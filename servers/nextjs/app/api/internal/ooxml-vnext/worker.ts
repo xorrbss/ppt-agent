@@ -142,7 +142,10 @@ function parseSlide(value: unknown, index: number): SlideMaterializationRequest 
 }
 
 function requireCanonicalText(value: unknown, name: string): string {
-  const text = requireString(value, name, 100_000);
+  // Retained authored scenes carry digest-pinned native OOXML fragments and
+  // element assets in the canonical body-grammar value. This is not free-form
+  // user text, and the scene parser below revalidates every fragment/asset.
+  const text = requireString(value, name, 25_000_000);
   if (text.normalize("NFC") !== text || /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(text)) {
     throw new OoxmlWorkerError("TEXT_NOT_CANONICAL", 422, `${name} must be NFC and XML-safe`);
   }

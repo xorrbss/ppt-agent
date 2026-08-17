@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 from models.authored_vnext.deck import (
+    AuthoredCompositionPin,
     DeckGenerationSnapshot,
     DeckMutationResult,
     GenerationResult,
@@ -30,6 +31,11 @@ from models.sql.authored_vnext_repository import (
     AuthoredVNextPublicationPointer,
 )
 from models.sql.user import User
+from models.sql.presentation import (
+    PRESENTATION_LIFECYCLE_PUBLISHED,
+    PresentationModel,
+)
+from models.sql.slide import SlideModel
 from services.authored_vnext.generation.errors import (
     GenerationConflictError,
     GenerationNotFoundError,
@@ -38,6 +44,7 @@ from services.authored_vnext.integration.sql_repository import (
     AuthoredVNextSqlRepository,
 )
 from services.authored_vnext.master.digests import canonical_json
+from .composition import remember_composition_pin
 from .sql_publication import append_generation_deck
 
 
@@ -57,6 +64,37 @@ def _hash(value: str) -> str:
 
 def _payload(model: Any) -> dict[str, Any]:
     return model.model_dump(mode="json", by_alias=True)
+
+
+def _payload_composition(payload: dict[str, Any]) -> AuthoredCompositionPin | None:
+    value = payload.get("composition")
+    return None if value is None else AuthoredCompositionPin.model_validate(value)
+
+
+def _assert_generation_composition(
+    request_payload: dict[str, Any],
+    deck: DeckGenerationSnapshot,
+    result: Any,
+) -> None:
+    """Fail closed before persisting a generation result with a changed pin."""
+
+    request_pin = _payload_composition(request_payload)
+    if isinstance(result, GenerationResult):
+        pins = (
+            request_pin,
+            deck.composition,
+            result.composition,
+            result.checkpoint.composition,
+        )
+        if any(pin is not None for pin in pins):
+            expected = pins[0]
+            if any(pin is None or pin != expected for pin in pins):
+                raise GenerationConflictError(
+                    "generation composition changed before publication"
+                )
+            remember_composition_pin(result.composition)
+    else:
+        remember_composition_pin(deck.composition)
 
 
 @dataclass(frozen=True)
@@ -136,7 +174,9 @@ class SqlGenerationRepository:
             )
             if row is None or row.payload.get("schemaVersion") != "deck-generation-snapshot/v1":
                 raise GenerationNotFoundError("generation deck revision not found")
-            return DeckGenerationSnapshot.model_validate(row.payload)
+            deck = DeckGenerationSnapshot.model_validate(row.payload)
+            remember_composition_pin(deck.composition)
+            return deck
 
     def begin_operation(
         self,
@@ -150,6 +190,7 @@ class SqlGenerationRepository:
         expected_digest: str | None,
     ) -> AuthoredVNextGenerationOperation:
         request_payload = _payload(request)
+        remember_composition_pin(_payload_composition(request_payload))
         request_hash = _hash(canonical_json(request_payload))
         idempotency_hash = _hash(idempotency_key)
         try:
@@ -323,7 +364,12 @@ class SqlGenerationRepository:
         }.get(schema)
         if model is None:
             raise GenerationConflictError("operation result schema is unsupported")
-        return model.model_validate(row.result_payload)
+        result = model.model_validate(row.result_payload)
+        if isinstance(result, GenerationResult):
+            remember_composition_pin(result.composition)
+        elif hasattr(result, "deck"):
+            remember_composition_pin(result.deck.composition)
+        return result
 
     def publish_result(
         self,
@@ -363,6 +409,7 @@ class SqlGenerationRepository:
                     or _as_utc(operation.lease_expires_at) <= now
                 ):
                     raise GenerationConflictError("stale operation fence")
+                _assert_generation_composition(operation.request_payload, deck, result)
                 append_generation_deck(
                     session,
                     owner_id=self._base.owner_id,
@@ -394,6 +441,139 @@ class SqlGenerationRepository:
                     raise GenerationConflictError("late operation publication rejected")
         except IntegrityError as error:
             raise GenerationConflictError("deck publication race") from error
+
+    def publish_legacy_master_apply(
+        self,
+        deck: DeckGenerationSnapshot,
+        result: Any,
+        *,
+        presentation_id,
+        expected_presentation_revision: int,
+        expected_revision: int,
+        expected_digest: str,
+        authored_projection: dict[str, Any],
+        slide_updates: dict[int, dict[str, Any]],
+    ) -> None:
+        """Atomically advance vNext and its legacy editor projection.
+
+        The preview images may already exist as immutable content-addressed
+        blobs, but neither deck head nor Presentation/Slide rows move unless
+        every owner/revision/count CAS predicate succeeds in this transaction.
+        """
+
+        claim = self._claim
+        if claim is None or claim.operation_id != result.operation_id:
+            raise GenerationConflictError("operation claim required")
+        now = _utcnow()
+        try:
+            with self._sessions.begin() as session:
+                operation = session.scalar(
+                    select(AuthoredVNextGenerationOperation).where(
+                        *self._scope(AuthoredVNextGenerationOperation),
+                        AuthoredVNextGenerationOperation.operation_id
+                        == claim.operation_id,
+                    )
+                )
+                owner = (
+                    session.scalar(
+                        select(User).where(
+                            User.id == self._base.owner_id,
+                            User.is_active.is_(True),
+                            User.deletion_state == "active",
+                            User.deletion_generation
+                            == operation.account_deletion_generation,
+                        )
+                    )
+                    if operation is not None
+                    else None
+                )
+                if (
+                    operation is None
+                    or owner is None
+                    or operation.state != "running"
+                    or operation.worker_id != claim.worker_id
+                    or operation.fencing_token != claim.fencing_token
+                    or operation.lease_expires_at is None
+                    or _as_utc(operation.lease_expires_at) <= now
+                ):
+                    raise GenerationConflictError("stale operation fence")
+
+                _assert_generation_composition(operation.request_payload, deck, result)
+
+                presentation = session.scalar(
+                    select(PresentationModel).where(
+                        PresentationModel.id == presentation_id,
+                        PresentationModel.owner_id == self._base.owner_id,
+                        PresentationModel.lifecycle_status
+                        == PRESENTATION_LIFECYCLE_PUBLISHED,
+                        PresentationModel.revision == expected_presentation_revision,
+                    )
+                )
+                if presentation is None:
+                    raise GenerationConflictError("legacy presentation CAS failed")
+                slides = list(
+                    session.scalars(
+                        select(SlideModel)
+                        .where(
+                            SlideModel.presentation == presentation_id,
+                            SlideModel.owner_id == self._base.owner_id,
+                        )
+                        .order_by(SlideModel.index, SlideModel.id)
+                    )
+                )
+                if not slide_updates or any(
+                    index < 0 or index >= len(slides) for index in slide_updates
+                ):
+                    raise GenerationConflictError("legacy slide target changed")
+
+                append_generation_deck(
+                    session,
+                    owner_id=self._base.owner_id,
+                    owner_scope=self.owner_scope,
+                    tenant_id=self.tenant_id,
+                    deck=deck,
+                    expected_revision=expected_revision,
+                    expected_digest=expected_digest,
+                )
+                theme = dict(presentation.theme or {})
+                theme["authored_vnext"] = authored_projection
+                presentation.theme = theme
+                presentation.revision = expected_presentation_revision + 1
+                presentation.updated_at = now
+                for index, values in slide_updates.items():
+                    row = slides[index]
+                    row.layout = values["layout"]
+                    row.layout_group = values["layout_group"]
+                    row.content = values["content"]
+                    row.html_content = values["html_content"]
+                    row.properties = values["properties"]
+                changed = session.execute(
+                    update(AuthoredVNextGenerationOperation)
+                    .where(
+                        AuthoredVNextGenerationOperation.id == operation.id,
+                        AuthoredVNextGenerationOperation.version == operation.version,
+                        AuthoredVNextGenerationOperation.fencing_token
+                        == claim.fencing_token,
+                    )
+                    .values(
+                        state="succeeded",
+                        result_payload=_payload(result),
+                        checkpoint_payload=(
+                            _payload(result.checkpoint)
+                            if hasattr(result, "checkpoint")
+                            else None
+                        ),
+                        result_revision=deck.revision,
+                        result_digest=deck.digest,
+                        lease_expires_at=None,
+                        completed_at=now,
+                        version=operation.version + 1,
+                    )
+                ).rowcount
+                if changed != 1:
+                    raise GenerationConflictError("late operation publication rejected")
+        except IntegrityError as error:
+            raise GenerationConflictError("legacy master apply publication race") from error
 
     def fail_operation(self, operation_id: str, error: Exception) -> None:
         claim = self._claim

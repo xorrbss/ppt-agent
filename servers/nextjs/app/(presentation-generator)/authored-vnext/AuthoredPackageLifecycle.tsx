@@ -15,6 +15,7 @@ function operationKey(prefix: string) {
 
 export default function AuthoredPackageLifecycle({ masterContract }: Props) {
   const t = useTranslations("authoredVnext.package");
+  const [visible, setVisible] = useState(true);
   const [source, setSource] = useState<OoxmlPackageVersion | null>(null);
   const [editable, setEditable] = useState<OoxmlPackageVersion | null>(null);
   const [readBack, setReadBack] = useState<OoxmlReadBack | null>(null);
@@ -40,8 +41,13 @@ export default function AuthoredPackageLifecycle({ masterContract }: Props) {
     setReadBack(receipt);
   };
 
+  if (!visible) return null;
+
   return <section className="fixed right-4 top-4 z-[75] max-h-[calc(100vh-2rem)] w-[26rem] overflow-y-auto rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-xl" data-testid="authored-package-lifecycle">
-    <h2 className="font-bold">{t("title")}</h2>
+    <div className="flex items-center justify-between gap-3">
+      <h2 className="font-bold">{t("title")}</h2>
+      <button aria-label={t("close")} className="grid size-7 shrink-0 place-items-center rounded-md border border-slate-200 text-lg leading-none text-slate-600 hover:bg-slate-100 hover:text-slate-950" data-testid="authored-package-close" onClick={() => setVisible(false)} type="button">×</button>
+    </div>
     <input accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" aria-label={t("fileAria")} className="mt-2 block w-full" disabled={busy} onChange={(event) => {
       const file = event.currentTarget.files?.[0];
       if (!file) return;

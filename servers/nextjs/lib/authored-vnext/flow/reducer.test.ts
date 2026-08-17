@@ -64,6 +64,16 @@ function reachOutline(): AuthoredVnextFlowState {
   ]).state;
 }
 
+function reachThreeSlideOutline(): AuthoredVnextFlowState {
+  return applyFlowEvents(createAuthoredVnextFlowState(3), [
+    { type: "materials.confirmed", materials },
+    { type: "master.draftSelected", draft },
+    { type: "master.publishSucceeded", published },
+    { type: "visualDirection.confirmed", visualDirection },
+    { type: "outline.succeeded", plan: outline(3) },
+  ]).state;
+}
+
 test("published Master is a hard gate and its CAS command precedes Visual Direction", () => {
   let state = createAuthoredVnextFlowState();
   state = authoredVnextFlowReducer(state, { type: "materials.confirmed", materials }).state;
@@ -130,6 +140,25 @@ test("outline requires ninety stable slide IDs with assigned layouts", () => {
     "outline_slide_id_not_stable_unique",
     "outline_layout_required",
   ]);
+});
+
+test("three-slide local harness changes only the runtime flow count", () => {
+  const state = reachThreeSlideOutline();
+  assert.equal(state.slideCount, 3);
+  assert.deepEqual(validateOutlineLayout(outline(3), state.slideCount), []);
+
+  const generation = authoredVnextFlowReducer(state, {
+    type: "generation.requested",
+    runId: "run:3",
+    deckId: "deck:local-three",
+    expectedDeckRevision: 1,
+    expectedDeckDigest: digestA,
+  });
+  assert.equal(generation.state.generation?.slides.length, 3);
+  assert.equal(generation.effects[0].type, "deck.generate");
+  if (generation.effects[0].type === "deck.generate") {
+    assert.equal(generation.effects[0].command.outlineLayout.slides.length, 3);
+  }
 });
 
 test("materials -> Master -> Visual Direction -> outline/layout -> 90-slide progress -> workbench -> export", () => {

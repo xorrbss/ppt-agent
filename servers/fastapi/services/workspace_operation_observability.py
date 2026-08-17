@@ -62,6 +62,7 @@ _COMMAND_TYPES = frozenset(
         "slide.delete",
         "version.restore",
         "template.apply",
+        "design.apply",
         "quality.review",
         "export.pptx",
         "export.pdf",

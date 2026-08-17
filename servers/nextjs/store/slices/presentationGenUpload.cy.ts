@@ -4,7 +4,8 @@ describe("presentationGenUpload authored style state", () => {
   it("starts without a legacy adaptive selection", () => {
     const initialState = reducer(undefined, { type: "init" });
 
-    expect(initialState.selectedTemplate).to.equal(null);
+    expect("selectedTemplate" in initialState).to.equal(false);
+    expect(initialState.companyStandard).to.equal(null);
   });
 
   it("defaults to the default authored style and preserves it across partial updates", () => {
@@ -17,7 +18,7 @@ describe("presentationGenUpload authored style state", () => {
     );
     const configUpdatedState = reducer(
       updatedState,
-      setPptGenUploadState({ selectedTemplate: "authored" })
+      setPptGenUploadState({ companyStandard: null })
     );
 
     expect(configUpdatedState.authoredStyle).to.equal("strategic-navy");

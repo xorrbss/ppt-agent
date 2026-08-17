@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import Field
 
 from .base import DeckId, Digest, LayoutId, MasterId, SlideId, StrictCamelModel
-from .contract import DeckMasterContract, VisualDirection
+from .contract import AssetReference, DeckMasterContract, VisualDirection
 from .slide import DeckSnapshot, SlideDraft, SlideSpecV2
 
 
@@ -16,6 +17,13 @@ class CreateDraftRequest(StrictCamelModel):
     visual_direction: VisualDirection | None = None
     expected_revision: int | None = Field(default=None, ge=1)
     expected_digest: Digest | None = None
+
+
+class RegisterMasterRequest(StrictCamelModel):
+    """Explicitly register a new server-identified master as draft revision 1."""
+
+    contract: DeckMasterContract
+    visual_direction: VisualDirection | None = None
 
 
 class MasterCasRequest(StrictCamelModel):
@@ -49,11 +57,36 @@ class RegenerateBodyRequest(StrictCamelModel):
     body: str = Field(min_length=1, max_length=50000)
 
 
+class LegacyMasterApplyPin(StrictCamelModel):
+    master_id: MasterId
+    revision: int = Field(ge=1)
+    digest: Digest
+
+
+class ApplyMasterToPresentationRequest(StrictCamelModel):
+    master_pin: LegacyMasterApplyPin
+    expected_presentation_revision: int = Field(ge=1)
+    expected_deck_revision: int = Field(ge=1)
+    expected_deck_digest: Digest
+    idempotency_key: str = Field(min_length=8, max_length=256)
+
+
 class StatusResponse(StrictCamelModel):
     enabled: bool
     contract_version: Literal["deckmaster-contract/v1"]
     slide_spec_version: Literal["slidespec/v2"]
     compiler_port: Literal["OoxmlMasterCompilerPort"]
+
+
+class CompanyStandardDefaultResponse(StrictCamelModel):
+    """Owner-scoped effective default used when the client has no last choice."""
+
+    schema_version: Literal["company-standard-default/v1"] = (
+        "company-standard-default/v1"
+    )
+    source: Literal["serverDefault"] = "serverDefault"
+    company_standard: LegacyMasterApplyPin | None = None
+    name: str | None = Field(default=None, max_length=200)
 
 
 class ValidationIssue(StrictCamelModel):
@@ -78,6 +111,26 @@ class MasterRevisionResponse(StrictCamelModel):
     contract: DeckMasterContract
     visual_direction: VisualDirection | None = None
     validation: ValidationSummary | None = None
+
+
+class MasterCatalogItem(StrictCamelModel):
+    """Summary-only catalog projection pinned to the latest publication."""
+
+    master_id: MasterId
+    name: str
+    semantic_version: str
+    published_revision: int | None = Field(default=None, ge=1)
+    published_digest: Digest | None = None
+    has_draft: bool
+    logo: AssetReference | None = None
+    primary_font: str
+    layout_count: int = Field(ge=0)
+    updated_time: datetime
+
+
+class MasterCatalogPage(StrictCamelModel):
+    items: list[MasterCatalogItem]
+    next_cursor: str | None = None
 
 
 class PngRenderRequest(StrictCamelModel):
@@ -119,3 +172,12 @@ class RegenerateResponse(StrictCamelModel):
     candidate_digest: Digest
     validation: ValidationSummary
     deck: DeckSnapshot
+
+
+class ApplyMasterToPresentationResponse(StrictCamelModel):
+    presentation_id: str
+    presentation_revision: int = Field(ge=1)
+    deck_id: DeckId
+    deck_revision: int = Field(ge=1)
+    deck_digest: Digest
+    master: LegacyMasterApplyPin

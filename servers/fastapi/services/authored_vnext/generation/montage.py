@@ -1,4 +1,4 @@
-"""Deterministic all-slide montage manifests for 10/90-slide QA."""
+"""Deterministic all-slide montage manifests for authored deck QA."""
 
 from __future__ import annotations
 
@@ -160,9 +160,9 @@ def build_montage_manifest(
     if deck is not None:
         from models.authored_vnext.deck.quality import MontageManifest as WireMontageManifest
         from models.authored_vnext.deck.quality import MontageTile as WireMontageTile
+        from models.authored_vnext.deck.quality import require_published_deck_size
 
-        if len(materialized) not in {10, 90}:
-            raise ValueError("published montage deck size must be exactly 10 or 90")
+        require_published_deck_size(len(materialized))
         wire_tiles = []
         for index, item in enumerate(materialized):
             slide = _read(item, "slide", default=None)
@@ -260,17 +260,17 @@ __all__ = ["MontageManifest", "MontageTile", "build_montage_manifest"]
 
 
 def build_generation_montage_manifest(deck: object):
-    """Build the strict 10/90-slide generation manifest without render I/O."""
+    """Build the strict published generation manifest without render I/O."""
 
     from models.authored_vnext.deck.quality import (
         MontageManifest as WireMontageManifest,
         MontageTile as WireMontageTile,
+        require_published_deck_size,
     )
     from services.authored_vnext.master.digests import canonical_digest
 
     slides = tuple(_read(deck, "slides", default=()) or ())
-    if len(slides) not in {10, 90}:
-        raise ValueError("generation montage supports complete 10/90-slide decks")
+    require_published_deck_size(len(slides))
     tiles = []
     for index, validated in enumerate(slides):
         slide = _read(validated, "slide", default=None)
@@ -297,7 +297,7 @@ def build_generation_montage_manifest(deck: object):
         "deckId": _read(deck, "deckId", "deck_id"),
         "deckDigest": _read(deck, "digest"),
         "deckSize": len(slides),
-        "columns": 5 if len(slides) == 10 else 10,
+        "columns": 5 if len(slides) <= 10 else 10,
         "tiles": [tile.model_dump(mode="json", by_alias=True) for tile in tiles],
     }
     return WireMontageManifest(

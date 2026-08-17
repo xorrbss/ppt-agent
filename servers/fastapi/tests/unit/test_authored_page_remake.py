@@ -259,6 +259,77 @@ async def test_workspace_handler_requires_exact_slide_and_preview_task():
 
 
 @async_test
+async def test_workspace_handler_rejects_missing_body_only_contract_for_pinned_deck(
+    monkeypatch,
+):
+    claim = WorkspaceOperationClaim(
+        operation_id=uuid.uuid4(),
+        owner_id=uuid.uuid4(),
+        owner_scope="owner",
+        conversation_id=uuid.uuid4(),
+        presentation_id=uuid.uuid4(),
+        kind="slide.regenerate",
+        request_payload={
+            "context": {
+                "slide_index": 0,
+                "preview_task_id": "task-restored",
+                "source": "page_remake_history",
+            }
+        },
+        expected_revision=3,
+        attempt_number=1,
+        attempt_token="attempt",
+        fencing_token=1,
+    )
+    presentation = SimpleNamespace(
+        revision=3,
+        theme={
+            "authored_vnext": {
+                "schemaVersion": "legacy-authored-vnext-projection/v1",
+                "masterPin": {
+                    "masterId": "master:company",
+                    "masterRevision": 7,
+                    "masterDigest": f"sha256:{'a' * 64}",
+                },
+            }
+        },
+    )
+
+    class _Session:
+        async def scalar(self, _statement):
+            return presentation
+
+    class _SessionContext:
+        async def __aenter__(self):
+            return _Session()
+
+        async def __aexit__(self, _type, _value, _traceback):
+            return False
+
+    monkeypatch.setattr(
+        "services.workspace_page_remake_operation_handler.async_session_maker",
+        lambda: _SessionContext(),
+    )
+
+    async def progress(**_kwargs):
+        return True
+
+    async def raise_if_cancelled():
+        return None
+
+    context = SimpleNamespace(
+        claim=claim,
+        progress=progress,
+        raise_if_cancelled=raise_if_cancelled,
+    )
+    with pytest.raises(
+        NonRetryableWorkspaceOperationError,
+        match="authored_vnext_regenerate_body_contract_invalid",
+    ):
+        await WorkspacePageRemakeOperationHandler().execute(context)
+
+
+@async_test
 async def test_preview_is_detached_and_pins_exact_source(tmp_path, monkeypatch):
     engine = await _engine(tmp_path / "preview.sqlite")
     async with AsyncSession(engine, expire_on_commit=False) as session:

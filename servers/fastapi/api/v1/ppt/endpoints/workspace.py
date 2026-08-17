@@ -506,7 +506,7 @@ async def confirm_presentation_template_application(
     ),
     session: AsyncSession = Depends(get_async_session),
 ) -> WorkspaceTemplateApplicationResponse:
-    """Confirm one target-owned authored template application."""
+    """Confirm one target-owned authored design application."""
 
     _require_workspace_writes(source_presentation_id)
     target_presentation_id = _template_application_target_id(
@@ -522,7 +522,7 @@ async def confirm_presentation_template_application(
             target_presentation_id=target_presentation_id,
         )
         _record_operation_admission(
-            "template.apply",
+            confirmed.operation.kind,
             duplicate=confirmed.duplicate,
         )
         timeline = await workspace_timeline(

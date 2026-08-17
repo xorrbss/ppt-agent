@@ -131,6 +131,25 @@ test("stable 409 conflict code is exposed to workflow state", async () => {
   );
 });
 
+test("request validation errors expose the rejected field without changing the stable code", async () => {
+  const fetchMock = (async () => jsonResponse({
+    code: "request_validation_error",
+    detail: [{
+      type: "string_too_short",
+      loc: ["body", "contract", "semanticElements", 7, "content", "altText"],
+      msg: "String should have at least 1 character",
+      input: "",
+    }],
+  }, 422)) as typeof fetch;
+  const client = new AuthoredVnextMasterClient(fetchMock);
+  await assert.rejects(
+    client.createDraft({ contract: DEFAULT_MASTER_CONTRACT, visualDirection: DEFAULT_VISUAL_DIRECTION }),
+    (error: unknown) => error instanceof MasterApiError
+      && error.code === "request_validation_error"
+      && error.message === "입력값을 확인해주세요 (contract.semanticElements.7.content.altText): String should have at least 1 character",
+  );
+});
+
 test("logo upload includes browser credentials and validates the receipt", async () => {
   let url = "";
   let request: RequestInit | undefined;

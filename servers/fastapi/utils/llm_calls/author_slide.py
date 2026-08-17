@@ -13,6 +13,7 @@ import os
 import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Mapping, Optional, Protocol, Sequence
 from weakref import WeakKeyDictionary
@@ -34,6 +35,7 @@ from utils.authored_font_policy import enforce_authored_font_floor
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_config import enforce_llm_egress_policy, get_llm_config
 from utils.llm_provider import get_llm_provider, get_model, is_codex_selected
+from utils.renderer_isolation import admit_authored_html
 from services.provider_usage_instrumentation import (
     ProviderCallTimer,
     provider_call_admission,
@@ -123,11 +125,40 @@ def _register_author_rate_limit(error: BaseException) -> None:
 # fit, language and output constraints stay in this common template. The visual
 # direction lives in a replaceable style brief so authored presets can vary the
 # deck without weakening those constraints.
+TEMPLATE_PAGE_NUMBER_MODE = "template"
+COMPANY_STANDARD_PAGE_NUMBER_MODE = "companyStandard"
+
+_TEMPLATE_PAGE_NUMBER_RULES = """\
+- PAGE-NUMBER SYSTEM (ordinary authored generation and style-reference mode):
+  - The COVER slide has no page number and no footer text.
+  - Every slide after the cover has exactly one page-number text element in the precise bottom
+    horizontal center. Use the per-slide PAGE MARKER instruction below as its only visible text.
+  - Numbering starts at `01` on the slide immediately after the cover, increases by one on every
+    following slide, and always uses two digits (`01`, `02`, `03`, ...).
+  - Give that element a full-width fixed box (`position:absolute;left:0;right:0;bottom:14px`),
+    centered text, 12px type (9pt equivalent), 500 weight, 16px line-height, and #A7ACB3 color.
+  - Reserve the bottom 72px as a footer safe zone (on a 1280x720 slide, all ordinary content must
+    end at or above y=648px). Content, images, charts, tables, and decorative shapes must not
+    overlap that zone or obscure the marker.
+  - The footer contains the number only: never add `Page`, `페이지`, a slash/total, title,
+    section name, wordmark, logo, or any other footer copy. Never place a page number at the top,
+    in a corner, or anywhere else. Do not create a duplicate marker."""
+
+_COMPANY_STANDARD_PAGE_NUMBER_RULES = """\
+- PAGE-NUMBER OWNERSHIP: company-standard furniture owns all page numbering.
+  - Never render a page number, page marker, pagination label, or page-number footer in the
+    authored template scene, including non-cover slides.
+  - Do not reserve or style a template-owned page-number box. The product composes the configured
+    company-standard pageNumber furniture after template rendering."""
+
 _DESIGN_SYSTEM_RULES = """\
 DESIGN SYSTEM (obey on EVERY slide so the deck is cohesive):
 - Brand primary colour: {primary}. Brand fonts: {fonts}. Deck language: {language}.
 - Canvas: a single 16:9 slide that renders at EXACTLY 1280x720px. Inline <style> only, no
   external JS. Body 1280x720, margin 0, overflow hidden.
+- Document head: emit at most `<meta charset="utf-8">`. Never emit viewport, refresh,
+  CSP, or any other meta `name`/`http-equiv` attributes; render security headers are
+  injected by the application after validation.
 - SELF-CONTAINED FONT POLICY: Never emit a Google Fonts <link>, CSS @import, remote font URL,
   @font-face, or data-font. Use a logical family plus its deterministic local fallback:
   "Noto Sans KR"/"Pretendard" -> "Malgun Gothic"; "Noto Serif KR" -> "Batang";
@@ -142,6 +173,21 @@ DESIGN SYSTEM (obey on EVERY slide so the deck is cohesive):
     elements, never ::before/::after pseudo-elements; painted pseudo-elements rasterize that subtree.
   - Do not use inline SVG for simple decoration; use HTML+CSS. Reserve SVG only for charts or
     diagrams that cannot be expressed in HTML.
+  - INLINE SVG CONTRACT (when an essential chart/diagram truly needs SVG):
+    - The root may declare only `xmlns="http://www.w3.org/2000/svg"` (exact value, root only),
+      plus `viewBox`, `width`, `height`, and `preserveAspectRatio`. Never emit `xmlns:xlink`.
+    - Use only inert presentation elements: `svg`, `g`, `path`, `rect`, `circle`, `ellipse`,
+      `line`, `polyline`, `polygon`, `text`, `tspan`, `defs`, `linearGradient`,
+      `radialGradient`, `stop`, `clipPath`, and `mask`.
+    - Geometry/paint attributes are limited to the element's ordinary coordinates, `d`,
+      `points`, `transform`, `fill`, `stroke`, `stroke-width`, `opacity`, `clip-path`, and
+      `mask`; text may also use `font-size`, `font-family`, `font-weight`, `text-anchor`;
+      gradients/stops may use their coordinate/units/transform plus `offset`, `stop-color`,
+      and `stop-opacity`. Use `opacity` instead of unsupported `fill-opacity` or
+      `stroke-opacity`.
+    - Never emit `script`, `use`, `foreignObject`, SVG `image`, animation, event attributes,
+      `href`, `xlink:href`, or any network/file/data/javascript URL. Paint references may only
+      be local fragment ids such as `clip-path="url(#clip1)"` or `mask="url(#mask1)"`.
   - Do not use text-shadow, filter, backdrop-filter, or mix-blend-mode.
   - Use only one uniform pixel value for border-radius; no asymmetric or percentage radii.
   - Freely allowed: linear-gradient backgrounds, layered box-shadow, and raster images; the converter maps these natively.
@@ -166,20 +212,7 @@ DESIGN SYSTEM (obey on EVERY slide so the deck is cohesive):
   words are never split mid-word across lines.
 - Boxes/cards/labels: each one's text must fit ENTIRELY inside it with padding — never let text
   touch or clip an edge. Size the box to its content (or shrink the content to the box).
-- PAGE-NUMBER SYSTEM (ordinary authored generation and style-reference mode):
-  - The COVER slide has no page number and no footer text.
-  - Every slide after the cover has exactly one page-number text element in the precise bottom
-    horizontal center. Use the per-slide PAGE MARKER instruction below as its only visible text.
-  - Numbering starts at `01` on the slide immediately after the cover, increases by one on every
-    following slide, and always uses two digits (`01`, `02`, `03`, ...).
-  - Give that element a full-width fixed box (`position:absolute;left:0;right:0;bottom:14px`),
-    centered text, 12px type (9pt equivalent), 500 weight, 16px line-height, and #A7ACB3 color.
-  - Reserve the bottom 72px as a footer safe zone (on a 1280x720 slide, all ordinary content must
-    end at or above y=648px). Content, images, charts, tables, and decorative shapes must not
-    overlap that zone or obscure the marker.
-  - The footer contains the number only: never add `Page`, `페이지`, a slash/total, title,
-    section name, wordmark, logo, or any other footer copy. Never place a page number at the top,
-    in a corner, or anywhere else. Do not create a duplicate marker.
+{page_number_system}
 - All visible text in {language}.
 Return ONLY the complete HTML document."""
 
@@ -273,7 +306,10 @@ def apply_style_defaults(brand: Brand, style: Optional[AuthoredStyleLike]) -> Br
 
 
 def build_design_system(
-    brand: Brand, style: Optional[AuthoredStyleLike] = None
+    brand: Brand,
+    style: Optional[AuthoredStyleLike] = None,
+    *,
+    page_number_mode: str = TEMPLATE_PAGE_NUMBER_MODE,
 ) -> str:
     """Build the concrete shared brief for a brand and optional authored style.
 
@@ -282,6 +318,11 @@ def build_design_system(
     Custom style briefs are already validated plain text from the A1 loader and
     are inserted verbatim apart from surrounding whitespace.
     """
+    if page_number_mode not in {
+        TEMPLATE_PAGE_NUMBER_MODE,
+        COMPANY_STANDARD_PAGE_NUMBER_MODE,
+    }:
+        raise ValueError("unsupported page number mode")
     return author_slide_prompt.build_design_system(
         brand,
         style,
@@ -291,6 +332,11 @@ def build_design_system(
         normalize_reference_mode=normalize_reference_mode,
         exact_reconstruction=EXACT_RECONSTRUCTION,
         style_reference=STYLE_REFERENCE,
+        page_number_system=(
+            _COMPANY_STANDARD_PAGE_NUMBER_RULES
+            if page_number_mode == COMPANY_STANDARD_PAGE_NUMBER_MODE
+            else _TEMPLATE_PAGE_NUMBER_RULES
+        ),
     )
 
 
@@ -301,10 +347,24 @@ _SYSTEM = (
 
 
 def _author_prompt(
-    content: str, design_system: str, brand: Brand, role: str, index: int, n: int
+    content: str,
+    design_system: str,
+    brand: Brand,
+    role: str,
+    index: int,
+    n: int,
+    structured_context: dict | None = None,
+    page_number_mode: str = TEMPLATE_PAGE_NUMBER_MODE,
 ) -> str:
     return author_slide_prompt.author_prompt(
-        content, design_system, brand, role, index, n
+        content,
+        design_system,
+        brand,
+        role,
+        index,
+        n,
+        structured_context=structured_context,
+        page_number_mode=page_number_mode,
     )
 
 
@@ -397,6 +457,199 @@ _LEADING_FENCE = re.compile(r"^\s*```[a-zA-Z]*\s*\n")
 _TRAILING_FENCE = re.compile(r"\n```\s*$")
 
 
+@dataclass(frozen=True)
+class _SourceStartTag:
+    start: int
+    end: int
+    name: str
+    attrs: tuple[tuple[str, str | None], ...]
+    raw: str
+
+
+class _SourceSpanParser(HTMLParser):
+    """Collect exact spans for real start tags, excluding comments and raw text."""
+
+    def __init__(self, source: str) -> None:
+        super().__init__(convert_charrefs=False)
+        self._line_offsets = [0]
+        self._line_offsets.extend(match.end() for match in re.finditer(r"\n", source))
+        self.tags: list[_SourceStartTag] = []
+
+    def _record(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        raw = self.get_starttag_text()
+        if raw is None:
+            return
+        line, column = self.getpos()
+        start = self._line_offsets[line - 1] + column
+        self.tags.append(
+            _SourceStartTag(
+                start=start,
+                end=start + len(raw),
+                name=tag.lower(),
+                attrs=tuple((name.lower(), value) for name, value in attrs),
+                raw=raw,
+            )
+        )
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self._record(tag, attrs)
+
+    def handle_startendtag(
+        self, tag: str, attrs: list[tuple[str, str | None]]
+    ) -> None:
+        self._record(tag, attrs)
+
+
+def _source_start_tags(source: str) -> tuple[_SourceStartTag, ...]:
+    parser = _SourceSpanParser(source)
+    try:
+        parser.feed(source)
+        parser.close()
+    except Exception:
+        # Leave malformed source byte-for-byte intact so renderer admission rejects it.
+        return ()
+    return tuple(parser.tags)
+
+
+def _apply_source_replacements(
+    source: str, replacements: Sequence[tuple[int, int, str]]
+) -> str:
+    result = source
+    for start, end, replacement in sorted(replacements, reverse=True):
+        result = result[:start] + replacement + result[end:]
+    return result
+
+
+def _remove_start_tag_attribute(raw: str, target: str) -> str:
+    """Remove a real tag attribute without matching inside another quoted value."""
+    spans: list[tuple[int, int, str]] = []
+    length = len(raw)
+    cursor = 1
+    while cursor < length and not raw[cursor].isspace() and raw[cursor] not in "/>":
+        cursor += 1
+    while cursor < length:
+        whitespace_start = cursor
+        while cursor < length and raw[cursor].isspace():
+            cursor += 1
+        if cursor >= length or raw[cursor] in "/>":
+            break
+        name_start = cursor
+        while (
+            cursor < length
+            and not raw[cursor].isspace()
+            and raw[cursor] not in "=/>"
+        ):
+            cursor += 1
+        name = raw[name_start:cursor].lower()
+        while cursor < length and raw[cursor].isspace():
+            cursor += 1
+        if cursor < length and raw[cursor] == "=":
+            cursor += 1
+            while cursor < length and raw[cursor].isspace():
+                cursor += 1
+            if cursor < length and raw[cursor] in "\"'":
+                quote = raw[cursor]
+                cursor += 1
+                while cursor < length and raw[cursor] != quote:
+                    cursor += 1
+                if cursor < length:
+                    cursor += 1
+            else:
+                while (
+                    cursor < length
+                    and not raw[cursor].isspace()
+                    and raw[cursor] != ">"
+                ):
+                    cursor += 1
+        if name == target:
+            spans.append((whitespace_start, cursor, ""))
+    return _apply_source_replacements(raw, spans)
+
+
+def _is_safe_charset_meta(tag: _SourceStartTag) -> bool:
+    return len(tag.attrs) == 1 and tag.attrs[0][0] == "charset"
+
+
+def _is_benign_named_meta(tag: _SourceStartTag) -> bool:
+    names = [name for name, _value in tag.attrs]
+    return (
+        names.count("name") == 1
+        and names.count("content") <= 1
+        and len(names) == len(set(names))
+        and set(names).issubset({"name", "content"})
+    )
+
+
+def canonicalize_authored_slide_html(html: str, *, finalized: bool = False) -> str:
+    """Canonicalize inert metadata using exact spans from an HTML-aware parser.
+
+    The renderer owns its fixed viewport and security policy, so ordinary named meta
+    declarations are redundant.  A mixed meta tag with active/unknown attributes is
+    deliberately preserved for fail-closed admission rather than silently sanitized.
+    Illustration prompt attributes survive until their provider has consumed them.
+    """
+    source = html or ""
+    replacements: list[tuple[int, int, str]] = []
+    kept_charset = False
+    for tag in _source_start_tags(source):
+        if tag.name == "meta":
+            if _is_safe_charset_meta(tag):
+                replacement = '<meta charset="utf-8">' if not kept_charset else ""
+                kept_charset = True
+                replacements.append((tag.start, tag.end, replacement))
+            elif _is_benign_named_meta(tag):
+                replacements.append((tag.start, tag.end, ""))
+        elif finalized and tag.name == "img" and any(
+            name == "data-illust-prompt" for name, _value in tag.attrs
+        ):
+            replacements.append(
+                (
+                    tag.start,
+                    tag.end,
+                    _remove_start_tag_attribute(tag.raw, "data-illust-prompt"),
+                )
+            )
+    return _apply_source_replacements(source, replacements)
+
+
+def _without_illustration_prompt_attributes(source: str) -> str:
+    return _apply_source_replacements(
+        source,
+        [
+            (
+                tag.start,
+                tag.end,
+                _remove_start_tag_attribute(tag.raw, "data-illust-prompt"),
+            )
+            for tag in _source_start_tags(source)
+            if tag.name == "img"
+            and any(name == "data-illust-prompt" for name, _value in tag.attrs)
+        ],
+    )
+
+
+def validate_authored_slide_html(
+    html: str,
+    *,
+    allow_illustration_slots: bool = False,
+    finalized: bool = False,
+) -> str:
+    """Return canonical HTML after applying the renderer's existing admission policy.
+
+    The illustration prompt attribute is authoring-only. Author-stage validation
+    removes only that attribute from a temporary projection, so the placeholder's
+    remaining attributes are still checked while the returned source keeps its prompt.
+    """
+    canonical = canonicalize_authored_slide_html(html, finalized=finalized)
+    validation_source = (
+        _without_illustration_prompt_attributes(canonical)
+        if allow_illustration_slots
+        else canonical
+    )
+    admit_authored_html(validation_source)
+    return canonical
+
+
 def extract_html_document(text: str) -> str:
     """Pull the clean HTML document out of a model response: strip ``` fences and
     any prose before <!doctype>/<html> or after </html>."""
@@ -415,6 +668,16 @@ def extract_html_document(text: str) -> str:
     return s.strip()
 
 
+def _strip_nonvisual_pointer_events(html: str) -> str:
+    """Remove interaction-only CSS that cannot change the rendered slide pixels."""
+
+    return re.sub(
+        r"(?i)\bpointer-events\s*:\s*[^;}\"']+;?",
+        "",
+        html,
+    )
+
+
 def is_valid_slide_html(html: str) -> bool:
     """A usable authored slide must be a non-trivial HTML document with a body. Guards
     against empty/truncated/garbage model output before it reaches the renderer."""
@@ -425,7 +688,13 @@ def is_valid_slide_html(html: str) -> bool:
 
 
 def fallback_slide_html(
-    content: str, brand: Brand, role: str, index: int, n: int
+    content: str,
+    brand: Brand,
+    role: str,
+    index: int,
+    n: int,
+    *,
+    page_number_mode: str = TEMPLATE_PAGE_NUMBER_MODE,
 ) -> str:
     """A clean, on-brand placeholder slide used when authoring a slide fails or returns
     invalid HTML — so one bad slide degrades to a simple branded slide instead of
@@ -436,7 +705,16 @@ def fallback_slide_html(
     if len(text) > 420:
         text = text[:420].rstrip() + "…"
     eyebrow = _html.escape(role or "")
-    marker = "" if role == "COVER" else f"{index:02d}"
+    if page_number_mode not in {
+        TEMPLATE_PAGE_NUMBER_MODE,
+        COMPANY_STANDARD_PAGE_NUMBER_MODE,
+    }:
+        raise ValueError("unsupported page number mode")
+    marker = (
+        ""
+        if role == "COVER" or page_number_mode == COMPANY_STANDARD_PAGE_NUMBER_MODE
+        else f"{index:02d}"
+    )
     footer = f'<div class="foot">{marker}</div>' if marker else ""
     return (
         f"<!DOCTYPE html><html lang=\"ko\" {_FALLBACK_SLIDE_MARKER}>"
@@ -514,6 +792,8 @@ async def author_slide_html(
     reasoning_effort: Optional[str] = None,
     reference_images: Optional[Sequence[Path]] = None,
     reference_mode: str = STYLE_REFERENCE,
+    structured_context: dict | None = None,
+    page_number_mode: str = TEMPLATE_PAGE_NUMBER_MODE,
 ) -> str:
     """Author one bespoke, self-contained 1280x720 HTML slide. Single text-generation
     call against the configured provider; returns the cleaned HTML document.
@@ -523,7 +803,16 @@ async def author_slide_html(
     run at the provider's full default effort rather than the fast authoring 'low'."""
     mode = normalize_reference_mode(reference_mode)
     requested_images = tuple(reference_images or ())
-    prompt = _author_prompt(content, design_system, brand, role, index, n)
+    prompt = _author_prompt(
+        content,
+        design_system,
+        brand,
+        role,
+        index,
+        n,
+        structured_context=structured_context,
+        page_number_mode=page_number_mode,
+    )
     image_parts = _reference_parts(requested_images)
     if mode == EXACT_RECONSTRUCTION and not (
         len(requested_images) == len(image_parts) == 1
@@ -616,6 +905,10 @@ async def author_slide_html(
         except Exception as fallback_error:
             raise handle_llm_client_exceptions(fallback_error)
     authored_html = extract_html_document(extract_text(response.content) or "")
-    if mode == EXACT_RECONSTRUCTION:
-        return authored_html
-    return enforce_authored_font_floor(authored_html)
+    authored_html = _strip_nonvisual_pointer_events(authored_html)
+    if mode != EXACT_RECONSTRUCTION:
+        authored_html = enforce_authored_font_floor(authored_html)
+    return validate_authored_slide_html(
+        authored_html,
+        allow_illustration_slots=True,
+    )

@@ -30,6 +30,7 @@ from services.references.contracts import (
 )
 from services.workspace_asset_service import get_workspace_asset
 from utils.datetime_utils import get_current_utc_datetime
+from utils.document_context import compact_document_texts
 from utils.owner_context import get_current_owner_id
 
 
@@ -41,9 +42,80 @@ MAX_COMMUNITY_CHARACTERS = 90_000
 MAX_COMMUNITY_RESPONSE_BYTES = 1_000_000
 MAX_UPLOADED_REFERENCES = 16
 MAX_UPLOADED_REFERENCE_CHARACTERS = 300_000
+MAX_UPLOADED_REFERENCE_PAYLOAD_BYTES = 480 * 1024
 UPLOADED_REFERENCE_EXTRACTION_ATTEMPTS = 2
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _uploaded_reference_payload(
+    documents: list[dict[str, str]],
+) -> dict[str, Any]:
+    normalized_documents = [
+        {
+            **item,
+            "contentSha256": sha256(item["text"].encode("utf-8")).hexdigest(),
+        }
+        for item in documents
+    ]
+    return {
+        "purpose": "generation-reference",
+        "assetCount": len(normalized_documents),
+        "documents": normalized_documents,
+    }
+
+
+def fit_uploaded_reference_payload(
+    documents: list[dict[str, str]],
+) -> dict[str, Any]:
+    """Fit the persisted payload to the generation context's UTF-8 budget."""
+
+    def payload_for(total_characters: int) -> dict[str, Any]:
+        compacted = compact_document_texts(
+            [item["text"] for item in documents],
+            total_characters,
+        )
+        return _uploaded_reference_payload(
+            [
+                {**item, "text": text}
+                for item, text in zip(documents, compacted)
+            ]
+        )
+
+    def payload_size(payload: Mapping[str, Any]) -> int:
+        return len(
+            json.dumps(
+                payload,
+                ensure_ascii=False,
+                allow_nan=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        )
+
+    capped_characters = min(
+        sum(len(item["text"]) for item in documents),
+        MAX_UPLOADED_REFERENCE_CHARACTERS,
+    )
+    payload = payload_for(capped_characters)
+    if payload_size(payload) <= MAX_UPLOADED_REFERENCE_PAYLOAD_BYTES:
+        return payload
+
+    lower = 0
+    upper = capped_characters
+    fitted: dict[str, Any] | None = None
+    while lower <= upper:
+        candidate_characters = (lower + upper) // 2
+        candidate = payload_for(candidate_characters)
+        if payload_size(candidate) <= MAX_UPLOADED_REFERENCE_PAYLOAD_BYTES:
+            fitted = candidate
+            lower = candidate_characters + 1
+        else:
+            upper = candidate_characters - 1
+    if fitted is None:
+        raise ReferenceProviderError("uploaded_reference_too_large")
+    return fitted
+
 
 _DROP_TAGS = frozenset({"script", "style", "iframe", "object", "embed", "link", "meta"})
 _SAFE_TAGS = frozenset(
@@ -420,7 +492,6 @@ class UploadedDocumentProvider:
         bindings = []
         extracted_documents: list[dict[str, str]] = []
         expiry_candidates = []
-        remaining_characters = MAX_UPLOADED_REFERENCE_CHARACTERS
         for asset_id in asset_ids:
             binding, private_path = await asset_gateway.resolve_for_processing(
                 session,
@@ -455,10 +526,6 @@ class UploadedDocumentProvider:
             document = document.replace("\x00", "").strip()
             if not document:
                 raise ReferenceProviderError("uploaded_reference_empty")
-            if len(document) > remaining_characters:
-                raise ReferenceProviderError("uploaded_reference_too_large")
-            remaining_characters -= len(document)
-
             # Close the processing TOCTOU window by replaying byte/hash
             # admission after extraction. Persist only immutable identity and
             # normalized text, never this server-private locator.
@@ -477,19 +544,26 @@ class UploadedDocumentProvider:
                 {
                     "assetId": str(asset_id),
                     "name": asset.original_name,
-                    "contentSha256": sha256(document.encode("utf-8")).hexdigest(),
                     "text": document,
                 }
+            )
+        extracted_character_count = sum(len(item["text"]) for item in extracted_documents)
+        normalized_payload = fit_uploaded_reference_payload(extracted_documents)
+        persisted_character_count = sum(
+            len(item["text"]) for item in normalized_payload["documents"]
+        )
+        if persisted_character_count < extracted_character_count:
+            LOGGER.warning(
+                "Compacting uploaded reference snapshot from %d to %d characters across %d sources",
+                extracted_character_count,
+                persisted_character_count,
+                len(extracted_documents),
             )
         identity = [binding.as_json() for binding in bindings]
         return NormalizedReference(
             provider_id=self.provider_id,
             source_revision=_digest(identity),
-            normalized_payload={
-                "purpose": "generation-reference",
-                "assetCount": len(bindings),
-                "documents": extracted_documents,
-            },
+            normalized_payload=normalized_payload,
             asset_bindings=tuple(bindings),
             expires_at=(
                 min(

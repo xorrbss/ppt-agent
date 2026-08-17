@@ -2,10 +2,10 @@
 
 ## Global policy
 
-Follow the global `~/.codex/AGENTS.md` working policy. During development, run the
-smallest checks relevant to the changed layer. Do not run a complete test suite
-unless the user explicitly requests it in the current request. Commands listed
-below are references, not authorization for an automatic full-suite run.
+Follow the global `~/.codex/AGENTS.md` working policy. After implementation, run
+exactly one smallest check that directly covers the changed layer. Do not
+automatically combine tests, lint, type checks, or builds. Commands below are
+references, not authorization for an automatic full-suite run.
 
 ## Project overview
 
@@ -46,6 +46,11 @@ changes against the official Presenton project and follow
 ## Setup and run commands
 
 Run commands from the indicated directory.
+
+When a code change requires a running local server to reload before it takes
+effect, reload or restart only the affected server automatically. Prefer HMR,
+preserve the existing ports and launch environment, and leave unaffected
+processes running.
 
 ### Electron (preferred full local workflow)
 
@@ -104,7 +109,8 @@ admin API-key bearer credential before a request is proxied to MCP.
 
 ## Verification
 
-Use the narrowest relevant check first, then broaden it when warranted.
+Choose exactly one narrowest relevant check. Broaden verification only for the
+high-impact changes listed in the global policy or when the user requests it.
 
 ```powershell
 # Backend

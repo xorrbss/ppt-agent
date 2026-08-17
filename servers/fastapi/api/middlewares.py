@@ -9,8 +9,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
 from api.v1.auth.assets import is_app_data_path_authorized
-from api.v1.auth.principal import resolve_request_principal
+from api.v1.auth.principal import AuthPrincipal, resolve_request_principal
 from utils.owner_context import (
+    get_current_owner_id,
     reset_current_owner_id,
     reset_current_owner_is_admin,
     set_current_owner_id,
@@ -140,7 +141,41 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         if is_disable_auth_enabled():
-            return await call_next(request)
+            # Focused harnesses may install a stricter outer owner scope. Keep
+            # that explicit request-local identity instead of replacing it.
+            if get_current_owner_id() is not None:
+                return await call_next(request)
+            async with async_session_maker() as session:
+                admin = await session.scalar(
+                    select(User)
+                    .where(
+                        User.admin_slot == "primary",
+                        User.is_superuser.is_(True),
+                        User.is_active.is_(True),
+                    )
+                    .limit(1)
+                )
+                if admin is None:
+                    return JSONResponse(
+                        status_code=503,
+                        content={"detail": "Bootstrap administrator is unavailable"},
+                    )
+                principal = AuthPrincipal(
+                    user_id=admin.id,
+                    username=admin.username,
+                    is_admin=True,
+                    method="jwt",
+                )
+                request.state.auth_principal = principal
+                request.state.current_user = admin
+                request.state.auth_username = principal.username
+                context_token = set_current_owner_id(principal.user_id)
+                admin_context_token = set_current_owner_is_admin(True)
+                try:
+                    return await call_next(request)
+                finally:
+                    reset_current_owner_is_admin(admin_context_token)
+                    reset_current_owner_id(context_token)
 
         # Decide auth on the NORMALIZED path so dot-segment traversal can't slip a
         # protected path past the exemptions (routing still uses the real path).

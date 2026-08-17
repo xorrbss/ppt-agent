@@ -243,7 +243,24 @@ export async function postWorkspaceTemplateApplication(
       body: JSON.stringify({
         source_revision: request.sourceRevision,
         prompt: request.prompt,
-        authored_style: request.authoredStyle,
+        authored_style:
+          request.authoredStyle.intent === "set"
+            ? {
+                intent: "set",
+                style_id: request.authoredStyle.styleId,
+              }
+            : { intent: "keep" },
+        master:
+          request.master.intent === "set"
+            ? {
+                intent: "set",
+                pin: {
+                  master_id: request.master.pin.masterId,
+                  revision: request.master.pin.revision,
+                  digest: request.master.pin.digest,
+                },
+              }
+            : { intent: request.master.intent },
         vision_qa: request.visionQa,
       }),
       signal,

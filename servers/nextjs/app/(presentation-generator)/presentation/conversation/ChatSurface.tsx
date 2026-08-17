@@ -47,6 +47,7 @@ const runMessageKey: Record<
   "slide.delete": "runType.slideDelete",
   "version.restore": "runType.versionRestore",
   "template.apply": "runType.templateApply",
+  "design.apply": "runType.templateApply",
   "quality.review": "runType.qualityReview",
   "export.pptx": "runType.exportPptx",
   "export.pdf": "runType.exportPdf",

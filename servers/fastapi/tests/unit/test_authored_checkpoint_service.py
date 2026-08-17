@@ -1,5 +1,6 @@
 import asyncio
 import uuid
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -10,7 +11,14 @@ from models.sql.async_presentation_generation_status import (
 )
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from models.sql.presentation_generation_job import PresentationGenerationJob
+from models.presentation_outline_model import (
+    PresentationOutlineModel,
+    SlideOutlineModel,
+)
 from services import authored_checkpoint_service as checkpoints
+from services import authored_presentation_pipeline as pipeline
+from utils.llm_calls.author_slide import Brand
+from utils.renderer_isolation import RendererPolicyError
 
 
 async def _checkpoint_database(tmp_path, monkeypatch):
@@ -53,6 +61,44 @@ async def _running_authored_job(maker, *, total_slides=0):
         session.add_all((status, job))
         await session.commit()
     return status, job
+
+
+def _one_slide_outline():
+    return PresentationOutlineModel(
+        slides=[SlideOutlineModel(content="checkpoint resume")]
+    )
+
+
+def _pipeline_brand():
+    return Brand(
+        topic="checkpoint",
+        language="English",
+        primary="#2563EB",
+        fonts="Inter",
+    )
+
+
+def _install_one_slide_pipeline_fakes(monkeypatch, *, rendered_html):
+    plan = SimpleNamespace(
+        contents=("checkpoint resume",),
+        design_system="TEST DESIGN SYSTEM",
+        reference_mode="style_reference",
+    )
+
+    async def unexpected_author(*_args, **_kwargs):
+        raise AssertionError("a completed author checkpoint must be resumed")
+
+    async def fake_render(html):
+        rendered_html.append(html)
+        return b"rendered-png"
+
+    async def no_recording(**_kwargs):
+        return None
+
+    monkeypatch.setattr(pipeline, "prepare_authored_deck", lambda *_args: plan)
+    monkeypatch.setattr(pipeline, "author_planned_slide", unexpected_author)
+    monkeypatch.setattr(pipeline, "render_html_to_png", fake_render)
+    monkeypatch.setattr(pipeline, "record_local_stage", no_recording)
 
 
 def test_exception_metadata_is_bounded_and_redacts_secrets_paths_and_html():
@@ -104,6 +150,22 @@ def test_exception_metadata_is_bounded_and_redacts_secrets_paths_and_html():
     assert safe["exception_type"] == "RuntimeError"
     assert safe["cause"] == sanitized
     assert len(safe["fingerprint"]) == 16
+
+
+def test_retry_classifier_keeps_renderer_policy_failures_non_retryable():
+    class HttpError(RuntimeError):
+        def __init__(self, status_code):
+            super().__init__(f"HTTP {status_code}")
+            self.status_code = status_code
+
+    assert (
+        checkpoints.is_retryable_exception(RendererPolicyError("unsafe HTML"))
+        is False
+    )
+    assert checkpoints.is_retryable_exception(HttpError(429)) is True
+    assert checkpoints.is_retryable_exception(HttpError(500)) is True
+    assert checkpoints.is_retryable_exception(HttpError(503)) is True
+    assert checkpoints.is_retryable_exception(TimeoutError("provider timeout")) is True
 
 
 def test_final_publish_is_attempt_fenced_and_terminal_in_one_transaction(
@@ -457,6 +519,133 @@ def test_attempt_token_fences_stale_checkpoint_writes(tmp_path, monkeypatch):
             assert raised.value.code == "authored_attempt_lost"
             checkpoint = await checkpoints.get_checkpoint(job.id, 0)
             assert checkpoint.author_status == "pending"
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_invalid_resumed_html_fails_before_render_and_is_durably_non_retryable(
+    tmp_path, monkeypatch
+):
+    async def scenario():
+        engine, maker = await _checkpoint_database(tmp_path, monkeypatch)
+        rendered_html = []
+        _install_one_slide_pipeline_fakes(
+            monkeypatch,
+            rendered_html=rendered_html,
+        )
+        try:
+            _, job = await _running_authored_job(maker, total_slides=1)
+            await checkpoints.initialize_checkpoints(
+                job_id=job.id,
+                attempt_token="attempt-a",
+                roles=["title"],
+            )
+            await checkpoints.start_stage(
+                job_id=job.id,
+                slide_index=0,
+                stage="author",
+                attempt_token="attempt-a",
+            )
+            unsafe = (
+                "<!doctype html><html><head>"
+                '<meta http-equiv="refresh" content="0;url=https://attacker.test">'
+                "</head><body><main>unsafe checkpoint</main></body></html>"
+            )
+            await checkpoints.complete_stage(
+                job_id=job.id,
+                slide_index=0,
+                stage="author",
+                attempt_token="attempt-a",
+                html=unsafe,
+            )
+
+            with pytest.raises(checkpoints.AuthoredStageError) as raised:
+                await pipeline._author_illustrate_render_pipeline(
+                    _one_slide_outline(),
+                    _pipeline_brand(),
+                    SimpleNamespace(
+                        reference_mode="style_reference",
+                        illustration_prompt=None,
+                    ),
+                    generation_job=job,
+                )
+
+            assert raised.value.stage == "author"
+            assert raised.value.code == "authored_slide_author_failed"
+            assert raised.value.retryable is False
+            assert rendered_html == []
+            failed = await checkpoints.get_checkpoint(job.id, 0)
+            assert failed.author_status == "failed"
+            assert failed.render_status == "pending"
+            assert failed.failed_stage == "author"
+            assert failed.error["retryable"] is False
+            async with maker() as session:
+                stored_job = await session.get(PresentationGenerationJob, job.id)
+                assert stored_job.resume_allowed is False
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_resumed_completed_html_is_canonicalized_then_rendered_normally(
+    tmp_path, monkeypatch
+):
+    async def scenario():
+        engine, maker = await _checkpoint_database(tmp_path, monkeypatch)
+        rendered_html = []
+        _install_one_slide_pipeline_fakes(
+            monkeypatch,
+            rendered_html=rendered_html,
+        )
+        try:
+            _, job = await _running_authored_job(maker, total_slides=1)
+            await checkpoints.initialize_checkpoints(
+                job_id=job.id,
+                attempt_token="attempt-a",
+                roles=["title"],
+            )
+            await checkpoints.start_stage(
+                job_id=job.id,
+                slide_index=0,
+                stage="author",
+                attempt_token="attempt-a",
+            )
+            resumable = (
+                "<!doctype html><html><head><meta charset='utf-8'>"
+                "<META CONTENT='width=device-width' NAME='VIEWPORT'>"
+                "</head><body><main>safe checkpoint</main></body></html>"
+            )
+            await checkpoints.complete_stage(
+                job_id=job.id,
+                slide_index=0,
+                stage="author",
+                attempt_token="attempt-a",
+                html=resumable,
+            )
+
+            result = await pipeline._author_illustrate_render_pipeline(
+                _one_slide_outline(),
+                _pipeline_brand(),
+                SimpleNamespace(
+                    reference_mode="style_reference",
+                    illustration_prompt=None,
+                ),
+                generation_job=job,
+            )
+
+            assert len(rendered_html) == 1
+            assert "viewport" not in rendered_html[0].lower()
+            assert '<meta charset="utf-8">' in rendered_html[0]
+            assert result.deck.htmls == rendered_html
+            resumed = await checkpoints.get_checkpoint(job.id, 0)
+            assert resumed.author_status == "completed"
+            assert resumed.illustrate_status == "skipped"
+            assert resumed.render_status == "completed"
+            assert resumed.persist_status == "completed"
+            assert resumed.failed_stage is None
         finally:
             await engine.dispose()
 

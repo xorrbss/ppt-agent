@@ -1,8 +1,10 @@
 import React from "react";
 import { mount } from "cypress/react";
+import { NextIntlClientProvider } from "next-intl";
 import { Provider } from "react-redux";
 import { PathnameContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
 
+import enMessages from "@/i18n/messages/en.json";
 import { makeStore } from "@/store/store";
 import { setPresentationData, setStreaming } from "@/store/slices/presentationGeneration";
 import { createBlankPresentationSlide } from "../../_shared/blank-slide";
@@ -30,16 +32,18 @@ function mountSlide(mutationsEnabled: boolean) {
   store.dispatch(setStreaming(false));
 
   mount(
-    <PathnameContext.Provider value="/presentation/deck-1">
-      <Provider store={store}>
-        <SlideContent
-          slide={slide}
-          index={0}
-          presentationId="deck-1"
-          mutationsEnabled={mutationsEnabled}
-        />
-      </Provider>
-    </PathnameContext.Provider>,
+    <NextIntlClientProvider locale="en" messages={enMessages} timeZone="UTC">
+      <PathnameContext.Provider value="/presentation/deck-1">
+        <Provider store={store}>
+          <SlideContent
+            slide={slide}
+            index={0}
+            presentationId="deck-1"
+            mutationsEnabled={mutationsEnabled}
+          />
+        </Provider>
+      </PathnameContext.Provider>
+    </NextIntlClientProvider>,
   );
 }
 
@@ -48,6 +52,10 @@ describe("SlideContent mutation gate", () => {
     mountSlide(false);
 
     cy.get("#slide-0").should("have.attr", "data-mutations-enabled", "false");
+    cy.get("#slide-0").should("have.class", "md:mb-6");
+    cy.get('[data-testid="slide-page-boundary"]')
+      .should("have.class", "ring-slate-300")
+      .and("have.class", "shadow-[0_3px_12px_rgba(15,23,42,0.16)]");
     cy.get('[data-testid="slide-add-control"]').should("not.exist");
     cy.get('[data-testid="slide-mutation-controls"]').should("not.exist");
     cy.get('[contenteditable="true"]').should("not.exist");

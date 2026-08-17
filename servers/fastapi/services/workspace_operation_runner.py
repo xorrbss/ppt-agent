@@ -30,7 +30,7 @@ import secrets
 from typing import Any
 import uuid
 
-from sqlalchemy import and_, exists, func, or_, select, text, update
+from sqlalchemy import and_, case, exists, func, or_, select, text, update
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased
@@ -55,6 +55,7 @@ from services.workspace_operation_handler_registry import (
     WorkspaceOperationBlocked,
     WorkspaceOperationCancelled,
     WorkspaceOperationClaim,
+    WorkspaceOperationDeferred,
     WorkspaceOperationExecutionContext,
     WorkspaceOperationExecutionError,
     WorkspaceOperationHandlerRegistry,
@@ -85,6 +86,10 @@ WORKSPACE_OPERATION_LEASE_SECONDS = 300
 WORKSPACE_OPERATION_HEARTBEAT_SECONDS = 30
 WORKSPACE_OPERATION_POLL_SECONDS = 1.0
 WORKSPACE_OPERATION_MAX_CONCURRENCY = 2
+# Serialize the short owner-aware dispatch decision across PostgreSQL workers.
+# SQLite already uses BEGIN IMMEDIATE below.  The lock is transaction-scoped,
+# so a crashed worker cannot strand the queue.
+_WORKSPACE_CLAIM_LOCK_ID = 0x50505457534F5043
 _MAX_OBSERVATION_DURATION_MS = 30 * 24 * 60 * 60 * 1000
 
 _TERMINAL_STATES = frozenset({"succeeded", "failed", "cancelled", "dead_letter"})
@@ -124,6 +129,7 @@ _SAFE_PAYLOAD_KEYS = frozenset(
         "retry_count",
         "max_attempts",
         "backoff_seconds",
+        "capacity_waiting",
         "next_attempt_at",
         "error_code",
         "retryable",
@@ -136,6 +142,8 @@ _SAFE_PAYLOAD_KEYS = frozenset(
         "task_id",
         "job_id",
         "fencing_token",
+        "queue_position",
+        "wait_reason",
     }
 )
 
@@ -620,7 +628,14 @@ async def claim_next_workspace_operation(
     session_factory: async_sessionmaker[AsyncSession] = async_session_maker,
     lease_seconds: int = WORKSPACE_OPERATION_LEASE_SECONDS,
 ) -> WorkspaceOperationClaim | None:
-    """Claim the oldest ready operation with dialect-appropriate locking."""
+    """Claim a ready operation using a durable owner-aware fair order.
+
+    Each owner's oldest ready command is effectively its queue head.  Owners
+    with fewer active commands are served first, then the owner least recently
+    served (claim/heartbeat time).  All inputs live in
+    ``workspace_operations``, so the order survives process restarts without a
+    scheduler-only cursor or migration.
+    """
 
     now = _utc_now()
     token = secrets.token_urlsafe(32)
@@ -628,7 +643,34 @@ async def claim_next_workspace_operation(
         dialect = session.get_bind().dialect.name
         if dialect == "sqlite":
             await session.execute(text("BEGIN IMMEDIATE"))
+        elif dialect == "postgresql":
+            await session.execute(
+                text("SELECT pg_advisory_xact_lock(:lock_id)"),
+                {"lock_id": _WORKSPACE_CLAIM_LOCK_ID},
+            )
         executing = aliased(WorkspaceOperation)
+        owner_activity = aliased(WorkspaceOperation)
+        owner_history = aliased(WorkspaceOperation)
+        owner_active_count = (
+            select(func.count(owner_activity.id))
+            .where(owner_activity.owner_scope == WorkspaceOperation.owner_scope)
+            .where(owner_activity.state.in_(tuple(_PRESENTATION_EXECUTING_STATES)))
+            .correlate(WorkspaceOperation)
+            .scalar_subquery()
+        )
+        owner_last_served_at = (
+            select(
+                func.max(
+                    func.coalesce(
+                        owner_history.heartbeat_at,
+                        owner_history.started_at,
+                    )
+                )
+            )
+            .where(owner_history.owner_scope == WorkspaceOperation.owner_scope)
+            .correlate(WorkspaceOperation)
+            .scalar_subquery()
+        )
         statement = (
             select(WorkspaceOperation)
             .where(WorkspaceOperation.state == "queued")
@@ -647,7 +689,13 @@ async def claim_next_workspace_operation(
                     )
                 )
             )
-            .order_by(WorkspaceOperation.created_at, WorkspaceOperation.id)
+            .order_by(
+                owner_active_count,
+                case((owner_last_served_at.is_(None), 0), else_=1),
+                owner_last_served_at,
+                WorkspaceOperation.created_at,
+                WorkspaceOperation.id,
+            )
             .limit(1)
         )
         if dialect == "postgresql":
@@ -1396,6 +1444,101 @@ async def release_workspace_operation_claim(
         return True
 
 
+async def defer_workspace_operation_claim(
+    claim: WorkspaceOperationClaim,
+    deferred: WorkspaceOperationDeferred,
+    *,
+    session_factory: async_sessionmaker[AsyncSession] = async_session_maker,
+) -> bool:
+    """Return a capacity-bound claim to the durable queue for free.
+
+    ``attempt_number`` is restored because the handler never acquired scarce
+    generation capacity.  The fencing token remains monotonic, while the
+    attempt token and lease are cleared atomically so a later poll or another
+    worker can safely reclaim the operation.
+    """
+
+    now = _utc_now()
+    next_attempt_at = now + timedelta(seconds=deferred.retry_after_seconds)
+    async with session_factory() as session:
+        operation = await session.get(WorkspaceOperation, claim.operation_id)
+        if (
+            operation is None
+            or operation.attempt_token != claim.attempt_token
+            or operation.state not in _RUNNING_STATES
+        ):
+            await session.rollback()
+            return False
+        if (
+            operation.cancel_requested_at is not None
+            or operation.state == "cancelling"
+        ):
+            await session.rollback()
+            return await finalize_workspace_operation_cancelled(
+                claim,
+                session_factory=session_factory,
+            )
+
+        raw_detail = dict(deferred.detail)
+        queue_position = getattr(deferred, "queue_position", None)
+        if isinstance(queue_position, int) and queue_position > 0:
+            raw_detail.setdefault("queue_position", queue_position)
+        detail = sanitize_workspace_event_payload(raw_detail)
+        progress = {
+            **detail,
+            "state": "queued",
+            "status": "queued",
+            "stage": "waiting_for_capacity",
+            "wait_reason": deferred.code,
+            "capacity_waiting": True,
+        }
+        event = await append_operation_event(
+            session,
+            operation_id=claim.operation_id,
+            event_type="operation.progress",
+            payload=progress,
+            attempt_token=claim.attempt_token,
+            allowed_states=("running",),
+            projection_values={
+                "state": "queued",
+                "attempt_number": max(0, operation.attempt_number - 1),
+                "attempt_token": None,
+                "lease_expires_at": None,
+                "heartbeat_at": now,
+                "next_attempt_at": next_attempt_at,
+                "backoff_seconds": max(1, math.ceil(deferred.retry_after_seconds)),
+                "progress": progress,
+                "error_code": None,
+                "error_detail": None,
+                "started_at": (
+                    None if claim.attempt_number == 1 else operation.started_at
+                ),
+            },
+        )
+        if event is None:
+            await session.rollback()
+            if await _operation_cancel_requested(
+                claim.operation_id,
+                claim.attempt_token,
+                session_factory=session_factory,
+            ):
+                return await finalize_workspace_operation_cancelled(
+                    claim,
+                    session_factory=session_factory,
+                )
+            return False
+        await session.commit()
+        _observe_claim(
+            claim,
+            name="released",
+            result_status="queued",
+            duration_ms=_elapsed_ms(operation.created_at, now),
+            retry_count=operation.retry_count,
+            fence_outcome="capacity_deferred",
+        )
+        return True
+
+
 async def request_workspace_operation_cancellation(
     operation_id: uuid.UUID,
     *,
@@ -2102,6 +2245,14 @@ class WorkspaceOperationRunner:
             finalized = await finalize_workspace_operation_success(claim, result, session_factory=self.session_factory)
             if not finalized and await context.cancellation_requested():
                 await finalize_workspace_operation_cancelled(claim, session_factory=self.session_factory)
+        except WorkspaceOperationDeferred as deferred:
+            await asyncio.shield(
+                defer_workspace_operation_claim(
+                    claim,
+                    deferred,
+                    session_factory=self.session_factory,
+                )
+            )
         except WorkspaceOperationBlocked as error:
             await _transition_claim_blocked(claim, error, session_factory=self.session_factory)
         except WorkspaceOperationCancelled:

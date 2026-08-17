@@ -1057,6 +1057,13 @@ def _event_to_wire(
     operation_anchor_position: int | None = None,
 ) -> dict[str, Any]:
     payload = _safe_payload(event.payload or {})
+    queue_position = payload.get("queue_position") if isinstance(payload, dict) else None
+    if (
+        isinstance(queue_position, bool)
+        or not isinstance(queue_position, int)
+        or queue_position < 1
+    ):
+        queue_position = None
     return {
         "id": f"{event.operation_id}:{event.sequence}",
         "operation_id": str(event.operation_id),
@@ -1083,6 +1090,13 @@ def _event_to_wire(
             and isinstance(payload.get("retryable"), bool)
             else None
         ),
+        "capacity_waiting": (
+            payload.get("capacity_waiting")
+            if isinstance(payload, dict)
+            and isinstance(payload.get("capacity_waiting"), bool)
+            else None
+        ),
+        "queue_position": queue_position,
         "result": payload.get("result") if isinstance(payload, dict) else None,
         "created_at": event.created_at.isoformat() if event.created_at else None,
     }
@@ -1097,6 +1111,7 @@ def _operation_title(kind: str) -> str:
         "slide.delete": "슬라이드 삭제",
         "version.restore": "버전 복원",
         "template.apply": "AI 저작 템플릿 변경",
+        "design.apply": "디자인 변경",
         "quality.review": "프레젠테이션 품질 검사",
         "export.pptx": "PowerPoint 내보내기",
         "export.pdf": "PDF 내보내기",
@@ -1144,6 +1159,26 @@ def _operation_retryable(operation: WorkspaceOperation) -> bool | None:
         # always safe to submit as a new operation.
         return True
     return None
+
+
+def _capacity_wait_projection(operation: WorkspaceOperation) -> tuple[bool, int | None]:
+    """Return only durable, non-error capacity-wait metadata for clients."""
+
+    progress = operation.progress if isinstance(operation.progress, Mapping) else {}
+    capacity_waiting = bool(
+        operation.state == "queued"
+        and progress.get("stage") == "waiting_for_capacity"
+        and progress.get("capacity_waiting") is True
+    )
+    queue_position = progress.get("queue_position")
+    if (
+        not capacity_waiting
+        or isinstance(queue_position, bool)
+        or not isinstance(queue_position, int)
+        or queue_position < 1
+    ):
+        queue_position = None
+    return capacity_waiting, queue_position
 
 
 async def workspace_timeline(
@@ -1381,6 +1416,7 @@ async def workspace_timeline(
             )
         else:
             progress = row.progress or {}
+            capacity_waiting, queue_position = _capacity_wait_projection(row)
             items.append(
                 {
                     "anchor_type": "operation",
@@ -1391,6 +1427,8 @@ async def workspace_timeline(
                     "title": _operation_title(row.kind),
                     "status": row.state,
                     "progress": progress.get("progress", progress.get("percent")),
+                    "capacity_waiting": capacity_waiting,
+                    "queue_position": queue_position,
                     "error": row.error_code,
                     "error_message": _SAFE_ERROR_MESSAGES.get(row.error_code or ""),
                     "retryable": _operation_retryable(row),
@@ -1916,7 +1954,10 @@ async def apply_workspace_action(
             # and SQLite enforces the receipt FK immediately.
             await session.flush()
             linked_job_id = _linked_generation_job_id(source_operation)
-            if linked_job_id is not None:
+            if linked_job_id is not None or source_operation.kind in {
+                "template.apply",
+                "design.apply",
+            }:
                 from services.presentation_generation_job_service import (
                     rebind_workspace_linked_generation_job_for_retry,
                 )
@@ -1926,6 +1967,7 @@ async def apply_workspace_action(
                     source_operation.id,
                     operation.id,
                     expected_job_id=linked_job_id,
+                    expected_presentation_id=source_operation.presentation_id,
                 )
                 if not rebound:
                     await session.rollback()

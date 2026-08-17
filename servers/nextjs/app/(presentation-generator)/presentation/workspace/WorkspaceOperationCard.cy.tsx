@@ -1,11 +1,99 @@
 import React from "react";
+import { NextIntlClientProvider } from "next-intl";
+import koMessages from "@/i18n/messages/ko.json";
 
 import { WorkspaceOperationCard } from "./WorkspaceOperationCard";
 
+const mountCard = (card: React.ReactElement) =>
+  cy.mount(
+    <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="Asia/Seoul">
+      {card}
+    </NextIntlClientProvider>,
+  );
+
 describe("WorkspaceOperationCard quality review", () => {
+  it("does not present a design application as complete without retained-layout fidelity evidence", () => {
+    mountCard(
+      <WorkspaceOperationCard
+        operation={{
+          anchorType: "operation",
+          id: "design-apply-pending-evidence",
+          operationId: "design-apply-pending-evidence",
+          position: 0,
+          operationType: "design.apply",
+          title: "AI 저작 디자인 적용",
+          status: "succeeded",
+          events: [],
+          allowedActions: [],
+          result: {
+            kind: "design.apply",
+            message: "작업이 완료되었습니다.",
+            slide_count: 5,
+          },
+        }}
+        onAction={() => undefined}
+      />,
+    );
+
+    cy.get('[role="status"]').should("contain.text", "시각 검증 증거 대기");
+    cy.get('[data-testid="template-apply-result"]')
+      .should("contain.text", "완료로 표시하지 않습니다")
+      .and("contain.text", "Reference-layout digest")
+      .and("contain.text", "미확인");
+  });
+
+  it("recognizes the completed snake_case design receipt when preview and native evidence agree", () => {
+    const snapshot = {
+      reference_layout_digest: "sha256:reference-layout",
+      composition_digest: "sha256:composition",
+      rule_digest: "sha256:rule",
+      slide_count: 8,
+    };
+    mountCard(
+      <WorkspaceOperationCard
+        operation={{
+          anchorType: "operation",
+          id: "design-apply-verified",
+          operationId: "design-apply-verified",
+          position: 0,
+          operationType: "design.apply",
+          title: "AI 저작 디자인 적용",
+          status: "succeeded",
+          events: [],
+          allowedActions: [],
+          result: {
+            kind: "design.apply",
+            message: "AI 저작 레이아웃 검증이 완료되었습니다.",
+            template_id: "artifact-template-ai/osb-proposal-1-29",
+            template_digest: "sha256:template",
+            reference_layout_digest: snapshot.reference_layout_digest,
+            composition_digest: snapshot.composition_digest,
+            rule_digest: snapshot.rule_digest,
+            visual_fidelity: { status: "passed" },
+            page_numbers: [1, 2, 3, 4, 5, 6, 7, 8],
+            slide_count: 8,
+            preview_snapshot: snapshot,
+            native_pptx_snapshot: snapshot,
+            readback_verified: true,
+          },
+        }}
+        onAction={() => undefined}
+      />,
+    );
+
+    cy.get('[role="status"]').should("contain.text", "완료");
+    cy.get('[data-testid="template-apply-result"]')
+      .should("contain.text", "AI 저작 레이아웃 검증이 완료되었습니다")
+      .and("contain.text", "동일한 resolved snapshot 확인");
+    cy.get('[data-testid="template-apply-evidence"]')
+      .should("contain.text", "artifact-template-ai/osb-proposal-1-29")
+      .and("contain.text", "1, 2, 3, 4, 5, 6, 7, 8 / 8장")
+      .and("contain.text", "검증됨");
+  });
+
   it("separates quality counts, surfaces all maximum-repair metrics, and focuses residual issues", () => {
     const onFocusSlide = cy.stub().as("focusSlide");
-    cy.mount(
+    mountCard(
       <WorkspaceOperationCard
         operation={{
           anchorType: "operation",

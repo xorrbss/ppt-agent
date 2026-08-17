@@ -15,6 +15,7 @@ from sqlmodel import SQLModel
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
+from models.generate_presentation_request import GeneratePresentationRequest
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.user import User
@@ -676,6 +677,15 @@ async def _default_pipeline_merges_publication_result(tmp_path: Path, monkeypatc
             endpoint, "_validate_authored_exact_admission", lambda _request: None
         )
 
+        async def preserve_unpinned_request(_request):
+            return None
+
+        monkeypatch.setattr(
+            endpoint,
+            "_validate_authored_master_pin_admission",
+            preserve_unpinned_request,
+        )
+
         async def fake_generation_handler(
             _request,
             _presentation_id,
@@ -739,5 +749,126 @@ async def _default_pipeline_merges_publication_result(tmp_path: Path, monkeypatc
             "job_id": str(job_id),
             "artifact_id": "immutable-artifact-id",
         }
+    finally:
+        await engine.dispose()
+
+
+def test_default_pipeline_resolves_durable_authored_master_pin_before_generation_handler(
+    tmp_path: Path, monkeypatch
+):
+    asyncio.run(
+        _default_pipeline_resolves_durable_authored_master_pin_before_generation_handler(
+            tmp_path, monkeypatch
+        )
+    )
+
+
+async def _default_pipeline_resolves_durable_authored_master_pin_before_generation_handler(
+    tmp_path: Path, monkeypatch
+):
+    engine, maker = await _database(tmp_path / "durable-master-pin.db", monkeypatch)
+    try:
+        presentation_id, operation_id, task_id, job_id = (
+            await _seed_linked_generation(maker, owner_id=OWNER_ID)
+        )
+        digest = f"sha256:{'a' * 64}"
+        durable_request = GeneratePresentationRequest(
+            content="Pinned authored deck",
+            strategy="authored",
+            template="authored",
+            master_pin={
+                "masterId": "master:company",
+                "revision": 7,
+                "digest": digest,
+            },
+        )
+        async with maker() as session, session.begin():
+            job = await session.get(PresentationGenerationJob, job_id)
+            assert job is not None
+            job.request_payload = durable_request.model_dump(mode="json", by_alias=True)
+            session.add(job)
+
+        from api.v1.ppt.endpoints import presentation_generate as endpoint
+
+        calls: list[str] = []
+        resolved_master = SimpleNamespace(master_id="master:company", revision=7)
+        validate_exact = endpoint._validate_authored_exact_admission
+
+        def observed_exact_validation(request):
+            calls.append("exact")
+            assert request._authored_master_resolution is None
+            validate_exact(request)
+
+        async def resolve_master_pin(request):
+            calls.append("master")
+            assert request.master_pin is not None
+            assert request.master_pin.master_id == "master:company"
+            assert request.master_pin.revision == 7
+            assert request.master_pin.digest == digest
+            request._authored_master_resolution = resolved_master
+
+        monkeypatch.setattr(
+            endpoint, "_validate_authored_exact_admission", observed_exact_validation
+        )
+        monkeypatch.setattr(
+            endpoint, "_validate_authored_master_pin_admission", resolve_master_pin
+        )
+
+        async def fake_generation_handler(
+            request,
+            _presentation_id,
+            *,
+            async_status,
+            export_cookie_header,
+            generation_job,
+            progress_reporter,
+            sql_session,
+        ):
+            calls.append("generate")
+            assert calls == ["exact", "master", "generate"]
+            assert request._authored_master_resolution is resolved_master
+            assert export_cookie_header is None
+            assert generation_job.id == job_id
+            assert progress_reporter == context.progress
+            async_status.status = "completed"
+            presentation = await sql_session.get(
+                PresentationModel, presentation_id
+            )
+            assert presentation is not None
+            presentation.revision = 1
+            sql_session.add_all((async_status, presentation))
+            await sql_session.flush()
+
+        monkeypatch.setattr(
+            endpoint, "generate_presentation_handler", fake_generation_handler
+        )
+        claim = WorkspaceOperationClaim(
+            operation_id=operation_id,
+            owner_id=OWNER_ID,
+            owner_scope=str(OWNER_ID),
+            conversation_id=uuid.uuid4(),
+            presentation_id=presentation_id,
+            kind=PRESENTATION_GENERATION_OPERATION_KIND,
+            request_payload={},
+            expected_revision=0,
+            attempt_number=1,
+            attempt_token="attempt-token",
+            fencing_token=1,
+        )
+        context = _PipelineContext(claim)
+        handler = PresentationGenerationOperationHandler(
+            session_factory=maker,
+            internal_header_provider=lambda: {},  # not used by this direct call
+        )
+        owner_token = set_current_owner_id(OWNER_ID)
+        try:
+            result = await handler._run_existing_pipeline(
+                job_id, task_id, None, context
+            )
+        finally:
+            reset_current_owner_id(owner_token)
+
+        assert calls == ["exact", "master", "generate"]
+        assert result.result_revision == 1
     finally:
         await engine.dispose()

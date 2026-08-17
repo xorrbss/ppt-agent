@@ -1,19 +1,43 @@
 import uuid
 from typing import Any, List, Literal, Optional
 
-from pydantic import BaseModel, Field, PrivateAttr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator
 
 from enums.tone import Tone
 from enums.verbosity import Verbosity
+from models.authored_vnext.master.base import Digest, MasterId, StrictCamelModel
+
+
+class AuthoredMasterPinInput(StrictCamelModel):
+    """Small public pin accepted by the existing presentation flow.
+
+    Layout/font digests are deliberately server-owned.  They are resolved from
+    the immutable published revision after the caller's three-field pin passes
+    the published-head check.
+    """
+
+    master_id: MasterId
+    revision: int = Field(ge=1)
+    digest: Digest
 
 
 class GeneratePresentationRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     # Admission-only state. This never crosses the HTTP wire, but lets the
     # in-process background task execute the exact immutable revision that was
     # accepted instead of re-reading mutable current state.
     _template_v2_generation_target: Any = PrivateAttr(default=None)
     _request_id: Optional[str] = PrivateAttr(default=None)
     _authored_exact_snapshot_id: Optional[str] = PrivateAttr(default=None)
+    _authored_master_pin: Any = PrivateAttr(default=None)
+    _authored_master_contract: Any = PrivateAttr(default=None)
+    _authored_master_resolution: Any = PrivateAttr(default=None)
+    _authored_composition_pin: Any = PrivateAttr(default=None)
+    _authored_style_snapshot: Any = PrivateAttr(default=None)
+    _authored_deck_metadata: Any = PrivateAttr(default=None)
+    _authored_source_semantic_snapshot: Any = PrivateAttr(default=None)
+    _authored_design_replay: bool = PrivateAttr(default=False)
     _reference_snapshots: tuple[Any, ...] = PrivateAttr(default=())
 
     # Chat-first async generation reuses the durable presentation shell and
@@ -122,4 +146,12 @@ class GeneratePresentationRequest(BaseModel):
     )
     authored_style: Optional[str] = Field(
         default=None, description="Authored mode: authored style preset id"
+    )
+    master_pin: Optional[AuthoredMasterPinInput] = Field(
+        default=None,
+        alias="masterPin",
+        description=(
+            "Authored mode only: immutable published master identity. The server "
+            "resolves layout/font manifest digests after validating the published head."
+        ),
     )

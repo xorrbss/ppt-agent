@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import { AUTHORED_VNEXT_SLIDE_COUNT, type AuthoredVnextFlowState, type FlowEvent } from "@/lib/authored-vnext/flow";
+import { type AuthoredVnextFlowState, type FlowEvent } from "@/lib/authored-vnext/flow";
 import type { MasterRevisionEnvelope, VisualDirection } from "@/lib/authored-vnext/master/contracts";
 import MasterSetupGate from "./master-setup/MasterSetupGate";
 
@@ -32,7 +32,7 @@ export default function AuthoredVnextFlowStage(p: Props) {
     <p className="text-xs font-bold text-blue-700">{t("outline.step")}</p><h1 className="mt-2 text-3xl font-bold">{t("outline.title")}</h1><ol className="mt-6 grid gap-3 sm:grid-cols-2" data-testid="authored-outline">{p.flow.outlineLayout?.slides.map((item) => <li className="rounded-xl border border-slate-200 p-4" data-layout-id={item.layoutId} key={item.slideId}><strong>{item.ordinal}. {item.title}</strong><span className="mt-1 block text-xs text-blue-700">{item.layoutId}</span></li>)}</ol>
     <button className="mt-6 rounded-xl bg-blue-700 px-5 py-3 font-bold text-white" data-testid="authored-generate" onClick={p.onGenerate} type="button">{t("outline.generate")}</button>{p.notice && <p className="mt-3 text-red-700" role="alert">{p.notice}</p>}
   </section></main>;
-  if (p.flow.step === "generating") { const ready = p.flow.generation?.slides.filter((item) => item.status === "ready").length ?? 0; return <main className="grid min-h-screen place-items-center bg-slate-950 p-6 text-white"><section className="w-full max-w-3xl"><h1 className="text-3xl font-bold">{t("generating.title")}</h1><p aria-live="polite" className="mt-2">{t("generating.progress", { ready, total: AUTHORED_VNEXT_SLIDE_COUNT })}</p>{p.notice && <p className="mt-4 text-red-300">{p.notice}</p>}</section></main>; }
+  if (p.flow.step === "generating") { const ready = p.flow.generation?.slides.filter((item) => item.status === "ready").length ?? 0; return <main className="grid min-h-screen place-items-center bg-slate-950 p-6 text-white"><section className="w-full max-w-3xl"><h1 className="text-3xl font-bold">{t("generating.title")}</h1><p aria-live="polite" className="mt-2">{t("generating.progress", { ready, total: p.flow.slideCount })}</p>{p.notice && <p className="mt-4 text-red-300">{p.notice}</p>}</section></main>; }
   if (!p.workbench) return <main className="grid min-h-screen place-items-center">{t("errors.noDeck")}</main>;
   return <div className="relative">{p.notice && <div aria-live="polite" className="fixed left-1/2 top-2 z-[80] -translate-x-1/2 rounded-lg bg-slate-950 px-4 py-2 text-xs text-white">{p.notice}</div>}<div className="fixed bottom-4 left-[16rem] z-[70] flex max-w-xl gap-2 rounded-xl bg-white p-2 shadow-lg"><input aria-label={t("regeneration.inputAria")} className="min-w-80 rounded-md border border-slate-300 px-3 py-2 text-xs" data-testid="authored-regeneration-body" onChange={(event) => p.onRegenerationBodyChange(event.target.value)} placeholder={t("regeneration.placeholder")} value={p.regenerationBody} /><button className="rounded-lg bg-violet-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-40" data-testid="authored-regeneration-prepare" disabled={!p.regenerationBody.trim()} onClick={p.onPrepareRegeneration} type="button">{t("regeneration.prepare")}</button></div>{p.workbench}</div>;
 }

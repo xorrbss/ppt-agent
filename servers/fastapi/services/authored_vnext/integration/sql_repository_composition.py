@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+from datetime import timezone
+import uuid
 from typing import Any
 
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from models.authored_vnext.master.operations import MasterRevisionResponse
+from models.authored_vnext.master.operations import (
+    MasterCatalogPage,
+    MasterRevisionResponse,
+)
 from models.authored_vnext.master.slide import DeckSnapshot
 from models.sql.authored_vnext_repository import (
     AuthoredVNextCandidate,
@@ -29,6 +34,11 @@ from services.authored_vnext.master.errors import (
     MasterNotFoundError,
     MasterRevisionConflictError,
 )
+from services.authored_vnext.master.repository import (
+    decode_catalog_cursor,
+    encode_catalog_cursor,
+    master_catalog_item,
+)
 
 from .sql_repository_types import (
     ExportJobConflictError,
@@ -41,6 +51,19 @@ from .sql_repository_types import (
 
 
 class AuthoredVNextCompositionRepositoryMixin:
+    def allocate_master_id(self) -> str:
+        with self._sessions() as session:
+            while True:
+                master_id = f"master:{uuid.uuid4().hex}"
+                exists = session.scalar(
+                    select(AuthoredVNextMasterRevision.id).where(
+                        *self._scope(AuthoredVNextMasterRevision),
+                        AuthoredVNextMasterRevision.master_id == master_id,
+                    )
+                )
+                if exists is None:
+                    return master_id
+
     def get_master(self, master_id: str, revision: int | None = None) -> MasterRevisionResponse:
         with self._sessions() as session:
             selected = revision
@@ -59,6 +82,94 @@ class AuthoredVNextCompositionRepositoryMixin:
             if row is None:
                 raise MasterNotFoundError()
             return MasterRevisionResponse.model_validate(row.payload)
+
+    def get_published_master(self, master_id: str) -> MasterRevisionResponse:
+        with self._sessions() as session:
+            pointer = session.scalar(
+                select(AuthoredVNextPublicationPointer).where(
+                    *self._scope(AuthoredVNextPublicationPointer),
+                    AuthoredVNextPublicationPointer.publication_kind == "master",
+                    AuthoredVNextPublicationPointer.entity_id == master_id,
+                )
+            )
+            if pointer is None:
+                raise MasterNotFoundError()
+            row = session.scalar(
+                select(AuthoredVNextMasterRevision).where(
+                    *self._scope(AuthoredVNextMasterRevision),
+                    AuthoredVNextMasterRevision.master_id == master_id,
+                    AuthoredVNextMasterRevision.revision == pointer.revision,
+                    AuthoredVNextMasterRevision.digest == pointer.digest,
+                    AuthoredVNextMasterRevision.status == "published",
+                )
+            )
+            if row is None:
+                raise MasterNotFoundError()
+            return MasterRevisionResponse.model_validate(row.payload)
+
+    def list_masters(
+        self, *, cursor: str | None, limit: int
+    ) -> MasterCatalogPage:
+        after = decode_catalog_cursor(cursor)
+        with self._sessions() as session:
+            predicates = [
+                *self._scope(AuthoredVNextEntityHead),
+                AuthoredVNextEntityHead.entity_kind == "master",
+            ]
+            if after is not None:
+                predicates.append(AuthoredVNextEntityHead.entity_id > after)
+            heads = list(
+                session.scalars(
+                    select(AuthoredVNextEntityHead)
+                    .where(*predicates)
+                    .order_by(AuthoredVNextEntityHead.entity_id.asc())
+                    .limit(limit + 1)
+                )
+            )
+            has_more = len(heads) > limit
+            heads = heads[:limit]
+            items = []
+            for head in heads:
+                pointer = session.scalar(
+                    select(AuthoredVNextPublicationPointer).where(
+                        *self._scope(AuthoredVNextPublicationPointer),
+                        AuthoredVNextPublicationPointer.publication_kind == "master",
+                        AuthoredVNextPublicationPointer.entity_id == head.entity_id,
+                    )
+                )
+                selected_revision = pointer.revision if pointer else head.revision
+                selected_digest = pointer.digest if pointer else head.digest
+                row = session.scalar(
+                    select(AuthoredVNextMasterRevision).where(
+                        *self._scope(AuthoredVNextMasterRevision),
+                        AuthoredVNextMasterRevision.master_id == head.entity_id,
+                        AuthoredVNextMasterRevision.revision == selected_revision,
+                        AuthoredVNextMasterRevision.digest == selected_digest,
+                    )
+                )
+                if row is None:
+                    continue
+                display = MasterRevisionResponse.model_validate(row.payload)
+                published = display if pointer is not None else None
+                updated_time = head.updated_at
+                if updated_time.tzinfo is None:
+                    updated_time = updated_time.replace(tzinfo=timezone.utc)
+                items.append(
+                    master_catalog_item(
+                        display,
+                        published=published,
+                        has_draft=pointer is None or head.revision > pointer.revision,
+                        updated_time=updated_time,
+                    )
+                )
+            return MasterCatalogPage(
+                items=items,
+                next_cursor=(
+                    encode_catalog_cursor(heads[-1].entity_id)
+                    if has_more and heads
+                    else None
+                ),
+            )
 
     def append_master(
         self,

@@ -1,12 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
+import { ReactReduxContext } from "react-redux";
 
 import { Button } from "@/components/ui/button";
 import { notify } from "@/components/ui/sonner";
+import type { RootState } from "@/store/store";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import type { WorkspaceCommandDispatcher } from "../workspace";
+import {
+  masterPinnedBodyOnlyContext,
+  presentationMasterPin,
+  presentationSlideLayoutId,
+} from "../utils/masterPresentation";
 import { PageRemakePreviewImage } from "./PageRemakePreviewImage";
 import {
   describePageRemakeFailure,
@@ -102,6 +109,7 @@ function PageRemakeHistoryCard({
   onApplied: (taskId: string) => void;
   onRegenerate?: (slideIndex: number) => void;
 }) {
+  const reduxContext = useContext(ReactReduxContext);
   const pageNumber = entry.slide_index + 1;
   const warned = entry.validation?.candidate_dom === "warning";
   const issueGroups = warned
@@ -116,12 +124,29 @@ function PageRemakeHistoryCard({
     onPublishingChange(entry.preview_task_id);
     try {
       if (onWorkspaceCommand) {
+        const presentationData = reduxContext
+          ? (reduxContext.store.getState() as RootState).presentationGeneration
+              .presentationData
+          : null;
+        const pin = presentationMasterPin(presentationData);
+        const layoutId = pin
+          ? presentationSlideLayoutId(presentationData, entry.slide_index)
+          : null;
+        const pinnedContext = pin
+          ? masterPinnedBodyOnlyContext(pin, layoutId)
+          : null;
+        if (pin && !pinnedContext) {
+          throw new Error(
+            "The pinned master layout for this slide is unavailable.",
+          );
+        }
         await onWorkspaceCommand(`${pageNumber}페이지 미리보기를 적용해 줘`, {
           commandType: "slide.regenerate",
           context: {
             slide_index: entry.slide_index,
             preview_task_id: entry.preview_task_id,
             source: "page_remake_history",
+            ...(pinnedContext ?? {}),
           },
         });
         notify.success("페이지 적용 작업을 대화에 추가했습니다.");
@@ -152,6 +177,7 @@ function PageRemakeHistoryCard({
     pageNumber,
     presentationId,
     publishing,
+    reduxContext,
   ]);
 
   return (

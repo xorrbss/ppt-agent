@@ -21,6 +21,7 @@ from pydantic import (
     model_validator,
 )
 
+from models.generate_presentation_request import AuthoredMasterPinInput
 from models.sql.workspace import WORKSPACE_ASSET_STATES
 from models.workspace_operation_kinds import (
     WORKSPACE_BOOTSTRAP_KINDS,
@@ -292,17 +293,90 @@ class WorkspaceCommandRequest(BaseModel):
         return _reject_sensitive_workspace_keys(value)
 
 
-class WorkspaceTemplateApplicationRequest(BaseModel):
-    """Explicit confirmation contract for an AI-authored template change."""
+class WorkspaceAuthoredStyleIntent(BaseModel):
+    """Whether to retain or explicitly replace the authored body style."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    intent: Literal["keep", "set"]
+    style_id: Optional[str] = Field(
+        default=None,
+        alias="styleId",
+        min_length=1,
+        max_length=255,
+    )
+
+    @field_validator("style_id")
+    @classmethod
+    def strip_style_id(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("styleId must not be blank")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_intent_payload(self) -> "WorkspaceAuthoredStyleIntent":
+        if self.intent == "set" and self.style_id is None:
+            raise ValueError("styleId is required when authoredStyle intent is set")
+        if self.intent == "keep" and self.style_id is not None:
+            raise ValueError("styleId is not allowed when authoredStyle intent is keep")
+        return self
+
+
+class WorkspaceMasterIntent(BaseModel):
+    """Explicit master selection; clear is distinct from keep-with-no-input."""
 
     model_config = ConfigDict(extra="forbid")
 
+    intent: Literal["keep", "set", "clear"]
+    pin: Optional[AuthoredMasterPinInput] = None
+
+    @model_validator(mode="after")
+    def validate_intent_payload(self) -> "WorkspaceMasterIntent":
+        if self.intent == "set" and self.pin is None:
+            raise ValueError("pin is required when master intent is set")
+        if self.intent != "set" and self.pin is not None:
+            raise ValueError("pin is only allowed when master intent is set")
+        return self
+
+
+class WorkspaceTemplateApplicationRequest(BaseModel):
+    """Explicit confirmation contract for an AI-authored design change."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
     source_revision: int = Field(ge=0)
     prompt: str = Field(min_length=1, max_length=100_000)
-    authored_style: str = Field(min_length=1, max_length=255)
-    vision_qa: bool = False
+    authored_style: WorkspaceAuthoredStyleIntent = Field(alias="authoredStyle")
+    master: WorkspaceMasterIntent = Field(
+        default_factory=lambda: WorkspaceMasterIntent(intent="keep")
+    )
+    vision_qa: bool = Field(default=False, alias="visionQa")
 
-    @field_validator("prompt", "authored_style")
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_legacy_authored_style(cls, value: Any) -> Any:
+        """Treat the shipped string field as an explicit style-set request.
+
+        Omitted master intentionally normalizes to ``keep`` so an older
+        template-only client can never clear an existing master implicitly.
+        """
+
+        if not isinstance(value, dict):
+            return value
+        normalized = dict(value)
+        raw_style = normalized.get("authoredStyle", normalized.get("authored_style"))
+        if isinstance(raw_style, str):
+            selection = {"intent": "set", "styleId": raw_style}
+            if "authoredStyle" in normalized:
+                normalized["authoredStyle"] = selection
+            else:
+                normalized["authored_style"] = selection
+        return normalized
+
+    @field_validator("prompt")
     @classmethod
     def strip_template_application_text(cls, value: str) -> str:
         normalized = value.strip()
@@ -515,6 +589,8 @@ class WorkspaceOperationEventResponse(BaseModel):
     error: Optional[str] = None
     safe_message: Optional[str] = Field(default=None, min_length=1, max_length=512)
     retryable: Optional[bool] = None
+    capacity_waiting: Optional[bool] = None
+    queue_position: Optional[int] = Field(default=None, ge=1)
     result: Any = None
     created_at: Optional[datetime] = None
 
@@ -585,6 +661,8 @@ class WorkspaceOperationTimelineItem(BaseModel):
     error: Optional[str] = None
     error_message: Optional[str] = None
     retryable: Optional[bool] = None
+    capacity_waiting: bool = False
+    queue_position: Optional[int] = Field(default=None, ge=1)
     result: Any = None
     # ``version`` is retained for v1 clients; ``operation_version`` makes the
     # optimistic-concurrency precondition explicit for action controls.

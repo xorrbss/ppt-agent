@@ -125,7 +125,7 @@ const SlideContent = ({
         id={`slide-${slide.index}`}
         data-slide-position={index}
         data-mutations-enabled={mutationsEnabled ? "true" : "false"}
-        className=" w-full  main-slide flex items-center max-md:mb-4  justify-center relative"
+        className="main-slide relative mb-4 flex w-full items-center justify-center last:mb-0 md:mb-6"
       >
         {isStreaming && (
           <Loader2 className="w-8 h-8 absolute right-2 top-2 z-30 text-blue-800 animate-spin" />
@@ -145,13 +145,18 @@ const SlideContent = ({
                 : "relative"
             }
           >
-            <SlideScale
-              slide={slide}
-              theme={presentationData?.theme || null}
-              isEditMode={mutationsEnabled}
-              showEditScan={isChatEditing}
-              preferAuthoredHtml
-            />
+            <div
+              data-testid="slide-page-boundary"
+              className="overflow-hidden rounded-[2px] bg-white shadow-[0_3px_12px_rgba(15,23,42,0.16)] ring-1 ring-inset ring-slate-300"
+            >
+              <SlideScale
+                slide={slide}
+                theme={presentationData?.theme || null}
+                isEditMode={mutationsEnabled}
+                showEditScan={isChatEditing}
+                preferAuthoredHtml
+              />
+            </div>
           </div>
           {mutationsEnabled && !showNewSlideSelection && (
             <div

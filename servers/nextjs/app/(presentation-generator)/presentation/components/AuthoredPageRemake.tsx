@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -12,6 +12,8 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { notify } from "@/components/ui/sonner";
+import type { RootState } from "@/store/store";
+import { ReactReduxContext } from "react-redux";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import { PageRemakePreviewImage } from "./PageRemakePreviewImage";
 import type { WorkspaceCommandDispatcher } from "../workspace";
@@ -28,6 +30,11 @@ import {
   type PageRemakeFailure,
   type PageRemakePreview,
 } from "./authoredPageRemakePreview";
+import {
+  masterPinnedBodyOnlyContext,
+  presentationMasterPin,
+  presentationSlideLayoutId,
+} from "../utils/masterPresentation";
 
 const POLL_INTERVAL_MS = 2_000;
 const PREVIEW_TIMEOUT_MS = 15 * 60 * 1_000;
@@ -47,6 +54,7 @@ function PageRemakeFlow({
   onReload?: () => void;
   onDismiss: () => void;
 }) {
+  const reduxContext = useContext(ReactReduxContext);
   const [previewTaskId, setPreviewTaskId] = useState<string | null>(null);
   const [preview, setPreview] = useState<PageRemakePreview | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
@@ -168,12 +176,29 @@ function PageRemakeFlow({
     setStatusMessage(`${pageNumber}페이지의 새 버전을 적용하고 있습니다.`);
     try {
       if (onWorkspaceCommand) {
+        const presentationData = reduxContext
+          ? (reduxContext.store.getState() as RootState).presentationGeneration
+              .presentationData
+          : null;
+        const pin = presentationMasterPin(presentationData);
+        const layoutId = pin
+          ? presentationSlideLayoutId(presentationData, currentSlide)
+          : null;
+        const pinnedContext = pin
+          ? masterPinnedBodyOnlyContext(pin, layoutId)
+          : null;
+        if (pin && !pinnedContext) {
+          throw new Error(
+            "현재 페이지의 마스터 레이아웃을 확인할 수 없어 적용하지 않았습니다.",
+          );
+        }
         await onWorkspaceCommand(`${pageNumber}페이지 미리보기를 적용해 줘`, {
           commandType: "slide.regenerate",
           context: {
             slide_index: currentSlide,
             preview_task_id: previewTaskId,
             source: "page_remake_button",
+            ...(pinnedContext ?? {}),
           },
         });
         notify.success("페이지 적용 작업을 대화에 추가했습니다.");

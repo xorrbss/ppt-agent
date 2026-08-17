@@ -32,6 +32,11 @@ export interface DurableGenerationTask {
     language: string | null;
     visionQa: boolean;
     authoredStyle: string;
+    masterPin?: {
+      masterId: string;
+      revision: number;
+      digest: `sha256:${string}`;
+    };
   };
 }
 

@@ -51,6 +51,10 @@ _SPECS = (
         "Apply template", "AI-authored template change", "AI-authored template generation",
     ),
     WorkspaceOperationKindSpec(
+        "design.apply", True, True, False,
+        "Apply design", "Presentation design change", "Presentation design generation",
+    ),
+    WorkspaceOperationKindSpec(
         "quality.review", True, True, False,
         "Review quality", "Presentation quality review", "Presentation quality review",
     ),

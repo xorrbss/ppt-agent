@@ -1,19 +1,12 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store/store";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { notify } from "@/components/ui/sonner";
 import { clearPresentationData } from "@/store/slices/presentationGeneration";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
-import { LoadingState, TABS } from "../types/index";
-import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
-import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
-import { AUTHORED_TEMPLATE_ID } from "../components/TemplateSelection";
+import { LoadingState } from "../types/index";
 import { LanguageType } from "../../upload/type";
-import {
-  parseTemplateV2SelectionId,
-  TEMPLATE_V2_SELECTION_PREFIX,
-} from "@/app/hooks/useStructuredTemplates";
 import {
   ApiError,
   isRetryablePresentationGenerationError,
@@ -27,6 +20,7 @@ import {
   saveDurableGenerationTask,
   updateDurableGenerationTask,
 } from "./durableGenerationTask";
+import { generationMasterPin } from "@/lib/authored-vnext/master/selection-storage";
 
 const DEFAULT_LOADING_STATE: LoadingState = {
   message: "",
@@ -35,10 +29,8 @@ const DEFAULT_LOADING_STATE: LoadingState = {
   duration: 0,
 };
 
-// The authored (high-quality) mode is not a real layout template, so it routes
-// through the async generate endpoint + polling rather than the layout
-// prepare/stream path. Sentinel id shared with the selection card
-// (AUTHORED_TEMPLATE_ID) so the card and this branch can never disagree.
+// New presentations have one engine.  It routes through the durable authored
+// endpoint instead of choosing among layout, custom, or Template V2 paths.
 const AUTHORED_TIMEOUT_MS = 30 * 60 * 1000;
 
 const isAmbiguousGenerationTransportError = (error: unknown): boolean => {
@@ -65,24 +57,33 @@ const isRetryableGenerationStartError = (error: unknown): boolean =>
 const hasRecoverableChatFirstWorkspace = (error: unknown): boolean =>
   error instanceof ApiError && error.workspaceProjected;
 
-export const normalizeCustomTemplateId = (templateId: string): string =>
-  templateId.startsWith("custom-") ? templateId : `custom-${templateId}`;
+const isCompanyStandardAdmissionError = (error: unknown): boolean => {
+  if (!(error instanceof ApiError)) return false;
+  const value = `${error.code ?? ""} ${error.message}`.toLowerCase();
+  return [
+    "authored_vnext_stale_master",
+    "authored_vnext_published_master_required",
+    "authored_vnext_generation_not_found",
+    "authored_vnext_master_disabled",
+  ].some((code) => value.includes(code));
+};
 
 export const usePresentationGeneration = (
   presentationId: string | null,
   outlines: { content: string }[] | null,
-  selectedTemplate: TemplateLayoutsWithSettings | string | null,
-  setActiveTab: (tab: string) => void
+  onMasterRequired?: () => void,
 ) => {
   const t = useTranslations("generation");
   const dispatch = useDispatch();
   const router = useRouter();
-  const pathname = usePathname();
   const authoredVisionQa = useSelector(
     (s: RootState) => s.pptGenUpload.authoredVisionQa
   );
   const authoredStyle = useSelector(
     (s: RootState) => s.pptGenUpload.authoredStyle
+  );
+  const companyStandard = useSelector(
+    (s: RootState) => s.pptGenUpload.companyStandard
   );
   // The deck language chosen in the upload flow; threaded into the authored request
   // so the backend picks language-aware fonts (e.g. Noto Sans KR) instead of falling
@@ -102,13 +103,11 @@ export const usePresentationGeneration = (
   // settles; both POSTs must still carry the exact same idempotency key.
   const startingDurableTaskRef = useRef<DurableGenerationTask | null>(null);
   const submittingDurableTaskRef = useRef<string | null>(null);
-  const standardIdempotencyKeyRef = useRef<string | null>(null);
 
   useEffect(
     () => () => {
       generationRunRef.current += 1;
       activeDurableTaskRef.current = null;
-      standardIdempotencyKeyRef.current = null;
     },
     []
   );
@@ -122,16 +121,8 @@ export const usePresentationGeneration = (
       return false;
     }
 
-    if (!selectedTemplate) {
-      notify.warning(
-        t("layoutNotSelectedTitle"),
-        t("layoutNotSelectedDescription")
-      );
-      return false;
-    }
-
     return true;
-  }, [outlines, selectedTemplate, t]);
+  }, [outlines, t]);
 
   const clearTheme = useCallback(() => {
     const element = document.getElementById("presentation-page");
@@ -159,7 +150,6 @@ export const usePresentationGeneration = (
       if (idempotencyKey) clearDurableGenerationTask(idempotencyKey);
       startingDurableTaskRef.current = null;
       submittingDurableTaskRef.current = null;
-      standardIdempotencyKeyRef.current = null;
       activeDurableTaskRef.current = null;
       setLoadingState(DEFAULT_LOADING_STATE);
       dispatch(clearPresentationData());
@@ -235,10 +225,6 @@ export const usePresentationGeneration = (
   }, [presentationId]);
 
   const handleSubmit = useCallback(async () => {
-    if (!selectedTemplate) {
-      setActiveTab(TABS.LAYOUTS);
-      return;
-    }
     if (!validateInputs()) return;
     if (!presentationId) {
       notify.error(
@@ -269,277 +255,109 @@ export const usePresentationGeneration = (
 
     // Persist the idempotency key before POSTing so a lost response can be retried
     // without creating a second authored deck.
-    if (selectedTemplate === AUTHORED_TEMPLATE_ID) {
-      const slides_markdown = (outlines || [])
-        .map((o) => o.content)
-        .filter((c) => c && c.trim().length > 0);
-      if (slides_markdown.length === 0) {
-        notify.warning(t("outlineEmptyTitle"), t("outlineEmptyDescription"));
-        return;
-      }
-      const base = Math.max(120, slides_markdown.length * 25);
-      const estSeconds = authoredVisionQa
-        ? Math.min(AUTHORED_TIMEOUT_MS / 1000, base * 2)
-        : Math.min(600, base);
-      // "Auto" is a sentinel, not a real language: send null so the backend applies
-      // its language-aware fallback instead of authoring with a literal "Auto".
-      const reduxAuthoredRequest = {
-        language: language && language !== LanguageType.Auto ? language : null,
-        visionQa: authoredVisionQa,
-        authoredStyle,
-      };
-      let durableTask =
-        startingDurableTaskRef.current?.sourcePresentationId === presentationId
-          ? startingDurableTaskRef.current
-          : findDurableGenerationTask(presentationId);
-      if (durableTask?.taskId && durableTask.status !== "retryable-error") {
-        openWorkspace(durableTask.idempotencyKey);
-        return;
-      }
-      // A "starting" record can survive a lost POST response. Reusing it here
-      // resubmits with the same idempotency key instead of creating a second job.
-      if (!durableTask || durableTask.mode !== "authored") {
-        durableTask = saveDurableGenerationTask({
-          ...createDurableGenerationTask({
-            mode: "authored",
-            sourcePresentationId: presentationId,
-            timeoutMs: AUTHORED_TIMEOUT_MS,
-            progressDurationSeconds: estSeconds,
-          }),
-          authoredRequest: reduxAuthoredRequest,
-        });
-      }
-      // A resume must resend the captured settings verbatim: a reload wipes the
-      // Redux copies, and the server 409s a same-key re-POST whose payload drifts.
-      const authoredRequest = durableTask.authoredRequest ?? reduxAuthoredRequest;
-      startingDurableTaskRef.current = durableTask;
-      submittingDurableTaskRef.current = durableTask.idempotencyKey;
-      try {
-        const started = await PresentationGenerationApi.generateAuthoredAsync({
-          presentation_id: presentationId,
-          content: slides_markdown[0].slice(0, 200),
-          slides_markdown,
-          ...asyncGenerationPreferences,
-          language: authoredRequest.language,
-          vision_qa: authoredRequest.visionQa,
-          authored_style: authoredRequest.authoredStyle,
-          idempotency_key: durableTask.idempotencyKey,
-        });
-        const taskId = started?.id;
-        if (!taskId) throw new Error("생성 작업을 시작하지 못했습니다.");
-        durableTask = updateDurableGenerationTask(durableTask, {
-          taskId,
-          status: started?.status === "running" ? "running" : "pending",
-          requestId: started?.request_id,
-          lastFailure: undefined,
-        });
-        submittingDurableTaskRef.current = null;
-        startingDurableTaskRef.current = null;
-        if (!isActiveRun()) return;
-        openWorkspace(durableTask.idempotencyKey);
-      } catch (error: unknown) {
-        submittingDurableTaskRef.current = null;
-        if (!isActiveRun()) return;
-        if (openRecoverableWorkspace(error, durableTask.idempotencyKey)) {
-          return;
-        }
-        if (!isRetryableGenerationStartError(error)) {
-          clearDurableGenerationTask(durableTask.idempotencyKey);
-          startingDurableTaskRef.current = null;
-        }
-        reportDurableGenerationFailure(error, durableTask);
-      }
-      return;
-    }
-
-    const templateV2Selection =
-      typeof selectedTemplate === "string"
-        ? parseTemplateV2SelectionId(selectedTemplate)
-        : null;
-    if (
-      typeof selectedTemplate === "string" &&
-      selectedTemplate.startsWith(TEMPLATE_V2_SELECTION_PREFIX) &&
-      !templateV2Selection
-    ) {
-      notify.error(
-        t("templateErrorTitle"),
-        t("templateErrorDescription")
-      );
-      return;
-    }
-    if (templateV2Selection) {
-      const slides_markdown = (outlines || [])
-        .map((outline) => outline.content)
-        .filter((content) => content && content.trim().length > 0);
-      if (slides_markdown.length === 0) {
-        notify.warning(t("outlineEmptyTitle"), t("outlineEmptyDescription"));
-        return;
-      }
-
-      const progressDurationSeconds = Math.max(
-        30,
-        slides_markdown.length * 12
-      );
-      let durableTask =
-        startingDurableTaskRef.current?.sourcePresentationId === presentationId
-          ? startingDurableTaskRef.current
-          : findDurableGenerationTask(presentationId);
-      if (durableTask?.taskId) {
-        openWorkspace(durableTask.idempotencyKey);
-        return;
-      }
-      // See the authored branch: a retry of a response-lost POST must keep the
-      // original key so the backend can return the existing task.
-      if (!durableTask || durableTask.mode !== "template-v2") {
-        durableTask = saveDurableGenerationTask(
-          createDurableGenerationTask({
-            mode: "template-v2",
-            sourcePresentationId: presentationId,
-            timeoutMs: AUTHORED_TIMEOUT_MS,
-            progressDurationSeconds,
-          })
-        );
-      }
-      startingDurableTaskRef.current = durableTask;
-      submittingDurableTaskRef.current = durableTask.idempotencyKey;
-
-      try {
-        const started =
-          await PresentationGenerationApi.generateTemplateV2Async({
-            presentation_id: presentationId,
-            content: slides_markdown[0].slice(0, 200),
-            slides_markdown,
-            ...asyncGenerationPreferences,
-            template_v2_id: templateV2Selection.templateId,
-            template_v2_revision: templateV2Selection.revision,
-            idempotency_key: durableTask.idempotencyKey,
-          });
-        const taskId = started?.id;
-        if (!taskId) {
-          throw new Error("구조화 템플릿 생성 작업을 시작하지 못했습니다.");
-        }
-        durableTask = updateDurableGenerationTask(durableTask, {
-          taskId,
-          status: started?.status === "running" ? "running" : "pending",
-          requestId: started?.request_id,
-        });
-        submittingDurableTaskRef.current = null;
-        startingDurableTaskRef.current = null;
-        if (!isActiveRun()) return;
-        openWorkspace(durableTask.idempotencyKey);
-      } catch (error: unknown) {
-        submittingDurableTaskRef.current = null;
-        if (!isActiveRun()) return;
-        if (openRecoverableWorkspace(error, durableTask.idempotencyKey)) {
-          return;
-        }
-        if (!isRetryableGenerationStartError(error)) {
-          clearDurableGenerationTask(durableTask.idempotencyKey);
-          startingDurableTaskRef.current = null;
-        }
-        reportDurableGenerationFailure(error, durableTask);
-      }
-      return;
-    }
-
-    const selectedTemplateId =
-      typeof selectedTemplate === "string"
-        ? selectedTemplate
-        : selectedTemplate?.id || null;
-    const selectedTemplateType =
-      typeof selectedTemplate === "string" ? "custom" : "built_in";
-    const selectedTemplateName =
-      typeof selectedTemplate === "string"
-        ? null
-        : selectedTemplate?.name || null;
-    const selectedTemplateLayoutCount =
-      typeof selectedTemplate === "string"
-        ? null
-        : selectedTemplate?.layouts?.length || 0;
-
-    trackEvent(MixpanelEvent.Outline_Presentation_Generation_Started, {
-      pathname,
-      presentation_id: presentationId,
-      outline_count: outlines?.length || 0,
-      template_id: selectedTemplateId,
-      template_type: selectedTemplateType,
-      template_name: selectedTemplateName,
-      template_layout_count: selectedTemplateLayoutCount,
-    });
-
     const slides_markdown = (outlines || [])
-      .map((outline) => outline.content)
-      .filter((content) => content && content.trim().length > 0);
+      .map((o) => o.content)
+      .filter((c) => c && c.trim().length > 0);
     if (slides_markdown.length === 0) {
-      notify.warning(
-        t("outlineEmptyTitle"),
-        t("outlineEmptyDescription")
-      );
+      notify.warning(t("outlineEmptyTitle"), t("outlineEmptyDescription"));
       return;
     }
-    const template =
-      typeof selectedTemplate === "string"
-        ? normalizeCustomTemplateId(selectedTemplate)
-        : selectedTemplate.id;
-    if (!standardIdempotencyKeyRef.current) {
-      const randomId =
-        typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? crypto.randomUUID()
-          : `${Date.now().toString(36)}-${Math.random()
-              .toString(36)
-              .slice(2)}`;
-      standardIdempotencyKeyRef.current = `ppt-generation-${randomId}`;
+    const base = Math.max(120, slides_markdown.length * 25);
+    const estSeconds = authoredVisionQa
+      ? Math.min(AUTHORED_TIMEOUT_MS / 1000, base * 2)
+      : Math.min(600, base);
+    // "Auto" is a sentinel, not a real language: send null so the backend applies
+    // its language-aware fallback instead of authoring with a literal "Auto".
+    const reduxAuthoredRequest = {
+      language: language && language !== LanguageType.Auto ? language : null,
+      visionQa: authoredVisionQa,
+      authoredStyle,
+      ...(companyStandard
+        ? { masterPin: generationMasterPin(companyStandard) }
+        : {}),
+    };
+    let durableTask =
+      startingDurableTaskRef.current?.sourcePresentationId === presentationId
+        ? startingDurableTaskRef.current
+        : findDurableGenerationTask(presentationId);
+    if (durableTask?.taskId && durableTask.status !== "retryable-error") {
+      openWorkspace(durableTask.idempotencyKey);
+      return;
     }
-    const idempotencyKey = standardIdempotencyKeyRef.current;
-
+    // A "starting" record can survive a lost POST response. Reusing it here
+    // resubmits with the same idempotency key instead of creating a second job.
+    if (!durableTask || durableTask.mode !== "authored") {
+      durableTask = saveDurableGenerationTask({
+        ...createDurableGenerationTask({
+          mode: "authored",
+          sourcePresentationId: presentationId,
+          timeoutMs: AUTHORED_TIMEOUT_MS,
+          progressDurationSeconds: estSeconds,
+        }),
+        authoredRequest: reduxAuthoredRequest,
+      });
+    }
+    // A resume must resend the captured settings verbatim: a reload wipes the
+    // Redux copies, and the server 409s a same-key re-POST whose payload drifts.
+    const authoredRequest = durableTask.authoredRequest ?? reduxAuthoredRequest;
+    startingDurableTaskRef.current = durableTask;
+    submittingDurableTaskRef.current = durableTask.idempotencyKey;
     try {
-      const started = await PresentationGenerationApi.generateStandardAsync({
+      const started = await PresentationGenerationApi.generateAuthoredAsync({
         presentation_id: presentationId,
         content: slides_markdown[0].slice(0, 200),
         slides_markdown,
-        ...generationPreferences,
-        template,
-        idempotency_key: idempotencyKey,
+        ...asyncGenerationPreferences,
+        language: authoredRequest.language,
+        vision_qa: authoredRequest.visionQa,
+        authored_style: authoredRequest.authoredStyle,
+        masterPin: authoredRequest.masterPin,
+        idempotency_key: durableTask.idempotencyKey,
       });
-      if (!started?.id) {
-        throw new Error("Presentation generation was not accepted.");
-      }
+      const taskId = started?.id;
+      if (!taskId) throw new Error("생성 작업을 시작하지 못했습니다.");
+      durableTask = updateDurableGenerationTask(durableTask, {
+        taskId,
+        status: started?.status === "running" ? "running" : "pending",
+        requestId: started?.request_id,
+        lastFailure: undefined,
+      });
+      submittingDurableTaskRef.current = null;
+      startingDurableTaskRef.current = null;
       if (!isActiveRun()) return;
-      openWorkspace();
+      openWorkspace(durableTask.idempotencyKey);
     } catch (error: unknown) {
+      submittingDurableTaskRef.current = null;
       if (!isActiveRun()) return;
-      console.warn("Presentation generation was not accepted.", error);
-      if (openRecoverableWorkspace(error)) return;
-      if (isRetryableGenerationStartError(error)) {
-        notify.error(
-          t("interruptedTitle"),
-          t("interruptedDescription"),
-          {
-            duration: 12_000,
-            action: {
-              label: t("retry"),
-              onClick: () => retrySubmitRef.current?.(),
-            },
-          }
+      if (isCompanyStandardAdmissionError(error)) {
+        clearDurableGenerationTask(durableTask.idempotencyKey);
+        startingDurableTaskRef.current = null;
+        notify.warning(
+          "PPT 마스터를 다시 확인해 주세요",
+          "마스터가 변경되었거나 게시 상태가 아닙니다. 최신 마스터를 적용한 뒤 다시 생성하세요."
         );
-      } else {
-        notify.error(
-          t("errorTitle"),
-          t("errorDescription")
-        );
+        onMasterRequired?.();
+        return;
       }
+      if (openRecoverableWorkspace(error, durableTask.idempotencyKey)) {
+        return;
+      }
+      if (!isRetryableGenerationStartError(error)) {
+        clearDurableGenerationTask(durableTask.idempotencyKey);
+        startingDurableTaskRef.current = null;
+      }
+      reportDurableGenerationFailure(error, durableTask);
     }
   }, [
-    selectedTemplate,
     validateInputs,
-    pathname,
     presentationId,
     outlines,
-    setActiveTab,
     authoredVisionQa,
     language,
     generationConfig,
     authoredStyle,
+    companyStandard,
+    onMasterRequired,
     openWorkspace,
     openRecoverableWorkspace,
     reportDurableGenerationFailure,
@@ -564,7 +382,6 @@ export const usePresentationGeneration = (
     activeDurableTaskRef.current = null;
     startingDurableTaskRef.current = null;
     submittingDurableTaskRef.current = null;
-    standardIdempotencyKeyRef.current = null;
     const durableTask = findDurableGenerationTask(presentationId);
     if (durableTask) {
       if (durableTask.taskId) {

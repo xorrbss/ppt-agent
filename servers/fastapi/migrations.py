@@ -12,6 +12,11 @@ from sqlalchemy.engine import make_url
 
 from alembic import command
 import migration_revision_contract as revision_contract
+from migration_retired_revision import (
+    RETIRED_AUTHORED_VNEXT_TABLES,
+    RETIRED_PROVIDER_RUNTIME_TABLES,
+    repair_orphan_alembic_revision,
+)
 from migration_runtime_settings_schema import (
     SLIDESPEC_ARTIFACT_BUNDLE_COLUMNS,
     SLIDESPEC_PUBLICATION_ATTEMPT_COLUMNS,
@@ -1298,48 +1303,13 @@ def _migration_owner_lock(database_url: str) -> Iterator[None]:
 
 
 def _repair_orphan_alembic_revision(config: Config, database_url: str) -> None:
-    """
-    If alembic_version points at a revision id that no longer exists in alembic/versions
-    (removed branch, old image, etc.), re-stamp from the live schema so upgrade can run.
-    """
-    script = ScriptDirectory.from_config(config)
-    known = {rev.revision for rev in script.walk_revisions()}
-    heads = script.get_heads()
-    if len(heads) != 1:
-        return
-    head = heads[0]
-
-    engine = create_engine(database_url)
-    try:
-        with engine.begin() as connection:
-            inspector = inspect(connection)
-            tables = set(inspector.get_table_names())
-            if "alembic_version" not in tables:
-                return
-            version_num = connection.execute(
-                text("SELECT version_num FROM alembic_version LIMIT 1")
-            ).scalar_one_or_none()
-            if not version_num or version_num in known:
-                return
-            print(
-                f"Alembic revision {version_num!r} is missing from the codebase; "
-                "inferring applied migrations from schema and re-stamping.",
-                flush=True,
-            )
-            target = _infer_revision_from_schema(inspector, tables, head)
-            repaired = connection.execute(
-                text(
-                    "UPDATE alembic_version SET version_num = :target "
-                    "WHERE version_num = :current"
-                ),
-                {"target": target, "current": version_num},
-            )
-            if repaired.rowcount != 1:
-                raise RuntimeError(
-                    "Alembic orphan revision changed during schema repair"
-                )
-    finally:
-        engine.dispose()
+    repair_orphan_alembic_revision(
+        config,
+        database_url,
+        interrupted_revision=REVISION_SHARE_TOKEN,
+        rebase_target=revision_contract.REVISION_PROVIDER_USAGE_RECEIPTS,
+        infer_revision=_infer_revision_from_schema,
+    )
 
 
 def _infer_revision_from_schema(

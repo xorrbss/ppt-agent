@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from dataclasses import replace
 from datetime import timedelta
 from hashlib import sha256
+import json
 from pathlib import Path
 from typing import Any
 import uuid
@@ -428,6 +429,89 @@ def test_uploaded_provider_persists_and_admits_immutable_asset_snapshot(tmp_path
                     serialized = str(row.normalized_payload) + str(row.asset_bindings)
                     assert str(root) not in serialized
                     assert "storage_key" not in serialized
+        finally:
+            await engine.dispose()
+
+    _run(scenario())
+
+
+def test_uploaded_provider_compacts_oversized_multi_document_snapshot(tmp_path: Path):
+    async def scenario():
+        engine, maker = await _database(tmp_path / "uploaded-compacted.db")
+        owner_id = uuid.uuid4()
+        root = tmp_path / "uploaded-compacted-assets"
+        try:
+            await _seed_owner(maker, owner_id)
+            assets = [
+                await _seed_asset(
+                    maker,
+                    root=root,
+                    owner_id=owner_id,
+                    content=(marker + ("x" * 199_998) + marker).encode(),
+                    media_type="text/plain",
+                    extension=".txt",
+                )
+                for marker in ("A", "B")
+            ]
+            with _owner(owner_id):
+                async with maker() as session:
+                    normalized = await UploadedDocumentProvider().normalize(
+                        session,
+                        request={"asset_ids": [str(asset.id) for asset in assets]},
+                        asset_gateway=AssetGateway(storage_root=root),
+                        conversation_id=None,
+                    )
+            documents = normalized.normalized_payload["documents"]
+            assert sum(len(item["text"]) for item in documents) == 300_000
+            assert [item["text"][0] for item in documents] == ["A", "B"]
+            assert [item["text"][-1] for item in documents] == ["A", "B"]
+            assert all(len(item["contentSha256"]) == 64 for item in documents)
+        finally:
+            await engine.dispose()
+
+    _run(scenario())
+
+
+def test_uploaded_provider_compacts_multibyte_text_to_generation_byte_budget(
+    tmp_path: Path,
+):
+    async def scenario():
+        engine, maker = await _database(tmp_path / "uploaded-multibyte.db")
+        owner_id = uuid.uuid4()
+        root = tmp_path / "uploaded-multibyte-assets"
+        try:
+            await _seed_owner(maker, owner_id)
+            assets = [
+                await _seed_asset(
+                    maker,
+                    root=root,
+                    owner_id=owner_id,
+                    content=(marker + ("한" * 149_998) + marker).encode(),
+                    media_type="text/plain",
+                    extension=".txt",
+                )
+                for marker in ("A", "B")
+            ]
+            with _owner(owner_id):
+                async with maker() as session:
+                    normalized = await UploadedDocumentProvider().normalize(
+                        session,
+                        request={"asset_ids": [str(asset.id) for asset in assets]},
+                        asset_gateway=AssetGateway(storage_root=root),
+                        conversation_id=None,
+                    )
+            payload = normalized.normalized_payload
+            serialized = json.dumps(
+                payload,
+                ensure_ascii=False,
+                allow_nan=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+            documents = payload["documents"]
+            assert len(serialized) <= 480 * 1024
+            assert [item["text"][0] for item in documents] == ["A", "B"]
+            assert [item["text"][-1] for item in documents] == ["A", "B"]
         finally:
             await engine.dispose()
 

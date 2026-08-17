@@ -10,12 +10,14 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.generate_presentation_request import GeneratePresentationRequest
+from models.authored_vnext.deck import AuthoredCompositionPin, MasterDigestPin
 from models.sql.async_presentation_generation_status import AsyncPresentationGenerationTaskModel
 from models.sql.image_asset import ImageAsset
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.slide import SlideModel
 from models.sql.workspace import WorkspaceOperation, get_workspace_owner_scope
+from utils.authored_styles import AuthoredStyle
 from services.database import sql_engine
 from services.presentation_generation_export_orchestration import (
     execute_generation_export,
@@ -38,6 +40,35 @@ from services.workspace_runtime_profile import UnsupportedWorkspaceRuntimeError,
 
 INTERNAL_EXACT_SNAPSHOT_KEY = "_internal_authored_exact_snapshot_id"
 INTERNAL_ADMISSION_RETRY_KEY = "_internal_admission_retry_required"
+INTERNAL_COMPOSITION_PIN_KEY = "_internal_authored_composition_pin"
+INTERNAL_DESIGN_REPLAY_KEY = "_internal_authored_design_replay"
+INTERNAL_RESOLVED_MASTER_PIN_KEY = "_internal_authored_resolved_master_pin"
+INTERNAL_STYLE_SNAPSHOT_KEY = "_internal_authored_style_snapshot"
+INTERNAL_DECK_METADATA_KEY = "_internal_authored_deck_metadata"
+INTERNAL_SOURCE_SEMANTIC_SNAPSHOT_KEY = "_internal_authored_source_semantic_snapshot"
+
+
+def _durable_style_snapshot(style: AuthoredStyle) -> dict[str, Any]:
+    return {
+        "id": style.id,
+        "name": style.name,
+        "description": style.description,
+        "preview_bg": style.preview_bg,
+        "preview_accent": style.preview_accent,
+        "brief": style.brief,
+        "category": style.category,
+        "tags": list(style.tags),
+        "use_cases": list(style.use_cases),
+        "preview_palette": list(style.preview_palette or []) or None,
+        "preview_variant": style.preview_variant,
+        "primary_color": style.primary_color,
+        "background_color": style.background_color,
+        "heading_font": style.heading_font,
+        "body_font": style.body_font,
+        "mono_font": style.mono_font,
+        "illustration_prompt": style.illustration_prompt,
+        "reference_mode": style.reference_mode,
+    }
 
 def _durable_request_payload(request: GeneratePresentationRequest) -> dict:
     """Persist canonical identities only, never admission-time raw paths."""
@@ -50,6 +81,30 @@ def _durable_request_payload(request: GeneratePresentationRequest) -> dict:
     payload["files"] = None
     if request._authored_exact_snapshot_id is not None:
         payload[INTERNAL_EXACT_SNAPSHOT_KEY] = request._authored_exact_snapshot_id
+    if request._authored_composition_pin is not None:
+        payload[INTERNAL_COMPOSITION_PIN_KEY] = (
+            request._authored_composition_pin.model_dump(
+                mode="json", by_alias=True
+            )
+        )
+    if request._authored_master_pin is not None:
+        payload[INTERNAL_RESOLVED_MASTER_PIN_KEY] = (
+            request._authored_master_pin.model_dump(mode="json", by_alias=True)
+        )
+    if request._authored_style_snapshot is not None:
+        payload[INTERNAL_STYLE_SNAPSHOT_KEY] = _durable_style_snapshot(
+            request._authored_style_snapshot
+        )
+    if request._authored_design_replay:
+        payload[INTERNAL_DESIGN_REPLAY_KEY] = True
+    if request._authored_deck_metadata is not None:
+        payload[INTERNAL_DECK_METADATA_KEY] = request._authored_deck_metadata.model_dump(
+            mode="json", by_alias=True
+        )
+    if request._authored_source_semantic_snapshot is not None:
+        payload[INTERNAL_SOURCE_SEMANTIC_SNAPSHOT_KEY] = (
+            request._authored_source_semantic_snapshot
+        )
     return payload
 
 
@@ -234,6 +289,14 @@ def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
 
     values = dict(payload)
     snapshot_id = values.pop(INTERNAL_EXACT_SNAPSHOT_KEY, None)
+    composition_payload = values.pop(INTERNAL_COMPOSITION_PIN_KEY, None)
+    resolved_master_payload = values.pop(INTERNAL_RESOLVED_MASTER_PIN_KEY, None)
+    style_snapshot_payload = values.pop(INTERNAL_STYLE_SNAPSHOT_KEY, None)
+    design_replay = values.pop(INTERNAL_DESIGN_REPLAY_KEY, False)
+    deck_metadata_payload = values.pop(INTERNAL_DECK_METADATA_KEY, None)
+    source_semantic_snapshot = values.pop(
+        INTERNAL_SOURCE_SEMANTIC_SNAPSHOT_KEY, None
+    )
     # Internal runner metadata is deliberately outside the public request
     # schema. It remains on the durable job across operation rebinds, but must
     # never be passed to Pydantic as caller input.
@@ -241,5 +304,23 @@ def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
     request = GeneratePresentationRequest.model_validate(values)
     if snapshot_id is not None:
         request._authored_exact_snapshot_id = str(snapshot_id)
+    if composition_payload is not None:
+        request._authored_composition_pin = AuthoredCompositionPin.model_validate(
+            composition_payload
+        )
+    if resolved_master_payload is not None:
+        request._authored_master_pin = MasterDigestPin.model_validate(
+            resolved_master_payload
+        )
+    if style_snapshot_payload is not None:
+        request._authored_style_snapshot = AuthoredStyle(**style_snapshot_payload)
+    if deck_metadata_payload is not None:
+        from models.authored_vnext.deck import DeckMetadataSnapshot
+
+        request._authored_deck_metadata = DeckMetadataSnapshot.model_validate(
+            deck_metadata_payload
+        )
+    request._authored_source_semantic_snapshot = source_semantic_snapshot
+    request._authored_design_replay = design_replay is True
     return request
 

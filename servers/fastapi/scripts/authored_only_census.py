@@ -228,6 +228,39 @@ def build_authored_only_report(
         for row in report_rows
         for job in row["inventory"]["active_jobs"]
     ]
+    deletion_manifest: list[dict[str, Any]] = []
+    for row in report_rows:
+        census_row = row["census"]
+        inventory_row = row["inventory"]
+        blockers: list[str] = []
+        if census_row["classification"] != "authored":
+            blockers.append("non_authored_compatibility_required")
+        if inventory_row["archive_count"] == 0:
+            blockers.append("archive_manifest_missing")
+        elif not inventory_row["archive_checksum_complete"]:
+            blockers.append("archive_digest_unverified")
+        if inventory_row["active_jobs"]:
+            blockers.append("active_job_drain_incomplete")
+        if inventory_row["checkpoint_count"]:
+            blockers.append("checkpoint_retention_present")
+        if not inventory_row["owner_isolation_ok"]:
+            blockers.append("owner_isolation_failed")
+        if any(
+            item["checksum_status"] in {"mismatch", "missing", "unreadable"}
+            for item in inventory_row["items"]
+        ):
+            blockers.append("inventory_checksum_unverified")
+        deletion_manifest.append(
+            {
+                "presentation_id": census_row["presentation_id"],
+                "classification": census_row["classification"],
+                "eligible": not blockers,
+                "blockers": blockers,
+            }
+        )
+    deletion_blockers = sorted(
+        {blocker for entry in deletion_manifest for blocker in entry["blockers"]}
+    )
     report = {
         "schema_version": 1,
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -244,6 +277,21 @@ def build_authored_only_report(
         "owner_isolation_ok": all(
             row["inventory"]["owner_isolation_ok"] for row in report_rows
         ),
+        "deletion_readiness": {
+            # Census has no authority to approve or execute deletion. Keep this
+            # blocked even when all per-presentation gates happen to pass.
+            "status": "blocked",
+            "approval_required": True,
+            "physical_deletion_performed": False,
+            "eligible_count": sum(
+                1 for entry in deletion_manifest if entry["eligible"]
+            ),
+            "blocked_count": sum(
+                1 for entry in deletion_manifest if not entry["eligible"]
+            ),
+            "blockers": deletion_blockers,
+            "manifest": deletion_manifest,
+        },
         "presentations": report_rows,
     }
     report["evidence_sha256"] = sha256(

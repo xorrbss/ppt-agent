@@ -14,15 +14,25 @@ interface Props {
 
 export default function MasterLogoAssetControl({ client, value, onChange }: Props) {
   const t = useTranslations("authoredVnext.master.logoAsset");
+  const studio = useTranslations("authoredVnext.master.studio");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fit, setFit] = useState<"contain" | "cover">("contain");
+  let previewUrl: string | null = null;
+  if (value) {
+    try {
+      previewUrl = client.assetUrl(value);
+    } catch {
+      previewUrl = null;
+    }
+  }
   return (
     <div className="mt-4 rounded-xl border border-slate-200 p-3">
       <label className="block text-sm font-semibold" htmlFor="authored-master-logo">
         {t("label")}
       </label>
       <input
-        accept="image/png,.png"
+        accept="image/png,image/svg+xml,.png,.svg"
         className="mt-2 block w-full text-xs"
         data-testid="authored-master-logo-input"
         disabled={busy}
@@ -43,13 +53,27 @@ export default function MasterLogoAssetControl({ client, value, onChange }: Prop
       />
       {value && (
         <div
-          className="mt-2 flex items-center justify-between gap-2"
+          className="mt-2 space-y-2"
           data-testid="authored-master-logo-selected"
         >
-          <span className="truncate text-xs" title={value.digest}>{value.altText}</span>
-          <button className="rounded border px-2 py-1" onClick={() => onChange(null)} type="button">
-            {t("remove")}
-          </button>
+          {previewUrl && (
+            <img
+              alt={value.altText}
+              className="h-20 w-full rounded border bg-slate-50 p-2"
+              src={previewUrl}
+              style={{ objectFit: fit }}
+            />
+          )}
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate text-xs" title={value.altText}>{value.altText}</span>
+            <button className="rounded border px-2 py-1" onClick={() => onChange(null)} type="button">
+              {t("remove")}
+            </button>
+          </div>
+          <div className="flex gap-2 text-xs">
+            <button className={`rounded border px-2 py-1 ${fit === "contain" ? "bg-slate-100" : ""}`} onClick={() => setFit("contain")} type="button">{studio("fit")}</button>
+            <button className={`rounded border px-2 py-1 ${fit === "cover" ? "bg-slate-100" : ""}`} onClick={() => setFit("cover")} type="button">{studio("fill")}</button>
+          </div>
         </div>
       )}
       {busy && <p aria-live="polite" className="mt-2 text-xs">{t("uploading")}</p>}

@@ -79,15 +79,50 @@ _TAG_ATTRIBUTES: Mapping[str, set[str]] = {
     "th": {"colspan", "rowspan", "scope"},
     "td": {"colspan", "rowspan"},
     "col": {"span"},
-    "svg": {"viewbox", "width", "height", "preserveaspectratio"},
-    "g": {"transform", "fill", "stroke", "stroke-width", "opacity", "clip-path"},
-    "path": {"d", "transform", "fill", "stroke", "stroke-width", "opacity"},
-    "rect": {"x", "y", "width", "height", "rx", "ry", "fill", "stroke", "stroke-width", "opacity"},
-    "circle": {"cx", "cy", "r", "fill", "stroke", "stroke-width", "opacity"},
-    "ellipse": {"cx", "cy", "rx", "ry", "fill", "stroke", "stroke-width", "opacity"},
-    "line": {"x1", "y1", "x2", "y2", "fill", "stroke", "stroke-width", "opacity"},
-    "polyline": {"points", "fill", "stroke", "stroke-width", "opacity"},
-    "polygon": {"points", "fill", "stroke", "stroke-width", "opacity"},
+    "svg": {
+        "viewbox", "width", "height", "preserveaspectratio", "focusable", "xmlns", "fill",
+        "stroke", "stroke-width", "fill-opacity", "stroke-opacity", "opacity",
+    },
+    "g": {
+        "transform", "fill", "stroke", "stroke-width", "fill-opacity",
+        "stroke-opacity", "stroke-linecap", "stroke-linejoin", "stroke-dasharray",
+        "opacity", "clip-path",
+    },
+    "path": {
+        "d", "transform", "fill", "stroke", "stroke-width", "fill-opacity",
+        "stroke-opacity", "stroke-linecap", "stroke-linejoin", "stroke-dasharray",
+        "fill-rule", "clip-rule", "vector-effect", "opacity",
+    },
+    "rect": {
+        "x", "y", "width", "height", "rx", "ry", "fill", "stroke",
+        "stroke-width", "fill-opacity", "stroke-opacity", "stroke-linecap",
+        "stroke-linejoin", "stroke-dasharray", "opacity",
+    },
+    "circle": {
+        "cx", "cy", "r", "fill", "stroke", "stroke-width", "fill-opacity",
+        "stroke-opacity", "stroke-linecap", "stroke-linejoin", "stroke-dasharray",
+        "opacity",
+    },
+    "ellipse": {
+        "cx", "cy", "rx", "ry", "fill", "stroke", "stroke-width",
+        "fill-opacity", "stroke-opacity", "stroke-linecap", "stroke-linejoin",
+        "stroke-dasharray", "opacity",
+    },
+    "line": {
+        "x1", "y1", "x2", "y2", "fill", "stroke", "stroke-width",
+        "fill-opacity", "stroke-opacity", "stroke-linecap", "stroke-linejoin",
+        "stroke-dasharray", "opacity",
+    },
+    "polyline": {
+        "points", "fill", "stroke", "stroke-width", "fill-opacity",
+        "stroke-opacity", "stroke-linecap", "stroke-linejoin", "stroke-dasharray",
+        "opacity",
+    },
+    "polygon": {
+        "points", "fill", "stroke", "stroke-width", "fill-opacity",
+        "stroke-opacity", "stroke-linecap", "stroke-linejoin", "stroke-dasharray",
+        "fill-rule", "clip-rule", "vector-effect", "opacity",
+    },
     "text": {
         "x", "y", "dx", "dy", "fill", "stroke", "font-size", "font-family",
         "font-weight", "text-anchor", "transform",
@@ -110,7 +145,7 @@ _ALLOWED_CSS_PROPERTIES = {
     "border-style", "border-top", "border-top-color", "border-top-left-radius",
     "border-top-right-radius", "border-top-style", "border-top-width", "border-width",
     "bottom", "box-shadow", "box-sizing", "clip-path", "color", "column-gap",
-    "display", "fill", "filter", "flex", "flex-basis", "flex-direction", "flex-flow",
+    "display", "fill", "fill-opacity", "filter", "flex", "flex-basis", "flex-direction", "flex-flow",
     "flex-grow", "flex-shrink", "flex-wrap", "font", "font-family", "font-size",
     "font-stretch", "font-style", "font-variant", "font-weight", "gap", "grid",
     "grid-area", "grid-auto-columns", "grid-auto-flow", "grid-auto-rows", "grid-column",
@@ -125,6 +160,7 @@ _ALLOWED_CSS_PROPERTIES = {
     "padding-left", "padding-right", "padding-top", "place-content", "place-items",
     "place-self", "position", "right", "row-gap", "stroke", "stroke-dasharray",
     "stroke-linecap", "stroke-linejoin", "stroke-width", "table-layout", "text-align",
+    "stroke-opacity",
     "text-decoration", "text-decoration-color", "text-decoration-line",
     "text-decoration-style", "text-indent", "text-overflow", "text-shadow",
     "text-transform", "top", "transform", "transform-origin", "vertical-align",
@@ -143,6 +179,18 @@ _DATA_URL = re.compile(r"^data:([^;,]+);base64,([A-Za-z0-9+/=\s]+)$", re.IGNOREC
 _ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp", "image/gif"}
 _SVG_PAINT_ATTRIBUTES = {"fill", "stroke", "clip-path", "mask"}
 _LOCAL_SVG_URL = re.compile(r"url\(\s*#[A-Za-z_][A-Za-z0-9_.:-]*\s*\)$", re.IGNORECASE)
+_SVG_OPACITY_ATTRIBUTES = {"opacity", "fill-opacity", "stroke-opacity"}
+_SVG_OPACITY = re.compile(r"(?:0(?:\.\d+)?|\.\d+|1(?:\.0+)?)$")
+_SVG_DASHARRAY = re.compile(
+    r"(?:none|(?:\d+(?:\.\d+)?)(?:[ ,]+\d+(?:\.\d+)?)*\s*)$",
+    re.IGNORECASE,
+)
+_SVG_LINECAPS = {"butt", "round", "square"}
+_SVG_LINEJOINS = {"arcs", "bevel", "miter", "miter-clip", "round"}
+_SVG_FILL_RULES = {"nonzero", "evenodd"}
+_SVG_FOCUSABLE = {"false", "true", "auto"}
+_SVG_VECTOR_EFFECTS = {"none", "non-scaling-stroke"}
+_SVG_NAMESPACE = "http://www.w3.org/2000/svg"
 _CSP = (
     "default-src 'none'; base-uri 'none'; connect-src 'none'; frame-src 'none'; "
     "child-src 'none'; object-src 'none'; media-src 'none'; worker-src 'none'; "
@@ -243,6 +291,28 @@ class _PolicyParser(HTMLParser):
             if "\x00" in value:
                 raise RendererPolicyError("HTML attribute contains NUL")
             values[name] = value
+            if name == "xmlns" and (tag != "svg" or value != _SVG_NAMESPACE):
+                raise RendererPolicyError("inline SVG namespace is not allowed")
+            if name in _SVG_OPACITY_ATTRIBUTES and tag in {
+                "svg", "g", "path", "rect", "circle", "ellipse", "line",
+                "polyline", "polygon", "text", "tspan", "stop",
+            }:
+                if _SVG_OPACITY.fullmatch(value.strip()) is None:
+                    raise RendererPolicyError(
+                        f"SVG {name} must be a number between 0 and 1"
+                    )
+            if name == "stroke-dasharray" and _SVG_DASHARRAY.fullmatch(value.strip()) is None:
+                raise RendererPolicyError("SVG stroke-dasharray is invalid")
+            if name == "stroke-linecap" and value.strip().lower() not in _SVG_LINECAPS:
+                raise RendererPolicyError("SVG stroke-linecap is invalid")
+            if name == "stroke-linejoin" and value.strip().lower() not in _SVG_LINEJOINS:
+                raise RendererPolicyError("SVG stroke-linejoin is invalid")
+            if name in {"fill-rule", "clip-rule"} and value.strip().lower() not in _SVG_FILL_RULES:
+                raise RendererPolicyError(f"SVG {name} is invalid")
+            if name == "focusable" and value.strip().lower() not in _SVG_FOCUSABLE:
+                raise RendererPolicyError("SVG focusable is invalid")
+            if name == "vector-effect" and value.strip().lower() not in _SVG_VECTOR_EFFECTS:
+                raise RendererPolicyError("SVG vector-effect is invalid")
             if tag in {
                 "svg", "g", "path", "rect", "circle", "ellipse", "line",
                 "polyline", "polygon", "text", "tspan",

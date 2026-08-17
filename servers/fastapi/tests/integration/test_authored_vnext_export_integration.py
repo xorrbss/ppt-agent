@@ -49,6 +49,9 @@ from services.authored_vnext.integration.sql_repository import (
     OperationFenceError,
     SourceDigestMismatchError,
 )
+from services.authored_vnext.generation.legacy_bridge import (
+    _legacy_export_job_identity,
+)
 from models.authored_vnext.master.contract import DeckMasterContract
 from models.sql.user import User
 from models.authored_vnext.deck import (
@@ -81,6 +84,31 @@ PPTX_MEDIA_TYPE = (
     "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 )
 OWNER_ID = uuid.uuid5(uuid.NAMESPACE_URL, "authored-vnext-export-owner-a")
+
+
+def test_legacy_export_job_identity_is_stable_per_attempt_and_rotates_on_retry() -> None:
+    deck_id = "deck:legacy-retry"
+    deck_digest = "sha256:" + "a" * 64
+
+    first = _legacy_export_job_identity(
+        deck_id,
+        deck_digest,
+        execution_scope="generation:attempt:1:token-a",
+    )
+    replay = _legacy_export_job_identity(
+        deck_id,
+        deck_digest,
+        execution_scope="generation:attempt:1:token-a",
+    )
+    retry = _legacy_export_job_identity(
+        deck_id,
+        deck_digest,
+        execution_scope="generation:attempt:2:token-b",
+    )
+
+    assert replay == first
+    assert retry != first
+    assert "token-a" not in first
 
 
 def _create_owner(engine) -> None:
@@ -234,9 +262,17 @@ def test_buffered_artifact_store_publishes_content_addressed_read_back_receipt(
     storage_key, byte_length = store.publish(artifact, digest)
     reopened = store.open_verified(storage_key, digest, byte_length)
     duplicate_key, duplicate_size = store.publish(artifact, digest)
+    scoped_key, scoped_size = store.publish(
+        artifact,
+        digest,
+        storage_namespace="a" * 32,
+    )
+    scoped_reopened = store.open_verified(scoped_key, digest, scoped_size)
 
     assert reopened.read_bytes() == artifact
     assert (duplicate_key, duplicate_size) == (storage_key, byte_length)
+    assert scoped_key != storage_key
+    assert scoped_reopened.read_bytes() == artifact
     assert not list((tmp_path / "artifacts").rglob("*.candidate"))
 
 
@@ -1018,6 +1054,40 @@ def test_worker_failure_preserves_downloadable_last_known_good(
             receipt_after.artifact_digest,
             receipt_after.size_bytes,
         ).read_bytes() == good_bytes
+    finally:
+        engine.dispose()
+
+
+def test_unexpected_worker_failure_is_durably_failed_and_retryable(
+    tmp_path: Path,
+) -> None:
+    engine, repository = _sql_repository(tmp_path)
+    try:
+        _master, deck, digests = _published_sql_deck(
+            repository, "deck:unexpected-worker-failure"
+        )
+        service = AuthoredVNextExportService(
+            repository,
+            DeterministicWorkerTransport(RuntimeError("unexpected adapter failure")),
+            BufferedArtifactStore(tmp_path / "service-artifacts"),
+        )
+        created = _create_service_job(
+            service,
+            deck=deck,
+            digests=digests,
+            key="unexpected-worker-failure",
+        )
+
+        failed = asyncio.run(service.run_job(created.id))
+        assert failed.state == "failed"
+        assert failed.failure_code == "authored_vnext_export_failed"
+        assert failed.request_payload
+
+        queued = repository.retry_export_job(
+            failed.id,
+            expected_operation_fence=failed.operation_fence,
+        )
+        assert queued.state == "queued"
     finally:
         engine.dispose()
 

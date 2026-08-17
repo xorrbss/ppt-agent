@@ -1,5 +1,279 @@
 {
   "$defs": {
+    "AIEditZone": {
+      "additionalProperties": false,
+      "description": "Authored-template composition envelope with optional AI intent.\n\nHistorical contracts persisted only ``id``, ``scope`` and ``bounds``.  All\nauthoring fields therefore remain optional and are omitted again when they\nwere absent, so those immutable revisions retain their geometry-only wire\nrepresentation.",
+      "properties": {
+        "bounds": {
+          "$ref": "#/$defs/Rect"
+        },
+        "contentType": {
+          "anyOf": [
+            {
+              "enum": [
+                "auto",
+                "text",
+                "cards",
+                "list",
+                "table",
+                "chart",
+                "mixed"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contenttype"
+        },
+        "density": {
+          "anyOf": [
+            {
+              "enum": [
+                "sparse",
+                "balanced",
+                "dense"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Density"
+        },
+        "emptyBehavior": {
+          "anyOf": [
+            {
+              "enum": [
+                "hidden",
+                "blank",
+                "fallback"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Emptybehavior"
+        },
+        "fallbackText": {
+          "anyOf": [
+            {
+              "maxLength": 10000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fallbacktext"
+        },
+        "id": {
+          "pattern": "^ai-zone:[a-z0-9][a-z0-9._-]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "instruction": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Instruction"
+        },
+        "maxChars": {
+          "anyOf": [
+            {
+              "maximum": 10000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Maxchars"
+        },
+        "maxItems": {
+          "anyOf": [
+            {
+              "maximum": 24,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Maxitems"
+        },
+        "pattern": {
+          "anyOf": [
+            {
+              "enum": [
+                "auto",
+                "numberedCards",
+                "bulletList",
+                "comparisonTable",
+                "metricChart",
+                "iconCards"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pattern"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CommonElementScope"
+            },
+            {
+              "$ref": "#/$defs/LayoutElementScope"
+            }
+          ],
+          "title": "Scope"
+        },
+        "sourcePolicy": {
+          "anyOf": [
+            {
+              "enum": [
+                "documentOnly",
+                "promptAndDocument",
+                "promptOnly"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sourcepolicy"
+        },
+        "stylePolicy": {
+          "anyOf": [
+            {
+              "const": "inheritTemplate",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stylepolicy"
+        },
+        "textAlign": {
+          "anyOf": [
+            {
+              "enum": [
+                "left",
+                "center",
+                "right"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Textalign"
+        }
+      },
+      "required": [
+        "id",
+        "scope",
+        "bounds"
+      ],
+      "title": "AIEditZone",
+      "type": "object"
+    },
+    "AITextBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "emptyBehavior": {
+          "enum": [
+            "hidden",
+            "blank",
+            "fallback"
+          ],
+          "title": "Emptybehavior",
+          "type": "string"
+        },
+        "exampleText": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Exampletext"
+        },
+        "fallbackText": {
+          "anyOf": [
+            {
+              "maxLength": 10000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fallbacktext"
+        },
+        "instruction": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Instruction",
+          "type": "string"
+        },
+        "maxChars": {
+          "anyOf": [
+            {
+              "maximum": 10000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Maxchars"
+        }
+      },
+      "required": [
+        "instruction",
+        "emptyBehavior"
+      ],
+      "title": "AITextBinding",
+      "type": "object"
+    },
     "AssetReference": {
       "additionalProperties": false,
       "properties": {
@@ -140,6 +414,21 @@
         "warning"
       ],
       "title": "ColorTokens",
+      "type": "object"
+    },
+    "CommonElementScope": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "common",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "CommonElementScope",
       "type": "object"
     },
     "DesignTokens": {
@@ -424,6 +713,65 @@
       "title": "FurnitureRegistry",
       "type": "object"
     },
+    "ImageCrop": {
+      "additionalProperties": false,
+      "properties": {
+        "height": {
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Height",
+          "type": "number"
+        },
+        "width": {
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Width",
+          "type": "number"
+        },
+        "x": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "title": "ImageCrop",
+      "type": "object"
+    },
+    "LayoutElementScope": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "layout",
+          "title": "Kind",
+          "type": "string"
+        },
+        "layoutId": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Layoutid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "layoutId"
+      ],
+      "title": "LayoutElementScope",
+      "type": "object"
+    },
     "LayoutRegistry": {
       "additionalProperties": false,
       "properties": {
@@ -500,6 +848,42 @@
       "title": "LayoutSlot",
       "type": "object"
     },
+    "MasterCustomLayout": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^layout:[a-z0-9][a-z0-9._-]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "custom",
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "slots": {
+          "items": {
+            "$ref": "#/$defs/LayoutSlot"
+          },
+          "maxItems": 64,
+          "title": "Slots",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "kind"
+      ],
+      "title": "MasterCustomLayout",
+      "type": "object"
+    },
     "MasterLayout": {
       "additionalProperties": false,
       "properties": {
@@ -529,7 +913,6 @@
             "$ref": "#/$defs/LayoutSlot"
           },
           "maxItems": 16,
-          "minItems": 2,
           "title": "Slots",
           "type": "array"
         }
@@ -537,8 +920,7 @@
       "required": [
         "id",
         "name",
-        "kind",
-        "slots"
+        "kind"
       ],
       "title": "MasterLayout",
       "type": "object"
@@ -628,6 +1010,469 @@
         "height"
       ],
       "title": "Rect",
+      "type": "object"
+    },
+    "SemanticElementContent": {
+      "additionalProperties": false,
+      "properties": {
+        "aiBinding": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AITextBinding"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "altText": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Alttext"
+        },
+        "assetId": {
+          "anyOf": [
+            {
+              "pattern": "^asset:[a-z0-9][a-z0-9._-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assetid"
+        },
+        "crop": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ImageCrop"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "digest": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Digest"
+        },
+        "fit": {
+          "anyOf": [
+            {
+              "enum": [
+                "contain",
+                "cover"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fit"
+        },
+        "mediaType": {
+          "anyOf": [
+            {
+              "enum": [
+                "image/png",
+                "image/jpeg",
+                "image/svg+xml"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mediatype"
+        },
+        "placeholderIndex": {
+          "anyOf": [
+            {
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Placeholderindex"
+        },
+        "placeholderRole": {
+          "anyOf": [
+            {
+              "enum": [
+                "title",
+                "body",
+                "content",
+                "image"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Placeholderrole"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role"
+        },
+        "sharedGroupId": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 3,
+              "pattern": "^[a-z][a-z0-9._-]*:[a-z0-9][a-z0-9._-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sharedgroupid"
+        },
+        "sharedOverride": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sharedoverride"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "maxLength": 10000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
+        }
+      },
+      "title": "SemanticElementContent",
+      "type": "object"
+    },
+    "SemanticElementStyle": {
+      "additionalProperties": false,
+      "properties": {
+        "color": {
+          "anyOf": [
+            {
+              "pattern": "^#[0-9A-Fa-f]{6}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "fill": {
+          "anyOf": [
+            {
+              "pattern": "^#[0-9A-Fa-f]{6}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fill"
+        },
+        "fontFamily": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fontfamily"
+        },
+        "fontSize": {
+          "anyOf": [
+            {
+              "maximum": 400,
+              "minimum": 1,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fontsize"
+        },
+        "fontWeight": {
+          "anyOf": [
+            {
+              "maximum": 900,
+              "minimum": 100,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fontweight"
+        },
+        "lineDash": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "maxItems": 16,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Linedash"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "shape": {
+          "anyOf": [
+            {
+              "enum": [
+                "rect",
+                "ellipse"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shape"
+        },
+        "stroke": {
+          "anyOf": [
+            {
+              "pattern": "^#[0-9A-Fa-f]{6}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stroke"
+        },
+        "strokeWidth": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Strokewidth"
+        },
+        "textAlign": {
+          "anyOf": [
+            {
+              "enum": [
+                "left",
+                "center",
+                "right",
+                "justify"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Textalign"
+        },
+        "verticalAlign": {
+          "anyOf": [
+            {
+              "enum": [
+                "top",
+                "middle",
+                "bottom"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Verticalalign"
+        }
+      },
+      "title": "SemanticElementStyle",
+      "type": "object"
+    },
+    "SemanticMasterElement": {
+      "additionalProperties": false,
+      "properties": {
+        "bounds": {
+          "$ref": "#/$defs/Rect"
+        },
+        "content": {
+          "$ref": "#/$defs/SemanticElementContent"
+        },
+        "editableByAI": {
+          "title": "Editablebyai",
+          "type": "boolean"
+        },
+        "editableByUser": {
+          "title": "Editablebyuser",
+          "type": "boolean"
+        },
+        "id": {
+          "pattern": "^element:[a-z0-9][a-z0-9._-]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "locked": {
+          "title": "Locked",
+          "type": "boolean"
+        },
+        "rotation": {
+          "maximum": 360,
+          "minimum": -360,
+          "title": "Rotation",
+          "type": "number"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CommonElementScope"
+            },
+            {
+              "$ref": "#/$defs/LayoutElementScope"
+            }
+          ],
+          "title": "Scope"
+        },
+        "style": {
+          "$ref": "#/$defs/SemanticElementStyle"
+        },
+        "type": {
+          "enum": [
+            "text",
+            "image",
+            "shape",
+            "line",
+            "pageNumber",
+            "placeholder"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "visibility": {
+          "enum": [
+            "always",
+            "exceptCover",
+            "coverOnly",
+            "layoutOnly",
+            "hidden"
+          ],
+          "title": "Visibility",
+          "type": "string"
+        },
+        "zIndex": {
+          "maximum": 100000,
+          "minimum": -100000,
+          "title": "Zindex",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "scope",
+        "bounds",
+        "rotation",
+        "zIndex",
+        "visibility",
+        "editableByUser",
+        "editableByAI",
+        "locked",
+        "style",
+        "content"
+      ],
+      "title": "SemanticMasterElement",
       "type": "object"
     },
     "SemanticStyles": {
@@ -894,6 +1739,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
+    "aiEditZones": {
+      "items": {
+        "$ref": "#/$defs/AIEditZone"
+      },
+      "maxItems": 256,
+      "title": "Aieditzones",
+      "type": "array"
+    },
     "brandAssets": {
       "$ref": "#/$defs/BrandAssets"
     },
@@ -905,6 +1758,14 @@
       "default": "deckmaster-contract/v1",
       "title": "Contractversion",
       "type": "string"
+    },
+    "customLayouts": {
+      "items": {
+        "$ref": "#/$defs/MasterCustomLayout"
+      },
+      "maxItems": 64,
+      "title": "Customlayouts",
+      "type": "array"
     },
     "digest": {
       "anyOf": [
@@ -942,6 +1803,14 @@
       "title": "Name",
       "type": "string"
     },
+    "semanticElements": {
+      "items": {
+        "$ref": "#/$defs/SemanticMasterElement"
+      },
+      "maxItems": 2048,
+      "title": "Semanticelements",
+      "type": "array"
+    },
     "semanticStyles": {
       "$ref": "#/$defs/SemanticStyles"
     },
@@ -955,7 +1824,6 @@
         "$ref": "#/$defs/TitleStressCase"
       },
       "maxItems": 100,
-      "minItems": 4,
       "title": "Titlestresscorpus",
       "type": "array"
     },

@@ -8,17 +8,35 @@ export const AUTHORED_VNEXT_MASTER_API_PREFIX =
 export const AUTHORED_VNEXT_MASTER_ENDPOINTS = {
   status: `${AUTHORED_VNEXT_MASTER_API_PREFIX}/status`,
   drafts: `${AUTHORED_VNEXT_MASTER_API_PREFIX}/drafts`,
+  masters: `${AUTHORED_VNEXT_MASTER_API_PREFIX}/masters`,
+  companyStandardDefault: `${AUTHORED_VNEXT_MASTER_API_PREFIX}/company-standard/default`,
+  register: `${AUTHORED_VNEXT_MASTER_API_PREFIX}/masters/register`,
+  published: (masterId: string) =>
+    `${AUTHORED_VNEXT_MASTER_API_PREFIX}/masters/${encodeURIComponent(masterId)}/published`,
   logoAsset: `${AUTHORED_VNEXT_MASTER_API_PREFIX}/assets/logo`,
+  asset: (assetId: string, digest: MasterDigest) =>
+    `${AUTHORED_VNEXT_MASTER_API_PREFIX}/assets/${encodeURIComponent(assetId)}?${new URLSearchParams({ digest }).toString()}`,
   validate: (masterId: string) =>
     `${AUTHORED_VNEXT_MASTER_API_PREFIX}/drafts/${encodeURIComponent(masterId)}/validate`,
   publish: (masterId: string) =>
     `${AUTHORED_VNEXT_MASTER_API_PREFIX}/drafts/${encodeURIComponent(masterId)}/publish`,
   revision: (masterId: string, revision: number) =>
     `${AUTHORED_VNEXT_MASTER_API_PREFIX}/masters/${encodeURIComponent(masterId)}/revisions/${revision}`,
+  head: (masterId: string) =>
+    `${AUTHORED_VNEXT_MASTER_API_PREFIX}/masters/${encodeURIComponent(masterId)}/head`,
+  applyToPresentation: (presentationId: string) =>
+    `${AUTHORED_VNEXT_MASTER_API_PREFIX}/presentations/${encodeURIComponent(presentationId)}/apply`,
   preview: `${AUTHORED_VNEXT_MASTER_API_PREFIX}/preview`,
   decks: `${AUTHORED_VNEXT_MASTER_API_PREFIX}/decks`,
   regenerateBody: (deckId: string, slideId: string) =>
     `${AUTHORED_VNEXT_MASTER_API_PREFIX}/decks/${encodeURIComponent(deckId)}/slides/${encodeURIComponent(slideId)}/regenerate-body`,
+  aiImportAnalyses: `${AUTHORED_VNEXT_MASTER_API_PREFIX}/ai-import/analyses`,
+  aiImportAnalysis: (analysisId: string) =>
+    `${AUTHORED_VNEXT_MASTER_API_PREFIX}/ai-import/analyses/${encodeURIComponent(analysisId)}`,
+  aiImportValidate: (analysisId: string) =>
+    `${AUTHORED_VNEXT_MASTER_API_PREFIX}/ai-import/analyses/${encodeURIComponent(analysisId)}/validate`,
+  aiImportSave: (analysisId: string) =>
+    `${AUTHORED_VNEXT_MASTER_API_PREFIX}/ai-import/analyses/${encodeURIComponent(analysisId)}/save`,
 } as const;
 
 export const MASTER_CONTRACT_KEY_MANIFEST = {
@@ -34,12 +52,15 @@ export const MASTER_CONTRACT_KEY_MANIFEST = {
     "furniture",
     "semanticStyles",
     "layouts",
+    "customLayouts",
+    "semanticElements",
+    "aiEditZones",
     "fitPolicy",
     "titleStressCorpus",
     "digest",
   ],
   slideDraft: ["slideId", "layoutId", "title", "body"],
-  createDraft: ["contract", "visualDirection"],
+  createDraft: ["contract", "visualDirection", "expectedRevision", "expectedDigest"],
   validateOrPublish: ["expectedRevision", "expectedDigest"],
   preview: ["masterId", "masterRevision", "masterDigest", "slideSpec"],
   previewWire: ["masterId", "masterRevision", "masterDigest", "slide"],
@@ -77,6 +98,152 @@ export interface Bounds {
   height: number;
 }
 
+export type SemanticMasterElementType =
+  | "text"
+  | "image"
+  | "shape"
+  | "line"
+  | "pageNumber"
+  | "placeholder";
+
+export type SemanticMasterElementVisibility =
+  | "always"
+  | "exceptCover"
+  | "coverOnly"
+  | "layoutOnly"
+  | "hidden";
+
+export type SemanticMasterElementScope =
+  | { kind: "common" }
+  | { kind: "layout"; layoutId: string };
+
+export interface MasterImageCrop {
+  /** Normalized source-image coordinates in the inclusive 0..1 range. */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface SemanticMasterElementStyle {
+  fontFamily?: string;
+  fontSize?: number;
+  fontWeight?: number;
+  color?: string;
+  textAlign?: "left" | "center" | "right" | "justify";
+  verticalAlign?: "top" | "middle" | "bottom";
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  opacity?: number;
+  shape?: "rect" | "ellipse";
+  lineDash?: number[];
+}
+
+export interface SemanticMasterElementContent {
+  text?: string;
+  assetId?: string;
+  digest?: MasterDigest;
+  mediaType?: "image/png" | "image/jpeg" | "image/svg+xml";
+  altText?: string;
+  fit?: "contain" | "cover";
+  crop?: MasterImageCrop;
+  placeholderRole?: "title" | "body" | "content" | "image";
+  placeholderIndex?: number;
+  /** `brand-logo` remains an ordinary image with a semantic role. */
+  role?: string;
+  /**
+   * A layout-scoped brand logo is materialized once per target native layout,
+   * while all instances retain the same digest-pinned asset reference.
+   * This group identifier is intentionally semantic-contract data (rather
+   * than canvas state) so save/reentry and native export retain synchronization
+   * intent.
+   */
+  sharedGroupId?: string;
+  /** A layout may opt out of later shared logo position/style changes. */
+  sharedOverride?: boolean;
+  /**
+   * Generation-time binding for an ordinary semantic text element. The
+   * canonical master stores the instruction and optional design-time example,
+   * never a generated deck value.
+   */
+  aiBinding?: MasterAITextBinding;
+}
+
+export interface MasterAITextBinding {
+  instruction: string;
+  exampleText?: string;
+  emptyBehavior: "hidden" | "blank" | "fallback";
+  fallbackText?: string;
+  maxChars?: number;
+}
+
+export type AIEditZoneContentType =
+  | "auto"
+  | "text"
+  | "cards"
+  | "list"
+  | "table"
+  | "chart"
+  | "mixed";
+
+export type AIEditZonePattern =
+  | "auto"
+  | "numberedCards"
+  | "bulletList"
+  | "comparisonTable"
+  | "metricChart"
+  | "iconCards";
+
+export type AIEditZoneSourcePolicy =
+  | "documentOnly"
+  | "promptAndDocument"
+  | "promptOnly";
+
+export type AIEditZoneEmptyBehavior = "hidden" | "blank" | "fallback";
+export type AIEditZoneDensity = "sparse" | "balanced" | "dense";
+
+/**
+ * A template-facing semantic composition reservation.  Geometry-only v1
+ * zones intentionally remain valid: all generation fields are optional so
+ * saved masters can be reopened and enriched without a migration.
+ */
+export interface AIEditZone {
+  id: string;
+  scope: SemanticMasterElementScope;
+  bounds: Bounds;
+  /** Natural-language authoring intent. An omitted or blank value is legacy geometry-only. */
+  instruction?: string;
+  contentType?: AIEditZoneContentType;
+  pattern?: AIEditZonePattern;
+  sourcePolicy?: AIEditZoneSourcePolicy;
+  emptyBehavior?: AIEditZoneEmptyBehavior;
+  fallbackText?: string;
+  maxChars?: number;
+  maxItems?: number;
+  density?: AIEditZoneDensity;
+  /** Text alignment applied to generated content inside this zone. */
+  textAlign?: "left" | "center" | "right";
+  /** The renderer may use only the selected template's visual grammar. */
+  stylePolicy?: "inheritTemplate";
+}
+
+/** Canonical semantic state; Konva node JSON is deliberately not persisted. */
+export interface SemanticMasterElement {
+  id: string;
+  type: SemanticMasterElementType;
+  scope: SemanticMasterElementScope;
+  bounds: Bounds;
+  rotation: number;
+  zIndex: number;
+  visibility: SemanticMasterElementVisibility;
+  editableByUser: boolean;
+  editableByAI: boolean;
+  locked: boolean;
+  style: SemanticMasterElementStyle;
+  content: SemanticMasterElementContent;
+}
+
 export interface TextMargins {
   leftPt: number;
   rightPt: number;
@@ -93,7 +260,7 @@ export interface MasterFurniture {
   assetId?: string;
   fill?: string;
   stroke?: string;
-  visibility: "always" | "exceptCover" | "coverOnly";
+  visibility: "always" | "exceptCover" | "coverOnly" | "hidden";
 }
 
 export interface MasterSlot {
@@ -109,6 +276,13 @@ export interface MasterLayout {
   id: string;
   name: string;
   kind: LayoutKind;
+  slots: MasterSlot[];
+}
+
+export interface MasterCustomLayout {
+  id: string;
+  name: string;
+  kind: "custom";
   slots: MasterSlot[];
 }
 
@@ -193,6 +367,11 @@ export interface DeckMasterContractV1 {
     SemanticStyle
   >;
   layouts: Record<LayoutKind, MasterLayout>;
+  /** Optional WYSIWYG extensions keep all pre-editor v1 contracts valid. */
+  customLayouts?: MasterCustomLayout[];
+  semanticElements?: SemanticMasterElement[];
+  /** Optional so v1 masters with legacy slots continue to round-trip intact. */
+  aiEditZones?: AIEditZone[];
   fitPolicy: {
     preferredFontPt: number;
     minimumFontPt: number;
@@ -314,11 +493,236 @@ export interface MasterPreviewEnvelope {
 export interface CreateDraftRequest {
   contract: DeckMasterContractV1;
   visualDirection: VisualDirection;
+  expectedRevision?: number;
+  expectedDigest?: MasterDigest;
+}
+
+export interface CompanyStandardDefault {
+  schemaVersion: "company-standard-default/v1";
+  source: "serverDefault";
+  companyStandard: {
+    masterId: string;
+    revision: number;
+    digest: MasterDigest;
+  } | null;
+  name: string | null;
+}
+
+/** Deliberately compact data used by the picker; never render transport pins in UI. */
+export interface MasterCatalogSummary {
+  masterId: string;
+  name: string;
+  semanticVersion: string;
+  publishedRevision: number | null;
+  publishedDigest: MasterDigest | null;
+  hasDraft: boolean;
+  logo: BrandAsset | null;
+  primaryFont: string;
+  layoutCount: number;
+  updatedTime: string;
+}
+
+export interface MasterCatalogPage {
+  items: MasterCatalogSummary[];
+  nextCursor: string | null;
+}
+
+export interface RegisterMasterRequest {
+  contract: DeckMasterContractV1;
+  visualDirection?: VisualDirection;
+}
+
+/** User intent changes deterministic cleanup tolerances, never data sharing. */
+export type AiMasterPurpose = "faithful" | "cleanup" | "rebrand";
+export type AiMasterAnalysisStatus = "completed" | "partial";
+export type AiMasterCandidateAction =
+  | "pending"
+  | "fixed"
+  | "variable"
+  | "aiZone"
+  | "remove";
+
+export interface AiMasterSource {
+  filename: string;
+  digest: MasterDigest;
+  slideCount: number;
+  widthPx: number;
+  heightPx: number;
+  assets: AiMasterSourceAsset[];
+  assetRelationships: AiMasterSourceRelationship[];
+}
+
+export interface AiMasterSourceAsset {
+  assetId: string;
+  digest: MasterDigest;
+  mediaType: string;
+  byteLength: number;
+  partName: string;
+}
+
+export interface AiMasterSourceRelationship {
+  slideNumber: number;
+  relationshipId: string;
+  assetId: string;
+  crop?: MasterImageCrop;
+  fit: "contain" | "cover";
+}
+
+export interface AiMasterAnalysisSummary {
+  designFamilies: number;
+  layoutCandidates: number;
+  fontCount: number;
+  colorCount: number;
+  repeatedElementCount: number;
+  aiZoneCandidateCount: number;
+  lowConfidenceCount: number;
+}
+
+export interface AiMasterTokenCount {
+  count: number;
+  family?: string;
+  hex?: string;
+  source?: "slide" | "theme" | "fallback";
+}
+
+export interface AiMasterEvidence {
+  slideNumber: number;
+  bounds: Bounds;
+  rotation: number;
+  zIndex: number;
+  layoutPart?: string;
+  masterPart?: string;
+  themePart?: string;
+}
+
+export interface AiMasterCandidateElement {
+  id: string;
+  type: "text" | "image" | "shape" | "pageNumber";
+  role: string;
+  confidence: number;
+  text?: string;
+  assetId?: string;
+  digest?: MasterDigest;
+  mediaType?: string;
+  crop?: MasterImageCrop;
+  fit?: "contain" | "cover";
+  differences: string[];
+  aiZoneCandidate: boolean;
+  evidence: AiMasterEvidence[];
+}
+
+export interface AiMasterLayoutDifference {
+  code: string;
+  message: string;
+  severity?: "info" | "warning";
+}
+
+export interface AiMasterLayoutCandidate {
+  id: string;
+  name: string;
+  kind: LayoutKind | "closing" | "custom";
+  representativeSlide: number;
+  slideNumbers: number[];
+  confidence: number;
+  differences: AiMasterLayoutDifference[];
+  slots: Array<{
+    id: string;
+    role: "title" | "body" | "content" | "image";
+    bounds: Bounds;
+    placeholderType?: string;
+    placeholderIndex?: number;
+    fontFamily?: string;
+    fontSize?: number;
+    color?: string;
+  }>;
+  layoutPart?: string;
+  masterPart?: string;
+  themePart?: string;
+  excluded: boolean;
+}
+
+export interface AiMasterCandidateDecision {
+  candidateId: string;
+  action: AiMasterCandidateAction;
+  instruction?: string;
+  exampleText?: string;
+  emptyBehavior?: MasterAITextBinding["emptyBehavior"];
+  fallbackText?: string;
+  maxChars?: number;
+  /** A document-scoped user value always wins over a resolved AI value. */
+  overrideText?: string;
+  variableName?: string;
+}
+
+export interface AiMasterLayoutAction {
+  action: "merge" | "split" | "exclude" | "include" | "reanalyze";
+  layoutIds: string[];
+  slideNumbers: number[];
+  name?: string;
+}
+
+export interface AiMasterReapplyWarning {
+  code: string;
+  message: string;
+  slideNumber?: number;
+  layoutId?: string;
+  elementId?: string;
+  severity: "info" | "warning" | "error";
+}
+
+export interface AiMasterReapplyValidation {
+  valid: boolean;
+  issues: AiMasterReapplyWarning[];
+  checkedSlideCount: number;
+}
+
+export interface AiMasterAnalysis {
+  analysisId: string;
+  status: AiMasterAnalysisStatus;
+  purpose: AiMasterPurpose;
+  source: AiMasterSource;
+  summary: AiMasterAnalysisSummary;
+  fonts: AiMasterTokenCount[];
+  colors: AiMasterTokenCount[];
+  repeatedElements: AiMasterCandidateElement[];
+  layoutCandidates: AiMasterLayoutCandidate[];
+  decisions: AiMasterCandidateDecision[];
+  layoutActions: AiMasterLayoutAction[];
+  warnings: string[];
+  lowConfidence: string[];
+  tolerances: Record<string, number>;
+  contractDraft: DeckMasterContractV1;
+  validation?: AiMasterReapplyValidation;
+  masterRevision?: MasterRevisionEnvelope;
+}
+
+export interface UpdateAiMasterAnalysisRequest {
+  decisions?: AiMasterCandidateDecision[];
+  layoutActions?: AiMasterLayoutAction[];
+}
+
+export interface SaveAiMasterAnalysisRequest {
+  expectedRevision?: number;
+  expectedDigest?: MasterDigest;
+  masterId?: string;
+  contract?: DeckMasterContractV1;
 }
 
 export interface RevisionCasRequest {
   expectedRevision: number;
   expectedDigest: MasterDigest;
+}
+
+export interface ApplyMasterToPresentationRequest {
+  masterPin: {
+    masterId: string;
+    revision: number;
+    digest: MasterDigest;
+  };
+  expectedPresentationRevision: number;
+  expectedDeckRevision: number;
+  expectedDeckDigest: MasterDigest;
+  idempotencyKey: string;
 }
 
 export interface PreviewRequest {
@@ -363,7 +767,7 @@ export class MasterContractError extends Error {
 }
 
 export function isAuthoredVnextMasterEnabled(
-  value = process.env.NEXT_PUBLIC_AUTHORED_VNEXT_MASTER_ENABLED,
+  value = process.env.NEXT_PUBLIC_AUTHORED_VNEXT_MASTER_ENABLED ?? "true",
 ): boolean {
   return value === "true";
 }

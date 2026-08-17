@@ -17,6 +17,7 @@ import {
   serverOperationId,
   slideLabel,
   generationClient,
+  authoredVnextSlideCount,
   ZERO_DIGEST,
   type FlowEvent,
   type GenerationDeckSnapshot,
@@ -62,13 +63,14 @@ import { confirmedDirectionEvents } from "./flow-client-outline";
 import { flowClientCallbacks } from "./flow-client-callbacks";
 export default function AuthoredVnextFlowClient() {
   const t = useTranslations("authoredVnext");
+  const slideCount = authoredVnextSlideCount();
   const [flow, reduceFlow] = useReducer(
     (
       state: ReturnType<typeof createAuthoredVnextFlowState>,
       event: FlowEvent,
     ) => authoredVnextFlowReducer(state, event).state,
     undefined,
-    createAuthoredVnextFlowState,
+    () => createAuthoredVnextFlowState(slideCount),
   );
   const [workbench, dispatchWorkbench] = useReducer(
     workbenchReducer,
@@ -118,7 +120,6 @@ export default function AuthoredVnextFlowClient() {
           body: t("scene.body"),
         })
       : null;
-
   const inspector = inspectorView(selectedNode, activeSlide);
   const panels: WorkbenchPanelData = useMemo(
     () => ({
@@ -158,7 +159,6 @@ export default function AuthoredVnextFlowClient() {
     }),
     [candidate, prompt, t, workbench.outbox, workbench.undoStack],
   );
-
   const createOperationId = () =>
     `op:ui-${crypto.randomUUID()}-${++operationSequence.current}`;
   const loadCanonicalDeck = (
@@ -336,7 +336,7 @@ export default function AuthoredVnextFlowClient() {
     confirmedDirectionEvents(direction, prompt, {
       coverPurpose: t("outline.coverPurpose"),
       slidePurpose: (ordinal) => t("outline.slidePurpose", { ordinal }),
-    }).forEach(dispatchFlow);
+    }, slideCount).forEach(dispatchFlow);
   };
 
   const generate = async () => {

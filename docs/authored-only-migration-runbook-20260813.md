@@ -297,6 +297,25 @@ Rehearsal은 internal 시작 전, 25% 전, 100% 전, release N 변경 시 반복
 
 삭제 readiness 승인 후에도 실제 deletion plan은 별도 문서, 별도 승인, dry-run target manifest, 복구 시나리오를 요구한다. 이 런북 실행자는 deletion command를 실행하지 않는다.
 
+### 12.1 Census deletion manifest와 blocker 규칙
+
+`authored_only_census.py`의 `deletion_readiness`는 삭제 대상 후보를 판정하기 위한
+읽기 전용 manifest이다. 각 `presentation_id`에는 `eligible`과 `blockers`를 기록하며,
+다음 blocker 중 하나라도 있으면 해당 행은 삭제 후보가 아니다.
+
+- `non_authored_compatibility_required`: 기존 legacy/adaptive/smart/template_v2/mixed/invalid 호환 대상
+- `archive_manifest_missing` 또는 `archive_digest_unverified`: signed archive와 digest 검증 미완료
+- `active_job_drain_incomplete`: queued/running/retrying/finalizing 등 작업 잔존
+- `checkpoint_retention_present`: checkpoint가 남아 복구 가능성을 보존해야 함
+- `owner_isolation_failed`: 소유자 격리 검증 실패
+- `inventory_checksum_unverified`: source/artifact/original PPTX/asset checksum 불일치·누락·읽기 실패
+
+`deletion_readiness.status`는 이 manifest가 비어 있지 않거나 승인되지 않은 동안
+`blocked`이며, `physical_deletion_performed`는 항상 `false`여야 한다. `eligible` 행이
+있더라도 별도 deletion change request, dry-run manifest, 복구 rehearsal, retention/legal
+hold 확인과 승인 서명이 완료되기 전에는 삭제하지 않는다. census의 출력 자체가 삭제
+승인이나 삭제 명령으로 해석되어서는 안 된다.
+
 ## 13. 단계별 evidence checklist
 
 ### 매 단계 공통

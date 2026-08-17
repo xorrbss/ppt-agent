@@ -1,4 +1,4 @@
-"""Fail-closed ownership, geometry, and title stress validation."""
+"""Fail-closed furniture ownership and reserved-envelope validation."""
 
 from __future__ import annotations
 
@@ -6,9 +6,6 @@ from collections import Counter
 
 from models.authored_vnext.master.contract import DeckMasterContract, Rect
 from models.authored_vnext.master.operations import ValidationIssue, ValidationSummary
-from models.authored_vnext.master.slide import ExplicitTitle
-
-from .title_fit import fit_title
 
 
 def _overlaps(left: Rect, right: Rect) -> bool:
@@ -64,99 +61,52 @@ def validate_master(contract: DeckMasterContract) -> ValidationSummary:
             )
         )
 
+    semantic_ids = Counter(element.id for element in contract.semantic_elements)
+    for count in semantic_ids.values():
+        if count > 1:
+            duplicate_count += count - 1
+    for index, element in enumerate(contract.semantic_elements):
+        path = f"contract.semanticElements[{index}]"
+        if not _inside_canvas(element.bounds, contract):
+            issues.append(
+                ValidationIssue(
+                    code="authored_vnext_master_geometry_out_of_bounds",
+                    path=f"{path}.bounds",
+                    message="Semantic element geometry must stay inside the canvas.",
+                )
+            )
+        if element.type == "image" and (
+            element.content.asset_id is None or element.content.digest is None
+        ):
+            issues.append(
+                ValidationIssue(
+                    code="authored_vnext_master_image_asset_unpinned",
+                    path=f"{path}.content",
+                    message="Semantic images require digest-pinned assetId and digest values.",
+                )
+            )
+
     writable_overlaps = 0
-    seen_slot_ids: set[str] = set()
-    for layout_name, layout in (
-        ("standard", contract.layouts.standard),
-        ("longTitle", contract.layouts.long_title),
-    ):
-        roles = Counter(slot.role for slot in layout.slots)
-        if roles["title"] != 1 or roles["body"] != 1:
+    for index, zone in enumerate(contract.ai_edit_zones):
+        path = f"contract.aiEditZones[{index}]"
+        if not _inside_canvas(zone.bounds, contract):
             issues.append(
                 ValidationIssue(
-                    code="authored_vnext_master_layout_slots_invalid",
-                    path=f"contract.layouts.{layout_name}.slots",
-                    message="Each layout requires exactly one title and one body slot.",
+                    code="authored_vnext_master_geometry_out_of_bounds",
+                    path=f"{path}.bounds",
+                    message="AI edit zone geometry must stay inside the canvas.",
                 )
             )
-        for index, slot in enumerate(layout.slots):
-            path = f"contract.layouts.{layout_name}.slots[{index}]"
-            if slot.id in seen_slot_ids:
-                duplicate_count += 1
+        for element in furniture_elements:
+            if not _occupies_canvas(element):
+                continue
+            if _overlaps(zone.bounds, element.bounds):
+                writable_overlaps += 1
                 issues.append(
                     ValidationIssue(
-                        code="authored_vnext_master_furniture_body_duplicate",
-                        path=f"{path}.id",
-                        message="Body slot identifiers must be unique across layouts.",
-                    )
-                )
-            seen_slot_ids.add(slot.id)
-            if slot.ownership.locked or not slot.ownership.model_writable:
-                issues.append(
-                    ValidationIssue(
-                        code="authored_vnext_master_body_ownership_invalid",
-                        path=f"{path}.ownership",
-                        message="Body slots must be unlocked and model-writable.",
-                    )
-                )
-            if not _inside_canvas(slot.bounds, contract):
-                issues.append(
-                    ValidationIssue(
-                        code="authored_vnext_master_geometry_out_of_bounds",
+                        code="authored_vnext_master_furniture_ai_zone_geometry_overlap",
                         path=f"{path}.bounds",
-                        message="Body slot geometry must stay inside the canvas.",
-                    )
-                )
-            for element in furniture_elements:
-                if _overlaps(slot.bounds, element.bounds):
-                    writable_overlaps += 1
-                    issues.append(
-                        ValidationIssue(
-                            code="authored_vnext_master_furniture_body_geometry_overlap",
-                            path=f"{path}.bounds",
-                            message=f"Writable body overlaps locked {element.id}.",
-                        )
-                    )
-
-    expected_margins = (7.2, 7.2, 3.6, 3.6)
-    margins = contract.semantic_styles.title.margins
-    actual_margins = (
-        margins.left_pt,
-        margins.right_pt,
-        margins.top_pt,
-        margins.bottom_pt,
-    )
-    if actual_margins != expected_margins:
-        issues.append(
-            ValidationIssue(
-                code="authored_vnext_master_powerpoint_margin_contract_invalid",
-                path="contract.semanticStyles.title.margins",
-                message="Title margins must be 7.2pt LR and 3.6pt TB.",
-            )
-        )
-
-    title_fit_failures = 0
-    for index, case in enumerate(contract.title_stress_corpus):
-        try:
-            title = ExplicitTitle(text=case.text, lines=case.expected_lines)
-            result = fit_title(contract, contract.layouts.long_title.id, title)
-        except ValueError as error:
-            result = None
-            issues.append(
-                ValidationIssue(
-                    code="authored_vnext_master_stress_title_invalid",
-                    path=f"contract.titleStressCorpus[{index}]",
-                    message=str(error),
-                )
-            )
-        if result is None or result.clipped:
-            title_fit_failures += 1
-            if result is not None:
-                issues.append(
-                    ValidationIssue(
-                        code="authored_vnext_master_stress_title_clipped",
-                        path=f"contract.titleStressCorpus[{index}]",
-                        message=", ".join(result.violations),
+                        message=f"AI edit zone overlaps locked {element.id}.",
                     )
                 )
 
@@ -165,5 +115,18 @@ def validate_master(contract: DeckMasterContract) -> ValidationSummary:
         errors=issues,
         furniture_body_duplicates=duplicate_count,
         writable_overlaps=writable_overlaps,
-        title_fit_failures=title_fit_failures,
+        title_fit_failures=0,
     )
+
+
+def _occupies_canvas(element: object) -> bool:
+    if getattr(element, "visibility", None) == "hidden":
+        return False
+    kind = getattr(element, "kind", None)
+    if kind == "logo":
+        return getattr(element, "asset_id", None) is not None
+    if kind in {"text", "pageNumber"}:
+        return bool((getattr(element, "text", None) or "").strip())
+    if kind in {"line", "rect"}:
+        return bool(getattr(element, "stroke", None) or getattr(element, "fill", None))
+    return True

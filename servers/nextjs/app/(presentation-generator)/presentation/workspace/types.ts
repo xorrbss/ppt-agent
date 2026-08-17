@@ -36,6 +36,7 @@ export const KNOWN_OPERATION_TYPES = [
   "slide.delete",
   "version.restore",
   "template.apply",
+  "design.apply",
   "quality.review",
   "export.pptx",
   "export.pdf",
@@ -94,6 +95,10 @@ export interface WorkspaceOperationEvent {
   progress?: number;
   error?: string;
   retryable?: boolean;
+  /** Durable scheduler wait; capacity is not a generation error. */
+  capacityWaiting?: boolean;
+  /** Best-effort position among capacity-waiting operations. */
+  queuePosition?: number;
   result?: Record<string, unknown>;
   createdAt?: string;
 }
@@ -129,6 +134,8 @@ export interface WorkspaceOperationAnchor {
   progress?: number;
   error?: string;
   retryable?: boolean;
+  capacityWaiting?: boolean;
+  queuePosition?: number;
   result?: Record<string, unknown>;
   actor?: WorkspaceOperationActor;
   target?: Record<string, unknown>;
@@ -171,10 +178,26 @@ export interface WorkspaceActionReceipt {
   timeline: WorkspaceTimelinePage;
 }
 
+export type WorkspaceAuthoredStyleIntent =
+  | { intent: "keep" }
+  | { intent: "set"; styleId: string };
+
+export interface WorkspaceDesignMasterPin {
+  masterId: string;
+  revision: number;
+  digest: string;
+}
+
+export type WorkspaceMasterIntent =
+  | { intent: "keep" }
+  | { intent: "set"; pin: WorkspaceDesignMasterPin }
+  | { intent: "clear" };
+
 export interface WorkspaceTemplateApplicationRequest {
   sourceRevision: number;
   prompt: string;
-  authoredStyle: string;
+  authoredStyle: WorkspaceAuthoredStyleIntent;
+  master: WorkspaceMasterIntent;
   visionQa: boolean;
   idempotencyKey: string;
 }
@@ -228,6 +251,7 @@ export type WorkspaceCommandType =
   | "slide.delete"
   | "version.restore"
   | "template.apply"
+  | "design.apply"
   | "quality.review"
   | "export.pptx"
   | "export.pdf";

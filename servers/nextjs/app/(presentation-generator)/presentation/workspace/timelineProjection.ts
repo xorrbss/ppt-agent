@@ -386,6 +386,19 @@ export function normalizeOperationEvent(
       payloadError.retryable,
       payloadErrorDetail.retryable,
     ),
+    capacityWaiting: booleanValue(
+      raw.capacityWaiting,
+      raw.capacity_waiting,
+      payload.capacityWaiting,
+      payload.capacity_waiting,
+    ),
+    queuePosition: safeIntegerValue(
+      raw.queuePosition ??
+        raw.queue_position ??
+        payload.queuePosition ??
+        payload.queue_position,
+      1,
+    ),
     result: objectValue(raw.result, payload.result),
     createdAt: stringValue(raw.createdAt, raw.created_at),
   };
@@ -604,6 +617,17 @@ function normalizeOperation(
       rawError.retryable,
       rawErrorDetail.retryable,
       events[events.length - 1]?.retryable,
+    ),
+    capacityWaiting: booleanValue(
+      raw.capacityWaiting,
+      raw.capacity_waiting,
+      events[events.length - 1]?.capacityWaiting,
+    ),
+    queuePosition: safeIntegerValue(
+      raw.queuePosition ??
+        raw.queue_position ??
+        events[events.length - 1]?.queuePosition,
+      1,
     ),
     result: objectValue(raw.result),
     actor: normalizeOperationActor(raw),
@@ -1083,6 +1107,8 @@ function patchOperation(
     progress: event.progress ?? operation.progress,
     error: event.error ?? operation.error,
     retryable: event.retryable ?? operation.retryable,
+    capacityWaiting: event.capacityWaiting ?? operation.capacityWaiting,
+    queuePosition: event.queuePosition ?? operation.queuePosition,
     result: event.result ?? operation.result,
     updatedAt: event.createdAt ?? operation.updatedAt,
     events,

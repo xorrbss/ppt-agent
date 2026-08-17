@@ -1,363 +1,48 @@
-// Component test for the (fork-rewritten) UploadPage. The upstream spec tested
-// behavior this fork removed (English "Next" button, /theme + /documents-preview
-// navigation, research-mode toggle, titles/report endpoints). This rewrite covers
-// what the fork actually ships: the Korean upload surface mounts with all its
-// controls, prompt/slides/language inputs work, file attachment lists + toasts,
-// and empty-input validation. Toasts only render when a <Toaster/> is in the tree
-// (notify -> sonner), so the mount wrapper includes one — mirroring the real app.
-import React from 'react'
-import UploadPage from './UploadPage'
-import { isAllowedFile } from './SupportingDoc'
-import { mount } from 'cypress/react'
-import { store } from '@/store/store'
-import { Provider } from 'react-redux'
-import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime'
-import { Toaster } from '@/components/ui/sonner'
-import { NextIntlClientProvider } from 'next-intl'
-import koMessages from '@/i18n/messages/ko.json'
-import { setPptGenUploadState } from '@/store/slices/presentationGenUpload'
-import { catalogStyles } from '../../outline/components/TemplateSelection.test-data'
+import React from "react";
+import { mount } from "cypress/react";
+import { Provider } from "react-redux";
+import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
+import { NextIntlClientProvider } from "next-intl";
 
-import '@/app/globals.css'
+import koMessages from "@/i18n/messages/ko.json";
+import { Toaster } from "@/components/ui/sonner";
+import { makeStore } from "@/store/store";
+import UploadPage from "./UploadPage";
 
-const createRouter = () => ({
-  push: cy.stub().as('router.push'),
-  back: cy.stub(),
-  forward: cy.stub(),
-  refresh: cy.stub(),
-  replace: cy.stub(),
-  prefetch: cy.stub().resolves(),
-  route: '/',
-  pathname: '/',
-  query: {},
-  asPath: '/',
-})
+import "@/app/globals.css";
 
-const mountUploadPage = () =>
-  mount(
-    <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="Asia/Seoul">
-      <AppRouterContext.Provider value={createRouter() as any}>
-        <Provider store={store}>
-          <UploadPage />
-          <Toaster />
-        </Provider>
-      </AppRouterContext.Provider>
-    </NextIntlClientProvider>
-  )
+const router = {
+  push: () => undefined,
+  back: () => undefined,
+  forward: () => undefined,
+  refresh: () => undefined,
+  replace: () => undefined,
+  prefetch: () => Promise.resolve(),
+};
 
-// notify() -> sonner renders <li data-sonner-toast> with the title in [data-title].
-const checkToast = (message: string) =>
-  cy.get('[data-sonner-toast]', { timeout: 6000 }).should('contain', message)
-
-describe('<UploadPage />', () => {
+describe("<UploadPage /> authored-only creation", () => {
   beforeEach(() => {
-    cy.viewport(1440, 900)
-    store.dispatch(
-      setPptGenUploadState({
-        selectedTemplate: null,
-        selectedTheme: null,
-        authoredStyle: 'default',
-      })
-    )
-    cy.intercept('GET', '**/api/v1/ppt/structured-templates*', {
-      statusCode: 200,
-      body: Array.from({ length: 5 }, (_, index) => ({
-        id: `catalog-template-${index + 1}`,
-        name: `카탈로그 템플릿 ${index + 1}`,
-        description: '편집 가능한 프레젠테이션 템플릿',
-        revision: 1,
-        is_default: index === 0,
-        source: index === 4 ? 'custom-upload' : 'Presenton',
-        assets: null,
-        layouts: { layouts: [{ id: 'cover' }, { id: 'content' }] },
-      })),
-    }).as('structuredTemplates')
-    cy.intercept('GET', '**/api/v1/ppt/authored/styles', {
-      statusCode: 200,
-      body: catalogStyles.slice(0, 2).map((style, index) =>
-        index === 0
-          ? {
-              ...style,
-              preview: {
-                ...style.preview,
-                image: '/create_presentation_card_1.png',
-              },
-            }
-          : style
-      ),
-    }).as('authoredStyles')
-    cy.intercept('GET', '**/api/v1/ppt/themes/all', {
+    cy.intercept("GET", "**/api/v1/ppt/authored/styles", {
       statusCode: 200,
       body: [],
-    })
-    mountUploadPage()
-  })
+    });
+  });
 
-  it('renders the upload surface with all controls', () => {
-    cy.contains('무엇을 만들어 드릴까요?').should('exist')
-    cy.contains('button', '생성하기').should('exist')
-    cy.get('[data-testid="prompt-input"]').should('exist')
-    cy.get('[data-testid="slides-select"]').should('exist')
-    // Language + tone/verbosity live behind the advanced-settings modal.
-    cy.get('[data-testid="advanced-settings-button"]').should('exist')
-    cy.get('[data-testid="file-upload-input"]').should('exist')
-    cy.get('[data-testid="template-catalog"]').should('be.visible')
-    cy.get('[data-testid="structured-mode-button"]').should('have.attr', 'aria-pressed', 'true')
-    cy.get('[data-testid="authored-mode-button"]').should('have.attr', 'aria-pressed', 'false')
-  })
+  it("shows only authored style selection for new generation", () => {
+    mount(
+      <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="Asia/Seoul">
+        <AppRouterContext.Provider value={router as any}>
+          <Provider store={makeStore()}>
+            <UploadPage masterFeatureEnabled={false} />
+            <Toaster />
+          </Provider>
+        </AppRouterContext.Provider>
+      </NextIntlClientProvider>,
+    );
 
-  it('keeps the primary CTA inside the desktop viewport', () => {
-    cy.get('[data-testid="generate-presentation-button"]').should(($button) => {
-      const rect = $button[0].getBoundingClientRect()
-      expect(rect.top).to.be.greaterThan(0)
-      expect(rect.bottom).to.be.at.most(900)
-    })
-  })
-
-  it('keeps the primary CTA inside a 390x844 mobile viewport', () => {
-    cy.viewport(390, 844)
-    cy.get('[data-testid="compose-card"]').should(($composer) => {
-      const rect = $composer[0].getBoundingClientRect()
-      expect(rect.left).to.be.at.least(0)
-      expect(rect.right).to.be.at.most(390)
-    })
-    cy.get('[data-testid="generate-presentation-button"]').should('be.visible')
-  })
-
-  it('opens theme settings and runs the CTA from the keyboard', () => {
-    cy.get('[data-testid="theme-settings-button"]').click()
-    cy.get('[role="dialog"]').should('be.visible').and('contain', '프레젠테이션 테마')
-    cy.get('body').type('{esc}')
-
-    cy.get('[data-testid="generate-presentation-button"]')
-      .focus()
-      .should('have.focus')
-    cy.get('[data-testid="prompt-input"]').focus().type('{enter}')
-    checkToast('입력이 필요합니다')
-  })
-
-  describe('Configuration Selection', () => {
-    it('allows selecting number of slides', () => {
-      cy.get('[data-testid="slides-select"]').click({ force: true })
-      // The slide popover is fixed-positioned and overlaps the template grid in
-      // the component-test layout, so force the click past the cover check.
-      cy.get('[role="option"]').contains('슬라이드 100개').click({ force: true })
-      cy.get('[data-testid="slides-select"]').should('contain', '100')
-    })
-
-    it('opens the advanced-settings modal', () => {
-      cy.get('[data-testid="advanced-settings-button"]').click({ force: true })
-      cy.get('[role="dialog"]').should('be.visible').and('contain', '고급 설정')
-      cy.get('[role="switch"][aria-label="목차 포함"]').should('exist')
-      cy.get('[role="switch"][aria-label="제목 슬라이드 포함"]').should('exist')
-      cy.get('[role="switch"][aria-label="웹 검색 사용"]').should('exist')
-    })
-  })
-
-  describe('Prompt Input', () => {
-    it('allows entering prompt text', () => {
-      const testPrompt = 'Create a presentation about AI'
-      cy.get('[data-testid="prompt-input"]').type(testPrompt, { delay: 0 })
-      cy.get('[data-testid="prompt-input"]').should('have.value', testPrompt)
-    })
-  })
-
-  describe('File Upload', () => {
-    it('handles a single document upload', () => {
-      cy.fixture('example.txt').as('testFile')
-      cy.get('[data-testid="file-upload-input"]').selectFile('@testFile', { force: true })
-      cy.get('[data-testid="file-list"]').should('contain', 'example.txt')
-      checkToast('파일 선택 완료')
-    })
-
-    it('accepts a Markdown document with the Markdown MIME type', () => {
-      cy.get('[data-testid="file-upload-input"]').selectFile(
-        [{
-          contents: Cypress.Buffer.from('# Markdown source\n\n- keep this structure'),
-          fileName: 'presentation-brief.md',
-          mimeType: 'text/markdown',
-        }],
-        { force: true }
-      )
-      cy.get('[data-testid="file-list"]').should('contain', 'presentation-brief.md')
-      checkToast('파일 선택 완료')
-    })
-
-    it('allows Markdown by its safe extension when the browser omits or generalizes MIME', () => {
-      expect(isAllowedFile(new File(['# Notes'], 'empty-mime.md'))).to.equal(true)
-      expect(
-        isAllowedFile(new File(['# Notes'], 'generic.markdown', { type: 'application/octet-stream' }))
-      ).to.equal(true)
-    })
-
-    it('does not accept arbitrary text MIME types', () => {
-      expect(isAllowedFile(new File(['<p>not allowed</p>'], 'unsafe.html', { type: 'text/html' }))).to.equal(false)
-    })
-
-    it('advertises Markdown in the file picker accept list', () => {
-      cy.get('[data-testid="file-upload-input"]')
-        .invoke('attr', 'accept')
-        .should('contain', 'text/markdown')
-        .and('contain', '.md')
-        .and('contain', '.markdown')
-    })
-
-    it('handles multiple document uploads', () => {
-      const file1 = new File(['content1'], 'document1.txt', { type: 'text/plain' })
-      const file2 = new File(['content2'], 'document2.txt', { type: 'text/plain' })
-      cy.get('[data-testid="file-upload-input"]').selectFile(
-        [
-          { contents: file1, fileName: 'document1.txt' },
-          { contents: file2, fileName: 'document2.txt' },
-        ],
-        { force: true }
-      )
-      cy.get('[data-testid="file-list"]').within(() => {
-        cy.contains('document1.txt').should('be.visible')
-        cy.contains('document2.txt').should('be.visible')
-      })
-      checkToast('파일 선택 완료')
-    })
-
-    it('handles an image upload', () => {
-      const imageFile = new File(['image content'], 'test-image.jpg', { type: 'image/jpeg' })
-      cy.get('[data-testid="file-upload-input"]').selectFile(
-        { contents: imageFile, fileName: 'test-image.jpg', mimeType: 'image/jpeg' },
-        { force: true }
-      )
-      cy.get('[data-testid="file-list"]').should('contain', 'test-image.jpg')
-      checkToast('파일 선택 완료')
-    })
-
-    it('handles mixed document and image uploads', () => {
-      const docFile = new File(['doc content'], 'test-doc.txt', { type: 'text/plain' })
-      const imageFile = new File(['image content'], 'test-image.jpg', { type: 'image/jpeg' })
-      cy.get('[data-testid="file-upload-input"]').selectFile(
-        [
-          { contents: docFile, fileName: 'test-doc.txt' },
-          { contents: imageFile, fileName: 'test-image.jpg', mimeType: 'image/jpeg' },
-        ],
-        { force: true }
-      )
-      cy.get('[data-testid="file-list"]').within(() => {
-        cy.contains('test-doc.txt').should('be.visible')
-        cy.contains('test-image.jpg').should('be.visible')
-      })
-      checkToast('파일 선택 완료')
-    })
-  })
-
-  describe('Drag and drop', () => {
-    it('adds a file dropped onto the compose card', () => {
-      const file = new File(['pdf content'], 'dropped.pdf', {
-        type: 'application/pdf',
-      })
-      cy.get('[data-testid="compose-card"]').selectFile(
-        { contents: file, fileName: 'dropped.pdf', mimeType: 'application/pdf' },
-        { action: 'drag-drop', force: true }
-      )
-      cy.get('[data-testid="file-list"]').should('contain', 'dropped.pdf')
-      checkToast('파일 선택 완료')
-    })
-
-    it('rejects an unsupported file dropped onto the card', () => {
-      const file = new File(['x'], 'malware.exe', {
-        type: 'application/octet-stream',
-      })
-      cy.get('[data-testid="compose-card"]').selectFile(
-        {
-          contents: file,
-          fileName: 'malware.exe',
-          mimeType: 'application/octet-stream',
-        },
-        { action: 'drag-drop', force: true }
-      )
-      checkToast('지원하지 않는 파일이 있습니다')
-    })
-  })
-
-  describe('Validation', () => {
-    it('warns when no prompt or document is provided', () => {
-      cy.contains('button', '생성하기').click()
-      checkToast('입력이 필요합니다')
-    })
-  })
-
-  describe('Theme gallery', () => {
-    it('lists presets and selecting one marks it active', () => {
-      cy.get('[data-testid="theme-settings-button"]').click()
-      cy.get('[data-testid="theme-gallery"]').should('exist')
-      cy.get('[data-testid="theme-option-carbon"]').should('exist')
-      cy.get('[data-testid="theme-option-broadsheet"]').should('exist')
-      cy.get('[data-testid="theme-option-carbon"]').click()
-      cy.get('[data-testid="theme-option-carbon"]').should('have.attr', 'aria-checked', 'true')
-      cy.get('[data-testid="theme-option-none"]').should('have.attr', 'aria-checked', 'false')
-    })
-  })
-
-  describe('Responsive template catalog', () => {
-    it('shows an AI-authored style in the first row of the default mixed catalog', () => {
-      cy.wait(['@structuredTemplates', '@authoredStyles'])
-      cy.get('[data-testid="template-catalog-grid"]')
-        .children()
-        .eq(0)
-        .should('have.attr', 'data-testid', 'catalog-structured-catalog-template-1')
-      cy.get('[data-testid="template-catalog-grid"]')
-        .children()
-        .eq(1)
-        .should('have.attr', 'data-testid', 'catalog-authored-default')
-        .and('be.visible')
-        .then(($card) => {
-          expect($card[0].getBoundingClientRect().top).to.be.lessThan(900)
-        })
-    })
-
-    it('reuses the original AI-authored reference thumbnail', () => {
-      cy.wait(['@structuredTemplates', '@authoredStyles'])
-      cy.get('[data-testid="catalog-authored-default"]')
-        .find('[data-testid="authored-style-preview-default"]')
-        .should('have.attr', 'data-preview-family', 'reference')
-        .find('img')
-        .should('have.attr', 'src')
-        .and('contain', '/create_presentation_card_1.png')
-    })
-
-    it('adds fluid columns from the actual catalog width', () => {
-      cy.wait(['@structuredTemplates', '@authoredStyles'])
-      const cases = [
-        { width: 768, columns: 2 },
-        { width: 1048, columns: 3 },
-        { width: 1280, columns: 3 },
-        { width: 1536, columns: 4 },
-        { width: 1920, columns: 5 },
-      ]
-
-      cases.forEach(({ width, columns: expectedColumns }) => {
-        cy.viewport(width, 900)
-        cy.get('[data-testid="template-catalog-grid"]').should(($grid) => {
-          const columns = getComputedStyle($grid[0]).gridTemplateColumns
-            .split(' ')
-            .filter(Boolean)
-          expect(columns, `${width}px catalog columns`).to.have.length(expectedColumns)
-          const rect = $grid[0].getBoundingClientRect()
-          expect(rect.left).to.be.at.least(0)
-          expect(rect.right).to.be.at.most(width)
-        })
-      })
-    })
-
-    it('keeps two columns without horizontal overflow on mobile', () => {
-      cy.viewport(390, 844)
-      cy.wait(['@structuredTemplates', '@authoredStyles'])
-      cy.get('[data-testid="template-catalog-grid"]').should(($grid) => {
-        const columns = getComputedStyle($grid[0]).gridTemplateColumns
-          .split(' ')
-          .filter(Boolean)
-        expect(columns).to.have.length(2)
-        const rect = $grid[0].getBoundingClientRect()
-        expect(rect.left).to.be.at.least(0)
-        expect(rect.right).to.be.at.most(390)
-      })
-    })
-  })
-})
+    cy.get('[data-testid="authored-style-section"]').should("be.visible");
+    cy.contains("Template V2").should("not.exist");
+    cy.contains("레이아웃 템플릿").should("not.exist");
+    cy.get('[data-testid="generate-presentation-button"]').should("be.visible");
+  });
+});

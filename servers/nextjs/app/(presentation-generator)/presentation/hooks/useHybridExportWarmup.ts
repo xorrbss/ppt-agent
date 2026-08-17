@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 
 import { buildSafeExportFileName } from "../utils/buildSafeExportFileName";
+import { presentationMasterPin } from "../utils/masterPresentation";
 
 const EDIT_WARMUP_DELAY_MS = 20_000;
 
@@ -50,7 +51,11 @@ export const useHybridExportWarmup = ({
 
   const warmHybridExport = useCallback(() => {
     const current = currentStateRef.current;
-    if (!current.isAuthoredDeck || current.isStreaming) return;
+    if (
+      !current.isAuthoredDeck ||
+      current.isStreaming ||
+      presentationMasterPin(current.presentationData)
+    ) return;
 
     const safeFileName = buildSafeExportFileName(current.title, "pptx");
     const safeTitle = safeFileName.replace(/\.pptx$/i, "");

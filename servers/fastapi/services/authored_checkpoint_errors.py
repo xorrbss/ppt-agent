@@ -10,6 +10,7 @@ from sqlalchemy import update
 
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from utils.datetime_utils import get_current_utc_datetime
+from utils.renderer_worker_policy import RendererPolicyError
 
 
 _SECRET_PATTERNS = (
@@ -186,6 +187,8 @@ async def complete_publish(
 def is_retryable_exception(error: BaseException) -> bool:
     """Classify provider/client failures without persisting their response body."""
 
+    if isinstance(error, RendererPolicyError):
+        return False
     status_code = getattr(error, "status_code", None)
     if status_code is None:
         response = getattr(error, "response", None)

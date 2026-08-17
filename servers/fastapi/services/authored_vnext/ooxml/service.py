@@ -86,6 +86,21 @@ class OoxmlPackageService(OoxmlPackageOperationMixin, OoxmlPackageRepository):
             for item in master_contract.get("furniture", [])
             if item.get("assetId") is not None
         }
+        authored_manifest = master_contract.get("authoredManifest", {})
+        if isinstance(authored_manifest, dict):
+            for element in authored_manifest.get("semanticElements", []):
+                if not isinstance(element, dict) or element.get("type") != "image":
+                    continue
+                content = element.get("content")
+                if not isinstance(content, dict):
+                    continue
+                asset_id = content.get("assetId")
+                digest = content.get("digest")
+                if isinstance(asset_id, str) and isinstance(digest, str):
+                    raw_digest = digest.removeprefix("sha256:")
+                    if asset_id in references and references[asset_id] != raw_digest:
+                        raise OoxmlPackageError("authored_vnext_master_asset_reference_mismatch")
+                    references[asset_id] = raw_digest
         if not references:
             return []
         store = OwnerMasterAssetStore(

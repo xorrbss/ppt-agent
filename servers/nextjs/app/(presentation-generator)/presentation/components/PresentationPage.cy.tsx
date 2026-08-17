@@ -151,17 +151,22 @@ describe("<PresentationPage />", () => {
   let apiMocks: ApiMockManager;
   let router: ReturnType<typeof createMockRouter>;
 
-  const mountPage = () => {
+  const mountPage = (workspaceStaging = false) => {
     router = createMockRouter();
     cy.mount(
       <NextIntlClientProvider locale="en" messages={enMessages} timeZone="UTC">
         <AppRouterContext.Provider value={router as never}>
           <PathnameContext.Provider value="/presentation">
             <SearchParamsContext.Provider
-              value={new URLSearchParams(`id=${presentationId}`) as never}
+              value={new URLSearchParams(
+                `id=${presentationId}${workspaceStaging ? "&workspace_staging=template" : ""}`,
+              ) as never}
             >
               <Provider store={makeStore()}>
-                <PresentationPage presentation_id={presentationId} />
+                <PresentationPage
+                  presentation_id={presentationId}
+                  workspaceStaging={workspaceStaging}
+                />
               </Provider>
             </SearchParamsContext.Provider>
           </PathnameContext.Provider>
@@ -224,6 +229,42 @@ describe("<PresentationPage />", () => {
       .should("have.attr", "data-render-artifact-target", "preview")
       .and("have.attr", "data-editor-adapter", "legacy-elements")
       .and("have.attr", "data-assistant-adapter", "canonical-workspace");
+  });
+
+  it("stops workspace staging when the design operation has failed", () => {
+    apiMocks.setupGetIntercept(presentationUrl, buildDeck(0), "loadStagingDeck");
+    apiMocks.setupGetIntercept(
+      `**/api/v1/ppt/workspace/presentations/${presentationId}/timeline*`,
+      {
+        schema_version: 1,
+        items: [
+          {
+            schema_version: 1,
+            anchor_type: "operation",
+            id: "operation-failed",
+            operation_id: "operation-failed",
+            position: 1,
+            operation_type: "design.apply",
+            title: "디자인 변경",
+            status: "dead_letter",
+            safe_message: "디자인 변경 작업을 완료하지 못했습니다.",
+            events: [],
+          },
+        ],
+        revision: 0,
+        has_more: false,
+      },
+      "stagingTimeline",
+    );
+
+    mountPage(true);
+
+    cy.wait("@loadStagingDeck");
+    cy.wait("@stagingTimeline");
+    cy.get('[data-testid="workspace-staging-failure"]')
+      .should("be.visible")
+      .and("contain.text", "디자인 변경에 실패했습니다");
+    cy.get('[data-testid="workspace-staging-loading"]').should("not.exist");
   });
 
   it("enables Smart HTML selection and forwards the selected element to canonical chat", () => {

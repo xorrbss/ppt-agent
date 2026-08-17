@@ -91,6 +91,164 @@ function useApprovalExpired(
   return expired;
 }
 
+type TemplateApplicationEvidence = {
+  templateId?: string;
+  templateDigest?: string;
+  referenceLayoutDigest?: string;
+  compositionDigest?: string;
+  ruleDigest?: string;
+  semanticRoles: string[];
+  layoutRoles: string[];
+  pageNumbers: number[];
+  slideCount?: number;
+  visualFidelityPassed: boolean;
+  previewMatches: boolean;
+  nativeMatches: boolean;
+  readbackVerified: boolean;
+};
+
+function matchesResolvedSnapshot(
+  snapshot: Record<string, unknown>,
+  evidence: Pick<
+    TemplateApplicationEvidence,
+    "referenceLayoutDigest" | "compositionDigest" | "ruleDigest" | "slideCount"
+  >,
+): boolean {
+  const referenceLayoutDigest = stringValue(
+    snapshot.reference_layout_digest,
+    snapshot.referenceLayoutDigest,
+  );
+  const compositionDigest = stringValue(
+    snapshot.composition_digest,
+    snapshot.compositionDigest,
+  );
+  const ruleDigest = stringValue(snapshot.rule_digest, snapshot.ruleDigest);
+  const slideCount = numberValue(snapshot.slide_count, snapshot.slideCount);
+  return Boolean(
+    evidence.referenceLayoutDigest &&
+      evidence.compositionDigest &&
+      evidence.ruleDigest &&
+      evidence.slideCount !== undefined &&
+      referenceLayoutDigest === evidence.referenceLayoutDigest &&
+      compositionDigest === evidence.compositionDigest &&
+      ruleDigest === evidence.ruleDigest &&
+      slideCount === evidence.slideCount,
+  );
+}
+
+function templateApplicationEvidence(
+  result: Record<string, unknown>,
+): TemplateApplicationEvidence {
+  // The durable design.apply receipt is snake_case.  Keep the older resolved
+  // aliases for historical rows, but prefer neither spelling: both describe the
+  // same immutable composition and must yield the same completed UI state.
+  const templateSnapshot = recordValue(
+    result.template_snapshot ?? result.templateSnapshot,
+  );
+  const referenceLayoutDigest = stringValue(
+    result.resolved_reference_layout_digest,
+    result.resolvedReferenceLayoutDigest,
+    result.reference_layout_digest,
+    result.referenceLayoutDigest,
+    templateSnapshot.reference_layout_digest,
+    templateSnapshot.referenceLayoutDigest,
+  );
+  const compositionDigest = stringValue(
+    result.resolved_composition_digest,
+    result.resolvedCompositionDigest,
+    result.composition_digest,
+    result.compositionDigest,
+    recordValue(result.resolved_composition_pin).digest,
+    recordValue(result.resolvedCompositionPin).digest,
+  );
+  const ruleDigest = stringValue(
+    result.resolved_rule_digest,
+    result.resolvedRuleDigest,
+    result.rule_digest,
+    result.ruleDigest,
+  );
+  const slideCount = numberValue(result.slide_count, result.slideCount);
+  const pageNumbers = (Array.isArray(result.page_numbers)
+    ? result.page_numbers
+    : Array.isArray(result.pageNumbers)
+      ? result.pageNumbers
+      : []
+  ).filter(
+    (value): value is number => typeof value === "number" && Number.isInteger(value),
+  );
+  const visualFidelity = recordValue(
+    result.visual_fidelity ?? result.visualFidelity,
+  );
+  const visualFidelityPassed =
+    stringValue(visualFidelity.status, result.visual_fidelity_status, result.visualFidelityStatus) ===
+      "passed" ||
+    booleanValue(visualFidelity.passed, result.visual_fidelity_passed, result.visualFidelityPassed) === true;
+  const evidence = {
+    templateId: stringValue(
+      result.resolved_template_id,
+      result.resolvedTemplateId,
+      result.template_id,
+      result.templateId,
+      templateSnapshot.resolved_template_id,
+      templateSnapshot.resolvedTemplateId,
+      templateSnapshot.template_id,
+      templateSnapshot.templateId,
+    ),
+    templateDigest: stringValue(
+      result.resolved_template_digest,
+      result.resolvedTemplateDigest,
+      result.template_digest,
+      result.templateDigest,
+      templateSnapshot.resolved_template_digest,
+      templateSnapshot.resolvedTemplateDigest,
+      templateSnapshot.template_digest,
+      templateSnapshot.templateDigest,
+    ),
+    referenceLayoutDigest,
+    compositionDigest,
+    ruleDigest,
+    semanticRoles: stringList(result.semantic_roles_used, result.semanticRolesUsed),
+    layoutRoles: stringList(result.layout_roles_used, result.layoutRolesUsed),
+    pageNumbers,
+    slideCount,
+    visualFidelityPassed,
+    previewMatches: false,
+    nativeMatches: false,
+    readbackVerified:
+      booleanValue(result.readback_verified, result.readbackVerified) === true,
+  } satisfies TemplateApplicationEvidence;
+  return {
+    ...evidence,
+    previewMatches: matchesResolvedSnapshot(
+      recordValue(result.preview_snapshot ?? result.previewSnapshot),
+      evidence,
+    ),
+    nativeMatches: matchesResolvedSnapshot(
+      recordValue(result.native_pptx_snapshot ?? result.nativePptxSnapshot),
+      evidence,
+    ),
+  };
+}
+
+function templateApplicationEvidenceComplete(
+  evidence: TemplateApplicationEvidence,
+): boolean {
+  return Boolean(
+    evidence.templateId &&
+    evidence.templateDigest &&
+      evidence.referenceLayoutDigest &&
+      evidence.compositionDigest &&
+      evidence.ruleDigest &&
+      evidence.visualFidelityPassed &&
+      evidence.previewMatches &&
+      evidence.nativeMatches &&
+      evidence.readbackVerified &&
+      evidence.slideCount !== undefined &&
+      evidence.pageNumbers.length === evidence.slideCount &&
+      evidence.pageNumbers.every((pageNumber, index) => pageNumber === index + 1),
+  );
+}
+
 export function WorkspaceOperationCard({
   operation,
   currentRevision,
@@ -122,6 +280,12 @@ export function WorkspaceOperationCard({
     operation.progress === undefined
       ? undefined
       : Math.max(0, Math.min(100, operation.progress));
+  const capacityWaiting =
+    operation.status === "queued" && operation.capacityWaiting === true;
+  const capacityWaitMessage =
+    operation.queuePosition !== undefined
+      ? `생성 용량 대기 중 · 대기 순번 ${operation.queuePosition}번째`
+      : "생성 용량 대기 중 · 슬롯이 확보되면 자동으로 시작합니다.";
   const latestMessage = [...operation.events]
     .reverse()
     .find((event) => event.message)?.message;
@@ -163,9 +327,19 @@ export function WorkspaceOperationCard({
     result.kind === "version.restore";
   const isTemplateApply =
     operation.operationType === "template.apply" ||
-    result.kind === "template.apply";
+    operation.operationType === "design.apply" ||
+    result.kind === "template.apply" ||
+    result.kind === "design.apply";
+  const templateEvidence = isTemplateApply
+    ? templateApplicationEvidence(result)
+    : undefined;
+  const templateEvidenceComplete =
+    templateEvidence !== undefined &&
+    templateApplicationEvidenceComplete(templateEvidence);
   const templateProgressMessage =
-    progress === undefined
+    capacityWaiting
+      ? capacityWaitMessage
+      : progress === undefined
       ? "템플릿 변경 작업을 준비하고 있습니다."
       : progress < 10
         ? "기존 원고와 선택한 템플릿을 확인하고 있습니다."
@@ -515,7 +689,11 @@ export function WorkspaceOperationCard({
             role="status"
             aria-live="polite"
           >
-            {STATUS_LABELS[operation.status] ??
+            {capacityWaiting
+              ? "생성 용량 대기 중"
+              : operation.status === "succeeded" && isTemplateApply && !templateEvidenceComplete
+              ? "시각 검증 증거 대기"
+              : STATUS_LABELS[operation.status] ??
               `지원되지 않는 상태 · ${operation.status}`}
           </p>
         </div>
@@ -604,7 +782,17 @@ export function WorkspaceOperationCard({
           검수 결과와 수정본 리비전을 저장하고 있습니다.
         </p>
       )}
-      {latestMessage && (
+      {capacityWaiting && !isTemplateApply && (
+        <p
+          className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-xs text-amber-800"
+          role="status"
+          aria-live="polite"
+          data-testid="generation-capacity-waiting"
+        >
+          {capacityWaitMessage}
+        </p>
+      )}
+      {latestMessage && operation.status !== "succeeded" && !capacityWaiting && (
         <p className="mt-2 text-xs text-slate-600">{latestMessage}</p>
       )}
       {isTemplateApply && !TERMINAL.has(operation.status) && (
@@ -670,18 +858,59 @@ export function WorkspaceOperationCard({
           )}
         </section>
       )}
-      {operation.status === "succeeded" && isTemplateApply && (
+      {operation.status === "succeeded" && isTemplateApply && templateEvidence && (
         <section
-          className="mt-2 rounded-lg border border-violet-100 bg-violet-50 px-2.5 py-2 text-xs text-violet-950"
+          className={`mt-2 rounded-lg border px-2.5 py-2 text-xs ${
+            templateEvidenceComplete
+              ? "border-violet-100 bg-violet-50 text-violet-950"
+              : "border-amber-200 bg-amber-50 text-amber-950"
+          }`}
           aria-label="AI 저작 템플릿 변경 결과"
           data-testid="template-apply-result"
         >
           <p className="font-semibold">
-            {stringValue(result.message) ?? "새 AI 저작 자료가 준비되었습니다."}
+            {templateEvidenceComplete
+              ? stringValue(result.message) ?? "AI 저작 자료의 시각 검증이 완료되었습니다."
+              : "자료는 생성되었지만 시각 검증 증거가 부족하여 완료로 표시하지 않습니다."}
           </p>
           <p className="mt-1 text-violet-800">
             원본 자료는 변경되지 않았습니다.
           </p>
+          <dl
+            className="mt-2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 break-words"
+            data-testid="template-apply-evidence"
+          >
+            <dt>템플릿</dt>
+            <dd>{templateEvidence.templateId ?? "미확인"}</dd>
+            <dt>템플릿 digest</dt>
+            <dd>{templateEvidence.templateDigest ?? "미확인"}</dd>
+            <dt>Reference-layout digest</dt>
+            <dd>{templateEvidence.referenceLayoutDigest ?? "미확인"}</dd>
+            <dt>Composition / rule digest</dt>
+            <dd>
+              {templateEvidence.compositionDigest ?? "미확인"} / {templateEvidence.ruleDigest ?? "미확인"}
+            </dd>
+            <dt>시각 충실도</dt>
+            <dd>{templateEvidence.visualFidelityPassed ? "통과" : "미통과 또는 미확인"}</dd>
+            <dt>Preview / native snapshot</dt>
+            <dd>
+              {templateEvidence.previewMatches && templateEvidence.nativeMatches
+                ? "동일한 resolved snapshot 확인"
+                : "동일 snapshot 미확인"}
+            </dd>
+            <dt>사용 semantic roles</dt>
+            <dd>{templateEvidence.semanticRoles.join(", ") || "미확인"}</dd>
+            <dt>사용 layout roles</dt>
+            <dd>{templateEvidence.layoutRoles.join(", ") || "미확인"}</dd>
+            <dt>페이지 번호</dt>
+            <dd>
+              {templateEvidence.pageNumbers.length > 0
+                ? `${templateEvidence.pageNumbers.join(", ")} / ${templateEvidence.slideCount ?? "?"}장`
+                : "미확인"}
+            </dd>
+            <dt>Native PPTX readback</dt>
+            <dd>{templateEvidence.readbackVerified ? "검증됨" : "미확인"}</dd>
+          </dl>
         </section>
       )}
       {operation.status === "succeeded" && isQualityReview && (
@@ -999,7 +1228,7 @@ export function WorkspaceOperationCard({
           )}
         </section>
       )}
-      {operation.error && (
+      {operation.error && operation.status !== "succeeded" && (
         <p
           className="mt-2 rounded-lg bg-red-50 px-2.5 py-2 text-xs text-red-700"
           role="alert"

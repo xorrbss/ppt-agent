@@ -46,6 +46,11 @@ def test_checked_in_contracts_match_authoritative_models_and_router() -> None:
     assert set(master_schema["$defs"]["LayoutRegistry"]["required"]) == {
         "cover", "section", "standard", "longTitle",
     }
+    assert "slots" not in master_schema["$defs"]["MasterLayout"]["required"]
+    assert "aiEditZones" not in master_schema["required"]
+    assert set(master_schema["$defs"]["AIEditZone"]["required"]) == {
+        "id", "scope", "bounds",
+    }
     assert list(Draft202012Validator(master_schema).iter_errors(master_contract_payload())) == []
     assert list(Draft202012Validator(slide_schema).iter_errors(long_title_slide_payload())) == []
 
@@ -53,6 +58,21 @@ def test_checked_in_contracts_match_authoritative_models_and_router() -> None:
     assert list(Draft202012Validator(master_schema).iter_errors(extra_master))
     extra_slide = {**long_title_slide_payload(), "furniture": []}
     assert list(Draft202012Validator(slide_schema).iter_errors(extra_slide))
+
+    furniture_only = master_contract_payload()
+    for layout in furniture_only["layouts"].values():
+        layout["slots"] = []
+    furniture_only["titleStressCorpus"] = []
+    furniture_only["aiEditZones"] = [
+        {
+            "id": "ai-zone:main-content",
+            "scope": {"kind": "common"},
+            "bounds": {"x": 100.0, "y": 120.0, "width": 1080.0, "height": 500.0},
+        }
+    ]
+    assert list(Draft202012Validator(master_schema).iter_errors(furniture_only)) == []
+    furniture_only["aiEditZones"][0]["style"] = {"fontSize": 48}
+    assert list(Draft202012Validator(master_schema).iter_errors(furniture_only))
 
 
 def test_api_wire_manifest_is_camel_case_feature_gated_and_complete() -> None:
@@ -83,9 +103,18 @@ def test_api_wire_manifest_is_camel_case_feature_gated_and_complete() -> None:
     }
     assert set(endpoints) == {
         ("GET", "/authored-vnext/master/status"),
+        ("GET", "/authored-vnext/master/assets/{asset_id}"),
+        ("GET", "/authored-vnext/master/masters"),
+        ("POST", "/authored-vnext/master/masters/register"),
+        ("GET", "/authored-vnext/master/masters/{master_id}/head"),
+        ("GET", "/authored-vnext/master/masters/{master_id}/published"),
         (
             "GET",
             "/authored-vnext/master/masters/{master_id}/revisions/{revision}",
+        ),
+        (
+            "POST",
+            "/authored-vnext/master/presentations/{presentation_id}/apply",
         ),
         ("POST", "/authored-vnext/master/drafts"),
         ("POST", "/authored-vnext/master/drafts/{master_id}/validate"),
@@ -111,6 +140,14 @@ def test_api_wire_manifest_is_camel_case_feature_gated_and_complete() -> None:
         "requestModel": "UploadFile",
         "responseModel": "MasterAssetReceipt",
         "successStatus": 201,
+    }
+    assert endpoints[("GET", "/authored-vnext/master/assets/{asset_id}")] == {
+        "method": "GET",
+        "operation": "get_master_asset",
+        "path": "/authored-vnext/master/assets/{asset_id}",
+        "requestModel": None,
+        "responseModel": None,
+        "successStatus": 200,
     }
 
 

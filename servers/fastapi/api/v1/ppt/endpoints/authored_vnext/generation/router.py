@@ -17,6 +17,7 @@ from models.authored_vnext.deck import (
     RegenerationResult,
     RollbackResult,
 )
+from models.authored_vnext.deck.quality import require_published_deck_size
 from services.authored_vnext.generation.core_bridge import DurableExportPlanBridge
 from services.authored_vnext.generation.errors import GenerationPipelineError
 from services.authored_vnext.generation.pipeline import AuthoredVNextGenerationPipeline
@@ -161,6 +162,13 @@ def get_master_pin(
 @AUTHORED_VNEXT_GENERATION_ROUTER.post("/decks", response_model=GenerationResult)
 def generate_deck(request: GenerateOperationRequest, repository: Repository) -> GenerationResult:
     command = request.command
+    try:
+        require_published_deck_size(len(command.outline.items))
+    except ValueError as error:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "authored_vnext_generation_deck_size_invalid"},
+        ) from error
     try:
         return _run(
             repository,

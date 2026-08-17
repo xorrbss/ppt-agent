@@ -89,6 +89,20 @@ from services.authored_presentation_service import (
     AUTHORED_TEMPLATE,
     generate_authored_presentation,
 )
+from services.authored_vnext.generation.errors import (
+    GenerationNotFoundError as AuthoredVNextGenerationNotFoundError,
+    GenerationPipelineError as AuthoredVNextGenerationPipelineError,
+)
+from services.authored_vnext.generation.effective_style import (
+    materialize_authored_composition,
+    resolve_authored_composition,
+)
+from services.authored_vnext.generation.legacy_pin import (
+    ResolvedLegacyMasterPin,
+    generation_repository_for_owner,
+    resolve_legacy_master_pin,
+)
+from services.authored_vnext.master.digests import canonical_digest
 from services.concurrent_service import CONCURRENT_SERVICE
 from services.database import async_session_maker, get_async_session, sql_engine
 from services.documents_loader import DocumentsLoader
@@ -123,6 +137,7 @@ from services.references import (
     admit_reference_snapshots,
     canonicalize_legacy_document_paths,
     claim_reference_snapshots,
+    fit_uploaded_reference_payload,
 )
 from services.template_v2_generation_observability import (
     log_template_v2_generation_observation,
@@ -259,6 +274,14 @@ class AsyncPresentationGenerationTaskResponse(BaseModel):
     failure: Optional[dict] = None
 
 
+class AsyncPresentationGenerationAdmissionResponse(
+    AsyncPresentationGenerationTaskResponse
+):
+    """Accepted durable generation plus its canonical workspace operation."""
+
+    operation_id: Optional[uuid.UUID] = None
+
+
 def _authored_exact_admission_exception(
     error: AuthoredExactReconstructionUnavailableError,
 ) -> HTTPException:
@@ -302,6 +325,113 @@ def _validate_authored_exact_admission(request: GeneratePresentationRequest) -> 
         resolve_authored_style(request.authored_style)
     except AuthoredExactReconstructionUnavailableError as error:
         raise _authored_exact_admission_exception(error) from error
+
+
+async def _validate_authored_master_pin_admission(
+    request: GeneratePresentationRequest,
+) -> None:
+    """Resolve the existing-flow pin only for explicit authored generation."""
+
+    if request.template != AUTHORED_TEMPLATE:
+        if request.master_pin is not None:
+            raise HTTPException(status_code=400, detail="generation_strategy_conflict")
+        return
+    master_enabled = (
+        os.getenv("AUTHORED_VNEXT_MASTER_ENABLED", "true").strip().lower()
+        == "true"
+    )
+    if request.master_pin is None:
+        # Authored styles remain a complete full-canvas path when the user
+        # deliberately selects no master.  The feature gate controls whether
+        # a supplied master pin may be resolved; it does not make one mandatory.
+        return
+    if not master_enabled:
+        raise HTTPException(status_code=404, detail="authored_vnext_master_disabled")
+    owner_id = get_current_owner_id()
+    if owner_id is None:
+        raise HTTPException(status_code=401, detail="authored_vnext_owner_required")
+    if (
+        request._authored_master_pin is not None
+        and request._authored_composition_pin is not None
+    ):
+        frozen_pin = request._authored_master_pin
+        composition_pin = request._authored_composition_pin
+        if frozen_pin is None or composition_pin is None:
+            raise HTTPException(
+                status_code=409,
+                detail="authored_vnext_composition_checkpoint_missing",
+            )
+        try:
+            repository = generation_repository_for_owner(owner_id)
+            master = await asyncio.to_thread(
+                repository.get_master,
+                frozen_pin.master_id,
+                frozen_pin.master_revision,
+            )
+            font_digest = master.contract.font_manifest.digest
+            layout_digest = canonical_digest(
+                master.contract.layouts.model_dump(mode="json", by_alias=True)
+            )
+            if (
+                master.status != "published"
+                or master.digest != frozen_pin.master_digest
+                or layout_digest != frozen_pin.layout_registry_digest
+                or font_digest != frozen_pin.font_manifest_digest
+                or composition_pin.master_digest != frozen_pin.master_digest
+            ):
+                raise ValueError("frozen authored design checkpoint mismatch")
+            materialize_authored_composition(master.contract, composition_pin)
+        except AuthoredVNextGenerationNotFoundError as error:
+            exception = HTTPException(
+                status_code=404,
+                detail="authored_vnext_generation_not_found",
+            )
+            exception.code = "authored_vnext_generation_not_found"
+            exception.retryable = False
+            raise exception from error
+        except ValueError as error:
+            exception = HTTPException(
+                status_code=409,
+                detail="authored_vnext_stale_master",
+            )
+            exception.code = "authored_vnext_stale_master"
+            exception.retryable = False
+            raise exception from error
+        request._authored_master_contract = master.contract
+        request._authored_master_resolution = ResolvedLegacyMasterPin(
+            owner_id=owner_id,
+            pin=frozen_pin,
+            contract=master.contract,
+        )
+        return
+    try:
+        resolved = await asyncio.to_thread(
+            resolve_legacy_master_pin,
+            owner_id=owner_id,
+            requested=request.master_pin,
+        )
+    except AuthoredVNextGenerationPipelineError as error:
+        status_code = (
+            404 if isinstance(error, AuthoredVNextGenerationNotFoundError) else 409
+        )
+        exception = HTTPException(status_code=status_code, detail=error.code)
+        exception.code = error.code
+        exception.retryable = False
+        raise exception from error
+    request._authored_master_pin = resolved.pin
+    request._authored_master_contract = resolved.contract
+    request._authored_master_resolution = resolved
+    # Freeze every mutable style/rule input before the durable queue is
+    # admitted. Workers and export replay this pin and never reread style YAML.
+    style = resolve_authored_style(request.authored_style)
+    request._authored_style_snapshot = style
+    composition, _ = resolve_authored_composition(
+        resolved.contract,
+        style=style if request.authored_style is not None else None,
+        visual_direction=getattr(resolved, "visual_direction", None),
+        metadata=request._authored_deck_metadata,
+    )
+    request._authored_composition_pin = composition
 
 
 def _template_v2_http_exception(error: TemplateV2GenerationError) -> HTTPException:
@@ -454,6 +584,9 @@ async def check_if_api_request_is_valid(
     if request.template.lower() == AUTHORED_TEMPLATE:
         request.template = AUTHORED_TEMPLATE
         _validate_authored_exact_admission(request)
+        await _validate_authored_master_pin_admission(request)
+    elif request.master_pin is not None:
+        raise HTTPException(status_code=400, detail="generation_strategy_conflict")
     elif request.template not in DEFAULT_TEMPLATES:
         request.template = request.template.lower()
         if not request.template.startswith("custom-"):
@@ -528,16 +661,26 @@ def _immutable_reference_context(
 
     if not snapshots:
         return ""
-    values = [
-        {
-            "snapshotId": str(snapshot.snapshot_id),
-            "providerId": snapshot.provider_id,
-            "sourceRevision": snapshot.source_revision,
-            "contentSha256": snapshot.content_sha256,
-            "payload": snapshot.payload(),
-        }
-        for snapshot in snapshots
-    ]
+    values = []
+    for snapshot in snapshots:
+        payload = snapshot.payload()
+        if snapshot.provider_id == "uploaded_document":
+            documents = payload.get("documents")
+            if isinstance(documents, list) and all(
+                isinstance(document, dict)
+                and isinstance(document.get("text"), str)
+                for document in documents
+            ):
+                payload = fit_uploaded_reference_payload(documents)
+        values.append(
+            {
+                "snapshotId": str(snapshot.snapshot_id),
+                "providerId": snapshot.provider_id,
+                "sourceRevision": snapshot.source_revision,
+                "contentSha256": snapshot.content_sha256,
+                "payload": payload,
+            }
+        )
     serialized = json.dumps(
         values,
         ensure_ascii=False,
@@ -2069,6 +2212,7 @@ async def run_generation_job(
             # exact preset may have changed after admission; it must become a
             # safe, explicit task error instead of falling back during authoring.
             _validate_authored_exact_admission(request)
+            await _validate_authored_master_pin_admission(request)
             if job.template_v2_target is not None:
                 from services.template_v2_generation_service import (
                     TemplateV2GenerationTarget,
@@ -2349,9 +2493,16 @@ async def queue_presentation_generation(
     # projected into that card.
     if not chat_first_enabled:
         _validate_authored_exact_admission(request)
+    # Freeze the effective company standard, hidden rule snapshot, authored
+    # template and style digest before the idempotency signature is computed.
+    # This is read-only admission and mints no deck/operation identity.
+    if request.strategy == "authored" and request.template.lower() == "adaptive":
+        request.template = AUTHORED_TEMPLATE
+    if request.template.lower() == AUTHORED_TEMPLATE and request.master_pin is not None:
+        await _validate_authored_master_pin_admission(request)
     # The fingerprint is taken before any deck is minted, so a replay under the
     # same idempotency key matches the stored job instead of bootstrapping a
-    # second deck.
+    # second deck. It now includes the resolved pins/rule/style snapshots.
     submitted_payload = _durable_request_payload(request)
     fingerprint = request_sha256(submitted_payload)
     key_error: HTTPException | None = None
@@ -2725,7 +2876,9 @@ async def queue_presentation_generation(
 
 
 @PRESENTATION_GENERATE_ROUTER.post(
-    "/generate/async", response_model=AsyncPresentationGenerationTaskModel
+    "/generate/async",
+    response_model=AsyncPresentationGenerationAdmissionResponse,
+    status_code=202,
 )
 async def generate_presentation_async(
     request_http: Request,
@@ -2739,12 +2892,21 @@ async def generate_presentation_async(
 ):
     request._request_id = getattr(request_http.state, "request_id", None)
     try:
-        return await queue_presentation_generation(
+        queued = await queue_presentation_generation(
             request,
             background_tasks,
             sql_session,
             export_cookie_header=build_export_cookie_header(request_http),
             idempotency_key=idempotency_key,
+        )
+        operation_id = await sql_session.scalar(
+            select(PresentationGenerationJob.workspace_operation_id).where(
+                PresentationGenerationJob.task_id == queued.id
+            )
+        )
+        return AsyncPresentationGenerationAdmissionResponse(
+            **queued.model_dump(mode="json"),
+            operation_id=operation_id,
         )
 
     except Exception as e:

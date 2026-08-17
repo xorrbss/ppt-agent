@@ -1,4 +1,5 @@
 import React from "react";
+import { ReactReduxContext } from "react-redux";
 
 import { PageRemakeHistory } from "./PageRemakeHistory";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
@@ -109,6 +110,70 @@ describe("PageRemakeHistory", () => {
     });
     cy.get("@applied").should("have.been.calledOnceWith", 4);
     cy.get("@notifyError").should("not.have.been.called");
+  });
+
+  it("preserves the pinned master and layout when applying restored history", () => {
+    stubToasts();
+    const workspaceCommand = cy.stub().as("workspaceCommand").resolves();
+    const digest = `sha256:${"a".repeat(64)}`;
+    const layoutRegistryDigest = `sha256:${"b".repeat(64)}`;
+    const fontManifestDigest = `sha256:${"c".repeat(64)}`;
+    const state = {
+      presentationGeneration: {
+        presentationData: {
+          theme: {
+            authored_vnext: {
+              masterPin: {
+                masterId: "master:company",
+                masterRevision: 7,
+                masterDigest: digest,
+                layoutRegistryDigest,
+                fontManifestDigest,
+              },
+            },
+          },
+          slides: Array.from({ length: 5 }, (_, index) =>
+            index === 4 ? { content: { layoutId: "layout:standard" } } : {},
+          ),
+        },
+      },
+    };
+    const contextValue = {
+      store: { getState: () => state },
+      storeState: state,
+    } as unknown as React.ContextType<typeof ReactReduxContext>;
+
+    cy.mount(
+      <ReactReduxContext.Provider value={contextValue}>
+        <PageRemakeHistory
+          presentationId="deck-1"
+          entries={[restorable]}
+          onWorkspaceCommand={workspaceCommand}
+        />
+      </ReactReduxContext.Provider>,
+    );
+
+    cy.get('[data-testid="page-remake-history-apply-4"]').click();
+    cy.then(() => {
+      expect(workspaceCommand.firstCall.args[1]).to.deep.equal({
+        commandType: "slide.regenerate",
+        context: {
+          slide_index: 4,
+          preview_task_id: "task-restorable",
+          source: "page_remake_history",
+          body_only: true,
+          allow_layout_change: false,
+          master_pin: {
+            master_id: "master:company",
+            revision: 7,
+            digest,
+            layout_registry_digest: layoutRegistryDigest,
+            font_manifest_digest: fontManifestDigest,
+          },
+          layout_id: "layout:standard",
+        },
+      });
+    });
   });
 
   it("refuses to apply a preview whose page has since changed", () => {

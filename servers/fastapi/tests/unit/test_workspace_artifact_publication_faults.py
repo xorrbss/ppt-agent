@@ -915,6 +915,89 @@ def test_ambiguous_commit_ack_reconciles_complete_publication_without_deleting_f
     asyncio.run(scenario())
 
 
+def test_ambiguous_design_apply_commit_keeps_composition_artifact(
+    tmp_path: Path,
+    monkeypatch,
+):
+    async def scenario():
+        engine, maker = await _database(tmp_path / "ambiguous-design-apply.db")
+        app_data = tmp_path / "app-data"
+        source = app_data / "exports" / "deck.pptx"
+        source.parent.mkdir(parents=True)
+        source.write_bytes(b"template-composed immutable bytes")
+        monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
+        try:
+            presentation_id, operation_id = await _seed_running_operation(maker)
+            source_presentation_id = uuid.uuid4()
+            async with maker() as session, session.begin():
+                operation = await session.get(WorkspaceOperation, operation_id)
+                assert operation is not None
+                operation.kind = "design.apply"
+                operation.request_payload = {
+                    "generation_settings": {
+                        "source_presentation_id": str(source_presentation_id),
+                        "source_revision": 4,
+                        "authored_style": "osb-smart-banking",
+                        "resolved_style_digest": "sha256:" + "1" * 64,
+                        "resolved_composition_pin": {
+                            "digest": "sha256:" + "2" * 64,
+                        },
+                    }
+                }
+
+            async with maker() as prepare_session:
+                artifact = await publication.prepare_workspace_generation_artifact(
+                    prepare_session,
+                    source_path=str(source),
+                    operation_id=operation_id,
+                    presentation_id=presentation_id,
+                    source_revision=1,
+                )
+
+            evidence = {
+                "readback_verified": True,
+                "preview_snapshot": {"digest": "sha256:" + "3" * 64},
+                "native_pptx_snapshot": {"digest": "sha256:" + "3" * 64},
+                "visual_fidelity": {"status": "passed"},
+            }
+            async with maker() as session:
+                original_commit = session.commit
+
+                async def commit_then_lose_ack():
+                    await original_commit()
+                    raise asyncio.CancelledError()
+
+                monkeypatch.setattr(session, "commit", commit_then_lose_ack)
+                revision = await publication.publish_workspace_generation_artifact(
+                    session,
+                    artifact=artifact,
+                    expected_revision=0,
+                    attempt_token="attempt-1",
+                    result_evidence=evidence,
+                )
+
+            assert revision == 1
+            assert artifact.absolute_path.read_bytes() == (
+                b"template-composed immutable bytes"
+            )
+            async with maker() as session:
+                operation = await session.get(WorkspaceOperation, operation_id)
+                stored = await session.get(WorkspaceArtifact, artifact.artifact_id)
+                assert operation is not None
+                assert operation.state == "succeeded"
+                assert operation.result is not None
+                assert operation.result["kind"] == "design.apply"
+                assert operation.result["authored_style"] == "osb-smart-banking"
+                assert operation.result["preview_snapshot"] == (
+                    operation.result["native_pptx_snapshot"]
+                )
+                assert stored is not None and stored.status == "ready"
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
 def test_failed_compensation_records_cleanup_pending_in_independent_transaction(
     tmp_path: Path,
     monkeypatch,

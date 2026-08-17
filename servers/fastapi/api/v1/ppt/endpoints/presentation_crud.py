@@ -514,7 +514,10 @@ async def create_presentation(
             "include_title_slide": include_title_slide,
             "web_search": web_search,
         }
-        if resolved_theme is not None:
+        # Authored-only admission stamps a theme-less presentation with the
+        # internal {"mode": "authored"} marker. That marker is not a catalog
+        # theme and therefore has no public id/name/user metadata.
+        if resolved_theme is not None and resolved_theme.get("id"):
             settings.update(
                 {
                     "theme_id": resolved_theme["id"],

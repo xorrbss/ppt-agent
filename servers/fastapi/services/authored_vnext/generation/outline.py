@@ -145,6 +145,8 @@ def _model_input(slot: LayoutSlot, body: str) -> BodySlotModelInput:
 def plan_outline(
     published_master: MasterRevisionResponse,
     outline: Sequence[OutlineItem | Mapping[str, object]],
+    *,
+    effective_contract: DeckMasterContract | None = None,
 ) -> GenerationOutlinePlan:
     """Assign roles/layouts and seal a body-only prompt plan.
 
@@ -152,7 +154,14 @@ def plan_outline(
     standard slides may be promoted to long-title after the CJK title-fit gate.
     """
 
-    contract = _require_published(published_master)
+    published_contract = _require_published(published_master)
+    contract = effective_contract or published_contract
+    if (
+        contract.digest is None
+        or contract.master_id != published_contract.master_id
+        or contract.canvas != published_contract.canvas
+    ):
+        raise MasterDigestConflictError("effective planning contract is invalid")
     if not outline:
         raise ValueError("outline must contain at least one slide")
     items = tuple(_coerce_item(value, index) for index, value in enumerate(outline))

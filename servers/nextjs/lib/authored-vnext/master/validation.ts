@@ -1,7 +1,5 @@
 import type {
-  Bounds,
   DeckMasterContractV1,
-  MasterSlot,
   MasterValidation,
   Ownership,
   ValidationIssue,
@@ -23,18 +21,9 @@ function ownershipIssues(
     {
       code: "ownership_boundary_violation",
       path,
-      message: `${item.id} has an invalid locked/modelWritable boundary`,
+      message: `${item.id}의 locked/modelWritable 소유권 경계가 올바르지 않습니다.`,
     },
   ];
-}
-
-function overlaps(left: Bounds, right: Bounds): boolean {
-  return (
-    left.x < right.x + right.width &&
-    left.x + left.width > right.x &&
-    left.y < right.y + right.height &&
-    left.y + left.height > right.y
-  );
 }
 
 export function validateDeckMasterContract(
@@ -45,7 +34,7 @@ export function validateDeckMasterContract(
     errors.push({
       code: "contract_version",
       path: "contractVersion",
-      message: "DeckMasterContract v1 is required",
+      message: "DeckMasterContract v1 계약 버전이 필요합니다.",
     });
   }
   for (const item of Object.values(contract.furniture)) {
@@ -58,19 +47,13 @@ export function validateDeckMasterContract(
     );
   }
 
-  const furniture = Object.values(contract.furniture);
-  const furnitureIds = new Set(furniture.map((item) => item.id));
-  const slotIds = new Set<string>();
-  let furnitureBodyDuplicates = 0;
-  let writableOverlaps = 0;
-
   for (const kind of REQUIRED_LAYOUT_KINDS) {
     const layout = contract.layouts[kind];
     if (!layout) {
       errors.push({
         code: "missing_layout",
         path: "layouts",
-        message: `Missing ${kind} layout`,
+        message: `${kind} 레이아웃이 없습니다.`,
       });
       continue;
     }
@@ -78,64 +61,56 @@ export function validateDeckMasterContract(
       errors.push({
         code: "layout_kind_mismatch",
         path: `layouts.${kind}.kind`,
-        message: `${kind} layout has an invalid kind`,
+        message: `${kind} 레이아웃 kind가 올바르지 않습니다.`,
       });
     }
 
-    const requiredSlotRoles = new Set<MasterSlot["role"]>(["title", "body"]);
-    const placeholderIndexes = new Set<number>();
-    for (const slot of layout.slots) {
-      requiredSlotRoles.delete(slot.role);
-      errors.push(
-        ...ownershipIssues(
-          slot,
-          { locked: false, modelWritable: true },
-          `layouts.${layout.id}.${slot.id}.ownership`,
-        ),
-      );
-      if (placeholderIndexes.has(slot.placeholderIndex)) {
-        errors.push({
-          code: "duplicate_placeholder_index",
-          path: `layouts.${layout.id}.${slot.id}.placeholderIndex`,
-          message: `${layout.id} reuses placeholder ${slot.placeholderIndex}`,
-        });
-      }
-      placeholderIndexes.add(slot.placeholderIndex);
-      if (furnitureIds.has(slot.id)) furnitureBodyDuplicates += 1;
-      if (slotIds.has(slot.id)) furnitureBodyDuplicates += 1;
-      slotIds.add(slot.id);
-      for (const item of furniture) {
-        if (overlaps(slot.bounds, item.bounds)) writableOverlaps += 1;
-      }
-    }
-    for (const role of requiredSlotRoles) {
+    // `slots` are compatibility-only legacy data.  They neither establish
+    // master validity nor contribute to authored-template composition.
+  }
+  const layoutIds = new Set(Object.values(contract.layouts).map((layout) => layout.id));
+  for (const zone of contract.aiEditZones ?? []) {
+    const bounds = zone.bounds;
+    const hasValidInstruction = zone.instruction === undefined ||
+      (typeof zone.instruction === "string" && zone.instruction.length <= 4000);
+    const contentTypes = new Set(["auto", "text", "cards", "list", "table", "chart", "mixed"]);
+    const patterns = new Set(["auto", "numberedCards", "bulletList", "comparisonTable", "metricChart", "iconCards"]);
+    const sourcePolicies = new Set(["documentOnly", "promptAndDocument", "promptOnly"]);
+    const emptyBehaviors = new Set(["hidden", "blank", "fallback"]);
+    const densities = new Set(["sparse", "balanced", "dense"]);
+    const textAlignments = new Set(["left", "center", "right"]);
+    const positiveLimit = (value: number | undefined, maximum: number) =>
+      value === undefined || (Number.isInteger(value) && value > 0 && value <= maximum);
+    if (!/^ai-zone:[a-z0-9][a-z0-9._-]*$/i.test(zone.id) ||
+      ![bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite) ||
+      bounds.width <= 0 || bounds.height <= 0 ||
+      (zone.scope.kind === "layout" && !layoutIds.has(zone.scope.layoutId)) ||
+      !hasValidInstruction ||
+      (zone.contentType !== undefined && !contentTypes.has(zone.contentType)) ||
+      (zone.pattern !== undefined && !patterns.has(zone.pattern)) ||
+      (zone.sourcePolicy !== undefined && !sourcePolicies.has(zone.sourcePolicy)) ||
+      (zone.emptyBehavior !== undefined && !emptyBehaviors.has(zone.emptyBehavior)) ||
+      (zone.density !== undefined && !densities.has(zone.density)) ||
+      (zone.textAlign !== undefined && !textAlignments.has(zone.textAlign)) ||
+      (zone.stylePolicy !== undefined && zone.stylePolicy !== "inheritTemplate") ||
+      !positiveLimit(zone.maxChars, 10000) ||
+      !positiveLimit(zone.maxItems, 24) ||
+      (zone.fallbackText !== undefined && (typeof zone.fallbackText !== "string" || zone.fallbackText.length > 10000)) ||
+      (zone.emptyBehavior === "fallback" && !zone.fallbackText?.trim()) ||
+      (zone.fallbackText !== undefined && zone.emptyBehavior !== "fallback") ||
+      (zone.fallbackText !== undefined && zone.maxChars !== undefined && zone.fallbackText.length > zone.maxChars)) {
       errors.push({
-        code: "missing_editable_placeholder",
-        path: `layouts.${layout.id}.slots`,
-        message: `${layout.id} is missing an editable ${role} placeholder`,
+        code: "invalid_ai_edit_zone",
+        path: `aiEditZones.${zone.id}`,
+        message: `${zone.id}의 도형 또는 AI 합성 제약이 올바르지 않습니다.`,
       });
     }
-  }
-
-  if (furnitureBodyDuplicates) {
-    errors.push({
-      code: "master_body_namespace_overlap",
-      path: "layouts",
-      message: "Master furniture and writable slots overlap",
-    });
-  }
-  if (writableOverlaps) {
-    errors.push({
-      code: "master_body_geometry_overlap",
-      path: "layouts",
-      message: "Writable slots overlap locked master furniture",
-    });
   }
   return {
     valid: errors.length === 0,
     errors,
-    furnitureBodyDuplicates,
-    writableOverlaps,
+    furnitureBodyDuplicates: 0,
+    writableOverlaps: 0,
     titleFitFailures: 0,
   };
 }

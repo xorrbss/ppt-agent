@@ -83,10 +83,13 @@ def test_retemplate_builds_new_authored_deck_from_saved_llm_manuscript(
     assert generation_request.slides_markdown == [
         slide.content for slide in source.get_presentation_outline().slides
     ]
+    assert generation_request.content == source.content
     assert generation_request.instructions == source.instructions
     assert generation_request.include_title_slide is False
     assert generation_request.include_table_of_contents is False
-    assert generation_request.n_slides is None
+    assert generation_request.n_slides == len(
+        source.get_presentation_outline().slides
+    )
 
 
 def test_retemplate_exact_snapshots_fresh_html_before_queue(fake_async_session):

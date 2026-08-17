@@ -15,11 +15,14 @@ import {
 
 const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/;
 
-export function createAuthoredVnextFlowState(): AuthoredVnextFlowState {
+export function createAuthoredVnextFlowState(
+  slideCount: AuthoredVnextFlowState["slideCount"] = AUTHORED_VNEXT_SLIDE_COUNT,
+): AuthoredVnextFlowState {
   return {
     schemaVersion: AUTHORED_VNEXT_FLOW_SCHEMA_VERSION,
     mode: "authored-vnext",
     featureEnabled: true,
+    slideCount,
     step: "materials",
     materials: [],
     availability: { status: "empty" },
@@ -61,6 +64,7 @@ function withCheckpoint(
     schemaVersion: state.schemaVersion,
     mode: state.mode,
     featureEnabled: state.featureEnabled,
+    slideCount: state.slideCount,
     ...next,
     availability,
   };
@@ -95,16 +99,19 @@ function validPublishedMaster(master: PublishedMasterReference | undefined): mas
   );
 }
 
-export function validateOutlineLayout(plan: OutlineLayoutPlan): readonly string[] {
+export function validateOutlineLayout(
+  plan: OutlineLayoutPlan,
+  slideCount: AuthoredVnextFlowState["slideCount"] = AUTHORED_VNEXT_SLIDE_COUNT,
+): readonly string[] {
   const errors: string[] = [];
-  if (plan.slides.length !== AUTHORED_VNEXT_SLIDE_COUNT) {
-    errors.push(`outline_requires_${AUTHORED_VNEXT_SLIDE_COUNT}_slides`);
+  if (plan.slides.length !== slideCount) {
+    errors.push(`outline_requires_${slideCount}_slides`);
   }
   const slideIds = new Set<string>();
   const ordinals = new Set<number>();
   for (const slide of plan.slides) {
     if (!slide.slideId || slideIds.has(slide.slideId)) errors.push("outline_slide_id_not_stable_unique");
-    if (!Number.isInteger(slide.ordinal) || slide.ordinal < 1 || slide.ordinal > AUTHORED_VNEXT_SLIDE_COUNT || ordinals.has(slide.ordinal)) {
+    if (!Number.isInteger(slide.ordinal) || slide.ordinal < 1 || slide.ordinal > slideCount || ordinals.has(slide.ordinal)) {
       errors.push("outline_ordinal_invalid");
     }
     if (!slide.layoutId) errors.push("outline_layout_required");
@@ -130,7 +137,7 @@ function canRequestOutline(state: AuthoredVnextFlowState): boolean {
 }
 
 function readyForGeneration(state: AuthoredVnextFlowState): boolean {
-  return canRequestOutline(state) && Boolean(state.outlineLayout && validateOutlineLayout(state.outlineLayout).length === 0);
+  return canRequestOutline(state) && Boolean(state.outlineLayout && validateOutlineLayout(state.outlineLayout, state.slideCount).length === 0);
 }
 
 function exhaustive(event: never): never {
@@ -249,7 +256,7 @@ export function authoredVnextFlowReducer(
             materials: next.materials,
             master: state.publishedMaster,
             visualDirection: event.visualDirection,
-            slideCount: AUTHORED_VNEXT_SLIDE_COUNT,
+            slideCount: state.slideCount,
           },
         }],
       };
@@ -257,7 +264,7 @@ export function authoredVnextFlowReducer(
     case "outline.succeeded": {
       if (state.step !== "outlineLayout") return reject(state, event, "outline_layout_step_required");
       if (!canRequestOutline(state)) return reject(state, event, "published_master_and_visual_direction_required");
-      const errors = validateOutlineLayout(event.plan);
+      const errors = validateOutlineLayout(event.plan, state.slideCount);
       if (errors.length > 0) return reject(state, event, errors.join(","));
       return { state: { ...state, outlineLayout: event.plan }, effects: [] };
     }

@@ -8,11 +8,17 @@ only fall back to UAX #14 ID/grapheme opportunities when a token cannot fit.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import unicodedata
 
 from models.authored_vnext.master.contract import DeckMasterContract, MasterLayout
 from models.authored_vnext.master.slide import ExplicitTitle, TitleFitResult
 from services.authored_vnext.master.title_fit import fit_title
+from services.authored_vnext.retained_reference_marker import (
+    RETAINED_REFERENCE_MARKER_CODEC,
+    canonical_reference_digest,
+    decode_reference_layout_marker,
+)
 
 
 UAX14_VERSION = "17.0.0"
@@ -20,6 +26,7 @@ LINE_BREAK_POLICY = "canonical-explicit-uax14-v1"
 TAILORING = "ko-space-first-with-id-fallback-v1"
 KINSOKU_POLICY = "cjk-no-leading-closing-no-trailing-opening"
 POINT_TO_PIXEL = 96 / 72
+_REFERENCE_LAYOUT_ROLE_PREFIX = "retained-reference-layout:"
 
 # JIS X 4051-style prohibition sets used by the master contract's CJK policy.
 # They cover the punctuation encountered by Korean, Japanese, Chinese and Latin
@@ -71,6 +78,63 @@ def _title_slot(contract: DeckMasterContract, layout_id: str):
     return slots[0]
 
 
+def _retained_reference_layout(contract: DeckMasterContract) -> dict | None:
+    chunks: list[tuple[int, int, str, bool]] = []
+    for element in contract.semantic_elements:
+        role = element.content.role or ""
+        if not role.startswith(_REFERENCE_LAYOUT_ROLE_PREFIX):
+            continue
+        suffix = role.removeprefix(_REFERENCE_LAYOUT_ROLE_PREFIX)
+        compressed = suffix.startswith(f"{RETAINED_REFERENCE_MARKER_CODEC}:")
+        if compressed:
+            suffix = suffix.removeprefix(f"{RETAINED_REFERENCE_MARKER_CODEC}:")
+        sequence, separator, remainder = suffix.partition("-of-")
+        total, digest_separator, _ = remainder.partition(":")
+        if not separator or not digest_separator or element.content.text is None:
+            raise ValueError("retained reference layout marker is malformed")
+        chunks.append((int(sequence), int(total), element.content.text, compressed))
+    if not chunks:
+        return None
+    chunks.sort(key=lambda item: item[0])
+    total = chunks[0][1]
+    if (
+        len(chunks) != total
+        or [item[0] for item in chunks] != list(range(1, total + 1))
+        or any(item[1] != total or item[3] != chunks[0][3] for item in chunks)
+    ):
+        raise ValueError("retained reference layout marker chunks are inconsistent")
+    marker_payload = "".join(item[2] for item in chunks)
+    snapshot = (
+        decode_reference_layout_marker(marker_payload)
+        if chunks[0][3]
+        else json.loads(marker_payload)
+    )
+    payload = {key: value for key, value in snapshot.items() if key != "digest"}
+    if snapshot.get("digest") != canonical_reference_digest(payload):
+        raise ValueError("retained reference layout marker digest mismatch")
+    return snapshot
+
+
+def _retained_title_style(
+    contract: DeckMasterContract,
+    layout: MasterLayout,
+) -> tuple[dict, str] | None:
+    retained = _retained_reference_layout(contract)
+    if retained is None:
+        return None
+    archetype = (
+        "cover"
+        if layout.kind == "cover"
+        else "section"
+        if layout.kind == "section"
+        else "content"
+    )
+    record = next(
+        item for item in retained["layouts"] if item.get("archetype") == archetype
+    )
+    return dict(record["title"].get("textStyle") or {}), retained["digest"]
+
+
 def resolve_windows_font(
     contract: DeckMasterContract,
     installed_fonts: set[str] | list[str] | tuple[str, ...] | None = None,
@@ -82,6 +146,16 @@ def resolve_windows_font(
     pinned Windows fallback is authoritative and therefore deterministic.
     """
 
+    retained = _retained_title_style(contract, contract.layouts.standard)
+    if retained is not None:
+        family = str(retained[0].get("fontFamily") or "Noto Sans KR")
+        if installed_fonts is None:
+            return family
+        installed = {name.casefold(): name for name in installed_fonts}
+        resolved = installed.get(family.casefold())
+        if resolved is None:
+            raise TitleFitPlanningError("authored template font is unavailable on Windows")
+        return resolved
     manifest = contract.font_manifest
     candidates = tuple(
         dict.fromkeys(
@@ -232,28 +306,57 @@ def _fit_on_layout(
     margins = style.margins
     width_px = slot.bounds.width - (margins.left_pt + margins.right_pt) * POINT_TO_PIXEL
     height_px = slot.bounds.height - (margins.top_pt + margins.bottom_pt) * POINT_TO_PIXEL
-    line_limit = min(
-        style.max_lines,
-        contract.fit_policy.long_title_max_lines
-        if layout.kind == "longTitle"
-        else contract.fit_policy.standard_max_lines,
-        3,  # ExplicitTitle v1 wire contract is capped at three explicit lines.
-    )
-    preferred = min(style.font_pt, contract.fit_policy.preferred_font_pt)
-    minimum = max(style.min_font_pt, contract.fit_policy.minimum_font_pt)
-    family = resolve_windows_font(contract, installed_fonts)
+    retained = _retained_title_style(contract, layout)
+    if retained is not None:
+        retained_style, _retained_digest = retained
+        line_limit = 3
+        preferred = max(
+            8.0,
+            min(96.0, float(retained_style.get("fontPt") or style.font_pt)),
+        )
+        minimum = 8.0
+        family = str(retained_style.get("fontFamily") or "Noto Sans KR")
+        line_height = float(retained_style.get("lineHeight") or style.line_height)
+    else:
+        line_limit = min(
+            style.max_lines,
+            contract.fit_policy.long_title_max_lines
+            if layout.kind == "longTitle"
+            else contract.fit_policy.standard_max_lines,
+            3,
+        )
+        preferred = min(style.font_pt, contract.fit_policy.preferred_font_pt)
+        minimum = max(style.min_font_pt, contract.fit_policy.minimum_font_pt)
+        family = resolve_windows_font(contract, installed_fonts)
+        line_height = style.line_height
     for font_pt in _font_sizes(preferred, minimum):
         lines = _greedy_break(normalized, width_px, line_limit, font_pt)
         if lines is None:
             continue
-        if len(lines) * font_pt * POINT_TO_PIXEL * style.line_height > height_px:
+        if len(lines) * font_pt * POINT_TO_PIXEL * line_height > height_px:
             continue
         # ExplicitTitle's canonical wire invariant treats line boundaries as
         # semantic spaces.  This is identical to ``normalized`` for preferred
         # word boundaries; ID/grapheme fallback adds only the canonical break
         # separator while the rendered explicit lines retain the exact glyphs.
         explicit = ExplicitTitle(text=" ".join(lines), lines=lines)
-        checked = fit_title(contract, layout_id, explicit)
+        checked = (
+            TitleFitResult(
+                layout_id=layout.id,
+                explicit_lines=explicit.lines,
+                font_family=family,
+                # Planning uses the effective template manifest. The durable
+                # SlideSpec v1 boundary rebinds this compatibility digest to
+                # the published MasterDigestPin while composition snapshot
+                # digests retain the real typography provenance.
+                font_manifest_digest=contract.font_manifest.digest,
+                chosen_font_pt=font_pt,
+                margins=margins,
+                clipped=False,
+            )
+            if retained is not None
+            else fit_title(contract, layout_id, explicit)
+        )
         if not checked.clipped:
             if checked.font_family != family:
                 checked = checked.model_copy(update={"font_family": family})
@@ -295,7 +398,7 @@ def fit_and_promote_title(
     initial_layout = _layout(contract, original)
     layout_ids = [original]
     if initial_layout.kind == "standard" and allow_promotion:
-        layout_ids.append(contract.fit_policy.promotion_layout_id)
+        layout_ids.append(contract.layouts.long_title.id)
     for layout_id in layout_ids:
         result = _fit_on_layout(
             contract,

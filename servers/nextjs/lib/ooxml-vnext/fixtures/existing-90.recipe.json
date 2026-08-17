@@ -1,6 +1,13 @@
 {
   "schemaVersion": "authored-vnext-ooxml-existing-fixture/v1",
   "name": "existing-style-90-with-opaque-passthrough",
+  "fixtureClass": "synthetic-preservation-negative",
+  "powerPointCompatibilityWitnessEligible": false,
+  "knownSyntheticInvalidities": [
+    "ppt/embeddings/oleObject1.bin is a 29-byte sentinel that was not constructed or validated as an OLE1/OLE2 embedded object",
+    "rIdOpaqueOle has no matching p:oleObj r:id consumer in slide1.xml",
+    "rIdFixtureMail has no matching hyperlink consumer in slide1.xml"
+  ],
   "slideCount": 90,
   "layoutCycle": [
     "layout:cover",

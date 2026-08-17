@@ -22,6 +22,7 @@ from sqlmodel import select
 
 from models.presentation_and_path import PresentationPathAndEditPath
 from models.generate_presentation_request import GeneratePresentationRequest
+from models.authored_vnext.deck import DeckMetadataSnapshot
 from models.presentation_from_template import (
     AuthoredPageRemakePreviewRequest,
     AuthoredPageRemakePublishRequest,
@@ -239,13 +240,15 @@ async def build_authored_retemplate_generation_request(
     """
     source = await require_live_presentation(sql_session, id)
 
+    source_slides = (
+        await sql_session.execute(
+            select(SlideModel)
+            .where(SlideModel.presentation == id)
+            .order_by(SlideModel.index)
+        )
+    ).scalars().all()
     is_authored_source = source.is_authored()
     if not is_authored_source:
-        source_slides = (
-            await sql_session.execute(
-                select(SlideModel).where(SlideModel.presentation == id)
-            )
-        ).scalars().all()
         is_authored_source = any(slide.is_authored() for slide in source_slides)
 
     if not is_authored_source:
@@ -280,13 +283,6 @@ async def build_authored_retemplate_generation_request(
                 slide_count=len(source_outline.slides),
                 roles=plan_deck_roles(source_outline),
             )
-            source_slides = (
-                await sql_session.execute(
-                    select(SlideModel)
-                    .where(SlideModel.presentation == id)
-                    .order_by(SlideModel.index)
-                )
-            ).scalars().all()
             exact_snapshot_id = await create_exact_source_snapshot(
                 selected_style.id,
                 source_slides,
@@ -303,10 +299,15 @@ async def build_authored_retemplate_generation_request(
             ) from error
 
     generation_payload = {
+        # Keep the source seed/manuscript metadata byte-for-byte.  The
+        # deterministic design replay consumes slides_markdown for layout, but
+        # presentation_generate persists request.content onto the derived deck.
+        # Preferring the title here silently rewrote that source field.
         "content": (
-            source.title or source.content or source_outline.slides[0].content
-        )[:500],
+            source.content or source.title or source_outline.slides[0].content
+        ),
         "slides_markdown": [slide.content for slide in source_outline.slides],
+        "n_slides": len(source_outline.slides),
         "instructions": source.instructions,
         "language": source.language,
         "template": "authored",
@@ -315,7 +316,18 @@ async def build_authored_retemplate_generation_request(
         "export_as": "pptx",
         "vision_qa": request.vision_qa,
         "authored_style": authored_style,
+        "master_pin": request.master_pin,
     }
+    try:
+        generation_payload["reference_snapshot_ids"] = [
+            uuid.UUID(str(snapshot_id))
+            for snapshot_id in (source.reference_snapshot_ids or [])
+        ]
+    except (TypeError, ValueError) as error:
+        raise HTTPException(
+            status_code=422,
+            detail="authored_source_reference_snapshot_invalid",
+        ) from error
     if source.tone:
         generation_payload["tone"] = source.tone
     if source.verbosity:
@@ -323,6 +335,54 @@ async def build_authored_retemplate_generation_request(
 
     generation_request = GeneratePresentationRequest(**generation_payload)
     generation_request._authored_exact_snapshot_id = exact_snapshot_id
+    if len(source_slides) != len(source_outline.slides) or [
+        slide.index for slide in source_slides
+    ] != list(range(len(source_outline.slides))):
+        raise HTTPException(
+            status_code=409,
+            detail="authored_source_semantic_snapshot_incomplete",
+        )
+    semantic_snapshot = {
+        "schemaVersion": "authored-source-semantic/v1",
+        "sourcePresentationId": str(source.id),
+        "sourceRevision": source.revision,
+        "slideCount": len(source_outline.slides),
+        "referenceSnapshotIds": list(source.reference_snapshot_ids or []),
+        "slides": [
+            {
+                "index": index,
+                "semanticContent": source_outline.slides[index].content,
+                "values": slide.content,
+                "ui": slide.ui,
+                "properties": slide.properties,
+                "speakerNote": slide.speaker_note,
+            }
+            for index, slide in enumerate(source_slides)
+        ],
+    }
+    semantic_snapshot["digest"] = (
+        "sha256:" + sha256_canonical_json(semantic_snapshot)
+    )
+    generation_request._authored_source_semantic_snapshot = semantic_snapshot
+
+    theme = source.theme if isinstance(source.theme, dict) else {}
+    authored_projection = theme.get("authored_vnext")
+    if not isinstance(authored_projection, dict):
+        authored_projection = {}
+    raw_metadata = authored_projection.get(
+        "deckMetadata", theme.get("deckMetadata")
+    )
+    try:
+        generation_request._authored_deck_metadata = (
+            DeckMetadataSnapshot.model_validate(raw_metadata)
+            if isinstance(raw_metadata, dict)
+            else DeckMetadataSnapshot()
+        )
+    except ValidationError as error:
+        raise HTTPException(
+            status_code=422,
+            detail="authored_source_deck_metadata_invalid",
+        ) from error
     return generation_request
 
 

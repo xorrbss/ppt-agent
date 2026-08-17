@@ -11,6 +11,7 @@ from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, inspect, text
 
 import migrations
+import migration_revision_contract as revision_contract
 import template_v2_schema_contract
 from alembic import command
 
@@ -2387,6 +2388,75 @@ def test_template_v2_upgrade_downgrade_upgrade_cycle(tmp_path):
                 constraint["name"]
                 for constraint in inspector.get_check_constraints("slides")
             }
+    finally:
+        engine.dispose()
+
+
+def test_retired_authored_vnext_revision_rebases_to_last_common_revision(
+    tmp_path,
+    monkeypatch,
+):
+    database_url = f"sqlite:///{tmp_path / 'retired-authored-vnext.db'}"
+    engine = create_engine(database_url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
+            )
+            connection.execute(
+                text("INSERT INTO alembic_version VALUES ('d1f4a6b8c0e2')")
+            )
+            for table in sorted(
+                migrations.RETIRED_AUTHORED_VNEXT_TABLES
+                | migrations.RETIRED_PROVIDER_RUNTIME_TABLES
+                | {"provider_usage_receipts"}
+            ):
+                connection.execute(text(f'CREATE TABLE "{table}" (id INTEGER)'))
+
+        monkeypatch.setattr(
+            migrations,
+            "_infer_revision_from_schema",
+            lambda *_args: pytest.fail("known retired revision must not use inference"),
+        )
+        migrations._repair_orphan_alembic_revision(
+            _alembic_config(database_url), database_url
+        )
+        with engine.connect() as connection:
+            assert connection.execute(
+                text("SELECT version_num FROM alembic_version")
+            ).scalar_one() == revision_contract.REVISION_PROVIDER_USAGE_RECEIPTS
+    finally:
+        engine.dispose()
+
+
+def test_authored_vnext_ownership_migration_is_restartable(tmp_path):
+    database_url = f"sqlite:///{tmp_path / 'ownership-restart.db'}"
+    config = _alembic_config(database_url)
+    command.upgrade(config, migrations.REVISION_AUTHORED_VNEXT_OWNERSHIP)
+
+    # A retired branch may leave its schema applied under an orphan revision.
+    # Re-stamping to the nearest common predecessor must not make the ownership
+    # migration recreate already-present constraints and indexes.
+    command.stamp(config, revision_contract.REVISION_AUTHORED_VNEXT_GENERATION_OPERATIONS)
+    command.upgrade(config, migrations.REVISION_AUTHORED_VNEXT_OWNERSHIP)
+
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            inspector = inspect(connection)
+            assert connection.execute(
+                text("SELECT version_num FROM alembic_version")
+            ).scalar_one() == migrations.REVISION_AUTHORED_VNEXT_OWNERSHIP
+            for table in (
+                "authored_vnext_master_revisions",
+                "authored_vnext_export_jobs",
+            ):
+                assert f"ix_{table}_owner_id" in {
+                    item["name"] for item in inspector.get_indexes(table)
+                }
+                assert f"fk_{table}_owner_id_user" in {
+                    item["name"] for item in inspector.get_foreign_keys(table)
+                }
     finally:
         engine.dispose()
 

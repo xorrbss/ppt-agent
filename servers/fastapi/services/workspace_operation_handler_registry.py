@@ -81,6 +81,7 @@ _BUILTIN_RECOVERY_POLICIES: dict[str, WorkspaceOperationRecoveryPolicy] = {
     "presentation.generate": "automatic",
     "presentation.delete": "automatic",
     "template.apply": "automatic",
+    "design.apply": "automatic",
 }
 
 
@@ -119,6 +120,27 @@ class WorkspaceOperationBlocked(WorkspaceOperationExecutionError):
         self, code: str, *, detail: Mapping[str, Any] | None = None
     ) -> None:
         super().__init__(code, retryable=False, detail=detail)
+
+
+class WorkspaceOperationDeferred(RuntimeError):
+    """A capacity wait that must not consume an execution attempt.
+
+    The durable runner returns the claim to ``queued`` and schedules it for a
+    later poll.  This is deliberately separate from execution errors: no retry
+    budget is charged and no terminal error is exposed to the caller.
+    """
+
+    def __init__(
+        self,
+        code: str,
+        *,
+        retry_after_seconds: float = 1.0,
+        detail: Mapping[str, Any] | None = None,
+    ) -> None:
+        self.code = code
+        self.retry_after_seconds = max(0.05, float(retry_after_seconds))
+        self.detail = dict(detail or {})
+        super().__init__(code)
 
 
 class WorkspaceOperationCancelled(RuntimeError):

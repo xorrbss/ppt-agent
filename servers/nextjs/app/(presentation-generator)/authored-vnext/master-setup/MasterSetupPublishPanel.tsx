@@ -7,120 +7,113 @@ import type {
   MasterValidation,
   VisualDirection,
 } from "@/lib/authored-vnext/master/contracts";
-import type { MasterSetupPhase } from "@/lib/authored-vnext/master/view-model";
 
 interface MasterSetupPublishPanelProps {
+  applyLabel?: string;
   busy: boolean;
-  continueHref?: string;
-  draft: MasterRevisionEnvelope | null;
-  draftStale: boolean;
   error: string | null;
-  onCreateDraft: () => void;
-  onPreview: () => void;
-  onPublished?: (
+  onApply?: (
     published: MasterRevisionEnvelope,
     visualDirection: VisualDirection,
   ) => void;
   onPublish: () => void;
-  onValidate: () => void;
-  phase: MasterSetupPhase;
-  previewReady: boolean;
+  onSave: () => void;
   published: MasterRevisionEnvelope | null;
   publishedStale: boolean;
-  remotelyValidated: boolean;
   validation: MasterValidation;
   visualDirection: VisualDirection;
 }
 
+/** A compact entry point: publish owns the save -> strict validate -> publish flow. */
 export default function MasterSetupPublishPanel({
+  applyLabel,
   busy,
-  continueHref,
-  draft,
-  draftStale,
   error,
-  onCreateDraft,
-  onPreview,
-  onPublished,
+  onApply,
   onPublish,
-  onValidate,
-  phase,
-  previewReady,
+  onSave,
   published,
   publishedStale,
-  remotelyValidated,
   validation,
   visualDirection,
 }: MasterSetupPublishPanelProps) {
   const t = useTranslations("authoredVnext.master");
+  const issues = validation.errors.slice(0, 2);
+  const saveLabel = t("publish.save");
+  const publishLabel = t("publish.publishAction");
 
   return (
-    <aside
+    <section
+      aria-label={`${saveLabel} / ${publishLabel}`}
       aria-live="polite"
-      className="h-fit space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+      className="w-full space-y-2 xl:w-[320px]"
     >
-      <h2 className="text-lg font-bold">{t("publish.title")}</h2>
-      <p className="text-xs text-slate-600">{t("publish.description")}</p>
-      <p className="rounded bg-slate-100 p-3 text-sm">{t(`phase.${phase}`)}</p>
-      <button
-        className="w-full rounded bg-slate-950 px-4 py-3 text-sm font-bold text-white disabled:opacity-40"
-        disabled={busy || !validation.valid}
-        data-testid="authored-master-create-draft"
-        onClick={onCreateDraft}
-        type="button"
-      >
-        {t("publish.createDraft")}
-      </button>
-      <button
-        className="w-full rounded border px-4 py-3 text-sm font-bold disabled:opacity-40"
-        disabled={busy || !draft || draftStale}
-        data-testid="authored-master-validate"
-        onClick={onValidate}
-        type="button"
-      >
-        {t("publish.validate")}
-      </button>
-      <button
-        className="w-full rounded bg-blue-700 px-4 py-3 text-sm font-bold text-white disabled:opacity-40"
-        disabled={busy || !remotelyValidated}
-        data-testid="authored-master-publish"
-        onClick={onPublish}
-        type="button"
-      >
-        {t("publish.publish")}
-      </button>
-      <button
-        className="w-full rounded bg-emerald-700 px-4 py-3 text-sm font-bold text-white disabled:opacity-40"
-        disabled={busy || !published || publishedStale}
-        data-testid="authored-master-preview"
-        onClick={onPreview}
-        type="button"
-      >
-        {t("publish.preview")}
-      </button>
+      <div className="flex gap-2">
+        <button
+          aria-label={saveLabel}
+          className="flex-1 rounded border border-slate-300 px-3 py-2 text-sm font-bold text-slate-800 disabled:opacity-40"
+          data-testid="authored-master-save"
+          disabled={busy || !validation.valid}
+          onClick={onSave}
+          type="button"
+        >
+          {saveLabel}
+        </button>
+        <button
+          aria-label={publishLabel}
+          className="flex-1 rounded bg-blue-700 px-3 py-2 text-sm font-bold text-white disabled:opacity-40"
+          data-testid="authored-master-publish"
+          disabled={
+            busy ||
+            !validation.valid ||
+            Boolean(published && !publishedStale)
+          }
+          onClick={onPublish}
+          type="button"
+        >
+          {busy ? t("publish.busy") : publishLabel}
+        </button>
+      </div>
+      {!validation.valid && issues.length > 0 && (
+        <div
+          className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-950"
+          role="status"
+        >
+          {issues.map((issue) => (
+            <p key={`${issue.code}:${issue.path}`}>
+              {t("validation.issue", {
+                code: issue.code,
+                message: issue.message,
+              })}
+            </p>
+          ))}
+        </div>
+      )}
       {error && (
-        <p className="rounded bg-red-50 p-3 text-sm text-red-900" role="alert">
+        <p className="rounded bg-red-50 p-2 text-xs text-red-900" role="alert">
           {t("publish.error", { code: error })}
         </p>
       )}
-      {previewReady && (
-        <p className="rounded bg-emerald-50 p-3 text-xs">
-          {t("publish.previewReady")}
-        </p>
-      )}
-      {published && !publishedStale && continueHref && (
-        <a
-          className="block rounded bg-violet-700 px-4 py-3 text-center text-sm font-bold text-white"
-          data-testid="continue-after-publish"
-          href={continueHref}
-          onClick={(event) => {
-            if (!onPublished) return;
-            event.preventDefault();
-            onPublished(published, visualDirection);
-          }}
+      {published && !publishedStale && (
+        <div
+          className="space-y-2 rounded bg-emerald-50 p-2 text-xs text-emerald-950"
+          role="status"
         >
-          {t("publish.continue")}
-        </a>
+          <p>
+            {t("phase.published")} · r{published.revision}
+          </p>
+          {onApply && applyLabel && (
+            <button
+              className="w-full rounded bg-violet-700 px-3 py-2 text-sm font-bold text-white"
+              data-testid="apply-after-publish"
+              onClick={() => onApply(published, visualDirection)}
+              type="button"
+            >
+              {applyLabel}
+            </button>
+          )}
+        </div>
       )}
-    </aside>
+    </section>
   );
 }

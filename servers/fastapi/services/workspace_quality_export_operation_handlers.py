@@ -16,8 +16,15 @@ from models.sql.workspace import WorkspaceOperation
 from services.authored_quality_review_service import (
     run_authored_quality_review as run_authored_quality_review,
 )
+from services.authored_vnext.generation.legacy_bridge import (
+    export_persisted_legacy_master_deck,
+)
+from services.authored_vnext.generation.legacy_pin import (
+    canonical_legacy_master_pin_identity,
+)
 from services.database import async_session_maker
 from services.presentation_export_attempt_service import (
+    begin_export_attempt,
     terminalize_export_attempt_failed,
 )
 from services.presentation_export_capabilities import (
@@ -80,6 +87,37 @@ def _resolve_workspace_export_options(
     return pptx_mode, font_embedding
 
 
+def _validate_authored_vnext_export_request(
+    claim_payload: Mapping[str, Any],
+    *,
+    projection: object,
+    export_format: str,
+    pptx_mode: Literal["fidelity", "hybrid"],
+    font_embedding: bool,
+) -> None:
+    """Fence native export to the immutable document pin and its native mode."""
+
+    if not isinstance(projection, Mapping):
+        raise NonRetryableWorkspaceOperationError(
+            "authored_vnext_export_projection_incomplete"
+        )
+    projected_pin = canonical_legacy_master_pin_identity(projection.get("masterPin"))
+    requested_pin_payload = _context(claim_payload).get("master_pin")
+    requested_pin = (
+        canonical_legacy_master_pin_identity(requested_pin_payload)
+        if requested_pin_payload is not None
+        else projected_pin
+    )
+    if projected_pin is None or requested_pin != projected_pin:
+        raise NonRetryableWorkspaceOperationError(
+            "authored_vnext_export_master_changed"
+        )
+    if export_format == "pptx" and (pptx_mode != "fidelity" or font_embedding):
+        raise NonRetryableWorkspaceOperationError(
+            "authored_vnext_native_export_mode_required"
+        )
+
+
 class WorkspaceExportOperationHandler:
     """Render then immutably publish an owner-scoped export artifact."""
 
@@ -112,6 +150,19 @@ class WorkspaceExportOperationHandler:
             if presentation.revision != claim.expected_revision:
                 raise NonRetryableWorkspaceOperationError("stale_presentation_revision")
             title = presentation.title or "presentation"
+            authored_vnext_projection = (
+                presentation.theme.get("authored_vnext")
+                if isinstance(presentation.theme, Mapping)
+                else None
+            )
+            if authored_vnext_projection is not None:
+                _validate_authored_vnext_export_request(
+                    claim.request_payload,
+                    projection=authored_vnext_projection,
+                    export_format=export_format,
+                    pptx_mode=pptx_mode,
+                    font_embedding=font_embedding,
+                )
             operation = await session.get(WorkspaceOperation, claim.operation_id)
             if (
                 operation is None
@@ -121,48 +172,151 @@ class WorkspaceExportOperationHandler:
                 raise NonRetryableWorkspaceOperationError("workspace_export_operation_invalid")
 
         await context.progress(stage="export_rendering", percent=10)
-        # Mint at execution time only. This credential is never copied into a
-        # request payload, event, artifact row or result projection.
-        headers = await self._internal_header_provider()
-        cookie_header = headers.get("Cookie") or None
         exported_source: Path | None = None
         execution = None
+        native_export = None
+        native_export_attempt_id = None
         try:
-            async with self._session_factory() as session:
-                execution = await execute_presentation_export(
-                    session,
-                    render_presentation_id=claim.presentation_id,
-                    attempt_presentation_id=claim.presentation_id,
-                    export_format=cast(Literal["pptx", "pdf"], export_format),
-                    expected_render_revision=claim.expected_revision,
-                    source_revision=claim.expected_revision,
-                    title=title,
-                    cookie_header=cookie_header,
-                    owner_id=claim.owner_id,
-                    owner_scope=claim.owner_scope,
-                    workspace_operation_id=claim.operation_id,
-                    request_hash=operation.request_hash,
-                    idempotency_key_hash=operation.idempotency_key_hash,
-                    pptx_mode=pptx_mode,
-                    font_embedding=font_embedding,
+            if authored_vnext_projection is not None and export_format == "pptx":
+                if not isinstance(authored_vnext_projection, dict):
+                    raise PresentationExportContractError(
+                        "authored_vnext_export_projection_incomplete"
+                    )
+                deck_digest = authored_vnext_projection.get("deckDigest")
+                master_pin = canonical_legacy_master_pin_identity(
+                    authored_vnext_projection.get("masterPin")
                 )
-            exported = execution.presentation
-            exported_source = Path(exported.path)
-            if execution.route.result.artifact_sha256 != (hashlib.sha256(exported_source.read_bytes()).hexdigest()):
-                raise PresentationExportContractError("presentation_export_artifact_digest_mismatch")
+                if (
+                    not isinstance(deck_digest, str)
+                    or not deck_digest.startswith("sha256:")
+                    or len(deck_digest) != 71
+                    or any(
+                        character not in "0123456789abcdef"
+                        for character in deck_digest.removeprefix("sha256:")
+                    )
+                    or master_pin is None
+                ):
+                    raise PresentationExportContractError(
+                        "authored_vnext_export_projection_incomplete"
+                    )
+                source_snapshot_sha256 = deck_digest.removeprefix("sha256:")
+                initial_provenance = {
+                    "schema_version": 1,
+                    "adapter_chain": ["native_reconstructed"],
+                    "capability_evidence": {
+                        "authored_vnext_native_master": True,
+                        "deck_digest": deck_digest,
+                        "master_digest": master_pin[2],
+                    },
+                    "fallback_reason": None,
+                    "asset_digests": {},
+                    "compiler_runtime": {
+                        "compiler": "OoxmlMasterCompilerPort",
+                        "compiler_version": "ooxml-master-port/v1",
+                        "runtime": "authored-vnext-ooxml-worker",
+                        "runtime_version": "1",
+                    },
+                    "freshness": {
+                        "source_revision": claim.expected_revision,
+                        "source_snapshot_sha256": source_snapshot_sha256,
+                        "package_sha256": None,
+                        "asset_digests_match": True,
+                        "package_digest_match": False,
+                    },
+                }
+                async with self._session_factory() as session:
+                    attempt = await begin_export_attempt(
+                        session,
+                        presentation_id=claim.presentation_id,
+                        owner_id=claim.owner_id,
+                        owner_scope=claim.owner_scope,
+                        workspace_operation_id=claim.operation_id,
+                        export_format="pptx",
+                        source_revision=claim.expected_revision,
+                        source_snapshot_sha256=source_snapshot_sha256,
+                        request_hash=operation.request_hash,
+                        idempotency_key_hash=operation.idempotency_key_hash,
+                        requested_adapter="native_reconstructed",
+                        provenance=initial_provenance,
+                    )
+                export_attempt_id = attempt.id
+                native_export_attempt_id = attempt.id
+                try:
+                    native_export = await export_persisted_legacy_master_deck(
+                        owner_id=claim.owner_id,
+                        projection=authored_vnext_projection,
+                    )
+                except Exception as error:
+                    raise PresentationExportContractError(
+                        getattr(
+                            error,
+                            "code",
+                            str(error)
+                            if str(error).startswith("authored_vnext_")
+                            else "authored_vnext_native_export_failed",
+                        )
+                    ) from error
+                export_path = native_export.path
+                artifact_sha256 = native_export.artifact_sha256
+                artifact_size_bytes = native_export.artifact_size_bytes
+                source_snapshot_sha256 = native_export.source_snapshot_sha256
+                selected_adapter = "native_reconstructed"
+                export_provenance = {
+                    **native_export.provenance,
+                    "freshness": {
+                        **native_export.provenance["freshness"],
+                        "source_revision": claim.expected_revision,
+                    },
+                }
+            else:
+                # Browser-backed exports alone need an ephemeral internal
+                # credential. Native master export stays document-server-free.
+                headers = await self._internal_header_provider()
+                cookie_header = headers.get("Cookie") or None
+                async with self._session_factory() as session:
+                    execution = await execute_presentation_export(
+                        session,
+                        render_presentation_id=claim.presentation_id,
+                        attempt_presentation_id=claim.presentation_id,
+                        export_format=cast(Literal["pptx", "pdf"], export_format),
+                        expected_render_revision=claim.expected_revision,
+                        source_revision=claim.expected_revision,
+                        title=title,
+                        cookie_header=cookie_header,
+                        owner_id=claim.owner_id,
+                        owner_scope=claim.owner_scope,
+                        workspace_operation_id=claim.operation_id,
+                        request_hash=operation.request_hash,
+                        idempotency_key_hash=operation.idempotency_key_hash,
+                        pptx_mode=pptx_mode,
+                        font_embedding=font_embedding,
+                    )
+                exported = execution.presentation
+                export_path = Path(exported.path)
+                exported_source = export_path
+                artifact_sha256 = execution.route.result.artifact_sha256
+                artifact_size_bytes = execution.route.result.artifact_size_bytes
+                source_snapshot_sha256 = execution.source_snapshot_sha256
+                selected_adapter = execution.route.result.selected_adapter
+                export_provenance = execution.provenance
+                export_attempt_id = execution.attempt_id
+            if artifact_sha256 != hashlib.sha256(export_path.read_bytes()).hexdigest():
+                raise PresentationExportContractError(
+                    "presentation_export_artifact_digest_mismatch"
+                )
             await context.raise_if_cancelled()
             await context.progress(stage="export_publishing", percent=80)
             async with self._session_factory() as session:
                 artifact = await prepare_workspace_generation_artifact(
                     session,
-                    source_path=exported.path,
+                    source_path=str(export_path),
                     operation_id=claim.operation_id,
                     presentation_id=claim.presentation_id,
                     source_revision=claim.expected_revision,
                     kind=claim.kind,
-                    export_attempt_id=execution.attempt_id,
-                    expected_source_sha256=(execution.route.result.artifact_sha256),
-                    expected_source_size_bytes=(execution.route.result.artifact_size_bytes),
+                    export_attempt_id=export_attempt_id,
+                    expected_source_sha256=artifact_sha256,
+                    expected_source_size_bytes=artifact_size_bytes,
                 )
                 try:
                     await context.raise_if_cancelled()
@@ -175,9 +329,9 @@ class WorkspaceExportOperationHandler:
                     attempt_token=claim.attempt_token,
                     fencing_token=claim.fencing_token,
                     export_format=export_format,
-                    export_source_snapshot_sha256=(execution.source_snapshot_sha256),
-                    export_selected_adapter=(execution.route.result.selected_adapter),
-                    export_provenance=execution.provenance,
+                    export_source_snapshot_sha256=source_snapshot_sha256,
+                    export_selected_adapter=selected_adapter,
+                    export_provenance=export_provenance,
                 )
         except WorkspaceOperationCancelled:
             if execution is not None:
@@ -190,6 +344,18 @@ class WorkspaceExportOperationHandler:
                         expected_workspace_operation_id=(execution.workspace_operation_id),
                         failure_code="presentation_export_cancelled",
                         failure_path=None,
+                    )
+            elif native_export_attempt_id is not None:
+                async with self._session_factory() as session:
+                    await terminalize_export_attempt_failed(
+                        session,
+                        attempt_id=native_export_attempt_id,
+                        expected_owner_id=claim.owner_id,
+                        expected_owner_scope=claim.owner_scope,
+                        expected_workspace_operation_id=claim.operation_id,
+                        failure_code="presentation_export_cancelled",
+                        failure_path=None,
+                        selected_adapter="native_reconstructed",
                     )
             raise
         except WorkspaceArtifactPublicationError as error:
@@ -214,6 +380,18 @@ class WorkspaceExportOperationHandler:
                         failure_code=error.code,
                         failure_path=None,
                     )
+            elif native_export_attempt_id is not None:
+                async with self._session_factory() as session:
+                    await terminalize_export_attempt_failed(
+                        session,
+                        attempt_id=native_export_attempt_id,
+                        expected_owner_id=claim.owner_id,
+                        expected_owner_scope=claim.owner_scope,
+                        expected_workspace_operation_id=claim.operation_id,
+                        failure_code=error.code,
+                        failure_path=None,
+                        selected_adapter="native_reconstructed",
+                    )
             if error.code == "operation_lease_lost":
                 raise WorkspaceOperationLeaseLost(error.code) from error
             raise error_type(error.code) from error
@@ -229,6 +407,18 @@ class WorkspaceExportOperationHandler:
                         failure_code="operation_lease_lost",
                         failure_path=None,
                     )
+            elif native_export_attempt_id is not None:
+                async with self._session_factory() as session:
+                    await terminalize_export_attempt_failed(
+                        session,
+                        attempt_id=native_export_attempt_id,
+                        expected_owner_id=claim.owner_id,
+                        expected_owner_scope=claim.owner_scope,
+                        expected_workspace_operation_id=claim.operation_id,
+                        failure_code="operation_lease_lost",
+                        failure_path=None,
+                        selected_adapter="native_reconstructed",
+                    )
             raise
         except PresentationExportContractError as error:
             if execution is not None:
@@ -241,6 +431,18 @@ class WorkspaceExportOperationHandler:
                         expected_workspace_operation_id=(execution.workspace_operation_id),
                         failure_code=error.code,
                         failure_path=error.path,
+                    )
+            elif native_export_attempt_id is not None:
+                async with self._session_factory() as session:
+                    await terminalize_export_attempt_failed(
+                        session,
+                        attempt_id=native_export_attempt_id,
+                        expected_owner_id=claim.owner_id,
+                        expected_owner_scope=claim.owner_scope,
+                        expected_workspace_operation_id=claim.operation_id,
+                        failure_code=error.code,
+                        failure_path=error.path,
+                        selected_adapter="native_reconstructed",
                     )
             raise NonRetryableWorkspaceOperationError(error.code) from error
         except Exception as error:
@@ -267,6 +469,22 @@ class WorkspaceExportOperationHandler:
                             "presentation_export_unexpected_failure",
                         ),
                         failure_path=getattr(error, "path", None),
+                    )
+            elif native_export_attempt_id is not None:
+                async with self._session_factory() as session:
+                    await terminalize_export_attempt_failed(
+                        session,
+                        attempt_id=native_export_attempt_id,
+                        expected_owner_id=claim.owner_id,
+                        expected_owner_scope=claim.owner_scope,
+                        expected_workspace_operation_id=claim.operation_id,
+                        failure_code=getattr(
+                            error,
+                            "code",
+                            "presentation_export_unexpected_failure",
+                        ),
+                        failure_path=getattr(error, "path", None),
+                        selected_adapter="native_reconstructed",
                     )
             raise RetryableWorkspaceOperationError("presentation_export_failed") from error
         finally:

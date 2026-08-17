@@ -1,0 +1,48 @@
+{
+  "schemaVersion": "ooxml-vnext/powerpoint-repair-scope/v1",
+  "observedAtUtc": "2026-08-14T00:37:42.8329402Z",
+  "sourceReceipt": "servers/nextjs/.tmp/ooxml-vnext-checkpoint4-existing-90/open-save-reopen-receipt.json",
+  "visibleObservation": {
+    "status": "failed-repair-dialog-observed-on-open",
+    "repairDialogObserved": true,
+    "reopenAttempted": false
+  },
+  "before": {
+    "sha256": "76236ccfaed176966dabcfb8d91b4541b17e8f6907606240d1e09a82bb78afa3",
+    "partCount": 200,
+    "source": "existing-90.build-receipt.json"
+  },
+  "after": {
+    "sha256": "6e9f0a0e3fa63567734c8f5be1c43d861db326074cf5e000a9357878419e482e",
+    "partCount": 201,
+    "slideCount": 90,
+    "masterCount": 1,
+    "layoutCount": 4,
+    "externalRelationshipCount": 0,
+    "removedKnownSyntheticParts": [
+      "customXml/item1.xml",
+      "ppt/embeddings/oleObject1.bin"
+    ],
+    "removedKnownSyntheticRelationships": [
+      "ppt/slides/_rels/slide1.xml.rels#rIdOpaqueOle",
+      "ppt/slides/_rels/slide1.xml.rels#rIdFixtureMail"
+    ],
+    "addedPowerPointProperties": [
+      "ppt/presProps.xml",
+      "ppt/tableStyles.xml",
+      "ppt/viewProps.xml"
+    ]
+  },
+  "conclusion": {
+    "established": [
+      "PowerPoint preserved the 90 slides, one master, and four layouts while repairing the package.",
+      "The repair scope includes the synthetic custom XML, OLE, and external-relationship additions.",
+      "The old witness did not protect the source: its source digest changed, so it cannot support a source-isolation claim."
+    ],
+    "notEstablished": [
+      "Which one of custom XML, the invalid OLE sentinel/orphan relationship, or the orphan external relationship triggered the dialog.",
+      "That a valid real-world imported OLE or custom XML part should be rejected."
+    ],
+    "nextEvidence": "Run the visible witness against the six three-slide variants produced by build-powerpoint-repair-bisection.mjs."
+  }
+}

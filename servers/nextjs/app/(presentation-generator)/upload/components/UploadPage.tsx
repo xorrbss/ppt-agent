@@ -6,41 +6,108 @@
 
 "use client";
 
-import React, { useCallback } from "react";
-import { ArrowUp, Sparkles } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowUp, LayoutTemplate, Sparkles } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useDispatch, useSelector } from "react-redux";
 
 import Wrapper from "@/components/Wrapper";
 import { Button } from "@/components/ui/button";
 import { OverlayLoader } from "@/components/ui/overlay-loader";
+import { notify } from "@/components/ui/sonner";
+import { useUploadLimits } from "@/lib/use-upload-limits";
 import { cn } from "@/lib/utils";
 import { setPptGenUploadState } from "@/store/slices/presentationGenUpload";
 import type { RootState } from "@/store/store";
+import { isAuthoredVnextMasterEnabled } from "@/lib/authored-vnext/master/contracts";
+import type { MasterRevisionEnvelope } from "@/lib/authored-vnext/master/contracts";
+import { AuthoredVnextMasterClient } from "@/lib/authored-vnext/master/client";
+import {
+  clearLastUsedMasterId,
+  masterSelectionFromPublished,
+  readStoredCompanyStandardPreference,
+  saveLastUsedMasterId,
+} from "@/lib/authored-vnext/master/selection-storage";
 
-import { AUTHORED_TEMPLATE_ID } from "../../outline/components/TemplateSelection";
+import TemplateSelection from "../../outline/components/TemplateSelection";
+import MasterCatalogDialog from "../../authored-vnext/master-setup/MasterCatalogDialog";
+import type { MasterCatalogEntryMode } from "../../authored-vnext/master-setup/MasterCatalogDialog";
 import { ConfigurationSelects } from "./ConfigurationSelects";
 import CurrentConfig from "./CurrentConfig";
 import { PromptInput } from "./PromptInput";
-import SupportingDoc from "./SupportingDoc";
-import TemplateCatalog from "./TemplateCatalog";
+import SupportingDoc, { MAX_SUPPORTED_FILES } from "./SupportingDoc";
 import { abortDocumentProcessing } from "./upload-page/abortDocumentProcessing";
 import { useSupportingFiles } from "./upload-page/useSupportingFiles";
 import { useUploadPageState } from "./upload-page/useUploadPageState";
 
-const UploadPage = () => {
+const masterClient = new AuthoredVnextMasterClient();
+const LAST_AI_MASTER_ANALYSIS_KEY = "presenton.authored-vnext.ai-master-analysis.v1";
+
+export interface UploadPageProps {
+  /** Component harness seam; production keeps the environment feature gate. */
+  masterFeatureEnabled?: boolean;
+}
+
+const UploadPage = ({
+  masterFeatureEnabled = isAuthoredVnextMasterEnabled(),
+}: UploadPageProps = {}) => {
   const t = useTranslations("upload");
+  const uploadLimits = useUploadLimits();
   const dispatch = useDispatch();
-  const selectedTemplateId = useSelector(
-    (state: RootState) => state.pptGenUpload.selectedTemplate
-  );
   const selectedThemeId = useSelector(
     (state: RootState) => state.pptGenUpload.selectedTheme
   );
-  const authoredStyleId = useSelector(
-    (state: RootState) => state.pptGenUpload.authoredStyle
+  const companyStandard = useSelector(
+    (state: RootState) => state.pptGenUpload.companyStandard
   );
-  const isAuthoredMode = selectedTemplateId === AUTHORED_TEMPLATE_ID;
+  const [masterCatalogOpen, setMasterCatalogOpen] = useState(false);
+  const [masterCatalogEntryMode, setMasterCatalogEntryMode] =
+    useState<MasterCatalogEntryMode>("catalog");
+  const [lastAnalysisId, setLastAnalysisId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const value = window.localStorage.getItem(LAST_AI_MASTER_ANALYSIS_KEY);
+      return value && /^[0-9a-f]{32}$/.test(value) ? value : null;
+    } catch {
+      return null;
+    }
+  });
+  const [analyzedSourceSignature, setAnalyzedSourceSignature] = useState<string | null>(null);
+  const masterSelectionEpochRef = useRef(0);
+
+  useEffect(() => {
+    if (!masterFeatureEnabled) return;
+
+    let active = true;
+    const epoch = ++masterSelectionEpochRef.current;
+    const preference = readStoredCompanyStandardPreference();
+    // A preference only identifies a master. Resolve the current published
+    // pointer for each fresh upload entry instead of retaining a stale pin.
+    dispatch(setPptGenUploadState({ companyStandard: null }));
+    const applyPublished = (published: MasterRevisionEnvelope) => {
+      if (!active || masterSelectionEpochRef.current !== epoch) return;
+      dispatch(
+        setPptGenUploadState({
+          companyStandard: masterSelectionFromPublished(published),
+        })
+      );
+    };
+    const resolvePublished = (masterId: string) =>
+      masterClient.getPublished(masterId).then(applyPublished);
+
+    if (preference.kind !== "last-used") {
+      return () => {
+        active = false;
+      };
+    }
+    void resolvePublished(preference.masterId).catch(() => {
+      // Deleted, unpublished, or inaccessible choices stay unselected.
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [dispatch, masterFeatureEnabled]);
 
   const {
     files,
@@ -50,6 +117,17 @@ const UploadPage = () => {
     handleCardDragLeave,
     handleCardDrop,
   } = useSupportingFiles();
+  const analysisSourceFile = useMemo(
+    () => files.find((file) => /\.(?:ppt|pptx)$/i.test(file.name)) ?? null,
+    [files],
+  );
+  const analysisSourceSignature = analysisSourceFile
+    ? `${analysisSourceFile.name}:${analysisSourceFile.size}:${analysisSourceFile.lastModified}`
+    : null;
+  const resumeAnalysisId =
+    !analysisSourceFile || analyzedSourceSignature === analysisSourceSignature
+      ? lastAnalysisId
+      : null;
 
   const {
     config,
@@ -58,23 +136,102 @@ const UploadPage = () => {
     canCancelDocumentProcessing,
     decomposeAbortControllerRef,
     handleGeneratePresentation,
-  } = useUploadPageState({ files, selectedThemeId });
+    handleReviewOutline,
+    isMasterResolving,
+    masterAdmissionError,
+  } = useUploadPageState({
+    files,
+    selectedThemeId,
+    masterFeatureEnabled,
+    onMasterRequired: () => {
+      setMasterCatalogEntryMode("catalog");
+      setMasterCatalogOpen(true);
+    },
+  });
 
-  const selectStructured = useCallback(
-    (selectionId: string) =>
-      dispatch(setPptGenUploadState({ selectedTemplate: selectionId })),
-    [dispatch]
-  );
-  const selectAuthored = useCallback(
-    (styleId: string) =>
+  const openMasterCatalog = useCallback(() => {
+    setMasterCatalogEntryMode("catalog");
+    setMasterCatalogOpen(true);
+  }, []);
+
+  const selectAiMasterSource = useCallback((file: File) => {
+    if (!/\.(?:ppt|pptx)$/i.test(file.name)) return;
+    if (file.size > uploadLimits.document.bytes) {
+      notify.error(
+        "파일이 너무 큽니다",
+        `파일당 최대 크기는 ${uploadLimits.document.mb}MB입니다.`,
+      );
+      return;
+    }
+    if (!analysisSourceFile && files.length >= MAX_SUPPORTED_FILES) {
+      notify.warning(
+        "최대 파일 수 초과",
+        `문서는 최대 ${MAX_SUPPORTED_FILES}개까지만 업로드할 수 있습니다.`,
+      );
+      return;
+    }
+    setFiles((current) => {
+      const sourceIndex = current.findIndex((item) => /\.(?:ppt|pptx)$/i.test(item.name));
+      if (sourceIndex < 0) return [...current, file];
+      const next = [...current];
+      next[sourceIndex] = file;
+      return next;
+    });
+  }, [analysisSourceFile, files.length, setFiles, uploadLimits.document.bytes, uploadLimits.document.mb]);
+
+  const rememberAnalysis = useCallback((analysisId: string | null) => {
+    setLastAnalysisId(analysisId);
+    setAnalyzedSourceSignature(analysisId ? analysisSourceSignature : null);
+    try {
+      if (analysisId) window.localStorage.setItem(LAST_AI_MASTER_ANALYSIS_KEY, analysisId);
+      else window.localStorage.removeItem(LAST_AI_MASTER_ANALYSIS_KEY);
+    } catch {
+      // Server persistence remains authoritative when browser storage is unavailable.
+    }
+  }, [analysisSourceSignature]);
+
+  // A master is optional.  Only a previously selected master that failed
+  // published-head resolution blocks retrying the authored request.
+  const masterBlocksGeneration = Boolean(masterAdmissionError);
+  const generationBusy = loadingState.isLoading || isMasterResolving;
+
+  const handlePrimaryGenerate = useCallback(() => {
+    if (generationBusy) return;
+    if (masterBlocksGeneration) {
+      openMasterCatalog();
+      return;
+    }
+    void handleGeneratePresentation();
+  }, [generationBusy, handleGeneratePresentation, masterBlocksGeneration, openMasterCatalog]);
+
+  const handleReviewThenGenerate = useCallback(() => {
+    if (generationBusy) return;
+    if (masterBlocksGeneration) {
+      openMasterCatalog();
+      return;
+    }
+    void handleReviewOutline();
+  }, [generationBusy, handleReviewOutline, masterBlocksGeneration, openMasterCatalog]);
+
+  const applyMaster = useCallback(
+    (published: MasterRevisionEnvelope) => {
+      // A manual Apply always wins over an in-flight preference restoration.
+      ++masterSelectionEpochRef.current;
       dispatch(
         setPptGenUploadState({
-          selectedTemplate: AUTHORED_TEMPLATE_ID,
-          authoredStyle: styleId,
+          companyStandard: masterSelectionFromPublished(published),
         })
-      ),
+      );
+      saveLastUsedMasterId(published.masterId);
+    },
     [dispatch]
   );
+
+  const clearMaster = useCallback(() => {
+    ++masterSelectionEpochRef.current;
+    dispatch(setPptGenUploadState({ companyStandard: null }));
+    clearLastUsedMasterId();
+  }, [dispatch]);
 
   return (
     <Wrapper className="max-w-none pb-20">
@@ -118,49 +275,8 @@ const UploadPage = () => {
           </div>
 
           <div
-            className="mt-6 flex max-w-full flex-wrap items-center justify-center gap-2"
-            role="group"
-            aria-label={t("modeLabel")}
-          >
-            <div className="flex rounded-xl border border-[#E6E7EA] bg-white p-1 shadow-sm">
-              <button
-                type="button"
-                aria-pressed={!isAuthoredMode}
-                onClick={() => {
-                  if (isAuthoredMode) {
-                    dispatch(setPptGenUploadState({ selectedTemplate: null }));
-                  }
-                }}
-                className={cn(
-                  "min-h-9 rounded-lg px-4 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5141E5]/30",
-                  !isAuthoredMode
-                    ? "bg-[#F1F2F4] text-[#242629]"
-                    : "text-[#6E727A] hover:bg-[#F7F7F8]"
-                )}
-                data-testid="structured-mode-button"
-              >
-                {t("templateMode")}
-              </button>
-              <button
-                type="button"
-                aria-pressed={isAuthoredMode}
-                onClick={() => selectAuthored(authoredStyleId)}
-                className={cn(
-                  "min-h-9 rounded-lg px-4 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5141E5]/30",
-                  isAuthoredMode
-                    ? "bg-[#F1F2F4] text-[#242629]"
-                    : "text-[#6E727A] hover:bg-[#F7F7F8]"
-                )}
-                data-testid="authored-mode-button"
-              >
-                {t("authoredMode")}
-              </button>
-            </div>
-          </div>
-
-          <div
             className={cn(
-              "mt-4 rounded-2xl border bg-white p-4 transition-colors md:p-5",
+              "mt-6 rounded-2xl border bg-white p-4 transition-colors md:p-5",
               isDragOver
                 ? "border-[#5141E5] ring-2 ring-[#5141E5]/20"
                 : "border-[#E4E6E9]"
@@ -178,7 +294,7 @@ const UploadPage = () => {
             <PromptInput
               value={config.prompt}
               onChange={(value) => handleConfigChange("prompt", value)}
-              onSubmit={handleGeneratePresentation}
+              onSubmit={handlePrimaryGenerate}
             />
 
             <div className="mt-2">
@@ -201,8 +317,18 @@ const UploadPage = () => {
               </div>
               <Button
                 type="button"
-                onClick={handleGeneratePresentation}
-                disabled={loadingState.isLoading}
+                variant="outline"
+                onClick={handleReviewThenGenerate}
+                disabled={generationBusy}
+                data-testid="review-outline-button"
+                className="h-11 shrink-0 rounded-full px-5 font-syne text-sm font-semibold"
+              >
+                {t("reviewOutline")}
+              </Button>
+              <Button
+                type="button"
+                onClick={handlePrimaryGenerate}
+                disabled={generationBusy}
                 data-testid="generate-presentation-button"
                 className="h-11 shrink-0 rounded-full bg-[#242629] px-5 font-syne text-sm font-semibold text-white shadow-[0_6px_16px_rgba(36,38,41,0.18)] transition hover:bg-[#111214] disabled:cursor-not-allowed disabled:opacity-60"
               >
@@ -212,19 +338,89 @@ const UploadPage = () => {
                 <ArrowUp className="ml-2 h-4 w-4" aria-hidden="true" />
               </Button>
             </div>
+
+            {masterAdmissionError ? (
+              <div
+                className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-900"
+                role="alert"
+                data-testid="master-admission-error"
+              >
+                <span>{t("master.unavailable")}</span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={openMasterCatalog}
+                  className="shrink-0 border-rose-300 bg-white text-rose-800 hover:bg-rose-100"
+                >
+                  {t("master.choose")}
+                </Button>
+              </div>
+            ) : null}
           </div>
         </section>
 
-        <TemplateCatalog
-          selectedTemplateId={selectedTemplateId}
-          selectedThemeId={selectedThemeId}
-          authoredStyleId={authoredStyleId}
-          onSelectStructured={selectStructured}
-          onSelectAuthored={selectAuthored}
-          onSelectTheme={(themeId) =>
-            dispatch(setPptGenUploadState({ selectedTheme: themeId }))
-          }
-        />
+        {masterFeatureEnabled ? (
+          <section
+            className="mx-auto mt-6 max-w-[760px]"
+            aria-labelledby="upload-master-title"
+            data-testid="upload-master-selection"
+          >
+            <div className="flex flex-col gap-3 rounded-2xl border border-[#E5E7EA] bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-700">
+                  <LayoutTemplate className="h-4 w-4" aria-hidden="true" />
+                </span>
+                <div className="min-w-0">
+                  <h2 id="upload-master-title" className="text-sm font-bold text-[#242629]">
+                    {t("master.title")}
+                  </h2>
+                  {companyStandard ? (
+                    <p className="mt-1 truncate text-sm text-[#5E626A]" data-testid="company-standard-summary">
+                      {t("master.selected", {
+                        name: companyStandard.name,
+                        version: companyStandard.revision,
+                        layouts: companyStandard.layoutCount,
+                      })}
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-sm text-[#737780]">
+                      {t("master.optional")}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={openMasterCatalog}
+                  data-testid="open-master-catalog"
+                >
+                  {companyStandard ? t("master.change") : t("master.choose")}
+                </Button>
+              </div>
+            </div>
+          </section>
+        ) : null}
+
+        <section className="mx-auto mt-10 max-w-[1180px]">
+          <TemplateSelection />
+        </section>
+        {masterFeatureEnabled ? (
+          <MasterCatalogDialog
+            analysisSourceFile={analysisSourceFile}
+            entryMode={masterCatalogEntryMode}
+            open={masterCatalogOpen}
+            onAnalysisIdChange={rememberAnalysis}
+            onAnalysisSourceFileChange={selectAiMasterSource}
+            onOpenChange={setMasterCatalogOpen}
+            resumeAnalysisId={resumeAnalysisId}
+            selectedMasterId={companyStandard?.masterId}
+            onApply={applyMaster}
+            onClear={clearMaster}
+          />
+        ) : null}
       </main>
     </Wrapper>
   );

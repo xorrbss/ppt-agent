@@ -1,13 +1,21 @@
 import { PresentationConfig } from "@/app/(presentation-generator)/upload/type";
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
+/** Immutable published company-standard revision selected for a new deck. */
+export interface CompanyStandardSelection {
+  masterId: string;
+  revision: number;
+  digest: `sha256:${string}`;
+  name: string;
+  hasLogo: boolean;
+  primaryFont: string;
+  layoutCount: number;
+}
+
 interface PresentationGenUploadState {
   config: PresentationConfig | null;
 
   files: any;
-
-  /** Selected template id (built-in, custom-<uuid>, or encoded Template V2 identity). */
-  selectedTemplate: string | null;
 
   /** Selected theme-preset id (a DEFAULT_THEMES id) applied to the deck after generation; null = none. */
   selectedTheme: string | null;
@@ -18,17 +26,22 @@ interface PresentationGenUploadState {
 
   /** Authored mode only: selected server-authored visual style id. */
   authoredStyle: string;
+
+  /**
+   * Company furniture/brand pin. This is deliberately independent from
+   * `authoredStyle`: the server resolves both into one immutable composition
+   * before it admits the generation job.
+   */
+  companyStandard: CompanyStandardSelection | null;
 }
 
 const initialState: PresentationGenUploadState = {
   config: null,
   files: [],
-  // New flows wait for TemplateSelection to resolve the single Template V2 default.
-  // Stored legacy ids remain supported during rehydration.
-  selectedTemplate: null,
   selectedTheme: null, // null = no preset; deck keeps the default (theme picked later in the editor)
   authoredVisionQa: false,
   authoredStyle: "default",
+  companyStandard: null,
 };
 
 export const presentationGenUploadSlice = createSlice({
@@ -39,22 +52,24 @@ export const presentationGenUploadSlice = createSlice({
       state,
       action: PayloadAction<Partial<PresentationGenUploadState>>
     ) => {
-      // Partial merge: only assign keys present in the payload so callers can
-      // update a single field (e.g. selectedTemplate) without wiping the rest.
+      // Partial merge: callers can update a single authored input without
+      // clearing the independently selected company standard.
       const {
         config,
         files,
-        selectedTemplate,
         selectedTheme,
         authoredVisionQa,
         authoredStyle,
+        companyStandard,
       } = action.payload;
       if (config !== undefined) state.config = config;
       if (files !== undefined) state.files = files;
-      if (selectedTemplate !== undefined) state.selectedTemplate = selectedTemplate;
       if (selectedTheme !== undefined) state.selectedTheme = selectedTheme;
       if (authoredVisionQa !== undefined) state.authoredVisionQa = authoredVisionQa;
       if (authoredStyle !== undefined) state.authoredStyle = authoredStyle;
+      if (companyStandard !== undefined) {
+        state.companyStandard = companyStandard;
+      }
     },
 
   },

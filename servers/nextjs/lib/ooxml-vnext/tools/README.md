@@ -80,6 +80,37 @@ avoid saving, and close only that presentation. Until those fields are filled,
 the status remains `awaiting-human-witness`; the automated report never claims
 `repair dialog = 0`.
 
+The interactive runner additionally opens the source through a read-only file
+handle with `FileShare.Read` for the full witness. That denies writes and
+deletes, creates the disposable copy directly from the locked handle, verifies
+the copy digest before launch, and derives the `/x` launch target from the
+distinct disposable path. The receipt records those checks instead of using a
+constant `openedByPowerPoint=false` assertion.
+
+## Three-slide repair bisection
+
+The checked-in 90-slide recipe is a preservation-negative fixture. Its
+29-byte OLE sentinel was not constructed or validated as an OLE1/OLE2 embedded
+object, its OLE relationship has no matching `p:oleObj r:id` consumer, and its
+external hyperlink relationship has no matching hyperlink consumer. It must
+not be used as the clean PowerPoint compatibility witness.
+
+Create six small variants that isolate the product-generated package, custom
+XML, external relationship, synthetic OLE part, orphan OLE relationship, and
+the combined 90-slide additions:
+
+```powershell
+cd servers/nextjs
+node --experimental-strip-types --import ./scripts/register-node-test-loader.mjs `
+  ./lib/ooxml-vnext/fixtures/build-powerpoint-repair-bisection.mjs `
+  ./.tmp/ooxml-repair-bisection
+```
+
+Run the exact-locked SDK validator on each file first. Then use
+`01-clean-3.pptx` for the product witness. Only if it opens with no repair
+dialog, use variants 02 through 06 in order to attribute the synthetic-fixture
+repair. Schema validation alone cannot make that attribution.
+
 The repository-contained interactive runner can prepare the same fail-closed
 bundle, optionally run supplemental LibreOffice read-back, and only when no
 PowerPoint process already exists start a visibly separate `/x` instance:

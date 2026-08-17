@@ -67,6 +67,89 @@ function envelope(overrides = {}) {
   };
 }
 
+function retainedReferenceSlide(pageNumber, slideCount) {
+  const title = `Retained page ${pageNumber}`;
+  const body = `resolved semantic body ${pageNumber}`;
+  const referenceLayoutDigest = "sha256:" + "b".repeat(64);
+  const grammar = {
+    schemaVersion: "authored-body-grammar/v3",
+    styleId: "osb-smart-banking",
+    kind: "process-grid",
+    archetype: "process",
+    slideRole: "content",
+    bodyRole: "standard-body",
+    sourceTextDigest: `sha256:${createHash("sha256").update(body, "utf8").digest("hex")}`,
+    bodySlot: { x: 90, y: 160, width: 1100, height: 470 },
+    contentRect: { x: 90, y: 160, width: 1100, height: 470 },
+    referenceLayoutId: "osb-process",
+    referenceLayoutDigest,
+    referenceSourceDigest: "sha256:" + "c".repeat(64),
+    title: {
+      bounds: { x: 90, y: 70, width: 700, height: 60 },
+      textStyle: {
+        fontFamily: "Arial",
+        fontPt: 28,
+        fontWeight: 700,
+        color: "#17335C",
+        alignment: "left",
+        lineHeight: 1.15,
+        verticalAlignment: "middle",
+      },
+      text: title,
+      lines: [title],
+    },
+    blocks: [{
+      id: "process-block-1",
+      kind: "process-step",
+      semanticRole: "process-step",
+      bounds: { x: 120, y: 210, width: 980, height: 260 },
+      shape: "roundRect",
+      fill: "#DCECF6",
+      stroke: "#0879B7",
+      strokeWidth: 1,
+      textInsets: { top: 12, right: 14, bottom: 12, left: 14 },
+      textStyle: {
+        fontFamily: "Arial",
+        fontPt: 16,
+        fontWeight: 500,
+        color: "#17335C",
+        alignment: "left",
+        lineHeight: 1.2,
+        verticalAlignment: "middle",
+      },
+      fontPt: 16,
+      zIndex: 10,
+      text: body,
+    }],
+    decorations: [],
+    semanticRolesUsed: ["process-step"],
+    documentMetadata: null,
+  };
+  grammar.digest = `sha256:${sha256CanonicalJson(grammar)}`;
+  const layoutRolesUsed = [grammar.referenceLayoutId, grammar.archetype, grammar.slideRole];
+  return {
+    slideId: `slide:retained-${pageNumber}`,
+    layoutId: "layout:standard",
+    values: {
+      "standard-title": title,
+      "standard-body": body,
+      __bodyGrammar: JSON.stringify(grammar),
+      __resolvedSnapshotEvidence: JSON.stringify({
+        schemaVersion: "resolved-snapshot-evidence/v1",
+        resolvedTemplateId: "artifact-template-ai/osb-proposal-1-29",
+        resolvedReferenceLayoutDigest: referenceLayoutDigest,
+        resolvedCompositionDigest: "sha256:" + "d".repeat(64),
+        resolvedRuleDigest: "sha256:" + "e".repeat(64),
+        pageNumber,
+        slideCount,
+        semanticRolesUsed: grammar.semanticRolesUsed,
+        layoutRolesUsed,
+        bodyGrammarDigest: grammar.digest,
+      }),
+    },
+  };
+}
+
 test("canonical digest normalizes integral numbers and Unicode NFC", () => {
   assert.equal(
     sha256CanonicalJson({ text: "e\u0301", value: 76.0 }),
@@ -106,6 +189,45 @@ test("authenticated POST returns fully buffered PPTX and read-back receipt", asy
   const bytes = Buffer.from(body.artifact.contentBase64, "base64");
   assert.equal(bytes.byteLength, body.artifact.byteLength);
   assert.equal(bytes.subarray(0, 2).toString("ascii"), "PK");
+});
+
+test("worker read-back preserves resolved snapshot evidence for every page", async () => {
+  const retainedSlides = [
+    retainedReferenceSlide(1, 2),
+    retainedReferenceSlide(2, 2),
+  ];
+  const input = envelope({ slides: retainedSlides });
+  input.digests.specSha256 = sha256CanonicalJson(retainedSlides);
+
+  const result = await executeWorkerExport(input, {
+    signal: new AbortController().signal,
+  });
+
+  assert.deepEqual(
+    result.receipt.slides.map((slide) => ({
+      pageNumber: slide.pageNumber,
+      slideCount: slide.slideCount,
+      referenceLayoutDigest: slide.referenceLayoutDigest,
+      resolvedCompositionDigest: slide.resolvedCompositionDigest,
+      resolvedRuleDigest: slide.resolvedRuleDigest,
+      semanticRolesUsed: slide.semanticRolesUsed,
+      layoutRolesUsed: slide.layoutRolesUsed,
+      bodyGrammarDigest: slide.bodyGrammarDigest,
+    })),
+    retainedSlides.map((slide, index) => {
+      const evidence = JSON.parse(slide.values.__resolvedSnapshotEvidence);
+      return {
+        pageNumber: index + 1,
+        slideCount: retainedSlides.length,
+        referenceLayoutDigest: evidence.resolvedReferenceLayoutDigest,
+        resolvedCompositionDigest: evidence.resolvedCompositionDigest,
+        resolvedRuleDigest: evidence.resolvedRuleDigest,
+        semanticRolesUsed: evidence.semanticRolesUsed,
+        layoutRolesUsed: evidence.layoutRolesUsed,
+        bodyGrammarDigest: evidence.bodyGrammarDigest,
+      };
+    }),
+  );
 });
 
 test("POST fails closed for missing or wrong bearer without leaking configuration", async (t) => {

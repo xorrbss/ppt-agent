@@ -36,15 +36,19 @@ from utils.llm_calls.author_deck import (
 )
 from utils.llm_calls.author_slide import (
     Brand,
+    COMPANY_STANDARD_PAGE_NUMBER_MODE,
     EXACT_RECONSTRUCTION,
     STYLE_REFERENCE,
     apply_style_defaults,
     build_design_system,
+    canonicalize_authored_slide_html,
     fallback_slide_html,
     is_fallback_slide_html,
     is_valid_slide_html,
+    validate_authored_slide_html,
 )
 from utils.llm_calls.critique_slide import SlideCritique
+from utils.renderer_isolation import RendererPolicyError
 
 
 def _run(coro):
@@ -54,6 +58,10 @@ def _run(coro):
 _VALID = (
     "<!DOCTYPE html><html lang='ko'><head><meta charset='utf-8'></head>"
     "<body><h1>제목</h1></body></html>"
+)
+_CANONICAL_VALID = _VALID.replace(
+    "<meta charset='utf-8'>",
+    '<meta charset="utf-8">',
 )
 
 
@@ -138,6 +146,69 @@ def test_is_valid_slide_html_rejects_garbage():
     assert is_valid_slide_html("   ") is False
     assert is_valid_slide_html("not html") is False
     assert is_valid_slide_html("<html><head></head></html>") is False  # no body
+
+
+@pytest.mark.parametrize(
+    "viewport_meta",
+    [
+        '<meta name="viewport" content="width=device-width, initial-scale=1">',
+        "<META CONTENT='width=device-width' NAME='VIEWPORT'>",
+        "<meta content=width=device-width name=viewport>",
+    ],
+)
+def test_authored_html_canonicalization_removes_only_viewport_meta(viewport_meta):
+    html = (
+        "<!doctype html><html><head>"
+        '<meta charset="utf-8">'
+        f"{viewport_meta}<style>body{{margin:0}}</style>"
+        "</head><body><main>Safe slide</main></body></html>"
+    )
+
+    canonical = canonicalize_authored_slide_html(html)
+
+    assert viewport_meta not in canonical
+    assert 'meta charset="utf-8"' in canonical
+    assert "<style>body{margin:0}</style>" in canonical
+    assert validate_authored_slide_html(html) == canonical
+
+
+@pytest.mark.parametrize(
+    "unsafe_html",
+    [
+        (
+            "<!doctype html><html><head>"
+            '<meta http-equiv="refresh" content="0;url=https://attacker.test">'
+            "</head><body><main>Unsafe meta</main></body></html>"
+        ),
+        (
+            "<!doctype html><html><head>"
+            '<meta name="viewport" http-equiv="refresh" content="width=device-width">'
+            "</head><body><main>Mixed unsafe meta</main></body></html>"
+        ),
+        (
+            "<!doctype html><html><head><meta charset='utf-8'></head>"
+            '<body><main onclick="steal()">Unsafe attribute</main></body></html>'
+        ),
+    ],
+)
+def test_authored_html_validation_rejects_unsafe_meta_and_attributes(unsafe_html):
+    with pytest.raises(RendererPolicyError):
+        validate_authored_slide_html(unsafe_html)
+
+
+def test_finalized_illustration_html_removes_prompt_only():
+    html = (
+        "<!doctype html><html><head><meta charset='utf-8'></head><body>"
+        '<img data-illust-prompt="blue chart" src="data:image/png;base64,ignored" '
+        'style="width:200px;height:100px">'
+        "</body></html>"
+    )
+
+    finalized = canonicalize_authored_slide_html(html, finalized=True)
+
+    assert "data-illust-prompt" not in finalized
+    assert 'src="data:image/png;base64,ignored"' in finalized
+    assert 'style="width:200px;height:100px"' in finalized
 
 
 def test_fallback_slide_html_is_valid_and_contains_content():
@@ -328,11 +399,37 @@ def test_author_prompt_uses_cover_exception_and_sequential_bottom_center_marker(
     content = author_slide_mod._author_prompt(
         "content", "DESIGN", _brand(), "PROBLEM", 1, 4
     )
+    company_standard = author_slide_mod._author_prompt(
+        "content",
+        "DESIGN",
+        _brand(),
+        "PROBLEM",
+        1,
+        4,
+        page_number_mode=COMPANY_STANDARD_PAGE_NUMBER_MODE,
+    )
+    company_design = build_design_system(
+        _brand(),
+        page_number_mode=COMPANY_STANDARD_PAGE_NUMBER_MODE,
+    )
+    company_fallback = fallback_slide_html(
+        "content",
+        _brand(),
+        "PROBLEM",
+        1,
+        4,
+        page_number_mode=COMPANY_STANDARD_PAGE_NUMBER_MODE,
+    )
 
     assert "PAGE MARKER FOR THIS SLIDE: OMIT IT" in cover
     assert "render no page number and no footer text" in cover
     assert 'render exactly "01" once' in content
     assert "as the only footer text" in content
+    assert "Company-standard furniture owns page numbering" in company_standard
+    assert 'render exactly "01" once' not in company_standard
+    assert "company-standard furniture owns all page numbering" in company_design
+    assert "Every slide after the cover has exactly one page-number" not in company_design
+    assert 'class="foot"' not in company_fallback
 
 
 def test_temporary_authored_render_preserves_sub_12px_source_css(monkeypatch):
@@ -430,7 +527,7 @@ def test_author_slide_style_reference_keeps_art_direction_multimodal_contract(
     )
 
     user_content = _author_user_content(calls[0])
-    assert html == _VALID
+    assert html == _CANONICAL_VALID
     assert len(calls) == 1
     assert isinstance(user_content, list)
     assert "art direction only" in user_content[0].text
@@ -466,7 +563,7 @@ def test_author_slide_style_reference_preserves_text_only_fallback(monkeypatch, 
         )
     )
 
-    assert html == _VALID
+    assert html == _CANONICAL_VALID
     assert len(calls) == 2
     assert isinstance(_author_user_content(calls[0]), list)
     assert _author_user_content(calls[1]) == _author_user_content(calls[0])[0].text.split(

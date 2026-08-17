@@ -58,6 +58,57 @@ def test_safe_fixture_is_admitted_with_nonce_csp() -> None:
     assert "img-src data:" in admitted.html
 
 
+def test_safe_inline_svg_namespace_opacity_and_presentation_attrs_are_admitted() -> None:
+    source = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 80"
+    width="120" height="80" preserveAspectRatio="xMidYMid meet" focusable="false">
+      <g transform="translate(4 6)" fill="none" stroke="#2563eb" stroke-width="2"
+         stroke-opacity=".75" stroke-linecap="round" stroke-linejoin="round"
+         stroke-dasharray="4 2">
+        <path d="M0 20 L40 0 L80 20 Z" fill="#93c5fd" fill-opacity="0.25"
+              fill-rule="evenodd" clip-rule="evenodd"
+              vector-effect="non-scaling-stroke"></path>
+      </g>
+    </svg>"""
+
+    admitted = renderer_isolation.admit_authored_html(source)
+
+    assert admitted.node_count == 3
+    assert 'xmlns="http://www.w3.org/2000/svg"' in admitted.html
+    assert 'stroke-opacity=".75"' in admitted.html
+    assert 'fill-opacity="0.25"' in admitted.html
+
+
+@pytest.mark.parametrize(
+    "hostile_svg",
+    [
+        '<svg xmlns="https://attacker.test/svg"><path d="M0 0"></path></svg>',
+        '<svg xmlns="http://www.w3.org/1999/xhtml"><path d="M0 0"></path></svg>',
+        (
+            '<svg xmlns="http://www.w3.org/2000/svg" '
+            'xmlns:xlink="http://www.w3.org/1999/xlink"></svg>'
+        ),
+        '<svg xmlns="http://www.w3.org/2000/svg"><g stroke-opacity="-0.1"></g></svg>',
+        '<svg xmlns="http://www.w3.org/2000/svg"><g stroke-opacity="1.01"></g></svg>',
+        '<svg xmlns="http://www.w3.org/2000/svg"><path fill-opacity="NaN"></path></svg>',
+        '<svg xmlns="http://www.w3.org/2000/svg"><path fill-opacity="50%"></path></svg>',
+        '<svg xmlns="http://www.w3.org/2000/svg" onload="steal()"></svg>',
+        (
+            '<svg xmlns="http://www.w3.org/2000/svg">'
+            '<path href="https://attacker.test/payload" d="M0 0"></path></svg>'
+        ),
+        (
+            '<svg xmlns="http://www.w3.org/2000/svg">'
+            '<path xlink:href="data:text/html,active" d="M0 0"></path></svg>'
+        ),
+    ],
+)
+def test_inline_svg_rejects_invalid_namespace_opacity_and_active_attrs(
+    hostile_svg: str,
+) -> None:
+    with pytest.raises(renderer_isolation.RendererPolicyError):
+        renderer_isolation.admit_authored_html(hostile_svg)
+
+
 @pytest.mark.parametrize(
     "malformed",
     ["<main><p>unclosed</main>", "<main><p>unclosed", "</main>"],

@@ -5,6 +5,7 @@ import { deckMasterRole, normalizeDeckMasterContract } from "./contracts.ts";
 import type { DeckMasterBinaryAsset } from "./master-compiler-contracts.ts";
 import {
   assertDeckMasterReadBack,
+  compileAuthoredDeckMasterParts,
   compileDeckMasterParts,
   readDeckMasterParts,
 } from "./master-compiler.ts";
@@ -117,6 +118,7 @@ class OoxmlMasterCompilerAdapter implements OoxmlMasterCompilerPort {
       entries,
       revision: 0,
       masterContract: null,
+      authoredMasterContract: null,
       masterRelationshipId: presentationMasterRelationshipId(entries),
     };
     this.#sessions.set(document, session);
@@ -173,6 +175,7 @@ class OoxmlMasterCompilerAdapter implements OoxmlMasterCompilerPort {
       entries,
       revision: 0,
       masterContract: null,
+      authoredMasterContract: null,
       masterRelationshipId: null,
     };
     this.#sessions.set(document, session);
@@ -247,6 +250,7 @@ class OoxmlMasterCompilerAdapter implements OoxmlMasterCompilerPort {
       );
       session.masterRelationshipId = relationshipId;
       session.masterContract = null;
+      session.authoredMasterContract = null;
       for (const name of ["[Content_Types].xml", PRESENTATION_PART, PRESENTATION_RELS]) {
         session.generatedParts.add(name);
       }
@@ -286,6 +290,7 @@ class OoxmlMasterCompilerAdapter implements OoxmlMasterCompilerPort {
       }
       session.ownedMasterParts.clear();
       session.masterContract = null;
+      session.authoredMasterContract = null;
       session.masterRelationshipId = null;
       return this.#mutationReceipt(session, "DELETE_MASTER", before);
     });
@@ -318,16 +323,38 @@ class OoxmlMasterCompilerAdapter implements OoxmlMasterCompilerPort {
       fontSizePt: placeholder.textStyle.fontPt,
       bold: placeholder.type === "title",
     }));
+    const pageNumberContract = session.masterContract.furniture.find(({ kind }) => kind === "pageNumber");
+    const pageNumberMapping = metadata.furniture.find(({ kind }) => kind === "pageNumber");
     const compiled = materializeSlideParts({
       slideId: request.slideId,
       layoutId: request.layoutId,
       layoutPartName: layoutMetadata.partName,
       placeholders,
       values: request.values,
+      ...(pageNumberContract && pageNumberMapping
+        ? {
+            pageNumberFurniture: {
+              idx: pageNumberMapping.shapeId,
+              bounds: pageNumberContract.bounds,
+              fontFamily: session.masterContract.fontManifest.primary,
+              fontSizePt: 10,
+              fill: pageNumberContract.fill ?? "#6D7785",
+            },
+          }
+        : {}),
       masterDigest: metadata.contractDigest,
       contractVersion: metadata.version,
     });
     return this.#transaction(session, () => {
+      for (const binary of compiled.binaryParts) {
+        const existing = session.entries.get(binary.partName);
+        if (existing && !existing.equals(binary.bytes)) {
+          throw new Error(`Retained native asset collides with an existing package part: ${binary.partName}`);
+        }
+        session.entries.set(binary.partName, binary.bytes);
+        ensureContentTypeOverride(session.entries, binary.partName, binary.contentType);
+        session.generatedParts.add(binary.partName);
+      }
       session.entries.set(slidePart, compiled.slideXml);
       session.entries.set(slideRels, compiled.relationshipsXml);
       ensureContentTypeOverride(session.entries, slidePart, OOXML_CONTENT_TYPES.slide);
@@ -403,7 +430,10 @@ class OoxmlMasterCompilerAdapter implements OoxmlMasterCompilerPort {
     assets: readonly DeckMasterBinaryAsset[],
   ): void {
     const normalized = normalizeDeckMasterContract(contract);
-    const compiled = compileDeckMasterParts(normalized, assets);
+    const authored = normalized.authoredManifest;
+    const compiled = authored
+      ? compileAuthoredDeckMasterParts(authored as Parameters<typeof compileAuthoredDeckMasterParts>[0], assets)
+      : compileDeckMasterParts(normalized, assets);
     const updating = session.entries.has(MASTER_PART);
     this.#transaction(session, () => {
       const compiledPartNames = new Set(compiled.parts.keys());
@@ -444,7 +474,9 @@ class OoxmlMasterCompilerAdapter implements OoxmlMasterCompilerPort {
         session.generatedParts.add(PRESENTATION_PART);
       }
       session.masterContract = normalized;
-      assertDeckMasterReadBack(normalized, session.entries);
+      session.authoredMasterContract = authored ?? null;
+      if (authored) readDeckMasterParts(session.entries);
+      else assertDeckMasterReadBack(normalized, session.entries);
       const after = graphFor(session);
       if (before.classification === "QUARANTINED" || after.classification === "QUARANTINED") {
         throw new Error("Master compilation cannot cross a quarantine boundary");
@@ -458,6 +490,7 @@ class OoxmlMasterCompilerAdapter implements OoxmlMasterCompilerPort {
     const patchSliceParts = new Set(session.patchSliceParts);
     const ownedMasterParts = new Set(session.ownedMasterParts);
     const masterContract = session.masterContract;
+    const authoredMasterContract = session.authoredMasterContract;
     const masterRelationshipId = session.masterRelationshipId;
     try {
       return operation();
@@ -470,6 +503,7 @@ class OoxmlMasterCompilerAdapter implements OoxmlMasterCompilerPort {
       session.ownedMasterParts.clear();
       for (const name of ownedMasterParts) session.ownedMasterParts.add(name);
       session.masterContract = masterContract;
+      session.authoredMasterContract = authoredMasterContract;
       session.masterRelationshipId = masterRelationshipId;
       throw error;
     }

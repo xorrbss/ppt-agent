@@ -262,6 +262,12 @@ def test_fixture_database_report_has_full_coverage_quarantine_and_drain(tmp_path
     assert report["classification_counts"]["invalid"] == 1
     assert report["quarantine"][0]["reason"] == "slide_index_invalid"
     assert report["active_job_drain"]["required"] is True
+    assert report["deletion_readiness"]["status"] == "blocked"
+    assert report["deletion_readiness"]["physical_deletion_performed"] is False
+    manifest_entry = report["deletion_readiness"]["manifest"][0]
+    assert manifest_entry["eligible"] is False
+    assert "non_authored_compatibility_required" in manifest_entry["blockers"]
+    assert "active_job_drain_incomplete" in manifest_entry["blockers"]
     assert async_report["classification_counts"] == report["classification_counts"]
     assert len(report["evidence_sha256"]) == 64
     json.dumps(report)

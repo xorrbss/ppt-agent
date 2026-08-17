@@ -8,7 +8,11 @@ import inspect
 from pydantic import ValidationError
 import pytest
 
-from models.authored_vnext.master.contract import DeckMasterContract, VisualDirection
+from models.authored_vnext.master.contract import (
+    DeckMasterContract,
+    SemanticMasterElement,
+    VisualDirection,
+)
 from models.authored_vnext.master.slide import SlideDraft
 from models.authored_vnext.master.operations import (
     CreateDraftRequest,
@@ -26,11 +30,58 @@ from services.authored_vnext.master.file_repository import (
 )
 from services.authored_vnext.master.service import AuthoredVNextMasterService
 from services.authored_vnext.master.validation import validate_master
+from utils.renderer_isolation import (
+    RendererPolicyError,
+    admit_authored_html,
+    admit_static_output_html,
+)
 from tests.support.authored_vnext_master_fixture import (
     ZERO_DIGEST,
     long_title_slide_payload,
     master_contract_payload,
 )
+
+
+def _furniture_only_payload() -> dict[str, object]:
+    payload = master_contract_payload()
+    for layout in payload["layouts"].values():
+        layout["slots"] = []
+    payload["titleStressCorpus"] = []
+    payload["aiEditZones"] = [
+        {
+            "id": "ai-zone:main-content",
+            "scope": {
+                "kind": "layout",
+                "layoutId": payload["layouts"]["standard"]["id"],
+            },
+            "bounds": {"x": 100.0, "y": 120.0, "width": 1080.0, "height": 500.0},
+        }
+    ]
+    return payload
+
+
+def test_semantic_element_accepts_legacy_ai_editability_key_but_emits_canonical_key() -> None:
+    payload = {
+        "id": "element:legacy-open-tab",
+        "type": "text",
+        "scope": {"kind": "layout", "layoutId": "layout:standard"},
+        "bounds": {"x": 100.0, "y": 100.0, "width": 240.0, "height": 86.0},
+        "rotation": 0.0,
+        "zIndex": 10,
+        "visibility": "layoutOnly",
+        "editableByUser": True,
+        "editableByAi": False,
+        "locked": False,
+        "style": {"color": "#0F172A"},
+        "content": {"text": "Fixed copy", "role": "fixed-copy"},
+    }
+
+    element = SemanticMasterElement.model_validate(payload)
+    dumped = element.model_dump(mode="json", by_alias=True)
+
+    assert element.editable_by_ai is False
+    assert dumped["editableByAI"] is False
+    assert "editableByAi" not in dumped
 
 
 def test_contract_is_strict_nfc_and_digest_is_server_recomputed() -> None:
@@ -107,7 +158,145 @@ def test_contract_requires_four_distinct_semantic_layouts() -> None:
         DeckMasterContract.model_validate(wrong_kind)
 
 
-def test_validation_fails_closed_on_geometry_overlap_and_stress_contract() -> None:
+def test_furniture_only_contract_accepts_geometry_only_ai_edit_zones() -> None:
+    payload = _furniture_only_payload()
+    contract = DeckMasterContract.model_validate(payload)
+
+    assert validate_master(contract).valid is True
+    assert all(
+        not layout.slots
+        for layout in (
+            contract.layouts.cover,
+            contract.layouts.section,
+            contract.layouts.standard,
+            contract.layouts.long_title,
+        )
+    )
+    assert contract.ai_edit_zones[0].model_dump(mode="json", by_alias=True) == {
+        "id": "ai-zone:main-content",
+        "scope": {"kind": "layout", "layoutId": "layout:standard-title"},
+        "bounds": {"x": 100.0, "y": 120.0, "width": 1080.0, "height": 500.0},
+    }
+
+    content_owning_zone = _furniture_only_payload()
+    content_owning_zone["aiEditZones"][0]["text"] = "master-owned content"
+    with pytest.raises(ValidationError):
+        DeckMasterContract.model_validate(content_owning_zone)
+
+    unknown_layout = _furniture_only_payload()
+    unknown_layout["aiEditZones"][0]["scope"]["layoutId"] = "layout:missing"
+    with pytest.raises(ValidationError, match="unknown layout"):
+        DeckMasterContract.model_validate(unknown_layout)
+
+
+def test_ai_edit_zone_intent_policies_round_trip_without_breaking_legacy_shape() -> None:
+    payload = _furniture_only_payload()
+    payload["aiEditZones"][0].update(
+        {
+            "instruction": "핵심 요구사항을 3개의 번호 카드로 구성",
+            "contentType": "cards",
+            "pattern": "numberedCards",
+            "sourcePolicy": "documentOnly",
+            "emptyBehavior": "fallback",
+            "fallbackText": "문서 근거가 없습니다.",
+            "maxChars": 240,
+            "maxItems": 3,
+            "density": "balanced",
+            "textAlign": "right",
+            "stylePolicy": "inheritTemplate",
+        }
+    )
+
+    contract = DeckMasterContract.model_validate(payload)
+    zone = contract.ai_edit_zones[0]
+    dumped = zone.model_dump(mode="json", by_alias=True)
+    assert dumped["instruction"] == "핵심 요구사항을 3개의 번호 카드로 구성"
+    assert dumped["contentType"] == "cards"
+    assert dumped["sourcePolicy"] == "documentOnly"
+    assert dumped["textAlign"] == "right"
+    assert dumped["stylePolicy"] == "inheritTemplate"
+
+    reentered = DeckMasterContract.model_validate(
+        contract.model_dump(mode="json", by_alias=True)
+    )
+    assert reentered.ai_edit_zones[0] == zone
+
+    missing_fallback = _furniture_only_payload()
+    missing_fallback["aiEditZones"][0]["emptyBehavior"] = "fallback"
+    with pytest.raises(ValidationError, match="requires fallbackText"):
+        DeckMasterContract.model_validate(missing_fallback)
+
+    whitespace_fallback = _furniture_only_payload()
+    whitespace_fallback["aiEditZones"][0].update(
+        {"emptyBehavior": "fallback", "fallbackText": "   "}
+    )
+    with pytest.raises(ValidationError, match="requires fallbackText"):
+        DeckMasterContract.model_validate(whitespace_fallback)
+
+    outside_canvas = _furniture_only_payload()
+    outside_canvas["aiEditZones"][0]["bounds"] = {
+        "x": 1200.0,
+        "y": 120.0,
+        "width": 1080.0,
+        "height": 500.0,
+    }
+    with pytest.raises(ValidationError, match="inside the canvas"):
+        DeckMasterContract.model_validate(outside_canvas)
+
+
+def test_legacy_typography_slots_and_fit_stress_do_not_affect_master_validation() -> None:
+    baseline_payload = master_contract_payload()
+    legacy_variant = deepcopy(baseline_payload)
+    for layout in legacy_variant["layouts"].values():
+        for index, slot in enumerate(layout["slots"]):
+            slot["bounds"] = {
+                "x": float(index),
+                "y": float(index),
+                "width": 1.0,
+                "height": 1.0,
+            }
+            slot["ownership"] = {"locked": True, "modelWritable": False}
+    legacy_variant["fontManifest"].update(
+        {
+            "primary": "Legacy Display Face",
+            "windowsFallback": "Unrelated Legacy Fallback",
+            "fallbacks": ["Another Legacy Face"],
+        }
+    )
+    legacy_variant["semanticStyles"]["title"].update(
+        {"fontPt": 96.0, "minFontPt": 8.0, "maxLines": 12}
+    )
+    legacy_variant["semanticStyles"]["title"]["margins"] = {
+        "leftPt": 72.0,
+        "rightPt": 0.0,
+        "topPt": 72.0,
+        "bottomPt": 0.0,
+    }
+    legacy_variant["semanticStyles"]["body"].update(
+        {"fontPt": 8.0, "minFontPt": 8.0, "lineHeight": 2.0}
+    )
+    legacy_variant["fitPolicy"].update(
+        {
+            "preferredFontPt": 16.0,
+            "minimumFontPt": 72.0,
+            "promotionLayoutId": "layout:cover",
+        }
+    )
+    legacy_variant["titleStressCorpus"][0]["expectedLines"] = ["legacy mismatch"]
+
+    baseline = DeckMasterContract.model_validate(baseline_payload)
+    variant = DeckMasterContract.model_validate(legacy_variant)
+
+    assert validate_master(baseline) == validate_master(variant)
+    dumped = variant.model_dump(mode="json", by_alias=True)
+    assert dumped["fontManifest"]["primary"] == "Legacy Display Face"
+    assert dumped["semanticStyles"]["title"]["fontPt"] == 96.0
+    assert dumped["layouts"]["standard"]["slots"][0]["bounds"]["width"] == 1.0
+    assert dumped["fitPolicy"]["promotionLayoutId"] == "layout:cover"
+    assert dumped["titleStressCorpus"][0]["expectedLines"] == ["legacy mismatch"]
+
+
+def test_validation_fails_closed_on_furniture_ai_zone_overlap() -> None:
     valid = seal_master_contract(
         DeckMasterContract.model_validate(master_contract_payload())
     )
@@ -118,26 +307,45 @@ def test_validation_fails_closed_on_geometry_overlap_and_stress_contract() -> No
     assert summary.title_fit_failures == 0
 
     overlap_payload = master_contract_payload()
-    overlap_payload["furniture"]["divider"]["bounds"] = {
-        "x": 100.0,
-        "y": 420.0,
-        "width": 1000.0,
-        "height": 2.0,
-    }
+    overlap_payload["aiEditZones"] = [
+        {
+            "id": "ai-zone:over-divider",
+            "scope": {"kind": "common"},
+            "bounds": {"x": 100.0, "y": 671.0, "width": 1000.0, "height": 4.0},
+        }
+    ]
     overlapping = seal_master_contract(
         DeckMasterContract.model_validate(overlap_payload)
     )
     rejected = validate_master(overlapping)
     assert rejected.valid is False
-    assert rejected.writable_overlaps == 2
+    assert rejected.writable_overlaps == 1
     assert {
         issue.code for issue in rejected.errors
-    } == {"authored_vnext_master_furniture_body_geometry_overlap"}
+    } == {"authored_vnext_master_furniture_ai_zone_geometry_overlap"}
+
+    empty_copy_payload = master_contract_payload()
+    empty_copy_payload["furniture"]["header"]["text"] = ""
+    empty_copy_payload["furniture"]["footer"]["text"] = ""
+    empty_copy_payload["aiEditZones"] = [
+        {
+            "id": "ai-zone:empty-header-area",
+            "scope": {
+                "kind": "layout",
+                "layoutId": empty_copy_payload["layouts"]["standard"]["id"],
+            },
+            "bounds": {"x": 100.0, "y": 30.0, "width": 300.0, "height": 26.0},
+        }
+    ]
+    empty_copy = seal_master_contract(
+        DeckMasterContract.model_validate(empty_copy_payload)
+    )
+    assert validate_master(empty_copy).valid is True
 
     broken_stress = master_contract_payload()
     broken_stress["titleStressCorpus"][0]["expectedLines"] = ["다른 제목"]
-    with pytest.raises(ValidationError, match="stress text"):
-        DeckMasterContract.model_validate(broken_stress)
+    compatible = DeckMasterContract.model_validate(broken_stress)
+    assert validate_master(compatible).valid is True
 
 
 def test_file_repository_keeps_immutable_revisions_and_never_saves_preview_html(
@@ -182,6 +390,13 @@ def test_file_repository_keeps_immutable_revisions_and_never_saves_preview_html(
     ]
     assert preview.html.startswith("<!doctype html>")
     assert repeated_preview == preview
+    with pytest.raises(RendererPolicyError):
+        admit_authored_html(preview.html)
+    admitted = admit_static_output_html(preview.html)
+    assert admitted.source_digest.startswith("sha256:")
+    assert "data-canonical-digest" in admitted.html
+    assert "data-master-furniture" in admitted.html
+    assert "data-body-slot" in admitted.html
     assert all("<!doctype html>" not in path.read_text("utf-8") for path in store.rglob("*.json"))
     assert not (store / "candidates").exists()
 

@@ -233,14 +233,80 @@ def build_deck_quality_report(
         _read(master, "masterDigest", "master_digest", default=None)
     )
     contract_master_digest = _string(_read(contract, "digest", default=None))
-    font_digest = _string(
+    contract_font_digest = _string(
         _read(
             _read(contract, "fontManifest", "font_manifest", default=None),
             "digest",
             default=None,
         )
     )
-    layout_digest = canonical_digest(_plain(_read(contract, "layouts", default={})))
+    contract_layout_digest = canonical_digest(
+        _plain(_read(contract, "layouts", default={}))
+    )
+    composition = _read(deck, "composition", default=None)
+    if composition is None:
+        expected_font_digest = contract_font_digest
+        expected_layout_digest = contract_layout_digest
+        if (
+            master_digest is None
+            or contract_master_digest is None
+            or master_digest != contract_master_digest
+        ):
+            issues.append(
+                GateIssue(
+                    code="authored_vnext_master_digest_mismatch",
+                    path="deck.master.masterDigest",
+                    message="Deck master digest must identify the supplied published contract.",
+                )
+            )
+    else:
+        composition_master_digest = _string(
+            _read(composition, "masterDigest", "master_digest", default=None)
+        )
+        effective_contract_digest = _string(
+            _read(
+                composition,
+                "effectiveContractDigest",
+                "effective_contract_digest",
+                default=None,
+            )
+        )
+        expected_font_digest = _string(
+            _read(master, "fontManifestDigest", "font_manifest_digest", default=None)
+        )
+        expected_layout_digest = _string(
+            _read(master, "layoutRegistryDigest", "layout_registry_digest", default=None)
+        )
+        if (
+            master_digest is None
+            or composition_master_digest is None
+            or master_digest != composition_master_digest
+        ):
+            issues.append(
+                GateIssue(
+                    code="authored_vnext_composition_master_digest_mismatch",
+                    path="deck.composition.masterDigest",
+                    message=(
+                        "Composition master digest must match the durable published "
+                        "deck master pin."
+                    ),
+                )
+            )
+        if (
+            contract_master_digest is None
+            or effective_contract_digest is None
+            or contract_master_digest != effective_contract_digest
+        ):
+            issues.append(
+                GateIssue(
+                    code="authored_vnext_composition_effective_contract_digest_mismatch",
+                    path="deck.composition.effectiveContractDigest",
+                    message=(
+                        "Supplied rendering contract must match the composition's "
+                        "sealed effective contract digest."
+                    ),
+                )
+            )
     source_digest = _string(
         _read(deck, "sourceDigest", "source_digest", default=None)
     )
@@ -248,15 +314,6 @@ def build_deck_quality_report(
         _plain(_read(_read(contract, "tokens", default={}), "colors", default={}))
     )
     frame_digest = canonical_digest(_plain(_read(contract, "furniture", default={})))
-    if master_digest != contract_master_digest:
-        issues.append(
-            GateIssue(
-                code="authored_vnext_master_digest_mismatch",
-                path="deck.master.masterDigest",
-                message="Deck master digest must identify the supplied published contract.",
-            )
-        )
-
     ids = [_slide_id(_read(item, "slide", default=None)) for item in slides]
     colors = [(slide_id, color_digest) for slide_id in ids]
     frames = [(slide_id, frame_digest) for slide_id in ids]
@@ -327,14 +384,14 @@ def build_deck_quality_report(
             slot_mismatches.append(slide_id)
 
     checks = {
-        "fonts": _consistency_check(fonts, font_digest),
+        "fonts": _consistency_check(fonts, expected_font_digest),
         "colors": _consistency_check(colors, color_digest),
         "frame": _consistency_check(frames, frame_digest),
         "page_numbers": ConsistencyCheck(
             passed=not page_mismatches,
             mismatched_slide_ids=page_mismatches,
         ),
-        "layouts": _consistency_check(layouts, layout_digest),
+        "layouts": _consistency_check(layouts, expected_layout_digest),
         "slots": ConsistencyCheck(
             passed=not slot_mismatches,
             mismatched_slide_ids=slot_mismatches,

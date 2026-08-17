@@ -31,6 +31,11 @@ import HeaderToolbar from "./header/HeaderToolbar";
 import PresentationTitleEditor from "./header/PresentationTitleEditor";
 import RegenerateConfirmDialog from "./header/RegenerateConfirmDialog";
 import type { PptxExportMode } from "./header/types";
+import MasterLayoutBadge from "./header/MasterLayoutBadge";
+import {
+  masterPinCommandContext,
+  presentationMasterPin,
+} from "../utils/masterPresentation";
 import type {
   WorkspaceCommandDispatcher,
   WorkspacePageRemakeRequester,
@@ -85,6 +90,9 @@ const PresentationHeader = ({
   const { presentationData, isStreaming, enableHtmlSelector } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
+  const appliedMasterPin = isAuthoredDeck
+    ? presentationMasterPin(presentationData)
+    : null;
   // Compatibility facade for isolated header consumers. The presentation page
   // always supplies the server-derived projection; this fallback is removable
   // once those stories/tests consume PresentationShell as well.
@@ -183,6 +191,7 @@ const PresentationHeader = ({
           format: "pptx",
           ...(pptxMode ? { pptx_mode: pptxMode } : {}),
           ...(pptxMode ? { font_embedding: fontEmbedding } : {}),
+          ...masterPinCommandContext(appliedMasterPin),
         },
       });
     } catch {
@@ -195,7 +204,10 @@ const PresentationHeader = ({
     try {
       await onWorkspaceCommand("PDF로 내보내기", {
         commandType: "export.pdf",
-        context: { format: "pdf" },
+        context: {
+          format: "pdf",
+          ...masterPinCommandContext(appliedMasterPin),
+        },
       });
     } catch {
       // The durable timeline owns request errors and explicit retry UI.
@@ -290,6 +302,13 @@ const PresentationHeader = ({
           ) : (
             titleBlock
           )}
+          {presentationData && isAuthoredDeck && (
+            <MasterLayoutBadge
+              presentationId={presentation_id}
+              presentation={presentationData}
+              currentSlide={currentSlide}
+            />
+          )}
         </div>
 
         <div className="flex shrink-0 items-center gap-2.5">
@@ -309,6 +328,7 @@ const PresentationHeader = ({
             <AuthoredHeaderActions
               presentation_id={presentation_id}
               theme={presentationData.theme}
+              currentMasterPin={appliedMasterPin}
               currentSlide={currentSlide}
               isStreaming={isStreaming}
               isPresentationSaving={isPresentationSaving}
@@ -346,6 +366,7 @@ const PresentationHeader = ({
           {resolvedHeaderFeatures.exportActions && (
             <ExportMenu
               isAuthoredDeck={isAuthoredDeck}
+              hasMasterPin={appliedMasterPin !== null}
               exportDisabled={exportDisabled}
               workspaceCommandsEnabled={workspaceCommandsEnabled}
               onExportPptx={handleExportPptx}

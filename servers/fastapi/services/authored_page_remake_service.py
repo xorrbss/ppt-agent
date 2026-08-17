@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+from html.parser import HTMLParser
 import json
 import logging
 import time
@@ -605,6 +606,73 @@ def _validated_preview_data(
             "authored_page_remake_candidate_invalid", stage="publish_validation"
         )
     return data
+
+
+class _MasterOwnedBodyTextParser(HTMLParser):
+    """Extract text only from the canonical writable body section."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.depth = 0
+        self.matches = 0
+        self.parts: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs) -> None:
+        attributes = dict(attrs)
+        classes = str(attributes.get("class") or "").split()
+        if self.depth:
+            self.depth += 1
+        elif (
+            tag == "section"
+            and "body" in classes
+            and str(attributes.get("data-body-slot") or "").startswith("slot:")
+        ):
+            self.matches += 1
+            self.depth = 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if self.depth:
+            self.depth -= 1
+
+    def handle_data(self, data: str) -> None:
+        if self.depth and data.strip():
+            self.parts.append(data.strip())
+
+
+async def validated_authored_page_remake_candidate_body(
+    *,
+    session: AsyncSession,
+    presentation_id: uuid.UUID,
+    slide_index: int,
+    preview_task_id: str,
+) -> str:
+    """Validate the existing preview CAS and expose only model-owned body text."""
+
+    presentation, slides = await _load_deck(session, presentation_id, slide_index)
+    if slide_index < 0 or slide_index >= len(slides):
+        raise AuthoredPageRemakeError(
+            "authored_page_remake_slide_out_of_range", stage="publish_validation"
+        )
+    task = await session.get(AsyncPresentationGenerationTaskModel, preview_task_id)
+    if task is None:
+        raise AuthoredPageRemakeError(
+            "authored_page_remake_preview_not_found", stage="publish_validation"
+        )
+    data = _validated_preview_data(
+        task,
+        presentation=presentation,
+        slide=slides[slide_index],
+        slide_index=slide_index,
+    )
+    parser = _MasterOwnedBodyTextParser()
+    parser.feed(str(data["candidate_html"]))
+    body = "\n".join(parser.parts).strip()
+    if parser.matches != 1 or not body:
+        raise AuthoredPageRemakeError(
+            "authored_vnext_regenerate_body_contract_invalid",
+            stage="publish_validation",
+        )
+    return body
 
 
 async def publish_authored_page_remake(

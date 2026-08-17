@@ -7,6 +7,7 @@ from typing import Protocol, Sequence, runtime_checkable
 from pydantic import Field
 
 from models.authored_vnext.master.base import Digest, StrictCamelModel
+from models.authored_vnext.deck.composition import AuthoredCompositionPin
 from models.authored_vnext.master.contract import DeckMasterContract
 from models.authored_vnext.master.operations import ExportPlan, ExportSlidePlan
 from models.authored_vnext.master.slide import SlideSpecV2
@@ -21,12 +22,21 @@ class CoreBridgeCheckpoint(StrictCamelModel):
     layout_registry_digest: Digest
     font_manifest_digest: Digest
     source_digest: Digest
+    composition: AuthoredCompositionPin | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 class CoreBridgeArtifact(StrictCamelModel):
     artifact_digest: Digest
     storage_reference: str = Field(min_length=1)
     compiler_port: str = "AuthoringCoreBridgePort"
+
+
+def _expected_contract_digest(checkpoint: CoreBridgeCheckpoint) -> str:
+    if checkpoint.composition is not None:
+        return checkpoint.composition.effective_contract_digest
+    return checkpoint.master_digest
 
 
 @runtime_checkable
@@ -57,15 +67,16 @@ class OoxmlCoreBridgeAdapter:
         slides: Sequence[SlideSpecV2],
         checkpoint: CoreBridgeCheckpoint,
     ) -> CoreBridgeArtifact:
-        if master.digest != checkpoint.master_digest:
+        if master.digest != _expected_contract_digest(checkpoint):
             raise ValueError("core bridge master checkpoint mismatch")
-        if master.font_manifest.digest != checkpoint.font_manifest_digest:
-            raise ValueError("core bridge font checkpoint mismatch")
-        layout_digest = canonical_digest(
-            master.layouts.model_dump(mode="json", by_alias=True)
-        )
-        if layout_digest != checkpoint.layout_registry_digest:
-            raise ValueError("core bridge layout checkpoint mismatch")
+        if checkpoint.composition is None:
+            if master.font_manifest.digest != checkpoint.font_manifest_digest:
+                raise ValueError("core bridge font checkpoint mismatch")
+            layout_digest = canonical_digest(
+                master.layouts.model_dump(mode="json", by_alias=True)
+            )
+            if layout_digest != checkpoint.layout_registry_digest:
+                raise ValueError("core bridge layout checkpoint mismatch")
         canonical = canonical_digest(
             {
                 "checkpoint": checkpoint.model_dump(mode="json", by_alias=True),
@@ -79,7 +90,7 @@ class OoxmlCoreBridgeAdapter:
             compiler_version="ooxml-master-port/v1",
             master_id=master.master_id,
             master_revision=master_revision,
-            master_digest=checkpoint.master_digest,
+            master_digest=master.digest,
             canonical_digest=canonical,
             source_digest=checkpoint.source_digest,
             slides=[
@@ -116,7 +127,7 @@ class DeterministicCoreBridge:
         slides: Sequence[SlideSpecV2],
         checkpoint: CoreBridgeCheckpoint,
     ) -> CoreBridgeArtifact:
-        if master.digest != checkpoint.master_digest:
+        if master.digest != _expected_contract_digest(checkpoint):
             raise ValueError("deterministic bridge master checkpoint mismatch")
         receipt = {
             "masterRevision": master_revision,
@@ -147,7 +158,7 @@ class DurableExportPlanBridge:
         slides: Sequence[SlideSpecV2],
         checkpoint: CoreBridgeCheckpoint,
     ) -> CoreBridgeArtifact:
-        if master.digest != checkpoint.master_digest:
+        if master.digest != _expected_contract_digest(checkpoint):
             raise ValueError("export plan master checkpoint mismatch")
         receipt = {
             "schemaVersion": "authored-vnext-export-plan-receipt/v1",

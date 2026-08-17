@@ -272,8 +272,35 @@ def test_deck_gate_and_montage_verdicts_are_derived() -> None:
     assert len(montage.tiles) == 10
     invalid = montage.model_dump(mode="json", by_alias=True)
     invalid["tiles"].pop()
-    with pytest.raises(ValidationError, match="at least 10"):
+    with pytest.raises(ValidationError, match="contain every slide"):
         MontageManifest.model_validate_json(json.dumps(invalid))
+
+
+def test_montage_accepts_counts_up_to_the_template_default() -> None:
+    payload = {
+        "deckId": "deck:shorter-than-default",
+        "deckDigest": D3,
+        "deckSize": 8,
+        "columns": 5,
+        "tiles": [
+            {"slideId": f"slide:{index}", "slideIndex": index, "pngDigest": D2}
+            for index in range(8)
+        ],
+        "montageDigest": D1,
+    }
+
+    assert MontageManifest.model_validate(payload).deck_size == 8
+
+    unsupported = {
+        **payload,
+        "deckSize": 11,
+        "tiles": [
+            {"slideId": f"slide:{index}", "slideIndex": index, "pngDigest": D2}
+            for index in range(11)
+        ],
+    }
+    with pytest.raises(ValidationError, match="between 1 and 10, or exactly 90"):
+        MontageManifest.model_validate(unsupported)
 
 
 def test_deck_snapshot_rejects_mixed_source_or_master_digests() -> None:

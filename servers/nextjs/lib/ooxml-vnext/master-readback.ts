@@ -19,6 +19,7 @@ import type {
   SemanticFurnitureMapping,
   SemanticLayoutMapping,
   SemanticPlaceholderMapping,
+  SemanticElementExportMapping,
 } from "./master-compiler-contracts.ts";
 
 const MASTER_PART = "ppt/slideMasters/slideMaster1.xml";
@@ -79,6 +80,12 @@ function parseTokenValue(kind: string, value: string): DeckMasterTokenValue {
   if (kind === "boolean" && (value === "true" || value === "false")) return value === "true";
   if (kind === "number" && value.trim() !== "" && Number.isFinite(Number(value))) return Number(value);
   throw new Error(`Deck master metadata contains an invalid ${kind} token`);
+}
+
+function parseOptionalBoolean(value: string | undefined, name: string): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (value === "true" || value === "false") return value === "true";
+  throw new Error(`Deck master metadata contains an invalid ${name}`);
 }
 
 function parseMetadata(masterXml: string): DeckMasterSemanticMetadata {
@@ -187,6 +194,43 @@ function parseMetadata(masterXml: string): DeckMasterSemanticMetadata {
       placeholders,
     });
   }
+  const semanticElementsBlock = /<(?:[A-Za-z_][\w.-]*:)?semanticElements\b[^>]*>([\s\S]*?)<\/(?:[A-Za-z_][\w.-]*:)?semanticElements>/.exec(body)?.[1];
+  const semanticElements: SemanticElementExportMapping[] = [];
+  if (semanticElementsBlock !== undefined) {
+    for (const match of semanticElementsBlock.matchAll(/<(?:[A-Za-z_][\w.-]*:)?element\b([^>]*)\/>/g)) {
+      const item = attributes(match[1]);
+      const cropValues = item.crop ? item.crop.split(",").map(Number) : [];
+      const crop = cropValues.length === 4 && cropValues.every(Number.isFinite)
+        ? { x: cropValues[0], y: cropValues[1], width: cropValues[2], height: cropValues[3] }
+        : null;
+      const opacity = item.opacity === undefined ? undefined : Number(item.opacity);
+      if (opacity !== undefined && (!Number.isFinite(opacity) || opacity < 0 || opacity > 1)) {
+        throw new Error("Deck master metadata contains an invalid semantic image opacity");
+      }
+      semanticElements.push({
+        id: item.id,
+        type: item.type as SemanticElementExportMapping["type"],
+        scope: item.scope as SemanticElementExportMapping["scope"],
+        layoutId: item.layoutId || null,
+        shapeId: Number(item.shapeId),
+        zIndex: Number(item.zIndex),
+        rotation: Number(item.rotation),
+        visibility: item.visibility as SemanticElementExportMapping["visibility"],
+        assetId: item.assetId || null,
+        assetSha256: item.assetSha256 || null,
+        mediaType: (item.mediaType || null) as SemanticElementExportMapping["mediaType"],
+        assetPartName: item.assetPartName || null,
+        assetRelationshipId: item.assetRelationshipId || null,
+        fit: (item.fit || null) as SemanticElementExportMapping["fit"],
+        crop,
+        ...(opacity === undefined ? {} : { opacity }),
+        ...(item.sharedGroupId === undefined ? {} : { sharedGroupId: item.sharedGroupId }),
+        ...(item.sharedOverride === undefined
+          ? {}
+          : { sharedOverride: parseOptionalBoolean(item.sharedOverride, "sharedOverride")! }),
+      });
+    }
+  }
   const base: Omit<DeckMasterSemanticMetadata, "semanticDigest"> = {
     version: DECK_MASTER_CONTRACT_VERSION,
     contractId: root.contractId,
@@ -206,6 +250,7 @@ function parseMetadata(masterXml: string): DeckMasterSemanticMetadata {
     tokens,
     furniture,
     layouts,
+    ...(semanticElementsBlock === undefined ? {} : { semanticElements }),
   };
   const calculated = digest(base);
   if (calculated !== root.semanticDigest) {
@@ -319,6 +364,12 @@ function assertContentTypes(
         partName: `/${item.assetPartName!}`,
         contentType: PNG_CONTENT_TYPE,
       })),
+    ...(metadata.semanticElements ?? [])
+      .filter((item) => item.assetPartName !== null && item.mediaType !== null)
+      .map((item) => ({
+        partName: `/${item.assetPartName!}`,
+        contentType: item.mediaType!,
+      })),
   ];
   for (const item of expected) {
     if (!overrides.some(
@@ -392,6 +443,60 @@ export function readDeckMasterParts(
     }
     verified.add(layout.partName);
     verified.add(relsPart);
+  }
+  for (const mapping of metadata.semanticElements ?? []) {
+    const materialized: Array<{ partName: string; xml: string }> = [];
+    for (const partName of [MASTER_PART, ...metadata.layouts.map((layout) => layout.partName)]) {
+      const xml = requirePart(parts, partName);
+      if (new RegExp(`<p:cNvPr\\b[^>]*\\bname="${mapping.id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`).test(xml)) {
+        materialized.push({ partName, xml });
+      }
+    }
+    if (mapping.visibility === "hidden") {
+      if (materialized.length !== 0) throw new Error(`Hidden semantic element ${mapping.id} was materialized`);
+      continue;
+    }
+    if (materialized.length === 0) throw new Error(`Semantic element ${mapping.id} is missing`);
+    for (const candidate of materialized) {
+      const shape = [...candidate.xml.matchAll(/<p:(?:sp|pic)\b[^>]*>([\s\S]*?)<\/p:(?:sp|pic)>/g)]
+        .map((match) => match[1])
+        .find((body) => attributes(/<p:cNvPr\b([^>]*)\/>/.exec(body)?.[1] ?? "").name === mapping.id);
+      if (!shape) throw new Error(`Semantic element ${mapping.id} has malformed native shape XML`);
+      const props = attributes(/<p:cNvPr\b([^>]*)\/>/.exec(shape)?.[1] ?? "");
+      if (Number(props.id) !== mapping.shapeId) throw new Error(`Semantic element ${mapping.id} shape ID drifted`);
+      if (mapping.type === "pageNumber" && (
+        !/<p:ph\b[^>]*\btype="sldNum"/.test(shape) ||
+        !/<a:fld\b[^>]*\btype="slidenum"/.test(shape)
+      )) {
+        throw new Error(`Semantic page number ${mapping.id} is not a native slide-number field`);
+      }
+      if (mapping.type === "image") {
+        const blip = /<a:blip\b([^>]*)(?:\/>|>([\s\S]*?)<\/a:blip>)/.exec(shape);
+        const relationshipId = attributes(blip?.[1] ?? "")["r:embed"];
+        const relsPart = candidate.partName === MASTER_PART
+          ? MASTER_RELS_PART
+          : `${path.posix.dirname(candidate.partName)}/_rels/${path.posix.basename(candidate.partName)}.rels`;
+        const relation = relationshipInventory(requirePart(parts, relsPart)).find((item) => item.Id === relationshipId);
+        if (!relation || resolveRelationshipTarget(candidate.partName, relation.Target) !== mapping.assetPartName) {
+          throw new Error(`Semantic image relationship for ${mapping.id} is missing`);
+        }
+        if (mapping.opacity !== undefined) {
+          const alphaAttributes = attributes(/<a:alphaModFix\b([^>]*)\/>/.exec(blip?.[2] ?? "")?.[1] ?? "");
+          const actualAlpha = alphaAttributes.amt === undefined ? 100_000 : Number(alphaAttributes.amt);
+          const expectedAlpha = Math.round(mapping.opacity * 100_000);
+          if (!Number.isFinite(actualAlpha) || actualAlpha !== expectedAlpha) {
+            throw new Error(`Semantic image opacity for ${mapping.id} drifted`);
+          }
+        }
+      }
+    }
+    if (mapping.assetPartName && mapping.assetSha256) {
+      const bytes = Buffer.from(parts.get(mapping.assetPartName) ?? []);
+      if (bytes.length === 0 || createHash("sha256").update(bytes).digest("hex") !== mapping.assetSha256) {
+        throw new Error(`Semantic image bytes for ${mapping.id} do not match metadata`);
+      }
+      verified.add(mapping.assetPartName);
+    }
   }
   const themeRelation = masterRels.find((candidate) => candidate.Type?.endsWith("/theme"));
   if (!themeRelation || resolveRelationshipTarget(MASTER_PART, themeRelation.Target) !== THEME_PART) {

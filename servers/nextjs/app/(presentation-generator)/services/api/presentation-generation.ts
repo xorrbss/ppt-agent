@@ -84,6 +84,7 @@ export type GenerationStatusResponse = {
 export type StartGenerationResponse = {
   id?: string;
   status?: string;
+  operation_id?: string;
   request_id?: string;
 };
 
@@ -709,6 +710,11 @@ export class PresentationGenerationApi {
       slides_markdown: string[];
       vision_qa?: boolean;
       authored_style?: string;
+      masterPin?: {
+        masterId: string;
+        revision: number;
+        digest: `sha256:${string}`;
+      };
       idempotency_key?: string;
     },
   ): Promise<StartGenerationResponse> {
@@ -736,6 +742,7 @@ export class PresentationGenerationApi {
             // a max-quality, slower pass.
             vision_qa: body.vision_qa ?? false,
             authored_style: body.authored_style ?? "default",
+            ...(body.masterPin ? { masterPin: body.masterPin } : {}),
           }),
           cache: "no-cache",
         },

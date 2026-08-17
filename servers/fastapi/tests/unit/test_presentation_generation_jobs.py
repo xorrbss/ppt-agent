@@ -184,6 +184,63 @@ def test_interrupted_attempt_is_safely_requeued(
     asyncio.run(scenario())
 
 
+def test_design_retry_repairs_a_job_link_by_target_presentation(
+    tmp_path, monkeypatch
+):
+    async def scenario():
+        engine, maker = await _job_database(tmp_path, monkeypatch)
+        try:
+            source_operation_id = uuid.uuid4()
+            retry_operation_id = uuid.uuid4()
+            target_presentation_id = uuid.uuid4()
+            status = AsyncPresentationGenerationTaskModel(
+                status="error",
+                message="Previous design attempt failed",
+                error="authored_slide_persist_failed",
+            )
+            job = PresentationGenerationJob(
+                task_id=status.id,
+                presentation_id=target_presentation_id,
+                workspace_operation_id=source_operation_id,
+                request_sha256="c" * 64,
+                request_payload={"content": "pinned design replay"},
+                state="failed",
+                attempt_number=3,
+                last_error={"code": "authored_slide_persist_failed"},
+            )
+            async with maker() as session:
+                session.add_all((status, job))
+                await session.commit()
+
+            async with maker() as session:
+                rebound = await jobs.rebind_workspace_linked_generation_job_for_retry(
+                    session,
+                    uuid.uuid4(),
+                    retry_operation_id,
+                    expected_job_id=job.id,
+                    expected_presentation_id=target_presentation_id,
+                )
+                await session.commit()
+
+            assert rebound is True
+            async with maker() as session:
+                stored_job = await session.get(PresentationGenerationJob, job.id)
+                stored_status = await session.get(
+                    AsyncPresentationGenerationTaskModel, status.id
+                )
+            assert stored_job is not None
+            assert stored_job.workspace_operation_id == retry_operation_id
+            assert stored_job.state == "queued"
+            assert stored_job.attempt_number == 0
+            assert stored_job.last_error is None
+            assert stored_status is not None
+            assert stored_status.status == "pending"
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
 def test_restart_reconciliation_recovers_only_abandoned_attempts(
     tmp_path, monkeypatch
 ):

@@ -129,6 +129,20 @@ export interface OoxmlReadBackReceipt {
     readonly slideId: string | null;
     readonly layoutId: string | null;
     readonly masterDigest: string | null;
+    readonly bodyGrammarDigest?: string;
+    readonly bodyGrammarSchemaVersion?: string;
+    readonly bodyGrammarArchetype?: string;
+    readonly bodyGrammarSlideRole?: string;
+    readonly referenceLayoutId?: string;
+    readonly referenceLayoutDigest?: string;
+    readonly referenceSourceDigest?: string;
+    readonly resolvedTemplateId?: string;
+    readonly resolvedCompositionDigest?: string;
+    readonly resolvedRuleDigest?: string;
+    readonly pageNumber?: number;
+    readonly slideCount?: number;
+    readonly semanticRolesUsed?: readonly string[];
+    readonly layoutRolesUsed?: readonly string[];
   }[];
 }
 
@@ -199,5 +213,6 @@ export interface OoxmlAdapterSession {
   entries: Map<string, Buffer>;
   revision: number;
   masterContract: NormalizedDeckMasterContract | null;
+  authoredMasterContract: unknown | null;
   masterRelationshipId: string | null;
 }

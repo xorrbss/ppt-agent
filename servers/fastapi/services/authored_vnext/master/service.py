@@ -8,12 +8,14 @@ from models.authored_vnext.master.contract import DeckMasterContract
 from models.authored_vnext.master.operations import (
     CreateDeckRequest,
     CreateDraftRequest,
+    MasterCatalogPage,
     MasterCasRequest,
     MasterRevisionResponse,
     PreviewRequest,
     PreviewResponse,
     RegenerateBodyRequest,
     RegenerateResponse,
+    RegisterMasterRequest,
     ValidationIssue,
     ValidationSummary,
 )
@@ -108,6 +110,31 @@ class AuthoredVNextMasterService:
         self, master_id: str, revision: int | None = None
     ) -> MasterRevisionResponse:
         return self.repository.get_master(master_id, revision)
+
+    def get_published_revision(self, master_id: str) -> MasterRevisionResponse:
+        return self.repository.get_published_master(master_id)
+
+    def list_masters(
+        self, *, cursor: str | None, limit: int
+    ) -> MasterCatalogPage:
+        return self.repository.list_masters(cursor=cursor, limit=limit)
+
+    def register_master(self, request: RegisterMasterRequest) -> MasterRevisionResponse:
+        """Allocate the identity server-side and explicitly create draft revision 1."""
+
+        for _ in range(8):
+            master_id = self.repository.allocate_master_id()
+            contract = request.contract.model_copy(update={"master_id": master_id})
+            try:
+                return self.create_draft(
+                    CreateDraftRequest(
+                        contract=contract,
+                        visual_direction=request.visual_direction,
+                    )
+                )
+            except MasterRevisionConflictError:
+                continue
+        raise MasterRevisionConflictError()
 
     @staticmethod
     def _require_master_cas(

@@ -147,8 +147,45 @@ def upgrade() -> None:
             )
 
     for table in TABLES:
+        inspector = sa.inspect(bind)
+        owner_column = next(
+            item
+            for item in inspector.get_columns(table)
+            if item["name"] == "owner_id"
+        )
+        foreign_keys = {
+            item.get("name"): item
+            for item in inspector.get_foreign_keys(table)
+        }
+        expected_foreign_key = f"fk_{table}_owner_id_user"
+        indexes = {
+            item.get("name"): item for item in inspector.get_indexes(table)
+        }
+        expected_index = f"ix_{table}_owner_id"
+        needs_owner_not_null = bool(owner_column.get("nullable", True))
+        needs_foreign_key = expected_foreign_key not in foreign_keys
+        needs_index = expected_index not in indexes
+        needs_export_check = False
+        if table == "authored_vnext_export_jobs":
+            checks = {
+                item.get("name"): str(item.get("sqltext") or "")
+                for item in inspector.get_check_constraints(table)
+            }
+            needs_export_check = (
+                "account_deletion_generation"
+                not in checks.get("ck_avnext_export_counters", "")
+            )
+        if not any(
+            (
+                needs_owner_not_null,
+                needs_foreign_key,
+                needs_index,
+                needs_export_check,
+            )
+        ):
+            continue
         with op.batch_alter_table(table) as batch:
-            if table == "authored_vnext_export_jobs":
+            if needs_export_check:
                 batch.drop_constraint(
                     "ck_avnext_export_counters", type_="check"
                 )
@@ -158,15 +195,20 @@ def upgrade() -> None:
                     "AND operation_fence >= 1 "
                     "AND account_deletion_generation >= 0",
                 )
-            batch.alter_column("owner_id", existing_type=sa.Uuid(), nullable=False)
-            batch.create_foreign_key(
-                f"fk_{table}_owner_id_user",
-                "user",
-                ["owner_id"],
-                ["id"],
-                ondelete="CASCADE",
-            )
-            batch.create_index(f"ix_{table}_owner_id", ["owner_id"], unique=False)
+            if needs_owner_not_null:
+                batch.alter_column(
+                    "owner_id", existing_type=sa.Uuid(), nullable=False
+                )
+            if needs_foreign_key:
+                batch.create_foreign_key(
+                    expected_foreign_key,
+                    "user",
+                    ["owner_id"],
+                    ["id"],
+                    ondelete="CASCADE",
+                )
+            if needs_index:
+                batch.create_index(expected_index, ["owner_id"], unique=False)
 
 
 def downgrade() -> None:

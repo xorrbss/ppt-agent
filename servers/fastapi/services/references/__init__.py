@@ -11,6 +11,7 @@ from services.references.providers import (
     TemplateReferenceProvider,
     UploadedDocumentProvider,
     default_reference_source_registry,
+    fit_uploaded_reference_payload,
 )
 from services.references.service import (
     admit_reference_snapshot,
@@ -36,4 +37,5 @@ __all__ = [
     "cleanup_expired_reference_snapshots",
     "create_reference_snapshot",
     "default_reference_source_registry",
+    "fit_uploaded_reference_payload",
 ]

@@ -1677,6 +1677,7 @@ async def _publication_was_committed(
     session: AsyncSession,
     *,
     artifact: PreparedWorkspaceArtifact,
+    result_payload: dict[str, object],
 ) -> bool:
     """Resolve an ambiguous commit acknowledgement without deleting live data."""
 
@@ -1760,7 +1761,7 @@ async def _publication_was_committed(
         and artifact_row.export_attempt_id == artifact.export_attempt_id
         and operation_row.state == "succeeded"
         and operation_row.result_revision == artifact.source_revision
-        and operation_row.result == artifact.result_payload()
+        and operation_row.result == result_payload
         and presentation_row.lifecycle_status == PRESENTATION_LIFECYCLE_PUBLISHED
         and presentation_row.revision == artifact.source_revision
         and linked_job_row.state == "published"
@@ -1924,6 +1925,7 @@ async def publish_workspace_generation_artifact(
     export_source_snapshot_sha256: str | None = None,
     export_selected_adapter: str | None = None,
     export_provenance: dict | None = None,
+    result_evidence: dict[str, object] | None = None,
 ) -> int:
     """Fence and commit artifact, presentation revision, and operation result."""
 
@@ -1960,7 +1962,10 @@ async def publish_workspace_generation_artifact(
             )
         )
     ).one_or_none()
-    if operation_metadata is not None and operation_metadata.kind == "template.apply":
+    if operation_metadata is not None and operation_metadata.kind in {
+        "template.apply",
+        "design.apply",
+    }:
         request_payload = (
             operation_metadata.request_payload
             if isinstance(operation_metadata.request_payload, dict)
@@ -1989,13 +1994,51 @@ async def publish_workspace_generation_artifact(
             )
         result_payload = {
             **result_payload,
-            "kind": "template.apply",
+            "kind": operation_metadata.kind,
             "source_presentation_id": source_presentation_id,
             "source_revision": source_revision,
             "target_presentation_id": str(artifact.presentation_id),
             "presentation_id": str(artifact.presentation_id),
             "authored_style": authored_style.strip(),
+            **(
+                {
+                    "resolved_style_digest": settings.get(
+                        "resolved_style_digest"
+                    )
+                }
+                if "resolved_style_digest" in settings
+                else {}
+            ),
+            **(
+                {"resolved_master_pin": settings.get("resolved_master_pin")}
+                if "resolved_master_pin" in settings
+                else {}
+            ),
+            **(
+                {
+                    "resolved_composition_pin": settings.get(
+                        "resolved_composition_pin"
+                    )
+                }
+                if "resolved_composition_pin" in settings
+                else {}
+            ),
         }
+        if result_evidence is not None:
+            preview = result_evidence.get("preview_snapshot")
+            native = result_evidence.get("native_pptx_snapshot")
+            fidelity = result_evidence.get("visual_fidelity")
+            if (
+                result_evidence.get("readback_verified") is not True
+                or not isinstance(preview, dict)
+                or preview != native
+                or not isinstance(fidelity, dict)
+                or fidelity.get("status") != "passed"
+            ):
+                raise WorkspaceArtifactPublicationError(
+                    "authored_template_visual_evidence_invalid"
+                )
+            result_payload = {**result_payload, **result_evidence}
     try:
         _require_prepared_artifact_integrity(artifact)
         # Lock the active account generation before any operation, job or
@@ -2159,7 +2202,11 @@ async def publish_workspace_generation_artifact(
             await session.rollback()
             # A driver may report commit failure after the database committed.
             # Reconcile the complete tuple before compensating the external file.
-            if await _publication_was_committed(session, artifact=artifact):
+            if await _publication_was_committed(
+                session,
+                artifact=artifact,
+                result_payload=result_payload,
+            ):
                 return artifact.source_revision
             await session.rollback()
         except Exception:

@@ -45,6 +45,10 @@ const nextConfig = {
     // Fidelity tests isolate their distDir per run. Avoid duplicating Turbopack's
     // persistent dev cache on disk in that already-disposable Windows workspace.
     turbopackFileSystemCacheForDev: !process.env.PRESENTON_TEST_NEXT_DIST_DIR,
+    // Native authored-template envelopes include digest-pinned OOXML fragments
+    // and element assets. Keep Next's middleware clone limit aligned with the
+    // internal worker route so valid requests are never silently truncated.
+    proxyClientMaxBodySize: "16mb",
   },
   output: "standalone",
   // Runtime template CSS compilation needs Tailwind's real package __dirname.

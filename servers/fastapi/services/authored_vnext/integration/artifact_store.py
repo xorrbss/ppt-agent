@@ -10,6 +10,7 @@ from uuid import uuid4
 
 
 _SHA256 = re.compile(r"^sha256:([0-9a-f]{64})$")
+_STORAGE_NAMESPACE = re.compile(r"^[0-9a-f]{32}$")
 
 
 class ArtifactStoreError(RuntimeError):
@@ -27,20 +28,32 @@ class BufferedArtifactStore:
     def digest_bytes(value: bytes) -> str:
         return f"sha256:{hashlib.sha256(value).hexdigest()}"
 
-    def _path(self, digest: str) -> Path:
+    def _path(self, digest: str, storage_namespace: str | None = None) -> Path:
         match = _SHA256.fullmatch(digest)
         if match is None:
             raise ArtifactStoreError("authored_vnext_artifact_digest_invalid")
         hexadecimal = match.group(1)
-        return self.root / hexadecimal[:2] / f"{hexadecimal}.pptx"
+        if storage_namespace is not None:
+            if _STORAGE_NAMESPACE.fullmatch(storage_namespace) is None:
+                raise ArtifactStoreError("authored_vnext_artifact_namespace_invalid")
+            file_name = f"{hexadecimal}.{storage_namespace}.pptx"
+        else:
+            file_name = f"{hexadecimal}.pptx"
+        return self.root / hexadecimal[:2] / file_name
 
-    def publish(self, value: bytes, expected_digest: str) -> tuple[str, int]:
+    def publish(
+        self,
+        value: bytes,
+        expected_digest: str,
+        *,
+        storage_namespace: str | None = None,
+    ) -> tuple[str, int]:
         if not isinstance(value, bytes) or not value:
             raise ArtifactStoreError("authored_vnext_artifact_must_be_buffered")
         actual_digest = self.digest_bytes(value)
         if actual_digest != expected_digest:
             raise ArtifactStoreError("authored_vnext_artifact_digest_mismatch")
-        destination = self._path(actual_digest)
+        destination = self._path(actual_digest, storage_namespace)
         destination.parent.mkdir(parents=True, exist_ok=True)
         if destination.exists():
             reopened = destination.read_bytes()
@@ -83,9 +96,20 @@ class BufferedArtifactStore:
             temporary.unlink(missing_ok=True)
 
     def open_verified(self, storage_key: str, digest: str, byte_length: int) -> Path:
-        expected = self._path(digest)
+        canonical = self._path(digest)
         supplied = Path(storage_key).resolve()
-        if supplied != expected.resolve() or not supplied.is_file():
+        hexadecimal = canonical.stem
+        valid_name = supplied.name == canonical.name or bool(
+            re.fullmatch(
+                rf"{re.escape(hexadecimal)}\.[0-9a-f]{{32}}\.pptx",
+                supplied.name,
+            )
+        )
+        if (
+            supplied.parent != canonical.parent.resolve()
+            or not valid_name
+            or not supplied.is_file()
+        ):
             raise ArtifactStoreError("authored_vnext_artifact_storage_key_invalid")
         value = supplied.read_bytes()
         if len(value) != byte_length or self.digest_bytes(value) != digest:

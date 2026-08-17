@@ -119,6 +119,8 @@ export interface AuthoredVnextFlowState extends FlowCheckpoint {
   schemaVersion: typeof AUTHORED_VNEXT_FLOW_SCHEMA_VERSION;
   mode: "authored-vnext";
   featureEnabled: true;
+  /** Runtime-only local harness count; the durable safety contract stays 90. */
+  slideCount: 3 | typeof AUTHORED_VNEXT_SLIDE_COUNT;
   availability: FlowAvailability;
 }
 
@@ -167,7 +169,7 @@ export interface OutlineLayoutCommand {
     materials: readonly SourceMaterial[];
     master: PublishedMasterReference;
     visualDirection: VisualDirection;
-    slideCount: typeof AUTHORED_VNEXT_SLIDE_COUNT;
+    slideCount: 3 | typeof AUTHORED_VNEXT_SLIDE_COUNT;
   };
 }
 

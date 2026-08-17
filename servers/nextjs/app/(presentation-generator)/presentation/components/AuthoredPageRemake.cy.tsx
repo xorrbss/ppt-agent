@@ -5,6 +5,11 @@ import AuthoredPageRemake, {
 } from "./AuthoredPageRemake";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import { notify } from "@/components/ui/sonner";
+import {
+  masterPinnedBodyOnlyContext,
+  presentationMasterPin,
+  presentationSlideLayoutId,
+} from "../utils/masterPresentation";
 
 const previewData = {
   kind: "authored_page_remake_preview" as const,
@@ -116,6 +121,50 @@ function prepareFailedPreview(detail: string) {
 }
 
 describe("AuthoredPageRemake", () => {
+  it("fences a pinned page remake to the document master and authored layout", () => {
+    const digest = `sha256:${"a".repeat(64)}`;
+    const layoutRegistryDigest = `sha256:${"b".repeat(64)}`;
+    const fontManifestDigest = `sha256:${"c".repeat(64)}`;
+    const presentation = {
+      theme: {
+        authored_vnext: {
+          masterPin: {
+            masterId: "master:company",
+            masterRevision: 7,
+            masterDigest: digest,
+            layoutRegistryDigest,
+            fontManifestDigest,
+          },
+        },
+      },
+      slides: Array.from({ length: 5 }, (_, index) =>
+        index === 4
+          ? {
+              layout: "authored:renderer-only-value",
+              content: { layoutId: "layout:standard" },
+            }
+          : {},
+      ),
+    };
+
+    const pin = presentationMasterPin(presentation);
+    expect(pin).not.to.equal(null);
+    const layoutId = presentationSlideLayoutId(presentation, 4);
+    expect(layoutId).to.equal("layout:standard");
+    expect(masterPinnedBodyOnlyContext(pin!, layoutId)).to.deep.equal({
+      body_only: true,
+      allow_layout_change: false,
+      master_pin: {
+        master_id: "master:company",
+        revision: 7,
+        digest,
+        layout_registry_digest: layoutRegistryDigest,
+        font_manifest_digest: fontManifestDigest,
+      },
+      layout_id: "layout:standard",
+    });
+  });
+
   it("uses the exact label and generates only the current page preview", () => {
     preparePreview();
     cy.mount(

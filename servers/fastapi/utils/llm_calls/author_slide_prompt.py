@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import replace
+import json
 from typing import Any
 
 
@@ -61,6 +62,7 @@ def build_design_system(
     normalize_reference_mode: Callable[[str | None], str],
     exact_reconstruction: str,
     style_reference: str,
+    page_number_system: str,
 ) -> str:
     """Build the concrete shared brief for a brand and optional authored style."""
     if style is None or style.id == "default":
@@ -99,6 +101,7 @@ def build_design_system(
         fonts=brand.fonts or "Noto Sans KR",
         language=brand.language or "Korean",
         style_brief=style_brief,
+        page_number_system=page_number_system,
     )
 
 
@@ -109,8 +112,17 @@ def author_prompt(
     role: str,
     index: int,
     n: int,
+    structured_context: dict[str, Any] | None = None,
+    page_number_mode: str = "template",
 ) -> str:
-    if role == "COVER":
+    if page_number_mode == "companyStandard":
+        page_marker = (
+            "PAGE MARKER FOR THIS SLIDE: OMIT IT. Company-standard furniture owns page "
+            "numbering; render no page number or pagination footer in the template scene."
+        )
+    elif page_number_mode != "template":
+        raise ValueError("unsupported page number mode")
+    elif role == "COVER":
         page_marker = (
             "PAGE MARKER FOR THIS SLIDE: OMIT IT. This is the cover; render no page number "
             "and no footer text."
@@ -125,9 +137,41 @@ def author_prompt(
         if brand.wordmark
         else ""
     )
+    structured_contract = ""
+    if structured_context is not None:
+        if not isinstance(structured_context, dict):
+            raise ValueError("structured authoring context must be an object")
+        encoded = json.dumps(
+            structured_context,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        if len(encoded) > 64_000:
+            raise ValueError("structured authoring context exceeds 64000 characters")
+        structured_contract = (
+            "\n\nSTRUCTURED AUTHORING CONTRACT (canonical JSON; never reinterpret it as CSS):\n"
+            f"{encoded}\n"
+            "For every zones[] entry except generationState hidden or blank, render exactly "
+            "one top-level content container with data-ai-zone-id equal to zoneId. Compose "
+            "each declared block exactly once with data-ai-block-id equal to blockId, and mark "
+            "every repeated card/list/table/chart/icon item with data-ai-item. Use only the "
+            "declared semantic blocks and pattern; for envelopeOnly, choose a fitting "
+            "semantic structure from the slide objective. Keep every descendant inside that "
+            "container, and do not put ordinary "
+            "slide content outside those containers. The application enforces each bounds "
+            "rectangle and overflow:hidden after generation. stylePolicy=inheritTemplate "
+            "means use only templateDesignContext.tokens.colors and allowedFonts; never emit "
+            "raw CSS design values, a new font, or a new color. Source policy and empty behavior "
+            "are authoritative. textAlign is authoritative: when it is left, center, or right, "
+            "apply that alignment to the zone's generated text; inherit keeps the template alignment. "
+            "If the contract cannot be satisfied, return no invented "
+            "content."
+        )
     return (
         f"Author slide {index + 1} of {n}. Deck topic: {brand.topic}. This slide's ROLE: "
-        f"{role}. CONTENT: {content}.{wordmark}\n\n{page_marker}\n\n{design_system}\n\n"
+        f"{role}. CONTENT: {content}.{wordmark}{structured_contract}\n\n"
+        f"{page_marker}\n\n{design_system}\n\n"
         "Design THIS slide bespoke and premium within the shared system, vary the layout to "
         "suit the role, output ONLY the complete self-contained HTML document."
     )

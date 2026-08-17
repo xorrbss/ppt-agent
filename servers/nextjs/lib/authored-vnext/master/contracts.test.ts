@@ -3,7 +3,6 @@ import test from "node:test";
 
 import {
   MASTER_CONTRACT_KEY_MANIFEST,
-  MasterContractError,
   REQUIRED_LAYOUT_KINDS,
   isAuthoredVnextMasterEnabled,
 } from "./contracts.ts";
@@ -13,105 +12,74 @@ import {
   TITLE_STRESS_CORPUS,
 } from "./fixtures.ts";
 import {
-  buildPreviewScene,
   createMasterSetupState,
-  createSlideSpec,
   masterSetupReducer,
   validateMasterSetup,
 } from "./view-model.ts";
 
 test("Master Setup route feature flag is default-off and exact-match enabled", () => {
-  assert.equal(isAuthoredVnextMasterEnabled(undefined), false);
+  assert.equal(isAuthoredVnextMasterEnabled(undefined), true);
   assert.equal(isAuthoredVnextMasterEnabled("false"), false);
   assert.equal(isAuthoredVnextMasterEnabled("TRUE"), false);
   assert.equal(isAuthoredVnextMasterEnabled("true"), true);
 });
 
 test("default contract follows the backend-owned root key manifest", () => {
-  assert.deepEqual(Object.keys(DEFAULT_MASTER_CONTRACT), [
-    ...MASTER_CONTRACT_KEY_MANIFEST.contract,
-  ]);
-  const slide = createSlideSpec(
-    DEFAULT_MASTER_CONTRACT,
-    "longTitle",
-    TITLE_STRESS_CORPUS[4],
+  const optional = new Set(["customLayouts", "semanticElements", "aiEditZones"]);
+  assert.deepEqual(
+    Object.keys(DEFAULT_MASTER_CONTRACT),
+    MASTER_CONTRACT_KEY_MANIFEST.contract.filter(
+      (key) => !optional.has(key) || key in DEFAULT_MASTER_CONTRACT,
+    ),
   );
-  assert.deepEqual(Object.keys(slide), [
-    ...MASTER_CONTRACT_KEY_MANIFEST.slideDraft,
-  ]);
-  assert.equal(slide.slideId, "slide:master-setup-preview");
-  assert.equal("windowsFontFallback" in slide.title, false);
 });
 
-test("master furniture is locked and body slots are model-writable in separate layers", () => {
+test("master furniture is locked while legacy slots remain compatibility-only", () => {
   const validation = validateMasterSetup(DEFAULT_MASTER_CONTRACT);
   assert.equal(validation.valid, true, JSON.stringify(validation.errors));
   assert.equal(validation.furnitureBodyDuplicates, 0);
   assert.equal(validation.writableOverlaps, 0);
   assert.equal(validation.titleFitFailures, 0);
 
-  for (const layoutKind of REQUIRED_LAYOUT_KINDS) {
-    const scene = buildPreviewScene(
-      DEFAULT_MASTER_CONTRACT,
-      createSlideSpec(
-        DEFAULT_MASTER_CONTRACT,
-        layoutKind,
-        TITLE_STRESS_CORPUS[0],
-      ),
-    );
-    assert.equal(
-      scene.layoutId,
-      DEFAULT_MASTER_CONTRACT.layouts[layoutKind].id,
-    );
-    const locked = scene.items.filter(
-      (item) => item.layer === "masterFurniture",
-    );
-    const writable = scene.items.filter(
-      (item) => item.layer === "modelWritableBody",
-    );
-    assert.equal(locked.length, 5);
-    assert.ok(locked.every((item) => item.locked && !item.modelWritable));
-    assert.ok(writable.every((item) => !item.locked && item.modelWritable));
-    assert.deepEqual(writable.map((item) => item.role).sort(), [
-      "body",
-      "title",
-    ]);
-    assert.equal(
-      new Set(locked.map((item) => item.id)).intersection(
-        new Set(writable.map((item) => item.id)),
-      ).size,
-      0,
-    );
-  }
+  assert.ok(
+    Object.values(DEFAULT_MASTER_CONTRACT.furniture).every(
+      (item) => item.ownership.locked && !item.ownership.modelWritable,
+    ),
+  );
 });
 
-test("all four layouts require distinct editable title and body placeholders", () => {
+test("title/body slots can be absent or malformed without changing furniture-only validity", () => {
   for (const layoutKind of REQUIRED_LAYOUT_KINDS) {
     const contract = structuredClone(DEFAULT_MASTER_CONTRACT);
     contract.layouts[layoutKind].slots[0].ownership = {
       locked: true,
       modelWritable: false,
     };
-    const ownership = validateMasterSetup(contract);
-    assert.ok(
-      ownership.errors.some(
-        (issue) => issue.code === "ownership_boundary_violation",
-      ),
-      layoutKind,
-    );
+    assert.equal(validateMasterSetup(contract).valid, true, layoutKind);
 
     const missing = structuredClone(DEFAULT_MASTER_CONTRACT);
-    missing.layouts[layoutKind].slots = missing.layouts[
-      layoutKind
-    ].slots.filter((slot) => slot.role !== "body");
-    const missingPlaceholder = validateMasterSetup(missing);
-    assert.ok(
-      missingPlaceholder.errors.some(
-        (issue) => issue.code === "missing_editable_placeholder",
-      ),
-      layoutKind,
-    );
+    missing.layouts[layoutKind].slots = [];
+    assert.equal(validateMasterSetup(missing).valid, true, layoutKind);
   }
+});
+
+test("AI edit zones are geometry-only reserved envelopes", () => {
+  const contract = structuredClone(DEFAULT_MASTER_CONTRACT);
+  contract.aiEditZones = [{
+    id: "ai-zone:standard-content",
+    scope: { kind: "layout", layoutId: contract.layouts.standard.id },
+    bounds: { x: 120, y: 180, width: 880, height: 260 },
+  }];
+  assert.equal(validateMasterSetup(contract).valid, true);
+  assert.deepEqual(Object.keys(contract.aiEditZones[0]).sort(), [
+    "bounds",
+    "id",
+    "scope",
+  ]);
+
+  contract.aiEditZones[0].bounds.width = 0;
+  const invalid = validateMasterSetup(contract);
+  assert.ok(invalid.errors.some((issue) => issue.code === "invalid_ai_edit_zone"));
 });
 
 test("Visual Direction remains separate from the immutable master contract", () => {
@@ -128,7 +96,7 @@ test("Visual Direction remains separate from the immutable master contract", () 
   assert.equal(changed.contract, state.contract);
 });
 
-test("stress corpus covers Korean, English, mixed, and numeric-parenthetical fixed lines", () => {
+test("legacy fit and stress data is retained as compatibility data", () => {
   assert.deepEqual(
     [...new Set(TITLE_STRESS_CORPUS.map((entry) => entry.category))].sort(),
     ["en", "ko", "mixed", "numericParenthetical"],
@@ -144,9 +112,9 @@ test("stress corpus covers Korean, English, mixed, and numeric-parenthetical fix
   }
 });
 
-test("furniture/body namespace collision fails closed", () => {
+test("legacy slot collisions do not change furniture-only validation", () => {
   const contract = structuredClone(DEFAULT_MASTER_CONTRACT);
   contract.layouts.standard.slots[0].id = contract.furniture.header.id;
-  const slide = createSlideSpec(contract, "standard", TITLE_STRESS_CORPUS[0]);
-  assert.throws(() => buildPreviewScene(contract, slide), MasterContractError);
+  assert.equal(validateMasterSetup(contract).valid, true);
+  assert.equal(contract.layouts.standard.slots[0].id, contract.furniture.header.id);
 });

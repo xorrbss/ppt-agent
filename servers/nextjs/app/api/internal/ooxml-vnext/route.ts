@@ -11,7 +11,11 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const DEFAULT_MAX_BODY_BYTES = 4 * 1024 * 1024;
+// Retained authored scenes carry digest-pinned native fragments and their
+// element assets in the same fail-closed export envelope. The previous 4 MiB
+// default rejected valid OSB native-scene requests before the worker could
+// verify those digests.
+const DEFAULT_MAX_BODY_BYTES = 16 * 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 function boundedInteger(value: string | undefined, fallback: number, minimum: number, maximum: number): number {
@@ -71,14 +75,29 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return errorResponse("REQUEST_TOO_LARGE", 413, "Request body is too large");
   }
 
+  let body: Uint8Array;
+  try {
+    body = new Uint8Array(await request.arrayBuffer());
+  } catch (error) {
+    console.error("[ooxml-vnext] request body read failed", {
+      contentLength: Number.isFinite(contentLength) ? contentLength : null,
+      error: error instanceof Error ? error.name : "unknown",
+    });
+    return errorResponse("BODY_READ_FAILED", 400, "Request body could not be read");
+  }
+  if (body.byteLength === 0 || body.byteLength > maxBodyBytes) {
+    return errorResponse("REQUEST_TOO_LARGE", 413, "Request body is empty or too large");
+  }
+
   let input: unknown;
   try {
-    const body = new Uint8Array(await request.arrayBuffer());
-    if (body.byteLength === 0 || body.byteLength > maxBodyBytes) {
-      return errorResponse("REQUEST_TOO_LARGE", 413, "Request body is empty or too large");
-    }
     input = JSON.parse(Buffer.from(body).toString("utf8"));
-  } catch {
+  } catch (error) {
+    console.error("[ooxml-vnext] request JSON parse failed", {
+      contentLength: Number.isFinite(contentLength) ? contentLength : null,
+      bodyBytes: body.byteLength,
+      error: error instanceof Error ? error.name : "unknown",
+    });
     return errorResponse("INVALID_JSON", 400, "Request body must be valid JSON");
   }
 
@@ -115,7 +134,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (controller.signal.aborted) {
       return errorResponse(request.signal.aborted ? "WORKER_CANCELLED" : "WORKER_TIMEOUT", request.signal.aborted ? 499 : 504, request.signal.aborted ? "Worker operation was cancelled" : "Worker operation timed out");
     }
-    if (error instanceof OoxmlWorkerError) return errorResponse(error.code, error.status, error.message);
+    if (error instanceof OoxmlWorkerError) {
+      console.error("[ooxml-vnext] worker rejected request", {
+        code: error.code,
+        status: error.status,
+        message: error.message,
+      });
+      return errorResponse(error.code, error.status, error.message);
+    }
     return errorResponse("INTERNAL_WORKER_ERROR", 500, "Internal OOXML worker failed");
   } finally {
     clearTimeout(timeout);

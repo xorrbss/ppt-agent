@@ -1,5 +1,6 @@
 import {
   AUTHORED_VNEXT_SLIDE_COUNT,
+  type AuthoredVnextFlowState,
   type FlowEvent,
 } from "@/lib/authored-vnext/flow/types";
 import { outlineForPrompt } from "@/lib/authored-vnext/flow/workbench-adapters";
@@ -14,6 +15,7 @@ export function confirmedDirectionEvents(
   direction: VisualDirection,
   prompt: string,
   labels: OutlineLabels,
+  slideCount: AuthoredVnextFlowState["slideCount"] = AUTHORED_VNEXT_SLIDE_COUNT,
 ): readonly FlowEvent[] {
   return [
     {
@@ -30,7 +32,7 @@ export function confirmedDirectionEvents(
       type: "outline.succeeded",
       plan: outlineForPrompt(
         prompt,
-        AUTHORED_VNEXT_SLIDE_COUNT,
+        slideCount,
         labels.coverPurpose,
         labels.slidePurpose,
       ),

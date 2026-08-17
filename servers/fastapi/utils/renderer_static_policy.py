@@ -20,9 +20,16 @@ from utils.renderer_worker_policy import RendererPolicyError
 MAX_STATIC_ASSET_BYTES = 1536 * 1024
 MAX_STATIC_SVG_NODES = 512
 _STATIC_DATA_ATTRIBUTES = {
+    "data-body-slot",
+    "data-canonical-digest",
     "data-intentional-overlap-group",
     "data-layout-id",
+    "data-locked",
+    "data-master-furniture",
+    "data-master-semantic",
+    "data-overflow-policy",
     "data-render-input-hash",
+    "data-semantic-role",
     "data-semantic-id",
     "data-slidespec",
     "data-slidespec-connector",
@@ -73,10 +80,14 @@ def _static_data_attribute(match: re.Match[str]) -> str:
     ):
         raise RendererPolicyError(f"static output attribute is invalid: {name}")
     if (
-        name == "data-render-input-hash"
+        name in {"data-canonical-digest", "data-render-input-hash"}
         and re.fullmatch(r"sha256:[0-9a-f]{64}", value) is None
     ):
-        raise RendererPolicyError("static render input hash is invalid")
+        raise RendererPolicyError(f"static digest attribute is invalid: {name}")
+    if name == "data-locked" and value not in {"true", "false"}:
+        raise RendererPolicyError("static locked attribute is invalid")
+    if name == "data-overflow-policy" and value != "shrink-to-fit":
+        raise RendererPolicyError("static overflow policy is invalid")
     return ""
 
 

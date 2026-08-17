@@ -10,7 +10,10 @@ import {
   PresentationGenerationApi,
 } from "../../../services/api/presentation-generation";
 import { getApiErrorDisplayMessage } from "../../../services/api/api-error-handler";
-import { setPptGenUploadState } from "@/store/slices/presentationGenUpload";
+import {
+  setPptGenUploadState,
+  type CompanyStandardSelection,
+} from "@/store/slices/presentationGenUpload";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { RootState } from "@/store/store";
 import { ImagesApi } from "../../../services/api/images";
@@ -19,12 +22,27 @@ import { abortDocumentProcessing } from "./abortDocumentProcessing";
 import { getFileCategory } from "./fileCategory";
 import { getSelectedImageQuality, getSelectedTextModel } from "./llmConfigSummary";
 import { LoadingState } from "./types";
+import { AuthoredVnextMasterClient } from "@/lib/authored-vnext/master/client";
+import {
+  isAuthoredVnextMasterEnabled,
+  type MasterRevisionEnvelope,
+} from "@/lib/authored-vnext/master/contracts";
+import { masterSelectionFromPublished } from "@/lib/authored-vnext/master/selection-storage";
+import {
+  createDurableGenerationTask,
+  saveDurableGenerationTask,
+} from "../../../outline/hooks/durableGenerationTask";
 
 const STOCK_IMAGE_PROVIDERS = new Set(["pexels", "pixabay"]);
+const masterClient = new AuthoredVnextMasterClient();
+
+export type UploadMasterAdmissionError = "required" | "unavailable";
 
 interface UseUploadPageStateArgs {
   files: File[];
   selectedThemeId: string | null;
+  masterFeatureEnabled?: boolean;
+  onMasterRequired?: () => void;
 }
 
 /**
@@ -34,6 +52,8 @@ interface UseUploadPageStateArgs {
 export const useUploadPageState = ({
   files,
   selectedThemeId,
+  masterFeatureEnabled = isAuthoredVnextMasterEnabled(),
+  onMasterRequired,
 }: UseUploadPageStateArgs) => {
   // Allocate the server-visible deck id before the create command so the
   // workspace operation and its retries hash the exact same stable id.
@@ -44,6 +64,18 @@ export const useUploadPageState = ({
   const pathname = usePathname();
   const dispatch = useDispatch();
   const llmConfig = useSelector((state: RootState) => state.userConfig.llm_config);
+  const companyStandard = useSelector(
+    (state: RootState) => state.pptGenUpload.companyStandard,
+  );
+  const authoredStyle = useSelector(
+    (state: RootState) => state.pptGenUpload.authoredStyle,
+  );
+  const authoredVisionQa = useSelector(
+    (state: RootState) => state.pptGenUpload.authoredVisionQa,
+  );
+  const [masterAdmissionError, setMasterAdmissionError] =
+    useState<UploadMasterAdmissionError | null>(null);
+  const [isMasterResolving, setIsMasterResolving] = useState(false);
 
   const [config, setConfig] = useState<PresentationConfig>({
     slides: "8",
@@ -65,6 +97,8 @@ export const useUploadPageState = ({
     extra_info: "",
   });
   const decomposeAbortControllerRef = useRef<AbortController | null>(null);
+  const companyStandardRef = useRef(companyStandard);
+  const startInFlightRef = useRef(false);
   const [canCancelDocumentProcessing, setCanCancelDocumentProcessing] =
     useState(false);
 
@@ -73,6 +107,100 @@ export const useUploadPageState = ({
   useEffect(() => {
     return () => abortDocumentProcessing(decomposeAbortControllerRef.current);
   }, []);
+
+  useEffect(() => {
+    setMasterAdmissionError(null);
+  }, [
+    companyStandard?.masterId,
+    companyStandard?.revision,
+    companyStandard?.digest,
+  ]);
+
+  companyStandardRef.current = companyStandard;
+
+  const resolveMasterForGeneration = async (): Promise<
+    CompanyStandardSelection | null | undefined
+  > => {
+    if (!masterFeatureEnabled) return undefined;
+    // A master is an optional structural layer.  Authored styles still own
+    // the full-canvas path when no master was selected, so do not make the
+    // ordinary template-only flow wait for a catalog choice.
+    if (!companyStandard) return undefined;
+
+    setIsMasterResolving(true);
+    setMasterAdmissionError(null);
+    try {
+      // The preference stores identity only. Pin the owner's current published
+      // pointer at the explicit generate click so a newly published revision is
+      // used by this new document while existing documents keep their old pin.
+      // Applying a different catalog card while this request is pending must
+      // never let the older response overwrite the new choice. Resolve again
+      // until the response matches the identity that is currently selected.
+      for (;;) {
+        const requested = companyStandardRef.current;
+        if (!requested) {
+          setMasterAdmissionError("required");
+          onMasterRequired?.();
+          return null;
+        }
+        let published: MasterRevisionEnvelope;
+        try {
+          published = await masterClient.getPublished(requested.masterId);
+        } catch (error) {
+          if (companyStandardRef.current?.masterId !== requested.masterId) continue;
+          throw error;
+        }
+        if (companyStandardRef.current?.masterId !== requested.masterId) continue;
+        const selection = masterSelectionFromPublished(published);
+        companyStandardRef.current = selection;
+        dispatch(setPptGenUploadState({ companyStandard: selection }));
+        return selection;
+      }
+    } catch {
+      setMasterAdmissionError("unavailable");
+      onMasterRequired?.();
+      return null;
+    } finally {
+      setIsMasterResolving(false);
+    }
+  };
+
+  const stageAutoAuthoredGeneration = (
+    presentationId: string,
+    master: CompanyStandardSelection | undefined,
+  ) => {
+    const requestedSlides = config.slides ? Number.parseInt(config.slides, 10) : 8;
+    const estimatedSlides = Number.isFinite(requestedSlides) ? requestedSlides : 8;
+    const baseSeconds = Math.max(120, estimatedSlides * 25);
+    const progressDurationSeconds = authoredVisionQa
+      ? Math.min(30 * 60, baseSeconds * 2)
+      : Math.min(600, baseSeconds);
+    saveDurableGenerationTask({
+      ...createDurableGenerationTask({
+        mode: "authored",
+        sourcePresentationId: presentationId,
+        timeoutMs: 30 * 60 * 1000,
+        progressDurationSeconds,
+      }),
+      authoredRequest: {
+        language:
+          config.language && config.language !== LanguageType.Auto
+            ? config.language
+            : null,
+        visionQa: authoredVisionQa,
+        authoredStyle,
+        ...(master
+          ? {
+              masterPin: {
+                masterId: master.masterId,
+                revision: master.revision,
+                digest: master.digest,
+              },
+            }
+          : {}),
+      },
+    });
+  };
 
   const getUploadSnapshotProps = () => {
     const trimmedPrompt = config.prompt.trim();
@@ -179,14 +307,22 @@ export const useUploadPageState = ({
   /**
    * Handles the presentation generation process
    */
-  const handleGeneratePresentation = async () => {
+  const startPresentation = async (auto: boolean) => {
+    if (startInFlightRef.current) return;
     if (!validateConfiguration()) return;
+    startInFlightRef.current = true;
+    const resolvedMaster = await resolveMasterForGeneration();
+    if (resolvedMaster === null) {
+      startInFlightRef.current = false;
+      return;
+    }
     trackEvent(MixpanelEvent.Upload_Generation_Started, getUploadSnapshotProps());
 
 
     const isStockProviderReady = await ensureStockImageProviderReady();
     if (!isStockProviderReady) {
       trackUploadValidationFailure("stock_image_provider_unreachable");
+      startInFlightRef.current = false;
       return;
     }
 
@@ -194,19 +330,27 @@ export const useUploadPageState = ({
       const hasUploadedAssets = files.length > 0;
 
       if (hasUploadedAssets) {
-        await handleDocumentProcessing();
+        await handleDocumentProcessing(auto, resolvedMaster);
       } else {
-        await handleDirectPresentationGeneration();
+        await handleDirectPresentationGeneration(auto, resolvedMaster);
       }
     } catch (error) {
       handleGenerationError(error);
+    } finally {
+      startInFlightRef.current = false;
     }
   };
+
+  const handleGeneratePresentation = () => startPresentation(true);
+  const handleReviewOutline = () => startPresentation(false);
 
   /**
    * Handles document processing
    */
-  const handleDocumentProcessing = async () => {
+  const handleDocumentProcessing = async (
+    auto: boolean,
+    resolvedMaster: CompanyStandardSelection | undefined,
+  ) => {
     setLoadingState({
       isLoading: true,
       message: "문서를 처리하는 중…",
@@ -299,7 +443,10 @@ export const useUploadPageState = ({
     });
 
     dispatch(setPresentationId(createResponse.id));
-    const outlineDestination = `/outline?auto=1&id=${encodeURIComponent(createResponse.id)}`;
+    if (auto) stageAutoAuthoredGeneration(createResponse.id, resolvedMaster);
+    const outlineDestination = auto
+      ? `/outline?auto=1&id=${encodeURIComponent(createResponse.id)}`
+      : `/outline?id=${encodeURIComponent(createResponse.id)}`;
     trackEvent(MixpanelEvent.Upload_Documents_Processed, {
       ...getUploadSnapshotProps(),
       uploaded_documents_count: documentAdmission?.assetIds.length ?? 0,
@@ -314,7 +461,10 @@ export const useUploadPageState = ({
   /**
    * Handles direct presentation generation without documents
    */
-  const handleDirectPresentationGeneration = async () => {
+  const handleDirectPresentationGeneration = async (
+    auto: boolean,
+    resolvedMaster: CompanyStandardSelection | undefined,
+  ) => {
     setLoadingState({
       isLoading: true,
       message: "개요를 생성하는 중…",
@@ -345,7 +495,10 @@ export const useUploadPageState = ({
 
     dispatch(setPresentationId(createResponse.id));
     dispatch(clearOutlines())
-    const outlineDestination = `/outline?auto=1&id=${encodeURIComponent(createResponse.id)}`;
+    if (auto) stageAutoAuthoredGeneration(createResponse.id, resolvedMaster);
+    const outlineDestination = auto
+      ? `/outline?auto=1&id=${encodeURIComponent(createResponse.id)}`
+      : `/outline?id=${encodeURIComponent(createResponse.id)}`;
     trackEvent(MixpanelEvent.Upload_Outline_Generation_Requested, {
       ...getUploadSnapshotProps(),
       presentation_id: createResponse.id,
@@ -411,5 +564,8 @@ export const useUploadPageState = ({
     canCancelDocumentProcessing,
     decomposeAbortControllerRef,
     handleGeneratePresentation,
+    handleReviewOutline,
+    masterAdmissionError,
+    isMasterResolving,
   };
 };

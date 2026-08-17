@@ -230,7 +230,6 @@ def test_export_fence_fail_closed_and_last_known_good(tmp_path: Path) -> None:
             artifact=_artifact(master, deck, digest=DIGEST_D),
         )
     assert repository.get_active_artifact(deck.deck_id)[1].id == receipt.id
-
     mismatch = _job(repository, master, deck, key="export-three")
     mismatch_claim = repository.claim_export_job(mismatch.id, worker_id="worker-mismatch")
     bad = _artifact(master, deck, digest=DIGEST_D)
@@ -261,6 +260,34 @@ def test_export_fence_fail_closed_and_last_known_good(tmp_path: Path) -> None:
             expected_generation=current_pointer.generation,
             expected_digest=current_pointer.digest,
         )
+
+
+def test_manual_export_retry_can_reset_an_exhausted_attempt_budget(
+    tmp_path: Path,
+) -> None:
+    repository = _repository(tmp_path / "export-retry-reset.db")
+    master, deck = _published_deck(repository)
+    job = _job(repository, master, deck)
+
+    for attempt in range(job.max_attempts):
+        claimed = repository.claim_export_job(job.id, worker_id=f"worker-{attempt}")
+        repository.fail_export_job(
+            job.id,
+            fence_token=claimed.fence_token,
+            failure_code="worker_timeout",
+        )
+        job = _job(repository, master, deck)
+        if attempt + 1 < job.max_attempts:
+            job = repository.retry_export_job(job.id)
+
+    with pytest.raises(OperationFenceError):
+        repository.retry_export_job(job.id)
+
+    restarted = repository.retry_export_job(job.id, reset_attempts=True)
+    assert restarted.state == "queued"
+    assert restarted.attempt_count == 0
+    assert restarted.failure_code is None
+    assert restarted.failure_detail is None
 
 
 def test_migration_upgrade_and_downgrade(tmp_path: Path) -> None:

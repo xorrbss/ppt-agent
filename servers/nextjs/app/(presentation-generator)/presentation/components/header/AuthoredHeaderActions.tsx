@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 
 import AuthoredPageRemake from "../AuthoredPageRemake";
 import AuthoredTemplateChanger from "../AuthoredTemplateChanger";
+import type { PresentationMasterPin } from "../../utils/masterPresentation";
 import type {
   WorkspaceCommandDispatcher,
   WorkspacePageRemakeRequester,
@@ -20,6 +21,7 @@ function getAuthoredStyleId(theme: unknown): string | null {
 const AuthoredHeaderActions = ({
   presentation_id,
   theme,
+  currentMasterPin,
   currentSlide,
   isStreaming,
   isPresentationSaving,
@@ -31,6 +33,7 @@ const AuthoredHeaderActions = ({
 }: {
   presentation_id: string;
   theme: unknown;
+  currentMasterPin?: PresentationMasterPin | null;
   currentSlide?: number;
   isStreaming: boolean | null;
   isPresentationSaving: boolean;
@@ -44,6 +47,7 @@ const AuthoredHeaderActions = ({
     <AuthoredTemplateChanger
       presentationId={presentation_id}
       currentStyleId={getAuthoredStyleId(theme)}
+      currentMasterPin={currentMasterPin}
       disabled={
         !workspaceCommandsEnabled ||
         !onWorkspaceCommand ||

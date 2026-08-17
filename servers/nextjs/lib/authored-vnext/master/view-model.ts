@@ -10,9 +10,7 @@ import {
   type MasterSlot,
   type MasterValidation,
   type SlideDraft,
-  type StressCategory,
   type TitleStressCase,
-  type ValidationIssue,
   type VisualDirection,
 } from "./contracts.ts";
 
@@ -101,6 +99,18 @@ export function buildPreviewScene(
 ): PreviewScene {
   const local = validateMasterSetup(contract);
   if (!local.valid) throw new MasterContractError(local.errors);
+  return buildEditingPreviewScene(contract, slide);
+}
+
+/**
+ * Builds the live editor scene without turning a recoverable geometry mistake
+ * into a render-time exception. Draft/publish callers must continue to use the
+ * strict buildPreviewScene path above.
+ */
+export function buildEditingPreviewScene(
+  contract: DeckMasterContractV1,
+  slide: SlideDraft,
+): PreviewScene {
   const layout = Object.values(contract.layouts).find((entry) => entry.id === slide.layoutId);
   if (!layout) {
     throw new MasterContractError([{ code: "unknown_layout", path: "slide.layoutId", message: "Slide layout is not present in the master" }]);
@@ -142,45 +152,9 @@ export function createSlideSpec(
 }
 
 export function validateMasterSetup(contract: DeckMasterContractV1): MasterValidation {
-  const base = validateDeckMasterContract(contract);
-  const errors: ValidationIssue[] = [...base.errors];
-  const required = new Set<StressCategory>(["ko", "en", "mixed", "numericParenthetical"]);
-  let titleFitFailures = 0;
-  for (const stress of contract.titleStressCorpus) {
-    required.delete(stress.category);
-    if (stress.expectedLines.length < 1 || stress.expectedLines.length > contract.fitPolicy.longTitleMaxLines) {
-      titleFitFailures += 1;
-      errors.push({
-        code: "title_fit_failed",
-        path: `titleStressCorpus.${stress.id}`,
-        message: `${stress.id} exceeds the long-title line contract`,
-      });
-    }
-    const normalizedText = stress.text.trim().split(/\s+/).join(" ");
-    const normalizedLines = stress.expectedLines.join(" ").trim().split(/\s+/).join(" ");
-    if (normalizedText !== normalizedLines) {
-      titleFitFailures += 1;
-      errors.push({
-        code: "title_line_content_changed",
-        path: `titleStressCorpus.${stress.id}`,
-        message: `${stress.id} fixed lines do not preserve title content`,
-      });
-    }
-  }
-  for (const category of required) {
-    titleFitFailures += 1;
-    errors.push({
-      code: "missing_stress_category",
-      path: "titleStressCorpus",
-      message: `Missing ${category} stress title`,
-    });
-  }
-  return {
-    ...base,
-    valid: errors.length === 0,
-    errors,
-    titleFitFailures,
-  };
+  // Fit and stress records are legacy compatibility data.  Furniture-only
+  // setup neither reads nor validates title/body presentation decisions.
+  return validateDeckMasterContract(contract);
 }
 
 export function createMasterSetupState(

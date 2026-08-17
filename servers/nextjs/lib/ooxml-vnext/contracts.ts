@@ -56,7 +56,7 @@ export interface DeckMasterFurniture {
   readonly stroke?: string;
   readonly assetId?: string;
   readonly assetSha256?: string;
-  readonly visibility?: "always" | "exceptCover" | "coverOnly";
+  readonly visibility?: "always" | "exceptCover" | "coverOnly" | "hidden";
   readonly ownership: DeckMasterOwnership;
 }
 
@@ -102,6 +102,34 @@ export interface DeckMasterFontManifest {
 
 export type DeckMasterTokens = Readonly<Record<string, DeckMasterTokenValue>>;
 
+export interface RetainedReferenceCanvasSnapshot {
+  readonly width: number;
+  readonly height: number;
+}
+
+export interface RetainedReferenceLayoutSnapshot {
+  readonly schemaVersion: "retained-reference-layout/v1";
+  readonly retainedReferenceId: string;
+  readonly sourceDigest: string;
+  readonly canvas: RetainedReferenceCanvasSnapshot;
+  /** Versioned, digest-sealed layout records consumed without geometry flattening. */
+  readonly layouts: readonly Readonly<Record<string, unknown>>[];
+  readonly digest: string;
+}
+
+export interface ResolvedSnapshotEvidenceV1 {
+  readonly schemaVersion: "resolved-snapshot-evidence/v1";
+  readonly resolvedTemplateId: string;
+  readonly resolvedReferenceLayoutDigest: string;
+  readonly resolvedCompositionDigest: string;
+  readonly resolvedRuleDigest: string;
+  readonly pageNumber: number;
+  readonly slideCount: number;
+  readonly semanticRolesUsed: readonly string[];
+  readonly layoutRolesUsed: readonly string[];
+  readonly bodyGrammarDigest: string;
+}
+
 export interface DeckMasterContract {
   readonly contractVersion?: typeof DECK_MASTER_CONTRACT_VERSION;
   readonly id: string;
@@ -112,6 +140,8 @@ export interface DeckMasterContract {
   readonly fontManifest: DeckMasterFontManifest;
   readonly furniture: readonly DeckMasterFurniture[];
   readonly layouts: readonly DeckMasterLayout[];
+  /** Canonical authored manifest retained for WYSIWYG-native master compilation. */
+  readonly authoredManifest?: unknown;
   readonly digest?: string;
 }
 

@@ -34,7 +34,7 @@ def _client(monkeypatch):
 
 
 def test_flag_off_returns_stable_404_before_store_dependency(monkeypatch, tmp_path) -> None:
-    monkeypatch.delenv("AUTHORED_VNEXT_MASTER_ENABLED", raising=False)
+    monkeypatch.setenv("AUTHORED_VNEXT_MASTER_ENABLED", "false")
     monkeypatch.setenv("APP_DATA_DIRECTORY", str(tmp_path / "must-not-exist"))
     calls = 0
 

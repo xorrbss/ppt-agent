@@ -25,9 +25,80 @@ const styleControls = readFileSync(
   path.join(routeDir, "MasterStyleControls.tsx"),
   "utf8",
 );
+const studio = readFileSync(
+  path.join(routeDir, "MasterStudioCanvas.tsx"),
+  "utf8",
+);
+const catalogDialog = readFileSync(
+  path.join(routeDir, "MasterCatalogDialog.tsx"),
+  "utf8",
+);
+const catalogCard = readFileSync(
+  path.join(routeDir, "MasterCatalogCard.tsx"),
+  "utf8",
+);
+const generatorDir = path.join(process.cwd(), "app", "(presentation-generator)");
+const uploadPage = readFileSync(
+  path.join(generatorDir, "upload", "components", "UploadPage.tsx"),
+  "utf8",
+);
+const uploadState = readFileSync(
+  path.join(
+    generatorDir,
+    "upload",
+    "components",
+    "upload-page",
+    "useUploadPageState.ts",
+  ),
+  "utf8",
+);
+const outlinePage = readFileSync(
+  path.join(generatorDir, "outline", "components", "OutlinePage.tsx"),
+  "utf8",
+);
+const presentationGeneration = readFileSync(
+  path.join(
+    generatorDir,
+    "outline",
+    "hooks",
+    "usePresentationGeneration.ts",
+  ),
+  "utf8",
+);
 const source = `${page}\n${gate}\n${scene}\n${publishPanel}\n${styleControls}`;
 
-test("Master Setup route remains hidden behind the default-off feature flag", () => {
+test("catalog selection commits only on Apply and draft cards remain edit-only", () => {
+  assert.match(catalogDialog, /setPendingMasterId\(entry\.masterId\)/);
+  assert.match(catalogDialog, /client\.getPublished\(pendingMasterId\)/);
+  assert.match(catalogDialog, /await onApply\(published\)/);
+  assert.match(catalogDialog, /setPendingMasterId\(selectedMasterId\)/);
+  assert.match(catalogCard, /entry\.publishedRevision !== null/);
+  assert.match(catalogCard, /disabled=\{!selectable\}/);
+  assert.match(gate, /client\.registerMaster/);
+  assert.match(gate, /onPublishComplete\?\.\(published\)/);
+  assert.doesNotMatch(`${catalogDialog}\n${catalogCard}`, /publishedDigest/);
+});
+
+test("Upload keeps master preference separate and defaults to one-shot generation", () => {
+  assert.match(uploadPage, /readStoredCompanyStandardPreference\(\)/);
+  assert.match(uploadPage, /masterClient[\s\S]*?\.getPublished\(lastUsedMasterId\)/);
+  assert.match(uploadPage, /saveLastUsedMasterId\(published\.masterId\)/);
+  assert.match(uploadPage, /onApply=\{applyMaster\}/);
+  assert.match(uploadPage, /masterBlocksGeneration/);
+  assert.match(uploadPage, /data-testid="master-admission-error"/);
+  assert.match(uploadPage, /handleReviewOutline/);
+  assert.match(uploadState, /masterClient\.getPublished\(requested\.masterId\)/);
+  assert.match(uploadState, /companyStandardRef\.current\?\.masterId !== requested\.masterId/);
+  assert.match(uploadState, /startPresentation\(true\)/);
+  assert.match(uploadState, /startPresentation\(false\)/);
+  assert.match(uploadState, /\/outline\?auto=1&id=/);
+  assert.match(outlinePage, /const autoWorking = auto/);
+  assert.match(outlinePage, /masterDefaultResolved/);
+  assert.match(presentationGeneration, /generationMasterPin\(companyStandard\)/);
+  assert.match(presentationGeneration, /authoredRequest\.masterPin/);
+});
+
+test("Master Setup route supports an explicit emergency-disable feature flag", () => {
   assert.match(page, /isAuthoredVnextMasterEnabled\(\)/);
   assert.match(page, /notFound\(\)/);
 });
@@ -45,17 +116,11 @@ test("published Master is a required gate with a query-driven continuation", () 
   assert.match(publishPanel, /event\.preventDefault\(\)/);
 });
 
-test("Master and Visual Direction are visibly and structurally separate", () => {
-  assert.match(gate, /library\.title/);
-  assert.match(gate, /library\.draft/);
-  assert.match(gate, /library\.published/);
-  assert.match(gate, /direction\.title/);
-  assert.match(gate, /direction\.description/);
-  assert.match(gate, /buildPreviewScene/);
-  assert.match(gate, /REQUIRED_LAYOUT_KINDS/);
-  assert.match(gate, /REQUIRED_LAYOUT_KINDS\.map/);
-  assert.match(source, /brand\.title/);
-  assert.match(gate, /stress\.title/);
+test("legacy Master library rail stays hidden so WYSIWYG uses the full width", () => {
+  assert.doesNotMatch(gate, /xl:grid-cols-\[280px_minmax\(0,1fr\)\]/);
+  assert.match(gate, /<div className="grid gap-4">/);
+  assert.match(gate, /<aside\s+className="hidden space-y-4/);
+  assert.match(gate, /<MasterStudioCanvas/);
 });
 
 test("Master Designer exposes non-logo furniture, typography, semantic styles, and colors", () => {
@@ -96,11 +161,45 @@ test("preview uses explicit accessible React layers and never injects or persist
   assert.doesNotMatch(source, /localStorage|sessionStorage|indexedDB/);
 });
 
+test("Master studio keeps direct canvas manipulation mapped to the existing contract", () => {
+  assert.match(gate, /MasterStudioCanvas/);
+  assert.match(gate, /client\.assetUrl\(logo\)/);
+  assert.match(gate, /buildEditingPreviewScene\(contract, selectedSlide\)/);
+  assert.match(studio, /setBounds\(contract, layoutKind/);
+  assert.match(studio, /beginDrag\(event, item, "resize"\)/);
+  assert.match(studio, /t\("addContent"\)/);
+  assert.match(studio, /activateFurniture\("furniture:header"\)/);
+  assert.match(studio, /activateFurniture\("furniture:logo", true\)/);
+  assert.match(studio, /authored-master-logo/);
+  assert.match(studio, /disabled type="button"/);
+  assert.match(studio, /activateFurniture\("furniture:divider"\)/);
+  assert.match(studio, /activateFurniture\("furniture:page-number"\)/);
+  assert.match(studio, /const setFurnitureText/);
+  assert.match(studio, /aria-label=\{t\("textAria"\)\}/);
+  assert.match(studio, /furniture\?\.text \?\? item\.role/);
+  assert.match(studio, /validateMasterSetup\(contract\)/);
+  assert.match(studio, /const conflictIds/);
+  assert.match(studio, /ring-red-500/);
+  assert.match(studio, /overlapWarning/);
+  assert.match(studio, /setPointerCapture\(event\.pointerId\)/);
+  assert.match(studio, /releasePointerCapture\(drag\.pointerId\)/);
+  assert.match(studio, /drag\.moved \|\| dragMoved\.current/);
+  assert.match(studio, /data-studio-role/);
+  assert.match(studio, /selectedNow \? 2_000 : 1_000/);
+  assert.match(studio, /selectedNow \? 500 : 100/);
+  assert.doesNotMatch(studio, /onPointerLeave=\{stop\}/);
+  assert.match(studio, /t\("bringFront"\)/);
+  assert.match(studio, /t\("safeArea"\)/);
+  assert.match(studio, /t\("undo"\)/);
+  assert.doesNotMatch(scene, /LOGO/);
+  assert.match(scene, /<img/);
+});
+
 test("Master operations keep the authored-vnext client contract", () => {
   for (const operation of [
     "client.createDraft",
-    "client.validateDraft",
-    "client.publishDraft",
+    "client.validateCanonicalDraft",
+    "client.publishValidatedDraft",
     "client.preview",
   ]) {
     assert.match(gate, new RegExp(operation.replace(".", "\\.")));

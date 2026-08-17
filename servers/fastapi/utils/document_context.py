@@ -204,7 +204,20 @@ def _compact_documents(documents: Sequence[str], total_limit: int) -> str:
     if separator_chars >= total_limit:
         return "\n\n".join(documents)[:total_limit]
 
-    content_budget = total_limit - separator_chars
+    return "\n\n".join(
+        compact_document_texts(documents, total_limit - separator_chars)
+    )
+
+
+def compact_document_texts(
+    documents: Sequence[str],
+    total_limit: int,
+) -> list[str]:
+    """Fit sources into a shared budget while retaining source boundaries."""
+    if not documents or total_limit <= 0:
+        return ["" for _document in documents]
+
+    content_budget = total_limit
     lengths = [len(document) for document in documents]
     nonempty = [index for index, length in enumerate(lengths) if length > 0]
     allocations = [0] * len(documents)
@@ -239,11 +252,10 @@ def _compact_documents(documents: Sequence[str], total_limit: int) -> str:
         for index in remainder_order[:undistributed]:
             allocations[index] += 1
 
-    compacted = [
+    return [
         _compact_document(document, allocation)
         for document, allocation in zip(documents, allocations)
     ]
-    return "\n\n".join(compacted)
 
 
 def _compact_document(document: str, target_chars: int) -> str:

@@ -3,6 +3,8 @@ import test from "node:test";
 
 import {
   AUTHORED_VNEXT_FLOW_FEATURE_FLAG,
+  AUTHORED_VNEXT_DEV_SLIDE_COUNT_FEATURE_FLAG,
+  authoredVnextSlideCount,
   isAuthoredVnextFlowEnabled,
   selectPresentationFlow,
 } from "./feature-flag.ts";
@@ -15,6 +17,14 @@ test("authored vNext flow is default-off and only exact lowercase true enables i
   assert.equal(isAuthoredVnextFlowEnabled("TRUE"), false);
   assert.equal(isAuthoredVnextFlowEnabled("1"), false);
   assert.equal(isAuthoredVnextFlowEnabled("true"), true);
+});
+
+test("three-slide harness is an exact development-only opt-in", () => {
+  assert.equal(AUTHORED_VNEXT_DEV_SLIDE_COUNT_FEATURE_FLAG, "NEXT_PUBLIC_AUTHORED_VNEXT_DEV_SLIDE_COUNT");
+  assert.equal(authoredVnextSlideCount(undefined, "development"), 90);
+  assert.equal(authoredVnextSlideCount("3", "development"), 3);
+  assert.equal(authoredVnextSlideCount("3", "production"), 90);
+  assert.equal(authoredVnextSlideCount("4", "development"), 90);
 });
 
 test("disabled selection preserves the legacy contract by reference and never constructs vNext", () => {

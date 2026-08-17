@@ -30,6 +30,7 @@
     "check:upstream-byte-parity:working-tree": "node scripts/verify-upstream-byte-parity.mjs --working-tree",
     "test:upstream-byte-parity": "node --test scripts/verify-upstream-byte-parity.test.mjs",
     "test:workspace-e2e": "npm --prefix servers/nextjs run test:workspace-e2e",
+    "dev:authored-vnext:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-authored-vnext-dev.ps1",
     "test:local": "node scripts/test-local.mjs"
   },
   "dependencies": {

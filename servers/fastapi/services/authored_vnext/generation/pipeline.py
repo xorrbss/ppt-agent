@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from dataclasses import replace
 from models.authored_vnext.deck import (
+    AuthoredCompositionPin,
     BodyTextElement,
     CandidateBundle,
     CompletedSlideCheckpoint,
@@ -25,11 +26,11 @@ from models.authored_vnext.deck import (
     ValidatedSlideSpecV2,
 )
 from models.authored_vnext.master.operations import MasterRevisionResponse
-from models.authored_vnext.master.slide import SlideDraft
+from models.authored_vnext.master.slide import SlideSpecV2
 from services.authored_vnext.master.digests import canonical_digest
-from services.authored_vnext.master.service import _seal_slide
 
 from .core_bridge import AuthoringCoreBridgePort, CoreBridgeCheckpoint
+from .effective_style import materialize_authored_composition
 from .errors import (
     CandidateRejectedError,
     GenerationConflictError,
@@ -88,6 +89,7 @@ def _validated_slide(
     item_id: str,
     source_digest: str,
     pin: MasterDigestPin,
+    composition: AuthoredCompositionPin | None,
     policy: str,
     revision: int = 1,
 ) -> tuple[SlideVisualPlan, ValidatedSlideSpecV2]:
@@ -113,21 +115,40 @@ def _validated_slide(
         bounds=body_slot.bounds,
         body=planned.model_input.body,
     )
-    slide = _seal_slide(
-        master.contract,
-        SlideDraft(
-            slide_id=planned.slide_id,
-            layout_id=planned.layout_id,
-            title=planned.title,
-            body=planned.model_input.body,
-        ),
-        revision,
+    content_digest = canonical_digest(
+        {
+            "title": planned.title.model_dump(mode="json", by_alias=True),
+            "body": planned.model_input.body,
+        }
+    )
+    # SlideSpec/DeckGenerationSnapshot v1 binds this compatibility field to the
+    # published master pin. The composition's resolved reference snapshot is
+    # the authoritative provenance for template-owned font family/size/style.
+    durable_title_fit = planned.title_fit.model_copy(
+        update={"font_manifest_digest": pin.font_manifest_digest}
+    )
+    slide_payload = {
+        "schemaVersion": "slidespec/v2",
+        "slideId": planned.slide_id,
+        "revision": revision,
+        "layoutId": planned.layout_id,
+        "title": planned.title.model_dump(mode="json", by_alias=True),
+        "body": planned.model_input.body,
+        "ownership": {"locked": False, "modelWritable": True},
+        "masterDigest": pin.master_digest,
+        "titleFit": durable_title_fit.model_dump(mode="json", by_alias=True),
+        "contentDigest": content_digest,
+    }
+    slide = SlideSpecV2(
+        **slide_payload,
+        specDigest=canonical_digest(slide_payload),
     )
     checkpoint = SlideValidationCheckpoint(
         master_digest=pin.master_digest,
         layout_registry_digest=pin.layout_registry_digest,
         font_manifest_digest=pin.font_manifest_digest,
         source_digest=source_digest,
+        composition=composition,
         visual_plan_digest=plan.plan_digest,
         quality_policy_version=policy,
         layout_id=slide.layout_id,
@@ -139,6 +160,7 @@ def _validated_slide(
 
 def _seal_deck(
     *, deck_id: str, revision: int, parent: str | None, pin: MasterDigestPin,
+    composition: AuthoredCompositionPin | None,
     source_digest: str, slides: list[ValidatedSlideSpecV2],
 ) -> DeckGenerationSnapshot:
     payload = {
@@ -151,6 +173,8 @@ def _seal_deck(
         "slides": [item.model_dump(mode="json", by_alias=True) for item in slides],
         "createdAt": _now(),
     }
+    if composition is not None:
+        payload["composition"] = composition.model_dump(mode="json", by_alias=True)
     return DeckGenerationSnapshot(**payload, digest=canonical_digest(payload))
 
 
@@ -184,6 +208,8 @@ def _published_checkpoint(
         "attempt": attempt,
         "createdAt": _now(),
     }
+    if request.composition is not None:
+        payload["composition"] = request.composition.model_dump(mode="json", by_alias=True)
     return GenerationCheckpoint(**payload, checkpointDigest=canonical_digest(payload))
 
 
@@ -197,6 +223,12 @@ class AuthoredVNextGenerationPipeline:
         self.core_bridge = core_bridge
     def generate(self, request: GenerateDeckRequest) -> GenerationResult:
         master = _validate_master_pin(self.repository, request.master)
+        effective_contract = (
+            materialize_authored_composition(master.contract, request.composition)
+            if request.composition is not None
+            else master.contract
+        )
+        planning_master = master.model_copy(update={"contract": effective_contract})
         if request.publication_fence.expected_deck_revision != 0:
             raise GenerationConflictError("new generation requires revision zero fence")
         planning_items = [
@@ -208,20 +240,24 @@ class AuthoredVNextGenerationPipeline:
             )
             for item in request.outline.items
         ]
-        planned = plan_outline(master, planning_items)
+        planned = plan_outline(
+            master,
+            planning_items,
+            effective_contract=effective_contract,
+        )
         assignments: list[OutlineAssignment] = []
         validated: list[ValidatedSlideSpecV2] = []
         plans: list[SlideVisualPlan] = []
         for item, slide in zip(request.outline.items, planned.slides, strict=True):
-            if item.role_hint == "longTitle" and slide.layout_id != master.contract.layouts.long_title.id:
+            if item.role_hint == "longTitle" and slide.layout_id != effective_contract.layouts.long_title.id:
                 forced_title = fit_and_promote_title(
-                    master.contract,
+                    effective_contract,
                     item.title,
-                    master.contract.layouts.long_title.id,
+                    effective_contract.layouts.long_title.id,
                 )
                 long_body_slot = next(
                     slot
-                    for slot in master.contract.layouts.long_title.slots
+                    for slot in effective_contract.layouts.long_title.slots
                     if slot.role == "body"
                 )
                 slide = replace(
@@ -243,8 +279,8 @@ class AuthoredVNextGenerationPipeline:
                     ),
                 )
             plan, sealed = _validated_slide(
-                master, slide, item.item_id, request.outline.source_digest,
-                request.master, request.quality_policy_version,
+                planning_master, slide, item.item_id, request.outline.source_digest,
+                request.master, request.composition, request.quality_policy_version,
             )
             plans.append(plan)
             validated.append(sealed)
@@ -263,26 +299,56 @@ class AuthoredVNextGenerationPipeline:
             ))
         deck = _seal_deck(
             deck_id=request.deck_id, revision=1, parent=None, pin=request.master,
+            composition=request.composition,
             source_digest=request.outline.source_digest, slides=validated,
         )
-        quality = build_deck_quality_report(master.contract, deck, plans)
+        quality = build_deck_quality_report(effective_contract, deck, plans)
         if not quality.passed:
-            raise CandidateRejectedError("generated deck failed quality gate")
+            issue_codes = sorted(
+                {
+                    issue.code
+                    for issue in quality.issues
+                }
+                | {
+                    issue.code
+                    for gate in quality.slide_gates
+                    for issue in gate.issues
+                }
+            )
+            failed_checks = [
+                name
+                for name in (
+                    "fonts",
+                    "colors",
+                    "frame",
+                    "page_numbers",
+                    "layouts",
+                    "slots",
+                    "sources",
+                )
+                if not getattr(quality, name).passed
+            ]
+            evidence = ",".join([*issue_codes, *failed_checks]) or "unknown"
+            raise CandidateRejectedError(
+                f"generated deck failed quality gate: {evidence}"
+            )
         montage = build_generation_montage_manifest(deck)
         artifact = self.core_bridge.export(
-            master=master.contract, master_revision=master.revision,
+            master=effective_contract, master_revision=master.revision,
             slides=[item.slide for item in validated],
             checkpoint=CoreBridgeCheckpoint(
                 master_digest=request.master.master_digest,
                 layout_registry_digest=request.master.layout_registry_digest,
                 font_manifest_digest=request.master.font_manifest_digest,
                 source_digest=request.outline.source_digest,
+                composition=request.composition,
             ),
         )
         checkpoint = _published_checkpoint(request, validated)
         result = GenerationResult(
             operation_id=request.operation_id,
             checkpoint=checkpoint,
+            composition=request.composition,
             outline_assignments=OutlineAssignmentSet(
                 source_digest=request.outline.source_digest,
                 master_digest=request.master.master_digest,
@@ -306,6 +372,8 @@ class AuthoredVNextGenerationPipeline:
             raise StaleMasterError()
         if request.expected_checkpoint_digest != prior.checkpoint.checkpoint_digest:
             raise GenerationConflictError("stale resume checkpoint")
+        if request.checkpoint.composition != prior.composition:
+            raise GenerationConflictError("stale resume composition")
         return prior
     def regenerate_body(self, request: RegenerateBodyCommand) -> RegenerationResult:
         candidate = self.prepare_regeneration(request)
@@ -314,6 +382,12 @@ class AuthoredVNextGenerationPipeline:
         """Build and persist a detached candidate without advancing the deck head."""
         master = _validate_master_pin(self.repository, request.master)
         deck = self.repository.get_deck(request.deck_id)
+        effective_contract = (
+            materialize_authored_composition(master.contract, deck.composition)
+            if deck.composition is not None
+            else master.contract
+        )
+        effective_master = master.model_copy(update={"contract": effective_contract})
         fence = request.publication_fence
         if deck.revision != fence.expected_deck_revision or deck.digest != fence.expected_active_revision_digest:
             raise GenerationConflictError("regeneration publication fence failed")
@@ -330,18 +404,20 @@ class AuthoredVNextGenerationPipeline:
             raise GenerationConflictError("slide CAS failed")
         planned = type("RegenerationPlan", (), {
             "slide_id": current.slide.slide_id,
-            "role": "long-title" if current.slide.layout_id == master.contract.layouts.long_title.id else "standard",
+            "role": "long-title" if current.slide.layout_id == effective_contract.layouts.long_title.id else "standard",
             "layout_id": current.slide.layout_id,
             "title": current.slide.title,
+            "title_fit": current.slide.title_fit,
             "model_input": type("Input", (), {"slot_id": current.checkpoint.body_slot_id, "body": request.body})(),
         })()
         plan, candidate_slide = _validated_slide(
-            master, planned, f"outline:{request.slide_id.removeprefix('slide:')}",
-            request.source_digest, request.master, current.checkpoint.quality_policy_version,
+            effective_master, planned, f"outline:{request.slide_id.removeprefix('slide:')}",
+            request.source_digest, request.master, deck.composition,
+            current.checkpoint.quality_policy_version,
             current.slide.revision + 1,
         )
         slide_gate = validate_pipeline_slide_candidate(
-            master.contract, candidate_slide, plan
+            effective_contract, candidate_slide, plan
         )
         candidate_payload = {
             "lifecycle": "detached", "parentDeckDigest": deck.digest,
@@ -390,6 +466,11 @@ class AuthoredVNextGenerationPipeline:
             raise GenerationConflictError("candidate digest changed")
         master = _validate_master_pin(self.repository, request.master)
         deck = self.repository.get_deck(request.deck_id)
+        effective_contract = (
+            materialize_authored_composition(master.contract, deck.composition)
+            if deck.composition is not None
+            else master.contract
+        )
         fence = request.publication_fence
         if (
             deck.revision != fence.expected_deck_revision
@@ -418,38 +499,40 @@ class AuthoredVNextGenerationPipeline:
         slides[index] = candidate.slide
         published = _seal_deck(
             deck_id=deck.deck_id, revision=deck.revision + 1, parent=deck.digest,
-            pin=deck.master, source_digest=deck.source_digest, slides=slides,
+            pin=deck.master, composition=deck.composition,
+            source_digest=deck.source_digest, slides=slides,
         )
         plans = [candidate.visual_plan if i == index else _visual_plan(
             slide_id=item.slide.slide_id,
             item_id=f"outline:{item.slide.slide_id.removeprefix('slide:')}",
-            role="longTitle" if item.slide.layout_id == master.contract.layouts.long_title.id else "standard",
+            role="longTitle" if item.slide.layout_id == effective_contract.layouts.long_title.id else "standard",
             layout_id=item.slide.layout_id, slot_id=item.checkpoint.body_slot_id,
             source_digest=item.checkpoint.source_digest,
             bounds=next(
                 slot.bounds
                 for layout in (
-                    master.contract.layouts.cover,
-                    master.contract.layouts.section,
-                    master.contract.layouts.standard,
-                    master.contract.layouts.long_title,
+                    effective_contract.layouts.cover,
+                    effective_contract.layouts.section,
+                    effective_contract.layouts.standard,
+                    effective_contract.layouts.long_title,
                 )
                 for slot in layout.slots
                 if slot.id == item.checkpoint.body_slot_id
             ),
             body=item.slide.body,
         ) for i, item in enumerate(slides)]
-        quality = build_deck_quality_report(master.contract, published, plans)
+        quality = build_deck_quality_report(effective_contract, published, plans)
         if not quality.passed:
             raise CandidateRejectedError("regenerated deck failed aggregate gate")
         self.core_bridge.export(
-            master=master.contract, master_revision=master.revision,
+            master=effective_contract, master_revision=master.revision,
             slides=[item.slide for item in slides],
             checkpoint=CoreBridgeCheckpoint(
                 master_digest=request.master.master_digest,
                 layout_registry_digest=request.master.layout_registry_digest,
                 font_manifest_digest=request.master.font_manifest_digest,
                 source_digest=request.source_digest,
+                composition=published.composition,
             ),
         )
         result = RegenerationResult(
@@ -474,7 +557,8 @@ class AuthoredVNextGenerationPipeline:
             raise RollbackConflictError("rollback target changed")
         restored = _seal_deck(
             deck_id=current.deck_id, revision=current.revision + 1, parent=current.digest,
-            pin=target.master, source_digest=target.source_digest, slides=list(target.slides),
+            pin=target.master, composition=target.composition,
+            source_digest=target.source_digest, slides=list(target.slides),
         )
         result = RollbackResult(
             operation_id=request.operation_id,

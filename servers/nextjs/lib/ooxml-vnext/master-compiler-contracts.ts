@@ -13,9 +13,30 @@ export interface ContentTypeOverride {
 
 export interface DeckMasterBinaryAsset {
   readonly assetId: string;
-  readonly mediaType: "image/png";
+  readonly mediaType: "image/png" | "image/jpeg" | "image/svg+xml";
   readonly sha256: string;
   readonly bytesBase64: string;
+}
+
+export interface SemanticElementExportMapping {
+  readonly id: string;
+  readonly type: "text" | "image" | "shape" | "line" | "pageNumber" | "placeholder";
+  readonly scope: "common" | "layout";
+  readonly layoutId: string | null;
+  readonly shapeId: number;
+  readonly zIndex: number;
+  readonly rotation: number;
+  readonly visibility: "always" | "exceptCover" | "coverOnly" | "layoutOnly" | "hidden";
+  readonly assetId: string | null;
+  readonly assetSha256: string | null;
+  readonly mediaType: DeckMasterBinaryAsset["mediaType"] | null;
+  readonly assetPartName: string | null;
+  readonly assetRelationshipId: string | null;
+  readonly fit: "contain" | "cover" | null;
+  readonly crop: { readonly x: number; readonly y: number; readonly width: number; readonly height: number } | null;
+  readonly opacity?: number;
+  readonly sharedGroupId?: string;
+  readonly sharedOverride?: boolean;
 }
 
 export interface SemanticFontMapping {
@@ -40,7 +61,7 @@ export interface SemanticFurnitureMapping {
   readonly role: string;
   readonly kind: DeckMasterFurniture["kind"];
   readonly shapeId: number;
-  readonly visibility: "always" | "exceptCover" | "coverOnly";
+  readonly visibility: "always" | "exceptCover" | "coverOnly" | "hidden";
   readonly assetId: string | null;
   readonly assetSha256: string | null;
   readonly assetPartName: string | null;
@@ -80,6 +101,7 @@ export interface DeckMasterSemanticMetadata {
   readonly tokens: Readonly<Record<string, DeckMasterTokenValue>>;
   readonly furniture: readonly SemanticFurnitureMapping[];
   readonly layouts: readonly SemanticLayoutMapping[];
+  readonly semanticElements?: readonly SemanticElementExportMapping[];
 }
 
 export interface CompiledDeckMasterParts {

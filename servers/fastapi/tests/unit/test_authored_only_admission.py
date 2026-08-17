@@ -64,13 +64,34 @@ def test_malformed_flag_fails_closed(monkeypatch):
         require_legacy_creation_closed(operation="blank")
 
 
-def test_rollout_is_default_off_until_release_gates_pass(monkeypatch):
+def test_authored_only_admission_is_fail_closed_by_default(monkeypatch):
     monkeypatch.delenv("AUTHORED_ONLY_NEW_PRESENTATION_ADMISSION", raising=False)
     monkeypatch.delenv("AUTHORED_ONLY_CANARY_STAGE", raising=False)
-    require_legacy_creation_closed(operation="blank")
+    with pytest.raises(HTTPException) as raised:
+        require_legacy_creation_closed(operation="blank")
+    assert raised.value.detail["code"] == "legacy_blank_presentation_admission_closed"
     manifest = build_authored_only_capability_manifest()
-    assert manifest["authored_only"]["canary_stage"] == "internal"
-    assert manifest["ui"]["hide_legacy_create_actions"] is False
+    assert manifest["authored_only"]["new_presentation_driver"] == "authored"
+    assert manifest["ui"]["hide_legacy_create_actions"] is True
+
+
+@pytest.mark.parametrize(
+    "generation_request",
+    [
+        SimpleNamespace(strategy=None, template=None),
+        SimpleNamespace(strategy="legacy", template="adaptive"),
+        SimpleNamespace(strategy="adaptive", template="adaptive"),
+        SimpleNamespace(strategy="template_v2", template="adaptive"),
+    ],
+)
+def test_default_admission_rejects_every_non_authored_driver(
+    monkeypatch, generation_request
+):
+    monkeypatch.delenv("AUTHORED_ONLY_NEW_PRESENTATION_ADMISSION", raising=False)
+    monkeypatch.delenv("AUTHORED_ONLY_CANARY_STAGE", raising=False)
+    with pytest.raises(HTTPException) as raised:
+        require_authored_generation_admission(generation_request)
+    assert raised.value.detail["required_driver"] == "authored"
 
 
 def test_internal_canary_only_admits_allowlisted_owner(monkeypatch):
@@ -81,9 +102,9 @@ def test_internal_canary_only_admits_allowlisted_owner(monkeypatch):
         require_legacy_creation_closed(operation="blank")
 
     monkeypatch.setenv("AUTHORED_ONLY_INTERNAL_OWNER_IDS", "different-owner")
-    # Outside the canary cohort, existing create behavior remains available
-    # so a rollback/hold changes configuration without a deployment.
-    require_legacy_creation_closed(operation="blank")
+    # A canary configuration must not reopen a non-authored creation path.
+    with pytest.raises(HTTPException):
+        require_legacy_creation_closed(operation="blank")
 
 
 def test_new_shell_is_canonical_authored(monkeypatch):

@@ -17,7 +17,8 @@
     "test:template-v2-pdf-golden": "node scripts/template-v2-pdf-golden.mjs",
     "test:chat-cypress": "cypress run --component --spec \"app/**/conversation/ChatSurface.cy.tsx,app/**/workspace/CanonicalWorkspaceChatPanel.cy.tsx\"",
     "test:workspace-cypress": "cypress run --component --spec \"app/**/workspace/WorkspaceChatPanel.cy.tsx\"",
-    "test:workspace-e2e": "node scripts/run-workspace-e2e.mjs"
+    "test:workspace-e2e": "node scripts/run-workspace-e2e.mjs",
+    "test:authored-vnext-local-e2e": "node scripts/run-authored-vnext-local-happy-path-e2e.mjs"
   },
   "dependencies": {
     "@babel/generator": "^7.29.8",

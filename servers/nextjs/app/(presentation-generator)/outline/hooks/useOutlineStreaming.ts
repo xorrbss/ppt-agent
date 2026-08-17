@@ -103,6 +103,14 @@ export const useOutlineStreaming = (
       highestIndexRef.current = -1;
     };
 
+    const stopStreaming = () => {
+      resetStreamingState();
+      isClosed = true;
+      closeEventSource();
+      clearRetryTimer();
+      clearRecoveryTimer();
+    };
+
     const refreshCodexSession = async (force = false): Promise<boolean> => {
       if (llmProvider?.toLowerCase() !== "codex" || codexRefreshAttempted) {
         return false;
@@ -115,10 +123,7 @@ export const useOutlineStreaming = (
     };
 
     const failExpiredCodexSession = () => {
-      resetStreamingState();
-      closeEventSource();
-      clearRetryTimer();
-      clearRecoveryTimer();
+      stopStreaming();
       notify.error(
         t("codexSessionExpiredTitle"),
         t("codexSessionExpiredDescription"),
@@ -202,7 +207,7 @@ export const useOutlineStreaming = (
           data = JSON.parse(event.data) as OutlineStreamEvent;
         } catch {
           if (!scheduleRetry("invalid SSE payload")) {
-            resetStreamingState();
+            stopStreaming();
             notify.error("스트림 파싱 실패", "개요 스트림 응답을 파싱하지 못했습니다.");
           }
           return;
@@ -260,7 +265,7 @@ export const useOutlineStreaming = (
               finishStreaming(outlinesData);
             } catch {
               if (!scheduleRetry("failed to parse complete payload")) {
-                resetStreamingState();
+                stopStreaming();
                 notify.error("파싱 실패", "프레젠테이션 데이터를 파싱하지 못했습니다.");
               }
             }
@@ -268,16 +273,7 @@ export const useOutlineStreaming = (
             break;
 
           case "closing":
-            setIsStreaming(false);
-            setIsLoading(false);
-            setHasCompleted(false);
-            setActiveSlideIndex(null);
-            setHighestActiveIndex(-1);
-            activeIndexRef.current = -1;
-            highestIndexRef.current = -1;
-            isClosed = true;
-            closeEventSource();
-            clearRetryTimer();
+            stopStreaming();
             retryCount = 0;
             break;
           case "error":
@@ -299,8 +295,7 @@ export const useOutlineStreaming = (
               break;
             }
             if (!scheduleRetry(data.detail || "server returned stream error")) {
-              resetStreamingState();
-              closeEventSource();
+              stopStreaming();
               notify.error(
                 "개요 스트리밍 실패",
                 data.detail ||
@@ -313,8 +308,7 @@ export const useOutlineStreaming = (
 
       eventSource.onerror = () => {
         if (!scheduleRetry("connection lost")) {
-          resetStreamingState();
-          closeEventSource();
+          stopStreaming();
           notify.error("연결 실패", "서버에 연결하지 못했습니다. 다시 시도해 주세요.");
         }
       };

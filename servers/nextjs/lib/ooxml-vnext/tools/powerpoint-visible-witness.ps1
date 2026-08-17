@@ -17,6 +17,34 @@ function Get-Sha256([string]$Path) {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
+function Get-StreamSha256([System.IO.FileStream]$Stream) {
+    $position = $Stream.Position
+    try {
+        $Stream.Position = 0
+        $sha256 = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            return ([BitConverter]::ToString($sha256.ComputeHash($Stream))).Replace("-", "").ToLowerInvariant()
+        }
+        finally { $sha256.Dispose() }
+    }
+    finally { $Stream.Position = $position }
+}
+
+function Test-WriteOpenBlocked([string]$Path) {
+    try {
+        $probe = [System.IO.File]::Open(
+            $Path,
+            [System.IO.FileMode]::Open,
+            [System.IO.FileAccess]::Write,
+            [System.IO.FileShare]::ReadWrite
+        )
+        $probe.Dispose()
+        return $false
+    }
+    catch [System.IO.IOException] { return $true }
+    catch [System.UnauthorizedAccessException] { return $true }
+}
+
 function ConvertTo-ObservedBoolean([string]$Answer) {
     $normalized = $Answer.Trim().ToLowerInvariant()
     if ($normalized -eq "yes") { return $true }
@@ -62,11 +90,41 @@ if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
 if ([System.IO.Path]::GetExtension($source) -ine ".pptx") {
     throw "Only .pptx input is accepted."
 }
-$sourceDigestBefore = Get-Sha256 $source
+$sourceReadLock = [System.IO.File]::Open(
+    $source,
+    [System.IO.FileMode]::Open,
+    [System.IO.FileAccess]::Read,
+    [System.IO.FileShare]::Read
+)
+$sourceWriteOpenProbeBlocked = Test-WriteOpenBlocked $source
+if (-not $sourceWriteOpenProbeBlocked) {
+    $sourceReadLock.Dispose()
+    throw "Source write-open probe unexpectedly succeeded while the witness lock was held."
+}
+$sourceDigestBefore = Get-StreamSha256 $sourceReadLock
 $witnessDirectory = New-WitnessDirectory $WitnessRoot
 $disposableCopy = Join-Path $witnessDirectory "disposable-witness.pptx"
-Copy-Item -LiteralPath $source -Destination $disposableCopy
+$copyWrite = [System.IO.File]::Open(
+    $disposableCopy,
+    [System.IO.FileMode]::CreateNew,
+    [System.IO.FileAccess]::Write,
+    [System.IO.FileShare]::None
+)
+try {
+    $sourceReadLock.Position = 0
+    $sourceReadLock.CopyTo($copyWrite)
+    $copyWrite.Flush($true)
+}
+finally { $copyWrite.Dispose() }
+$sourceReadLock.Position = 0
 $copyDigestBefore = Get-Sha256 $disposableCopy
+if ($copyDigestBefore -ne $sourceDigestBefore) {
+    throw "Disposable copy digest does not match the locked source handle."
+}
+$powerPointLaunchTarget = [System.IO.Path]::GetFullPath($disposableCopy)
+if ($powerPointLaunchTarget.Equals($source, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "PowerPoint witness target must be distinct from the source path."
+}
 $archive = [IO.Compression.ZipFile]::OpenRead($disposableCopy)
 try {
     $expectedSlideCount = @(
@@ -116,7 +174,7 @@ if ($LaunchOpenSaveReopenWitness) {
         $powerPoint.status = "blocked-existing-powerpoint-process"
     }
     else {
-        $arguments = @("/x", ('"' + $disposableCopy + '"'))
+        $arguments = @("/x", ('"' + $powerPointLaunchTarget + '"'))
         $opened = Start-Process -FilePath $PowerPointExecutable -ArgumentList $arguments -PassThru
         $powerPoint.launched = $true
         $powerPoint.spawnedProcessId = $opened.Id
@@ -232,7 +290,7 @@ elseif ($LaunchVisibleWitness) {
         $powerPoint.status = "blocked-existing-powerpoint-process"
     }
     else {
-        $arguments = @("/x", ('"' + $disposableCopy + '"'))
+        $arguments = @("/x", ('"' + $powerPointLaunchTarget + '"'))
         $spawned = Start-Process `
             -FilePath $PowerPointExecutable `
             -ArgumentList $arguments `
@@ -289,7 +347,8 @@ if ($RunLibreOffice) {
     }
 }
 
-$sourceDigestAfter = Get-Sha256 $source
+$sourceDigestAfter = Get-StreamSha256 $sourceReadLock
+$sourcePathDigestAfter = Get-Sha256 $source
 $copyDigestAfter = Get-Sha256 $disposableCopy
 $report = [ordered]@{
     schemaVersion = "ooxml-vnext/powerpoint-visible-witness/v1"
@@ -298,8 +357,18 @@ $report = [ordered]@{
         path = $source
         sha256Before = $sourceDigestBefore
         sha256After = $sourceDigestAfter
-        unchanged = $sourceDigestBefore -eq $sourceDigestAfter
-        openedByPowerPoint = $false
+        pathSha256After = $sourcePathDigestAfter
+        unchanged = (
+            $sourceDigestBefore -eq $sourceDigestAfter -and
+            $sourceDigestBefore -eq $sourcePathDigestAfter
+        )
+        passedToPowerPoint = $source.Equals(
+            $powerPointLaunchTarget,
+            [StringComparison]::OrdinalIgnoreCase
+        )
+        readOnlyHandleHeldDuringWitness = $true
+        writeOpenProbeBlocked = $sourceWriteOpenProbeBlocked
+        fileShareDuringWitness = "Read (writes and deletes denied)"
     }
     disposable = [ordered]@{
         directory = $witnessDirectory
@@ -309,6 +378,18 @@ $report = [ordered]@{
         unchanged = $copyDigestBefore -eq $copyDigestAfter
         mutationExpected = [bool]$LaunchOpenSaveReopenWitness
         retainedForAudit = $true
+        createdFromLockedSourceHandle = $true
+        digestMatchedSourceBeforeLaunch = $copyDigestBefore -eq $sourceDigestBefore
+    }
+    isolation = [ordered]@{
+        sourcePath = $source
+        powerPointLaunchTarget = $powerPointLaunchTarget
+        distinctPaths = -not $source.Equals(
+            $powerPointLaunchTarget,
+            [StringComparison]::OrdinalIgnoreCase
+        )
+        sourceWriteOpenProbeBlocked = $sourceWriteOpenProbeBlocked
+        sourceDeleteDeniedByFileShareMode = $true
     }
     safety = [ordered]@{
         existingProcessAttach = $false
@@ -337,6 +418,7 @@ $report = [ordered]@{
 $templatePath = Join-Path $witnessDirectory "witness-receipt.json"
 Write-Json $templatePath $report
 if ($OutputJson) { Write-Json $OutputJson $report }
+$sourceReadLock.Dispose()
 $report | ConvertTo-Json -Depth 20
 
 if ($report.overallStatus -eq "failed") { exit 1 }

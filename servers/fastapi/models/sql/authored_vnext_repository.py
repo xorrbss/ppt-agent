@@ -7,6 +7,7 @@ publication rows are the only mutable records and are advanced with SQL CAS.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 import uuid
 
 from sqlalchemy import (
@@ -222,6 +223,10 @@ class AuthoredVNextExportJob(SQLModel, table=True):
     expected_publication_digest: str | None = Field(default=None, sa_column=Column(String(71), nullable=True))
     timeout_ms: int = Field(default=120000, sa_column=Column(BigInteger, nullable=False, server_default="120000"))
     max_attempts: int = Field(default=3, sa_column=Column(Integer, nullable=False, server_default="3"))
+    request_payload: dict[str, Any] = Field(
+        default_factory=dict,
+        sa_column=Column(JSON, nullable=False, server_default=text("'{}'")),
+    )
     request_hash: str = Field(sa_column=Column(String(64), nullable=False))
     idempotency_key_hash: str = Field(sa_column=Column(String(64), nullable=False))
     state: str = Field(default="queued", sa_column=Column(String(24), nullable=False, server_default="queued"))

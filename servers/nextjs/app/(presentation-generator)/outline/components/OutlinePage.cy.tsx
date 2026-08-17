@@ -11,7 +11,6 @@ import {
 import { setPptGenUploadState } from "@/store/slices/presentationGenUpload";
 import { makeStore, store } from "@/store/store";
 
-import { AUTHORED_TEMPLATE_ID } from "./TemplateSelection";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import { DashboardApi } from "../../services/api/dashboard";
 import OutlinePage from "./OutlinePage";
@@ -87,7 +86,6 @@ describe("<OutlinePage /> resume banner", () => {
     store.dispatch(setOutlines([{ content: "# Interrupted outline" }]));
     store.dispatch(
       setPptGenUploadState({
-        selectedTemplate: AUTHORED_TEMPLATE_ID,
         authoredStyle: "default",
         authoredVisionQa: false,
         config: null,
@@ -143,6 +141,143 @@ describe("<OutlinePage /> resume banner", () => {
 });
 
 describe("<OutlinePage /> reload recovery", () => {
+  it("redirects an already-published auto re-entry to the presentation", () => {
+    const publishedPresentationId = "already-published-auto-entry";
+    const publishedStore = makeStore();
+    publishedStore.dispatch(setPresentationId(publishedPresentationId));
+    publishedStore.dispatch(setOutlines([{ content: "# Published outline" }]));
+    publishedStore.dispatch(
+      setPptGenUploadState({
+        authoredStyle: "default",
+        authoredVisionQa: false,
+        companyStandard: {
+          masterId: "master:published",
+          revision: 1,
+          digest: `sha256:${"b".repeat(64)}`,
+          name: "게시 회사 표준",
+          hasLogo: true,
+          primaryFont: "Noto Sans KR",
+          layoutCount: 4,
+        },
+        config: null,
+      })
+    );
+    cy.window().then((window) => window.localStorage.clear());
+    cy.stub(DashboardApi, "getPresentation")
+      .resolves({
+        id: publishedPresentationId,
+        lifecycle_status: "published",
+        n_slides: 1,
+        outlines: { slides: [{ content: "# Published outline" }] },
+        slides: [{ id: "published-slide" }],
+      } as any)
+      .as("getPresentation");
+    cy.stub(PresentationGenerationApi, "generateAuthoredAsync")
+      .as("generateAuthored");
+    cy.stub(router, "replace").as("replace");
+
+    mountOutlinePage(publishedStore, publishedPresentationId);
+
+    cy.get("@getPresentation").should(
+      "have.been.calledWith",
+      publishedPresentationId
+    );
+    cy.get("@replace").should(
+      "have.been.calledOnceWith",
+      `/presentation?id=${publishedPresentationId}`
+    );
+    cy.get("@generateAuthored").should("not.have.been.called");
+  });
+
+  it("auto-submits a staged first generation when its outline already exists", () => {
+    cy.viewport(1280, 900);
+    cy.window().then((window) => window.localStorage.clear());
+    seedRetryableTask(undefined, {
+      taskId: null,
+      status: "starting",
+      authoredRequest: {
+        language: "Korean",
+        visionQa: false,
+        authoredStyle: "default",
+        masterPin: {
+          masterId: "master:auto",
+          revision: 1,
+          digest: `sha256:${"a".repeat(64)}`,
+        },
+      },
+    });
+    const autoStore = makeStore();
+    autoStore.dispatch(setPresentationId(SOURCE_PRESENTATION_ID));
+    autoStore.dispatch(setOutlines([{ content: "# Ready outline" }]));
+    autoStore.dispatch(
+      setPptGenUploadState({
+        authoredStyle: "default",
+        authoredVisionQa: false,
+        companyStandard: {
+          masterId: "master:auto",
+          revision: 1,
+          digest: `sha256:${"a".repeat(64)}`,
+          name: "자동 회사 표준",
+          hasLogo: true,
+          primaryFont: "Noto Sans KR",
+          layoutCount: 4,
+        },
+        config: null,
+      })
+    );
+    cy.stub(PresentationGenerationApi, "generateAuthoredAsync")
+      .resolves({ id: "first-authored-task", status: "running" } as any)
+      .as("generateAuthored");
+
+    mountOutlinePage(autoStore);
+
+    cy.get("@generateAuthored").should(
+      "have.been.calledOnceWith",
+      Cypress.sinon.match({
+        idempotency_key: RESUME_IDEMPOTENCY_KEY,
+        slides_markdown: ["# Ready outline"],
+      })
+    );
+  });
+
+  it("auto-submits a staged authored template without a master", () => {
+    cy.window().then((window) => window.localStorage.clear());
+    seedRetryableTask(undefined, {
+      taskId: null,
+      status: "starting",
+      authoredRequest: {
+        language: "Korean",
+        visionQa: false,
+        authoredStyle: "osb-smart-banking",
+      },
+    });
+    const templateOnlyStore = makeStore();
+    templateOnlyStore.dispatch(setPresentationId(SOURCE_PRESENTATION_ID));
+    templateOnlyStore.dispatch(setOutlines([{ content: "# Template-only outline" }]));
+    templateOnlyStore.dispatch(
+      setPptGenUploadState({
+        authoredStyle: "osb-smart-banking",
+        authoredVisionQa: false,
+        companyStandard: null,
+        config: null,
+      })
+    );
+    cy.stub(PresentationGenerationApi, "generateAuthoredAsync")
+      .resolves({ id: "template-only-task", status: "running" } as any)
+      .as("generateTemplateOnly");
+
+    mountOutlinePage(templateOnlyStore);
+
+    cy.get("@generateTemplateOnly").should(
+      "have.been.calledOnceWith",
+      Cypress.sinon.match({
+        authored_style: "osb-smart-banking",
+        masterPin: undefined,
+        slides_markdown: ["# Template-only outline"],
+      })
+    );
+  });
+
   it("restores the presentation identity carried by the outline URL", () => {
     const reloadStore = makeStore();
     reloadStore.dispatch(setOutlines([{ content: "# Route-restored outline" }]));

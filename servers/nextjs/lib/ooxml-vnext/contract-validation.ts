@@ -260,7 +260,15 @@ export function validateDeckMasterContract(input: unknown): DeckMasterContractVa
   const issues: string[] = [];
   const root = requireRecord(input, "deckMaster", issues);
   if (!root) return { ok: false, issues };
-  allowedKeys(root, ["contractVersion", "id", "name", "slideSizePx", "theme", "tokens", "fontManifest", "furniture", "layouts", "digest"], "deckMaster", issues);
+  allowedKeys(root, ["contractVersion", "id", "name", "slideSizePx", "theme", "tokens", "fontManifest", "furniture", "layouts", "authoredManifest", "digest"], "deckMaster", issues);
+  if (
+    root.authoredManifest !== undefined &&
+    (!isRecord(root.authoredManifest) ||
+      root.authoredManifest.contractVersion !== DECK_MASTER_CONTRACT_VERSION ||
+      typeof root.authoredManifest.masterId !== "string")
+  ) {
+    issues.push("deckMaster.authoredManifest must be a canonical authored deck master");
+  }
   if (root.contractVersion !== undefined && root.contractVersion !== DECK_MASTER_CONTRACT_VERSION) {
     issues.push(`deckMaster.contractVersion must equal ${DECK_MASTER_CONTRACT_VERSION}`);
   }
@@ -301,7 +309,7 @@ export function validateDeckMasterContract(input: unknown): DeckMasterContractVa
       if (record.kind === "logo" && Boolean(record.assetId) !== Boolean(record.assetSha256)) {
         issues.push(`${path}.assetId and assetSha256 must be configured together`);
       }
-      if (record.visibility !== undefined && !["always", "exceptCover", "coverOnly"].includes(record.visibility as string)) {
+      if (record.visibility !== undefined && !["always", "exceptCover", "coverOnly", "hidden"].includes(record.visibility as string)) {
         issues.push(`${path}.visibility is unsupported`);
       }
       const bounds = validateRect(record.bounds, `${path}.bounds`, issues);

@@ -3,6 +3,8 @@ from __future__ import annotations
 # The publication admission path performs one local existence check.
 # ruff: noqa: ASYNC240
 
+import asyncio
+import html as html_module
 import logging
 import os
 import time
@@ -21,7 +23,11 @@ from models.sql.presentation import (
     PresentationModel,
 )
 from models.sql.presentation_generation_job import PresentationGenerationJob
-from services.authored_checkpoint_service import AuthoredStageError, fail_stage
+from services.authored_checkpoint_service import (
+    AuthoredStageError,
+    fail_stage,
+    is_retryable_exception,
+)
 from services.authored_exact_provenance import build_exact_provenance
 from services.authored_exact_source_snapshot import (
     ExactSourceSnapshotError,
@@ -35,12 +41,25 @@ from services.authored_presentation_artifacts import (
     authored_title,
     resolve_brand,
 )
+from services.authored_presentation_contracts import AuthoredGenerationPipelineResult
 from services.authored_presentation_pipeline import _author_illustrate_render_pipeline
 from services.authored_presentation_publication import publish_authored_presentation
+from services.authored_vnext.generation.legacy_bridge import (
+    _checkpoint_generated_slides,
+    export_legacy_master_owned_deck,
+    generate_legacy_master_owned_deck,
+)
+from services.authored_vnext.generation.ai_text_zones import (
+    AITextZoneContext,
+)
 from services.provider_usage_instrumentation import provider_usage_scope, record_local_stage
 from utils.authored_dom_quality import ensure_authored_qids
 from utils.authored_styles import resolve_authored_style, validate_exact_reconstruction_style
-from utils.llm_calls.author_deck import plan_deck_roles, prepare_authored_deck
+from utils.llm_calls.author_deck import (
+    AuthoredDeckResult,
+    plan_deck_roles,
+    prepare_authored_deck,
+)
 from utils.llm_calls.author_slide import (
     EXACT_RECONSTRUCTION,
     STYLE_REFERENCE,
@@ -48,10 +67,91 @@ from utils.llm_calls.author_slide import (
     normalize_reference_mode,
 )
 from utils.llm_calls.author_vision_qa import revise_authored_deck
-from utils.slide_capture import _placeholder_png, find_chrome
+from utils.slide_capture import _placeholder_png, find_chrome, render_html_to_png
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _deterministic_style_replay_html(
+    content: str,
+    *,
+    role: str,
+    index: int,
+    slide_count: int,
+    style,
+    brand,
+) -> str:
+    """Render saved semantic content without authoring or deleting any text."""
+
+    background = style.background_color or style.preview_bg or "#F8FAFC"
+    accent = style.primary_color or style.preview_accent or brand.primary or "#2563EB"
+    palette = tuple(style.preview_palette or ())
+    text_color = palette[1] if len(palette) > 1 else "#0F172A"
+    font = style.body_font or brand.fonts or "Noto Sans KR"
+    heading_font = style.heading_font or font
+    escaped = html_module.escape(content or "")
+    escaped_role = html_module.escape(role or "CONTENT")
+    font_size = 28 if len(content) <= 320 else 20 if len(content) <= 900 else 13
+    return (
+        '<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><style>'
+        f'*{{box-sizing:border-box}}body{{margin:0;width:1280px;height:720px;overflow:hidden;'
+        f'background:{background};color:{text_color};font-family:"{font}",sans-serif;'
+        'padding:58px 68px 54px;display:flex;flex-direction:column;}'
+        f'.accent{{width:64px;height:7px;background:{accent};margin-bottom:22px}}'
+        f'.role{{font-family:"{heading_font}",sans-serif;font-size:14px;font-weight:700;'
+        f'letter-spacing:.12em;color:{accent};margin-bottom:22px}}'
+        f'.semantic{{white-space:pre-wrap;overflow-wrap:anywhere;font-size:{font_size}px;'
+        'line-height:1.42;font-weight:500;flex:1;overflow:hidden}'
+        '.page{font-size:12px;opacity:.55;text-align:right;margin-top:16px}'
+        '</style></head><body><div class="accent"></div>'
+        f'<div class="role">{escaped_role}</div>'
+        f'<div class="semantic">{escaped}</div>'
+        f'<div class="page">{index + 1} / {slide_count}</div>'
+        '</body></html>'
+    )
+
+
+async def _deterministic_style_replay_pipeline(
+    outline: PresentationOutlineModel,
+    *,
+    roles: list[str],
+    style,
+    brand,
+    generation_job: PresentationGenerationJob | None,
+) -> AuthoredGenerationPipelineResult:
+    started = time.monotonic()
+    htmls = [
+        _deterministic_style_replay_html(
+            slide.content,
+            role=roles[index],
+            index=index,
+            slide_count=len(outline.slides),
+            style=style,
+            brand=brand,
+        )
+        for index, slide in enumerate(outline.slides)
+    ]
+    render_started = time.monotonic()
+    pngs = list(await asyncio.gather(*(render_html_to_png(html) for html in htmls)))
+    render_work = time.monotonic() - render_started
+    await _checkpoint_generated_slides(
+        generation_job=generation_job,
+        layout_ids=roles,
+        htmls=htmls,
+        pngs=pngs,
+    )
+    return AuthoredGenerationPipelineResult(
+        deck=AuthoredDeckResult(
+            htmls=htmls,
+            design_system="authored-design-replay/v1",
+        ),
+        pngs=pngs,
+        elapsed=time.monotonic() - started,
+        author_work=0.0,
+        illustration_work=0.0,
+        render_work=render_work,
+    )
 
 
 async def _generate_authored_presentation(
@@ -66,7 +166,9 @@ async def _generate_authored_presentation(
     Returns the path to the produced file plus the editor path."""
     started = time.monotonic()
     title = authored_title(request, outline)
-    style = resolve_authored_style(request.authored_style)
+    style = request._authored_style_snapshot or resolve_authored_style(
+        request.authored_style
+    )
     roles = plan_deck_roles(outline)
     exact_snapshot_id = request._authored_exact_snapshot_id
     if exact_snapshot_id is not None:
@@ -166,7 +268,87 @@ async def _generate_authored_presentation(
     # artifact-intent writer at finalization.
     await sql_session.commit()
 
-    if generation_job is None:
+    master_generation = None
+    if request._authored_master_resolution is not None:
+        owner_id = request._authored_master_resolution.owner_id
+        source_attachments = tuple(
+            snapshot.normalized_payload_json
+            for snapshot in request._reference_snapshots
+        )
+        ai_text_context = AITextZoneContext(
+            prompt=request.content,
+            instructions=request.instructions or "",
+            materials=tuple(
+                request.slides_markdown
+                or [slide.content for slide in outline.slides]
+            ),
+            attachments=source_attachments,
+        )
+        try:
+            master_generation = await generate_legacy_master_owned_deck(
+                owner_id=owner_id,
+                presentation_id=presentation_id,
+                outline=outline,
+                resolved=request._authored_master_resolution,
+                authored_style=style if request.authored_style is not None else None,
+                composition_pin=request._authored_composition_pin,
+                deterministic_replay=request._authored_design_replay,
+                ai_text_context=ai_text_context,
+                generation_job=generation_job,
+                source_semantic_snapshot=request._authored_source_semantic_snapshot,
+            )
+        except Exception as error:
+            if isinstance(error, AuthoredStageError):
+                raise
+            LOGGER.exception(
+                "Master-owned authored generation failed for %s",
+                presentation_id,
+            )
+            raise AuthoredStageError(
+                slide_index=0,
+                stage="author",
+                code=getattr(error, "code", "authored_vnext_generation_failed"),
+                retryable=is_retryable_exception(error),
+                cause=error,
+            ) from error
+        composition_pin = request._authored_composition_pin
+        deck_composition = master_generation.result.deck.composition
+        if (
+            composition_pin is None
+            or master_generation.composition_pin != composition_pin
+            or deck_composition != composition_pin
+        ):
+            raise AuthoredStageError(
+                slide_index=0,
+                stage="author",
+                code="authored_composition_digest_mismatch",
+                retryable=False,
+                message=(
+                    "생성 결과의 회사표준/저작 스타일 구성이 요청 시 고정된 구성과 "
+                    "일치하지 않습니다."
+                ),
+            )
+        composition_pin.require_digest(
+            deck_composition.digest,
+            consumer="generation-preview-checkpoint",
+        )
+        roles = [
+            item.slide.layout_id for item in master_generation.result.deck.slides
+        ]
+        # The compiler-owned immutable deck scene is the only preview/PNG source.
+        # Company furniture and authored style are already materialized in its
+        # effective contract; no post-render overlay or template-only fallback is
+        # permitted after this point.
+        pipeline = master_generation.pipeline
+    elif request._authored_design_replay:
+        pipeline = await _deterministic_style_replay_pipeline(
+            outline,
+            roles=roles,
+            style=style,
+            brand=brand,
+            generation_job=generation_job,
+        )
+    elif generation_job is None:
         pipeline = await _author_illustrate_render_pipeline(outline, brand, style)
     else:
         pipeline = await _author_illustrate_render_pipeline(
@@ -180,7 +362,11 @@ async def _generate_authored_presentation(
 
     fixed_count = 0
     vision_elapsed = 0.0
-    if getattr(request, "vision_qa", False):
+    if (
+        getattr(request, "vision_qa", False)
+        and master_generation is None
+        and not request._authored_design_replay
+    ):
         vision_started = time.monotonic()
         with provider_usage_scope(
             job_id=generation_job.id if generation_job is not None else None,
@@ -232,6 +418,7 @@ async def _generate_authored_presentation(
 
     export_started = time.monotonic()
     attempt_token = generation_job.attempt_token if generation_job is not None else None
+    native_export_evidence = None
     try:
         if generation_job is not None:
             if not attempt_token:
@@ -240,7 +427,49 @@ async def _generate_authored_presentation(
                     stage="persist",
                     code="authored_attempt_lost",
                 )
-        out_path = _build_authored_export(request, presentation_id, pngs, title)
+        if (
+            master_generation is not None
+            and request.export_as == "pptx"
+        ):
+            owner_id = request._authored_master_resolution.owner_id
+            requested_composition = request._authored_composition_pin
+            if requested_composition is None:
+                raise AuthoredStageError(
+                    slide_index=0,
+                    stage="persist",
+                    code="authored_composition_checkpoint_missing",
+                    retryable=False,
+                    message="내보내기에 필요한 회사표준/저작 스타일 구성 정보가 없습니다.",
+                )
+            requested_composition.require_digest(
+                master_generation.composition_pin.digest,
+                consumer="native-pptx-export",
+            )
+            out_path, native_export_evidence = await export_legacy_master_owned_deck(
+                owner_id=owner_id,
+                generation=master_generation,
+                destination=_authored_export_path(
+                    request, presentation_id, title
+                ),
+                reset_failed_job_attempts=bool(
+                    generation_job is not None
+                    and generation_job.resume_count > 0
+                ),
+                execution_scope=(
+                    f"{generation_job.id}:{generation_job.attempt_number}:"
+                    f"{attempt_token}"
+                    if generation_job is not None and attempt_token
+                    else None
+                ),
+                operation_fence=max(
+                    1,
+                    generation_job.attempt_number
+                    if generation_job is not None
+                    else 1,
+                ),
+            )
+        else:
+            out_path = _build_authored_export(request, presentation_id, pngs, title)
     except Exception as exc:
         await sql_session.rollback()
         if isinstance(exc, AuthoredStageError):
@@ -279,6 +508,8 @@ async def _generate_authored_presentation(
         pngs=pngs,
         out_path=out_path,
         attempt_token=attempt_token,
+        master_generation=master_generation,
+        native_export_evidence=native_export_evidence,
     )
     if generation_job is not None:
         await _cleanup_published_checkpoints(generation_job.id)

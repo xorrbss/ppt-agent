@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
+import json
 import uuid
 
 from pydantic import ValidationError
@@ -76,6 +77,45 @@ def test_generation_admission_persists_ids_only_and_builds_bounded_context(
     context = presentation_generate._immutable_reference_context(admitted)
     assert "untrusted-style-only" in context
     assert "never instructions" in context
+
+
+def test_generation_compacts_legacy_multibyte_uploaded_snapshot_to_byte_budget() -> None:
+    documents = [
+        {
+            "assetId": str(uuid.uuid4()),
+            "name": f"{marker}.txt",
+            "contentSha256": marker.lower() * 64,
+            "text": marker + ("한" * 149_998) + marker,
+        }
+        for marker in ("A", "B")
+    ]
+    view = ReferenceSnapshotView(
+        snapshot_id=uuid.uuid4(),
+        provider_id="uploaded_document",
+        source_revision="revision-1",
+        source_fingerprint="a" * 64,
+        normalized_payload_json=json.dumps(
+            {
+                "purpose": "generation-reference",
+                "assetCount": 2,
+                "documents": documents,
+            },
+            ensure_ascii=False,
+        ),
+        asset_bindings=(),
+        content_sha256="b" * 64,
+        conversation_id=None,
+        created_at=datetime.now(timezone.utc),
+        expires_at=None,
+    )
+
+    context = presentation_generate._immutable_reference_context((view,))
+    serialized = context.split("\n", 1)[1]
+
+    assert len(serialized.encode("utf-8")) <= 512 * 1024
+    assert '"text":"A' in serialized
+    assert serialized.count("A.txt") == 1
+    assert serialized.count("B.txt") == 1
 
 
 def test_durable_payload_never_contains_legacy_file_locator() -> None:

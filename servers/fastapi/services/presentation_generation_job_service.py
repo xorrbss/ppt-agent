@@ -63,6 +63,22 @@ _active_jobs: dict[uuid.UUID, asyncio.Task[None]] = {}
 class GenerationCapacityUnavailable(RuntimeError):
     """The job remains queued until cluster-wide authored capacity is free."""
 
+    def __init__(
+        self,
+        code: str = "authored_cluster_capacity_unavailable",
+        *,
+        retry_after_seconds: float = GENERATION_JOB_CAPACITY_POLL_SECONDS,
+        queue_position: int | None = None,
+    ) -> None:
+        super().__init__(code)
+        self.code = code
+        self.retry_after_seconds = max(0.1, float(retry_after_seconds))
+        self.queue_position = (
+            max(1, int(queue_position))
+            if queue_position is not None
+            else None
+        )
+
 
 def _is_authored_payload(payload: dict[str, Any] | None) -> bool:
     if not isinstance(payload, dict):
@@ -139,6 +155,137 @@ async def _authored_capacity_available(
         1 for payload in active_payloads if _is_authored_payload(payload)
     )
     return active_authored < AUTHORED_CLUSTER_JOB_CONCURRENCY
+
+
+def _owner_fair_queue_position(
+    ordered_candidates: list[tuple[uuid.UUID, str]],
+    *,
+    target_id: uuid.UUID,
+    owner_active_counts: dict[str, int] | None = None,
+) -> int | None:
+    """Return a stable, owner-interleaved rank for an already FIFO list.
+
+    Owners without a live authored attempt rank before owners already consuming
+    a slot. Within that tier, each owner's first queued command is ranked before
+    any owner's second command, and so on. This retains per-owner FIFO while
+    preventing one deep queue from occupying every visible position.
+    """
+
+    owner_depths: dict[str, int] = {}
+    active_counts = owner_active_counts or {}
+    ranked: list[tuple[int, int, int, uuid.UUID]] = []
+    for fifo_index, (candidate_id, owner_scope) in enumerate(ordered_candidates):
+        depth = owner_depths.get(owner_scope, 0)
+        owner_depths[owner_scope] = depth + 1
+        ranked.append(
+            (active_counts.get(owner_scope, 0), depth, fifo_index, candidate_id)
+        )
+    ranked.sort()
+    for position, (_, _, _, candidate_id) in enumerate(ranked, start=1):
+        if candidate_id == target_id:
+            return position
+    return None
+
+
+async def _workspace_linked_generation_queue_position(
+    session,
+    *,
+    target: PresentationGenerationJob,
+) -> int | None:
+    """Best-effort owner-fair position for a capacity-deferred operation."""
+
+    if target.workspace_operation_id is None:
+        return None
+    rows = (
+        await session.execute(
+            select(
+                PresentationGenerationJob.id,
+                PresentationGenerationJob.request_payload,
+                WorkspaceOperation.id,
+                WorkspaceOperation.owner_scope,
+                WorkspaceOperation.state,
+                PresentationGenerationJob.state,
+                PresentationGenerationJob.attempt_token,
+                PresentationGenerationJob.lease_expires_at,
+            )
+            .join(
+                WorkspaceOperation,
+                WorkspaceOperation.id
+                == PresentationGenerationJob.workspace_operation_id,
+            )
+            .where(WorkspaceOperation.state.in_(("queued", "running")))
+            .where(PresentationGenerationJob.state != "published")
+            .order_by(WorkspaceOperation.created_at, WorkspaceOperation.id)
+            # Capacity and fairness are cluster-wide concerns. Owner scoping
+            # would otherwise make every caller appear first in the queue.
+            .execution_options(skip_owner_scope=True)
+        )
+    ).all()
+    candidates: list[tuple[uuid.UUID, str]] = []
+    owner_active_counts: dict[str, int] = {}
+    now = utc_now()
+    for (
+        job_id,
+        payload,
+        operation_id,
+        owner_scope,
+        operation_state,
+        job_state,
+        attempt_token,
+        lease_expires_at,
+    ) in rows:
+        if not _is_authored_payload(payload):
+            continue
+        normalized_owner = str(owner_scope)
+        lease_is_live = lease_expires_at is not None
+        if lease_is_live:
+            normalized_lease = lease_expires_at
+            if normalized_lease.tzinfo is None:
+                normalized_lease = normalized_lease.replace(tzinfo=timezone.utc)
+            lease_is_live = normalized_lease >= now
+        if (
+            operation_state == "running"
+            and job_state in {"running", "staging"}
+            and attempt_token is not None
+            and lease_is_live
+        ):
+            owner_active_counts[normalized_owner] = (
+                owner_active_counts.get(normalized_owner, 0) + 1
+            )
+        if (
+            operation_id == target.workspace_operation_id
+            or operation_state == "queued"
+        ):
+            candidates.append((job_id, normalized_owner))
+    return _owner_fair_queue_position(
+        candidates,
+        target_id=target.id,
+        owner_active_counts=owner_active_counts,
+    )
+
+
+async def get_workspace_linked_generation_queue_position(
+    workspace_operation_id: uuid.UUID,
+) -> int | None:
+    """Return a metadata-only, best-effort capacity queue position."""
+
+    async with async_session_maker() as session:
+        target = (
+            await session.execute(
+                select(PresentationGenerationJob)
+                .where(
+                    PresentationGenerationJob.workspace_operation_id
+                    == workspace_operation_id
+                )
+                .execution_options(skip_owner_scope=True)
+            )
+        ).scalar_one_or_none()
+        if target is None:
+            return None
+        return await _workspace_linked_generation_queue_position(
+            session,
+            target=target,
+        )
 
 
 def utc_now() -> datetime:
@@ -226,9 +373,7 @@ async def claim_generation_job(
             )
         ):
             await session.rollback()
-            raise GenerationCapacityUnavailable(
-                "authored_cluster_capacity_unavailable"
-            )
+            raise GenerationCapacityUnavailable()
         result = await session.execute(
             update(PresentationGenerationJob)
             .where(PresentationGenerationJob.id == job_id)
@@ -342,9 +487,13 @@ async def claim_workspace_linked_generation_job(
                 now=now,
             )
         ):
+            queue_position = await _workspace_linked_generation_queue_position(
+                session,
+                target=target,
+            )
             await session.rollback()
             raise GenerationCapacityUnavailable(
-                "authored_cluster_capacity_unavailable"
+                queue_position=queue_position,
             )
 
         result = await session.execute(
@@ -647,6 +796,7 @@ async def rebind_workspace_linked_generation_job_for_retry(
     retry_operation_id: uuid.UUID,
     *,
     expected_job_id: uuid.UUID | None = None,
+    expected_presentation_id: uuid.UUID | None = None,
 ) -> bool:
     """Move the single compatibility job to a terminal operation's retry.
 
@@ -656,12 +806,21 @@ async def rebind_workspace_linked_generation_job_for_retry(
     """
 
     now = utc_now()
+    link_fence = (
+        PresentationGenerationJob.workspace_operation_id == source_operation_id
+    )
+    if expected_presentation_id is not None:
+        # A rolling-version design retry may have created an operation before
+        # rebinding its unique target job. The target presentation is the
+        # durable fallback fence that lets the next retry repair that link.
+        link_fence = or_(
+            link_fence,
+            PresentationGenerationJob.presentation_id
+            == expected_presentation_id,
+        )
     statement = (
         select(PresentationGenerationJob)
-        .where(
-            PresentationGenerationJob.workspace_operation_id
-            == source_operation_id
-        )
+        .where(link_fence)
         .where(PresentationGenerationJob.state != "published")
         .with_for_update()
     )

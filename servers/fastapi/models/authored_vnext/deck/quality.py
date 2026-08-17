@@ -9,6 +9,25 @@ from pydantic import Field, model_validator
 from ..master.base import DeckId, Digest, SlideId, StrictCamelModel
 
 
+_TEMPLATE_DEFAULT_DECK_SIZE = 10
+_LARGE_DECK_SIZE = 90
+
+
+def allowed_published_deck_sizes() -> frozenset[int]:
+    """Allow shorter decks up to the template default plus the large-deck tier."""
+
+    return frozenset(range(1, _TEMPLATE_DEFAULT_DECK_SIZE + 1)) | {
+        _LARGE_DECK_SIZE
+    }
+
+
+def require_published_deck_size(deck_size: int) -> None:
+    if deck_size not in allowed_published_deck_sizes():
+        raise ValueError(
+            "published montage deck size must be between 1 and 10, or exactly 90"
+        )
+
+
 class GateIssue(StrictCamelModel):
     code: str = Field(pattern=r"^authored_vnext_[a-z0-9_]+$")
     slide_id: SlideId | None = None
@@ -100,15 +119,16 @@ class MontageManifest(StrictCamelModel):
     )
     deck_id: DeckId
     deck_digest: Digest
-    deck_size: Literal[10, 90]
+    deck_size: int = Field(ge=1, le=90)
     columns: int = Field(ge=1, le=10)
-    tiles: list[MontageTile] = Field(min_length=10, max_length=90)
+    tiles: list[MontageTile] = Field(min_length=1, max_length=90)
     montage_digest: Digest
 
     @model_validator(mode="after")
     def _all_slides_are_in_order(self) -> "MontageManifest":
+        require_published_deck_size(self.deck_size)
         if len(self.tiles) != self.deck_size:
-            raise ValueError("10/90 montage must contain every slide")
+            raise ValueError("montage must contain every slide")
         if [tile.slide_index for tile in self.tiles] != list(range(self.deck_size)):
             raise ValueError("montage tiles must be ordered and contiguous")
         if len({tile.slide_id for tile in self.tiles}) != self.deck_size:

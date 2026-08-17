@@ -1,12 +1,28 @@
 {
   "endpoints": [
     {
+      "method": "GET",
+      "operation": "company_standard_default",
+      "path": "/authored-vnext/master/company-standard/default",
+      "requestModel": null,
+      "responseModel": "CompanyStandardDefaultResponse",
+      "successStatus": 200
+    },
+    {
       "method": "POST",
       "operation": "upload_master_logo",
       "path": "/authored-vnext/master/assets/logo",
       "requestModel": "UploadFile",
       "responseModel": "MasterAssetReceipt",
       "successStatus": 201
+    },
+    {
+      "method": "GET",
+      "operation": "get_master_asset",
+      "path": "/authored-vnext/master/assets/{asset_id}",
+      "requestModel": null,
+      "responseModel": null,
+      "successStatus": 200
     },
     {
       "method": "POST",
@@ -50,10 +66,50 @@
     },
     {
       "method": "GET",
+      "operation": "list_masters",
+      "path": "/authored-vnext/master/masters",
+      "requestModel": null,
+      "responseModel": "MasterCatalogPage",
+      "successStatus": 200
+    },
+    {
+      "method": "POST",
+      "operation": "register_master",
+      "path": "/authored-vnext/master/masters/register",
+      "requestModel": "RegisterMasterRequest",
+      "responseModel": "MasterRevisionResponse",
+      "successStatus": 201
+    },
+    {
+      "method": "GET",
+      "operation": "get_master_head",
+      "path": "/authored-vnext/master/masters/{master_id}/head",
+      "requestModel": null,
+      "responseModel": "MasterRevisionResponse",
+      "successStatus": 200
+    },
+    {
+      "method": "GET",
+      "operation": "get_published_master",
+      "path": "/authored-vnext/master/masters/{master_id}/published",
+      "requestModel": null,
+      "responseModel": "MasterRevisionResponse",
+      "successStatus": 200
+    },
+    {
+      "method": "GET",
       "operation": "get_master_revision",
       "path": "/authored-vnext/master/masters/{master_id}/revisions/{revision}",
       "requestModel": null,
       "responseModel": "MasterRevisionResponse",
+      "successStatus": 200
+    },
+    {
+      "method": "POST",
+      "operation": "apply_master_to_presentation",
+      "path": "/authored-vnext/master/presentations/{presentation_id}/apply",
+      "requestModel": "ApplyMasterToPresentationRequest",
+      "responseModel": "ApplyMasterToPresentationResponse",
       "successStatus": 200
     },
     {

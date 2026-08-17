@@ -209,6 +209,7 @@ class AuthoredVNextExportJobRepositoryMixin:
                 max_attempts=max_attempts,
                 operation_fence=operation_fence,
                 account_deletion_generation=account_generation,
+                request_payload=request_payload,
                 request_hash=request_hash,
                 idempotency_key_hash=key_hash,
             )
@@ -338,6 +339,7 @@ class AuthoredVNextExportJobRepositoryMixin:
         job_id: uuid.UUID,
         *,
         expected_operation_fence: int | None = None,
+        reset_attempts: bool = False,
     ) -> AuthoredVNextExportJob:
         with self._sessions.begin() as session:
             row = session.scalar(
@@ -349,7 +351,9 @@ class AuthoredVNextExportJobRepositoryMixin:
                 raise KeyError("authored_vnext_export_job_not_found")
             if expected_operation_fence is not None and row.operation_fence != expected_operation_fence:
                 raise OperationFenceError()
-            if row.state not in {"failed", "cancelled"} or row.attempt_count >= row.max_attempts:
+            if row.state not in {"failed", "cancelled"} or (
+                row.attempt_count >= row.max_attempts and not reset_attempts
+            ):
                 raise OperationFenceError()
             changed = session.execute(
                 update(AuthoredVNextExportJob)
@@ -364,6 +368,9 @@ class AuthoredVNextExportJobRepositoryMixin:
                     worker_id=None,
                     lease_expires_at=None,
                     completed_at=None,
+                    attempt_count=0 if reset_attempts else row.attempt_count,
+                    failure_code=None,
+                    failure_detail=None,
                     operation_fence=row.operation_fence + 1,
                 )
             ).rowcount

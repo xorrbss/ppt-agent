@@ -36,6 +36,7 @@ from services.presentation_generation_job_service import (
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
     RetryableWorkspaceOperationError,
+    WorkspaceOperationDeferred,
     WorkspaceOperationExecutionContext,
     WorkspaceOperationExecutionError,
     WorkspaceOperationCancelled,
@@ -141,6 +142,7 @@ class PresentationGenerationOperationHandler:
         from api.v1.ppt.endpoints.presentation_generate import (
             _request_from_durable_payload,
             _validate_authored_exact_admission,
+            _validate_authored_master_pin_admission,
             generate_presentation_handler,
         )
 
@@ -162,6 +164,7 @@ class PresentationGenerationOperationHandler:
             request = _request_from_durable_payload(job.request_payload)
             request._request_id = job.request_id
             _validate_authored_exact_admission(request)
+            await _validate_authored_master_pin_admission(request)
             if job.template_v2_target is not None:
                 from services.template_v2_generation_service import (
                     TemplateV2GenerationTarget,
@@ -251,8 +254,17 @@ class PresentationGenerationOperationHandler:
                 claim.attempt_number,
             )
         except GenerationCapacityUnavailable as error:
-            raise RetryableWorkspaceOperationError(
-                "authored_cluster_capacity_unavailable"
+            # Capacity is a durable scheduling condition, not a failed
+            # generation attempt.  The runner returns its generic lease and
+            # requeues this operation without consuming its error budget.
+            raise WorkspaceOperationDeferred(
+                error.code,
+                retry_after_seconds=error.retry_after_seconds,
+                detail=(
+                    {"queue_position": error.queue_position}
+                    if error.queue_position is not None
+                    else None
+                ),
             ) from error
         if linked_claim is None:
             raise WorkspaceOperationLeaseLost(

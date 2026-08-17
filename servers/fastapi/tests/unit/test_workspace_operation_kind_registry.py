@@ -36,6 +36,7 @@ def test_workspace_operation_kind_catalog_is_closed_and_partitioned() -> None:
         "slide.delete",
         "version.restore",
         "template.apply",
+        "design.apply",
         "quality.review",
         "export.pptx",
         "export.pdf",

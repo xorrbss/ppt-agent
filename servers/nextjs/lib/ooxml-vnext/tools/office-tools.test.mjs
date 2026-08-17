@@ -94,6 +94,41 @@ test("manual repair-dialog witness creates but never launches a disposable copy"
   assert.notEqual(witness.disposableCopy, input);
 });
 
+test("visible witness derives source isolation from a locked handle and a distinct launch target", async (t) => {
+  if (process.platform !== "win32") {
+    t.skip("Windows manual witness helper");
+    return;
+  }
+  const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "ooxml-visible-lock-test-"));
+  t.after(() => rm(temporaryDirectory, { recursive: true, force: true }));
+  const input = path.join(temporaryDirectory, "source.pptx");
+  const entries = new Map([
+    ["[Content_Types].xml", Buffer.from("<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"/>")],
+    ["ppt/presentation.xml", Buffer.from("<p:presentation xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\"/>")],
+  ]);
+  await writeFile(input, writePptxArchive(entries));
+  const result = spawnSync(
+    "powershell.exe",
+    [
+      "-NoLogo", "-NoProfile", "-NonInteractive", "-File", visibleWitnessScript,
+      "-InputPath", input,
+      "-WitnessRoot", temporaryDirectory,
+    ],
+    { encoding: "utf8", windowsHide: true },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.source.unchanged, true);
+  assert.equal(report.source.passedToPowerPoint, false);
+  assert.equal(report.source.readOnlyHandleHeldDuringWitness, true);
+  assert.equal(report.source.writeOpenProbeBlocked, true);
+  assert.equal(report.disposable.createdFromLockedSourceHandle, true);
+  assert.equal(report.disposable.digestMatchedSourceBeforeLaunch, true);
+  assert.equal(report.isolation.distinctPaths, true);
+  assert.equal(report.isolation.sourceWriteOpenProbeBlocked, true);
+  assert.equal(report.isolation.sourceDeleteDeniedByFileShareMode, true);
+});
+
 test("matrix implementation contains no PowerPoint COM or termination primitive", () => {
   const source = readFileSync(matrixScript, "utf8");
   assert.doesNotMatch(source, /-ComObject\s+PowerPoint/i);
@@ -114,6 +149,9 @@ test("visible witness uses a disposable /x process and forbids attach, save, or 
   assert.doesNotMatch(source, /taskkill/i);
   assert.doesNotMatch(source, /\.Kill\(/i);
   assert.doesNotMatch(source, /\.Save(?:As|CopyAs)?\(/i);
+  assert.match(source, /FileShare\]::Read/);
+  assert.match(source, /sourceReadLock\.CopyTo\(\$copyWrite\)/);
+  assert.doesNotMatch(source, /Copy-Item/);
 });
 
 test("interactive witness requires the complete PowerPoint product observation set", () => {

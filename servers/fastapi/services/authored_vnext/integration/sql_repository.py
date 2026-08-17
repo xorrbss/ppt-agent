@@ -129,8 +129,21 @@ class AsyncAuthoredVNextSqlRepository:
     def __init__(self, repository: AuthoredVNextSqlRepository) -> None:
         self.repository = repository
 
+    async def allocate_master_id(self) -> str:
+        return await asyncio.to_thread(self.repository.allocate_master_id)
+
     async def get_master(self, master_id: str, revision: int | None = None):
         return await asyncio.to_thread(self.repository.get_master, master_id, revision)
+
+    async def get_published_master(self, master_id: str):
+        return await asyncio.to_thread(self.repository.get_published_master, master_id)
+
+    async def list_masters(self, *, cursor: str | None, limit: int):
+        return await asyncio.to_thread(
+            self.repository.list_masters,
+            cursor=cursor,
+            limit=limit,
+        )
 
     async def append_master(self, record, *, expected_revision, expected_digest) -> None:
         await asyncio.to_thread(

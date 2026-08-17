@@ -38,9 +38,7 @@ export function readBackSession(session: OoxmlAdapterSession): OoxmlReadBackRece
       const metadata = readSlideSemanticMetadata(session.entries.get(partName)!);
       return {
         partName,
-        slideId: metadata.slideId,
-        layoutId: metadata.layoutId,
-        masterDigest: metadata.masterDigest,
+        ...metadata,
       };
     } catch {
       return { partName, slideId: null, layoutId: null, masterDigest: null };
@@ -49,7 +47,9 @@ export function readBackSession(session: OoxmlAdapterSession): OoxmlReadBackRece
   let master: DeckMasterReadBackReceipt | null = null;
   if (session.entries.has(MASTER_PART)) {
     if (session.masterContract) {
-      master = assertDeckMasterReadBack(session.masterContract, session.entries);
+      master = session.authoredMasterContract
+        ? readDeckMasterParts(session.entries)
+        : assertDeckMasterReadBack(session.masterContract, session.entries);
     } else {
       // Imported masters without vNext metadata stay opaque PRESERVE_EXACT parts.
       try {
@@ -112,7 +112,8 @@ export async function saveBufferedSession(
       }
       const readBackEntries = readPptxArchive(await readFile(path));
       if (session.masterContract) {
-        assertDeckMasterReadBack(session.masterContract, readBackEntries);
+        if (session.authoredMasterContract) readDeckMasterParts(readBackEntries);
+        else assertDeckMasterReadBack(session.masterContract, readBackEntries);
       }
     },
   });

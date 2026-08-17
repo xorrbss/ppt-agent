@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import os
 import time
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 from models.presentation_outline_model import PresentationOutlineModel
 from models.sql.presentation_generation_job import PresentationGenerationJob
@@ -36,7 +38,9 @@ from utils.llm_calls.author_slide import (
     Brand,
     is_fallback_slide_html,
     normalize_reference_mode,
+    validate_authored_slide_html,
 )
+from utils.renderer_isolation import RendererPolicyError
 from utils.slide_capture import _placeholder_png, render_html_to_png
 
 
@@ -51,10 +55,18 @@ async def _author_illustrate_render_pipeline(
     style,
     *,
     generation_job: PresentationGenerationJob | None = None,
+    structured_slide_contexts: Sequence[Mapping[str, Any] | None] | None = None,
+    page_number_mode: str = "template",
 ) -> AuthoredGenerationPipelineResult:
     """Pipeline slides through durable, fenced checkpoints with bounded workers."""
     started = time.monotonic()
-    plan = prepare_authored_deck(outline, brand, style)
+    plan = prepare_authored_deck(
+        outline,
+        brand,
+        style,
+        structured_slide_contexts=structured_slide_contexts,
+        page_number_mode=page_number_mode,
+    )
     plan_reference_mode = normalize_reference_mode(
         getattr(
             plan,
@@ -128,6 +140,14 @@ async def _author_illustrate_render_pipeline(
                             html = await author_planned_slide(
                                 plan, index, raise_on_failure=True
                             )
+                    except RendererPolicyError as exc:
+                        raise AuthoredStageError(
+                            slide_index=index,
+                            stage="author",
+                            code="authored_slide_author_failed",
+                            cause=exc,
+                            retryable=False,
+                        ) from exc
                     except Exception as exc:
                         raise AuthoredStageError(
                             slide_index=index,
@@ -150,6 +170,19 @@ async def _author_illustrate_render_pipeline(
                             "was not published."
                         ),
                     )
+                try:
+                    html = validate_authored_slide_html(
+                        html,
+                        allow_illustration_slots=True,
+                    )
+                except RendererPolicyError as exc:
+                    raise AuthoredStageError(
+                        slide_index=index,
+                        stage="author",
+                        code="authored_slide_author_failed",
+                        cause=exc,
+                        retryable=False,
+                    ) from exc
                 if generation_job is not None:
                     checkpoint = await _complete_stage_after_external_success(
                         job_id=generation_job.id,
@@ -158,6 +191,20 @@ async def _author_illustrate_render_pipeline(
                         attempt_token=attempt_token,
                         html=html,
                     )
+            else:
+                try:
+                    html = validate_authored_slide_html(
+                        html,
+                        allow_illustration_slots=True,
+                    )
+                except RendererPolicyError as exc:
+                    raise AuthoredStageError(
+                        slide_index=index,
+                        stage="author",
+                        code="authored_slide_author_failed",
+                        cause=exc,
+                        retryable=False,
+                    ) from exc
 
             illustrated_html = (
                 checkpoint.illustrated_html
@@ -220,6 +267,19 @@ async def _author_illustrate_render_pipeline(
                             await record_local_stage(
                                 latency_ms=illustration_work * 1000
                             )
+                try:
+                    illustrated_html = validate_authored_slide_html(
+                        illustrated_html,
+                        finalized=True,
+                    )
+                except RendererPolicyError as exc:
+                    raise AuthoredStageError(
+                        slide_index=index,
+                        stage="illustrate",
+                        code="authored_slide_illustrate_failed",
+                        cause=exc,
+                        retryable=False,
+                    ) from exc
                 if generation_job is not None:
                     checkpoint = await _complete_stage_after_external_success(
                         job_id=generation_job.id,
@@ -229,6 +289,20 @@ async def _author_illustrate_render_pipeline(
                         html=illustrated_html,
                         skipped=skipped,
                     )
+            else:
+                try:
+                    illustrated_html = validate_authored_slide_html(
+                        illustrated_html,
+                        finalized=True,
+                    )
+                except RendererPolicyError as exc:
+                    raise AuthoredStageError(
+                        slide_index=index,
+                        stage="illustrate",
+                        code="authored_slide_illustrate_failed",
+                        cause=exc,
+                        retryable=False,
+                    ) from exc
 
             png = read_valid_render(checkpoint) if checkpoint else None
             if png is None or checkpoint.render_status != "completed":

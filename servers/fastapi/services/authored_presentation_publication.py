@@ -44,6 +44,63 @@ from utils.llm_calls.author_slide import Brand
 LOGGER = logging.getLogger(__name__)
 
 
+def _require_immutable_composition_publication(
+    *,
+    request: GeneratePresentationRequest,
+    master_generation,
+    native_export_evidence: dict[str, object] | None,
+) -> None:
+    """Seal preview, publication, and native export to one composition pin."""
+
+    if master_generation is None:
+        return
+    deck = master_generation.result.deck
+    composition = deck.composition
+    requested = request._authored_composition_pin
+    if (
+        composition is None
+        or requested is None
+        or requested != composition
+        or master_generation.composition_pin != composition
+    ):
+        raise AuthoredStageError(
+            slide_index=0,
+            stage="persist",
+            code="authored_composition_publication_mismatch",
+            retryable=False,
+            message="생성 요청과 미리보기의 회사표준/저작 스타일 구성이 일치하지 않습니다.",
+        )
+
+    if request.export_as != "pptx":
+        return
+    preview = (
+        native_export_evidence.get("preview_snapshot")
+        if isinstance(native_export_evidence, dict)
+        else None
+    )
+    native = (
+        native_export_evidence.get("native_pptx_snapshot")
+        if isinstance(native_export_evidence, dict)
+        else None
+    )
+    if (
+        not isinstance(preview, dict)
+        or not isinstance(native, dict)
+        or preview != native
+        or preview.get("composition_digest") != composition.digest
+        or native_export_evidence.get("resolved_composition_digest")
+        != composition.digest
+        or native_export_evidence.get("readback_verified") is not True
+    ):
+        raise AuthoredStageError(
+            slide_index=0,
+            stage="persist",
+            code="authored_composition_export_evidence_mismatch",
+            retryable=False,
+            message="미리보기와 PowerPoint 내보내기의 구성 검증 결과가 일치하지 않습니다.",
+        )
+
+
 async def publish_authored_presentation(
     *,
     request: GeneratePresentationRequest,
@@ -62,6 +119,8 @@ async def publish_authored_presentation(
     pngs: list[bytes],
     out_path: str,
     attempt_token: str | None,
+    master_generation=None,
+    native_export_evidence: dict[str, object] | None = None,
 ) -> tuple[str, float]:
     persist_started = time.monotonic()
     images_ready = False
@@ -85,6 +144,11 @@ async def publish_authored_presentation(
     )
     expected_revision = presentation.revision
     try:
+        _require_immutable_composition_publication(
+            request=request,
+            master_generation=master_generation,
+            native_export_evidence=native_export_evidence,
+        )
         # Reserve and materialize every external artifact before acquiring the
         # caller transaction's publication fence.  In particular, the durable
         # artifact intent uses an independent session; opening it after
@@ -149,6 +213,46 @@ async def publish_authored_presentation(
             "fonts": brand.fonts,
             "language": brand.language,
         }
+        if master_generation is not None:
+            deck = master_generation.result.deck
+            pin = deck.master
+            presentation.theme["authored_vnext"] = {
+                "schemaVersion": "legacy-authored-vnext-projection/v1",
+                "deckId": deck.deck_id,
+                "deckRevision": deck.revision,
+                "deckDigest": deck.digest,
+                "sourceDigest": deck.source_digest,
+                "masterPin": pin.model_dump(mode="json", by_alias=True),
+                **(
+                    {
+                        "compositionPin": deck.composition.model_dump(
+                            mode="json", by_alias=True
+                        )
+                    }
+                    if deck.composition is not None
+                    else {}
+                ),
+                "exportArtifactDigest": (
+                    master_generation.result.export_artifact_digest
+                ),
+                "aiTextZones": master_generation.ai_text_zones.model_dump(
+                    mode="json"
+                ),
+                **(
+                    {
+                        "sourceSemanticSnapshotDigest": master_generation.source_semantic_snapshot.get(
+                            "digest"
+                        ),
+                        "sourceSemanticSnapshot": master_generation.source_semantic_snapshot,
+                    }
+                    if isinstance(master_generation.source_semantic_snapshot, dict)
+                    and isinstance(
+                        master_generation.source_semantic_snapshot.get("digest"),
+                        str,
+                    )
+                    else {}
+                ),
+            }
         slides = [
             SlideModel(
                 presentation=presentation_id,
@@ -159,6 +263,31 @@ async def publish_authored_presentation(
                     "__authored__": True,
                     "image": image_refs[i],
                     "role": roles[i],
+                    **(
+                        {
+                            "masterOwned": True,
+                            "layoutId": master_generation.result.deck.slides[
+                                i
+                            ].slide.layout_id,
+                            "masterPin": master_generation.result.deck.master.model_dump(
+                                mode="json", by_alias=True
+                            ),
+                            **(
+                                {
+                                    "compositionPin": master_generation.result.deck.composition.model_dump(
+                                        mode="json", by_alias=True
+                                    )
+                                }
+                                if master_generation.result.deck.composition is not None
+                                else {}
+                            ),
+                            "slideSpecDigest": master_generation.result.deck.slides[
+                                i
+                            ].slide.spec_digest,
+                        }
+                        if master_generation is not None
+                        else {}
+                    ),
                 },
                 html_content=htmls[i],
                 properties={"image": image_refs[i]},
@@ -230,6 +359,7 @@ async def publish_authored_presentation(
                     artifact=workspace_artifact,
                     expected_revision=expected_revision,
                     attempt_token=attempt_token or "",
+                    result_evidence=native_export_evidence,
                 )
             except WorkspaceArtifactPublicationError as error:
                 raise AuthoredStageError(
@@ -246,6 +376,10 @@ async def publish_authored_presentation(
         else:
             await sql_session.commit()
     except BaseException as exc:
+        LOGGER.exception(
+            "Authored presentation publication failed for %s",
+            presentation_id,
+        )
         await sql_session.rollback()
         if workspace_artifact is not None and not artifact_handed_to_publish:
             try:

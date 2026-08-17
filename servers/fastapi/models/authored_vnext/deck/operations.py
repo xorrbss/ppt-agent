@@ -14,6 +14,7 @@ from .checkpoint import (
     UtcTimestamp,
     ValidatedSlideSpecV2,
 )
+from .composition import AuthoredCompositionPin
 from .outline import OutlineAssignmentSet, OutlineInput
 from .quality import DeckQualityReport, MontageManifest, SlideGateReport
 from .visual_plan import SlideVisualPlan
@@ -29,9 +30,21 @@ class GenerateDeckRequest(StrictCamelModel):
     operation_id: OperationId
     deck_id: DeckId
     master: MasterDigestPin
+    composition: AuthoredCompositionPin | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     outline: OutlineInput
     quality_policy_version: str = Field(min_length=1, max_length=100)
     publication_fence: PublicationFence
+
+    @model_validator(mode="after")
+    def _composition_uses_requested_master(self) -> "GenerateDeckRequest":
+        if (
+            self.composition is not None
+            and self.composition.master_digest != self.master.master_digest
+        ):
+            raise ValueError("composition uses a different requested master")
+        return self
 
 
 class RegenerateBodyCommand(StrictCamelModel):
@@ -92,12 +105,20 @@ class DeckGenerationSnapshot(StrictCamelModel):
     digest: Digest
     parent_revision_digest: Digest | None = None
     master: MasterDigestPin
+    composition: AuthoredCompositionPin | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     source_digest: Digest
     slides: list[ValidatedSlideSpecV2] = Field(min_length=1, max_length=500)
     created_at: UtcTimestamp
 
     @model_validator(mode="after")
     def _all_slides_use_pinned_inputs(self) -> "DeckGenerationSnapshot":
+        if (
+            self.composition is not None
+            and self.composition.master_digest != self.master.master_digest
+        ):
+            raise ValueError("deck uses a different composition master")
         ids = [item.slide.slide_id for item in self.slides]
         if len(set(ids)) != len(ids):
             raise ValueError("slide IDs must be unique")
@@ -111,6 +132,8 @@ class DeckGenerationSnapshot(StrictCamelModel):
                 raise ValueError("slide uses a different font manifest digest")
             if checkpoint.source_digest != self.source_digest:
                 raise ValueError("slide uses a different source digest")
+            if checkpoint.composition != self.composition:
+                raise ValueError("slide uses a different authored composition")
         return self
 
 
@@ -137,6 +160,9 @@ class GenerationResult(StrictCamelModel):
     schema_version: Literal["generation-result/v1"] = "generation-result/v1"
     operation_id: OperationId
     checkpoint: GenerationCheckpoint
+    composition: AuthoredCompositionPin | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     outline_assignments: OutlineAssignmentSet
     deck: DeckGenerationSnapshot
     quality: DeckQualityReport
@@ -149,6 +175,11 @@ class GenerationResult(StrictCamelModel):
             raise ValueError("generation result checkpoint must be published")
         if self.operation_id != self.checkpoint.operation_id:
             raise ValueError("operationId does not match checkpoint")
+        if (
+            self.composition != self.checkpoint.composition
+            or self.composition != self.deck.composition
+        ):
+            raise ValueError("generation result uses a different authored composition")
         if not self.quality.passed:
             raise ValueError("failed deck quality cannot be published")
         if self.deck.digest != self.quality.deck_digest:

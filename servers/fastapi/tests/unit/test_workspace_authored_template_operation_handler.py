@@ -5,6 +5,7 @@ import uuid
 import pytest
 
 from services.workspace_authored_template_operation_handler import (
+    DESIGN_APPLY_OPERATION_KIND,
     WorkspaceAuthoredTemplateOperationHandler,
     register_workspace_authored_template_operation_handler,
 )
@@ -22,6 +23,7 @@ class _Context:
         *,
         expected_revision: int | None,
         settings: dict | None = None,
+        kind: str = "template.apply",
     ):
         self.claim = WorkspaceOperationClaim(
             operation_id=uuid.uuid4(),
@@ -29,7 +31,7 @@ class _Context:
             owner_scope="anonymous:test",
             conversation_id=uuid.uuid4(),
             presentation_id=uuid.uuid4(),
-            kind="template.apply",
+            kind=kind,
             request_payload={"generation_settings": settings or {}},
             expected_revision=expected_revision,
             attempt_number=1,
@@ -68,6 +70,17 @@ def _settings(source_id: uuid.UUID | None = None) -> dict:
     }
 
 
+def _design_settings(source_id: uuid.UUID | None = None) -> dict:
+    return _settings(source_id) | {
+        "authored_style_intent": {"intent": "keep"},
+        "master_intent": {"intent": "clear"},
+        "resolved_master_pin": None,
+        "resolved_composition_pin": None,
+        "resolved_style_digest": "sha256:" + "b" * 64,
+        "design_signature": "sha256:" + "a" * 64,
+    }
+
+
 def test_template_apply_registration_is_automatic_and_resolvable():
     registry = WorkspaceOperationHandlerRegistry()
 
@@ -76,7 +89,9 @@ def test_template_apply_registration_is_automatic_and_resolvable():
     )
 
     assert registry.resolve("template.apply") is handler
+    assert registry.resolve(DESIGN_APPLY_OPERATION_KIND) is handler
     assert registry.recovery_policy("template.apply") == "automatic"
+    assert registry.recovery_policy(DESIGN_APPLY_OPERATION_KIND) == "automatic"
 
 
 @pytest.mark.parametrize(
@@ -135,6 +150,25 @@ def test_template_apply_delegates_linked_generation_and_reports_target():
         "presentation_id": str(context.claim.presentation_id),
         "authored_style": "signal",
     }
+
+
+def test_design_apply_preserves_canonical_kind_and_resolved_snapshot():
+    generation_handler = _GenerationHandler()
+    handler = WorkspaceAuthoredTemplateOperationHandler(
+        generation_handler=generation_handler
+    )
+    context = _Context(
+        expected_revision=0,
+        settings=_design_settings(),
+        kind=DESIGN_APPLY_OPERATION_KIND,
+    )
+
+    result = asyncio.run(handler.execute(context))
+
+    assert result.payload["kind"] == DESIGN_APPLY_OPERATION_KIND
+    assert result.payload["resolved_style_digest"].startswith("sha256:")
+    assert result.payload["resolved_master_pin"] is None
+    assert result.payload["resolved_composition_pin"] is None
 
 
 def test_template_apply_rejects_source_owned_operation():

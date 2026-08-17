@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
 
+import type {
+  DeckMasterContractV1 as AuthoredDeckMasterContract,
+  SemanticMasterElement,
+} from "../authored-vnext/master/contracts.ts";
+
 import {
   DECK_MASTER_CONTRACT_VERSION,
   DECK_MASTER_REQUIRED_THEME_COLORS,
@@ -21,6 +26,7 @@ import type {
   SemanticFontMapping,
   SemanticFurnitureMapping,
   SemanticLayoutMapping,
+  SemanticElementExportMapping,
 } from "./master-compiler-contracts.ts";
 export * from "./master-compiler-contracts.ts";
 
@@ -43,6 +49,8 @@ const MASTER_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.prese
 const LAYOUT_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml";
 const THEME_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.theme+xml";
 const PNG_CONTENT_TYPE = "image/png";
+const JPEG_CONTENT_TYPE = "image/jpeg";
+const SVG_CONTENT_TYPE = "image/svg+xml";
 const PNG_SIGNATURE = Buffer.from("89504e470d0a1a0a", "hex");
 
 function xmlEscape(value: string): string {
@@ -156,12 +164,17 @@ function placeholderXml(item: DeckMasterPlaceholder, shapeId: number): string {
   const color = title ? "tx1" : "tx2";
   const fontRef = title ? "mj" : "mn";
   const semanticMarker = `<p:extLst><p:ext uri="${PLACEHOLDER_EXTENSION_URI}"><v:placeholder xmlns:v="${NS.v}" role="${xmlEscape(role)}" idx="${item.index}"/></p:ext></p:extLst>`;
-  return `<p:sp><p:nvSpPr><p:cNvPr id="${shapeId}" name="${xmlEscape(item.id)}" descr="${xmlEscape(description)}"/><p:cNvSpPr txBox="1">${shapeLocks(item.ownership.locked)}</p:cNvSpPr><p:nvPr><p:ph type="${placeholderType(item.type)}" idx="${item.index}"/>${semanticMarker}</p:nvPr></p:nvSpPr><p:spPr>${xfrmXml(item.bounds)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr><p:txBody>${bodyProperties(style, title ? "ctr" : "t")}<a:lstStyle><a:lvl1pPr algn="l" eaLnBrk="1" latinLnBrk="0" hangingPunct="0"><a:defRPr sz="${Math.round(style.fontPt * 100)}"${title ? ' b="1"' : ""}><a:solidFill><a:schemeClr val="${color}"/></a:solidFill><a:latin typeface="+${fontRef}-lt"/><a:ea typeface="+${fontRef}-ea"/><a:cs typeface="+${fontRef}-cs"/></a:defRPr></a:lvl1pPr></a:lstStyle><a:p><a:endParaRPr lang="ko-KR"/></a:p></p:txBody></p:sp>`;
+  return `<p:sp><p:nvSpPr><p:cNvPr id="${shapeId}" name="${xmlEscape(item.id)}" descr="${xmlEscape(description)}"/><p:cNvSpPr txBox="1">${shapeLocks(item.ownership.locked)}</p:cNvSpPr><p:nvPr><p:ph type="${placeholderType(item.type)}" idx="${item.index}"/>${semanticMarker}</p:nvPr></p:nvSpPr><p:spPr>${xfrmXml(item.bounds)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr><p:txBody>${bodyProperties(style, title ? "ctr" : "t", !title)}<a:lstStyle><a:lvl1pPr algn="l" eaLnBrk="1" latinLnBrk="0" hangingPunct="0"><a:defRPr sz="${Math.round(style.fontPt * 100)}"${title ? ' b="1"' : ""}><a:solidFill><a:schemeClr val="${color}"/></a:solidFill><a:latin typeface="+${fontRef}-lt"/><a:ea typeface="+${fontRef}-ea"/><a:cs typeface="+${fontRef}-cs"/></a:defRPr></a:lvl1pPr></a:lstStyle><a:p><a:endParaRPr lang="ko-KR"/></a:p></p:txBody></p:sp>`;
 }
 
-function bodyProperties(style: DeckMasterTextStyle, anchor: "ctr" | "t"): string {
+function bodyProperties(
+  style: DeckMasterTextStyle,
+  anchor: "ctr" | "t",
+  shrinkToFit: boolean,
+): string {
   const margins = style.marginsPx;
-  return `<a:bodyPr wrap="square" anchor="${anchor}" lIns="${asEmu(margins.left)}" rIns="${asEmu(margins.right)}" tIns="${asEmu(margins.top)}" bIns="${asEmu(margins.bottom)}"><a:noAutofit/></a:bodyPr>`;
+  const fit = shrinkToFit ? "<a:normAutofit/>" : "<a:noAutofit/>";
+  return `<a:bodyPr wrap="square" anchor="${anchor}" lIns="${asEmu(margins.left)}" rIns="${asEmu(margins.right)}" tIns="${asEmu(margins.top)}" bIns="${asEmu(margins.bottom)}">${fit}</a:bodyPr>`;
 }
 
 function relationshipsXml(items: readonly { id: string; type: string; target: string }[]): string {
@@ -331,7 +344,9 @@ function compileNormalized(
   const assetBytes = verifiedAssetBytes(metadata, assets);
   const parts = new Map<string, Buffer>();
   const furniture = contract.furniture
-    .map((item, index) => furnitureXml(item, metadata.furniture[index], metadata.fonts.primary))
+    .flatMap((item, index) => item.visibility === "hidden"
+      ? []
+      : [furnitureXml(item, metadata.furniture[index], metadata.fonts.primary)])
     .join("");
   const masterRelationships = [
     ...metadata.layouts.map((layout) => ({
@@ -341,7 +356,7 @@ function compileNormalized(
     })),
     { id: `rId${metadata.layouts.length + 1}`, type: "theme", target: "../theme/theme1.xml" },
     ...metadata.furniture
-      .filter((item) => item.assetPartName !== null)
+      .filter((item) => item.visibility !== "hidden" && item.assetPartName !== null)
       .map((item) => ({
         id: item.assetRelationshipId!,
         type: "image",
@@ -394,6 +409,352 @@ export function compileDeckMasterParts(
   assets: readonly DeckMasterBinaryAsset[] = [],
 ): CompiledDeckMasterParts {
   return compileNormalized(normalizeDeckMasterContract(contract), assets);
+}
+
+function authoredToCompilerContract(contract: AuthoredDeckMasterContract): NormalizedDeckMasterContract {
+  const colors = contract.tokens.colors;
+  const themeColors = {
+    dk1: colors.textPrimary,
+    lt1: colors.background,
+    dk2: colors.textSecondary,
+    lt2: colors.surface,
+    accent1: colors.accent,
+    accent2: colors.warning,
+    accent3: colors.divider,
+    accent4: colors.accent,
+    accent5: colors.textSecondary,
+    accent6: colors.surface,
+    hlink: colors.accent,
+    folHlink: colors.warning,
+  };
+  const furniture = Object.values(contract.furniture).map((item): DeckMasterFurniture => ({
+    id: item.id,
+    kind: item.kind === "logo" ? "logo" : item.kind,
+    bounds: item.bounds,
+    ownership: item.ownership,
+    visibility: item.visibility,
+    ...(item.text === undefined ? {} : { text: item.text }),
+    ...(item.assetId === undefined ? {} : { assetId: item.assetId }),
+    ...(item.assetId === undefined
+      ? {}
+      : {
+          assetSha256: [contract.brandAssets.logo, contract.brandAssets.wordmark]
+            .find((asset) => asset?.assetId === item.assetId)?.digest.slice("sha256:".length),
+        }),
+    ...(item.fill === undefined ? {} : { fill: item.fill }),
+    ...(item.stroke === undefined ? {} : { stroke: item.stroke }),
+  }));
+  const layouts = [
+    ...Object.values(contract.layouts),
+    ...(contract.customLayouts ?? []),
+  ].map((layout): DeckMasterLayout => ({
+    id: layout.id,
+    name: layout.name,
+    kind: layout.kind === "custom" ? "standard" : layout.kind === "longTitle" ? "long-title" : layout.kind,
+    placeholders: layout.slots.map((slot): DeckMasterPlaceholder => {
+      const style = contract.semanticStyles[slot.style];
+      return {
+        id: slot.id.replace(/^slot:/, "placeholder:"),
+        type: slot.role,
+        index: slot.placeholderIndex,
+        bounds: slot.bounds,
+        ownership: slot.ownership,
+        textStyle: {
+          fontPt: style.fontPt,
+          lineHeight: style.lineHeight,
+          maxLines: style.maxLines,
+          marginsPx: {
+            left: style.margins.leftPt * 4 / 3,
+            right: style.margins.rightPt * 4 / 3,
+            top: style.margins.topPt * 4 / 3,
+            bottom: style.margins.bottomPt * 4 / 3,
+          },
+        },
+      };
+    }),
+  }));
+  return {
+    contractVersion: DECK_MASTER_CONTRACT_VERSION,
+    id: contract.masterId,
+    name: contract.name,
+    slideSizePx: { x: 0, y: 0, width: contract.canvas.widthPx, height: contract.canvas.heightPx },
+    theme: { name: `${contract.name} Theme`, colors: themeColors },
+    tokens: {
+      background: colors.background,
+      surface: colors.surface,
+      textPrimary: colors.textPrimary,
+      textSecondary: colors.textSecondary,
+      accent: colors.accent,
+      divider: colors.divider,
+      warning: colors.warning,
+    },
+    fontManifest: {
+      primary: contract.fontManifest.primary,
+      fallbacks: contract.fontManifest.fallbacks,
+      windowsFallback: contract.fontManifest.windowsFallback,
+      themeScripts: {
+        latin: contract.fontManifest.themeScripts.latin,
+        eastAsian: contract.fontManifest.themeScripts.hang,
+        complexScript: contract.fontManifest.themeScripts.latin,
+        Hang: contract.fontManifest.themeScripts.hang,
+        Jpan: contract.fontManifest.themeScripts.jpan,
+        Hans: contract.fontManifest.themeScripts.hans,
+        Hant: contract.fontManifest.themeScripts.hant,
+      },
+      files: contract.fontManifest.files,
+      ...(contract.fontManifest.digest ? { digest: contract.fontManifest.digest } : {}),
+    },
+    furniture,
+    layouts,
+    ...(contract.digest ? { digest: contract.digest } : {}),
+  };
+}
+
+function mediaExtension(mediaType: DeckMasterBinaryAsset["mediaType"]): string {
+  if (mediaType === JPEG_CONTENT_TYPE) return "jpg";
+  if (mediaType === SVG_CONTENT_TYPE) return "svg";
+  return "png";
+}
+
+function semanticAssetRole(identifier: string): string {
+  if (!/^asset:[a-z0-9][a-z0-9._-]*$/.test(identifier)) {
+    throw new Error(`Invalid semantic asset identifier: ${identifier}`);
+  }
+  return identifier.slice("asset:".length);
+}
+
+function semanticXfrmXml(element: SemanticMasterElement): string {
+  const rotation = Math.round(element.rotation * 60_000);
+  return `<a:xfrm${rotation === 0 ? "" : ` rot="${rotation}"`}><a:off x="${asEmu(element.bounds.x)}" y="${asEmu(element.bounds.y)}"/><a:ext cx="${asEmu(element.bounds.width)}" cy="${asEmu(element.bounds.height)}"/></a:xfrm>`;
+}
+
+function semanticSolidFill(color: string | undefined, opacity = 1): string {
+  if (!color) return "<a:noFill/>";
+  const alpha = Math.max(0, Math.min(100_000, Math.round(opacity * 100_000)));
+  return `<a:solidFill><a:srgbClr val="${color.slice(1).toUpperCase()}">${alpha === 100_000 ? "" : `<a:alpha val="${alpha}"/>`}</a:srgbClr></a:solidFill>`;
+}
+
+function semanticElementXml(
+  element: SemanticMasterElement,
+  mapping: SemanticElementExportMapping,
+  primaryFont: string,
+): string {
+  const description = `vnext:semantic=1;editableByUser=${element.editableByUser ? 1 : 0};editableByAI=${element.editableByAI ? 1 : 0};locked=${element.locked ? 1 : 0}`;
+  const locks = shapeLocks(element.locked);
+  const opacity = element.style.opacity ?? 1;
+  if (element.type === "image") {
+    const crop = element.content.crop;
+    const srcRect = crop
+      ? `<a:srcRect l="${Math.round(crop.x * 100_000)}" t="${Math.round(crop.y * 100_000)}" r="${Math.round((1 - crop.x - crop.width) * 100_000)}" b="${Math.round((1 - crop.y - crop.height) * 100_000)}"/>`
+      : "";
+    const alpha = Math.max(0, Math.min(100_000, Math.round(opacity * 100_000)));
+    const blip = alpha === 100_000
+      ? `<a:blip r:embed="${mapping.assetRelationshipId}"/>`
+      : `<a:blip r:embed="${mapping.assetRelationshipId}"><a:alphaModFix amt="${alpha}"/></a:blip>`;
+    return `<p:pic><p:nvPicPr><p:cNvPr id="${mapping.shapeId}" name="${xmlEscape(element.id)}" descr="${xmlEscape(description)}"/><p:cNvPicPr><a:picLocks noChangeAspect="1"${element.locked ? ' noMove="1" noResize="1"' : ""}/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill>${blip}${srcRect}<a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr>${semanticXfrmXml(element)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>`;
+  }
+  const placeholderTypeValue = element.type === "pageNumber"
+    ? "sldNum"
+    : element.type === "placeholder"
+      ? element.content.placeholderRole === "content" || element.content.placeholderRole === "image" ? "obj" : element.content.placeholderRole
+      : null;
+  const placeholder = placeholderTypeValue
+    ? `<p:ph type="${placeholderTypeValue}" idx="${element.content.placeholderIndex ?? mapping.shapeId}"/>`
+    : "";
+  const textBox = element.type === "text" || element.type === "pageNumber" || element.type === "placeholder";
+  const nonVisual = `<p:nvSpPr><p:cNvPr id="${mapping.shapeId}" name="${xmlEscape(element.id)}" descr="${xmlEscape(description)}"/><p:cNvSpPr${textBox ? ' txBox="1"' : ""}>${locks}</p:cNvSpPr><p:nvPr>${placeholder}</p:nvPr></p:nvSpPr>`;
+  const geometry = element.type === "line" ? "line" : element.style.shape === "ellipse" ? "ellipse" : "rect";
+  const fill = element.type === "line" || textBox ? "<a:noFill/>" : semanticSolidFill(element.style.fill, opacity);
+  const stroke = element.style.stroke;
+  const line = stroke
+    ? `<a:ln w="${Math.max(1, asEmu(element.style.strokeWidth ?? 1))}">${semanticSolidFill(stroke, opacity)}</a:ln>`
+    : "<a:ln><a:noFill/></a:ln>";
+  let textBody = "";
+  if (textBox) {
+    const font = element.style.fontFamily ?? primaryFont;
+    const size = Math.round((element.style.fontSize ?? 18) * 100);
+    const weight = (element.style.fontWeight ?? 400) >= 600 ? ' b="1"' : "";
+    const color = element.style.color ?? "#000000";
+    const rPr = `<a:rPr lang="ko-KR" sz="${size}"${weight}>${semanticSolidFill(color, opacity)}<a:latin typeface="${xmlEscape(font)}"/><a:ea typeface="${xmlEscape(font)}"/><a:cs typeface="${xmlEscape(font)}"/></a:rPr>`;
+    const run = element.type === "pageNumber"
+      ? `<a:fld id="{00000000-0000-0000-0000-${String(mapping.shapeId).padStart(12, "0")}}" type="slidenum">${rPr}<a:t>1</a:t></a:fld>`
+      : element.type === "placeholder" ? "" : `<a:r>${rPr}<a:t>${xmlEscape(element.content.text ?? "")}</a:t></a:r>`;
+    textBody = `<p:txBody><a:bodyPr wrap="square"/><a:lstStyle/><a:p>${run}<a:endParaRPr lang="ko-KR"/></a:p></p:txBody>`;
+  }
+  return `<p:sp>${nonVisual}<p:spPr>${semanticXfrmXml(element)}<a:prstGeom prst="${geometry}"><a:avLst/></a:prstGeom>${fill}${line}</p:spPr>${textBody}</p:sp>`;
+}
+
+function injectBefore(xml: string, marker: string, addition: string): string {
+  const index = xml.indexOf(marker);
+  if (index < 0) throw new Error(`OOXML insertion marker is missing: ${marker}`);
+  return `${xml.slice(0, index)}${addition}${xml.slice(index)}`;
+}
+
+function semanticElementMetadataXml(item: SemanticElementExportMapping): string {
+  const optional = [
+    item.opacity === undefined ? "" : ` opacity="${item.opacity}"`,
+    item.sharedGroupId === undefined ? "" : ` sharedGroupId="${xmlEscape(item.sharedGroupId)}"`,
+    item.sharedOverride === undefined ? "" : ` sharedOverride="${item.sharedOverride}"`,
+  ].join("");
+  return `<avm:element id="${xmlEscape(item.id)}" type="${item.type}" scope="${item.scope}" layoutId="${xmlEscape(item.layoutId ?? "")}" shapeId="${item.shapeId}" zIndex="${item.zIndex}" rotation="${item.rotation}" visibility="${item.visibility}" assetId="${xmlEscape(item.assetId ?? "")}" assetSha256="${item.assetSha256 ?? ""}" mediaType="${item.mediaType ?? ""}" assetPartName="${xmlEscape(item.assetPartName ?? "")}" assetRelationshipId="${xmlEscape(item.assetRelationshipId ?? "")}" fit="${item.fit ?? ""}" crop="${item.crop ? `${item.crop.x},${item.crop.y},${item.crop.width},${item.crop.height}` : ""}"${optional}/>`;
+}
+
+/**
+ * Compiles the canonical authored manifest without persisting any Konva state.
+ * Legacy fixed furniture/layouts are compiled first, then optional WYSIWYG
+ * semantic elements are emitted as native master/layout shapes.
+ */
+export function compileAuthoredDeckMasterParts(
+  contract: AuthoredDeckMasterContract,
+  assets: readonly DeckMasterBinaryAsset[] = [],
+): CompiledDeckMasterParts {
+  const normalized = authoredToCompilerContract(contract);
+  const legacyAssetIds = new Set(normalized.furniture.flatMap((item) => item.assetId ? [item.assetId] : []));
+  const semanticImageIds = new Set(
+    (contract.semanticElements ?? []).flatMap((element) =>
+      element.type === "image" && element.content.assetId ? [element.content.assetId] : [],
+    ),
+  );
+  const allowedAssetIds = new Set([...legacyAssetIds, ...semanticImageIds]);
+  if (assets.some((asset) => !allowedAssetIds.has(asset.assetId))) {
+    throw new Error("Deck master binary assets contain unused asset IDs");
+  }
+  const assetsById = new Map<string, DeckMasterBinaryAsset>();
+  for (const asset of assets) {
+    if (assetsById.has(asset.assetId)) {
+      throw new Error("Deck master binary assets contain duplicate asset IDs");
+    }
+    assetsById.set(asset.assetId, asset);
+  }
+  const base = compileNormalized(normalized, assets.filter((asset) => legacyAssetIds.has(asset.assetId)));
+  const parts = new Map(base.parts);
+  const overrides = [...base.contentTypeOverrides];
+  const mediaPartByAsset = new Map(
+    base.semanticMetadata.furniture.flatMap((item) =>
+      item.assetId && item.assetSha256 && item.assetPartName
+        ? [[`${item.assetId}\u0000${item.assetSha256}`, item.assetPartName] as const]
+        : [],
+    ),
+  );
+  const layoutPartById = new Map(base.semanticMetadata.layouts.map((layout) => [layout.id, layout.partName]));
+  const mappings: SemanticElementExportMapping[] = [];
+  const masterShapeXml: string[] = [];
+  const layoutShapeXml = new Map<string, string[]>();
+  const masterRelationships: string[] = [];
+  const layoutRelationships = new Map<string, string[]>();
+
+  const ordered = [...(contract.semanticElements ?? [])].sort((left, right) => left.zIndex - right.zIndex || left.id.localeCompare(right.id, "en"));
+  ordered.forEach((element, index) => {
+    const shapeId = 10_000 + index;
+    const asset = element.type === "image" && element.content.assetId
+      ? assetsById.get(element.content.assetId)
+      : undefined;
+    if (element.type === "image") {
+      const expectedDigest = element.content.digest?.slice("sha256:".length);
+      if (!asset || !expectedDigest || asset.sha256 !== expectedDigest || asset.mediaType !== element.content.mediaType) {
+        throw new Error(`Semantic image ${element.id} requires matching digest-pinned asset bytes`);
+      }
+      const bytes = Buffer.from(asset.bytesBase64, "base64");
+      if (bytes.length === 0 || bytes.length > 10_000_000 || createHash("sha256").update(bytes).digest("hex") !== asset.sha256) {
+        throw new Error(`Semantic image ${element.id} bytes do not match its digest`);
+      }
+    }
+    const extension = asset ? mediaExtension(asset.mediaType) : null;
+    const assetKey = asset ? `${asset.assetId}\u0000${asset.sha256}` : null;
+    const partName = asset && assetKey
+      ? mediaPartByAsset.get(assetKey) ?? `ppt/media/asset-${semanticAssetRole(asset.assetId)}-${asset.sha256.slice(0, 16)}.${extension}`
+      : null;
+    if (assetKey && partName) mediaPartByAsset.set(assetKey, partName);
+    const relationshipId = asset ? `rIdSemantic${index + 1}` : null;
+    const mapping: SemanticElementExportMapping = {
+      id: element.id,
+      type: element.type,
+      scope: element.scope.kind,
+      layoutId: element.scope.kind === "layout" ? element.scope.layoutId : null,
+      shapeId,
+      zIndex: element.zIndex,
+      rotation: element.rotation,
+      visibility: element.visibility,
+      assetId: element.content.assetId ?? null,
+      assetSha256: asset?.sha256 ?? null,
+      mediaType: asset?.mediaType ?? null,
+      assetPartName: partName,
+      assetRelationshipId: relationshipId,
+      fit: element.content.fit ?? null,
+      crop: element.content.crop ? { ...element.content.crop } : null,
+      opacity: element.style.opacity ?? 1,
+      ...(element.content.sharedGroupId === undefined ? {} : { sharedGroupId: element.content.sharedGroupId }),
+      ...(element.content.sharedOverride === undefined ? {} : { sharedOverride: element.content.sharedOverride }),
+    };
+    mappings.push(mapping);
+    if (element.visibility === "hidden") return;
+    const targetLayoutIds = element.scope.kind === "layout"
+      ? [element.scope.layoutId]
+      : element.visibility === "coverOnly"
+        ? [contract.layouts.cover.id]
+        : element.visibility === "exceptCover" || element.visibility === "layoutOnly"
+          ? [...Object.values(contract.layouts), ...(contract.customLayouts ?? [])].filter((layout) => layout.id !== contract.layouts.cover.id).map((layout) => layout.id)
+          : [];
+    const xml = semanticElementXml(element, mapping, contract.fontManifest.primary);
+    if (element.scope.kind === "common" && targetLayoutIds.length === 0) {
+      masterShapeXml.push(xml);
+      if (asset && partName && relationshipId) {
+        masterRelationships.push(`<Relationship Id="${relationshipId}" Type="${NS.r}/image" Target="../media/${path.posix.basename(partName)}"/>`);
+      }
+    } else {
+      for (const layoutId of targetLayoutIds) {
+        const part = layoutPartById.get(layoutId);
+        if (!part) throw new Error(`Semantic element ${element.id} references unknown layout ${layoutId}`);
+        const relationship = asset ? `${relationshipId}-${deckMasterRole(layoutId)}` : null;
+        const perLayoutMapping = relationship ? { ...mapping, assetRelationshipId: relationship } : mapping;
+        const perLayoutXml = semanticElementXml(element, perLayoutMapping, contract.fontManifest.primary);
+        layoutShapeXml.set(part, [...(layoutShapeXml.get(part) ?? []), perLayoutXml]);
+        if (asset && partName && relationship) {
+          const relsPart = `${path.posix.dirname(part)}/_rels/${path.posix.basename(part)}.rels`;
+          layoutRelationships.set(relsPart, [
+            ...(layoutRelationships.get(relsPart) ?? []),
+            `<Relationship Id="${relationship}" Type="${NS.r}/image" Target="../media/${path.posix.basename(partName)}"/>`,
+          ]);
+        }
+      }
+    }
+    if (asset && partName && !parts.has(partName)) {
+      parts.set(partName, Buffer.from(asset.bytesBase64, "base64"));
+      if (!overrides.some((item) => item.partName === `/${partName}`)) {
+        overrides.push({ partName: `/${partName}`, contentType: asset.mediaType });
+      }
+    }
+  });
+
+  const semanticMetadata: DeckMasterSemanticMetadata = {
+    ...base.semanticMetadata,
+    semanticElements: mappings,
+    semanticDigest: digest({ ...base.semanticMetadata, semanticElements: mappings, semanticDigest: undefined }),
+  };
+  let masterXml = parts.get(MASTER_PART)!.toString("utf8");
+  masterXml = masterXml.replace(
+    `semanticDigest="${base.semanticMetadata.semanticDigest}"`,
+    `semanticDigest="${semanticMetadata.semanticDigest}"`,
+  );
+  masterXml = injectBefore(masterXml, "</p:spTree>", masterShapeXml.join(""));
+  const semanticMetadataXml = `<avm:semanticElements>${mappings.map(semanticElementMetadataXml).join("")}</avm:semanticElements>`;
+  masterXml = injectBefore(masterXml, "</avm:deckMaster>", semanticMetadataXml);
+  parts.set(MASTER_PART, Buffer.from(masterXml, "utf8"));
+  if (masterRelationships.length) {
+    const xml = parts.get(MASTER_RELS_PART)!.toString("utf8");
+    parts.set(MASTER_RELS_PART, Buffer.from(injectBefore(xml, "</Relationships>", masterRelationships.join("")), "utf8"));
+  }
+  for (const [partName, shapes] of layoutShapeXml) {
+    parts.set(partName, Buffer.from(injectBefore(parts.get(partName)!.toString("utf8"), "</p:spTree>", shapes.join("")), "utf8"));
+  }
+  for (const [partName, relationships] of layoutRelationships) {
+    parts.set(partName, Buffer.from(injectBefore(parts.get(partName)!.toString("utf8"), "</Relationships>", relationships.join("")), "utf8"));
+  }
+  const contentTypeOverridesXml = Buffer.from(
+    overrides.map((item) => `<Override PartName="${item.partName}" ContentType="${item.contentType}"/>`).join(""),
+    "utf8",
+  );
+  return { parts, contentTypeOverrides: overrides, contentTypeOverridesXml, semanticMetadata };
 }
 
 export {

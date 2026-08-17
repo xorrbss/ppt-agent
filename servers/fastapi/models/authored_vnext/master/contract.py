@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import AliasChoices, Field, model_validator
 
 from .base import Digest, LayoutId, MasterId, StrictCamelModel
 
@@ -27,6 +27,209 @@ class Rect(StrictCamelModel):
 class Ownership(StrictCamelModel):
     locked: bool
     model_writable: bool
+
+
+class CommonElementScope(StrictCamelModel):
+    kind: Literal["common"]
+
+
+class LayoutElementScope(StrictCamelModel):
+    kind: Literal["layout"]
+    layout_id: str = Field(min_length=1, max_length=200)
+
+
+class AIEditZone(StrictCamelModel):
+    """Authored-template composition envelope with optional AI intent.
+
+    Historical contracts persisted only ``id``, ``scope`` and ``bounds``.  All
+    authoring fields therefore remain optional and are omitted again when they
+    were absent, so those immutable revisions retain their geometry-only wire
+    representation.
+    """
+
+    id: str = Field(pattern=r"^ai-zone:[a-z0-9][a-z0-9._-]*$")
+    scope: CommonElementScope | LayoutElementScope
+    bounds: Rect
+    instruction: str | None = Field(
+        default=None,
+        max_length=4000,
+        exclude_if=lambda value: value is None,
+    )
+    content_type: Literal[
+        "auto", "text", "cards", "list", "table", "chart", "mixed"
+    ] | None = Field(default=None, exclude_if=lambda value: value is None)
+    pattern: Literal[
+        "auto",
+        "numberedCards",
+        "bulletList",
+        "comparisonTable",
+        "metricChart",
+        "iconCards",
+    ] | None = Field(default=None, exclude_if=lambda value: value is None)
+    source_policy: Literal[
+        "documentOnly", "promptAndDocument", "promptOnly"
+    ] | None = Field(default=None, exclude_if=lambda value: value is None)
+    empty_behavior: Literal["hidden", "blank", "fallback"] | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
+    fallback_text: str | None = Field(
+        default=None,
+        max_length=10000,
+        exclude_if=lambda value: value is None,
+    )
+    max_chars: int | None = Field(
+        default=None,
+        ge=1,
+        le=10000,
+        exclude_if=lambda value: value is None,
+    )
+    max_items: int | None = Field(
+        default=None,
+        ge=1,
+        le=24,
+        exclude_if=lambda value: value is None,
+    )
+    density: Literal["sparse", "balanced", "dense"] | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
+    text_align: Literal["left", "center", "right"] | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
+    style_policy: Literal["inheritTemplate"] | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
+
+    @model_validator(mode="after")
+    def _fallback_is_explicit_and_bounded(self) -> "AIEditZone":
+        if self.empty_behavior == "fallback" and not (self.fallback_text or "").strip():
+            raise ValueError("fallback emptyBehavior requires fallbackText")
+        if self.fallback_text is not None and self.empty_behavior != "fallback":
+            raise ValueError("fallbackText requires emptyBehavior=fallback")
+        if (
+            self.fallback_text is not None
+            and self.max_chars is not None
+            and len(self.fallback_text) > self.max_chars
+        ):
+            raise ValueError("fallbackText cannot exceed maxChars")
+        return self
+
+
+class ImageCrop(StrictCamelModel):
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+    width: float = Field(gt=0, le=1)
+    height: float = Field(gt=0, le=1)
+
+    @model_validator(mode="after")
+    def _inside_source(self) -> "ImageCrop":
+        if self.x + self.width > 1 or self.y + self.height > 1:
+            raise ValueError("crop must stay within normalized image coordinates")
+        return self
+
+
+class SemanticElementStyle(StrictCamelModel):
+    font_family: str | None = Field(default=None, min_length=1, max_length=200)
+    font_size: float | None = Field(default=None, ge=1, le=400)
+    font_weight: int | None = Field(default=None, ge=100, le=900)
+    color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    text_align: Literal["left", "center", "right", "justify"] | None = None
+    vertical_align: Literal["top", "middle", "bottom"] | None = None
+    fill: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    stroke: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    stroke_width: float | None = Field(default=None, ge=0, le=100)
+    opacity: float | None = Field(default=None, ge=0, le=1)
+    shape: Literal["rect", "ellipse"] | None = None
+    line_dash: list[float] | None = Field(default=None, max_length=16)
+
+
+class AITextBinding(StrictCamelModel):
+    instruction: str = Field(min_length=1, max_length=4000)
+    example_text: str | None = Field(default=None, max_length=4000)
+    empty_behavior: Literal["hidden", "blank", "fallback"]
+    fallback_text: str | None = Field(default=None, max_length=10000)
+    max_chars: int | None = Field(default=None, ge=1, le=10000)
+
+    @model_validator(mode="after")
+    def _fallback_is_explicit(self) -> "AITextBinding":
+        if self.empty_behavior == "fallback" and not self.fallback_text:
+            raise ValueError("fallback emptyBehavior requires fallbackText")
+        return self
+
+
+class SemanticElementContent(StrictCamelModel):
+    text: str | None = Field(default=None, max_length=10000)
+    asset_id: str | None = Field(
+        default=None, pattern=r"^asset:[a-z0-9][a-z0-9._-]*$"
+    )
+    digest: Digest | None = None
+    media_type: Literal["image/png", "image/jpeg", "image/svg+xml"] | None = None
+    alt_text: str | None = Field(default=None, max_length=500)
+    fit: Literal["contain", "cover"] | None = None
+    crop: ImageCrop | None = None
+    placeholder_role: Literal["title", "body", "content", "image"] | None = None
+    placeholder_index: int | None = Field(default=None, ge=0, le=65535)
+    role: str | None = Field(default=None, min_length=1, max_length=200)
+    ai_binding: AITextBinding | None = None
+    shared_group_id: str | None = Field(
+        default=None,
+        min_length=3,
+        max_length=200,
+        pattern=r"^[a-z][a-z0-9._-]*:[a-z0-9][a-z0-9._-]*$",
+    )
+    shared_override: bool | None = None
+
+    @model_validator(mode="after")
+    def _shared_logo_metadata(self) -> "SemanticElementContent":
+        if self.shared_override is not None and self.shared_group_id is None:
+            raise ValueError("sharedOverride requires sharedGroupId")
+        if self.shared_group_id is not None and self.role != "brand-logo":
+            raise ValueError("sharedGroupId is reserved for role=brand-logo")
+        return self
+
+
+class SemanticMasterElement(StrictCamelModel):
+    id: str = Field(pattern=r"^element:[a-z0-9][a-z0-9._-]*$")
+    type: Literal["text", "image", "shape", "line", "pageNumber", "placeholder"]
+    scope: CommonElementScope | LayoutElementScope
+    bounds: Rect
+    rotation: float = Field(ge=-360, le=360)
+    z_index: int = Field(ge=-100000, le=100000)
+    visibility: Literal[
+        "always", "exceptCover", "coverOnly", "layoutOnly", "hidden"
+    ]
+    editable_by_user: bool
+    # Keep the public acronym stable while accepting the short-lived legacy
+    # spelling that may still exist in an already-open editor tab.
+    editable_by_ai: bool = Field(
+        validation_alias=AliasChoices("editableByAI", "editableByAi"),
+        serialization_alias="editableByAI",
+    )
+    locked: bool
+    style: SemanticElementStyle
+    content: SemanticElementContent
+
+    @model_validator(mode="after")
+    def _type_content(self) -> "SemanticMasterElement":
+        if self.type == "image" and (
+            self.content.asset_id is None
+            or self.content.digest is None
+            or self.content.media_type is None
+        ):
+            raise ValueError("image elements require digest-pinned assetId, digest, and mediaType")
+        if self.type == "placeholder" and self.content.placeholder_role is None:
+            raise ValueError("placeholder elements require content.placeholderRole")
+        if self.type == "shape" and self.style.shape is None:
+            raise ValueError("shape elements require style.shape")
+        if self.content.role == "ai-text-zone":
+            if self.type != "text" or self.content.ai_binding is None:
+                raise ValueError("ai-text-zone requires a text element with content.aiBinding")
+        elif self.content.ai_binding is not None:
+            raise ValueError("content.aiBinding requires role=ai-text-zone")
+        return self
 
 
 class CanvasContract(StrictCamelModel):
@@ -99,7 +302,7 @@ class FurnitureElement(StrictCamelModel):
     kind: Literal["logo", "text", "line", "rect", "pageNumber"]
     bounds: Rect
     ownership: Ownership
-    visibility: Literal["always", "exceptCover", "coverOnly"] = "always"
+    visibility: Literal["always", "exceptCover", "coverOnly", "hidden"] = "always"
     text: str | None = Field(default=None, max_length=500)
     asset_id: str | None = Field(
         default=None,
@@ -194,16 +397,31 @@ class MasterLayout(StrictCamelModel):
     id: LayoutId
     name: str = Field(min_length=1, max_length=200)
     kind: Literal["cover", "section", "standard", "longTitle"]
-    slots: list[LayoutSlot] = Field(min_length=2, max_length=16)
+    # Legacy placeholder metadata remains readable, but authored templates own
+    # content geometry. New furniture-only masters may therefore omit slots.
+    slots: list[LayoutSlot] = Field(default_factory=list, max_length=16)
 
     @model_validator(mode="after")
-    def _slots_are_disjoint_and_writable(self) -> "MasterLayout":
+    def _slot_ids_and_indices_are_unique(self) -> "MasterLayout":
         if len({slot.id for slot in self.slots}) != len(self.slots):
             raise ValueError("layout slot IDs must be unique")
         if len({slot.placeholder_index for slot in self.slots}) != len(self.slots):
             raise ValueError("placeholderIndex values must be unique per layout")
-        if any(slot.ownership.locked or not slot.ownership.model_writable for slot in self.slots):
-            raise ValueError("layout slots must be unlocked and model-writable")
+        return self
+
+
+class MasterCustomLayout(StrictCamelModel):
+    id: LayoutId
+    name: str = Field(min_length=1, max_length=200)
+    kind: Literal["custom"]
+    slots: list[LayoutSlot] = Field(default_factory=list, max_length=64)
+
+    @model_validator(mode="after")
+    def _slot_ids_and_indices_are_unique(self) -> "MasterCustomLayout":
+        if len({slot.id for slot in self.slots}) != len(self.slots):
+            raise ValueError("custom layout slot IDs must be unique")
+        if len({slot.placeholder_index for slot in self.slots}) != len(self.slots):
+            raise ValueError("placeholderIndex values must be unique per custom layout")
         return self
 
 
@@ -263,32 +481,103 @@ class DeckMasterContract(StrictCamelModel):
     furniture: FurnitureRegistry
     semantic_styles: SemanticStyles
     layouts: LayoutRegistry
+    custom_layouts: list[MasterCustomLayout] = Field(default_factory=list, max_length=64)
+    semantic_elements: list[SemanticMasterElement] = Field(default_factory=list, max_length=2048)
+    ai_edit_zones: list[AIEditZone] = Field(default_factory=list, max_length=256)
     fit_policy: TitleFitPolicy
-    title_stress_corpus: list[TitleStressCase] = Field(min_length=4, max_length=100)
+    title_stress_corpus: list[TitleStressCase] = Field(max_length=100)
     digest: Digest | None = None
 
     @model_validator(mode="after")
-    def _stress_and_promotion_contract(self) -> "DeckMasterContract":
-        categories = {case.category for case in self.title_stress_corpus}
-        required = {"ko", "en", "mixed", "numericParenthetical"}
-        if categories != required:
-            raise ValueError("titleStressCorpus must cover all four categories")
-        if self.fit_policy.promotion_layout_id != self.layouts.long_title.id:
-            raise ValueError("promotionLayoutId must identify longTitle")
-        stress_ids = [case.id for case in self.title_stress_corpus]
-        if len(set(stress_ids)) != len(stress_ids):
-            raise ValueError("titleStressCorpus IDs must be unique")
-        for case in self.title_stress_corpus:
-            normalized_text = " ".join(case.text.split())
-            normalized_lines = " ".join(" ".join(case.expected_lines).split())
-            if normalized_text != normalized_lines:
-                raise ValueError("stress text must equal expectedLines")
-        if self.tokens.fonts.east_asian != self.font_manifest.primary:
-            raise ValueError("eastAsian font token must match fontManifest.primary")
-        if self.tokens.fonts.fallbacks != self.font_manifest.fallbacks:
-            raise ValueError("font token fallbacks must match fontManifest.fallbacks")
-        if self.font_manifest.windows_fallback != self.font_manifest.primary:
-            raise ValueError("windowsFallback must match primary")
+    def _layout_and_semantic_integrity(self) -> "DeckMasterContract":
+        custom_layout_ids = [layout.id for layout in self.custom_layouts]
+        built_in_layout_ids = {
+            self.layouts.cover.id,
+            self.layouts.section.id,
+            self.layouts.standard.id,
+            self.layouts.long_title.id,
+        }
+        if len(set(custom_layout_ids)) != len(custom_layout_ids):
+            raise ValueError("custom layout IDs must be unique")
+        if built_in_layout_ids.intersection(custom_layout_ids):
+            raise ValueError("custom layout IDs must differ from built-in layout IDs")
+        element_ids = [element.id for element in self.semantic_elements]
+        if len(set(element_ids)) != len(element_ids):
+            raise ValueError("semantic element IDs must be unique")
+        zone_ids = [zone.id for zone in self.ai_edit_zones]
+        if len(set(zone_ids)) != len(zone_ids):
+            raise ValueError("AI edit zone IDs must be unique")
+        known_layout_ids = built_in_layout_ids.union(custom_layout_ids)
+        all_layouts = [
+            self.layouts.cover,
+            self.layouts.section,
+            self.layouts.standard,
+            self.layouts.long_title,
+            *self.custom_layouts,
+        ]
+        all_slot_ids = [slot.id for layout in all_layouts for slot in layout.slots]
+        if len(set(all_slot_ids)) != len(all_slot_ids):
+            raise ValueError("layout slot IDs must be globally unique")
+        for element in self.semantic_elements:
+            if (
+                isinstance(element.scope, LayoutElementScope)
+                and element.scope.layout_id not in known_layout_ids
+            ):
+                raise ValueError("layout-scoped semantic element references unknown layout")
+        for zone in self.ai_edit_zones:
+            if (
+                isinstance(zone.scope, LayoutElementScope)
+                and zone.scope.layout_id not in known_layout_ids
+            ):
+                raise ValueError("layout-scoped AI edit zone references unknown layout")
+            if (
+                zone.bounds.right > self.canvas.width_px
+                or zone.bounds.bottom > self.canvas.height_px
+            ):
+                raise ValueError("AI edit zone bounds must stay inside the canvas")
+        shared_groups: dict[str, list[SemanticMasterElement]] = {}
+        for element in self.semantic_elements:
+            group_id = element.content.shared_group_id
+            if group_id is None:
+                continue
+            if element.type != "image" or not isinstance(element.scope, LayoutElementScope):
+                raise ValueError("shared logo elements must be layout-scoped images")
+            shared_groups.setdefault(group_id, []).append(element)
+        for members in shared_groups.values():
+            layout_ids = [member.scope.layout_id for member in members]
+            if len(set(layout_ids)) != len(layout_ids):
+                raise ValueError("shared logo groups allow at most one element per layout")
+            asset_references = {
+                (
+                    member.content.asset_id,
+                    member.content.digest,
+                    member.content.media_type,
+                )
+                for member in members
+            }
+            if len(asset_references) != 1:
+                raise ValueError("shared logo groups must reference one pinned asset")
+            inherited = [
+                member
+                for member in members
+                if member.content.shared_override is not True
+            ]
+            if inherited:
+                representative = inherited[0]
+                representative_content = representative.content.model_dump(
+                    exclude={"shared_group_id", "shared_override"}
+                )
+                for member in inherited[1:]:
+                    if (
+                        member.bounds != representative.bounds
+                        or member.rotation != representative.rotation
+                        or member.style != representative.style
+                        or member.content.model_dump(
+                            exclude={"shared_group_id", "shared_override"}
+                        )
+                        != representative_content
+                    ):
+                        raise ValueError("non-overridden shared logos must stay synchronized")
         logo_reference = self.brand_assets.logo
         if (logo_reference is None) != (self.furniture.logo.asset_id is None):
             raise ValueError("logo asset reference and furniture binding must match")
@@ -297,15 +586,6 @@ class DeckMasterContract(StrictCamelModel):
             and self.furniture.logo.asset_id != logo_reference.asset_id
         ):
             raise ValueError("logo asset reference and furniture binding must match")
-        scripts = self.font_manifest.theme_scripts
-        if {
-            scripts.latin,
-            scripts.hang,
-            scripts.jpan,
-            scripts.hans,
-            scripts.hant,
-        } != {self.font_manifest.primary}:
-            raise ValueError("all theme scripts must resolve to the primary font")
         return self
 
 

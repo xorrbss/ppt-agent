@@ -1,20 +1,17 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { LoadingState } from "../types/index";
-import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
 import { ChevronRight } from "lucide-react";
 
 interface GenerateButtonProps {
   loadingState: LoadingState;
   streamState: { isStreaming: boolean; isLoading: boolean };
-  selectedTemplate: TemplateLayoutsWithSettings | string | null;
   onSubmit: () => void;
 }
 
 const GenerateButton: React.FC<GenerateButtonProps> = ({
   loadingState,
   streamState,
-  selectedTemplate,
   onSubmit,
 }) => {
   const isDisabled =
@@ -23,7 +20,6 @@ const GenerateButton: React.FC<GenerateButtonProps> = ({
   const getButtonText = () => {
     if (loadingState.isLoading) return loadingState.message;
     if (streamState.isLoading || streamState.isStreaming) return "불러오는 중…";
-    if (!selectedTemplate) return "템플릿 선택";
     return "발표자료 생성";
   };
 

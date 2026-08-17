@@ -8,6 +8,7 @@ from pydantic import Field, model_validator
 
 from ..master.base import DeckId, Digest, LayoutId, MasterId, SlideId, StrictCamelModel
 from ..master.slide import SlideSpecV2
+from .composition import AuthoredCompositionPin
 
 
 OperationId = Annotated[str, Field(pattern=r"^operation:[a-z0-9][a-z0-9._-]*$")]
@@ -33,6 +34,9 @@ class SlideValidationCheckpoint(StrictCamelModel):
     layout_registry_digest: Digest
     font_manifest_digest: Digest
     source_digest: Digest
+    composition: AuthoredCompositionPin | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     visual_plan_digest: Digest
     quality_policy_version: str = Field(min_length=1, max_length=100)
     layout_id: LayoutId
@@ -58,6 +62,11 @@ class ValidatedSlideSpecV2(StrictCamelModel):
             raise ValueError("slide and checkpoint font manifest digests differ")
         if self.slide.title_fit.clipped:
             raise ValueError("validated slide title cannot be clipped")
+        if (
+            self.checkpoint.composition is not None
+            and self.checkpoint.composition.master_digest != self.slide.master_digest
+        ):
+            raise ValueError("slide uses a different composition master digest")
         if self.slide.ownership.locked or not self.slide.ownership.model_writable:
             raise ValueError("validated slide must own only the writable body layer")
         return self
@@ -85,6 +94,9 @@ class GenerationCheckpoint(StrictCamelModel):
         "rolledBack",
     ]
     master: MasterDigestPin
+    composition: AuthoredCompositionPin | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     source_digest: Digest
     quality_policy_version: str = Field(min_length=1, max_length=100)
     total_slides: int = Field(ge=1, le=500)
@@ -97,6 +109,11 @@ class GenerationCheckpoint(StrictCamelModel):
 
     @model_validator(mode="after")
     def _completed_slides_are_consistent(self) -> "GenerationCheckpoint":
+        if (
+            self.composition is not None
+            and self.composition.master_digest != self.master.master_digest
+        ):
+            raise ValueError("generation checkpoint uses a different composition master")
         indexes = [slide.slide_index for slide in self.completed_slides]
         ids = [slide.slide_id for slide in self.completed_slides]
         if len(set(indexes)) != len(indexes) or len(set(ids)) != len(ids):

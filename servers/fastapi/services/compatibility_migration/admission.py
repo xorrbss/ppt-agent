@@ -7,7 +7,6 @@ presentation, and it deliberately does not provide a compatibility bypass.
 
 from __future__ import annotations
 
-import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Final
@@ -16,18 +15,11 @@ from fastapi import HTTPException
 
 from models.sql.presentation import PresentationModel
 from services.presentation_profiles import PROFILE_SCHEMA_VERSION
-from services.compatibility_migration.rollout import (
-    AuthoredOnlyRolloutFlags,
-    CanaryStage,
-)
-from utils.owner_context import get_current_owner_id
 
 
 AUTHORED_ONLY_ADMISSION_CLOSED: Final = "legacy_generation_admission_closed"
 AUTHORED_ONLY_BLANK_CLOSED: Final = "legacy_blank_presentation_admission_closed"
 AUTHORED_ONLY_TEMPLATE_IMPORT_CLOSED: Final = "template_v2_import_admission_closed"
-_TRUE_VALUES: Final = frozenset({"1", "true", "yes", "on"})
-_FALSE_VALUES: Final = frozenset({"0", "false", "no", "off"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,50 +32,22 @@ class AuthoredOnlyAdmissionPolicy:
     canary_stage: str
 
 
-def _environment_boolean(name: str, *, default: bool) -> bool:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    normalized = raw.strip().lower()
-    if normalized in _TRUE_VALUES:
-        return True
-    if normalized in _FALSE_VALUES:
-        return False
-    # A malformed safety flag must not reopen legacy creation.
-    return True
-
-
 def authored_only_admission_policy() -> AuthoredOnlyAdmissionPolicy:
-    enabled = _environment_boolean(
-        "AUTHORED_ONLY_NEW_PRESENTATION_ADMISSION",
-        default=False,
-    )
-    raw_stage = os.getenv("AUTHORED_ONLY_CANARY_STAGE", "internal").strip().lower()
-    try:
-        stage = CanaryStage(raw_stage)
-    except ValueError:
-        # Invalid rollout configuration must never admit legacy creation.
-        stage = CanaryStage.PERCENT_100
-    internal_owners = frozenset(
-        owner.strip()
-        for owner in os.getenv("AUTHORED_ONLY_INTERNAL_OWNER_IDS", "").split(",")
-        if owner.strip()
-    )
-    rollout = AuthoredOnlyRolloutFlags(
-        stage=stage,
-        salt=os.getenv("AUTHORED_ONLY_ROLLOUT_SALT", "authored-only-default-v1"),
-        internal_owner_ids=internal_owners,
-        enabled=enabled,
-    )
-    owner_id = get_current_owner_id()
-    owner_key = str(owner_id) if owner_id is not None else "anonymous"
+    """Return the permanent new-presentation admission contract.
+
+    Authored-only creation is a product invariant, not a rollout switch.  In
+    particular, stale ``AUTHORED_ONLY_*`` environment values must not reopen a
+    legacy generation driver.  Existing persisted presentations remain governed
+    by their stored compatibility profile and are not reclassified here.
+    """
+
     return AuthoredOnlyAdmissionPolicy(
         schema_version=1,
-        enabled=rollout.owner_enabled(owner_key),
+        enabled=True,
         new_presentation_driver="authored",
         blocked_drivers=("standard", "smart", "template-v2"),
         stable_error_code=AUTHORED_ONLY_ADMISSION_CLOSED,
-        canary_stage=stage.value,
+        canary_stage="100",
     )
 
 
@@ -107,7 +71,7 @@ def requested_driver_from_generation(request: object) -> str:
 def require_authored_generation_admission(request: object) -> None:
     policy = authored_only_admission_policy()
     driver = requested_driver_from_generation(request)
-    if policy.enabled and driver != policy.new_presentation_driver:
+    if driver != policy.new_presentation_driver:
         raise HTTPException(
             status_code=409,
             detail={
@@ -123,8 +87,6 @@ def require_legacy_creation_closed(*, operation: str) -> None:
     """Reject non-generation entry points that mint a legacy-format deck."""
 
     policy = authored_only_admission_policy()
-    if not policy.enabled:
-        return
     code_by_operation = {
         "blank": AUTHORED_ONLY_BLANK_CLOSED,
         "template-v2-import": AUTHORED_ONLY_TEMPLATE_IMPORT_CLOSED,
@@ -143,9 +105,6 @@ def require_legacy_creation_closed(*, operation: str) -> None:
 def stamp_new_authored_presentation(presentation: PresentationModel) -> None:
     """Stamp a newly-created staging shell with canonical authored identity."""
 
-    policy = authored_only_admission_policy()
-    if not policy.enabled:
-        return
     presentation.generation_mode = "standard"
     presentation.mode = "authored"
     presentation.version = "v1-standard"
