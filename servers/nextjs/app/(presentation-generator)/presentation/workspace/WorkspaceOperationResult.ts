@@ -80,6 +80,8 @@ export interface QualityReviewHistoryItem {
   description?: string;
   action?: string;
   applied?: boolean;
+  /** Why the repair was not applied. Recorded per slide, not per issue. */
+  reason?: string;
 }
 
 export function qualityReviewHistory(
@@ -130,6 +132,14 @@ export function qualityReviewHistory(
           item.repairAction,
         ),
         applied: booleanValue(item.applied, item.fixed, item.resolved),
+        // The backend already records why a slide was left alone; only the
+        // outcome was being surfaced, so "수정 조치: none" read as unexplained.
+        reason: stringValue(
+          item.rejection_reason,
+          item.rejectionReason,
+          item.failure_reason,
+          item.failureReason,
+        ),
       };
     })
     .filter(
@@ -158,6 +168,7 @@ export function qualityReviewHistory(
     compatible.description ??= item.description;
     compatible.action ??= item.action;
     compatible.applied ??= item.applied;
+    compatible.reason ??= item.reason;
   }
   return merged;
 }
