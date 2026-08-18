@@ -1,3 +1,4 @@
+import CodexConfig from "@/components/codex-config";
 import { LLMConfig } from "@/types/llm_config";
 import { LLM_PROVIDER_OPTIONS, type PublicCredentialDescriptor } from "@/utils/provider-registry.generated";
 import { Eye, EyeOff } from "lucide-react";
@@ -13,13 +14,23 @@ interface ProviderCredentialFieldsProps {
   setShowApiKey: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
-const ProviderCredentialFields = ({ llmConfig, onInputChange, credentialFields, showApiKey, setShowApiKey }: ProviderCredentialFieldsProps) => {
+const ProviderCredentialFields = ({ selectedProvider, llmConfig, onInputChange, credentialFields, showApiKey, setShowApiKey }: ProviderCredentialFieldsProps) => {
   const t = useTranslations("providerSettings");
   return <div className="flex w-full flex-col gap-3">
     {credentialFields.map((credential) => {
       const value = ((llmConfig as Record<string, unknown>)[credential.settingKey] as string) || "";
       if (credential.widget === "oauth-status") {
-        return <p key={credential.settingKey} className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">{t("serverManagedSignIn")}</p>;
+        // ChatGPT is the one OAuth provider whose sign-in runs from this app, so
+        // it renders its own flow; other OAuth providers only get the notice.
+        if (selectedProvider !== "codex") {
+          return <p key={credential.settingKey} className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">{t("serverManagedSignIn")}</p>;
+        }
+        return <CodexConfig
+          key={credential.settingKey}
+          variant="settings"
+          codexModel={llmConfig.CODEX_MODEL || ""}
+          onInputChange={(nextValue, field) => onInputChange(nextValue, field === "codex_model" ? "CODEX_MODEL" : field)}
+        />;
       }
       const sensitive = credential.inputType === "password";
       return <label key={credential.settingKey} className="block text-sm font-medium text-gray-700">

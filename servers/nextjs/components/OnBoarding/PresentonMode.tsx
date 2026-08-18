@@ -17,7 +17,7 @@ import { usePathname } from 'next/navigation';
 import { getLLMConfigValidationError, handleSaveLLMConfig } from '@/utils/storeHelpers';
 import { checkIfSelectedOllamaModelIsPulled, pullOllamaModel } from '@/utils/providerUtils';
 import { getApiUrl } from '@/utils/api';
-import CodexConfig, { CHATGPT_MODELS } from '../CodexConfig';
+import CodexConfig, { CHATGPT_MODELS } from '@/components/codex-config';
 import VertexAzureManualFields from '@/components/VertexAzureManualFields';
 import BedrockManualFields from '@/components/BedrockManualFields';
 import OpenAICompatibleImageFields from '@/components/OpenAICompatibleImageFields';
