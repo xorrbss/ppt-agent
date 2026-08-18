@@ -798,18 +798,19 @@ function parseBodyGrammar(values: Readonly<Record<string, MaterializedTextValue>
       && metadata !== null
       && !Array.isArray(metadata)
     ) {
-      const kind = metadata.kind;
-      const value = metadata.value;
+      const metadataRecord = metadata as Record<string, unknown>;
+      const kind = metadataRecord.kind;
+      const value = metadataRecord.value;
       if (
         (kind !== "rfp" && kind !== "documentNumber")
         || typeof value !== "string"
         || value.trim().length === 0
         || value.length > 512
-        || typeof metadata.visible !== "boolean"
+        || typeof metadataRecord.visible !== "boolean"
       ) {
         throw new Error("Body grammar v2 documentMetadata is invalid");
       }
-      documentMetadata = { kind, value, visible: metadata.visible };
+      documentMetadata = { kind, value, visible: metadataRecord.visible };
     } else {
       throw new Error("Body grammar documentMetadata is required");
     }

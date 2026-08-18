@@ -1,9 +1,19 @@
 "use client";
 
+import type { ChangeEvent } from "react";
 import { useTranslations } from "next-intl";
 
 import type { DeckMasterContractV1 } from "@/lib/authored-vnext/master/contracts";
-import { setMasterFurnitureColor, setMasterFurnitureText } from "@/lib/authored-vnext/master/style-controls";
+import {
+  EDITABLE_SEMANTIC_STYLES,
+  setMasterColor,
+  setMasterFallbackFonts,
+  setMasterFurnitureColor,
+  setMasterFurnitureText,
+  setMasterPrimaryFont,
+  setMasterSemanticFontPt,
+  setMasterTitleMinimumFontPt,
+} from "@/lib/authored-vnext/master/style-controls";
 
 import { Label } from "./MasterSetupPrimitives";
 
@@ -12,19 +22,37 @@ interface MasterStyleControlsProps {
   onContractChange: (
     update: (current: DeckMasterContractV1) => DeckMasterContractV1,
   ) => void;
+  /**
+   * Standalone editors open the panel; the catalog dialog keeps it collapsed so
+   * the modal's scroll position stays anchored on the canvas it opened for.
+   */
+  defaultOpen?: boolean;
+}
+
+function numberValue(event: ChangeEvent<HTMLInputElement>): number {
+  return Number(event.target.value);
 }
 
 export default function MasterStyleControls({
   contract,
   onContractChange,
+  defaultOpen = true,
 }: MasterStyleControlsProps) {
   const t = useTranslations("authoredVnext.master");
+  const colors = Object.keys(contract.tokens.colors) as Array<
+    keyof DeckMasterContractV1["tokens"]["colors"]
+  >;
+
   return (
-    <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div>
-        <h2 className="text-lg font-bold">{t("brand.title")}</h2>
+    <details
+      className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+      data-testid="authored-master-style-controls"
+      open={defaultOpen}
+    >
+      <summary className="cursor-pointer">
+        <span className="text-lg font-bold">{t("brand.title")}</span>
         <p className="mt-1 text-xs text-slate-600">{t("brand.description")}</p>
-      </div>
+      </summary>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="sm:col-span-2">
           <Label>{t("brand.name")}</Label>
@@ -40,6 +68,36 @@ export default function MasterStyleControls({
               }))
             }
             value={contract.name}
+          />
+        </label>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label>
+          <Label>{t("brand.primaryFont")}</Label>
+          <input
+            aria-label={t("brand.primaryFont")}
+            className="w-full rounded border border-slate-400 px-3 py-2"
+            data-testid="authored-master-primary-font"
+            onChange={(event) =>
+              onContractChange((current) =>
+                setMasterPrimaryFont(current, event.target.value),
+              )
+            }
+            value={contract.fontManifest.primary}
+          />
+        </label>
+        <label>
+          <Label>{t("brand.fallbackFonts")}</Label>
+          <input
+            aria-label={t("brand.fallbackFonts")}
+            className="w-full rounded border border-slate-400 px-3 py-2"
+            data-testid="authored-master-fallback-fonts"
+            onChange={(event) =>
+              onContractChange((current) =>
+                setMasterFallbackFonts(current, event.target.value),
+              )
+            }
+            value={contract.fontManifest.fallbacks.join(", ")}
           />
         </label>
       </div>
@@ -132,6 +190,73 @@ export default function MasterStyleControls({
           />
         </label>
       </div>
-    </section>
+      <fieldset>
+        <legend className="text-sm font-bold">
+          {t("brand.semanticStyles")}
+        </legend>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {EDITABLE_SEMANTIC_STYLES.map((style) => (
+            <label key={style}>
+              <Label>{t(`brand.style.${style}`)}</Label>
+              <input
+                aria-label={t(`brand.style.${style}`)}
+                className="w-full rounded border border-slate-400 px-3 py-2"
+                data-style={style}
+                data-testid="authored-master-semantic-style"
+                min="1"
+                onChange={(event) =>
+                  onContractChange((current) =>
+                    setMasterSemanticFontPt(current, style, numberValue(event)),
+                  )
+                }
+                type="number"
+                value={contract.semanticStyles[style].fontPt}
+              />
+            </label>
+          ))}
+          <label>
+            <Label>{t("brand.titleMinimum")}</Label>
+            <input
+              aria-label={t("brand.titleMinimum")}
+              className="w-full rounded border border-slate-400 px-3 py-2"
+              data-testid="authored-master-title-minimum"
+              min="1"
+              onChange={(event) =>
+                onContractChange((current) =>
+                  setMasterTitleMinimumFontPt(current, numberValue(event)),
+                )
+              }
+              type="number"
+              value={contract.semanticStyles.title.minFontPt}
+            />
+          </label>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend className="text-sm font-bold">{t("brand.colors")}</legend>
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          {colors.map((token) => (
+            <label className="flex items-center gap-2" key={token}>
+              <input
+                aria-label={t("brand.colorAria", {
+                  color: t(`colors.${token}`),
+                })}
+                className="h-9 w-10"
+                data-testid="authored-master-color"
+                data-token={token}
+                onChange={(event) =>
+                  onContractChange((current) =>
+                    setMasterColor(current, token, event.target.value),
+                  )
+                }
+                type="color"
+                value={contract.tokens.colors[token]}
+              />
+              <span className="text-xs">{t(`colors.${token}`)}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+    </details>
   );
 }

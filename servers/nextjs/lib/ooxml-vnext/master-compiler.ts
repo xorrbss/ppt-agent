@@ -629,7 +629,7 @@ export function compileAuthoredDeckMasterParts(
   const base = compileNormalized(normalized, assets.filter((asset) => legacyAssetIds.has(asset.assetId)));
   const parts = new Map(base.parts);
   const overrides = [...base.contentTypeOverrides];
-  const mediaPartByAsset = new Map(
+  const mediaPartByAsset = new Map<string, string>(
     base.semanticMetadata.furniture.flatMap((item) =>
       item.assetId && item.assetSha256 && item.assetPartName
         ? [[`${item.assetId}\u0000${item.assetSha256}`, item.assetPartName] as const]

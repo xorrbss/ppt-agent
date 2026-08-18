@@ -21,6 +21,7 @@ import {
   validateMasterSetup,
 } from "@/lib/authored-vnext/master/view-model";
 import MasterStudioCanvas from "./MasterStudioCanvas";
+import MasterStyleControls from "./MasterStyleControls";
 import MasterSetupPublishPanel from "./MasterSetupPublishPanel";
 import { Badge, Label } from "./MasterSetupPrimitives";
 import type { PptAnalysisReviewProps } from "./PptAnalysisReviewPanel";
@@ -562,6 +563,15 @@ export default function MasterSetupGate({
                   return null;
                 }
               }}
+            />
+            {/* Below the canvas: the master-wide typography, furniture and token
+                controls the WYSIWYG panel cannot express (it edits one element).
+                Keeping it after the canvas preserves the editor's existing top
+                anchor, which the embedded catalog dialog scrolls to. */}
+            <MasterStyleControls
+              contract={contract}
+              defaultOpen={!embedded}
+              onContractChange={update}
             />
           </section>
         </div>

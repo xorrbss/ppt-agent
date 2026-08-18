@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   AuthoredVnextMasterClient,
   MasterApiError,
+  normalizeMasterCatalogPage,
 } from "./client.ts";
 import { AUTHORED_VNEXT_MASTER_ENDPOINTS } from "./contracts.ts";
 import {
@@ -212,6 +213,53 @@ test("body-only regenerate preserves the pinned master digest and layout on the 
   });
   assert.equal(result.deck.slides[0].body, "후보 본문");
   assert.equal(result.candidateDigest, digestB);
+});
+
+test("catalog entries keep the published pointer typed and reject a partial logo", () => {
+  const entry = {
+    masterId: "master:test",
+    name: "테스트 마스터",
+    semanticVersion: "1.0.0",
+    publishedRevision: 3,
+    publishedDigest: digest,
+    hasDraft: false,
+    logo: { assetId: "asset:test-logo", digest: digestB, altText: "테스트 로고" },
+    primaryFont: "Malgun Gothic",
+    layoutCount: 4,
+    updatedTime: "2026-08-17T00:00:00Z",
+  };
+
+  const page = normalizeMasterCatalogPage({ items: [entry], nextCursor: null });
+  assert.equal(page.nextCursor, null);
+  assert.equal(page.items[0].publishedRevision, 3);
+  assert.equal(page.items[0].publishedDigest, digest);
+  assert.deepEqual(page.items[0].logo, entry.logo);
+
+  // A logo is display-only: an incomplete reference drops to null instead of
+  // failing the listing, because the card dereferences altText and assetUrl
+  // re-validates the digest.
+  for (const logo of [
+    { assetId: "asset:test-logo", digest: digestB },
+    { assetId: "asset:test-logo", digest: "not-a-digest", altText: "테스트 로고" },
+    {},
+  ]) {
+    assert.equal(
+      normalizeMasterCatalogPage({ items: [{ ...entry, logo }], nextCursor: null }).items[0].logo,
+      null,
+    );
+  }
+
+  // A published pointer is a receipt: a malformed one must fail closed.
+  for (const invalid of [
+    { publishedRevision: 0 },
+    { publishedRevision: "3" },
+    { publishedDigest: "sha256:zzz" },
+  ]) {
+    assert.throws(
+      () => normalizeMasterCatalogPage({ items: [{ ...entry, ...invalid }], nextCursor: null }),
+      /invalid catalog entry/,
+    );
+  }
 });
 
 test("create deck keeps Visual Direction separate and normalizes the immutable snapshot", async () => {
