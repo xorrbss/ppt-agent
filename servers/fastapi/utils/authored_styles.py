@@ -33,8 +33,28 @@ AUTHORED_STYLE_CATEGORIES = frozenset(
 _ENGLISH_IDENTIFIER_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 _HEX_COLOR_PATTERN = re.compile(r"^#[0-9A-Fa-f]{6}$")
 _REFERENCE_ROLES = frozenset(
-    {"cover", "content", "data", "timeline", "architecture", "closing"}
+    {
+        "cover",
+        "content",
+        "data",
+        "timeline",
+        "architecture",
+        "closing",
+        "section",
+        "agenda",
+    }
 )
+
+#: Where a role looks for its references, in order, until a style supplies some.
+#: The two roles the chapter plan inserts are new, so no existing style has an
+#: image for them; falling back keeps those decks on the style they chose rather
+#: than authoring their divider and agenda pages against no reference at all.
+#: A divider is composed like a cover — an announcement on a full field — and an
+#: agenda is composed like a content page, which is what those fallbacks say.
+_REFERENCE_ROLE_FALLBACKS: Mapping[str, tuple[str, ...]] = {
+    "section": ("section", "cover"),
+    "agenda": ("agenda", "content"),
+}
 _REFERENCE_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".webp"})
 _MAX_REFERENCES_PER_ROLE = 2
 _STYLE_REFERENCE = "style_reference"
@@ -404,6 +424,10 @@ def reference_images_for_role(style: Optional[AuthoredStyle], role: str) -> tupl
         key = "cover"
     elif normalized == "CLOSING":
         key = "closing"
+    elif normalized == "SECTION":
+        key = "section"
+    elif normalized == "AGENDA":
+        key = "agenda"
     elif normalized in {"ROADMAP", "TIMELINE"}:
         key = "timeline"
     elif normalized in {"OUTCOMES", "METRICS", "DATA"}:
@@ -413,7 +437,11 @@ def reference_images_for_role(style: Optional[AuthoredStyle], role: str) -> tupl
     else:
         key = "content"
     references = getattr(style, "reference_images", {})
-    return tuple(references.get(key, ()))
+    for candidate in _REFERENCE_ROLE_FALLBACKS.get(key, (key,)):
+        resolved = references.get(candidate, ())
+        if resolved:
+            return tuple(resolved)
+    return ()
 
 
 def _read_style_mapping(source: Path) -> Mapping[str, Any]:

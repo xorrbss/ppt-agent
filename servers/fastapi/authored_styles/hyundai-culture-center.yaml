@@ -75,6 +75,8 @@ brief: |-
 
   SLIDE ARCHETYPES
   cover: Place the client name and the project title left-aligned in white on the dark green gradient, with a small date line below and the author mark in the upper right.
+  agenda: Present the chapter list as a single left-aligned column on the near-white canvas, each row a large emerald numeral beside its chapter name, separated by hairline rules, with generous leading and no descriptions.
+  section: Fill the slide with the near-black green field, seat a soft rounded folder-tab shape at the left carrying the chapter numeral in teal, set the chapter name large in white beside it, and list the chapter's pages beneath in small muted type.
   content: Lead with one bold claim line above the field, then combine a compact grouped block on the left with a labeled evidence list on the right, closing with a short takeaway.
   architecture: Use one full-width system map with tiered zones for channels, common services, business modules, and data, connected by orthogonal lines, and place two summary callouts on the right edge.
   data: Build one dominant figure table with a teal header row beside a small companion chart or rating panel, and add one short interpretation line.

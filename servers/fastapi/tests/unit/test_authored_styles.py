@@ -34,6 +34,7 @@ EXPECTED_AUTHORED_STYLE_IDS = {
     "flat-infographic",
     "geometric-mono",
     "groovy-70s",
+    "hyundai-culture-center",
     "iso-blueprint",
     "liquid-executive",
     "luxury-editorial",
@@ -105,7 +106,7 @@ def _tracked_authored_style_sources() -> list[Path]:
     developer can preview a local style.  The catalogue contract, however,
     describes the versioned product surface.  Resolving that surface via Git
     keeps this test hermetic when a developer has an ignored draft next to the
-    36 shipped styles, while still failing if a tracked file is added, removed,
+    37 shipped styles, while still failing if a tracked file is added, removed,
     or renamed without updating the contract.
     """
 
@@ -499,7 +500,7 @@ def test_authored_catalogue_has_complete_contracts(tmp_path, caplog):
     with caplog.at_level(logging.WARNING, logger="utils.authored_styles"):
         styles = load_authored_styles(tracked_catalogue)
 
-    assert len(sources) == len(styles) == len(EXPECTED_AUTHORED_STYLE_IDS) == 36
+    assert len(sources) == len(styles) == len(EXPECTED_AUTHORED_STYLE_IDS) == 37
     assert {source.stem for source in sources} == EXPECTED_AUTHORED_STYLE_IDS
     assert {style.id for style in styles} == EXPECTED_AUTHORED_STYLE_IDS
     assert not [
@@ -531,7 +532,12 @@ def test_authored_catalogue_has_complete_contracts(tmp_path, caplog):
 
         preview = data["preview"]
         expected_preview_fields = {"bg", "accent", "palette", "variant"}
-        if style_id in {"cyber-ai", "osb-smart-banking", "tech-blueprint"}:
+        if style_id in {
+            "cyber-ai",
+            "hyundai-culture-center",
+            "osb-smart-banking",
+            "tech-blueprint",
+        }:
             expected_preview_fields.add("image")
         assert set(preview) == expected_preview_fields
         assert len(preview["palette"]) >= 3
@@ -576,7 +582,7 @@ def test_authored_styles_api_hides_briefs_and_returns_exact_catalogue():
 
     assert response.status_code == 200
     body = response.json()
-    assert len(body) == 36
+    assert len(body) == 37
     assert [style["id"] for style in body] == sorted(style["id"] for style in body)
     assert {style["id"] for style in body} == EXPECTED_AUTHORED_STYLE_IDS
     assert all(

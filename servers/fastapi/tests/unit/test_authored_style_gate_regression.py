@@ -136,7 +136,7 @@ def _install_style_reference_stubs(monkeypatch, critique, compare, revise):
         lambda _: SimpleNamespace(id="default", reference_mode=STYLE_REFERENCE),
     )
     monkeypatch.setattr(
-        quality_service, "prepare_authored_deck", lambda *_: _style_plan()
+        quality_service, "prepare_authored_deck", lambda *_, **_kwargs: _style_plan()
     )
     monkeypatch.setattr(
         quality_service,

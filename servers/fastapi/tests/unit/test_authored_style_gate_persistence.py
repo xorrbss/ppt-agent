@@ -109,7 +109,7 @@ def _patch_style_reference_review(monkeypatch, final_critiques, write_png):
         design_system="DESIGN",
     )
     monkeypatch.setattr(quality_service, "resolve_authored_style", lambda _: style)
-    monkeypatch.setattr(quality_service, "prepare_authored_deck", lambda *args: plan)
+    monkeypatch.setattr(quality_service, "prepare_authored_deck", lambda *args, **_kwargs: plan)
     monkeypatch.setattr(quality_service, "render_html_to_png", fake_render)
     monkeypatch.setattr(quality_service, "critique_authored", fake_critique)
     monkeypatch.setattr(
