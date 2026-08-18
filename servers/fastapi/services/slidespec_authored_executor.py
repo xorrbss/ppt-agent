@@ -1398,6 +1398,19 @@ def _execution_rollout(
     return rollout
 
 
+def _validate_plan_geometry(
+    spec: SlideSpec, plan: RepairPlan
+) -> FeasibilityResult:
+    """Apply one repair plan and solve the geometry it produces.
+
+    Extracted so the whole CPU-bound step is a single call the caller can hand
+    to a worker thread; the pieces are meaningless apart from each other.
+    """
+    applied = apply_repair_plan(spec, plan)
+    validate_slidespec(applied.spec)
+    return solve_constraints(applied.spec, compute_unsat_core=False)
+
+
 async def _run_one(
     *,
     presentation_id: uuid.UUID,
@@ -1592,11 +1605,12 @@ async def _run_one(
                 },
             )
         try:
-            applied = apply_repair_plan(request.spec, plan)
-            validate_slidespec(applied.spec)
-            feasibility = solve_constraints(
-                applied.spec,
-                compute_unsat_core=False,
+            # Run on the loop, the solver held it for as long as it searched
+            # - observed in production as a backend that stopped answering the
+            # API and its own heartbeats until the process was killed. The
+            # solver's time budget bounds the work; this keeps it off the loop.
+            feasibility = await asyncio.to_thread(
+                _validate_plan_geometry, request.spec, plan
             )
             if not feasibility.feasible and feasibility.search_complete:
                 return SensorResult(

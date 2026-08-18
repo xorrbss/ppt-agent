@@ -197,7 +197,7 @@ def test_cardinality_core_beats_deletion_order_and_has_stable_tie_break(monkeypa
     pair = frozenset(("con:a-pair-1", "con:a-pair-2"))
     triple = frozenset(("con:z-triple-1", "con:z-triple-2", "con:z-triple-3"))
 
-    def fake_solve_active(_spec, active_ids):
+    def fake_solve_active(_spec, active_ids, _deadline=None):
         unsat = pair <= active_ids or triple <= active_ids
         return solver_module.FeasibilityResult(
             feasible=not unsat,
@@ -242,7 +242,7 @@ def test_cardinality_budget_returns_proved_inclusion_minimal_fallback(monkeypatc
     pair = frozenset(("con:a-pair-1", "con:a-pair-2"))
     triple = frozenset(("con:z-triple-1", "con:z-triple-2", "con:z-triple-3"))
 
-    def fake_solve_active(_spec, active_ids):
+    def fake_solve_active(_spec, active_ids, _deadline=None):
         return solver_module.FeasibilityResult(
             feasible=not (pair <= active_ids or triple <= active_ids),
             bounds={},
@@ -533,3 +533,80 @@ def test_large_feasible_non_overlap_set_short_circuits_at_global_minimum() -> No
     assert result.branches_evaluated == 1
     assert result.max_residual == 0
     assert time.perf_counter() - started < 0.25
+
+
+def test_an_exhausted_time_budget_downgrades_the_search_never_the_verdict(
+    monkeypatch,
+) -> None:
+    """A budget must never turn "not searched" into "proved infeasible".
+
+    Observed in production: the solver ran for over an hour on one slide and,
+    because it is synchronous, took the whole backend's event loop with it. The
+    ceiling that stops that must not buy the answer with a false UNSAT.
+    """
+    import utils.slidespec_solver as solver_module
+
+    spec = _spec(
+        constraints=(
+            NonOverlapConstraint(
+                constraintId="con:no-overlap-budget",
+                kind="nonOverlap",
+                targets=("lay:a", "lay:b"),
+                clearance=0.1,
+                tolerance=0.001,
+            ),
+        )
+    )
+
+    # The deadline is read once to be set, then again inside the search. A clock
+    # that jumps between the two trips the budget on the first branch, without
+    # making the test depend on how fast this machine solves.
+    readings = iter([0.0])
+
+    def clock() -> float:
+        return next(readings, 1e9)
+
+    monkeypatch.setattr(solver_module, "monotonic", clock)
+
+    result = solver_module.solve_constraints(spec, time_budget_seconds=5.0)
+
+    assert result.search_complete is False
+    assert "constraint.feasibility.search_limited" in result.reason_codes
+    # The verdict a caller keys on: an incomplete search is not infeasibility.
+    assert result.feasible is False
+
+
+def test_the_budget_bounds_wall_clock_on_a_dense_non_overlap_problem() -> None:
+    spec = _spec(
+        constraints=(
+            NonOverlapConstraint(
+                constraintId="con:no-overlap-dense",
+                kind="nonOverlap",
+                targets=("lay:a", "lay:b"),
+                clearance=0.4,
+                tolerance=0.001,
+            ),
+        )
+    )
+
+    started = time.monotonic()
+    result = solve_constraints(spec, time_budget_seconds=0.25)
+    elapsed = time.monotonic() - started
+
+    # Generous headroom: the point is a ceiling exists, not its exact value.
+    assert elapsed < 5.0
+    assert result.branches_evaluated >= 0
+
+
+def test_the_budget_is_opt_out_and_rejects_a_meaningless_ceiling() -> None:
+    spec = _spec()
+
+    unbudgeted = solve_constraints(spec, time_budget_seconds=None)
+    assert unbudgeted.search_complete is True
+
+    for invalid in (0, -1.0):
+        try:
+            solve_constraints(spec, time_budget_seconds=invalid)
+        except ValueError:
+            continue
+        raise AssertionError(f"{invalid} should be rejected as a time budget")
