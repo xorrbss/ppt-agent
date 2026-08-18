@@ -107,15 +107,34 @@ export function chartIds(
       }
     });
     for (const value of Object.values(slide)) {
+      // Only explicit runtime markers count. A class token is not one: `\bchart\b`
+      // matches decorative names like "chart-wrap" or "mini-chart", so authored
+      // CSS bar graphs — which no runtime draws — were demanding a snapshot that
+      // the server never issues for them.
       if (
         typeof value === "string" &&
-        /(?:data-(?:smart-)?chart|<canvas\b|class=["'][^"']*\bchart\b)/i.test(value)
+        /(?:data-(?:smart-)?chart|<canvas\b)/i.test(value)
       ) {
         ids.add(`slide-${slideIndex + 1}-html-chart`);
       }
     }
   });
   return Object.freeze([...ids]);
+}
+
+/**
+ * Whether a driver draws charts with a script runtime a headless export cannot
+ * keep alive, making an immutable snapshot the only faithful substitute.
+ *
+ * Authored decks are exempt by construction: `scriptPolicy` rejects any slide
+ * carrying `<script>`, so authored chart markup is plain CSS that Chrome paints
+ * directly into the export, and the server issues no
+ * `render_dependencies.chart_snapshots` for that driver. Demanding a snapshot
+ * there is unsatisfiable — it fails the whole export rather than degrading one
+ * chart.
+ */
+function needsChartRuntime(snapshot: RenderPresentationSnapshot): boolean {
+  return snapshot.profile.driver_id !== "authored";
 }
 
 export function chartSnapshotManifest(
@@ -148,11 +167,25 @@ export function chartSnapshotManifest(
   }
   const snapshotIds = new Set(snapshots.map((item) => item.chart_id));
   const missing = ids.filter((id) => !snapshotIds.has(id));
-  if ((target === "pdf" || target === "pptx" || target === "thumbnail") && missing.length) {
+  if (!missing.length) {
+    return Object.freeze({
+      status: "complete",
+      chart_ids: ids,
+      snapshots: Object.freeze([...snapshots]),
+    });
+  }
+  if (!needsChartRuntime(snapshot)) {
+    return Object.freeze({
+      status: "not-required",
+      chart_ids: ids,
+      snapshots: Object.freeze([...snapshots]),
+    });
+  }
+  if (target === "pdf" || target === "pptx" || target === "thumbnail") {
     throw new RenderPolicyError(`render_chart_snapshot_required:${missing.join(",")}`);
   }
   return Object.freeze({
-    status: missing.length ? "runtime-required" : "complete",
+    status: "runtime-required",
     chart_ids: ids,
     snapshots: Object.freeze([...snapshots]),
   });
