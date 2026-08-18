@@ -113,3 +113,11 @@ pnpm-workspace.yaml
 # stdout/stderr of locally launched backend, frontend and proxy processes. These
 # carry request paths and presentation ids from real decks.
 .local-runtime-logs/
+
+# pytest's sqlite database (CI sets DATABASE_URL to ./test.db)
+servers/fastapi/test.db
+servers/fastapi/test.db-shm
+servers/fastapi/test.db-wal
+
+# local review-tool scratch output
+.codex-review/

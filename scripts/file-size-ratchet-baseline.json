@@ -96,7 +96,7 @@
     "servers/nextjs/app/(presentation-generator)/presentation/workspace/timelineProjection.ts": 1164,
     "servers/nextjs/app/(presentation-generator)/presentation/workspace/useWorkspace.ts": 750,
     "servers/nextjs/app/(presentation-generator)/presentation/workspace/WorkspaceChatPanel.tsx": 915,
-    "servers/nextjs/app/(presentation-generator)/presentation/workspace/WorkspaceOperationCard.tsx": 1216,
+    "servers/nextjs/app/(presentation-generator)/presentation/workspace/WorkspaceOperationCard.tsx": 1211,
     "servers/nextjs/app/(presentation-generator)/services/api/presentation-generation.ts": 1125,
     "servers/nextjs/app/template-v2-studio/[templateId]/TemplateV2Canvas.tsx": 637,
     "servers/nextjs/app/template-v2-studio/[templateId]/TemplateV2CanvasElement.tsx": 510,
