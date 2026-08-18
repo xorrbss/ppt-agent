@@ -468,6 +468,35 @@ def test_two_chapters_numbered_alike_do_not_cost_the_deck_its_structure():
     assert expand_outline_with_chapters(_outline(14), draft) is not None
 
 
+def test_a_marker_copied_with_its_separator_is_not_printed_twice():
+    # A source that writes "Ⅱ. 제안개요" reports the marker the way the page
+    # reads it, separator included. Every renderer here adds the separator, so
+    # keeping it would print "Ⅱ.. 제안개요" on every page of that chapter.
+    for reported, stored in (
+        ("Ⅱ.", "Ⅱ"),
+        ("Ⅵ. ", "Ⅵ"),
+        ("2)", "2"),
+        ("제1장", "제1장"),
+    ):
+        chapter = AuthoredChapter(numeral=reported, title="제안개요", start_index=2)
+        assert chapter.numeral == stored
+        assert chapter.prefix == f"{stored}. 제안개요"
+    draft = AuthoredChapterDraft(numeral="Ⅲ.", title="수행방안", first_slide_index=3)
+    assert draft.numeral == "Ⅲ"
+
+
+def test_two_chapters_differing_only_by_that_separator_are_one_numeral():
+    # Normalisation happens before the uniqueness check, so "Ⅱ" and "Ⅱ." are
+    # the same chapter marker rather than two that merely look alike.
+    with pytest.raises(ValueError):
+        AuthoredChapterPlan(
+            chapters=(
+                AuthoredChapter(numeral="Ⅱ", title="가", start_index=2),
+                AuthoredChapter(numeral="Ⅱ.", title="나", start_index=6),
+            )
+        )
+
+
 def test_slide_heading_reads_the_markdown_title_a_slide_leads_with():
     assert slide_heading("## 목표 아키텍처\n\n본문") == "목표 아키텍처"
     assert slide_heading("본문만 있는 슬라이드") == "본문만 있는 슬라이드"

@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 CHAPTER_PLAN_SCHEMA_VERSION = "authored-chapter-plan/v1"
@@ -54,6 +54,21 @@ MIN_SLIDES_FOR_CHAPTER_PLAN = 10
 MAX_CHAPTERS = 9
 MIN_CHAPTERS = 2
 
+#: Punctuation a document puts AFTER a chapter marker to separate it from the
+#: chapter's name. A source that writes "Ⅱ. 제안개요" reports the numeral as
+#: "Ⅱ." because that is how the page reads, and every renderer here adds the
+#: separator itself — so the marker is stored without it, or the deck prints
+#: "Ⅱ.. 제안개요" on every page of that chapter.
+_NUMERAL_TRAILING_PUNCTUATION = ".)·、,: 	"
+
+
+def normalize_numeral(value: str) -> str:
+    """Return a chapter marker with any trailing separator punctuation removed."""
+    stripped = value.strip().rstrip(_NUMERAL_TRAILING_PUNCTUATION)
+    # A marker that is nothing BUT punctuation is not a marker; keep what was
+    # given rather than failing the whole plan on a field bound of 1 character.
+    return stripped or value.strip()
+
 
 class _Spec(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -69,6 +84,8 @@ class AuthoredChapterDraft(_Spec):
     title: str = Field(min_length=1, max_length=40)
     #: Index into the SOURCE outline of the chapter's first content slide.
     first_slide_index: int = Field(ge=0)
+
+    _normalize_numeral = field_validator("numeral")(normalize_numeral)
 
 
 class AuthoredChapterPlanDraft(_Spec):
@@ -96,6 +113,8 @@ class AuthoredChapter(_Spec):
     title: str = Field(min_length=1, max_length=40)
     #: Index into the FINAL outline of this chapter's first slide.
     start_index: int = Field(ge=0)
+
+    _normalize_numeral = field_validator("numeral")(normalize_numeral)
     #: Whether ``start_index`` is the chapter's divider slide rather than its
     #: first content slide. A plan carries this instead of assuming it, so a
     #: deck whose dividers were suppressed still describes itself correctly.
@@ -178,6 +197,7 @@ class AuthoredChapterPlan(_Spec):
 
 __all__ = [
     "AGENDA_ROLE",
+    "normalize_numeral",
     "AuthoredChapter",
     "AuthoredChapterDraft",
     "AuthoredChapterPlan",
