@@ -117,10 +117,16 @@ export function CanonicalWorkspaceChatPanel(props: {
       );
       onPageRemakeRequesterReady?.(
         send
-          ? (slideIndex) => void dispatch?.(t("remakeSlide", { slide: slideIndex + 1 }), {
-              commandType: "slide.regenerate",
-              context: { slide_index: slideIndex },
-            })
+          ? (requested) => {
+              // This panel hosts no preview dialog, so a batch selection has no
+              // safe equivalent here: publishing one page of it would apply
+              // work the user never saw.
+              if (Array.isArray(requested)) return;
+              void dispatch?.(t("remakeSlide", { slide: requested + 1 }), {
+                commandType: "slide.regenerate",
+                context: { slide_index: requested },
+              });
+            }
           : null,
       );
     }}

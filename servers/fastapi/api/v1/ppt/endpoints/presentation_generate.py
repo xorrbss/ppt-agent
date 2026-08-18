@@ -1484,8 +1484,19 @@ async def generate_presentation_handler(
                 traceback.print_exc()
 
             # Finding number of slides to generate by considering table of contents
+            #
+            # Only the template path reserves outline slots for a table of
+            # contents, because only it inserts TOC layouts afterwards
+            # (build_template_structure). The authored path returns before that
+            # insertion and builds its own agenda page from its chapter plan, so
+            # reserving here left an authored deck short by the reserved count
+            # with nothing ever put in its place.
             n_slides_to_generate = request.n_slides
-            if request.include_table_of_contents and request.n_slides is not None:
+            if (
+                request.include_table_of_contents
+                and request.n_slides is not None
+                and request.template != AUTHORED_TEMPLATE
+            ):
                 n_slides_to_generate = (
                     get_no_of_outlines_to_generate_for_n_slides(
                         n_slides=request.n_slides,

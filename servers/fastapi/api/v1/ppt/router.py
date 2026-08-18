@@ -7,6 +7,9 @@ from api.v1.ppt.endpoints.presentation_generate import PRESENTATION_GENERATE_ROU
 from api.v1.ppt.endpoints.presentation_blank import PRESENTATION_BLANK_ROUTER
 from api.v1.ppt.endpoints.presentation_versions import PRESENTATION_VERSION_ROUTER
 from api.v1.ppt.endpoints.presentation_share import PRESENTATION_SHARE_ROUTER
+from api.v1.ppt.endpoints.authored_batch_remake import (
+    AUTHORED_BATCH_REMAKE_ROUTER,
+)
 from api.v1.ppt.endpoints.anthropic import ANTHROPIC_ROUTER
 from api.v1.ppt.endpoints.codex_auth import CODEX_AUTH_ROUTER
 from api.v1.ppt.endpoints.community import COMMUNITY_ROUTER
@@ -69,6 +72,11 @@ PPT_FEATURE_MODULES = (
     FeatureModule("presentation-generate", PRESENTATION_GENERATE_ROUTER, frozenset({"ppt-api", "presentation"})),
     FeatureModule("presentation-blank", PRESENTATION_BLANK_ROUTER, frozenset({"ppt-api", "presentation"})),
     FeatureModule("presentation-versions", PRESENTATION_VERSION_ROUTER, frozenset({"ppt-api", "presentation"})),
+    FeatureModule(
+        "authored-batch-remake",
+        AUTHORED_BATCH_REMAKE_ROUTER,
+        frozenset({"ppt-api", "presentation"}),
+    ),
     FeatureModule("presentation-share", PRESENTATION_SHARE_ROUTER, frozenset({"ppt-api", "presentation"})),
     FeatureModule("pptx-slides", PPTX_SLIDES_ROUTER, frozenset({"ppt-api", "export"})),
     FeatureModule("slide", SLIDE_ROUTER, frozenset({"ppt-api", "presentation"})),

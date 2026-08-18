@@ -701,6 +701,24 @@
       "status_code": 500,
       "safe_message": "The presentation version could not be restored. Try again.",
       "retryable": true
+    },
+    {
+      "code": "authored_batch_remake_request_invalid",
+      "status_code": 400,
+      "safe_message": "This batch page remake request is missing its pages or previews.",
+      "retryable": false
+    },
+    {
+      "code": "authored_batch_remake_master_pinned_unsupported",
+      "status_code": 400,
+      "safe_message": "Batch page remake is not available while a design master is pinned.",
+      "retryable": false
+    },
+    {
+      "code": "authored_batch_remake_all_slides_failed",
+      "status_code": 409,
+      "safe_message": "None of the selected pages could be applied.",
+      "retryable": false
     }
   ],
   "privacy": {

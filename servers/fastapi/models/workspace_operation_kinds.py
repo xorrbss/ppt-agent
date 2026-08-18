@@ -39,6 +39,10 @@ _SPECS = (
         "Regenerate slide", "Selected slide", "Slide regeneration",
     ),
     WorkspaceOperationKindSpec(
+        "slide.regenerate.batch", True, True, False,
+        "Regenerate selected slides", "Selected slides", "Batch slide regeneration",
+    ),
+    WorkspaceOperationKindSpec(
         "slide.delete", True, True, True,
         "Delete slide", "Selected slide", "Destructive slide deletion",
     ),

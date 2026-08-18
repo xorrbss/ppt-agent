@@ -59,6 +59,7 @@ _COMMAND_TYPES = frozenset(
         "presentation.delete",
         "slide.edit",
         "slide.regenerate",
+        "slide.regenerate.batch",
         "slide.delete",
         "version.restore",
         "template.apply",
@@ -87,6 +88,9 @@ _ERROR_CODES = frozenset(
     {
         "app_data_directory_required",
         "asset_not_ready",
+        "authored_batch_remake_all_slides_failed",
+        "authored_batch_remake_master_pinned_unsupported",
+        "authored_batch_remake_request_invalid",
         "authored_cluster_capacity_unavailable",
         "invalid_operation_handler_result",
         "operation_lease_lost",

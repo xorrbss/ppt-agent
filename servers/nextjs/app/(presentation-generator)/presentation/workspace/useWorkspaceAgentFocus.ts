@@ -21,6 +21,7 @@ const IN_FLIGHT_STATUSES = new Set([
 const SLIDE_SCOPED_COMMAND_TYPES = new Set([
   "slide.edit",
   "slide.regenerate",
+  "slide.regenerate.batch",
   "slide.delete",
 ]);
 

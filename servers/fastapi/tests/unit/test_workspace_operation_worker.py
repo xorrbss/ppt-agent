@@ -7,6 +7,9 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from services import workspace_operation_worker as worker
+from services.workspace_operation_handler_registry import (
+    workspace_operation_handler_registry,
+)
 from services.workspace_runtime_profile import UnsupportedWorkspaceRuntimeError
 
 
@@ -74,6 +77,21 @@ def test_external_worker_owns_migrations_runner_and_shutdown(
     worker.stop_runtime_settings_coordinator.assert_awaited_once_with()
     metrics_exporter.close.assert_awaited_once_with()
     worker.dispose_engines.assert_awaited_once_with()
+
+
+def test_worker_registration_includes_the_batch_remake_handler() -> None:
+    # An external worker that misses a handler fails only in production, so the
+    # registration list is asserted against the process registry it publishes to.
+    worker.register_workspace_operation_handlers()
+
+    assert (
+        workspace_operation_handler_registry.resolve("slide.regenerate.batch")
+        is not None
+    )
+    assert (
+        workspace_operation_handler_registry.recovery_policy("slide.regenerate.batch")
+        == "automatic"
+    )
 
 
 def test_external_worker_requires_a_supported_sql_runtime(monkeypatch) -> None:

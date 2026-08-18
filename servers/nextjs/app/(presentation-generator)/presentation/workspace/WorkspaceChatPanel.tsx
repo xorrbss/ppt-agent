@@ -37,7 +37,7 @@ import {
 } from "../../services/api/dashboard";
 import { withGenerationContext } from "./generationContext";
 import { buildConversationContext } from "../conversation/context";
-import { WorkspacePageRemakePrompt } from "../components/AuthoredPageRemake";
+import { WorkspaceRemakePrompts, type WorkspaceRemakeRequest } from "./WorkspaceRemakePrompts";
 import {
   PageRemakeHistory,
   usePageRemakeHistory,
@@ -98,9 +98,8 @@ export default function WorkspaceChatPanel({
   const [qualityReviewPrompt, setQualityReviewPrompt] = useState<{
     currentSlide?: number;
   } | null>(null);
-  const [pageRemakePrompt, setPageRemakePrompt] = useState<{
-    currentSlide: number;
-  } | null>(null);
+  const [pageRemakePrompt, setPageRemakePrompt] =
+    useState<WorkspaceRemakeRequest | null>(null);
   // Remake previews live outside the conversation, so the timeline reloads them
   // explicitly; bumping the token re-reads them after one is applied.
   const [pageRemakeHistoryToken, setPageRemakeHistoryToken] = useState(0);
@@ -246,9 +245,10 @@ export default function WorkspaceChatPanel({
   }, [onQualityReviewRequesterReady, qualityReviewRequester]);
 
   const pageRemakeRequester = useCallback<WorkspacePageRemakeRequester>(
-    (requestedSlide) => {
+    (requested) => {
+      const slideIndexes = Array.isArray(requested) ? requested : [requested];
       setQualityReviewPrompt(null);
-      setPageRemakePrompt({ currentSlide: requestedSlide });
+      setPageRemakePrompt({ slideIndexes, batch: Array.isArray(requested) });
       shouldFollowLatestRef.current = true;
     },
     [],
@@ -575,7 +575,7 @@ export default function WorkspaceChatPanel({
             });
           }}
           onRegenerate={(slideIndex) =>
-            setPageRemakePrompt({ currentSlide: slideIndex })
+            setPageRemakePrompt({ slideIndexes: [slideIndex], batch: false })
           }
         />
         <div className="space-y-3">
@@ -798,18 +798,17 @@ export default function WorkspaceChatPanel({
               </div>
             </article>
           )}
-          {pageRemakePrompt && (
-            <WorkspacePageRemakePrompt
-              presentationId={presentationId}
-              currentSlide={pageRemakePrompt.currentSlide}
-              disabled={submitting || !writesEnabled}
-              onWorkspaceCommand={commandDispatcher}
-              onDismiss={() => {
-                setPageRemakePrompt(null);
-                setPageRemakeHistoryToken((token) => token + 1);
-              }}
-            />
-          )}
+          <WorkspaceRemakePrompts
+            request={pageRemakePrompt}
+            presentationId={presentationId}
+            disabled={submitting || !writesEnabled}
+            onWorkspaceCommand={commandDispatcher}
+            onDismiss={() => {
+              setPageRemakePrompt(null);
+              setPageRemakeHistoryToken((token) => token + 1);
+            }}
+          />
+
         </div>
         {historyError && (
           <div

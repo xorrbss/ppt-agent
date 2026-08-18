@@ -169,11 +169,11 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     },
     [],
   );
-  const handleWorkspacePageRemakeRequest = useCallback(
-    (slideIndex: number) => {
+  const handleWorkspacePageRemakeRequest = useCallback<WorkspacePageRemakeRequester>(
+    (requested) => {
       setCompactWorkspacePane("chat");
       setWorkspaceDrawerOpen(true);
-      workspacePageRemakeRequester?.(slideIndex);
+      workspacePageRemakeRequester?.(requested);
     },
     [workspacePageRemakeRequester],
   );
@@ -230,7 +230,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     if (!workspaceStaging || slidesLength > 0) return;
 
     let cancelled = false;
-    let timer: ReturnType<typeof window.setTimeout> | null = null;
+    let timer: number | null = null;
     const scheduleNextPoll = () => {
       if (!cancelled) {
         timer = window.setTimeout(pollWorkspaceStaging, WORKSPACE_STAGING_POLL_INTERVAL_MS);

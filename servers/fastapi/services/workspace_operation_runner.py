@@ -12,6 +12,7 @@ from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
+from services.workspace_batch_payload import BATCH_KIND, BATCH_RESULT_KEYS, sanitize_batch_value
 from services.workspace_quality_review_payload import (
     _normalize_quality_review_payload,
     _quality_review_count,
@@ -230,6 +231,7 @@ _SAFE_RESULT_PAYLOAD_KEYS_BY_KIND: dict[str, frozenset[str]] = {
             "result",
         }
     ),
+    BATCH_KIND: BATCH_RESULT_KEYS,
     "presentation.delete": frozenset(
         {
             "lifecycle_status",
@@ -416,6 +418,8 @@ def sanitize_workspace_event_payload(
                 {key: item for key, item in value.items() if key != "result"},
                 operation_kind=operation_kind,
             )
+        elif operation_kind == BATCH_KIND and isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+            safe[normalized] = sanitize_batch_value(normalized, value)
         elif value is None or isinstance(value, (str, int, float, bool)):
             if isinstance(value, str):
                 if normalized == "assistant_text":

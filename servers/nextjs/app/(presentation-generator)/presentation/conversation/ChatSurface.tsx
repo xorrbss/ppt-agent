@@ -27,23 +27,19 @@ const actionMessageKey: Record<
 
 const runMessageKey: Record<
   string,
-  | "runType.presentationGenerate"
-  | "runType.presentationEdit"
-  | "runType.presentationDelete"
-  | "runType.slideEdit"
-  | "runType.slideRegenerate"
-  | "runType.slideDelete"
-  | "runType.versionRestore"
-  | "runType.templateApply"
-  | "runType.qualityReview"
-  | "runType.exportPptx"
-  | "runType.exportPdf"
+  | "runType.presentationGenerate" | "runType.presentationEdit"
+  | "runType.presentationDelete" | "runType.slideEdit"
+  | "runType.slideRegenerate" | "runType.slideRegenerateBatch"
+  | "runType.slideDelete" | "runType.versionRestore"
+  | "runType.templateApply" | "runType.qualityReview"
+  | "runType.exportPptx" | "runType.exportPdf"
 > = {
   "presentation.generate": "runType.presentationGenerate",
   "presentation.edit": "runType.presentationEdit",
   "presentation.delete": "runType.presentationDelete",
   "slide.edit": "runType.slideEdit",
   "slide.regenerate": "runType.slideRegenerate",
+  "slide.regenerate.batch": "runType.slideRegenerateBatch",
   "slide.delete": "runType.slideDelete",
   "version.restore": "runType.versionRestore",
   "template.apply": "runType.templateApply",

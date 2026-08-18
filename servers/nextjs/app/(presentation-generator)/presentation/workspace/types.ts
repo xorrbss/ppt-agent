@@ -33,6 +33,7 @@ export const KNOWN_OPERATION_TYPES = [
   "presentation.delete",
   "slide.edit",
   "slide.regenerate",
+  "slide.regenerate.batch",
   "slide.delete",
   "version.restore",
   "template.apply",
@@ -248,6 +249,7 @@ export type WorkspaceCommandType =
   | "presentation.delete"
   | "slide.edit"
   | "slide.regenerate"
+  | "slide.regenerate.batch"
   | "slide.delete"
   | "version.restore"
   | "template.apply"
@@ -302,7 +304,10 @@ export type WorkspaceQualityReviewRequester = (
   currentSlide?: number,
 ) => void;
 
-export type WorkspacePageRemakeRequester = (currentSlide: number) => void;
+/** A number requests one page; an array requests the batch preview dialog. */
+export type WorkspacePageRemakeRequester = (
+  slides: number | number[],
+) => void;
 
 export interface WorkspaceOperationActionRequest {
   action: "retry" | "cancel" | "approve" | "reject" | "undo";
