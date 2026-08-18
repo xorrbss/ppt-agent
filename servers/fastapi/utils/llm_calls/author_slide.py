@@ -31,7 +31,9 @@ from utils.llm_calls import author_slide_prompt
 from llmai import get_client
 from llmai.shared import ImageContentPart, SystemMessage, TextContentPart, UserMessage
 
+from models.authored_header_contract import AuthoredHeaderContract
 from utils.authored_font_policy import enforce_authored_font_floor
+from utils.authored_header_prompt import render_header_contract
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_config import enforce_llm_egress_policy, get_llm_config
 from utils.llm_provider import get_llm_provider, get_model, is_codex_selected
@@ -127,6 +129,23 @@ def _register_author_rate_limit(error: BaseException) -> None:
 # deck without weakening those constraints.
 TEMPLATE_PAGE_NUMBER_MODE = "template"
 COMPANY_STANDARD_PAGE_NUMBER_MODE = "companyStandard"
+NO_PAGE_NUMBER_MODE = "none"
+
+PAGE_NUMBER_MODES = frozenset(
+    (
+        TEMPLATE_PAGE_NUMBER_MODE,
+        COMPANY_STANDARD_PAGE_NUMBER_MODE,
+        NO_PAGE_NUMBER_MODE,
+    )
+)
+
+
+def validate_page_number_mode(page_number_mode: str) -> str:
+    """Return the mode, rejecting anything outside the closed vocabulary."""
+    if page_number_mode not in PAGE_NUMBER_MODES:
+        raise ValueError("unsupported page number mode")
+    return page_number_mode
+
 
 _TEMPLATE_PAGE_NUMBER_RULES = """\
 - PAGE-NUMBER SYSTEM (ordinary authored generation and style-reference mode):
@@ -144,12 +163,29 @@ _TEMPLATE_PAGE_NUMBER_RULES = """\
     section name, wordmark, logo, or any other footer copy. Never place a page number at the top,
     in a corner, or anywhere else. Do not create a duplicate marker."""
 
+_NO_PAGE_NUMBER_RULES = """\
+- NO PAGE NUMBER: this deck does not number its slides.
+  - Never render a page number, page marker, pagination label, slide counter, or any
+    other footer copy (title, section name, date, wordmark, logo) at the bottom of the
+    slide. This applies to every slide including the cover.
+  - The bottom boundary is y=688px, leaving a 32px margin that balances the 64px side
+    margins. NOTHING may cross that line or be cut off by it: a panel showing only its
+    top edge is a far worse failure than a slightly deeper margin. Compose so the
+    content finishes close to y=688px, but get there by shortening copy and tightening
+    spacing — never by letting a block run past the line."""
+
 _COMPANY_STANDARD_PAGE_NUMBER_RULES = """\
 - PAGE-NUMBER OWNERSHIP: company-standard furniture owns all page numbering.
   - Never render a page number, page marker, pagination label, or page-number footer in the
     authored template scene, including non-cover slides.
   - Do not reserve or style a template-owned page-number box. The product composes the configured
     company-standard pageNumber furniture after template rendering."""
+
+_PAGE_NUMBER_RULES_BY_MODE = {
+    TEMPLATE_PAGE_NUMBER_MODE: _TEMPLATE_PAGE_NUMBER_RULES,
+    COMPANY_STANDARD_PAGE_NUMBER_MODE: _COMPANY_STANDARD_PAGE_NUMBER_RULES,
+    NO_PAGE_NUMBER_MODE: _NO_PAGE_NUMBER_RULES,
+}
 
 _DESIGN_SYSTEM_RULES = """\
 DESIGN SYSTEM (obey on EVERY slide so the deck is cohesive):
@@ -212,7 +248,7 @@ DESIGN SYSTEM (obey on EVERY slide so the deck is cohesive):
   words are never split mid-word across lines.
 - Boxes/cards/labels: each one's text must fit ENTIRELY inside it with padding — never let text
   touch or clip an edge. Size the box to its content (or shrink the content to the box).
-{page_number_system}
+{header_system}{page_number_system}
 - All visible text in {language}.
 Return ONLY the complete HTML document."""
 
@@ -310,6 +346,7 @@ def build_design_system(
     style: Optional[AuthoredStyleLike] = None,
     *,
     page_number_mode: str = TEMPLATE_PAGE_NUMBER_MODE,
+    header_contract: Optional[AuthoredHeaderContract] = None,
 ) -> str:
     """Build the concrete shared brief for a brand and optional authored style.
 
@@ -317,12 +354,12 @@ def build_design_system(
     legacy brief so the generated prompt remains byte-for-byte compatible.
     Custom style briefs are already validated plain text from the A1 loader and
     are inserted verbatim apart from surrounding whitespace.
+
+    ``header_contract`` is the deck's frozen top-area design. Omitting it keeps
+    the pre-contract prompt unchanged; supplying it makes every slide of the
+    deck reproduce the same header.
     """
-    if page_number_mode not in {
-        TEMPLATE_PAGE_NUMBER_MODE,
-        COMPANY_STANDARD_PAGE_NUMBER_MODE,
-    }:
-        raise ValueError("unsupported page number mode")
+    validate_page_number_mode(page_number_mode)
     return author_slide_prompt.build_design_system(
         brand,
         style,
@@ -332,10 +369,14 @@ def build_design_system(
         normalize_reference_mode=normalize_reference_mode,
         exact_reconstruction=EXACT_RECONSTRUCTION,
         style_reference=STYLE_REFERENCE,
-        page_number_system=(
-            _COMPANY_STANDARD_PAGE_NUMBER_RULES
-            if page_number_mode == COMPANY_STANDARD_PAGE_NUMBER_MODE
-            else _TEMPLATE_PAGE_NUMBER_RULES
+        page_number_system=_PAGE_NUMBER_RULES_BY_MODE[page_number_mode],
+        header_system=(
+            render_header_contract(
+                header_contract,
+                language=brand.language or "Korean",
+            )
+            if header_contract is not None
+            else ""
         ),
     )
 
@@ -355,6 +396,9 @@ def _author_prompt(
     n: int,
     structured_context: dict | None = None,
     page_number_mode: str = TEMPLATE_PAGE_NUMBER_MODE,
+    requirements_enabled: bool = False,
+    chapter_breadcrumb: bool = False,
+    chapter_prefix: Optional[str] = None,
 ) -> str:
     return author_slide_prompt.author_prompt(
         content,
@@ -365,6 +409,9 @@ def _author_prompt(
         n,
         structured_context=structured_context,
         page_number_mode=page_number_mode,
+        requirements_enabled=requirements_enabled,
+        chapter_breadcrumb=chapter_breadcrumb,
+        chapter_prefix=chapter_prefix,
     )
 
 
@@ -705,23 +752,23 @@ def fallback_slide_html(
     if len(text) > 420:
         text = text[:420].rstrip() + "…"
     eyebrow = _html.escape(role or "")
-    if page_number_mode not in {
-        TEMPLATE_PAGE_NUMBER_MODE,
-        COMPANY_STANDARD_PAGE_NUMBER_MODE,
-    }:
-        raise ValueError("unsupported page number mode")
+    validate_page_number_mode(page_number_mode)
     marker = (
         ""
-        if role == "COVER" or page_number_mode == COMPANY_STANDARD_PAGE_NUMBER_MODE
+        if role == "COVER" or page_number_mode != TEMPLATE_PAGE_NUMBER_MODE
         else f"{index:02d}"
     )
     footer = f'<div class="foot">{marker}</div>' if marker else ""
+    # The numbered layout reserves a 72px footer zone; an unnumbered deck keeps
+    # the 32px bottom margin its slides were authored against.
+    bottom_padding = 72 if page_number_mode == TEMPLATE_PAGE_NUMBER_MODE else 32
     return (
         f"<!DOCTYPE html><html lang=\"ko\" {_FALLBACK_SLIDE_MARKER}>"
         "<head><meta charset=\"utf-8\"><style>"
         f"body{{margin:0;width:1280px;height:720px;overflow:hidden;background:#F8FAFC;"
         f"font-family:{font_stack};"
-        "box-sizing:border-box;padding:64px 64px 72px;display:flex;flex-direction:column;position:relative;}"
+        f"box-sizing:border-box;padding:64px 64px {bottom_padding}px;"
+        "display:flex;flex-direction:column;position:relative;}"
         f".bar{{width:56px;height:6px;background:{primary};margin-bottom:24px;}}"
         f".eyebrow{{font-size:13px;letter-spacing:.15em;text-transform:uppercase;color:{primary};"
         "font-weight:700;margin-bottom:18px;}"
@@ -794,6 +841,9 @@ async def author_slide_html(
     reference_mode: str = STYLE_REFERENCE,
     structured_context: dict | None = None,
     page_number_mode: str = TEMPLATE_PAGE_NUMBER_MODE,
+    requirements_enabled: bool = False,
+    chapter_breadcrumb: bool = False,
+    chapter_prefix: Optional[str] = None,
 ) -> str:
     """Author one bespoke, self-contained 1280x720 HTML slide. Single text-generation
     call against the configured provider; returns the cleaned HTML document.
@@ -812,6 +862,9 @@ async def author_slide_html(
         n,
         structured_context=structured_context,
         page_number_mode=page_number_mode,
+        requirements_enabled=requirements_enabled,
+        chapter_breadcrumb=chapter_breadcrumb,
+        chapter_prefix=chapter_prefix,
     )
     image_parts = _reference_parts(requested_images)
     if mode == EXACT_RECONSTRUCTION and not (

@@ -63,6 +63,7 @@ def build_design_system(
     exact_reconstruction: str,
     style_reference: str,
     page_number_system: str,
+    header_system: str = "",
 ) -> str:
     """Build the concrete shared brief for a brand and optional authored style."""
     if style is None or style.id == "default":
@@ -101,7 +102,105 @@ def build_design_system(
         fonts=brand.fonts or "Noto Sans KR",
         language=brand.language or "Korean",
         style_brief=style_brief,
+        # Empty when the deck has no header contract, which keeps the prompt
+        # byte-identical to the pre-contract behaviour.
+        header_system=f"{header_system}\n" if header_system else "",
         page_number_system=page_number_system,
+    )
+
+
+def requirement_marker(*, requirements_enabled: bool) -> str:
+    """The per-slide half of the header contract's requirement rule.
+
+    The identifiers are already in this slide's own CONTENT, so they are read
+    from there rather than handed over as a pre-extracted list. Recognising them
+    needs the surrounding sentence — 'SHA-256' inside a security paragraph looks
+    identical to a requirement code to anything that only matches on shape.
+    """
+    if not requirements_enabled:
+        return ""
+    return (
+        "REQUIREMENT IDENTIFIERS: this deck numbers its requirements. The CONTENT "
+        "field of THIS slide is the ONLY place you may take an identifier from. "
+        "Not the deck topic, not the design system, not another slide, not your "
+        "own knowledge of the document — if the string is not written in this "
+        "slide's CONTENT, it does not go on this slide.\n"
+        "- If this slide's CONTENT states identifiers (a code the source document "
+        "assigns to a requirement, such as those introduced by 고유번호/요구사항 "
+        "번호/REQ), copy each one verbatim into the header's requirement group, "
+        'in the order given, and list them in data-requirement-ids="ID1,ID2".\n'
+        "- Never invent, renumber, or reformat one, and never promote an "
+        "algorithm, protocol, standard, version, or date that merely resembles "
+        "one (SHA-256, AES-256, ISO 9001, HTTP/2).\n"
+        "- If this slide's CONTENT states none, render NO requirement group at "
+        "all and leave the header's right slot empty. That is the correct, "
+        "expected result on such a slide — an empty slot is never a defect to "
+        "paper over, and repeating another slide's identifier to fill it is a "
+        "worse error than leaving it blank."
+    )
+
+
+def structure_role_brief(role: str) -> str:
+    """What a slide the chapter plan inserted is for, stated per slide.
+
+    These two roles exist only on decks that resolved a chapter plan, so their
+    rules are given to the slides that have them rather than added to the shared
+    design system, where every ordinary deck would carry instructions for pages
+    it does not contain. The visual idiom still comes from the deck's style
+    brief; what is fixed here is what the page is, which is not a style
+    question.
+    """
+    normalized = (role or "").strip().upper()
+    if normalized == "SECTION":
+        return (
+            "THIS SLIDE IS A CHAPTER DIVIDER. It announces the chapter and does "
+            "nothing else: the chapter numeral and name are the dominant "
+            "element, and the items the CONTENT lists sit beneath them as a "
+            "quiet secondary column. Compose it full-bleed in this deck's cover "
+            "idiom rather than as a content page. It carries NO header band, no "
+            "eyebrow-and-tick row, no requirement identifier, no divider rule "
+            "imitating the header, and no argument, claim, chart, table, or "
+            "body copy the CONTENT does not state."
+        )
+    if normalized == "AGENDA":
+        return (
+            "THIS SLIDE IS THE DECK'S TABLE OF CONTENTS. It lists the chapters "
+            "in the order the CONTENT gives them and nothing else: one line per "
+            "chapter, numerals aligned in a single column, wording copied "
+            "verbatim. Never add a chapter the CONTENT does not list, a "
+            "description, a page number, a duration, or a status marker. It "
+            "carries this deck's ordinary header like any other content page."
+        )
+    return ""
+
+
+def chapter_marker(
+    *, chapter_breadcrumb: bool, chapter_prefix: str | None
+) -> str:
+    """The per-slide half of the header contract's breadcrumb rule.
+
+    The deck-wide brief says an eyebrow opens with its chapter; this says which
+    chapter THIS slide is in. The value is computed from the deck's frozen
+    chapter plan and handed over verbatim rather than being left to the model,
+    because a slide cannot see the pages around it, and a chapter number guessed
+    per slide is the exact drift the breadcrumb exists to remove.
+    """
+    if not chapter_breadcrumb:
+        return ""
+    if chapter_prefix:
+        return (
+            "HEADER EYEBROW PREFIX FOR THIS SLIDE: the eyebrow must begin with "
+            f'exactly "{chapter_prefix}" and then name the section this slide '
+            "covers, on the same single line. Reproduce the prefix character "
+            "for character, separator included. Never renumber it, translate "
+            "it, abbreviate it, reformat its punctuation, or replace it with "
+            "another chapter's."
+        )
+    return (
+        "HEADER EYEBROW PREFIX FOR THIS SLIDE: none. This slide belongs to the "
+        "deck's front matter rather than to a chapter, so its eyebrow names "
+        "the slide's own section alone: no chapter number, no separator, and "
+        "nothing borrowed from a neighbouring slide."
     )
 
 
@@ -114,11 +213,19 @@ def author_prompt(
     n: int,
     structured_context: dict[str, Any] | None = None,
     page_number_mode: str = "template",
+    requirements_enabled: bool = False,
+    chapter_breadcrumb: bool = False,
+    chapter_prefix: str | None = None,
 ) -> str:
     if page_number_mode == "companyStandard":
         page_marker = (
             "PAGE MARKER FOR THIS SLIDE: OMIT IT. Company-standard furniture owns page "
             "numbering; render no page number or pagination footer in the template scene."
+        )
+    elif page_number_mode == "none":
+        page_marker = (
+            "PAGE MARKER FOR THIS SLIDE: OMIT IT. This deck is not numbered; render no "
+            "page number and no footer text of any kind."
         )
     elif page_number_mode != "template":
         raise ValueError("unsupported page number mode")
@@ -168,10 +275,18 @@ def author_prompt(
             "If the contract cannot be satisfied, return no invented "
             "content."
         )
+    marker = requirement_marker(requirements_enabled=requirements_enabled)
+    requirement_block = f"{marker}\n\n" if marker else ""
+    chapter = chapter_marker(
+        chapter_breadcrumb=chapter_breadcrumb, chapter_prefix=chapter_prefix
+    )
+    chapter_block = f"{chapter}\n\n" if chapter else ""
+    structure = structure_role_brief(role)
+    structure_block = f"{structure}\n\n" if structure else ""
     return (
         f"Author slide {index + 1} of {n}. Deck topic: {brand.topic}. This slide's ROLE: "
         f"{role}. CONTENT: {content}.{wordmark}{structured_contract}\n\n"
-        f"{page_marker}\n\n{design_system}\n\n"
+        f"{page_marker}\n\n{structure_block}{chapter_block}{requirement_block}{design_system}\n\n"
         "Design THIS slide bespoke and premium within the shared system, vary the layout to "
         "suit the role, output ONLY the complete self-contained HTML document."
     )
@@ -180,6 +295,9 @@ def author_prompt(
 __all__ = [
     "apply_style_defaults",
     "author_prompt",
+    "chapter_marker",
+    "structure_role_brief",
     "build_design_system",
     "css_font_stack",
+    "requirement_marker",
 ]

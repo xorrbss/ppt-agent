@@ -322,3 +322,21 @@ class SetPresentationThemeInput(OpenAIStrictSchemaModel):
         if self.theme is None and self.custom_theme is None:
             raise ValueError("Either 'theme' or 'customTheme' must be provided.")
         return self
+
+
+class UpdateDeckHeaderInput(OpenAIStrictSchemaModel):
+    """One deck-wide change to the slide header, expressed in the user's words."""
+
+    instruction: str = Field(
+        ...,
+        min_length=1,
+        max_length=1000,
+        description=(
+            "The user's header request, restated in one sentence (e.g. 'remove the "
+            "divider line', 'make the title bigger', 'use a red accent'). Describe "
+            "only the top area of the slides; this tool never edits slide body "
+            "content and always applies the same change to every slide."
+        ),
+    )
+
+    model_config = ConfigDict(extra="forbid", strict=True, populate_by_name=True)

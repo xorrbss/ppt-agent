@@ -16,16 +16,19 @@ from services.chat.schemas import (
     GenerateIconInput,
     GenerateImageInput,
     GetContentSchemaFromLayoutIdInput,
-    GetSmartPresentationContextInput,
     GetSlideAtIndexInput,
     NoArgsInput,
-    ReadSourceDocumentsInput,
     SaveSlideInput,
     SaveSmartSlideInput,
     SearchSlidesInput,
     SetPresentationThemeInput,
     SlideUIToolInput,
 )
+from services.chat.deck_header_tool import (
+    deck_header_tool,
+    run_deck_header_update,
+)
+from services.chat.smart_tool_definitions import smart_tool_definitions
 from services.chat.slide_ui_mutations import SlideUIMutationService
 
 LOGGER = logging.getLogger(__name__)
@@ -42,6 +45,8 @@ class ChatTools:
         presentation_id = getattr(
             memory, "presentation_id", getattr(memory, "_presentation_id", None)
         )
+        self._sql_session = sql_session
+        self._presentation_id = presentation_id
         self._outline_context = OutlineTemplateContext(
             sql_session=sql_session,
             presentation_id=presentation_id,
@@ -61,6 +66,7 @@ class ChatTools:
             "saveSlide": self._save_slide,
             "deleteSlide": self._delete_slide,
             "setPresentationTheme": self._set_presentation_theme,
+            "updateDeckHeader": self._update_deck_header,
         }
         for name in self._context_tool_names():
             self._tool_handlers[name] = lambda args, tool_name=name: (
@@ -221,77 +227,11 @@ class ChatTools:
             )
             for name in self._ui_tool_names()
         )
+        tools.append(deck_header_tool())
         return tools
 
     def _get_smart_tool_definitions(self) -> list[Tool]:
-        return [
-            Tool(
-                name="getSmartPresentationContext",
-                description=(
-                    "Read Smart deck metadata, fonts, outlines, structure, and live "
-                    "HTML slide previews. Use before new slides, style changes, or "
-                    "multi-slide edits. Prefer includeSlideHtml=false; fetch exact "
-                    "target HTML with getSlideAtIndex."
-                ),
-                schema=GetSmartPresentationContextInput,
-                strict=False,
-            ),
-            Tool(
-                name="readSourceDocuments",
-                description=(
-                    "Read parsed source documents linked to this presentation when "
-                    "the user asks to use, summarize, quote, or visualize their content."
-                ),
-                schema=ReadSourceDocumentsInput,
-                strict=False,
-            ),
-            Tool(
-                name="searchSlide",
-                description=(
-                    "Search rendered Smart slide text and return matching slide indices "
-                    "and snippets."
-                ),
-                schema=SearchSlidesInput,
-                strict=False,
-            ),
-            Tool(
-                name="getSlideAtIndex",
-                description=(
-                    "Read one live Smart HTML slide by zero-based index. Set "
-                    "includeFullContent=true before every edit to receive the complete "
-                    "authoritative html field."
-                ),
-                schema=GetSlideAtIndexInput,
-                strict=False,
-            ),
-            Tool(
-                name="generateAssets",
-                description=(
-                    "Generate image or icon assets before inserting new visual URLs "
-                    "into Smart slide HTML."
-                ),
-                schema=GenerateAssetsInput,
-                strict=False,
-            ),
-            Tool(
-                name="saveSlide",
-                description=(
-                    "Replace or insert one Smart HTML slide. Pass the complete HTML "
-                    "fragment in html. For an edit, first read the slide, keep its "
-                    "design and scripts, and use replaceOldSlideAtIndex=true."
-                ),
-                schema=SaveSmartSlideInput,
-                strict=False,
-            ),
-            Tool(
-                name="deleteSlide",
-                description=(
-                    "Delete a Smart slide by zero-based index and reindex the rest."
-                ),
-                schema=DeleteSlideInput,
-                strict=False,
-            ),
-        ]
+        return smart_tool_definitions()
 
     async def execute_tool_call(self, tool_call: AssistantToolCall) -> dict[str, Any]:
         handler = self._tool_handlers.get(tool_call.name)
@@ -529,6 +469,11 @@ class ChatTools:
                 else None
             ),
             save_custom_theme=bool(payload.save_custom_theme),
+        )
+
+    async def _update_deck_header(self, args: dict[str, Any]) -> dict[str, Any]:
+        return await run_deck_header_update(
+            self._sql_session, self._presentation_id, args
         )
 
     @staticmethod
