@@ -44,8 +44,8 @@ LABEL_LINE_RATIO = 1.4
 _HEX_PATTERN = r"^#[0-9A-Fa-f]{6}$"
 
 # Roles whose slides are full-bleed compositions rather than ordinary content
-# pages.  They opt out of the header band.  A chapter divider announces rather
-# than argues, exactly as a cover does; an unchaptered deck has no such slide.
+# pages.  They opt out of the header band: a chapter divider announces rather
+# than argues, exactly as a cover does.
 DEFAULT_EXCLUDED_ROLES: tuple[str, ...] = ("COVER", "SECTION")
 
 HeaderPart = Literal[
@@ -102,7 +102,7 @@ _CONTENT_GAP_FLOOR_PX = 8
 _CONTENT_GAP_CEILING_PX = 64
 
 #: Shortest eyebrow budget a breadcrumb fits in: the chapter half alone spends
-#: most of the sectionOnly default, truncating the section name after it.
+#: most of the sectionOnly default.
 BREADCRUMB_MIN_EYEBROW_CHARS = 36
 
 
@@ -121,9 +121,11 @@ class _Spec(BaseModel):
 
 
 class HeaderTickSpec(_Spec):
-    """The short accent rule that precedes the eyebrow."""
+    """The short accent rule before the eyebrow. OFF by default like page
+    numbering: an accent bar nobody asked for is chrome, and readers mistake
+    the rendered span for a dash in the eyebrow text."""
 
-    enabled: bool = True
+    enabled: bool = False
     width_px: int = Field(default=24, ge=8, le=120)
     height_px: int = Field(default=3, ge=1, le=8)
     color: str = Field(default="#2563EB", pattern=_HEX_PATTERN)
@@ -142,8 +144,7 @@ class HeaderEyebrowSpec(_Spec):
     #: is fine — mixing them across slides is what breaks the deck's look.
     text_style: Literal["deckLanguage", "latinUpper"] = "deckLanguage"
     #: ``sectionOnly`` names the slide's own section; ``chapterBreadcrumb``
-    #: opens it with that slide's chapter ("Ⅱ. 제안개요 > 목표 아키텍처"). Not a
-    #: judgement but a consequence of whether a chapter plan resolved.
+    #: opens it with that slide's chapter ("Ⅱ. 제안개요 > 목표 아키텍처").
     form: Literal["sectionOnly", "chapterBreadcrumb"] = "sectionOnly"
     tick: HeaderTickSpec = Field(default_factory=HeaderTickSpec)
 
@@ -446,11 +447,10 @@ def default_header_contract(
 ) -> AuthoredHeaderContract:
     """The deterministic fallback used when contract generation is unavailable.
 
-    It is intentionally the plain, safe header: tick + eyebrow, two-line title,
-    hairline divider, and no requirement slot. Reserving the slot is a judgement
-    about the source document that only the contract call can make, so the
-    fallback omits it rather than guessing. The eyebrow's form is the one thing
-    it must still honour: that is a fact about the deck, not a judgement.
+    It is intentionally the plain, safe header: eyebrow, two-line title, hairline
+    divider, no accent tick and no requirement slot. Reserving the slot is a
+    judgement about the source document that only the contract call can make,
+    so the fallback omits it rather than guessing; the eyebrow's form it keeps.
     """
     accent = primary if _is_hex(primary) else "#2563EB"
     return AuthoredHeaderContract(

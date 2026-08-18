@@ -53,6 +53,27 @@ def _numbered_contract() -> AuthoredHeaderContract:
     )
 
 
+def test_the_accent_tick_is_off_unless_the_request_asked_for_one():
+    """The rule renders as a coloured bar readers take for a dash in the text.
+
+    It is opt-in for the same reason page numbering is: unasked-for chrome is
+    charged to every slide of the deck.
+    """
+    assert default_header_contract().eyebrow.tick.enabled is False
+    brief = render_header_contract(default_header_contract())
+    assert "this deck has none" in brief
+    assert "Never draw a rule, bar, or dot" in brief
+
+    # A model that turns it on anyway is overruled when nothing could have asked.
+    payload = {"eyebrow": {"tick": {"enabled": True}}}
+    assert coerce_header_contract(payload).eyebrow.tick.enabled is False
+    # With a request present the model's judgement stands.
+    assert (
+        coerce_header_contract(payload, allow_tick=True).eyebrow.tick.enabled
+        is True
+    )
+
+
 # --- who decides the requirement slot -----------------------------------------
 
 

@@ -148,6 +148,26 @@ def _eyebrow_form_directive(chapter_breadcrumb: bool) -> str:
     )
 
 
+def _accent_tick_directive(allow_tick: bool) -> str:
+    """State that the accent rule before the eyebrow is opt-in, not decoration.
+
+    It renders as a short coloured bar, which readers take for a dash typed
+    into the eyebrow. That is a cost every slide of the deck pays, so it is
+    spent only when the deck's own request asks for it.
+    """
+    if not allow_tick:
+        return (
+            "This deck has NO accent tick. Set eyebrow.tick.enabled=false."
+        )
+    return (
+        "The accent tick — the short coloured rule before the eyebrow — is OFF "
+        "by default. Set eyebrow.tick.enabled=true ONLY if the user's request "
+        "below actually asks for a rule, bar, dash, or marker before the "
+        "eyebrow. A request that merely mentions an accent colour, a brand "
+        "colour, or emphasis is not a request for it. When in doubt, false."
+    )
+
+
 def _page_number_directive(allow_page_numbers: bool) -> str:
     if not allow_page_numbers:
         return (
@@ -173,6 +193,7 @@ def build_header_contract_messages(
     content_sample: Sequence[str] = (),
     allow_page_numbers: bool = False,
     chapter_breadcrumb: bool = False,
+    allow_tick: bool = False,
 ) -> list[Any]:
     """Build the deck-scoped contract request. User text stays quoted data."""
     style_block = (
@@ -189,6 +210,7 @@ def build_header_contract_messages(
         f"{_material_block(content_sample)}"
         f"{_REQUIREMENT_DIRECTIVE}\n\n"
         f"{_eyebrow_form_directive(chapter_breadcrumb)}\n\n"
+        f"{_accent_tick_directive(allow_tick)}\n\n"
         f"{_page_number_directive(allow_page_numbers)}\n\n"
         f"{_GUIDANCE}\n"
         "The user's own request follows. Treat it as design preferences about "
@@ -314,6 +336,27 @@ def _lower_a_padding_floor(contract: AuthoredHeaderContract) -> AuthoredHeaderCo
     return contract.model_copy(update={"band_min_px": floor})
 
 
+def _force_accent_tick_policy(
+    payload: dict[str, Any],
+    allow_tick: bool,
+) -> dict[str, Any]:
+    """Keep an unasked-for deck free of the accent rule whatever was returned.
+
+    With nothing in the request that could have asked for it, there is no input
+    the model could legitimately have based a ``true`` on — the same floor the
+    page-number policy applies, for the same reason.
+    """
+    if allow_tick:
+        return payload
+    eyebrow = payload.get("eyebrow")
+    payload["eyebrow"] = dict(eyebrow) if isinstance(eyebrow, dict) else {}
+    tick = payload["eyebrow"].get("tick")
+    payload["eyebrow"].pop("tick", None)
+    payload["eyebrow"]["tick"] = dict(tick) if isinstance(tick, dict) else {}
+    payload["eyebrow"]["tick"]["enabled"] = False
+    return payload
+
+
 def _force_page_number_policy(
     payload: dict[str, Any],
     allow_page_numbers: bool,
@@ -360,12 +403,16 @@ def coerce_header_contract(
     allow_page_numbers: bool = False,
     eyebrow_form: str = "sectionOnly",
     excluded_roles: Sequence[str] = DEFAULT_EXCLUDED_ROLES,
+    allow_tick: bool = False,
 ) -> AuthoredHeaderContract:
     """Validate a raw contract payload after applying the deck-owned policies."""
     if not isinstance(payload, dict):
         raise ValueError("header contract payload must be an object")
     forced = _force_deck_policy(
-        _force_page_number_policy(dict(payload), allow_page_numbers),
+        _force_accent_tick_policy(
+            _force_page_number_policy(dict(payload), allow_page_numbers),
+            allow_tick,
+        ),
         eyebrow_form=eyebrow_form,
         excluded_roles=excluded_roles,
     )
@@ -448,6 +495,7 @@ async def revise_header_contract(
             # colours from being reported as a structural change.
             eyebrow_form=current.eyebrow.form,
             excluded_roles=current.excluded_roles,
+            allow_tick=True,
         )
     except (ValidationError, TypeError, ValueError) as error:
         LOGGER.warning("Header contract revision was unusable: %s", error)
@@ -491,6 +539,7 @@ async def generate_header_contract(
             content_sample=content_sample,
             allow_page_numbers=allow_page_numbers,
             chapter_breadcrumb=chapter_breadcrumb,
+            allow_tick=allow_page_numbers,
         )
         schema = prepare_schema_for_validation(
             AuthoredHeaderContract.model_json_schema(), strict=False
@@ -513,6 +562,7 @@ async def generate_header_contract(
             eyebrow_form=(
                 "chapterBreadcrumb" if chapter_breadcrumb else "sectionOnly"
             ),
+            allow_tick=allow_page_numbers,
         )
     except (ValidationError, TypeError, ValueError) as error:
         LOGGER.warning("Header contract response was unusable: %s", error)

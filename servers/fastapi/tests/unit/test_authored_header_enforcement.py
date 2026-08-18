@@ -26,8 +26,13 @@ from utils.renderer_isolation import admit_authored_html
 
 
 def _numbered_contract() -> AuthoredHeaderContract:
-    """A contract whose deck was judged to number its requirements."""
+    """A contract whose deck was judged to number its requirements.
+
+    The accent tick is opt-in, so a deck that renders one has to say so. These
+    fixtures render one, which is what keeps the tick rules under test.
+    """
     return AuthoredHeaderContract(
+        eyebrow=HeaderEyebrowSpec(tick=HeaderTickSpec(enabled=True)),
         requirements=HeaderRequirementSpec(enabled=True),
         right_slot=HeaderRightSlotSpec(mode="requirements"),
     )
@@ -244,10 +249,14 @@ def test_a_slide_with_nothing_for_the_right_slot_may_leave_it_out():
     the subline defect one field over: the model obeys, is re-authored for
     obeying, and the only way through is filler on every slide.
     """
+    tick = HeaderEyebrowSpec(tick=HeaderTickSpec(enabled=True))
     for contract in (
-        AuthoredHeaderContract(right_slot=HeaderRightSlotSpec(mode="summary")),
+        AuthoredHeaderContract(
+            eyebrow=tick, right_slot=HeaderRightSlotSpec(mode="summary")
+        ),
         _numbered_contract(),
         AuthoredHeaderContract(
+            eyebrow=tick,
             requirements=HeaderRequirementSpec(enabled=True),
             right_slot=HeaderRightSlotSpec(mode="requirementsAndSummary"),
         ),
@@ -406,6 +415,7 @@ def test_header_markers_pass_renderer_admission():
 def _summary_contract() -> AuthoredHeaderContract:
     """A deck whose right slot stacks a chip row over a three-line note."""
     return AuthoredHeaderContract(
+        eyebrow=HeaderEyebrowSpec(tick=HeaderTickSpec(enabled=True)),
         requirements=HeaderRequirementSpec(enabled=True),
         right_slot=HeaderRightSlotSpec(
             mode="requirementsAndSummary", summary_max_lines=3
