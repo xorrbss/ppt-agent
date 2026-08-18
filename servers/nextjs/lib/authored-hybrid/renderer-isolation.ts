@@ -18,34 +18,63 @@ export interface AuthoredRendererIsolationPolicy {
   webSecurity: true;
   inputTransport: "cdp-pipe";
   networkPolicy: "cdp-abort-all";
-  productionOsIsolation: "nonroot-readonly-tmpfs-network-none" | "development-unattested";
-  executionBoundary: "external-worker" | "development-local";
+  productionOsIsolation:
+    | "nonroot-readonly-tmpfs-network-none"
+    | "development-unattested"
+    | "local-native-unattested";
+  executionBoundary: "external-worker" | "development-local" | "local-native";
 }
 
 const REQUIRED_PRODUCTION_OS_ISOLATION =
   "nonroot-readonly-tmpfs-network-none" as const;
+
+/**
+ * The single-user local native profile. `RUNNING-LOCAL.md` builds and serves this
+ * fork with `npm run build; npm run start`, which is `NODE_ENV=production` on a
+ * Windows desktop where no container can supply the non-root read-only tmpfs
+ * worker — so that flow has no honest attestation to make.
+ *
+ * It is spelled as an explicit *non*-attestation rather than a boolean escape
+ * hatch, and it must be declared twice (isolation value plus execution boundary)
+ * so a real deployment cannot drift into it by setting one stray variable.
+ * Everything it renders records `local-native-unattested`, keeping its artifacts
+ * distinguishable from isolated-worker renders instead of forging the guarantee.
+ */
+const LOCAL_NATIVE_OS_ISOLATION = "local-native-unattested" as const;
+const LOCAL_NATIVE_BOUNDARY = "local-native" as const;
 
 /** Evaluated for every capture so an operations kill switch takes effect
  * without restarting or silently selecting the legacy file renderer. */
 export function authoredRendererIsolationPolicy(): AuthoredRendererIsolationPolicy {
   const production = process.env.NODE_ENV === "production";
   const osIsolation = process.env.AUTHORED_RENDERER_OS_ISOLATION?.trim();
-  if (production && osIsolation !== REQUIRED_PRODUCTION_OS_ISOLATION) {
+  const configuredBoundary = process.env.AUTHORED_RENDERER_EXECUTION_BOUNDARY?.trim();
+  const localNative = production && osIsolation === LOCAL_NATIVE_OS_ISOLATION;
+  if (production && !localNative && osIsolation !== REQUIRED_PRODUCTION_OS_ISOLATION) {
     throw new Error(
       `Production authored rendering requires AUTHORED_RENDERER_OS_ISOLATION=${REQUIRED_PRODUCTION_OS_ISOLATION}. ` +
-      "The deployment must run a non-root, read-only worker with tmpfs resource limits and network none."
+      "The deployment must run a non-root, read-only worker with tmpfs resource limits and network none. " +
+      `A single-user local native run may instead declare AUTHORED_RENDERER_OS_ISOLATION=${LOCAL_NATIVE_OS_ISOLATION} ` +
+      `with AUTHORED_RENDERER_EXECUTION_BOUNDARY=${LOCAL_NATIVE_BOUNDARY}.`
     );
   }
-  const configuredBoundary = process.env.AUTHORED_RENDERER_EXECUTION_BOUNDARY?.trim();
-  if (production && configuredBoundary !== "external-worker") {
+  if (localNative && configuredBoundary !== LOCAL_NATIVE_BOUNDARY) {
+    throw new Error(
+      `The unattested local profile requires AUTHORED_RENDERER_EXECUTION_BOUNDARY=${LOCAL_NATIVE_BOUNDARY}. ` +
+      "Declaring the profile once must never be enough to run local Chrome where an isolated worker is expected."
+    );
+  }
+  if (production && !localNative && configuredBoundary !== "external-worker") {
     throw new Error(
       "Production Next.js must consume artifacts from the external authored renderer worker; direct local Chrome is forbidden."
     );
   }
+  // Only an attested production deployment is barred from driving Chrome itself.
+  const externalWorker = production && !localNative;
   const globalKillSwitch = booleanEnvironment("AUTHORED_RENDERER_KILL_SWITCH", false);
   return {
     rendererEnabled:
-      !production && !globalKillSwitch && booleanEnvironment("AUTHORED_VNEXT_RENDERER_ENABLED", false),
+      !externalWorker && !globalKillSwitch && booleanEnvironment("AUTHORED_VNEXT_RENDERER_ENABLED", false),
     legacyFileFallbackEnabled: booleanEnvironment(
       "AUTHORED_LEGACY_FILE_RENDERER_ENABLED",
       false
@@ -54,10 +83,16 @@ export function authoredRendererIsolationPolicy(): AuthoredRendererIsolationPoli
     webSecurity: true,
     inputTransport: "cdp-pipe",
     networkPolicy: "cdp-abort-all",
-    productionOsIsolation: production
-      ? REQUIRED_PRODUCTION_OS_ISOLATION
-      : "development-unattested",
-    executionBoundary: production ? "external-worker" : "development-local",
+    productionOsIsolation: localNative
+      ? LOCAL_NATIVE_OS_ISOLATION
+      : production
+        ? REQUIRED_PRODUCTION_OS_ISOLATION
+        : "development-unattested",
+    executionBoundary: localNative
+      ? LOCAL_NATIVE_BOUNDARY
+      : production
+        ? "external-worker"
+        : "development-local",
   };
 }
 
