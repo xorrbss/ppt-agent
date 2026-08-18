@@ -6,6 +6,8 @@ import time
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from models.authored_chapter_plan import AuthoredChapterPlan
+from models.authored_header_contract import AuthoredHeaderContract
 from models.presentation_outline_model import PresentationOutlineModel
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from services.authored_checkpoint_service import (
@@ -34,6 +36,7 @@ from utils.llm_calls.author_deck import (
 )
 from utils.llm_calls.author_slide import (
     EXACT_RECONSTRUCTION,
+    NO_PAGE_NUMBER_MODE,
     STYLE_REFERENCE,
     Brand,
     is_fallback_slide_html,
@@ -56,7 +59,11 @@ async def _author_illustrate_render_pipeline(
     *,
     generation_job: PresentationGenerationJob | None = None,
     structured_slide_contexts: Sequence[Mapping[str, Any] | None] | None = None,
-    page_number_mode: str = "template",
+    # Decks are unnumbered unless their own request asked for numbering; the
+    # numbered layout is opted into by the caller that resolved the contract.
+    page_number_mode: str = NO_PAGE_NUMBER_MODE,
+    header_contract: AuthoredHeaderContract | None = None,
+    chapter_plan: AuthoredChapterPlan | None = None,
 ) -> AuthoredGenerationPipelineResult:
     """Pipeline slides through durable, fenced checkpoints with bounded workers."""
     started = time.monotonic()
@@ -66,6 +73,8 @@ async def _author_illustrate_render_pipeline(
         style,
         structured_slide_contexts=structured_slide_contexts,
         page_number_mode=page_number_mode,
+        header_contract=header_contract,
+        chapter_plan=chapter_plan,
     )
     plan_reference_mode = normalize_reference_mode(
         getattr(
@@ -74,7 +83,7 @@ async def _author_illustrate_render_pipeline(
             getattr(style, "reference_mode", STYLE_REFERENCE),
         )
     )
-    roles = plan_deck_roles(outline)
+    roles = plan_deck_roles(outline, chapter_plan)
     image_service = (
         ImageGenerationService(get_images_directory())
         if plan_reference_mode != EXACT_RECONSTRUCTION

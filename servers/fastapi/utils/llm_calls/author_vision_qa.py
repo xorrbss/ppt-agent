@@ -13,7 +13,7 @@ import os
 import time
 from collections import OrderedDict
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from utils.authored_dom_quality import (
     build_compact_dom_map,
@@ -434,6 +434,7 @@ async def revise_authored_deck(
     reference_images_by_slide: Optional[List[Tuple[Path, ...]]] = None,
     return_details: bool = False,
     force_full_reauthor_indices: Optional[Iterable[int]] = None,
+    chapter_prefixes: Optional[Sequence[Optional[str]]] = None,
 ) -> Any:
     """Bounded critique -> re-author -> re-render loop over an authored deck. Returns
     the (possibly revised) htmls + pngs and the local indices that changed.
@@ -441,6 +442,11 @@ async def revise_authored_deck(
     ``slide_indices`` and ``total_slides`` let callers review a subset while keeping
     the original deck position in the authoring prompt. This matters for cover/closing
     composition and slide numbering during post-generation quality review.
+
+    ``chapter_prefixes`` carries the same per-slide eyebrow prefix the first
+    authoring pass was given, one entry per REVIEWED slide. A full re-author is
+    an ordinary authoring call, so without it a corrected slide would be asked
+    for a breadcrumb and handed no chapter to open it with.
     """
     n = len(htmls)
     if not (len(pngs) == len(contents) == len(roles) == n):
@@ -453,6 +459,8 @@ async def revise_authored_deck(
         raise ValueError("total_slides cannot be smaller than the reviewed slide count")
     if initial_critiques is not None and len(initial_critiques) != n:
         raise ValueError("initial_critiques must match the reviewed slide count")
+    if chapter_prefixes is not None and len(chapter_prefixes) != n:
+        raise ValueError("chapter_prefixes must match the reviewed slide count")
     forced_full_reauthor = set(force_full_reauthor_indices or ())
     if any(type(index) is not int or index < 0 or index >= n for index in forced_full_reauthor):
         raise ValueError("force_full_reauthor_indices contains an invalid local index")
@@ -515,6 +523,9 @@ async def revise_authored_deck(
             reference_kwargs["reference_images"] = refs
         if reference_mode == EXACT_RECONSTRUCTION:
             reference_kwargs["reference_mode"] = reference_mode
+        if chapter_prefixes is not None:
+            reference_kwargs["chapter_breadcrumb"] = True
+            reference_kwargs["chapter_prefix"] = chapter_prefixes[i]
         new_html = await author_slide_html(
             content,
             design_system,

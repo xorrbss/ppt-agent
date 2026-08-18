@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from models.authored_chapter_plan import AuthoredChapterPlan
+from models.authored_header_contract import AuthoredHeaderContract
 from models.generate_presentation_request import GeneratePresentationRequest
 from models.presentation_and_path import PresentationPathAndEditPath
 from models.presentation_outline_model import PresentationOutlineModel
@@ -121,6 +123,8 @@ async def publish_authored_presentation(
     attempt_token: str | None,
     master_generation=None,
     native_export_evidence: dict[str, object] | None = None,
+    header_contract: AuthoredHeaderContract | None = None,
+    chapter_plan: AuthoredChapterPlan | None = None,
 ) -> tuple[str, float]:
     persist_started = time.monotonic()
     images_ready = False
@@ -213,6 +217,21 @@ async def publish_authored_presentation(
             "fonts": brand.fonts,
             "language": brand.language,
         }
+        if header_contract is not None:
+            # The deck's frozen top-area design. Persisting it is what lets a
+            # later chat request restyle the header without re-deciding it from
+            # scratch, and what keeps a regenerated slide consistent with the
+            # slides around it.
+            presentation.theme["headerContract"] = header_contract.model_dump(
+                mode="json"
+            )
+        if chapter_plan is not None:
+            # The deck's frozen chapter structure, in the same final-outline
+            # indices the persisted outline uses. A single-page remake rebuilds
+            # its plan from here for the same reason it rebuilds the header
+            # contract: without it the remade page writes a bare section-name
+            # eyebrow while its 63 siblings carry a chapter number.
+            presentation.theme["chapterPlan"] = chapter_plan.model_dump(mode="json")
         if master_generation is not None:
             deck = master_generation.result.deck
             pin = deck.master

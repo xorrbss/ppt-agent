@@ -58,6 +58,30 @@ def test_safe_fixture_is_admitted_with_nonce_csp() -> None:
     assert "img-src data:" in admitted.html
 
 
+def test_tabular_numerals_are_admitted() -> None:
+    """Authored slides line digits up in tables and chips; the property is inert."""
+    source = (
+        '<!doctype html><html><head><meta charset="utf-8"><style>'
+        ".figure{font-variant-numeric:tabular-nums}"
+        "</style></head><body><p class=\"figure\">1,204</p></body></html>"
+    )
+
+    admitted = renderer_isolation.admit_authored_html(source)
+
+    assert "font-variant-numeric:tabular-nums" in admitted.html
+
+
+def test_an_unknown_font_property_is_still_rejected() -> None:
+    source = (
+        '<!doctype html><html><head><meta charset="utf-8"><style>'
+        ".x{font-synthesis-weight:none}"
+        "</style></head><body><p>text</p></body></html>"
+    )
+
+    with pytest.raises(renderer_isolation.RendererPolicyError):
+        renderer_isolation.admit_authored_html(source)
+
+
 def test_safe_inline_svg_namespace_opacity_and_presentation_attrs_are_admitted() -> None:
     source = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 80"
     width="120" height="80" preserveAspectRatio="xMidYMid meet" focusable="false">

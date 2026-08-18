@@ -9,6 +9,14 @@ async def revise_legacy_review(ctx):
         message=f"문제가 발견된 {len(ctx.initial_issues)}개 슬라이드를 자동 수정하고 있습니다.",
     )
     ctx.revise_kwargs = {"initial_critiques": ctx.initial_critiques, "return_details": True}
+    # Test doubles substitute a lightweight plan object, and the deck-plan
+    # dataclass only carries prefixes for a chaptered deck, so both absences
+    # mean the same thing: this review re-authors without a breadcrumb.
+    plan_prefixes = getattr(ctx.plan, "chapter_prefixes", ())
+    if plan_prefixes:
+        ctx.revise_kwargs["chapter_prefixes"] = [
+            plan_prefixes[position] for position in ctx.positions
+        ]
     ctx.candidate_decisions: list[dict] = []
     if ctx.exact_reconstruction:
         ctx.revise_kwargs["reference_images_by_slide"] = ctx.target_references

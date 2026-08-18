@@ -72,6 +72,9 @@ _DROP_TAGS = {
 _GLOBAL_ATTRIBUTES = {
     "id", "class", "role", "aria-label", "aria-hidden", "lang", "dir", "style",
     "title", "data-qid", "data-qid-ignore", "data-allow-overlap",
+    # Inert authored-header markers. They carry no behaviour and no URL; the
+    # deck's header contract validator is what constrains their values.
+    "data-header-part", "data-requirement-ids", "data-header-band",
 }
 _TAG_ATTRIBUTES: Mapping[str, set[str]] = {
     "meta": {"charset"},
@@ -147,7 +150,8 @@ _ALLOWED_CSS_PROPERTIES = {
     "bottom", "box-shadow", "box-sizing", "clip-path", "color", "column-gap",
     "display", "fill", "fill-opacity", "filter", "flex", "flex-basis", "flex-direction", "flex-flow",
     "flex-grow", "flex-shrink", "flex-wrap", "font", "font-family", "font-size",
-    "font-stretch", "font-style", "font-variant", "font-weight", "gap", "grid",
+    "font-stretch", "font-style", "font-variant", "font-variant-numeric",
+    "font-weight", "gap", "grid",
     "grid-area", "grid-auto-columns", "grid-auto-flow", "grid-auto-rows", "grid-column",
     "grid-column-end", "grid-column-start", "grid-row", "grid-row-end", "grid-row-start",
     "grid-template", "grid-template-areas", "grid-template-columns", "grid-template-rows",

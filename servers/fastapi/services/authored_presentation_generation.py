@@ -3,8 +3,6 @@ from __future__ import annotations
 # The publication admission path performs one local existence check.
 # ruff: noqa: ASYNC240
 
-import asyncio
-import html as html_module
 import logging
 import os
 import time
@@ -41,11 +39,16 @@ from services.authored_presentation_artifacts import (
     authored_title,
     resolve_brand,
 )
-from services.authored_presentation_contracts import AuthoredGenerationPipelineResult
+from models.authored_chapter_plan import AuthoredChapterPlan
+from models.authored_header_contract import AuthoredHeaderContract
+from services.authored_deck_chapter_plan import resolve_chapter_plan
+from services.authored_header_contract_service import (
+    page_number_mode_for,
+    resolve_header_contract,
+)
 from services.authored_presentation_pipeline import _author_illustrate_render_pipeline
 from services.authored_presentation_publication import publish_authored_presentation
 from services.authored_vnext.generation.legacy_bridge import (
-    _checkpoint_generated_slides,
     export_legacy_master_owned_deck,
     generate_legacy_master_owned_deck,
 )
@@ -56,7 +59,6 @@ from services.provider_usage_instrumentation import provider_usage_scope, record
 from utils.authored_dom_quality import ensure_authored_qids
 from utils.authored_styles import resolve_authored_style, validate_exact_reconstruction_style
 from utils.llm_calls.author_deck import (
-    AuthoredDeckResult,
     plan_deck_roles,
     prepare_authored_deck,
 )
@@ -67,90 +69,30 @@ from utils.llm_calls.author_slide import (
     normalize_reference_mode,
 )
 from utils.llm_calls.author_vision_qa import revise_authored_deck
-from utils.slide_capture import _placeholder_png, find_chrome, render_html_to_png
+from utils.slide_capture import _placeholder_png, find_chrome
 
 
 LOGGER = logging.getLogger(__name__)
 
 
-def _deterministic_style_replay_html(
-    content: str,
-    *,
-    role: str,
-    index: int,
-    slide_count: int,
-    style,
-    brand,
-) -> str:
-    """Render saved semantic content without authoring or deleting any text."""
+def _chapter_plan_applies(request: GeneratePresentationRequest, style) -> bool:
+    """Whether this generation may add chapter structure to its own outline.
 
-    background = style.background_color or style.preview_bg or "#F8FAFC"
-    accent = style.primary_color or style.preview_accent or brand.primary or "#2563EB"
-    palette = tuple(style.preview_palette or ())
-    text_color = palette[1] if len(palette) > 1 else "#0F172A"
-    font = style.body_font or brand.fonts or "Noto Sans KR"
-    heading_font = style.heading_font or font
-    escaped = html_module.escape(content or "")
-    escaped_role = html_module.escape(role or "CONTENT")
-    font_size = 28 if len(content) <= 320 else 20 if len(content) <= 900 else 13
+    Three decks are left exactly as they arrive. A master-owned deck takes its
+    chrome from company-standard furniture, so a divider page authored here
+    would not be one of its layouts. Exact reconstruction reproduces a source
+    slide-for-slide, and inserting a page it does not have is the one thing that
+    mode forbids. And a caller that supplied ``slides_markdown`` — the retemplate
+    and design-replay paths among them — is stating the deck's pages itself, the
+    same rule the template path applies when it skips its own table of contents.
+    """
+    if request._authored_master_resolution is not None:
+        return False
+    if request.slides_markdown:
+        return False
     return (
-        '<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><style>'
-        f'*{{box-sizing:border-box}}body{{margin:0;width:1280px;height:720px;overflow:hidden;'
-        f'background:{background};color:{text_color};font-family:"{font}",sans-serif;'
-        'padding:58px 68px 54px;display:flex;flex-direction:column;}'
-        f'.accent{{width:64px;height:7px;background:{accent};margin-bottom:22px}}'
-        f'.role{{font-family:"{heading_font}",sans-serif;font-size:14px;font-weight:700;'
-        f'letter-spacing:.12em;color:{accent};margin-bottom:22px}}'
-        f'.semantic{{white-space:pre-wrap;overflow-wrap:anywhere;font-size:{font_size}px;'
-        'line-height:1.42;font-weight:500;flex:1;overflow:hidden}'
-        '.page{font-size:12px;opacity:.55;text-align:right;margin-top:16px}'
-        '</style></head><body><div class="accent"></div>'
-        f'<div class="role">{escaped_role}</div>'
-        f'<div class="semantic">{escaped}</div>'
-        f'<div class="page">{index + 1} / {slide_count}</div>'
-        '</body></html>'
-    )
-
-
-async def _deterministic_style_replay_pipeline(
-    outline: PresentationOutlineModel,
-    *,
-    roles: list[str],
-    style,
-    brand,
-    generation_job: PresentationGenerationJob | None,
-) -> AuthoredGenerationPipelineResult:
-    started = time.monotonic()
-    htmls = [
-        _deterministic_style_replay_html(
-            slide.content,
-            role=roles[index],
-            index=index,
-            slide_count=len(outline.slides),
-            style=style,
-            brand=brand,
-        )
-        for index, slide in enumerate(outline.slides)
-    ]
-    render_started = time.monotonic()
-    pngs = list(await asyncio.gather(*(render_html_to_png(html) for html in htmls)))
-    render_work = time.monotonic() - render_started
-    await _checkpoint_generated_slides(
-        generation_job=generation_job,
-        layout_ids=roles,
-        htmls=htmls,
-        pngs=pngs,
-    )
-    return AuthoredGenerationPipelineResult(
-        deck=AuthoredDeckResult(
-            htmls=htmls,
-            design_system="authored-design-replay/v1",
-        ),
-        pngs=pngs,
-        elapsed=time.monotonic() - started,
-        author_work=0.0,
-        illustration_work=0.0,
-        render_work=render_work,
+        normalize_reference_mode(getattr(style, "reference_mode", STYLE_REFERENCE))
+        != EXACT_RECONSTRUCTION
     )
 
 
@@ -209,6 +151,25 @@ async def _generate_authored_presentation(
             source_snapshot_id=exact_snapshot_id,
         )
     brand = apply_style_defaults(resolve_brand(request, outline, language), style)
+
+    # The deck's chapter structure is decided before its header, because whether
+    # an eyebrow may open with a chapter number follows from whether chapters
+    # exist at all. Expanding the outline here — before the roles, the header
+    # contract, and every persisted artifact — is what keeps the divider pages,
+    # the plan's indices, and the published slide list describing one deck.
+    chapter_plan: AuthoredChapterPlan | None = None
+    if _chapter_plan_applies(request, style):
+        expansion = await resolve_chapter_plan(
+            outline,
+            brand,
+            style,
+            instructions=request.instructions,
+            table_of_contents_requested=request.include_table_of_contents,
+        )
+        if expansion is not None:
+            outline = expansion.outline
+            chapter_plan = expansion.plan
+            roles = plan_deck_roles(outline, chapter_plan)
 
     # Render needs a headless Chrome. Without it every slide silently degrades to a
     # blank placeholder (resilience by design) ??so warn loudly to surface deploy
@@ -269,6 +230,10 @@ async def _generate_authored_presentation(
     await sql_session.commit()
 
     master_generation = None
+    # Only the ordinary authored path owns a header contract. Master-owned decks
+    # get their header from company-standard furniture, and design replay and
+    # exact reconstruction both reproduce an existing design verbatim.
+    header_contract: AuthoredHeaderContract | None = None
     if request._authored_master_resolution is not None:
         owner_id = request._authored_master_resolution.owner_id
         source_attachments = tuple(
@@ -340,19 +305,27 @@ async def _generate_authored_presentation(
         # effective contract; no post-render overlay or template-only fallback is
         # permitted after this point.
         pipeline = master_generation.pipeline
-    elif request._authored_design_replay:
-        pipeline = await _deterministic_style_replay_pipeline(
-            outline,
-            roles=roles,
-            style=style,
-            brand=brand,
-            generation_job=generation_job,
-        )
-    elif generation_job is None:
-        pipeline = await _author_illustrate_render_pipeline(outline, brand, style)
     else:
+        # A design replay carries the source deck's own slide text plus the newly
+        # chosen style, which is exactly the ordinary authoring input, so it is
+        # authored here rather than rendered verbatim. Emitting the raw source
+        # text kept every character but produced an undesigned deck.
+        header_contract = await resolve_header_contract(
+            outline,
+            brand,
+            style,
+            instructions=request.instructions,
+            chapter_breadcrumb=chapter_plan is not None,
+        )
+        job_kwargs = {} if generation_job is None else {"generation_job": generation_job}
         pipeline = await _author_illustrate_render_pipeline(
-            outline, brand, style, generation_job=generation_job
+            outline,
+            brand,
+            style,
+            header_contract=header_contract,
+            page_number_mode=page_number_mode_for(header_contract),
+            chapter_plan=chapter_plan,
+            **job_kwargs,
         )
     authored_deck = pipeline.deck
     # Persist stable edit targets for future local quality-review patches. Attribute
@@ -362,11 +335,9 @@ async def _generate_authored_presentation(
 
     fixed_count = 0
     vision_elapsed = 0.0
-    if (
-        getattr(request, "vision_qa", False)
-        and master_generation is None
-        and not request._authored_design_replay
-    ):
+    # A replay now produces authored slides, so the caller's own vision-QA choice
+    # governs it like any other authored deck.
+    if getattr(request, "vision_qa", False) and master_generation is None:
         vision_started = time.monotonic()
         with provider_usage_scope(
             job_id=generation_job.id if generation_job is not None else None,
@@ -384,6 +355,15 @@ async def _generate_authored_presentation(
                     vision_qa_kwargs["reference_images_by_slide"] = (
                         exact_plan.reference_images
                     )
+                if chapter_plan is not None:
+                    # A corrected slide is authored the same way its first draft
+                    # was, so it needs the same chapter prefix. Without it the
+                    # one slide vision-QA touched is the one whose eyebrow
+                    # disagrees with the deck.
+                    vision_qa_kwargs["chapter_prefixes"] = [
+                        chapter_plan.eyebrow_prefix_at(index)
+                        for index in range(len(htmls))
+                    ]
                 htmls, pngs, fixed = await revise_authored_deck(
                     htmls,
                     pngs,
@@ -504,12 +484,14 @@ async def _generate_authored_presentation(
         style=style,
         roles=roles,
         exact_provenance=exact_provenance,
+        chapter_plan=chapter_plan,
         htmls=htmls,
         pngs=pngs,
         out_path=out_path,
         attempt_token=attempt_token,
         master_generation=master_generation,
         native_export_evidence=native_export_evidence,
+        header_contract=header_contract,
     )
     if generation_job is not None:
         await _cleanup_published_checkpoints(generation_job.id)

@@ -106,6 +106,10 @@ async def review_style_candidates(ctx):
             for index in range(len(ctx.targets))
         ]
         ctx.fallback_started_at = _service.time.perf_counter()
+        # A test double substitutes a lightweight plan, and the deck-plan
+        # dataclass carries prefixes only for a chaptered deck; both absences
+        # mean this fallback re-authors without a breadcrumb.
+        fallback_prefixes = getattr(ctx.plan, "chapter_prefixes", ())
         ctx.fallback_result = await _service.revise_authored_deck(
             ctx.htmls,
             ctx.pngs,
@@ -120,6 +124,15 @@ async def review_style_candidates(ctx):
             initial_critiques=ctx.fallback_initial_critiques,
             return_details=True,
             force_full_reauthor_indices=ctx.fallback_local_indices,
+            **(
+                {
+                    "chapter_prefixes": [
+                        fallback_prefixes[position] for position in ctx.positions
+                    ]
+                }
+                if fallback_prefixes
+                else {}
+            ),
         )
         ctx.revision_ms += (_service.time.perf_counter() - ctx.fallback_started_at) * 1000
         if len(ctx.fallback_result) == 4:
