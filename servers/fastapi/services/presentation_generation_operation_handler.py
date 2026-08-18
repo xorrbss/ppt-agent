@@ -23,6 +23,9 @@ from models.sql.presentation import PresentationModel
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.workspace import WorkspaceOperation
 from api.v1.auth.internal import authenticated_internal_request_headers
+from services.authored_generation_progress_poller import (
+    start_authored_generation_progress_polling,
+)
 from services.database import async_session_maker
 from services.presentation_generation_job_service import (
     GENERATION_JOB_HEARTBEAT_SECONDS,
@@ -279,6 +282,13 @@ class PresentationGenerationOperationHandler:
                 attempt_token=claim.attempt_token,
             )
         )
+        # Authored generation has no reporter seam of its own; this turns the
+        # per-slide checkpoints it already writes into timeline progress.
+        stop_authored_progress = start_authored_generation_progress_polling(
+            job_id=job_id,
+            report=context.progress,
+            session_factory=self._session_factory,
+        )
         try:
             await context.progress(stage="generation_started")
             result = await self._pipeline(
@@ -330,6 +340,7 @@ class PresentationGenerationOperationHandler:
             )
             raise error_type(code) from error
         finally:
+            await stop_authored_progress()
             heartbeat.cancel()
             await asyncio.gather(heartbeat, return_exceptions=True)
 

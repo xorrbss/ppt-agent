@@ -31,6 +31,9 @@ from services.presentation_export_capabilities import (
     PresentationExportContractError,
 )
 from services.presentation_export_router import execute_presentation_export
+from services.workspace_export_progress_poller import (
+    start_export_progress_polling,
+)
 from services.workspace_artifact_publication_service import (
     WorkspaceArtifactPublicationError,
     compensate_workspace_artifact,
@@ -273,24 +276,35 @@ class WorkspaceExportOperationHandler:
                 # credential. Native master export stays document-server-free.
                 headers = await self._internal_header_provider()
                 cookie_header = headers.get("Cookie") or None
-                async with self._session_factory() as session:
-                    execution = await execute_presentation_export(
-                        session,
-                        render_presentation_id=claim.presentation_id,
-                        attempt_presentation_id=claim.presentation_id,
-                        export_format=cast(Literal["pptx", "pdf"], export_format),
-                        expected_render_revision=claim.expected_revision,
-                        source_revision=claim.expected_revision,
-                        title=title,
-                        cookie_header=cookie_header,
-                        owner_id=claim.owner_id,
-                        owner_scope=claim.owner_scope,
-                        workspace_operation_id=claim.operation_id,
-                        request_hash=operation.request_hash,
-                        idempotency_key_hash=operation.idempotency_key_hash,
-                        pptx_mode=pptx_mode,
-                        font_embedding=font_embedding,
-                    )
+                # The renderer runs in Next.js behind one blocking request, so
+                # without this poller the operation reports nothing for the
+                # minutes that render actually takes.
+                stop_progress_polling = start_export_progress_polling(
+                    operation_id=claim.operation_id,
+                    cookie_header=cookie_header,
+                    report=context.progress,
+                )
+                try:
+                    async with self._session_factory() as session:
+                        execution = await execute_presentation_export(
+                            session,
+                            render_presentation_id=claim.presentation_id,
+                            attempt_presentation_id=claim.presentation_id,
+                            export_format=cast(Literal["pptx", "pdf"], export_format),
+                            expected_render_revision=claim.expected_revision,
+                            source_revision=claim.expected_revision,
+                            title=title,
+                            cookie_header=cookie_header,
+                            owner_id=claim.owner_id,
+                            owner_scope=claim.owner_scope,
+                            workspace_operation_id=claim.operation_id,
+                            request_hash=operation.request_hash,
+                            idempotency_key_hash=operation.idempotency_key_hash,
+                            pptx_mode=pptx_mode,
+                            font_embedding=font_embedding,
+                        )
+                finally:
+                    await stop_progress_polling()
                 exported = execution.presentation
                 export_path = Path(exported.path)
                 exported_source = export_path

@@ -350,6 +350,7 @@ async def execute_presentation_export(
                 font_embedding=font_embedding,
                 slides=slide_inputs,
                 template_target=template_target,
+                workspace_operation_id=workspace_operation_id,
             ),
             analysis,
             asset_digests_verified=True,

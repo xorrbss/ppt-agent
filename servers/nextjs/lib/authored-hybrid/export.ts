@@ -10,35 +10,25 @@ import {
   type BundledPresentationExportResult,
 } from "@/lib/run-bundled-presentation-export";
 
-import {
-  extractAuthoredSlideDom,
-  renderAuthoredBackplate,
-  resolveAuthoredHybridChromeExecutable,
-} from "./index.ts";
-import {
-  prepareNativeElements,
-  selectLayerSafeNativeElements,
-  serializePreparedNativeElement,
-  type PowerPointTypefaceSerializationOptions,
-  type PreparedNativeElement,
-} from "./native-plan.ts";
+import { resolveAuthoredHybridChromeExecutable } from "./index.ts";
 import {
   assembleAuthoredHybridPptx,
   type AuthoredHybridSlideLayer,
 } from "./pptx-assembler.ts";
 import { isAuthoredPresentation } from "./presentation-mode.ts";
+import { authoredRendererIsolationPolicy } from "./renderer-isolation.ts";
+import { readBoundedResponseText } from "./security.ts";
 import {
-  preflightAuthoredHtmlForHybrid,
-  readBoundedResponseText,
-} from "./security.ts";
+  beginExportProgress,
+  recordExportProgress,
+} from "./export-progress.ts";
+import { prepareSlideLayer } from "./slide-layer.ts";
 import {
   mapWithConcurrency,
   parseBoundedPositiveInt,
   resolveHybridExportConcurrencyDefault,
 } from "./export-performance.ts";
-import { getGoogleFontsCollector } from "./google-fonts-runtime.ts";
 import { summarizeAuthoredHybridExport } from "./export-metadata.ts";
-import { mergePowerPointTextLayout } from "./font-layout.ts";
 import {
   resolveFontEmbeddingPlan,
   type FontEmbeddingPlan,
@@ -51,11 +41,10 @@ import {
   createImageOnlyExportQuality,
   createPresentationExportQuality,
   type PresentationExportFontEmbeddingStatus,
-  type PresentationExportFallbackElement,
   type PresentationExportQualityReport,
-  type PresentationExportSlideQuality,
+  type PresentationExportRendererIsolation,
 } from "../presentation-export-quality.ts";
-import { fallbackElementForContractElement, imageFallbackSlide, noFontRenderingTelemetry } from "./export-slide-quality.ts";
+import { imageFallbackSlide, noFontRenderingTelemetry } from "./export-slide-quality.ts";
 
 const MAX_PRESENTATION_RESPONSE_BYTES = 50 * 1024 * 1024;
 const MAX_HYBRID_SLIDES = 100;
@@ -68,9 +57,6 @@ const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
 const HYBRID_DECK_BUDGET_MS = 15 * 60_000;
 const HYBRID_CACHE_VERSION =
   "authored-hybrid-v6-windows-profile-cleanup-race";
-// The collector adds a bounded network step ahead of each browser pass, so
-// the per-pass ceiling is higher than the pre-collection 20s.
-const HYBRID_BROWSER_PASS_TIMEOUT_MS = 45_000;
 const HYBRID_RESULT_CACHE_LIMIT = 24;
 const HYBRID_EXPORT_CONCURRENCY = parseBoundedPositiveInt(
   process.env.AUTHORED_HYBRID_CONCURRENCY,
@@ -111,6 +97,8 @@ interface AuthoredHybridExportParams {
   cookieHeader?: string;
   fontEmbedding?: boolean;
   expectedPresentationRevision?: number;
+  /** Correlates this export with the caller polling /api/internal/export-progress. */
+  operationId?: string;
 }
 
 interface FetchedPresentation {
@@ -118,17 +106,32 @@ interface FetchedPresentation {
   sourceSha256: string;
 }
 
-interface PreparedSlideOutcome {
-  layer: AuthoredHybridSlideLayer | null;
-  quality: PresentationExportSlideQuality;
-  fontRendering: {
-    browserFontFilesCollected: number;
-    browserCollectionFailures: number;
-  };
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Stamp every quality report with the isolation the render actually ran under,
+ * so an unattested local-native artifact stays identifiable downstream. A policy
+ * that throws is reported as unattested rather than crashing the export: the
+ * per-slide passes surface that failure on their own.
+ */
+function rendererIsolationRecord(): PresentationExportRendererIsolation {
+  try {
+    const policy = authoredRendererIsolationPolicy();
+    return {
+      osIsolation: policy.productionOsIsolation,
+      executionBoundary: policy.executionBoundary,
+      attested:
+        policy.productionOsIsolation === "nonroot-readonly-tmpfs-network-none",
+    };
+  } catch {
+    return {
+      osIsolation: "development-unattested",
+      executionBoundary: "development-local",
+      attested: false,
+    };
+  }
 }
 
 async function fetchPresentation(
@@ -170,191 +173,6 @@ async function fetchPresentation(
   }
 }
 
-function preSerializePreparedElements(
-  elements: readonly PreparedNativeElement[],
-  options: PowerPointTypefaceSerializationOptions = {}
-): PreparedNativeElement[] {
-  const serializable: PreparedNativeElement[] = [];
-  for (const element of elements) {
-    try {
-      serializePreparedNativeElement(
-        element,
-        serializable.length + 3,
-        element.kind === "image" ? "rId999" : undefined,
-        options
-      );
-      serializable.push(element);
-    } catch {
-      // Never hide an element whose final OOXML cannot be constructed.
-    }
-  }
-  return serializable;
-}
-
-function sameIds(
-  elements: readonly PreparedNativeElement[],
-  ids: readonly string[]
-): boolean {
-  return (
-    elements.length === ids.length &&
-    elements.every((element, index) => element.source.id === ids[index])
-  );
-}
-
-async function prepareSlideLayer(
-  html: string,
-  slideNumber: number,
-  chromeExecutable: string,
-  embeddedTypefaceFamilies: readonly string[] = []
-): Promise<PreparedSlideOutcome> {
-  // Network access is permitted only in this validated server-side collector.
-  // The resulting document is self-contained before isolated Chrome receives it.
-  // The collector returns two documents on purpose. Only the sanitized form is
-  // preflighted, so untrusted authored HTML can never self-authorize a data
-  // font face; the verified form carrying collector-built @font-face rules is
-  // used only after that preflight succeeds.
-  const fontCollection = await getGoogleFontsCollector().prepareHtml(html);
-  const fontRendering = {
-    browserFontFilesCollected: fontCollection.fontFiles,
-    browserCollectionFailures: fontCollection.failures.length,
-  };
-  const preflight = preflightAuthoredHtmlForHybrid(
-    fontCollection.htmlForPreflight
-  );
-  if (!preflight.ok) {
-    return {
-      layer: null,
-      quality: imageFallbackSlide(
-        slideNumber,
-        preflight.reason ?? "html-preflight-failed"
-      ),
-      fontRendering,
-    };
-  }
-  const collectedHtml = fontCollection.htmlForChrome;
-  const extractionOptions = {
-    chromeExecutable,
-    timeoutMs: HYBRID_BROWSER_PASS_TIMEOUT_MS,
-  };
-  const contract = await extractAuthoredSlideDom(collectedHtml, extractionOptions);
-  let nativeLayoutElements = contract.elements;
-  try {
-    const layoutContract = await extractAuthoredSlideDom(collectedHtml, {
-      ...extractionOptions,
-      fontLayoutMode: "powerpoint",
-    });
-    const merged = mergePowerPointTextLayout(
-      contract.elements,
-      layoutContract.elements,
-      { embeddedTypefaceFamilies }
-    );
-    nativeLayoutElements = merged.elements;
-  } catch {
-    // The mapped-font pass is an accuracy enhancement. Source extraction and
-    // fidelity backplate remain a safe compatible fallback if it cannot run.
-  }
-  const prepared = preSerializePreparedElements(
-    await prepareNativeElements(nativeLayoutElements, {
-      includeRasterText: true,
-      includeRasterShapes: true,
-    }),
-    { embeddedTypefaceFamilies }
-  );
-  let selected = selectLayerSafeNativeElements(
-    contract.elements,
-    prepared,
-    undefined,
-    // Text remains editable above the residual backplate. Shapes only move to
-    // the native layer when doing so preserves their authored stacking order;
-    // otherwise translucent ancestor cards would wash out later SVG artwork.
-    {
-      promoteTextAboveRaster: true,
-      promoteShapesAboveRaster: false,
-      retainedChildPaint: "slide-root",
-    }
-  );
-  if (!selected.length) {
-    return {
-      layer: null,
-      quality: imageFallbackSlide(slideNumber, "no-safe-native-elements"),
-      fontRendering,
-    };
-  }
-
-  let backplate = await renderAuthoredBackplate(
-    collectedHtml,
-    contract,
-    selected.map((element) => element.source.id),
-    extractionOptions
-  );
-  const applied = new Set(backplate.appliedPromotedElementIds);
-  const finalSelected = selectLayerSafeNativeElements(
-    contract.elements,
-    prepared,
-    applied,
-    {
-      promoteTextAboveRaster: true,
-      promoteShapesAboveRaster: false,
-      retainedChildPaint: "slide-root",
-    }
-  );
-  if (!finalSelected.length) {
-    return {
-      layer: null,
-      quality: imageFallbackSlide(slideNumber, "backplate-identity-mismatch"),
-      fontRendering,
-    };
-  }
-
-  if (!sameIds(finalSelected, backplate.appliedPromotedElementIds)) {
-    selected = finalSelected;
-    backplate = await renderAuthoredBackplate(
-      collectedHtml,
-      contract,
-      selected.map((element) => element.source.id),
-      extractionOptions
-    );
-    if (!sameIds(selected, backplate.appliedPromotedElementIds)) {
-      return {
-        layer: null,
-        quality: imageFallbackSlide(slideNumber, "backplate-identity-mismatch"),
-        fontRendering,
-      };
-    }
-  } else {
-    selected = finalSelected;
-  }
-  const selectedIds = new Set(
-    selected.map((element) => element.source.id)
-  );
-  const fallbackElements = contract.elements
-    .filter((element) => !selectedIds.has(element.id))
-    .map(fallbackElementForContractElement);
-
-  return {
-    layer: {
-      slideNumber,
-      backplatePng: backplate.backplatePng,
-      elements: selected,
-    },
-    quality: {
-      slideNumber,
-      editable: selected.length > 0,
-      imageFallback: selected.length === 0,
-      nativeTextElements: selected.filter((element) => element.kind === "text")
-        .length,
-      nativeShapeElements: selected.filter((element) => element.kind === "shape")
-        .length,
-      nativeGroupElements: 0,
-      nativeImageElements: selected.filter((element) => element.kind === "image")
-        .length,
-      rasterFallbackElements: fallbackElements.length,
-      fallbackReasons: fallbackElements.flatMap((element) => element.reasons),
-      fallbackElements,
-    },
-    fontRendering,
-  };
-}
 
 async function resolveSafeFidelityPptx(outPath: string): Promise<string> {
   if (path.extname(outPath).toLowerCase() !== ".pptx") {
@@ -653,6 +471,7 @@ async function runUncachedAuthoredHybridExport(
   requestStartedAt: number
 ): Promise<BundledPresentationExportResult> {
   const fidelityStartedAt = performance.now();
+  recordExportProgress(cacheKey, { phase: "fidelity" });
   const fidelity = await runBundledPresentationExport({
     format: "pptx",
     presentationId: params.presentationId,
@@ -688,6 +507,7 @@ async function runUncachedAuthoredHybridExport(
           : fidelity,
         createImageOnlyExportQuality(slides.length, "chrome-unavailable", {
           fontEmbeddingStatus: fontEmbedding.status,
+          rendererIsolation: rendererIsolationRecord(),
         })
       );
     }
@@ -705,47 +525,72 @@ async function runUncachedAuthoredHybridExport(
     const deckStart = Date.now();
     const slidesStartedAt = performance.now();
     let budgetWarningWritten = false;
+    let completedSlides = 0;
+    recordExportProgress(cacheKey, {
+      phase: "slides",
+      completedSlides: 0,
+      totalSlides: slideInputs.length,
+    });
+    // Slides finish concurrently and a 100-slide deck would otherwise append a
+    // timeline event per slide. Publishing on a fixed stride keeps the poller
+    // meaningful without turning progress into its own write load.
+    const progressStride = Math.max(1, Math.ceil(slideInputs.length / 40));
+    const noteSlideCompleted = () => {
+      completedSlides += 1;
+      if (
+        completedSlides % progressStride === 0 ||
+        completedSlides === slideInputs.length
+      ) {
+        recordExportProgress(cacheKey, { completedSlides });
+      }
+    };
     const preparedSlides = await mapWithConcurrency(
       slideInputs,
       HYBRID_EXPORT_CONCURRENCY,
       async ({ html, slideNumber }) => {
-        if (Date.now() - deckStart > HYBRID_DECK_BUDGET_MS) {
-          if (!budgetWarningWritten) {
-            budgetWarningWritten = true;
-            console.warn(
-              "[authored-hybrid] deck time budget exhausted; remaining slides " +
-                "keep the fidelity render"
-            );
-          }
-          return {
-            layer: null,
-            quality: imageFallbackSlide(
-              slideNumber,
-              "deck-time-budget-exhausted"
-            ),
-            fontRendering: noFontRenderingTelemetry(),
-          };
-        }
         try {
-          return await prepareSlideLayer(
-            html,
-            slideNumber,
-            chromeExecutable,
-            fontEmbedding.embeddedTypefaceFamilies
-          );
-        } catch (error) {
-          console.warn(
-            `[authored-hybrid:slide-${slideNumber}] fidelity fallback after slide processing failure`,
-            error
-          );
-          return {
-            layer: null,
-            quality: imageFallbackSlide(
+          if (Date.now() - deckStart > HYBRID_DECK_BUDGET_MS) {
+            if (!budgetWarningWritten) {
+              budgetWarningWritten = true;
+              console.warn(
+                "[authored-hybrid] deck time budget exhausted; remaining slides " +
+                  "keep the fidelity render"
+              );
+            }
+            return {
+              layer: null,
+              quality: imageFallbackSlide(
+                slideNumber,
+                "deck-time-budget-exhausted"
+              ),
+              fontRendering: noFontRenderingTelemetry(),
+            };
+          }
+          try {
+            return await prepareSlideLayer(
+              html,
               slideNumber,
-              "slide-processing-failed"
-            ),
-            fontRendering: noFontRenderingTelemetry(),
-          };
+              chromeExecutable,
+              fontEmbedding.embeddedTypefaceFamilies
+            );
+          } catch (error) {
+            console.warn(
+              `[authored-hybrid:slide-${slideNumber}] fidelity fallback after slide processing failure`,
+              error
+            );
+            return {
+              layer: null,
+              quality: imageFallbackSlide(
+                slideNumber,
+                "slide-processing-failed"
+              ),
+              fontRendering: noFontRenderingTelemetry(),
+            };
+          }
+        } finally {
+          // A slide that fell back is still finished work; counting it keeps
+          // progress monotonic instead of stalling on the failing slides.
+          noteSlideCompleted();
         }
       }
     );
@@ -759,6 +604,7 @@ async function runUncachedAuthoredHybridExport(
       preparedSlides.map((prepared) => prepared.quality),
       {
         fontEmbeddingStatus: fontEmbedding.status,
+        rendererIsolation: rendererIsolationRecord(),
         fontRendering: {
           browserFontFilesCollected: preparedSlides.reduce(
             (sum, prepared) =>
@@ -778,6 +624,7 @@ async function runUncachedAuthoredHybridExport(
       return attachQualityReport(fidelity, quality);
     }
     const assemblyStartedAt = performance.now();
+    recordExportProgress(cacheKey, { phase: "assembly" });
     const hybridPath = await writeHybridPptx(
       fidelity.path,
       layers,
@@ -815,6 +662,7 @@ async function runUncachedAuthoredHybridExport(
         : fidelity,
       createImageOnlyExportQuality(slideCount, "hybrid-processing-failed", {
         fontEmbeddingStatus: fontEmbedding.status,
+        rendererIsolation: rendererIsolationRecord(),
       })
     );
   }
@@ -905,9 +753,14 @@ export async function runAuthoredHybridPresentationExport(
   const inFlight = inFlightHybridExports.get(cacheKey);
   if (inFlight) {
     console.info("[authored-hybrid] joined existing export job");
+    // Point this operation at the running job's progress instead of starting a
+    // second record, so a joining caller reports the work that is actually
+    // happening rather than sitting silent until the shared job resolves.
+    beginExportProgress(cacheKey, params.operationId, Date.now());
     return inFlight;
   }
 
+  beginExportProgress(cacheKey, params.operationId, Date.now());
   const job = runUncachedAuthoredHybridExport(
     params,
     presentation,
@@ -915,6 +768,15 @@ export async function runAuthoredHybridPresentationExport(
     fontEmbeddingPlan,
     cacheKey,
     requestStartedAt
+  ).then(
+    (result) => {
+      recordExportProgress(cacheKey, { phase: "completed" });
+      return result;
+    },
+    (error: unknown) => {
+      recordExportProgress(cacheKey, { phase: "failed" });
+      throw error;
+    },
   ).finally(() => {
     if (inFlightHybridExports.get(cacheKey) === job) {
       inFlightHybridExports.delete(cacheKey);

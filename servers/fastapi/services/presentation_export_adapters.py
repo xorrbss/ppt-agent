@@ -89,6 +89,9 @@ class PresentationExportAdapterRequest:
     font_embedding: bool = False
     slides: tuple[PresentationExportSlideInput, ...] = ()
     template_target: TemplateV2GenerationTarget | None = None
+    # Progress correlation only. It selects no adapter and gates nothing, so an
+    # absent value costs the caller narration, never the export itself.
+    workspace_operation_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -275,6 +278,7 @@ async def run_general_adapter(
             cookie_header=request.cookie_header,
             expected_revision=request.expected_revision,
             font_embedding=request.font_embedding,
+            workspace_operation_id=request.workspace_operation_id,
         )
     else:
         exported = await export_presentation(

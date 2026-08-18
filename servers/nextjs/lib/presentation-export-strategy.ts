@@ -45,6 +45,12 @@ export interface PresentationExportExecutionParams {
   /** Server-bound optimistic revision; client hints never select an adapter. */
   expectedPresentationRevision?: number;
   expectedArtifactVersion?: string;
+  /**
+   * Correlation id for progress reporting only. It selects no adapter and
+   * gates nothing, so an absent or unknown value costs the caller narration,
+   * never the export.
+   */
+  operationId?: string;
 }
 
 export interface PresentationExportResult {
