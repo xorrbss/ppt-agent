@@ -116,9 +116,13 @@ def expand_outline_with_chapters(
     chapters: list[AuthoredChapter] = []
     agenda_index: Optional[int] = None
 
-    # The cover always stays first; the agenda, when there is one, sits directly
-    # behind it so the reader meets the structure before the argument.
+    # The cover always stays first; the agenda, when this plan adds one, sits
+    # directly behind it so the reader meets the structure before the argument.
+    # A page that is ALREADY the deck's table of contents is adopted where it
+    # stands instead: it keeps its own wording, and the deck ends up with one
+    # agenda rather than two that disagree about the chapters.
     final.append(source[0])
+    adopted = draft.existing_agenda_index
     if draft.include_agenda:
         agenda_index = len(final)
         final.append(
@@ -134,6 +138,8 @@ def expand_outline_with_chapters(
         )
 
     for index in range(1, len(source)):
+        if adopted is not None and index == adopted:
+            agenda_index = len(final)
         chapter = starts.get(index)
         if chapter is not None:
             chapters.append(

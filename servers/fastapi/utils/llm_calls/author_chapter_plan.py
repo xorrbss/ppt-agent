@@ -64,18 +64,29 @@ Rules for this plan:
   chapter opens on. Indices must strictly ascend and no two chapters may share
   one.
 - numeral is the chapter's own marker written the way this document would write
-  it. Prefer the numbering the source material itself already uses. When it uses
-  none, use uppercase Roman numerals for a Korean proposal or report
-  (Ⅰ, Ⅱ, Ⅲ, Ⅳ, Ⅴ) and plain Arabic numerals otherwise.
+  it. When the slide headings below ALREADY carry chapter markers (제1장, Ⅱ.,
+  2., Chapter 3), the deck has numbered itself and you must adopt that
+  numbering exactly: one chapter per distinct marker, opening on the first
+  slide that carries it, with that marker copied verbatim as the numeral. Do
+  NOT regroup those slides under a coarser scheme of your own — the marker
+  stays visible in each slide's title, so a chapter numbered differently from
+  the pages inside it contradicts them on every page. Only when the headings
+  carry no markers at all do you choose the numbering yourself: uppercase Roman
+  numerals for a Korean proposal or report (Ⅰ, Ⅱ, Ⅲ, Ⅳ, Ⅴ), plain Arabic
+  numerals otherwise.
 - title is the chapter's name in the deck's own language: a short noun phrase of
   at most about ten characters (제안개요, 사업수행방안, 기대효과). It is not a
   sentence, not a claim, and never a repeat of the deck title.
-- include_agenda is true only when this deck should open with a
-  table-of-contents page listing the chapters. Set it when the deck's own
-  request asks for one — in the flag below or in the user's words — and leave it
-  false otherwise.
+- existing_agenda_index is the index of a slide below that is ALREADY this
+  deck's table of contents — a page whose whole purpose is to list the chapters
+  (목차, Contents, Agenda). Set it whenever such a page exists, and set
+  include_agenda to false: the deck has one and a second would contradict it.
+- include_agenda is true ONLY when this deck should open with a
+  table-of-contents page and does not already have one. Set it when the deck's
+  own request asks for one — in the flag below or in the user's words — and
+  leave it false otherwise. Never set both it and existing_agenda_index.
 - agenda_title is what that page is called in the deck's language (목차,
-  Contents). Leave it empty when include_agenda is false.
+  Contents). Leave it empty unless include_agenda is true.
 """
 
 
@@ -170,7 +181,24 @@ def coerce_chapter_plan_draft(
     kept.sort(key=lambda chapter: chapter.first_slide_index)
     if len(kept) > MAX_CHAPTERS:
         kept = kept[:MAX_CHAPTERS]
-    return draft.model_copy(update={"chapters": tuple(kept)})
+    # An adopted agenda has to be real front matter. One pointing at the cover,
+    # past the deck, or into a chapter is a mis-index, and honouring it would
+    # file an ordinary content page as the table of contents.
+    existing = draft.existing_agenda_index
+    first_chapter = kept[0].first_slide_index if kept else slide_count
+    if existing is not None and not (1 <= existing < min(first_chapter, slide_count)):
+        existing = None
+    # The two agenda fields describe the same page, so they cannot both hold.
+    # An existing page wins: it is already in the deck and the reader will see
+    # it whatever this plan does.
+    include_agenda = draft.include_agenda and existing is None
+    return draft.model_copy(
+        update={
+            "chapters": tuple(kept),
+            "existing_agenda_index": existing,
+            "include_agenda": include_agenda,
+        }
+    )
 
 
 async def generate_chapter_plan(

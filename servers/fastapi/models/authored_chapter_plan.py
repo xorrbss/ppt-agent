@@ -81,6 +81,11 @@ class AuthoredChapterPlanDraft(_Spec):
     #: What the agenda page is called in the deck's own language ("목차").
     #: Empty when no agenda was asked for.
     agenda_title: str = Field(default="", max_length=24)
+    #: Index into the SOURCE outline of a page that is ALREADY this deck's table
+    #: of contents. The outline writer produces one whenever the request asked
+    #: for it, so without this the deck would carry two: the writer's and the
+    #: one this plan inserts, each listing its own idea of the chapters.
+    existing_agenda_index: Optional[int] = Field(default=None, ge=0)
     chapters: tuple[AuthoredChapterDraft, ...] = ()
 
 

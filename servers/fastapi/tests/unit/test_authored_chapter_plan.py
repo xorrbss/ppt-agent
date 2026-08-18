@@ -124,6 +124,78 @@ def test_the_agenda_sits_behind_the_cover_and_lists_every_chapter():
     assert expansion.outline.slides[0].content == "## 슬라이드 0"
 
 
+def test_a_deck_that_already_lists_its_chapters_is_not_given_a_second_agenda():
+    draft = AuthoredChapterPlanDraft(
+        include_agenda=False,
+        existing_agenda_index=1,
+        chapters=(
+            AuthoredChapterDraft(numeral="Ⅰ", title="사업개요", first_slide_index=2),
+            AuthoredChapterDraft(numeral="Ⅱ", title="제안개요", first_slide_index=6),
+            AuthoredChapterDraft(numeral="Ⅲ", title="기대효과", first_slide_index=9),
+        ),
+    )
+    expansion = expand_outline_with_chapters(_outline(12), draft)
+    assert expansion is not None
+    # Three dividers and no agenda page: the deck already had one.
+    assert expansion.inserted == 3
+    assert expansion.plan.agenda_index == 1
+    assert expansion.plan.role_at(1) == AGENDA_ROLE
+    # The adopted page keeps its own wording rather than being rewritten.
+    assert expansion.outline.slides[1].content == "## 슬라이드 1"
+
+
+def test_an_adopted_agenda_index_tracks_the_slides_inserted_before_it():
+    draft = AuthoredChapterPlanDraft(
+        existing_agenda_index=2,
+        chapters=(
+            AuthoredChapterDraft(numeral="Ⅰ", title="개요", first_slide_index=4),
+            AuthoredChapterDraft(numeral="Ⅱ", title="제안", first_slide_index=8),
+        ),
+    )
+    expansion = expand_outline_with_chapters(_outline(12), draft)
+    assert expansion is not None
+    # Nothing is inserted ahead of source slide 2, so it keeps its index.
+    assert expansion.plan.agenda_index == 2
+    assert expansion.outline.slides[2].content == "## 슬라이드 2"
+    assert expansion.plan.chapters[0].start_index == 4
+
+
+def test_the_two_agenda_fields_never_both_hold():
+    draft = coerce_chapter_plan_draft(
+        {
+            "include_agenda": True,
+            "agenda_title": "목차",
+            "existing_agenda_index": 1,
+            "chapters": [
+                {"numeral": "Ⅰ", "title": "가", "first_slide_index": 3},
+                {"numeral": "Ⅱ", "title": "나", "first_slide_index": 7},
+            ],
+        },
+        slide_count=12,
+    )
+    assert draft.existing_agenda_index == 1
+    assert draft.include_agenda is False
+
+
+def test_an_adopted_agenda_outside_the_front_matter_is_dropped():
+    base = {
+        "existing_agenda_index": None,
+        "chapters": [
+            {"numeral": "Ⅰ", "title": "가", "first_slide_index": 3},
+            {"numeral": "Ⅱ", "title": "나", "first_slide_index": 7},
+        ],
+    }
+    for bad in (0, 5, 40):
+        draft = coerce_chapter_plan_draft(
+            {**base, "existing_agenda_index": bad}, slide_count=12
+        )
+        assert draft.existing_agenda_index is None, bad
+    good = coerce_chapter_plan_draft(
+        {**base, "existing_agenda_index": 2}, slide_count=12
+    )
+    assert good.existing_agenda_index == 2
+
+
 def test_a_draft_with_too_few_usable_chapters_leaves_the_deck_alone():
     draft = AuthoredChapterPlanDraft(
         chapters=(
