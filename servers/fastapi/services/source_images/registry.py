@@ -194,6 +194,21 @@ def _apply_source_image_filters(collected: Sequence[_RawImage]) -> list[_RawImag
     ]
 
 
+#: Namespace for deriving a source image's asset id from the deck it belongs to
+#: and the bytes it carries. Fixed forever: changing it renames every id and
+#: strands the slide HTML of decks generated before the change.
+_SOURCE_IMAGE_NAMESPACE = uuid.UUID("2f8a6d1e-6c3b-5f47-9d21-0a7c4b8e5d10")
+
+
+def source_image_asset_id(presentation_id: uuid.UUID, digest: str) -> uuid.UUID:
+    """Return the stable asset id for one picture within one deck.
+
+    Deriving the id from (deck, bytes) rather than allocating a random one makes
+    registration idempotent across the durable retries this pipeline performs.
+    """
+    return uuid.uuid5(_SOURCE_IMAGE_NAMESPACE, f"{presentation_id}:{digest}")
+
+
 async def _persist_raw_image(
     session: AsyncSession,
     *,
@@ -210,23 +225,32 @@ async def _persist_raw_image(
     if not await asyncio.to_thread(stored_path.exists):
         await asyncio.to_thread(_write_stored_bytes, raw, stored_path)
 
-    asset = ImageAsset(
-        path=str(stored_path),
-        is_uploaded=True,
-        extras={
-            "presentation_id": str(presentation_id),
-            "digest": raw.digest,
-            "mime_type": raw.mime_type,
-            "width": raw.width,
-            "height": raw.height,
-            "source_slide_index": raw.source_slide_index,
-            "source_heading": raw.source_heading,
-        },
-    )
-    session.add(asset)
+    asset_id = source_image_asset_id(presentation_id, raw.digest)
+    # A generation attempt is durable and resumable: the pipeline replays
+    # checkpointed slide HTML that already names an asset id, while this
+    # function runs again from the top. A fresh random id per attempt would
+    # leave that HTML pointing at an identifier the retry never offers, so the
+    # picture would be dropped and a row leaked on every attempt.
+    asset = await session.get(ImageAsset, asset_id)
+    if asset is None:
+        asset = ImageAsset(
+            id=asset_id,
+            path=str(stored_path),
+            is_uploaded=True,
+            extras={
+                "presentation_id": str(presentation_id),
+                "digest": raw.digest,
+                "mime_type": raw.mime_type,
+                "width": raw.width,
+                "height": raw.height,
+                "source_slide_index": raw.source_slide_index,
+                "source_heading": raw.source_heading,
+            },
+        )
+        session.add(asset)
 
     return SourceImageCandidate(
-        asset_id=str(asset.id),
+        asset_id=str(asset_id),
         path=stored_path,
         mime_type=raw.mime_type,
         width=raw.width,

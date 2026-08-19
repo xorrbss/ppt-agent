@@ -33,14 +33,24 @@ def async_test(fn):
 
 
 class FakeSession:
-    """Just enough AsyncSession surface for the registry's write path."""
+    """Just enough AsyncSession surface for the registry's write path.
+
+    Rows added stay addressable by primary key, so a second registration of the
+    same deck sees the row the first one wrote — which is what makes the
+    idempotency the registry relies on observable in a test.
+    """
 
     def __init__(self) -> None:
         self.added: list[Any] = []
         self.flush_count = 0
+        self._by_id: dict[Any, Any] = {}
 
     def add(self, obj: Any) -> None:
         self.added.append(obj)
+        self._by_id[getattr(obj, "id", None)] = obj
+
+    async def get(self, _model: Any, primary_key: Any) -> Any:
+        return self._by_id.get(primary_key)
 
     async def flush(self) -> None:
         self.flush_count += 1
@@ -395,3 +405,49 @@ async def test_deck_suffixes_route_to_the_extractor(
         assert len(candidates) == 1, name
 
     assert session.added == []
+
+
+@async_test
+async def test_registration_is_idempotent_across_generation_retries(
+    tmp_path: Path, app_data: Path
+) -> None:
+    """A retry must offer the ids the checkpointed slide HTML already names.
+
+    Generation is durable and resumable: an attempt replays slide HTML that
+    already carries data-asset-id, while registration runs again from the top.
+    Fresh ids would strand that HTML and leak a row per attempt.
+    """
+    upload = tmp_path / "photo.png"
+    _write_image(upload, 800, 600)
+    session = FakeSession()
+    presentation_id = uuid.uuid4()
+
+    first = await register_source_images(
+        session, presentation_id=presentation_id, upload_paths=[upload]
+    )
+    added_after_first = len(session.added)
+    second = await register_source_images(
+        session, presentation_id=presentation_id, upload_paths=[upload]
+    )
+
+    assert [item.asset_id for item in first] == [item.asset_id for item in second]
+    assert len(session.added) == added_after_first
+
+
+@async_test
+async def test_the_same_picture_in_two_decks_gets_two_ids(
+    tmp_path: Path, app_data: Path
+) -> None:
+    """The id is scoped to the deck, so one deck can never address another's."""
+    upload = tmp_path / "photo.png"
+    _write_image(upload, 800, 600)
+    session = FakeSession()
+
+    first = await register_source_images(
+        session, presentation_id=uuid.uuid4(), upload_paths=[upload]
+    )
+    second = await register_source_images(
+        session, presentation_id=uuid.uuid4(), upload_paths=[upload]
+    )
+
+    assert first[0].asset_id != second[0].asset_id
