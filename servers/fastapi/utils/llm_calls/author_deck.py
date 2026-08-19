@@ -15,6 +15,7 @@ from typing import Any, List, Mapping, Optional, Sequence, Tuple
 
 from models.authored_chapter_plan import AuthoredChapterPlan
 from models.authored_header_contract import AuthoredHeaderContract
+from models.authored_illustration_plan import AuthoredIllustrationPlan
 from models.presentation_outline_model import PresentationOutlineModel
 from utils.authored_header_validation import validate_header_contract
 from utils.llm_calls.author_slide import (
@@ -91,6 +92,18 @@ class AuthoredDeckPlan:
     # value per slide rather than as the plan itself so the authoring layer never
     # has to re-derive which chapter a position falls in.
     chapter_prefixes: Tuple[str | None, ...] = ()
+    # Whether each slide may carry a generated illustration, one entry per FINAL
+    # outline index. Slides are authored independently and in parallel, so a
+    # slide's own prompt cannot see how many siblings already took a picture:
+    # steering the count from inside that prompt produced 4/77, then 73/77, then
+    # 1/77 illustrated slides on the same real deck. The deck answers it once and
+    # every slide is handed its own share here. An empty tuple is a deck with no
+    # plan, which keeps the pre-plan behaviour of letting the model decide.
+    illustration_slots: Tuple[bool, ...] = ()
+    # The caller's own free-text request, repeated into every slide prompt so a
+    # slide-level instruction ("no pictures", "keep it text-only") reaches the
+    # slide it is about rather than only the deck-scoped planners.
+    instructions: Optional[str] = None
 
 
 # Concurrency is bounded PROCESS-WIDE inside author_slide_html (the AUTHOR_CONCURRENCY-sized
@@ -409,6 +422,8 @@ async def _author_one_resilient(
     page_number_mode: str = TEMPLATE_PAGE_NUMBER_MODE,
     header_contract: AuthoredHeaderContract | None = None,
     chapter_prefix: str | None = None,
+    instructions: str | None = None,
+    illustration_allowed: bool | None = None,
 ) -> str:
     """Author one slide with bounded retries and a style-mode branded fallback.
 
@@ -449,6 +464,8 @@ async def _author_one_resilient(
                     requirements_enabled=_requirements_enabled(header_contract),
                     chapter_breadcrumb=_chapter_breadcrumb(header_contract),
                     chapter_prefix=chapter_prefix,
+                    instructions=instructions,
+                    illustration_allowed=illustration_allowed,
                     **kwargs,
                 )
             else:
@@ -467,6 +484,8 @@ async def _author_one_resilient(
                     requirements_enabled=_requirements_enabled(header_contract),
                     chapter_breadcrumb=_chapter_breadcrumb(header_contract),
                     chapter_prefix=chapter_prefix,
+                    instructions=instructions,
+                    illustration_allowed=illustration_allowed,
                     **kwargs,
                 )
             if is_valid_slide_html(html):
@@ -572,6 +591,8 @@ def prepare_authored_deck(
     page_number_mode: str = TEMPLATE_PAGE_NUMBER_MODE,
     header_contract: AuthoredHeaderContract | None = None,
     chapter_plan: AuthoredChapterPlan | None = None,
+    illustration_plan: AuthoredIllustrationPlan | None = None,
+    instructions: Optional[str] = None,
 ) -> AuthoredDeckPlan:
     """Prepare the shared prompt inputs once, before slide-level pipelining starts.
 
@@ -584,6 +605,12 @@ def prepare_authored_deck(
     the outline must hand over the plan that expansion produced; a plan from a
     different outline would move every divider by the number of slides that
     changed.
+
+    ``illustration_plan`` is the deck's already-decided set of illustrated
+    slides, indexed into that same final outline. It is flattened to one boolean
+    per slide here for the same reason the chapter plan is flattened to one
+    prefix per slide: the authoring layer answers "may THIS slide have a
+    picture", never "which slides did the deck choose".
     """
     slides = list(outline.slides)
     validate_page_number_mode(page_number_mode)
@@ -667,6 +694,12 @@ def prepare_authored_deck(
             if chapter_plan is not None and effective_contract is not None
             else ()
         ),
+        illustration_slots=(
+            tuple(illustration_plan.allows(i) for i in range(len(slides)))
+            if illustration_plan is not None
+            else ()
+        ),
+        instructions=instructions,
     )
 
 
@@ -674,6 +707,10 @@ async def author_planned_slide(
     plan: AuthoredDeckPlan, index: int, *, raise_on_failure: bool = False
 ) -> str:
     """Author one planned slide; safe to compose with illustration/render stages."""
+    # Read defensively: the remake and checkpoint paths build stand-in plan
+    # objects that carry only the fields they need, and a missing field here has
+    # a well-defined meaning — no plan, so the model decides as it did before.
+    illustration_slots = getattr(plan, "illustration_slots", ())
     return await _author_one_resilient(
         plan.contents[index],
         plan.design_system,
@@ -689,6 +726,10 @@ async def author_planned_slide(
         header_contract=plan.header_contract,
         chapter_prefix=(
             plan.chapter_prefixes[index] if plan.chapter_prefixes else None
+        ),
+        instructions=getattr(plan, "instructions", None),
+        illustration_allowed=(
+            illustration_slots[index] if illustration_slots else None
         ),
     )
 

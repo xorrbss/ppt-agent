@@ -8,6 +8,7 @@ from typing import Any
 
 from models.authored_chapter_plan import AuthoredChapterPlan
 from models.authored_header_contract import AuthoredHeaderContract
+from models.authored_illustration_plan import AuthoredIllustrationPlan
 from models.presentation_outline_model import PresentationOutlineModel
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from services.authored_checkpoint_service import (
@@ -23,11 +24,11 @@ from services.authored_checkpoint_service import (
 from services.authored_presentation_artifacts import (
     _complete_stage_after_external_success,
 )
+from services.authored_illustration_stage import illustrate_slide
 from services.authored_presentation_contracts import AuthoredGenerationPipelineResult
 from services.image_generation_service import ImageGenerationService
 from services.provider_usage_instrumentation import provider_usage_scope, record_local_stage
 from utils.asset_directory_utils import get_images_directory
-from utils.authored_illustrations import apply_authored_illustration
 from utils.llm_calls.author_deck import (
     AuthoredDeckResult,
     author_planned_slide,
@@ -64,6 +65,10 @@ async def _author_illustrate_render_pipeline(
     page_number_mode: str = NO_PAGE_NUMBER_MODE,
     header_contract: AuthoredHeaderContract | None = None,
     chapter_plan: AuthoredChapterPlan | None = None,
+    # The deck's already-decided illustration slots. None means no plan ran, and
+    # the deck keeps the pre-plan behaviour in which any slide may author one.
+    illustration_plan: AuthoredIllustrationPlan | None = None,
+    instructions: str | None = None,
 ) -> AuthoredGenerationPipelineResult:
     """Pipeline slides through durable, fenced checkpoints with bounded workers."""
     started = time.monotonic()
@@ -75,7 +80,12 @@ async def _author_illustrate_render_pipeline(
         page_number_mode=page_number_mode,
         header_contract=header_contract,
         chapter_plan=chapter_plan,
+        illustration_plan=illustration_plan,
+        instructions=instructions,
     )
+    # Read defensively: the checkpoint regression tests drive this pipeline with
+    # stand-in plan objects that carry only the fields they exercise.
+    illustration_slots = getattr(plan, "illustration_slots", ())
     plan_reference_mode = normalize_reference_mode(
         getattr(
             plan,
@@ -215,103 +225,23 @@ async def _author_illustrate_render_pipeline(
                         retryable=False,
                     ) from exc
 
-            illustrated_html = (
-                checkpoint.illustrated_html
-                if checkpoint
-                and checkpoint.illustrate_status in ("completed", "skipped")
-                and checkpoint.illustrated_html
-                else None
+            illustrated_html, checkpoint, illustration_work = await illustrate_slide(
+                html=html,
+                checkpoint=checkpoint,
+                index=index,
+                style=style,
+                image_service=image_service,
+                slide_content=(
+                    plan.contents[index] if index < len(plan.contents) else ""
+                ),
+                # A deck without a plan lets every slide keep the slot it wrote,
+                # which is exactly how this pipeline behaved before plans existed.
+                illustration_allowed=(
+                    illustration_slots[index] if illustration_slots else True
+                ),
+                generation_job=generation_job,
+                attempt_token=attempt_token,
             )
-            if illustrated_html is None:
-                if checkpoint and should_inject_failure(
-                    checkpoint, slide_index=index, stage="illustrate"
-                ):
-                    raise AuthoredStageError(
-                        slide_index=index,
-                        stage="illustrate",
-                        code="authored_injected_failure",
-                    )
-                if generation_job is not None:
-                    await start_stage(
-                        job_id=generation_job.id,
-                        slide_index=index,
-                        stage="illustrate",
-                        attempt_token=attempt_token,
-                    )
-                illustrated_html = html
-                skipped = image_service is None
-                if image_service is not None:
-                    illustration_started = time.monotonic()
-                    with provider_usage_scope(
-                        job_id=generation_job.id if generation_job is not None else None,
-                        operation="authored_generation",
-                        stage="illustrate",
-                        attempt_number=(generation_job.attempt_number if generation_job else 0),
-                        slide_index=index,
-                    ):
-                        try:
-                            if generation_job is None:
-                                illustrated_html = await apply_authored_illustration(
-                                    html, style, image_service, slide_index=index
-                                )
-                            else:
-                                illustrated_html = await apply_authored_illustration(
-                                    html,
-                                    style,
-                                    image_service,
-                                    slide_index=index,
-                                    raise_on_failure=True,
-                                )
-                        except Exception as exc:
-                            raise AuthoredStageError(
-                                slide_index=index,
-                                stage="illustrate",
-                                code="authored_slide_illustrate_failed",
-                                cause=exc,
-                                retryable=is_retryable_exception(exc),
-                            ) from exc
-                        finally:
-
-                            illustration_work = time.monotonic() - illustration_started
-                            await record_local_stage(
-                                latency_ms=illustration_work * 1000
-                            )
-                try:
-                    illustrated_html = validate_authored_slide_html(
-                        illustrated_html,
-                        finalized=True,
-                    )
-                except RendererPolicyError as exc:
-                    raise AuthoredStageError(
-                        slide_index=index,
-                        stage="illustrate",
-                        code="authored_slide_illustrate_failed",
-                        cause=exc,
-                        retryable=False,
-                    ) from exc
-                if generation_job is not None:
-                    checkpoint = await _complete_stage_after_external_success(
-                        job_id=generation_job.id,
-                        slide_index=index,
-                        stage="illustrate",
-                        attempt_token=attempt_token,
-                        html=illustrated_html,
-                        skipped=skipped,
-                    )
-            else:
-                try:
-                    illustrated_html = validate_authored_slide_html(
-                        illustrated_html,
-                        finalized=True,
-                    )
-                except RendererPolicyError as exc:
-                    raise AuthoredStageError(
-                        slide_index=index,
-                        stage="illustrate",
-                        code="authored_slide_illustrate_failed",
-                        cause=exc,
-                        retryable=False,
-                    ) from exc
 
             png = read_valid_render(checkpoint) if checkpoint else None
             if png is None or checkpoint.render_status != "completed":

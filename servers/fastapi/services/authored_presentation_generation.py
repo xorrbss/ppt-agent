@@ -41,7 +41,8 @@ from services.authored_presentation_artifacts import (
 )
 from models.authored_chapter_plan import AuthoredChapterPlan
 from models.authored_header_contract import AuthoredHeaderContract
-from services.authored_deck_chapter_plan import resolve_chapter_plan
+from models.authored_illustration_plan import AuthoredIllustrationPlan
+from services.authored_deck_plans import resolve_deck_plans
 from services.authored_header_contract_service import (
     page_number_mode_for,
     resolve_header_contract,
@@ -73,27 +74,6 @@ from utils.slide_capture import _placeholder_png, find_chrome
 
 
 LOGGER = logging.getLogger(__name__)
-
-
-def _chapter_plan_applies(request: GeneratePresentationRequest, style) -> bool:
-    """Whether this generation may add chapter structure to its own outline.
-
-    Three decks are left exactly as they arrive. A master-owned deck takes its
-    chrome from company-standard furniture, so a divider page authored here
-    would not be one of its layouts. Exact reconstruction reproduces a source
-    slide-for-slide, and inserting a page it does not have is the one thing that
-    mode forbids. And a caller that supplied ``slides_markdown`` — the retemplate
-    and design-replay paths among them — is stating the deck's pages itself, the
-    same rule the template path applies when it skips its own table of contents.
-    """
-    if request._authored_master_resolution is not None:
-        return False
-    if request.slides_markdown:
-        return False
-    return (
-        normalize_reference_mode(getattr(style, "reference_mode", STYLE_REFERENCE))
-        != EXACT_RECONSTRUCTION
-    )
 
 
 async def _generate_authored_presentation(
@@ -152,24 +132,17 @@ async def _generate_authored_presentation(
         )
     brand = apply_style_defaults(resolve_brand(request, outline, language), style)
 
-    # The deck's chapter structure is decided before its header, because whether
-    # an eyebrow may open with a chapter number follows from whether chapters
-    # exist at all. Expanding the outline here — before the roles, the header
-    # contract, and every persisted artifact — is what keeps the divider pages,
-    # the plan's indices, and the published slide list describing one deck.
-    chapter_plan: AuthoredChapterPlan | None = None
-    if _chapter_plan_applies(request, style):
-        expansion = await resolve_chapter_plan(
-            outline,
-            brand,
-            style,
-            instructions=request.instructions,
-            table_of_contents_requested=request.include_table_of_contents,
-        )
-        if expansion is not None:
-            outline = expansion.outline
-            chapter_plan = expansion.plan
-            roles = plan_deck_roles(outline, chapter_plan)
+    # Every deck-wide decision is taken here, before a single slide is authored,
+    # because slides are authored independently and in parallel and cannot see
+    # one another. The expanded outline and the plans that describe it come back
+    # together so they can never drift apart.
+    deck_plans = await resolve_deck_plans(request, outline, brand, style, roles)
+    outline = deck_plans.outline
+    roles = deck_plans.roles
+    chapter_plan: AuthoredChapterPlan | None = deck_plans.chapter_plan
+    illustration_plan: AuthoredIllustrationPlan | None = (
+        deck_plans.illustration_plan
+    )
 
     # Render needs a headless Chrome. Without it every slide silently degrades to a
     # blank placeholder (resilience by design) ??so warn loudly to surface deploy
@@ -325,6 +298,8 @@ async def _generate_authored_presentation(
             header_contract=header_contract,
             page_number_mode=page_number_mode_for(header_contract),
             chapter_plan=chapter_plan,
+            illustration_plan=illustration_plan,
+            instructions=request.instructions,
             **job_kwargs,
         )
     authored_deck = pipeline.deck
@@ -485,6 +460,7 @@ async def _generate_authored_presentation(
         roles=roles,
         exact_provenance=exact_provenance,
         chapter_plan=chapter_plan,
+        illustration_plan=illustration_plan,
         htmls=htmls,
         pngs=pngs,
         out_path=out_path,

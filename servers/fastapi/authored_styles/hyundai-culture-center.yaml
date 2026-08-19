@@ -40,7 +40,7 @@ illustration:
     premium Korean corporate proposal illustration, near-white canvas,
     emerald green and deep teal with navy accents over pale blue tints,
     restrained flat vector finish, clean edges, generous whitespace,
-    no readable text inside images, no logos, no watermark, no clip art,
+    no logos, no watermark, no clip art,
     no photorealistic retail stock image
 reference_images:
   cover:
@@ -88,4 +88,4 @@ brief: |-
   closing: Present a single centered closing line in white on the dark green field with the author mark beneath it.
 
   AVOID
-  Avoid decorative gradients inside the content field, playful consumer styling, mismatched icon sets, drop shadows on text, unlabeled arrows, tables without header contrast, more than one amber emphasis per slide, paragraphs longer than three lines, oversized logos, copied source wording, copied brand marks, real client or personnel data, text inside generated images, and claims unsupported by the visual evidence.
+  Avoid decorative gradients inside the content field, playful consumer styling, mismatched icon sets, drop shadows on text, unlabeled arrows, tables without header contrast, more than one amber emphasis per slide, paragraphs longer than three lines, oversized logos, copied source wording, copied brand marks, real client or personnel data, any wording inside a generated image that the slide's own CONTENT does not already state, and claims unsupported by the visual evidence.
