@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.sql.image_asset import ImageAsset
 from services.source_images.extract import extract_pptx_images
 from services.source_images.models import (
+    FULL_SLIDE_COVERAGE_THRESHOLD,
     FURNITURE_REPEAT_THRESHOLD,
     MIN_SOURCE_IMAGE_EDGE_PX,
     SUPPORTED_SOURCE_IMAGE_MIME_TYPES,
@@ -65,6 +66,8 @@ class _RawImage:
     source_path: Optional[Path] = None
     payload: Optional[bytes] = None
     source_slide_index: Optional[int] = None
+    #: Share of its slide the picture was placed over, when the deck said.
+    slide_coverage: Optional[float] = None
     source_heading: Optional[str] = None
 
 
@@ -124,6 +127,7 @@ async def _collect_raw_images(upload_paths: Sequence[Path]) -> list[_RawImage]:
                     payload=image.payload,
                     source_slide_index=image.source_slide_index,
                     source_heading=image.source_heading,
+                    slide_coverage=image.slide_coverage,
                 )
                 for image in extracted
             )
@@ -176,10 +180,20 @@ def _apply_source_image_filters(collected: Sequence[_RawImage]) -> list[_RawImag
         for raw in supported
         if min(raw.width, raw.height) >= MIN_SOURCE_IMAGE_EDGE_PX
     ]
+    # A picture covering its whole slide is that slide's backplate. Decks this
+    # tool exports through the authored-hybrid path are built that way, so a
+    # deck rebuilt from such an export would otherwise offer the author a
+    # photograph of an entire old slide as content for a new one.
+    content_sized = [
+        raw
+        for raw in large_enough
+        if raw.slide_coverage is None
+        or raw.slide_coverage < FULL_SLIDE_COVERAGE_THRESHOLD
+    ]
 
     first_by_digest: dict[str, _RawImage] = {}
     slides_by_digest: dict[str, set[int]] = defaultdict(set)
-    for raw in large_enough:
+    for raw in content_sized:
         first_by_digest.setdefault(raw.digest, raw)
         if raw.source_slide_index is not None:
             slides_by_digest[raw.digest].add(raw.source_slide_index)

@@ -62,13 +62,22 @@ def _body_shape(text: str) -> str:
     )
 
 
-def _picture(relationship_id: str) -> str:
+def _picture(relationship_id: str, extent: tuple[int, int] | None = None) -> str:
+    """A picture shape, optionally stating the extent it was placed at (EMU)."""
+    properties = (
+        "<p:spPr/>"
+        if extent is None
+        else (
+            f'<p:spPr><a:xfrm><a:off x="0" y="0"/>'
+            f'<a:ext cx="{extent[0]}" cy="{extent[1]}"/></a:xfrm></p:spPr>'
+        )
+    )
     return (
         "<p:pic>"
         f'<p:nvPicPr><p:cNvPr id="4" name="Picture {relationship_id}"/>'
         "<p:cNvPicPr/><p:nvPr/></p:nvPicPr>"
         f'<p:blipFill><a:blip r:embed="{relationship_id}"/><a:stretch/></p:blipFill>'
-        "<p:spPr/>"
+        f"{properties}"
         "</p:pic>"
     )
 
@@ -479,3 +488,55 @@ def test_absolute_relationship_targets_resolve(tmp_path: Path) -> None:
     images = extract_pptx_images(path)
 
     assert [image.digest for image in images] == [hashlib.sha256(payload).hexdigest()]
+
+
+# The deck fixture declares a 12192000 x 6858000 EMU slide.
+_SLIDE_EMU = (12192000, 6858000)
+
+
+def test_a_full_slide_picture_reports_full_coverage(tmp_path: Path) -> None:
+    """A backplate must be recognisable, not just measurable.
+
+    Decks this tool exports put one full-slide raster behind every page, so a
+    deck rebuilt from such an export would otherwise offer a photograph of an
+    entire old slide as content for a new one.
+    """
+    payload = _png_bytes(1280, 720)
+    deck = _deck(
+        tmp_path / "backplate.pptx",
+        [(_slide_xml(_picture("rId1", _SLIDE_EMU)), {"rId1": ("image", "../media/a.png")})],
+        {"a.png": payload},
+    )
+
+    images = extract_pptx_images(deck)
+
+    assert len(images) == 1
+    assert images[0].slide_coverage == pytest.approx(1.0)
+
+
+def test_an_inset_picture_reports_its_share_of_the_slide(tmp_path: Path) -> None:
+    payload = _png_bytes(1280, 720)
+    half = (_SLIDE_EMU[0] // 2, _SLIDE_EMU[1] // 2)
+    deck = _deck(
+        tmp_path / "inset.pptx",
+        [(_slide_xml(_picture("rId1", half)), {"rId1": ("image", "../media/a.png")})],
+        {"a.png": payload},
+    )
+
+    images = extract_pptx_images(deck)
+
+    assert images[0].slide_coverage == pytest.approx(0.25, abs=0.01)
+
+
+def test_a_picture_without_a_stated_extent_reports_no_coverage(tmp_path: Path) -> None:
+    """Silence is reported as unknown rather than guessed at."""
+    payload = _png_bytes(1280, 720)
+    deck = _deck(
+        tmp_path / "unstated.pptx",
+        [(_slide_xml(_picture("rId1")), {"rId1": ("image", "../media/a.png")})],
+        {"a.png": payload},
+    )
+
+    images = extract_pptx_images(deck)
+
+    assert images[0].slide_coverage is None

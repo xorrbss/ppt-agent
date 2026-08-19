@@ -26,6 +26,12 @@ MIN_SOURCE_IMAGE_EDGE_PX = 200
 #: slide content.
 FURNITURE_REPEAT_THRESHOLD = 3
 
+#: A picture placed over at least this share of its slide is a backplate, not
+#: content: decks exported by this tool's own authored-hybrid path put one
+#: full-slide raster behind every page, and a deck built from such an export
+#: would otherwise offer the author a photograph of an entire old slide.
+FULL_SLIDE_COVERAGE_THRESHOLD = 0.9
+
 
 @dataclass(frozen=True)
 class SourceImageCandidate:

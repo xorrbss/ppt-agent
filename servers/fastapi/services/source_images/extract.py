@@ -74,6 +74,10 @@ class ExtractedSourceImage:
     #: Zero-based position in the deck's slide order.
     source_slide_index: int
     source_heading: Optional[str] = None
+    #: Share of the slide this picture was placed over, when the deck states
+    #: both the slide size and the picture's extent. ``None`` means the deck
+    #: did not say (a shape fill, or a picture without an explicit extent).
+    slide_coverage: Optional[float] = None
 
 
 def extract_pptx_images(pptx_path: Path) -> list[ExtractedSourceImage]:
@@ -87,6 +91,7 @@ def extract_pptx_images(pptx_path: Path) -> list[ExtractedSourceImage]:
         return []
 
     measured: dict[str, Optional[tuple[str, int, int, str]]] = {}
+    slide_area = _slide_area(package)
     extracted: list[ExtractedSourceImage] = []
     for slide_index, slide_part in enumerate(_slide_parts(package)):
         try:
@@ -97,7 +102,9 @@ def extract_pptx_images(pptx_path: Path) -> list[ExtractedSourceImage]:
         heading = _slide_heading(root)
         relationships = _relationships(package, slide_part)
         seen_on_slide: set[str] = set()
-        for media_part in _referenced_media_parts(root, relationships, package):
+        for media_part, coverage in _referenced_media_parts(
+            root, relationships, package, slide_area
+        ):
             if media_part not in measured:
                 measured[media_part] = _measure(media_part, package[media_part])
             details = measured[media_part]
@@ -117,6 +124,7 @@ def extract_pptx_images(pptx_path: Path) -> list[ExtractedSourceImage]:
                     digest=digest,
                     source_slide_index=slide_index,
                     source_heading=heading,
+                    slide_coverage=coverage,
                 )
             )
     return extracted
@@ -202,20 +210,67 @@ def _referenced_media_parts(
     root: ET.Element,
     relationships: dict[str, tuple[str, str]],
     package: dict[str, bytes],
-) -> list[str]:
-    """Media parts this slide embeds, in document order.
+    slide_area: Optional[int] = None,
+) -> list[tuple[str, Optional[float]]]:
+    """Media parts this slide embeds, in document order, with their coverage.
 
     Every ``a:blip`` counts, not only the ones inside ``p:pic``: a photo used as
     a shape fill is just as reusable as one dropped on the canvas. A target the
     package does not actually carry is a dangling relationship, not a picture.
+
+    Coverage is how much of the slide the picture was placed over, which is what
+    separates a backplate from an illustration. Only a ``p:pic`` states its own
+    extent, so a blip found anywhere else reports ``None`` rather than a guess.
     """
 
-    parts: list[str] = []
+    coverage_by_blip = _picture_coverage(root, slide_area)
+    parts: list[tuple[str, Optional[float]]] = []
+    seen: set[str] = set()
     for blip in root.iter(f"{{{NS['a']}}}blip"):
         relation = relationships.get(blip.attrib.get(f"{{{NS['r']}}}embed") or "")
-        if relation and relation[1] in package and relation[1] not in parts:
-            parts.append(relation[1])
+        if not relation or relation[1] not in package or relation[1] in seen:
+            continue
+        seen.add(relation[1])
+        parts.append((relation[1], coverage_by_blip.get(id(blip))))
     return parts
+
+
+def _picture_coverage(
+    root: ET.Element, slide_area: Optional[int]
+) -> dict[int, float]:
+    """Map each ``p:pic``'s blip to the share of the slide it was placed over."""
+
+    if not slide_area:
+        return {}
+    coverage: dict[int, float] = {}
+    for pic in root.iter(f"{{{NS['p']}}}pic"):
+        blip = pic.find(f".//{{{NS['a']}}}blip")
+        extent = pic.find(f".//{{{NS['a']}}}ext")
+        if blip is None or extent is None:
+            continue
+        try:
+            placed = int(extent.attrib["cx"]) * int(extent.attrib["cy"])
+        except (KeyError, ValueError):
+            continue
+        coverage[id(blip)] = placed / slide_area
+    return coverage
+
+
+def _slide_area(package: dict[str, bytes]) -> Optional[int]:
+    """Slide width x height in EMU, the denominator for picture coverage."""
+
+    try:
+        root = ET.fromstring(package["ppt/presentation.xml"])
+    except (KeyError, ET.ParseError):
+        return None
+    size = root.find(f"{{{NS['p']}}}sldSz")
+    if size is None:
+        return None
+    try:
+        area = int(size.attrib["cx"]) * int(size.attrib["cy"])
+    except (KeyError, ValueError):
+        return None
+    return area or None
 
 
 def _measure(part: str, payload: bytes) -> Optional[tuple[str, int, int, str]]:

@@ -451,3 +451,50 @@ async def test_the_same_picture_in_two_decks_gets_two_ids(
     )
 
     assert first[0].asset_id != second[0].asset_id
+
+
+@async_test
+async def test_a_full_slide_backplate_is_not_offered_as_content(
+    tmp_path: Path, app_data: Path, fake_extractor
+) -> None:
+    """Rebuilding from one of this tool's own exports must not recycle pages.
+
+    An authored-hybrid export carries one full-slide raster per page. Offering
+    those would let the author paste a picture of an entire old slide onto a
+    new one.
+    """
+    payload = _image_bytes(1280, 720)
+    backplate = _extracted(payload, slide_index=0, width=1280, height=720)
+    fake_extractor["export.pptx"] = [
+        ExtractedSourceImage(**{**backplate.__dict__, "slide_coverage": 1.0})
+    ]
+    session = FakeSession()
+
+    candidates = await register_source_images(
+        session,
+        presentation_id=uuid.uuid4(),
+        upload_paths=[tmp_path / "export.pptx"],
+    )
+
+    assert candidates == []
+
+
+@async_test
+async def test_a_large_but_inset_picture_is_still_offered(
+    tmp_path: Path, app_data: Path, fake_extractor
+) -> None:
+    """The cut is on placement, not on pixel size: a big diagram is content."""
+    payload = _image_bytes(1600, 900)
+    inset = _extracted(payload, slide_index=2, width=1600, height=900)
+    fake_extractor["deck.pptx"] = [
+        ExtractedSourceImage(**{**inset.__dict__, "slide_coverage": 0.48})
+    ]
+    session = FakeSession()
+
+    candidates = await register_source_images(
+        session,
+        presentation_id=uuid.uuid4(),
+        upload_paths=[tmp_path / "deck.pptx"],
+    )
+
+    assert len(candidates) == 1
