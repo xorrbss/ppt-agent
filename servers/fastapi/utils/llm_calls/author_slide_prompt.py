@@ -120,13 +120,16 @@ def build_design_system(
 _SOURCE_IMAGE_RULES = (
     "A style reference is art direction and is not reproduced. A source image is "
     "one of the user's own assets and may be placed on this slide.\n"
-    "Place one when it genuinely supports the point this slide makes: an "
-    '`<img data-asset-id="THE_ID">` whose area is reserved with explicit '
-    "width/height (or absolute inset) styles, the way the illustration slot is. "
-    "It is this slide's one image slot, in place of a data-illust-prompt "
-    "placeholder.\n"
-    "When no candidate fits that point, the slide carries no image. These are "
-    "candidates, not a quota, and the slide's argument stays as it is."
+    "It can earn its place in either of two ways: as evidence for what this "
+    "slide claims, or as an example of the tool, artifact or way of working the "
+    "slide describes. A screenshot captured on a different project still shows "
+    "what that work looks like, which is what a proposal shows it for.\n"
+    "Place one when it does either: an `<img data-asset-id=\"THE_ID\">` whose "
+    "area is reserved with explicit width/height (or absolute inset) styles, the "
+    "way the illustration slot is. It is this slide's one image slot, in place "
+    "of a data-illust-prompt placeholder.\n"
+    "Leave the slide without a picture when no candidate shows anything it talks "
+    "about. These are candidates, not a quota."
 )
 
 

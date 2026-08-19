@@ -136,7 +136,12 @@ def test_source_image_brief_separates_the_two_kinds_of_attached_image(tmp_path):
     assert "width/height" in brief
     # Priority over an invented illustration, and the freedom to place nothing.
     assert "in place of a data-illust-prompt" in brief
-    assert "no candidate fits that point, the slide carries no image" in brief
+    assert "Leave the slide without a picture when no candidate shows" in brief
+    # Both ways a picture can earn its place: a proposal shows a tool or an
+    # artifact as an example, and refusing anything but direct evidence left
+    # decks with none of the pictures their own source deck was built to show.
+    assert "as evidence for what this slide claims" in brief
+    assert "as an example of the tool, artifact or way of working" in brief
 
 
 def test_source_image_brief_flattens_a_multiline_heading(tmp_path):
