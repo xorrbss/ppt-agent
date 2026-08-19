@@ -207,8 +207,15 @@ DESIGN SYSTEM (obey on EVERY slide so the deck is cohesive):
 - PPTX-NATIVE SAFETY (keeps exported objects editable):
   - Draw decorative ticks, underlines, badges, and divider lines as real <span>/<div> DOM
     elements, never ::before/::after pseudo-elements; painted pseudo-elements rasterize that subtree.
-  - Do not use inline SVG for simple decoration; use HTML+CSS. Reserve SVG only for charts or
-    diagrams that cannot be expressed in HTML.
+  - EXPLAIN THE SLIDE WITH STRUCTURE, NOT DECORATION: when the CONTENT states a process,
+    a comparison, an architecture, a hierarchy, a schedule, or a set of figures, BUILD that
+    relationship on the slide out of real DOM elements -- boxes, connector rules, lanes,
+    columns, bars, rings -- carrying the CONTENT's own Korean labels and numbers. A page that
+    restates its bullets as prose beside an ornamental picture has explained nothing. Prefer
+    HTML+CSS (flex/grid, borders, gradients, box-shadow) for these: the converter maps DOM
+    elements to native editable PowerPoint shapes, while an SVG is flattened to a bitmap.
+  - Do not use inline SVG for simple decoration; use HTML+CSS. Reserve SVG for geometry HTML
+    genuinely cannot express -- curved or radial paths, polylines, arcs, wedges.
   - INLINE SVG CONTRACT (when an essential chart/diagram truly needs SVG):
     - The root may declare only `xmlns="http://www.w3.org/2000/svg"` (exact value, root only),
       plus `viewBox`, `width`, `height`, and `preserveAspectRatio`. Never emit `xmlns:xlink`.
@@ -216,11 +223,13 @@ DESIGN SYSTEM (obey on EVERY slide so the deck is cohesive):
       `line`, `polyline`, `polygon`, `text`, `tspan`, `defs`, `linearGradient`,
       `radialGradient`, `stop`, `clipPath`, and `mask`.
     - Geometry/paint attributes are limited to the element's ordinary coordinates, `d`,
-      `points`, `transform`, `fill`, `stroke`, `stroke-width`, `opacity`, `clip-path`, and
-      `mask`; text may also use `font-size`, `font-family`, `font-weight`, `text-anchor`;
-      gradients/stops may use their coordinate/units/transform plus `offset`, `stop-color`,
-      and `stop-opacity`. Use `opacity` instead of unsupported `fill-opacity` or
-      `stroke-opacity`.
+      `points`, `transform`, `fill`, `stroke`, `stroke-width`, `fill-opacity`,
+      `stroke-opacity`, `opacity`, `stroke-linecap`, `stroke-linejoin`, `stroke-dasharray`,
+      `stroke-dashoffset`, `vector-effect`, `clip-path`, and `mask`; `transform` is available
+      on every shape, not only on `g`. Text may also use `font-size`, `font-family`,
+      `font-weight`, `font-style`, `letter-spacing`, `text-anchor`, `dominant-baseline`, and
+      `writing-mode` for a vertical axis label; gradients/stops may use their
+      coordinate/units/transform plus `offset`, `stop-color`, and `stop-opacity`.
     - Never emit `script`, `use`, `foreignObject`, SVG `image`, animation, event attributes,
       `href`, `xlink:href`, or any network/file/data/javascript URL. Paint references may only
       be local fragment ids such as `clip-path="url(#clip1)"` or `mask="url(#mask1)"`.
@@ -315,14 +324,29 @@ class AuthoredStyleLike(Protocol):
 # reserved area — text inside generated images is unreliable (especially Korean),
 # HTML text is always crisp and correct.
 _ILLUSTRATION_SLOT_RULES = """\
-- ILLUSTRATION SLOT: you MAY include AT MOST ONE bespoke illustration placeholder:
-  `<img data-illust-prompt="..." style="...">`. In data-illust-prompt, describe the
-  desired SCENE in English (concrete objects, composition, viewpoint) — subject matter
-  only; the visual style is applied automatically. The image will contain NO text, so
-  put every label, callout and annotation in HTML positioned around/over the slot.
-  Reserve the slot's exact area with explicit width/height (or absolute inset) styles
-  so the layout holds even if the image is dropped. Do not reference any other image
-  (no external URLs, no data URIs)."""
+- ILLUSTRATION SLOT: EXACTLY ONE bespoke illustration placeholder on a content-bearing
+  slide (roles CONTENT, DATA, TIMELINE, ARCHITECTURE and the like), and NONE on COVER,
+  SECTION, AGENDA or CLOSING. Write it as `<img data-illust-prompt="..." style="...">`.
+- WHAT THE SCENE MUST SHOW: in data-illust-prompt, describe in English the specific
+  subject THIS slide argues about - the actual system, place, equipment, material,
+  activity or artefact the CONTENT names. Name concrete objects, their arrangement and
+  the viewpoint. A scene that would suit any other slide in the deck is wrong, and so is
+  a generic office, an abstract network glow, or a wall of screens standing in for the
+  topic. The deck's palette and finish are appended automatically - spend every word on
+  subject matter, none on colour or style.
+- The generated image carries NO text: it cannot render Korean, and invented lettering
+  reads as gibberish. It must therefore never be the thing that explains the slide.
+  Every label, figure, callout and annotation lives in HTML positioned around or over
+  the slot, and any diagram the CONTENT calls for is BUILT from DOM elements as above.
+  Use the image for the subject's texture and setting, not for its structure.
+- Keep the slot clear of the text it supports.
+- SLOT GEOMETRY IS MANDATORY, and it is a PANEL, never a backdrop. Give the img explicit
+  width AND height in px (or an absolute inset box) so the layout holds when the image is
+  dropped; an img with no reserved size is a defect. The generated picture is landscape
+  and close to 16:9, so keep the slot between 4:3 and 2:1 - a thin strip or a tall column
+  crops it to an unreadable sliver. Never stretch it to the full slide (no width:100% with
+  height:100%, no inset:0), never place it behind the text, and never sit text on top of
+  it. Do not reference any other image (no external URLs, no data URIs)."""
 
 
 def apply_style_defaults(brand: Brand, style: Optional[AuthoredStyleLike]) -> Brand:

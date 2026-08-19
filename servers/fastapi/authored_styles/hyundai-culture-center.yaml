@@ -30,12 +30,16 @@ design_tokens:
   body_font: Noto Sans KR
   mono_font: IBM Plex Mono
 illustration:
+  # STYLE ONLY: palette, medium and finish. Subject matter belongs to the
+  # slide's own scene prompt. Naming motifs here ("module-and-connector system
+  # maps", "gantt style schedule rails") described the picture rather than the
+  # look, and since this text is appended to every scene it out-argued them:
+  # each slide, whatever it was about, came back as the same wall of unreadable
+  # diagrams.
   style_prompt: >-
-    premium Korean system integration proposal infographic, near-white canvas,
-    deep green to black gradient title fields, emerald green header bars and
-    table headers, teal and navy structural diagrams, pale blue information
-    panels, dense but disciplined consulting-grade information design,
-    module-and-connector system maps, gantt style schedule rails,
+    premium Korean corporate proposal illustration, near-white canvas,
+    emerald green and deep teal with navy accents over pale blue tints,
+    restrained flat vector finish, clean edges, generous whitespace,
     no readable text inside images, no logos, no watermark, no clip art,
     no photorealistic retail stock image
 reference_images:
