@@ -382,7 +382,9 @@ def test_custom_design_system_injects_brief_without_weakening_common_rules():
     assert "Brand primary colour: #2563EB" in design_system
     assert "EXACTLY 1280x720px" in design_system
     assert "FIT IS CRITICAL" in design_system
-    assert "unnecessarily hard-to-read" in design_system
+    # The readability rule is now stated per verbosity, so assert the clause
+    # every type scale shares rather than one scale's wording.
+    assert "do not use CSS `font` shorthand" in design_system
     assert "precise bottom" in design_system
     assert "bottom:14px" in design_system
     assert "bottom 72px" in design_system

@@ -63,6 +63,7 @@ def build_design_system(
     exact_reconstruction: str,
     style_reference: str,
     page_number_system: str,
+    type_scale: str,
     header_system: str = "",
 ) -> str:
     """Build the concrete shared brief for a brand and optional authored style."""
@@ -106,6 +107,7 @@ def build_design_system(
         # byte-identical to the pre-contract behaviour.
         header_system=f"{header_system}\n" if header_system else "",
         page_number_system=page_number_system,
+        type_scale=type_scale,
     )
 
 

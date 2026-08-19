@@ -76,6 +76,7 @@ def resolve_brand(
         wordmark=(request.wordmark or "").strip(),
         primary_is_explicit=bool((request.primary_color or "").strip()),
         fonts_are_explicit=bool((request.fonts or "").strip()),
+        verbosity=request.verbosity.value,
     )
 
 

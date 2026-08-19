@@ -9,12 +9,31 @@ from models.presentation_outline_model import (
 from models.presentation_structure_model import PresentationStructureModel
 
 
-def get_presentation_outline_model_with_n_slides(n_slides: int):
+#: Schema-enforced slide-text bounds per verbosity, as (min_length, max_length).
+#: These are the decoder's hard limits, so the floor must sit BELOW the length
+#: the outline prompt asks for. A fixed 300-character floor under a prompt that
+#: asked for ~140 left the model unable to close the string on its own text, so
+#: it padded with whitespace until it hit the ceiling — every slide arriving as
+#: ~100 characters of content and 2,400 blanks.
+_OUTLINE_CONTENT_BOUNDS = {
+    "concise": (50, 250),
+    "standard": (150, 800),
+    "text-heavy": (300, 2500),
+}
+
+
+def get_presentation_outline_model_with_n_slides(
+    n_slides: int, verbosity: Optional[str] = None
+):
+    min_length, max_length = _OUTLINE_CONTENT_BOUNDS.get(
+        verbosity or "standard", _OUTLINE_CONTENT_BOUNDS["standard"]
+    )
+
     class SlideOutlineModelWithNSlides(SlideOutlineModel):
         content: str = Field(
             description="Markdown content for each slide",
-            min_length=300,
-            max_length=2500,
+            min_length=min_length,
+            max_length=max_length,
         )
 
     class PresentationOutlineModelWithNSlides(PresentationOutlineModel):

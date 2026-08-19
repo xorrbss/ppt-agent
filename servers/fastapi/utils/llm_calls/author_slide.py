@@ -233,12 +233,7 @@ DESIGN SYSTEM (obey on EVERY slide so the deck is cohesive):
   must fit fully inside it with NO overflow, NO clipping, and NO overlap between blocks. This is
   the single most common failure — prioritise it over visual ambition. Use less/shorter text and
   generous spacing rather than cramming.
-- READABILITY FLOOR: in ordinary authored generation and style-reference mode, every visible
-  text element that communicates slide content (headings, body, bullets, tables, chart labels,
-  metrics, callouts, captions, and footnotes) must be at least 12px (9pt equivalent). Express
-  text sizes with `font-size` in px; do not use CSS `font` shorthand or relative units to evade
-  this floor. If content does not fit, shorten it or allocate more space instead of shrinking it
-  until it becomes unnecessarily hard-to-read.
+{type_scale}
 - Heading sizing: size headings to the ACTUAL text length so they stay within their area, and
   budget vertical space for the real number of wrapped lines.
 - No fragile positioning: do NOT hard-pin a block to a fixed top/absolute offset that a longer
@@ -276,6 +271,8 @@ class Brand:
     wordmark: str = ""
     primary_is_explicit: bool = False
     fonts_are_explicit: bool = False
+    # Decides the slide type scale: less text per slide means larger type.
+    verbosity: str = "standard"
 
 
 _FALLBACK_SLIDE_MARKER = 'data-presenton-authored-fallback="true"'
@@ -370,6 +367,7 @@ def build_design_system(
         exact_reconstruction=EXACT_RECONSTRUCTION,
         style_reference=STYLE_REFERENCE,
         page_number_system=_PAGE_NUMBER_RULES_BY_MODE[page_number_mode],
+        type_scale=type_scale_rules(getattr(brand, "verbosity", None)),
         header_system=(
             render_header_contract(
                 header_contract,
@@ -379,6 +377,44 @@ def build_design_system(
             else ""
         ),
     )
+
+
+#: Per-verbosity type scale for the design-system brief. The deck's verbosity
+#: decides how much text a slide carries, so it also decides how large that text
+#: can be: a concise deck that keeps a 12px floor spends the room it saved on
+#: empty bands instead of readable type. Measured on a 54-slide concise deck
+#: before this rule, 59% of font-size declarations were under 14px.
+#:
+#: The page-number element keeps its own 12px specification from the
+#: PAGE-NUMBER SYSTEM rules; it is furniture, not slide content.
+_TYPE_SCALES = {
+    "concise": """- TYPE SCALE: this deck is written concise, so every slide carries little text and has room to
+  read well. In ordinary authored generation and style-reference mode, set body copy, bullets,
+  labels, and table cells at 22px or larger, the slide's own title between 40px and 56px, and
+  keep no visible content text (headings, body, bullets, tables, chart labels, metrics,
+  callouts, captions, footnotes) below 15px (11pt equivalent). Express text sizes with
+  `font-size` in px; do not use CSS `font` shorthand or relative units to evade this floor.
+  Spare room on a slide goes into a larger type scale and more generous leading, not into one
+  large empty band.""",
+    "standard": """- TYPE SCALE: in ordinary authored generation and style-reference mode, set body copy, bullets,
+  labels, and table cells at 18px or larger, and keep no visible content text (headings, body,
+  bullets, tables, chart labels, metrics, callouts, captions, footnotes) below 13px (10pt
+  equivalent). Express text sizes with `font-size` in px; do not use CSS `font` shorthand or
+  relative units to evade this floor. Spare room on a slide goes into a larger type scale and
+  more generous leading, not into one large empty band. If content does not fit, shorten it or
+  allocate more space instead of shrinking it until it becomes unnecessarily hard to read.""",
+    "text-heavy": """- READABILITY FLOOR: in ordinary authored generation and style-reference mode, every visible
+  text element that communicates slide content (headings, body, bullets, tables, chart labels,
+  metrics, callouts, captions, and footnotes) must be at least 12px (9pt equivalent). Express
+  text sizes with `font-size` in px; do not use CSS `font` shorthand or relative units to evade
+  this floor. If content does not fit, shorten it or allocate more space instead of shrinking it
+  until it becomes unnecessarily hard-to-read.""",
+}
+
+
+def type_scale_rules(verbosity: Optional[str]) -> str:
+    """The type-scale brief for a deck's verbosity, defaulting to standard."""
+    return _TYPE_SCALES.get(verbosity or "standard", _TYPE_SCALES["standard"])
 
 
 _SYSTEM = (

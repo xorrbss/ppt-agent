@@ -316,7 +316,7 @@ def test_get_selected_image_provider_invalid_env_raises(monkeypatch):
 
 
 def test_dynamic_outline_and_structure_factories_validate():
-    long_text = "x" * 400  # SlideOutlineModelWithNSlides.content requires min_length=300
+    long_text = "x" * 400  # within the default (standard) 150-800 character bounds
     OutlineCls = get_presentation_outline_model_with_n_slides(1)
     outline = OutlineCls(slides=[{"content": long_text}])
 
@@ -325,6 +325,30 @@ def test_dynamic_outline_and_structure_factories_validate():
 
     assert outline.slides[0].content == long_text
     assert structure.slides == [0, 1, 2]
+
+
+@pytest.mark.parametrize(
+    ("verbosity", "min_length", "max_length"),
+    [
+        ("concise", 50, 250),
+        ("standard", 150, 800),
+        (None, 150, 800),
+        ("text-heavy", 300, 2500),
+    ],
+)
+def test_outline_content_bounds_follow_verbosity(verbosity, min_length, max_length):
+    """The decoder's floor must sit below what the outline prompt asks for.
+
+    A floor above the requested length leaves the model unable to close the
+    string on its own text, and it pads to the ceiling with whitespace.
+    """
+    schema = get_presentation_outline_model_with_n_slides(
+        2, verbosity
+    ).model_json_schema()
+    content = schema["$defs"]["SlideOutlineModelWithNSlides"]["properties"]["content"]
+
+    assert content["minLength"] == min_length
+    assert content["maxLength"] == max_length
 
 
 @pytest.mark.parametrize(
