@@ -13,6 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from services import authored_illustration_stage as illustration_stage
 from services import authored_presentation_pipeline as pipeline
 from services import authored_source_images as seam
 from services.source_images.models import SourceImageCandidate
@@ -364,14 +365,33 @@ def test_plan_leaves_an_unrelated_slide_without_an_offer():
 # --------------------------------------------------------------------------
 
 
-def _install_pipeline_fakes(monkeypatch, author_calls, illustrate_calls, contents):
-    plan = SimpleNamespace(contents=contents, design_system="DS")
+def _install_pipeline_fakes(
+    monkeypatch, author_calls, illustrate_calls, contents, illustration_slots=()
+):
+    """Record what each consumer is handed.
+
+    ``apply_authored_illustration`` is patched on ``authored_illustration_stage``
+    rather than on the pipeline: the illustrate stage moved into its own module
+    when the deck-scoped illustration plan landed, and the pipeline no longer
+    imports that name at all.
+
+    ``slide_content`` is stripped from the recorded kwargs. Every slide now
+    carries its outline markdown into substitution — it is the only source of a
+    label a text-capable image provider may draw — so it says nothing about the
+    source-image wiring these tests pin.
+    """
+    plan = SimpleNamespace(
+        contents=contents,
+        design_system="DS",
+        illustration_slots=illustration_slots,
+    )
 
     async def fake_author(selected_plan, index, **kwargs):
         author_calls.append((index, kwargs))
         return _VALID
 
     async def fake_illustrate(html, style, image_service, slide_index=0, **kwargs):
+        kwargs.pop("slide_content", None)
         illustrate_calls.append((slide_index, kwargs))
         return html
 
@@ -382,7 +402,9 @@ def _install_pipeline_fakes(monkeypatch, author_calls, illustrate_calls, content
         pipeline, "prepare_authored_deck", lambda *args, **kwargs: plan
     )
     monkeypatch.setattr(pipeline, "author_planned_slide", fake_author)
-    monkeypatch.setattr(pipeline, "apply_authored_illustration", fake_illustrate)
+    monkeypatch.setattr(
+        illustration_stage, "apply_authored_illustration", fake_illustrate
+    )
     monkeypatch.setattr(pipeline, "render_html_to_png", fake_render)
 
 
@@ -500,6 +522,41 @@ def test_source_images_run_the_illustrate_stage_without_an_image_provider(
     )
 
     assert len(illustrate_calls) == 1
+    assert set(illustrate_calls[0][1]["source_images"]) == {"sales"}
+
+
+def test_a_slide_the_deck_denied_a_drawing_still_places_the_users_picture(
+    monkeypatch,
+):
+    """The illustration plan budgets provider calls, not user-owned pictures.
+
+    This is the one behaviour neither branch specified on its own: the deck-wide
+    illustration plan and source-image reuse landed in parallel. The plan exists
+    because a per-slide prompt cannot count its siblings' images, so it caps how
+    many pictures the deck pays an image provider to draw. Placing a picture the
+    user already uploaded costs no such call, and the slide was offered it by a
+    separate per-slide budget, so an excluded slide keeps its source image while
+    losing only its generated illustration slot.
+    """
+    author_calls, illustrate_calls = [], []
+    _install_pipeline_fakes(
+        monkeypatch,
+        author_calls,
+        illustrate_calls,
+        ("매출 현황\n분기별 매출 추이",),
+        # The deck plan denied slide 0 a generated illustration.
+        illustration_slots=(False,),
+    )
+
+    _run(
+        pipeline._author_illustrate_render_pipeline(
+            _outline(1),
+            _brand(),
+            _style(),
+            source_images=[_candidate("sales", "매출 현황")],
+        )
+    )
+
     assert set(illustrate_calls[0][1]["source_images"]) == {"sales"}
 
 

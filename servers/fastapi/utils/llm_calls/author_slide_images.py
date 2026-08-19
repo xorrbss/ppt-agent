@@ -20,6 +20,7 @@ from services.source_images.models import (
     SUPPORTED_SOURCE_IMAGE_MIME_TYPES,
     SourceImageCandidate,
 )
+from utils.llm_calls import author_slide_rules
 
 logger = logging.getLogger(__name__)
 
@@ -28,37 +29,32 @@ logger = logging.getLogger(__name__)
 REFERENCE_IMAGE_MAX_BYTES = 8 * 1024 * 1024
 
 
-# Appended to the style brief only for illustration-enabled styles. The image is
-# generated AFTER authoring (utils/authored_illustrations.py fills the slot), so
-# the model designs the composition and all labels/callouts in HTML around a
-# reserved area — text inside generated images is unreliable (especially Korean),
-# HTML text is always crisp and correct.
-ILLUSTRATION_SLOT_RULES = """\
-- ILLUSTRATION SLOT: you MAY include AT MOST ONE bespoke illustration placeholder:
-  `<img data-illust-prompt="..." style="...">`. In data-illust-prompt, describe the
-  desired SCENE in English (concrete objects, composition, viewpoint) — subject matter
-  only; the visual style is applied automatically. The image will contain NO text, so
-  put every label, callout and annotation in HTML positioned around/over the slot.
-  Reserve the slot's exact area with explicit width/height (or absolute inset) styles
-  so the layout holds even if the image is dropped. Do not reference any other image
-  (no external URLs, no data URIs)."""
+# The slot rules themselves live in ``author_slide_rules`` with the rest of the
+# design-system prose; re-exported here because this module owns the two-kinds-of-
+# image story and every caller of ``illustration_slot_rules`` already imports it.
+ILLUSTRATION_SLOT_RULES = author_slide_rules.ILLUSTRATION_SLOT_RULES
 
-# Source-image reuse widens the allowed set by exactly one entry, so the rule is
-# restated rather than contradicted a paragraph later. It is only ever shown when
-# the feature is on: an unset gate must leave the prompt byte-identical, and a
-# model told about asset ids it was never given would author an
-# `<img data-asset-id>` that no stage of the ordinary flow can resolve.
-ILLUSTRATION_SLOT_RULES_WITH_SOURCE_IMAGES = """\
-- ILLUSTRATION SLOT: you MAY include AT MOST ONE bespoke illustration placeholder:
-  `<img data-illust-prompt="..." style="...">`. In data-illust-prompt, describe the
-  desired SCENE in English (concrete objects, composition, viewpoint) — subject matter
-  only; the visual style is applied automatically. The image will contain NO text, so
-  put every label, callout and annotation in HTML positioned around/over the slot.
-  Reserve the slot's exact area with explicit width/height (or absolute inset) styles
-  so the layout holds even if the image is dropped. The images available to a slide are
-  this slot and the source-image asset ids listed for that slide: no external URLs, no
-  data URIs, no other image source."""
+#: The one sentence the source-image feature has to widen: with the feature on a
+#: slide may also place a picture the user uploaded, named by asset id.
+_NO_OTHER_IMAGE = "Do not reference any other image (no external URLs, no data URIs)."
+_LISTED_ASSETS_ALLOWED = (
+    "The images available to a slide are this slot and the source-image asset ids\n"
+    "  listed for that slide: no external URLs, no data URIs, no other image source."
+)
 
+# Derived from the rule above rather than copied, because a second copy of this
+# prose is how the source-image wording and the illustration-relevance wording
+# silently drift apart: the copy that is not edited still reads correctly and
+# every test still passes. Source-image reuse widens the allowed set by exactly
+# one entry, so the sentence is restated rather than contradicted a paragraph
+# later. It is only ever shown when the feature is on: an unset gate must leave
+# the prompt byte-identical, and a model told about asset ids it was never given
+# would author an `<img data-asset-id>` that no stage of the ordinary flow can
+# resolve. ``test_illustration_slot_rules_allow_only_the_slot_and_listed_assets``
+# fails loudly if the sentence below stops matching the rule text.
+ILLUSTRATION_SLOT_RULES_WITH_SOURCE_IMAGES = ILLUSTRATION_SLOT_RULES.replace(
+    _NO_OTHER_IMAGE, _LISTED_ASSETS_ALLOWED
+)
 
 
 def reference_parts(reference_images: Sequence[Path]) -> list[ImageContentPart]:

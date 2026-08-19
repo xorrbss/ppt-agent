@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.authored_chapter_plan import AuthoredChapterPlan
 from models.authored_header_contract import AuthoredHeaderContract
+from models.authored_illustration_plan import AuthoredIllustrationPlan
 from models.generate_presentation_request import GeneratePresentationRequest
 from models.presentation_and_path import PresentationPathAndEditPath
 from models.presentation_outline_model import PresentationOutlineModel
@@ -125,6 +126,7 @@ async def publish_authored_presentation(
     native_export_evidence: dict[str, object] | None = None,
     header_contract: AuthoredHeaderContract | None = None,
     chapter_plan: AuthoredChapterPlan | None = None,
+    illustration_plan: AuthoredIllustrationPlan | None = None,
 ) -> tuple[str, float]:
     persist_started = time.monotonic()
     images_ready = False
@@ -232,6 +234,16 @@ async def publish_authored_presentation(
             # contract: without it the remade page writes a bare section-name
             # eyebrow while its 63 siblings carry a chapter number.
             presentation.theme["chapterPlan"] = chapter_plan.model_dump(mode="json")
+        if illustration_plan is not None:
+            # The deck's frozen illustration slots, in the same final-outline
+            # indices the persisted outline uses. A single-page remake replays it
+            # rather than re-deciding: a page that was authored without a picture
+            # must not come back from a remake carrying one, and a page that had
+            # one must not lose it. An EMPTY plan is still a plan and is stored,
+            # because "this deck gets no pictures" is a decision.
+            presentation.theme["illustrationPlan"] = illustration_plan.model_dump(
+                mode="json"
+            )
         if master_generation is not None:
             deck = master_generation.result.deck
             pin = deck.master

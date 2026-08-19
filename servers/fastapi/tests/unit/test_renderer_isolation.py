@@ -497,3 +497,91 @@ def test_outer_worker_watchdog_allows_launcher_cleanup_and_kills_posix_group() -
     assert "await asyncio.wait_for(process.wait(), timeout=12)" in worker
     assert "asyncio.CancelledError" in worker
     assert "await terminate_process_tree()" in worker
+
+
+def test_layout_properties_a_real_deck_needs_are_admitted() -> None:
+    """Properties observed failing real authored decks must stay admitted.
+
+    Each of these cost a slide in production before it was allowed. The test
+    exists so a future narrowing of the policy has to be deliberate rather than
+    a silent regression that only shows up 65 slides into a 20-minute run.
+    """
+    for declaration in (
+        "writing-mode: vertical-rl",   # vertical axis label on a Korean chart
+        "visibility: hidden",          # spacer that reserves width but is unseen
+        "visibility: visible",
+        "aspect-ratio: 16 / 9",
+        "float: left",
+        "column-count: 2",
+        "list-style-type: none",
+        "margin-inline: auto",
+        "inline-size: 50%",
+        "text-wrap: balance",
+        "rotate: 45deg",
+        "dominant-baseline: middle",
+        "backdrop-filter: blur(4px)",
+        "mix-blend-mode: multiply",
+        "transition: opacity 200ms ease",
+        "-webkit-font-smoothing: antialiased",
+        "-webkit-line-clamp: 3",
+    ):
+        renderer_isolation._validate_css(declaration)
+
+
+def test_properties_that_would_desync_the_export_stay_refused() -> None:
+    """These are refused for export fidelity, not security — keep them refused.
+
+    ``content`` puts text outside the DOM the hybrid measurer reads, and the
+    containment pair lets the browser skip laying a subtree out at all. A slide
+    using them renders correctly and then exports wrong, which is worse than
+    failing loudly. Custom properties are a separate, unmade design decision.
+    """
+    for declaration in (
+        'content: "invisible to the exporter"',
+        "content-visibility: hidden",
+        "contain: strict",
+        "--brand-primary: #123456",
+    ):
+        with pytest.raises(renderer_isolation.RendererPolicyError):
+            renderer_isolation._validate_css(declaration)
+
+
+def test_transform_is_admitted_on_every_svg_shape() -> None:
+    """A translated bar must pass wherever a translated group already does.
+
+    `transform` used to be admitted on <g>, <path> and <text> but not on the
+    shape elements, so an inline chart that moved a rect failed while the same
+    attribute on its parent group passed. The asymmetry cost a real slide.
+    """
+    for tag, geometry in (
+        ("rect", 'x="1" y="1" width="4" height="4"'),
+        ("circle", 'cx="5" cy="5" r="2"'),
+        ("ellipse", 'cx="5" cy="5" rx="2" ry="1"'),
+        ("line", 'x1="0" y1="0" x2="9" y2="9"'),
+        ("polyline", 'points="0,0 9,9"'),
+        ("polygon", 'points="0,0 9,0 9,9"'),
+        ("g", ""),
+        ("path", 'd="M0 0 L9 9"'),
+    ):
+        markup = (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">'
+            f'<{tag} {geometry} transform="translate(2,2)"></{tag}></svg>'
+        )
+        renderer_isolation.admit_authored_html(
+            "<!doctype html><html><head><meta charset=\"utf-8\"></head>"
+            f"<body><main>{markup}</main></body></html>"
+        )
+
+
+def test_svg_paint_attributes_still_refuse_remote_references() -> None:
+    """Widening which elements carry paint must not widen what paint may say."""
+    markup = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">'
+        '<rect x="1" y="1" width="4" height="4" fill="url(https://evil.example/x)"/>'
+        "</svg>"
+    )
+    with pytest.raises(renderer_isolation.RendererPolicyError):
+        renderer_isolation.admit_authored_html(
+            "<!doctype html><html><head><meta charset=\"utf-8\"></head>"
+            f"<body><main>{markup}</main></body></html>"
+        )

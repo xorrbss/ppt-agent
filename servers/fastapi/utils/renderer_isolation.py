@@ -23,6 +23,14 @@ from typing import Mapping
 from PIL import Image, UnidentifiedImageError
 
 from utils.renderer_internal_capability import consume_internal_render_capability
+from utils.renderer_css_policy import ALLOWED_CSS_PROPERTIES
+from utils.renderer_markup_policy import (
+    ALLOWED_TAGS,
+    DROP_TAGS,
+    GLOBAL_ATTRIBUTES,
+    TAG_ATTRIBUTES,
+    VOID_TAGS,
+)
 from utils.renderer_worker_policy import (
     RendererDisabledError as RendererDisabledError,
     RendererPolicyError as RendererPolicyError,
@@ -52,124 +60,17 @@ MAX_IMAGE_PIXELS = 16_777_216
 MAX_FONT_DECLARATIONS = 256
 MAX_FONT_FAMILIES = 16
 
-_ALLOWED_TAGS = {
-    "html", "head", "title", "meta", "body", "main", "section", "article",
-    "header", "footer", "nav", "aside", "div", "span", "p", "h1", "h2",
-    "h3", "h4", "h5", "h6", "ul", "ol", "li", "dl", "dt", "dd",
-    "table", "caption", "colgroup", "col", "thead", "tbody", "tfoot", "tr",
-    "th", "td", "strong", "b", "em", "i", "small", "sub", "sup", "br",
-    "hr", "img", "figure", "figcaption", "blockquote", "style", "svg", "g", "path",
-    "rect", "circle", "ellipse", "line", "polyline", "polygon", "text", "tspan",
-    "defs", "lineargradient", "radialgradient", "stop", "clippath", "mask",
-}
-_VOID_TAGS = {"meta", "br", "hr", "img", "col"}
-_DROP_TAGS = {
-    "script", "iframe", "frame", "frameset", "object", "embed", "applet",
-    "link", "base", "form", "input", "button", "textarea", "select", "option",
-    "video", "audio", "source", "track", "canvas", "template", "math",
-    "foreignobject", "use",
-}
-_GLOBAL_ATTRIBUTES = {
-    "id", "class", "role", "aria-label", "aria-hidden", "lang", "dir", "style",
-    "title", "data-qid", "data-qid-ignore", "data-allow-overlap",
-    # Inert authored-header markers. They carry no behaviour and no URL; the
-    # deck's header contract validator is what constrains their values.
-    "data-header-part", "data-requirement-ids", "data-header-band",
-}
-_TAG_ATTRIBUTES: Mapping[str, set[str]] = {
-    "meta": {"charset"},
-    "img": {"src", "alt", "width", "height", "loading", "decoding"},
-    "th": {"colspan", "rowspan", "scope"},
-    "td": {"colspan", "rowspan"},
-    "col": {"span"},
-    "svg": {
-        "viewbox", "width", "height", "preserveaspectratio", "focusable", "xmlns", "fill",
-        "stroke", "stroke-width", "fill-opacity", "stroke-opacity", "opacity",
-    },
-    "g": {
-        "transform", "fill", "stroke", "stroke-width", "fill-opacity",
-        "stroke-opacity", "stroke-linecap", "stroke-linejoin", "stroke-dasharray",
-        "opacity", "clip-path",
-    },
-    "path": {
-        "d", "transform", "fill", "stroke", "stroke-width", "fill-opacity",
-        "stroke-opacity", "stroke-linecap", "stroke-linejoin", "stroke-dasharray",
-        "fill-rule", "clip-rule", "vector-effect", "opacity",
-    },
-    "rect": {
-        "x", "y", "width", "height", "rx", "ry", "fill", "stroke",
-        "stroke-width", "fill-opacity", "stroke-opacity", "stroke-linecap",
-        "stroke-linejoin", "stroke-dasharray", "opacity",
-    },
-    "circle": {
-        "cx", "cy", "r", "fill", "stroke", "stroke-width", "fill-opacity",
-        "stroke-opacity", "stroke-linecap", "stroke-linejoin", "stroke-dasharray",
-        "opacity",
-    },
-    "ellipse": {
-        "cx", "cy", "rx", "ry", "fill", "stroke", "stroke-width",
-        "fill-opacity", "stroke-opacity", "stroke-linecap", "stroke-linejoin",
-        "stroke-dasharray", "opacity",
-    },
-    "line": {
-        "x1", "y1", "x2", "y2", "fill", "stroke", "stroke-width",
-        "fill-opacity", "stroke-opacity", "stroke-linecap", "stroke-linejoin",
-        "stroke-dasharray", "opacity",
-    },
-    "polyline": {
-        "points", "fill", "stroke", "stroke-width", "fill-opacity",
-        "stroke-opacity", "stroke-linecap", "stroke-linejoin", "stroke-dasharray",
-        "opacity",
-    },
-    "polygon": {
-        "points", "fill", "stroke", "stroke-width", "fill-opacity",
-        "stroke-opacity", "stroke-linecap", "stroke-linejoin", "stroke-dasharray",
-        "fill-rule", "clip-rule", "vector-effect", "opacity",
-    },
-    "text": {
-        "x", "y", "dx", "dy", "fill", "stroke", "font-size", "font-family",
-        "font-weight", "text-anchor", "transform",
-    },
-    "tspan": {"x", "y", "dx", "dy", "fill", "font-size", "font-family", "font-weight"},
-    "lineargradient": {"id", "x1", "y1", "x2", "y2", "gradientunits", "gradienttransform"},
-    "radialgradient": {"id", "cx", "cy", "r", "fx", "fy", "gradientunits", "gradienttransform"},
-    "stop": {"offset", "stop-color", "stop-opacity"},
-    "clippath": {"id", "transform"},
-    "mask": {"id", "x", "y", "width", "height", "maskunits"},
-}
-_ALLOWED_CSS_PROPERTIES = {
-    "align-content", "align-items", "align-self", "background", "background-color",
-    "background-image", "background-position", "background-repeat", "background-size",
-    "border", "border-bottom", "border-bottom-color", "border-bottom-left-radius",
-    "border-bottom-right-radius", "border-bottom-style", "border-bottom-width",
-    "border-collapse", "border-color", "border-left", "border-left-color",
-    "border-left-style", "border-left-width", "border-radius", "border-right",
-    "border-right-color", "border-right-style", "border-right-width", "border-spacing",
-    "border-style", "border-top", "border-top-color", "border-top-left-radius",
-    "border-top-right-radius", "border-top-style", "border-top-width", "border-width",
-    "bottom", "box-shadow", "box-sizing", "clip-path", "color", "column-gap",
-    "display", "fill", "fill-opacity", "filter", "flex", "flex-basis", "flex-direction", "flex-flow",
-    "flex-grow", "flex-shrink", "flex-wrap", "font", "font-family", "font-size",
-    "font-stretch", "font-style", "font-variant", "font-variant-numeric",
-    "font-weight", "gap", "grid",
-    "grid-area", "grid-auto-columns", "grid-auto-flow", "grid-auto-rows", "grid-column",
-    "grid-column-end", "grid-column-start", "grid-row", "grid-row-end", "grid-row-start",
-    "grid-template", "grid-template-areas", "grid-template-columns", "grid-template-rows",
-    "height", "inset", "justify-content", "justify-items", "justify-self", "left",
-    "letter-spacing", "line-height", "list-style", "list-style-position", "margin",
-    "margin-bottom", "margin-left", "margin-right", "margin-top", "mask", "max-height",
-    "max-width", "min-height", "min-width", "object-fit", "object-position", "opacity",
-    "outline", "outline-color", "outline-offset", "outline-style", "outline-width",
-    "overflow", "overflow-wrap", "overflow-x", "overflow-y", "padding", "padding-bottom",
-    "padding-left", "padding-right", "padding-top", "place-content", "place-items",
-    "place-self", "position", "right", "row-gap", "stroke", "stroke-dasharray",
-    "stroke-linecap", "stroke-linejoin", "stroke-width", "table-layout", "text-align",
-    "stroke-opacity",
-    "text-decoration", "text-decoration-color", "text-decoration-line",
-    "text-decoration-style", "text-indent", "text-overflow", "text-shadow",
-    "text-transform", "top", "transform", "transform-origin", "vertical-align",
-    "white-space", "width", "word-break", "word-spacing", "z-index",
-}
+_ALLOWED_TAGS = ALLOWED_TAGS
+_VOID_TAGS = VOID_TAGS
+_DROP_TAGS = DROP_TAGS
+_GLOBAL_ATTRIBUTES = GLOBAL_ATTRIBUTES
+_TAG_ATTRIBUTES = TAG_ATTRIBUTES
+_ALLOWED_CSS_PROPERTIES = ALLOWED_CSS_PROPERTIES
+#: How much of a rejected declaration's value is echoed into the policy
+#: error. Enough to identify the declaration, short enough that untrusted
+#: model output cannot flood a log line.
+_REJECTED_VALUE_LOG_CHARS = 120
+
 _CSS_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
 _CSS_BLOCK = re.compile(r"([^{}]+)\{([^{}]*)\}", re.DOTALL)
 _UNSAFE_CSS = re.compile(
@@ -237,7 +138,17 @@ def _validate_css(css: str) -> set[str]:
             property_name, value = declaration.split(":", 1)
             property_name = property_name.strip().lower()
             if property_name not in _ALLOWED_CSS_PROPERTIES:
-                raise RendererPolicyError(f"CSS property is not allowed: {property_name}")
+                # The value is reported alongside the name because the allowlist
+                # is value-blind: `visibility: visible` and `visibility: hidden`
+                # are rejected identically, and only the value says whether the
+                # property should be admitted or whether it would hide content
+                # from the hybrid-export measurer. Without it every rejection
+                # investigation stops at a guess. Truncated because a rejected
+                # declaration is untrusted model output on a log line.
+                raise RendererPolicyError(
+                    "CSS property is not allowed: "
+                    f"{property_name}: {value.strip()[:_REJECTED_VALUE_LOG_CHARS]}"
+                )
             if len(value) > 8192 or "\\" in property_name or "\\" in value:
                 raise RendererPolicyError("CSS value exceeds policy")
     for match in _FONT_FAMILY.finditer(";" + normalized):

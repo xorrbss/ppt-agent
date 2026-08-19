@@ -1308,6 +1308,8 @@ def test_authored_service_resolves_passes_and_persists_canonical_style(
         header_contract=None,
         page_number_mode="none",
         chapter_plan=None,
+        illustration_plan=None,
+        instructions=None,
     ):
         captured["style"] = style
         captured["header_contract"] = header_contract
@@ -1408,6 +1410,8 @@ def test_a_design_replay_is_authored_rather_than_dumped_verbatim(
         header_contract=None,
         page_number_mode="none",
         chapter_plan=None,
+        illustration_plan=None,
+        instructions=None,
     ):
         captured["authored"] = True
         captured["header_contract"] = header_contract
