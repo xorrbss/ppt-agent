@@ -58,6 +58,18 @@ class WorkspaceOperationExecutionContext(Protocol):
 
     async def cancellation_requested(self) -> bool: ...
 
+    async def extend_lease(self, *, seconds: int) -> bool:
+        """Widen this attempt's lease to cover a long write transaction.
+
+        A single-writer backend blocks every other session -- the heartbeat
+        included -- for as long as a handler holds the write lock, so a handler
+        that is about to take one must ask for the window it needs *before*
+        taking it.  Returns False when the lease was not widened; the handler
+        may proceed, but a longer transaction than the current lease risks
+        being reclaimed and restarted.
+        """
+        ...
+
     async def raise_if_cancelled(self) -> None: ...
 
 

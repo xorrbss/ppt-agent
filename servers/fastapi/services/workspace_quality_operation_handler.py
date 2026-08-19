@@ -10,7 +10,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from typing import Any, Literal, cast
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from models.presentation_from_template import AuthoredQualityReviewRequest
@@ -18,6 +18,7 @@ from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
 from models.sql.presentation import PresentationModel
+from models.sql.slide import SlideModel
 from models.sql.workspace import WorkspaceOperation
 from services.authored_quality_review_service import run_authored_quality_review
 from services.database import async_session_maker
@@ -36,6 +37,10 @@ from services.workspace_operation_handler_registry import (
 from services.workspace_operation_runner import sanitize_workspace_event_payload
 
 QUALITY_REVIEW_OPERATION_KIND = "quality.review"
+# The review writes its slide fixes on the session it holds open until the final
+# revision bump, so its lease must cover the whole pass rather than one renewal.
+_LEASE_BASE_SECONDS = 600
+_LEASE_PER_SLIDE_SECONDS = 60
 EXPORT_OPERATION_KINDS = ("export.pptx", "export.pdf")
 InternalHeaderProvider = Callable[[], Awaitable[dict[str, str]]]
 LOGGER = logging.getLogger(__name__)
@@ -211,6 +216,22 @@ class WorkspaceQualityReviewOperationHandler:
                 await session.commit()
 
             if not review_completed:
+                # The review mutates slides on this session and nothing commits
+                # until the revision bump below.  A single-writer backend gives
+                # that transaction the write lock for its whole duration, which
+                # locks out the heartbeat, so widen the lease before it starts.
+                reviewed_slides = len(slide_indices) if scope != "all" else (
+                    await session.scalar(
+                        select(func.count())
+                        .select_from(SlideModel)
+                        .where(SlideModel.presentation == claim.presentation_id)
+                    )
+                    or 0
+                )
+                await context.extend_lease(
+                    seconds=_LEASE_BASE_SECONDS
+                    + _LEASE_PER_SLIDE_SECONDS * int(reviewed_slides)
+                )
                 try:
                     if await context.progress(stage="quality_review_analyzing", percent=20) is False:
                         raise WorkspaceOperationLeaseLost("operation_lease_lost")

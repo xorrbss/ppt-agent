@@ -41,6 +41,11 @@ from services.workspace_operation_handler_registry import (
 from services.workspace_operation_runner import sanitize_workspace_event_payload
 
 OPERATION_KIND = "slide.regenerate.batch"
+# The batch publishes inside one write transaction, so its lease must cover the
+# whole run.  Observed authored republication is well under two minutes a page;
+# double that so a slow provider does not cost the deck its attempt.
+_LEASE_BASE_SECONDS = 300
+_LEASE_PER_PAGE_SECONDS = 240
 
 _REQUEST_INVALID = "authored_batch_remake_request_invalid"
 _MASTER_PINNED = "authored_batch_remake_master_pinned_unsupported"
@@ -205,6 +210,13 @@ class WorkspaceBatchRemakeOperationHandler:
         # four-wide preview stage; it only makes deck-wide rewrites take turns.
         lock = _ANALYZE_AND_FIX_LOCKS.setdefault(
             claim.presentation_id, asyncio.Lock()
+        )
+        # Everything below is a single write transaction, from the snapshot to
+        # the revision bump.  A single-writer backend hands that transaction the
+        # write lock for its whole duration, which locks out the heartbeat too,
+        # so the lease has to be widened here -- afterwards it cannot be.
+        await context.extend_lease(
+            seconds=_LEASE_BASE_SECONDS + _LEASE_PER_PAGE_SECONDS * total
         )
         async with lock:
             # One undo point for the whole batch, taken before anything moves.

@@ -83,11 +83,19 @@ def _context(claim: WorkspaceOperationClaim, *, progress_result: bool = True):
     async def raise_if_cancelled():
         return None
 
+    leases: list[int] = []
+
+    async def extend_lease(*, seconds):
+        leases.append(seconds)
+        return True
+
     return SimpleNamespace(
         claim=claim,
         progress=progress,
         raise_if_cancelled=raise_if_cancelled,
+        extend_lease=extend_lease,
         stages=stages,
+        leases=leases,
     )
 
 
@@ -205,8 +213,15 @@ async def test_batch_handler_publishes_every_slide_with_one_revision_bump(
             ],
         )
 
-        result = await WorkspaceBatchRemakeOperationHandler().execute(_context(claim))
+        context = _context(claim)
+        result = await WorkspaceBatchRemakeOperationHandler().execute(context)
 
+        # The publish is one write transaction, so no heartbeat can renew the
+        # lease while it runs: the whole batch has to be paid for up front.
+        assert context.leases == [
+            handler_module._LEASE_BASE_SECONDS
+            + handler_module._LEASE_PER_PAGE_SECONDS * 2
+        ]
         assert len(revision_calls) == 1
         assert revision_calls[0]["expected_revision"] == 3
         assert revision_calls[0]["operation_kind"] == "slide.regenerate.batch"

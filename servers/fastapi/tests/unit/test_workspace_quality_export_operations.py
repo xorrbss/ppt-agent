@@ -509,6 +509,10 @@ def test_quality_review_emits_live_progress_during_long_analysis(monkeypatch):
         )
 
         class Context:
+            async def extend_lease(self, *, seconds):
+                self.extended_lease_seconds = seconds
+                return True
+
             async def raise_if_cancelled(self):
                 return None
 
@@ -550,6 +554,10 @@ def test_quality_review_rejects_any_mode_except_auto_fix_before_execution(mode):
     )
 
     class Context:
+        async def extend_lease(self, *, seconds):
+            self.extended_lease_seconds = seconds
+            return True
+
         async def raise_if_cancelled(self):
             return None
 
@@ -623,6 +631,10 @@ def test_quality_review_without_fixes_is_revision_neutral_and_detects_change(
             )
 
             class Context:
+                async def extend_lease(self, *, seconds):
+                    self.extended_lease_seconds = seconds
+                    return True
+
                 def __init__(self):
                     self.claim = claim
 
@@ -740,6 +752,10 @@ def test_quality_review_auto_fix_publishes_new_revision(
             )
 
             class Context:
+                async def extend_lease(self, *, seconds):
+                    self.extended_lease_seconds = seconds
+                    return True
+
                 def __init__(self):
                     self.claim = claim
                     self.progress_updates = []
@@ -859,6 +875,10 @@ def test_quality_review_retry_reuses_completed_task_without_duplicate_fix(
             )
 
             class Context:
+                async def extend_lease(self, *, seconds):
+                    self.extended_lease_seconds = seconds
+                    return True
+
                 def __init__(self):
                     self.claim = claim
 
@@ -937,6 +957,10 @@ def test_quality_review_subset_without_fixes_finalizes_result_atomically(
             )
 
             class Context:
+                async def extend_lease(self, *, seconds):
+                    self.extended_lease_seconds = seconds
+                    return True
+
                 def __init__(self):
                     self.claim = claim
                     self.progress_updates = []
@@ -1033,6 +1057,10 @@ def test_quality_review_propagates_lease_loss_after_review(
             )
 
             class Context:
+                async def extend_lease(self, *, seconds):
+                    self.extended_lease_seconds = seconds
+                    return True
+
                 def __init__(self):
                     self.claim = claim
                     self.cancel_checks = 0
