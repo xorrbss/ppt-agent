@@ -15,9 +15,11 @@ from utils.llm_calls import author_slide_prompt
 from utils.llm_calls.author_slide import (
     Brand,
     EXACT_RECONSTRUCTION,
-    _ILLUSTRATION_SLOT_RULES,
-    _ILLUSTRATION_SLOT_RULES_WITH_SOURCE_IMAGES,
     build_design_system,
+)
+from utils.llm_calls.author_slide_images import (
+    ILLUSTRATION_SLOT_RULES,
+    ILLUSTRATION_SLOT_RULES_WITH_SOURCE_IMAGES,
 )
 
 
@@ -156,7 +158,7 @@ def test_source_image_brief_flattens_a_multiline_heading(tmp_path):
 
 
 def test_illustration_slot_rules_allow_only_the_slot_and_listed_assets():
-    rules = " ".join(_ILLUSTRATION_SLOT_RULES_WITH_SOURCE_IMAGES.split())
+    rules = " ".join(ILLUSTRATION_SLOT_RULES_WITH_SOURCE_IMAGES.split())
 
     # One statement of the allowed set rather than a prohibition plus an exception.
     assert "Do not reference any other image" not in rules
@@ -179,11 +181,11 @@ def test_gated_off_deck_keeps_the_pre_feature_slot_rules(monkeypatch):
     monkeypatch.setenv("AUTHORED_SOURCE_IMAGES_ENABLED", "true")
     on = build_design_system(_brand(), _illustration_style())
 
-    assert _ILLUSTRATION_SLOT_RULES in off
+    assert ILLUSTRATION_SLOT_RULES in off
     assert "source-image asset ids" not in off
-    assert _ILLUSTRATION_SLOT_RULES_WITH_SOURCE_IMAGES in on
+    assert ILLUSTRATION_SLOT_RULES_WITH_SOURCE_IMAGES in on
     assert off == on.replace(
-        _ILLUSTRATION_SLOT_RULES_WITH_SOURCE_IMAGES, _ILLUSTRATION_SLOT_RULES
+        ILLUSTRATION_SLOT_RULES_WITH_SOURCE_IMAGES, ILLUSTRATION_SLOT_RULES
     )
 
 

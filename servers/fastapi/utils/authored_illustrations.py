@@ -2,7 +2,7 @@
 
 Illustration-enabled authored styles let the model place ONE
 ``<img data-illust-prompt="...">`` slot per slide (see
-``_ILLUSTRATION_SLOT_RULES`` in ``author_slide.py``). When source images are
+``ILLUSTRATION_SLOT_RULES`` in ``author_slide_images.py``). When source images are
 offered to a slide, the model may instead reference one of them by
 ``<img data-asset-id="...">``; a real picture the user owns beats invented
 pixels, so a resolved source image wins over the illustration slot.
