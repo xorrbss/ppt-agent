@@ -123,7 +123,7 @@ def test_90_slide_bounded_workers_resume_without_repeating_successful_work(
             finally:
                 active_render -= 1
 
-        monkeypatch.setattr(authored, "prepare_authored_deck", lambda *_: plan)
+        monkeypatch.setattr(authored, "prepare_authored_deck", lambda *_, **__: plan)
         monkeypatch.setattr(authored, "author_planned_slide", fake_author)
         monkeypatch.setattr(authored, "is_fallback_slide_html", lambda _: False)
         monkeypatch.setattr(authored, "render_html_to_png", fake_render)

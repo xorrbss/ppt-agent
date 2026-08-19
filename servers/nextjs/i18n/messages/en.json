@@ -56,7 +56,8 @@
       "templateApply": "Apply template",
       "qualityReview": "Quality review",
       "exportPptx": "Export PowerPoint",
-      "exportPdf": "Export PDF"
+      "exportPdf": "Export PDF",
+      "slideRegenerateBatch": "Remake selected pages"
     },
     "status": {
       "queued": "Queued",
@@ -2759,16 +2760,16 @@
     "generating": "Generating",
     "reviewOutline": "Review outline before generating",
     "master": {
-        "title": "Company standard",
-        "optional": "If you do not select one, the presentation is generated without a company standard.",
-        "required": "Choose a published company standard to generate with this AI-authored style.",
-        "unavailable": "The selected company standard is no longer available. Choose a published company standard to continue.",
-        "choose": "Choose company standard",
-        "change": "Change company standard",
-        "selected": "{name} · v{version} / PPT Master based · {layouts} layouts",
-        "unnamed": "Company standard",
+      "title": "Company standard",
+      "optional": "If you do not select one, the presentation is generated without a company standard.",
+      "required": "Choose a published company standard to generate with this AI-authored style.",
+      "unavailable": "The selected company standard is no longer available. Choose a published company standard to continue.",
+      "choose": "Choose company standard",
+      "change": "Change company standard",
+      "selected": "{name} · v{version} / PPT Master based · {layouts} layouts",
+      "unnamed": "Company standard",
       "defaultFont": "Default font",
-        "aiCreate": "Create company standard from PPT"
+      "aiCreate": "Create company standard from PPT"
     },
     "catalog": {
       "heading": "Template catalog",
@@ -3086,8 +3087,34 @@
       "reason": "Reason: {reason}",
       "moreIssues": "{count} more issues remain.",
       "remainingSlidesAria": "Move to slides with remaining issues",
-      "moveToSlide": "Move to slide {slide}"
+      "moveToSlide": "Move to slide {slide}",
+      "selectIssueSlide": "Select slide {slide}",
+      "selectAllIssueSlides": "Select every slide with a remaining issue",
+      "batchRemakeSelected": "Remake {count} selected pages",
+      "batchRemakeSelectionHint": "Previews for the selected pages are built together and applied in one step."
     }
+  },
+  "batchRemake": {
+    "title": "Remake selected pages",
+    "description": "New versions of {count} pages are being created. Nothing is applied until you approve the previews.",
+    "generating": "Building previews {completed}/{total}",
+    "ready": "{count} previews are ready.",
+    "slideLabel": "Page {slide}",
+    "includeSlide": "Include page {slide} when applying",
+    "statusPending": "Building",
+    "statusPreviewed": "Preview ready",
+    "statusFailed": "Failed",
+    "warningBadge": "Needs a look",
+    "failureReason": "Reason: {reason}",
+    "allFailed": "None of the selected pages could be previewed, so there is nothing to apply.",
+    "timeout": "Preview generation timed out. Please try again.",
+    "startFailed": "The preview job could not be started. Please try again.",
+    "unsupportedMaster": "Several pages cannot be remade at once while a design master is pinned.",
+    "approve": "Apply {count} selected pages",
+    "cancel": "Cancel",
+    "commandText": "Apply the previews for {count} pages",
+    "stalled": "This batch stopped making progress. Candidates that already finished can still be applied, and the rest can be started again.",
+    "restart": "Start again"
   },
   "authoredVnext": {
     "scene": {
@@ -3267,15 +3294,15 @@
       "canvas": {
         "title": "Canvas and layout",
         "dimensions": "16:9 {width} × {height}px · safe area {safeWidth} × {safeHeight}px",
-      "choiceAria": "Canvas type",
-      "cover": "Cover",
-      "section": "Section",
-      "standard": "Standard",
+        "choiceAria": "Canvas type",
+        "cover": "Cover",
+        "section": "Section",
+        "standard": "Standard",
         "longTitle": "Long title",
-      "preview": {
-        "cover": "Cover canvas",
-        "section": "Section canvas",
-        "standard": "Standard canvas",
+        "preview": {
+          "cover": "Cover canvas",
+          "section": "Section canvas",
+          "standard": "Standard canvas",
           "longTitle": "Long-title canvas"
         },
         "lockedTitle": "Locked Master layer",
@@ -3292,28 +3319,28 @@
         "error": "Logo upload failed ({code})."
       },
       "brand": {
-      "title": "Brand, font, and color",
-      "description": "Update the published Master contract; logo selection is managed separately.",
-      "logo": "Logo furniture",
+        "title": "Brand, font, and color",
+        "description": "Update the published Master contract; logo selection is managed separately.",
+        "logo": "Logo furniture",
         "logoPlaceholder": "Logo asset ID (empty uses the default mark)",
-      "name": "Master name",
-      "primaryFont": "Primary font",
-      "fallbackFonts": "Fallback fonts (comma-separated)",
-      "latinFont": "Latin font",
-      "header": "Header text",
-      "footer": "Footer text",
-      "divider": "Divider color",
-      "pageNumber": "Page-number text",
-      "pageNumberColor": "Page-number color",
-      "semanticStyles": "Semantic text styles",
-      "titleMinimum": "Title minimum size (pt)",
-      "style": {
-        "eyebrow": "Eyebrow size (pt)",
-        "title": "Title size (pt)",
-        "note": "Note size (pt)",
-        "rightCallout": "Right callout size (pt)"
-      },
-      "colors": "Color tokens",
+        "name": "Master name",
+        "primaryFont": "Primary font",
+        "fallbackFonts": "Fallback fonts (comma-separated)",
+        "latinFont": "Latin font",
+        "header": "Header text",
+        "footer": "Footer text",
+        "divider": "Divider color",
+        "pageNumber": "Page-number text",
+        "pageNumberColor": "Page-number color",
+        "semanticStyles": "Semantic text styles",
+        "titleMinimum": "Title minimum size (pt)",
+        "style": {
+          "eyebrow": "Eyebrow size (pt)",
+          "title": "Title size (pt)",
+          "note": "Note size (pt)",
+          "rightCallout": "Right callout size (pt)"
+        },
+        "colors": "Color tokens",
         "colorAria": "Select {color} color",
         "hexAria": "{color} HEX"
       },
@@ -3383,7 +3410,7 @@
       },
       "publish": {
         "title": "Validate · publish",
-      "description": "Review the current draft, then publish it safely as a new version.",
+        "description": "Review the current draft, then publish it safely as a new version.",
         "status": "Current status",
         "busy": "Processing the request. Please wait.",
         "save": "Save",

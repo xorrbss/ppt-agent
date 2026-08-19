@@ -179,6 +179,50 @@ describe("<TextProvider />", () => {
     cy.contains("label", "OpenAI 모델 선택").should("not.exist");
   });
 
+  it("runs the ChatGPT sign-in flow instead of the server-managed notice", () => {
+    apiMocks.setupGetIntercept(
+      "**/api/v1/ppt/codex/auth/status",
+      { status: "unauthenticated" },
+      "codexStatus"
+    );
+
+    mountProvider({ LLM: "codex" });
+
+    cy.wait("@codexStatus");
+    cy.contains("button", "ChatGPT로 로그인").should("be.visible");
+    // The OAuth flow lives in this app, so the read-only notice must not win.
+    cy.contains("This provider is authenticated through the server-managed sign-in flow.").should("not.exist");
+  });
+
+  it("shows the connected ChatGPT account and seeds the default model", () => {
+    apiMocks.setupGetIntercept(
+      "**/api/v1/ppt/codex/auth/status",
+      {
+        status: "authenticated",
+        account_id: "acct-42",
+        username: "presenton-admin",
+        email: "admin@example.com",
+      },
+      "codexStatus"
+    );
+
+    mountProvider({ LLM: "codex" });
+
+    cy.wait("@codexStatus");
+    cy.contains("presenton-admin").should("be.visible");
+    cy.contains("admin@example.com").should("be.visible");
+    cy.contains("ChatGPT에 로그인됨").should("be.visible");
+    cy.get('button[title="토큰 갱신"]').should("be.visible");
+    cy.get('button[title="로그아웃"]').should("be.visible");
+
+    cy.contains("label", "GPT 모델 선택").should("be.visible");
+    cy.contains('button[role="combobox"]', "GPT-5.6 Sol").should("be.visible");
+
+    cy.contains('button[role="combobox"]', "GPT-5.6 Sol").click();
+    cy.get("[cmdk-item]").contains("GPT-5.4 mini").click();
+    cy.contains('button[role="combobox"]', "GPT-5.4 mini").should("be.visible");
+  });
+
   it("auto-loads supported Ollama models and exposes the custom URL field", () => {
     apiMocks.setupGetIntercept(
       "**/api/v1/ppt/ollama/models/supported",

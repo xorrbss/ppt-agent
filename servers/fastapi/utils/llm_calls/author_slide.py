@@ -31,7 +31,9 @@ from utils.llm_calls import author_slide_prompt
 from llmai import get_client
 from llmai.shared import ImageContentPart, SystemMessage, TextContentPart, UserMessage
 
+from models.authored_header_contract import AuthoredHeaderContract
 from utils.authored_font_policy import enforce_authored_font_floor
+from utils.authored_header_prompt import render_header_contract
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_config import enforce_llm_egress_policy, get_llm_config
 from utils.llm_provider import get_llm_provider, get_model, is_codex_selected
@@ -127,6 +129,23 @@ def _register_author_rate_limit(error: BaseException) -> None:
 # deck without weakening those constraints.
 TEMPLATE_PAGE_NUMBER_MODE = "template"
 COMPANY_STANDARD_PAGE_NUMBER_MODE = "companyStandard"
+NO_PAGE_NUMBER_MODE = "none"
+
+PAGE_NUMBER_MODES = frozenset(
+    (
+        TEMPLATE_PAGE_NUMBER_MODE,
+        COMPANY_STANDARD_PAGE_NUMBER_MODE,
+        NO_PAGE_NUMBER_MODE,
+    )
+)
+
+
+def validate_page_number_mode(page_number_mode: str) -> str:
+    """Return the mode, rejecting anything outside the closed vocabulary."""
+    if page_number_mode not in PAGE_NUMBER_MODES:
+        raise ValueError("unsupported page number mode")
+    return page_number_mode
+
 
 _TEMPLATE_PAGE_NUMBER_RULES = """\
 - PAGE-NUMBER SYSTEM (ordinary authored generation and style-reference mode):
@@ -144,12 +163,29 @@ _TEMPLATE_PAGE_NUMBER_RULES = """\
     section name, wordmark, logo, or any other footer copy. Never place a page number at the top,
     in a corner, or anywhere else. Do not create a duplicate marker."""
 
+_NO_PAGE_NUMBER_RULES = """\
+- NO PAGE NUMBER: this deck does not number its slides.
+  - Never render a page number, page marker, pagination label, slide counter, or any
+    other footer copy (title, section name, date, wordmark, logo) at the bottom of the
+    slide. This applies to every slide including the cover.
+  - The bottom boundary is y=688px, leaving a 32px margin that balances the 64px side
+    margins. NOTHING may cross that line or be cut off by it: a panel showing only its
+    top edge is a far worse failure than a slightly deeper margin. Compose so the
+    content finishes close to y=688px, but get there by shortening copy and tightening
+    spacing — never by letting a block run past the line."""
+
 _COMPANY_STANDARD_PAGE_NUMBER_RULES = """\
 - PAGE-NUMBER OWNERSHIP: company-standard furniture owns all page numbering.
   - Never render a page number, page marker, pagination label, or page-number footer in the
     authored template scene, including non-cover slides.
   - Do not reserve or style a template-owned page-number box. The product composes the configured
     company-standard pageNumber furniture after template rendering."""
+
+_PAGE_NUMBER_RULES_BY_MODE = {
+    TEMPLATE_PAGE_NUMBER_MODE: _TEMPLATE_PAGE_NUMBER_RULES,
+    COMPANY_STANDARD_PAGE_NUMBER_MODE: _COMPANY_STANDARD_PAGE_NUMBER_RULES,
+    NO_PAGE_NUMBER_MODE: _NO_PAGE_NUMBER_RULES,
+}
 
 _DESIGN_SYSTEM_RULES = """\
 DESIGN SYSTEM (obey on EVERY slide so the deck is cohesive):
@@ -197,12 +233,7 @@ DESIGN SYSTEM (obey on EVERY slide so the deck is cohesive):
   must fit fully inside it with NO overflow, NO clipping, and NO overlap between blocks. This is
   the single most common failure — prioritise it over visual ambition. Use less/shorter text and
   generous spacing rather than cramming.
-- READABILITY FLOOR: in ordinary authored generation and style-reference mode, every visible
-  text element that communicates slide content (headings, body, bullets, tables, chart labels,
-  metrics, callouts, captions, and footnotes) must be at least 12px (9pt equivalent). Express
-  text sizes with `font-size` in px; do not use CSS `font` shorthand or relative units to evade
-  this floor. If content does not fit, shorten it or allocate more space instead of shrinking it
-  until it becomes unnecessarily hard-to-read.
+{type_scale}
 - Heading sizing: size headings to the ACTUAL text length so they stay within their area, and
   budget vertical space for the real number of wrapped lines.
 - No fragile positioning: do NOT hard-pin a block to a fixed top/absolute offset that a longer
@@ -212,7 +243,7 @@ DESIGN SYSTEM (obey on EVERY slide so the deck is cohesive):
   words are never split mid-word across lines.
 - Boxes/cards/labels: each one's text must fit ENTIRELY inside it with padding — never let text
   touch or clip an edge. Size the box to its content (or shrink the content to the box).
-{page_number_system}
+{header_system}{page_number_system}
 - All visible text in {language}.
 Return ONLY the complete HTML document."""
 
@@ -240,6 +271,8 @@ class Brand:
     wordmark: str = ""
     primary_is_explicit: bool = False
     fonts_are_explicit: bool = False
+    # Decides the slide type scale: less text per slide means larger type.
+    verbosity: str = "standard"
 
 
 _FALLBACK_SLIDE_MARKER = 'data-presenton-authored-fallback="true"'
@@ -310,6 +343,7 @@ def build_design_system(
     style: Optional[AuthoredStyleLike] = None,
     *,
     page_number_mode: str = TEMPLATE_PAGE_NUMBER_MODE,
+    header_contract: Optional[AuthoredHeaderContract] = None,
 ) -> str:
     """Build the concrete shared brief for a brand and optional authored style.
 
@@ -317,12 +351,12 @@ def build_design_system(
     legacy brief so the generated prompt remains byte-for-byte compatible.
     Custom style briefs are already validated plain text from the A1 loader and
     are inserted verbatim apart from surrounding whitespace.
+
+    ``header_contract`` is the deck's frozen top-area design. Omitting it keeps
+    the pre-contract prompt unchanged; supplying it makes every slide of the
+    deck reproduce the same header.
     """
-    if page_number_mode not in {
-        TEMPLATE_PAGE_NUMBER_MODE,
-        COMPANY_STANDARD_PAGE_NUMBER_MODE,
-    }:
-        raise ValueError("unsupported page number mode")
+    validate_page_number_mode(page_number_mode)
     return author_slide_prompt.build_design_system(
         brand,
         style,
@@ -332,12 +366,55 @@ def build_design_system(
         normalize_reference_mode=normalize_reference_mode,
         exact_reconstruction=EXACT_RECONSTRUCTION,
         style_reference=STYLE_REFERENCE,
-        page_number_system=(
-            _COMPANY_STANDARD_PAGE_NUMBER_RULES
-            if page_number_mode == COMPANY_STANDARD_PAGE_NUMBER_MODE
-            else _TEMPLATE_PAGE_NUMBER_RULES
+        page_number_system=_PAGE_NUMBER_RULES_BY_MODE[page_number_mode],
+        type_scale=type_scale_rules(getattr(brand, "verbosity", None)),
+        header_system=(
+            render_header_contract(
+                header_contract,
+                language=brand.language or "Korean",
+            )
+            if header_contract is not None
+            else ""
         ),
     )
+
+
+#: Per-verbosity type scale for the design-system brief. The deck's verbosity
+#: decides how much text a slide carries, so it also decides how large that text
+#: can be: a concise deck that keeps a 12px floor spends the room it saved on
+#: empty bands instead of readable type. Measured on a 54-slide concise deck
+#: before this rule, 59% of font-size declarations were under 14px.
+#:
+#: The page-number element keeps its own 12px specification from the
+#: PAGE-NUMBER SYSTEM rules; it is furniture, not slide content.
+_TYPE_SCALES = {
+    "concise": """- TYPE SCALE: this deck is written concise, so every slide carries little text and has room to
+  read well. In ordinary authored generation and style-reference mode, set body copy, bullets,
+  labels, and table cells at 22px or larger, the slide's own title between 40px and 56px, and
+  keep no visible content text (headings, body, bullets, tables, chart labels, metrics,
+  callouts, captions, footnotes) below 15px (11pt equivalent). Express text sizes with
+  `font-size` in px; do not use CSS `font` shorthand or relative units to evade this floor.
+  Spare room on a slide goes into a larger type scale and more generous leading, not into one
+  large empty band.""",
+    "standard": """- TYPE SCALE: in ordinary authored generation and style-reference mode, set body copy, bullets,
+  labels, and table cells at 18px or larger, and keep no visible content text (headings, body,
+  bullets, tables, chart labels, metrics, callouts, captions, footnotes) below 13px (10pt
+  equivalent). Express text sizes with `font-size` in px; do not use CSS `font` shorthand or
+  relative units to evade this floor. Spare room on a slide goes into a larger type scale and
+  more generous leading, not into one large empty band. If content does not fit, shorten it or
+  allocate more space instead of shrinking it until it becomes unnecessarily hard to read.""",
+    "text-heavy": """- READABILITY FLOOR: in ordinary authored generation and style-reference mode, every visible
+  text element that communicates slide content (headings, body, bullets, tables, chart labels,
+  metrics, callouts, captions, and footnotes) must be at least 12px (9pt equivalent). Express
+  text sizes with `font-size` in px; do not use CSS `font` shorthand or relative units to evade
+  this floor. If content does not fit, shorten it or allocate more space instead of shrinking it
+  until it becomes unnecessarily hard-to-read.""",
+}
+
+
+def type_scale_rules(verbosity: Optional[str]) -> str:
+    """The type-scale brief for a deck's verbosity, defaulting to standard."""
+    return _TYPE_SCALES.get(verbosity or "standard", _TYPE_SCALES["standard"])
 
 
 _SYSTEM = (
@@ -355,6 +432,9 @@ def _author_prompt(
     n: int,
     structured_context: dict | None = None,
     page_number_mode: str = TEMPLATE_PAGE_NUMBER_MODE,
+    requirements_enabled: bool = False,
+    chapter_breadcrumb: bool = False,
+    chapter_prefix: Optional[str] = None,
 ) -> str:
     return author_slide_prompt.author_prompt(
         content,
@@ -365,6 +445,9 @@ def _author_prompt(
         n,
         structured_context=structured_context,
         page_number_mode=page_number_mode,
+        requirements_enabled=requirements_enabled,
+        chapter_breadcrumb=chapter_breadcrumb,
+        chapter_prefix=chapter_prefix,
     )
 
 
@@ -705,23 +788,23 @@ def fallback_slide_html(
     if len(text) > 420:
         text = text[:420].rstrip() + "…"
     eyebrow = _html.escape(role or "")
-    if page_number_mode not in {
-        TEMPLATE_PAGE_NUMBER_MODE,
-        COMPANY_STANDARD_PAGE_NUMBER_MODE,
-    }:
-        raise ValueError("unsupported page number mode")
+    validate_page_number_mode(page_number_mode)
     marker = (
         ""
-        if role == "COVER" or page_number_mode == COMPANY_STANDARD_PAGE_NUMBER_MODE
+        if role == "COVER" or page_number_mode != TEMPLATE_PAGE_NUMBER_MODE
         else f"{index:02d}"
     )
     footer = f'<div class="foot">{marker}</div>' if marker else ""
+    # The numbered layout reserves a 72px footer zone; an unnumbered deck keeps
+    # the 32px bottom margin its slides were authored against.
+    bottom_padding = 72 if page_number_mode == TEMPLATE_PAGE_NUMBER_MODE else 32
     return (
         f"<!DOCTYPE html><html lang=\"ko\" {_FALLBACK_SLIDE_MARKER}>"
         "<head><meta charset=\"utf-8\"><style>"
         f"body{{margin:0;width:1280px;height:720px;overflow:hidden;background:#F8FAFC;"
         f"font-family:{font_stack};"
-        "box-sizing:border-box;padding:64px 64px 72px;display:flex;flex-direction:column;position:relative;}"
+        f"box-sizing:border-box;padding:64px 64px {bottom_padding}px;"
+        "display:flex;flex-direction:column;position:relative;}"
         f".bar{{width:56px;height:6px;background:{primary};margin-bottom:24px;}}"
         f".eyebrow{{font-size:13px;letter-spacing:.15em;text-transform:uppercase;color:{primary};"
         "font-weight:700;margin-bottom:18px;}"
@@ -794,6 +877,9 @@ async def author_slide_html(
     reference_mode: str = STYLE_REFERENCE,
     structured_context: dict | None = None,
     page_number_mode: str = TEMPLATE_PAGE_NUMBER_MODE,
+    requirements_enabled: bool = False,
+    chapter_breadcrumb: bool = False,
+    chapter_prefix: Optional[str] = None,
 ) -> str:
     """Author one bespoke, self-contained 1280x720 HTML slide. Single text-generation
     call against the configured provider; returns the cleaned HTML document.
@@ -812,6 +898,9 @@ async def author_slide_html(
         n,
         structured_context=structured_context,
         page_number_mode=page_number_mode,
+        requirements_enabled=requirements_enabled,
+        chapter_breadcrumb=chapter_breadcrumb,
+        chapter_prefix=chapter_prefix,
     )
     image_parts = _reference_parts(requested_images)
     if mode == EXACT_RECONSTRUCTION and not (

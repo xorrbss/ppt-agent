@@ -7,10 +7,10 @@ is required for both preview and publication.
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 from html.parser import HTMLParser
 import json
+import asyncio
 import logging
 import time
 import uuid
@@ -41,6 +41,11 @@ from services.authored_quality_review_service import (
     _render_review_html,
     _saved_brand,
     _saved_role,
+)
+from services.authored_deck_chapter_plan import load_chapter_plan
+from services.authored_header_contract_service import (
+    load_header_contract,
+    page_number_mode_for,
 )
 from services.authored_review_asset_store import publish_reviewed_png
 from services.database import async_session_maker
@@ -224,10 +229,20 @@ async def _authoring_context(
             stage="source_validation",
         ) from error
 
+    # Remaking one page must reproduce the deck's own frozen chrome. Rebuilding
+    # the plan from defaults instead would give the remade slide a header the
+    # rest of the deck does not have, and a page number it deliberately dropped.
+    header_contract = load_header_contract(presentation.theme)
     plan = prepare_authored_deck(
         outline,
         _saved_brand(presentation),
         style,
+        page_number_mode=page_number_mode_for(header_contract),
+        header_contract=header_contract,
+        # The chapter plan is indexed against the persisted outline, which is
+        # the one loaded above, so the remade page is handed the same eyebrow
+        # prefix and the same role it was authored with.
+        chapter_plan=load_chapter_plan(presentation.theme),
     )
     plan_mode = normalize_reference_mode(getattr(plan, "reference_mode", saved_mode))
     if plan_mode != saved_mode:
@@ -252,226 +267,234 @@ async def run_authored_page_remake_preview(
     """Generate and validate one detached candidate; never mutate a live slide."""
 
     started = time.perf_counter()
-    lock = _ANALYZE_AND_FIX_LOCKS.setdefault(presentation_id, asyncio.Lock())
-    async with lock:
-        presentation, slides = await _load_deck(session, presentation_id, slide_index)
-        if slide_index < 0 or slide_index >= len(slides):
-            raise AuthoredPageRemakeError(
-                "authored_page_remake_slide_out_of_range", stage="source_validation"
-            )
-        target = slides[slide_index]
-        if not target.html_content:
-            raise AuthoredPageRemakeError(
-                "authored_page_remake_source_html_missing", stage="source_validation"
-            )
-        outline = presentation.get_presentation_outline()
-        if outline is None:
-            raise AuthoredPageRemakeError(
-                "authored_page_remake_outline_missing", stage="source_validation"
-            )
-        plan, style, reference_mode, exact_sources = await _authoring_context(
-            session, presentation, slides
+    # Deliberately unlocked, so a batch can preview four pages at once. A
+    # process-local lock could not exclude publication anyway — the workspace
+    # worker has its own OS process — so a deck that moves underneath is caught
+    # by the candidate's source digest at publish time, not by exclusion here.
+    presentation, slides = await _load_deck(session, presentation_id, slide_index)
+    if slide_index < 0 or slide_index >= len(slides):
+        raise AuthoredPageRemakeError(
+            "authored_page_remake_slide_out_of_range", stage="source_validation"
         )
+    target = slides[slide_index]
+    if not target.html_content:
+        raise AuthoredPageRemakeError(
+            "authored_page_remake_source_html_missing", stage="source_validation"
+        )
+    outline = presentation.get_presentation_outline()
+    if outline is None:
+        raise AuthoredPageRemakeError(
+            "authored_page_remake_outline_missing", stage="source_validation"
+        )
+    plan, style, reference_mode, exact_sources = await _authoring_context(
+        session, presentation, slides
+    )
 
-        await _set_task(
-            session,
-            task,
-            status="processing",
-            message=f"{slide_index + 1}페이지의 새 버전을 만들고 있습니다.",
-        )
-        source_html = str(target.html_content)
-        source_digest = authored_page_source_digest(target)
-        try:
-            baseline_png, baseline_metrics = await _render_review_html(source_html)
-        except Exception as error:
-            raise AuthoredPageRemakeError(
-                "authored_page_remake_source_render_failed",
-                stage="source_render",
-                retryable=True,
-            ) from error
-        baseline_report = inspect_authored_dom(
-            source_html,
-            baseline_metrics,
-            reference_mode=reference_mode,
-        )
-        issue_details = "; ".join(issue.detail for issue in baseline_report.issues[:4])
-        instruction = (request.instruction or "").strip()
-        detail = (
-            "Rebuild this entire slide as a fresh composition while preserving every "
-            "source fact, label, number, and semantic relationship. Resolve overlap, "
-            "occlusion, clipping, and unsafe spacing."
-        )
-        if issue_details:
-            detail += f" Detected visual evidence: {issue_details}"
-        if instruction:
-            detail += f" User note: {instruction}"
-        critique = SlideCritique(
-            needs_fix=True,
-            issues=[
-                CritiqueIssue(
-                    type=(
-                        "overlap"
-                        if any(
-                            issue.category == "overlap"
-                            for issue in baseline_report.issues
-                        )
-                        else "other"
-                    ),
-                    severity="high",
-                    detail=detail[:200],
-                )
-            ],
-        )
+    await _set_task(
+        session,
+        task,
+        status="processing",
+        message=f"{slide_index + 1}페이지의 새 버전을 만들고 있습니다.",
+    )
+    source_html = str(target.html_content)
+    source_digest = authored_page_source_digest(target)
+    try:
+        baseline_png, baseline_metrics = await _render_review_html(source_html)
+    except Exception as error:
+        raise AuthoredPageRemakeError(
+            "authored_page_remake_source_render_failed",
+            stage="source_render",
+            retryable=True,
+        ) from error
+    baseline_report = inspect_authored_dom(
+        source_html,
+        baseline_metrics,
+        reference_mode=reference_mode,
+    )
+    issue_details = "; ".join(issue.detail for issue in baseline_report.issues[:4])
+    instruction = (request.instruction or "").strip()
+    detail = (
+        "Rebuild this entire slide as a fresh composition while preserving every "
+        "source fact, label, number, and semantic relationship. Resolve overlap, "
+        "occlusion, clipping, and unsafe spacing."
+    )
+    if issue_details:
+        detail += f" Detected visual evidence: {issue_details}"
+    if instruction:
+        detail += f" User note: {instruction}"
+    critique = SlideCritique(
+        needs_fix=True,
+        issues=[
+            CritiqueIssue(
+                type=(
+                    "overlap"
+                    if any(
+                        issue.category == "overlap"
+                        for issue in baseline_report.issues
+                    )
+                    else "other"
+                ),
+                severity="high",
+                detail=detail[:200],
+            )
+        ],
+    )
 
-        role = _saved_role(target, plan.roles[slide_index])
-        reference_kwargs: dict[str, Any] = {}
-        if reference_mode == EXACT_RECONSTRUCTION:
-            planned = getattr(plan, "reference_images", None)
-            if planned is None or len(planned) != len(slides):
-                raise AuthoredPageRemakeError(
-                    "authored_page_remake_exact_source_unavailable",
-                    stage="source_validation",
-                )
-            reference_kwargs["reference_images_by_slide"] = [planned[slide_index]]
-            if exact_sources is None or len(exact_sources) != len(slides):
-                raise AuthoredPageRemakeError(
-                    "authored_page_remake_exact_source_unavailable",
-                    stage="source_validation",
-                )
+    role = _saved_role(target, plan.roles[slide_index])
+    reference_kwargs: dict[str, Any] = {}
+    plan_prefixes = getattr(plan, "chapter_prefixes", ())
+    if plan_prefixes:
+        # Remaking one page re-authors it, and the deck's other 63 pages already
+        # open their eyebrow with a chapter. Handing over the same prefix is what
+        # keeps this one from being the page that disagrees.
+        reference_kwargs["chapter_prefixes"] = [plan_prefixes[slide_index]]
+    if reference_mode == EXACT_RECONSTRUCTION:
+        planned = getattr(plan, "reference_images", None)
+        if planned is None or len(planned) != len(slides):
+            raise AuthoredPageRemakeError(
+                "authored_page_remake_exact_source_unavailable",
+                stage="source_validation",
+            )
+        reference_kwargs["reference_images_by_slide"] = [planned[slide_index]]
+        if exact_sources is None or len(exact_sources) != len(slides):
+            raise AuthoredPageRemakeError(
+                "authored_page_remake_exact_source_unavailable",
+                stage="source_validation",
+            )
 
-        try:
-            result = await revise_authored_deck(
-                [source_html],
-                [baseline_png],
-                [outline.slides[slide_index].content],
-                [role],
-                plan.brand,
-                plan.design_system,
-                max_cycles=1,
-                style=style,
-                slide_indices=[slide_index],
-                total_slides=len(slides),
-                initial_critiques=[critique],
-                return_details=True,
-                force_full_reauthor_indices=[0],
-                **reference_kwargs,
-            )
-        except Exception as error:
-            raise AuthoredPageRemakeError(
-                "authored_page_remake_generation_failed",
-                stage="generation",
-                retryable=True,
-            ) from error
-        if len(result) != 4:
-            raise AuthoredPageRemakeError(
-                "authored_page_remake_candidate_invalid", stage="generation"
-            )
-        htmls, pngs, changed, details = result
-        detail_payload = details[0] if details and isinstance(details[0], dict) else {}
-        if not htmls or not pngs:
-            raise AuthoredPageRemakeError(
-                "authored_page_remake_candidate_invalid", stage="generation"
-            )
-        # The reviser swallows model and transport failures and hands the source
-        # back unchanged, so "no new page was produced" must not be read as "the
-        # page is bad".  A failed attempt is transient and worth retrying; a page
-        # that simply came back identical is a real result the user can judge.
-        attempt_failed = changed != [0] or (
-            bool(detail_payload.get("attempted"))
-            and not detail_payload.get("succeeded")
+    try:
+        result = await revise_authored_deck(
+            [source_html],
+            [baseline_png],
+            [outline.slides[slide_index].content],
+            [role],
+            plan.brand,
+            plan.design_system,
+            max_cycles=1,
+            style=style,
+            slide_indices=[slide_index],
+            total_slides=len(slides),
+            initial_critiques=[critique],
+            return_details=True,
+            force_full_reauthor_indices=[0],
+            **reference_kwargs,
         )
-        if attempt_failed:
-            LOGGER.warning(
-                "Authored page remake generation attempt failed "
-                "(slide_index=%s, path=%s, detail=%s)",
-                slide_index,
-                detail_payload.get("path"),
-                detail_payload.get("failure_detail"),
-            )
-            raise AuthoredPageRemakeError(
-                "authored_page_remake_generation_failed",
-                stage="generation",
-                retryable=True,
-            )
-        candidate_html = str(htmls[0])
-        candidate_png = bytes(pngs[0])
-        # An identical re-author is a legitimate outcome, not a defect: it happens
-        # naturally when the page was already remade.  Report it so the user can
-        # decide whether to keep it or retry, rather than hiding the result.
-        candidate_change = (
-            "unchanged" if candidate_html == source_html else "changed"
+    except Exception as error:
+        raise AuthoredPageRemakeError(
+            "authored_page_remake_generation_failed",
+            stage="generation",
+            retryable=True,
+        ) from error
+    if len(result) != 4:
+        raise AuthoredPageRemakeError(
+            "authored_page_remake_candidate_invalid", stage="generation"
         )
-        try:
-            verified_png, candidate_metrics = await _render_review_html(candidate_html)
-        except Exception as error:
-            raise AuthoredPageRemakeError(
-                "authored_page_remake_candidate_render_failed",
-                stage="candidate_render",
-                retryable=True,
-            ) from error
-        candidate_report = inspect_authored_dom(
-            candidate_html,
-            candidate_metrics,
-            reference_mode=reference_mode,
+    htmls, pngs, changed, details = result
+    detail_payload = details[0] if details and isinstance(details[0], dict) else {}
+    if not htmls or not pngs:
+        raise AuthoredPageRemakeError(
+            "authored_page_remake_candidate_invalid", stage="generation"
         )
-        # A candidate that generated and rendered is always offered to the user.
-        # Deterministic DOM findings are advisory evidence for that human decision;
-        # hiding a renderable candidate behind a local sensor removes the only way
-        # to judge it.  Telemetry coverage travels with the verdict so a warning
-        # without issues (missing/partial browser probe) stays explainable.
-        candidate_dom_status = (
-            "warning" if candidate_report.needs_attention else "passed"
+    # The reviser swallows model and transport failures and hands the source
+    # back unchanged, so "no new page was produced" must not be read as "the
+    # page is bad".  A failed attempt is transient and worth retrying; a page
+    # that simply came back identical is a real result the user can judge.
+    attempt_failed = changed != [0] or (
+        bool(detail_payload.get("attempted"))
+        and not detail_payload.get("succeeded")
+    )
+    if attempt_failed:
+        LOGGER.warning(
+            "Authored page remake generation attempt failed "
+            "(slide_index=%s, path=%s, detail=%s)",
+            slide_index,
+            detail_payload.get("path"),
+            detail_payload.get("failure_detail"),
         )
-        if candidate_dom_status == "warning":
-            LOGGER.info(
-                "Authored page remake candidate needs attention "
-                "(slide_index=%s, telemetry=%s, issues=%d)",
-                slide_index,
-                candidate_report.telemetry_status,
-                len(candidate_report.issues),
-            )
-        image_reference = publish_reviewed_png(
-            presentation_id, slide_index, verified_png or candidate_png
+        raise AuthoredPageRemakeError(
+            "authored_page_remake_generation_failed",
+            stage="generation",
+            retryable=True,
         )
-        candidate_digest = _canonical_digest(
-            {"html": candidate_html, "image": image_reference}
+    candidate_html = str(htmls[0])
+    candidate_png = bytes(pngs[0])
+    # An identical re-author is a legitimate outcome, not a defect: it happens
+    # naturally when the page was already remade.  Report it so the user can
+    # decide whether to keep it or retry, rather than hiding the result.
+    candidate_change = (
+        "unchanged" if candidate_html == source_html else "changed"
+    )
+    try:
+        verified_png, candidate_metrics = await _render_review_html(candidate_html)
+    except Exception as error:
+        raise AuthoredPageRemakeError(
+            "authored_page_remake_candidate_render_failed",
+            stage="candidate_render",
+            retryable=True,
+        ) from error
+    candidate_report = inspect_authored_dom(
+        candidate_html,
+        candidate_metrics,
+        reference_mode=reference_mode,
+    )
+    # A candidate that generated and rendered is always offered to the user.
+    # Deterministic DOM findings are advisory evidence for that human decision;
+    # hiding a renderable candidate behind a local sensor removes the only way
+    # to judge it.  Telemetry coverage travels with the verdict so a warning
+    # without issues (missing/partial browser probe) stays explainable.
+    candidate_dom_status = (
+        "warning" if candidate_report.needs_attention else "passed"
+    )
+    if candidate_dom_status == "warning":
+        LOGGER.info(
+            "Authored page remake candidate needs attention "
+            "(slide_index=%s, telemetry=%s, issues=%d)",
+            slide_index,
+            candidate_report.telemetry_status,
+            len(candidate_report.issues),
         )
-        await _set_task(
-            session,
-            task,
-            status="completed",
-            message=f"{slide_index + 1}페이지의 새 버전 미리보기가 준비되었습니다.",
-            data={
-                "kind": PREVIEW_KIND,
-                "phase": "preview_ready",
-                "presentation_id": str(presentation_id),
-                "slide_id": str(target.id),
-                "slide_index": slide_index,
-                "source_digest": source_digest,
-                "candidate_digest": candidate_digest,
-                "candidate_html": candidate_html,
-                "candidate_image": image_reference,
-                "baseline_issues": _issue_summary(baseline_report),
-                "candidate_issues": _issue_summary(candidate_report),
-                "validation": {
-                    "source_render": "passed",
-                    "candidate_render": "passed",
-                    "candidate_dom": candidate_dom_status,
-                    "candidate_dom_telemetry": candidate_report.telemetry_status,
-                    "candidate_change": candidate_change,
-                    "reference_mode": reference_mode,
-                },
-                "generation": {
-                    "path": detail_payload.get("path", "full_fallback"),
-                    "elapsed_ms": round((time.perf_counter() - started) * 1000, 3),
-                    "llm_scope": "single_page",
-                },
-                "publish": {
-                    "status": "not_started",
-                    "rollback_available": False,
-                },
+    image_reference = publish_reviewed_png(
+        presentation_id, slide_index, verified_png or candidate_png
+    )
+    candidate_digest = _canonical_digest(
+        {"html": candidate_html, "image": image_reference}
+    )
+    await _set_task(
+        session,
+        task,
+        status="completed",
+        message=f"{slide_index + 1}페이지의 새 버전 미리보기가 준비되었습니다.",
+        data={
+            "kind": PREVIEW_KIND,
+            "phase": "preview_ready",
+            "presentation_id": str(presentation_id),
+            "slide_id": str(target.id),
+            "slide_index": slide_index,
+            "source_digest": source_digest,
+            "candidate_digest": candidate_digest,
+            "candidate_html": candidate_html,
+            "candidate_image": image_reference,
+            "baseline_issues": _issue_summary(baseline_report),
+            "candidate_issues": _issue_summary(candidate_report),
+            "validation": {
+                "source_render": "passed",
+                "candidate_render": "passed",
+                "candidate_dom": candidate_dom_status,
+                "candidate_dom_telemetry": candidate_report.telemetry_status,
+                "candidate_change": candidate_change,
+                "reference_mode": reference_mode,
             },
-        )
+            "generation": {
+                "path": detail_payload.get("path", "full_fallback"),
+                "elapsed_ms": round((time.perf_counter() - started) * 1000, 3),
+                "llm_scope": "single_page",
+            },
+            "publish": {
+                "status": "not_started",
+                "rollback_available": False,
+            },
+        },
+    )
 
 
 def _failed_preview_breadcrumb(
@@ -681,6 +704,7 @@ async def publish_authored_page_remake(
     presentation_id: uuid.UUID,
     slide_index: int,
     preview_task_id: str,
+    snapshot: bool = True,
 ) -> dict[str, Any]:
     """Stage one preview publication in the caller-owned transaction."""
 
@@ -748,13 +772,16 @@ async def publish_authored_page_remake(
         }
     )
 
-    await version_service.snapshot_slides(
-        session,
-        presentation_id,
-        [item.model_dump(mode="json") for item in slides],
-        label=f"페이지 다시 만들기: {slide_index + 1}",
-        force=True,
-    )
+    if snapshot:
+        # A batch takes one snapshot for the whole transaction instead: per-page
+        # snapshots there would evict the deck's real undo history.
+        await version_service.snapshot_slides(
+            session,
+            presentation_id,
+            [item.model_dump(mode="json") for item in slides],
+            label=f"페이지 다시 만들기: {slide_index + 1}",
+            force=True,
+        )
     result = await session.execute(
         update(SlideModel)
         .where(

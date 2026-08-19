@@ -136,7 +136,7 @@ def test_rejected_local_patch_gets_one_bounded_full_fallback(
         monkeypatch.setattr(
             quality_service,
             "prepare_authored_deck",
-            lambda *_: SimpleNamespace(
+            lambda *_, **_kwargs: SimpleNamespace(
                 roles=("CONTENT",),
                 reference_mode=STYLE_REFERENCE,
                 brand=Brand(topic="Fallback gate"),

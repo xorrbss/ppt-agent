@@ -16,6 +16,7 @@ from models.sql.presentation_generation_job import PresentationGenerationJob
 
 from services import authored_presentation_generation as _generation
 from services import authored_presentation_artifacts as _artifacts
+from services.authored_header_contract_service import resolve_header_contract
 from services import authored_presentation_pipeline as _pipeline
 from services import authored_presentation_publication as _publication
 from services.authored_presentation_artifacts import (
@@ -69,6 +70,7 @@ def _sync_runtime_dependencies() -> None:
     _generation.materialize_exact_source_style = materialize_exact_source_style
     _generation.revise_authored_deck = revise_authored_deck
     _generation.resolve_authored_style = resolve_authored_style
+    _generation.resolve_header_contract = resolve_header_contract
     _generation.validate_exact_reconstruction_style = (
         validate_exact_reconstruction_style
     )
@@ -127,6 +129,7 @@ __all__ = [
     "is_fallback_slide_html",
     "resolve_brand",
     "resolve_authored_style",
+    "resolve_header_contract",
     "validate_exact_reconstruction_style",
     "prepare_authored_deck",
     "materialize_exact_source_style",

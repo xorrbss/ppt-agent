@@ -220,6 +220,22 @@ export function normalizeCompanyStandardDefault(
   };
 }
 
+/**
+ * A brand asset reference is all-or-nothing on the wire: the server emits either
+ * null or the full `{assetId, digest, altText}` triple.  Drop a partial record to
+ * null instead of casting it: consumers dereference `altText` and re-validate the
+ * digest when building the asset URL, so an incomplete logo would throw at render
+ * time.  A missing logo degrades one card; it must not fail the whole catalog.
+ */
+function normalizeBrandAsset(value: unknown): BrandAsset | null {
+  if (!isRecord(value)) return null;
+  const assetId = stringValue(value, "assetId", "asset_id");
+  const altText = stringValue(value, "altText", "alt_text");
+  const digest = value.digest;
+  if (!assetId || !altText || !isMasterDigest(digest)) return null;
+  return { assetId, digest, altText };
+}
+
 function normalizeMasterCatalogSummary(value: unknown): MasterCatalogSummary {
   if (!isRecord(value)) throw new Error("Master API returned an invalid catalog entry");
   const masterId = stringValue(value, "masterId", "master_id");
@@ -228,13 +244,21 @@ function normalizeMasterCatalogSummary(value: unknown): MasterCatalogSummary {
   const primaryFont = stringValue(value, "primaryFont", "primary_font");
   const updatedTime = stringValue(value, "updatedTime", "updated_time", "updatedAt", "updated_at");
   const layoutCount = numberValue(value, "layoutCount", "layout_count");
-  const publishedRevision = value.publishedRevision ?? value.published_revision ?? null;
-  const publishedDigest = value.publishedDigest ?? value.published_digest ?? null;
+  const publishedRevisionValue = value.publishedRevision ?? value.published_revision ?? null;
+  const publishedDigestValue = value.publishedDigest ?? value.published_digest ?? null;
+  const publishedRevision =
+    typeof publishedRevisionValue === "number" &&
+    Number.isInteger(publishedRevisionValue) &&
+    publishedRevisionValue >= 1
+      ? publishedRevisionValue
+      : null;
+  const publishedDigest = isMasterDigest(publishedDigestValue) ? publishedDigestValue : null;
+  const logo = normalizeBrandAsset(value.logo);
   if (
     !masterId || !name || !semanticVersion || !primaryFont || !updatedTime ||
     layoutCount === undefined || layoutCount < 0 ||
-    (publishedRevision !== null && (!Number.isInteger(publishedRevision) || publishedRevision < 1)) ||
-    (publishedDigest !== null && !isMasterDigest(publishedDigest))
+    (publishedRevisionValue !== null && publishedRevision === null) ||
+    (publishedDigestValue !== null && publishedDigest === null)
   ) {
     throw new Error("Master API returned an invalid catalog entry");
   }
@@ -242,10 +266,10 @@ function normalizeMasterCatalogSummary(value: unknown): MasterCatalogSummary {
     masterId,
     name,
     semanticVersion,
-    publishedRevision: publishedRevision as number | null,
-    publishedDigest: publishedDigest as MasterDigest | null,
+    publishedRevision,
+    publishedDigest,
     hasDraft: Boolean(value.hasDraft ?? value.has_draft),
-    logo: isRecord(value.logo) ? value.logo as MasterCatalogSummary["logo"] : null,
+    logo,
     primaryFont,
     layoutCount,
     updatedTime,
@@ -572,6 +596,10 @@ export function normalizeAiMasterAnalysis(payload: unknown): AiMasterAnalysis {
   const integerSummary = (camel: string, snake: string) => numberValue(summary, camel, snake) ?? 0;
   const masterRevisionValue = data.masterRevision ?? data.master_revision;
   const validationValue = data.validation;
+  // `Array.isArray(a ?? b)` does not narrow the re-evaluated `a ?? b`, so bind
+  // the coalesced value once and narrow that binding instead.
+  const layoutActionsValue = data.layoutActions ?? data.layout_actions;
+  const lowConfidenceValue = data.lowConfidence ?? data.low_confidence;
   return {
     analysisId,
     status: status as AiMasterAnalysis["status"],
@@ -643,9 +671,9 @@ export function normalizeAiMasterAnalysis(payload: unknown): AiMasterAnalysis {
       .map(normalizeAiLayout)
       .filter((item): item is AiMasterLayoutCandidate => item !== null),
     decisions: (Array.isArray(data.decisions) ? data.decisions : []).map(normalizeAiDecision).filter((item): item is AiMasterCandidateDecision => item !== null),
-    layoutActions: (Array.isArray(data.layoutActions ?? data.layout_actions) ? data.layoutActions ?? data.layout_actions : []).map(normalizeAiLayoutAction).filter((item): item is AiMasterLayoutAction => item !== null),
+    layoutActions: (Array.isArray(layoutActionsValue) ? layoutActionsValue : []).map(normalizeAiLayoutAction).filter((item): item is AiMasterLayoutAction => item !== null),
     warnings: Array.isArray(data.warnings) ? data.warnings.filter((item): item is string => typeof item === "string") : [],
-    lowConfidence: Array.isArray(data.lowConfidence ?? data.low_confidence) ? (data.lowConfidence ?? data.low_confidence as unknown[]).filter((item): item is string => typeof item === "string") : [],
+    lowConfidence: Array.isArray(lowConfidenceValue) ? lowConfidenceValue.filter((item): item is string => typeof item === "string") : [],
     tolerances: isRecord(data.tolerances) ? Object.fromEntries(Object.entries(data.tolerances).filter((entry): entry is [string, number] => typeof entry[1] === "number")) : {},
     contractDraft: contractDraft as unknown as AiMasterAnalysis["contractDraft"],
     ...(isRecord(validationValue)

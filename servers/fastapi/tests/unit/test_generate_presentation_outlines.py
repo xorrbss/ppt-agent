@@ -118,3 +118,60 @@ def test_presentation_outline_model_schema_validation_rejects_invalid_ai_payload
 
     with pytest.raises(ValidationError):
         PresentationOutlineModel.model_validate(invalid_payload)
+
+
+@pytest.mark.parametrize(
+    ("verbosity", "bullets", "per_bullet"),
+    [
+        ("concise", "at most 3 bullets", "about 24 characters"),
+        ("standard", "at most 5 bullets", "about 60 characters"),
+        (None, "at most 5 bullets", "about 60 characters"),
+        ("text-heavy", "at most 6 bullets", "about 100 characters"),
+    ],
+)
+def test_slide_text_budget_is_a_ceiling_per_verbosity(verbosity, bullets, per_bullet):
+    """Each verbosity caps slide text instead of setting a floor.
+
+    The authored pipeline renders this outline text verbatim, so a floor here
+    reached the slide as text no later stage could trim. The cap is expressed
+    per bullet: a self-audited per-slide total made the model narrate its own
+    corrections into the content field.
+    """
+    system = outline_module.get_system_prompt(verbosity)
+
+    assert bullets in system
+    assert per_bullet in system
+    assert "The body is those bullets and nothing else." in system
+    assert "at least ~" not in system
+
+
+@pytest.mark.parametrize(
+    ("verbosity", "expected"),
+    [
+        ("concise", "22px or larger"),
+        ("standard", "18px or larger"),
+        ("text-heavy", "at least 12px (9pt equivalent)"),
+        (None, "18px or larger"),
+    ],
+)
+def test_authored_type_scale_follows_deck_verbosity(verbosity, expected):
+    """A deck that carries less text per slide may set that text larger.
+
+    Verbosity reaches the authoring prompt only through Brand, so a deck that
+    kept the 12px floor spent the room it saved on empty bands instead of type.
+    """
+    from utils.llm_calls.author_slide import Brand, build_design_system
+
+    brand = Brand(topic="t", verbosity=verbosity or "standard")
+
+    assert expected in build_design_system(brand)
+
+
+def test_concise_type_scale_leaves_the_page_number_specification_alone():
+    """The page number is furniture, so it keeps its own 12px size."""
+    from utils.llm_calls.author_slide import Brand, build_design_system
+
+    design_system = build_design_system(Brand(topic="t", verbosity="concise"))
+
+    assert "12px type (9pt equivalent)" in design_system
+    assert "below 15px (11pt equivalent)" in design_system

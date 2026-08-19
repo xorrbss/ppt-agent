@@ -729,7 +729,7 @@ export function masterCanvasClipboardItems(
 ): MasterCanvasClipboardItem[] {
   const scene = masterContractToCanvasScene(contract, layoutIdOrKind);
   const { layout } = findLayout(contract, layoutIdOrKind);
-  return [...new Set(elementIds)].flatMap((elementId) => {
+  return [...new Set(elementIds)].flatMap((elementId): MasterCanvasClipboardItem[] => {
     const canvasElement = scene.elements.find(
       (candidate) => candidate.id === elementId && candidate.duplicable,
     );

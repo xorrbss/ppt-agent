@@ -19,6 +19,7 @@ export interface ExportPresentationRouteBody {
   pptxMode?: unknown;
   fontEmbedding?: unknown;
   expectedPresentationRevision?: unknown;
+  operationId?: unknown;
 }
 
 export interface ExportPresentationRouteDependencies<
@@ -245,6 +246,12 @@ export async function executeExportPresentationRouteRequest<
       400
     );
   }
+  // Progress correlation is optional narration, so a malformed value is
+  // dropped rather than failing an otherwise valid export request.
+  const operationId =
+    typeof body.operationId === "string" && body.operationId.trim()
+      ? body.operationId.trim()
+      : undefined;
   if (!(await dependencies.packageAvailable())) {
     throw new Error(
       "presentation-export runtime is not available. Run scripts/sync-presentation-export.cjs to install it."
@@ -261,6 +268,7 @@ export async function executeExportPresentationRouteRequest<
       fontEmbedding,
       expectedPresentationRevision:
         body.expectedPresentationRevision as number | undefined,
+      ...(operationId ? { operationId } : {}),
     },
     dependencies
   );

@@ -13,9 +13,11 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, List, Mapping, Optional, Sequence, Tuple
 
+from models.authored_chapter_plan import AuthoredChapterPlan
+from models.authored_header_contract import AuthoredHeaderContract
 from models.presentation_outline_model import PresentationOutlineModel
+from utils.authored_header_validation import validate_header_contract
 from utils.llm_calls.author_slide import (
-    COMPANY_STANDARD_PAGE_NUMBER_MODE,
     EXACT_RECONSTRUCTION,
     STYLE_REFERENCE,
     TEMPLATE_PAGE_NUMBER_MODE,
@@ -27,6 +29,7 @@ from utils.llm_calls.author_slide import (
     fallback_slide_html,
     is_valid_slide_html,
     normalize_reference_mode,
+    validate_page_number_mode,
 )
 from utils.authored_styles import reference_images_for_role
 
@@ -80,6 +83,14 @@ class AuthoredDeckPlan:
     design_system: str
     structured_contexts: Tuple[dict[str, Any] | None, ...]
     page_number_mode: str
+    # The deck's frozen top-area design. None for decks authored before contracts
+    # existed and for exact reconstruction, which reproduces a source verbatim.
+    header_contract: AuthoredHeaderContract | None = None
+    # Per-slide eyebrow prefixes derived from the deck's frozen chapter plan,
+    # separator included; an empty tuple is a deck with no chapters. Kept as one
+    # value per slide rather than as the plan itself so the authoring layer never
+    # has to re-derive which chapter a position falls in.
+    chapter_prefixes: Tuple[str | None, ...] = ()
 
 
 # Concurrency is bounded PROCESS-WIDE inside author_slide_html (the AUTHOR_CONCURRENCY-sized
@@ -333,6 +344,15 @@ def _constrain_structured_zone_html(
     return constrained
 
 
+def _requirements_enabled(contract: AuthoredHeaderContract | None) -> bool:
+    return contract is not None and contract.requirements.enabled
+
+
+def _chapter_breadcrumb(contract: AuthoredHeaderContract | None) -> bool:
+    """Whether this deck's frozen header asks every eyebrow to open with a chapter."""
+    return contract is not None and contract.eyebrow.form == "chapterBreadcrumb"
+
+
 def derive_role(index: int, n: int, content: str) -> str:
     """Per-slide ROLE for the authoring prompt, from position + content keywords."""
     if index == 0:
@@ -351,12 +371,27 @@ def derive_role(index: int, n: int, content: str) -> str:
     return "PILLARS"
 
 
-def plan_deck_roles(outline: PresentationOutlineModel) -> List[str]:
+def plan_deck_roles(
+    outline: PresentationOutlineModel,
+    chapter_plan: AuthoredChapterPlan | None = None,
+) -> List[str]:
     """The deck-plan: one ROLE per slide. Single source of role derivation, shared by
-    the authoring pass and the vision-QA re-author pass."""
+    the authoring pass and the vision-QA re-author pass.
+
+    A chapter plan overrides the keyword derivation on the slides it inserted,
+    and only on those. Their role is not a guess about their text — the deck
+    decided it when it decided to insert them — and letting a divider page whose
+    chapter is called "시스템 구성" be derived into ARCHITECTURE would give it a
+    content slide's reference image and a content slide's header."""
     slides = list(outline.slides)
     n = len(slides)
-    return [derive_role(i, n, slides[i].content) for i in range(n)]
+    roles = [derive_role(i, n, slides[i].content) for i in range(n)]
+    if chapter_plan is not None:
+        for index in range(n):
+            forced = chapter_plan.role_at(index)
+            if forced is not None:
+                roles[index] = forced
+    return roles
 
 
 async def _author_one_resilient(
@@ -372,6 +407,8 @@ async def _author_one_resilient(
     raise_on_failure: bool = False,
     structured_context: dict[str, Any] | None = None,
     page_number_mode: str = TEMPLATE_PAGE_NUMBER_MODE,
+    header_contract: AuthoredHeaderContract | None = None,
+    chapter_prefix: str | None = None,
 ) -> str:
     """Author one slide with bounded retries and a style-mode branded fallback.
 
@@ -379,6 +416,10 @@ async def _author_one_resilient(
     Provider overloads and broken streamed responses get two additional attempts with
     exponential backoff so a brief upstream incident does not invalidate the whole deck.
     Exact reconstruction instead fails closed rather than replacing the source slide.
+
+    A slide that renders but breaks the deck's header contract is retried like any
+    other failure. If the retries run out, the best rendered attempt is still
+    returned: a slightly drifted header is worth more than a placeholder slide.
     """
     reference_mode = normalize_reference_mode(reference_mode)
     if reference_mode == EXACT_RECONSTRUCTION and len(reference_images) != 1:
@@ -388,6 +429,7 @@ async def _author_one_resilient(
     last_error: object = "invalid HTML"
     attempt_limit = _DEFAULT_AUTHOR_ATTEMPTS
     attempts_made = 0
+    header_reject: str | None = None
     for attempt in range(_TRANSIENT_AUTHOR_ATTEMPTS):
         attempts_made = attempt + 1
         try:
@@ -404,6 +446,9 @@ async def _author_one_resilient(
                     n,
                     structured_context=structured_context,
                     page_number_mode=page_number_mode,
+                    requirements_enabled=_requirements_enabled(header_contract),
+                    chapter_breadcrumb=_chapter_breadcrumb(header_contract),
+                    chapter_prefix=chapter_prefix,
                     **kwargs,
                 )
             else:
@@ -419,10 +464,34 @@ async def _author_one_resilient(
                     n,
                     structured_context=structured_context,
                     page_number_mode=page_number_mode,
+                    requirements_enabled=_requirements_enabled(header_contract),
+                    chapter_breadcrumb=_chapter_breadcrumb(header_contract),
+                    chapter_prefix=chapter_prefix,
                     **kwargs,
                 )
             if is_valid_slide_html(html):
-                return _constrain_structured_zone_html(html, structured_context)
+                constrained = _constrain_structured_zone_html(html, structured_context)
+                violations = (
+                    validate_header_contract(
+                        constrained,
+                        header_contract,
+                        role=role,
+                        content=content,
+                    )
+                    if header_contract is not None
+                    else ()
+                )
+                if not violations:
+                    return constrained
+                header_reject = constrained
+                last_error = "header contract violated: " + ", ".join(violations)
+                logger.warning(
+                    "[authored] slide %d/%d %s (attempt %d)",
+                    index + 1,
+                    n,
+                    last_error,
+                    attempts_made,
+                )
         except Exception as e:  # noqa: BLE001 — resilience boundary, recorded below
             last_error = e
             if reference_mode == EXACT_RECONSTRUCTION and isinstance(e, ValueError):
@@ -450,6 +519,16 @@ async def _author_one_resilient(
             )
             await asyncio.sleep(delay)
 
+    if header_reject is not None:
+        logger.warning(
+            "[authored] slide %d/%d kept a header-contract-violating render after "
+            "%d attempts (%s)",
+            index + 1,
+            n,
+            attempts_made,
+            last_error,
+        )
+        return header_reject
     if (
         raise_on_failure
         or reference_mode == EXACT_RECONSTRUCTION
@@ -491,14 +570,23 @@ def prepare_authored_deck(
     *,
     structured_slide_contexts: Sequence[Mapping[str, Any] | None] | None = None,
     page_number_mode: str = TEMPLATE_PAGE_NUMBER_MODE,
+    header_contract: AuthoredHeaderContract | None = None,
+    chapter_plan: AuthoredChapterPlan | None = None,
 ) -> AuthoredDeckPlan:
-    """Prepare the shared prompt inputs once, before slide-level pipelining starts."""
+    """Prepare the shared prompt inputs once, before slide-level pipelining starts.
+
+    ``header_contract`` is the deck's already-decided top-area design. It is
+    rendered into ``design_system`` exactly once here, which is what guarantees
+    every slide receives the identical header brief.
+
+    ``chapter_plan`` is the deck's already-decided structure. It is resolved
+    against the SAME outline this plan is built from, so a caller that expanded
+    the outline must hand over the plan that expansion produced; a plan from a
+    different outline would move every divider by the number of slides that
+    changed.
+    """
     slides = list(outline.slides)
-    if page_number_mode not in {
-        TEMPLATE_PAGE_NUMBER_MODE,
-        COMPANY_STANDARD_PAGE_NUMBER_MODE,
-    }:
-        raise ValueError("unsupported page number mode")
+    validate_page_number_mode(page_number_mode)
     if structured_slide_contexts is None:
         structured_contexts: tuple[dict[str, Any] | None, ...] = tuple(
             None for _ in slides
@@ -515,7 +603,7 @@ def prepare_authored_deck(
             for value in structured_slide_contexts
         )
     effective_brand = apply_style_defaults(brand, style)
-    roles = tuple(plan_deck_roles(outline))
+    roles = tuple(plan_deck_roles(outline, chapter_plan))
     reference_mode = normalize_reference_mode(
         getattr(style, "reference_mode", STYLE_REFERENCE)
     )
@@ -541,8 +629,26 @@ def prepare_authored_deck(
         references = tuple(
             tuple(reference_images_for_role(style, role)) for role in roles
         )
+    contents = tuple(slide.content for slide in slides)
+    # Exact reconstruction reproduces a source slide verbatim, so imposing a
+    # header design on it would contradict the mode.
+    #
+    # Structured authoring is the same kind of contradiction, one layer down: the
+    # template owns the geometry there, and _constrain_structured_zone_html pins
+    # every zone container at the template's own top. A per-slide derived band
+    # cannot also be authoritative — a zone pinned at y=140 under a 180px band
+    # renders 40px inside the header, and a body wrapper pinned below the band
+    # becomes the containing block the zone offsets then resolve against. Only
+    # one of the two can decide where content starts, and for these decks it is
+    # the template.
+    structured = any(context is not None for context in structured_contexts)
+    effective_contract = (
+        None
+        if reference_mode == EXACT_RECONSTRUCTION or structured
+        else header_contract
+    )
     return AuthoredDeckPlan(
-        contents=tuple(slide.content for slide in slides),
+        contents=contents,
         roles=roles,
         reference_images=references,
         reference_mode=reference_mode,
@@ -551,9 +657,16 @@ def prepare_authored_deck(
             effective_brand,
             style,
             page_number_mode=page_number_mode,
+            header_contract=effective_contract,
         ),
         structured_contexts=structured_contexts,
         page_number_mode=page_number_mode,
+        header_contract=effective_contract,
+        chapter_prefixes=(
+            tuple(chapter_plan.eyebrow_prefix_at(i) for i in range(len(slides)))
+            if chapter_plan is not None and effective_contract is not None
+            else ()
+        ),
     )
 
 
@@ -573,6 +686,10 @@ async def author_planned_slide(
         raise_on_failure=raise_on_failure,
         structured_context=plan.structured_contexts[index],
         page_number_mode=plan.page_number_mode,
+        header_contract=plan.header_contract,
+        chapter_prefix=(
+            plan.chapter_prefixes[index] if plan.chapter_prefixes else None
+        ),
     )
 
 

@@ -165,6 +165,83 @@ test("production fails closed without the non-root read-only tmpfs network-none 
   }
 });
 
+test("the local native profile is unattested, twice-declared, and kill-switchable", () => {
+  const previous = {
+    nodeEnv: process.env.NODE_ENV,
+    isolation: process.env.AUTHORED_RENDERER_OS_ISOLATION,
+    boundary: process.env.AUTHORED_RENDERER_EXECUTION_BOUNDARY,
+    renderer: process.env.AUTHORED_VNEXT_RENDERER_ENABLED,
+    killSwitch: process.env.AUTHORED_RENDERER_KILL_SWITCH,
+  };
+  try {
+    process.env.NODE_ENV = "production";
+    process.env.AUTHORED_VNEXT_RENDERER_ENABLED = "true";
+    delete process.env.AUTHORED_RENDERER_KILL_SWITCH;
+
+    // Declaring the profile once must not be enough to run local Chrome.
+    process.env.AUTHORED_RENDERER_OS_ISOLATION = "local-native-unattested";
+    delete process.env.AUTHORED_RENDERER_EXECUTION_BOUNDARY;
+    assert.throws(authoredRendererIsolationPolicy, /EXECUTION_BOUNDARY=local-native/);
+    process.env.AUTHORED_RENDERER_EXECUTION_BOUNDARY = "external-worker";
+    assert.throws(authoredRendererIsolationPolicy, /EXECUTION_BOUNDARY=local-native/);
+
+    process.env.AUTHORED_RENDERER_EXECUTION_BOUNDARY = "local-native";
+    const policy = authoredRendererIsolationPolicy();
+    assert.equal(policy.productionOsIsolation, "local-native-unattested");
+    assert.equal(policy.executionBoundary, "local-native");
+    assert.equal(policy.rendererEnabled, true);
+    assert.equal(policy.browserSandbox, true);
+    assert.equal(policy.webSecurity, true);
+
+    // The operations kill switch still wins over the local profile.
+    process.env.AUTHORED_RENDERER_KILL_SWITCH = "true";
+    assert.equal(authoredRendererIsolationPolicy().rendererEnabled, false);
+    delete process.env.AUTHORED_RENDERER_KILL_SWITCH;
+
+    // The boundary value alone never unlocks the profile.
+    process.env.AUTHORED_RENDERER_OS_ISOLATION = "proxy-and-csp-only";
+    assert.throws(authoredRendererIsolationPolicy, /nonroot-readonly-tmpfs-network-none/);
+  } finally {
+    for (const [name, value] of [
+      ["NODE_ENV", previous.nodeEnv],
+      ["AUTHORED_RENDERER_OS_ISOLATION", previous.isolation],
+      ["AUTHORED_RENDERER_EXECUTION_BOUNDARY", previous.boundary],
+      ["AUTHORED_VNEXT_RENDERER_ENABLED", previous.renderer],
+      ["AUTHORED_RENDERER_KILL_SWITCH", previous.killSwitch],
+    ]) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+});
+
+test("attested production still forbids driving Chrome from Next.js", () => {
+  const previous = {
+    nodeEnv: process.env.NODE_ENV,
+    isolation: process.env.AUTHORED_RENDERER_OS_ISOLATION,
+    boundary: process.env.AUTHORED_RENDERER_EXECUTION_BOUNDARY,
+    renderer: process.env.AUTHORED_VNEXT_RENDERER_ENABLED,
+  };
+  try {
+    process.env.NODE_ENV = "production";
+    process.env.AUTHORED_RENDERER_OS_ISOLATION =
+      "nonroot-readonly-tmpfs-network-none";
+    process.env.AUTHORED_RENDERER_EXECUTION_BOUNDARY = "external-worker";
+    process.env.AUTHORED_VNEXT_RENDERER_ENABLED = "true";
+    assert.equal(authoredRendererIsolationPolicy().rendererEnabled, false);
+  } finally {
+    for (const [name, value] of [
+      ["NODE_ENV", previous.nodeEnv],
+      ["AUTHORED_RENDERER_OS_ISOLATION", previous.isolation],
+      ["AUTHORED_RENDERER_EXECUTION_BOUNDARY", previous.boundary],
+      ["AUTHORED_VNEXT_RENDERER_ENABLED", previous.renderer],
+    ]) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+});
+
 test("the inert 04 hostile corpus is rejected by the product preflight", async () => {
   const manifest = JSON.parse(
     await fs.readFile(path.join(corpusRoot, "manifest.json"), "utf8")

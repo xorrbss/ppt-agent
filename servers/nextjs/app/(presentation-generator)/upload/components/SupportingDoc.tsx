@@ -14,7 +14,7 @@ interface SupportingDocProps {
     compact?: boolean
 }
 
-export const MAX_SUPPORTED_FILES = 8
+export const MAX_SUPPORTED_FILES = 20
 export const SUPPORTED_FILE_FORMATS_DESCRIPTION = 'Word, PowerPoint, 스프레드시트, PDF, TXT, Markdown, 이미지 파일.'
 
 const PDF_TYPES = ['.pdf']

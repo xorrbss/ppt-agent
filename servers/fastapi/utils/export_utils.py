@@ -149,6 +149,7 @@ async def export_authored_hybrid_presentation(
     cookie_header: str | None,
     expected_revision: int,
     font_embedding: bool = False,
+    workspace_operation_id: uuid.UUID | None = None,
 ) -> PresentationAndPath:
     """Run the canonical authored-hybrid exporter instead of rasterizing HTML."""
 
@@ -170,6 +171,11 @@ async def export_authored_hybrid_presentation(
                 "pptxMode": "hybrid",
                 "fontEmbedding": font_embedding,
                 "expectedPresentationRevision": expected_revision,
+                **(
+                    {"operationId": str(workspace_operation_id)}
+                    if workspace_operation_id is not None
+                    else {}
+                ),
             },
         )
         response.raise_for_status()

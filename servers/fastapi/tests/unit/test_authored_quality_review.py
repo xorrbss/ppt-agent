@@ -875,7 +875,7 @@ def test_unimportable_review_never_reaches_legacy_revise_or_cas(
                 quality_service, "resolve_authored_style", lambda _: style
             )
             monkeypatch.setattr(
-                quality_service, "prepare_authored_deck", lambda *args: plan
+                quality_service, "prepare_authored_deck", lambda *args, **_kwargs: plan
             )
             monkeypatch.setattr(
                 quality_service,
@@ -970,7 +970,7 @@ def test_unimportable_exact_review_does_not_call_legacy_image_critique(
 
             monkeypatch.setattr(quality_service, "resolve_authored_style", lambda _: style)
             monkeypatch.setattr(
-                quality_service, "prepare_authored_deck", lambda *args: _exact_plan(source_paths)
+                quality_service, "prepare_authored_deck", lambda *args, **_kwargs: _exact_plan(source_paths)
             )
             monkeypatch.setattr(quality_service, "render_html_to_png", fake_render)
             monkeypatch.setattr(quality_service, "critique_authored", fake_critique)
@@ -1051,7 +1051,7 @@ def test_unimportable_exact_review_does_not_accept_legacy_html_rewrite(
                 return ["<html><body>fixed</body></html>", args[0][1]], [b"fixed", args[1][1]], [0]
 
             monkeypatch.setattr(quality_service, "resolve_authored_style", lambda _: style)
-            monkeypatch.setattr(quality_service, "prepare_authored_deck", lambda *args: _exact_plan(source_paths))
+            monkeypatch.setattr(quality_service, "prepare_authored_deck", lambda *args, **_kwargs: _exact_plan(source_paths))
             monkeypatch.setattr(quality_service, "render_html_to_png", fake_render)
             monkeypatch.setattr(quality_service, "critique_authored", fake_critique)
             monkeypatch.setattr(quality_service, "revise_authored_deck", fake_revise)
@@ -1163,7 +1163,7 @@ def test_exact_quality_review_rejects_non_improving_candidate_without_snapshot(
                 return ["<html><body>worse</body></html>", htmls[1]], [b"worse", pngs[1]], [0]
 
             monkeypatch.setattr(quality_service, "resolve_authored_style", lambda _: style)
-            monkeypatch.setattr(quality_service, "prepare_authored_deck", lambda *args: _exact_plan(source_paths))
+            monkeypatch.setattr(quality_service, "prepare_authored_deck", lambda *args, **_kwargs: _exact_plan(source_paths))
             monkeypatch.setattr(quality_service, "render_html_to_png", lambda html: _async_bytes(html.encode()))
             monkeypatch.setattr(quality_service, "critique_authored", fake_critique)
             monkeypatch.setattr(quality_service, "revise_authored_deck", fake_revise)

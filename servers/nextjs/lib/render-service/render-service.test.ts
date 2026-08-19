@@ -157,6 +157,60 @@ test("smart charts use controlled preview runtime and require immutable snapshot
   assert.equal(pdf.script_policy.iframe_free, true);
 });
 
+test("decorative chart class names are not a runtime chart", () => {
+  const snapshot = createRenderPresentationSnapshot(
+    presentation("smart", [
+      {
+        id: "slide-1",
+        html_content:
+          '<div class="chart-wrap"><div class="mini-chart"><div class="bar b4"></div></div>' +
+          '<div class="chart-label">전년 대비</div></div>',
+      },
+    ]),
+  );
+  const artifact = new RenderService().render({ target: "pptx", snapshot });
+  assert.equal(artifact.chart_snapshot.status, "not-required");
+  assert.deepEqual(artifact.chart_snapshot.chart_ids, []);
+});
+
+test("explicit runtime chart markers still require an export snapshot", () => {
+  const service = new RenderService();
+  for (const markup of [
+    '<canvas id="revenue"></canvas>',
+    '<div data-chart="revenue"></div>',
+    '<div data-smart-chart="revenue"></div>',
+  ]) {
+    const snapshot = createRenderPresentationSnapshot(
+      presentation("smart", [{ id: "slide-1", html_content: markup }]),
+    );
+    assert.throws(
+      () => service.render({ target: "pptx", snapshot }),
+      /render_chart_snapshot_required:slide-1-html-chart/,
+      markup,
+    );
+  }
+});
+
+test("authored decks export without chart snapshots the server never issues", () => {
+  const service = new RenderService();
+  // Even an explicit marker is snapshot-free here: scriptPolicy denies <script>,
+  // so nothing can draw into it and Chrome paints the authored markup as-is.
+  const snapshot = createRenderPresentationSnapshot(
+    presentation("authored", [
+      {
+        id: "slide-1",
+        html_content:
+          '<div class="chart-zone"><canvas id="q-canvas-1"></canvas></div>',
+      },
+    ]),
+  );
+  for (const target of ["pptx", "pdf", "thumbnail"] as const) {
+    const artifact = service.render({ target, snapshot });
+    assert.equal(artifact.chart_snapshot.status, "not-required");
+    assert.deepEqual(artifact.chart_snapshot.chart_ids, ["slide-1-html-chart"]);
+  }
+});
+
 test("Template V2 adapter consumes canonical plans and persisted hydrated UI", () => {
   const ast = JSON.parse(
     readFileSync(

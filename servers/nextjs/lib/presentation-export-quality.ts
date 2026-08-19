@@ -104,6 +104,16 @@ export interface PresentationExportSlideQuality {
   fallbackElements?: PresentationExportFallbackElement[];
 }
 
+export interface PresentationExportRendererIsolation {
+  osIsolation:
+    | "nonroot-readonly-tmpfs-network-none"
+    | "development-unattested"
+    | "local-native-unattested";
+  executionBoundary: "external-worker" | "development-local" | "local-native";
+  /** False whenever the render carries no OS-isolation guarantee. */
+  attested: boolean;
+}
+
 export interface PresentationExportQualityReport {
   schemaVersion: typeof PRESENTATION_EXPORT_QUALITY_SCHEMA_VERSION;
   mode: "hybrid" | "fidelity";
@@ -122,6 +132,13 @@ export interface PresentationExportQualityReport {
   fontEmbedding: boolean;
   fontEmbeddingStatus?: PresentationExportFontEmbeddingStatus;
   fontRendering?: PresentationExportFontRenderingQuality;
+  /**
+   * Which renderer isolation the artifact was actually produced under. Recorded
+   * so an unattested local-native render is never mistaken for an isolated
+   * external-worker one after the file leaves this process. Additive: exporters
+   * that never consult the isolation policy may omit it.
+   */
+  rendererIsolation?: PresentationExportRendererIsolation;
 }
 
 export type PresentationExportSlideQualityInput = Omit<
@@ -135,6 +152,7 @@ export type PresentationExportSlideQualityInput = Omit<
 export interface PresentationExportQualityOptions {
   fontEmbeddingStatus?: Partial<PresentationExportFontEmbeddingStatus>;
   fontRendering?: Partial<PresentationExportFontRenderingQuality>;
+  rendererIsolation?: PresentationExportRendererIsolation;
 }
 
 function nonNegativeInteger(value: number): number {
@@ -349,6 +367,9 @@ export function createPresentationExportQuality(
       ),
       powerpointTypefacePolicy: "central-compatible-fallbacks",
     },
+    ...(options.rendererIsolation
+      ? { rendererIsolation: options.rendererIsolation }
+      : {}),
   };
 }
 

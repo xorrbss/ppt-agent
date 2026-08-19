@@ -31,14 +31,34 @@ def get_system_prompt(
     include_title_slide: bool = True,
     include_table_of_contents: bool = False,
 ):
-    verbosity_instruction = (
-        "Each slide's content should be at least ~80 words: substantive but tight, covering the key points with at least one concrete fact, figure, or example."
+    # Slide text budgets are CEILINGS. They were floors ("at least ~N words")
+    # until decks came back too dense to lay out: the authored pipeline hands
+    # this outline text to the slide author verbatim, so an over-long outline
+    # becomes a crowded slide with no later stage able to trim it.
+    #
+    # The budget is stated as the SHAPE of the body — how many bullets, how long
+    # each may be — rather than as a total the model has to audit itself against.
+    # A per-slide total plus override wording ("hard ceiling", "outranks every
+    # other instruction", "in any language") made the model monitor its own
+    # drafts, and that self-correction leaked into the streamed content field.
+    # Per-bullet limits bound the same total without asking for the audit.
+    #
+    # Characters are the primary unit because one CJK "word" is an eojeol of
+    # three to four characters, so a word-only limit reads as several times more
+    # text in Korean than the same number does in English.
+    verbosity_budget = (
+        "at most 3 bullets, each at most about 24 characters (about 6 words)"
         if verbosity == "concise"
         else (
-            "Each slide's content should be at least ~250 words: rich and information-dense, packed with specific facts, figures, named examples, dates, and cause-effect detail — never a short summary."
+            "at most 6 bullets, each at most about 100 characters (about 25 words)"
             if verbosity == "text-heavy"
-            else "Each slide's content should be at least ~150 words: specific and substantive (not a high-level summary), with concrete facts, figures, or examples supporting each point."
+            else "at most 5 bullets, each at most about 60 characters (about 15 words)"
         )
+    )
+    verbosity_instruction = (
+        f"Each slide's body is a bullet list: {verbosity_budget}. The body is those bullets and "
+        "nothing else. Keep the concrete facts, figures, and named examples; leave out "
+        "restatement, adjectives, and connective prose that do not fit."
     )
 
     title_slide_instruction = (
@@ -64,8 +84,8 @@ def get_system_prompt(
     )
 
     system = (
-        "You are an expert content strategist and subject-matter writer creating substantive, insight-dense presentation slides.\n"
-        "Generate a presentation title and rich, specific content for each slide.\n"
+        "You are an expert content strategist and subject-matter writer creating substantive, insight-dense presentation slides that stay within their text budget.\n"
+        "Generate a presentation title and specific, high-signal content for each slide.\n"
         "Generate flow based on user **content** and use **context** just for reference.\n"
         "Presentation title should be plain text, not markdown. It should be a concise title for the presentation.\n"
         "Each slide content should contain the content for that slide.\n"
@@ -80,6 +100,7 @@ def get_system_prompt(
         "Ensure logical flow between slides and avoid repetition, vague statements, or generic filler content.\n"
         "Proactively include relevant figures, statistics, dates, named examples, and concrete evidence for each slide; prefer specific detail over generic claims.\n"
         "If 'auto-detect' is used, figure it out from the content/context.\n"
+        "Write the presentation title and every line of every slide in that one language.\n"
         f"{title_slide_instruction}\n"
         f"{toc_block}"
         f"{slide_outline_structure}\n"
@@ -194,7 +215,7 @@ async def generate_ppt_outline(
 ):
     model = get_model()
     response_model = (
-        get_presentation_outline_model_with_n_slides(n_slides)
+        get_presentation_outline_model_with_n_slides(n_slides, verbosity)
         if n_slides is not None
         else PresentationOutlineModel
     )

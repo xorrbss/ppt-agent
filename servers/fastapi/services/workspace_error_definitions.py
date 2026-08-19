@@ -455,5 +455,20 @@ WORKSPACE_ERROR_REGISTRY: dict[str, WorkspaceErrorDefinition] = {
             retryable=True,
             status_code=500,
         ),
+        definition(
+            "authored_batch_remake_request_invalid",
+            "This batch page remake request is missing its pages or previews.",
+            status_code=400,
+        ),
+        definition(
+            "authored_batch_remake_master_pinned_unsupported",
+            "Batch page remake is not available while a design master is pinned.",
+            status_code=400,
+        ),
+        definition(
+            "authored_batch_remake_all_slides_failed",
+            "None of the selected pages could be applied.",
+            status_code=409,
+        ),
     )
 }

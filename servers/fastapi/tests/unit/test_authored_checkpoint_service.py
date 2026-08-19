@@ -95,7 +95,7 @@ def _install_one_slide_pipeline_fakes(monkeypatch, *, rendered_html):
     async def no_recording(**_kwargs):
         return None
 
-    monkeypatch.setattr(pipeline, "prepare_authored_deck", lambda *_args: plan)
+    monkeypatch.setattr(pipeline, "prepare_authored_deck", lambda *_args, **_kwargs: plan)
     monkeypatch.setattr(pipeline, "author_planned_slide", unexpected_author)
     monkeypatch.setattr(pipeline, "render_html_to_png", fake_render)
     monkeypatch.setattr(pipeline, "record_local_stage", no_recording)

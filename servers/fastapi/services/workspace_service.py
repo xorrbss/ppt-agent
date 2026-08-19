@@ -57,6 +57,7 @@ from services.account_deletion_service import (
     require_active_account_generation,
 )
 from services.workspace_error_registry import resolve_workspace_error
+from services.workspace_operation_titles import workspace_operation_title
 from utils.datetime_utils import get_current_utc_datetime
 from utils.owner_context import get_current_owner_id
 
@@ -1102,22 +1103,6 @@ def _event_to_wire(
     }
 
 
-def _operation_title(kind: str) -> str:
-    return {
-        "presentation.generate": "프레젠테이션 생성",
-        "presentation.edit": "프레젠테이션 수정",
-        "slide.edit": "슬라이드 수정",
-        "slide.regenerate": "페이지 다시 만들기",
-        "slide.delete": "슬라이드 삭제",
-        "version.restore": "버전 복원",
-        "template.apply": "AI 저작 템플릿 변경",
-        "design.apply": "디자인 변경",
-        "quality.review": "프레젠테이션 품질 검사",
-        "export.pptx": "PowerPoint 내보내기",
-        "export.pdf": "PDF 내보내기",
-    }.get(kind, "워크스페이스 작업")
-
-
 def _is_retryable_template_v2_outline_admission(operation: WorkspaceOperation) -> bool:
     """Recognize grounded Template V2 rows stranded by repaired admission gates.
 
@@ -1424,7 +1409,7 @@ async def workspace_timeline(
                     "operation_id": str(row.id),
                     "position": position,
                     "operation_type": row.kind,
-                    "title": _operation_title(row.kind),
+                    "title": workspace_operation_title(row.kind),
                     "status": row.state,
                     "progress": progress.get("progress", progress.get("percent")),
                     "capacity_waiting": capacity_waiting,

@@ -51,7 +51,10 @@ uv run python server.py --port 8000 --reload false
 
 # frontend (APP_DATA_DIRECTORY + USER_CONFIG_PATH are required here too — see note below)
 cd servers/nextjs; npm install
-$env:APP_DATA_DIRECTORY="..\..\app_data"; $env:FAST_API_INTERNAL_URL="http://127.0.0.1:8000"; $env:NEXT_INTERNAL_URL="http://localhost:5000"; $env:USER_CONFIG_PATH="..\..\app_data\userConfig.json"; npm run build; npm run start -- -p 3000
+$env:APP_DATA_DIRECTORY="..\..\app_data"; $env:FAST_API_INTERNAL_URL="http://127.0.0.1:8000"; $env:NEXT_INTERNAL_URL="http://localhost:5000"; $env:USER_CONFIG_PATH="..\..\app_data\userConfig.json"
+# authored 편집가능 PPTX 익스포트를 쓸 때만 필요한 로컬 프로파일 (아래 절 참고)
+$env:AUTHORED_RENDERER_OS_ISOLATION="local-native-unattested"; $env:AUTHORED_RENDERER_EXECUTION_BOUNDARY="local-native"; $env:AUTHORED_VNEXT_RENDERER_ENABLED="true"
+npm run build; npm run start -- -p 3000
 
 # single-origin proxy (mcp:8001 is reachable only if started separately)
 node scripts/presenton-local-proxy.mjs
@@ -62,6 +65,35 @@ Startup migrations should remain enabled for normal native runs. Re-running the
 backend is safe: Alembic upgrades an older database to the current head and a
 subsequent startup is a no-op. Set `MIGRATE_DATABASE_ON_STARTUP=false` only for a
 controlled workflow that applies migrations separately.
+
+### Authored renderer: the unattested local native profile
+
+`npm run start` runs with `NODE_ENV=production`, and production authored
+rendering normally demands the isolated renderer worker described in
+`contracts/authored-renderer/` — a non-root, read-only, tmpfs, network-none
+container. A Windows desktop cannot supply that, so authored slides would all
+fall back to images and the backend would reject the export as
+`authored_hybrid_export_not_editable`.
+
+For a single-user local run, declare the absence of that guarantee explicitly:
+
+| Variable | Value |
+|---|---|
+| `AUTHORED_RENDERER_OS_ISOLATION` | `local-native-unattested` |
+| `AUTHORED_RENDERER_EXECUTION_BOUNDARY` | `local-native` |
+| `AUTHORED_VNEXT_RENDERER_ENABLED` | `true` |
+
+Both of the first two are required: declaring one alone fails closed, so a real
+deployment cannot drift into the local profile by setting a stray variable. The
+CSP, CDP-pipe input, network abortion, and browser sandbox are unchanged — only
+the OS-level isolation attestation is waived, and every export produced this way
+records `rendererIsolation.osIsolation = "local-native-unattested"` with
+`attested: false` in its `.quality.json` sidecar and API response.
+
+**Never set these in a shared or hosted deployment.** Run the isolated worker
+there instead (`AUTHORED_RENDERER_OS_ISOLATION=nonroot-readonly-tmpfs-network-none`
+with `AUTHORED_RENDERER_EXECUTION_BOUNDARY=external-worker`).
+`AUTHORED_RENDERER_KILL_SWITCH=true` still disables the renderer in either mode.
 
 ### Optional MCP server
 

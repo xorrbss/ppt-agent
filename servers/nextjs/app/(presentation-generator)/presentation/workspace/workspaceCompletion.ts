@@ -86,5 +86,10 @@ export function workspacePresentationChangeFor(
     operationType: operation.operationType,
     result: operation.result,
     resultRevision: operation.resultRevision,
+    // A partial batch publishes only some of the selected pages, so the canvas
+    // must refresh exactly what the durable result says was written.
+    ...(operation.operationType === "slide.regenerate.batch"
+      ? { fixedSlideIndexes: fixedWorkspaceSlideIndexes(operation.result) }
+      : {}),
   };
 }

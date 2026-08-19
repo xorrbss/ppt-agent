@@ -18,6 +18,7 @@ from itertools import combinations, product
 import hashlib
 import json
 from math import isfinite
+from time import monotonic
 from typing import Iterable, Mapping, Sequence
 
 from models.slidespec_v1 import (
@@ -42,6 +43,20 @@ _EPSILON = 1e-7
 _MAX_ITERATIONS = 2048
 _MAX_EXHAUSTIVE_NON_OVERLAP_PAIRS = 5
 _MAX_BRANCHES = 1024
+
+#: Wall-clock ceiling for one ``solve_constraints`` call.
+#:
+#: Every loop here is already finite, but the product of them is not usable as a
+#: bound: 1024 branches x 2048 projection sweeps x the half spaces of a dense
+#: slide runs for hours. Observed in production as a wedged backend - the solver
+#: is synchronous, so the whole event loop stopped with it. An exhausted budget
+#: is reported as an incomplete search, which the callers already handle; it is
+#: never reported as proved infeasibility.
+_TIME_BUDGET_SECONDS = 5.0
+
+#: How often the projection sweep looks at the clock. Reading it every sweep is
+#: measurable on small problems, and the budget does not need that resolution.
+_BUDGET_CHECK_INTERVAL = 32
 _MAX_CARDINALITY_CORE_CHECKS = 4096
 
 
@@ -443,7 +458,11 @@ class _Problem:
         return result
 
 
-def _project(problem: _Problem, branch: Sequence[_HalfSpace]) -> tuple[bool, list[float], int, float]:
+def _project(
+    problem: _Problem,
+    branch: Sequence[_HalfSpace],
+    deadline: float | None = None,
+) -> tuple[bool, list[float], int, float]:
     values = problem.initial.copy()
     spaces = (*problem.spaces, *branch)
     # Norms are invariant across projection iterations.  Precomputing them is
@@ -455,6 +474,14 @@ def _project(problem: _Problem, branch: Sequence[_HalfSpace]) -> tuple[bool, lis
     )
     iterations = 0
     for iterations in range(1, _MAX_ITERATIONS + 1):
+        if (
+            deadline is not None
+            and iterations % _BUDGET_CHECK_INTERVAL == 0
+            and monotonic() >= deadline
+        ):
+            # Abandoning a sweep yields no witness, which is the safe answer:
+            # a branch without a witness never proves infeasibility on its own.
+            return False, values, iterations, float("inf")
         maximum = 0.0
         for space, norm in prepared:
             residual = space.residual(values)
@@ -473,7 +500,11 @@ def _project(problem: _Problem, branch: Sequence[_HalfSpace]) -> tuple[bool, lis
     return finite and residual <= 5e-7, values, iterations, max(0.0, residual)
 
 
-def _solve_active(spec: SlideSpec, active_ids: frozenset[str]) -> FeasibilityResult:
+def _solve_active(
+    spec: SlideSpec,
+    active_ids: frozenset[str],
+    deadline: float | None = None,
+) -> FeasibilityResult:
     problem = _Problem(spec, active_ids)
     best: tuple[float, list[float], int, float] | None = None
     branches = 0
@@ -482,8 +513,14 @@ def _solve_active(spec: SlideSpec, active_ids: frozenset[str]) -> FeasibilityRes
     branch_count = 4 ** len(problem.non_overlap)
     enumeration_complete = branch_count <= _MAX_BRANCHES
     for branch in problem.non_overlap_branches():
+        if deadline is not None and monotonic() >= deadline:
+            # The branches not evaluated are exactly what "complete" claims to
+            # have covered, so the budget downgrades the search rather than the
+            # verdict.
+            enumeration_complete = False
+            break
         branches += 1
-        feasible, values, iterations, residual = _project(problem, branch)
+        feasible, values, iterations, residual = _project(problem, branch, deadline)
         maximum_iterations = max(maximum_iterations, iterations)
         best_residual = min(best_residual, residual)
         if feasible:
@@ -548,6 +585,7 @@ def solve_constraints(
     *,
     compute_unsat_core: bool = True,
     cardinality_core_budget: int = _MAX_CARDINALITY_CORE_CHECKS,
+    time_budget_seconds: float | None = _TIME_BUDGET_SECONDS,
 ) -> FeasibilityResult:
     """Solve hard geometry and derive a deterministic bounded UNSAT core.
 
@@ -562,6 +600,13 @@ def solve_constraints(
 
     if cardinality_core_budget < 0:
         raise ValueError("cardinality_core_budget must be non-negative")
+    if time_budget_seconds is not None and time_budget_seconds <= 0:
+        raise ValueError("time_budget_seconds must be positive")
+    # One deadline covers the primary search and both core phases together, so
+    # the caller's ceiling is the whole call rather than per phase.
+    deadline = (
+        None if time_budget_seconds is None else monotonic() + time_budget_seconds
+    )
 
     hard_ids = tuple(sorted(
         constraint.constraintId
@@ -576,7 +621,7 @@ def solve_constraints(
         if node.constraints is not None
     ))
     active_owners = (*hard_ids, *envelope_ids)
-    result = _solve_active(spec, frozenset(active_owners))
+    result = _solve_active(spec, frozenset(active_owners), deadline)
     if result.feasible or not compute_unsat_core or not result.search_complete:
         return result
     core = list(active_owners)
@@ -591,7 +636,7 @@ def solve_constraints(
         if cached is not None:
             return cached
         oracle_calls += 1
-        solved = _solve_active(spec, owners)
+        solved = _solve_active(spec, owners, deadline)
         cache[owners] = solved
         return solved
 

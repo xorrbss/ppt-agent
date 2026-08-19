@@ -5,7 +5,7 @@ import GoogleConfig from "./GoogleConfig";
 import AnthropicConfig from "./AnthropicConfig";
 import OllamaConfig from "./OllamaConfig";
 import CustomConfig from "./CustomConfig";
-import CodexConfig from "./CodexConfig";
+import CodexConfig from "./codex-config";
 import {
   updateLLMConfig,
   changeProvider as changeProviderUtil,

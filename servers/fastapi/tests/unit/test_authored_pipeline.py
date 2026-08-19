@@ -15,6 +15,7 @@ import pytest
 from PIL import Image
 
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
+from models.authored_header_contract import default_header_contract
 from models.generate_presentation_request import GeneratePresentationRequest
 from models.presentation_outline_model import (
     PresentationOutlineModel,
@@ -254,7 +255,7 @@ def test_fallback_slide_html_uses_offline_safe_logical_font_stack():
 
 
 def test_author_deck_uses_authored_html_when_valid(monkeypatch):
-    async def fake(content, ds, brand, role, index, n):
+    async def fake(content, ds, brand, role, index, n, **kwargs):
         return _VALID
 
     monkeypatch.setattr(author_deck_mod, "author_slide_html", fake)
@@ -287,7 +288,7 @@ def test_author_deck_falls_back_when_authoring_returns_invalid(monkeypatch):
 def test_author_deck_retries_then_succeeds(monkeypatch):
     calls = {"n": 0}
 
-    async def flaky(content, ds, brand, role, index, n):
+    async def flaky(content, ds, brand, role, index, n, **kwargs):
         calls["n"] += 1
         if calls["n"] == 1:
             return ""  # first attempt invalid -> retry
@@ -303,7 +304,7 @@ def test_author_deck_backs_off_and_retries_transient_provider_failures(monkeypat
     calls = {"n": 0}
     delays = []
 
-    async def flaky(content, ds, brand, role, index, n):
+    async def flaky(content, ds, brand, role, index, n, **kwargs):
         calls["n"] += 1
         if calls["n"] < 4:
             raise RuntimeError(
@@ -327,7 +328,7 @@ def test_author_deck_backs_off_and_retries_transient_provider_failures(monkeypat
 def test_author_deck_keeps_two_attempt_limit_for_permanent_failures(monkeypatch):
     calls = {"n": 0}
 
-    async def invalid_request(content, ds, brand, role, index, n):
+    async def invalid_request(content, ds, brand, role, index, n, **kwargs):
         calls["n"] += 1
         raise RuntimeError("invalid authored slide request")
 
@@ -381,7 +382,9 @@ def test_custom_design_system_injects_brief_without_weakening_common_rules():
     assert "Brand primary colour: #2563EB" in design_system
     assert "EXACTLY 1280x720px" in design_system
     assert "FIT IS CRITICAL" in design_system
-    assert "unnecessarily hard-to-read" in design_system
+    # The readability rule is now stated per verbosity, so assert the clause
+    # every type scale shares rather than one scale's wording.
+    assert "do not use CSS `font` shorthand" in design_system
     assert "precise bottom" in design_system
     assert "bottom:14px" in design_system
     assert "bottom 72px" in design_system
@@ -666,11 +669,11 @@ def test_author_deck_builds_and_shares_selected_design_system_once(monkeypatch):
     build_calls = []
     author_design_systems = []
 
-    def fake_build(brand, selected_style):
+    def fake_build(brand, selected_style, **kwargs):
         build_calls.append((brand, selected_style))
         return "SELECTED DESIGN SYSTEM"
 
-    async def fake_author(content, design_system, brand, role, index, n):
+    async def fake_author(content, design_system, brand, role, index, n, **kwargs):
         author_design_systems.append(design_system)
         return _VALID
 
@@ -710,6 +713,7 @@ def test_author_deck_sends_role_specific_visual_references(monkeypatch, tmp_path
         index,
         n,
         reference_images=None,
+        **kwargs,
     ):
         captured.append((role, tuple(reference_images or ())))
         return _VALID
@@ -1297,8 +1301,17 @@ def test_authored_service_resolves_passes_and_persists_canonical_style(
     selected_style = SimpleNamespace(id="editorial", brief="- Editorial")
     captured = {}
 
-    async def fake_pipeline(outline, brand, style):
+    async def fake_pipeline(
+        outline,
+        brand,
+        style,
+        header_contract=None,
+        page_number_mode="none",
+        chapter_plan=None,
+    ):
         captured["style"] = style
+        captured["header_contract"] = header_contract
+        captured["page_number_mode"] = page_number_mode
         return authored_service.AuthoredGenerationPipelineResult(
             deck=AuthoredDeckResult([_VALID], "SELECTED DESIGN SYSTEM"),
             pngs=[b"png"],
@@ -1322,6 +1335,16 @@ def test_authored_service_resolves_passes_and_persists_canonical_style(
     )
     monkeypatch.setattr(
         authored_service, "_author_illustrate_render_pipeline", fake_pipeline
+    )
+
+    async def fake_header_contract(
+        outline, brand, style=None, instructions=None, chapter_breadcrumb=False
+    ):
+        captured["header_instructions"] = instructions
+        return default_header_contract(primary=brand.primary)
+
+    monkeypatch.setattr(
+        authored_service, "resolve_header_contract", fake_header_contract
     )
     monkeypatch.setattr(authored_service, "revise_authored_deck", fake_revise)
     monkeypatch.setattr(authored_service, "find_chrome", lambda: True)
@@ -1356,11 +1379,98 @@ def test_authored_service_resolves_passes_and_persists_canonical_style(
     presentation = next(x for x in session.added if isinstance(x, PresentationModel))
 
     assert captured["style"] is selected_style
+    # The default contract asks for no numbering, so the pipeline is driven with
+    # the unnumbered mode rather than the historical always-numbered default.
+    assert captured["page_number_mode"] == "none"
     assert captured["vision_design_system"] == "SELECTED DESIGN SYSTEM"
     assert captured["vision_style"] is selected_style
     assert presentation.theme["style"] == "editorial"
     assert presentation.theme["mode"] == "authored"
     assert "reference_mode" not in presentation.theme
+    assert result.path == "deck.pptx"
+
+
+def test_a_design_replay_is_authored_rather_than_dumped_verbatim(
+    monkeypatch, fake_async_session
+):
+    """Retemplating re-authors the source text against the newly chosen style.
+
+    The previous deterministic replay echoed the source markdown into a generic
+    frame, so a retemplated deck lost its design and showed raw '##' headings.
+    """
+    selected_style = SimpleNamespace(id="editorial", brief="- Editorial")
+    captured = {}
+
+    async def fake_pipeline(
+        outline,
+        brand,
+        style,
+        header_contract=None,
+        page_number_mode="none",
+        chapter_plan=None,
+    ):
+        captured["authored"] = True
+        captured["header_contract"] = header_contract
+        return authored_service.AuthoredGenerationPipelineResult(
+            deck=AuthoredDeckResult([_VALID], "REPLAY DESIGN SYSTEM"),
+            pngs=[b"png"],
+            elapsed=0.1,
+            author_work=0.1,
+            illustration_work=0.0,
+            render_work=0.1,
+        )
+
+    monkeypatch.setattr(
+        authored_service, "resolve_authored_style", lambda style_id: selected_style
+    )
+    monkeypatch.setattr(
+        authored_service, "_author_illustrate_render_pipeline", fake_pipeline
+    )
+
+    async def fake_header_contract(
+        outline, brand, style=None, instructions=None, chapter_breadcrumb=False
+    ):
+        return default_header_contract(primary=brand.primary)
+
+    monkeypatch.setattr(
+        authored_service, "resolve_header_contract", fake_header_contract
+    )
+    monkeypatch.setattr(authored_service, "find_chrome", lambda: True)
+    monkeypatch.setattr(
+        authored_service, "_save_slide_pngs", lambda presentation_id, pngs: ["slide.png"]
+    )
+    monkeypatch.setattr(
+        authored_service,
+        "_build_authored_export",
+        lambda request, presentation_id, pngs, title: "deck.pptx",
+    )
+
+    from utils import llm_provider
+
+    monkeypatch.setattr(
+        llm_provider, "get_llm_provider", lambda: SimpleNamespace(value="stub")
+    )
+    monkeypatch.setattr(llm_provider, "get_model", lambda: "stub-model")
+
+    request = GeneratePresentationRequest(
+        content="topic",
+        template="authored",
+        authored_style="editorial",
+    )
+    request._authored_design_replay = True
+    result = _run(
+        authored_service.generate_authored_presentation(
+            request, uuid.uuid4(), _outline(1), "Korean", fake_async_session
+        )
+    )
+    presentation = next(
+        x for x in fake_async_session.added if isinstance(x, PresentationModel)
+    )
+
+    assert captured["authored"] is True
+    # A replay gets the same frozen deck chrome as any other authored deck.
+    assert captured["header_contract"] is not None
+    assert "headerContract" in presentation.theme
     assert result.path == "deck.pptx"
 
 
@@ -1443,7 +1553,7 @@ def test_slide_pipeline_renders_fast_slide_before_slowest_author_finishes(monkey
             return b"png-1"
 
         monkeypatch.setattr(
-            authored_service, "prepare_authored_deck", lambda *args: plan
+            authored_service, "prepare_authored_deck", lambda *args, **kwargs: plan
         )
         monkeypatch.setattr(authored_service, "author_planned_slide", fake_author)
         monkeypatch.setattr(authored_service, "render_html_to_png", fake_render)
@@ -1485,7 +1595,7 @@ def test_slide_pipeline_rejects_fallback_instead_of_publishing_incomplete_deck(
             return b"png"
 
         monkeypatch.setattr(
-            authored_service, "prepare_authored_deck", lambda *args: plan
+            authored_service, "prepare_authored_deck", lambda *args, **kwargs: plan
         )
         monkeypatch.setattr(authored_service, "author_planned_slide", fake_author)
         monkeypatch.setattr(authored_service, "render_html_to_png", fake_render)
@@ -1537,7 +1647,7 @@ def test_ninety_slide_pipeline_keeps_worker_concurrency_bounded(monkeypatch):
 
         monkeypatch.setattr(authored_service, "_AUTHORED_SLIDE_WORKERS", 8)
         monkeypatch.setattr(
-            authored_service, "prepare_authored_deck", lambda *args: plan
+            authored_service, "prepare_authored_deck", lambda *args, **kwargs: plan
         )
         monkeypatch.setattr(authored_service, "author_planned_slide", fake_author)
         monkeypatch.setattr(authored_service, "render_html_to_png", fake_render)

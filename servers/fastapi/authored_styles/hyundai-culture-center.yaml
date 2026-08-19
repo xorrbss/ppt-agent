@@ -1,0 +1,87 @@
+id: hyundai-culture-center
+name: 문화센터 그린 제안서
+description: 딥그린 표지와 에메랄드 헤더 바, 촘촘한 표·구성도·간트 일정으로 유통·문화시설 SI 제안을 설득력 있게 전개하는 한국형 제안서 스타일입니다.
+category: business
+tags:
+  - 유통 SI
+  - 시스템 재구축
+  - 사업 제안서
+  - 그린 인포그래픽
+use_cases:
+  - 유통·문화시설 시스템 재구축 제안
+  - 사업 수행방안 및 관리방안 보고
+  - 수행 실적·조직·일정 종합 제안
+preview:
+  bg: "#F9F9F9"
+  accent: "#08916E"
+  palette:
+    - "#F9F9F9"
+    - "#00140E"
+    - "#08916E"
+    - "#219F88"
+    - "#00828E"
+    - "#002060"
+  variant: proposal-deep-green
+  image: hyundai-culture-center/cover.png
+design_tokens:
+  primary: "#08916E"
+  background: "#F9F9F9"
+  heading_font: Noto Sans KR
+  body_font: Noto Sans KR
+  mono_font: IBM Plex Mono
+illustration:
+  style_prompt: >-
+    premium Korean system integration proposal infographic, near-white canvas,
+    deep green to black gradient title fields, emerald green header bars and
+    table headers, teal and navy structural diagrams, pale blue information
+    panels, dense but disciplined consulting-grade information design,
+    module-and-connector system maps, gantt style schedule rails,
+    no readable text inside images, no logos, no watermark, no clip art,
+    no photorealistic retail stock image
+reference_images:
+  cover:
+    - hyundai-culture-center/cover.png
+  content:
+    - hyundai-culture-center/content.png
+  data:
+    - hyundai-culture-center/data.png
+  timeline:
+    - hyundai-culture-center/timeline.png
+  architecture:
+    - hyundai-culture-center/architecture.png
+  closing:
+    - hyundai-culture-center/closing.png
+brief: |-
+  MOOD
+  Create a thorough, execution-ready Korean SI proposal that reads as if it were prepared for a retail and cultural-center client review board. The tone is competent and exhaustive rather than promotional: every slide answers one requirement with visible structure, and the reviewer should be able to trace the argument from chapter, to sub-clause, to evidence. Density is acceptable when alignment and grouping keep it legible.
+
+  PALETTE
+  Use off-white #F9F9F9 as the working canvas with white #FFFFFF panels floating on it. Use emerald #08916E for the top header band, chapter markers, and keyword emphasis, and teal #219F88 for table header rows and grouped-label fills. Use deep teal #00828E for schedule rails, progress bands, and chart accents. Use navy #002060 and cobalt #1B469C for system diagrams, module boxes, and hierarchy labels, with pale blue #E0F3FF and #CCECFF as information-zone fills and neutral #EAEDF2 for supporting panels. Cover and section slides invert to a near-black green field #00140E graded into deep green. Keep body text near-black #1D1D1B. Reserve a single warm amber accent for one status or priority marker per slide.
+
+  TYPOGRAPHY
+  Use Noto Sans KR throughout. Set slide titles as short numbered clauses on two lines: the chapter or sub-clause number and label on the first line, the specific topic on the second. Use bold compact headlines for the one-line claim above a diagram, and color only the decisive keyword in emerald rather than the whole sentence. Keep body copy short, tight, and left-aligned; align numerals in tables and use IBM Plex Mono only for identifiers, version tags, and technical metadata. All meaningful text must remain editable HTML rather than being baked into generated images.
+
+  LAYOUT SYSTEM
+  Use a wide corporate canvas with a persistent thin emerald header band across the top carrying the chapter name on the left and the project name on a darker right-hand tag. Directly beneath it, place the numbered clause title in black on the plain canvas. Anchor the bottom with a slim footer strip: a small brand tile at far left, the page number centered, and the author mark at far right. The content field between them is one clean rectangle; fill it with two or three aligned panels, or with one dominant diagram plus a narrow supporting column. Keep outer margins consistent on every slide so the header, footer, and content field never shift.
+
+  SIGNATURE ELEMENTS
+  Use the emerald header band with a dark chapter tag, numbered clause titles, rounded white panels with hairline borders, dark navy tab labels seated on top of numbered cards, teal-filled table header rows with white type and subtle row rules, pale blue rounded information zones, connector lines with small square nodes, hexagonal or rounded module boxes for system components, and a large single-word emerald keyword for the slide takeaway. Cover and section slides use a soft rounded folder-tab shape over the dark green gradient with a small teal marker beside the chapter numeral.
+
+  DATA VISUALIZATION
+  Favor comparison tables with teal header rows, multi-year figure tables paired with a small companion bar chart, role and responsibility matrices, and horizontal gantt rails divided into month columns. Direct-label important values, keep gridlines faint, and use teal intensity to encode hierarchy. Schedule visuals should show phase bars, milestone diamonds, a dashed present-date line, and a deliverables row beneath. Charts, tables, and values must be editable HTML or inline SVG.
+
+  IMAGE DIRECTION
+  Use restrained supporting imagery only when it carries the claim: abstract technology fields behind a headline, device or interface frames beside a UX point, and muted photographic bands as section texture. Prefer original vector-like diagrams over stock photography. Reference images define composition, density, and visual hierarchy only; never reproduce their wording, client names, logos, company marks, watermarks, photographs of people, financial figures, or exact object arrangement.
+
+  SLIDE ARCHETYPES
+  cover: Place the client name and the project title left-aligned in white on the dark green gradient, with a small date line below and the author mark in the upper right.
+  agenda: Present the chapter list as a single left-aligned column on the near-white canvas, each row a large emerald numeral beside its chapter name, separated by hairline rules, with generous leading and no descriptions.
+  section: Fill the slide with the near-black green field, seat a soft rounded folder-tab shape at the left carrying the chapter numeral in teal, set the chapter name large in white beside it, and list the chapter's pages beneath in small muted type.
+  content: Lead with one bold claim line above the field, then combine a compact grouped block on the left with a labeled evidence list on the right, closing with a short takeaway.
+  architecture: Use one full-width system map with tiered zones for channels, common services, business modules, and data, connected by orthogonal lines, and place two summary callouts on the right edge.
+  data: Build one dominant figure table with a teal header row beside a small companion chart or rating panel, and add one short interpretation line.
+  timeline: Use a single horizontal month grid with swimlanes for management, development, and deliverables, aligned milestone markers, and one dashed critical or current line.
+  closing: Present a single centered closing line in white on the dark green field with the author mark beneath it.
+
+  AVOID
+  Avoid decorative gradients inside the content field, playful consumer styling, mismatched icon sets, drop shadows on text, unlabeled arrows, tables without header contrast, more than one amber emphasis per slide, paragraphs longer than three lines, oversized logos, copied source wording, copied brand marks, real client or personnel data, text inside generated images, and claims unsupported by the visual evidence.

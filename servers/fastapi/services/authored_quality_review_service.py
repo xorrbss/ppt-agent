@@ -153,6 +153,9 @@ from utils.slide_capture import (
 
 LOGGER = logging.getLogger(__name__)
 _ORIGINAL_RENDER_HTML_TO_PNG = render_html_to_png
+#: One mutex per deck. Analyze-fix, page-remake publication, and batch
+#: publication all rewrite the same slides, so they take turns. Preview
+#: generation deliberately does NOT take it — see the note there.
 _ANALYZE_AND_FIX_LOCKS: weakref.WeakValueDictionary[uuid.UUID, asyncio.Lock] = (
     weakref.WeakValueDictionary()
 )

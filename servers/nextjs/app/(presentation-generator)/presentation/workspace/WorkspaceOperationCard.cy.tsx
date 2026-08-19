@@ -199,4 +199,168 @@ describe("WorkspaceOperationCard quality review", () => {
     cy.get('[data-testid="quality-review-focus-remaining-slide-7"]').click();
     cy.get("@focusSlide").should("have.been.calledWith", 6);
   });
+
+  it("offers no batch remake when the review only reported deck-level issues", () => {
+    mountCard(
+      <WorkspaceOperationCard
+        operation={{
+          anchorType: "operation",
+          id: "quality-deck-level-issues",
+          operationId: "quality-deck-level-issues",
+          position: 0,
+          operationType: "quality.review",
+          title: "품질 검토",
+          status: "succeeded",
+          events: [],
+          allowedActions: [],
+          result: {
+            kind: "quality.review",
+            reviewed_count: 4,
+            remaining_issues: [{ code: "dom.clipping" }, { code: "contrast" }],
+          },
+        }}
+        onAction={() => undefined}
+        onRemakePage={cy.stub().as("remakePage")}
+      />,
+    );
+
+    // Without a page to rebuild there is nothing a remake could target.
+    cy.get('[data-testid="quality-review-remaining-issues"]')
+      .find('input[type="checkbox"]')
+      .should("not.exist");
+    cy.get('[data-testid="quality-review-batch-remake"]').should("not.exist");
+  });
+
+  it("requests one remake per residual page, not one per residual issue", () => {
+    const onRemakePage = cy.stub().as("remakePage");
+    mountCard(
+      <WorkspaceOperationCard
+        operation={{
+          anchorType: "operation",
+          id: "quality-batch-remake-one-page",
+          operationId: "quality-batch-remake-one-page",
+          position: 0,
+          operationType: "quality.review",
+          title: "품질 검토",
+          status: "succeeded",
+          events: [],
+          allowedActions: [],
+          result: {
+            kind: "quality.review",
+            reviewed_count: 9,
+            slide_results: [
+              {
+                slide_index: 6,
+                remaining_issues: [
+                  { code: "text_overflow" },
+                  { code: "dom.clipping", reason: "constraint.no_safe_space" },
+                ],
+              },
+            ],
+          },
+        }}
+        onAction={() => undefined}
+        onRemakePage={onRemakePage}
+      />,
+    );
+
+    cy.get('[data-testid^="quality-review-select-slide-"]').should("have.length", 1);
+    cy.get('[data-testid="quality-review-select-slide-7"]').check();
+    cy.get('[data-testid="quality-review-batch-remake"]').click();
+    cy.get("@remakePage").should("have.been.calledOnceWith", [6]);
+  });
+
+  it("sends every residual page once when the reviewer selects them all", () => {
+    const onRemakePage = cy.stub().as("remakePage");
+    mountCard(
+      <WorkspaceOperationCard
+        operation={{
+          anchorType: "operation",
+          id: "quality-batch-remake-select-all",
+          operationId: "quality-batch-remake-select-all",
+          position: 0,
+          operationType: "quality.review",
+          title: "품질 검토",
+          status: "succeeded",
+          events: [],
+          allowedActions: [],
+          result: {
+            kind: "quality.review",
+            reviewed_count: 9,
+            remaining_issues: [{ code: "deck.summary" }],
+            slide_results: [
+              { slide_index: 8, remaining_issues: [{ code: "text_overflow" }] },
+              { slide_index: 2, remaining_issues: [{ code: "contrast" }] },
+              { slide_index: 8, remaining_issues: [{ code: "dom.clipping" }] },
+            ],
+          },
+        }}
+        onAction={() => undefined}
+        onRemakePage={onRemakePage}
+      />,
+    );
+
+    cy.get('[data-testid="quality-review-select-all-slides"]').check();
+    cy.get('[data-testid="quality-review-batch-remake"]')
+      .should("contain.text", "선택한 2개 페이지 다시 만들기")
+      .click();
+    cy.get("@remakePage").should("have.been.calledOnceWith", [2, 8]);
+  });
+
+  it("says why an unfixed slide was left alone, not just that nothing was applied", () => {
+    mountCard(
+      <WorkspaceOperationCard
+        operation={{
+          anchorType: "operation",
+          id: "quality-rejection-reason",
+          operationId: "quality-rejection-reason",
+          position: 0,
+          operationType: "quality.review",
+          title: "품질 검토",
+          status: "succeeded",
+          events: [],
+          allowedActions: [],
+          result: {
+            kind: "quality.review",
+            reviewed_count: 2,
+            issue_slide_count: 2,
+            fixed_count: 0,
+            issues: [
+              { slide_index: 12, type: "dom.clipping", severity: "medium" },
+              { slide_index: 64, type: "constraint.readability.violated", severity: "high" },
+            ],
+            slide_results: [
+              {
+                slide_index: 12,
+                attempted: true,
+                applied: false,
+                fix_action: "none",
+                rejection_reason: "deterministic_no_candidate",
+              },
+              {
+                slide_index: 64,
+                attempted: true,
+                applied: false,
+                fix_action: "deterministic",
+                rejection_reason: "some.future.code",
+              },
+            ],
+          },
+        }}
+        onAction={() => undefined}
+      />,
+    );
+
+    // "수정 조치: none" alone cannot distinguish "no repair was ever drafted"
+    // from "a repair was drafted and rejected"; the reason row must.
+    cy.get('[data-testid="quality-rejection-reason"]')
+      .first()
+      .should("contain.text", "복구안을 만들지 못했습니다")
+      // The raw code stays on screen for log and telemetry lookups.
+      .and("contain.text", "deterministic_no_candidate");
+    // A code with no reading yet still reaches the reader verbatim.
+    cy.get('[data-testid="quality-rejection-reason"]')
+      .last()
+      .should("contain.text", "some.future.code");
+  });
 });

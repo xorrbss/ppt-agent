@@ -56,7 +56,8 @@
       "templateApply": "템플릿 적용",
       "qualityReview": "고품질 검수",
       "exportPptx": "PowerPoint 내보내기",
-      "exportPdf": "PDF 내보내기"
+      "exportPdf": "PDF 내보내기",
+      "slideRegenerateBatch": "선택 페이지 다시 만들기"
     },
     "status": {
       "queued": "대기 중",
@@ -2759,16 +2760,16 @@
     "generating": "생성 중",
     "reviewOutline": "개요를 검토하고 생성",
     "master": {
-        "title": "회사 표준",
-        "optional": "선택하지 않으면 회사 표준 없이 생성합니다.",
-        "required": "이 AI 작성 스타일로 생성하려면 게시된 회사 표준을 선택하세요.",
-        "unavailable": "선택한 회사 표준을 더 이상 사용할 수 없습니다. 계속하려면 게시된 회사 표준을 선택하세요.",
-        "choose": "회사 표준 선택",
-        "change": "회사 표준 변경",
-        "selected": "{name} · v{version} / PPT 마스터 기반 · 레이아웃 {layouts}개",
-        "unnamed": "회사 표준",
+      "title": "회사 표준",
+      "optional": "선택하지 않으면 회사 표준 없이 생성합니다.",
+      "required": "이 AI 작성 스타일로 생성하려면 게시된 회사 표준을 선택하세요.",
+      "unavailable": "선택한 회사 표준을 더 이상 사용할 수 없습니다. 계속하려면 게시된 회사 표준을 선택하세요.",
+      "choose": "회사 표준 선택",
+      "change": "회사 표준 변경",
+      "selected": "{name} · v{version} / PPT 마스터 기반 · 레이아웃 {layouts}개",
+      "unnamed": "회사 표준",
       "defaultFont": "기본 글꼴",
-        "aiCreate": "PPT에서 회사 표준 만들기"
+      "aiCreate": "PPT에서 회사 표준 만들기"
     },
     "catalog": {
       "heading": "템플릿 카탈로그",
@@ -3086,8 +3087,34 @@
       "reason": "사유: {reason}",
       "moreIssues": "외 {count}개 이슈가 더 있습니다.",
       "remainingSlidesAria": "잔여 이슈 슬라이드로 이동",
-      "moveToSlide": "{slide}번으로 이동"
+      "moveToSlide": "{slide}번으로 이동",
+      "selectIssueSlide": "{slide}번 슬라이드 선택",
+      "selectAllIssueSlides": "잔여 이슈 슬라이드 모두 선택",
+      "batchRemakeSelected": "선택한 {count}개 페이지 다시 만들기",
+      "batchRemakeSelectionHint": "선택한 페이지의 미리보기를 함께 만든 뒤 한 번에 적용합니다."
     }
+  },
+  "batchRemake": {
+    "title": "선택 페이지 다시 만들기",
+    "description": "{count}개 페이지의 새 버전을 만듭니다. 미리보기를 확인하고 승인해야 적용됩니다.",
+    "generating": "미리보기 만드는 중 {completed}/{total}",
+    "ready": "미리보기 {count}개가 준비되었습니다.",
+    "slideLabel": "{slide}페이지",
+    "includeSlide": "{slide}페이지 적용 대상에 포함",
+    "statusPending": "만드는 중",
+    "statusPreviewed": "미리보기 준비됨",
+    "statusFailed": "실패",
+    "warningBadge": "확인 필요",
+    "failureReason": "사유: {reason}",
+    "allFailed": "선택한 페이지의 미리보기를 모두 만들지 못했습니다. 적용할 항목이 없습니다.",
+    "timeout": "미리보기 생성 시간이 초과되었습니다. 다시 시도해 주세요.",
+    "startFailed": "미리보기 작업을 시작하지 못했습니다. 다시 시도해 주세요.",
+    "unsupportedMaster": "마스터가 고정된 프레젠테이션에서는 여러 페이지를 한 번에 다시 만들 수 없습니다.",
+    "approve": "선택한 {count}개 페이지 적용",
+    "cancel": "취소",
+    "commandText": "{count}개 페이지 미리보기를 적용해 줘",
+    "stalled": "일괄 생성이 중단되었습니다. 이미 완성된 후보는 그대로 적용할 수 있고, 나머지는 다시 시작할 수 있습니다.",
+    "restart": "다시 시작"
   },
   "authoredVnext": {
     "scene": {
@@ -3267,15 +3294,15 @@
       "canvas": {
         "title": "Canvas · Layout",
         "dimensions": "16:9 {width} × {height}px · safe area {safeWidth} × {safeHeight}px",
-      "choiceAria": "Canvas 종류",
-      "cover": "표지",
-      "section": "섹션",
-      "standard": "Standard",
+        "choiceAria": "Canvas 종류",
+        "cover": "표지",
+        "section": "섹션",
+        "standard": "Standard",
         "longTitle": "Long title",
-      "preview": {
-        "cover": "표지 캔버스",
-        "section": "섹션 캔버스",
-        "standard": "Standard canvas",
+        "preview": {
+          "cover": "표지 캔버스",
+          "section": "섹션 캔버스",
+          "standard": "Standard canvas",
           "longTitle": "Long-title canvas"
         },
         "lockedTitle": "잠긴 Master layer",
@@ -3292,28 +3319,28 @@
         "error": "로고 업로드에 실패했습니다({code})."
       },
       "brand": {
-      "title": "Brand · Font · Color",
-      "description": "게시할 Master 계약을 수정합니다. 로고 선택은 별도 영역에서 관리합니다.",
-      "logo": "Logo furniture",
+        "title": "브랜드 · 글꼴 · 색상",
+        "description": "게시할 Master 계약을 수정합니다. 로고 선택은 별도 영역에서 관리합니다.",
+        "logo": "Logo furniture",
         "logoPlaceholder": "Logo asset ID (비우면 기본 마크)",
-      "name": "마스터 이름",
-      "primaryFont": "Primary font",
-      "fallbackFonts": "대체 글꼴(쉼표로 구분)",
-      "latinFont": "Latin font",
-      "header": "헤더 텍스트",
-      "footer": "푸터 텍스트",
-      "divider": "구분선 색상",
-      "pageNumber": "페이지 번호 텍스트",
-      "pageNumberColor": "페이지 번호 색상",
-      "semanticStyles": "시맨틱 텍스트 스타일",
-      "titleMinimum": "제목 최소 크기(pt)",
-      "style": {
-        "eyebrow": "눈썹글 크기(pt)",
-        "title": "제목 크기(pt)",
-        "note": "주석 크기(pt)",
-        "rightCallout": "오른쪽 콜아웃 크기(pt)"
-      },
-      "colors": "Color tokens",
+        "name": "마스터 이름",
+        "primaryFont": "기본 글꼴",
+        "fallbackFonts": "대체 글꼴(쉼표로 구분)",
+        "latinFont": "Latin font",
+        "header": "헤더 텍스트",
+        "footer": "푸터 텍스트",
+        "divider": "구분선 색상",
+        "pageNumber": "페이지 번호 텍스트",
+        "pageNumberColor": "페이지 번호 색상",
+        "semanticStyles": "시맨틱 텍스트 스타일",
+        "titleMinimum": "제목 최소 크기(pt)",
+        "style": {
+          "eyebrow": "눈썹글 크기(pt)",
+          "title": "제목 크기(pt)",
+          "note": "주석 크기(pt)",
+          "rightCallout": "오른쪽 콜아웃 크기(pt)"
+        },
+        "colors": "색상 토큰",
         "colorAria": "{color} 색상 선택",
         "hexAria": "{color} HEX"
       },
@@ -3383,7 +3410,7 @@
       },
       "publish": {
         "title": "Validate · Publish",
-      "description": "현재 초안을 확인한 뒤 새로운 버전으로 안전하게 게시합니다.",
+        "description": "현재 초안을 확인한 뒤 새로운 버전으로 안전하게 게시합니다.",
         "status": "현재 상태",
         "busy": "요청을 처리하고 있습니다. 잠시 기다려 주세요.",
         "save": "저장",

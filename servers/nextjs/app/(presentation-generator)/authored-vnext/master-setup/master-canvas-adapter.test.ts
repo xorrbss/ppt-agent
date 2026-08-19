@@ -381,7 +381,7 @@ test("legacy placeholder and AI-text records round-trip without entering furnitu
       elementId: "element:legacy-ai-text",
       bounds: { x: 120, y: 280, width: 760, height: 96 },
     }),
-    /Only confirmed furniture can be edited/,
+    /Only confirmed master furniture can be edited in furniture setup/,
   );
   assert.deepEqual(roundTripped.semanticElements, original.semanticElements);
 });

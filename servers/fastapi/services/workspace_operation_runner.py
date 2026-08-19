@@ -12,6 +12,7 @@ from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
+from services.workspace_batch_payload import BATCH_KIND, BATCH_RESULT_KEYS, sanitize_batch_value
 from services.workspace_quality_review_payload import (
     _normalize_quality_review_payload,
     _quality_review_count,
@@ -63,6 +64,15 @@ from services.workspace_operation_handler_registry import (
     WorkspaceOperationResult,
     workspace_operation_handler_registry,
 )
+from services.workspace_operation_lease import (  # noqa: F401
+    TERMINAL_OPERATION_STATES,
+    WORKSPACE_OPERATION_HEARTBEAT_SECONDS,
+    WORKSPACE_OPERATION_LEASE_SECONDS,
+    extend_workspace_operation_lease,
+    heartbeat_workspace_operation,
+    operation_cancel_requested as _operation_cancel_requested,
+    run_attempt_heartbeat_loop,
+)
 from services.workspace_operation_retry_policy import (
     decide_workspace_operation_retry,
 )
@@ -82,8 +92,6 @@ from models.sql.workspace import get_workspace_owner_scope
 
 LOGGER = logging.getLogger(__name__)
 
-WORKSPACE_OPERATION_LEASE_SECONDS = 300
-WORKSPACE_OPERATION_HEARTBEAT_SECONDS = 30
 WORKSPACE_OPERATION_POLL_SECONDS = 1.0
 WORKSPACE_OPERATION_MAX_CONCURRENCY = 2
 # Serialize the short owner-aware dispatch decision across PostgreSQL workers.
@@ -92,7 +100,7 @@ WORKSPACE_OPERATION_MAX_CONCURRENCY = 2
 _WORKSPACE_CLAIM_LOCK_ID = 0x50505457534F5043
 _MAX_OBSERVATION_DURATION_MS = 30 * 24 * 60 * 60 * 1000
 
-_TERMINAL_STATES = frozenset({"succeeded", "failed", "cancelled", "dead_letter"})
+_TERMINAL_STATES = TERMINAL_OPERATION_STATES
 _RUNNING_STATES = frozenset({"running", "cancelling"})
 # Only one mutating operation may execute for a presentation at a time.  Wait
 # states do not hold this execution lock: they must not indefinitely block a
@@ -230,6 +238,7 @@ _SAFE_RESULT_PAYLOAD_KEYS_BY_KIND: dict[str, frozenset[str]] = {
             "result",
         }
     ),
+    BATCH_KIND: BATCH_RESULT_KEYS,
     "presentation.delete": frozenset(
         {
             "lifecycle_status",
@@ -416,6 +425,8 @@ def sanitize_workspace_event_payload(
                 {key: item for key, item in value.items() if key != "result"},
                 operation_kind=operation_kind,
             )
+        elif operation_kind == BATCH_KIND and isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+            safe[normalized] = sanitize_batch_value(normalized, value)
         elif value is None or isinstance(value, (str, int, float, bool)):
             if isinstance(value, str):
                 if normalized == "assistant_text":
@@ -809,54 +820,6 @@ async def claim_next_workspace_operation(
             fence_outcome="claim_acquired",
         )
         return claim
-
-
-async def heartbeat_workspace_operation(
-    operation_id: uuid.UUID,
-    attempt_token: str,
-    *,
-    session_factory: async_sessionmaker[AsyncSession] = async_session_maker,
-    lease_seconds: int = WORKSPACE_OPERATION_LEASE_SECONDS,
-) -> bool:
-    now = _utc_now()
-    async with session_factory() as session:
-        result = await session.execute(
-            update(WorkspaceOperation)
-            .where(WorkspaceOperation.id == operation_id)
-            .where(WorkspaceOperation.state == "running")
-            .where(WorkspaceOperation.cancel_requested_at.is_(None))
-            .where(WorkspaceOperation.attempt_token == attempt_token)
-            .values(
-                heartbeat_at=now,
-                lease_expires_at=now + timedelta(seconds=max(1, lease_seconds)),
-                updated_at=now,
-            )
-        )
-        await session.commit()
-        return result.rowcount == 1
-
-
-async def _operation_cancel_requested(
-    operation_id: uuid.UUID,
-    attempt_token: str,
-    *,
-    session_factory: async_sessionmaker[AsyncSession],
-) -> bool:
-    async with session_factory() as session:
-        row = (
-            await session.execute(
-                select(
-                    WorkspaceOperation.state,
-                    WorkspaceOperation.cancel_requested_at,
-                    WorkspaceOperation.attempt_token,
-                ).where(WorkspaceOperation.id == operation_id)
-            )
-        ).one_or_none()
-    if row is None:
-        return True
-    if row.state in _TERMINAL_STATES:
-        return row.state == "cancelled"
-    return row.attempt_token != attempt_token or row.state == "cancelling" or row.cancel_requested_at is not None
 
 
 async def _transition_claim_failure(
@@ -1890,9 +1853,28 @@ class _ExecutionContext(WorkspaceOperationExecutionContext):
         self,
         claim: WorkspaceOperationClaim,
         session_factory: async_sessionmaker[AsyncSession],
+        lease_seconds: int = WORKSPACE_OPERATION_LEASE_SECONDS,
     ) -> None:
         self.claim = claim
         self._session_factory = session_factory
+        self._lease_seconds = lease_seconds
+        # Widened by `extend_lease`, read by the heartbeat loop, so the window a
+        # handler asked for is not narrowed back on the next renewal.
+        self.lease_seconds_override: int | None = None
+
+    async def extend_lease(self, *, seconds: int) -> bool:
+        """Widen this attempt's lease before taking a long write lock."""
+        granted = await extend_workspace_operation_lease(
+            self.claim.operation_id,
+            self.claim.attempt_token,
+            session_factory=self._session_factory,
+            lease_seconds=seconds,
+            minimum_seconds=self._lease_seconds,
+        )
+        if granted is None:
+            return False
+        self.lease_seconds_override = granted
+        return True
 
     async def progress(
         self,
@@ -2120,41 +2102,16 @@ class WorkspaceOperationRunner:
                 break
             await self._wait_for_wake()
 
-    async def _heartbeat_loop(self, claim: WorkspaceOperationClaim) -> None:
-        loop = asyncio.get_running_loop()
-        heartbeat_interval = max(0.05, float(self.heartbeat_seconds))
-        # Cancellation is a durable cross-process signal.  Poll it separately
-        # from the lease write so a five-minute lease (or a long heartbeat
-        # interval) cannot strand an operation in `cancelling`.
-        cancellation_poll_interval = max(
-            0.05,
-            min(float(self.poll_seconds), heartbeat_interval, 1.0),
+    async def _heartbeat_loop(
+        self, claim: WorkspaceOperationClaim, context: _ExecutionContext
+    ) -> None:
+        await run_attempt_heartbeat_loop(
+            claim,
+            session_factory=self.session_factory,
+            heartbeat_seconds=self.heartbeat_seconds,
+            poll_seconds=self.poll_seconds,
+            lease_seconds=lambda: context.lease_seconds_override or self.lease_seconds,
         )
-        next_heartbeat_at = loop.time() + heartbeat_interval
-        while True:
-            await asyncio.sleep(
-                min(
-                    cancellation_poll_interval,
-                    max(0.0, next_heartbeat_at - loop.time()),
-                )
-            )
-            if await _operation_cancel_requested(
-                claim.operation_id,
-                claim.attempt_token,
-                session_factory=self.session_factory,
-            ):
-                raise WorkspaceOperationCancelled("workspace_operation_cancelled")
-            if loop.time() < next_heartbeat_at:
-                continue
-            alive = await heartbeat_workspace_operation(
-                claim.operation_id,
-                claim.attempt_token,
-                session_factory=self.session_factory,
-                lease_seconds=self.lease_seconds,
-            )
-            if not alive:
-                raise WorkspaceOperationLeaseLost("workspace_operation_lease_lost")
-            next_heartbeat_at = loop.time() + heartbeat_interval
 
     async def _call_handler(
         self,
@@ -2191,7 +2148,9 @@ class WorkspaceOperationRunner:
         heartbeat: asyncio.Task[None] | None = None
         handler_task: asyncio.Task[WorkspaceOperationResult] | None = None
         try:
-            context = _ExecutionContext(claim, self.session_factory)
+            context = _ExecutionContext(
+                claim, self.session_factory, lease_seconds=self.lease_seconds
+            )
             handler = self.registry.resolve(claim.kind)
             if handler is None:
                 await _transition_claim_failure(
@@ -2213,7 +2172,7 @@ class WorkspaceOperationRunner:
                 )
                 return
 
-            heartbeat = asyncio.create_task(self._heartbeat_loop(claim))
+            heartbeat = asyncio.create_task(self._heartbeat_loop(claim, context))
             handler_task = create_runtime_settings_task(self._call_handler(handler, context))
             done, _ = await asyncio.wait((handler_task, heartbeat), return_when=asyncio.FIRST_COMPLETED)
             if heartbeat in done:

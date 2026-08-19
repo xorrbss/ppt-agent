@@ -9,6 +9,7 @@ import {
   isKnownWorkspaceOperationType,
   type WorkspaceOperationActionId,
   type WorkspaceOperationAnchor,
+  type WorkspacePageRemakeRequester,
   type WorkspacePresentationRefreshState,
 } from "./types";
 import {
@@ -25,7 +26,6 @@ import {
   displayResultValue,
   formatDuration,
   formatTimestamp,
-  issueLabel,
   numberValue,
   qualityMetric,
   qualityReviewHistory,
@@ -38,8 +38,12 @@ import {
   stringValue,
   targetSummary,
   triggerBrowserDownload,
-  type QualityReviewIssueDetail,
 } from "./WorkspaceOperationResult";
+import { QualityReviewHistoryList } from "./QualityReviewHistoryList";
+import {
+  QualityReviewRemainingIssues,
+  remainingIssueList,
+} from "./QualityReviewRemainingIssues";
 
 
 interface WorkspaceOperationCardProps {
@@ -49,7 +53,7 @@ interface WorkspaceOperationCardProps {
   onAction: (operationId: string, action: "retry" | "cancel" | "approve" | "reject" | "undo") => void | Promise<void>;
   onReExport?: (operationType: "export.pptx" | "export.pdf") => void | Promise<void>;
   onFocusSlide?: (slideIndex: number) => void;
-  onRemakePage?: (slideIndex: number) => void;
+  onRemakePage?: WorkspacePageRemakeRequester;
   presentationRefreshState?: WorkspacePresentationRefreshState;
 }
 
@@ -479,14 +483,6 @@ export function WorkspaceOperationCard({
   );
   const qualityStageAggregateTime = reportedStageAggregateTime ??
     (Object.keys(qualityStageTimings).length > 0 ? derivedStageAggregateTime : undefined);
-  const remainingSlideIndexes = Array.from(
-    new Set([
-      ...slideIndexes(result.remaining_slide_indices, result.remaining_pages),
-      ...remainingIssueDetails.flatMap((issue) =>
-        issue.slideIndex === undefined ? [] : [issue.slideIndex],
-      ),
-    ]),
-  ).sort((left, right) => left - right);
   const fixedSlideIndexes = slideIndexes(
     result.fixed_slide_indices ??
       result.fixedSlideIndices ??
@@ -506,20 +502,7 @@ export function WorkspaceOperationCard({
       : fixedCount !== undefined && fixedCount > 0
         ? `${fixedCount}개 슬라이드를 수정했습니다.`
         : "수정된 슬라이드가 없습니다.";
-  const allQualityIssues = (
-    Array.isArray(result.remaining_issues)
-      ? result.remaining_issues
-      : Array.isArray(result.issues)
-        ? result.issues
-        : []
-  )
-    .map(issueLabel)
-    .filter((issue): issue is string => Boolean(issue));
-  const qualityIssues = allQualityIssues.slice(0, 8);
-  const shownRemainingIssues: QualityReviewIssueDetail[] =
-    remainingIssueDetails.length > 0
-      ? remainingIssueDetails.slice(0, 8)
-      : qualityIssues.map((description) => ({ description }));
+  const remainingIssues = remainingIssueList(result, remainingIssueDetails);
   const qualityHistory = qualityReviewHistory(result);
   const qualityRevision = numberValue(
     result.revision,
@@ -1027,119 +1010,18 @@ export function WorkspaceOperationCard({
               ))}
             </div>
           )}
-          {(remainingIssueDetails.length > 0 || qualityIssues.length > 0) && (
-            <section
-              className="mt-3 border-t border-blue-100 pt-2"
-              aria-label={t("remainingIssues")}
-              data-testid="quality-review-remaining-issues"
-            >
-              <h4 className="font-semibold">{t("remainingIssues")}</h4>
-              <ol className="mt-1.5 space-y-1.5">
-                {shownRemainingIssues.map((issue, index) => (
-                  <li
-                    key={`${issue.slideIndex ?? "unknown"}-${issue.description}-${index}`}
-                    className="rounded-md bg-white/70 px-2 py-1.5 text-[11px] text-blue-900"
-                  >
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <span>
-                        {issue.slideIndex === undefined
-                          ? t("unattributedIssue", { description: issue.description })
-                          : t("slideIssue", { slide: issue.slideIndex + 1, description: issue.description })}
-                      </span>
-                      {issue.slideIndex !== undefined && (
-                        <button
-                          type="button"
-                          onClick={() => onFocusSlide?.(issue.slideIndex!)}
-                          disabled={!onFocusSlide}
-                          className="rounded border border-blue-200 bg-white px-1.5 py-0.5 font-semibold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1"
-                          data-testid={`quality-review-focus-remaining-slide-${issue.slideIndex + 1}`}
-                        >
-                          {t("move")}
-                        </button>
-                      )}
-                    </div>
-                    {issue.reason && (
-                      <p className="mt-0.5 text-blue-700">{t("reason", { reason: issue.reason })}</p>
-                    )}
-                  </li>
-                ))}
-              </ol>
-              {remainingIssueDetails.length === 0 && allQualityIssues.length > qualityIssues.length && (
-                <p className="mt-1 text-blue-700">
-                  {t("moreIssues", { count: allQualityIssues.length - qualityIssues.length })}
-                </p>
-              )}
-              {remainingSlideIndexes.length > 0 && remainingIssueDetails.length === 0 && (
-                <div className="mt-2 flex flex-wrap gap-1.5" aria-label={t("remainingSlidesAria")}>
-                  {remainingSlideIndexes.map((slideIndex) => (
-                    <button
-                      key={slideIndex}
-                      type="button"
-                      onClick={() => onFocusSlide?.(slideIndex)}
-                      disabled={!onFocusSlide}
-                      className="rounded-md border border-blue-200 bg-white px-2 py-1 font-semibold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1"
-                    >
-                      {t("moveToSlide", { slide: slideIndex + 1 })}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </section>
-          )}
-          {qualityHistory.length > 0 && (
-            <section
-              className="mt-3 border-t border-blue-100 pt-2"
-              aria-label="페이지별 검수 이력"
-            >
-              <h4 className="font-semibold">페이지별 검수 이력</h4>
-              <ol className="mt-1.5 space-y-2">
-                {qualityHistory.map((item, index) => (
-                  <li
-                    key={`${item.slideIndex ?? "unknown"}-${item.issueType ?? index}-${index}`}
-                    className="rounded-md bg-white/70 px-2 py-1.5"
-                  >
-                    <p className="font-medium">
-                      {item.slideIndex === undefined
-                        ? "페이지 정보 없음"
-                        : `${item.slideIndex + 1}번 슬라이드`}
-                    </p>
-                    <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[11px] text-blue-900">
-                      {item.issueType && (
-                        <>
-                          <dt>이슈 유형</dt>
-                          <dd>{item.issueType}</dd>
-                        </>
-                      )}
-                      {item.severity && (
-                        <>
-                          <dt>심각도</dt>
-                          <dd>{item.severity}</dd>
-                        </>
-                      )}
-                      {item.description && (
-                        <>
-                          <dt>설명</dt>
-                          <dd>{item.description}</dd>
-                        </>
-                      )}
-                      {item.action && (
-                        <>
-                          <dt>수정 조치</dt>
-                          <dd>{item.action}</dd>
-                        </>
-                      )}
-                      {item.applied !== undefined && (
-                        <>
-                          <dt>적용</dt>
-                          <dd>{item.applied ? "적용됨" : "미적용"}</dd>
-                        </>
-                      )}
-                    </dl>
-                  </li>
-                ))}
-              </ol>
-            </section>
-          )}
+          <QualityReviewRemainingIssues
+            issues={remainingIssues}
+            totalIssueCount={remainingIssues.length}
+            remainingSlideIndexes={slideIndexes(
+              result.remaining_slide_indices,
+              result.remaining_pages,
+            )}
+            disabled={disabled}
+            onFocusSlide={onFocusSlide}
+            onRemakePage={onRemakePage}
+          />
+          <QualityReviewHistoryList items={qualityHistory} />
         </section>
       )}
       {operation.status === "succeeded" && isExport && (

@@ -1,6 +1,11 @@
 # ruff: noqa: B020, B905
 
 from services import authored_quality_review_service as _service
+from services.authored_deck_chapter_plan import load_chapter_plan
+from services.authored_header_contract_service import (
+    load_header_contract,
+    page_number_mode_for,
+)
 
 
 async def prepare_legacy_review(ctx):
@@ -70,7 +75,19 @@ async def prepare_legacy_review(ctx):
         ):
             raise _service.ExactProvenanceError("Saved exact reconstruction provenance is missing")
         ctx.saved_reference_mode = _service.STYLE_REFERENCE
-    ctx.plan = _service.prepare_authored_deck(ctx.outline, _service._saved_brand(ctx.presentation), ctx.style)
+    # Reviewing re-authors slides against this plan, so it has to carry the
+    # deck's own frozen chrome rather than the built-in defaults.
+    header_contract = load_header_contract(ctx.presentation.theme)
+    ctx.plan = _service.prepare_authored_deck(
+        ctx.outline,
+        _service._saved_brand(ctx.presentation),
+        ctx.style,
+        page_number_mode=page_number_mode_for(header_contract),
+        header_contract=header_contract,
+        # Reviewing a page re-authors it, so it needs the same chapter prefix
+        # and the same forced role the first pass gave it.
+        chapter_plan=load_chapter_plan(ctx.presentation.theme),
+    )
     ctx.plan_reference_mode = _service.normalize_reference_mode(
         getattr(ctx.plan, "reference_mode", ctx.saved_reference_mode)
     )
