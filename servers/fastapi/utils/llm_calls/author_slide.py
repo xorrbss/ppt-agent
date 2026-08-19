@@ -343,8 +343,10 @@ _ILLUSTRATION_SLOT_RULES = """\
 - SLOT GEOMETRY IS MANDATORY, and it is a PANEL, never a backdrop. Give the img explicit
   width AND height in px (or an absolute inset box) so the layout holds when the image is
   dropped; an img with no reserved size is a defect. The generated picture is landscape
-  and close to 16:9, so keep the slot between 4:3 and 2:1 - a thin strip or a tall column
-  crops it to an unreadable sliver. Never stretch it to the full slide (no width:100% with
+  and close to 16:9, so the slot must be WIDER THAN TALL AND NO WIDER THAN TWICE ITS
+  HEIGHT - width/height between 1.3 and 2.0, and 16/9 is the ideal. Outside that band
+  object-fit:cover throws away the part of the picture that carried the subject: a
+  400x140 strip keeps a horizon-slice of it and nothing else. Never stretch it to the full slide (no width:100% with
   height:100%, no inset:0), never place it behind the text, and never sit text on top of
   it. Do not reference any other image (no external URLs, no data URIs)."""
 

@@ -29,13 +29,18 @@ design_tokens:
   body_font: Noto Sans KR
   mono_font: IBM Plex Mono
 illustration:
+  # STYLE ONLY: palette, medium and finish. Subject matter belongs to the
+  # slide's own scene prompt. This text is appended to every scene, so motifs
+  # named here ("banking interface motifs", "precise tables and timelines")
+  # describe the picture rather than the look and out-argue the slide, which
+  # is how a sibling style ended up returning the same diagram wall on every
+  # page. See hyundai-culture-center.yaml for the same correction.
   style_prompt: >-
-    premium Korean financial IT proposal infographic, clean white canvas,
-    deep navy typography and structural panels, cobalt blue process lines,
-    pale blue information zones, restrained red emphasis, polished mobile
-    banking interface motifs, precise tables and timelines, consulting-grade
-    information design, generous whitespace, no readable text inside images,
-    no logos, no watermark, no clip art, no photorealistic banking stock image
+    premium Korean financial proposal illustration, clean white canvas,
+    deep navy and cobalt blue over pale blue tints, restrained red emphasis,
+    flat vector finish, clean edges, generous whitespace,
+    no readable text inside images, no logos, no watermark, no clip art,
+    no photorealistic banking stock image
 reference_images:
   cover:
     - osb-smart-banking/cover.png
