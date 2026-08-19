@@ -29,15 +29,24 @@ from utils.llm_calls.author_slide_admission import (
 from utils.llm_calls import author_slide_prompt
 
 from llmai import get_client
-from llmai.shared import ImageContentPart, SystemMessage, TextContentPart, UserMessage
+from llmai.shared import SystemMessage, TextContentPart, UserMessage
 
 from models.authored_header_contract import AuthoredHeaderContract
 from utils.authored_font_policy import enforce_authored_font_floor
 from utils.authored_header_prompt import render_header_contract
+from utils.get_env import is_authored_source_images_enabled
+from utils.llm_calls.author_slide_images import (
+    illustration_slot_rules,
+    reference_parts,
+    source_image_parts,
+)
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_config import enforce_llm_egress_policy, get_llm_config
 from utils.llm_provider import get_llm_provider, get_model, is_codex_selected
 from utils.renderer_isolation import admit_authored_html
+from services.source_images.models import (
+    SourceImageCandidate,
+)
 from services.provider_usage_instrumentation import (
     ProviderCallTimer,
     provider_call_admission,
@@ -50,7 +59,6 @@ logger = logging.getLogger(__name__)
 # A bespoke full-bleed HTML slide with inline CSS is large; give the model room so
 # the document is never truncated mid-markup (truncation => broken render).
 AUTHOR_MAX_TOKENS = 16000
-REFERENCE_IMAGE_MAX_BYTES = 8 * 1024 * 1024
 STYLE_REFERENCE = "style_reference"
 EXACT_RECONSTRUCTION = "exact_reconstruction"
 _REFERENCE_MODES = frozenset({STYLE_REFERENCE, EXACT_RECONSTRUCTION})
@@ -309,22 +317,6 @@ class AuthoredStyleLike(Protocol):
     reference_mode: str
 
 
-# Appended to the style brief only for illustration-enabled styles. The image is
-# generated AFTER authoring (utils/authored_illustrations.py fills the slot), so
-# the model designs the composition and all labels/callouts in HTML around a
-# reserved area — text inside generated images is unreliable (especially Korean),
-# HTML text is always crisp and correct.
-_ILLUSTRATION_SLOT_RULES = """\
-- ILLUSTRATION SLOT: you MAY include AT MOST ONE bespoke illustration placeholder:
-  `<img data-illust-prompt="..." style="...">`. In data-illust-prompt, describe the
-  desired SCENE in English (concrete objects, composition, viewpoint) — subject matter
-  only; the visual style is applied automatically. The image will contain NO text, so
-  put every label, callout and annotation in HTML positioned around/over the slot.
-  Reserve the slot's exact area with explicit width/height (or absolute inset) styles
-  so the layout holds even if the image is dropped. Do not reference any other image
-  (no external URLs, no data URIs)."""
-
-
 def apply_style_defaults(brand: Brand, style: Optional[AuthoredStyleLike]) -> Brand:
     """Apply preset brand defaults without overriding explicit request values.
 
@@ -362,7 +354,11 @@ def build_design_system(
         style,
         default_style_brief=_DEFAULT_STYLE_BRIEF,
         design_system_rules=_DESIGN_SYSTEM_RULES,
-        illustration_slot_rules=_ILLUSTRATION_SLOT_RULES,
+        # The wider rule is opt-in with the feature: offering asset ids the
+        # deck cannot produce would only invite an unresolvable slot.
+        illustration_slot_rules=illustration_slot_rules(
+            source_images_enabled=is_authored_source_images_enabled()
+        ),
         normalize_reference_mode=normalize_reference_mode,
         exact_reconstruction=EXACT_RECONSTRUCTION,
         style_reference=STYLE_REFERENCE,
@@ -513,29 +509,6 @@ def normalize_reference_mode(reference_mode: Optional[str]) -> str:
     return mode
 
 
-def _reference_parts(reference_images: Sequence[Path]) -> list[ImageContentPart]:
-    parts: list[ImageContentPart] = []
-    mime_by_suffix = {
-        ".png": "image/png",
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".webp": "image/webp",
-    }
-    for path in reference_images:
-        try:
-            if path.stat().st_size > REFERENCE_IMAGE_MAX_BYTES:
-                # References may come from a private exact preset. Never expose
-                # their local filesystem identity in operational logs.
-                logger.warning("Skipping oversized authored reference image")
-                continue
-            mime = mime_by_suffix.get(path.suffix.lower())
-            if mime:
-                parts.append(ImageContentPart(data=path.read_bytes(), mime_type=mime))
-        except OSError:
-            logger.warning("Unable to read authored reference image")
-    return parts
-
-
 _LEADING_FENCE = re.compile(r"^\s*```[a-zA-Z]*\s*\n")
 _TRAILING_FENCE = re.compile(r"\n```\s*$")
 
@@ -663,13 +636,33 @@ def _is_benign_named_meta(tag: _SourceStartTag) -> bool:
     )
 
 
+#: Attributes the authoring call adds to an ``<img>`` purely to address the image
+#: it wants there. Neither is part of the renderer's attribute policy, so both
+#: are hidden from admission while the slot is still unresolved and removed for
+#: good once the provider (illustration) or the substitution step (source image)
+#: has consumed them.
+_AUTHORING_ONLY_IMG_ATTRIBUTES = ("data-illust-prompt", "data-asset-id")
+
+
+def _without_authoring_only_attributes(raw: str) -> str:
+    for attribute in _AUTHORING_ONLY_IMG_ATTRIBUTES:
+        raw = _remove_start_tag_attribute(raw, attribute)
+    return raw
+
+
+def _has_authoring_only_attribute(tag: _SourceStartTag) -> bool:
+    return any(
+        name in _AUTHORING_ONLY_IMG_ATTRIBUTES for name, _value in tag.attrs
+    )
+
+
 def canonicalize_authored_slide_html(html: str, *, finalized: bool = False) -> str:
     """Canonicalize inert metadata using exact spans from an HTML-aware parser.
 
     The renderer owns its fixed viewport and security policy, so ordinary named meta
     declarations are redundant.  A mixed meta tag with active/unknown attributes is
     deliberately preserved for fail-closed admission rather than silently sanitized.
-    Illustration prompt attributes survive until their provider has consumed them.
+    Authoring-only image attributes survive until their stage has consumed them.
     """
     source = html or ""
     replacements: list[tuple[int, int, str]] = []
@@ -682,31 +675,20 @@ def canonicalize_authored_slide_html(html: str, *, finalized: bool = False) -> s
                 replacements.append((tag.start, tag.end, replacement))
             elif _is_benign_named_meta(tag):
                 replacements.append((tag.start, tag.end, ""))
-        elif finalized and tag.name == "img" and any(
-            name == "data-illust-prompt" for name, _value in tag.attrs
-        ):
+        elif finalized and tag.name == "img" and _has_authoring_only_attribute(tag):
             replacements.append(
-                (
-                    tag.start,
-                    tag.end,
-                    _remove_start_tag_attribute(tag.raw, "data-illust-prompt"),
-                )
+                (tag.start, tag.end, _without_authoring_only_attributes(tag.raw))
             )
     return _apply_source_replacements(source, replacements)
 
 
-def _without_illustration_prompt_attributes(source: str) -> str:
+def _without_authoring_only_image_attributes(source: str) -> str:
     return _apply_source_replacements(
         source,
         [
-            (
-                tag.start,
-                tag.end,
-                _remove_start_tag_attribute(tag.raw, "data-illust-prompt"),
-            )
+            (tag.start, tag.end, _without_authoring_only_attributes(tag.raw))
             for tag in _source_start_tags(source)
-            if tag.name == "img"
-            and any(name == "data-illust-prompt" for name, _value in tag.attrs)
+            if tag.name == "img" and _has_authoring_only_attribute(tag)
         ],
     )
 
@@ -719,13 +701,14 @@ def validate_authored_slide_html(
 ) -> str:
     """Return canonical HTML after applying the renderer's existing admission policy.
 
-    The illustration prompt attribute is authoring-only. Author-stage validation
-    removes only that attribute from a temporary projection, so the placeholder's
-    remaining attributes are still checked while the returned source keeps its prompt.
+    The illustration prompt and the source-image asset id are both authoring-only.
+    Author-stage validation removes only those attributes from a temporary
+    projection, so the placeholder's remaining attributes are still checked while
+    the returned source keeps the markers the illustrate stage still needs.
     """
     canonical = canonicalize_authored_slide_html(html, finalized=finalized)
     validation_source = (
-        _without_illustration_prompt_attributes(canonical)
+        _without_authoring_only_image_attributes(canonical)
         if allow_illustration_slots
         else canonical
     )
@@ -880,13 +863,18 @@ async def author_slide_html(
     requirements_enabled: bool = False,
     chapter_breadcrumb: bool = False,
     chapter_prefix: Optional[str] = None,
+    *,
+    source_images: Sequence[SourceImageCandidate] = (),
 ) -> str:
     """Author one bespoke, self-contained 1280x720 HTML slide. Single text-generation
     call against the configured provider; returns the cleaned HTML document.
 
     `reasoning_effort` overrides the codex reasoning effort for this call (see
     _authoring_extra_body); the vision-QA re-author pass passes 'off' so corrections
-    run at the provider's full default effort rather than the fast authoring 'low'."""
+    run at the provider's full default effort rather than the fast authoring 'low'.
+
+    `source_images` are pictures the user already owns that this slide may place.
+    An empty sequence attaches nothing and leaves the request as it was."""
     mode = normalize_reference_mode(reference_mode)
     requested_images = tuple(reference_images or ())
     prompt = _author_prompt(
@@ -902,22 +890,34 @@ async def author_slide_html(
         chapter_breadcrumb=chapter_breadcrumb,
         chapter_prefix=chapter_prefix,
     )
-    image_parts = _reference_parts(requested_images)
+    reference_image_parts = reference_parts(requested_images)
     if mode == EXACT_RECONSTRUCTION and not (
-        len(requested_images) == len(image_parts) == 1
+        len(requested_images) == len(reference_image_parts) == 1
     ):
         raise ValueError(
             "Exact reconstruction requires exactly one readable reference image"
         )
+    # Exact reconstruction reproduces its single source image and admits no other
+    # picture, so candidates are dropped rather than offered there.
+    source_candidates, source_parts = (
+        ((), [])
+        if mode == EXACT_RECONSTRUCTION
+        else source_image_parts(source_images)
+    )
+    image_parts = [*reference_image_parts, *source_parts]
     client = get_client(config=get_llm_config())
     model = get_model()
-    reference_guidance = (
-        _EXACT_RECONSTRUCTION_GUIDANCE
-        if mode == EXACT_RECONSTRUCTION
-        else _STYLE_REFERENCE_GUIDANCE
-    )
+    if mode == EXACT_RECONSTRUCTION:
+        reference_guidance = _EXACT_RECONSTRUCTION_GUIDANCE
+    else:
+        # Only claim references are attached when some were actually read.
+        reference_guidance = _STYLE_REFERENCE_GUIDANCE if reference_image_parts else ""
+    source_guidance = author_slide_prompt.source_image_brief(source_candidates)
     user_content = (
-        [TextContentPart(text=prompt + reference_guidance), *image_parts]
+        [
+            TextContentPart(text=prompt + reference_guidance + source_guidance),
+            *image_parts,
+        ]
         if image_parts
         else prompt
     )

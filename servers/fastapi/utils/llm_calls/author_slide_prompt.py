@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import replace
 import json
 from typing import Any
+
+from services.source_images.models import SourceImageCandidate
 
 
 LOCAL_FONT_FALLBACKS = {
@@ -108,6 +110,62 @@ def build_design_system(
         header_system=f"{header_system}\n" if header_system else "",
         page_number_system=page_number_system,
         type_scale=type_scale,
+    )
+
+
+# Two kinds of picture can be attached to one authoring call and they carry
+# opposite instructions, so the brief names both and says which is which. The
+# rules live here rather than in the design system because a deck whose style
+# generates no illustration can still be handed source images.
+_SOURCE_IMAGE_RULES = (
+    "A style reference is art direction and is not reproduced. A source image is "
+    "one of the user's own assets and may be placed on this slide.\n"
+    "It can earn its place in either of two ways: as evidence for what this "
+    "slide claims, or as an example of the tool, artifact or way of working the "
+    "slide describes. A screenshot captured on a different project still shows "
+    "what that work looks like, which is what a proposal shows it for.\n"
+    "Place one when it does either: an `<img data-asset-id=\"THE_ID\">` whose "
+    "area is reserved with explicit width/height (or absolute inset) styles, the "
+    "way the illustration slot is. It is this slide's one image slot, in place "
+    "of a data-illust-prompt placeholder.\n"
+    "Leave the slide without a picture when no candidate shows anything it talks "
+    "about. These are candidates, not a quota."
+)
+
+
+def _condensed(text: str, limit: int) -> str:
+    """Flatten extracted text so a heading cannot restructure the prompt."""
+    flattened = " ".join((text or "").split()).replace('"', "'")
+    if len(flattened) > limit:
+        flattened = flattened[:limit].rstrip() + "…"
+    return flattened
+
+
+def source_image_brief(candidates: Sequence[SourceImageCandidate]) -> str:
+    """Describe the attached source images and how this slide may use them.
+
+    Returns an empty string for an empty sequence, so a call that attaches no
+    candidate keeps exactly the prompt it had before the feature existed.
+    """
+    if not candidates:
+        return ""
+    lines = []
+    for candidate in candidates:
+        origin = []
+        if candidate.source_slide_index is not None:
+            origin.append(f"from source slide {candidate.source_slide_index + 1}")
+        heading = _condensed(candidate.source_heading or "", 80)
+        if heading:
+            origin.append(f'headed "{heading}"')
+        suffix = f" ({', '.join(origin)})" if origin else ""
+        lines.append(
+            f'- asset id "{_condensed(candidate.asset_id, 64)}" — '
+            f"{candidate.width}x{candidate.height}px{suffix}"
+        )
+    listing = "\n".join(lines)
+    return (
+        "\n\nSOURCE IMAGES: pictures the user already owns, attached after any "
+        f"style reference, in this order:\n{listing}\n{_SOURCE_IMAGE_RULES}"
     )
 
 
@@ -302,4 +360,5 @@ __all__ = [
     "build_design_system",
     "css_font_stack",
     "requirement_marker",
+    "source_image_brief",
 ]

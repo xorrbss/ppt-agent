@@ -55,6 +55,7 @@ from services.authored_vnext.generation.legacy_bridge import (
 from services.authored_vnext.generation.ai_text_zones import (
     AITextZoneContext,
 )
+from services.authored_source_images import collect_source_image_candidates
 from services.provider_usage_instrumentation import provider_usage_scope, record_local_stage
 from utils.authored_dom_quality import ensure_authored_qids
 from utils.authored_styles import resolve_authored_style, validate_exact_reconstruction_style
@@ -318,6 +319,13 @@ async def _generate_authored_presentation(
             chapter_breadcrumb=chapter_plan is not None,
         )
         job_kwargs = {} if generation_job is None else {"generation_job": generation_job}
+        # Passed only when the deck actually has candidates, so a gated-off run
+        # reaches the pipeline with exactly the arguments it always did.
+        source_images = await collect_source_image_candidates(
+            request, style, presentation_id, sql_session
+        )
+        if source_images:
+            job_kwargs["source_images"] = source_images
         pipeline = await _author_illustrate_render_pipeline(
             outline,
             brand,
