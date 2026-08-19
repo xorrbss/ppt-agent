@@ -52,6 +52,45 @@ def is_open_webui_selected(settings: RuntimeSettings | None = None) -> bool:
     return ImageProvider.OPEN_WEBUI == get_selected_image_provider(settings)
 
 
+# Image providers whose model is verified to render short, correct label text —
+# Korean included — inside a generated illustration.
+#
+# `gpt-image-2` was verified live: a generated diagram came back with correct
+# Korean labels and a correct middle dot. `gpt-image-1.5` is the same OpenAI
+# text-rendering generation and is grouped with it.
+#
+# `dall-e-3` is deliberately NOT listed: it renders Latin text only
+# approximately and has no verified CJK glyph support, so it would bake garbled
+# Korean into the slide. Gemini-based providers (`gemini_flash`,
+# `nanobanana_pro`) cannot render Korean either. ComfyUI / Open WebUI /
+# `openai_compatible` point at an unknown backing model, and the stock providers
+# (`pexels`, `pixabay`) return photographs, so text instructions are meaningless
+# for them.
+_TEXT_RENDERING_IMAGE_PROVIDERS = frozenset(
+    {
+        ImageProvider.GPT_IMAGE_2,
+        ImageProvider.GPT_IMAGE_1_5,
+    }
+)
+
+
+def image_provider_renders_text(settings: RuntimeSettings | None = None) -> bool:
+    """Whether the selected image provider may be asked to draw label text.
+
+    Default-deny: an unset, unrecognized or unresolvable provider reports False,
+    so a newly added provider can never silently start baking broken Korean
+    glyphs into generated illustrations. Adding a provider here requires a live
+    verification that its model renders Korean correctly.
+    """
+    try:
+        provider = get_selected_image_provider(settings)
+    except Exception:
+        # Misconfigured / unknown provider value: fall back to the safe answer
+        # instead of failing the caller, which only wants a prompt suffix.
+        return False
+    return provider in _TEXT_RENDERING_IMAGE_PROVIDERS
+
+
 def get_selected_image_provider(
     settings: RuntimeSettings | None = None,
 ) -> ImageProvider | None:

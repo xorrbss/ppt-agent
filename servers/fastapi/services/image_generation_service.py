@@ -87,6 +87,25 @@ def _get_image_generation_lock() -> asyncio.Lock:
 OPENAI_IMAGE_MAX_ATTEMPTS = 6
 OPENAI_IMAGE_MAX_WAIT_SECONDS = 30.0
 
+# Generated illustrations land in slide slots that are roughly 16:9 and are painted
+# with `object-fit: cover`. A square source is therefore cropped to about 56% of its
+# height, which removes the subject the prompt asked for and, since the image models
+# can now render Korean labels, removes the labels as well. Request a landscape source
+# per model so the crop stays close to a no-op.
+# Models absent from this table keep the historical square size: an unverified size
+# value is rejected by the API, so an unknown model must not start erroring.
+OPENAI_IMAGE_DEFAULT_SIZE = "1024x1024"
+OPENAI_IMAGE_LANDSCAPE_SIZES = {
+    "gpt-image-2": "1536x1024",
+    "gpt-image-1.5": "1536x1024",
+    "dall-e-3": "1792x1024",
+}
+
+
+def resolve_openai_image_size(model: str) -> str:
+    """Return the landscape size for a known OpenAI image model, else square."""
+    return OPENAI_IMAGE_LANDSCAPE_SIZES.get(model, OPENAI_IMAGE_DEFAULT_SIZE)
+
 
 def _parse_retry_after_seconds(error: Exception) -> float | None:
     """Extract the suggested wait from an OpenAI rate-limit error, if present."""
@@ -235,7 +254,7 @@ class ImageGenerationService:
                     n=1,
                     quality=quality,
                     response_format="b64_json" if model == "dall-e-3" else NOT_GIVEN,
-                    size="1024x1024",
+                    size=resolve_openai_image_size(model),
                 )
                 break
             except RateLimitError as e:
@@ -879,6 +898,10 @@ class ImageGenerationService:
                 model=model,
                 prompt=prompt,
                 n=1,
+                # Deliberately square, unlike the first-party OpenAI path above: this
+                # endpoint is user-configured and its model is arbitrary, so the
+                # landscape sizes verified against OpenAI may be rejected here and
+                # break setups that work today.
                 size="1024x1024",
             )
 
