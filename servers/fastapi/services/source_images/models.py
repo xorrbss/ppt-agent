@@ -50,8 +50,11 @@ class SourceImageCandidate:
     digest: str
     #: Zero-based slide position in the uploaded PPTX, when it came from one.
     source_slide_index: Optional[int] = None
-    #: Heading of the source slide, used to match the picture to a new slide.
+    #: Heading of the source slide, shown as provenance.
     source_heading: Optional[str] = None
+    #: What the source slide says, condensed. This is the matching signal: a
+    #: proposal deck's headings are often section markers that carry no subject.
+    source_text: Optional[str] = None
 
     @property
     def aspect_ratio(self) -> float:

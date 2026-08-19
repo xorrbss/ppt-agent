@@ -516,3 +516,22 @@ def test_a_picture_too_large_to_inline_degrades_to_the_illustration(
     assert len(service.prompts) == 1
     assert out.count("<img") == 1
     assert _PNG_DATA_URI in out
+
+
+def test_dropping_a_slot_without_a_style_does_not_raise():
+    """Degrading to no picture must not become the exception it avoids.
+
+    A caller may pass no style (the default preset path does). Reading an
+    attribute off it while logging the drop turned a slide that should simply
+    lose its picture into a failed one.
+    """
+    html = '<html><body><img data-asset-id="never-offered"></body></html>'
+
+    result = asyncio.run(
+        apply_authored_illustration(
+            html, None, None, slide_index=0, source_images={}
+        )
+    )
+
+    assert "data-asset-id" not in result
+    assert "<img" not in result

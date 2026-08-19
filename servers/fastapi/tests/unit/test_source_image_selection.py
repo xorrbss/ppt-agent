@@ -15,6 +15,7 @@ def make_candidate(
     asset_id: str,
     *,
     source_heading: Optional[str] = None,
+    source_text: Optional[str] = None,
     source_slide_index: Optional[int] = SLIDE_INDEX,
     width: int = 1600,
     height: int = 900,
@@ -29,6 +30,7 @@ def make_candidate(
         digest=f"sha256:{asset_id}",
         source_slide_index=source_slide_index,
         source_heading=source_heading,
+        source_text=source_text,
     )
 
 
@@ -206,3 +208,38 @@ def test_html_markup_in_slide_content_does_not_create_matches():
     )
 
     assert selected == []
+
+
+def test_a_section_marker_heading_is_matched_through_the_source_slide_text():
+    """A proposal deck labels sections, not pictures.
+
+    Measured on a real deck, nine of ten candidates were headed "02 · SOLUTION";
+    scoring headings alone found nothing for any slide, so what the source slide
+    actually says has to count.
+    """
+    candidate = make_candidate(
+        "marker",
+        source_heading="02 · SOLUTION",
+        source_text=(
+            "02 · SOLUTION 기능 ④ AI 오케스트레이션으로 실행·차단·검토를 통제 "
+            "업무 단위로 자율 실행을 관리합니다"
+        ),
+    )
+
+    selected = select(
+        [candidate],
+        slide_heading="AI 오케스트레이션 통제",
+        slide_content="자율 실행과 검토를 하나의 업무 단위로 통제한다.",
+    )
+
+    assert selected == [candidate]
+
+
+def test_source_text_about_something_else_still_stays_out():
+    candidate = make_candidate(
+        "marker",
+        source_heading="02 · SOLUTION",
+        source_text="02 · SOLUTION 사무실 이전 안내와 주차 정책 변경 공지입니다",
+    )
+
+    assert select([candidate]) == []

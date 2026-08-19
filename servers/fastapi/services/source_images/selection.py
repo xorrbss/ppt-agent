@@ -47,20 +47,38 @@ _STOPWORDS = frozenset(
     }
 )
 
-#: The source heading is the strongest evidence we have that a picture belongs
-#: to this slide's topic, so heading-to-heading similarity dominates. Body text
-#: is long and repeats deck-wide vocabulary, which makes a hit there much weaker
-#: evidence; it only breaks the frequent case of a slide whose heading is terse
-#: ("현황") while the body names the subject.
-_HEADING_WEIGHT = 0.65
-_CONTENT_WEIGHT = 0.35
+#: Being titled with this slide's subject is the clearest evidence a picture
+#: belongs to it, so heading-to-heading similarity carries the largest single
+#: share. The second term covers the frequent case of a new slide whose heading
+#: is terse ("현황") while its body names the subject, and is weighted lower
+#: because a body mentions many things it is not mainly about.
+_HEADING_WEIGHT = 0.4
+_CONTENT_WEIGHT = 0.2
 
-#: Below this the match is a coincidental syllable or two. On real Korean and
-#: English headings the two populations separate cleanly: a candidate sharing
-#: even one topic word scores upwards of ~0.21, an off-topic one scores ~0.
-#: The floor sits in that gap, because offering an unrelated picture is worse
-#: than offering none — the author will place whatever it is handed.
-_RELEVANCE_FLOOR = 0.18
+#: What the source slide actually says is the signal that survives a deck whose
+#: headings are section markers, which is the common shape of a proposal deck.
+#: It carries the same weight as the heading match. Measured across two real
+#: proposal decks, one names its pictures ("3. 업무시스템 구축방안") and the other
+#: does not ("02 · SOLUTION"); weighting the heading higher found nothing at all
+#: in the second. Two decks are a thin calibration set, so treat these weights
+#: as a starting point to re-measure, not as a tuned constant.
+_SOURCE_TEXT_WEIGHT = 0.4
+
+#: Below this the match is a coincidental syllable or two, and offering an
+#: unrelated picture is worse than offering none.
+#:
+#: Calibrated against two real proposal decks rather than against headings
+#: alone, because the body-text signal changed the scale. On a DevAX deck whose
+#: pictures all sit under one "02 · SOLUTION" marker, the slide about an
+#: orchestration feature scored 0.104 against the new slide that argues for
+#: orchestration, while unrelated pictures on the same deck scored 0.04 or less;
+#: on an OSB proposal the topical matches scored above 0.18. The floor sits
+#: under the weaker population's real matches and above both decks' noise.
+#:
+#: A candidate that clears it is still only *offered*: the author sees the
+#: picture itself and declines when it does not fit, which it did on every slide
+#: of a deck whose pictures were screenshots of another project's tools.
+_RELEVANCE_FLOOR = 0.09
 
 #: A picture the user uploaded directly has no source heading, so it cannot be
 #: scored on text at all. It is still presumed relevant — the user handed it to
@@ -143,17 +161,31 @@ def _relevance(
     heading_grams: frozenset[str],
     content_grams: frozenset[str],
 ) -> float:
-    """Text-only relevance of one candidate, in ``0.0``-``1.0``."""
-    source_grams = _grams(candidate.source_heading or "")
-    if not source_grams:
+    """Text-only relevance of one candidate, in ``0.0``-``1.0``.
+
+    Two signals, each measured in the direction its lengths allow.
+
+    The source heading against the new heading is short against short, so Dice
+    is right: a source heading should be penalised for the parts it does not
+    share. But a proposal deck's headings are often section markers — measured
+    on a real one, nine of ten pictures were headed "02 · SOLUTION" — so that
+    signal alone finds nothing.
+
+    The source slide's body text carries the subject, and it is long. Asking how
+    much of it appears in the new slide would punish it for its own length, so
+    the question is reversed: how much of what the new slide talks about is
+    present in the source slide. A long source can then answer a short slide.
+    """
+    source_heading_grams = _grams(candidate.source_heading or "")
+    source_text_grams = _grams(candidate.source_text or "")
+    if not source_heading_grams and not source_text_grams:
         return _UNTITLED_BASELINE
 
-    # Dice against the heading: both sides are short, so a symmetric measure is
-    # right and a long source heading should be penalised for the parts it does
-    # not share. Containment against the body: the body is far longer, so we ask
-    # how much of the source heading appears in it, not the reverse.
-    return _HEADING_WEIGHT * _dice(source_grams, heading_grams) + (
-        _CONTENT_WEIGHT * _containment(source_grams, content_grams)
+    return (
+        _HEADING_WEIGHT * _dice(source_heading_grams, heading_grams)
+        + _CONTENT_WEIGHT * _containment(source_heading_grams, content_grams)
+        + _SOURCE_TEXT_WEIGHT
+        * _containment(heading_grams | content_grams, source_text_grams)
     )
 
 

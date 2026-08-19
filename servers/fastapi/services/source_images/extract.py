@@ -42,6 +42,10 @@ MAX_ZIP_MEMBERS = 20_000
 #: A heading is a matching hint for the slide author, not a transcript.
 MAX_HEADING_CHARS = 120
 
+#: The body text is a matching signal, not a transcript either. Enough to carry
+#: a slide's subject, bounded so a dense table cannot dominate the comparison.
+MAX_SOURCE_TEXT_CHARS = 600
+
 #: Only the formats the authoring call can attach; anything else (SVG, EMF,
 #: GIF, TIFF) is dropped rather than converted.
 _EXTENSION_MIME_TYPES = {
@@ -74,6 +78,10 @@ class ExtractedSourceImage:
     #: Zero-based position in the deck's slide order.
     source_slide_index: int
     source_heading: Optional[str] = None
+    #: Everything the source slide says, condensed. Titles alone are often
+    #: section markers ("02 · SOLUTION") that carry no subject, so the body text
+    #: is what lets a consumer tell which new slide a picture belongs to.
+    source_text: Optional[str] = None
     #: Share of the slide this picture was placed over, when the deck states
     #: both the slide size and the picture's extent. ``None`` means the deck
     #: did not say (a shape fill, or a picture without an explicit extent).
@@ -100,6 +108,7 @@ def extract_pptx_images(pptx_path: Path) -> list[ExtractedSourceImage]:
             # One unreadable slide must not cost us the rest of the deck.
             continue
         heading = _slide_heading(root)
+        slide_text = _slide_text(root)
         relationships = _relationships(package, slide_part)
         seen_on_slide: set[str] = set()
         for media_part, coverage in _referenced_media_parts(
@@ -124,6 +133,7 @@ def extract_pptx_images(pptx_path: Path) -> list[ExtractedSourceImage]:
                     digest=digest,
                     source_slide_index=slide_index,
                     source_heading=heading,
+                    source_text=slide_text,
                     slide_coverage=coverage,
                 )
             )
@@ -325,6 +335,30 @@ def _slide_heading(root: ET.Element) -> Optional[str]:
         if first_text is None:
             first_text = text
     return _trim(first_text) if first_text else None
+
+
+def _slide_text(root: ET.Element) -> Optional[str]:
+    """Everything the slide says, condensed into one matching hint.
+
+    A deck's picture is identified by what its slide talks about. Titles are
+    unreliable for that: proposal decks label whole sections ("02 · SOLUTION",
+    "PROPOSAL MAP"), so every picture in a section would share one meaningless
+    caption. Reading the body text costs nothing extra -- the XML is already
+    parsed -- and it is the difference between a usable hint and none.
+    """
+
+    tree = root.find(".//p:spTree", NS)
+    if tree is None:
+        return None
+    parts: list[str] = []
+    for shape in tree.iter(f"{{{NS['p']}}}sp"):
+        text = _shape_text(shape)
+        if text:
+            parts.append(text)
+    joined = " ".join(" ".join(parts).split())
+    if not joined:
+        return None
+    return joined[:MAX_SOURCE_TEXT_CHARS]
 
 
 def _is_title_placeholder(shape: ET.Element) -> bool:

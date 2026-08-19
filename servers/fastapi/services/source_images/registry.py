@@ -69,6 +69,7 @@ class _RawImage:
     #: Share of its slide the picture was placed over, when the deck said.
     slide_coverage: Optional[float] = None
     source_heading: Optional[str] = None
+    source_text: Optional[str] = None
 
 
 async def register_source_images(
@@ -127,6 +128,7 @@ async def _collect_raw_images(upload_paths: Sequence[Path]) -> list[_RawImage]:
                     payload=image.payload,
                     source_slide_index=image.source_slide_index,
                     source_heading=image.source_heading,
+                    source_text=image.source_text,
                     slide_coverage=image.slide_coverage,
                 )
                 for image in extracted
@@ -259,6 +261,7 @@ async def _persist_raw_image(
                 "height": raw.height,
                 "source_slide_index": raw.source_slide_index,
                 "source_heading": raw.source_heading,
+                "source_text": raw.source_text,
             },
         )
         session.add(asset)
@@ -272,6 +275,7 @@ async def _persist_raw_image(
         digest=raw.digest,
         source_slide_index=raw.source_slide_index,
         source_heading=raw.source_heading,
+        source_text=raw.source_text,
     )
 
 

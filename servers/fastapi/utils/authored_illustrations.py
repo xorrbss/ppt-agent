@@ -397,7 +397,11 @@ async def apply_authored_illustration(
         LOGGER.warning(
             "[authored] dropping image slot on slide %d (style=%s)",
             slide_index + 1,
-            style.id,
+            # This module never raises: a slide degrades to no picture rather
+            # than failing the deck. Reading .id off a caller that passed no
+            # style would turn the degradation itself into the exception the
+            # rest of the function exists to avoid.
+            getattr(style, "id", None),
         )
     # Replace from the last slot backwards so spans stay valid; only the chosen
     # slot may receive the image, the rest are always removed.
