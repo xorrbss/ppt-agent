@@ -25,7 +25,9 @@ from services.authored_presentation_artifacts import (
 )
 from services.authored_presentation_contracts import AuthoredGenerationPipelineResult
 from services.image_generation_service import ImageGenerationService
+from services.authored_source_images import plan_slide_source_images
 from services.provider_usage_instrumentation import provider_usage_scope, record_local_stage
+from services.source_images.models import SourceImageCandidate
 from utils.asset_directory_utils import get_images_directory
 from utils.authored_illustrations import apply_authored_illustration
 from utils.llm_calls.author_deck import (
@@ -64,6 +66,9 @@ async def _author_illustrate_render_pipeline(
     page_number_mode: str = NO_PAGE_NUMBER_MODE,
     header_contract: AuthoredHeaderContract | None = None,
     chapter_plan: AuthoredChapterPlan | None = None,
+    # Pictures the caller already owns, offered to the author instead of an
+    # invented illustration. Empty means the feature is off for this deck.
+    source_images: Sequence[SourceImageCandidate] = (),
 ) -> AuthoredGenerationPipelineResult:
     """Pipeline slides through durable, fenced checkpoints with bounded workers."""
     started = time.monotonic()
@@ -84,6 +89,11 @@ async def _author_illustrate_render_pipeline(
         )
     )
     roles = plan_deck_roles(outline, chapter_plan)
+    if plan_reference_mode == EXACT_RECONSTRUCTION:
+        # Reproducing a source slide-for-slide may not gain a picture the
+        # source does not have, whatever the caller uploaded.
+        source_images = ()
+    slide_source_images = plan_slide_source_images(plan.contents, source_images)
     image_service = (
         ImageGenerationService(get_images_directory())
         if plan_reference_mode != EXACT_RECONSTRUCTION
@@ -110,6 +120,12 @@ async def _author_illustrate_render_pipeline(
         author_work = 0.0
         illustration_work = 0.0
         render_work = 0.0
+        # The authoring call and the substitution step must see the identical
+        # set: substitution resolves a placed id against this mapping, so an id
+        # the author was never offered has nowhere to resolve.
+        offered = (
+            slide_source_images[index] if slide_source_images is not None else None
+        )
         checkpoint = (
             await get_checkpoint(generation_job.id, index)
             if generation_job is not None
@@ -142,13 +158,15 @@ async def _author_illustrate_render_pipeline(
                     attempt_number=(generation_job.attempt_number if generation_job else 0),
                     slide_index=index,
                 ):
+                    author_kwargs: dict[str, Any] = {}
+                    if generation_job is not None:
+                        author_kwargs["raise_on_failure"] = True
+                    if offered:
+                        author_kwargs["source_images"] = tuple(offered.values())
                     try:
-                        if generation_job is None:
-                            html = await author_planned_slide(plan, index)
-                        else:
-                            html = await author_planned_slide(
-                                plan, index, raise_on_failure=True
-                            )
+                        html = await author_planned_slide(
+                            plan, index, **author_kwargs
+                        )
                     except RendererPolicyError as exc:
                         raise AuthoredStageError(
                             slide_index=index,
@@ -239,8 +257,12 @@ async def _author_illustrate_render_pipeline(
                         attempt_token=attempt_token,
                     )
                 illustrated_html = html
-                skipped = image_service is None
-                if image_service is not None:
+                # A slide with an offered picture still has an image to resolve
+                # even when the style generates no illustrations, so the stage
+                # runs for either reason.
+                illustrate_applies = image_service is not None or offered is not None
+                skipped = not illustrate_applies
+                if illustrate_applies:
                     illustration_started = time.monotonic()
                     with provider_usage_scope(
                         job_id=generation_job.id if generation_job is not None else None,
@@ -249,19 +271,19 @@ async def _author_illustrate_render_pipeline(
                         attempt_number=(generation_job.attempt_number if generation_job else 0),
                         slide_index=index,
                     ):
+                        illustrate_kwargs: dict[str, Any] = {}
+                        if generation_job is not None:
+                            illustrate_kwargs["raise_on_failure"] = True
+                        if offered is not None:
+                            illustrate_kwargs["source_images"] = offered
                         try:
-                            if generation_job is None:
-                                illustrated_html = await apply_authored_illustration(
-                                    html, style, image_service, slide_index=index
-                                )
-                            else:
-                                illustrated_html = await apply_authored_illustration(
-                                    html,
-                                    style,
-                                    image_service,
-                                    slide_index=index,
-                                    raise_on_failure=True,
-                                )
+                            illustrated_html = await apply_authored_illustration(
+                                html,
+                                style,
+                                image_service,
+                                slide_index=index,
+                                **illustrate_kwargs,
+                            )
                         except Exception as exc:
                             raise AuthoredStageError(
                                 slide_index=index,

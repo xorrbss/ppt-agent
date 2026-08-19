@@ -161,3 +161,14 @@ def is_parallel_image_generation_enabled(
     settings: RuntimeSettings | None = None,
 ) -> bool:
     return _is_truthy(get_setting_env("ENABLE_PARALLEL_IMAGE_GENERATION", settings))
+
+
+def is_authored_source_images_enabled(
+    settings: RuntimeSettings | None = None,
+) -> bool:
+    """Whether ordinary authored generation may place the user's own pictures.
+
+    Off by default. With the flag unset a deck is authored, prompted, and
+    illustrated exactly as it was before source-image reuse existed.
+    """
+    return _is_truthy(get_setting_env("AUTHORED_SOURCE_IMAGES_ENABLED", settings))

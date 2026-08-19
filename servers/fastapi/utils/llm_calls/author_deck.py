@@ -17,6 +17,7 @@ from models.authored_chapter_plan import AuthoredChapterPlan
 from models.authored_header_contract import AuthoredHeaderContract
 from models.presentation_outline_model import PresentationOutlineModel
 from utils.authored_header_validation import validate_header_contract
+from services.source_images.models import SourceImageCandidate
 from utils.llm_calls.author_slide import (
     EXACT_RECONSTRUCTION,
     STYLE_REFERENCE,
@@ -409,6 +410,9 @@ async def _author_one_resilient(
     page_number_mode: str = TEMPLATE_PAGE_NUMBER_MODE,
     header_contract: AuthoredHeaderContract | None = None,
     chapter_prefix: str | None = None,
+    # Pictures the user already owns that this slide may place. Empty is the
+    # pre-feature request, byte for byte.
+    source_images: Sequence[SourceImageCandidate] = (),
 ) -> str:
     """Author one slide with bounded retries and a style-mode branded fallback.
 
@@ -437,6 +441,8 @@ async def _author_one_resilient(
                 kwargs = {"reference_images": reference_images}
                 if reference_mode == EXACT_RECONSTRUCTION:
                     kwargs["reference_mode"] = reference_mode
+                if source_images:
+                    kwargs["source_images"] = source_images
                 html = await author_slide_html(
                     content,
                     design_system,
@@ -455,6 +461,8 @@ async def _author_one_resilient(
                 kwargs = {}
                 if reference_mode == EXACT_RECONSTRUCTION:
                     kwargs["reference_mode"] = reference_mode
+                if source_images:
+                    kwargs["source_images"] = source_images
                 html = await author_slide_html(
                     content,
                     design_system,
@@ -671,9 +679,17 @@ def prepare_authored_deck(
 
 
 async def author_planned_slide(
-    plan: AuthoredDeckPlan, index: int, *, raise_on_failure: bool = False
+    plan: AuthoredDeckPlan,
+    index: int,
+    *,
+    raise_on_failure: bool = False,
+    source_images: Sequence[SourceImageCandidate] = (),
 ) -> str:
-    """Author one planned slide; safe to compose with illustration/render stages."""
+    """Author one planned slide; safe to compose with illustration/render stages.
+
+    ``source_images`` is the offer for THIS slide only: the pipeline ranks the
+    deck's candidates per slide, so the plan stays one immutable deck-wide value.
+    """
     return await _author_one_resilient(
         plan.contents[index],
         plan.design_system,
@@ -690,6 +706,7 @@ async def author_planned_slide(
         chapter_prefix=(
             plan.chapter_prefixes[index] if plan.chapter_prefixes else None
         ),
+        source_images=source_images,
     )
 
 
