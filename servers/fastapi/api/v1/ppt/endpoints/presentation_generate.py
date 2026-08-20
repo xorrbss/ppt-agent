@@ -212,6 +212,7 @@ from utils.llm_calls.generate_slide_content import (
     get_slide_content_from_type_and_outline,
 )
 from utils.llm_utils import message_content_to_text
+from utils.outline_citations import strip_outline_citations
 from utils.outline_utils import (
     get_images_for_slides_from_outline,
     get_no_of_outlines_to_generate_for_n_slides,
@@ -1598,6 +1599,12 @@ async def generate_presentation_handler(
                 source_content=request.content,
                 instructions=request.instructions,
             )
+
+        # Web search cites its sources inline as markdown links, and the authored
+        # pipeline hands this text to the slide author verbatim — where a link
+        # becomes an `<a href>` the renderer isolation policy refuses, failing the
+        # slide and, under strict authoring, the deck. Keep the labels, drop the URLs.
+        presentation_outlines = strip_outline_citations(presentation_outlines)
 
         if (
             request.template == AUTHORED_TEMPLATE
