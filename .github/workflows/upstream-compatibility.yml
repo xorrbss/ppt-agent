@@ -7,6 +7,7 @@ on:
       - "scripts/verify-upstream-compatibility.mjs"
       - "scripts/verify-upstream-compatibility.test.mjs"
       - "scripts/sync-presentation-export.cjs"
+      - "scripts/lib/presentation-export-*.cjs"
       - "scripts/test-local.mjs"
       - "package.json"
       - "docker-compose.yml"
@@ -74,6 +75,7 @@ on:
       - "electron/package.json"
       - "electron/tests/runtime-settings-refresh.test.cjs"
       - "electron/scripts/verify-packaging-inputs.cjs"
+      - "electron/scripts/export-runtime-sync-contract.*"
       - ".github/workflows/upstream-compatibility.yml"
   workflow_dispatch:
 

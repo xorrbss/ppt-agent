@@ -23,7 +23,7 @@
         {
           "path": "servers/nextjs/lib/authored-hybrid/security.test.mjs",
           "requiredContains": [
-            "Chrome blocks network requests",
+            "public Chrome runner cannot bypass authored network preflight",
             "presentation response reads are byte-bounded"
           ]
         },
@@ -49,7 +49,31 @@
             "EXPORT_RUNTIME_VERSION",
             "process.platform === \"win32\"",
             "powershell",
-            ".installed-version"
+            ".installed-version",
+            "verifyPinnedDownloadedAsset"
+          ]
+        },
+        {
+          "path": "scripts/lib/presentation-export-assets.cjs",
+          "requiredContains": [
+            "SUPPORTED_EXPORT_RUNTIME_ASSETS",
+            "export-Windows-X64.zip",
+            "export-Windows-ia32.zip",
+            "Missing or invalid SHA-256"
+          ]
+        },
+        {
+          "path": "electron/scripts/export-runtime-sync-contract.cjs",
+          "requiredContains": [
+            "../../scripts/lib/presentation-export-assets.cjs",
+            "verifySharedDownloadedAsset"
+          ]
+        },
+        {
+          "path": "compatibility/presentation-export-v0.4.8-release-receipt.json",
+          "requiredContains": [
+            "c0375365b11dcad89db71df39f6b303dcf0cd33f",
+            "\"allMatched\": true"
           ]
         },
         {
@@ -62,7 +86,7 @@
         },
         {
           "path": "presentation-export/.installed-version",
-          "requiredContains": ["v0.4.3"]
+          "requiredContains": ["v0.4.8"]
         }
       ]
     },
@@ -270,7 +294,6 @@
           "requiredContains": [
             "\"template-v2-general\"",
             "\"authored-hybrid\"",
-            "\"legacy-general\"",
             "mixed_slide_payload_forbidden"
           ]
         },
@@ -361,7 +384,7 @@
         {
           "path": "electron/scripts/verify-packaging-inputs.cjs",
           "requiredContains": [
-            "EXPECTED_EXPORT_VERSION = \"v0.4.3\"",
+            "EXPECTED_EXPORT_VERSION = \"v0.4.8\"",
             "Export runtime marker must be"
           ]
         },
@@ -374,8 +397,8 @@
         {
           "path": "electron/app/main.ts",
           "requiredContains": [
-            "contextIsolation: true",
-            "nodeIntegration: false"
+            "buildSecureAppWebPreferences",
+            "app.enableSandbox"
           ],
           "forbiddenContains": [
             "contextIsolation: false",

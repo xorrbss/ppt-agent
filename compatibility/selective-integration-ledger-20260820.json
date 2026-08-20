@@ -1,0 +1,238 @@
+{
+  "schemaVersion": 1,
+  "repository": "presenton/presenton",
+  "localHead": "b11a92e62c8bfd7ef42f355fc8d6a2b83085e2d0",
+  "mergeBase": "968f7de6c2b3467f838330f319b992349805eeef",
+  "observedUpstream": "51396e23df194cab70ecd91a45495931bb8e9825",
+  "acceptedBaselineUnchanged": "b940f7b4a51d473af830d96d441276af3540dae6",
+  "intakeMode": "independent-product-selective-port",
+  "workspaceBaseline": {
+    "branch": "fix/vision-qa-illustration-finalization",
+    "dirtyEntries": 216,
+    "listenersChecked": [3000, 3010, 5000, 5110, 8000, 8010],
+    "activeListeners": [],
+    "isolatedWorktree": "C:/project/PPT-agent/upstream-intake-20260820"
+  },
+  "decisions": [
+    {
+      "upstreamCommits": [
+        "16ab94abb7538de93e896353218f707beea83570",
+        "7ab6df68e6f0c6b7c89da9ebcff626cb33f2e882"
+      ],
+      "feature": "alignment snapping and bounded guides",
+      "decision": "adopted-selectively",
+      "upstreamLocations": [
+        "servers/nextjs/components/slide-editor/surface/alignmentGuides.ts",
+        "servers/nextjs/components/slide-editor/surface/TemplateV2KonvaSlide.tsx"
+      ],
+      "localLocations": [
+        "servers/nextjs/components/canvas-core/alignmentSnap.ts",
+        "servers/nextjs/components/canvas-core/CanvasCoreGuides.tsx",
+        "servers/nextjs/app/(presentation-generator)/authored-vnext/master-setup/MasterKonvaCanvas.tsx"
+      ],
+      "reason": "Ported only the start/center/end anchor selection, deterministic candidate priority, and multi-target guide extent into the common canvas port. Authored-vNext consumes it with the safe area as its alignment frame and the full slide as guide bounds; the removed upstream Template V2 standalone surface was not restored."
+    },
+    {
+      "upstreamCommits": ["409fec3f6685b5d8bd27cf88426d1d7a0677e478"],
+      "feature": "alignment guide visual weight and halo",
+      "decision": "adopted-selectively",
+      "localLocations": ["servers/nextjs/components/canvas-core/CanvasCoreGuides.tsx"],
+      "reason": "Applied the upstream purple, translucent halo, scale-stable stroke and dash, and round caps in the shared CanvasCore guide used by authored-vNext Master and Template V2 Studio. Focused Cypress now proves the rendered guide state at three zoom levels in each studio, with six screenshot hashes recorded in compatibility/evidence/guide-visual-20260821/guide-visual-receipt.json."
+    },
+    {
+      "upstreamCommits": ["9b2276b02043a0b3bd69591a0cc647f30bf745fc"],
+      "feature": "derive component bounds from elements",
+      "decision": "adopted-renderer-only",
+      "localLocations": [
+        "servers/nextjs/lib/template-v2-html/render-item.ts"
+      ],
+      "reason": "Removed stale component size only at the HTML renderer boundary so renderGroup derives bounds from child elements. The raw-frame and importer geometry contracts remain unchanged because they preserve explicit native asset geometry."
+    },
+    {
+      "upstreamCommits": ["6f60b10e0b69b7e5e63de0859b4fa31f8d6fb308"],
+      "feature": "ellipse bounds in flex layouts",
+      "decision": "rejected-not-applicable",
+      "reason": "The upstream flowLayout engine is absent by design; restoring it would revive a standalone Template V2 layout strategy."
+    },
+    {
+      "upstreamCommits": [
+        "c928e457515962aace759951678dd252c9838025",
+        "14276f4a5",
+        "911b8f3b1",
+        "0f4db9cd2"
+      ],
+      "feature": "keyboard slide navigation and navigation hint",
+      "decision": "adopted-selectively",
+      "localLocations": [
+        "servers/nextjs/app/(presentation-generator)/presentation/components/PresentationPage.tsx",
+        "servers/nextjs/app/(presentation-generator)/presentation/components/KeyboardShortcutsDialog.tsx",
+        "servers/nextjs/app/(presentation-generator)/presentation/utils/slideKeyboardNavigation.ts"
+      ],
+      "reason": "Added a shared defaultPrevented, IME, modifier, repeat, and editable/composed-path guard. Arrow navigation calls handleSlideClick so scroll, selection, and agent-focus coordination remain intact. The local multi-slide hint uses PPT Agent storage branding, accessible dismissal, and early dismissal without restoring the upstream single-slide UX."
+    },
+    {
+      "upstreamCommits": [
+        "9966aca4a0ed45034ba4e3635740e5d5c480493b",
+        "f5950f44d",
+        "7d954b13997f1d676e5208d365c8e625e523770c"
+      ],
+      "feature": "slide and tools rails",
+      "decision": "rejected-first-batch",
+      "localLocations": [
+        "servers/nextjs/app/(presentation-generator)/presentation/components/SidePanel.tsx",
+        "servers/nextjs/app/(presentation-generator)/presentation/components/SlideThumbnailCard.tsx"
+      ],
+      "reason": "The local responsive drawer, keyboard-selectable thumbnails, and scroll targeting are already stronger, and all corresponding product files are user-dirty."
+    },
+    {
+      "upstreamCommits": ["b508c3ec9858268151a71436c57ea69b4afd2a5f"],
+      "feature": "single-slide rendering performance",
+      "decision": "rejected-wholesale-adopted-performance-intent",
+      "localLocations": [
+        "servers/nextjs/components/canvas-core/pixelRatio.ts",
+        "servers/nextjs/components/canvas-core/CanvasCoreViewport.tsx",
+        "servers/nextjs/app/(presentation-generator)/components/PresentationRender.tsx",
+        "servers/nextjs/app/(presentation-generator)/presentation/components/SlideContent.tsx",
+        "servers/nextjs/app/(presentation-generator)/presentation/components/PresentationPage.tsx"
+      ],
+      "reason": "Rejected the upstream single-slide surface. Ported its pixel-ratio policy into the shared canvas viewport and applied it to actual Konva Layer canvases for authored-vNext Master and Template V2 Studio. Added reserved-height viewport culling behind the common presentation renderer while retaining every outer slide anchor and priority-mounting selected, agent-focused, and chat-targeted slides."
+    },
+    {
+      "upstreamCommits": ["e271359ed"],
+      "feature": "Template V2 Editorial theme and generation choice",
+      "decision": "rejected-product-direction",
+      "reason": "The observed eight-slide convergence on title_with_numbered_list_in_two_columns is not a generation-quality improvement. The template may only be reconsidered as an internal native render/edit/export asset, never as a competing LLM layout-selection strategy."
+    },
+    {
+      "upstreamCommits": [
+        "78e7dbabb044a434d9ad9143720dd038ff2f99ad",
+        "d0e51d870a754e7233ec4d4e295e007849b635e0",
+        "de13c32110aec3fa0c1f32a74e2862ab669d1ac6"
+      ],
+      "feature": "presentation-export v0.4.8 and package metadata",
+      "decision": "adopted-after-contract-verification",
+      "localLocations": [
+        "package.json",
+        "electron/package.json",
+        "electron/version.json",
+        "compatibility/upstream-compatibility.json",
+        "compatibility/presentation-export-v0.4.8-release-receipt.json",
+        "scripts/lib/presentation-export-assets.cjs"
+      ],
+      "reason": "Promoted the signed c037536 v0.4.8 release only after all six official archives matched GitHub, review-provided, and independent SHA-256 values. Root and Electron share one canonical asset/checksum contract and fail closed when a checksum is absent. Windows X64 runtime sync, PE/readiness/Sharp, PDF/PPTX smoke, and isolated-index parity passed. The stale release attestation was regenerated, legacy 0.8.6 artifacts were quarantined recoverably, and current 2026.7.2401 NSIS/AppX packages passed structure and packaged-server smoke; Authenticode remains fail-closed because all three signing targets are NotSigned."
+    },
+    {
+      "upstreamCommits": ["1a945a3427e31f2e51a2785b8a35f0e3a9285fc0"],
+      "feature": "MCP nginx authentication routing",
+      "decision": "already-covered-locally",
+      "localLocations": ["nginx.conf"],
+      "reason": "The fork already has dedicated exact /mcp and /mcp/ auth_request routing through /_mcp_auth_check and keeps MCP default-off."
+    },
+    {
+      "upstreamCommits": [
+        "04e7b0752c84b6c51818b2f17aa4383531513810",
+        "a54290e5ee38742a2af7dfbe104497b2eeefe082"
+      ],
+      "feature": "remove unauthenticated path-traversal-capable save-layout route",
+      "decision": "adopted-by-removing-orphan",
+      "localLocations": [
+        "servers/nextjs/app/api/save-layout/route.ts",
+        "electron/app/ipc/api_handlers.ts"
+      ],
+      "reason": "Repository caller census found no consumers. The Next route was already absent and the remaining Electron api:save-layout writer was removed, eliminating the obsolete dynamic TSX write surface without retaining or reviving the legacy custom-layout generation path."
+    }
+  ],
+  "verification": {
+    "status": "passed-after-one-fixture-correction",
+    "command": "node --experimental-strip-types --import ./servers/nextjs/scripts/register-node-test-loader.mjs --test servers/nextjs/components/canvas-core/alignmentSnap.test.ts servers/nextjs/app/(presentation-generator)/presentation/utils/slideKeyboardNavigation.test.ts servers/nextjs/tests/template-v2-json-to-html.test.mjs",
+    "result": "2 passed, 0 failed",
+    "note": "The first run exposed an incorrect end-anchor test fixture. Product code was unchanged; the fixture was corrected and the same focused command passed."
+  },
+  "followUpVerification": {
+    "frontendFocused": "10 passed, 0 failed across alignment snapping, keyboard guard, and renderer child-bounds tests",
+    "guideComponentContract": "Focused Cypress passed 4/4 for authored Master and 1/1 for Template V2 Studio; six receipt-selected screenshots cover fit, zoom-out, and zoom-in with matching SHA-256 values",
+    "viewportCulling": "Focused MasterStudioCanvas Cypress passed all 4/4 current product-contract cases, including viewport culling, logo deletion, guides, and AI-zone history",
+    "electronSaveLayout": "1 passed, 0 failed; Electron handler and Next route are both absent",
+    "exportRuntime": "6/6 archive three-way digests matched; sync, packaging, and Windows verifier contract tests 81/81 passed; Windows X64 sync/check, PE 0x8664, Sharp, strict readiness, and PDF/PPTX smoke 2/2 passed",
+    "byteParity": "Isolated index write/review/recheck passed without absorbing feat.txt or concurrent non-owned authored-vNext changes; full compatibility is rechecked against the reviewed selective-intake ledger",
+    "packaging": "Release SPDX attestation current; legacy 0.8.6 dist recoverably quarantined; current 2026.7.2401 NSIS/AppX built and structure-verified; packaged FastAPI /docs, Next root, and runtime Tailwind smoke passed; NSIS/AppX/unpacked Authenticode are NotSigned and therefore fail the required-signature gate. The NSIS silent-install probe extracted Presenton.exe and the v0.4.8 marker into an isolated temporary directory, but remained running for 897 seconds without creating an uninstaller, so install/uninstall smoke is blocked and the temporary evidence tree is preserved."
+  },
+  "compatibilityDriftCensus": {
+    "baselineCommand": "node scripts/verify-upstream-compatibility.mjs",
+    "baselineResult": "10 failed checks out of 638; all ten were reviewed against the current fork contract",
+    "policy": "Preserve the independent authored-vNext fork and document deleted legacy evidence. Update reviewed compatibility contracts when the current product contract is already proven; do not revive deleted routes or rewrite migration history.",
+    "entries": [
+      {
+        "checkId": "async-generation-response-anchor",
+        "observed": "POST /api/v1/ppt/presentation/generate/async required the retired AsyncPresentationGenerationTaskModel anchor",
+        "disposition": "resolved-in-owned-contract",
+        "action": "Updated the manifest anchor to the current AsyncPresentationGenerationAdmissionResponse decorator while retaining the same route and source.",
+        "evidence": "servers/fastapi/api/v1/ppt/endpoints/presentation_generate.py"
+      },
+      {
+        "checkId": "legacy-router-evidence-read-1",
+        "observed": "servers/fastapi/templates/router.py is absent",
+        "disposition": "maintain-deletion-exception",
+        "action": "Verifier uses an exact retired-evidence allowlist for this one deleted router path; no router was restored.",
+        "evidence": "scripts/verify-upstream-compatibility.mjs"
+      },
+      {
+        "checkId": "legacy-template-api-evidence",
+        "observed": "Excluded GET /api/v1/ppt/template/{template_id} evidence points to the deleted legacy router",
+        "disposition": "maintain-deletion-exception",
+        "action": "Retained the excluded API contract and deletion evidence boundary; no legacy response shape was reintroduced.",
+        "evidence": "compatibility/upstream-test-contracts.json"
+      },
+      {
+        "checkId": "legacy-router-evidence-read-2",
+        "observed": "The same deleted router evidence was read again by the non-conflicting Template V2 contract",
+        "disposition": "maintain-deletion-exception",
+        "action": "Verifier uses the same exact retired-evidence exception for this second evidence consumer.",
+        "evidence": "scripts/verify-upstream-compatibility.mjs"
+      },
+      {
+        "checkId": "non-conflicting-template-v2-evidence",
+        "observed": "non-conflicting-template-v2-compat-mutations evidence points to the deleted legacy router",
+        "disposition": "maintain-deletion-exception",
+        "action": "Kept the local Template V2 boundary and the exact retired-evidence exception; did not revive the legacy router solely to satisfy historical evidence.",
+        "evidence": "compatibility/upstream-test-contracts.json"
+      },
+      {
+        "checkId": "alembic-head-c7e9a1b3d5f8",
+        "observed": "Compatibility ledger expects c0e3f5a7b9d1 but the checkout has authored-vNext head c7e9a1b3d5f8",
+        "disposition": "resolved-in-owned-contract",
+        "action": "Extended the reviewed linear ledger through all nine already-committed post-c0 migrations and advanced the expected sole head to c7e9a1b3d5f8 without changing migration history.",
+        "evidence": "servers/fastapi/alembic/versions/c7e9a1b3d5f8_persist_authored_vnext_export_payload.py"
+      },
+      {
+        "checkId": "authored-hybrid-security-anchor",
+        "observed": "Protected patch expected the retired Chrome blocks network requests wording",
+        "disposition": "resolved-in-owned-contract",
+        "action": "Updated the protected anchor to the current public Chrome runner preflight test name; network isolation behavior remains tested.",
+        "evidence": "servers/nextjs/lib/authored-hybrid/security.test.mjs"
+      },
+      {
+        "checkId": "presentation-export-strategy-legacy-general",
+        "observed": "Protected patch expected a removed legacy-general strategy literal",
+        "disposition": "maintain-product-boundary",
+        "action": "Removed the stale protected anchor; current strategy deliberately admits only authored-hybrid and Template V2 general identities.",
+        "evidence": "servers/nextjs/lib/presentation-export-strategy.ts"
+      },
+      {
+        "checkId": "electron-context-isolation-anchor",
+        "observed": "Electron main no longer contains the security literals inline",
+        "disposition": "resolved-in-owned-contract",
+        "action": "Protected the delegated buildSecureAppWebPreferences policy and app.enableSandbox boundary instead of requiring duplicated inline literals.",
+        "evidence": "electron/app/main.ts"
+      },
+      {
+        "checkId": "electron-node-integration-anchor",
+        "observed": "Electron main no longer contains the nodeIntegration literal inline",
+        "disposition": "resolved-in-owned-contract",
+        "action": "The same delegated secure-preferences contract covers node integration disabled behavior; the registry no longer relies on stale inline wording.",
+        "evidence": "electron/app/main.ts"
+      }
+    ]
+  },
+  "acceptedBaselineAdvanced": false
+}

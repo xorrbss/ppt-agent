@@ -8,7 +8,7 @@
   },
   "commonRevision": "c7b70d0f31b1",
   "upstreamTipRevision": "b8e2f4a7c9d1",
-  "localTipRevision": "c0e3f5a7b9d1",
+  "localTipRevision": "c7e9a1b3d5f8",
   "databaseCompatibility": {
     "verified": [
       {
@@ -79,7 +79,16 @@
     { "revision": "f7c9e1a3b5d8", "downRevision": "e6b8d0f2a4c6", "file": "f7c9e1a3b5d8_add_reference_snapshots.py" },
     { "revision": "a8c1e4f7b2d9", "downRevision": "f7c9e1a3b5d8", "file": "a8c1e4f7b2d9_add_asset_profile_compatibility_bridges.py" },
     { "revision": "b9d2e4f6a8c1", "downRevision": "a8c1e4f7b2d9", "file": "b9d2e4f6a8c1_add_presentation_reference_snapshots.py" },
-    { "revision": "c0e3f5a7b9d1", "downRevision": "b9d2e4f6a8c1", "file": "c0e3f5a7b9d1_add_asset_gateway_idempotency_receipts.py" }
+    { "revision": "c0e3f5a7b9d1", "downRevision": "b9d2e4f6a8c1", "file": "c0e3f5a7b9d1_add_asset_gateway_idempotency_receipts.py" },
+    { "revision": "d1a4c7e9b2f6", "downRevision": "c0e3f5a7b9d1", "file": "d1a4c7e9b2f6_reconcile_post_c0_schema.py" },
+    { "revision": "d2b5e8f0a3c6", "downRevision": "d1a4c7e9b2f6", "file": "d2b5e8f0a3c6_add_presentation_export_attempts.py" },
+    { "revision": "d3e7a9c2b4f6", "downRevision": "d2b5e8f0a3c6", "file": "d3e7a9c2b4f6_add_provider_usage_receipts.py" },
+    { "revision": "e4f8a2c6d0b3", "downRevision": "d3e7a9c2b4f6", "file": "e4f8a2c6d0b3_add_authored_vnext_sql_repository.py" },
+    { "revision": "d4f8a0b2c6e1", "downRevision": "e4f8a2c6d0b3", "file": "d4f8a0b2c6e1_add_provider_credential_references.py" },
+    { "revision": "f5a1c3e7b9d2", "downRevision": "d4f8a0b2c6e1", "file": "f5a1c3e7b9d2_add_authored_vnext_generation_operations.py" },
+    { "revision": "a6b2c4d8e0f3", "downRevision": "f5a1c3e7b9d2", "file": "a6b2c4d8e0f3_harden_authored_vnext_ownership.py" },
+    { "revision": "b6d8e0f2a4c7", "downRevision": "a6b2c4d8e0f3", "file": "b6d8e0f2a4c7_add_provider_runtime_reservations.py" },
+    { "revision": "c7e9a1b3d5f8", "downRevision": "b6d8e0f2a4c7", "file": "c7e9a1b3d5f8_persist_authored_vnext_export_payload.py" }
   ],
   "translations": [
     {
@@ -259,6 +268,42 @@
     {
       "revision": "c0e3f5a7b9d1",
       "purpose": "Durable owner-scoped Asset Gateway idempotency receipts with path-free replay and bounded expiry cleanup"
+    },
+    {
+      "revision": "d1a4c7e9b2f6",
+      "purpose": "Reconcile the post-c0 physical schema without accepting ambiguous DDL"
+    },
+    {
+      "revision": "d2b5e8f0a3c6",
+      "purpose": "Durable presentation export attempts and artifact publication links"
+    },
+    {
+      "revision": "d3e7a9c2b4f6",
+      "purpose": "Privacy-safe provider usage receipts"
+    },
+    {
+      "revision": "e4f8a2c6d0b3",
+      "purpose": "Durable authored-vNext revision and export publication repository"
+    },
+    {
+      "revision": "d4f8a0b2c6e1",
+      "purpose": "External provider credential references"
+    },
+    {
+      "revision": "f5a1c3e7b9d2",
+      "purpose": "Durable authored-vNext generation operations"
+    },
+    {
+      "revision": "a6b2c4d8e0f3",
+      "purpose": "Authored-vNext ownership and account-deletion cascade hardening"
+    },
+    {
+      "revision": "b6d8e0f2a4c7",
+      "purpose": "Durable provider budgets, reservations, RPM, and circuit state"
+    },
+    {
+      "revision": "c7e9a1b3d5f8",
+      "purpose": "Persist authored-vNext export worker request payloads"
     }
   ]
 }

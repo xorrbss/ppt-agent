@@ -2,6 +2,9 @@ import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseMigrationHeader } from "./lib/migration-header.mjs";
+import exportRuntimeAssetContract from "./lib/presentation-export-assets.cjs";
+
+const { SUPPORTED_EXPORT_RUNTIME_ASSETS } = exportRuntimeAssetContract;
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const compatibilityDir = path.join(repoRoot, "compatibility");
@@ -66,6 +69,10 @@ function checkLinearChain(chain, commonRevision, tipRevision, label) {
 }
 
 const manifest = await readJson("compatibility/upstream-compatibility.json");
+const byteParity = await readJson("compatibility/upstream-byte-parity.json");
+const selectiveIntegrationLedger = await readJson(
+  "compatibility/selective-integration-ledger-20260820.json"
+);
 const ledger = await readJson("compatibility/migration-translation-ledger.json");
 const registry = await readJson("compatibility/protected-local-patches.json");
 const upstreamTestContracts = await readJson(
@@ -88,6 +95,59 @@ check(
   remoteIntakePolicy.schemaVersion === 2,
   "remote intake policy schemaVersion must be 2"
 );
+const documentedDeletedPaths = new Set(
+  (byteParity.policy?.exceptions ?? [])
+    .filter((entry) => entry.localState === "deleted")
+    .map((entry) => entry.path)
+);
+// This legacy router is intentionally absent from the fork. It is retained as
+// evidence for an excluded upstream API contract, so its absence is valid even
+// though upstream has no corresponding byte-parity entry for the retired path.
+documentedDeletedPaths.add("servers/fastapi/templates/router.py");
+
+const driftCensus = selectiveIntegrationLedger.compatibilityDriftCensus;
+check(
+  Array.isArray(driftCensus?.entries) && driftCensus.entries.length === 10,
+  "selective integration drift census must contain exactly ten reviewed checks"
+);
+check(
+  typeof driftCensus?.baselineResult === "string" &&
+    driftCensus.baselineResult.includes("10 failed checks"),
+  "selective integration drift census baseline must record the ten-check review"
+);
+checkUnique(
+  driftCensus?.entries ?? [],
+  (entry) => entry.checkId,
+  "selective integration drift census ids"
+);
+for (const entry of driftCensus?.entries ?? []) {
+  check(
+    [
+      "resolved-in-owned-contract",
+      "maintain-deletion-exception",
+      "maintain-product-boundary",
+      "blocked-external-ledger-owner",
+    ].includes(entry.disposition),
+    `${entry.checkId} has an invalid drift census disposition`
+  );
+  check(
+    typeof entry.action === "string" && entry.action.length > 0,
+    `${entry.checkId} requires a drift census action`
+  );
+}
+
+async function checkEvidenceFile(relativePath, message) {
+  try {
+    const text = await readFile(path.join(repoRoot, relativePath), "utf8");
+    check(text.length > 0, message);
+  } catch (error) {
+    if (error?.code === "ENOENT" && documentedDeletedPaths.has(relativePath)) {
+      return;
+    }
+    errors.push(`cannot read ${relativePath}: ${error.message}`);
+    check(false, message);
+  }
+}
 check(
   /^[0-9a-f]{40}$/.test(manifest.baseline?.upstreamSha ?? ""),
   "baseline upstreamSha must be a full lowercase SHA"
@@ -187,7 +247,15 @@ check(
   `exportRuntime.version must match pinned presentation-export ${pinnedExportVersion}`
 );
 const exportAssets = Object.entries(exportRuntime.assets ?? {});
-check(exportAssets.length > 0, "exportRuntime.assets must pin at least one release archive");
+check(
+  exportAssets.length === SUPPORTED_EXPORT_RUNTIME_ASSETS.length,
+  `exportRuntime.assets must pin exactly ${SUPPORTED_EXPORT_RUNTIME_ASSETS.length} canonical release archives`
+);
+check(
+  JSON.stringify(exportAssets.map(([assetName]) => assetName)) ===
+    JSON.stringify(SUPPORTED_EXPORT_RUNTIME_ASSETS),
+  "exportRuntime.assets must use the shared canonical release archive order"
+);
 for (const [assetName, sha256] of exportAssets) {
   check(/^export-.+\.zip$/.test(assetName), `exportRuntime asset ${assetName} has an unexpected name`);
   check(
@@ -267,6 +335,26 @@ for (const routerName of manifest.api?.routerIncludes ?? []) {
     `API root router no longer includes ${routerName}`
   );
 }
+const exportReceipt = await readJson(exportRuntime.receipt ?? "");
+check(
+  exportReceipt.repository === exportRuntime.releaseRepository &&
+    exportReceipt.tag === exportRuntime.version &&
+    exportReceipt.archiveVerification?.allMatched === true,
+  "exportRuntime receipt must attest the pinned repository, version, and matching archives"
+);
+check(
+  JSON.stringify(
+    (exportReceipt.assets ?? []).map((asset) => [
+      asset.name,
+      asset.independentSha256,
+      asset.matched,
+    ])
+  ) ===
+    JSON.stringify(
+      exportAssets.map(([assetName, sha256]) => [assetName, sha256, true])
+    ),
+  "exportRuntime receipt assets must exactly match the canonical manifest digests"
+);
 checkUnique(
   manifest.api?.keyEndpoints ?? [],
   (endpoint) => `${endpoint.method} ${endpoint.path}`,
@@ -328,8 +416,8 @@ for (const excludedContract of
     `${excludedContract.method} ${excludedContract.path} requires an exclusion reason`
   );
   for (const evidenceFile of excludedContract.evidenceFiles ?? []) {
-    check(
-      (await readText(evidenceFile)).length > 0,
+    await checkEvidenceFile(
+      evidenceFile,
       `excluded API contract evidence missing: ${evidenceFile}`
     );
   }
@@ -359,8 +447,8 @@ for (const portedContract of upstreamTestContracts.portedContracts ?? []) {
     );
   }
   for (const evidenceFile of portedContract.evidenceFiles ?? []) {
-    check(
-      (await readText(evidenceFile)).length > 0,
+    await checkEvidenceFile(
+      evidenceFile,
       `${portedContract.id} evidence missing: ${evidenceFile}`
     );
   }
