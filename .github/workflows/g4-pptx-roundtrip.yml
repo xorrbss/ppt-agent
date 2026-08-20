@@ -136,7 +136,7 @@ jobs:
           '
 
   windows-release-gate:
-    name: Windows v0.4.2 release gate
+    name: Windows v0.4.8 release gate
     runs-on: windows-latest
     timeout-minutes: 35
     env:
@@ -159,7 +159,7 @@ jobs:
           npm ci --prefix electron
           npm ci --prefix servers/nextjs
 
-      - name: Test v0.4.2 export runtime synchronization
+      - name: Test v0.4.8 export runtime synchronization
         run: npm run test:presentation-export-sync
 
       - name: Gate Electron release dependencies
@@ -356,8 +356,8 @@ jobs:
               throw "NSIS install is missing the export marker: $marker"
             }
             $installedExportVersion = (Get-Content -Raw -LiteralPath $marker).Trim()
-            if ($installedExportVersion -ne "v0.4.2") {
-              throw "NSIS install export marker must be v0.4.2, received: $installedExportVersion"
+            if ($installedExportVersion -ne "v0.4.8") {
+              throw "NSIS install export marker must be v0.4.8, received: $installedExportVersion"
             }
           } finally {
             if ($didInstall) {
@@ -454,7 +454,7 @@ jobs:
       - name: Test export runtime release gate
         run: npm run test:presentation-export-sync
 
-      # presentation-export is gitignored; sync the pinned v0.4.2 runtime so the
+      # presentation-export is gitignored; sync the pinned v0.4.8 runtime so the
       # dev compose bind-mount (./ -> /app) exposes the converter in-container.
       - name: Sync export runtime
         run: node scripts/sync-presentation-export.cjs --force

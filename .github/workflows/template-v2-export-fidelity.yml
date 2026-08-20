@@ -152,7 +152,7 @@ jobs:
           retention-days: 14
 
   pdf-golden:
-    name: Windows presentation-export v0.4.3 PDF golden
+    name: Windows presentation-export v0.4.8 PDF golden
     runs-on: windows-latest
     timeout-minutes: 45
 

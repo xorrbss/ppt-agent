@@ -18,12 +18,15 @@ const fs = require("fs");
 const path = require("path");
 const https = require("https");
 const http = require("http");
-const crypto = require("crypto");
 const { execFileSync } = require("child_process");
 const {
   ensureCommonJsEntrypoint,
   ensureRendererReadinessOverlay: applyRendererReadinessOverlay,
 } = require("./lib/presentation-export-readiness.cjs");
+const {
+  getPlatformAssetName,
+  verifyDownloadedAsset: verifyPinnedDownloadedAsset,
+} = require("./lib/presentation-export-assets.cjs");
 
 const repoRoot = path.join(__dirname, "..");
 const targetRoot = path.join(repoRoot, "presentation-export");
@@ -36,19 +39,12 @@ const packageJsonFile = path.join(repoRoot, "package.json");
 const cacheDir = path.join(repoRoot, ".cache", "presentation-export");
 const exportRepoBase =
   "https://github.com/presenton/presenton-export/releases/download";
-// The export runtime publishes one archive per OS/arch. Pick the one matching the
-// current platform instead of always fetching Linux — otherwise Windows/macOS get a
-// Linux converter binary they can't execute (export then 404s "converter not found").
-// Docker/Linux resolves to the same export-Linux-X64.zip as before (no change there).
-function getExportAssetName() {
-  const osName =
-    { win32: "Windows", darwin: "macOS", linux: "Linux" }[process.platform] ||
-    "Linux";
-  const archName =
-    { x64: "X64", arm64: "ARM64", ia32: "ia32" }[process.arch] || "X64";
-  return `export-${osName}-${archName}.zip`;
-}
-const exportAssetName = getExportAssetName();
+const exportAssetName = getPlatformAssetName();
+const exportChecksumManifest = path.join(
+  repoRoot,
+  "compatibility",
+  "upstream-compatibility.json"
+);
 
 const helpText = [
   "Usage: node scripts/sync-presentation-export.cjs [options]",
@@ -403,49 +399,13 @@ function resolveExtractedRoot(extractDir) {
   throw new Error(`Unable to locate export runtime root under ${extractDir}`);
 }
 
-// The release archive is a version-pinned but mutable network input: GitHub lets a
-// tag's asset be re-uploaded. When the compatibility manifest pins a SHA-256 for the
-// requested version+asset, verify the downloaded bytes before extracting so a
-// swapped or corrupted archive fails closed instead of installing silently.
-function expectedAssetSha256(tag, assetName) {
-  const manifestPath = path.join(
-    repoRoot,
-    "compatibility",
-    "upstream-compatibility.json"
-  );
-  let manifest;
-  try {
-    manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-  } catch {
-    return null;
-  }
-  const runtime = manifest.exportRuntime;
-  if (!runtime || runtime.version !== tag) {
-    return null;
-  }
-  const hex = runtime.assets && runtime.assets[assetName];
-  return typeof hex === "string" && /^[0-9a-f]{64}$/.test(hex) ? hex : null;
-}
-
-function verifyDownloadedAsset(zipPath, tag, assetName) {
-  const expected = expectedAssetSha256(tag, assetName);
-  if (!expected) {
-    console.log(
-      `[presentation-export] No pinned checksum for ${assetName}@${tag}; skipping integrity check.`
-    );
-    return;
-  }
-  const actual = crypto
-    .createHash("sha256")
-    .update(fs.readFileSync(zipPath))
-    .digest("hex");
-  if (actual !== expected) {
-    throw new Error(
-      `Checksum mismatch for ${assetName}@${tag}: expected ${expected}, got ${actual}. ` +
-        "The pinned release asset may have been re-uploaded or corrupted."
-    );
-  }
+function verifyDownloadedAsset(zipPath, tag, assetName, options = {}) {
+  const actual = verifyPinnedDownloadedAsset(zipPath, tag, assetName, {
+    manifestPath: exportChecksumManifest,
+    ...options,
+  });
   console.log(`[presentation-export] Verified ${assetName} sha256 ${actual}`);
+  return actual;
 }
 
 async function downloadAndInstallRuntime(tag) {
@@ -668,10 +628,12 @@ if (require.main === module) {
     finalizeRuntimeInstall,
     ensureRendererReadinessOverlay,
     getTargetVersion,
+    getPlatformAssetName,
     helpText,
     parseCliArgs,
     readInstalledVersion,
     writeInstalledVersionAtomic,
     validateExistingRuntime,
+    verifyDownloadedAsset,
   };
 }

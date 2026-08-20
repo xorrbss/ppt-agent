@@ -386,13 +386,13 @@ test("Template V2 persisted JSON always crosses the production strategy boundary
 // leaving enough time for the test's mandatory child-process cleanup.
 const EXPORT_E2E_TIMEOUT_MS = process.platform === "win32" ? 360_000 : 240_000;
 
-test("actual API route renders Template V2 through /pdf-maker and presentation-export v0.4.3", { timeout: EXPORT_E2E_TIMEOUT_MS }, async (t) => {
+test("actual API route renders Template V2 through /pdf-maker and presentation-export v0.4.8", { timeout: EXPORT_E2E_TIMEOUT_MS }, async (t) => {
   const [{ manifest, presentations }, chrome, installedVersion] = await Promise.all([
     loadCorpus(),
     resolveAuthoredHybridChromeExecutable(),
     fs.readFile(path.join(EXPORT_ROOT, ".installed-version"), "utf8").then((value) => value.trim()),
   ]);
-  assert.equal(installedVersion, "v0.4.3");
+  assert.equal(installedVersion, "v0.4.8");
   if (!chrome) {
     if (process.env.CI === "true") assert.fail("CI must provide Chrome for Template V2 structural export");
     t.skip("Chrome unavailable; dependency-free production boundary coverage passed separately");

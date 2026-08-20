@@ -4,7 +4,7 @@
 
 `upstream-compatibility.yml` is the pinned, local contract gate. It verifies the
 checked-out manifest, Alembic ledger/head, Template V2 boundaries, protected
-patch anchors, presentation-export `v0.4.2`, and relevant database behavior.
+patch anchors, presentation-export `v0.4.8`, and relevant database behavior.
 It does not decide whether the official upstream branch moved.
 
 `upstream-intake.yml` is the separate remote observation gate:
@@ -76,7 +76,7 @@ Protect `main` with these exact, always-present pull-request checks:
 - `Test All Applications / Test Main Next.js`
 - `Test All Applications / Workspace chat-first browser E2E`
 - `G4 round-trip and release gates / production export runtime stage`
-- `G4 round-trip and release gates / Windows v0.4.2 release gate`
+- `G4 round-trip and release gates / Windows v0.4.8 release gate`
 - `G4 round-trip and release gates / adaptive PPTX round-trip`
 
 The following checks are path- or matrix-scoped and therefore must not be added
@@ -126,6 +126,7 @@ capability-specific integration gates:
 | `upstream-compatibility.yml` | Ubuntu plus Windows path checks; PostgreSQL 16 for one job | Static/export compatibility contracts, three Windows path/synchronization guards, and real PostgreSQL migration, canary rollback, and owner-scoped async-read integration tests. The PostgreSQL job is intentionally separate from the SQLite FastAPI suite. |
 | `upstream-intake.yml` | Offline fixture on pull requests; GitHub API on schedule/manual dispatch | Detects upstream movement without merging it. Live intake is intentionally not a pull-request dependency. |
 | `template-v2-export-fidelity.yml` | Ubuntu, macOS, and Windows with Chromium, LibreOffice, and PDF tools | Template V2 structural export checks and required rendered-image fidelity on all three operating systems. |
+| `export-platform-archives.yml` | Ubuntu, macOS, and Windows with Node 22 and `tar` | Downloads every pinned v0.4.8 export archive into runner temporary storage, verifies its SHA-256 and exact two-entry structure, and checks the target ELF/Mach-O/PE ABI without claiming cross-OS native execution. |
 | `cross-platform-packaging-security.yml` | Ubuntu and macOS unsigned builders; Ubuntu ClamAV scanner | Gates the root, Next.js, and Electron packaged production dependency trees before rebuilding FastAPI, Next.js, and Electron; records SHA-256 manifests, retains quarantined candidates for seven days, and fails closed when the downstream ClamAV scan cannot complete. |
 | `g4-pptx-roundtrip.yml` | Ubuntu Docker; Windows for release gates | Pinned export-runtime contract, Windows Electron/resource safety tests, optional manual Windows packaging, and required adaptive plus legacy end-to-end PPTX round trips. |
 | `sync-releaes-to-r2.yml` | Release event and deployment credentials | Publishes release artifacts. This is a deployment workflow, not a pull-request test gate. |
@@ -179,7 +180,7 @@ npm run test:local -- --dry-run --all
 entrypoint. The default core profile runs:
 
 - locked root and Next.js installs;
-- the `presentation-export` v0.4.2 synchronization contract, idempotent sync,
+- the `presentation-export` v0.4.8 synchronization contract, idempotent sync,
   and installed-runtime verification (a download occurs only when absent or
   stale);
 - static upstream compatibility and the offline intake fixture;

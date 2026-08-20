@@ -1,6 +1,10 @@
-const crypto = require("node:crypto");
-const fs = require("node:fs");
 const path = require("node:path");
+const {
+  SUPPORTED_EXPORT_RUNTIME_ASSETS,
+  expectedAssetSha256: expectedSharedAssetSha256,
+  getPlatformAssetName,
+  verifyDownloadedAsset: verifySharedDownloadedAsset,
+} = require("../../scripts/lib/presentation-export-assets.cjs");
 
 const helpText = [
   "Usage: node sync_export_runtime.js [options]",
@@ -46,55 +50,31 @@ async function resolveTargetVersion({
   return requested === "latest" ? resolveLatest() : requested;
 }
 
-function getPlatformAssetName(platform = process.platform, arch = process.arch) {
-  const platformArch = `${platform}-${arch}`;
-  if (platformArch === "linux-x64") return "export-Linux-X64.zip";
-  if (platformArch === "linux-arm64") return "export-Linux-ARM64.zip";
-  if (platformArch === "darwin-x64") return "export-macOS-X64.zip";
-  if (platformArch === "darwin-arm64") return "export-macOS-ARM64.zip";
-  if (platformArch === "win32-x64") return "export-Windows-X64.zip";
-  if (platformArch === "win32-ia32") return "export-Windows-ia32.zip";
-  throw new Error(
-    `Unsupported export runtime platform: ${platformArch}`
-  );
-}
-
 function expectedAssetSha256({
   tag,
   assetName,
   manifestPath = path.join(__dirname, "..", "..", "compatibility", "upstream-compatibility.json"),
 }) {
-  let manifest;
-  try {
-    manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-  } catch (error) {
-    throw new Error(`Cannot read export checksum manifest ${manifestPath}: ${error.message}`);
-  }
-  const runtime = manifest.exportRuntime;
-  if (!runtime || runtime.version !== tag) {
-    throw new Error(`No checksum manifest is pinned for presentation-export ${tag}`);
-  }
-  const checksum = runtime.assets?.[assetName];
-  if (typeof checksum !== "string" || !/^[0-9a-f]{64}$/.test(checksum)) {
-    throw new Error(`Missing or invalid SHA-256 for ${assetName}@${tag}`);
-  }
-  return checksum;
+  return expectedSharedAssetSha256({ tag, assetName, manifestPath });
 }
 
 function verifyDownloadedAsset(filePath, tag, assetName, options = {}) {
-  const expected = expectedAssetSha256({ tag, assetName, ...options });
-  const actual = crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
-  if (!crypto.timingSafeEqual(Buffer.from(actual), Buffer.from(expected))) {
-    throw new Error(
-      `Checksum mismatch for ${assetName}@${tag}: expected ${expected}, got ${actual}`
-    );
-  }
-  return actual;
+  return verifySharedDownloadedAsset(filePath, tag, assetName, {
+    manifestPath: path.join(
+      __dirname,
+      "..",
+      "..",
+      "compatibility",
+      "upstream-compatibility.json"
+    ),
+    ...options,
+  });
 }
 
 module.exports = {
   expectedAssetSha256,
   getPlatformAssetName,
+  SUPPORTED_EXPORT_RUNTIME_ASSETS,
   helpText,
   parseSyncCliArgs,
   resolveTargetVersion,

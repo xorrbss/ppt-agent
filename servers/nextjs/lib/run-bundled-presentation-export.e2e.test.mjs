@@ -190,7 +190,7 @@ async function runGeneralExporterSmoke(t, format) {
 }
 
 for (const format of ["pdf", "pptx"]) {
-  test(`v0.4.3 general exporter converts a representative Template V2 ${format.toUpperCase()} render`, async (t) => {
+  test(`v0.4.8 general exporter converts a representative Template V2 ${format.toUpperCase()} render`, async (t) => {
     await runGeneralExporterSmoke(t, format);
   });
 }

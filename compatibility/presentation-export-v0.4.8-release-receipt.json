@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "repository": "presenton/presenton-export",
+  "tag": "v0.4.8",
+  "release": {
+    "id": 372276016,
+    "url": "https://github.com/presenton/presenton-export/releases/tag/v0.4.8",
+    "draft": false,
+    "prerelease": false,
+    "publishedAt": "2026-08-18T10:52:53Z"
+  },
+  "tagTarget": {
+    "type": "commit",
+    "sha": "c0375365b11dcad89db71df39f6b303dcf0cd33f",
+    "url": "https://github.com/presenton/presenton-export/commit/c0375365b11dcad89db71df39f6b303dcf0cd33f",
+    "githubSignatureVerification": {
+      "verified": true,
+      "reason": "valid",
+      "verifiedAt": "2026-03-18T08:41:18Z"
+    }
+  },
+  "archiveVerification": {
+    "verifiedAt": "2026-08-20T20:47:38.8600603Z",
+    "method": "Each official browser_download_url was downloaded into a fresh temporary directory. Get-FileHash -Algorithm SHA256 was computed independently and compared with the GitHub release asset digest and the review-provided digest.",
+    "allMatched": true
+  },
+  "assets": [
+    {
+      "id": 519330454,
+      "name": "export-Linux-X64.zip",
+      "size": 57887082,
+      "url": "https://github.com/presenton/presenton-export/releases/download/v0.4.8/export-Linux-X64.zip",
+      "githubDigest": "sha256:05b528a4b502862c1942c1f11f22b027c0bd65d5e61f42b02d111091d4317098",
+      "independentSha256": "05b528a4b502862c1942c1f11f22b027c0bd65d5e61f42b02d111091d4317098",
+      "reviewProvidedSha256": "05b528a4b502862c1942c1f11f22b027c0bd65d5e61f42b02d111091d4317098",
+      "matched": true
+    },
+    {
+      "id": 519330450,
+      "name": "export-Linux-ARM64.zip",
+      "size": 55826548,
+      "url": "https://github.com/presenton/presenton-export/releases/download/v0.4.8/export-Linux-ARM64.zip",
+      "githubDigest": "sha256:613033ab2cee3370741cb3eadd430da2c59da931182e0e9ad84e7c8603875b90",
+      "independentSha256": "613033ab2cee3370741cb3eadd430da2c59da931182e0e9ad84e7c8603875b90",
+      "reviewProvidedSha256": "613033ab2cee3370741cb3eadd430da2c59da931182e0e9ad84e7c8603875b90",
+      "matched": true
+    },
+    {
+      "id": 519330455,
+      "name": "export-macOS-X64.zip",
+      "size": 42831361,
+      "url": "https://github.com/presenton/presenton-export/releases/download/v0.4.8/export-macOS-X64.zip",
+      "githubDigest": "sha256:389b44a050be02f95ac196806051a1ca1ff6755ad39a71a95a0f3909cc4b856b",
+      "independentSha256": "389b44a050be02f95ac196806051a1ca1ff6755ad39a71a95a0f3909cc4b856b",
+      "reviewProvidedSha256": "389b44a050be02f95ac196806051a1ca1ff6755ad39a71a95a0f3909cc4b856b",
+      "matched": true
+    },
+    {
+      "id": 519330451,
+      "name": "export-macOS-ARM64.zip",
+      "size": 40506978,
+      "url": "https://github.com/presenton/presenton-export/releases/download/v0.4.8/export-macOS-ARM64.zip",
+      "githubDigest": "sha256:7e5c2311c0f724d9c68caeeca74d8bcf81621443bf1187a1b6813e242e33f43f",
+      "independentSha256": "7e5c2311c0f724d9c68caeeca74d8bcf81621443bf1187a1b6813e242e33f43f",
+      "reviewProvidedSha256": "7e5c2311c0f724d9c68caeeca74d8bcf81621443bf1187a1b6813e242e33f43f",
+      "matched": true
+    },
+    {
+      "id": 519330449,
+      "name": "export-Windows-X64.zip",
+      "size": 43066640,
+      "url": "https://github.com/presenton/presenton-export/releases/download/v0.4.8/export-Windows-X64.zip",
+      "githubDigest": "sha256:9d30418c4941bfade89d8cb6c5dfda91da2f9bc7b7cc9230f613595f54e34d3c",
+      "independentSha256": "9d30418c4941bfade89d8cb6c5dfda91da2f9bc7b7cc9230f613595f54e34d3c",
+      "reviewProvidedSha256": "9d30418c4941bfade89d8cb6c5dfda91da2f9bc7b7cc9230f613595f54e34d3c",
+      "matched": true
+    },
+    {
+      "id": 519330452,
+      "name": "export-Windows-ia32.zip",
+      "size": 38901553,
+      "url": "https://github.com/presenton/presenton-export/releases/download/v0.4.8/export-Windows-ia32.zip",
+      "githubDigest": "sha256:5c742c2cf6e8ae9a20d2f88b6de67ee7b987f3323190db1bdc2bbf444fe5968f",
+      "independentSha256": "5c742c2cf6e8ae9a20d2f88b6de67ee7b987f3323190db1bdc2bbf444fe5968f",
+      "reviewProvidedSha256": "5c742c2cf6e8ae9a20d2f88b6de67ee7b987f3323190db1bdc2bbf444fe5968f",
+      "matched": true
+    }
+  ]
+}

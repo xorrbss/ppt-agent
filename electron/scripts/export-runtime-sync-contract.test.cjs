@@ -11,6 +11,7 @@ const {
   helpText,
   parseSyncCliArgs,
   resolveTargetVersion,
+  SUPPORTED_EXPORT_RUNTIME_ASSETS,
   verifyDownloadedAsset,
 } = require("./export-runtime-sync-contract.cjs");
 
@@ -45,13 +46,13 @@ test("ambient version cannot bypass the package pin without explicit opt-in", as
   assert.equal(
     await resolveTargetVersion({
       env: { EXPORT_RUNTIME_VERSION: "latest" },
-      pinnedVersion: "v0.4.3",
+      pinnedVersion: "v0.4.8",
       resolveLatest: async () => {
         latestRequests += 1;
         return "v9.9.9";
       },
     }),
-    "v0.4.3"
+    "v0.4.8"
   );
   assert.equal(latestRequests, 0);
 });
@@ -59,21 +60,21 @@ test("ambient version cannot bypass the package pin without explicit opt-in", as
 test("explicit dev override resolves both fixed and latest versions", async () => {
   assert.equal(
     await resolveTargetVersion({
-      env: { EXPORT_RUNTIME_VERSION: "v0.4.4" },
-      pinnedVersion: "v0.4.3",
+      env: { EXPORT_RUNTIME_VERSION: "v0.4.9" },
+      pinnedVersion: "v0.4.8",
       allowVersionOverride: true,
       resolveLatest: async () => "unused",
     }),
-    "v0.4.4"
+    "v0.4.9"
   );
   assert.equal(
     await resolveTargetVersion({
       env: { EXPORT_RUNTIME_VERSION: "latest" },
-      pinnedVersion: "v0.4.3",
+      pinnedVersion: "v0.4.8",
       allowVersionOverride: true,
-      resolveLatest: async () => "v0.4.5",
+      resolveLatest: async () => "v0.5.0",
     }),
-    "v0.4.5"
+    "v0.5.0"
   );
 });
 
@@ -87,34 +88,32 @@ test("supported Electron platforms map to checksum-manifest asset names", () => 
   assert.throws(() => getPlatformAssetName("win32", "arm64"), /Unsupported/);
 });
 
-test("canonical v0.4.3 manifest pins every supported Electron asset", () => {
-  for (const assetName of [
-    "export-Linux-X64.zip",
-    "export-Linux-ARM64.zip",
-    "export-macOS-X64.zip",
-    "export-macOS-ARM64.zip",
-    "export-Windows-X64.zip",
-    "export-Windows-ia32.zip",
-  ]) {
+test("canonical v0.4.8 manifest pins exactly the shared six assets", () => {
+  const manifest = JSON.parse(fs.readFileSync(canonicalManifest, "utf8"));
+  assert.deepEqual(
+    Object.keys(manifest.exportRuntime.assets),
+    SUPPORTED_EXPORT_RUNTIME_ASSETS
+  );
+  for (const assetName of SUPPORTED_EXPORT_RUNTIME_ASSETS) {
     assert.match(
-      expectedAssetSha256({ tag: "v0.4.3", assetName, manifestPath: canonicalManifest }),
+      expectedAssetSha256({ tag: "v0.4.8", assetName, manifestPath: canonicalManifest }),
       /^[0-9a-f]{64}$/
     );
   }
 });
 
 test("missing version, asset, or valid SHA-256 fails closed", () => {
-  withTempManifest({ exportRuntime: { version: "v0.4.2", assets: {} } }, ({ manifestPath }) => {
+  withTempManifest({ exportRuntime: { version: "v0.4.7", assets: {} } }, ({ manifestPath }) => {
     assert.throws(
-      () => expectedAssetSha256({ tag: "v0.4.3", assetName: "runtime.zip", manifestPath }),
+      () => expectedAssetSha256({ tag: "v0.4.8", assetName: "runtime.zip", manifestPath }),
       /No checksum manifest/
     );
   });
   withTempManifest(
-    { exportRuntime: { version: "v0.4.3", assets: { "runtime.zip": "bad" } } },
+    { exportRuntime: { version: "v0.4.8", assets: { "runtime.zip": "bad" } } },
     ({ manifestPath }) => {
       assert.throws(
-        () => expectedAssetSha256({ tag: "v0.4.3", assetName: "runtime.zip", manifestPath }),
+        () => expectedAssetSha256({ tag: "v0.4.8", assetName: "runtime.zip", manifestPath }),
         /Missing or invalid SHA-256/
       );
     }
@@ -125,17 +124,17 @@ test("downloaded archive tampering is rejected before extraction", () => {
   const expectedBytes = Buffer.from("trusted archive bytes");
   const expectedHash = crypto.createHash("sha256").update(expectedBytes).digest("hex");
   withTempManifest(
-    { exportRuntime: { version: "v0.4.3", assets: { "runtime.zip": expectedHash } } },
+    { exportRuntime: { version: "v0.4.8", assets: { "runtime.zip": expectedHash } } },
     ({ root, manifestPath }) => {
       const archive = path.join(root, "runtime.zip");
       fs.writeFileSync(archive, expectedBytes);
       assert.equal(
-        verifyDownloadedAsset(archive, "v0.4.3", "runtime.zip", { manifestPath }),
+        verifyDownloadedAsset(archive, "v0.4.8", "runtime.zip", { manifestPath }),
         expectedHash
       );
       fs.appendFileSync(archive, "tampered");
       assert.throws(
-        () => verifyDownloadedAsset(archive, "v0.4.3", "runtime.zip", { manifestPath }),
+        () => verifyDownloadedAsset(archive, "v0.4.8", "runtime.zip", { manifestPath }),
         /Checksum mismatch/
       );
     }

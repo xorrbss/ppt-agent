@@ -247,7 +247,7 @@ export async function runPdfGoldenGate({
   assert.ok(chrome, "Chrome/Chromium is required");
   const poppler = resolvePopplerExecutables();
   const runtimeVersion = (await readFile(path.join(repositoryRoot, "presentation-export", ".installed-version"), "utf8")).trim();
-  assert.equal(runtimeVersion, "v0.4.3", "PDF golden gate requires presentation-export v0.4.3");
+  assert.equal(runtimeVersion, "v0.4.8", "PDF golden gate requires presentation-export v0.4.8");
   const workRoot = await mkdtemp(path.join(os.tmpdir(), "presenton-pdf-golden-"));
   const failures = [];
   const templateResults = [];
@@ -364,7 +364,7 @@ export async function runPdfGoldenGate({
       toolProvenance(poppler.pdfinfo, ["-v"], repositoryRoot),
       toolProvenance(converterPath(repositoryRoot), ["--version"], repositoryRoot).catch(async () => ({
         path: normalizedRepoPath(path.relative(repositoryRoot, converterPath(repositoryRoot))),
-        version: "PyInstaller converter bundled with presentation-export v0.4.3",
+        version: "PyInstaller converter bundled with presentation-export v0.4.8",
         sha256: await sha256File(converterPath(repositoryRoot)),
         sizeBytes: (await stat(converterPath(repositoryRoot))).size,
       })),

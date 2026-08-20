@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -10,12 +11,17 @@ const {
   finalizeRuntimeInstall,
   ensureRendererReadinessOverlay,
   getTargetVersion,
+  getPlatformAssetName,
   helpText,
   parseCliArgs,
   readInstalledVersion,
   writeInstalledVersionAtomic,
   validateExistingRuntime,
+  verifyDownloadedAsset,
 } = require("./sync-presentation-export.cjs");
+const {
+  SUPPORTED_EXPORT_RUNTIME_ASSETS,
+} = require("./lib/presentation-export-assets.cjs");
 const {
   assertElectronSharpLoadable,
   finalizeRuntimeInstall: finalizeElectronRuntimeInstall,
@@ -105,6 +111,15 @@ function createRuntimeFixture(version) {
       path.join(runtimeRoot, installedVersionFileName)
     );
   }
+  return runtimeRoot;
+}
+
+function createV048RuntimeFixture(version) {
+  const runtimeRoot = createRuntimeFixture(version);
+  fs.writeFileSync(
+    path.join(runtimeRoot, "index.js"),
+    'async function sjt(a,r){let i=await VWr(a,r);try{await i.waitForFunction(()=>document.readyState==="complete")}catch{}try{await nnt(i)}catch{}try{await eYr(i)}catch{}return i}\n'
+  );
   return runtimeRoot;
 }
 
@@ -233,6 +248,22 @@ test("runtime repair upgrades the legacy ready-only overlay to reject resource e
   }
 });
 
+test("v0.4.8 stable-page anchor receives the fail-closed readiness overlay", () => {
+  const runtimeRoot = createV048RuntimeFixture("v0.4.8");
+  try {
+    const repaired = ensureRendererReadinessOverlay(runtimeRoot, { repair: true });
+    assert.equal(repaired.ok, true);
+    const source = fs.readFileSync(path.join(runtimeRoot, "index.js"), "utf8");
+    assert.match(source, /data-presenton-template-v2-readiness/);
+    assert.match(source, /templateV2ResourceError===\"true\"/);
+    assert.match(source, /data-render-artifact-contract/);
+    const strict = ensureRendererReadinessOverlay(runtimeRoot, { repair: false });
+    assert.equal(strict.ok, true);
+  } finally {
+    removeFixture(runtimeRoot);
+  }
+});
+
 test("version mismatch is rejected before runtime reuse", () => {
   const runtimeRoot = createRuntimeFixture("v0.3.3");
   try {
@@ -293,8 +324,8 @@ test("strict validation rejects a stale CommonJS bundle", () => {
   }
 });
 
-test("root and Electron pin the same v0.4.3 export release and Sharp range", () => {
-  assert.equal(rootPackage.presentationExportVersion, "v0.4.3");
+test("root and Electron pin the same v0.4.8 export release, assets, and Sharp range", () => {
+  assert.equal(rootPackage.presentationExportVersion, "v0.4.8");
   assert.equal(
     electronPackage.exportVersion,
     rootPackage.presentationExportVersion
@@ -303,6 +334,53 @@ test("root and Electron pin the same v0.4.3 export release and Sharp range", () 
     electronPackage.dependencies.sharp,
     rootPackage.dependencies.sharp
   );
+  const manifest = require("../compatibility/upstream-compatibility.json");
+  assert.deepEqual(
+    Object.keys(manifest.exportRuntime.assets),
+    SUPPORTED_EXPORT_RUNTIME_ASSETS
+  );
+  assert.equal(getPlatformAssetName("win32", "x64"), "export-Windows-X64.zip");
+});
+
+test("root archive verification fails closed without a valid pinned checksum", () => {
+  const fixtureRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), "root-export-checksum-")
+  );
+  const archive = path.join(fixtureRoot, "runtime.zip");
+  const manifestPath = path.join(fixtureRoot, "manifest.json");
+  const bytes = Buffer.from("trusted archive bytes");
+  const digest = crypto.createHash("sha256").update(bytes).digest("hex");
+  try {
+    fs.writeFileSync(archive, bytes);
+    fs.writeFileSync(
+      manifestPath,
+      JSON.stringify({
+        exportRuntime: {
+          version: "v0.4.8",
+          assets: { "runtime.zip": digest },
+        },
+      })
+    );
+    assert.equal(
+      verifyDownloadedAsset(archive, "v0.4.8", "runtime.zip", {
+        manifestPath,
+      }),
+      digest
+    );
+    fs.writeFileSync(
+      manifestPath,
+      JSON.stringify({ exportRuntime: { version: "v0.4.8", assets: {} } })
+    );
+    assert.throws(
+      () =>
+        verifyDownloadedAsset(archive, "v0.4.8", "runtime.zip", {
+          manifestPath,
+        }),
+      /Missing or invalid SHA-256/
+    );
+  } finally {
+    fs.rmSync(fixtureRoot, { recursive: true, force: true });
+  }
 });
 
 test("Sharp validation rejects a damaged native addon", () => {

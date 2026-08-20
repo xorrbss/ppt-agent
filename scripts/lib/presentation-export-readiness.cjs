@@ -11,6 +11,10 @@ const renderArtifactNeedle =
   'try{await a.waitForFunction(()=>document.readyState==="complete")}catch{}try{await Att(a)}catch{}';
 const renderArtifactReplacement =
   'try{await a.waitForFunction(()=>document.readyState==="complete")}catch{}await a.waitForFunction(()=>{let c=new URL(location.href).searchParams,l=c.get("render_contract");if(!l)return!0;let p=document.querySelector("[data-render-artifact-contract]");if(!p||p.getAttribute("data-render-artifact-contract")!==l)return!1;let C=c.get("format"),b=c.get("source_sha256"),k=p.getAttribute("data-render-artifact-version")||"";return(!C||p.getAttribute("data-render-artifact-target")===C)&&k.includes("/revision-")&&(!b||k.endsWith(`/${b}`))},{timeout:15e3});try{await Att(a)}catch{}';
+const rendererV048Needle =
+  'try{await i.waitForFunction(()=>document.readyState==="complete")}catch{}try{await nnt(i)}catch{}';
+const rendererV048Replacement =
+  'try{await i.waitForFunction(()=>document.readyState==="complete")}catch{}await i.waitForFunction(()=>!document.querySelector("script[data-presenton-template-v2-readiness]")||document.documentElement.dataset.templateV2RenderReady==="true"||document.documentElement.dataset.templateV2ResourceError==="true",{timeout:15e3}),await i.evaluate(()=>{if(document.documentElement.dataset.templateV2ResourceError==="true")throw new Error(`Template V2 required resource failed: ${document.documentElement.dataset.templateV2ResourceErrorCode||"unknown"}`)}),await i.waitForFunction(()=>{let c=new URL(location.href).searchParams,l=c.get("render_contract");if(!l)return!0;let p=document.querySelector("[data-render-artifact-contract]");if(!p||p.getAttribute("data-render-artifact-contract")!==l)return!1;let C=c.get("format"),b=c.get("source_sha256"),k=p.getAttribute("data-render-artifact-version")||"";return(!C||p.getAttribute("data-render-artifact-target")===C)&&k.includes("/revision-")&&(!b||k.endsWith(`/${b}`))},{timeout:15e3});try{await nnt(i)}catch{}';
 
 function count(source, needle) {
   return source.split(needle).length - 1;
@@ -23,6 +27,31 @@ function ensureRendererReadinessOverlay(runtimeRoot, { repair = true } = {}) {
     return { ok: false, reason: `Missing runtime bundle: ${indexJs}` };
   }
   const source = fs.readFileSync(indexJs, "utf8");
+  const v048SourceCount = count(source, rendererV048Needle);
+  const v048PatchedCount = count(source, rendererV048Replacement);
+  if (v048SourceCount === 0 && v048PatchedCount === 1) {
+    return { ok: true };
+  }
+  if (v048SourceCount === 1 && v048PatchedCount === 0) {
+    if (!repair) {
+      return {
+        ok: false,
+        reason: `Runtime browser capture readiness overlay is missing or ambiguous: ${indexJs}`,
+      };
+    }
+    fs.writeFileSync(
+      indexJs,
+      source.replace(rendererV048Needle, rendererV048Replacement),
+      "utf8"
+    );
+    return { ok: true };
+  }
+  if (v048SourceCount !== 0 || v048PatchedCount !== 0) {
+    return {
+      ok: false,
+      reason: `Runtime browser capture readiness overlay cannot be applied safely: ${indexJs}`,
+    };
+  }
   const sourceCount = count(source, rendererReadinessNeedle);
   const legacyCount = count(source, rendererReadinessLegacyReplacement);
   const patchedCount = count(source, rendererReadinessReplacement);
