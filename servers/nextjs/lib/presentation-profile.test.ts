@@ -15,18 +15,6 @@ import {
 } from "./presentation-profile.ts";
 
 const expected = {
-  standard: {
-    content_model: "legacy-elements",
-    generation_strategy: "standard",
-    style_source: "builtin",
-    generation_mode: "standard",
-  },
-  smart: {
-    content_model: "smart-html",
-    generation_strategy: "smart",
-    style_source: "community",
-    generation_mode: "smart",
-  },
   "template-v2": {
     content_model: "template-v2",
     generation_strategy: "template",
@@ -61,10 +49,8 @@ function serverResponse(driverId: PresentationDriverId) {
   return { profile, capabilities };
 }
 
-test("compile-time registry resolves all four server-issued profiles", () => {
+test("compile-time registry resolves the two supported server-issued profiles", () => {
   assert.deepEqual(Object.keys(PRESENTATION_DRIVER_REGISTRY), [
-    "standard",
-    "smart",
     "template-v2",
     "authored",
   ]);
@@ -79,7 +65,7 @@ test("compile-time registry resolves all four server-issued profiles", () => {
     assert.equal(resolved.driver, PRESENTATION_DRIVER_REGISTRY[driverId]);
     assert.equal(
       encodeLegacyGenerationMode(resolved.profile),
-      driverId === "smart" ? "smart" : "standard",
+      "standard",
     );
   }
 });
@@ -88,9 +74,9 @@ test("unknown and future server identities fail closed with stable codes", () =>
   assert.throws(
     () =>
       resolveServerIssuedPresentationProfile({
-        ...serverResponse("standard"),
+        ...serverResponse("authored"),
         profile: {
-          ...serverResponse("standard").profile,
+          ...serverResponse("authored").profile,
           driver_id: "future",
         },
       }),
@@ -101,9 +87,9 @@ test("unknown and future server identities fail closed with stable codes", () =>
   assert.throws(
     () =>
       resolveServerIssuedPresentationProfile({
-        ...serverResponse("standard"),
+        ...serverResponse("authored"),
         profile: {
-          ...serverResponse("standard").profile,
+          ...serverResponse("authored").profile,
           schema_version: 2,
         },
       }),
@@ -117,20 +103,20 @@ test("UI-safe resolution grants no capability to malformed profiles", () => {
   assert.equal(tryResolveServerIssuedPresentationProfile({}), null);
   assert.equal(
     tryResolveServerIssuedPresentationProfile({
-      ...serverResponse("standard"),
-      capabilities: serverResponse("smart").capabilities,
+      ...serverResponse("authored"),
+      capabilities: serverResponse("template-v2").capabilities,
     }),
     null,
   );
 });
 
 test("profile/capability conflicts fail before an adapter is selected", () => {
-  const standard = serverResponse("standard");
+  const authored = serverResponse("authored");
   assert.throws(
     () =>
       resolveServerIssuedPresentationProfile({
-        profile: standard.profile,
-        capabilities: serverResponse("authored").capabilities,
+        profile: authored.profile,
+        capabilities: serverResponse("template-v2").capabilities,
       }),
     (error: unknown) =>
       error instanceof PresentationProfileResolutionError &&
@@ -140,10 +126,10 @@ test("profile/capability conflicts fail before an adapter is selected", () => {
     () =>
       resolveServerIssuedPresentationProfile({
         profile: {
-          ...standard.profile,
-          content_model: "smart-html",
+          ...authored.profile,
+          content_model: "template-v2",
         },
-        capabilities: standard.capabilities,
+        capabilities: authored.capabilities,
       }),
     (error: unknown) =>
       error instanceof PresentationProfileResolutionError &&
@@ -153,35 +139,28 @@ test("profile/capability conflicts fail before an adapter is selected", () => {
 
 test("root client hints cannot spoof a server-issued profile", () => {
   const response = {
-    ...serverResponse("standard"),
+    ...serverResponse("template-v2"),
     driver_id: "authored",
-    generation_mode: "smart",
+    generation_mode: "standard",
     content_model: "authored",
-    client_capabilities: { smart_selection: true },
   };
 
   const resolved = resolveServerIssuedPresentationProfile(response);
 
-  assert.equal(resolved.profile.driver_id, "standard");
-  assert.equal(resolved.capabilities.editor.smart_selection, false);
-  assert.equal(resolved.driver.export_adapter_id, "legacy-general");
+  assert.equal(resolved.profile.driver_id, "template-v2");
+  assert.equal(resolved.driver.export_adapter_id, "template-v2-general");
 });
 
 test("selectors consume immutable capabilities and authored alternatives", () => {
-  const standard = resolveServerIssuedPresentationProfile(
-    serverResponse("standard"),
+  const templateV2 = resolveServerIssuedPresentationProfile(
+    serverResponse("template-v2"),
   );
-  const smart = resolveServerIssuedPresentationProfile(serverResponse("smart"));
   const authored = resolveServerIssuedPresentationProfile(
     serverResponse("authored"),
   );
 
   assert.equal(
-    presentationCapabilitySelectors.canEditElements(standard.capabilities),
-    true,
-  );
-  assert.equal(
-    presentationCapabilitySelectors.canUseSmartSelection(smart.capabilities),
+    presentationCapabilitySelectors.canEditElements(templateV2.capabilities),
     true,
   );
   assert.equal(

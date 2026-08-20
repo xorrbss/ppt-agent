@@ -6,15 +6,14 @@ import { fileURLToPath } from "node:url";
 
 const directory = path.dirname(fileURLToPath(import.meta.url));
 
-test("authored slides never enter the SmartHtmlEditor application DOM", async () => {
-  const source = await fs.readFile(path.join(directory, "V1ContentRender.tsx"), "utf8");
-  const authoredBranch = source.slice(
-    source.indexOf("if (isAuthored)"),
-    source.indexOf("// Show loading state for custom templates")
+test("authored slides use the isolated authored renderer directly", async () => {
+  const source = await fs.readFile(
+    path.join(directory, "PresentationContentRender.tsx"),
+    "utf8",
   );
-  assert.ok(authoredBranch.length > 0);
-  assert.doesNotMatch(authoredBranch, /SmartHtmlEditor|innerHTML/);
-  assert.match(authoredBranch, /AuthoredSlidePreview/);
+  assert.doesNotMatch(source, /dangerouslySetInnerHTML/);
+  assert.match(source, /authored: AuthoredContent/);
+  assert.match(source, /AuthoredSlidePreview/);
 });
 
 test("web authored preview fallback is opaque, scriptless, and CSP-restricted", async () => {

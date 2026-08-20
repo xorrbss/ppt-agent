@@ -67,7 +67,7 @@ export interface RenderChartSnapshotManifest {
 }
 
 export interface RenderScriptPolicy {
-  readonly mode: "deny" | "controlled-runtime";
+  readonly mode: "deny";
   readonly allow_inline: false;
   readonly allow_eval: false;
   readonly allow_external: false;

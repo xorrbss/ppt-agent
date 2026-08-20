@@ -16,7 +16,6 @@ from models.conversation import (
     ConversationSlideReference,
     ConversationViewport,
     PresentationRevision,
-    SmartHtmlSelection,
 )
 from models.sql.presentation import PresentationModel
 from models.sql.user import User
@@ -78,14 +77,16 @@ async def _database(path: Path):
     return engine, async_sessionmaker(engine, expire_on_commit=False)
 
 
-async def _presentation(maker, *, generation_mode: str = "standard"):
+async def _presentation(maker):
     async with maker() as session:
         presentation = PresentationModel(
             content="canonical conversation test",
             n_slides=2,
             language="en",
-            layout={"name": "test"},
-            generation_mode=generation_mode,
+            layout=None,
+            mode="authored",
+            theme={"mode": "authored"},
+            generation_mode="standard",
             revision=4,
         )
         session.add(presentation)
@@ -108,11 +109,6 @@ def _request(
         context=ConversationMessageContext(
             viewport=ConversationViewport(width=1440, height=900, zoom=1.25),
             current_slide=ConversationSlideReference(index=1),
-            smart_selection=SmartHtmlSelection(
-                html="<h1>Selected headline</h1>",
-                selected_text="Selected headline",
-                slide_index=1,
-            ),
         ),
     )
 
@@ -143,11 +139,11 @@ def test_revision_projection_rejects_false_publication_claims():
         )
 
 
-def test_standard_mode_drops_smart_selection_and_reuses_single_store(tmp_path: Path):
-    asyncio.run(_standard_mode_drops_smart_selection_and_reuses_single_store(tmp_path))
+def test_authored_mode_reuses_single_conversation_store(tmp_path: Path):
+    asyncio.run(_authored_mode_reuses_single_conversation_store(tmp_path))
 
 
-async def _standard_mode_drops_smart_selection_and_reuses_single_store(
+async def _authored_mode_reuses_single_conversation_store(
     tmp_path: Path,
 ):
     engine, maker = await _database(tmp_path / "canonical-standard.db")
@@ -163,7 +159,6 @@ async def _standard_mode_drops_smart_selection_and_reuses_single_store(
             )
             assert second.id == first.id
             assert second.capability.generation_mode == "standard"
-            assert second.capability.supports_smart_selection is False
 
         async with maker() as session:
             receipt = await send_message(
@@ -176,8 +171,8 @@ async def _standard_mode_drops_smart_selection_and_reuses_single_store(
             assert operation.request_payload["context"] == {
                 "runtime": {
                     "generation_mode": "standard",
-                    "presentation_mode": "template",
-                    "tool_profile": "standard",
+                    "presentation_mode": "authored",
+                    "tool_profile": "authored",
                     "can_edit": True,
                 },
                 "viewport": {
@@ -258,8 +253,7 @@ async def _typed_message_commands_reuse_workspace_state_machine_and_preserve_con
                     operation_context={
                         **operation_context,
                         # These generic keys are never authoritative.
-                        "runtime": {"generation_mode": "smart"},
-                        "smart_selection": {"html": "<script>spoofed()</script>"},
+                            "runtime": {"generation_mode": "unsupported"},
                     },
                 ),
             )
@@ -271,36 +265,34 @@ async def _typed_message_commands_reuse_workspace_state_machine_and_preserve_con
                 assert operation.request_payload["context"][key] == value
             assert operation.request_payload["context"]["runtime"] == {
                 "generation_mode": "standard",
-                "presentation_mode": "template",
-                "tool_profile": "standard",
+                "presentation_mode": "authored",
+                "tool_profile": "authored",
                 "can_edit": True,
             }
-            assert "smart_selection" not in operation.request_payload["context"]
     finally:
         await engine.dispose()
 
 
-def test_smart_mode_persists_allowlisted_selection_and_replays_standard_events(
+def test_authored_mode_replays_standard_events(
     tmp_path: Path,
 ):
     asyncio.run(
-        _smart_mode_persists_allowlisted_selection_and_replays_standard_events(
+        _authored_mode_replays_standard_events(
             tmp_path
         )
     )
 
 
-async def _smart_mode_persists_allowlisted_selection_and_replays_standard_events(
+async def _authored_mode_replays_standard_events(
     tmp_path: Path,
 ):
-    engine, maker = await _database(tmp_path / "canonical-smart.db")
+    engine, maker = await _database(tmp_path / "canonical-authored.db")
     try:
-        presentation = await _presentation(maker, generation_mode="smart")
+        presentation = await _presentation(maker)
         async with maker() as session:
             conversation = await create_conversation(
                 session, presentation_id=presentation.id
             )
-            assert conversation.capability.tool_profile == "smart"
         async with maker() as session:
             receipt = await send_message(
                 session,
@@ -309,11 +301,6 @@ async def _smart_mode_persists_allowlisted_selection_and_replays_standard_events
             )
             operation = await session.get(WorkspaceOperation, receipt.run_id)
             assert operation is not None
-            assert operation.request_payload["context"]["smart_selection"] == {
-                "html": "<h1>Selected headline</h1>",
-                "selected_text": "Selected headline",
-                "slide_index": 1,
-            }
 
         async with maker() as session:
             page = await conversation_events(

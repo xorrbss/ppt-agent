@@ -15,7 +15,7 @@ class ChatAttachment(BaseModel):
 
 class ChatMessageRequest(BaseModel):
     presentation_id: uuid.UUID
-    presentation_type: Literal["standard", "smart"] = "standard"
+    presentation_type: Literal["standard"] = "standard"
     message: str = Field(min_length=1, max_length=8000)
     conversation_id: Optional[uuid.UUID] = None
     attachments: Optional[list[ChatAttachment]] = Field(default=None, max_length=8)

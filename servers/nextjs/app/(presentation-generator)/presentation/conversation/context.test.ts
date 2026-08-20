@@ -10,7 +10,6 @@ test("buildConversationContext sends structured viewport and only safe assets", 
     currentSlideId: "slide-a",
     currentSlideIndex: 2,
     visibleSlideIds: ["slide-a", "slide-b"],
-    smartSelection: { html: "<p>Selected</p>", text: "Selected", slideId: "slide-a" },
     assets: [
       { id: "ready", name: "brief.pdf", status: "ready" },
       { id: "scanned", name: "table.xlsx", status: "scanned" },
@@ -20,11 +19,9 @@ test("buildConversationContext sends structured viewport and only safe assets", 
   assert.deepEqual(context.viewport, { width: 1440, height: 900, visibleSlideIds: ["slide-a", "slide-b"] });
   assert.deepEqual(context.currentSlide, { slideId: "slide-a", index: 2 });
   assert.deepEqual(context.assetIds, ["ready", "scanned"]);
-  assert.equal(context.smartSelection?.text, "Selected");
 });
 
-test("does not send an empty smart selection or invalid slide index", () => {
-  const context = buildConversationContext({ currentSlideIndex: -1, smartSelection: { html: " ", text: "text" } });
+test("does not send an invalid slide index", () => {
+  const context = buildConversationContext({ currentSlideIndex: -1 });
   assert.equal(context.viewport, undefined);
-  assert.equal(context.smartSelection, undefined);
 });

@@ -1,27 +1,10 @@
-export const PRESENTATION_DRIVER_IDS = [
-  "standard",
-  "smart",
-  "template-v2",
-  "authored",
-] as const;
+export const PRESENTATION_DRIVER_IDS = ["template-v2", "authored"] as const;
 
 export type PresentationDriverId = (typeof PRESENTATION_DRIVER_IDS)[number];
-export type PresentationContentModel =
-  | "legacy-elements"
-  | "smart-html"
-  | "template-v2"
-  | "authored";
-export type PresentationGenerationStrategy =
-  | "standard"
-  | "smart"
-  | "template"
-  | "authored";
-export type PresentationStyleSource =
-  | "builtin"
-  | "community"
-  | "imported"
-  | "authored";
-export type LegacyGenerationMode = "standard" | "smart";
+export type PresentationContentModel = "template-v2" | "authored";
+export type PresentationGenerationStrategy = "template" | "authored";
+export type PresentationStyleSource = "imported" | "authored";
+export type LegacyGenerationMode = "standard";
 
 export interface PresentationProfile {
   readonly schema_version: 1;
@@ -39,7 +22,6 @@ export interface PresentationEditorCapabilities {
   readonly theme_apply: boolean;
   readonly template_apply: boolean;
   readonly slide_image_regenerate: boolean;
-  readonly smart_selection: boolean;
 }
 
 export interface PresentationCapabilities {
@@ -89,7 +71,7 @@ export type PresentationDriverRegistry = {
 export const GENERATION_MODE_COMPATIBILITY = Object.freeze({
   field_name: "generation_mode" as const,
   source_of_truth: "derived-presentation-profile" as const,
-  accepted_values: ["standard", "smart"] as const,
+  accepted_values: ["standard"] as const,
   removal_condition:
     "Remove only after every supported persisted row and public API consumer uses server-issued PresentationProfile.driver_id, no supported rolling deployment reads generation_mode, and a compatibility migration has been released and rollback-tested.",
 });
@@ -130,7 +112,6 @@ function parseEditorCapabilities(
     theme_apply: requireBoolean(value, "theme_apply"),
     template_apply: requireBoolean(value, "template_apply"),
     slide_image_regenerate: requireBoolean(value, "slide_image_regenerate"),
-    smart_selection: requireBoolean(value, "smart_selection"),
   });
 }
 
@@ -146,19 +127,14 @@ function parseProfile(value: unknown): PresentationProfile {
     );
   }
   if (
-    ![
-      "legacy-elements",
-      "smart-html",
-      "template-v2",
-      "authored",
-    ].includes(String(value.content_model))
+    !["template-v2", "authored"].includes(String(value.content_model))
   ) {
     throw new PresentationProfileResolutionError(
       "unsupported_presentation_content_model",
     );
   }
   if (
-    !["standard", "smart", "template", "authored"].includes(
+    !["template", "authored"].includes(
       String(value.generation_strategy),
     )
   ) {
@@ -167,7 +143,7 @@ function parseProfile(value: unknown): PresentationProfile {
     );
   }
   if (
-    !["builtin", "community", "imported", "authored"].includes(
+    !["imported", "authored"].includes(
       String(value.style_source),
     )
   ) {
@@ -175,7 +151,7 @@ function parseProfile(value: unknown): PresentationProfile {
       "unsupported_presentation_style_source",
     );
   }
-  if (value.generation_mode !== "standard" && value.generation_mode !== "smart") {
+  if (value.generation_mode !== "standard") {
     throw new PresentationProfileResolutionError("unsupported_generation_mode");
   }
   return Object.freeze({
@@ -233,8 +209,7 @@ function sameEditorCapabilities(
     actual.chart_edit === expected.chart_edit &&
     actual.theme_apply === expected.theme_apply &&
     actual.template_apply === expected.template_apply &&
-    actual.slide_image_regenerate === expected.slide_image_regenerate &&
-    actual.smart_selection === expected.smart_selection
+    actual.slide_image_regenerate === expected.slide_image_regenerate
   );
 }
 
@@ -243,8 +218,7 @@ function validateDriverContract(
   profile: PresentationProfile,
   capabilities: PresentationCapabilities,
 ): void {
-  const expectedGenerationMode: LegacyGenerationMode =
-    driver.driver_id === "smart" ? "smart" : "standard";
+  const expectedGenerationMode: LegacyGenerationMode = "standard";
   if (
     profile.driver_id !== driver.driver_id ||
     profile.content_model !== driver.content_model ||
@@ -285,46 +259,6 @@ function driver<const Driver extends Omit<PresentationDriver, "validate">>(
 }
 
 export const PRESENTATION_DRIVER_REGISTRY = Object.freeze({
-  standard: driver({
-    driver_id: "standard",
-    content_model: "legacy-elements",
-    generation_strategy: "standard",
-    style_sources: ["builtin", "community", "imported"],
-    renderer_adapter_id: "legacy-elements",
-    editor_adapter_id: "legacy-elements",
-    editor: {
-      element_text_edit: true,
-      element_geometry_edit: true,
-      chart_edit: true,
-      theme_apply: true,
-      template_apply: true,
-      slide_image_regenerate: false,
-      smart_selection: false,
-    },
-    agent_tool_capability: "standard",
-    export_adapter_id: "legacy-general",
-    export_editable_pptx: true,
-  }),
-  smart: driver({
-    driver_id: "smart",
-    content_model: "smart-html",
-    generation_strategy: "smart",
-    style_sources: ["builtin", "community", "imported"],
-    renderer_adapter_id: "smart-html",
-    editor_adapter_id: "smart-html",
-    editor: {
-      element_text_edit: true,
-      element_geometry_edit: true,
-      chart_edit: false,
-      theme_apply: false,
-      template_apply: false,
-      slide_image_regenerate: false,
-      smart_selection: true,
-    },
-    agent_tool_capability: "smart",
-    export_adapter_id: "legacy-general",
-    export_editable_pptx: true,
-  }),
   "template-v2": driver({
     driver_id: "template-v2",
     content_model: "template-v2",
@@ -339,7 +273,6 @@ export const PRESENTATION_DRIVER_REGISTRY = Object.freeze({
       theme_apply: true,
       template_apply: true,
       slide_image_regenerate: false,
-      smart_selection: false,
     },
     agent_tool_capability: "template-v2",
     export_adapter_id: "template-v2-general",
@@ -359,7 +292,6 @@ export const PRESENTATION_DRIVER_REGISTRY = Object.freeze({
       theme_apply: false,
       template_apply: true,
       slide_image_regenerate: true,
-      smart_selection: false,
     },
     agent_tool_capability: "authored",
     export_adapter_id: "authored-hybrid",
@@ -438,9 +370,6 @@ export const presentationCapabilitySelectors = Object.freeze({
   canRegenerateSlideImage(capabilities: PresentationCapabilities): boolean {
     return capabilities.editor.slide_image_regenerate;
   },
-  canUseSmartSelection(capabilities: PresentationCapabilities): boolean {
-    return capabilities.editor.smart_selection;
-  },
   canExportEditablePptx(capabilities: PresentationCapabilities): boolean {
     return capabilities.export_editable_pptx;
   },
@@ -449,11 +378,10 @@ export const presentationCapabilitySelectors = Object.freeze({
 export function encodeLegacyGenerationMode(
   profile: PresentationProfile,
 ): LegacyGenerationMode {
-  const expected = profile.driver_id === "smart" ? "smart" : "standard";
-  if (profile.generation_mode !== expected) {
+  if (profile.generation_mode !== "standard") {
     throw new PresentationProfileResolutionError(
       "generation_mode_profile_conflict",
     );
   }
-  return expected;
+  return "standard";
 }

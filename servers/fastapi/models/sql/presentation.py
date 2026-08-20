@@ -19,7 +19,6 @@ from sqlmodel import Boolean, Field, SQLModel
 from models.presentation_outline_model import PresentationOutlineModel
 from models.presentation_structure_model import PresentationStructureModel
 from models.presentation_layout import PresentationLayoutModel
-from models.slide_spec_model import PresentationComposition
 from utils.datetime_utils import get_current_utc_datetime
 from templates.v2.constants import LEGACY_PRESENTATION_VERSION
 from utils.owner_context import get_current_owner_id
@@ -91,7 +90,7 @@ class PresentationModel(SQLModel, table=True):
     web_search: bool = Field(sa_column=Column(Boolean), default=False)
     theme: Optional[dict] = Field(sa_column=Column(JSON), default=None)
     fonts: Optional[dict] = Field(sa_column=Column(JSON), default=None)
-    generation_mode: Literal["standard", "smart"] = Field(
+    generation_mode: Literal["standard"] = Field(
         sa_column=Column(String, nullable=False, default="standard"),
         default="standard",
     )
@@ -110,17 +109,14 @@ class PresentationModel(SQLModel, table=True):
     community_design_ids: Optional[List[int]] = Field(
         sa_column=Column(JSON), default=None
     )
-    # Adaptive composer output (PresentationComposition: SlideSpec[]). NEW column
-    # (additive, nullable) — holds the authoritative adaptive composition; legacy
-    # decks leave it NULL. See docs/adaptive-layout-design-revision.md R3.
+    # Retained nullable compatibility payload. New Authored and Template V2
+    # generation never writes a deck plan.
     deck_plan: Optional[dict] = Field(sa_column=Column(JSON), default=None)
-    # Explicit generation mode: "template" | "adaptive" | "authored". Authoritative
-    # replacement for the older sentinels (deck_plan non-null → adaptive; theme.mode
-    # / layout is None → authored). Additive, nullable; legacy rows are backfilled by
-    # migration and still read correctly via the is_authored() fallback below.
+    # Explicit presentation mode. Only ``authored`` and Template V2 ``template``
+    # are written by current product paths.
     mode: Optional[str] = Field(sa_column=Column(String), default=None)
-    # Persisted presentation-format identity. Legacy/template/adaptive decks
-    # remain v1-standard; native Template V2 decks are explicitly v2-standard.
+    # Authored decks remain v1-standard; native Template V2 decks are
+    # explicitly v2-standard.
     # No existing presentation is converted by this additive field.
     version: str = Field(
         sa_column=Column(
@@ -248,16 +244,11 @@ class PresentationModel(SQLModel, table=True):
         not drive them through the template stream/edit/layout paths."""
         if self.mode is not None:
             return self.mode == "authored"
-        # Legacy rows written before the mode column existed: fall back to the
-        # original sentinels (theme.mode == "authored", or no React layout).
+        # Rows written before the mode column existed may retain the authored
+        # theme sentinel.
         if isinstance(self.theme, dict) and self.theme.get("mode") == "authored":
             return True
-        return self.layout is None
+        return False
 
-    def get_deck_plan(self):
-        if not self.deck_plan:
-            return None
-        return PresentationComposition(**self.deck_plan)
-
-    def set_deck_plan(self, composition: PresentationComposition):
-        self.deck_plan = composition.model_dump(mode="json")
+# Legacy deck-plan object adapters are intentionally not part of this model.
+__all__ = ["PresentationModel", "PresentationVersion"]

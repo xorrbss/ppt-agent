@@ -1,9 +1,8 @@
 from api.feature_module_registry import FeatureModule, compose_static_feature_modules
 
-from api.v1.ppt.endpoints.slide_to_html import LAYOUT_MANAGEMENT_ROUTER
-from api.v1.ppt.endpoints.presentation import PRESENTATION_ROUTER
 from api.v1.ppt.endpoints.presentation_crud import PRESENTATION_CRUD_ROUTER
 from api.v1.ppt.endpoints.presentation_generate import PRESENTATION_GENERATE_ROUTER
+from api.v1.ppt.endpoints.authored_operations import AUTHORED_OPERATIONS_ROUTER
 from api.v1.ppt.endpoints.presentation_blank import PRESENTATION_BLANK_ROUTER
 from api.v1.ppt.endpoints.presentation_versions import PRESENTATION_VERSION_ROUTER
 from api.v1.ppt.endpoints.presentation_share import PRESENTATION_SHARE_ROUTER
@@ -56,7 +55,6 @@ from api.v1.ppt.endpoints.template_v2_compat import (
 from api.v1.ppt.endpoints.compatibility_migration import (
     COMPATIBILITY_MIGRATION_ROUTER,
 )
-from templates.router import TEMPLATE_ROUTER
 
 
 # This tuple is intentionally static.  Feature discovery through settings or
@@ -68,8 +66,8 @@ PPT_FEATURE_MODULES = (
     FeatureModule("fonts", FONTS_ROUTER, frozenset({"ppt-api", "assets"})),
     FeatureModule("outlines", OUTLINES_ROUTER, frozenset({"ppt-api"})),
     FeatureModule("presentation-crud", PRESENTATION_CRUD_ROUTER, frozenset({"ppt-api", "presentation"})),
-    FeatureModule("presentation", PRESENTATION_ROUTER, frozenset({"ppt-api", "presentation"})),
     FeatureModule("presentation-generate", PRESENTATION_GENERATE_ROUTER, frozenset({"ppt-api", "presentation"})),
+    FeatureModule("authored-operations", AUTHORED_OPERATIONS_ROUTER, frozenset({"ppt-api", "presentation"})),
     FeatureModule("presentation-blank", PRESENTATION_BLANK_ROUTER, frozenset({"ppt-api", "presentation"})),
     FeatureModule("presentation-versions", PRESENTATION_VERSION_ROUTER, frozenset({"ppt-api", "presentation"})),
     FeatureModule(
@@ -80,7 +78,6 @@ PPT_FEATURE_MODULES = (
     FeatureModule("presentation-share", PRESENTATION_SHARE_ROUTER, frozenset({"ppt-api", "presentation"})),
     FeatureModule("pptx-slides", PPTX_SLIDES_ROUTER, frozenset({"ppt-api", "export"})),
     FeatureModule("slide", SLIDE_ROUTER, frozenset({"ppt-api", "presentation"})),
-    FeatureModule("layout-management", LAYOUT_MANAGEMENT_ROUTER, frozenset({"ppt-api", "renderer"})),
     FeatureModule("images", IMAGES_ROUTER, frozenset({"ppt-api", "assets"})),
     FeatureModule("icons", ICONS_ROUTER, frozenset({"ppt-api", "assets"})),
     FeatureModule("ollama", OLLAMA_ROUTER, frozenset({"ppt-api", "providers"})),
@@ -129,7 +126,6 @@ PPT_FEATURE_MODULES = (
         COMPATIBILITY_MIGRATION_ROUTER,
         frozenset({"ppt-api", "presentation"}),
     ),
-    FeatureModule("templates", TEMPLATE_ROUTER, frozenset({"ppt-api", "templates"})),
     FeatureModule("community", COMMUNITY_ROUTER, frozenset({"ppt-api", "community"})),
 )
 

@@ -9,11 +9,8 @@ const initialState: TemplateEditorState = {
   loadedTemplate: null,
   layouts: [],
   activeLayoutIndex: 0,
-  promptLayoutIndex: null,
-  returnLayoutIndex: 0,
   loading: true,
   saving: false,
-  generating: false,
   dirty: false,
   error: null,
 };
@@ -39,7 +36,6 @@ export function templateEditorReducer(
         },
         layouts: layoutsFromDocument(action.payload.document),
         activeLayoutIndex: 0,
-        promptLayoutIndex: null,
         dirty: false,
         error: null,
       };
@@ -59,33 +55,6 @@ export function templateEditorReducer(
       return {
         ...state,
         activeLayoutIndex: action.payload,
-      };
-    case "START_PROMPT":
-      return {
-        ...state,
-        layouts: [...state.layouts, { id: action.payload.draftId, description: "AI로 생성할 새 레이아웃", components: [] }],
-        activeLayoutIndex: action.payload.draftIndex,
-        promptLayoutIndex: action.payload.draftIndex,
-        returnLayoutIndex: action.payload.currentActiveIndex,
-      };
-    case "DISMISS_PROMPT":
-      return {
-        ...state,
-        layouts: state.layouts.filter((_, index) => index !== state.promptLayoutIndex),
-        activeLayoutIndex: Math.max(0, state.returnLayoutIndex),
-        promptLayoutIndex: null,
-      };
-    case "COMPLETE_PROMPT":
-      // Success path: keep the generated layout in place and only clear the
-      // prompt state. DISMISS_PROMPT is the cancel path that removes the draft.
-      return {
-        ...state,
-        promptLayoutIndex: null,
-      };
-    case "SET_GENERATING":
-      return {
-        ...state,
-        generating: action.payload,
       };
     case "SET_SAVING":
       return {

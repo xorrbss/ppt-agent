@@ -21,18 +21,10 @@ export interface ConversationSlideReference {
   index: number;
 }
 
-export interface SmartHtmlSelection {
-  html: string;
-  text?: string;
-  slideId?: string;
-  slideIndex?: number;
-}
-
 /** Client hints only. Generation mode and capabilities are always server derived. */
 export interface ConversationContext {
   viewport?: ConversationViewport;
   currentSlide?: ConversationSlideReference;
-  smartSelection?: SmartHtmlSelection;
   assetIds?: string[];
 }
 

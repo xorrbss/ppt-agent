@@ -272,20 +272,13 @@ export const usePresentationStreaming = (
 
           case "slide_html": {
             const slideIndex = Number(data.index);
-            const html = typeof data.html === "string" ? data.html : "";
-            if (!Number.isFinite(slideIndex) || !html) break;
+            if (
+              !Number.isFinite(slideIndex) ||
+              !data.slide ||
+              typeof data.slide !== "object"
+            ) break;
 
-            const incomingSlide =
-              data.slide && typeof data.slide === "object"
-                ? data.slide
-                : {
-                    id: data.slide_id,
-                    index: slideIndex,
-                    layout: "smart-html",
-                    layout_group: "smart-html",
-                    content: { title: t("slideTitle", { title: "", index: slideIndex + 1 }).trim() },
-                    html_content: html,
-                  };
+            const incomingSlide = data.slide;
             const normalizedSlide = normalizeBackendAssetUrls(
               incomingSlide
             ) as unknown as StreamedSlide;

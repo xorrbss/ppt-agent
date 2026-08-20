@@ -5,7 +5,7 @@ import enMessages from "@/i18n/messages/en.json";
 import { ChatSurface } from "./ChatSurface";
 
 describe("ChatSurface", () => {
-  it("keeps assistant activity, approval and smart-selection context in one timeline", () => {
+  it("keeps assistant activity and approval context in one timeline", () => {
     const onAction = cy.stub().resolves();
     cy.mount(
       <NextIntlClientProvider locale="en" messages={enMessages} timeZone="UTC">
@@ -38,14 +38,13 @@ describe("ChatSurface", () => {
         submitting={false}
         connection="live"
         pendingAssets={[{ id: "asset", name: "brief.pdf", status: "ready" }]}
-        context={{ smartSelection: { html: "<p>Title</p>", text: "Title" } }}
+        context={{}}
         onRemoveAsset={cy.stub()}
         onSend={cy.stub().resolves()}
         onAction={onAction}
         />
       </NextIntlClientProvider>,
     );
-    cy.get('[data-testid="smart-selection-badge"]').should("contain", "Smart selection");
     cy.get('[data-testid="conversation-surface"]').should("have.class", "font-inter");
     cy.get('[data-testid="conversation-attachment-source"]')
       .should("contain", "original brief.pdf")

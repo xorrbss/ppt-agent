@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 
-import { V1ContentRender } from '../../(presentation-generator)/components/V1ContentRender';
+import type { PresentationDriverId } from "@/lib/presentation-profile";
+import { PresentationContentRender } from "./PresentationContentRender";
 
 
 const BASE_WIDTH = 1280;
@@ -43,6 +44,7 @@ const SlideScale = ({
     isClickable = true,
     fixedSize = false,
     preferAuthoredHtml = false,
+    driverId,
 }: {
     slide: any;
     theme?: any;
@@ -52,6 +54,7 @@ const SlideScale = ({
     isClickable?: boolean;
     fixedSize?: boolean;
     preferAuthoredHtml?: boolean;
+    driverId?: PresentationDriverId;
 }) => {
 
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -126,11 +129,10 @@ const SlideScale = ({
                         aria-hidden="true"
 
                     />}
-                    <V1ContentRender
+                    <PresentationContentRender
                         slide={slide}
-                        isEditMode={isEditMode}
-                        theme={theme}
                         preferAuthoredHtml={preferAuthoredHtml}
+                        driverId={driverId}
                     />
                     {showEditScan && (
                         <div

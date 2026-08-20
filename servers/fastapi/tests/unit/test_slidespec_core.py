@@ -26,7 +26,6 @@ from models.slidespec_v1 import (
 from utils.slidespec_core import (
     ZERO_DIGEST,
     SlideSpecError,
-    adapt_adaptive_slide,
     apply_repair_plan,
     canonical_json,
     render_slidespec,
@@ -262,16 +261,6 @@ def test_v1_1_constraints_reject_design_damaging_repairs(
     )
     with pytest.raises(SlideSpecError, match=code):
         apply_repair_plan(base, _plan(base, [operation]))
-
-
-def test_adapter_persists_opaque_identity_map() -> None:
-    source = {"blocks": [{"id": "customer-title", "type": "title", "text": "Hello"}]}
-    first, identities = adapt_adaptive_slide(source, slide_id="legacy-1")
-    second, again = adapt_adaptive_slide(source, slide_id="legacy-1", identity_map=identities)
-    assert first == second
-    assert identities == again
-    assert first.content[0].semanticId != "sem:customer-title"
-    validate_slidespec(first)
 
 
 def test_acceptance_decision_keeps_inconclusive_distinct_and_hard_gated() -> None:

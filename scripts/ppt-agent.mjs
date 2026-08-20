@@ -21,7 +21,7 @@
 //   --batch <file>           File with one topic per line; each line becomes one deck
 //   --slides <n>             n_slides (default 8, max 50). Use --slides auto to let the model decide
 //   --language <str>         language (default "Korean (한국어)")
-//   --template <name>        template id (default "adaptive")
+//   --template <name>        retained template id (default "authored")
 //   --style <id>             authored-mode style preset id (sent as authored_style)
 //   --export <pptx|pdf>      export_as (default pptx)
 //   --instructions <str>     extra generation instructions
@@ -48,7 +48,7 @@
 //     --base http://localhost:5000 --export pdf --out ./out
 //
 //   # Batch mode (sequential, continues on per-item failure):
-//   node scripts/ppt-agent.mjs --batch topics.txt --template general --out ./decks
+//   node scripts/ppt-agent.mjs --batch topics.txt --template authored --out ./decks
 //
 //   # Authored mode with a style preset:
 //   node scripts/ppt-agent.mjs --content "2026 AI strategy" --mode authored --style strategic-navy --async --out ./out
@@ -119,7 +119,7 @@ function printHelpAndExit() {
       "  --batch <file>          one topic per line",
       "  --slides <n|auto>       n_slides (default 8, max 50)",
       '  --language <str>        default "Korean (한국어)"',
-      "  --template <name>       default adaptive",
+      "  --template <name>       default authored",
       "  --mode authored         model-authored bespoke-HTML deck (image PPTX/PDF)",
       "  --style <id>            authored mode: style preset id",
       "  --vision-qa             authored mode: self-correct flagged slides (slower)",
@@ -163,7 +163,7 @@ function buildBody(content, opts) {
   if (opts.noTitle) body.include_title_slide = false;
   if (opts.toc) body.include_table_of_contents = true;
   if (opts.visionQa) body.vision_qa = true;
-  // Keep the legacy request unchanged unless a style preset was explicitly given.
+  // Preserve the authored request shape unless a style preset was explicitly given.
   if (opts.authoredStyle) body.authored_style = opts.authoredStyle;
   // Authored-mode brand tokens (ignored by the template path).
   if (opts.primaryColor) body.primary_color = opts.primaryColor;
@@ -534,9 +534,9 @@ async function main() {
     nSlides,
     slidesProvided,
     language: args.language !== undefined ? args.language : "Korean (한국어)",
-    // --mode authored selects the model-authored bespoke-HTML pipeline (maps to
-    // template="authored"); otherwise --template (default adaptive) applies.
-    template: args.mode === "authored" ? "authored" : args.template || "adaptive",
+    // --mode authored and the default both select the model-authored bespoke-HTML
+    // pipeline. A supplied template is retained for explicit supported templates.
+    template: args.mode === "authored" ? "authored" : args.template || "authored",
     instructions: args.instructions || null,
     tone: args.tone || null,
     verbosity: args.verbosity || null,

@@ -77,6 +77,6 @@ export function applyPresentationThemeToElement(
   element.style.setProperty("font-family", `"${bodyFont.name}"`);
   element.style.setProperty("--heading-font-family", `"${headingFont.name}"`);
   element.style.setProperty("--body-font-family", `"${bodyFont.name}"`);
-  // Additive tone & manner tokens (consumed only by the adaptive renderer).
+  // Additive tone & manner tokens for shared render surfaces.
   applyPresentationThemeTokens(element, theme);
 }

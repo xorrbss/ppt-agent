@@ -21,11 +21,7 @@ function runtime(driverId: PresentationDriverId) {
       content_model: driver.content_model,
       generation_strategy: driver.generation_strategy,
       style_source:
-        driverId === "template-v2"
-          ? ("imported" as const)
-          : driverId === "authored"
-            ? ("authored" as const)
-            : ("builtin" as const),
+        driverId === "template-v2" ? ("imported" as const) : ("authored" as const),
       generation_mode: "standard" as const,
     },
     capabilities: {
@@ -54,13 +50,6 @@ function persistedPresentation(
     ...runtime(driverId),
   };
 }
-
-const legacySlide = {
-  id: "legacy-slide",
-  ui: null,
-  html_content: null,
-  elements: [{ id: "legacy-title", type: "text", content: "Legacy" }],
-};
 
 const authoredSlide = {
   id: "authored-slide",
@@ -103,12 +92,6 @@ for (const regression of [
     slide: authoredSlide,
     renderer: "authored-browser@1",
   },
-  {
-    name: "legacy-general",
-    driverId: "standard" as const,
-    slide: legacySlide,
-    renderer: "legacy-elements@1",
-  },
 ]) {
   test(`${regression.name} uses one production artifact for preview/PDF/PPTX`, () => {
     const presentation = persistedPresentation(regression.driverId, [
@@ -137,7 +120,7 @@ test("production export rejects stale revision, invalid dependency state, and ov
   assert.throws(
     () =>
       createProductionRenderArtifact(
-        persistedPresentation("standard", [legacySlide]),
+        persistedPresentation("authored", [authoredSlide]),
         {
           target: "pptx",
           source_sha256: SOURCE_SHA256,
@@ -150,9 +133,9 @@ test("production export rejects stale revision, invalid dependency state, and ov
   assert.throws(
     () =>
       createProductionRenderArtifact(
-        persistedPresentation("standard", [
+        persistedPresentation("authored", [
           {
-            ...legacySlide,
+            ...authoredSlide,
             elements: [
               {
                 id: "pending-image",
@@ -174,9 +157,9 @@ test("production export rejects stale revision, invalid dependency state, and ov
   assert.throws(
     () =>
       createProductionRenderArtifact(
-        persistedPresentation("standard", [
+        persistedPresentation("authored", [
           {
-            ...legacySlide,
+            ...authoredSlide,
             elements: [
               {
                 id: "ready-image",
@@ -198,9 +181,9 @@ test("production export rejects stale revision, invalid dependency state, and ov
   assert.throws(
     () =>
       createProductionRenderArtifact(
-        persistedPresentation("standard", [
+        persistedPresentation("authored", [
           {
-            ...legacySlide,
+            ...authoredSlide,
             elements: [{ id: "overflow", type: "text", overflow: true }],
           },
         ]),

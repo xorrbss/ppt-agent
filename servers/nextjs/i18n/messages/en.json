@@ -29,7 +29,6 @@
       "connecting": "Connecting",
       "reconnecting": "Reconnecting"
     },
-    "smartSelection": "Smart selection",
     "loading": "Loading conversation…",
     "streaming": "Streaming…",
     "tool": {
@@ -1462,7 +1461,7 @@
       "metadataDescription": "Explore community presentation designs and prompts.",
       "newPresentation": "New presentation",
       "heading": "Pick community designs or prompts",
-      "description": "Preview shared decks, then use their design or prompt in Smart mode.",
+      "description": "Preview shared decks and inspect their reference relationships.",
       "searchLabel": "Search community presentations",
       "searchPlaceholder": "Search ...",
       "loadError": "Could not load community presentations",
@@ -1545,7 +1544,7 @@
       "refreshPage": "Refresh page",
       "goToUpload": "Go to upload",
       "referencePicker": {
-        "description": "Choose an optional design reference for Smart mode.",
+        "description": "Choose an optional community design reference for Authored generation.",
         "search": "Search designs",
         "clear": "Clear selection",
         "retry": "Retry community designs",
@@ -2891,7 +2890,7 @@
     "metadataDescription": "Explore community presentation designs and prompts.",
     "newPresentation": "New presentation",
     "heading": "Pick community designs or prompts",
-    "description": "Preview shared decks, then use their design or prompt in Smart mode.",
+    "description": "Preview shared decks and inspect their reference relationships.",
     "searchLabel": "Search community presentations",
     "searchPlaceholder": "Search ...",
     "loadError": "Could not load community presentations",
@@ -2974,7 +2973,7 @@
     "refreshPage": "Refresh page",
     "goToUpload": "Go to upload",
     "referencePicker": {
-      "description": "Choose an optional design reference for Smart mode.",
+      "description": "Choose an optional community design reference for Authored generation.",
       "search": "Search designs",
       "clear": "Clear selection",
       "retry": "Retry community designs",

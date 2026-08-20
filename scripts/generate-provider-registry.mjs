@@ -13,7 +13,7 @@ const settingKeys = new Set(settings.settings.map((setting) => setting.key));
 const capabilities = ["webSearch", "vision", "thinking", "structuredOutput", "imageGeneration"];
 const kinds = new Set(["llm", "image", "web-search"]);
 const states = new Set(["supported", "unsupported", "conditional"]);
-const drivers = new Set(["standard", "smart", "template-v2", "authored"]);
+const drivers = new Set(["template-v2", "authored"]);
 const credentialKinds = new Set(["secret", "oauth", "url", "setting"]);
 const widgets = new Set(["oauth-status", "password", "url", "text"]);
 
@@ -33,7 +33,7 @@ for (const provider of registry.providers) {
     if (provider.kind !== "web-search" && !settingKeys.has(credential.settingKey)) fail(`unknown settings registry key ${credential.settingKey} for ${provider.id}`);
   }
   if (!provider.capabilities || Object.keys(provider.capabilities).length !== capabilities.length || capabilities.some((key) => !states.has(provider.capabilities[key]))) fail(`invalid capabilities for ${provider.id}`);
-  if (!Array.isArray(provider.presentationDrivers) || !provider.presentationDrivers.length || provider.presentationDrivers.some((driver) => !drivers.has(driver))) fail(`invalid drivers for ${provider.id}`);
+  if (!Array.isArray(provider.presentationDrivers) || provider.presentationDrivers.some((driver) => !drivers.has(driver))) fail(`invalid drivers for ${provider.id}`);
 }
 for (const settingKey of ["LLM", "IMAGE_PROVIDER"]) {
   const setting = settings.settings.find((entry) => entry.key === settingKey);

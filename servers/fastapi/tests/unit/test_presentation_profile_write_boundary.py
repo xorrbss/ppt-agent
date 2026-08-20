@@ -22,8 +22,6 @@ def _presentation(**identity: object) -> PresentationModel:
 @pytest.mark.parametrize(
     ("identity", "expected_driver"),
     [
-        ({}, "standard"),
-        ({"generation_mode": "smart"}, "smart"),
         ({"version": "v2-standard", "mode": "template"}, "template-v2"),
         ({"mode": "authored"}, "authored"),
     ],
@@ -42,9 +40,7 @@ def test_new_presentation_persists_server_derived_profile(
             assert presentation.profile_driver_id == expected_driver
             assert presentation.profile_schema_version == 1
             assert presentation.profile_backfilled_at is not None
-            assert presentation.generation_mode == (
-                "smart" if expected_driver == "smart" else "standard"
-            )
+            assert presentation.generation_mode == "standard"
     finally:
         engine.dispose()
 
@@ -73,10 +69,10 @@ def test_server_owned_identity_transition_restamps_profile() -> None:
     PresentationModel.__table__.create(engine)
     try:
         with Session(engine) as session:
-            presentation = _presentation()
+            presentation = _presentation(mode="authored")
             session.add(presentation)
             session.commit()
-            assert presentation.profile_driver_id == "standard"
+            assert presentation.profile_driver_id == "authored"
 
             presentation.version = "v2-standard"
             presentation.mode = "template"

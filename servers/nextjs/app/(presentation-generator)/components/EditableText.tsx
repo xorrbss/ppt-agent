@@ -18,16 +18,15 @@ interface EditableTextProps {
 }
 
 /**
- * In-tree editable text — the replacement for the DOM-surgery TiptapTextReplacer.
+ * In-tree editable text for supported presentation content.
  *
  * Read-only / export: renders the semantic tag with SYNCHRONOUS inline markdown,
  * so the exported/screenshotted DOM has the same semantic leaves and first-paint
  * emphasis the export runtime expects. Edit: renders an inline Tiptap editor that
  * writes back through the context by explicit `path` (no fragile text matching).
  *
- * The `data-editable-native` marker tells the legacy TiptapTextReplacer to leave
- * this subtree alone, so migrated and not-yet-migrated templates coexist while the
- * rollout is in progress.
+ * The `data-editable-native` marker identifies nodes managed by this component;
+ * it does not alter the rendered document.
  */
 // Phrasing/heading tags whose content model is inline-only, so wrapping the
 // Tiptap editor's block <div> in them produces invalid HTML (<p><div></div></p>)

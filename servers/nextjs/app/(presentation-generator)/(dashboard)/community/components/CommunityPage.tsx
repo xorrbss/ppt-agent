@@ -2,20 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Eye,
-  FileText,
   Heart,
-  Plus,
   Search,
 } from "lucide-react";
 
-import SmartHtmlSlide from "@/app/(presentation-generator)/components/SmartHtmlSlide";
+import SafeHtmlSlidePreview from "@/app/(presentation-generator)/components/SafeHtmlSlidePreview";
 import {
   CommunityPresentationApi,
   getCommunityPresentationAuthor,
@@ -24,12 +20,6 @@ import {
   type CommunityPresentationListFilters,
 } from "@/app/(presentation-generator)/services/api/community";
 import CommunityPresentationFilters from "@/app/(presentation-generator)/upload/components/CommunityPresentationFilters";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { notify } from "@/components/ui/sonner";
 import CommunityDesignPreviewDialog from "./CommunityDesignPreviewDialog";
 
@@ -37,7 +27,6 @@ const PAGE_SIZE = 20;
 
 export default function CommunityPage() {
   const t = useTranslations("community");
-  const router = useRouter();
   const [query, setQuery] = useState("");
   const [filters, setFilters] =
     useState<CommunityPresentationListFilters>({});
@@ -123,27 +112,6 @@ export default function CommunityPage() {
     }
   };
 
-  const handleUseDesign = (presentation: CommunityPresentation) => {
-    const params = new URLSearchParams({
-      mode: "smart",
-      communityId: String(presentation.id),
-    });
-    router.push(`/upload?${params.toString()}`);
-  };
-
-  const handleUsePrompt = (presentation: CommunityPresentation) => {
-    const prompt = presentation.prompt?.trim();
-    if (!prompt) {
-      notify.error(
-        t("promptUnavailable"),
-        t("promptUnavailableDescription")
-      );
-      return;
-    }
-    const params = new URLSearchParams({ mode: "smart", prompt });
-    router.push(`/upload?${params.toString()}`);
-  };
-
   return (
     <div className="min-h-screen font-manrope">
       <header className="sticky right-0 top-0 z-40 ml-7 mr-[9px] flex min-h-[105px] items-center justify-between border-b border-[#EDEEEF] bg-white px-1">
@@ -215,8 +183,6 @@ export default function CommunityPage() {
                 key={presentation.id}
                 presentation={presentation}
                 onPreview={() => void openPreview(presentation)}
-                onUseDesign={() => handleUseDesign(presentation)}
-                onUsePrompt={() => handleUsePrompt(presentation)}
               />
             ))}
           </div>
@@ -272,7 +238,6 @@ export default function CommunityPage() {
         onOpenChange={(open) => {
           if (!open) setPreview(null);
         }}
-        onUseDesign={handleUseDesign}
       />
     </div>
   );
@@ -281,13 +246,9 @@ export default function CommunityPage() {
 function CommunityPresentationCard({
   presentation,
   onPreview,
-  onUseDesign,
-  onUsePrompt,
 }: {
   presentation: CommunityPresentation;
   onPreview: () => void;
-  onUseDesign: () => void;
-  onUsePrompt: () => void;
 }) {
   const t = useTranslations("community");
   const title = getCommunityPresentationTitle(presentation);
@@ -304,7 +265,7 @@ function CommunityPresentationCard({
       >
         {thumbnail ? (
           <div className="transition duration-300 group-hover:scale-[1.015]">
-            <SmartHtmlSlide html={thumbnail} fonts={presentation.fonts} title={t("slidePreview", { title })} />
+            <SafeHtmlSlidePreview html={thumbnail} fonts={presentation.fonts} title={t("slidePreview", { title })} />
           </div>
         ) : (
           <span className="flex h-full items-center justify-center text-xs text-[#999999]">
@@ -326,38 +287,6 @@ function CommunityPresentationCard({
           >
             <Eye className="h-3.5 w-3.5" strokeWidth={1.6} />
           </button>
-          <div className="flex h-[26px] overflow-hidden rounded-full border border-[#EDEEEF] bg-white">
-            <button
-              type="button"
-              onClick={onUseDesign}
-              className="px-3.5 pr-2 font-syne text-xs font-medium text-[#191919] transition hover:bg-[#F6F6F9]"
-            >
-              {t("use")}
-            </button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="flex w-6 items-center justify-center border-l border-[#EDEEEF] transition hover:bg-[#F6F6F9]"
-                  aria-label={t("useChoice", { title })}
-                >
-                  <ChevronDown className="h-3.5 w-3.5" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[190px] rounded-xl p-2 font-manrope">
-                <DropdownMenuItem onSelect={onUseDesign} className="cursor-pointer rounded-md">
-                  <Plus className="h-4 w-4" />
-                  {t("useDesign")}
-                </DropdownMenuItem>
-                {presentation.prompt?.trim() && (
-                  <DropdownMenuItem onSelect={onUsePrompt} className="cursor-pointer rounded-md">
-                    <FileText className="h-4 w-4" />
-                  {t("usePrompt")}
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
         </div>
 
         <div className="flex min-h-[34px] items-center justify-between border-t border-[#EDEEEF] py-2.5 text-[10px] font-medium tracking-[0.4px] text-[#808080]">

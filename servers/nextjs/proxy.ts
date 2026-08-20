@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 
 /**
  * API-only: session required for all /api/* except auth, telemetry, and
- * /api/template (server-to-server template layout for FastAPI fallback).
  * Page routes are protected in server layouts (unknown URLs still 404; login uses relative redirects).
  */
 function getFastApiBaseUrl(): string {
@@ -76,9 +75,6 @@ function isApiAuthExempt(pathname: string): boolean {
   return (
     pathname.startsWith("/api/v1/auth/") ||
     pathname === "/api/telemetry-status" ||
-    /** FastAPI `get_layout_by_name` fallback (no browser cookie in Docker). */
-    pathname === "/api/template" ||
-    pathname === "/api/template/custom" ||
     pathname.startsWith("/api/export-presentation-data/") ||
     /** Read-only public share view (token-scoped; FastAPI re-checks on the
      * normalized path, so a traversal here still fails auth there). */

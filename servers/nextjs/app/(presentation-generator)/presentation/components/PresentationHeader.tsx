@@ -14,9 +14,7 @@ import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { usePresentationUndoRedo } from "../hooks/PresentationUndoRedo";
 import ToolTip from "@/components/ToolTip";
 import {
-  clearChatHtmlSelection,
   clearPresentationData,
-  setEnableHtmlSelector,
   updateTitle,
 } from "@/store/slices/presentationGeneration";
 import { clearHistory } from "@/store/slices/undoRedoSlice";
@@ -87,7 +85,7 @@ const PresentationHeader = ({
   const pathname = usePathname();
   const dispatch = useDispatch();
 
-  const { presentationData, isStreaming, enableHtmlSelector } = useSelector(
+  const { presentationData, isStreaming } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
   const appliedMasterPin = isAuthoredDeck

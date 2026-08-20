@@ -9,7 +9,7 @@ from typing import Any, Literal
 
 
 RunRole = Literal["user", "assistant", "system", "tool"]
-GenerationMode = Literal["standard", "smart"]
+GenerationMode = Literal["standard"]
 _ASSISTANT_MESSAGE_NAMESPACE = uuid.UUID("ee5b6470-ec94-4f63-a4ba-351b6c645c9a")
 
 
@@ -30,16 +30,6 @@ class RunViewport:
     width: int
     height: int
     zoom: float = 1.0
-    slide_id: uuid.UUID | None = None
-    slide_index: int | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class SmartSelection:
-    """Allow-listed editor selection supplied only for a DB-backed Smart deck."""
-
-    html: str
-    selected_text: str | None = None
     slide_id: uuid.UUID | None = None
     slide_index: int | None = None
 
@@ -142,7 +132,6 @@ class RunContext:
     generation_mode: GenerationMode
     history: tuple[RunMessage, ...] = ()
     viewport: RunViewport | None = None
-    smart_selection: SmartSelection | None = None
     assets: tuple[RunAsset, ...] = ()
     artifact_scope: OperationArtifactScope | None = None
     cancellation_check: CancellationCheck | None = field(

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Loader2, Save, Sparkles } from "lucide-react";
+import { ArrowLeft, Loader2, Save } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import Header from "../../../(dashboard)/dashboard/components/Header";
@@ -53,9 +53,7 @@ export type EditorHeaderProps = {
   revision: number;
   isDirty: boolean;
   canEdit: boolean;
-  isPrompting: boolean;
   isSaving: boolean;
-  onClickGenerateAI: () => void;
   onClickSave: () => void;
 };
 
@@ -64,9 +62,7 @@ export function EditorHeader({
   revision,
   isDirty,
   canEdit,
-  isPrompting,
   isSaving,
-  onClickGenerateAI,
   onClickSave,
 }: EditorHeaderProps) {
   return (
@@ -80,15 +76,7 @@ export function EditorHeader({
       </div>
       <div className="flex items-center gap-2">
         <Button
-          disabled={!canEdit || isPrompting}
-          onClick={onClickGenerateAI}
-          variant="outline"
-        >
-          <Sparkles className="mr-2 h-4 w-4" />
-          AI 레이아웃 생성
-        </Button>
-        <Button
-          disabled={!canEdit || !isDirty || isSaving || isPrompting}
+          disabled={!canEdit || !isDirty || isSaving}
           onClick={onClickSave}
         >
           {isSaving ? (

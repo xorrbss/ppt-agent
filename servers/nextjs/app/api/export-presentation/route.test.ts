@@ -46,21 +46,8 @@ function templateV2Slide() {
 function canonicalServerPresentation(
   input: Record<string, unknown>,
 ): PersistedPresentation {
-  const slides = Array.isArray(input.slides) ? input.slides : [];
-  const authored =
-    input.mode === "authored" ||
-    slides.some(
-      (slide) =>
-        typeof slide === "object" &&
-        slide !== null &&
-        (slide as Record<string, unknown>).html_content,
-    );
   const driverId: PresentationDriverId =
-    input.version === "v2-standard"
-      ? "template-v2"
-      : authored
-        ? "authored"
-        : "standard";
+    input.version === "v2-standard" ? "template-v2" : "authored";
   const driver = PRESENTATION_DRIVER_REGISTRY[driverId];
   const presentation = {
     id: "persisted-id",
@@ -72,12 +59,7 @@ function canonicalServerPresentation(
       driver_id: driverId,
       content_model: driver.content_model,
       generation_strategy: driver.generation_strategy,
-      style_source:
-        driverId === "template-v2"
-          ? "imported"
-          : driverId === "authored"
-            ? "authored"
-            : "builtin",
+      style_source: driverId === "template-v2" ? "imported" : "authored",
       generation_mode: "standard",
     },
     capabilities: {
@@ -167,36 +149,10 @@ test("route request fetches persisted V2 identity and calls only general", async
   assert.deepEqual(calls, { fetch: 1, general: 1, hybrid: 0 });
 });
 
-test("route request keeps legacy identity on general even with hybrid hint", async () => {
-  const { calls, dependencies } = boundarySpies({
-    version: "v1-standard",
-    mode: "template",
-    slides: [{ ui: null, html_content: null }],
-  });
-
-  const result = await executeExportPresentationRouteRequest(
-    {
-      format: "pptx",
-      id: "persisted-id",
-      pptxMode: "hybrid",
-    },
-    "session=test",
-    dependencies
-  );
-
-  assert.equal(result.path, "general.pptx");
-  assert.equal(
-    (result as { renderArtifact?: { driver_id: string } }).renderArtifact
-      ?.driver_id,
-    "standard",
-  );
-  assert.deepEqual(calls, { fetch: 1, general: 1, hybrid: 0 });
-});
-
 test("route request sends authored to hybrid only for explicit hybrid", async () => {
   const { calls, dependencies } = boundarySpies({
     version: "v1-standard",
-    mode: null,
+    mode: "authored",
     slides: [
       {
         layout_group: "authored",

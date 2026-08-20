@@ -26,7 +26,6 @@ import { notify } from '@/components/ui/sonner'
 import { Theme, ThemeParams } from '@/app/(presentation-generator)/services/api/types'
 import { ImagesApi } from '@/app/(presentation-generator)/services/api/images'
 import { Input } from '@/components/ui/input'
-import { getTemplatesByTemplateName } from '@/app/presentation-templates'
 import { usePathname, useSearchParams } from 'next/navigation'
 import CustomTabEmpty from './CustomTabEmpty'
 import ThemeApi from '@/app/(presentation-generator)/services/api/theme'
@@ -225,9 +224,6 @@ const ThemePanel: React.FC = () => {
 
 
 
-  // Theme preview slides. neo-general was removed (#5); use a kept group's concrete
-  // layouts (they render with the theme's colour vars, same as before).
-  const template = getTemplatesByTemplateName('korean-biz')
   const applyTheme = (theme: Theme) => {
     const cssVariables = {
       '--primary-color': theme.data.colors['primary'],
@@ -1167,34 +1163,41 @@ const ThemePanel: React.FC = () => {
                   style={{ backgroundColor: 'var(--page-background-color)' }}
                   className="overflow-y-auto overflow-x-hidden custom_scrollbar space-y-4 h-[90vh] rounded-lg shadow-lg border bg-white"
                 >
-                  {template && template.map((layout) => {
-                    const {
-                      component: LayoutComponent,
-                      sampleData,
-
-                    } = layout;
-                    return (
-                      <div key={layout.layoutId}>
-                        <div
-                          className="relative w-full"
-                          style={{ height: `${720 * slideScale()}px` }}
-                        >
-                          <div
-                            className="absolute top-0 left-0 pointer-events-none"
-                            style={{
-                              width: 1280,
-                              height: 720,
-                              transformOrigin: "top left",
-                              transform: `scale(${slideScale()})`,
-                            }}
-                          >
-                            <LayoutComponent data={sampleData} />
-                          </div>
-                        </div>
-
+                  <div
+                    className="relative w-full"
+                    style={{ height: `${720 * slideScale()}px` }}
+                  >
+                    <div
+                      className="absolute left-0 top-0 flex flex-col justify-between p-16"
+                      style={{
+                        width: 1280,
+                        height: 720,
+                        backgroundColor: "var(--background-color)",
+                        color: "var(--primary-text)",
+                        transformOrigin: "top left",
+                        transform: `scale(${slideScale()})`,
+                      }}
+                    >
+                      <div>
+                        <div className="mb-8 h-3 w-32 rounded-full bg-[var(--primary-color)]" />
+                        <h2 className="text-6xl font-bold">테마 미리보기</h2>
+                        <p className="mt-6 text-2xl text-[var(--background-text)]">
+                          색상과 글꼴이 Authored 및 Template V2 콘텐츠에 적용됩니다.
+                        </p>
                       </div>
-                    )
-                  })}
+                      <div className="grid grid-cols-3 gap-6">
+                        {["primary", "card", "stroke"].map((color) => (
+                          <div
+                            key={color}
+                            className="rounded-2xl p-6"
+                            style={{ backgroundColor: `var(--${color}-color, var(--card-color))` }}
+                          >
+                            <p className="text-lg font-semibold">{color}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

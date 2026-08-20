@@ -185,7 +185,7 @@ def _service_factory(*, edits: bool):
 
 def _admit_legacy_transaction_fixture(monkeypatch) -> None:
     async def allow_fixture(_session, _presentation):
-        return SimpleNamespace(driver_id="standard")
+        return SimpleNamespace(driver_id="authored")
 
     monkeypatch.setattr(
         "services.workspace_chat_operation_handler.require_authored_mutation_evidence",

@@ -66,15 +66,14 @@ class GeneratePresentationRequest(BaseModel):
         description="Language for the presentation. If omitted, model auto-detects language.",
     )
     template: str = Field(
-        default="adaptive", description="Template to use for the presentation"
+        default="authored", description="Presentation source to use for generation"
     )
     strategy: Optional[
-        Literal["legacy", "adaptive", "authored", "template_v2"]
+        Literal["authored", "template_v2"]
     ] = Field(
         default=None,
         description=(
-            "Explicit generation strategy. Omit to preserve the existing "
-            "template-driven behavior."
+            "Explicit generation strategy. Omit to use the authored source."
         ),
     )
     template_v2_id: Optional[str] = Field(

@@ -817,56 +817,6 @@ export class PresentationGenerationApi {
     }
   }
 
-  static async generateStandardAsync(
-    body: GenerationPreferences & {
-      presentation_id: string;
-      content: string;
-      slides_markdown: string[];
-      template: string;
-      idempotency_key?: string;
-    },
-  ): Promise<StartGenerationResponse> {
-    try {
-      const response = await fetch(
-        getApiUrl(`/api/v1/ppt/presentation/generate/async`),
-        {
-          method: "POST",
-          headers: {
-            ...getHeader(),
-            ...(body.idempotency_key
-              ? { "Idempotency-Key": body.idempotency_key }
-              : {}),
-          },
-          body: JSON.stringify({
-            presentation_id: body.presentation_id,
-            content: body.content,
-            slides_markdown: body.slides_markdown,
-            ...generationPreferencesPayload(body),
-            template: body.template,
-            strategy: body.template === "adaptive" ? "adaptive" : "legacy",
-            export_as: "pptx",
-          }),
-          cache: "no-cache",
-        },
-      );
-
-      const result = await ApiResponseHandler.handleResponse(
-        response,
-        "Failed to start presentation generation",
-      );
-      return {
-        ...result,
-        request_id:
-          result?.request_id ||
-          response.headers.get("x-request-id") ||
-          undefined,
-      };
-    } catch (error) {
-      console.warn("error starting presentation generation", error);
-      throw error;
-    }
-  }
-
   static async getGenerationStatus(
     taskId: string,
   ): Promise<GenerationStatusResponse> {

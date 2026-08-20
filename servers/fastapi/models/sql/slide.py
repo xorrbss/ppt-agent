@@ -52,7 +52,7 @@ class SlideModel(SQLModel, table=True):
     index: int
     content: dict = Field(sa_column=Column(JSON))
     html_content: Optional[str] = None
-    # Native Template V2 editor payload. It is never projected into adaptive
+    # Native Template V2 editor payload. It is never projected into legacy
     # content and must not coexist with authored HTML.
     ui: Optional[dict] = Field(
         sa_column=Column(NativeSlideUIJSON(), nullable=True),

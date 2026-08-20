@@ -32,7 +32,6 @@ from services.agent_runtime import (
     RunContext,
     RunMessage,
     RunViewport,
-    SmartSelection,
 )
 from services.chat import PresentationChatService
 from services.chat.service import ChatTurnResult
@@ -244,29 +243,6 @@ def _run_viewport(raw_context: Mapping[str, Any]) -> RunViewport | None:
     )
 
 
-def _smart_selection(raw_context: Mapping[str, Any], *, generation_mode: str) -> SmartSelection | None:
-    if generation_mode != "smart":
-        return None
-    raw = raw_context.get("smart_selection", raw_context.get("smartSelection"))
-    selection = raw if isinstance(raw, Mapping) else {}
-    html = _bounded_text(selection.get("html"), 100_000)
-    if html is None:
-        return None
-    raw_index = selection.get("slide_index", selection.get("slideIndex"))
-    slide_index = (
-        raw_index if isinstance(raw_index, int) and not isinstance(raw_index, bool) and raw_index >= 0 else None
-    )
-    return SmartSelection(
-        html=html,
-        selected_text=_bounded_text(
-            selection.get("selected_text", selection.get("selectedText")),
-            50_000,
-        ),
-        slide_id=_optional_uuid(selection.get("slide_id", selection.get("slideId"))),
-        slide_index=slide_index,
-    )
-
-
 async def _load_canonical_history(
     session: AsyncSession,
     *,
@@ -350,7 +326,7 @@ async def _build_run_context(
         profile = await require_authored_mutation_evidence(session, presentation)
     except FrozenCompatibilityError as error:
         raise NonRetryableWorkspaceOperationError(error.code) from error
-    generation_mode = "smart" if profile.driver_id == "smart" else "standard"
+    generation_mode = "standard"
     raw_context = claim.request_payload.get("context")
     structured = raw_context if isinstance(raw_context, Mapping) else {}
     current_user_message_id = _optional_uuid(claim.request_payload.get("user_message_id"))
@@ -367,7 +343,6 @@ async def _build_run_context(
             current_user_message_id=current_user_message_id,
         ),
         viewport=_run_viewport(structured),
-        smart_selection=_smart_selection(structured, generation_mode=generation_mode),
         assets=await _load_ready_run_assets(
             session,
             raw_asset_ids=claim.request_payload.get("asset_ids", []),

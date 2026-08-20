@@ -25,30 +25,6 @@ describe("TemplateService structured template layout flow", () => {
       });
   });
 
-  it("generates a layout as a draft through the prompted layout endpoint", () => {
-    cy.intercept("POST", "**/api/v1/ppt/template/layouts/generate", {
-      statusCode: 200,
-      body: {
-        layout: { id: "generated-layout", components: [] },
-        response: "Created",
-      },
-    }).as("generateLayout");
-
-    cy.then(() =>
-      TemplateService.generateTemplateLayout({
-        template_id: "brand-template",
-        prompt: "Create a product comparison layout",
-      }),
-    );
-
-    cy.wait("@generateLayout").then(({ request }) => {
-      expect(request.body).to.deep.equal({
-        template_id: "brand-template",
-        prompt: "Create a product comparison layout",
-      });
-    });
-  });
-
   it("persists layouts with an optimistic revision", () => {
     cy.intercept(
       "PATCH",

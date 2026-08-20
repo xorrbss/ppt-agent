@@ -312,14 +312,6 @@ export function ChatSurface(props: {
               ? t("connection.connecting")
               : t("connection.reconnecting")}
         </span>
-        {context?.smartSelection && (
-          <span
-            className="rounded-full bg-violet-100 px-2 py-1 font-medium text-violet-800"
-            data-testid="smart-selection-badge"
-          >
-            {t("smartSelection")}
-          </span>
-        )}
       </div>
 
       <ol

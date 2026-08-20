@@ -53,7 +53,6 @@ from api.v1.ppt.endpoints.presentation_generation_staging import (
 )
 from constants.presentation import (
     DEFAULT_ATTACHMENT_GENERATION_PROMPT,
-    DEFAULT_TEMPLATES,
     MAX_NUMBER_OF_SLIDES,
 )
 from enums.webhook_event import WebhookEvent
@@ -64,7 +63,6 @@ from models.presentation_outline_model import (
     PresentationOutlineModel,
     SlideOutlineModel,
 )
-from models.slide_spec_model import archetype_to_layout_id, spec_to_blocks
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
@@ -75,7 +73,6 @@ from models.sql.presentation import (
 )
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.slide import SlideModel
-from models.sql.template import TemplateModel
 from models.sql.workspace import WorkspaceOperation, get_workspace_owner_scope
 from models.workspace import WorkspaceBootstrapRequest
 from services.authored_checkpoint_service import (
@@ -197,10 +194,7 @@ from utils.authored_styles import (
 from utils.document_context import build_document_context
 from utils.get_env import (
     get_authored_resume_max_attempts_env,
-    get_next_internal_base_url,
 )
-from utils.get_layout_by_name import get_layout_by_name
-from utils.llm_calls.compose_slides import compose_and_project
 from utils.llm_calls.generate_content_brief import generate_content_brief
 from utils.llm_calls.generate_presentation_outlines import (
     generate_ppt_outline,
@@ -208,14 +202,10 @@ from utils.llm_calls.generate_presentation_outlines import (
 from utils.llm_calls.generate_presentation_outlines import (
     get_messages as get_outline_messages,
 )
-from utils.llm_calls.generate_slide_content import (
-    get_slide_content_from_type_and_outline,
-)
 from utils.llm_utils import message_content_to_text
 from utils.outline_citations import strip_outline_citations
 from utils.outline_utils import (
     get_images_for_slides_from_outline,
-    get_no_of_outlines_to_generate_for_n_slides,
     get_presentation_title_from_presentation_outline,
 )
 from utils.owner_context import get_current_owner_id
@@ -317,9 +307,7 @@ def _validate_authored_exact_admission(request: GeneratePresentationRequest) -> 
     downgrading an exact request to style-reference generation.
     """
     template = (request.template or "").strip().lower()
-    authored_requested = template == AUTHORED_TEMPLATE or (
-        request.strategy == "authored" and template in {"adaptive", AUTHORED_TEMPLATE}
-    )
+    authored_requested = template == AUTHORED_TEMPLATE or request.strategy == "authored"
     if not authored_requested:
         return
     try:
@@ -533,8 +521,6 @@ async def check_if_api_request_is_valid(
             raise HTTPException(status_code=400, detail="template_v2_revision_required")
         if request.template_v2_revision < 1:
             raise HTTPException(status_code=400, detail="template_v2_revision_invalid")
-        if request.template.lower() != "adaptive":
-            raise HTTPException(status_code=400, detail="generation_strategy_conflict")
         # A chat-first deck keeps its uploaded-document snapshots attached for
         # audit/download history.  Once the client supplies the already-grounded
         # slide markdown, Template V2 does not consume those snapshots again, so
@@ -566,45 +552,13 @@ async def check_if_api_request_is_valid(
     if request.template_v2_id is not None or request.template_v2_revision is not None:
         raise HTTPException(status_code=400, detail="generation_strategy_conflict")
 
-    if request.strategy == "authored":
-        if request.template.lower() not in {"adaptive", AUTHORED_TEMPLATE}:
-            raise HTTPException(status_code=400, detail="generation_strategy_conflict")
-        request.template = AUTHORED_TEMPLATE
-    elif request.strategy == "adaptive":
-        if request.template.lower() != "adaptive":
-            raise HTTPException(status_code=400, detail="generation_strategy_conflict")
-        request.template = "adaptive"
-    elif request.strategy == "legacy" and request.template.lower() in {
-        "adaptive",
-        AUTHORED_TEMPLATE,
-    }:
+    if request.strategy not in {None, "authored"}:
         raise HTTPException(status_code=400, detail="generation_strategy_conflict")
-
-    # Checking if template is valid. The authored mode reuses the template field as a
-    # MODE selector (not a real layout template), so it bypasses layout validation.
-    if request.template.lower() == AUTHORED_TEMPLATE:
-        request.template = AUTHORED_TEMPLATE
-        _validate_authored_exact_admission(request)
-        await _validate_authored_master_pin_admission(request)
-    elif request.master_pin is not None:
+    if request.template.lower() != AUTHORED_TEMPLATE:
         raise HTTPException(status_code=400, detail="generation_strategy_conflict")
-    elif request.template not in DEFAULT_TEMPLATES:
-        request.template = request.template.lower()
-        if not request.template.startswith("custom-"):
-            raise HTTPException(
-                status_code=400,
-                detail="Template not found. Please use a valid template.",
-            )
-        template_id = request.template.replace("custom-", "")
-        try:
-            template = await sql_session.get(TemplateModel, uuid.UUID(template_id))
-            if not template:
-                raise Exception()
-        except Exception:
-            raise HTTPException(
-                status_code=400,
-                detail="Template not found. Please use a valid template.",
-            )
+    request.template = AUTHORED_TEMPLATE
+    _validate_authored_exact_admission(request)
+    await _validate_authored_master_pin_admission(request)
 
     return (presentation_id,)
 
@@ -1664,388 +1618,7 @@ async def generate_presentation_handler(
                 )
             return response
 
-        # Updating async status
-        if async_status:
-            async_status.message = "Selecting layout for each slide"
-            async_status.updated_at = datetime.now(timezone.utc)
-            sql_session.add(async_status)
-            await sql_session.commit()
-
-        print("-" * 40)
-        print(f"Generated {total_outlines} outlines for the presentation")
-
-        logger.info(
-            "[presentation.generate] loading layout template=%r presentation_id=%s",
-            request.template,
-            presentation_id,
-        )
-        layout_model = await get_layout_by_name(request.template)
-        logger.info(
-            "[presentation.generate] layout ready template=%r slides=%d ordered=%s icon_weight=%s",
-            request.template,
-            len(layout_model.slides),
-            layout_model.ordered,
-            layout_model.icon_weight,
-        )
-        total_slide_layouts = len(layout_model.slides)
-
-        # Adaptive path: compose one SlideSpec per outline slide and project to the
-        # (outline, structure) pair the rest of the handler consumes — mirrors the
-        # interactive /prepare branch. No per-slide content LLM call, no TOC/fit.
-        adaptive_composition = None
-        vqa_source_outline = presentation_outlines  # descriptive outline, before projection
-        if layout_model.name == "adaptive":
-            adaptive_composition, presentation_outlines, presentation_structure = (
-                await compose_and_project(
-                    presentation_outlines,
-                    layout_model,
-                    language=language_to_use,
-                    tone=request.tone.value,
-                    verbosity=request.verbosity.value,
-                    instructions=request.instructions,
-                )
-            )
-        else:
-            presentation_outlines, presentation_structure = (
-                await build_template_structure(
-                    presentation_outlines,
-                    layout_model,
-                    instructions=request.instructions,
-                    using_slides_markdown=using_slides_markdown,
-                    include_table_of_contents=request.include_table_of_contents,
-                    include_title_slide=request.include_title_slide,
-                    target_n_slides=request.n_slides,
-                )
-            )
-
-        final_n_slides = len(presentation_outlines.slides)
-
-        # Exporters read committed presentation state. Durable chat-first writes
-        # therefore build under an attempt-fenced render identity and leave the
-        # admitted/public target byte-for-byte untouched until final publication.
-        target_presentation = await sql_session.get(
-            PresentationModel, presentation_id
-        )
-        if isolated_render:
-            if target_presentation is None or generation_job is None:
-                raise HTTPException(status_code=409, detail="revision_conflict")
-            render_presentation_id = _render_staging_id(generation_job)
-            presentation = PresentationModel(
-                id=render_presentation_id,
-                owner_id=target_presentation.owner_id,
-                content=request.content,
-                n_slides=final_n_slides,
-                language=language_to_use or "",
-                lifecycle_status=PRESENTATION_LIFECYCLE_STAGING,
-            )
-        elif target_presentation is None:
-            presentation = PresentationModel(
-                id=presentation_id,
-                content=request.content,
-                n_slides=final_n_slides,
-                language=language_to_use or "",
-                lifecycle_status=PRESENTATION_LIFECYCLE_STAGING,
-            )
-        elif target_presentation.lifecycle_status != PRESENTATION_LIFECYCLE_STAGING:
-            raise HTTPException(status_code=409, detail="revision_conflict")
-        else:
-            presentation = target_presentation
-        presentation.content = request.content
-        presentation.n_slides = final_n_slides
-        presentation.language = language_to_use or ""
-        # Use the descriptive outline (pre-projection): on the adaptive path
-        # presentation_outlines was replaced with the projected SlideSpec outline
-        # whose first slide's content is the composition JSON, which would leak
-        # into the title. vqa_source_outline is the descriptive outline (== the
-        # same object on the template path, so this is correct for both).
-        presentation.title = get_presentation_title_from_presentation_outline(
-            vqa_source_outline
-        )
-        presentation.file_paths = request.files
-        presentation.reference_snapshot_ids = [
-            str(snapshot_id) for snapshot_id in request.reference_snapshot_ids
-        ] or None
-        presentation.outlines = presentation_outlines.model_dump()
-        presentation.layout = layout_model.model_dump()
-        presentation.structure = presentation_structure.model_dump()
-        presentation.tone = request.tone.value
-        presentation.verbosity = request.verbosity.value
-        presentation.instructions = request.instructions
-        presentation.include_table_of_contents = request.include_table_of_contents
-        presentation.include_title_slide = request.include_title_slide
-        presentation.web_search = request.web_search
-        # Authored decks return before this point, so this handler only ever
-        # persists adaptive (composition present) or template decks.
-        presentation.mode = "adaptive" if adaptive_composition else "template"
-        presentation.deck_plan = (
-            adaptive_composition.model_dump(mode="json")
-            if adaptive_composition
-            else None
-        )
-        presentation.lifecycle_status = PRESENTATION_LIFECYCLE_STAGING
-
-        # Updating async status
-        if async_status:
-            async_status.message = "Generating slides"
-            async_status.updated_at = datetime.now(timezone.utc)
-            sql_session.add(async_status)
-            await sql_session.commit()
-
-        image_output_directory = get_images_directory()
-        if isolated_render:
-            if generation_job is None or target_presentation is None:
-                raise WorkspaceArtifactPublicationError("operation_lease_lost")
-            fencing_token = await _workspace_operation_fencing_token(
-                sql_session,
-                generation_job=generation_job,
-                presentation_id=presentation_id,
-            )
-            image_staging = await prepare_workspace_chat_artifact_staging(
-                sql_session,
-                operation_id=generation_job.workspace_operation_id,
-                presentation_id=presentation_id,
-                source_revision=target_presentation.revision + 1,
-                attempt_token=generation_job.attempt_token,
-                fencing_token=fencing_token,
-            )
-            image_output_directory = str(image_staging.staging_directory)
-
-        image_generation_service = ImageGenerationService(image_output_directory)
-        async_assets_generation_tasks = []
-
-        # 7. Build slides (adaptive: directly from the composition; legacy: batched
-        # per-slide content generation), then fetch assets.
-        slides: List[SlideModel] = []
-        slide_layouts = [layout_model.slides[idx] for idx in presentation_structure.slides]
-
-        if adaptive_composition is not None:
-            # Adaptive: use the persisted SlideSpec directly (no per-slide LLM call).
-            # spec_to_blocks → SlideModel.content, speaker_note from the spec; still
-            # fetch image/icon assets per slide (markers handled depth-agnostically).
-            for i, spec in enumerate(adaptive_composition.slides):
-                slide = SlideModel(
-                    presentation=presentation.id,
-                    layout_group=layout_model.name,
-                    layout=slide_layouts[i].id,
-                    index=i,
-                    speaker_note=spec.speaker_note or "",
-                    content=spec_to_blocks(spec),
-                )
-                slides.append(slide)
-                async_assets_generation_tasks.append(
-                    asyncio.create_task(
-                        process_slide_and_fetch_assets(
-                            image_generation_service,
-                            slide,
-                            outline_image_urls=None,
-                            icon_weight=layout_model.icon_weight,
-                        )
-                    )
-                )
-        else:
-            # Schedule slide content generation and asset fetching in batches of 10
-            batch_size = 10
-            for start in range(0, len(slide_layouts), batch_size):
-                end = min(start + batch_size, len(slide_layouts))
-
-                print(f"Generating slides from {start} to {end}")
-
-                # Generate contents for this batch concurrently
-                content_tasks = [
-                    get_slide_content_from_type_and_outline(
-                        slide_layouts[i],
-                        presentation_outlines.slides[i],
-                        language_to_use,
-                        request.tone.value,
-                        request.verbosity.value,
-                        request.instructions,
-                    )
-                    for i in range(start, end)
-                ]
-                batch_contents: List[dict] = await asyncio.gather(*content_tasks)
-
-                # Build slides for this batch
-                batch_slides: List[SlideModel] = []
-                for offset, slide_content in enumerate(batch_contents):
-                    i = start + offset
-                    slide_layout = slide_layouts[i]
-                    slide = SlideModel(
-                        presentation=presentation.id,
-                        layout_group=layout_model.name,
-                        layout=slide_layout.id,
-                        index=i,
-                        speaker_note=slide_content.get("__speaker_note__"),
-                        content=slide_content,
-                    )
-                    slides.append(slide)
-                    batch_slides.append(slide)
-
-                if using_slides_markdown:
-                    image_urls_for_batch = get_images_for_slides_from_outline(
-                        presentation_outlines.slides[start:end]
-                    )
-                else:
-                    image_urls_for_batch = [[] for _ in batch_slides]
-
-                # Start asset fetch tasks immediately so they run in parallel with next batch's LLM calls
-                asset_tasks = [
-                    asyncio.create_task(
-                        process_slide_and_fetch_assets(
-                            image_generation_service,
-                            slide,
-                            outline_image_urls=image_urls_for_batch[offset],
-                            icon_weight=layout_model.icon_weight,
-                        )
-                    )
-                    for offset, slide in enumerate(batch_slides)
-                ]
-                async_assets_generation_tasks.extend(asset_tasks)
-
-        if async_status:
-            async_status.message = "Fetching assets for slides"
-            async_status.updated_at = datetime.now(timezone.utc)
-            sql_session.add(async_status)
-            await sql_session.commit()
-
-        # Run all asset tasks concurrently while batches may still be generating content
-        generated_assets_list = await asyncio.gather(*async_assets_generation_tasks)
-        generated_assets = []
-        for assets_list in generated_assets_list:
-            generated_assets.extend(assets_list)
-
-        if isolated_render and image_staging is not None:
-            promoted_images = await promote_workspace_chat_image_artifacts(
-                sql_session,
-                image_staging,
-            )
-            for slide in slides:
-                slide.content = _replace_workspace_image_paths(
-                    slide.content,
-                    promoted_images.replacements,
-                )
-            for generated_asset in generated_assets:
-                generated_asset.path = _replace_workspace_image_paths(
-                    generated_asset.path,
-                    promoted_images.replacements,
-                )
-                generated_asset.extras = _replace_workspace_image_paths(
-                    generated_asset.extras,
-                    promoted_images.replacements,
-                )
-
-        # 8. Save PresentationModel and Slides
-        sql_session.add(presentation)
-        sql_session.add_all(slides)
-        if not isolated_render:
-            sql_session.add_all(generated_assets)
-        await sql_session.commit()
-
-        # 8b. Optional vision-QA pass (opt-in via request.vision_qa, adaptive only):
-        # render + critique each slide and re-compose any the model flags as broken.
-        # Best-effort and bounded — wrapped so it can never break or slow the default
-        # (vision_qa=false) path.
-        if getattr(request, "vision_qa", False) and adaptive_composition is not None:
-            try:
-                from utils.llm_calls.vision_qa import run_vision_qa_pass
-
-                # Vision-QA renders /pdf-maker to critique slides. Fall back to the
-                # same NEXT_INTERNAL_URL used for template layout resolution (honours
-                # the local single-origin proxy) instead of a bare :80, so the
-                # opt-in QA pass doesn't silently no-op on setups without nginx.
-                vqa_base = (
-                    os.getenv("NEXT_PUBLIC_URL") or ""
-                ).strip() or get_next_internal_base_url()
-                adaptive_composition, fixed_idx = await run_vision_qa_pass(
-                    str(presentation.id),
-                    vqa_source_outline,
-                    adaptive_composition,
-                    language=language_to_use,
-                    tone=request.tone.value,
-                    verbosity=request.verbosity.value,
-                    base_url=vqa_base,
-                    instructions=request.instructions,
-                )
-                print(
-                    f"Vision-QA pass complete: re-composed {len(fixed_idx)} slide(s): "
-                    f"{fixed_idx}"
-                )
-                if fixed_idx:
-                    by_index = {s.index: s for s in slides}
-                    for i in fixed_idx:
-                        spec = adaptive_composition.slides[i]
-                        sm = by_index.get(i)
-                        if sm is not None:
-                            sm.content = spec_to_blocks(spec)
-                            sm.layout = archetype_to_layout_id(spec.archetype)
-                            sm.speaker_note = spec.speaker_note or ""
-                    sql_session.add_all(slides)
-                    await sql_session.commit()
-                    print(f"Vision-QA fixed slides: {fixed_idx}")
-            except Exception:
-                traceback.print_exc()
-
-        if async_status:
-            async_status.message = "Exporting presentation"
-            async_status.updated_at = datetime.now(timezone.utc)
-            sql_session.add(async_status)
-
-        # 9. Export
-        publication_target = target_presentation if isolated_render else presentation
-        if publication_target is None:
-            raise HTTPException(status_code=409, detail="revision_conflict")
-        export_execution = await _execute_generation_export(
-            sql_session,
-            publication_target=publication_target,
-            render_presentation=presentation,
-            request=request,
-            export_cookie_header=export_cookie_header,
-            generation_job=generation_job,
-        )
-        presentation_and_path = export_execution.presentation
-
-        response = PresentationPathAndEditPath(
-            presentation_id=presentation_id,
-            path=presentation_and_path.path,
-            edit_path=f"/presentation?id={presentation_id}",
-        )
-
-        # Publish once, only after the exported artifact exists.  The
-        # optimistic revision is the publication commit token; intermediate
-        # checkpoints above intentionally leave the staging revision intact.
-        try:
-            published_path = await _publish_staged_presentation(
-                sql_session,
-                publication_target,
-                presentation_and_path.path,
-                generation_job,
-                async_status,
-                render_presentation=presentation if isolated_render else None,
-                generated_assets=tuple(generated_assets) if isolated_render else (),
-                image_staging=image_staging,
-                image_artifacts=promoted_images.artifacts,
-                export_execution=export_execution,
-            )
-        except BaseException as error:
-            await _record_generation_export_failure(
-                sql_session,
-                export_execution,
-                error,
-            )
-            raise
-        if published_path != response.path:
-            response.path = published_path
-
-        # Triggering webhook on success (opt-in via request.trigger_webhook)
-        if request.trigger_webhook:
-            CONCURRENT_SERVICE.run_task(
-                None,
-                WebhookService.send_webhook,
-                WebhookEvent.PRESENTATION_GENERATION_COMPLETED,
-                response.model_dump(mode="json"),
-            )
-
-        return response
-
+        raise HTTPException(status_code=400, detail="generation_strategy_conflict")
     except BaseException as e:
         authored_attempt_number = (
             generation_job.attempt_number
@@ -2072,7 +1645,7 @@ async def generate_presentation_handler(
                     )
             except BaseException:
                 logger.exception(
-                    "Failed to compensate adaptive/template image staging %s",
+                "Failed to compensate generation image staging %s",
                     image_staging.artifact_id,
                 )
         if isolated_render and render_presentation_id is not None:
@@ -2084,7 +1657,7 @@ async def generate_presentation_handler(
                 )
             except BaseException:
                 logger.exception(
-                    "Failed to discard adaptive/template render staging %s",
+                "Failed to discard generation render staging %s",
                     render_presentation_id,
                 )
         if isinstance(e, (asyncio.CancelledError, KeyboardInterrupt, SystemExit)):
@@ -2494,7 +2067,6 @@ async def queue_presentation_generation(
     sql_session: AsyncSession,
     export_cookie_header: Optional[str] = None,
     idempotency_key: Optional[str] = None,
-    force_legacy_dispatch: bool = False,
 ) -> AsyncPresentationGenerationTaskModel:
     """Validate and atomically enqueue one durable, idempotent generation job."""
     # Workspace orchestration can deliberately create a separate, new deck
@@ -2502,20 +2074,10 @@ async def queue_presentation_generation(
     # That nested generation job must use the existing durable generator rather
     # than trying to bootstrap a second workspace operation for a deck that does
     # not exist yet.
-    chat_first_enabled = (
-        False if force_legacy_dispatch else _chat_first_generation_enabled()
-    )
-    # Legacy requests have no pre-existing timeline anchor, so retain their
-    # fail-before-session behavior. Chat-first requests are admitted only after
-    # locating the bootstrap operation so every rejection can be durably
-    # projected into that card.
-    if not chat_first_enabled:
-        _validate_authored_exact_admission(request)
+    chat_first_enabled = _chat_first_generation_enabled()
     # Freeze the effective company standard, hidden rule snapshot, authored
     # template and style digest before the idempotency signature is computed.
     # This is read-only admission and mints no deck/operation identity.
-    if request.strategy == "authored" and request.template.lower() == "adaptive":
-        request.template = AUTHORED_TEMPLATE
     if request.template.lower() == AUTHORED_TEMPLATE and request.master_pin is not None:
         await _validate_authored_master_pin_admission(request)
     # The fingerprint is taken before any deck is minted, so a replay under the
@@ -2730,8 +2292,7 @@ async def queue_presentation_generation(
             # Reject oversized extracted input before persisting a durable job.
             await _load_document_context(request.files, request.language)
 
-    # Validation may normalize legacy template identifiers. Persist the exact
-    # admitted request that the worker will execute. The fingerprint remains
+    # Persist the exact admitted request that the worker will execute. The fingerprint remains
     # tied to the caller's canonical submitted payload for stable replay.
     payload = _durable_request_payload(request)
 

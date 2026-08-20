@@ -5,7 +5,7 @@ import pytest
 from fastapi import BackgroundTasks, HTTPException
 from starlette.requests import Request
 
-from api.v1.ppt.endpoints.presentation import (
+from api.v1.ppt.endpoints.authored_operations import (
     build_authored_retemplate_generation_request,
 )
 from models.presentation_from_template import RetemplatePresentationRequest
@@ -59,12 +59,37 @@ def _http_request() -> Request:
     return Request({"type": "http", "headers": []})
 
 
+def _set_persisted_authored_slides(fake_async_session, source: PresentationModel):
+    slides = [
+        SlideModel(
+            presentation=source.id,
+            layout_group="authored",
+            layout="authored:content",
+            index=index,
+            content={"__authored__": True},
+            html_content=f"<section>authored slide {index}</section>",
+        )
+        for index in range(source.n_slides)
+    ]
+
+    class _SlideResult:
+        def scalars(self):
+            return self
+
+        def all(self):
+            return slides
+
+    fake_async_session.execute = AsyncMock(return_value=_SlideResult())
+    return slides
+
+
 def test_retemplate_builds_new_authored_deck_from_saved_llm_manuscript(
     fake_async_session,
 ):
     source = _source_presentation()
     original_snapshot = source.model_dump(mode="json")
     fake_async_session._get_results[source.id] = source
+    _set_persisted_authored_slides(fake_async_session, source)
 
     generation_request = asyncio.run(
         build_authored_retemplate_generation_request(
@@ -129,14 +154,14 @@ def test_retemplate_exact_snapshots_fresh_html_before_queue(fake_async_session):
 
     with (
         patch(
-            "api.v1.ppt.endpoints.presentation.load_authored_styles",
+            "api.v1.ppt.endpoints.authored_operations.load_authored_styles",
             return_value=[exact_style],
         ),
         patch(
-            "api.v1.ppt.endpoints.presentation.validate_exact_reconstruction_style"
+            "api.v1.ppt.endpoints.authored_operations.validate_exact_reconstruction_style"
         ),
         patch(
-            "api.v1.ppt.endpoints.presentation.create_exact_source_snapshot",
+            "api.v1.ppt.endpoints.authored_operations.create_exact_source_snapshot",
             new=snapshot,
         ),
     ):
@@ -166,10 +191,11 @@ def test_retemplate_style_reference_does_not_snapshot_current_html(
 ):
     source = _source_presentation()
     fake_async_session._get_results[source.id] = source
+    _set_persisted_authored_slides(fake_async_session, source)
     snapshot = AsyncMock()
 
     with patch(
-        "api.v1.ppt.endpoints.presentation.create_exact_source_snapshot",
+        "api.v1.ppt.endpoints.authored_operations.create_exact_source_snapshot",
         new=snapshot,
     ):
         asyncio.run(
@@ -217,14 +243,14 @@ def test_retemplate_exact_snapshot_failure_is_422_before_queue(fake_async_sessio
     )
     with (
         patch(
-            "api.v1.ppt.endpoints.presentation.load_authored_styles",
+            "api.v1.ppt.endpoints.authored_operations.load_authored_styles",
             return_value=[exact_style],
         ),
         patch(
-            "api.v1.ppt.endpoints.presentation.validate_exact_reconstruction_style"
+            "api.v1.ppt.endpoints.authored_operations.validate_exact_reconstruction_style"
         ),
         patch(
-            "api.v1.ppt.endpoints.presentation.create_exact_source_snapshot",
+            "api.v1.ppt.endpoints.authored_operations.create_exact_source_snapshot",
             new=AsyncMock(side_effect=ValueError("private source failure")),
         ),
         pytest.raises(HTTPException) as exc_info,
@@ -274,46 +300,6 @@ def test_retemplate_rejects_unknown_authored_style(fake_async_session):
 
     assert exc_info.value.status_code == 400
     assert exc_info.value.detail == "AI-authored template not found"
-
-
-def test_retemplate_accepts_legacy_authored_deck_from_slide_sentinel(
-    fake_async_session,
-):
-    source = _source_presentation()
-    source.mode = "template"
-    source.theme = None
-    source.layout = {"name": "adaptive", "ordered": False, "slides": []}
-    fake_async_session._get_results[source.id] = source
-    authored_slide = SlideModel(
-        presentation=source.id,
-        layout_group="authored",
-        layout="authored:content",
-        index=0,
-        content={"__authored__": True},
-        html_content="<section>legacy authored slide</section>",
-    )
-
-    class _SlideResult:
-        def scalars(self):
-            return self
-
-        def all(self):
-            return [authored_slide]
-
-    fake_async_session.execute = AsyncMock(return_value=_SlideResult())
-    generation_request = asyncio.run(
-        build_authored_retemplate_generation_request(
-            source.id,
-            _request(),
-            fake_async_session,
-        )
-    )
-
-    assert generation_request.slides_markdown == [
-        "2026년 매출은 125억 원이며 전년 대비 18% 증가했다.",
-        "핵심 고객은 공공기관 12곳이며 계약 갱신율은 94%다.",
-    ]
-    fake_async_session.execute.assert_awaited_once()
 
 
 def test_retemplate_rejects_missing_semantic_manuscript(fake_async_session):

@@ -44,37 +44,6 @@ function adapter<const Adapter extends PresentationRenderAdapter>(
   return Object.freeze(definition);
 }
 
-const legacyAdapter = adapter({
-  driver_id: "standard",
-  renderer_adapter_id: "legacy-elements",
-  plan(request): RenderAdapterPlan {
-    return {
-      renderer_version: "legacy-elements@1",
-      runtime_dependencies: [BASE_LAYOUT_RUNTIME],
-      payload: { slides: clone(request.snapshot.slides) },
-    };
-  },
-});
-
-const smartAdapter = adapter({
-  driver_id: "smart",
-  renderer_adapter_id: "smart-html",
-  plan(request): RenderAdapterPlan {
-    return {
-      renderer_version: "smart-html@1",
-      runtime_dependencies: [
-        BASE_LAYOUT_RUNTIME,
-        {
-          id: "presenton-chart-snapshot-runtime",
-          version: "1",
-          purpose: "chart",
-        },
-      ],
-      payload: { slides: clone(request.snapshot.slides) },
-    };
-  },
-});
-
 const templateV2Adapter = adapter({
   driver_id: "template-v2",
   renderer_adapter_id: "template-v2",
@@ -133,8 +102,6 @@ const authoredAdapter = adapter({
 });
 
 export const PRESENTATION_RENDER_ADAPTER_REGISTRY = Object.freeze({
-  standard: legacyAdapter,
-  smart: smartAdapter,
   "template-v2": templateV2Adapter,
   authored: authoredAdapter,
 } satisfies PresentationRenderAdapterRegistry);

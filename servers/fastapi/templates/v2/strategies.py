@@ -1,9 +1,4 @@
-"""Exhaustive strategy resolution at the persisted presentation boundary.
-
-The resolver only classifies the two Phase 1 identities. Existing V1
-template/adaptive execution remains on its current code path and is never
-implicitly upgraded to Template V2.
-"""
+"""Exhaustive Authored and Template V2 strategy resolution."""
 
 from __future__ import annotations
 
@@ -123,7 +118,7 @@ def resolve_presentation_strategies(
     mode = _read(presentation, "mode", None)
     if version not in {LEGACY_PRESENTATION_VERSION, TEMPLATE_V2_VERSION}:
         raise StrategyResolutionError("unsupported_presentation_identity")
-    if mode not in {None, "template", "adaptive", "authored"}:
+    if mode not in {None, "template", "authored"}:
         raise StrategyResolutionError("unsupported_presentation_identity")
     if not slides:
         raise StrategyResolutionError("presentation_slides_required")
@@ -131,7 +126,7 @@ def resolve_presentation_strategies(
     authored = _is_authored(presentation, version)
     theme = _read(presentation, "theme", None)
     theme_mode = theme.get("mode") if isinstance(theme, Mapping) else None
-    if theme_mode not in {None, "template", "adaptive", "authored"}:
+    if theme_mode not in {None, "template", "authored"}:
         raise StrategyResolutionError("unsupported_presentation_identity")
     if (
         mode is not None
@@ -163,7 +158,7 @@ def resolve_presentation_strategies(
         return AUTHORED_STRATEGIES
 
     if version == TEMPLATE_V2_VERSION:
-        if mode != "template" or theme_mode not in {None, "template"}:
+        if mode not in {None, "template"} or theme_mode not in {None, "template"}:
             raise StrategyResolutionError("template_v2_identity_mismatch")
         if any(bool(html) for _, html in payloads):
             raise StrategyResolutionError("template_v2_authored_payload_forbidden")
@@ -171,10 +166,7 @@ def resolve_presentation_strategies(
             raise StrategyResolutionError("template_v2_ui_payload_required")
         return TEMPLATE_V2_STRATEGIES
 
-    if any(ui is not None or bool(html) for ui, html in payloads):
-        raise StrategyResolutionError("legacy_payload_identity_mismatch")
-
-    raise StrategyResolutionError("legacy_strategy_managed_by_existing_pipeline")
+    raise StrategyResolutionError("unsupported_presentation_identity")
 
 
 def resolve_presentation_adapters(
@@ -206,14 +198,9 @@ def _is_authored(
     theme = _read(presentation, "theme", None)
     if isinstance(theme, Mapping) and theme.get("mode") is not None:
         return theme.get("mode") == "authored"
-    # A native V2 deck intentionally has no legacy React layout. Only an
-    # explicit ``mode="template"`` is accepted for it by the resolver.
     if version == TEMPLATE_V2_VERSION:
         return False
-    is_authored = getattr(presentation, "is_authored", None)
-    if callable(is_authored):
-        return bool(is_authored())
-    return _read(presentation, "layout", None) is None
+    return False
 
 
 def _read(value: object | Mapping[str, Any], key: str, default: Any) -> Any:

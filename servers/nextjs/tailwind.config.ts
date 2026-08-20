@@ -7,7 +7,6 @@ const config: Config = {
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
     "!./app/privacy-policy/**/*.{js,ts,jsx,tsx,mdx}",
-    "./presentation-templates/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     extend: {

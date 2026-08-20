@@ -1,7 +1,6 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
-import { createPortal } from "react-dom";
 import { Plus } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { v4 as uuidv4 } from "uuid";
@@ -30,7 +29,6 @@ import type { Slide } from "../../types/slide";
 import { Separator } from "@/components/ui/separator";
 import { notify } from "@/components/ui/sonner";
 import { usePathname } from "next/navigation";
-import NewSlide from "./NewSlide";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { SlideThumbnailCard } from "./SlideThumbnailCard";
 import {
@@ -61,7 +59,6 @@ const SidePanel = ({
 }: SidePanelProps) => {
   const t = useTranslations("slideNavigation");
   const pathname = usePathname();
-  const [showNewSlideSelection, setShowNewSlideSelection] = useState(false);
   const thumbnailScrollRef = useRef<HTMLDivElement | null>(null);
 
   const { presentationData, isStreaming } = useSelector(
@@ -73,9 +70,6 @@ const SidePanel = ({
   const lastSlideIndex = presentationData?.slides?.length
     ? presentationData.slides.length - 1
     : 0;
-  const lastSlideTemplateId = presentationData?.slides?.[lastSlideIndex]?.layout
-    ? presentationData.slides[lastSlideIndex].layout.split(":")[0]
-    : "";
   const isTemplateFree = isTemplateFreePresentation(presentationData);
   const previewScale = displayMode === "drawer" ? 0.18 : undefined;
 
@@ -144,7 +138,6 @@ const SidePanel = ({
       return;
     }
 
-    setShowNewSlideSelection(true);
   };
 
   const sensors = useSensors(
@@ -219,38 +212,6 @@ const SidePanel = ({
     return null;
   }
 
-  const shouldShowNewSlideModal =
-    mutationsEnabled &&
-    showNewSlideSelection &&
-    !isTemplateFree &&
-    lastSlideTemplateId &&
-    typeof document !== "undefined";
-
-  const newSlideModal = shouldShowNewSlideModal
-    ? createPortal(
-        <div
-          className="fixed inset-0 z-[1000] overflow-y-auto bg-black/50 px-4 py-16"
-          onClick={() => setShowNewSlideSelection(false)}
-        >
-          <div className="relative z-[1001] flex min-h-full items-start justify-center pt-10">
-            <div
-              className="w-full max-w-[675px]"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <NewSlide
-                index={lastSlideIndex}
-                templateID={lastSlideTemplateId}
-                setShowNewSlideSelection={setShowNewSlideSelection}
-                presentationId={presentationId}
-                mutationsEnabled={mutationsEnabled}
-              />
-            </div>
-          </div>
-        </div>,
-        document.body,
-      )
-    : null;
-
   return (
     <div
       data-thumbnail-display={displayMode}
@@ -313,7 +274,7 @@ const SidePanel = ({
               )}
             </div>
           </DndContext>
-          {mutationsEnabled && (
+          {mutationsEnabled && isTemplateFree && (
             <Separator orientation="horizontal" className=" " />
           )}
 
@@ -332,7 +293,6 @@ const SidePanel = ({
           )}
         </div>
       </div>
-      {newSlideModal}
     </div>
   );
 };

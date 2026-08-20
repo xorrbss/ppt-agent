@@ -137,7 +137,7 @@ def _render_staging_id(generation_job: PresentationGenerationJob) -> uuid.UUID:
         raise RuntimeError("workspace_render_staging_requires_attempt")
     return uuid.uuid5(
         generation_job.workspace_operation_id,
-        f"adaptive-template-render:{generation_job.attempt_token}",
+        f"template-render:{generation_job.attempt_token}",
     )
 
 

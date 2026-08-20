@@ -1,4 +1,3 @@
-DEFAULT_TEMPLATES = ["adaptive", "korean-biz", "financial-chart", "comparison-table", "roadmap", "org-chart"]
 MAX_NUMBER_OF_SLIDES = 100
 DEFAULT_ATTACHMENT_GENERATION_PROMPT = (
     "Generate a presentation from the attached files."

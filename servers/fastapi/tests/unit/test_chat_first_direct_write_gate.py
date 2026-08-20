@@ -1,12 +1,11 @@
 import asyncio
 import uuid
-from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
 
-from api.v1.ppt.endpoints import presentation as presentation_endpoints
 from api.v1.ppt.endpoints import (
+    authored_operations as presentation_endpoints,
     presentation_crud,
     presentation_generate,
     presentation_versions,
@@ -19,13 +18,8 @@ from services.workspace_legacy_write_gate import (
 
 
 _GUARDED_ENDPOINTS = (
-    "prepare",
     "quality_review",
     "retemplate",
-    "stream",
-    "update",
-    "edit",
-    "derive",
     "slide_edit",
     "slide_edit_html",
     "restore",
@@ -48,16 +42,7 @@ class _ProbeSession:
 
 async def _call_guarded_endpoint(name: str, session: _ProbeSession):
     entity_id = uuid.uuid4()
-    edit_request = SimpleNamespace(presentation_id=entity_id)
 
-    if name == "prepare":
-        return await presentation_endpoints.prepare_presentation(
-            entity_id,
-            [object()],
-            object(),
-            None,
-            session,
-        )
     if name == "quality_review":
         return await presentation_endpoints.quality_review_authored_presentation(
             entity_id,
@@ -71,34 +56,6 @@ async def _call_guarded_endpoint(name: str, session: _ProbeSession):
             object(),
             object(),
             object(),
-            session,
-        )
-    if name == "stream":
-        return await presentation_endpoints.stream_presentation(
-            entity_id,
-            object(),
-            False,
-            session,
-        )
-    if name == "update":
-        return await presentation_endpoints.update_presentation(
-            entity_id,
-            None,
-            None,
-            None,
-            None,
-            session,
-        )
-    if name == "edit":
-        return await presentation_endpoints.edit_presentation_with_new_content(
-            object(),
-            edit_request,
-            session,
-        )
-    if name == "derive":
-        return await presentation_endpoints.derive_presentation_from_existing_one(
-            object(),
-            edit_request,
             session,
         )
     if name == "slide_edit":

@@ -113,7 +113,7 @@ export function chartIds(
       // the server never issues for them.
       if (
         typeof value === "string" &&
-        /(?:data-(?:smart-)?chart|<canvas\b)/i.test(value)
+        /(?:data-(?:presenton-)?chart|<canvas\b)/i.test(value)
       ) {
         ids.add(`slide-${slideIndex + 1}-html-chart`);
       }
@@ -213,10 +213,8 @@ export function scriptPolicy(
   if (containsUnsafeMarkup(snapshot, /<script\b|javascript\s*:/i)) {
     throw new RenderPolicyError("render_script_source_forbidden");
   }
-  const controlledRuntime =
-    !exportTarget && snapshot.profile.content_model === "smart-html";
   return Object.freeze({
-    mode: controlledRuntime ? "controlled-runtime" : "deny",
+    mode: "deny",
     allow_inline: false,
     allow_eval: false,
     allow_external: false,

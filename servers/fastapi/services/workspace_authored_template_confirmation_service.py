@@ -269,7 +269,7 @@ async def confirm_authored_template_application(
     resolved_master_input = _resolve_master_pin(source, request)
 
     if generation_request_builder is None:
-        from api.v1.ppt.endpoints.presentation import (
+        from api.v1.ppt.endpoints.authored_operations import (
             build_authored_retemplate_generation_request,
         )
 

@@ -1,4 +1,4 @@
-import type { ConversationAsset, ConversationContext, SmartHtmlSelection } from "./types";
+import type { ConversationAsset, ConversationContext } from "./types";
 
 export function buildConversationContext(input: {
   viewportWidth?: number;
@@ -7,12 +7,8 @@ export function buildConversationContext(input: {
   currentSlideId?: string;
   currentSlideIndex?: number;
   visibleSlideIds?: string[];
-  smartSelection?: SmartHtmlSelection;
   assets?: ConversationAsset[];
 }): ConversationContext {
-  const selection = input.smartSelection && input.smartSelection.html.trim()
-    ? input.smartSelection
-    : undefined;
   const hasViewport = Number.isFinite(input.viewportWidth)
     && (input.viewportWidth ?? 0) > 0
     && Number.isFinite(input.viewportHeight)
@@ -31,7 +27,6 @@ export function buildConversationContext(input: {
     ...(Number.isInteger(input.currentSlideIndex) && (input.currentSlideIndex ?? -1) >= 0
       ? { currentSlide: { ...(input.currentSlideId ? { slideId: input.currentSlideId } : {}), index: input.currentSlideIndex! } }
       : {}),
-    ...(selection ? { smartSelection: selection } : {}),
     assetIds: (input.assets ?? []).filter((asset) => asset.status === "ready" || asset.status === "scanned").map((asset) => asset.id),
   };
 }

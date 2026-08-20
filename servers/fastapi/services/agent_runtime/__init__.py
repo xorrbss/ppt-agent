@@ -15,7 +15,6 @@ from services.agent_runtime.contracts import (
     RunMessage,
     RunViewport,
     RuntimeArtifact,
-    SmartSelection,
     ToolSummary,
     TypedMutation,
 )
@@ -45,7 +44,6 @@ __all__ = [
     "RunViewport",
     "RuntimeEventFenceLost",
     "RuntimeArtifact",
-    "SmartSelection",
     "TRANSIENT_RUN_EVENTS",
     "ToolSummary",
     "TransientRunEventBroadcaster",

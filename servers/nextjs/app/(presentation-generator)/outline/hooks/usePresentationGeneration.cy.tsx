@@ -54,7 +54,6 @@ describe("usePresentationGeneration authored-only generation", () => {
     cy.stub(PresentationGenerationApi, "generateAuthoredAsync")
       .resolves({ id: "task-authored", status: "running" } as any)
       .as("generateAuthored");
-    cy.spy(PresentationGenerationApi, "generateStandardAsync").as("legacyGenerate");
     cy.spy(PresentationGenerationApi, "generateTemplateV2Async").as("templateV2Generate");
 
     mount(
@@ -81,7 +80,6 @@ describe("usePresentationGeneration authored-only generation", () => {
         },
       }),
     );
-    cy.get("@legacyGenerate").should("not.have.been.called");
     cy.get("@templateV2Generate").should("not.have.been.called");
   });
 });

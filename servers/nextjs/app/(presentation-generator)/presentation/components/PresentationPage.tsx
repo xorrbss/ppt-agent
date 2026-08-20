@@ -9,10 +9,6 @@ import React, {
 } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store/store";
-import {
-  clearChatHtmlSelection,
-  setEnableHtmlSelector,
-} from "@/store/slices/presentationGeneration";
 import "../../utils/prism-languages";
 import { Skeleton } from "@/components/ui/skeleton";
 import SidePanel from "./SidePanel";
@@ -190,15 +186,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     loading: loading || presentationData == null,
   });
   const isAuthoredDeck = presentationFeatureView.authored;
-  const isSmartPresentation = presentationFeatureView.selectionEnabled;
-  useEffect(() => {
-    dispatch(setEnableHtmlSelector(isSmartPresentation));
-    if (!isSmartPresentation) dispatch(clearChatHtmlSelection());
-    return () => {
-      dispatch(setEnableHtmlSelector(false));
-      dispatch(clearChatHtmlSelection());
-    };
-  }, [dispatch, isSmartPresentation, presentation_id]);
   const slidesLength = presentationData?.slides?.length ?? 0;
   const previewArtifactRequired =
     presentationRuntime !== null && slidesLength > 0 && !loading;
@@ -557,13 +544,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
       <PresentationFeatureSlot name="runtimeDependencies">
         <PresentationRuntimeDependencies
           dependencies={presentationFeatureView.runtimeDependencies}
-        />
-      </PresentationFeatureSlot>
-      <PresentationFeatureSlot name="selectionOverlay">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-30"
-          data-testid="presentation-selection-overlay-slot"
         />
       </PresentationFeatureSlot>
       <PresentationFeatureSlot name="exportActions">

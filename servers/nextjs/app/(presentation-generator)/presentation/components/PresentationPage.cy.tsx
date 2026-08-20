@@ -22,20 +22,20 @@ type AxeRuntime = typeof import("axe-core");
 const presentationId = "deck-1";
 const presentationUrl = `**/api/v1/ppt/presentation/${presentationId}`;
 
-const standardRuntime = {
+const templateV2Runtime = {
   profile: {
     schema_version: 1,
-    driver_id: "standard",
-    content_model: "legacy-elements",
-    generation_strategy: "standard",
-    style_source: "builtin",
+    driver_id: "template-v2",
+    content_model: "template-v2",
+    generation_strategy: "template",
+    style_source: "imported",
     generation_mode: "standard",
   },
   capabilities: {
     schema_version: 1,
-    driver_id: "standard",
-    renderer_adapter_id: "legacy-elements",
-    editor_adapter_id: "legacy-elements",
+    driver_id: "template-v2",
+    renderer_adapter_id: "template-v2",
+    editor_adapter_id: "template-v2",
     editor: {
       element_text_edit: true,
       element_geometry_edit: true,
@@ -43,36 +43,10 @@ const standardRuntime = {
       theme_apply: true,
       template_apply: true,
       slide_image_regenerate: false,
-      smart_selection: false,
     },
-    agent_tool_capability: "standard",
-    export_adapter_id: "legacy-general",
+    agent_tool_capability: "template-v2",
+    export_adapter_id: "template-v2-general",
     export_editable_pptx: true,
-  },
-} as const;
-
-const smartRuntime = {
-  profile: {
-    schema_version: 1,
-    driver_id: "smart",
-    content_model: "smart-html",
-    generation_strategy: "smart",
-    style_source: "community",
-    generation_mode: "smart",
-  },
-  capabilities: {
-    ...standardRuntime.capabilities,
-    driver_id: "smart",
-    renderer_adapter_id: "smart-html",
-    editor_adapter_id: "smart-html",
-    editor: {
-      ...standardRuntime.capabilities.editor,
-      chart_edit: false,
-      theme_apply: false,
-      template_apply: false,
-      smart_selection: true,
-    },
-    agent_tool_capability: "smart",
   },
 } as const;
 
@@ -85,7 +59,9 @@ const buildDeck = (slideCount: number) => ({
   revision: 1,
   lifecycle_status: "published",
   theme: null,
-  ...standardRuntime,
+  mode: "template",
+  version: "v2-standard",
+  ...templateV2Runtime,
   slides: Array.from({ length: slideCount }, (_, index) =>
     createBlankPresentationSlide({
       id: `slide-${index + 1}`,
@@ -95,26 +71,6 @@ const buildDeck = (slideCount: number) => ({
       isTemplateV2: true,
     }),
   ),
-});
-
-const buildSmartDeck = () => ({
-  ...buildDeck(0),
-  ...smartRuntime,
-  mode: "authored",
-  slides: [
-    {
-      id: "smart-slide-1",
-      presentation: presentationId,
-      index: 0,
-      layout_group: "authored",
-      layout: "authored:SMART_SMOKE",
-      content: { __authored__: true },
-      html_content:
-        "<!doctype html><html><body><main><p>Choose this Smart paragraph</p></main></body></html>",
-      properties: {},
-    },
-  ],
-  n_slides: 1,
 });
 
 function assertNoSevereAxeViolations() {
@@ -227,7 +183,7 @@ describe("<PresentationPage />", () => {
     cy.get('[data-testid="slides-scroll-container"]').should("be.visible");
     cy.get('main[data-render-artifact-contract="presenton.render-artifact/v1"]')
       .should("have.attr", "data-render-artifact-target", "preview")
-      .and("have.attr", "data-editor-adapter", "legacy-elements")
+      .and("have.attr", "data-editor-adapter", "template-v2")
       .and("have.attr", "data-assistant-adapter", "canonical-workspace");
   });
 
@@ -265,22 +221,6 @@ describe("<PresentationPage />", () => {
       .should("be.visible")
       .and("contain.text", "디자인 변경에 실패했습니다");
     cy.get('[data-testid="workspace-staging-loading"]').should("not.exist");
-  });
-
-  it("enables Smart HTML selection and forwards the selected element to canonical chat", () => {
-    cy.window().then((window) => {
-      (window as Window & { tailwind?: unknown }).tailwind = {};
-    });
-    apiMocks.setupGetIntercept(presentationUrl, buildSmartDeck(), "loadSmartDeck");
-
-    mountPage();
-
-    cy.wait("@loadSmartDeck");
-    cy.contains("Choose this Smart paragraph").click();
-    cy.get('[data-testid="smart-selection-badge"]')
-      .should("be.visible")
-      .and("contain.text", "Smart selection");
-    cy.contains("Selected for AI").should("exist");
   });
 
   it("offers a recoverable empty state and reloads the deck on demand", () => {

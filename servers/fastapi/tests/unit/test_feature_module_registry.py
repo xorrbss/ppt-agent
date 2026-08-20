@@ -52,24 +52,6 @@ def test_ppt_feature_route_names_are_unique_and_reverse_to_the_public_paths() ->
             "GET",
             "/api/v1/ppt/community/presentations/{community_id}",
         ),
-        "get_presentation_layouts": (
-            "GET",
-            "/api/v1/ppt/template-management/get-templates/{presentation}",
-        ),
-        "delete_legacy_template": (
-            "DELETE",
-            "/api/v1/ppt/template-management/delete-templates/{template_id}",
-        ),
-        "delete_template_v2": ("DELETE", "/api/v1/ppt/template/{template_id}"),
-        "get_template_layouts": ("GET", "/api/v1/ppt/template/{template_id}/layouts"),
-        "create_template_slide_layout": (
-            "POST",
-            "/api/v1/ppt/template/slide-layout/create",
-        ),
-        "create_template_slide_layout_legacy": (
-            "POST",
-            "/api/v1/ppt/template/create/slide-layout",
-        ),
     }
     routes = {route.name: route for route in API_V1_PPT_ROUTER.routes}
 

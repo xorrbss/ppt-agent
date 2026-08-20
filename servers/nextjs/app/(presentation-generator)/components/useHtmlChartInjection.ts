@@ -4,7 +4,7 @@ import { useEffect, type RefObject } from "react";
 
 import { loadChartBrowserRuntime } from "@/lib/chart-browser";
 
-export function useSmartChartInjection({
+export function useHtmlChartInjection({
   html,
   instanceId,
   domRevision,
@@ -35,7 +35,7 @@ export function useSmartChartInjection({
         };
         destroyRenderedCharts();
         document
-          .querySelectorAll(`script[data-smart-chart-instance="${instanceId}"]`)
+          .querySelectorAll(`script[data-html-chart-instance="${instanceId}"]`)
           .forEach((script) => script.remove());
 
         const rootId = JSON.stringify(instanceId);
@@ -44,14 +44,14 @@ export function useSmartChartInjection({
           if (!sourceCode) return;
 
           const script = document.createElement("script");
-          script.dataset.smartChartInstance = instanceId;
+          script.dataset.htmlChartInstance = instanceId;
           script.textContent = `
             try {
               (function () {
                 var rootId = ${rootId};
-                var root = Array.from(document.querySelectorAll('[data-smart-slide-instance]'))
+                var root = Array.from(document.querySelectorAll('[data-html-slide-instance]'))
                   .find(function (element) {
-                    return element.getAttribute('data-smart-slide-instance') === rootId;
+                    return element.getAttribute('data-html-slide-instance') === rootId;
                   });
                 if (!root) return;
                 var realDocument = document;
@@ -93,7 +93,7 @@ export function useSmartChartInjection({
                 })(scopedDocument, window.Chart, window.ChartDataLabels);
               })();
             } catch (error) {
-              console.error('Smart slide chart failed to render', error);
+              console.error('HTML slide chart failed to render', error);
             }
           `;
           document.body.appendChild(script);
@@ -109,7 +109,7 @@ export function useSmartChartInjection({
           });
         });
       } catch (error) {
-        console.error("Could not initialize Smart slide charts", error);
+        console.error("Could not initialize HTML slide charts", error);
       }
     };
 
@@ -120,7 +120,7 @@ export function useSmartChartInjection({
       if (paintFrame !== undefined) window.cancelAnimationFrame(paintFrame);
       destroyRenderedCharts?.();
       document
-        .querySelectorAll(`script[data-smart-chart-instance="${instanceId}"]`)
+        .querySelectorAll(`script[data-html-chart-instance="${instanceId}"]`)
         .forEach((script) => script.remove());
     };
   }, [containerRef, domRevision, html, instanceId]);

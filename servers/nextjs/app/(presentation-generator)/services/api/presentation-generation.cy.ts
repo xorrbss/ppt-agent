@@ -1,5 +1,4 @@
 import { PresentationGenerationApi } from "./presentation-generation";
-import { ApiError } from "./api-error-handler";
 import ThemeApi from "./theme";
 import { resolveDeckTheme } from "../../upload/components/applyDeckTheme";
 import { canonicalUploadAdmissionKey } from "./canonical-document-admission";
@@ -216,88 +215,6 @@ describe("PresentationGenerationApi.generateTemplateV2Async", () => {
         template_v2_id: "brand-template",
         template_v2_revision: 4,
         export_as: "pptx",
-      });
-    });
-  });
-});
-
-describe("PresentationGenerationApi.generateStandardAsync", () => {
-  it("starts a durable standard generation with the reviewed settings", () => {
-    cy.intercept("POST", "**/api/v1/ppt/presentation/generate/async", {
-      statusCode: 202,
-      headers: { "x-request-id": "standard-request" },
-      body: { id: "standard-operation", status: "queued" },
-    }).as("startStandardGeneration");
-
-    cy.then(() =>
-      PresentationGenerationApi.generateStandardAsync({
-        presentation_id: "standard-shell",
-        content: "Outline title",
-        slides_markdown: ["# Outline title"],
-        language: "Korean",
-        tone: "professional",
-        verbosity: "concise",
-        instructions: "Use the brand voice",
-        include_table_of_contents: true,
-        include_title_slide: false,
-        web_search: true,
-        template: "custom-brand-template",
-        idempotency_key: "standard-generation-key",
-      })
-    ).should("deep.include", {
-      id: "standard-operation",
-      request_id: "standard-request",
-    });
-
-    cy.wait("@startStandardGeneration").then(({ request }) => {
-      expect(request.headers).to.include({
-        "idempotency-key": "standard-generation-key",
-      });
-      expect(request.body).to.deep.equal({
-        presentation_id: "standard-shell",
-        content: "Outline title",
-        slides_markdown: ["# Outline title"],
-        language: "Korean",
-        tone: "professional",
-        verbosity: "concise",
-        instructions: "Use the brand voice",
-        include_table_of_contents: true,
-        include_title_slide: false,
-        web_search: true,
-        template: "custom-brand-template",
-        strategy: "legacy",
-        export_as: "pptx",
-      });
-    });
-  });
-
-  it("preserves the projected-workspace response marker on admission failure", () => {
-    cy.intercept("POST", "**/api/v1/ppt/presentation/generate/async", {
-      statusCode: 503,
-      headers: {
-        "x-chat-first-workspace-projected": "true",
-      },
-      body: { detail: "generation_admission_unavailable" },
-    });
-
-    cy.then(async () => {
-      let caught: unknown;
-      try {
-        await PresentationGenerationApi.generateStandardAsync({
-          presentation_id: "projected-standard-shell",
-          content: "Outline title",
-          slides_markdown: ["# Outline title"],
-          template: "adaptive",
-          idempotency_key: "projected-standard-generation-key",
-        });
-      } catch (error) {
-        caught = error;
-      }
-
-      expect(caught).to.be.instanceOf(ApiError);
-      expect(caught).to.include({
-        status: 503,
-        workspaceProjected: true,
       });
     });
   });

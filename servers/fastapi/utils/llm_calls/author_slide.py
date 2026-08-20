@@ -1,7 +1,7 @@
 """Authored-mode core: have the configured LLM AUTHOR a complete, self-contained
 1280x720 HTML slide (bespoke layout) within a shared design system — instead of
 filling a fixed React archetype. This is the crux of the high-quality "authored"
-generation mode (vs. the fast default adaptive/template path). Provider-agnostic:
+generation mode. Provider-agnostic:
 one plain `client.generate` text call against the selected provider (codex /
 anthropic / ...). Opt-in — never on the fast deterministic default path."""
 

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Eye, Heart, Loader2, RefreshCw, Search } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import SmartHtmlSlide from "../../components/SmartHtmlSlide";
+import SafeHtmlSlidePreview from "../../components/SafeHtmlSlidePreview";
 import {
   CommunityPresentationApi,
   type CommunityPresentation,
@@ -137,7 +137,7 @@ export default function CommunityReferencePicker({
                   aria-label={t("referencePicker.use", { title: item.title || t("title") })}
                 >
                   {preview ? (
-                    <SmartHtmlSlide html={preview} fonts={item.fonts} />
+                    <SafeHtmlSlidePreview html={preview} fonts={item.fonts} />
                   ) : (
                     <span className="flex h-full items-center justify-center text-xs text-[#999999]">
                       {t("noPreview")}

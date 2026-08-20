@@ -11,8 +11,6 @@ const isWindows = platform() === "win32";
 const npm = isWindows ? "npm.cmd" : "npm";
 const npx = isWindows ? "npx.cmd" : "npx";
 const uv = isWindows ? "uv.exe" : "uv";
-const docker = isWindows ? "docker.exe" : "docker";
-const bash = "bash";
 const argv = new Set(process.argv.slice(2));
 const knownArguments = new Set([
   "--all",
@@ -22,7 +20,6 @@ const knownArguments = new Set([
   "--with-electron",
   "--with-fastapi-binary",
   "--with-fidelity",
-  "--with-g4",
   "--with-postgres",
 ]);
 
@@ -47,7 +44,6 @@ Options:
   --with-fidelity        Require visual tools and run host-OS export fidelity
   --with-postgres        Require PPT_AGENT_POSTGRES_TEST_URL and run live DB tests
   --with-electron        Require Windows and run the Windows release gate
-  --with-g4              Require Linux, Bash, and Docker; run both G4 round-trips
   --all                  Request every capability gate (fails if one is unavailable)
   --help                 Show this help
 `);
@@ -475,8 +471,6 @@ runStep({
   preconditionDescription: "Node 22, npm ci, and cached Cypress binary",
 });
 const cypressSpecs = [
-  "**/AdaptiveBlockControls.cy.tsx",
-  "**/AdaptivePropertyControls.cy.tsx",
   "**/ChartLeaf.cy.tsx",
   "**/Variants.cy.tsx",
   "**/UploadPage.cy.tsx", "**/DashboardPage.cy.tsx",
@@ -669,61 +663,6 @@ runStep({
   notRunReason: "requires --with-electron on Windows",
   precondition: electronPrecondition,
   preconditionDescription: "Windows, compiled Electron TypeScript, and electron npm ci",
-});
-
-const g4Selected = requested("--with-g4");
-const g4Script = String.raw`set -euo pipefail
-override="$(mktemp)"
-cleanup() {
-  docker compose -f docker-compose.yml -f "$override" down -v || true
-  rm -f "$override"
-}
-trap cleanup EXIT
-cat > "$override" <<'YML'
-services:
-  development:
-    environment:
-      - DISABLE_AUTH=true
-      - MEM0_ENABLED=false
-      - DISABLE_IMAGE_GENERATION=true
-      - CYPRESS_INSTALL_BINARY=0
-YML
-docker build --target assets-builder --tag presenton-export-runtime-gate .
-docker run --rm presenton-export-runtime-gate sh -lc 'node /app/scripts/sync-presentation-export.cjs --check-only && node --check /app/presentation-export/index.cjs && test -x /app/presentation-export/py/convert-linux-x64'
-docker compose -f docker-compose.yml -f "$override" up -d development
-ready=0
-for i in $(seq 1 120); do
-  fa=$(docker compose exec -T development bash -lc 'curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/openapi.json' 2>/dev/null || true)
-  ng=$(docker compose exec -T development bash -lc 'curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:80/' 2>/dev/null || true)
-  echo "try $i fastapi=$fa nginx=$ng"
-  if [ -n "$fa" ] && [ "$fa" != "000" ] && [ -n "$ng" ] && [ "$ng" != "000" ] && [ "$ng" != "502" ] && [ "$ng" != "504" ]; then
-    ready=1
-    break
-  fi
-  sleep 10
-done
-if [ "$ready" != "1" ]; then
-  docker compose logs --tail=60 development
-  exit 1
-fi
-docker compose exec -T -e RUN_PPTX_ROUNDTRIP=1 -e APP_DATA_DIRECTORY=/app_data -e NEXT_PUBLIC_FAST_API=http://127.0.0.1 development bash -lc 'export PATH=$PATH:/root/.local/bin; cd /app/servers/fastapi && uv run python ../../scripts/check_adaptive_pptx_roundtrip.py'
-docker compose exec -T -e RUN_PPTX_ROUNDTRIP=1 -e APP_DATA_DIRECTORY=/app_data -e NEXT_PUBLIC_FAST_API=http://127.0.0.1 development bash -lc 'export PATH=$PATH:/root/.local/bin; cd /app/servers/fastapi && uv run python ../../scripts/check_legacy_pptx_roundtrip.py'`;
-runStep({
-  name: "Linux Docker production runtime + adaptive and legacy G4 round-trips",
-  command: bash,
-  args: ["-lc", g4Script],
-  selected: g4Selected,
-  notRunReason: "requires --with-g4; GitHub runs this Linux/Docker gate",
-  precondition: () => {
-    if (platform() !== "linux") return `Linux required; current host is ${platform()}`;
-    if (!findOnPath("bash")) return "bash not found";
-    if (!findOnPath("docker")) return "docker not found";
-    const info = spawnSync(docker, ["info"], { stdio: "ignore", windowsHide: true });
-    if (info.status !== 0) return "Docker daemon is not available";
-    return null;
-  },
-  preconditionDescription: "Linux, Bash, Docker Compose, and a running Docker daemon",
-  displayCommand: "bash -lc <production-runtime + compose readiness + adaptive G4 + legacy G4 + teardown>",
 });
 
 console.log("\nSummary");

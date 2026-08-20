@@ -64,10 +64,8 @@ export const PresentationCard = ({
     router.push(`/presentation?id=${id}&driver=${presentationDriverId}`);
   };
   useEffect(() => {
-    // Unified theme application (base 16 vars + fonts + adaptive tone & manner
-    // tokens) so adaptive-deck thumbnails match the editor/export render. Legacy
-    // thumbnails are unaffected — base vars are identical, extended tokens are
-    // consumed only by the adaptive renderer.
+    // Unified theme application keeps thumbnails aligned with editor/export
+    // rendering while preserving the retained theme token wire shape.
     const element = document.getElementById(`dashboard-presentation-card-${id}`)
     applyPresentationThemeToElement(element, presentation.theme)
   }, [id, presentation.theme])

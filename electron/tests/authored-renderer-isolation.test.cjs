@@ -108,13 +108,13 @@ test("Electron authored preview is PNG-only and never constructs raw authored DO
       "app",
       "(presentation-generator)",
       "components",
-      "V1ContentRender.tsx",
+      "PresentationContentRender.tsx",
     ),
     "utf8",
   );
   const authoredBranch = contentRender.slice(
-    contentRender.indexOf("const isAuthored"),
-    contentRender.indexOf("// Show loading state for custom templates"),
+    contentRender.indexOf("const AuthoredRenderer"),
+    contentRender.indexOf("const TemplateV2Renderer"),
   );
   assert.match(authoredBranch, /AuthoredSlidePreview/);
   assert.doesNotMatch(authoredBranch, /SmartHtmlEditor|innerHTML|driver_id/);

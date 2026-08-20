@@ -10,15 +10,10 @@ import {
   serializeStudioLayoutsForUpstream,
 } from "@/lib/template-v2-upstream-compat";
 import type { JsonRecord } from "@/lib/template-v2-studio";
-import { normalizeBackendAssetUrls } from "@/utils/api";
 import TemplateService from "../../services/api/template";
 import Header from "../../(dashboard)/dashboard/components/Header";
 import { LayoutsPanel } from "./editor/LayoutsPanel";
-import {
-  isRecord,
-  readLayoutId,
-  updateLayoutMetadata,
-} from "@/lib/template-v2-preview";
+import { readLayoutId, updateLayoutMetadata } from "@/lib/template-v2-preview";
 import {
   EditReadOnlyWarning,
   EditorHeader,
@@ -34,17 +29,6 @@ import {
 type StructuredTemplateLayoutEditorProps = {
   templateId: string;
 };
-
-function nextGeneratedLayoutId(layouts: TemplateV2Layout[]) {
-  const ids = new Set(layouts.map((layout, index) => readLayoutId(layout, index)));
-  let suffix = layouts.length + 1;
-  let candidate = `ai_layout_${suffix}`;
-  while (ids.has(candidate)) {
-    suffix += 1;
-    candidate = `ai_layout_${suffix}`;
-  }
-  return candidate;
-}
 
 export function StructuredTemplateLayoutEditor({
   templateId,
@@ -102,7 +86,7 @@ export function StructuredTemplateLayoutEditor({
       field: "id" | "description",
       value: string,
     ) => {
-      if (!canEdit || state.promptLayoutIndex !== null) return;
+      if (!canEdit) return;
       dispatch({
         type: "UPDATE_LAYOUTS",
         payload: state.layouts.map((layout, index) =>
@@ -112,7 +96,7 @@ export function StructuredTemplateLayoutEditor({
         ),
       });
     },
-    [canEdit, state.promptLayoutIndex, state.layouts, dispatch],
+    [canEdit, state.layouts, dispatch],
   );
 
   const copyLayoutId = useCallback(
@@ -129,105 +113,13 @@ export function StructuredTemplateLayoutEditor({
     [state.layouts],
   );
 
-  // Prompt/generation callbacks
-  const startPrompt = useCallback(() => {
-    if (!canEdit || state.promptLayoutIndex !== null) return;
-    const draftIndex = state.layouts.length;
-    const draftId = nextGeneratedLayoutId(state.layouts);
-
-    dispatch({
-      type: "START_PROMPT",
-      payload: {
-        draftIndex,
-        draftId,
-        currentActiveIndex: state.activeLayoutIndex,
-      },
-    });
-  }, [canEdit, state.promptLayoutIndex, state.layouts, state.activeLayoutIndex, dispatch]);
-
-  const dismissPrompt = useCallback(() => {
-    if (state.generating || state.promptLayoutIndex === null) return;
-    dispatch({ type: "DISMISS_PROMPT", payload: state.returnLayoutIndex });
-  }, [state.generating, state.promptLayoutIndex, state.returnLayoutIndex, dispatch]);
-
-  const generatePromptedLayout = useCallback(
-    async (prompt: string) => {
-      if (
-        !canEdit ||
-        state.promptLayoutIndex === null ||
-        state.generating ||
-        !state.loadedTemplate
-      ) {
-        return false;
-      }
-
-      dispatch({ type: "SET_GENERATING", payload: true });
-      try {
-        const response = await TemplateService.generateTemplateLayout({
-          template_id: templateId,
-          prompt,
-        });
-        if (!isRecord(response.layout)) {
-          throw new Error("생성된 레이아웃 응답이 올바르지 않습니다.");
-        }
-
-        const generatedLayout = normalizeBackendAssetUrls(
-          response.layout,
-        ) as TemplateV2Layout;
-        const updatedLayouts = state.layouts.map((layout, index) => {
-          if (index !== state.promptLayoutIndex) return layout;
-
-          const generatedId = readLayoutId(generatedLayout, state.promptLayoutIndex);
-          const idIsUsed = state.layouts.some(
-            (l, i) =>
-              i !== state.promptLayoutIndex &&
-              readLayoutId(l, i) === generatedId,
-          );
-          const draftId = readLayoutId(layout, state.promptLayoutIndex);
-          return {
-            ...generatedLayout,
-            id: idIsUsed ? draftId : generatedId,
-          };
-        });
-
-        dispatch({ type: "UPDATE_LAYOUTS", payload: updatedLayouts });
-        dispatch({ type: "SET_GENERATING", payload: false });
-        dispatch({ type: "COMPLETE_PROMPT" });
-        notify.success(
-          "AI 레이아웃을 생성했습니다.",
-          "미리보기를 확인한 뒤 저장해 주세요.",
-        );
-        return false;
-      } catch (generationError) {
-        dispatch({ type: "SET_GENERATING", payload: false });
-        notify.error(
-          "AI 레이아웃을 생성하지 못했습니다.",
-          generationError instanceof Error
-            ? generationError.message
-            : "잠시 후 다시 시도해 주세요.",
-        );
-        return false;
-      }
-    },
-    [
-      canEdit,
-      state.generating,
-      state.loadedTemplate,
-      state.promptLayoutIndex,
-      state.layouts,
-      templateId,
-      dispatch,
-    ],
-  );
-
   // Save callback
   const save = useCallback(async () => {
     if (
       !state.loadedTemplate ||
       !canEdit ||
       !state.dirty ||
-      state.saving ||
-      state.promptLayoutIndex !== null
+      state.saving
     ) {
       return;
     }
@@ -273,7 +165,6 @@ export function StructuredTemplateLayoutEditor({
     state.dirty,
     state.layouts,
     state.loadedTemplate,
-    state.promptLayoutIndex,
     state.saving,
     templateId,
     dispatch,
@@ -308,10 +199,7 @@ export function StructuredTemplateLayoutEditor({
             updateLayout(index, "description", value)
           }
           onLayoutIdChange={(index, value) => updateLayout(index, "id", value)}
-          onSelectLayout={(index) => {
-            if (state.promptLayoutIndex !== null && index !== state.promptLayoutIndex) return;
-            dispatch({ type: "SET_ACTIVE_LAYOUT", payload: index });
-          }}
+          onSelectLayout={(index) => dispatch({ type: "SET_ACTIVE_LAYOUT", payload: index })}
         />
 
         <main className="min-w-0 flex-1 overflow-hidden p-6">
@@ -320,9 +208,7 @@ export function StructuredTemplateLayoutEditor({
             revision={state.loadedTemplate.details.revision}
             isDirty={state.dirty}
             canEdit={canEdit}
-            isPrompting={state.promptLayoutIndex !== null}
             isSaving={state.saving}
-            onClickGenerateAI={startPrompt}
             onClickSave={save}
           />
 
@@ -331,10 +217,6 @@ export function StructuredTemplateLayoutEditor({
           <TemplatePreviewSection
             activeLayout={activeLayout}
             activeLayoutIndex={state.activeLayoutIndex}
-            isPrompting={state.promptLayoutIndex === state.activeLayoutIndex}
-            isGenerating={state.generating}
-            onDismissPrompt={dismissPrompt}
-            onSubmitPrompt={generatePromptedLayout}
           />
         </main>
       </div>

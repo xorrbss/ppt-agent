@@ -50,7 +50,6 @@ export default function PresentationShell({
         data-editor-adapter={viewModel.componentAdapters.editor ?? undefined}
         data-assistant-adapter={viewModel.componentAdapters.assistant ?? undefined}
         data-export-adapter={viewModel.componentAdapters.export ?? undefined}
-        data-selection-controller={viewModel.componentAdapters.selection ?? undefined}
         data-render-artifact-contract={renderArtifact?.schema_version}
         data-render-artifact-version={renderArtifact?.artifact_version}
         data-render-artifact-target={renderArtifact?.target}

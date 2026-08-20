@@ -139,27 +139,6 @@ def test_default_off_preserves_authored_html_and_authored_hybrid_contract():
     assert (presentation, slides) == before
 
 
-@pytest.mark.parametrize("mode", ["template", "adaptive"])
-def test_default_off_leaves_legacy_template_and_adaptive_on_existing_pipeline(mode):
-    policy = get_structured_template_policy({})
-    presentation = {
-        "version": LEGACY_PRESENTATION_VERSION,
-        "mode": mode,
-        "layout": {"name": "existing-layout"},
-    }
-    slides = [{"ui": None, "html_content": None}]
-    before = deepcopy((presentation, slides))
-
-    with pytest.raises(
-        StrategyResolutionError,
-        match="legacy_strategy_managed_by_existing_pipeline",
-    ):
-        resolve_presentation_strategies(presentation, slides)
-
-    assert policy.creation_enabled is False
-    assert (presentation, slides) == before
-
-
 def test_adapter_registry_delegates_to_existing_executors_after_resolution():
     template_generation = object()
     authored_generation = object()
@@ -255,24 +234,6 @@ def test_python_and_typescript_share_persisted_strategy_semantics(case):
             {"version": LEGACY_PRESENTATION_VERSION, "mode": "authored"},
             [{"ui": {"id": "native"}, "html_content": None}],
             "authored_identity_payload_mismatch",
-        ),
-        (
-            {
-                "version": LEGACY_PRESENTATION_VERSION,
-                "mode": "template",
-                "layout": {"name": "existing"},
-            },
-            [{"ui": None, "html_content": None}],
-            "legacy_strategy_managed_by_existing_pipeline",
-        ),
-        (
-            {
-                "version": LEGACY_PRESENTATION_VERSION,
-                "mode": "template",
-                "layout": {"name": "existing"},
-            },
-            [{"ui": {"id": "native"}, "html_content": None}],
-            "legacy_payload_identity_mismatch",
         ),
         (
             {"version": "v9-unknown", "mode": "template", "layout": {}},

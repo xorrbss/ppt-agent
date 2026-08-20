@@ -1,14 +1,6 @@
 import { Theme } from "@/app/(presentation-generator)/services/api/types";
 import { Slide } from "@/app/(presentation-generator)/types/slide";
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import {
-  setAdaptiveBlockText,
-  setAdaptiveChartBlock,
-  deleteAdaptiveUnit as crudDeleteUnit,
-  moveAdaptiveUnit as crudMoveUnit,
-  addAdaptiveUnit as crudAddUnit,
-  type AdaptiveChartPatch,
-} from "@/lib/adaptiveBlockEdit";
 import type { ImageEditorProperties } from "@/components/slide-editor/images/imageCrop";
 import type {
   PresentationCapabilities,
@@ -27,9 +19,9 @@ export interface PresentationData {
   };
   n_slides: number;
   title: string;
-  // Deliberately untyped: every consumer reads template-family-specific paths
-  // off `slides[i].content` (classic fields, adaptive `blocks[]`, template-v2
-  // elements). Narrowing this needs a discriminated slide model first.
+  // Deliberately untyped while Authored and Template V2 consumers read their
+  // own server-issued slide contracts. Narrowing this needs a discriminated
+  // slide model first.
   slides: any;
   theme: Theme | null;
   profile?: PresentationProfile;
@@ -41,16 +33,6 @@ export interface PresentationData {
   fonts?: Record<string, string> | null;
 }
 
-export interface ChatHtmlSelection {
-  slideId?: string | null;
-  slideIndex: number;
-  slideNumber: number;
-  html: string;
-  elementTag?: string | null;
-  selectedText?: string;
-  selectedAt: number;
-}
-
 interface PresentationGenerationState {
   presentation_id: string | null;
   isLoading: boolean;
@@ -60,8 +42,6 @@ interface PresentationGenerationState {
   presentationData: PresentationData | null;
   isSlidesRendered: boolean;
   isLayoutLoading: boolean;
-  enableHtmlSelector: boolean;
-  chatHtmlSelection: ChatHtmlSelection | null;
 }
 
 const initialState: PresentationGenerationState = {
@@ -73,8 +53,6 @@ const initialState: PresentationGenerationState = {
   isStreaming: null,
   error: null,
   presentationData: null,
-  enableHtmlSelector: false,
-  chatHtmlSelection: null,
 };
 
 const presentationGenerationSlice = createSlice({
@@ -93,9 +71,6 @@ const presentationGenerationSlice = createSlice({
     },
     // Presentation ID
     setPresentationId: (state, action: PayloadAction<string>) => {
-      if (state.presentation_id !== action.payload) {
-        state.chatHtmlSelection = null;
-      }
       state.presentation_id = action.payload;
       state.error = null;
     },
@@ -111,7 +86,6 @@ const presentationGenerationSlice = createSlice({
     // Clear presentation data
     clearPresentationData: (state) => {
       state.presentationData = null;
-      state.chatHtmlSelection = null;
     },
     clearOutlines: (state) => {
       state.outlines = [];
@@ -123,20 +97,6 @@ const presentationGenerationSlice = createSlice({
     // Set presentation data
     setPresentationData: (state, action: PayloadAction<PresentationData>) => {
       state.presentationData = action.payload;
-      state.chatHtmlSelection = null;
-    },
-    setEnableHtmlSelector: (state, action: PayloadAction<boolean>) => {
-      state.enableHtmlSelector = action.payload;
-      if (!action.payload) state.chatHtmlSelection = null;
-    },
-    setChatHtmlSelection: (
-      state,
-      action: PayloadAction<ChatHtmlSelection>
-    ) => {
-      state.chatHtmlSelection = action.payload;
-    },
-    clearChatHtmlSelection: (state) => {
-      state.chatHtmlSelection = null;
     },
     updateTitle: (state, action: PayloadAction<string>) => {
       if (state.presentationData) {
@@ -310,63 +270,6 @@ const presentationGenerationSlice = createSlice({
       }
     },
 
-    // Deterministic text edit for adaptive slides, keyed by data-block-id (no
-    // fragile string matching). blockId is one of: a top-level block id (e.g.
-    // "title"), a nested item id (bullets/column items, e.g. "b1"/"col1.1"), or
-    // a dotted block field (e.g. "s1.value", "card1.title", "step1.label").
-    updateAdaptiveBlock: (
-      state,
-      action: PayloadAction<{
-        slideIndex: number;
-        blockId: string;
-        content: string;
-      }>
-    ) => {
-      const { slideIndex, blockId, content } = action.payload;
-      const slide = state.presentationData?.slides?.[slideIndex];
-      setAdaptiveBlockText(slide?.content?.blocks, blockId, content);
-    },
-
-    // Update an adaptive chart block's type / data / series by block id. Chart
-    // shape changes (add/remove rows or series, type switch) can't go through the
-    // text-only updateAdaptiveBlock.
-    updateAdaptiveBlockChart: (
-      state,
-      action: PayloadAction<{
-        slideIndex: number;
-        blockId: string;
-        patch: AdaptiveChartPatch;
-      }>
-    ) => {
-      const { slideIndex, blockId, patch } = action.payload;
-      const slide = state.presentationData?.slides?.[slideIndex];
-      setAdaptiveChartBlock(slide?.content?.blocks, blockId, patch);
-    },
-
-    // Adaptive block/item CRUD (P4b) — unitId is a top-level block id or a
-    // nested item id; helpers locate the owning array (blocks[] or items[]).
-    deleteAdaptiveUnit: (
-      state,
-      action: PayloadAction<{ slideIndex: number; unitId: string }>
-    ) => {
-      const slide = state.presentationData?.slides?.[action.payload.slideIndex];
-      crudDeleteUnit(slide?.content?.blocks, action.payload.unitId);
-    },
-    moveAdaptiveUnit: (
-      state,
-      action: PayloadAction<{ slideIndex: number; unitId: string; delta: number }>
-    ) => {
-      const slide = state.presentationData?.slides?.[action.payload.slideIndex];
-      crudMoveUnit(slide?.content?.blocks, action.payload.unitId, action.payload.delta);
-    },
-    addAdaptiveUnit: (
-      state,
-      action: PayloadAction<{ slideIndex: number; afterUnitId: string }>
-    ) => {
-      const slide = state.presentationData?.slides?.[action.payload.slideIndex];
-      crudAddUnit(slide?.content?.blocks, action.payload.afterUnitId);
-    },
-
     addNewSlide: (state, action: PayloadAction<{ slideData: SlideRecord; index: number }>) => {
       if (state.presentationData?.slides) {
         // Insert the new slide at the specified index + 1 (after current slide)
@@ -488,9 +391,6 @@ export const {
   clearOutlines,
   deleteSlideOutline,
   setPresentationData,
-  setEnableHtmlSelector,
-  setChatHtmlSelection,
-  clearChatHtmlSelection,
   updateTitle,
   setOutlines,
   // slides operations
@@ -501,11 +401,6 @@ export const {
   updateSlideContent,
   updateSlideSpeakerNote,
   updateSlideChart,
-  updateAdaptiveBlock,
-  updateAdaptiveBlockChart,
-  deleteAdaptiveUnit,
-  moveAdaptiveUnit,
-  addAdaptiveUnit,
   updateSlideImage,
   updateImageProperties,
   updateSlideIcon,

@@ -10,6 +10,20 @@ import {
 const SLIDE_WIDTH = 1280;
 const SLIDE_HEIGHT = 720;
 
+const PREVIEW_CSP = [
+  "default-src 'none'",
+  "base-uri 'none'",
+  "object-src 'none'",
+  "frame-src 'none'",
+  "connect-src 'none'",
+  "media-src 'none'",
+  "form-action 'none'",
+  "img-src data: blob: http: https:",
+  "font-src data: http: https:",
+  "style-src 'unsafe-inline' http: https:",
+  "script-src 'unsafe-inline' http: https:",
+].join("; ");
+
 function escapeAttribute(value: string) {
   return value
     .replaceAll("&", "&amp;")
@@ -17,7 +31,6 @@ function escapeAttribute(value: string) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
 }
-
 function fontAssets(fonts: unknown) {
   if (!fonts || typeof fonts !== "object" || Array.isArray(fonts)) return "";
   return Object.entries(fonts as Record<string, unknown>)
@@ -31,11 +44,12 @@ function fontAssets(fonts: unknown) {
     .join("\n");
 }
 
-function previewDocument(html: string, fonts: unknown) {
+function isolatedPreviewDocument(html: string, fonts: unknown) {
   return `<!doctype html>
   <html>
     <head>
       <meta charset="utf-8">
+      <meta http-equiv="Content-Security-Policy" content="${PREVIEW_CSP}">
       <meta name="viewport" content="width=1280, initial-scale=1">
       ${fontAssets(fonts)}
       <script src="https://cdn.tailwindcss.com"></script>
@@ -55,11 +69,11 @@ function previewDocument(html: string, fonts: unknown) {
   </html>`;
 }
 
-export default function SmartHtmlSlide({
+export default function SafeHtmlSlidePreview({
   html,
   fonts,
   fixedSize = false,
-  title = "Smart presentation slide",
+  title = "Presentation design preview",
 }: {
   html: string;
   fonts?: unknown;
@@ -68,7 +82,10 @@ export default function SmartHtmlSlide({
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(0);
-  const srcDoc = useMemo(() => previewDocument(html, fonts), [fonts, html]);
+  const srcDoc = useMemo(
+    () => isolatedPreviewDocument(html, fonts),
+    [fonts, html],
+  );
 
   useEffect(() => {
     if (fixedSize) return;
@@ -87,6 +104,7 @@ export default function SmartHtmlSlide({
     <div
       ref={containerRef}
       className="relative w-full overflow-hidden bg-white"
+      data-safe-html-preview="true"
       style={{
         width: fixedSize ? SLIDE_WIDTH : undefined,
         height: fixedSize ? SLIDE_HEIGHT : SLIDE_HEIGHT * (scale || 1),
@@ -105,6 +123,7 @@ export default function SmartHtmlSlide({
         <iframe
           className="block h-[720px] w-[1280px] border-0 bg-white"
           sandbox="allow-scripts"
+          referrerPolicy="no-referrer"
           srcDoc={srcDoc}
           tabIndex={-1}
           title={title}

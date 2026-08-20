@@ -28,7 +28,6 @@ from models.sse_response import (
 from services.chat.conversation_store import ChatConversationStore
 from services.concurrent_service import ConcurrentService
 from services.export_task_service import EXPORT_TASK_SERVICE
-from templates import get_layout_by_name as tpl_layout_fetcher
 from templates.presentation_layout import PresentationLayoutModel, SlideLayoutModel
 from utils import ocr_language
 from utils.datetime_utils import get_current_utc_datetime
@@ -605,131 +604,6 @@ def test_presentation_layout_model_surface():
     assert layout.get_slide_layout_index("sid") == 0
     with pytest.raises(HTTPException):
         layout.get_slide_layout_index("missing")
-
-
-def _make_aio_layout_session(resp: AsyncMock):
-    sess = MagicMock()
-    getter = MagicMock()
-    getter.__aenter__ = AsyncMock(return_value=resp)
-    getter.__aexit__ = AsyncMock(return_value=None)
-    sess.get = MagicMock(return_value=getter)
-    sess.__aenter__ = AsyncMock(return_value=sess)
-    sess.__aexit__ = AsyncMock(return_value=None)
-    return sess
-
-
-def test_get_layout_by_name_returns_model():
-    resp = AsyncMock()
-    resp.status = 200
-    resp.json = AsyncMock(
-        return_value={
-            "name": "grp",
-            "ordered": False,
-            "slides": [{"id": "layout", "json_schema": {"title": "t"}}],
-        }
-    )
-
-    async def runner():
-        with patch(
-            "templates.get_layout_by_name.aiohttp.ClientSession",
-            return_value=_make_aio_layout_session(resp),
-        ):
-            layout = await tpl_layout_fetcher.get_layout_by_name("deck")
-            assert isinstance(layout, PresentationLayoutModel)
-
-    asyncio.run(runner())
-
-
-def test_get_layout_by_name_raises_on_http_failure():
-    resp = AsyncMock()
-    resp.status = 500
-    resp.text = AsyncMock(return_value="down")
-
-    async def runner():
-        with patch(
-            "templates.get_layout_by_name.aiohttp.ClientSession",
-            return_value=_make_aio_layout_session(resp),
-        ):
-            with pytest.raises(HTTPException):
-                await tpl_layout_fetcher.get_layout_by_name("missing")
-
-    asyncio.run(runner())
-
-
-def test_get_layout_by_name_does_not_attach_obsolete_auth_cookie():
-    resp = AsyncMock()
-    resp.status = 200
-    resp.json = AsyncMock(
-        return_value={
-            "name": "grp",
-            "ordered": False,
-            "slides": [{"id": "layout", "json_schema": {"title": "t"}}],
-        }
-    )
-
-    captured: dict[str, str | None] = {}
-
-    def capture_session(*_a, **_k):
-        sess = MagicMock()
-
-        def _get(url, *, headers=None, **_kw):
-            captured.update(headers or {})
-            inner = MagicMock()
-            inner.__aenter__ = AsyncMock(return_value=resp)
-            inner.__aexit__ = AsyncMock(return_value=None)
-            return inner
-
-        sess.get = MagicMock(side_effect=_get)
-        sess.__aenter__ = AsyncMock(return_value=sess)
-        sess.__aexit__ = AsyncMock(return_value=None)
-        return sess
-
-    async def runner():
-        with patch(
-            "templates.get_layout_by_name.aiohttp.ClientSession",
-            side_effect=capture_session,
-        ):
-            layout = await tpl_layout_fetcher.get_layout_by_name("deck")
-            assert isinstance(layout, PresentationLayoutModel)
-
-    asyncio.run(runner())
-    assert "Cookie" not in captured
-
-
-def test_get_layout_by_name_prefers_build_artifact(monkeypatch):
-    # When the build-time artifact carries the group, resolution uses it and must
-    # never touch the network (the headless scrape / JSON route are both skipped).
-    payload = {
-        "name": "korean-biz",
-        "ordered": False,
-        "icon_weight": "thin",
-        "slides": [
-            {
-                "id": "korean-biz:cover",
-                "name": "Cover",
-                "description": "",
-                "json_schema": {"title": "t"},
-            }
-        ],
-    }
-    monkeypatch.setattr(
-        tpl_layout_fetcher,
-        "_read_builtin_layout_artifact",
-        lambda name: dict(payload),
-    )
-
-    def _boom(*_a, **_k):
-        raise AssertionError("HTTP fallback must not run when the artifact resolves")
-
-    monkeypatch.setattr(tpl_layout_fetcher.aiohttp, "ClientSession", _boom)
-
-    async def runner():
-        layout = await tpl_layout_fetcher.get_layout_by_name("korean-biz")
-        assert isinstance(layout, PresentationLayoutModel)
-        assert layout.name == "korean-biz"
-        assert [s.id for s in layout.slides] == ["korean-biz:cover"]
-
-    asyncio.run(runner())
 
 
 @pytest.mark.parametrize(

@@ -90,13 +90,6 @@ const LayoutPreview = () => {
             <div className="rounded-2xl border border-[#E4E7EC] bg-[#F9FAFB] p-8 text-center" data-testid="template-v2-dashboard-empty" role="status">
               <h4 className="text-lg font-semibold text-[#101828]">{t("emptyTitle")}</h4>
               <p className="mt-2 text-sm text-[#667085]">{t("emptyDescription")}</p>
-              <button
-                type="button"
-                onClick={() => router.push("/custom-template")}
-                className="mt-5 rounded-full bg-[#5146E5] px-5 py-2.5 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5146E5] focus-visible:ring-offset-2"
-              >
-                {t("createTemplate")}
-              </button>
             </div>
           ) : catalogConfigurationError ? (
             <div data-testid="template-v2-dashboard-configuration-error" role="alert">

@@ -13,7 +13,7 @@ import {
   X,
 } from "lucide-react";
 
-import SmartHtmlSlide from "@/app/(presentation-generator)/components/SmartHtmlSlide";
+import SafeHtmlSlidePreview from "@/app/(presentation-generator)/components/SafeHtmlSlidePreview";
 import {
   CommunityPresentationApi,
   getCommunityPresentationAuthor,
@@ -36,14 +36,12 @@ interface CommunityDesignPreviewDialogProps {
   open: boolean;
   loading: boolean;
   onOpenChange: (open: boolean) => void;
-  onUseDesign: (presentation: CommunityPresentation) => void;
 }
 export default function CommunityDesignPreviewDialog({
   presentation,
   open,
   loading,
   onOpenChange,
-  onUseDesign,
 }: CommunityDesignPreviewDialogProps) {
   const t = useTranslations("community");
   const [referenceView, setReferenceView] = useState<{
@@ -200,13 +198,6 @@ export default function CommunityDesignPreviewDialog({
                     label={t("likes", { count: presentation.likes ?? 0 })}
                     value={presentation.likes ?? 0}
                   />
-                  <button
-                    type="button"
-                    onClick={() => onUseDesign(presentation)}
-                    className="inline-flex h-[41px] shrink-0 items-center justify-center rounded-full border border-[#EDEEEF] px-[26px] font-syne text-sm font-normal tracking-[0.16px] text-[#191919] transition hover:bg-[#F8F8FA]"
-                  >
-                    {t("useDesignLabel")}
-                  </button>
                 </div>
               </header>
 
@@ -226,7 +217,7 @@ export default function CommunityDesignPreviewDialog({
                           key={`${displayedPresentation?.id ?? presentation.id}-${index}`}
                           className="aspect-[1840/1038] w-full overflow-hidden bg-white"
                         >
-                          <SmartHtmlSlide
+                          <SafeHtmlSlidePreview
                             html={slide}
                             fonts={displayedPresentation?.fonts}
                             title={t("slideTitle", { title, index: index + 1 })}

@@ -2,7 +2,7 @@ import React, { forwardRef } from "react";
 import { GripVertical } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { Slide } from "../../types/slide";
-import { V1ContentRender } from "../../components/V1ContentRender";
+import { PresentationContentRender } from "../../components/PresentationContentRender";
 
 interface SlideThumbnailCardProps extends React.HTMLAttributes<HTMLDivElement> {
   slide: Slide;
@@ -85,7 +85,7 @@ export const SlideThumbnailCard = forwardRef<
               transform: `scale(${previewScale})`,
             }}
           >
-            <V1ContentRender slide={slide} isEditMode={false} />
+            <PresentationContentRender slide={slide} />
           </div>
         </div>
       </div>

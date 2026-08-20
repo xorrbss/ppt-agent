@@ -34,12 +34,13 @@ const mountHeader = (
     setPresentationData({
       id: "deck-1",
       language: "en",
-      layout: isAuthoredDeck ? null : { name: "adaptive", ordered: false, slides: [] },
+      layout: isAuthoredDeck ? null : { name: "template-v2", ordered: false, slides: [] },
       n_slides: 1,
       title: "deck",
-      slides: [{ id: "slide-1", layout: "standard" }],
+      slides: [{ id: "slide-1", layout: "template-v2" }],
       theme: null,
-      mode: isAuthoredDeck ? "authored" : "adaptive",
+      mode: isAuthoredDeck ? "authored" : "template",
+      version: "v2-standard",
     } as any)
   );
   store.dispatch(setStreaming(false));

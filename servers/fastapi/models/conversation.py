@@ -48,12 +48,11 @@ class PresentationCapability(BaseModel):
     driver_id: PresentationDriverId
     profile: PresentationProfile
     capabilities: PresentationCapabilities
-    generation_mode: Literal["standard", "smart"]
-    presentation_mode: Literal["template", "adaptive", "authored"]
-    tool_profile: Literal["standard", "smart"]
+    generation_mode: Literal["standard"]
+    presentation_mode: Literal["template", "authored"]
+    tool_profile: Literal["authored", "template-v2"]
     can_edit: bool
     supports_assets: bool = True
-    supports_smart_selection: bool
 
 
 class PresentationRevision(BaseModel):
@@ -130,29 +129,11 @@ class ConversationSlideReference(BaseModel):
         return self
 
 
-class SmartHtmlSelection(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    html: str = Field(min_length=1, max_length=100_000)
-    selected_text: Optional[str] = Field(default=None, max_length=50_000)
-    slide_id: Optional[uuid.UUID] = None
-    slide_index: Optional[int] = Field(default=None, ge=0)
-
-    @field_validator("html")
-    @classmethod
-    def strip_html(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("html must not be blank")
-        return normalized
-
-
 class ConversationMessageContext(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     viewport: Optional[ConversationViewport] = None
     current_slide: Optional[ConversationSlideReference] = None
-    smart_selection: Optional[SmartHtmlSelection] = None
 
 
 class ConversationMessageCreateRequest(BaseModel):

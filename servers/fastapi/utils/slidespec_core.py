@@ -39,7 +39,6 @@ from utils.slidespec_projection import (
 )
 
 ZERO_DIGEST = "sha256:" + "0" * 64
-ADAPTER_VERSION = "adaptive-minimal/1"
 class SlideSpecError(ValueError):
     """A stable, machine-readable SlideSpec contract failure."""
 
@@ -1001,8 +1000,6 @@ def _render_imported_html(request: RenderRequest) -> RenderResult:
         semanticDomHash=dom_hash,
         artifactHashes={"html": html_hash, "semanticDom": dom_hash},
     )
-
-
 def render_slidespec(request: RenderRequest) -> RenderResult:
     """Deterministically render native or imported semantic-bound HTML."""
 
@@ -1038,6 +1035,3 @@ def render_slidespec(request: RenderRequest) -> RenderResult:
         semanticDomHash=dom_hash,
         artifactHashes={"html": html_hash, "semanticDom": dom_hash},
     )
-
-from utils.slidespec_adaptive import _adaptive_blocks, _opaque_id, adapt_adaptive_slide
-# ruff: noqa: E402, F401

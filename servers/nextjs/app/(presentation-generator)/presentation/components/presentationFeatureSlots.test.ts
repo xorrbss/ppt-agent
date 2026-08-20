@@ -14,7 +14,7 @@ function runtime(driverId: keyof typeof PRESENTATION_DRIVER_REGISTRY) {
       content_model: driver.content_model,
       generation_strategy: driver.generation_strategy,
       style_source: driver.style_sources[0],
-      generation_mode: driverId === "smart" ? ("smart" as const) : ("standard" as const),
+      generation_mode: "standard" as const,
     },
     capabilities: {
       schema_version: 1 as const,
@@ -31,8 +31,8 @@ function runtime(driverId: keyof typeof PRESENTATION_DRIVER_REGISTRY) {
 }
 
 test("feature slots are driven by the validated presentation capability", () => {
-  const smart = buildPresentationFeatureViewModel({
-    runtime: runtime("smart"),
+  const templateV2 = buildPresentationFeatureViewModel({
+    runtime: runtime("template-v2"),
     workspaceReady: true,
   });
   const authored = buildPresentationFeatureViewModel({
@@ -40,8 +40,7 @@ test("feature slots are driven by the validated presentation capability", () => 
     workspaceReady: true,
   });
 
-  assert.equal(smart.slots.selectionOverlay, true);
-  assert.equal(authored.slots.selectionOverlay, false);
+  assert.equal(templateV2.slots.editorSurface, true);
   assert.equal(authored.authored, true);
   assert.equal(authored.slots.editorSurface, true);
   assert.equal(authored.slots.assistantPanel, true);
@@ -51,10 +50,9 @@ test("feature slots are driven by the validated presentation capability", () => 
     "authored-hybrid",
   ]);
   assert.deepEqual(authored.renderActions, ["preview", "pdf", "pptx"]);
-  assert.equal(smart.background, "#F6F6F9");
-  assert.equal(smart.componentAdapters.editor, "smart-html");
-  assert.equal(smart.componentAdapters.assistant, "canonical-workspace");
-  assert.equal(smart.componentAdapters.selection, "smart-html-selection");
+  assert.equal(templateV2.background, "#EDEEEF");
+  assert.equal(templateV2.componentAdapters.editor, "template-v2");
+  assert.equal(templateV2.componentAdapters.assistant, "canonical-workspace");
   assert.equal(authored.componentAdapters.editor, "authored-readonly");
   assert.equal(authored.componentAdapters.export, "authored-hybrid");
 });
@@ -87,7 +85,6 @@ test("unknown profiles fail closed while loading retains only the skeleton slot"
   assert.deepEqual(unknown.renderActions, []);
   assert.equal(unknown.componentAdapters.editor, null);
   assert.equal(unknown.componentAdapters.assistant, null);
-  assert.equal(unknown.selectionEnabled, false);
 
   const loading = buildPresentationFeatureViewModel({
     runtime: null,

@@ -33,7 +33,6 @@ const SETTING_LABELS: Record<string, string> = {
   standard: "표준",
   "text-heavy": "상세하게",
   template: "템플릿",
-  adaptive: "적응형",
   authored: "AI 고품질",
 };
 

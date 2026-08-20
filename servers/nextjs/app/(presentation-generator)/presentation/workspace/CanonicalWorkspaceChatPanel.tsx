@@ -18,7 +18,6 @@ export function CanonicalWorkspaceChatPanel(props: {
   currentSlide?: number;
   currentSlideId?: string;
   visibleSlideIds?: string[];
-  smartSelection?: { html: string; text?: string; slideId?: string; slideIndex?: number };
   onPresentationPublished?: (revision?: number) => void;
   onCommandDispatcherReady?: (dispatcher: WorkspaceCommandDispatcher | null) => void;
   onQualityReviewRequesterReady?: (requester: WorkspaceQualityReviewRequester | null) => void;
@@ -32,7 +31,6 @@ export function CanonicalWorkspaceChatPanel(props: {
     currentSlide,
     currentSlideId,
     visibleSlideIds,
-    smartSelection,
     onPresentationPublished,
     onCommandDispatcherReady,
     onQualityReviewRequesterReady,
@@ -54,11 +52,9 @@ export function CanonicalWorkspaceChatPanel(props: {
     currentSlideId,
     currentSlideIndex: currentSlide,
     visibleSlideIds,
-    smartSelection,
   }), [
     currentSlide,
     currentSlideId,
-    smartSelection,
     visibleSlideIds,
     viewport.height,
     viewport.width,

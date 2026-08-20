@@ -13,7 +13,6 @@ const REGRESSION_FILES = [
   "app/(presentation-generator)/(dashboard)/theme/components/ThemePanel/ThemeCard.tsx",
   "app/(presentation-generator)/(dashboard)/theme/components/ThemePanel/index.tsx",
   "app/(presentation-generator)/components/PresentationMode.tsx",
-  "app/(presentation-generator)/custom-template/CustomTemplatePage.tsx",
   "app/(presentation-generator)/presentation/hooks/usePresentationData.ts",
   "app/(presentation-generator)/presentation/page.tsx",
   "app/(presentation-generator)/presentation/utils/applyPresentationThemeDom.ts",

@@ -216,10 +216,8 @@ export const DEFAULT_THEMES: any[] = [
       density: "compact"
     }
   },
-  // v2 tone-&-manner presets: these exercise the per-theme typography / shape /
-  // elevation tokens (deriveThemeTokens) so the adaptive renderer produces
-  // genuinely distinct "templates" — no new layout code. Colours+fonts also apply
-  // to legacy decks; the typography/shape/elevation keys are adaptive-only.
+  // Tone-and-manner presets exercise the shared typography, shape, and elevation
+  // tokens without adding layout-specific render code.
   {
     id: "carbon",
     name: "Carbon",

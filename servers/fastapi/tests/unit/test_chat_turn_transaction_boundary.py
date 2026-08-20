@@ -176,7 +176,7 @@ def _patch_external_side_effects(monkeypatch) -> None:
         # the legacy chat-tool transaction buffer. Authored-only admission has
         # separate fail-closed tests; this fixture isolates transaction
         # semantics without weakening the production policy.
-        return SimpleNamespace(driver_id="standard")
+        return SimpleNamespace(driver_id="authored")
 
     monkeypatch.setattr(memory_layer, "process_slide_and_fetch_assets", no_assets)
     monkeypatch.setattr(

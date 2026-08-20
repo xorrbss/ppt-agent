@@ -4,24 +4,24 @@ import test from "node:test";
 import { PRESENTATION_DRIVER_REGISTRY } from "../../../../lib/presentation-profile.ts";
 import { createPresentationRenderActionFactory } from "./presentationRenderGateway.ts";
 
-const driver = PRESENTATION_DRIVER_REGISTRY.standard;
+const driver = PRESENTATION_DRIVER_REGISTRY.authored;
 const presentation = {
   id: "slot-deck",
   revision: 4,
   lifecycle_status: "published",
   source_sha256: "a".repeat(64),
-  slides: [{ id: "slide-1", elements: [{ id: "title", type: "text" }] }],
+  slides: [{ id: "slide-1", html_content: "<section>Authored</section>" }],
   profile: {
     schema_version: 1 as const,
-    driver_id: "standard" as const,
+    driver_id: "authored" as const,
     content_model: driver.content_model,
     generation_strategy: driver.generation_strategy,
-    style_source: "builtin" as const,
+    style_source: "authored" as const,
     generation_mode: "standard" as const,
   },
   capabilities: {
     schema_version: 1 as const,
-    driver_id: "standard" as const,
+    driver_id: "authored" as const,
     renderer_adapter_id: driver.renderer_adapter_id,
     editor_adapter_id: driver.editor_adapter_id,
     editor: driver.editor,

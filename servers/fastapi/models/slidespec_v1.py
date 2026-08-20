@@ -367,7 +367,7 @@ class SlideDigests(StrictModel):
     spec: Digest
 
 class Provenance(StrictModel):
-    source: Literal["native", "adaptive-adapter", "authored-html-import", "repair"] = "native"
+    source: Literal["native", "authored-html-import", "repair"] = "native"
     parentSpecHash: Digest | None = None
     adapterVersion: str | None = None
 

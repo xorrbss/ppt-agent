@@ -1,35 +1,879 @@
 {
   "schemaVersion": 1,
   "providers": [
-    {"id":"codex","kind":"llm","displayName":"ChatGPT","icon":"/providers/openai.png","enabled":true,"credentialSchema":[{"settingKey":"CODEX_ACCESS_TOKEN","kind":"oauth","required":true,"widget":"oauth-status"}],"modelDiscovery":"server-managed","ui":{"modelSettingKey":"CODEX_MODEL","credentialLayout":"oauth-status"},"capabilities":{"webSearch":"supported","vision":"supported","thinking":"supported","structuredOutput":"supported","imageGeneration":"unsupported"},"presentationDrivers":["standard","smart","template-v2","authored"]},
-    {"id":"openai","kind":"llm","displayName":"OpenAI","icon":"/providers/openai.png","enabled":true,"credentialSchema":[{"settingKey":"OPENAI_API_KEY","kind":"secret","required":true}],"modelDiscovery":"remote","capabilities":{"webSearch":"supported","vision":"supported","thinking":"supported","structuredOutput":"supported","imageGeneration":"supported"},"presentationDrivers":["standard","smart","template-v2","authored"]},
-    {"id":"google","kind":"llm","displayName":"Google","icon":"/providers/gemini-color.svg","enabled":true,"credentialSchema":[{"settingKey":"GOOGLE_API_KEY","kind":"secret","required":true}],"modelDiscovery":"remote","capabilities":{"webSearch":"supported","vision":"supported","thinking":"supported","structuredOutput":"supported","imageGeneration":"supported"},"presentationDrivers":["standard","smart","template-v2","authored"]},
-    {"id":"vertex","kind":"llm","displayName":"Vertex AI","icon":"/providers/gemini-color.svg","enabled":true,"credentialSchema":[{"settingKey":"VERTEX_PROJECT","kind":"setting","required":true},{"settingKey":"VERTEX_LOCATION","kind":"setting","required":false},{"settingKey":"VERTEX_BASE_URL","kind":"url","required":false},{"settingKey":"VERTEX_API_KEY","kind":"secret","required":false}],"modelDiscovery":"remote","ui":{"modelSettingKey":"VERTEX_MODEL"},"capabilities":{"webSearch":"supported","vision":"supported","thinking":"supported","structuredOutput":"supported","imageGeneration":"conditional"},"presentationDrivers":["standard","smart","template-v2","authored"]},
-    {"id":"azure","kind":"llm","displayName":"Azure OpenAI","icon":"/providers/openai.png","enabled":true,"credentialSchema":[{"settingKey":"AZURE_OPENAI_ENDPOINT","kind":"url","required":true},{"settingKey":"AZURE_OPENAI_BASE_URL","kind":"url","required":false},{"settingKey":"AZURE_OPENAI_API_VERSION","kind":"setting","required":false},{"settingKey":"AZURE_OPENAI_DEPLOYMENT","kind":"setting","required":false},{"settingKey":"AZURE_OPENAI_API_KEY","kind":"secret","required":true}],"modelDiscovery":"configured","ui":{"modelSettingKey":"AZURE_OPENAI_MODEL"},"capabilities":{"webSearch":"conditional","vision":"conditional","thinking":"conditional","structuredOutput":"conditional","imageGeneration":"conditional"},"presentationDrivers":["standard","smart","template-v2","authored"]},
-    {"id":"bedrock","kind":"llm","displayName":"Amazon Bedrock","icon":"/providers/custom.svg","enabled":true,"credentialSchema":[{"settingKey":"BEDROCK_REGION","kind":"setting","required":true},{"settingKey":"BEDROCK_AWS_ACCESS_KEY_ID","kind":"setting","required":false},{"settingKey":"BEDROCK_AWS_SECRET_ACCESS_KEY","kind":"secret","required":false},{"settingKey":"BEDROCK_AWS_SESSION_TOKEN","kind":"secret","required":false},{"settingKey":"BEDROCK_PROFILE_NAME","kind":"setting","required":false},{"settingKey":"BEDROCK_API_KEY","kind":"secret","required":false}],"modelDiscovery":"configured","ui":{"modelSettingKey":"BEDROCK_MODEL"},"capabilities":{"webSearch":"unsupported","vision":"conditional","thinking":"conditional","structuredOutput":"conditional","imageGeneration":"conditional"},"presentationDrivers":["standard","template-v2","authored"]},
-    {"id":"openrouter","kind":"llm","displayName":"OpenRouter","icon":"/providers/openai.png","enabled":true,"credentialSchema":[{"settingKey":"OPENROUTER_API_KEY","kind":"secret","required":true}],"modelDiscovery":"remote","capabilities":{"webSearch":"conditional","vision":"conditional","thinking":"conditional","structuredOutput":"conditional","imageGeneration":"conditional"},"presentationDrivers":["standard","smart","template-v2","authored"]},
-    {"id":"fireworks","kind":"llm","displayName":"Fireworks","icon":"/providers/openai.png","enabled":true,"credentialSchema":[{"settingKey":"FIREWORKS_API_KEY","kind":"secret","required":true}],"modelDiscovery":"remote","capabilities":{"webSearch":"unsupported","vision":"conditional","thinking":"unsupported","structuredOutput":"conditional","imageGeneration":"unsupported"},"presentationDrivers":["standard","template-v2"]},
-    {"id":"together","kind":"llm","displayName":"Together AI","icon":"/providers/openai.png","enabled":true,"credentialSchema":[{"settingKey":"TOGETHER_API_KEY","kind":"secret","required":true}],"modelDiscovery":"remote","capabilities":{"webSearch":"unsupported","vision":"conditional","thinking":"unsupported","structuredOutput":"conditional","imageGeneration":"unsupported"},"presentationDrivers":["standard","template-v2"]},
-    {"id":"cerebras","kind":"llm","displayName":"Cerebras","icon":"/providers/openai.png","enabled":true,"credentialSchema":[{"settingKey":"CEREBRAS_API_KEY","kind":"secret","required":true}],"modelDiscovery":"remote","capabilities":{"webSearch":"unsupported","vision":"unsupported","thinking":"unsupported","structuredOutput":"conditional","imageGeneration":"unsupported"},"presentationDrivers":["standard"]},
-    {"id":"anthropic","kind":"llm","displayName":"Anthropic","icon":"/providers/claude-color.svg","enabled":true,"credentialSchema":[{"settingKey":"ANTHROPIC_API_KEY","kind":"secret","required":true}],"modelDiscovery":"remote","capabilities":{"webSearch":"conditional","vision":"supported","thinking":"supported","structuredOutput":"supported","imageGeneration":"unsupported"},"presentationDrivers":["standard","smart","template-v2","authored"]},
-    {"id":"litellm","kind":"llm","displayName":"LiteLLM","icon":"/providers/openai.png","enabled":true,"credentialSchema":[{"settingKey":"LITELLM_BASE_URL","kind":"url","required":true},{"settingKey":"LITELLM_API_KEY","kind":"secret","required":false}],"modelDiscovery":"remote","capabilities":{"webSearch":"conditional","vision":"conditional","thinking":"conditional","structuredOutput":"conditional","imageGeneration":"conditional"},"presentationDrivers":["standard","smart","template-v2","authored"]},
-    {"id":"lmstudio","kind":"llm","displayName":"LM Studio","icon":"/providers/custom.svg","enabled":true,"credentialSchema":[{"settingKey":"LMSTUDIO_BASE_URL","kind":"url","required":true},{"settingKey":"LMSTUDIO_API_KEY","kind":"secret","required":false}],"modelDiscovery":"remote","capabilities":{"webSearch":"unsupported","vision":"conditional","thinking":"unsupported","structuredOutput":"conditional","imageGeneration":"unsupported"},"presentationDrivers":["standard","template-v2"]},
-    {"id":"ollama","kind":"llm","displayName":"Ollama","icon":"/providers/ollama.svg","enabled":true,"credentialSchema":[{"settingKey":"OLLAMA_URL","kind":"url","required":true}],"modelDiscovery":"remote","capabilities":{"webSearch":"unsupported","vision":"conditional","thinking":"unsupported","structuredOutput":"conditional","imageGeneration":"unsupported"},"presentationDrivers":["standard","template-v2"]},
-    {"id":"custom","kind":"llm","displayName":"Custom","icon":"/providers/custom.svg","enabled":true,"credentialSchema":[{"settingKey":"CUSTOM_LLM_URL","kind":"url","required":true},{"settingKey":"CUSTOM_LLM_API_KEY","kind":"secret","required":false}],"modelDiscovery":"remote","capabilities":{"webSearch":"unsupported","vision":"conditional","thinking":"conditional","structuredOutput":"conditional","imageGeneration":"unsupported"},"presentationDrivers":["standard","template-v2"]},
-    {"id":"pexels","kind":"image","displayName":"Pexels","icon":"/providers/pexel.png","enabled":true,"credentialSchema":[{"settingKey":"PEXELS_API_KEY","kind":"secret","required":true}],"modelDiscovery":"none","capabilities":{"webSearch":"unsupported","vision":"unsupported","thinking":"unsupported","structuredOutput":"unsupported","imageGeneration":"supported"},"presentationDrivers":["standard","smart","template-v2","authored"]},
-    {"id":"pixabay","kind":"image","displayName":"Pixabay","icon":"/providers/pixabay.png","enabled":true,"credentialSchema":[{"settingKey":"PIXABAY_API_KEY","kind":"secret","required":true}],"modelDiscovery":"none","capabilities":{"webSearch":"unsupported","vision":"unsupported","thinking":"unsupported","structuredOutput":"unsupported","imageGeneration":"supported"},"presentationDrivers":["standard","smart","template-v2","authored"]},
-    {"id":"dall-e-3","kind":"image","displayName":"DALL-E 3","icon":"/providers/openai.png","enabled":true,"credentialSchema":[{"settingKey":"OPENAI_API_KEY","kind":"secret","required":true}],"modelDiscovery":"none","capabilities":{"webSearch":"unsupported","vision":"unsupported","thinking":"unsupported","structuredOutput":"unsupported","imageGeneration":"supported"},"presentationDrivers":["standard","smart","template-v2","authored"]},
-    {"id":"gpt-image-1.5","kind":"image","displayName":"GPT Image 1.5","icon":"/providers/openai.png","enabled":true,"credentialSchema":[{"settingKey":"OPENAI_API_KEY","kind":"secret","required":true}],"modelDiscovery":"none","capabilities":{"webSearch":"unsupported","vision":"unsupported","thinking":"unsupported","structuredOutput":"unsupported","imageGeneration":"supported"},"presentationDrivers":["standard","smart","template-v2","authored"]},
-    {"id":"gpt-image-2","kind":"image","displayName":"GPT Image 2","icon":"/providers/openai.png","enabled":true,"credentialSchema":[{"settingKey":"OPENAI_API_KEY","kind":"secret","required":true}],"modelDiscovery":"none","capabilities":{"webSearch":"unsupported","vision":"unsupported","thinking":"unsupported","structuredOutput":"unsupported","imageGeneration":"supported"},"presentationDrivers":["standard","smart","template-v2","authored"]},
-    {"id":"gemini_flash","kind":"image","displayName":"Gemini Flash","icon":"/providers/gemini-color.svg","enabled":true,"credentialSchema":[{"settingKey":"GOOGLE_API_KEY","kind":"secret","required":true}],"modelDiscovery":"none","capabilities":{"webSearch":"unsupported","vision":"unsupported","thinking":"unsupported","structuredOutput":"unsupported","imageGeneration":"supported"},"presentationDrivers":["standard","smart","template-v2","authored"]},
-    {"id":"nanobanana_pro","kind":"image","displayName":"NanoBanana Pro","icon":"/providers/gemini-color.svg","enabled":true,"credentialSchema":[{"settingKey":"GOOGLE_API_KEY","kind":"secret","required":true}],"modelDiscovery":"none","capabilities":{"webSearch":"unsupported","vision":"unsupported","thinking":"unsupported","structuredOutput":"unsupported","imageGeneration":"supported"},"presentationDrivers":["standard","smart","template-v2","authored"]},
-    {"id":"comfyui","kind":"image","displayName":"ComfyUI","icon":"/providers/comfyui-color.svg","enabled":true,"credentialSchema":[{"settingKey":"COMFYUI_URL","kind":"url","required":true}],"modelDiscovery":"configured","ui":{"credentialLayout":"comfyui-workflow"},"capabilities":{"webSearch":"unsupported","vision":"unsupported","thinking":"unsupported","structuredOutput":"unsupported","imageGeneration":"supported"},"presentationDrivers":["standard","smart","template-v2","authored"]},
-    {"id":"open_webui","kind":"image","displayName":"Open WebUI","icon":"/icons/open-webui.png","enabled":true,"credentialSchema":[{"settingKey":"OPEN_WEBUI_IMAGE_URL","kind":"url","required":true},{"settingKey":"OPEN_WEBUI_IMAGE_API_KEY","kind":"secret","required":false}],"modelDiscovery":"configured","ui":{"credentialLayout":"open-webui"},"capabilities":{"webSearch":"unsupported","vision":"unsupported","thinking":"unsupported","structuredOutput":"unsupported","imageGeneration":"supported"},"presentationDrivers":["standard","smart","template-v2","authored"]},
-    {"id":"openai_compatible","kind":"image","displayName":"Custom","icon":"/providers/custom.svg","enabled":true,"credentialSchema":[{"settingKey":"OPENAI_COMPAT_IMAGE_BASE_URL","kind":"url","required":true},{"settingKey":"OPENAI_COMPAT_IMAGE_API_KEY","kind":"secret","required":false}],"modelDiscovery":"configured","ui":{"credentialLayout":"openai-compatible"},"capabilities":{"webSearch":"unsupported","vision":"unsupported","thinking":"unsupported","structuredOutput":"unsupported","imageGeneration":"supported"},"presentationDrivers":["standard","smart","template-v2","authored"]},
-    {"id":"auto","kind":"web-search","displayName":"Default (Model)","icon":"/providers/model-search.svg","enabled":true,"credentialSchema":[],"modelDiscovery":"none","capabilities":{"webSearch":"conditional","vision":"unsupported","thinking":"unsupported","structuredOutput":"unsupported","imageGeneration":"unsupported"},"presentationDrivers":["standard","smart","template-v2","authored"]},
-    {"id":"searxng","kind":"web-search","displayName":"SearXNG","icon":"/providers/searxng.svg","enabled":true,"credentialSchema":[{"settingKey":"SEARXNG_BASE_URL","kind":"url","required":true}],"modelDiscovery":"none","capabilities":{"webSearch":"supported","vision":"unsupported","thinking":"unsupported","structuredOutput":"unsupported","imageGeneration":"unsupported"},"presentationDrivers":["standard","smart","template-v2","authored"]},
-    {"id":"tavily","kind":"web-search","displayName":"Tavily","icon":"/providers/tavily.png","enabled":true,"credentialSchema":[{"settingKey":"TAVILY_API_KEY","kind":"secret","required":true}],"modelDiscovery":"none","capabilities":{"webSearch":"supported","vision":"unsupported","thinking":"unsupported","structuredOutput":"unsupported","imageGeneration":"unsupported"},"presentationDrivers":["standard","smart","template-v2","authored"]},
-    {"id":"exa","kind":"web-search","displayName":"Exa","icon":"/providers/exa.png","enabled":true,"credentialSchema":[{"settingKey":"EXA_API_KEY","kind":"secret","required":true}],"modelDiscovery":"none","capabilities":{"webSearch":"supported","vision":"unsupported","thinking":"unsupported","structuredOutput":"unsupported","imageGeneration":"unsupported"},"presentationDrivers":["standard","smart","template-v2","authored"]},
-    {"id":"brave","kind":"web-search","displayName":"Brave","icon":"/providers/brave.svg","enabled":true,"credentialSchema":[{"settingKey":"BRAVE_SEARCH_API_KEY","kind":"secret","required":true}],"modelDiscovery":"none","capabilities":{"webSearch":"supported","vision":"unsupported","thinking":"unsupported","structuredOutput":"unsupported","imageGeneration":"unsupported"},"presentationDrivers":["standard","smart","template-v2","authored"]}
+    {
+      "id": "codex",
+      "kind": "llm",
+      "displayName": "ChatGPT",
+      "icon": "/providers/openai.png",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "CODEX_ACCESS_TOKEN",
+          "kind": "oauth",
+          "required": true,
+          "widget": "oauth-status"
+        }
+      ],
+      "modelDiscovery": "server-managed",
+      "ui": {
+        "modelSettingKey": "CODEX_MODEL",
+        "credentialLayout": "oauth-status"
+      },
+      "capabilities": {
+        "webSearch": "supported",
+        "vision": "supported",
+        "thinking": "supported",
+        "structuredOutput": "supported",
+        "imageGeneration": "unsupported"
+      },
+      "presentationDrivers": [
+        "template-v2",
+        "authored"
+      ]
+    },
+    {
+      "id": "openai",
+      "kind": "llm",
+      "displayName": "OpenAI",
+      "icon": "/providers/openai.png",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "OPENAI_API_KEY",
+          "kind": "secret",
+          "required": true
+        }
+      ],
+      "modelDiscovery": "remote",
+      "capabilities": {
+        "webSearch": "supported",
+        "vision": "supported",
+        "thinking": "supported",
+        "structuredOutput": "supported",
+        "imageGeneration": "supported"
+      },
+      "presentationDrivers": [
+        "template-v2",
+        "authored"
+      ]
+    },
+    {
+      "id": "google",
+      "kind": "llm",
+      "displayName": "Google",
+      "icon": "/providers/gemini-color.svg",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "GOOGLE_API_KEY",
+          "kind": "secret",
+          "required": true
+        }
+      ],
+      "modelDiscovery": "remote",
+      "capabilities": {
+        "webSearch": "supported",
+        "vision": "supported",
+        "thinking": "supported",
+        "structuredOutput": "supported",
+        "imageGeneration": "supported"
+      },
+      "presentationDrivers": [
+        "template-v2",
+        "authored"
+      ]
+    },
+    {
+      "id": "vertex",
+      "kind": "llm",
+      "displayName": "Vertex AI",
+      "icon": "/providers/gemini-color.svg",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "VERTEX_PROJECT",
+          "kind": "setting",
+          "required": true
+        },
+        {
+          "settingKey": "VERTEX_LOCATION",
+          "kind": "setting",
+          "required": false
+        },
+        {
+          "settingKey": "VERTEX_BASE_URL",
+          "kind": "url",
+          "required": false
+        },
+        {
+          "settingKey": "VERTEX_API_KEY",
+          "kind": "secret",
+          "required": false
+        }
+      ],
+      "modelDiscovery": "remote",
+      "ui": {
+        "modelSettingKey": "VERTEX_MODEL"
+      },
+      "capabilities": {
+        "webSearch": "supported",
+        "vision": "supported",
+        "thinking": "supported",
+        "structuredOutput": "supported",
+        "imageGeneration": "conditional"
+      },
+      "presentationDrivers": [
+        "template-v2",
+        "authored"
+      ]
+    },
+    {
+      "id": "azure",
+      "kind": "llm",
+      "displayName": "Azure OpenAI",
+      "icon": "/providers/openai.png",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "AZURE_OPENAI_ENDPOINT",
+          "kind": "url",
+          "required": true
+        },
+        {
+          "settingKey": "AZURE_OPENAI_BASE_URL",
+          "kind": "url",
+          "required": false
+        },
+        {
+          "settingKey": "AZURE_OPENAI_API_VERSION",
+          "kind": "setting",
+          "required": false
+        },
+        {
+          "settingKey": "AZURE_OPENAI_DEPLOYMENT",
+          "kind": "setting",
+          "required": false
+        },
+        {
+          "settingKey": "AZURE_OPENAI_API_KEY",
+          "kind": "secret",
+          "required": true
+        }
+      ],
+      "modelDiscovery": "configured",
+      "ui": {
+        "modelSettingKey": "AZURE_OPENAI_MODEL"
+      },
+      "capabilities": {
+        "webSearch": "conditional",
+        "vision": "conditional",
+        "thinking": "conditional",
+        "structuredOutput": "conditional",
+        "imageGeneration": "conditional"
+      },
+      "presentationDrivers": [
+        "template-v2",
+        "authored"
+      ]
+    },
+    {
+      "id": "bedrock",
+      "kind": "llm",
+      "displayName": "Amazon Bedrock",
+      "icon": "/providers/custom.svg",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "BEDROCK_REGION",
+          "kind": "setting",
+          "required": true
+        },
+        {
+          "settingKey": "BEDROCK_AWS_ACCESS_KEY_ID",
+          "kind": "setting",
+          "required": false
+        },
+        {
+          "settingKey": "BEDROCK_AWS_SECRET_ACCESS_KEY",
+          "kind": "secret",
+          "required": false
+        },
+        {
+          "settingKey": "BEDROCK_AWS_SESSION_TOKEN",
+          "kind": "secret",
+          "required": false
+        },
+        {
+          "settingKey": "BEDROCK_PROFILE_NAME",
+          "kind": "setting",
+          "required": false
+        },
+        {
+          "settingKey": "BEDROCK_API_KEY",
+          "kind": "secret",
+          "required": false
+        }
+      ],
+      "modelDiscovery": "configured",
+      "ui": {
+        "modelSettingKey": "BEDROCK_MODEL"
+      },
+      "capabilities": {
+        "webSearch": "unsupported",
+        "vision": "conditional",
+        "thinking": "conditional",
+        "structuredOutput": "conditional",
+        "imageGeneration": "conditional"
+      },
+      "presentationDrivers": [
+        "template-v2",
+        "authored"
+      ]
+    },
+    {
+      "id": "openrouter",
+      "kind": "llm",
+      "displayName": "OpenRouter",
+      "icon": "/providers/openai.png",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "OPENROUTER_API_KEY",
+          "kind": "secret",
+          "required": true
+        }
+      ],
+      "modelDiscovery": "remote",
+      "capabilities": {
+        "webSearch": "conditional",
+        "vision": "conditional",
+        "thinking": "conditional",
+        "structuredOutput": "conditional",
+        "imageGeneration": "conditional"
+      },
+      "presentationDrivers": [
+        "template-v2",
+        "authored"
+      ]
+    },
+    {
+      "id": "fireworks",
+      "kind": "llm",
+      "displayName": "Fireworks",
+      "icon": "/providers/openai.png",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "FIREWORKS_API_KEY",
+          "kind": "secret",
+          "required": true
+        }
+      ],
+      "modelDiscovery": "remote",
+      "capabilities": {
+        "webSearch": "unsupported",
+        "vision": "conditional",
+        "thinking": "unsupported",
+        "structuredOutput": "conditional",
+        "imageGeneration": "unsupported"
+      },
+      "presentationDrivers": [
+        "template-v2"
+      ]
+    },
+    {
+      "id": "together",
+      "kind": "llm",
+      "displayName": "Together AI",
+      "icon": "/providers/openai.png",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "TOGETHER_API_KEY",
+          "kind": "secret",
+          "required": true
+        }
+      ],
+      "modelDiscovery": "remote",
+      "capabilities": {
+        "webSearch": "unsupported",
+        "vision": "conditional",
+        "thinking": "unsupported",
+        "structuredOutput": "conditional",
+        "imageGeneration": "unsupported"
+      },
+      "presentationDrivers": [
+        "template-v2"
+      ]
+    },
+    {
+      "id": "cerebras",
+      "kind": "llm",
+      "displayName": "Cerebras",
+      "icon": "/providers/openai.png",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "CEREBRAS_API_KEY",
+          "kind": "secret",
+          "required": true
+        }
+      ],
+      "modelDiscovery": "remote",
+      "capabilities": {
+        "webSearch": "unsupported",
+        "vision": "unsupported",
+        "thinking": "unsupported",
+        "structuredOutput": "conditional",
+        "imageGeneration": "unsupported"
+      },
+      "presentationDrivers": []
+    },
+    {
+      "id": "anthropic",
+      "kind": "llm",
+      "displayName": "Anthropic",
+      "icon": "/providers/claude-color.svg",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "ANTHROPIC_API_KEY",
+          "kind": "secret",
+          "required": true
+        }
+      ],
+      "modelDiscovery": "remote",
+      "capabilities": {
+        "webSearch": "conditional",
+        "vision": "supported",
+        "thinking": "supported",
+        "structuredOutput": "supported",
+        "imageGeneration": "unsupported"
+      },
+      "presentationDrivers": [
+        "template-v2",
+        "authored"
+      ]
+    },
+    {
+      "id": "litellm",
+      "kind": "llm",
+      "displayName": "LiteLLM",
+      "icon": "/providers/openai.png",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "LITELLM_BASE_URL",
+          "kind": "url",
+          "required": true
+        },
+        {
+          "settingKey": "LITELLM_API_KEY",
+          "kind": "secret",
+          "required": false
+        }
+      ],
+      "modelDiscovery": "remote",
+      "capabilities": {
+        "webSearch": "conditional",
+        "vision": "conditional",
+        "thinking": "conditional",
+        "structuredOutput": "conditional",
+        "imageGeneration": "conditional"
+      },
+      "presentationDrivers": [
+        "template-v2",
+        "authored"
+      ]
+    },
+    {
+      "id": "lmstudio",
+      "kind": "llm",
+      "displayName": "LM Studio",
+      "icon": "/providers/custom.svg",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "LMSTUDIO_BASE_URL",
+          "kind": "url",
+          "required": true
+        },
+        {
+          "settingKey": "LMSTUDIO_API_KEY",
+          "kind": "secret",
+          "required": false
+        }
+      ],
+      "modelDiscovery": "remote",
+      "capabilities": {
+        "webSearch": "unsupported",
+        "vision": "conditional",
+        "thinking": "unsupported",
+        "structuredOutput": "conditional",
+        "imageGeneration": "unsupported"
+      },
+      "presentationDrivers": [
+        "template-v2"
+      ]
+    },
+    {
+      "id": "ollama",
+      "kind": "llm",
+      "displayName": "Ollama",
+      "icon": "/providers/ollama.svg",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "OLLAMA_URL",
+          "kind": "url",
+          "required": true
+        }
+      ],
+      "modelDiscovery": "remote",
+      "capabilities": {
+        "webSearch": "unsupported",
+        "vision": "conditional",
+        "thinking": "unsupported",
+        "structuredOutput": "conditional",
+        "imageGeneration": "unsupported"
+      },
+      "presentationDrivers": [
+        "template-v2"
+      ]
+    },
+    {
+      "id": "custom",
+      "kind": "llm",
+      "displayName": "Custom",
+      "icon": "/providers/custom.svg",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "CUSTOM_LLM_URL",
+          "kind": "url",
+          "required": true
+        },
+        {
+          "settingKey": "CUSTOM_LLM_API_KEY",
+          "kind": "secret",
+          "required": false
+        }
+      ],
+      "modelDiscovery": "remote",
+      "capabilities": {
+        "webSearch": "unsupported",
+        "vision": "conditional",
+        "thinking": "conditional",
+        "structuredOutput": "conditional",
+        "imageGeneration": "unsupported"
+      },
+      "presentationDrivers": [
+        "template-v2"
+      ]
+    },
+    {
+      "id": "pexels",
+      "kind": "image",
+      "displayName": "Pexels",
+      "icon": "/providers/pexel.png",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "PEXELS_API_KEY",
+          "kind": "secret",
+          "required": true
+        }
+      ],
+      "modelDiscovery": "none",
+      "capabilities": {
+        "webSearch": "unsupported",
+        "vision": "unsupported",
+        "thinking": "unsupported",
+        "structuredOutput": "unsupported",
+        "imageGeneration": "supported"
+      },
+      "presentationDrivers": [
+        "template-v2",
+        "authored"
+      ]
+    },
+    {
+      "id": "pixabay",
+      "kind": "image",
+      "displayName": "Pixabay",
+      "icon": "/providers/pixabay.png",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "PIXABAY_API_KEY",
+          "kind": "secret",
+          "required": true
+        }
+      ],
+      "modelDiscovery": "none",
+      "capabilities": {
+        "webSearch": "unsupported",
+        "vision": "unsupported",
+        "thinking": "unsupported",
+        "structuredOutput": "unsupported",
+        "imageGeneration": "supported"
+      },
+      "presentationDrivers": [
+        "template-v2",
+        "authored"
+      ]
+    },
+    {
+      "id": "dall-e-3",
+      "kind": "image",
+      "displayName": "DALL-E 3",
+      "icon": "/providers/openai.png",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "OPENAI_API_KEY",
+          "kind": "secret",
+          "required": true
+        }
+      ],
+      "modelDiscovery": "none",
+      "capabilities": {
+        "webSearch": "unsupported",
+        "vision": "unsupported",
+        "thinking": "unsupported",
+        "structuredOutput": "unsupported",
+        "imageGeneration": "supported"
+      },
+      "presentationDrivers": [
+        "template-v2",
+        "authored"
+      ]
+    },
+    {
+      "id": "gpt-image-1.5",
+      "kind": "image",
+      "displayName": "GPT Image 1.5",
+      "icon": "/providers/openai.png",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "OPENAI_API_KEY",
+          "kind": "secret",
+          "required": true
+        }
+      ],
+      "modelDiscovery": "none",
+      "capabilities": {
+        "webSearch": "unsupported",
+        "vision": "unsupported",
+        "thinking": "unsupported",
+        "structuredOutput": "unsupported",
+        "imageGeneration": "supported"
+      },
+      "presentationDrivers": [
+        "template-v2",
+        "authored"
+      ]
+    },
+    {
+      "id": "gpt-image-2",
+      "kind": "image",
+      "displayName": "GPT Image 2",
+      "icon": "/providers/openai.png",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "OPENAI_API_KEY",
+          "kind": "secret",
+          "required": true
+        }
+      ],
+      "modelDiscovery": "none",
+      "capabilities": {
+        "webSearch": "unsupported",
+        "vision": "unsupported",
+        "thinking": "unsupported",
+        "structuredOutput": "unsupported",
+        "imageGeneration": "supported"
+      },
+      "presentationDrivers": [
+        "template-v2",
+        "authored"
+      ]
+    },
+    {
+      "id": "gemini_flash",
+      "kind": "image",
+      "displayName": "Gemini Flash",
+      "icon": "/providers/gemini-color.svg",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "GOOGLE_API_KEY",
+          "kind": "secret",
+          "required": true
+        }
+      ],
+      "modelDiscovery": "none",
+      "capabilities": {
+        "webSearch": "unsupported",
+        "vision": "unsupported",
+        "thinking": "unsupported",
+        "structuredOutput": "unsupported",
+        "imageGeneration": "supported"
+      },
+      "presentationDrivers": [
+        "template-v2",
+        "authored"
+      ]
+    },
+    {
+      "id": "nanobanana_pro",
+      "kind": "image",
+      "displayName": "NanoBanana Pro",
+      "icon": "/providers/gemini-color.svg",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "GOOGLE_API_KEY",
+          "kind": "secret",
+          "required": true
+        }
+      ],
+      "modelDiscovery": "none",
+      "capabilities": {
+        "webSearch": "unsupported",
+        "vision": "unsupported",
+        "thinking": "unsupported",
+        "structuredOutput": "unsupported",
+        "imageGeneration": "supported"
+      },
+      "presentationDrivers": [
+        "template-v2",
+        "authored"
+      ]
+    },
+    {
+      "id": "comfyui",
+      "kind": "image",
+      "displayName": "ComfyUI",
+      "icon": "/providers/comfyui-color.svg",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "COMFYUI_URL",
+          "kind": "url",
+          "required": true
+        }
+      ],
+      "modelDiscovery": "configured",
+      "ui": {
+        "credentialLayout": "comfyui-workflow"
+      },
+      "capabilities": {
+        "webSearch": "unsupported",
+        "vision": "unsupported",
+        "thinking": "unsupported",
+        "structuredOutput": "unsupported",
+        "imageGeneration": "supported"
+      },
+      "presentationDrivers": [
+        "template-v2",
+        "authored"
+      ]
+    },
+    {
+      "id": "open_webui",
+      "kind": "image",
+      "displayName": "Open WebUI",
+      "icon": "/icons/open-webui.png",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "OPEN_WEBUI_IMAGE_URL",
+          "kind": "url",
+          "required": true
+        },
+        {
+          "settingKey": "OPEN_WEBUI_IMAGE_API_KEY",
+          "kind": "secret",
+          "required": false
+        }
+      ],
+      "modelDiscovery": "configured",
+      "ui": {
+        "credentialLayout": "open-webui"
+      },
+      "capabilities": {
+        "webSearch": "unsupported",
+        "vision": "unsupported",
+        "thinking": "unsupported",
+        "structuredOutput": "unsupported",
+        "imageGeneration": "supported"
+      },
+      "presentationDrivers": [
+        "template-v2",
+        "authored"
+      ]
+    },
+    {
+      "id": "openai_compatible",
+      "kind": "image",
+      "displayName": "Custom",
+      "icon": "/providers/custom.svg",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "OPENAI_COMPAT_IMAGE_BASE_URL",
+          "kind": "url",
+          "required": true
+        },
+        {
+          "settingKey": "OPENAI_COMPAT_IMAGE_API_KEY",
+          "kind": "secret",
+          "required": false
+        }
+      ],
+      "modelDiscovery": "configured",
+      "ui": {
+        "credentialLayout": "openai-compatible"
+      },
+      "capabilities": {
+        "webSearch": "unsupported",
+        "vision": "unsupported",
+        "thinking": "unsupported",
+        "structuredOutput": "unsupported",
+        "imageGeneration": "supported"
+      },
+      "presentationDrivers": [
+        "template-v2",
+        "authored"
+      ]
+    },
+    {
+      "id": "auto",
+      "kind": "web-search",
+      "displayName": "Default (Model)",
+      "icon": "/providers/model-search.svg",
+      "enabled": true,
+      "credentialSchema": [],
+      "modelDiscovery": "none",
+      "capabilities": {
+        "webSearch": "conditional",
+        "vision": "unsupported",
+        "thinking": "unsupported",
+        "structuredOutput": "unsupported",
+        "imageGeneration": "unsupported"
+      },
+      "presentationDrivers": [
+        "template-v2",
+        "authored"
+      ]
+    },
+    {
+      "id": "searxng",
+      "kind": "web-search",
+      "displayName": "SearXNG",
+      "icon": "/providers/searxng.svg",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "SEARXNG_BASE_URL",
+          "kind": "url",
+          "required": true
+        }
+      ],
+      "modelDiscovery": "none",
+      "capabilities": {
+        "webSearch": "supported",
+        "vision": "unsupported",
+        "thinking": "unsupported",
+        "structuredOutput": "unsupported",
+        "imageGeneration": "unsupported"
+      },
+      "presentationDrivers": [
+        "template-v2",
+        "authored"
+      ]
+    },
+    {
+      "id": "tavily",
+      "kind": "web-search",
+      "displayName": "Tavily",
+      "icon": "/providers/tavily.png",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "TAVILY_API_KEY",
+          "kind": "secret",
+          "required": true
+        }
+      ],
+      "modelDiscovery": "none",
+      "capabilities": {
+        "webSearch": "supported",
+        "vision": "unsupported",
+        "thinking": "unsupported",
+        "structuredOutput": "unsupported",
+        "imageGeneration": "unsupported"
+      },
+      "presentationDrivers": [
+        "template-v2",
+        "authored"
+      ]
+    },
+    {
+      "id": "exa",
+      "kind": "web-search",
+      "displayName": "Exa",
+      "icon": "/providers/exa.png",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "EXA_API_KEY",
+          "kind": "secret",
+          "required": true
+        }
+      ],
+      "modelDiscovery": "none",
+      "capabilities": {
+        "webSearch": "supported",
+        "vision": "unsupported",
+        "thinking": "unsupported",
+        "structuredOutput": "unsupported",
+        "imageGeneration": "unsupported"
+      },
+      "presentationDrivers": [
+        "template-v2",
+        "authored"
+      ]
+    },
+    {
+      "id": "brave",
+      "kind": "web-search",
+      "displayName": "Brave",
+      "icon": "/providers/brave.svg",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "BRAVE_SEARCH_API_KEY",
+          "kind": "secret",
+          "required": true
+        }
+      ],
+      "modelDiscovery": "none",
+      "capabilities": {
+        "webSearch": "supported",
+        "vision": "unsupported",
+        "thinking": "unsupported",
+        "structuredOutput": "unsupported",
+        "imageGeneration": "unsupported"
+      },
+      "presentationDrivers": [
+        "template-v2",
+        "authored"
+      ]
+    }
   ]
 }

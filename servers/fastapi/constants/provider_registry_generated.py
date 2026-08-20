@@ -42,8 +42,6 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "imageGeneration": "unsupported"
       },
       "presentationDrivers": [
-        "standard",
-        "smart",
         "template-v2",
         "authored"
       ]
@@ -70,8 +68,6 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "imageGeneration": "supported"
       },
       "presentationDrivers": [
-        "standard",
-        "smart",
         "template-v2",
         "authored"
       ]
@@ -98,8 +94,6 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "imageGeneration": "supported"
       },
       "presentationDrivers": [
-        "standard",
-        "smart",
         "template-v2",
         "authored"
       ]
@@ -144,8 +138,6 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "imageGeneration": "conditional"
       },
       "presentationDrivers": [
-        "standard",
-        "smart",
         "template-v2",
         "authored"
       ]
@@ -195,8 +187,6 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "imageGeneration": "conditional"
       },
       "presentationDrivers": [
-        "standard",
-        "smart",
         "template-v2",
         "authored"
       ]
@@ -251,7 +241,6 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "imageGeneration": "conditional"
       },
       "presentationDrivers": [
-        "standard",
         "template-v2",
         "authored"
       ]
@@ -278,8 +267,6 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "imageGeneration": "conditional"
       },
       "presentationDrivers": [
-        "standard",
-        "smart",
         "template-v2",
         "authored"
       ]
@@ -306,7 +293,6 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "imageGeneration": "unsupported"
       },
       "presentationDrivers": [
-        "standard",
         "template-v2"
       ]
     },
@@ -332,7 +318,6 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "imageGeneration": "unsupported"
       },
       "presentationDrivers": [
-        "standard",
         "template-v2"
       ]
     },
@@ -357,9 +342,7 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "structuredOutput": "conditional",
         "imageGeneration": "unsupported"
       },
-      "presentationDrivers": [
-        "standard"
-      ]
+      "presentationDrivers": []
     },
     {
       "id": "anthropic",
@@ -383,8 +366,6 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "imageGeneration": "unsupported"
       },
       "presentationDrivers": [
-        "standard",
-        "smart",
         "template-v2",
         "authored"
       ]
@@ -416,8 +397,6 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "imageGeneration": "conditional"
       },
       "presentationDrivers": [
-        "standard",
-        "smart",
         "template-v2",
         "authored"
       ]
@@ -449,7 +428,6 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "imageGeneration": "unsupported"
       },
       "presentationDrivers": [
-        "standard",
         "template-v2"
       ]
     },
@@ -475,7 +453,6 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "imageGeneration": "unsupported"
       },
       "presentationDrivers": [
-        "standard",
         "template-v2"
       ]
     },
@@ -506,7 +483,6 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "imageGeneration": "unsupported"
       },
       "presentationDrivers": [
-        "standard",
         "template-v2"
       ]
     },
@@ -532,8 +508,6 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "imageGeneration": "supported"
       },
       "presentationDrivers": [
-        "standard",
-        "smart",
         "template-v2",
         "authored"
       ]
@@ -560,8 +534,6 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "imageGeneration": "supported"
       },
       "presentationDrivers": [
-        "standard",
-        "smart",
         "template-v2",
         "authored"
       ]
@@ -588,8 +560,6 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "imageGeneration": "supported"
       },
       "presentationDrivers": [
-        "standard",
-        "smart",
         "template-v2",
         "authored"
       ]
@@ -616,8 +586,6 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "imageGeneration": "supported"
       },
       "presentationDrivers": [
-        "standard",
-        "smart",
         "template-v2",
         "authored"
       ]
@@ -644,8 +612,6 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "imageGeneration": "supported"
       },
       "presentationDrivers": [
-        "standard",
-        "smart",
         "template-v2",
         "authored"
       ]
@@ -672,8 +638,6 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "imageGeneration": "supported"
       },
       "presentationDrivers": [
-        "standard",
-        "smart",
         "template-v2",
         "authored"
       ]
@@ -700,8 +664,6 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "imageGeneration": "supported"
       },
       "presentationDrivers": [
-        "standard",
-        "smart",
         "template-v2",
         "authored"
       ]
@@ -731,8 +693,6 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "imageGeneration": "supported"
       },
       "presentationDrivers": [
-        "standard",
-        "smart",
         "template-v2",
         "authored"
       ]
@@ -767,8 +727,6 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "imageGeneration": "supported"
       },
       "presentationDrivers": [
-        "standard",
-        "smart",
         "template-v2",
         "authored"
       ]
@@ -803,8 +761,6 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "imageGeneration": "supported"
       },
       "presentationDrivers": [
-        "standard",
-        "smart",
         "template-v2",
         "authored"
       ]
@@ -825,8 +781,6 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "imageGeneration": "unsupported"
       },
       "presentationDrivers": [
-        "standard",
-        "smart",
         "template-v2",
         "authored"
       ]
@@ -853,8 +807,6 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "imageGeneration": "unsupported"
       },
       "presentationDrivers": [
-        "standard",
-        "smart",
         "template-v2",
         "authored"
       ]
@@ -881,8 +833,6 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "imageGeneration": "unsupported"
       },
       "presentationDrivers": [
-        "standard",
-        "smart",
         "template-v2",
         "authored"
       ]
@@ -909,8 +859,6 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "imageGeneration": "unsupported"
       },
       "presentationDrivers": [
-        "standard",
-        "smart",
         "template-v2",
         "authored"
       ]
@@ -937,8 +885,6 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         "imageGeneration": "unsupported"
       },
       "presentationDrivers": [
-        "standard",
-        "smart",
         "template-v2",
         "authored"
       ]

@@ -103,12 +103,6 @@ function contextWire(value: SendConversationMessageRequest["context"]): RecordVa
       ...(value.currentSlide.slideId ? { slide_id: value.currentSlide.slideId } : {}),
       index: value.currentSlide.index,
     } } : {}),
-    ...(value.smartSelection ? { smart_selection: {
-      html: value.smartSelection.html,
-      ...(value.smartSelection.text ? { selected_text: value.smartSelection.text } : {}),
-      ...(value.smartSelection.slideId ? { slide_id: value.smartSelection.slideId } : {}),
-      ...(value.smartSelection.slideIndex !== undefined ? { slide_index: value.smartSelection.slideIndex } : {}),
-    } } : {}),
   };
 }
 function event(value: unknown, sseId: string): ConversationEvent | undefined {

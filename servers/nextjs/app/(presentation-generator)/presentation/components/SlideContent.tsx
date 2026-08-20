@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Loader2, PlusIcon, Pencil, Trash } from "lucide-react";
+import { Loader2, Pencil, Trash } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -20,7 +20,6 @@ import {
 import { usePathname } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { addToHistory } from "@/store/slices/undoRedoSlice";
-import NewSlide from "./NewSlide";
 import SlideScale from "../../components/PresentationRender";
 
 interface SlideContentProps {
@@ -42,7 +41,6 @@ const SlideContent = ({
 }: SlideContentProps) => {
   const dispatch = useDispatch();
   const [isUpdating, setIsUpdating] = useState(false);
-  const [showNewSlideSelection, setShowNewSlideSelection] = useState(false);
   const [isEditPopoverOpen, setIsEditPopoverOpen] = useState(false);
   const [isSpeakerPopoverOpen, setIsSpeakerPopoverOpen] = useState(false);
   const [editPrompt, setEditPrompt] = useState("");
@@ -135,7 +133,6 @@ const SlideContent = ({
           data-group={slide.layout_group}
           className={` w-full  group font-syne  `}
         >
-          {/* <V1ContentRender slide={slide} isEditMode={true} theme={null} /> */}
           <div
             className={
               isChatEditing
@@ -158,48 +155,6 @@ const SlideContent = ({
               />
             </div>
           </div>
-          {mutationsEnabled && !showNewSlideSelection && (
-            <div
-              className="group-hover:opacity-100 group-focus-within:opacity-100 hidden md:block opacity-0 transition-opacity my-4 duration-300"
-              data-testid="slide-add-control"
-            >
-              <ToolTip content="아래에 새 슬라이드 추가">
-                {!isStreaming && (
-                  <button
-                    type="button"
-                    aria-label="아래에 새 슬라이드 추가"
-                    onClick={() => {
-                      setShowNewSlideSelection(true);
-                    }}
-                    className="mx-auto flex w-[80px] cursor-pointer items-center justify-center rounded-lg border bg-white py-2 shadow-md duration-300 hover:border-[#5141e5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6D28D9] focus-visible:ring-offset-2"
-                  >
-                    <PlusIcon aria-hidden="true" className="text-gray-500 text-base cursor-pointer" />
-                  </button>
-                )}
-              </ToolTip>
-            </div>
-          )}
-          {mutationsEnabled && showNewSlideSelection && (
-            <div
-              className="fixed inset-0 z-[1000] overflow-y-auto bg-black/50 px-4 py-16"
-              onClick={() => setShowNewSlideSelection(false)}
-            >
-              <div className="relative z-[1001] flex min-h-full items-start justify-center pt-10">
-                <div
-                  className="w-full max-w-[675px]"
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <NewSlide
-                    index={index}
-                    templateID={`${slide.layout.split(":")[0]}`}
-                    setShowNewSlideSelection={setShowNewSlideSelection}
-                    presentationId={presentationId}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
           {mutationsEnabled && !isStreaming && (
             <div
               data-testid="slide-mutation-controls"

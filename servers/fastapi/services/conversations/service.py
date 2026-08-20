@@ -61,8 +61,6 @@ def derive_presentation_capability(
     profile, capabilities, _ = resolve_presentation_driver(presentation)
     if profile.driver_id == "authored":
         presentation_mode = "authored"
-    elif presentation.mode == "adaptive" or presentation.deck_plan is not None:
-        presentation_mode = "adaptive"
     else:
         presentation_mode = "template"
     return PresentationCapability(
@@ -71,11 +69,8 @@ def derive_presentation_capability(
         capabilities=capabilities,
         generation_mode=profile.generation_mode,
         presentation_mode=presentation_mode,
-        # Rolling compatibility for the existing standard/smart chat tool
-        # registry. Canonical consumers use capabilities.agent_tool_capability.
-        tool_profile="smart" if profile.driver_id == "smart" else "standard",
+        tool_profile=profile.driver_id,
         can_edit=presentation.lifecycle_status != PRESENTATION_LIFECYCLE_DELETED,
-        supports_smart_selection=capabilities.editor.smart_selection,
     )
 
 
@@ -184,14 +179,14 @@ def _canonical_agent_context(
     Operation handlers retain their kind-specific inputs (for example a
     version id or review scope), while runtime/editor fields are reserved and
     always rebuilt from validated request models plus the presentation row.
-    A client therefore cannot spoof Smart selection or capability flags via
-    the generic operation context.
+    A client therefore cannot spoof runtime/editor capability flags via the
+    generic operation context.
     """
 
     context: dict[str, Any] = {
         key: value
         for key, value in request.operation_context.items()
-        if key not in {"runtime", "viewport", "current_slide", "smart_selection"}
+        if key not in {"runtime", "viewport", "current_slide"}
     }
     context["runtime"] = {
         "generation_mode": capability.generation_mode,
@@ -203,15 +198,6 @@ def _canonical_agent_context(
         context["viewport"] = request.context.viewport.model_dump(mode="json")
     if request.context.current_slide is not None:
         context["current_slide"] = request.context.current_slide.model_dump(
-            mode="json", exclude_none=True
-        )
-    # HTML/selected text is a Smart-only capability. A standard client cannot
-    # smuggle it into provider context by guessing the wire shape.
-    if (
-        capability.supports_smart_selection
-        and request.context.smart_selection is not None
-    ):
-        context["smart_selection"] = request.context.smart_selection.model_dump(
             mode="json", exclude_none=True
         )
     return context

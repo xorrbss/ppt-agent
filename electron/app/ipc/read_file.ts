@@ -4,7 +4,7 @@ import path from "path";
 
 // Confine reads to the app's own data/temp roots — mirrors the web guard in
 // servers/nextjs/app/api/read-file/route.ts. Without this, ANY renderer JS (a
-// malicious custom-template compiled+run in the renderer, or any DOM-XSS) could
+// malicious untrusted template code, or any DOM-XSS) could
 // call window.electron.readFile('C:\\...') to read arbitrary local files and
 // exfiltrate them. realpath defeats symlink/`..`
 // escapes; legit callers only ever read upload/decompose temp paths.

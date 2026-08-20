@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 import uuid
 
-from api.v1.ppt.endpoints.presentation import (
+from api.v1.ppt.endpoints.authored_operations import (
     build_authored_retemplate_generation_request,
 )
 from api.v1.ppt.endpoints.presentation_generation_staging import (

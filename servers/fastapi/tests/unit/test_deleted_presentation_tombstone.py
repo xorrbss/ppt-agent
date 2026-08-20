@@ -11,7 +11,7 @@ import pytest
 from fastapi import HTTPException
 
 from api.v1.ppt.endpoints import outlines as outlines_endpoint
-from api.v1.ppt.endpoints import presentation as presentation_endpoint
+from api.v1.ppt.endpoints import authored_operations as presentation_endpoint
 from api.v1.ppt.endpoints import presentation_crud
 from api.v1.ppt.endpoints import presentation_versions
 from models.sql.presentation import (
@@ -75,14 +75,6 @@ async def _call_deleted_mutation(
     presentation: PresentationModel,
     session: _TombstoneSession,
 ):
-    if name == "prepare":
-        return await presentation_endpoint.prepare_presentation(
-            presentation.id,
-            [object()],
-            object(),
-            None,
-            session,
-        )
     if name == "quality-review":
         return await presentation_endpoint.quality_review_authored_presentation(
             presentation.id,
@@ -96,34 +88,6 @@ async def _call_deleted_mutation(
             object(),
             object(),
             object(),
-            session,
-        )
-    if name == "stream":
-        return await presentation_endpoint.stream_presentation(
-            presentation.id,
-            object(),
-            False,
-            session,
-        )
-    if name == "update":
-        return await presentation_endpoint.update_presentation(
-            presentation.id,
-            None,
-            None,
-            None,
-            None,
-            session,
-        )
-    if name == "edit":
-        return await presentation_endpoint.edit_presentation_with_new_content(
-            object(),
-            SimpleNamespace(presentation_id=presentation.id),
-            session,
-        )
-    if name == "derive":
-        return await presentation_endpoint.derive_presentation_from_existing_one(
-            object(),
-            SimpleNamespace(presentation_id=presentation.id),
             session,
         )
     if name == "restore":
@@ -212,13 +176,8 @@ def test_legacy_delete_preserves_existing_durable_tombstone(monkeypatch):
 @pytest.mark.parametrize(
     "mutation",
     (
-        "prepare",
         "quality-review",
         "retemplate",
-        "stream",
-        "update",
-        "edit",
-        "derive",
         "restore",
     ),
 )

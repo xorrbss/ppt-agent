@@ -1,13 +1,13 @@
-"""Shared, non-adaptive (template-path) structure pipeline.
+"""Shared Template V2 structure pipeline.
 
-`/prepare` and the one-shot `/generate` handler both turn an outline + a layout
-into a persisted PresentationStructure the same way — choose a layout per slide,
+Template V2 generation turns an outline + a layout into a persisted
+PresentationStructure the same way — choose a layout per slide,
 clamp/backfill out-of-range indices, insert a table of contents, and fit content
 to capacity. That logic used to be copy-pasted into both endpoints (with subtle
 drift and dead code); it lives here once so a fix lands in a single place.
 
-The adaptive path (compose_and_project) and the authored path have their own
-self-contained pipelines and do NOT use this module.
+Authored generation has its own self-contained pipeline and does not use this
+module.
 """
 import logging
 from typing import Optional, Tuple
@@ -86,14 +86,12 @@ async def build_template_structure(
     include_title_slide: bool,
     target_n_slides: Optional[int],
 ) -> Tuple[PresentationOutlineModel, PresentationStructureModel]:
-    """Build the (outline, structure) pair for a non-adaptive template deck.
+    """Build the (outline, structure) pair for a Template V2 deck.
 
     Returns the possibly-TOC-expanded outline and the fitted structure; callers
     persist them and derive n_slides from the result. Behaviour is identical to
     the code previously inlined in /prepare and generate_presentation_handler:
-    - /prepare passes using_slides_markdown=False (interactive path), so the TOC
-      and capacity-fit run exactly as before (`not False` == True).
-    - the handler passes the real using_slides_markdown, so a user-supplied
+    - Template V2 generation passes the real using_slides_markdown, so a user-supplied
       slides_markdown deck still skips TOC + capacity-fit.
     """
     total_outlines = len(outline.slides)

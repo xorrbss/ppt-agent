@@ -19,11 +19,18 @@ import json
 import logging
 from typing import Any, Callable, Iterable, Literal, Mapping, Protocol
 
-from services.template_v2_poc import (
-    TEMPLATE_V2_FORMAT,
-    TemplateV2ContractError,
-)
 from templates.v2.constants import TEMPLATE_V2_VERSION
+
+
+TEMPLATE_V2_FORMAT = TEMPLATE_V2_VERSION
+
+
+class TemplateV2ContractError(ValueError):
+    """Stable, content-free Template V2 rollout failure."""
+
+    def __init__(self, code: str):
+        self.code = code
+        super().__init__(code)
 
 
 LOGGER = logging.getLogger(__name__)
@@ -70,9 +77,6 @@ _OBSERVATION_CODES = {
     "template_v2_duplicate_text_slot",
     "template_v2_export_not_json_safe",
     "template_v2_invalid_adapter_output",
-    "template_v2_invalid_adaptive_content",
-    "template_v2_invalid_adaptive_slide",
-    "template_v2_invalid_adaptive_slides",
     "template_v2_invalid_export_content",
     "template_v2_invalid_node",
     "template_v2_invalid_node_fields",

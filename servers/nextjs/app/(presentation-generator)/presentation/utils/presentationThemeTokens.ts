@@ -3,7 +3,7 @@ import type { Theme } from "../../services/api/types";
 // Phase 2 — tone & manner design tokens.
 // Derived ADDITIVELY from the existing 16-colour theme so legacy templates
 // (which read only the original --primary-color/etc.) are unaffected. Only the
-// adaptive renderer consumes these extended tokens.
+// shared render surfaces consume these extended tokens.
 
 /**
  * The optional tone & manner sections (`typography`/`shape`/`elevation`/`motif`)
@@ -40,7 +40,7 @@ export function deriveThemeTokens(theme: Theme | null | undefined): Record<strin
   // multipliers default to 1 and the explicit values to the current hardcoded
   // look). This is what lets curated presets feel like distinct "templates"
   // (tight editorial type + sharp/flat vs. airy rounded/elevated) without any new
-  // layout code. Only the adaptive renderer reads these tokens.
+  // layout and preview code.
   const ty = asRecord(theme?.data?.typography);
   const tScale = Number(ty.scale) > 0 ? Number(ty.scale) : 1;
   const fs = (rem: number) => `${Math.round(rem * tScale * 1000) / 1000}rem`;

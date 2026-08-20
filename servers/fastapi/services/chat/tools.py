@@ -19,7 +19,6 @@ from services.chat.schemas import (
     GetSlideAtIndexInput,
     NoArgsInput,
     SaveSlideInput,
-    SaveSmartSlideInput,
     SearchSlidesInput,
     SetPresentationThemeInput,
     SlideUIToolInput,
@@ -28,7 +27,6 @@ from services.chat.deck_header_tool import (
     deck_header_tool,
     run_deck_header_update,
 )
-from services.chat.smart_tool_definitions import smart_tool_definitions
 from services.chat.slide_ui_mutations import SlideUIMutationService
 
 LOGGER = logging.getLogger(__name__)
@@ -78,8 +76,6 @@ class ChatTools:
             )
 
     def get_tool_definitions(self) -> list[Tool]:
-        if getattr(self._memory, "presentation_type", "standard") == "smart":
-            return self._get_smart_tool_definitions()
         tools = [
             Tool(
                 name="getPresentationOutline",
@@ -229,9 +225,6 @@ class ChatTools:
         )
         tools.append(deck_header_tool())
         return tools
-
-    def _get_smart_tool_definitions(self) -> list[Tool]:
-        return smart_tool_definitions()
 
     async def execute_tool_call(self, tool_call: AssistantToolCall) -> dict[str, Any]:
         handler = self._tool_handlers.get(tool_call.name)
@@ -423,15 +416,6 @@ class ChatTools:
         }
 
     async def _save_slide(self, args: dict[str, Any]) -> dict[str, Any]:
-        if getattr(self._memory, "presentation_type", "standard") == "smart":
-            payload = SaveSmartSlideInput(**args)
-            return await self._memory.save_html_slide(
-                html=payload.html,
-                index=payload.index,
-                replace_old_slide_at_index=payload.replace_old_slide_at_index,
-                speaker_note=payload.speaker_note,
-            )
-
         payload_args = json.loads(json.dumps(dict(args), ensure_ascii=False))
         raw_content = payload_args.get("content")
         if isinstance(raw_content, dict):

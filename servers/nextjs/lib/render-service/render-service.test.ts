@@ -22,19 +22,14 @@ const SHA = "a".repeat(64);
 
 function runtime(driverId: PresentationDriverId) {
   const driver = PRESENTATION_DRIVER_REGISTRY[driverId];
-  const styleSource =
-    driverId === "authored"
-      ? "authored"
-      : driverId === "template-v2"
-        ? "imported"
-        : "builtin";
+  const styleSource = driverId === "authored" ? "authored" : "imported";
   const profile: PresentationProfile = {
     schema_version: 1,
     driver_id: driver.driver_id,
     content_model: driver.content_model,
     generation_strategy: driver.generation_strategy,
     style_source: styleSource,
-    generation_mode: driverId === "smart" ? "smart" : "standard",
+    generation_mode: "standard",
   };
   return {
     profile,
@@ -67,9 +62,9 @@ function presentation(
   };
 }
 
-test("all default drivers produce the same revision-bound artifact contract", () => {
+test("authored driver produces the revision-bound artifact contract", () => {
   const service = new RenderService();
-  for (const driverId of ["standard", "smart", "authored"] as const) {
+  for (const driverId of ["authored"] as const) {
     const snapshot = createRenderPresentationSnapshot(presentation(driverId));
     const artifact = service.render({ target: "preview", snapshot });
     assert.equal(artifact.schema_version, "presenton.render-artifact/v1");
@@ -84,7 +79,7 @@ test("all default drivers produce the same revision-bound artifact contract", ()
 
 test("preview, thumbnail, selection map, PDF, and PPTX share one artifact shape", () => {
   const snapshot = createRenderPresentationSnapshot(
-    presentation("standard", [
+    presentation("authored", [
       { id: "slide-1", elements: [{ id: "title", type: "text" }] },
       { id: "slide-2", elements: [{ id: "image", type: "image" }] },
     ]),
@@ -113,80 +108,13 @@ test("preview, thumbnail, selection map, PDF, and PPTX share one artifact shape"
   );
   for (const artifact of artifacts) {
     assert.equal(artifact.schema_version, "presenton.render-artifact/v1");
-    assert.equal(artifact.renderer_version, "legacy-elements@1");
+    assert.equal(artifact.renderer_version, "authored-browser@1");
     assert.equal(artifact.slide_discovery.count, 2);
     assert.equal(artifact.fonts[0]?.family, "Inter");
     assert.equal(artifact.assets[0]?.asset_id, "image");
     assert.deepEqual(
       artifact.selection_map.map((entry) => entry.slide_id),
       ["slide-1", "slide-2"],
-    );
-  }
-});
-
-test("smart charts use controlled preview runtime and require immutable snapshots for export", () => {
-  const snapshot = createRenderPresentationSnapshot(
-    presentation("smart", [
-      { id: "slide-1", elements: [{ id: "revenue", type: "chart" }] },
-    ]),
-  );
-  const service = new RenderService();
-  const preview = service.render({ target: "preview", snapshot });
-  assert.equal(preview.chart_snapshot.status, "runtime-required");
-  assert.equal(preview.script_policy.mode, "controlled-runtime");
-
-  assert.throws(
-    () => service.render({ target: "pdf", snapshot }),
-    /render_chart_snapshot_required:revenue/,
-  );
-  const pdf = service.render({
-    target: "pdf",
-    snapshot,
-    chart_snapshots: [
-      {
-        chart_id: "revenue",
-        slide_id: "slide-1",
-        mime_type: "image/png",
-        sha256: "b".repeat(64),
-        asset_id: "asset-chart-revenue",
-      },
-    ],
-  });
-  assert.equal(pdf.chart_snapshot.status, "complete");
-  assert.equal(pdf.script_policy.mode, "deny");
-  assert.equal(pdf.script_policy.iframe_free, true);
-});
-
-test("decorative chart class names are not a runtime chart", () => {
-  const snapshot = createRenderPresentationSnapshot(
-    presentation("smart", [
-      {
-        id: "slide-1",
-        html_content:
-          '<div class="chart-wrap"><div class="mini-chart"><div class="bar b4"></div></div>' +
-          '<div class="chart-label">전년 대비</div></div>',
-      },
-    ]),
-  );
-  const artifact = new RenderService().render({ target: "pptx", snapshot });
-  assert.equal(artifact.chart_snapshot.status, "not-required");
-  assert.deepEqual(artifact.chart_snapshot.chart_ids, []);
-});
-
-test("explicit runtime chart markers still require an export snapshot", () => {
-  const service = new RenderService();
-  for (const markup of [
-    '<canvas id="revenue"></canvas>',
-    '<div data-chart="revenue"></div>',
-    '<div data-smart-chart="revenue"></div>',
-  ]) {
-    const snapshot = createRenderPresentationSnapshot(
-      presentation("smart", [{ id: "slide-1", html_content: markup }]),
-    );
-    assert.throws(
-      () => service.render({ target: "pptx", snapshot }),
-      /render_chart_snapshot_required:slide-1-html-chart/,
-      markup,
     );
   }
 });
@@ -260,14 +188,14 @@ test("Template V2 adapter consumes canonical plans and persisted hydrated UI", (
 
 test("unknown profiles, stale revisions, stale artifacts, overflow, and unsafe HTML fail closed", () => {
   const service = new RenderService();
-  const unknown = presentation("standard") as Record<string, unknown>;
+  const unknown = presentation("authored") as Record<string, unknown>;
   unknown.profile = { ...(unknown.profile as object), driver_id: "future" };
   assert.throws(
     () => createRenderPresentationSnapshot(unknown),
     /unsupported_presentation_driver/,
   );
 
-  const snapshot = createRenderPresentationSnapshot(presentation("standard"));
+  const snapshot = createRenderPresentationSnapshot(presentation("authored"));
   assert.throws(
     () => service.render({ target: "preview", snapshot, expected_revision: 6 }),
     /stale_render_revision/,
@@ -283,7 +211,7 @@ test("unknown profiles, stale revisions, stale artifacts, overflow, and unsafe H
   );
 
   const overflow = createRenderPresentationSnapshot(
-    presentation("standard", [
+    presentation("authored", [
       { id: "slide-1", elements: [{ id: "body", overflow: true }] },
     ]),
   );
@@ -304,7 +232,7 @@ test("unknown profiles, stale revisions, stale artifacts, overflow, and unsafe H
 });
 
 test("unready assets never cross the renderer boundary", () => {
-  const snapshot = createRenderPresentationSnapshot(presentation("standard"));
+  const snapshot = createRenderPresentationSnapshot(presentation("authored"));
   assert.throws(
     () =>
       new RenderService().render({

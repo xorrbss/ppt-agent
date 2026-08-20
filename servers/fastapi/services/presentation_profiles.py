@@ -12,26 +12,18 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Final, Literal, TypeAlias, cast
 
-PresentationDriverId: TypeAlias = Literal[
-    "standard", "smart", "template-v2", "authored"
-]
-ContentModel: TypeAlias = Literal[
-    "legacy-elements", "smart-html", "template-v2", "authored"
-]
-GenerationStrategy: TypeAlias = Literal[
-    "standard", "smart", "template", "authored"
-]
-StyleSource: TypeAlias = Literal["builtin", "community", "imported", "authored"]
-LegacyGenerationMode: TypeAlias = Literal["standard", "smart"]
+PresentationDriverId: TypeAlias = Literal["template-v2", "authored"]
+ContentModel: TypeAlias = Literal["template-v2", "authored"]
+GenerationStrategy: TypeAlias = Literal["template", "authored"]
+StyleSource: TypeAlias = Literal["imported", "authored"]
+LegacyGenerationMode: TypeAlias = Literal["standard"]
 
 PROFILE_SCHEMA_VERSION: Final = 1
 CAPABILITY_SCHEMA_VERSION: Final = 1
 _KNOWN_VERSIONS: Final = frozenset({"v1-standard", "v2-standard"})
-_KNOWN_MODES: Final = frozenset({None, "template", "adaptive", "authored"})
-_KNOWN_THEME_MODES: Final = frozenset({None, "template", "adaptive", "authored"})
+_KNOWN_MODES: Final = frozenset({None, "template", "authored"})
+_KNOWN_THEME_MODES: Final = frozenset({None, "template", "authored"})
 _DRIVER_IDS: Final[tuple[PresentationDriverId, ...]] = (
-    "standard",
-    "smart",
     "template-v2",
     "authored",
 )
@@ -63,7 +55,6 @@ class EditorCapabilities:
     theme_apply: bool
     template_apply: bool
     slide_image_regenerate: bool
-    smart_selection: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,7 +88,7 @@ class GenerationModeCompatibilityCodec:
 
     field_name: Literal["generation_mode"]
     source_of_truth: Literal["derived-presentation-profile"]
-    accepted_values: tuple[LegacyGenerationMode, LegacyGenerationMode]
+    accepted_values: tuple[LegacyGenerationMode, ...]
     removal_condition: str
 
     def decode_persisted(self, value: object) -> LegacyGenerationMode:
@@ -105,28 +96,16 @@ class GenerationModeCompatibilityCodec:
             raise PresentationProfileError("unsupported_generation_mode")
         return cast(LegacyGenerationMode, value)
 
-    def decode_driver(self, value: object) -> PresentationDriverId:
-        """Decode a legacy value only when no canonical profile exists."""
-
-        mode = self.decode_persisted(value)
-        return cast(
-            PresentationDriverId,
-            {"standard": "standard", "smart": "smart"}[mode],
-        )
-
     def encode_profile(self, profile: PresentationProfile) -> LegacyGenerationMode:
-        expected: LegacyGenerationMode = (
-            "smart" if profile.driver_id == "smart" else "standard"
-        )
-        if profile.generation_mode != expected:
+        if profile.generation_mode != "standard":
             raise PresentationProfileError("generation_mode_profile_conflict")
-        return expected
+        return "standard"
 
 
 GENERATION_MODE_COMPATIBILITY: Final = GenerationModeCompatibilityCodec(
     field_name="generation_mode",
     source_of_truth="derived-presentation-profile",
-    accepted_values=("standard", "smart"),
+    accepted_values=("standard",),
     removal_condition=(
         "Remove only after every supported persisted row and public API consumer "
         "uses server-issued PresentationProfile.driver_id, no supported rolling "
@@ -155,12 +134,6 @@ def _canonical_driver_id(
     return cast(PresentationDriverId, value)
 
 
-def uses_generation_mode_fallback(identity: PersistedIdentity) -> bool:
-    """Whether this row still needs the legacy discriminator to resolve."""
-
-    return _canonical_driver_id(identity) is None
-
-
 def _theme(identity: PersistedIdentity) -> Mapping[str, Any]:
     value = _read(identity, "theme")
     if value is None:
@@ -170,54 +143,20 @@ def _theme(identity: PersistedIdentity) -> Mapping[str, Any]:
     return value
 
 
-def _community_ids(identity: PersistedIdentity) -> tuple[int, ...]:
-    value = _read(identity, "community_design_ids")
-    if value is None:
-        return ()
-    if not isinstance(value, (list, tuple)) or any(
-        isinstance(item, bool) or not isinstance(item, int) or item < 1
-        for item in value
-    ):
-        raise PresentationProfileError("invalid_community_design_identity")
-    return tuple(value)
-
-
 def _style_source(
     driver_id: PresentationDriverId,
     identity: PersistedIdentity,
     theme: Mapping[str, Any],
 ) -> StyleSource:
-    if driver_id == "authored":
-        return "authored"
-    if _community_ids(identity):
-        if driver_id in {"template-v2", "authored"}:
-            raise PresentationProfileError("presentation_style_source_conflict")
-        return "community"
-    if driver_id == "template-v2":
-        return "imported"
-
-    theme_user = theme.get("user")
-    if theme_user is None or theme_user == "builtin":
-        return "builtin"
-    if not isinstance(theme_user, str) or not theme_user.strip():
-        raise PresentationProfileError("invalid_presentation_style_source")
-    return "imported"
+    del identity, theme
+    return "authored" if driver_id == "authored" else "imported"
 
 
 def _validate_common_identity(identity: PersistedIdentity) -> tuple[
     LegacyGenerationMode, str | None, str, Mapping[str, Any]
 ]:
-    canonical_driver = _canonical_driver_id(identity)
-    generation_mode: LegacyGenerationMode = (
-        "smart"
-        if canonical_driver == "smart"
-        else (
-            "standard"
-            if canonical_driver is not None
-            else GENERATION_MODE_COMPATIBILITY.decode_persisted(
-                _read(identity, "generation_mode", "standard")
-            )
-        )
+    generation_mode = GENERATION_MODE_COMPATIBILITY.decode_persisted(
+        _read(identity, "generation_mode", "standard")
     )
     mode = _read(identity, "mode")
     if mode not in _KNOWN_MODES:
@@ -241,34 +180,7 @@ def _validate_common_identity(identity: PersistedIdentity) -> tuple[
         if mode not in {None, "template"}:
             raise PresentationProfileError("template_v2_identity_conflict")
 
-    deck_plan = _read(identity, "deck_plan")
-    if deck_plan is not None and not isinstance(deck_plan, Mapping):
-        raise PresentationProfileError("invalid_presentation_deck_plan")
-    if deck_plan is not None and mode not in {None, "adaptive"}:
-        raise PresentationProfileError("presentation_deck_plan_mode_conflict")
     return generation_mode, cast(str | None, mode), cast(str, version), theme
-
-
-def _validate_standard(profile: PresentationProfile, identity: PersistedIdentity) -> None:
-    generation_mode, mode, version, _ = _validate_common_identity(identity)
-    if generation_mode != "standard":
-        raise PresentationProfileError("standard_generation_mode_conflict")
-    if mode == "authored":
-        raise PresentationProfileError("standard_authored_mode_conflict")
-    if version == "v2-standard" and mode == "template":
-        raise PresentationProfileError("standard_template_v2_identity_conflict")
-    if profile.content_model != "legacy-elements":
-        raise PresentationProfileError("standard_content_model_conflict")
-
-
-def _validate_smart(profile: PresentationProfile, identity: PersistedIdentity) -> None:
-    generation_mode, mode, _, theme = _validate_common_identity(identity)
-    if generation_mode != "smart":
-        raise PresentationProfileError("smart_generation_mode_conflict")
-    if mode == "authored" or theme.get("mode") == "authored":
-        raise PresentationProfileError("smart_authored_identity_conflict")
-    if profile.content_model != "smart-html":
-        raise PresentationProfileError("smart_content_model_conflict")
 
 
 def _validate_template_v2(
@@ -316,41 +228,11 @@ def _capabilities(
     )
 
 
-_STANDARD_EDITOR = EditorCapabilities(True, True, True, True, True, False, False)
-_SMART_EDITOR = EditorCapabilities(True, True, False, False, False, False, True)
-_TEMPLATE_V2_EDITOR = EditorCapabilities(True, True, True, True, True, False, False)
-_AUTHORED_EDITOR = EditorCapabilities(False, False, False, False, True, True, False)
+_TEMPLATE_V2_EDITOR = EditorCapabilities(True, True, True, True, True, False)
+_AUTHORED_EDITOR = EditorCapabilities(False, False, False, False, True, True)
 
 
 _DRIVERS: dict[PresentationDriverId, PresentationDriver] = {
-    "standard": PresentationDriver(
-        driver_id="standard",
-        content_model="legacy-elements",
-        generation_strategy="standard",
-        validate=_validate_standard,
-        capabilities=_capabilities(
-            "standard",
-            renderer="legacy-elements",
-            editor_adapter="legacy-elements",
-            editor=_STANDARD_EDITOR,
-            export_adapter="legacy-general",
-            export_editable_pptx=True,
-        ),
-    ),
-    "smart": PresentationDriver(
-        driver_id="smart",
-        content_model="smart-html",
-        generation_strategy="smart",
-        validate=_validate_smart,
-        capabilities=_capabilities(
-            "smart",
-            renderer="smart-html",
-            editor_adapter="smart-html",
-            editor=_SMART_EDITOR,
-            export_adapter="legacy-general",
-            export_editable_pptx=True,
-        ),
-    ),
     "template-v2": PresentationDriver(
         driver_id="template-v2",
         content_model="template-v2",
@@ -406,18 +288,12 @@ def resolve_presentation_profile(identity: PersistedIdentity) -> PresentationPro
     canonical_driver = _canonical_driver_id(identity)
     if canonical_driver is not None:
         driver_id = canonical_driver
+    elif mode == "authored" or theme.get("mode") == "authored":
+        driver_id = "authored"
+    elif version == "v2-standard" and mode in {None, "template"}:
+        driver_id = "template-v2"
     else:
-        legacy_mode_driver = GENERATION_MODE_COMPATIBILITY.decode_driver(
-            generation_mode
-        )
-        if legacy_mode_driver == "smart":
-            driver_id = legacy_mode_driver
-        elif mode == "authored" or theme.get("mode") == "authored":
-            driver_id = "authored"
-        elif version == "v2-standard" and mode in {None, "template"}:
-            driver_id = "template-v2"
-        else:
-            driver_id = legacy_mode_driver
+        raise PresentationProfileError("unsupported_presentation_driver")
 
     driver = get_presentation_driver(driver_id)
     profile = PresentationProfile(
@@ -471,5 +347,4 @@ __all__ = [
     "resolve_presentation_capabilities",
     "resolve_presentation_driver",
     "resolve_presentation_profile",
-    "uses_generation_mode_fallback",
 ]

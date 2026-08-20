@@ -123,7 +123,7 @@ class PresentationChatService:
         self._artifact_directory = artifact_directory
         # The database row, never a client field, selects the capability/tool
         # profile when the run context is prepared.
-        self._presentation_type: Literal["standard", "smart"] | None = None
+        self._presentation_type: Literal["standard"] | None = None
 
         self._conversation_store = ChatConversationStore(sql_session)
         self._memory: PresentationContextStore | None = None
@@ -358,11 +358,9 @@ class PresentationChatService:
         if not presentation:
             raise HTTPException(status_code=404, detail="Presentation not found")
         profile = resolve_presentation_profile(presentation)
-        # Rolling facade for the existing two chat tool registries. Driver
-        # selection itself is always based on the persisted canonical profile.
-        self._presentation_type = (
-            "smart" if profile.driver_id == "smart" else "standard"
-        )
+        # The profile remains the authority for deck access; all retained chat
+        # tools use the neutral structured-content surface.
+        self._presentation_type = "standard"
         self._memory = PresentationContextStore(
             self._sql_session,
             self._presentation_id,
@@ -824,7 +822,7 @@ class PresentationChatService:
     def _build_runtime_context_block(
         context: RunContext | None,
         *,
-        generation_mode: Literal["standard", "smart"],
+        generation_mode: Literal["standard"],
     ) -> str:
         """Render only server-vetted structured context for the provider."""
 
@@ -844,19 +842,6 @@ class PresentationChatService:
                     else None
                 ),
                 "slide_index": context.viewport.slide_index,
-            }
-        # HTML/selected text is meaningful only for a DB-authoritative Smart
-        # capability. Standard decks must never receive a spoofed selection.
-        if generation_mode == "smart" and context.smart_selection is not None:
-            payload["smart_selection"] = {
-                "html": context.smart_selection.html,
-                "selected_text": context.smart_selection.selected_text,
-                "slide_id": (
-                    str(context.smart_selection.slide_id)
-                    if context.smart_selection.slide_id is not None
-                    else None
-                ),
-                "slide_index": context.smart_selection.slide_index,
             }
         if context.assets:
             payload["assets"] = [

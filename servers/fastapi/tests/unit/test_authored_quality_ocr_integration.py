@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlmodel import SQLModel
 
-from api.v1.ppt.endpoints import presentation as presentation_endpoint
+from api.v1.ppt.endpoints import authored_operations as presentation_endpoint
 from models.presentation_from_template import AuthoredQualityReviewRequest
 from models.presentation_outline_model import (
     PresentationOutlineModel,
@@ -79,7 +79,7 @@ def test_quality_review_readiness_route_precedes_dynamic_presentation_route(
         return payload
 
     monkeypatch.setattr(presentation_endpoint, "get_ocr_readiness", fake_readiness)
-    routes = list(presentation_endpoint.PRESENTATION_ROUTER.routes)
+    routes = list(presentation_endpoint.AUTHORED_OPERATIONS_ROUTER.routes)
     readiness_route = next(
         route for route in routes if route.path == "/presentation/quality-review/readiness"
     )

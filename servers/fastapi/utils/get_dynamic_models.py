@@ -1,7 +1,6 @@
 from typing import List, Optional
 from pydantic import Field
 from models.content_brief_model import BriefSection, ContentBrief
-from models.slide_spec_model import PresentationComposition, SlideSpecUnion
 from models.presentation_outline_model import (
     PresentationOutlineModel,
     SlideOutlineModel,
@@ -75,22 +74,6 @@ def get_content_brief_model(verbosity: Optional[str] = None):
         )
 
     return ContentBriefWithFloor
-
-
-def get_composition_model_with_n_slides(n_slides: Optional[int]):
-    """Adaptive composer output. Pins slide count to n_slides when given;
-    'auto' (None/<=0) leaves it unconstrained (composer decides count)."""
-    if not n_slides or n_slides <= 0:
-        return PresentationComposition
-
-    class PresentationCompositionWithNSlides(PresentationComposition):
-        slides: List[SlideSpecUnion] = Field(
-            description="Ordered adaptive slides",
-            min_length=n_slides,
-            max_length=n_slides,
-        )
-
-    return PresentationCompositionWithNSlides
 
 
 def get_presentation_structure_model_with_n_slides(n_slides: int):

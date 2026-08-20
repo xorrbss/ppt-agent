@@ -59,7 +59,7 @@ export const DeferredSlideThumbnail = ({ slide }: { slide: any }) => {
   }, [isNearViewport]);
 
   // A deck with no slides has nothing to stage; render the reserved box only.
-  // (SlideScale/V1ContentRender dereference the slide unconditionally.)
+  // (SlideScale dereferences the slide unconditionally.)
   const canRender = Boolean(slide);
   const state = !canRender
     ? "empty"

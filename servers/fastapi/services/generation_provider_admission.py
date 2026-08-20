@@ -33,11 +33,7 @@ def requested_generation_driver(
         return "template-v2"
     if request.strategy == "authored" or request.template == "authored":
         return "authored"
-    if request.strategy == "adaptive" or (
-        request.strategy is None and request.template == "adaptive"
-    ):
-        return "smart"
-    return "standard"
+    raise PresentationProfileError("generation_strategy_not_supported")
 
 
 def server_generation_profile_identity(
@@ -52,9 +48,7 @@ def server_generation_profile_identity(
         has_materialized_identity = bool(
             persisted.mode is not None
             or persisted.version == "v2-standard"
-            or persisted.generation_mode == "smart"
-            or persisted.deck_plan is not None
-            or theme.get("mode") in {"adaptive", "authored", "template"}
+            or theme.get("mode") in {"authored", "template"}
         )
         if has_materialized_identity:
             profile = resolve_presentation_profile(persisted)
@@ -63,18 +57,6 @@ def server_generation_profile_identity(
             return persisted
 
     identity_by_driver: dict[PresentationDriverId, Mapping[str, Any]] = {
-        "standard": {
-            "generation_mode": "standard",
-            "mode": None,
-            "version": "v1-standard",
-            "theme": {},
-        },
-        "smart": {
-            "generation_mode": "smart",
-            "mode": "adaptive",
-            "version": "v1-standard",
-            "theme": {"mode": "adaptive"},
-        },
         "template-v2": {
             "generation_mode": "standard",
             "mode": "template",
@@ -100,7 +82,7 @@ def generation_provider_capabilities(
         required.append("webSearch")
     if request.vision_qa:
         required.append("vision")
-    if driver_id in {"smart", "authored"} and not disable_thinking():
+    if driver_id == "authored" and not disable_thinking():
         required.append("thinking")
     return tuple(required)
 

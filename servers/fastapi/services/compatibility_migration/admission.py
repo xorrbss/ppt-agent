@@ -45,7 +45,7 @@ def authored_only_admission_policy() -> AuthoredOnlyAdmissionPolicy:
         schema_version=1,
         enabled=True,
         new_presentation_driver="authored",
-        blocked_drivers=("standard", "smart", "template-v2"),
+        blocked_drivers=("legacy", "template-v2"),
         stable_error_code=AUTHORED_ONLY_ADMISSION_CLOSED,
         canary_stage="100",
     )
@@ -63,9 +63,7 @@ def requested_driver_from_generation(request: object) -> str:
         return "template-v2"
     if strategy == "authored" or template == "authored":
         return "authored"
-    if strategy == "adaptive" or (strategy is None and template == "adaptive"):
-        return "smart"
-    return "standard"
+    return "legacy"
 
 
 def require_authored_generation_admission(request: object) -> None:

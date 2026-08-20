@@ -89,23 +89,7 @@
         ]
       },
       "expected": {
-        "error": "legacy_payload_identity_mismatch"
-      }
-    },
-    {
-      "name": "v1-adaptive-with-authored-html",
-      "presentation": {
-        "version": "v1-standard",
-        "mode": "adaptive",
-        "slides": [
-          {
-            "ui": null,
-            "html_content": "<section>wrong identity</section>"
-          }
-        ]
-      },
-      "expected": {
-        "error": "legacy_payload_identity_mismatch"
+        "error": "unsupported_presentation_identity"
       }
     },
     {
@@ -143,10 +127,10 @@
       }
     },
     {
-      "name": "template-v2-mode-mismatch",
+      "name": "template-v2-unknown-mode",
       "presentation": {
         "version": "v2-standard",
-        "mode": "adaptive",
+        "mode": "bogus",
         "slides": [
           {
             "ui": {

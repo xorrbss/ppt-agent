@@ -28,10 +28,8 @@ def _settings(provider: str) -> RuntimeSettings:
 @pytest.mark.parametrize(
     ("strategy", "template", "driver_id", "required"),
     [
-        ("legacy", "general", "standard", ("structuredOutput",)),
-        ("adaptive", "adaptive", "smart", ("structuredOutput", "thinking")),
-        ("template_v2", "adaptive", "template-v2", ("structuredOutput",)),
-        ("authored", "adaptive", "authored", ("structuredOutput", "thinking")),
+        ("template_v2", "general", "template-v2", ("structuredOutput",)),
+        ("authored", "general", "authored", ("structuredOutput", "thinking")),
     ],
 )
 def test_generation_profiles_admit_supported_provider(
@@ -70,8 +68,7 @@ def test_client_cannot_select_a_presentation_driver() -> None:
     request = GeneratePresentationRequest.model_validate(
         {
             "content": "server owned profile",
-            "strategy": "legacy",
-            "template": "general",
+            "strategy": "authored",
             "profile_driver_id": "authored",
         }
     )
@@ -79,18 +76,12 @@ def test_client_cannot_select_a_presentation_driver() -> None:
     identity = server_generation_profile_identity(request, None)
 
     assert isinstance(identity, Mapping)
-    assert resolve_presentation_profile(identity).driver_id == "standard"
+    assert resolve_presentation_profile(identity).driver_id == "authored"
 
 
-@pytest.mark.parametrize("driver_id", ["smart", "template-v2", "authored"])
+@pytest.mark.parametrize("driver_id", ["template-v2", "authored"])
 def test_generation_driver_mismatch_fails_before_invocation(driver_id: str) -> None:
     identity_by_driver = {
-        "smart": {
-            "generation_mode": "smart",
-            "mode": "adaptive",
-            "version": "v1-standard",
-            "theme": {"mode": "adaptive"},
-        },
         "template-v2": {
             "generation_mode": "standard",
             "mode": "template",
@@ -118,13 +109,13 @@ def test_generation_driver_mismatch_fails_before_invocation(driver_id: str) -> N
     assert invoked is False
 
 
-def test_standard_capability_mismatch_fails_before_invocation() -> None:
+def test_authored_capability_mismatch_fails_before_invocation() -> None:
     invoked = False
     with pytest.raises(ProviderResolutionError) as error:
         with generation_provider_admission(
             {
                 "generation_mode": "standard",
-                "mode": None,
+                "mode": "authored",
                 "version": "v1-standard",
                 "theme": {},
             },
@@ -158,7 +149,7 @@ def test_client_factory_is_not_constructed_before_runtime_policy_passes(
     with generation_provider_policy(
         {
             "generation_mode": "standard",
-            "mode": None,
+            "mode": "authored",
             "version": "v1-standard",
             "theme": {},
         },
@@ -190,7 +181,7 @@ def test_disabled_provider_is_rejected_at_the_client_boundary(
     with generation_provider_policy(
         {
             "generation_mode": "standard",
-            "mode": None,
+            "mode": "authored",
             "version": "v1-standard",
             "theme": {},
         },
@@ -217,7 +208,7 @@ def test_unknown_runtime_provider_fails_closed_without_exposing_settings(
         resolve_generation_provider(
             {
                 "generation_mode": "standard",
-                "mode": None,
+                "mode": "authored",
                 "version": "v1-standard",
                 "theme": {},
             },

@@ -13,8 +13,7 @@ import type {
 
 export type PersistedExportStrategy =
   | "template-v2-general"
-  | "authored-hybrid"
-  | "legacy-general";
+  | "authored-hybrid";
 
 export const PRESENTATION_SOURCE_SHA256 = Symbol(
   "presenton.presentationSourceSha256"
@@ -103,7 +102,6 @@ export function resolvePersistedExportStrategy(
   if (
     mode !== null &&
     mode !== "template" &&
-    mode !== "adaptive" &&
     mode !== "authored"
   ) {
     throw new Error("unsupported_presentation_identity");
@@ -118,7 +116,6 @@ export function resolvePersistedExportStrategy(
   if (
     themeMode !== undefined &&
     themeMode !== "template" &&
-    themeMode !== "adaptive" &&
     themeMode !== "authored"
   ) {
     throw new Error("unsupported_presentation_identity");
@@ -148,7 +145,7 @@ export function resolvePersistedExportStrategy(
 
   if (version === "v2-standard") {
     if (
-      mode !== "template" ||
+      (mode !== null && mode !== "template") ||
       (themeMode !== undefined && themeMode !== "template")
     ) {
       throw new Error("template_v2_identity_mismatch");
@@ -179,32 +176,19 @@ export function resolvePersistedExportStrategy(
     return validateCanonicalExportStrategy(presentation, "authored-hybrid");
   }
 
-  if (
-    payloads.some(
-      ({ ui, html }) =>
-        (ui !== null && ui !== undefined) || Boolean(html)
-    )
-  ) {
-    throw new Error("legacy_payload_identity_mismatch");
-  }
-  return validateCanonicalExportStrategy(presentation, "legacy-general");
+  throw new Error("unsupported_presentation_identity");
 }
 
 function validateCanonicalExportStrategy(
   presentation: PersistedPresentation,
-  legacyStrategy: PersistedExportStrategy,
+  identityStrategy: PersistedExportStrategy,
 ): PersistedExportStrategy {
-  const hasProfile = presentation.profile !== undefined;
-  const hasCapabilities = presentation.capabilities !== undefined;
-  if (!hasProfile && !hasCapabilities) return legacyStrategy;
   const runtime = resolveServerIssuedPresentationProfile(presentation);
   const expected: PersistedExportStrategy =
     runtime.driver.driver_id === "template-v2"
       ? "template-v2-general"
-      : runtime.driver.driver_id === "authored"
-        ? "authored-hybrid"
-        : "legacy-general";
-  if (expected !== legacyStrategy) {
+      : "authored-hybrid";
+  if (expected !== identityStrategy) {
     throw new Error("presentation_profile_export_identity_conflict");
   }
   if (runtime.capabilities.export_adapter_id !== runtime.driver.export_adapter_id) {

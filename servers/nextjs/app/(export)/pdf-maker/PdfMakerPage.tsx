@@ -23,7 +23,7 @@ import {
 } from "@/lib/presentation-export-strategy";
 import TemplateV2GeneralSlide from "./TemplateV2GeneralSlide";
 import { ensureTailwindBrowserScript } from "@/lib/tailwind-browser";
-import { useSmartChartInjection } from "@/app/(presentation-generator)/components/useSmartChartInjection";
+import { useHtmlChartInjection } from "@/app/(presentation-generator)/components/useHtmlChartInjection";
 import {
   createProductionRenderArtifact,
   renderArtifactSlides,
@@ -140,7 +140,7 @@ type PresentationPageProps = {
   expectedRevision?: number;
 };
 
-const SmartHtmlPdfSlide = ({
+const AuthoredHtmlPdfSlide = ({
   slide,
   index,
 }: {
@@ -150,11 +150,11 @@ const SmartHtmlPdfSlide = ({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const html = slide.html_content?.trim() ?? "";
   const instanceId = useMemo(
-    () => `pdf-smart-${slide.id ?? index}`,
+    () => `pdf-authored-html-${slide.id ?? index}`,
     [index, slide.id]
   );
 
-  useSmartChartInjection({
+  useHtmlChartInjection({
     html,
     instanceId,
     domRevision: `${slide.index ?? "none"}:${index}`,
@@ -162,11 +162,11 @@ const SmartHtmlPdfSlide = ({
   });
 
   return (
-    <div className="smart-slide-export-root h-[720px] w-[1280px] overflow-hidden bg-white">
-      <div className="smart-slide-export-content h-[720px] w-[1280px] overflow-hidden bg-white">
+    <div className="authored-html-export-root h-[720px] w-[1280px] overflow-hidden bg-white">
+      <div className="authored-html-export-content h-[720px] w-[1280px] overflow-hidden bg-white">
         <div
           ref={containerRef}
-          data-smart-slide-instance={instanceId}
+          data-html-slide-instance={instanceId}
           data-screenshot="true"
           data-screenshot-include-children="true"
           className="h-[720px] w-[1280px] overflow-hidden bg-white"
@@ -307,7 +307,7 @@ const PresentationPage = ({
     element.style.setProperty("font-family", `"${bodyFont.name}"`);
     element.style.setProperty("--heading-font-family", `"${headingFont.name}"`);
     element.style.setProperty("--body-font-family", `"${bodyFont.name}"`);
-    // Additive tone & manner tokens (consumed only by the adaptive renderer).
+    // Additive tone & manner tokens for the shared HTML render surface.
     applyPresentationThemeTokens(element, theme);
   };
 
@@ -412,7 +412,7 @@ const PresentationPage = ({
                         <TemplateV2GeneralSlide slide={slide} />
                       ) : typeof slide?.html_content === "string" &&
                         slide.html_content.trim() ? (
-                        <SmartHtmlPdfSlide slide={slide} index={index} />
+                        <AuthoredHtmlPdfSlide slide={slide} index={index} />
                       ) : (
                         <SlideScale
                           slide={slide}

@@ -46,7 +46,7 @@ function assertNoSevereAxeViolations() {
 }
 
 describe("TemplatePanel localized empty states", () => {
-  it("shows a localized create action when the catalog is empty", () => {
+  it("shows a localized empty state when the catalog is empty", () => {
     cy.intercept("GET", "**/api/v1/ppt/structured-templates*", []).as(
       "templates",
     );
@@ -55,8 +55,7 @@ describe("TemplatePanel localized empty states", () => {
 
     cy.contains("h3", "템플릿").should("be.visible");
     cy.contains("아직 사용할 수 있는 템플릿이 없습니다").should("be.visible");
-    cy.contains("button", "템플릿 만들기").focus().should("have.focus").click();
-    cy.get("@router.push").should("have.been.calledWith", "/custom-template");
+    cy.contains("button", "템플릿 만들기").should("not.exist");
     assertNoSevereAxeViolations();
   });
 

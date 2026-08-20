@@ -4,7 +4,6 @@ import React, { useMemo } from "react";
 
 import type { TemplateV2Layout } from "@/components/slide-editor/importing/template-v2-import";
 import { readLayoutId } from "@/lib/template-v2-preview";
-import { TemplateV2PromptOverlay } from "../../../_shared/TemplateV2PromptOverlay";
 import { TemplateV2HtmlSlidePreview } from "../../../components/TemplateV2HtmlSlidePreview";
 
 function createPreviewSlide(layout: TemplateV2Layout, index: number) {
@@ -20,19 +19,11 @@ function createPreviewSlide(layout: TemplateV2Layout, index: number) {
 type TemplatePreviewSectionProps = {
   activeLayout: TemplateV2Layout | null;
   activeLayoutIndex: number;
-  isPrompting: boolean;
-  isGenerating: boolean;
-  onDismissPrompt: () => void;
-  onSubmitPrompt: (prompt: string) => Promise<boolean>;
 };
 
 export function TemplatePreviewSection({
   activeLayout,
   activeLayoutIndex,
-  isPrompting,
-  isGenerating,
-  onDismissPrompt,
-  onSubmitPrompt,
 }: TemplatePreviewSectionProps) {
   const previewSlide = useMemo(
     () =>
@@ -47,19 +38,9 @@ export function TemplatePreviewSection({
           <TemplateV2HtmlSlidePreviewMemoized slide={previewSlide} fixedSize />
         ) : (
           <div className="flex h-full items-center justify-center text-gray-500">
-            템플릿에 레이아웃이 없습니다. AI 레이아웃을 생성해 주세요.
+            템플릿에 레이아웃이 없습니다.
           </div>
         )}
-        {isPrompting && activeLayout ? (
-          <TemplateV2PromptOverlay
-            isSubmitting={isGenerating}
-            layout={activeLayout}
-            onDismiss={onDismissPrompt}
-            onSubmitPrompt={onSubmitPrompt}
-            showLayoutPreview
-            slideIndex={activeLayoutIndex}
-          />
-        ) : null}
       </div>
     </div>
   );

@@ -772,10 +772,10 @@ def _capturing_runtime_factory(captured: list[object]):
 def test_handler_passes_only_db_vetted_authored_context_and_publishes_one_message(
     tmp_path: Path,
 ):
-    asyncio.run(_handler_passes_only_db_vetted_smart_context(tmp_path))
+    asyncio.run(_handler_passes_only_db_vetted_authored_context(tmp_path))
 
 
-async def _handler_passes_only_db_vetted_smart_context(tmp_path: Path):
+async def _handler_passes_only_db_vetted_authored_context(tmp_path: Path):
     engine, maker = await _database(tmp_path / "canonical-context.db")
     try:
         presentation_id, operation_id, claim = await _seed(
@@ -786,13 +786,6 @@ async def _handler_passes_only_db_vetted_smart_context(tmp_path: Path):
         raw_context = {
             "viewport": {"width": 1440, "height": 900, "zoom": 1.25},
             "current_slide": {"index": 2},
-            "smart_selection": {
-                "html": "<section><h1>Selected</h1></section>",
-                "selected_text": "Selected",
-                "slide_index": 2,
-                # Unknown fields must not enter the typed context.
-                "provider_response": "secret",
-            },
         }
         request_payload = {
             **dict(claim.request_payload),
@@ -842,7 +835,6 @@ async def _handler_passes_only_db_vetted_smart_context(tmp_path: Path):
         assert context.generation_mode == "standard"
         assert context.history == ()  # current canonical user is not duplicated
         assert context.viewport.slide_index == 2
-        assert context.smart_selection is None
         assert [asset.name for asset in context.assets] == ["authoritative.pdf"]
         assert all(asset.name != "spoofed.exe" for asset in context.assets)
 
@@ -916,40 +908,6 @@ async def _handler_revalidates_assets_before_runtime(tmp_path: Path):
             assert list(
                 (await session.scalars(select(WorkspaceMessage))).all()
             ) == []
-    finally:
-        await engine.dispose()
-
-
-def test_standard_deck_discards_spoofed_smart_selection(tmp_path: Path):
-    asyncio.run(_standard_deck_discards_spoofed_smart_selection(tmp_path))
-
-
-async def _standard_deck_discards_spoofed_smart_selection(tmp_path: Path):
-    engine, maker = await _database(tmp_path / "standard-selection.db")
-    try:
-        _presentation_id, _operation_id, claim = await _seed(
-            maker, presentation_revision=3, expected_revision=3
-        )
-        request_payload = {
-            **dict(claim.request_payload),
-            "context": {
-                "smart_selection": {
-                    "html": "<script>untrusted()</script>",
-                    "selected_text": "untrusted",
-                }
-            },
-        }
-        captured: list[object] = []
-        handler = PresentationChatOperationHandler(
-            session_factory=maker,
-            service_factory=_capturing_runtime_factory(captured),
-        )
-        await handler.execute(
-            _Context(replace(claim, request_payload=request_payload))
-        )
-        assert len(captured) == 1
-        assert captured[0].generation_mode == "standard"
-        assert captured[0].smart_selection is None
     finally:
         await engine.dispose()
 
