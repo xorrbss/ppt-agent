@@ -26,8 +26,12 @@ resources/nextjs
 dist
 eng.traineddata
 resources/document-extraction/tessdata/
+resources/contracts/
+resources/servers/
+resources/templates/
 electron/.cache/
 electron/.cache/export-runtime/
+/.cache/
 
 # presenton-export runtime (downloaded via npm run setup:export-runtime / sync_export_runtime.js)
 resources/export/

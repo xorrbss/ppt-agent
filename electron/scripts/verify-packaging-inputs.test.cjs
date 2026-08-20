@@ -5,9 +5,15 @@ const path = require("node:path");
 const test = require("node:test");
 const crypto = require("node:crypto");
 const { writeResourceProvenance } = require("./resource-provenance.cjs");
+const {
+  materializeTailwindRuntimeClosure,
+} = require("./next-runtime-dependencies.cjs");
 
 const {
   EXPECTED_EXPORT_VERSION,
+  OOXML_CONTRACT_RELATIVE,
+  TEMPLATE_ENGINE_RELATIVE,
+  TEMPLATE_RENDERER_RELATIVE,
   validatePackagingInputs,
 } = require("./verify-packaging-inputs.cjs");
 
@@ -73,7 +79,68 @@ function createFixture({ nested = false, platform = "win32", arch = "x64" } = {}
   writeFile(path.join(electronSourceRoot, "main.ts"), "export const fixture = true;");
   writeFile(path.join(electronBundleRoot, "main.js"), "exports.fixture = true;");
   writeFile(path.join(nextSourceRoot, "app", "page.tsx"), "export default function Page() {}");
+  writeFile(
+    path.join(nextSourceRoot, "node_modules", "tailwindcss", "package.json"),
+    JSON.stringify({
+      name: "tailwindcss",
+      version: "3.4.19",
+      dependencies: { "@alloc/quick-lru": "^5.2.0" },
+    })
+  );
+  writeFile(
+    path.join(nextSourceRoot, "node_modules", "tailwindcss", "index.js"),
+    "module.exports = function tailwindcss() {};\n"
+  );
+  writeFile(
+    path.join(nextSourceRoot, "node_modules", "@alloc", "quick-lru", "index.js"),
+    "module.exports = class QuickLRU {};\n"
+  );
+  writeFile(
+    path.join(nextSourceRoot, "node_modules", "@alloc", "quick-lru", "package.json"),
+    JSON.stringify({ name: "@alloc/quick-lru", version: "5.2.0" })
+  );
+  materializeTailwindRuntimeClosure({ nextjsRoot: nextSourceRoot, serverRoot });
   writeFile(path.join(fastapiSourceRoot, "main.py"), "app = object()\n");
+  const ooxmlContract = "# generated OOXML contract fixture\n" + "x".repeat(100);
+  writeFile(
+    path.join(workspaceRoot, "contracts", OOXML_CONTRACT_RELATIVE),
+    ooxmlContract
+  );
+  const templateRegistry = JSON.stringify({
+    schemaVersion: "presenton.template-package-registry/v1",
+    packages: [],
+    legacyCompatibility: { enabled: false, templateIds: [] },
+  });
+  writeFile(
+    path.join(workspaceRoot, "templates", "package-registry.v1.json"),
+    templateRegistry
+  );
+  writeFile(
+    path.join(electronRoot, "resources", "templates", "package-registry.v1.json"),
+    templateRegistry
+  );
+  const templateEngine = "{\"engineId\":\"template-v2-json\"}" + " ".repeat(100);
+  writeFile(
+    path.join(workspaceRoot, "contracts", TEMPLATE_ENGINE_RELATIVE),
+    templateEngine
+  );
+  const templateRenderer = "export const rendererEvidence = true;\n" + "x".repeat(100);
+  writeFile(
+    path.join(workspaceRoot, TEMPLATE_RENDERER_RELATIVE),
+    templateRenderer
+  );
+  writeFile(
+    path.join(electronRoot, "resources", TEMPLATE_RENDERER_RELATIVE),
+    templateRenderer
+  );
+  writeFile(
+    path.join(electronRoot, "resources", "contracts", TEMPLATE_ENGINE_RELATIVE),
+    templateEngine
+  );
+  writeFile(
+    path.join(electronRoot, "resources", "contracts", OOXML_CONTRACT_RELATIVE),
+    ooxmlContract
+  );
   writeFile(path.join(workspaceRoot, "LICENSE"), "L".repeat(1000));
   writeFile(path.join(workspaceRoot, "NOTICE"), "N".repeat(1000));
   writeFile(
@@ -121,6 +188,11 @@ function createFixture({ nested = false, platform = "win32", arch = "x64" } = {}
     ["electron", electronSourceRoot, electronBundleRoot],
     ["nextjs", nextSourceRoot, nextRoot],
     ["fastapi", fastapiSourceRoot, fastapiRoot],
+    [
+      "template-packages",
+      path.join(workspaceRoot, "templates"),
+      path.join(electronRoot, "resources", "templates"),
+    ],
   ]) {
     writeResourceProvenance({ kind, sourceRoot, resourceRoot, workspaceRoot });
   }
@@ -204,6 +276,41 @@ test("rejects stale and missing source provenance", async (t) => {
       fixture.cleanup();
     }
   });
+
+  await t.test("generated build output is excluded", () => {
+    const fixture = createFixture();
+    try {
+      writeFile(
+        path.join(fixture.workspaceRoot, "servers", "fastapi", "build", "server", "Analysis-00.toc"),
+        "generated pyinstaller state"
+      );
+      assert.doesNotThrow(() => validate(fixture));
+    } finally {
+      fixture.cleanup();
+    }
+  });
+});
+
+test("rejects a stale Next.js quick-lru NFT runtime dependency", () => {
+  const fixture = createFixture({ nested: true });
+  try {
+    writeFile(
+      path.join(
+        fixture.serverRoot,
+        "node_modules",
+        "@alloc",
+        "quick-lru",
+        "package.json"
+      ),
+      JSON.stringify({ name: "@alloc/quick-lru", version: "0.0.0" })
+    );
+    assert.throws(
+      () => validate(fixture),
+      /Packaged Next\.js runtime dependency is stale: @alloc\/quick-lru sha256; rebuild the Next\.js resource/
+    );
+  } finally {
+    fixture.cleanup();
+  }
 });
 
 test("rejects incomplete release compliance inputs", () => {
@@ -211,6 +318,99 @@ test("rejects incomplete release compliance inputs", () => {
   try {
     fs.rmSync(path.join(fixture.workspaceRoot, "compliance", "fonts", "OFL-1.1.txt"));
     assert.throws(() => validate(fixture), /Bundled font OFL text is missing/);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("rejects a stale packaged authored OOXML contract", () => {
+  const fixture = createFixture();
+  try {
+    writeFile(
+      path.join(
+        fixture.electronRoot,
+        "resources",
+        "contracts",
+        OOXML_CONTRACT_RELATIVE
+      ),
+      "# stale generated contract\n" + "x".repeat(100)
+    );
+    assert.throws(
+      () => validate(fixture),
+      /Packaged authored OOXML contract is stale/
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("rejects stale packaged template assets", () => {
+  const fixture = createFixture();
+  try {
+    writeFile(
+      path.join(
+        fixture.electronRoot,
+        "resources",
+        "templates",
+        "package-registry.v1.json"
+      ),
+      JSON.stringify({ legacyCompatibility: { enabled: true } })
+    );
+    assert.throws(
+      () => validate(fixture),
+      /Packaged template package tree file is stale/
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("rejects stale packaged template renderer evidence", () => {
+  const fixture = createFixture();
+  try {
+    writeFile(
+      path.join(
+        fixture.electronRoot,
+        "resources",
+        TEMPLATE_RENDERER_RELATIVE
+      ),
+      "export const rendererEvidence = false;\n" + "x".repeat(100)
+    );
+    assert.throws(
+      () => validate(fixture),
+      /Packaged template package renderer evidence is stale/
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("rejects a template registry that re-enables legacy compatibility", () => {
+  const fixture = createFixture();
+  try {
+    const registry = JSON.stringify({
+      schemaVersion: "presenton.template-package-registry/v1",
+      packages: [],
+      legacyCompatibility: { enabled: true, templateIds: [] },
+    });
+    const sourceRoot = path.join(fixture.workspaceRoot, "templates");
+    const resourceRoot = path.join(
+      fixture.electronRoot,
+      "resources",
+      "templates"
+    );
+    writeFile(path.join(sourceRoot, "package-registry.v1.json"), registry);
+    writeFile(path.join(resourceRoot, "package-registry.v1.json"), registry);
+    writeResourceProvenance({
+      kind: "template-packages",
+      sourceRoot,
+      resourceRoot,
+      workspaceRoot: fixture.workspaceRoot,
+    });
+    assert.throws(
+      () => validate(fixture),
+      /template registry must keep legacyCompatibility\.enabled=false/
+    );
   } finally {
     fixture.cleanup();
   }
@@ -272,7 +472,7 @@ test("rejects export marker mismatch and damaged Sharp", async (t) => {
       writeFile(path.join(fixture.exportRoot, ".installed-version"), "v0.3.3\n");
       assert.throws(
         () => validate(fixture),
-        /Export runtime marker must be v0\.4\.3, received v0\.3\.3/
+        /Export runtime marker must be v0\.4\.8, received v0\.3\.3/
       );
     } finally {
       fixture.cleanup();

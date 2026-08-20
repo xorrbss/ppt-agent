@@ -13,6 +13,7 @@ const COMMON_EXCLUDED_DIRECTORIES = new Set([
   ".venv",
   "__pycache__",
   "app_data",
+  "build",
   "coverage",
   "cypress",
   "dist",

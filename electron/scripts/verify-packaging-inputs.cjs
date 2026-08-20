@@ -4,8 +4,29 @@ const { spawnSync } = require("child_process");
 const { requireReadinessOverlay } = require("./export-readiness-verifier.cjs");
 const { validateReleaseCompliance } = require("./release-compliance.cjs");
 const { verifyResourceProvenance } = require("./resource-provenance.cjs");
+const {
+  verifyTailwindRuntimeClosure,
+} = require("./next-runtime-dependencies.cjs");
 
-const EXPECTED_EXPORT_VERSION = "v0.4.3";
+const EXPECTED_EXPORT_VERSION = "v0.4.8";
+const OOXML_CONTRACT_RELATIVE = path.join(
+  "authored_vnext",
+  "ooxml",
+  "v1",
+  "generated",
+  "ooxml_package.py"
+);
+const TEMPLATE_ENGINE_RELATIVE = path.join(
+  "template_package",
+  "engines",
+  "template-v2-json.v1.json"
+);
+const TEMPLATE_RENDERER_RELATIVE = path.join(
+  "servers",
+  "nextjs",
+  "lib",
+  "template-v2-json-to-html.ts"
+);
 const DEFAULT_MAX_STANDALONE_FILES = 150000;
 const DEFAULT_MAX_STANDALONE_BYTES = 3 * 1024 * 1024 * 1024;
 const ALLOWED_STANDALONE_ROOTS = new Set([
@@ -88,6 +109,40 @@ function requirePopulatedDirectory(directory, label) {
   }
   if (!directoryHasFile(directory)) {
     fail(`${label} contains no files: ${directory}`);
+  }
+}
+
+function requireDirectoryByteParity(sourceRoot, resourceRoot, label, rebuildTarget) {
+  const inventory = (root, ignoreProvenance) => {
+    const files = new Map();
+    const pending = [root];
+    while (pending.length > 0) {
+      const current = pending.pop();
+      for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+        const entryPath = path.join(current, entry.name);
+        if (entry.isDirectory()) pending.push(entryPath);
+        if (entry.isFile()) {
+          const relative = path.relative(root, entryPath).split(path.sep).join("/");
+          if (ignoreProvenance && relative === ".source-provenance.json") continue;
+          files.set(relative, entryPath);
+        }
+      }
+    }
+    return files;
+  };
+  const sourceFiles = inventory(sourceRoot, false);
+  const resourceFiles = inventory(resourceRoot, true);
+  if (
+    sourceFiles.size !== resourceFiles.size ||
+    [...sourceFiles.keys()].some((relative) => !resourceFiles.has(relative))
+  ) {
+    fail(`${label} inventory is stale; rebuild the ${rebuildTarget} resource`);
+  }
+  for (const [relative, source] of sourceFiles) {
+    const resource = resourceFiles.get(relative);
+    if (!fs.readFileSync(source).equals(fs.readFileSync(resource))) {
+      fail(`${label} file is stale: ${relative}; rebuild the ${rebuildTarget} resource`);
+    }
   }
 }
 
@@ -333,6 +388,33 @@ function validatePackagingInputs(options = {}) {
   const nextRoot = path.join(resourcesRoot, "nextjs");
   const exportRoot = path.join(resourcesRoot, "export");
   const fastapiRoot = path.join(resourcesRoot, "fastapi");
+  const ooxmlContractSource = path.join(
+    workspaceRoot,
+    "contracts",
+    OOXML_CONTRACT_RELATIVE
+  );
+  const ooxmlContractResource = path.join(
+    resourcesRoot,
+    "contracts",
+    OOXML_CONTRACT_RELATIVE
+  );
+  const templateEngineSource = path.join(
+    workspaceRoot,
+    "contracts",
+    TEMPLATE_ENGINE_RELATIVE
+  );
+  const templateEngineResource = path.join(
+    resourcesRoot,
+    "contracts",
+    TEMPLATE_ENGINE_RELATIVE
+  );
+  const templatePackagesSource = path.join(workspaceRoot, "templates");
+  const templatePackagesResource = path.join(resourcesRoot, "templates");
+  const templateRendererSource = path.join(workspaceRoot, TEMPLATE_RENDERER_RELATIVE);
+  const templateRendererResource = path.join(
+    resourcesRoot,
+    TEMPLATE_RENDERER_RELATIVE
+  );
   const standalone = resolveNextStandalone(nextRoot);
 
   const provenanceCheck = options.provenanceCheck || verifyResourceProvenance;
@@ -358,6 +440,12 @@ function validatePackagingInputs(options = {}) {
       resourceRoot: fastapiRoot,
       workspaceRoot,
     }),
+    templatePackages: provenanceCheck({
+      kind: "template-packages",
+      sourceRoot: templatePackagesSource,
+      resourceRoot: templatePackagesResource,
+      workspaceRoot,
+    }),
   };
 
   requireFile(standalone.serverScript, "Next.js standalone server");
@@ -369,6 +457,10 @@ function validatePackagingInputs(options = {}) {
     path.join(standalone.serverRoot, "public"),
     "Next.js public assets"
   );
+  const nextRuntimeDependencies = verifyTailwindRuntimeClosure({
+    nextjsRoot: nextSourceRoot,
+    serverRoot: standalone.serverRoot,
+  });
 
   const standaloneStats = scanTree(nextRoot, {
     workspaceRoot,
@@ -406,6 +498,39 @@ function validatePackagingInputs(options = {}) {
     platform === "win32" ? "fastapi.exe" : "fastapi"
   );
   requireCompatibleBinary(fastapiBinary, "FastAPI executable", platform);
+  requireFile(ooxmlContractSource, "Authored OOXML contract source", 100);
+  requireFile(ooxmlContractResource, "Packaged authored OOXML contract", 100);
+  if (
+    !fs.readFileSync(ooxmlContractSource).equals(fs.readFileSync(ooxmlContractResource))
+  ) {
+    fail("Packaged authored OOXML contract is stale; rebuild the FastAPI resource");
+  }
+  requireFile(templateEngineSource, "Template package engine source", 100);
+  requireFile(templateEngineResource, "Packaged template package engine", 100);
+  if (
+    !fs.readFileSync(templateEngineSource).equals(fs.readFileSync(templateEngineResource))
+  ) {
+    fail("Packaged template package engine is stale; rebuild the FastAPI resource");
+  }
+  requireFile(templateRendererSource, "Template package renderer evidence source", 100);
+  requireFile(templateRendererResource, "Packaged template package renderer evidence", 100);
+  if (
+    !fs.readFileSync(templateRendererSource).equals(fs.readFileSync(templateRendererResource))
+  ) {
+    fail("Packaged template package renderer evidence is stale; rebuild the FastAPI resource");
+  }
+  requireDirectoryByteParity(
+    templatePackagesSource,
+    templatePackagesResource,
+    "Packaged template package tree",
+    "FastAPI"
+  );
+  const packagedRegistry = JSON.parse(
+    fs.readFileSync(path.join(templatePackagesResource, "package-registry.v1.json"), "utf8")
+  );
+  if (packagedRegistry.legacyCompatibility?.enabled !== false) {
+    fail("Packaged template registry must keep legacyCompatibility.enabled=false");
+  }
 
   scanTree(exportRoot, { workspaceRoot, platform });
   scanTree(fastapiRoot, {
@@ -426,6 +551,7 @@ function validatePackagingInputs(options = {}) {
     nextServer: standalone.serverScript,
     provenance,
     compliance,
+    nextRuntimeDependencies,
     ...standaloneStats,
   };
 }
@@ -452,6 +578,9 @@ if (require.main === module) {
   module.exports = {
     ALLOWED_STANDALONE_ROOTS,
     EXPECTED_EXPORT_VERSION,
+    OOXML_CONTRACT_RELATIVE,
+    TEMPLATE_ENGINE_RELATIVE,
+    TEMPLATE_RENDERER_RELATIVE,
     detectBinaryFormat,
     isWithin,
     resolveNextStandalone,

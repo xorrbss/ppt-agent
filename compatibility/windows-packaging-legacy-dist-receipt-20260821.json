@@ -1,0 +1,45 @@
+{
+  "schema": "presenton.windows-packaging-receipt/v1",
+  "kind": "legacy-dist-quarantine",
+  "root": "../electron/.cache/release-archive/dist-legacy-20260723-presenton-0.8.6",
+  "quarantine": {
+    "previousRoot": "../electron/dist",
+    "recoverable": true,
+    "reason": "Legacy AppX identity version 0.8.6.0 does not match current expected 2026.7.2401.0",
+    "verificationCommand": "node electron/scripts/verify-windows-release.cjs electron/dist"
+  },
+  "treeFileCount": 42615,
+  "totalBytes": 3004175834,
+  "topLevelFiles": [
+    {
+      "path": "builder-debug.yml",
+      "bytes": 9000551,
+      "sha256": "f5e3215f73f048995d94c40e630f845f9e03ad2cfbb3cacc9d5901909d716bee"
+    },
+    {
+      "path": "builder-effective-config.yaml",
+      "bytes": 1248,
+      "sha256": "b6801ae681ea21a32b7904c3bd701c6fa5ae35d7169e36ccb945f9d0430f1c29"
+    },
+    {
+      "path": "latest.yml",
+      "bytes": 350,
+      "sha256": "c1137dde8aa84829cd1a4445d6c05695d163e943af16eea9d7a81b2185069c8e"
+    },
+    {
+      "path": "Presenton-0.8.6-beta.appx",
+      "bytes": 592399168,
+      "sha256": "efdc3c3f209f635774c58e8ab4554f0c1a5e5cae6544e3de33084ac5c7f33d4f"
+    },
+    {
+      "path": "Presenton-0.8.6-beta.exe",
+      "bytes": 464686365,
+      "sha256": "9d5dab96b4c58fe12eb43886f3c5e3ea02074d963482304041c2ac865cb4a4ca"
+    },
+    {
+      "path": "Presenton-0.8.6-beta.exe.blockmap",
+      "bytes": 459670,
+      "sha256": "31115483519eedb57a4f034a17b4cb7d80657fee65c065e0dba801156648f1ba"
+    }
+  ]
+}

@@ -9,6 +9,9 @@ const {
   validateCopiedLinks,
   validateLinkFreeTree,
 } = require("./scripts/standalone-copy.cjs")
+const {
+  materializeTailwindRuntimeClosure,
+} = require("./scripts/next-runtime-dependencies.cjs")
 
 const electronRoot = __dirname
 const nextjsDir = path.join(electronRoot, "..", "servers", "nextjs")
@@ -134,6 +137,15 @@ try {
   if (removeMaterializedPnpmStore(serverDir)) {
     console.log("Removed materialized pnpm backing store from:", serverDir)
   }
+
+  const runtimeDependencies = materializeTailwindRuntimeClosure({
+    nextjsRoot: nextjsDir,
+    serverRoot: serverDir,
+  })
+  console.log(
+    `Materialized ${runtimeDependencies.packageInstanceCount} Tailwind runtime dependency instances ` +
+      `(${runtimeDependencies.uniquePackageCount} unique packages)`
+  )
 
   const staticSrc = path.join(nextBuildDir, "static")
   if (fs.existsSync(staticSrc)) {

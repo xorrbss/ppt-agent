@@ -1,4 +1,5 @@
 const fs = require("node:fs")
+const crypto = require("node:crypto")
 const net = require("node:net")
 const os = require("node:os")
 const path = require("node:path")
@@ -14,6 +15,24 @@ const resourcesRoot = path.join(electronRoot, "resources")
 const startupTimeoutMs = Number(
   process.env.PRESENTON_SMOKE_STARTUP_TIMEOUT_MS || 120000,
 )
+
+const SMOKE_ADMIN_USERNAME = "packaged_smoke_admin"
+
+function createSmokeAdminPassword() {
+  return crypto.randomBytes(32).toString("base64url")
+}
+
+function buildFastApiSmokeEnv(baseEnv, appDataDirectory, adminPassword) {
+  return {
+    ...baseEnv,
+    APP_DATA_DIRECTORY: appDataDirectory,
+    AUTH_PASSWORD: adminPassword,
+    AUTH_USERNAME: SMOKE_ADMIN_USERNAME,
+    DISABLE_AUTH: "true",
+    MIGRATE_DATABASE_ON_STARTUP: "True",
+    USER_CONFIG_PATH: path.join(appDataDirectory, "userConfig.json"),
+  }
+}
 
 function allocatePort() {
   return new Promise((resolve, reject) => {
@@ -99,6 +118,7 @@ async function main() {
   ])
   let fastapi
   let nextjs
+  const smokeAdminPassword = createSmokeAdminPassword()
 
   try {
     fastapi = startProcess(
@@ -106,12 +126,11 @@ async function main() {
       ["--port", fastapiPort.toString()],
       {
         cwd: fastapiRoot,
-        env: {
-          ...process.env,
-          APP_DATA_DIRECTORY: appDataDirectory,
-          DISABLE_AUTH: "true",
-          MIGRATE_DATABASE_ON_STARTUP: "True",
-        },
+        env: buildFastApiSmokeEnv(
+          process.env,
+          appDataDirectory,
+          smokeAdminPassword,
+        ),
       },
     )
     const docs = await waitForResponse(
@@ -133,6 +152,7 @@ async function main() {
           FAST_API_INTERNAL_URL: `http://127.0.0.1:${fastapiPort}`,
           HOSTNAME: "127.0.0.1",
           PORT: nextPort.toString(),
+          USER_CONFIG_PATH: path.join(appDataDirectory, "userConfig.json"),
         },
       },
     )
@@ -187,4 +207,10 @@ if (require.main === module) {
     console.error(`[packaged-servers-smoke] ${error.message}`)
     process.exitCode = 1
   })
+} else {
+  module.exports = {
+    SMOKE_ADMIN_USERNAME,
+    buildFastApiSmokeEnv,
+    createSmokeAdminPassword,
+  }
 }

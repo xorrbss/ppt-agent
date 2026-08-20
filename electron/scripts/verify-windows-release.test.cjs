@@ -58,6 +58,22 @@ function archiveFixture(overrides = {}) {
     [`${prefix}export/index.js`, readinessOverlayFixture()],
     [`${prefix}export/py/convert-win32-x64.exe`, peFixture()],
     [`${prefix}fastapi/fastapi.exe`, peFixture()],
+    [
+      `${prefix}contracts/authored_vnext/ooxml/v1/generated/ooxml_package.py`,
+      Buffer.from("# generated OOXML contract fixture\n" + "x".repeat(100)),
+    ],
+    [
+      `${prefix}templates/package-registry.v1.json`,
+      Buffer.from(JSON.stringify({ legacyCompatibility: { enabled: false } })),
+    ],
+    [
+      `${prefix}contracts/template_package/engines/template-v2-json.v1.json`,
+      Buffer.from("{\"engineId\":\"template-v2-json\"}" + " ".repeat(100)),
+    ],
+    [
+      `${prefix}servers/nextjs/lib/template-v2-json-to-html.ts`,
+      Buffer.from("export const rendererEvidence = true;\n" + "x".repeat(100)),
+    ],
     [`${nextRoot}server.js`, Buffer.from("server")],
     [`${nextRoot}.next-build/static/chunks/webpack.js`, Buffer.from("static")],
     [`${nextRoot}public/favicon.ico`, Buffer.from("public")],
@@ -113,6 +129,42 @@ function addUnpacked(fixture) {
     peFixture()
   );
   write(path.join(resources, "fastapi", "fastapi.exe"), peFixture());
+  write(
+    path.join(
+      resources,
+      "contracts",
+      "authored_vnext",
+      "ooxml",
+      "v1",
+      "generated",
+      "ooxml_package.py"
+    ),
+    "# generated OOXML contract fixture\n" + "x".repeat(100)
+  );
+  write(
+    path.join(resources, "templates", "package-registry.v1.json"),
+    JSON.stringify({ legacyCompatibility: { enabled: false }, padding: "x".repeat(100) })
+  );
+  write(
+    path.join(
+      resources,
+      "contracts",
+      "template_package",
+      "engines",
+      "template-v2-json.v1.json"
+    ),
+    "{\"engineId\":\"template-v2-json\"}" + " ".repeat(100)
+  );
+  write(
+    path.join(
+      resources,
+      "servers",
+      "nextjs",
+      "lib",
+      "template-v2-json-to-html.ts"
+    ),
+    "export const rendererEvidence = true;\n" + "x".repeat(100)
+  );
   const next = path.join(resources, "nextjs", "servers", "nextjs");
   write(path.join(next, "server.js"), "server");
   write(path.join(next, ".next-build", "static", "chunk.js"), "static");
@@ -187,7 +239,7 @@ test("rejects AppX manifest identity, signature entry, and export marker regress
               [`${APP_RESOURCE_PREFIX}export/.installed-version`]: "v0.3.3",
             }),
           }),
-        /export marker must be v0\.4\.3/
+        /export marker must be v0\.4\.8/
       );
     } finally {
       fixture.cleanup();

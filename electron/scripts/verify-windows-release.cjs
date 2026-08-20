@@ -7,7 +7,7 @@ const {
   readExpectedExportVersion,
 } = require("./release-version-contract.cjs");
 
-const EXPECTED_EXPORT_VERSION = "v0.4.3";
+const EXPECTED_EXPORT_VERSION = "v0.4.8";
 const EXPECTED_IDENTITY = "PresentonAI.Presenton";
 const EXPECTED_PUBLISHER = "CN=8A2C57B5-F1C6-473A-93EE-2E9B72134341";
 const APP_RESOURCE_PREFIX = "app/resources/app/resources/";
@@ -91,16 +91,25 @@ function defaultSignatureCheck(filePath) {
       "| ConvertTo-Json -Compress",
     ].join(""),
   ].join(";");
-  const output = execFileSync(
-    "powershell.exe",
-    ["-NoProfile", "-NonInteractive", "-Command", script],
-    {
-      encoding: "utf8",
-      env: { ...process.env, PRESENTON_SIGN_TARGET: path.resolve(filePath) },
-      windowsHide: true,
+  const candidates = ["pwsh.exe", "powershell.exe"];
+  let lastError;
+  for (const executable of candidates) {
+    try {
+      const output = execFileSync(
+        executable,
+        ["-NoProfile", "-NonInteractive", "-Command", script],
+        {
+          encoding: "utf8",
+          env: { ...process.env, PRESENTON_SIGN_TARGET: path.resolve(filePath) },
+          windowsHide: true,
+        }
+      );
+      return JSON.parse(output);
+    } catch (error) {
+      lastError = error;
     }
-  );
-  return JSON.parse(output);
+  }
+  throw lastError;
 }
 
 function requireValidSignature(filePath, label, signatureCheck) {
@@ -287,6 +296,30 @@ function validateAppx(appxPath, options = {}) {
     [resource("fastapi/fastapi.exe")],
     "FastAPI executable"
   );
+  findEntry(
+    names,
+    [resource("contracts/authored_vnext/ooxml/v1/generated/ooxml_package.py")],
+    "authored OOXML contract"
+  );
+  const templateRegistry = findEntry(
+    names,
+    [resource("templates/package-registry.v1.json")],
+    "template package registry"
+  );
+  findEntry(
+    names,
+    [resource("contracts/template_package/engines/template-v2-json.v1.json")],
+    "template package engine"
+  );
+  findEntry(
+    names,
+    [resource("servers/nextjs/lib/template-v2-json-to-html.ts")],
+    "template package renderer evidence"
+  );
+  const registry = JSON.parse(entries.read(appxPath, templateRegistry).toString("utf8"));
+  if (registry.legacyCompatibility?.enabled !== false) {
+    throw new Error("AppX template registry must keep legacyCompatibility.enabled=false");
+  }
   inspectPeBuffer(readPrefix(converter), "AppX export converter");
   inspectPeBuffer(readPrefix(fastapi), "AppX FastAPI executable");
 
@@ -380,6 +413,51 @@ function validateUnpacked(
   inspectPeFile(
     path.join(resources, "fastapi", "fastapi.exe"),
     "unpacked FastAPI executable"
+  );
+  requireFile(
+    path.join(
+      resources,
+      "contracts",
+      "authored_vnext",
+      "ooxml",
+      "v1",
+      "generated",
+      "ooxml_package.py"
+    ),
+    "unpacked authored OOXML contract",
+    100
+  );
+  requireFile(
+    path.join(
+      resources,
+      "servers",
+      "nextjs",
+      "lib",
+      "template-v2-json-to-html.ts"
+    ),
+    "unpacked template package renderer evidence",
+    100
+  );
+  const unpackedTemplateRegistry = path.join(
+    resources,
+    "templates",
+    "package-registry.v1.json"
+  );
+  requireFile(unpackedTemplateRegistry, "unpacked template package registry", 100);
+  const unpackedRegistry = JSON.parse(fs.readFileSync(unpackedTemplateRegistry, "utf8"));
+  if (unpackedRegistry.legacyCompatibility?.enabled !== false) {
+    throw new Error("unpacked template registry must keep legacyCompatibility.enabled=false");
+  }
+  requireFile(
+    path.join(
+      resources,
+      "contracts",
+      "template_package",
+      "engines",
+      "template-v2-json.v1.json"
+    ),
+    "unpacked template package engine",
+    100
   );
   const direct = path.join(resources, "nextjs", "server.js");
   const nested = path.join(resources, "nextjs", "servers", "nextjs", "server.js");

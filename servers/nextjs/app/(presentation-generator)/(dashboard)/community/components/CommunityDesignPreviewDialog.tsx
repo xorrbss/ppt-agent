@@ -358,14 +358,6 @@ export default function CommunityDesignPreviewDialog({
                         value={presentation.likes ?? 0}
                       />
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => onUseDesign(presentation)}
-                      className="mt-2 inline-flex h-[41px] w-full min-w-0 items-center justify-center gap-2 rounded-full border border-[#EDEEEF] px-5 text-sm text-[#191919] sm:hidden"
-                    >
-                      <Check className="h-4 w-4" />
-                      {t("useDesignLabel")}
-                    </button>
                   </div>
                 </aside>
               </div>
