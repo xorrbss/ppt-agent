@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { Ellipse, Group, Image as KonvaImage, Layer, Line, Rect, Stage, Text, Transformer } from "react-konva";
 
 import { CanvasCoreGuides, type CanvasCoreGuide } from "@/components/canvas-core/CanvasCoreGuides";
+import { createCanvasCoreAlignmentTargets, snapCanvasCoreBounds } from "@/components/canvas-core/alignmentSnap";
 import { CanvasCoreZoomControls, useCanvasCoreViewport } from "@/components/canvas-core/CanvasCoreViewport";
 import { useTemplateImage } from "@/app/template-v2-studio/[templateId]/TemplateV2CanvasHelpers";
 
@@ -105,7 +106,9 @@ function CanvasElement({
     draggable: interactive && element.editable,
     listening: interactive,
     ref: (node: Konva.Node | null) => setNode(element.id, node),
-    onMouseDown: (event: Konva.KonvaEventObject<MouseEvent>) => {
+    // Pointer events normalize mouse, pen, and touch before a drag starts.
+    // Mouse-only selection left pen input without an inspector selection.
+    onPointerDown: (event: Konva.KonvaEventObject<PointerEvent>) => {
       const additive = event.evt.shiftKey || event.evt.metaKey || event.evt.ctrlKey;
       if (!selected && !additive) onSelect(element, false);
     },
@@ -216,7 +219,7 @@ export interface MasterKonvaCanvasProps {
  */
 export default function MasterKonvaCanvas({ scene, titleLines, body, logoUrl, resolveAssetUrl, onTransaction, onCopy, onPaste, canPaste = false, onWarningChange, onSelectionChange, editRequest, onEditRequestConsumed, onUndo, onRedo, interactionResetNonce, preview = false }: MasterKonvaCanvasProps) {
   const t = useTranslations("authoredVnext.master.studio");
-  const { containerRef, dimensions, viewport, armPan, beginPan, stageProps, zoomBy, fit } = useCanvasCoreViewport({ slideWidth: scene.width, slideHeight: scene.height });
+  const { containerRef, dimensions, viewport, armPan, beginPan, stageProps, registerCanvasLayer, zoomBy, fit } = useCanvasCoreViewport({ slideWidth: scene.width, slideHeight: scene.height });
   const transformerRef = useRef<Konva.Transformer | null>(null);
   const nodesRef = useRef(new Map<string, Konva.Node>());
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
@@ -321,23 +324,23 @@ export default function MasterKonvaCanvas({ scene, titleLines, body, logoUrl, re
   }, [selectedIds, visibleElements]);
   const snapNode = useCallback((element: MasterCanvasElement, node: Konva.Node) => {
     if (!snapEnabled) return;
-    const next = { x: node.x(), y: node.y() };
-    const nextGuides: CanvasCoreGuide[] = [];
-    const vertical = [scene.safeArea.x, scene.safeArea.x + scene.safeArea.width / 2, scene.safeArea.x + scene.safeArea.width];
-    const horizontal = [scene.safeArea.y, scene.safeArea.y + scene.safeArea.height / 2, scene.safeArea.y + scene.safeArea.height];
-    for (const other of visibleElements) {
-      if (other.id === element.id || selectedIds.includes(other.id)) continue;
-      vertical.push(other.bounds.x, other.bounds.x + other.bounds.width / 2, other.bounds.x + other.bounds.width);
-      horizontal.push(other.bounds.y, other.bounds.y + other.bounds.height / 2, other.bounds.y + other.bounds.height);
-    }
-    const snapAxis = (value: number, candidates: number[], orientation: CanvasCoreGuide["orientation"]) => {
-      const found = candidates.find((candidate) => Math.abs(value - candidate) <= SNAP_DISTANCE / Math.max(viewport.scale, 0.1));
-      if (found === undefined) return value;
-      nextGuides.push({ orientation, position: found, start: orientation === "vertical" ? 0 : 0, end: orientation === "vertical" ? scene.height : scene.width });
-      return found - (orientation === "vertical" ? 0 : 0) + (value - value);
-    };
-    next.x = snapAxis(next.x, vertical, "vertical");
-    next.y = snapAxis(next.y, horizontal, "horizontal");
+    const targets = createCanvasCoreAlignmentTargets(
+      scene.safeArea,
+      visibleElements
+        .filter((other) => other.id !== element.id && !selectedIds.includes(other.id))
+        .map((other) => other.bounds),
+    );
+    const { position: next, guides: nextGuides } = snapCanvasCoreBounds({
+      movingBounds: {
+        x: node.x(),
+        y: node.y(),
+        width: node.width() * node.scaleX(),
+        height: node.height() * node.scaleY(),
+      },
+      guideBounds: { x: 0, y: 0, width: scene.width, height: scene.height },
+      targets,
+      threshold: SNAP_DISTANCE / Math.max(viewport.scale, 0.1),
+    });
     node.position(next);
     const multiDrag = multiDragRef.current;
     if (multiDrag?.sourceId === element.id) {
@@ -395,7 +398,7 @@ export default function MasterKonvaCanvas({ scene, titleLines, body, logoUrl, re
       <button type="button" className="rounded border px-2 py-1 disabled:opacity-40" disabled={!canReorder} onClick={() => applyToSelection({ type: "reorder", elementIds: selectedIds, direction: "front" })}>{t("bringFront")}</button>
       <button type="button" className="rounded border px-2 py-1 disabled:opacity-40" disabled={!canReorder} onClick={() => applyToSelection({ type: "reorder", elementIds: selectedIds, direction: "back" })}>{t("sendBack")}</button>
       <button type="button" className="rounded border px-2 py-1 disabled:opacity-40" disabled={!copySelection.length} onClick={() => applyToSelection({ type: "duplicate", elementIds: copySelection })}>{t("duplicate")}</button>
-      <button type="button" className="rounded border px-2 py-1 disabled:opacity-40" disabled={!deleteSelection.length} onClick={deleteSelected}>{t("delete")}</button>
+      <button type="button" data-testid="master-canvas-delete" className="rounded border px-2 py-1 disabled:opacity-40" disabled={!deleteSelection.length} onClick={deleteSelected}>{t("delete")}</button>
       {selected.length === 1 && selected[0].kind === "image" && <><button type="button" className="rounded border px-2 py-1" onClick={() => onTransaction({ type: "updateImagePresentation", elementId: selected[0].id, fit: "contain" })}>{t("fit")}</button><button type="button" className="rounded border px-2 py-1" onClick={() => onTransaction({ type: "updateImagePresentation", elementId: selected[0].id, fit: "cover" })}>{t("fill")}</button></>}
     </div>}
     <div ref={containerRef} className="relative h-[72vh] min-h-[480px] w-full overflow-hidden bg-slate-800 outline-none" tabIndex={preview ? -1 : 0} role="application" aria-label={t("canvasAria")} data-testid="master-studio-canvas" data-preview-mode={preview ? "true" : "false"} data-editing-chrome={preview ? "hidden" : "visible"} data-viewport-x={viewport.x} data-viewport-y={viewport.y} data-viewport-scale={viewport.scale} onKeyDown={(event) => {
@@ -422,7 +425,7 @@ export default function MasterKonvaCanvas({ scene, titleLines, body, logoUrl, re
       }
     }} onKeyUp={(event) => { if (!preview && event.code === "Space") armPan(false); }} onBlur={() => armPan(false)}>
       <Stage width={dimensions.width} height={dimensions.height} {...stageProps} listening={!preview} onMouseDown={(event) => { if (preview || beginPan(event)) return; const stage = event.target.getStage(); if (event.target === stage || event.target.name() === "slide-background") { setSelectedIds([]); setInlineEditor(null); } }}>
-        <Layer><Group x={viewport.x} y={viewport.y} scaleX={viewport.scale} scaleY={viewport.scale}>
+        <Layer ref={registerCanvasLayer}><Group x={viewport.x} y={viewport.y} scaleX={viewport.scale} scaleY={viewport.scale}>
           <Rect name="slide-background" width={scene.width} height={scene.height} fill={scene.background} shadowColor="#020617" shadowBlur={18} shadowOpacity={0.45} />
           {!preview && showSafeArea && <Rect x={scene.safeArea.x} y={scene.safeArea.y} width={scene.safeArea.width} height={scene.safeArea.height} stroke="#60a5fa" dash={[8, 5]} listening={false} />}
           {visibleElements.map((element) => <CanvasElement key={element.id} element={element} titleLines={titleLines} body={body} placeholderLabels={{ title: t("placeholderTitle"), body: t("placeholderBody"), content: t("placeholderContent") }} logoUrl={logoUrl} resolveAssetUrl={resolveAssetUrl} imageFit={element.content?.fit || (element.kind === "image" ? "contain" : "cover")} selected={!preview && selectedIds.includes(element.id)} interactive={!preview} showPlaceholderChrome={!preview} setNode={setNode} onSelect={select} onDoubleClick={startTextEditing} onDragStart={beginDrag} onDragMove={snapNode} onDragEnd={(dragged, node) => { const multiDrag = multiDragRef.current; multiDragRef.current = null; commitGeometry(multiDrag?.sourceId === dragged.id ? multiDrag.entries : [{ element: dragged, node }]); }} />)}

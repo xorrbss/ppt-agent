@@ -26,7 +26,14 @@ import { renderPolygon, renderSvg } from "./vector";
 
 export function renderItem(item: JsonRecord, mode: RenderMode): string {
   if (isComponent(item)) {
-    return renderGroup({ ...item, type: "group", children: item.elements }, mode);
+    // A component's persisted size can describe its stale authoring frame.
+    // The HTML group must size itself from the element bounds instead.
+    const { size, ...component } = item;
+    void size;
+    return renderGroup(
+      { ...component, type: "group", children: item.elements },
+      mode,
+    );
   }
 
   switch (readString(item.type)) {

@@ -38,62 +38,6 @@ export function setupApiHandlers() {
     return { telemetryEnabled: !isDisabled };
   });
 
-  // Handler for save-layout API
-  ipcMain.handle("api:save-layout", async (event, { layout_name, components }) => {
-    try {
-      if (!layout_name || !components || !Array.isArray(components)) {
-        throw new Error("Invalid request body. Expected layout_name and components array.");
-      }
-
-      // Define the layouts directory path
-      const layoutsDir = path.join(process.cwd(), "app_data", "layouts", layout_name);
-
-      // Create the directory if it doesn't exist
-      if (!fs.existsSync(layoutsDir)) {
-        fs.mkdirSync(layoutsDir, { recursive: true });
-      }
-
-      // Save each component as a separate file
-      const savedFiles = [];
-
-      for (const component of components) {
-        const { slide_number, component_code, component_name } = component;
-
-        if (!component_code || !component_name) {
-          console.warn(
-            `Skipping component for slide ${slide_number}: missing code or name`
-          );
-          continue;
-        }
-
-        const fileName = `${component_name}.tsx`;
-        const filePath = path.join(layoutsDir, fileName);
-        const cleanComponentCode = component_code
-          .replace(/```tsx/g, "")
-          .replace(/```/g, "");
-
-        fs.writeFileSync(filePath, cleanComponentCode, "utf8");
-        savedFiles.push({
-          slide_number,
-          component_name,
-          file_path: filePath,
-          file_name: fileName,
-        });
-      }
-
-      return {
-        success: true,
-        layout_name,
-        path: layoutsDir,
-        saved_files: savedFiles.length,
-        components: savedFiles,
-      };
-    } catch (error) {
-      console.error("Error saving layout:", error);
-      throw new Error("Failed to save layout components");
-    }
-  });
-
   // Handler for templates API (static list)
   ipcMain.handle("api:templates", async () => {
     try {

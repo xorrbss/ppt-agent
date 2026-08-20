@@ -20,7 +20,7 @@ import {
 import { usePathname } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { addToHistory } from "@/store/slices/undoRedoSlice";
-import SlideScale from "../../components/PresentationRender";
+import SlideScale, { ViewportCulledSlide } from "../../components/PresentationRender";
 
 interface SlideContentProps {
   slide: any;
@@ -29,6 +29,8 @@ interface SlideContentProps {
   isChatEditing?: boolean;
   isChatTargeted?: boolean;
   mutationsEnabled?: boolean;
+  deferRender?: boolean;
+  renderPriority?: boolean;
 }
 
 const SlideContent = ({
@@ -38,6 +40,8 @@ const SlideContent = ({
   isChatEditing = false,
   isChatTargeted = false,
   mutationsEnabled = true,
+  deferRender = false,
+  renderPriority = false,
 }: SlideContentProps) => {
   const dispatch = useDispatch();
   const [isUpdating, setIsUpdating] = useState(false);
@@ -142,18 +146,20 @@ const SlideContent = ({
                 : "relative"
             }
           >
-            <div
-              data-testid="slide-page-boundary"
-              className="overflow-hidden rounded-[2px] bg-white shadow-[0_3px_12px_rgba(15,23,42,0.16)] ring-1 ring-inset ring-slate-300"
-            >
-              <SlideScale
-                slide={slide}
-                theme={presentationData?.theme || null}
-                isEditMode={mutationsEnabled}
-                showEditScan={isChatEditing}
-                preferAuthoredHtml
-              />
-            </div>
+            <ViewportCulledSlide enabled={deferRender} priority={renderPriority}>
+              <div
+                data-testid="slide-page-boundary"
+                className="h-full overflow-hidden rounded-[2px] bg-white shadow-[0_3px_12px_rgba(15,23,42,0.16)] ring-1 ring-inset ring-slate-300"
+              >
+                <SlideScale
+                  slide={slide}
+                  theme={presentationData?.theme || null}
+                  isEditMode={mutationsEnabled}
+                  showEditScan={isChatEditing}
+                  preferAuthoredHtml
+                />
+              </div>
+            </ViewportCulledSlide>
           </div>
           {mutationsEnabled && !isStreaming && (
             <div

@@ -62,6 +62,12 @@ function expectMountedKonvaNodeMissing(elementId: string) {
 
 function selectKonvaElement(elementId: string) {
   return findMountedKonvaNode(elementId).then((node) => {
+    // Component tests exercise the mounted Konva pointer boundary directly;
+    // the Stage resolves browser mouse, pen, and touch input to this handler.
+    node.fire("pointerdown", {
+      target: node,
+      evt: new PointerEvent("pointerdown"),
+    }, true);
     node.fire("click", {
       target: node,
       evt: new MouseEvent("click"),
@@ -119,7 +125,14 @@ describe("MasterStudioCanvas Konva adapter", () => {
 
     cy.mount(<Harness initialContract={contract} />);
     cy.then(() => selectKonvaElement("furniture:logo"));
-    cy.contains("button", "Delete").should("be.enabled").click();
+    cy.get('[data-testid="master-canvas-delete"]')
+      .should("be.enabled")
+      .then(($button) => {
+        // Cypress's synthetic pointer sequence can move focus after this
+        // mounted-Konva selection assertion. The native control invocation
+        // exercises the same enabled product click handler deterministically.
+        ($button[0] as HTMLButtonElement).click();
+      });
     cy.get('[data-testid="master-contract-snapshot"]').should(($output) => {
       const updated = JSON.parse($output.text()) as DeckMasterContractV1;
       expect(updated.brandAssets.logo).to.eq(null);
@@ -132,7 +145,8 @@ describe("MasterStudioCanvas Konva adapter", () => {
         evt: new MouseEvent("click"),
       }, true);
     });
-    cy.contains("button", "Delete").should("be.disabled");
+    cy.get('[data-testid="master-canvas-delete"]')
+      .should("be.disabled");
   });
 
   it("keeps a wheel-zoomed slide centered while it fits in the viewport", () => {
@@ -145,7 +159,7 @@ describe("MasterStudioCanvas Konva adapter", () => {
         1,
       );
     });
-    cy.get('[data-testid="master-studio-canvas"]').then(($surface) => {
+    cy.get('[data-testid="master-studio-canvas"]').should(($surface) => {
       const surface = $surface[0] as HTMLElement;
       const canvas = $surface.find("canvas")[0];
       const rect = surface.getBoundingClientRect();
@@ -185,17 +199,65 @@ describe("MasterStudioCanvas Konva adapter", () => {
     });
   });
 
+  it("renders the shared guide halo at fit, zoomed-out, and zoomed-in scales", () => {
+    let insertedId = "";
+    cy.mount(<Harness />);
+    cy.contains("button", "AI 편집존").click();
+    cy.get('[data-testid="master-contract-snapshot"]').should(($output) => {
+      const contract = JSON.parse($output.text()) as DeckMasterContractV1;
+      insertedId = contract.aiEditZones?.at(-1)?.id ?? "";
+      expect(insertedId, "inserted AI zone id").to.match(/^ai-zone:/);
+    });
+    cy.then(() => findMountedKonvaNode(insertedId)).then((node) => {
+      node.fire("dragstart", {
+        target: node,
+        currentTarget: node,
+        evt: new MouseEvent("mousedown"),
+      }, true);
+      // Move within the snap threshold of the safe-area corner. The guide
+      // remains rendered until dragend, which is exactly the visual state a
+      // user sees while aligning an editable envelope.
+      node.position({ x: 77, y: 73 });
+      node.fire("dragmove", {
+        target: node,
+        currentTarget: node,
+        evt: new MouseEvent("mousemove"),
+      }, true);
+    });
+    cy.get('[data-testid="master-studio-canvas"]').should(($surface) => {
+      const content = $surface.find(".konvajs-content")[0];
+      const stage = Konva.stages.find((candidate) => candidate.getContent() === content);
+      const guideLines = stage!
+        .find("Line")
+        .filter((candidate) => candidate.stroke() === "#7A5AF8");
+      expect(guideLines, "purple guide lines").to.have.length(2);
+      guideLines.forEach((line) => {
+        expect(line.dash(), "scale-stable guide dash").to.have.length(2);
+        expect(line.lineCap(), "rounded guide cap").to.equal("round");
+        expect(line.strokeWidth(), "visible guide stroke").to.be.greaterThan(0);
+        expect(line.points(), "full guide line").to.have.length(4);
+      });
+    });
+    cy.get('[data-testid="master-studio"]').screenshot("authored-master-guide-fit");
+    cy.get('[aria-label="Zoom out"]').click();
+    cy.get('[data-testid="master-studio"]').screenshot("authored-master-guide-zoom-out");
+    cy.get('[aria-label="Zoom in"]').click().click().click();
+    cy.get('[data-testid="master-studio"]').screenshot("authored-master-guide-zoom-in");
+  });
+
   it("keeps AI-zone drag history stable and makes preview genuinely read-only", () => {
     let insertedId = "";
-    const insertedBounds = { x: 72, y: 72, width: 360, height: 92 };
-    const draggedBounds = { x: 126, y: 104, width: 360, height: 92 };
+    const insertedBounds = { x: 76, y: 72, width: 360, height: 92 };
+    // Snapping is evaluated at drag time. This delta does not cross a guide,
+    // so the committed geometry is the safe-area-based insertion plus delta.
+    const draggedBounds = { x: 130, y: 104, width: 360, height: 92 };
 
     cy.mount(<Harness />);
     cy.get('[data-testid="master-studio-canvas"] canvas')
       .filter(":visible")
       .should("exist");
 
-    cy.contains("button", "AI reserved zone").click();
+    cy.contains("button", "AI 편집존").click();
     cy.get('[data-testid="master-studio-inline-editor"]').should("not.exist");
     cy.get('[data-testid="master-contract-snapshot"]').should(($output) => {
       const contract = JSON.parse($output.text()) as DeckMasterContractV1;
@@ -283,6 +345,12 @@ describe("MasterStudioCanvas Konva adapter", () => {
       const contract = JSON.parse($output.text()) as DeckMasterContractV1;
       expect(contract.aiEditZones?.find((zone) => zone.id === insertedId)?.bounds)
         .to.deep.equal(insertedBounds);
+    });
+    cy.contains("button", "Undo").click();
+    cy.get('[data-testid="master-contract-snapshot"]').should(($output) => {
+      const contract = JSON.parse($output.text()) as DeckMasterContractV1;
+      expect(contract.aiEditZones?.find((zone) => zone.id === insertedId)?.textAlign)
+        .to.equal("left");
     });
     cy.contains("button", "Undo").click();
     cy.get('[data-testid="master-contract-snapshot"]').should(($output) => {

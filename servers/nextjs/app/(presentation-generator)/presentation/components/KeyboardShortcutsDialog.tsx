@@ -25,6 +25,7 @@ import {
   useAppleShortcutPlatform,
 } from "@/components/slide-editor/shortcuts/ShortcutKeys";
 import { useTranslations } from "next-intl";
+import { isEditorEditableTarget } from "../utils/slideKeyboardNavigation";
 
 const SECTION_ICONS: Record<EditorShortcutSection["id"], LucideIcon> = {
   selection: MousePointer2,
@@ -54,7 +55,7 @@ export function KeyboardShortcutsDialog({
         event.metaKey ||
         event.ctrlKey ||
         event.altKey ||
-        isEditableTarget(event.target)
+        isEditorEditableTarget(event.target)
       ) {
         return;
       }
@@ -193,15 +194,5 @@ function PlatformButton({
     >
       {label}
     </button>
-  );
-}
-
-function isEditableTarget(target: EventTarget | null) {
-  if (!(target instanceof HTMLElement)) return false;
-  return (
-    target.isContentEditable ||
-    target instanceof HTMLInputElement ||
-    target instanceof HTMLTextAreaElement ||
-    target instanceof HTMLSelectElement
   );
 }

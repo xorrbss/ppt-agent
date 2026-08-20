@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type Konva from "konva";
+import { calculateCanvasPixelRatio } from "./pixelRatio";
 
 export interface CanvasCoreViewportTransform {
   x: number;
@@ -118,6 +119,22 @@ export function constrainCanvasCoreViewport(
 }
 
 /**
+ * Konva's Stage config does not configure mounted Layer canvases.  Keep this
+ * explicit so every canvas surface that uses the shared viewport receives the
+ * same backing-store policy.
+ */
+export function syncCanvasCoreLayerPixelRatio(
+  layer: Konva.Layer | null,
+  pixelRatio: number,
+) {
+  if (!layer || typeof window === "undefined") return;
+  const canvas = layer.getCanvas();
+  if (Math.abs(canvas.getPixelRatio() - pixelRatio) < 0.01) return;
+  canvas.setPixelRatio(pixelRatio);
+  layer.batchDraw();
+}
+
+/**
  * Shared viewport controller for Konva-backed editors. Element selection and
  * contract commits stay in the adapter/editor; this hook only frames the
  * canonical slide and keeps pan/zoom transient.
@@ -153,6 +170,40 @@ export function useCanvasCoreViewport({
       padding,
     ),
   );
+  const [pixelRatio, setPixelRatio] = useState(1);
+  const canvasLayersRef = useRef(new Set<Konva.Layer>());
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const refreshPixelRatio = () => {
+      const navigatorWithMemory = window.navigator as Navigator & {
+        deviceMemory?: number;
+      };
+      setPixelRatio(
+        calculateCanvasPixelRatio({
+          devicePixelRatio: window.devicePixelRatio || 1,
+          displayScale: viewport.scale,
+          deviceMemory: navigatorWithMemory.deviceMemory,
+          hardwareConcurrency: navigatorWithMemory.hardwareConcurrency,
+        }),
+      );
+    };
+    refreshPixelRatio();
+    window.addEventListener("resize", refreshPixelRatio);
+    return () => window.removeEventListener("resize", refreshPixelRatio);
+  }, [viewport.scale]);
+
+  useEffect(() => {
+    canvasLayersRef.current.forEach((layer) =>
+      syncCanvasCoreLayerPixelRatio(layer, pixelRatio),
+    );
+  }, [pixelRatio]);
+
+  const registerCanvasLayer = useCallback((layer: Konva.Layer | null) => {
+    if (!layer) return;
+    canvasLayersRef.current.add(layer);
+    syncCanvasCoreLayerPixelRatio(layer, pixelRatio);
+  }, [pixelRatio]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -255,6 +306,7 @@ export function useCanvasCoreViewport({
     armPan: setPanArmed,
     beginPan,
     stageProps,
+    registerCanvasLayer,
     zoomBy,
     fit,
   };

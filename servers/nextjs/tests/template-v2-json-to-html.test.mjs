@@ -66,6 +66,35 @@ test("renders template v2 text run underlines in generated HTML", async () => {
   );
 });
 
+test("derives component group size from child bounds when persisted size is stale", async () => {
+  const { templateV2UiToHtmlFragment } = await importRenderer();
+
+  const html = templateV2UiToHtmlFragment({
+    components: [
+      {
+        id: "component-with-stale-size",
+        position: { x: 10, y: 20 },
+        size: { width: 2, height: 3 },
+        elements: [
+          {
+            type: "text",
+            position: { x: 5, y: 7 },
+            size: { width: 40, height: 30 },
+            text: "child",
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.ok(html);
+  assert.match(
+    html,
+    /position:absolute;left:10px;top:20px;width:45px;height:37px;/,
+  );
+  assert.doesNotMatch(html, /left:10px;top:20px;width:2px;height:3px;/);
+});
+
 test("renders legacy text-decoration underline fields", async () => {
   const { templateV2UiToHtml } = await importRenderer();
 

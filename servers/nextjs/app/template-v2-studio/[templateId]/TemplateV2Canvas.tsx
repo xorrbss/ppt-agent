@@ -123,6 +123,7 @@ export default function TemplateV2Canvas({
     armPan,
     beginPan,
     stageProps,
+    registerCanvasLayer,
     zoomBy,
     fit,
   } = useTemplateV2Viewport();
@@ -555,7 +556,7 @@ export default function TemplateV2Canvas({
           }
         }}
       >
-        <Layer>
+        <Layer ref={registerCanvasLayer}>
           <Group
             x={viewport.x}
             y={viewport.y}

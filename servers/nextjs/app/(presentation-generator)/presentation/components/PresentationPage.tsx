@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
-import { AlertCircle, Layers, PanelLeft } from "lucide-react";
+import { AlertCircle, Keyboard, Layers, PanelLeft, X } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -54,6 +54,10 @@ import {
   type WorkspaceQualityReviewRequester,
 } from "../workspace";
 import { findMostVisibleSlideIndex } from "../utils/slideScrollSync";
+import {
+  getSlideNavigationIntent,
+  isEditorEditableTarget,
+} from "../utils/slideKeyboardNavigation";
 import { PresentationLoadError, PresentationModeView } from "./PresentationTerminalStates";
 import { renderArtifactSlides } from "@/lib/render-service";
 import { usePresentationPreviewArtifact } from "../hooks/usePresentationPreviewArtifact";
@@ -72,6 +76,11 @@ const WORKSPACE_STAGING_FAILURE_STATES = new Set([
   "rejected",
   "expired",
 ]);
+const NAVIGATION_HINT_STORAGE_KEY = "ppt-agent:workbench-slide-navigation-hint:v1";
+const NAVIGATION_HINT_KEYS = ["←", "↑", "↓", "→"];
+const NAVIGATION_HINT_TIMEOUT_MS = 5_000;
+const NAVIGATION_SCROLL_THRESHOLD = 240;
+const NAVIGATION_SCROLL_WINDOW_MS = 800;
 
 export function useAgentSlideFocusOnce({
   presentationId,
@@ -144,8 +153,12 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     string | null
   >(null);
   const [mobileThumbnailsOpen, setMobileThumbnailsOpen] = useState(false);
+  const [showNavigationHint, setShowNavigationHint] = useState(false);
   const slidesScrollContainerRef = useRef<HTMLDivElement | null>(null);
   const slideScrollSyncFrameRef = useRef<number | null>(null);
+  const navigationHintShownRef = useRef(false);
+  const navigationHintSlideRef = useRef<number | null>(null);
+  const navigationScrollIntentRef = useRef({ amount: 0, lastAt: 0 });
   const router = useRouter();
   const {
     state: workspaceCapabilityState,
@@ -307,6 +320,104 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     },
     [handleSlideClick],
   );
+  const dismissNavigationHint = useCallback(() => {
+    setShowNavigationHint(false);
+    navigationHintSlideRef.current = null;
+    try {
+      window.localStorage.setItem(NAVIGATION_HINT_STORAGE_KEY, "seen");
+    } catch {
+      // A private or unavailable storage area must not prevent dismissal.
+    }
+  }, []);
+  useEffect(() => {
+    if (
+      isPresentMode ||
+      loading ||
+      isStreaming ||
+      slidesLength <= 1 ||
+      navigationHintShownRef.current ||
+      !window.matchMedia("(min-width: 768px)").matches
+    ) {
+      return;
+    }
+    try {
+      if (window.localStorage.getItem(NAVIGATION_HINT_STORAGE_KEY)) return;
+    } catch {
+      // Show once this visit when browser storage is unavailable.
+    }
+    navigationHintShownRef.current = true;
+    navigationHintSlideRef.current = selectedSlide;
+    setShowNavigationHint(true);
+  }, [isPresentMode, isStreaming, loading, selectedSlide, slidesLength]);
+  useEffect(() => {
+    if (!showNavigationHint) return;
+    const timer = window.setTimeout(dismissNavigationHint, NAVIGATION_HINT_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [dismissNavigationHint, showNavigationHint]);
+  useEffect(() => {
+    if (
+      !showNavigationHint ||
+      navigationHintSlideRef.current === null ||
+      navigationHintSlideRef.current === selectedSlide
+    ) {
+      return;
+    }
+    dismissNavigationHint();
+  }, [dismissNavigationHint, selectedSlide, showNavigationHint]);
+  useEffect(() => {
+    const scrollContainer = slidesScrollContainerRef.current;
+    if (
+      !scrollContainer ||
+      isPresentMode ||
+      loading ||
+      isStreaming ||
+      slidesLength <= 1 ||
+      navigationHintShownRef.current ||
+      !window.matchMedia("(min-width: 768px)").matches
+    ) {
+      return;
+    }
+    const handleWheel = (event: WheelEvent) => {
+      if (
+        showNavigationHint ||
+        Math.abs(event.deltaY) < 4 ||
+        isEditorEditableTarget(event.target)
+      ) {
+        return;
+      }
+      const now = Date.now();
+      const scrollIntent = navigationScrollIntentRef.current;
+      if (now - scrollIntent.lastAt > NAVIGATION_SCROLL_WINDOW_MS) {
+        scrollIntent.amount = 0;
+      }
+      const multiplier =
+        event.deltaMode === WheelEvent.DOM_DELTA_LINE
+          ? 16
+          : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+            ? window.innerHeight
+            : 1;
+      scrollIntent.amount += Math.abs(event.deltaY) * multiplier;
+      scrollIntent.lastAt = now;
+      if (scrollIntent.amount < NAVIGATION_SCROLL_THRESHOLD) return;
+      scrollIntent.amount = 0;
+      navigationHintShownRef.current = true;
+      navigationHintSlideRef.current = selectedSlide;
+      setShowNavigationHint(true);
+    };
+    scrollContainer.addEventListener("wheel", handleWheel, { passive: true });
+    return () => scrollContainer.removeEventListener("wheel", handleWheel);
+  }, [isPresentMode, isStreaming, loading, selectedSlide, showNavigationHint, slidesLength]);
+  useEffect(() => {
+    if (isPresentMode || slidesLength <= 1) return;
+    const handleEditorArrowNavigation = (event: KeyboardEvent) => {
+      const intent = getSlideNavigationIntent(event);
+      if (intent === null) return;
+      event.preventDefault();
+      handleSlideClick(Math.min(Math.max(selectedSlide + intent, 0), slidesLength - 1));
+    };
+    window.addEventListener("keydown", handleEditorArrowNavigation);
+    return () => window.removeEventListener("keydown", handleEditorArrowNavigation);
+  }, [handleSlideClick, isPresentMode, selectedSlide, slidesLength]);
   useEffect(() => {
     const desktopRail = window.matchMedia("(min-width: 768px)");
     const closeMobileDrawer = (event: MediaQueryListEvent | MediaQueryList) => {
@@ -669,6 +780,37 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
               onScroll={handleSlidesScroll}
               className="font-inter h-full overflow-y-auto hide-scrollbar scroll-pt-[18px]"
             >
+              {showNavigationHint ? (
+                <div
+                  className="pointer-events-none fixed top-[72px] z-[95] hidden items-center gap-3 rounded-full border border-violet-200 bg-white/95 py-2 pl-3 pr-2 text-[13px] text-slate-700 shadow-[0_8px_24px_rgba(16,24,40,0.14)] backdrop-blur md:flex"
+                  role="status"
+                  aria-live="polite"
+                  data-testid="slide-navigation-hint"
+                  style={{ left: "50%", transform: "translateX(-50%)" }}
+                >
+                  <Keyboard className="h-4 w-4 text-violet-700" aria-hidden="true" />
+                  <span>화살표 키로 슬라이드를 이동할 수 있습니다</span>
+                  <span className="flex items-center gap-1" aria-label="방향키">
+                    {NAVIGATION_HINT_KEYS.map((key) => (
+                      <kbd
+                        key={key}
+                        className="flex h-6 min-w-6 items-center justify-center rounded-md border border-slate-200 bg-slate-50 px-1 text-[12px] font-medium text-slate-900 shadow-sm"
+                      >
+                        {key}
+                      </kbd>
+                    ))}
+                  </span>
+                  <span className="hidden lg:inline">또는 왼쪽 목록에서 선택하세요</span>
+                  <button
+                    type="button"
+                    aria-label="슬라이드 이동 안내 닫기"
+                    onClick={dismissNavigationHint}
+                    className="pointer-events-auto ml-1 flex h-11 w-11 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-700"
+                  >
+                    <X className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                </div>
+              ) : null}
               <div className="w-full max-w-[1280px] min-h-full mx-auto flex flex-col items-center pb-8">
                 {!presentationData ||
                   loading ||
@@ -768,6 +910,12 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                           index={index}
                           presentationId={presentation_id}
                           mutationsEnabled={INLINE_MUTATIONS_ENABLED}
+                          deferRender
+                          renderPriority={
+                            index === selectedSlide ||
+                            index === highlightedSlideIndex ||
+                            targetedSlidesSet.has(index)
+                          }
                           isChatEditing={
                             highlightedSlideIndex !== null &&
                             index === highlightedSlideIndex

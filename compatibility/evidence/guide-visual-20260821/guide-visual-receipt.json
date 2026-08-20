@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-08-21",
+  "runner": {
+    "tool": "Cypress component",
+    "browser": "Electron 138 headless",
+    "viewport": "1280x800"
+  },
+  "observations": {
+    "sharedGuide": {
+      "stroke": "#7A5AF8",
+      "halo": "rgba(255, 255, 255, 0.72)",
+      "lineCap": "round",
+      "dash": "scale-stable two-value dash",
+      "geometry": "two full-slide horizontal/vertical guides during an in-threshold drag"
+    },
+    "authoredMaster": {
+      "spec": "servers/nextjs/app/(presentation-generator)/authored-vnext/master-setup/MasterStudioCanvas.cy.tsx",
+      "result": "4 passed, 0 failed",
+      "scenario": "AI edit envelope moved within the safe-area-corner snap threshold"
+    },
+    "templateV2Studio": {
+      "spec": "servers/nextjs/app/template-v2-studio/[templateId]/TemplateV2CanvasGuideVisual.cy.tsx",
+      "result": "1 passed, 0 failed",
+      "scenario": "editable title right edge moved within 3 px of a sibling title's left edge"
+    }
+  },
+  "screenshots": [
+    {
+      "path": "compatibility/evidence/guide-visual-20260821/MasterStudioCanvas.cy.tsx/authored-master-guide-fit.png",
+      "sha256": "17d2f58c9def0c70bcdfce5c5d2ec8ffc2bb012447417b0adbf2b98e861a0a22",
+      "pixels": "807x593",
+      "zoom": "58%"
+    },
+    {
+      "path": "compatibility/evidence/guide-visual-20260821/MasterStudioCanvas.cy.tsx/authored-master-guide-zoom-out.png",
+      "sha256": "8a85cf6172375376bdb7145a2a0c86f10ffae1d7b8b400c9a426754a92012e0d",
+      "pixels": "807x593",
+      "zoom": "48%"
+    },
+    {
+      "path": "compatibility/evidence/guide-visual-20260821/MasterStudioCanvas.cy.tsx/authored-master-guide-zoom-in.png",
+      "sha256": "dcfb76d6b65c2988ad949b3727b8a4f0d0a80372b8c7a714db1146ab97793f5c",
+      "pixels": "807x593",
+      "zoom": "83%"
+    },
+    {
+      "path": "compatibility/evidence/guide-visual-20260821/TemplateV2CanvasGuideVisual.cy.tsx/template-v2-guide-fit (1).png",
+      "sha256": "1d770dd4a706ab9097828f71d44f78982e4d6b0aa215b0f41abd8203c5a823f9",
+      "pixels": "1280x490",
+      "zoom": "69%"
+    },
+    {
+      "path": "compatibility/evidence/guide-visual-20260821/TemplateV2CanvasGuideVisual.cy.tsx/template-v2-guide-zoom-out (1).png",
+      "sha256": "72eb503307b904d02cb3c75b1669ac65f6321c1b8a83fa8463c3ee0699d09684",
+      "pixels": "1280x490",
+      "zoom": "58%"
+    },
+    {
+      "path": "compatibility/evidence/guide-visual-20260821/TemplateV2CanvasGuideVisual.cy.tsx/template-v2-guide-zoom-in (1).png",
+      "sha256": "1740fc2486275f2b8c327d4c84cf64c8129dc07ada4c8e08f99fd6d82207b5ed",
+      "pixels": "1280x490",
+      "zoom": "100%"
+    }
+  ]
+}

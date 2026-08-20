@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { PresentationDriverId } from "@/lib/presentation-profile";
 import { PresentationContentRender } from "./PresentationContentRender";
@@ -33,6 +33,60 @@ export const SLIDE_SCALE_RESERVED_HEIGHT_CSS = `min(calc(${(
 ).toFixed(4)}% + ${(FIT_RATIO * FIT_WIDTH_BLEED).toFixed(
     4
 )}px), ${BASE_HEIGHT}px)`;
+
+const NEAR_VIEWPORT_ROOT_MARGIN = "900px 0px";
+
+/**
+ * Reserves the exact default SlideScale height until its expensive render tree
+ * is near the viewport.  The outer slide node remains mounted so selection,
+ * chat targets, and scroll-to-slide anchors stay stable.
+ */
+export function ViewportCulledSlide({
+    children,
+    enabled = false,
+    priority = false,
+}: {
+    children: ReactNode;
+    enabled?: boolean;
+    priority?: boolean;
+}) {
+    const slotRef = useRef<HTMLDivElement | null>(null);
+    const [isMounted, setIsMounted] = useState(() => !enabled || priority);
+
+    useEffect(() => {
+        if (!enabled || priority) setIsMounted(true);
+    }, [enabled, priority]);
+
+    useEffect(() => {
+        if (!enabled || isMounted) return;
+        const slot = slotRef.current;
+        if (!slot || typeof IntersectionObserver === "undefined") {
+            setIsMounted(true);
+            return;
+        }
+        const observer = new IntersectionObserver((entries) => {
+            if (!entries.some((entry) => entry.isIntersecting)) return;
+            setIsMounted(true);
+            observer.disconnect();
+        }, { rootMargin: NEAR_VIEWPORT_ROOT_MARGIN });
+        observer.observe(slot);
+        return () => observer.disconnect();
+    }, [enabled, isMounted]);
+
+    return (
+        <div
+            ref={slotRef}
+            className="relative w-full"
+            data-render-state={isMounted ? "rendered" : "deferred"}
+            data-testid="viewport-culled-slide"
+            style={{ paddingTop: SLIDE_SCALE_RESERVED_HEIGHT_CSS }}
+        >
+            <div className="absolute inset-0">
+                {isMounted ? children : <div aria-hidden="true" className="h-full w-full bg-slate-100" />}
+            </div>
+        </div>
+    );
+}
 
 const SlideScale = ({
     slide,
