@@ -20,6 +20,7 @@ async def revise_legacy_review(ctx):
     ctx.candidate_decisions: list[dict] = []
     if ctx.exact_reconstruction:
         ctx.revise_kwargs["reference_images_by_slide"] = ctx.target_references
+    ctx.revise_kwargs.update(getattr(ctx, "illustration_reauthor_kwargs", {}))
     ctx.revision_started_at = _service.time.perf_counter()
     ctx.revision_result = await _service.revise_authored_deck(
         ctx.htmls,

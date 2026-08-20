@@ -43,14 +43,17 @@ from services.authored_quality_review_service import (
     _saved_role,
 )
 from services.authored_deck_chapter_plan import load_chapter_plan
+from services.authored_deck_illustration_plan import load_illustration_plan
 from services.authored_header_contract_service import (
     load_header_contract,
     page_number_mode_for,
 )
 from services.authored_review_asset_store import publish_reviewed_png
+from services.image_generation_service import ImageGenerationService
 from services.database import async_session_maker
 from services.slidespec_artifact_store import ACTIVE_POINTER_KEY
 from utils.authored_dom_quality import inspect_authored_dom
+from utils.asset_directory_utils import get_images_directory
 from utils.authored_styles import (
     AuthoredExactReconstructionUnavailableError,
     resolve_authored_style,
@@ -243,6 +246,7 @@ async def _authoring_context(
         # the one loaded above, so the remade page is handed the same eyebrow
         # prefix and the same role it was authored with.
         chapter_plan=load_chapter_plan(presentation.theme),
+        illustration_plan=load_illustration_plan(presentation.theme),
     )
     plan_mode = normalize_reference_mode(getattr(plan, "reference_mode", saved_mode))
     if plan_mode != saved_mode:
@@ -360,6 +364,19 @@ async def run_authored_page_remake_preview(
             raise AuthoredPageRemakeError(
                 "authored_page_remake_exact_source_unavailable",
                 stage="source_validation",
+            )
+    else:
+        # A one-page remake receives the original deck decision at the target's
+        # persisted index.  An absent plan intentionally leaves this keyword
+        # absent, preserving legacy per-slide illustration behavior.
+        illustration_slots = getattr(plan, "illustration_slots", ())
+        if illustration_slots:
+            reference_kwargs["illustration_slots"] = [
+                illustration_slots[slide_index]
+            ]
+        if getattr(style, "illustration_prompt", None):
+            reference_kwargs["image_service"] = ImageGenerationService(
+                get_images_directory()
             )
 
     try:

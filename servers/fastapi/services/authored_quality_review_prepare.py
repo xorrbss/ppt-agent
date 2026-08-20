@@ -2,6 +2,7 @@
 
 from services import authored_quality_review_service as _service
 from services.authored_deck_chapter_plan import load_chapter_plan
+from services.authored_deck_illustration_plan import load_illustration_plan
 from services.authored_header_contract_service import (
     load_header_contract,
     page_number_mode_for,
@@ -87,6 +88,10 @@ async def prepare_legacy_review(ctx):
         # Reviewing a page re-authors it, so it needs the same chapter prefix
         # and the same forced role the first pass gave it.
         chapter_plan=load_chapter_plan(ctx.presentation.theme),
+        # The persisted plan is the original deck decision.  Recomputing it
+        # from a review subset would give an edited page a different right to
+        # use a generated picture than its untouched siblings.
+        illustration_plan=load_illustration_plan(ctx.presentation.theme),
     )
     ctx.plan_reference_mode = _service.normalize_reference_mode(
         getattr(ctx.plan, "reference_mode", ctx.saved_reference_mode)
@@ -100,6 +105,19 @@ async def prepare_legacy_review(ctx):
     ctx.persisted_htmls = [str(target.html_content) for target in ctx.targets]
     ctx.htmls = [_service.ensure_authored_qids(html) for html in ctx.persisted_htmls]
     ctx.exact_reconstruction = ctx.plan_reference_mode == _service.EXACT_RECONSTRUCTION
+    ctx.illustration_reauthor_kwargs = {}
+    illustration_slots = getattr(ctx.plan, "illustration_slots", ())
+    if not ctx.exact_reconstruction:
+        # Slots must be aligned to ``ctx.htmls`` / ``ctx.contents`` rather than
+        # the persisted outline: a subset review is addressed by local indices.
+        if illustration_slots:
+            ctx.illustration_reauthor_kwargs["illustration_slots"] = [
+                illustration_slots[position] for position in ctx.positions
+            ]
+        if getattr(ctx.style, "illustration_prompt", None):
+            ctx.illustration_reauthor_kwargs["image_service"] = (
+                _service.ImageGenerationService(_service.get_images_directory())
+            )
     ctx.final_review_batch_count = 0
     if ctx.exact_reconstruction:
         ctx.planned_references = getattr(ctx.plan, "reference_images", None)

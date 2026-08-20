@@ -49,6 +49,7 @@ from services.authored_header_contract_service import (
 )
 from services.authored_presentation_pipeline import _author_illustrate_render_pipeline
 from services.authored_presentation_publication import publish_authored_presentation
+from services.image_generation_service import ImageGenerationService
 from services.authored_vnext.generation.legacy_bridge import (
     export_legacy_master_owned_deck,
     generate_legacy_master_owned_deck,
@@ -59,6 +60,7 @@ from services.authored_vnext.generation.ai_text_zones import (
 from services.authored_source_images import collect_source_image_candidates
 from services.provider_usage_instrumentation import provider_usage_scope, record_local_stage
 from utils.authored_dom_quality import ensure_authored_qids
+from utils.asset_directory_utils import get_images_directory
 from utils.authored_styles import resolve_authored_style, validate_exact_reconstruction_style
 from utils.llm_calls.author_deck import (
     plan_deck_roles,
@@ -347,6 +349,27 @@ async def _generate_authored_presentation(
                         chapter_plan.eyebrow_prefix_at(index)
                         for index in range(len(htmls))
                     ]
+                if (
+                    normalize_reference_mode(
+                        getattr(style, "reference_mode", STYLE_REFERENCE)
+                    )
+                    != EXACT_RECONSTRUCTION
+                ):
+                    # Re-authoring a slide must replay the deck-wide decision
+                    # made before its first draft.  ``None`` remains distinct
+                    # from an empty plan: without a plan the legacy behavior
+                    # still lets a slide request an illustration.
+                    if illustration_plan is not None:
+                        vision_qa_kwargs["illustration_slots"] = [
+                            illustration_plan.allows(index)
+                            for index in range(len(htmls))
+                        ]
+                    if getattr(style, "illustration_prompt", None):
+                        # One service is shared by this bounded QA pass; the
+                        # reviser calls it only for an allowed replacement slot.
+                        vision_qa_kwargs["image_service"] = ImageGenerationService(
+                            get_images_directory()
+                        )
                 htmls, pngs, fixed = await revise_authored_deck(
                     htmls,
                     pngs,

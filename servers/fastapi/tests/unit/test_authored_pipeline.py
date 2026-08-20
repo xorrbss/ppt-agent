@@ -881,6 +881,197 @@ def test_vision_qa_reuses_selected_design_system(monkeypatch):
     assert fixed == [0]
 
 
+def _illustration_style():
+    return SimpleNamespace(
+        id="editorial",
+        brief="- Editorial",
+        illustration_prompt="editorial illustration",
+        reference_mode="style_reference",
+    )
+
+
+def _reauthored_illustration_slot_html():
+    return _VALID.replace(
+        "</body>",
+        '<img data-illust-prompt="an abstract skyline" '
+        'style="width:200px;height:100px"></body>',
+    )
+
+
+def test_vision_qa_full_reauthor_consumes_allowed_illustration_slot(
+    monkeypatch, tmp_path
+):
+    class FakeImageService:
+        def __init__(self):
+            self.prompts = []
+
+        async def generate_image(self, prompt):
+            self.prompts.append(prompt)
+            image_path = tmp_path / "illustration.png"
+            Image.new("RGB", (8, 8), (12, 34, 56)).save(image_path, format="PNG")
+            return SimpleNamespace(path=str(image_path))
+
+    service = FakeImageService()
+
+    async def fake_critique(pngs, contexts=None):
+        return [SlideCritique(needs_fix=True)]
+
+    async def fake_author(*args, **kwargs):
+        return _reauthored_illustration_slot_html()
+
+    async def fake_render(html, timeout=60):
+        assert "data-illust-prompt" not in html
+        assert "data:image/png;base64," in html
+        return b"revised-png"
+
+    monkeypatch.setattr(author_vision_qa_mod, "critique_authored", fake_critique)
+    monkeypatch.setattr(author_vision_qa_mod, "author_slide_html", fake_author)
+    monkeypatch.setattr(author_vision_qa_mod, "render_html_to_png", fake_render)
+
+    htmls, pngs, fixed = _run(
+        author_vision_qa_mod.revise_authored_deck(
+            [_VALID],
+            [b"original-png"],
+            ["content"],
+            ["COVER"],
+            _brand(),
+            "SELECTED DESIGN SYSTEM",
+            style=_illustration_style(),
+            illustration_slots=[True],
+            image_service=service,
+        )
+    )
+
+    assert len(service.prompts) == 1
+    assert "data-illust-prompt" not in htmls[0]
+    assert "data:image/png;base64," in htmls[0]
+    assert pngs == [b"revised-png"]
+    assert fixed == [0]
+
+
+def test_vision_qa_full_reauthor_removes_disallowed_illustration_slot(monkeypatch):
+    class FakeImageService:
+        def __init__(self):
+            self.prompts = []
+
+        async def generate_image(self, prompt):
+            self.prompts.append(prompt)
+            raise AssertionError("disallowed slide must not call the image provider")
+
+    service = FakeImageService()
+
+    async def fake_critique(pngs, contexts=None):
+        return [SlideCritique(needs_fix=True)]
+
+    async def fake_author(*args, **kwargs):
+        return _reauthored_illustration_slot_html()
+
+    async def fake_render(html, timeout=60):
+        assert "data-illust-prompt" not in html
+        assert "<img" not in html
+        return b"revised-png"
+
+    monkeypatch.setattr(author_vision_qa_mod, "critique_authored", fake_critique)
+    monkeypatch.setattr(author_vision_qa_mod, "author_slide_html", fake_author)
+    monkeypatch.setattr(author_vision_qa_mod, "render_html_to_png", fake_render)
+
+    htmls, pngs, fixed = _run(
+        author_vision_qa_mod.revise_authored_deck(
+            [_VALID],
+            [b"original-png"],
+            ["content"],
+            ["COVER"],
+            _brand(),
+            "SELECTED DESIGN SYSTEM",
+            style=_illustration_style(),
+            illustration_slots=[False],
+            image_service=service,
+        )
+    )
+
+    assert service.prompts == []
+    assert "data-illust-prompt" not in htmls[0]
+    assert "<img" not in htmls[0]
+    assert pngs == [b"revised-png"]
+    assert fixed == [0]
+
+
+def test_vision_qa_full_reauthor_keeps_original_when_illustration_fails(monkeypatch):
+    class FailingImageService:
+        async def generate_image(self, prompt):
+            raise RuntimeError("provider unavailable")
+
+    async def fake_critique(pngs, contexts=None):
+        return [SlideCritique(needs_fix=True)]
+
+    async def fake_author(*args, **kwargs):
+        return _reauthored_illustration_slot_html()
+
+    async def fake_render(html, timeout=60):
+        raise AssertionError("failed illustration must not render a partial correction")
+
+    monkeypatch.setattr(author_vision_qa_mod, "critique_authored", fake_critique)
+    monkeypatch.setattr(author_vision_qa_mod, "author_slide_html", fake_author)
+    monkeypatch.setattr(author_vision_qa_mod, "render_html_to_png", fake_render)
+
+    htmls, pngs, fixed = _run(
+        author_vision_qa_mod.revise_authored_deck(
+            [_VALID],
+            [b"original-png"],
+            ["content"],
+            ["COVER"],
+            _brand(),
+            "SELECTED DESIGN SYSTEM",
+            style=_illustration_style(),
+            illustration_slots=[True],
+            image_service=FailingImageService(),
+        )
+    )
+
+    assert htmls == [_VALID]
+    assert pngs == [b"original-png"]
+    assert fixed == []
+
+
+def test_vision_qa_full_reauthor_rejects_unresolved_illustration_asset_slot(
+    monkeypatch,
+):
+    async def fake_critique(pngs, contexts=None):
+        return [SlideCritique(needs_fix=True)]
+
+    async def fake_author(*args, **kwargs):
+        return _VALID.replace(
+            "</body>",
+            '<img data-asset-id="not-offered" '
+            'style="width:200px;height:100px"></body>',
+        )
+
+    async def fake_render(html, timeout=60):
+        raise AssertionError("an unresolved source-image slot must not render")
+
+    monkeypatch.setattr(author_vision_qa_mod, "critique_authored", fake_critique)
+    monkeypatch.setattr(author_vision_qa_mod, "author_slide_html", fake_author)
+    monkeypatch.setattr(author_vision_qa_mod, "render_html_to_png", fake_render)
+
+    htmls, pngs, fixed = _run(
+        author_vision_qa_mod.revise_authored_deck(
+            [_VALID],
+            [b"original-png"],
+            ["content"],
+            ["COVER"],
+            _brand(),
+            "SELECTED DESIGN SYSTEM",
+            style=_illustration_style(),
+            illustration_slots=[True],
+            image_service=object(),
+        )
+    )
+
+    assert htmls == [_VALID]
+    assert pngs == [b"original-png"]
+    assert fixed == []
+
+
 def test_vision_qa_propagates_exact_reference_mode(monkeypatch, tmp_path):
     captured = []
     style = SimpleNamespace(

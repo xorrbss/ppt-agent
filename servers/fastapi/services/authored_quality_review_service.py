@@ -119,6 +119,8 @@ from services.authored_quality_telemetry import (
 )
 from services.authored_review_asset_store import publish_reviewed_png
 from services.database import async_session_maker
+from services.image_generation_service import ImageGenerationService
+from utils.asset_directory_utils import get_images_directory
 from utils.authored_dom_quality import (
     DomQualityReport,
     ensure_authored_qids,

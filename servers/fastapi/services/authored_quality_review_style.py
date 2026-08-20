@@ -124,6 +124,7 @@ async def review_style_candidates(ctx):
             initial_critiques=ctx.fallback_initial_critiques,
             return_details=True,
             force_full_reauthor_indices=ctx.fallback_local_indices,
+            **getattr(ctx, "illustration_reauthor_kwargs", {}),
             **(
                 {
                     "chapter_prefixes": [

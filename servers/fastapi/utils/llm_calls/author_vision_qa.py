@@ -13,8 +13,9 @@ import os
 import time
 from collections import OrderedDict
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Protocol, Sequence, Tuple
 
+from models.image_prompt import ImagePrompt
 from utils.authored_dom_quality import (
     build_compact_dom_map,
     ensure_authored_qids,
@@ -22,6 +23,10 @@ from utils.authored_dom_quality import (
     inspect_authored_dom,
 )
 from utils.authored_patch_engine import apply_authored_patch
+from utils.authored_illustrations import (
+    apply_authored_illustration,
+    strip_illustration_slots,
+)
 from utils.llm_calls.author_slide import (
     EXACT_RECONSTRUCTION,
     STYLE_REFERENCE,
@@ -31,6 +36,7 @@ from utils.llm_calls.author_slide import (
     author_slide_html,
     is_valid_slide_html,
     normalize_reference_mode,
+    validate_authored_slide_html,
 )
 from utils.llm_calls.author_slide_patch import propose_authored_slide_patch
 from utils.authored_styles import reference_images_for_role
@@ -53,6 +59,10 @@ from utils.slide_capture import (
 
 LOGGER = logging.getLogger(__name__)
 _ORIGINAL_RENDER_HTML_TO_PNG = render_html_to_png
+
+
+class _ImageServiceLike(Protocol):
+    async def generate_image(self, prompt: ImagePrompt) -> object: ...
 
 
 async def _render_correction_html(html: str) -> bytes:
@@ -435,6 +445,8 @@ async def revise_authored_deck(
     return_details: bool = False,
     force_full_reauthor_indices: Optional[Iterable[int]] = None,
     chapter_prefixes: Optional[Sequence[Optional[str]]] = None,
+    image_service: Optional[_ImageServiceLike] = None,
+    illustration_slots: Optional[Sequence[bool]] = None,
 ) -> Any:
     """Bounded critique -> re-author -> re-render loop over an authored deck. Returns
     the (possibly revised) htmls + pngs and the local indices that changed.
@@ -447,6 +459,12 @@ async def revise_authored_deck(
     authoring pass was given, one entry per REVIEWED slide. A full re-author is
     an ordinary authoring call, so without it a corrected slide would be asked
     for a breadcrumb and handed no chapter to open it with.
+
+    ``illustration_slots`` carries the deck plan's decision for each REVIEWED
+    slide. A full re-author must consume any author-only illustration marker
+    before rendering just like the first-pass pipeline: an allowed slot is
+    filled through ``image_service`` when the style supports it, while every
+    other unresolved slot is removed.
     """
     n = len(htmls)
     if not (len(pngs) == len(contents) == len(roles) == n):
@@ -461,6 +479,8 @@ async def revise_authored_deck(
         raise ValueError("initial_critiques must match the reviewed slide count")
     if chapter_prefixes is not None and len(chapter_prefixes) != n:
         raise ValueError("chapter_prefixes must match the reviewed slide count")
+    if illustration_slots is not None and len(illustration_slots) != n:
+        raise ValueError("illustration_slots must match the reviewed slide count")
     forced_full_reauthor = set(force_full_reauthor_indices or ())
     if any(type(index) is not int or index < 0 or index >= n for index in forced_full_reauthor):
         raise ValueError("force_full_reauthor_indices contains an invalid local index")
@@ -526,6 +546,14 @@ async def revise_authored_deck(
         if chapter_prefixes is not None:
             reference_kwargs["chapter_breadcrumb"] = True
             reference_kwargs["chapter_prefix"] = chapter_prefixes[i]
+        illustration_allowed = (
+            illustration_slots[i] if illustration_slots is not None else True
+        )
+        if (
+            reference_mode != EXACT_RECONSTRUCTION
+            and illustration_slots is not None
+        ):
+            reference_kwargs["illustration_allowed"] = illustration_allowed
         new_html = await author_slide_html(
             content,
             design_system,
@@ -538,6 +566,48 @@ async def revise_authored_deck(
         )
         if not is_valid_slide_html(new_html):
             raise ValueError("full re-author returned invalid slide HTML")
+        lowered_html = new_html.lower()
+        if "data-asset-id" in lowered_html:
+            # This re-authoring path never offers source-image candidates.  Silently
+            # finalizing an invented/stale asset id would leave a src-less <img> box.
+            # Reject the candidate so the existing fail-closed path keeps the original.
+            raise ValueError("full re-author returned an unresolved source-image slot")
+        had_authoring_only_attributes = "data-illust-prompt" in lowered_html
+        if reference_mode == EXACT_RECONSTRUCTION and had_authoring_only_attributes:
+            # Exact reconstruction has no illustration stage: consuming the marker
+            # would invent pixels, while stripping only the attribute would preserve
+            # an empty box that was not in the source.
+            raise ValueError("exact full re-author returned an illustration slot")
+        if reference_mode != EXACT_RECONSTRUCTION:
+            can_generate = (
+                illustration_allowed
+                and image_service is not None
+                and bool(
+                    (getattr(style, "illustration_prompt", None) or "").strip()
+                )
+            )
+            if can_generate:
+                new_html = await apply_authored_illustration(
+                    new_html,
+                    style,
+                    image_service,
+                    slide_index=absolute_indices[i],
+                    slide_content=contents[i],
+                    raise_on_failure=True,
+                )
+            else:
+                # Finalization alone would turn an unresolved authored slot into
+                # a src-less <img> box. Withdraw it through the same path used by
+                # the first-pass illustration stage when the deck disallows it.
+                new_html = strip_illustration_slots(new_html)
+        finalized_html = validate_authored_slide_html(new_html, finalized=True)
+        # Real author output is already canonicalized at the author-stage boundary.
+        # Preserve the legacy lexical HTML for test doubles/older callers that return
+        # an otherwise-valid document without author-only attributes, while still
+        # running the final admission check. When finalization has work to do, its
+        # returned copy is authoritative so no marker can reach the renderer.
+        if had_authoring_only_attributes:
+            new_html = finalized_html
         # Fallback may replace structure, but every resulting edit target still gets
         # a deterministic id. The normal local-patch path preserves every existing id.
         if return_details:
