@@ -41,6 +41,7 @@ from utils.llm_calls.generate_presentation_outlines import (
     generate_ppt_outline,
     get_messages as get_outline_messages,
 )
+from utils.outline_citations import strip_outline_citations
 
 OUTLINES_ROUTER = APIRouter(prefix="/outlines", tags=["Outlines"])
 LOGGER = logging.getLogger(__name__)
@@ -272,6 +273,11 @@ async def stream_outlines(
             return
 
         presentation_outlines = PresentationOutlineModel(**presentation_outlines_json)
+        # With web search on the model cites its sources inline. The URL is what
+        # the slide author turns into an `<a href>` the renderer refuses, and it
+        # also eats the slide's text budget, so it goes before the outline is
+        # stored or shown. The label stays, so the citation still reads as one.
+        presentation_outlines = strip_outline_citations(presentation_outlines)
 
         if (
             n_slides_to_generate is not None
