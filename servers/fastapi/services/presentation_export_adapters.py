@@ -6,7 +6,7 @@ import os
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 import uuid
 
 from pathvalidate import sanitize_filename
@@ -38,6 +38,7 @@ from templates.v2.pptx.native_compiler import (
 )
 from utils.asset_directory_utils import get_exports_directory
 from utils.export_utils import (
+    export_authored_fidelity_presentation,
     export_authored_hybrid_presentation,
     export_presentation,
 )
@@ -105,6 +106,8 @@ class PresentationExportAdapterResult:
     runtime: str
     runtime_version: str
     package_sha256: str | None
+    coverage_manifest: dict[str, Any] | None = None
+    renderer_source_sha256: str | None = None
 
 
 def _publish_native_bytes(
@@ -147,6 +150,8 @@ def _result(
     runtime: str,
     runtime_version: str,
     package_sha256: str | None = None,
+    coverage_manifest: dict[str, Any] | None = None,
+    renderer_source_sha256: str | None = None,
 ) -> PresentationExportAdapterResult:
     path = Path(presentation.path)
     payload = path.read_bytes()
@@ -166,6 +171,8 @@ def _result(
         runtime=runtime,
         runtime_version=runtime_version,
         package_sha256=package_sha256,
+        coverage_manifest=coverage_manifest,
+        renderer_source_sha256=renderer_source_sha256,
     )
 
 
@@ -271,6 +278,11 @@ async def run_general_adapter(
         and request.profile_driver_id == "authored"
         and request.pptx_mode == "hybrid"
     )
+    authored_fidelity = (
+        request.export_format == "pptx"
+        and request.profile_driver_id == "authored"
+        and request.pptx_mode != "hybrid"
+    )
     if authored_hybrid:
         exported = await export_authored_hybrid_presentation(
             request.presentation_id,
@@ -279,6 +291,13 @@ async def run_general_adapter(
             expected_revision=request.expected_revision,
             font_embedding=request.font_embedding,
             workspace_operation_id=request.workspace_operation_id,
+        )
+    elif authored_fidelity:
+        exported = await export_authored_fidelity_presentation(
+            request.presentation_id,
+            request.title,
+            cookie_header=request.cookie_header,
+            expected_revision=request.expected_revision,
         )
     else:
         exported = await export_presentation(
@@ -291,7 +310,13 @@ async def run_general_adapter(
     return _result(
         exported,
         adapter="general",
-        compiler="authored-hybrid" if authored_hybrid else "presentation-export",
+        compiler=(
+            "authored-hybrid"
+            if authored_hybrid
+            else "authored-fidelity"
+            if authored_fidelity
+            else "presentation-export"
+        ),
         compiler_version="0.4.3",
         runtime=(
             "chromium-native-layer-export"
@@ -299,6 +324,16 @@ async def run_general_adapter(
             else "chromium-dom-export"
         ),
         runtime_version="presenton.render-artifact/v1",
+        coverage_manifest=(
+            getattr(exported, "coverage_manifest", None)
+            if authored_hybrid
+            else None
+        ),
+        renderer_source_sha256=(
+            getattr(exported, "renderer_source_sha256", None)
+            if authored_hybrid
+            else None
+        ),
     )
 
 

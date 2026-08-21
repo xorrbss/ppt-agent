@@ -59,7 +59,7 @@ function assertBackplatePng(png: Buffer): void {
  * below the residual raster; otherwise it hides raster-only illustrations
  * while later text and small shapes still appear correctly.
  */
-function isCanvasBackgroundShape(item: PreparedNativeElement): boolean {
+export function isCanvasBackgroundShape(item: PreparedNativeElement): boolean {
   if (item.kind !== "shape") return false;
   const { x, y, width, height } = item.source.bounds.px;
   const shape = item.source.shape;
@@ -166,7 +166,7 @@ function backplateBackgroundXml(relationshipId: string): string {
   return `<p:bg><p:bgPr><a:blipFill dpi="0" rotWithShape="1"><a:blip r:embed="${relationshipId}"/><a:stretch><a:fillRect/></a:stretch></a:blipFill><a:effectLst/></p:bgPr></p:bg>`;
 }
 
-function isOpaqueRgbPng(png: Buffer): boolean {
+export function isOpaqueRgbPng(png: Buffer): boolean {
   // The PNG IHDR colour-type byte is 2 for true-colour RGB without an alpha
   // channel. Such a residual covers the entire canvas (typically a page-level
   // gradient), so keeping it as a selectable picture only creates a misleading

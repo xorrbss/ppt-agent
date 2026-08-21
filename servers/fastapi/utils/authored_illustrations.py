@@ -375,6 +375,7 @@ async def apply_authored_illustration(
     slide_content: str = "",
     raise_on_failure: bool = False,
     source_images: SlideSourceImages = None,
+    generate_fallback: bool = True,
 ) -> str:
     """Fill one slide's image slot, without ever raising.
 
@@ -404,7 +405,7 @@ async def apply_authored_illustration(
     data_uri: Optional[str] = None
     if source_images:
         keep_index, data_uri = _place_source_image(slots, source_images, slide_index)
-    if data_uri is None and style_prompt:
+    if data_uri is None and style_prompt and generate_fallback:
         # No user picture landed — the generated illustration is the fallback.
         illust_index = next(
             (i for i, slot in enumerate(slots) if slot.scene is not None), None

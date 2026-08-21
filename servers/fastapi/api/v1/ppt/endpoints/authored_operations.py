@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import uuid
+from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
-from pydantic import ValidationError
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -26,6 +28,11 @@ from services.authored_exact_source_snapshot import (
     ExactSourceSnapshotError,
     create_exact_source_snapshot,
 )
+from services.authored_canonical import (
+    AuthoredCanonicalConflict,
+    AuthoredCanonicalError,
+    AuthoredCanonicalService,
+)
 from services.authored_page_remake_history import list_authored_page_remake_previews
 from services.authored_page_remake_service import (
     AuthoredPageRemakeError,
@@ -40,11 +47,159 @@ from services.presentation_access_service import require_live_presentation
 from services.presentation_export_attempt_service import sha256_canonical_json
 from services.workspace_legacy_write_gate import require_legacy_presentation_write_path
 from utils.authored_styles import load_authored_styles, validate_exact_reconstruction_style
+from utils.authored_patch_engine import (
+    CropAction,
+    MoveAction,
+    ReplaceImageAction,
+    ResizeAction,
+    SetStyleAction,
+    SetTextAction,
+)
 from utils.llm_calls.author_deck import plan_deck_roles
 from utils.llm_calls.author_slide import EXACT_RECONSTRUCTION, normalize_reference_mode
 
 
 AUTHORED_OPERATIONS_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation"])
+_AUTHORED_CANONICAL_SERVICE = AuthoredCanonicalService()
+
+
+def _to_camel(value: str) -> str:
+    head, *tail = value.split("_")
+    return head + "".join(part.capitalize() for part in tail)
+
+
+class _CanonicalWireModel(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        alias_generator=_to_camel,
+        populate_by_name=True,
+    )
+
+
+CanonicalPatchAction = Annotated[
+    SetTextAction
+    | SetStyleAction
+    | MoveAction
+    | ResizeAction
+    | CropAction
+    | ReplaceImageAction,
+    Field(discriminator="action"),
+]
+
+
+class AuthoredCanonicalSlidePatch(_CanonicalWireModel):
+    slide_id: uuid.UUID
+    actions: list[CanonicalPatchAction] = Field(min_length=1, max_length=16)
+
+
+class AuthoredCanonicalPatchRequest(_CanonicalWireModel):
+    expected_revision: int = Field(ge=0)
+    expected_digest: str | None = Field(
+        default=None, pattern=r"^sha256:[0-9a-f]{64}$"
+    )
+    rebase_on_conflict: bool = False
+    patches: list[AuthoredCanonicalSlidePatch] = Field(min_length=1, max_length=50)
+
+
+class AuthoredCanonicalCasRequest(_CanonicalWireModel):
+    expected_revision: int = Field(ge=0)
+    expected_digest: str | None = Field(
+        default=None, pattern=r"^sha256:[0-9a-f]{64}$"
+    )
+
+
+def _canonical_error_response(error: AuthoredCanonicalError):
+    if isinstance(error, AuthoredCanonicalConflict):
+        return JSONResponse(status_code=409, content=error.payload())
+    raise HTTPException(
+        status_code=422,
+        detail={"code": error.code, "message": error.message},
+    ) from error
+
+
+@AUTHORED_OPERATIONS_ROUTER.get("/{id}/canonical")
+async def get_authored_canonical_document(
+    id: uuid.UUID,
+    sql_session: AsyncSession = Depends(get_async_session),
+):
+    presentation = await require_live_presentation(sql_session, id)
+    try:
+        return await _AUTHORED_CANONICAL_SERVICE.get_or_initialize(
+            sql_session, presentation
+        )
+    except AuthoredCanonicalError as error:
+        return _canonical_error_response(error)
+
+
+@AUTHORED_OPERATIONS_ROUTER.post("/{id}/canonical/patches")
+async def patch_authored_canonical_document(
+    id: uuid.UUID,
+    request: AuthoredCanonicalPatchRequest,
+    sql_session: AsyncSession = Depends(get_async_session),
+):
+    presentation = await require_live_presentation(sql_session, id)
+    try:
+        return await _AUTHORED_CANONICAL_SERVICE.apply_patches(
+            sql_session,
+            presentation,
+            expected_revision=request.expected_revision,
+            expected_digest=request.expected_digest,
+            rebase_on_conflict=request.rebase_on_conflict,
+            patches=[
+                patch.model_dump(mode="json", by_alias=True)
+                for patch in request.patches
+            ],
+        )
+    except AuthoredCanonicalError as error:
+        return _canonical_error_response(error)
+
+
+@AUTHORED_OPERATIONS_ROUTER.get("/{id}/canonical/history")
+async def list_authored_canonical_history(
+    id: uuid.UUID,
+    sql_session: AsyncSession = Depends(get_async_session),
+):
+    presentation = await require_live_presentation(sql_session, id)
+    try:
+        return await _AUTHORED_CANONICAL_SERVICE.history(sql_session, presentation)
+    except AuthoredCanonicalError as error:
+        return _canonical_error_response(error)
+
+
+@AUTHORED_OPERATIONS_ROUTER.post("/{id}/canonical/undo")
+async def undo_authored_canonical_document(
+    id: uuid.UUID,
+    request: AuthoredCanonicalCasRequest,
+    sql_session: AsyncSession = Depends(get_async_session),
+):
+    presentation = await require_live_presentation(sql_session, id)
+    try:
+        return await _AUTHORED_CANONICAL_SERVICE.undo(
+            sql_session,
+            presentation,
+            expected_revision=request.expected_revision,
+            expected_digest=request.expected_digest,
+        )
+    except AuthoredCanonicalError as error:
+        return _canonical_error_response(error)
+
+
+@AUTHORED_OPERATIONS_ROUTER.post("/{id}/canonical/redo")
+async def redo_authored_canonical_document(
+    id: uuid.UUID,
+    request: AuthoredCanonicalCasRequest,
+    sql_session: AsyncSession = Depends(get_async_session),
+):
+    presentation = await require_live_presentation(sql_session, id)
+    try:
+        return await _AUTHORED_CANONICAL_SERVICE.redo(
+            sql_session,
+            presentation,
+            expected_revision=request.expected_revision,
+            expected_digest=request.expected_digest,
+        )
+    except AuthoredCanonicalError as error:
+        return _canonical_error_response(error)
 
 
 @AUTHORED_OPERATIONS_ROUTER.get("/quality-review/readiness")

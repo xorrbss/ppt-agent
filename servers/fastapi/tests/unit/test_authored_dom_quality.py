@@ -113,6 +113,53 @@ def test_normalize_browser_metrics_accepts_browser_camel_case_contract():
     assert normalized["elements"][0]["scroll_width"] == 11
 
 
+def test_cjk_line_fit_uses_resolved_browser_font_and_line_rectangles():
+    html = (
+        '<html><body><p data-qid="ko-copy">'
+        "한글 본문 첫 줄과 둘째 줄"
+        "</p></body></html>"
+    )
+    report = inspect_authored_dom(
+        html,
+        {
+            "fonts_ready": True,
+            "elements": [
+                {
+                    "qid": "ko-copy",
+                    "tag": "p",
+                    "bbox": {"x": 40, "y": 100, "width": 420, "height": 44},
+                    "clientWidth": 420,
+                    "clientHeight": 44,
+                    "scrollWidth": 420,
+                    "scrollHeight": 44,
+                    "fontSize": 20,
+                    "font_loaded": True,
+                    "rendered_text": "한글 본문 첫 줄과 둘째 줄",
+                    "computed_style": {
+                        "fontFamily": '"Malgun Gothic"',
+                        "fontSize": "20px",
+                        "lineHeight": "20px",
+                        "color": "#111111",
+                        "backgroundColor": "#ffffff",
+                    },
+                    "text_fragments": [
+                        {"x": 40, "y": 100, "width": 260, "height": 21.5},
+                        {"x": 40, "y": 120, "width": 180, "height": 21.5},
+                    ],
+                }
+            ],
+        },
+    )
+
+    cjk_issues = [
+        issue
+        for issue in report.issues
+        if issue.category == "font" and issue.qids == ("ko-copy",)
+    ]
+    assert len(cjk_issues) == 1
+    assert "resolved CJK line-height 20.0px is too tight" in cjk_issues[0].detail
+
+
 def test_unavailable_or_incomplete_telemetry_is_not_a_clean_dom_pass():
     html = ensure_authored_qids(
         "<html><body><p>Needs browser coverage</p></body></html>"

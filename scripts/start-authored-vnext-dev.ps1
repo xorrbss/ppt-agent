@@ -328,7 +328,7 @@ try {
     Write-Host "Presenton with PPT Master local development is ready."
     Write-Host "Open the existing flow: $proxyUrl/upload"
     Write-Host "Local slide count: 3"
-    Write-Host "New-presentation authored-vNext admission: true (compatibility open/export preserved)"
+    Write-Host "New-presentation engine: Authored only (vNext independent generation frozen; compatibility open/export preserved)"
     Write-Host "Database: $devDatabasePath"
     Write-Host "Logs: $logRoot"
     Write-Host "Press Ctrl+C to stop only the three processes started by this script."

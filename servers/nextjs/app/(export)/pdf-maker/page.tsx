@@ -35,7 +35,9 @@ async function fetchInitialPresentation(
   renderArtifactRequired: boolean,
 ): Promise<PresentationData | undefined> {
   const authHeaders = getFastApiAuthHeaders();
-  if (!cookieHeader && Object.keys(authHeaders).length === 0) {
+  const authDisabled =
+    process.env.DISABLE_AUTH?.trim().toLowerCase() === "true";
+  if (!cookieHeader && Object.keys(authHeaders).length === 0 && !authDisabled) {
     if (expectedSha256 || renderArtifactRequired) {
       throw new Error("Authenticated presentation snapshot is unavailable.");
     }

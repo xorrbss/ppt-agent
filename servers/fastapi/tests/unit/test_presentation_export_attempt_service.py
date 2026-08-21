@@ -352,6 +352,9 @@ def test_standalone_terminalization_rejects_concurrently_overwritten_artifact(
                 workspace_operation_id=None,
                 source_revision=4,
                 source_snapshot_sha256="c" * 64,
+                html_source_sha256="d" * 64,
+                composition_sha256="e" * 64,
+                asset_manifest_sha256="f" * 64,
                 route=PresentationExportRouteResult(
                     result=PresentationExportAdapterResult(
                         presentation=PresentationAndPath(

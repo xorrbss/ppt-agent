@@ -74,6 +74,9 @@ export interface PresentationExportAdapterRegistry<
   general(
     params: PresentationExportExecutionParams
   ): Promise<Result>;
+  authoredFidelity?(
+    params: PresentationExportExecutionParams
+  ): Promise<Result>;
   hybrid(
     params: PresentationExportExecutionParams
   ): Promise<Result>;
@@ -274,6 +277,18 @@ export async function executePersistedPresentationExport<
       presentation,
       params,
       await registry.hybrid(params),
+    );
+  }
+  if (
+    params.format === "pptx" &&
+    params.pptxMode !== "hybrid" &&
+    strategy === "authored-hybrid" &&
+    registry.authoredFidelity
+  ) {
+    return validateCanonicalExportResult(
+      presentation,
+      params,
+      await registry.authoredFidelity(params),
     );
   }
   return validateCanonicalExportResult(

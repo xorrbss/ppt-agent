@@ -5,6 +5,8 @@ import { isAuthoredVnextMasterEnabled } from "@/lib/authored-vnext/master/contra
 import AuthoredVnextFlowClient from "./AuthoredVnextFlowClient";
 
 export default function AuthoredVnextPage() {
-  if (!isAuthoredVnextMasterEnabled()) notFound();
+  const internalCompatibilityUi =
+    process.env.AUTHORED_VNEXT_INTERNAL_COMPATIBILITY_UI === "true";
+  if (!internalCompatibilityUi || !isAuthoredVnextMasterEnabled()) notFound();
   return <AuthoredVnextFlowClient />;
 }

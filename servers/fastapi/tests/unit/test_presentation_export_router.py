@@ -167,7 +167,40 @@ def _result(
     )
 
 
-def test_authored_general_adapter_defaults_to_chromium_dom_exporter(
+def _hybrid_coverage(*, revision: int, source_digest: str) -> dict:
+    return {
+        "schemaVersion": "presenton.authored-hybrid-coverage/v1",
+        "mode": "hybrid",
+        "source": {
+            "presentationRevision": revision,
+            "sourceDigest": source_digest,
+        },
+        "totalSlides": 1,
+        "nativeText": 1,
+        "nativeImage": 0,
+        "nativeShape": 0,
+        "nativeTable": 0,
+        "nativeChart": 0,
+        "rasterRemaining": 1,
+        "fullyEditable": False,
+        "slides": [
+            {
+                "slideNumber": 1,
+                "nativeText": 1,
+                "nativeImage": 0,
+                "nativeShape": 0,
+                "nativeTable": 0,
+                "nativeChart": 0,
+                "rasterRemaining": 1,
+                "fallbackReasons": ["complex-chart"],
+                "visualParity": "not-verified",
+                "nativeBackplateDeDuplication": "applied",
+            }
+        ],
+    }
+
+
+def test_authored_general_adapter_defaults_to_revision_sealed_fidelity(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -176,8 +209,8 @@ def test_authored_general_adapter_defaults_to_chromium_dom_exporter(
     artifact.write_bytes(b"fast-pptx")
     calls: dict = {}
 
-    async def general(*args, **kwargs):
-        calls["general"] = (args, kwargs)
+    async def fidelity(*args, **kwargs):
+        calls["fidelity"] = (args, kwargs)
         return PresentationAndPath(
             presentation_id=presentation_id,
             path=str(artifact),
@@ -191,7 +224,11 @@ def test_authored_general_adapter_defaults_to_chromium_dom_exporter(
         "export_authored_hybrid_presentation",
         hybrid,
     )
-    monkeypatch.setattr(adapter_module, "export_presentation", general)
+    monkeypatch.setattr(
+        adapter_module,
+        "export_authored_fidelity_presentation",
+        fidelity,
+    )
 
     result = asyncio.run(
         adapter_module.run_general_adapter(
@@ -206,10 +243,9 @@ def test_authored_general_adapter_defaults_to_chromium_dom_exporter(
         )
     )
 
-    assert result.compiler == "presentation-export"
+    assert result.compiler == "authored-fidelity"
     assert result.runtime == "chromium-dom-export"
-    assert calls["general"][0][2] == "pptx"
-    assert calls["general"][1]["expected_revision"] == 2
+    assert calls["fidelity"][1]["expected_revision"] == 2
 
 
 def test_authored_general_adapter_uses_hybrid_only_when_explicit(
@@ -223,9 +259,14 @@ def test_authored_general_adapter_uses_hybrid_only_when_explicit(
 
     async def hybrid(*args, **kwargs):
         calls["hybrid"] = (args, kwargs)
-        return PresentationAndPath(
+        return SimpleNamespace(
             presentation_id=presentation_id,
             path=str(artifact),
+            coverage_manifest=_hybrid_coverage(
+                revision=2,
+                source_digest="d" * 64,
+            ),
+            renderer_source_sha256="d" * 64,
         )
 
     async def general(*_args, **_kwargs):
@@ -257,6 +298,35 @@ def test_authored_general_adapter_uses_hybrid_only_when_explicit(
     assert result.runtime == "chromium-native-layer-export"
     assert calls["hybrid"][1]["expected_revision"] == 2
     assert calls["hybrid"][1]["font_embedding"] is True
+    assert result.coverage_manifest["rasterRemaining"] == 1
+    assert result.renderer_source_sha256 == "d" * 64
+
+    provenance = router.PresentationExportRouteResult(
+        result=result,
+        adapter_chain=("general",),
+        fallback_reason=None,
+        capability_evidence={"selected_adapter": "general"},
+        asset_digests={},
+        asset_digests_verified=True,
+    ).provenance(
+        source_revision=2,
+        source_snapshot_sha256="a" * 64,
+        html_source_sha256="b" * 64,
+        composition_sha256="c" * 64,
+        asset_manifest_sha256="e" * 64,
+    )
+    assert provenance["coverage_manifest"]["raster_remaining"] == 1
+    assert provenance["freshness"] == {
+        "source_revision": 2,
+        "source_snapshot_sha256": "a" * 64,
+        "html_source_sha256": "b" * 64,
+        "composition_sha256": "c" * 64,
+        "asset_manifest_sha256": "e" * 64,
+        "renderer_source_sha256": "d" * 64,
+        "package_sha256": None,
+        "asset_digests_match": True,
+        "package_digest_match": True,
+    }
 
 
 def test_router_falls_back_only_after_explicit_unsupported(

@@ -40,16 +40,10 @@ def _reference_mode(style) -> str:
 def _chapter_plan_applies(request: GeneratePresentationRequest, style) -> bool:
     """Whether this generation may add chapter structure to its own outline.
 
-    Three decks are left exactly as they arrive. A master-owned deck takes its
-    chrome from company-standard furniture, so a divider page authored here
-    would not be one of its layouts. Exact reconstruction reproduces a source
-    slide-for-slide, and inserting a page it does not have is the one thing that
-    mode forbids. And a caller that supplied ``slides_markdown`` — the retemplate
-    and design-replay paths among them — is stating the deck's pages itself, the
-    same rule the template path applies when it skips its own table of contents.
+    Exact reconstruction and caller-fixed outlines are left exactly as they
+    arrive. A selected company standard no longer changes this decision because
+    Authored HTML, not the independent Scene compiler, owns the user deck body.
     """
-    if request._authored_master_resolution is not None:
-        return False
     if request.slides_markdown:
         return False
     return _reference_mode(style) != EXACT_RECONSTRUCTION
@@ -58,11 +52,9 @@ def _chapter_plan_applies(request: GeneratePresentationRequest, style) -> bool:
 def _illustration_plan_applies(request: GeneratePresentationRequest, style) -> bool:
     """Whether this generation decides its own illustration slots.
 
-    The two decks that must not be planned are the two the chapter plan also
-    leaves alone, for the same reasons: a master-owned deck draws its imagery
-    from company-standard furniture rather than from an image provider, and
-    exact reconstruction reproduces a source slide-for-slide, where an invented
-    illustration is precisely what the mode forbids.
+    Exact reconstruction must not invent imagery. A selected company standard
+    no longer suppresses body imagery because Authored owns the body and the
+    company furniture identity is kept as a separate compatibility projection.
 
     Unlike the chapter plan this DOES apply to a caller-supplied
     ``slides_markdown``. That caller is stating the deck's pages, not which of
@@ -70,8 +62,6 @@ def _illustration_plan_applies(request: GeneratePresentationRequest, style) -> b
     per-slide prompts fall back to deciding independently and in parallel, which
     is the oscillation the plan exists to end.
     """
-    if request._authored_master_resolution is not None:
-        return False
     return _reference_mode(style) != EXACT_RECONSTRUCTION
 
 

@@ -110,8 +110,21 @@ async def illustrate_slide(
     # A slide the deck excluded loses its slot through the same removal every
     # generation failure already uses, so it can never leave a src-less <img>
     # box behind, and no provider call is made for it.
-    illustrated_html = html if illustration_allowed else strip_illustration_slots(html)
-    generating = image_service is not None and illustration_allowed
+    image_generation_disabled = bool(
+        image_service is not None
+        and getattr(image_service, "is_image_generation_disabled", False)
+    )
+    illustrated_html = (
+        html
+        if illustration_allowed
+        and (not image_generation_disabled or source_images is not None)
+        else strip_illustration_slots(html)
+    )
+    generating = (
+        image_service is not None
+        and illustration_allowed
+        and not image_generation_disabled
+    )
     # A slide with an offered picture still has an `<img data-asset-id>` to
     # resolve even when this deck generates no illustrations at all, so the
     # stage runs for either reason. Resolution is also what drops an id the
@@ -136,6 +149,11 @@ async def illustrate_slide(
             # reaches substitution byte-identically to before it.
             if source_images is not None:
                 illustration_kwargs["source_images"] = source_images
+            if image_generation_disabled:
+                # Source-image substitution remains available, but a missing
+                # or invalid source cannot fall through to the disabled
+                # provider and turn an otherwise valid deck into retries.
+                illustration_kwargs["generate_fallback"] = False
             try:
                 # The slide's outline markdown is the authoritative source for
                 # any label a text-capable image model is allowed to draw — it

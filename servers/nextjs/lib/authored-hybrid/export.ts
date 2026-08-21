@@ -4,7 +4,10 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { resolveAppDataDirectory } from "@/lib/app-data-directory";
-import { getFastApiAuthHeaders, getFastApiBaseUrl } from "@/lib/fastapi-internal";
+import {
+  getFastApiAuthHeaders,
+  getFastApiBaseUrl,
+} from "@/lib/fastapi-internal";
 import {
   runBundledPresentationExport,
   type BundledPresentationExportResult,
@@ -22,13 +25,19 @@ import {
   beginExportProgress,
   recordExportProgress,
 } from "./export-progress.ts";
-import { prepareSlideLayer } from "./slide-layer.ts";
+import {
+  prepareFidelitySlideLayer,
+  prepareSlideLayer,
+} from "./slide-layer.ts";
 import {
   mapWithConcurrency,
   parseBoundedPositiveInt,
   resolveHybridExportConcurrencyDefault,
 } from "./export-performance.ts";
-import { summarizeAuthoredHybridExport } from "./export-metadata.ts";
+import {
+  createAuthoredHybridCoverageManifest,
+  summarizeAuthoredHybridExport,
+} from "./export-metadata.ts";
 import {
   resolveFontEmbeddingPlan,
   type FontEmbeddingPlan,
@@ -38,13 +47,15 @@ import {
   type PowerPointTypefaceInput,
 } from "./pptx-font-embedding.ts";
 import {
-  createImageOnlyExportQuality,
   createPresentationExportQuality,
   type PresentationExportFontEmbeddingStatus,
   type PresentationExportQualityReport,
   type PresentationExportRendererIsolation,
 } from "../presentation-export-quality.ts";
-import { imageFallbackSlide, noFontRenderingTelemetry } from "./export-slide-quality.ts";
+import {
+  imageFallbackSlide,
+  noFontRenderingTelemetry,
+} from "./export-slide-quality.ts";
 
 const MAX_PRESENTATION_RESPONSE_BYTES = 50 * 1024 * 1024;
 const MAX_HYBRID_SLIDES = 100;
@@ -55,14 +66,13 @@ const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
 // pathological deck holds the export request for tens of minutes. When the budget is
 // spent the remaining slides simply keep their fidelity (image) render.
 const HYBRID_DECK_BUDGET_MS = 15 * 60_000;
-const HYBRID_CACHE_VERSION =
-  "authored-hybrid-v6-windows-profile-cleanup-race";
+const HYBRID_CACHE_VERSION = "authored-hybrid-v14-multiline-overflow";
 const HYBRID_RESULT_CACHE_LIMIT = 24;
 const HYBRID_EXPORT_CONCURRENCY = parseBoundedPositiveInt(
   process.env.AUTHORED_HYBRID_CONCURRENCY,
   resolveHybridExportConcurrencyDefault(),
   1,
-  12
+  12,
 );
 
 interface CompletedHybridExport {
@@ -91,7 +101,7 @@ interface StoredPresentation {
   revision?: unknown;
 }
 
-interface AuthoredHybridExportParams {
+export interface AuthoredHybridExportParams {
   presentationId: string;
   title?: string;
   cookieHeader?: string;
@@ -136,10 +146,13 @@ function rendererIsolationRecord(): PresentationExportRendererIsolation {
 
 async function fetchPresentation(
   presentationId: string,
-  cookieHeader: string
+  cookieHeader: string,
 ): Promise<FetchedPresentation> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), PRESENTATION_FETCH_TIMEOUT_MS);
+  const timer = setTimeout(
+    () => controller.abort(),
+    PRESENTATION_FETCH_TIMEOUT_MS,
+  );
   try {
     const headers: Record<string, string> = {
       Accept: "application/json",
@@ -153,17 +166,18 @@ async function fetchPresentation(
         headers,
         cache: "no-store",
         signal: controller.signal,
-      }
+      },
     );
     if (!response.ok) {
       throw new Error(`presentation fetch returned HTTP ${response.status}`);
     }
     const body = await readBoundedResponseText(
       response,
-      MAX_PRESENTATION_RESPONSE_BYTES
+      MAX_PRESENTATION_RESPONSE_BYTES,
     );
     const parsed: unknown = JSON.parse(body);
-    if (!isRecord(parsed)) throw new Error("presentation response is not an object");
+    if (!isRecord(parsed))
+      throw new Error("presentation response is not an object");
     return {
       presentation: parsed as StoredPresentation,
       sourceSha256: createHash("sha256").update(body).digest("hex"),
@@ -173,13 +187,12 @@ async function fetchPresentation(
   }
 }
 
-
 async function resolveSafeFidelityPptx(outPath: string): Promise<string> {
   if (path.extname(outPath).toLowerCase() !== ".pptx") {
     throw new Error("Fidelity export did not produce a PPTX file.");
   }
   const exportsDirectory = await fs.realpath(
-    path.join(resolveAppDataDirectory(), "exports")
+    path.join(resolveAppDataDirectory(), "exports"),
   );
   const resolved = await fs.realpath(outPath);
   if (
@@ -189,7 +202,11 @@ async function resolveSafeFidelityPptx(outPath: string): Promise<string> {
     throw new Error("Fidelity export finished outside the exports directory.");
   }
   const stats = await fs.stat(resolved);
-  if (!stats.isFile() || stats.size < 22 || stats.size > MAX_FIDELITY_PPTX_BYTES) {
+  if (
+    !stats.isFile() ||
+    stats.size < 22 ||
+    stats.size > MAX_FIDELITY_PPTX_BYTES
+  ) {
     throw new Error("Fidelity PPTX is not a safe readable file.");
   }
   return resolved;
@@ -202,7 +219,7 @@ interface PreparedFontEmbedding {
 }
 
 function fontEmbeddingFailures(
-  plan: FontEmbeddingPlan
+  plan: FontEmbeddingPlan,
 ): NonNullable<PresentationExportFontEmbeddingStatus["failures"]> {
   return plan.status.failures.map((failure) => ({
     family: failure.family,
@@ -213,7 +230,7 @@ function fontEmbeddingFailures(
 }
 
 function powerPointFontInputs(
-  plan: FontEmbeddingPlan
+  plan: FontEmbeddingPlan,
 ): PowerPointTypefaceInput[] {
   const filesById = new Map(plan.files.map((file) => [file.sourceId, file]));
   const byFamily = new Map<
@@ -248,7 +265,7 @@ function powerPointFontInputs(
 
 async function prepareFontEmbedding(
   fidelityPath: string,
-  plan: FontEmbeddingPlan
+  plan: FontEmbeddingPlan,
 ): Promise<PreparedFontEmbedding> {
   const safeFidelityPath = await resolveSafeFidelityPptx(fidelityPath);
   const fidelityBytes = await fs.readFile(safeFidelityPath);
@@ -290,7 +307,7 @@ async function prepareFontEmbedding(
   try {
     const packaged = embedPowerPointFonts(
       fidelityBytes,
-      powerPointFontInputs(plan)
+      powerPointFontInputs(plan),
     );
     if (!packaged.result.applied) {
       return {
@@ -320,21 +337,24 @@ async function prepareFontEmbedding(
 
     const filesById = new Map(plan.files.map((file) => [file.sourceId, file]));
     const facesBySource = new Map(
-      plan.faces.map((face) => [`${face.family}\0${face.sourceId}\0${face.face}`, face])
+      plan.faces.map((face) => [
+        `${face.family}\0${face.sourceId}\0${face.face}`,
+        face,
+      ]),
     );
     const faceStatus = packaged.result.fonts.flatMap((font) =>
       font.faces.map((face) => {
         const sourceId = face.source ?? "";
         const file = filesById.get(sourceId);
         const plannedFace = facesBySource.get(
-          `${font.typeface}\0${sourceId}\0${face.face}`
+          `${font.typeface}\0${sourceId}\0${face.face}`,
         );
         return {
           typeface: font.typeface,
           face: face.face,
           weight: plannedFace?.weight ?? face.weight,
-          style: (plannedFace?.style ??
-            (face.italic ? "italic" : "normal")) as "normal" | "italic",
+          style: (plannedFace?.style ?? (face.italic ? "italic" : "normal")) as
+            "normal" | "italic",
           source: file?.source ?? "server-font-allowlist",
           ...(file?.sourcePath ? { sourcePath: file.sourcePath } : {}),
           sourceSha256: face.sourceSha256,
@@ -347,14 +367,12 @@ async function prepareFontEmbedding(
           strategy: plan.strategy,
           partName: face.partName,
           format: face.format,
-          ...(file?.derivedFromVariable
-            ? { derivedFromVariable: true }
-            : {}),
+          ...(file?.derivedFromVariable ? { derivedFromVariable: true } : {}),
         };
-      })
+      }),
     );
     const embeddedTypefaceFamilies = packaged.result.fonts.map(
-      (font) => font.typeface
+      (font) => font.typeface,
     );
     return {
       pptx: packaged.pptx,
@@ -404,7 +422,8 @@ async function writeHybridPptx(
   fidelityPath: string,
   layers: readonly AuthoredHybridSlideLayer[],
   basePptx?: Buffer,
-  embeddedTypefaceFamilies: readonly string[] = []
+  embeddedTypefaceFamilies: readonly string[] = [],
+  artifactKind: "hybrid" | "authored-fidelity" = "hybrid",
 ): Promise<string> {
   const safeFidelityPath = await resolveSafeFidelityPptx(fidelityPath);
   const fidelityBytes = basePptx ?? (await fs.readFile(safeFidelityPath));
@@ -413,7 +432,10 @@ async function writeHybridPptx(
   });
   const parsed = path.parse(safeFidelityPath);
   const suffix = randomUUID();
-  const hybridPath = path.join(parsed.dir, `${parsed.name}-hybrid-${suffix}.pptx`);
+  const hybridPath = path.join(
+    parsed.dir,
+    `${parsed.name}-${artifactKind}-${suffix}.pptx`,
+  );
   const temporaryPath = path.join(parsed.dir, `.${parsed.name}-${suffix}.tmp`);
   let published = false;
   try {
@@ -433,22 +455,118 @@ async function writeHybridPptx(
   return hybridPath;
 }
 
+/**
+ * Authored fidelity is an exact, full-slide raster capture from the same
+ * revision-sealed browser source used by Hybrid. No native element is emitted.
+ */
+export async function runAuthoredFidelityPresentationExport(
+  params: Omit<AuthoredHybridExportParams, "fontEmbedding" | "operationId">,
+): Promise<BundledPresentationExportResult> {
+  const fetched = await fetchPresentation(
+    params.presentationId,
+    params.cookieHeader ?? "",
+  );
+  const { presentation } = fetched;
+  if (
+    !Number.isSafeInteger(presentation.revision) ||
+    (presentation.revision as number) < 0 ||
+    (params.expectedPresentationRevision !== undefined &&
+      presentation.revision !== params.expectedPresentationRevision) ||
+    !isAuthoredPresentation(presentation) ||
+    !Array.isArray(presentation.slides) ||
+    presentation.slides.length === 0 ||
+    presentation.slides.length > MAX_HYBRID_SLIDES
+  ) {
+    throw new Error("authored_fidelity_source_invalid");
+  }
+
+  const fidelity = await runBundledPresentationExport({
+    format: "pptx",
+    presentationId: params.presentationId,
+    title: params.title,
+    cookieHeader: params.cookieHeader,
+    expectedPresentationSha256: fetched.sourceSha256,
+    expectedPresentationRevision: params.expectedPresentationRevision,
+  });
+  const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
+  if (!chromeExecutable) throw new Error("authored_fidelity_chrome_unavailable");
+
+  const layers = await mapWithConcurrency(
+    presentation.slides,
+    HYBRID_EXPORT_CONCURRENCY,
+    async (rawSlide, arrayIndex) => {
+      if (!isRecord(rawSlide) || typeof rawSlide.html_content !== "string") {
+        throw new Error("authored_fidelity_slide_html_required");
+      }
+      const prepared = await prepareFidelitySlideLayer(
+        rawSlide.html_content,
+        arrayIndex + 1,
+        chromeExecutable,
+      );
+      if (!prepared.layer) throw new Error("authored_fidelity_slide_capture_failed");
+      return prepared.layer;
+    },
+  );
+  const resultPath = await writeHybridPptx(
+    fidelity.path,
+    layers,
+    undefined,
+    [],
+    "authored-fidelity",
+  );
+  return { path: resultPath };
+}
+
 async function attachQualityReport(
   result: BundledPresentationExportResult,
-  quality: PresentationExportQualityReport
+  quality: PresentationExportQualityReport,
+  source: { presentationRevision: number; sourceDigest: string },
 ): Promise<BundledPresentationExportResult> {
   const qualityPath = `${result.path}.quality.json`;
-  const temporaryPath = `${qualityPath}.${randomUUID()}.tmp`;
+  const coveragePath = `${result.path}.coverage.json`;
+  const suffix = randomUUID();
+  const temporaryQualityPath = `${qualityPath}.${suffix}.tmp`;
+  const temporaryCoveragePath = `${coveragePath}.${suffix}.tmp`;
+  const coverageManifest = createAuthoredHybridCoverageManifest(
+    quality,
+    source,
+  );
+  let qualityPublished = false;
+  let coveragePublished = false;
   try {
-    await fs.writeFile(temporaryPath, JSON.stringify(quality, null, 2), {
+    await fs.writeFile(temporaryQualityPath, JSON.stringify(quality, null, 2), {
       flag: "wx",
       mode: 0o600,
     });
-    await fs.rename(temporaryPath, qualityPath);
+    await fs.writeFile(
+      temporaryCoveragePath,
+      JSON.stringify(coverageManifest, null, 2),
+      { flag: "wx", mode: 0o600 },
+    );
+    await fs.rename(temporaryQualityPath, qualityPath);
+    qualityPublished = true;
+    await fs.rename(temporaryCoveragePath, coveragePath);
+    coveragePublished = true;
     await fs.chmod(qualityPath, 0o644);
+    await fs.chmod(coveragePath, 0o644);
   } catch (error) {
-    console.warn("[authored-hybrid] quality sidecar could not be persisted", error);
-    await fs.rm(temporaryPath, { force: true }).catch(() => {});
+    // Coverage is part of the Hybrid artifact contract. Returning a PPTX after
+    // either sidecar failed would silently discard the evidence needed to tell
+    // users what remained raster, so fail the explicit Hybrid request.
+    await Promise.all([
+      fs.rm(temporaryQualityPath, { force: true }).catch(() => {}),
+      fs.rm(temporaryCoveragePath, { force: true }).catch(() => {}),
+      ...(qualityPublished
+        ? [fs.rm(qualityPath, { force: true }).catch(() => {})]
+        : []),
+      ...(coveragePublished
+        ? [fs.rm(coveragePath, { force: true }).catch(() => {})]
+        : []),
+      fs.rm(result.path, { force: true }).catch(() => {}),
+    ]);
+    throw new Error("authored_hybrid_coverage_publication_failed", {
+      cause: error,
+    });
   }
   // The client-facing summary is derived from the same per-slide quality the
   // sidecar records, so the editor toast and the persisted report can never
@@ -457,8 +575,9 @@ async function attachQualityReport(
     quality.slides.map((slide) => ({
       editable: slide.editable,
       fallbackReason: slide.fallbackReasons[0],
-    }))
+    })),
   );
+  exportMetadata.coverageManifest = coverageManifest;
   return { ...result, quality, exportMetadata };
 }
 
@@ -468,7 +587,7 @@ async function runUncachedAuthoredHybridExport(
   sourceSha256: string,
   fontEmbeddingPlan: FontEmbeddingPlan,
   cacheKey: string,
-  requestStartedAt: number
+  requestStartedAt: number,
 ): Promise<BundledPresentationExportResult> {
   const fidelityStartedAt = performance.now();
   recordExportProgress(cacheKey, { phase: "fidelity" });
@@ -483,44 +602,31 @@ async function runUncachedAuthoredHybridExport(
   const fidelityMs = elapsedMs(fidelityStartedAt);
   const fontEmbedding = await prepareFontEmbedding(
     fidelity.path,
-    fontEmbeddingPlan
+    fontEmbeddingPlan,
   );
 
   try {
-    const slides = Array.isArray(presentation.slides) ? presentation.slides : [];
+    const slides = Array.isArray(presentation.slides)
+      ? presentation.slides
+      : [];
     const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
     if (!chromeExecutable) {
       console.info(
         `[authored-hybrid] fidelity-only total=${elapsedMs(requestStartedAt)}ms ` +
-          `fidelity=${fidelityMs}ms reason=chrome-unavailable`
+          `fidelity=${fidelityMs}ms reason=chrome-unavailable`,
       );
-      return attachQualityReport(
-        fontEmbedding.status.applied
-          ? {
-              path: await writeHybridPptx(
-                fidelity.path,
-                [],
-                fontEmbedding.pptx,
-                fontEmbedding.embeddedTypefaceFamilies
-              ),
-            }
-          : fidelity,
-        createImageOnlyExportQuality(slides.length, "chrome-unavailable", {
-          fontEmbeddingStatus: fontEmbedding.status,
-          rendererIsolation: rendererIsolationRecord(),
-        })
-      );
+      throw new Error("authored_hybrid_chrome_unavailable");
     }
 
-    const slideInputs = slides
-      .map((rawSlide, arrayIndex) => {
-        if (!isRecord(rawSlide)) {
-          return { html: "", slideNumber: arrayIndex + 1 };
-        }
-        const slide = rawSlide as StoredSlide;
-        const html = typeof slide.html_content === "string" ? slide.html_content : "";
-        return { html, slideNumber: arrayIndex + 1 };
-      });
+    const slideInputs = slides.map((rawSlide, arrayIndex) => {
+      if (!isRecord(rawSlide)) {
+        return { html: "", slideNumber: arrayIndex + 1 };
+      }
+      const slide = rawSlide as StoredSlide;
+      const html =
+        typeof slide.html_content === "string" ? slide.html_content : "";
+      return { html, slideNumber: arrayIndex + 1 };
+    });
 
     const deckStart = Date.now();
     const slidesStartedAt = performance.now();
@@ -554,14 +660,14 @@ async function runUncachedAuthoredHybridExport(
               budgetWarningWritten = true;
               console.warn(
                 "[authored-hybrid] deck time budget exhausted; remaining slides " +
-                  "keep the fidelity render"
+                  "keep the fidelity render",
               );
             }
             return {
               layer: null,
               quality: imageFallbackSlide(
                 slideNumber,
-                "deck-time-budget-exhausted"
+                "deck-time-budget-exhausted",
               ),
               fontRendering: noFontRenderingTelemetry(),
             };
@@ -571,18 +677,18 @@ async function runUncachedAuthoredHybridExport(
               html,
               slideNumber,
               chromeExecutable,
-              fontEmbedding.embeddedTypefaceFamilies
+              fontEmbedding.embeddedTypefaceFamilies,
             );
           } catch (error) {
             console.warn(
               `[authored-hybrid:slide-${slideNumber}] fidelity fallback after slide processing failure`,
-              error
+              error,
             );
             return {
               layer: null,
               quality: imageFallbackSlide(
                 slideNumber,
-                "slide-processing-failed"
+                "slide-processing-failed",
               ),
               fontRendering: noFontRenderingTelemetry(),
             };
@@ -592,13 +698,11 @@ async function runUncachedAuthoredHybridExport(
           // progress monotonic instead of stalling on the failing slides.
           noteSlideCompleted();
         }
-      }
+      },
     );
     const layers = preparedSlides
       .map((prepared) => prepared.layer)
-      .filter(
-        (layer): layer is AuthoredHybridSlideLayer => layer !== null
-      );
+      .filter((layer): layer is AuthoredHybridSlideLayer => layer !== null);
     const quality = createPresentationExportQuality(
       "hybrid",
       preparedSlides.map((prepared) => prepared.quality),
@@ -609,19 +713,19 @@ async function runUncachedAuthoredHybridExport(
           browserFontFilesCollected: preparedSlides.reduce(
             (sum, prepared) =>
               sum + prepared.fontRendering.browserFontFilesCollected,
-            0
+            0,
           ),
           browserCollectionFailures: preparedSlides.reduce(
             (sum, prepared) =>
               sum + prepared.fontRendering.browserCollectionFailures,
-            0
+            0,
           ),
         },
-      }
+      },
     );
     const slidesMs = elapsedMs(slidesStartedAt);
-    if (!layers.length && !fontEmbedding.status.applied) {
-      return attachQualityReport(fidelity, quality);
+    if (!layers.length) {
+      throw new Error("authored_hybrid_no_native_elements");
     }
     const assemblyStartedAt = performance.now();
     recordExportProgress(cacheKey, { phase: "assembly" });
@@ -629,42 +733,24 @@ async function runUncachedAuthoredHybridExport(
       fidelity.path,
       layers,
       fontEmbedding.pptx,
-      fontEmbedding.embeddedTypefaceFamilies
+      fontEmbedding.embeddedTypefaceFamilies,
     );
     const assemblyMs = elapsedMs(assemblyStartedAt);
-    const result = await attachQualityReport({ path: hybridPath }, quality);
+    const result = await attachQualityReport({ path: hybridPath }, quality, {
+      presentationRevision: Number(presentation.revision),
+      sourceDigest: sourceSha256,
+    });
     await rememberCompletedHybridExport(cacheKey, result);
     console.info(
       `[authored-hybrid] complete total=${elapsedMs(requestStartedAt)}ms ` +
         `fidelity=${fidelityMs}ms slides=${slidesMs}ms assembly=${assemblyMs}ms ` +
         `editable=${layers.length}/${slides.length} ` +
-        `concurrency=${HYBRID_EXPORT_CONCURRENCY}`
+        `concurrency=${HYBRID_EXPORT_CONCURRENCY}`,
     );
     return result;
   } catch (error) {
-    console.warn(
-      "[authored-hybrid] fidelity fallback after hybrid processing failure",
-      error
-    );
-    const slideCount = Array.isArray(presentation.slides)
-      ? presentation.slides.length
-      : 0;
-    return attachQualityReport(
-      fontEmbedding.status.applied
-        ? {
-            path: await writeHybridPptx(
-              fidelity.path,
-              [],
-              fontEmbedding.pptx,
-              fontEmbedding.embeddedTypefaceFamilies
-            ),
-          }
-        : fidelity,
-      createImageOnlyExportQuality(slideCount, "hybrid-processing-failed", {
-        fontEmbeddingStatus: fontEmbedding.status,
-        rendererIsolation: rendererIsolationRecord(),
-      })
-    );
+    console.warn("[authored-hybrid] explicit hybrid export failed", error);
+    throw error;
   }
 }
 
@@ -674,56 +760,45 @@ async function runUncachedAuthoredHybridExport(
  * share one export job instead of spawning duplicate Chrome processes.
  */
 export async function runAuthoredHybridPresentationExport(
-  params: AuthoredHybridExportParams
+  params: AuthoredHybridExportParams,
 ): Promise<BundledPresentationExportResult> {
   const requestStartedAt = performance.now();
   let fetched: FetchedPresentation;
   try {
     fetched = await fetchPresentation(
       params.presentationId,
-      params.cookieHeader ?? ""
+      params.cookieHeader ?? "",
     );
   } catch (error) {
-    console.warn(
-      "[authored-hybrid] presentation lookup failed; using fidelity export",
-      error
-    );
-    return runBundledPresentationExport({
-      format: "pptx",
-      presentationId: params.presentationId,
-      title: params.title,
-      cookieHeader: params.cookieHeader,
-      expectedPresentationRevision: params.expectedPresentationRevision,
+    throw new Error("authored_hybrid_presentation_lookup_failed", {
+      cause: error,
     });
   }
 
   const { presentation } = fetched;
+  if (
+    !Number.isSafeInteger(presentation.revision) ||
+    (presentation.revision as number) < 0
+  ) {
+    throw new Error("authored_hybrid_revision_invalid");
+  }
   if (
     params.expectedPresentationRevision !== undefined &&
     presentation.revision !== params.expectedPresentationRevision
   ) {
     throw new Error("stale_render_revision");
   }
-  if (!isAuthoredPresentation(presentation) || !Array.isArray(presentation.slides)) {
-    return runBundledPresentationExport({
-      format: "pptx",
-      presentationId: params.presentationId,
-      title: params.title,
-      cookieHeader: params.cookieHeader,
-      expectedPresentationRevision: params.expectedPresentationRevision,
-    });
+  if (
+    !isAuthoredPresentation(presentation) ||
+    !Array.isArray(presentation.slides)
+  ) {
+    throw new Error("authored_hybrid_requires_authored_presentation");
   }
   if (
     presentation.slides.length === 0 ||
     presentation.slides.length > MAX_HYBRID_SLIDES
   ) {
-    return runBundledPresentationExport({
-      format: "pptx",
-      presentationId: params.presentationId,
-      title: params.title,
-      cookieHeader: params.cookieHeader,
-      expectedPresentationRevision: params.expectedPresentationRevision,
-    });
+    throw new Error("authored_hybrid_slide_count_unsupported");
   }
 
   const fontEmbeddingPlan = await resolveFontEmbeddingPlan({
@@ -740,12 +815,12 @@ export async function runAuthoredHybridPresentationExport(
     Number.isSafeInteger(presentation.revision)
       ? (presentation.revision as number)
       : params.expectedPresentationRevision,
-    fontEmbeddingPlan.cacheDiscriminator
+    fontEmbeddingPlan.cacheDiscriminator,
   );
   const cached = await readCompletedHybridExport(cacheKey);
   if (cached) {
     console.info(
-      `[authored-hybrid] cache-hit total=${elapsedMs(requestStartedAt)}ms`
+      `[authored-hybrid] cache-hit total=${elapsedMs(requestStartedAt)}ms`,
     );
     return cached;
   }
@@ -767,21 +842,23 @@ export async function runAuthoredHybridPresentationExport(
     fetched.sourceSha256,
     fontEmbeddingPlan,
     cacheKey,
-    requestStartedAt
-  ).then(
-    (result) => {
-      recordExportProgress(cacheKey, { phase: "completed" });
-      return result;
-    },
-    (error: unknown) => {
-      recordExportProgress(cacheKey, { phase: "failed" });
-      throw error;
-    },
-  ).finally(() => {
-    if (inFlightHybridExports.get(cacheKey) === job) {
-      inFlightHybridExports.delete(cacheKey);
-    }
-  });
+    requestStartedAt,
+  )
+    .then(
+      (result) => {
+        recordExportProgress(cacheKey, { phase: "completed" });
+        return result;
+      },
+      (error: unknown) => {
+        recordExportProgress(cacheKey, { phase: "failed" });
+        throw error;
+      },
+    )
+    .finally(() => {
+      if (inFlightHybridExports.get(cacheKey) === job) {
+        inFlightHybridExports.delete(cacheKey);
+      }
+    });
   inFlightHybridExports.set(cacheKey, job);
   return job;
 }
@@ -790,7 +867,7 @@ function createHybridCacheKey(
   presentationId: string,
   sourceSha256: string,
   sourceRevision: number | undefined,
-  fontEmbeddingDiscriminator: string
+  fontEmbeddingDiscriminator: string,
 ): string {
   return createHash("sha256")
     .update(HYBRID_CACHE_VERSION)
@@ -806,7 +883,7 @@ function createHybridCacheKey(
 }
 
 async function readHybridArtifactIdentity(
-  artifactPath: string
+  artifactPath: string,
 ): Promise<{ sha256: string; sizeBytes: number }> {
   const safePath = await resolveSafeFidelityPptx(artifactPath);
   const stats = await fs.stat(safePath);
@@ -819,7 +896,7 @@ async function readHybridArtifactIdentity(
 
 async function rememberCompletedHybridExport(
   cacheKey: string,
-  result: BundledPresentationExportResult
+  result: BundledPresentationExportResult,
 ): Promise<void> {
   const identity = await readHybridArtifactIdentity(result.path);
   completedHybridExports.delete(cacheKey);
@@ -836,7 +913,7 @@ async function rememberCompletedHybridExport(
 }
 
 async function readCompletedHybridExport(
-  cacheKey: string
+  cacheKey: string,
 ): Promise<BundledPresentationExportResult | null> {
   const cached = completedHybridExports.get(cacheKey);
   if (!cached) return null;

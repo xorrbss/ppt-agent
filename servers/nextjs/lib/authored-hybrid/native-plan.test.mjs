@@ -89,7 +89,7 @@ test("text intersecting a slide edge is retained while off-slide text is rejecte
   assert.deepEqual(prepared[1].source.bounds, bounds(1245, -49, 9, 154));
 });
 
-test("rich CJK text, a simple shape, and a safe data image become native OOXML", async () => {
+test("rich CJK body text, a simple shape, and a safe data image become native OOXML", async () => {
   const redPng = await sharp({
     create: { width: 8, height: 6, channels: 4, background: "#ff0000" },
   })
@@ -103,7 +103,7 @@ test("rich CJK text, a simple shape, and a safe data image become native OOXML",
       opacity: 0.8,
       classification: { mode: "native", kind: "text", confidence: "safe" },
       text: {
-        role: "title",
+        role: "body",
         plainText: "서울 Hybrid",
         paragraphs: ["서울 Hybrid"],
         style: style(),
@@ -164,9 +164,9 @@ test("rich CJK text, a simple shape, and a safe data image become native OOXML",
   assert.match(textXml, /wrap="square"/);
   assert.match(textXml, /horzOverflow="clip"/);
   assert.match(textXml, /vertOverflow="clip"/);
-  assert.match(textXml, /<a:noAutofit\/>/);
+  assert.match(textXml, /<a:normAutofit\/>/);
   assert.match(textXml, /<a:lnSpc><a:spcPts val="3000"\/><\/a:lnSpc>/);
-  assert.doesNotMatch(textXml, /<a:normAutofit/);
+  assert.doesNotMatch(textXml, /<a:noAutofit/);
   assert.match(textXml, /rot="21150000"/);
   assert.match(textXml, /<a:alpha val="80000"\/>/);
 
@@ -348,7 +348,7 @@ test("invalid native images and z-order inversions stay on the raster backplate"
   assert.deepEqual(explicitlyRejected, []);
 });
 
-test("nowrap text stays on one line without PowerPoint shrinking it", async () => {
+test("nowrap substitute-CJK text stays on one line with shrink-to-fit", async () => {
   const element = {
     ...base("nowrap-title", 0, 0, bounds(1120, 40, 150, 50)),
     classification: { mode: "native", kind: "text", confidence: "safe" },
@@ -365,10 +365,41 @@ test("nowrap text stays on one line without PowerPoint shrinking it", async () =
   assert.match(xml, /wrap="none"/);
   assert.match(xml, /horzOverflow="clip"/);
   assert.match(xml, /vertOverflow="clip"/);
-  assert.match(xml, /<a:noAutofit\/>/);
-  assert.doesNotMatch(xml, /<a:normAutofit/);
+  assert.match(xml, /<a:normAutofit\/>/);
+  assert.doesNotMatch(xml, /<a:noAutofit/);
   assert.match(xml, /<a:off x="10668000" y="381000"\/>/);
   assert.match(xml, /<a:ext cx="1428750" cy="476250"\/>/);
+});
+
+test("rich text on separate visual rows stays in the fidelity backplate without an explicit break", async () => {
+  const firstStyle = style({ fontSizePt: 28 });
+  const secondStyle = style({ fontSizePt: 28, bold: true });
+  const element = {
+    ...base("implicit-rich-lines", 0, 0, bounds(80, 80, 500, 120)),
+    classification: { mode: "native", kind: "text", confidence: "safe" },
+    text: {
+      role: "title",
+      plainText: "FirstSecond",
+      paragraphs: ["FirstSecond"],
+      style: firstStyle,
+      runs: [
+        {
+          text: "First",
+          bounds: bounds(80, 80, 200, 40),
+          fragments: [bounds(80, 80, 200, 40)],
+          style: firstStyle,
+        },
+        {
+          text: "Second",
+          bounds: bounds(80, 140, 240, 40),
+          fragments: [bounds(80, 140, 240, 40)],
+          style: secondStyle,
+        },
+      ],
+    },
+  };
+
+  assert.deepEqual(await prepareNativeElements([element]), []);
 });
 
 test("editable text and runs are clamped to 9pt", async () => {
@@ -406,7 +437,7 @@ test("editable text and runs are clamped to 9pt", async () => {
   const xml = serializePreparedNativeElement(prepared[0], 3);
   assert.match(xml, /sz="900"/);
   assert.doesNotMatch(xml, /sz="[1-8]\d\d"/);
-  assert.match(xml, /<a:noAutofit\/>/);
+  assert.match(xml, /<a:normAutofit\/>/);
 });
 
 test("a browser-confirmed single line cannot rewrap into the content below", async () => {
@@ -942,7 +973,7 @@ test("partially off-slide rotated geometry preserves its authored coordinate", a
   assert.match(xml, /rot="16200000"/);
 });
 
-test("gradient rails export as one editable axis-aligned PowerPoint line", async () => {
+test("gradient rails remain in the fidelity backplate", async () => {
   const element = {
     ...base("gradient-rail", 0, 0, bounds(40, 200, 800, 2)),
     classification: { mode: "native", kind: "shape", confidence: "safe" },
@@ -962,18 +993,10 @@ test("gradient rails export as one editable axis-aligned PowerPoint line", async
     },
   };
   const prepared = await prepareNativeElements([element]);
-  const xml = serializePreparedNativeElement(prepared[0], 3);
-
-  assert.equal(preparedNativeElementNonVisualIdCount(prepared[0]), 1);
-  assert.equal((xml.match(/<p:sp>/g) ?? []).length, 1);
-  assert.match(xml, /<a:off x="381000" y="1914525"\/><a:ext cx="7620000" cy="95"\/>/);
-  assert.match(xml, /<a:noFill\/><a:ln w="19050"><a:gradFill rotWithShape="1">/);
-  assert.match(xml, /<a:gs pos="0"><a:srgbClr val="4F86D9">/);
-  assert.match(xml, /<a:gs pos="100000"><a:srgbClr val="ECA064">/);
-  assert.doesNotMatch(xml, /gradient \d+/);
+  assert.deepEqual(prepared, []);
 });
 
-test("vertical gradient rails stay on one exact PowerPoint axis", async () => {
+test("vertical gradient rails remain in the fidelity backplate", async () => {
   const element = {
     ...base("vertical-gradient-rail", 0, 0, bounds(80, 40, 2, 620)),
     classification: { mode: "native", kind: "shape", confidence: "safe" },
@@ -994,11 +1017,7 @@ test("vertical gradient rails stay on one exact PowerPoint axis", async () => {
     },
   };
   const prepared = await prepareNativeElements([element]);
-  const xml = serializePreparedNativeElement(prepared[0], 3);
-
-  assert.equal((xml.match(/<p:sp>/g) ?? []).length, 1);
-  assert.match(xml, /<a:off x="771525" y="381000"\/><a:ext cx="95" cy="5905500"\/>/);
-  assert.match(xml, /<a:ln w="19050"><a:gradFill rotWithShape="1">/);
+  assert.deepEqual(prepared, []);
 });
 
 test("raster-classified CSS panels retain editable fill and per-side borders", async () => {
@@ -1044,7 +1063,7 @@ test("raster-classified CSS panels retain editable fill and per-side borders", a
   assert.match(xml, /<a:prstDash val="dash"\/>/);
 });
 
-test("CSS hard-stop gradients become editable PowerPoint gradient fills", async () => {
+test("CSS hard-stop gradients remain in the fidelity backplate", async () => {
   const element = {
     ...base("gradient-panel", 0, 0, bounds(0, 0, 1280, 720)),
     classification: { mode: "native", kind: "shape", confidence: "safe" },
@@ -1069,12 +1088,7 @@ test("CSS hard-stop gradients become editable PowerPoint gradient fills", async 
   };
 
   const prepared = await prepareNativeElements([element]);
-  assert.equal(prepared.length, 1);
-  const xml = serializePreparedNativeElement(prepared[0], 3);
-  assert.match(xml, /<a:gradFill rotWithShape="1">/);
-  assert.match(xml, /<a:gs pos="24219"><a:srgbClr val="071B4F">/);
-  assert.match(xml, /<a:gs pos="26406"><a:srgbClr val="FFFFFF">/);
-  assert.match(xml, /<a:lin ang="0" scaled="1"\/>/);
+  assert.deepEqual(prepared, []);
 });
 
 test("SVG connector samples become editable PowerPoint freeform geometry", async () => {

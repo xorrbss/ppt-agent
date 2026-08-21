@@ -26,6 +26,9 @@ from services.presentation_export_adapters import (
 )
 from services.presentation_export_attempt_service import (
     begin_export_attempt,
+    build_export_asset_manifest_sha256,
+    build_export_composition_sha256,
+    build_export_html_source_sha256,
     build_export_source_snapshot_sha256,
     initial_export_attempt_provenance,
     require_export_asset_digests,
@@ -78,6 +81,9 @@ class PresentationExportRouteResult:
         *,
         source_revision: int,
         source_snapshot_sha256: str,
+        html_source_sha256: str | None = None,
+        composition_sha256: str | None = None,
+        asset_manifest_sha256: str | None = None,
     ) -> dict:
         return validate_export_attempt_provenance(
             {
@@ -95,10 +101,15 @@ class PresentationExportRouteResult:
                 "freshness": {
                     "source_revision": source_revision,
                     "source_snapshot_sha256": source_snapshot_sha256,
+                    "html_source_sha256": html_source_sha256,
+                    "composition_sha256": composition_sha256,
+                    "asset_manifest_sha256": asset_manifest_sha256,
+                    "renderer_source_sha256": self.result.renderer_source_sha256,
                     "package_sha256": self.result.package_sha256,
                     "asset_digests_match": self.asset_digests_verified,
                     "package_digest_match": True,
                 },
+                "coverage_manifest": self.result.coverage_manifest,
             }
         )
 
@@ -114,6 +125,9 @@ class PresentationExportExecution:
     workspace_operation_id: uuid.UUID | None
     source_revision: int
     source_snapshot_sha256: str
+    html_source_sha256: str
+    composition_sha256: str
+    asset_manifest_sha256: str
     route: PresentationExportRouteResult
 
     @property
@@ -125,6 +139,9 @@ class PresentationExportExecution:
         return self.route.provenance(
             source_revision=self.source_revision,
             source_snapshot_sha256=self.source_snapshot_sha256,
+            html_source_sha256=self.html_source_sha256,
+            composition_sha256=self.composition_sha256,
+            asset_manifest_sha256=self.asset_manifest_sha256,
         )
 
 
@@ -270,6 +287,8 @@ async def execute_presentation_export(
         slides,
         durable_presentation_id=attempt_presentation_id,
     )
+    html_source_sha256 = build_export_html_source_sha256(slides)
+    composition_sha256 = build_export_composition_sha256(presentation, slides)
 
     template_identity = _template_identity(presentation)
     if template_target is None and template_identity is not None:
@@ -315,6 +334,18 @@ async def execute_presentation_export(
             template_target is not None and template_target.native_source is not None
         ),
     )
+    analysis = PresentationExportCapabilityAnalysis(
+        candidate_chain=analysis.candidate_chain,
+        capability_evidence={
+            **analysis.capability_evidence,
+            "pptx_mode": pptx_mode if export_format == "pptx" else None,
+            "font_embedding_requested": bool(font_embedding),
+        },
+        asset_digests=analysis.asset_digests,
+    )
+    asset_manifest_sha256 = build_export_asset_manifest_sha256(
+        analysis.asset_digests
+    )
     await require_export_asset_digests(
         session,
         expected_asset_digests=analysis.asset_digests,
@@ -335,6 +366,9 @@ async def execute_presentation_export(
             analysis,
             source_revision=source_revision,
             source_snapshot_sha256=source_snapshot_sha256,
+            html_source_sha256=html_source_sha256,
+            composition_sha256=composition_sha256,
+            asset_manifest_sha256=asset_manifest_sha256,
         ),
     )
     try:
@@ -376,6 +410,9 @@ async def execute_presentation_export(
         workspace_operation_id=workspace_operation_id,
         source_revision=source_revision,
         source_snapshot_sha256=source_snapshot_sha256,
+        html_source_sha256=html_source_sha256,
+        composition_sha256=composition_sha256,
+        asset_manifest_sha256=asset_manifest_sha256,
         route=routed,
     )
 

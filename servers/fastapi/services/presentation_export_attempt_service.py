@@ -78,17 +78,85 @@ def build_export_source_snapshot_sha256(
 
     return sha256_canonical_json(
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "presentation": {
                 "id": str(durable_presentation_id or presentation.id),
                 "revision": presentation.revision,
                 "lifecycle_status": presentation.lifecycle_status,
                 "version": presentation.version,
                 "mode": presentation.mode,
+                "content": presentation.content,
+                "title": presentation.title,
+                "language": presentation.language,
+                "reference_snapshot_ids": presentation.reference_snapshot_ids,
+                "outlines": presentation.outlines,
+                "layout": presentation.layout,
+                "structure": presentation.structure,
+                "instructions": presentation.instructions,
+                "tone": presentation.tone,
+                "verbosity": presentation.verbosity,
+                "include_table_of_contents": presentation.include_table_of_contents,
+                "include_title_slide": presentation.include_title_slide,
                 "theme": presentation.theme,
+                "fonts": presentation.fonts,
+                "generation_mode": presentation.generation_mode,
                 "profile_driver_id": presentation.profile_driver_id,
+                "profile_schema_version": presentation.profile_schema_version,
             },
             "slides": slide_payloads,
+        }
+    )
+
+
+def build_export_html_source_sha256(slides: Sequence[SlideModel]) -> str:
+    return sha256_canonical_json(
+        [
+            {"index": slide.index, "html_content": slide.html_content}
+            for slide in sorted(slides, key=lambda item: (item.index, str(item.id)))
+        ]
+    )
+
+
+def build_export_composition_sha256(
+    presentation: PresentationModel,
+    slides: Sequence[SlideModel],
+) -> str:
+    """Seal exactly the authored paint/layout inputs shared by preview/export."""
+
+    return sha256_canonical_json(
+        {
+            "schema_version": 1,
+            "presentation": {
+                "mode": presentation.mode,
+                "theme": presentation.theme,
+                "fonts": presentation.fonts,
+                "layout": presentation.layout,
+                "structure": presentation.structure,
+                "profile_driver_id": presentation.profile_driver_id,
+                "profile_schema_version": presentation.profile_schema_version,
+            },
+            "slides": [
+                {
+                    "index": slide.index,
+                    "layout_group": slide.layout_group,
+                    "layout": slide.layout,
+                    "html_content": slide.html_content,
+                    "ui": slide.ui,
+                    "properties": slide.properties,
+                }
+                for slide in sorted(
+                    slides, key=lambda item: (item.index, str(item.id))
+                )
+            ],
+        }
+    )
+
+
+def build_export_asset_manifest_sha256(asset_digests: dict[str, str]) -> str:
+    return sha256_canonical_json(
+        {
+            "schema_version": 1,
+            "assets": dict(sorted(asset_digests.items())),
         }
     )
 
@@ -174,6 +242,9 @@ def initial_export_attempt_provenance(
     *,
     source_revision: int,
     source_snapshot_sha256: str,
+    html_source_sha256: str | None = None,
+    composition_sha256: str | None = None,
+    asset_manifest_sha256: str | None = None,
 ) -> dict[str, Any]:
     return validate_export_attempt_provenance(
         {
@@ -195,6 +266,10 @@ def initial_export_attempt_provenance(
             "freshness": {
                 "source_revision": source_revision,
                 "source_snapshot_sha256": source_snapshot_sha256,
+                "html_source_sha256": html_source_sha256,
+                "composition_sha256": composition_sha256,
+                "asset_manifest_sha256": asset_manifest_sha256,
+                "renderer_source_sha256": None,
                 "package_sha256": None,
                 "asset_digests_match": True,
                 "package_digest_match": True,
@@ -431,6 +506,9 @@ async def require_export_source_revision(
 
 __all__ = [
     "begin_export_attempt",
+    "build_export_asset_manifest_sha256",
+    "build_export_composition_sha256",
+    "build_export_html_source_sha256",
     "build_export_source_snapshot_sha256",
     "build_sync_export_hashes",
     "initial_export_attempt_provenance",

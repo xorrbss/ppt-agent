@@ -22,6 +22,9 @@ from models.sql.authored_slide_checkpoint import (  # noqa: F401, E402
 from models.sql.authored_exact_provenance import (  # noqa: F401, E402
     AuthoredExactProvenance,
 )
+from models.sql.authored_canonical_revision import (  # noqa: F401, E402
+    AuthoredCanonicalRevision,
+)
 from models.sql.chat_history_message import ChatHistoryMessageModel  # noqa: F401, E402
 from models.sql.image_asset import ImageAsset  # noqa: F401, E402
 from models.sql.key_value import KeyValueSqlModel  # noqa: F401, E402

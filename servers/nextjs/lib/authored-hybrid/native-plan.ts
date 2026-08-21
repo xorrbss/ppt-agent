@@ -93,6 +93,45 @@ function isEditableTextCandidate(
     : isEditableRasterText(element);
 }
 
+function hasUnrepresentedVisualLineBreak(
+  element: AuthoredHybridEditableTextElement
+): boolean {
+  if (
+    element.text.runs.length < 2 ||
+    element.text.runs.some((run) => run.text.includes("\n"))
+  ) {
+    return false;
+  }
+  // Rich headings often use block-level spans for deliberate authored rows.
+  // The extraction contract cannot always distinguish that layout boundary
+  // from same-line emphasis, so keep the whole heading on the fidelity layer
+  // unless it carries an explicit/captured break.
+  if (element.text.role === "title") return true;
+  const rects = element.text.runs
+    .flatMap((run) =>
+      run.fragments.length
+        ? run.fragments.map((fragment) => fragment.px)
+        : [run.bounds.px]
+    )
+    .filter((rect) => rect.width > 0 && rect.height > 0);
+  for (let left = 0; left < rects.length; left += 1) {
+    for (let right = left + 1; right < rects.length; right += 1) {
+      const first = rects[left];
+      const second = rects[right];
+      const centerDelta = Math.abs(
+        first.y + first.height / 2 - (second.y + second.height / 2)
+      );
+      if (
+        centerDelta >=
+          Math.max(2, Math.min(first.height, second.height) * 0.65)
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 const UNSAFE_RASTER_SHAPE_REASONS = new Set([
   "extraction-error",
   "invalid-bounds",
@@ -147,33 +186,14 @@ function shapeIsSafe(shape: AuthoredHybridShapePayload): boolean {
   ) {
     return false;
   }
+  // Gradients are deliberately backplate-only. Reconstructing arbitrary CSS
+  // gradient paint as OOXML is not part of the supported simple-shape contract.
+  if (shape.gradient) return false;
   if (
     shape.shape === "freeform" &&
     !normalizedPointsAreSafe(shape)
   ) {
     return false;
-  }
-  if (shape.gradient) {
-    if (
-      !Number.isFinite(shape.gradient.angleDeg) ||
-      shape.gradient.stops.length < 2 ||
-      shape.gradient.stops.length > 256
-    ) {
-      return false;
-    }
-    let previousPosition = -Infinity;
-    for (const stop of shape.gradient.stops) {
-      if (
-        !colorIsSafe(stop.color) ||
-        !Number.isFinite(stop.position) ||
-        stop.position < 0 ||
-        stop.position > 1 ||
-        stop.position < previousPosition
-      ) {
-        return false;
-      }
-      previousPosition = stop.position;
-    }
   }
   if (
     shape.borderLines?.some(
@@ -452,6 +472,7 @@ export async function prepareNativeElements(
     try {
       if (isEditableTextCandidate(candidate)) {
         if (
+          hasUnrepresentedVisualLineBreak(candidate) ||
           !xmlTextIsSafe(candidate.text.plainText) ||
           !styleIsSafe(candidate.text.style) ||
           candidate.text.runs.some(
@@ -466,7 +487,15 @@ export async function prepareNativeElements(
         });
       } else if (isEditableShapeCandidate(candidate)) {
         if (shapeIsSafe(candidate.shape)) {
-          prepared.push({ kind: "shape", source: candidate });
+          // The simple base shape may be native, but CSS shadows remain in the
+          // residual fidelity backplate. Do not serialize a second shadow.
+          const source = candidate.shape.shadowLayers?.length
+            ? {
+                ...candidate,
+                shape: { ...candidate.shape, shadowLayers: undefined },
+              }
+            : candidate;
+          prepared.push({ kind: "shape", source });
         }
       } else {
         const png = await renderImageToBox(candidate);
@@ -1473,7 +1502,18 @@ function powerPointAutofitXml(
   const hasCapturedLineBreak = textSegments(element).some((segment) =>
     segment.text.includes("\n")
   );
-  return hasCapturedLineBreak ? "<a:normAutofit/>" : "<a:noAutofit/>";
+  const usesCjkTypeface = /(?:malgun|noto\s+sans\s+(?:kr|jp|sc|tc)|pretendard|맑은|고딕|명조)/i
+    .test(element.text.style.fontFamily);
+  const containsCjk = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u
+    .test(element.text.plainText);
+  // Office CJK substitution is measurably wider than Chromium web fonts.
+  // Editable one-line labels otherwise escape their authored boxes and collide
+  // with neighbouring native objects. Let PowerPoint shrink only those
+  // substitute-typeface cases (and browser-captured multiline text); Latin
+  // exact-font text keeps its authored point size.
+  return hasCapturedLineBreak || usesCjkTypeface || containsCjk
+    ? "<a:normAutofit/>"
+    : "<a:noAutofit/>";
 }
 
 function nonVisualName(element: AuthoredHybridElement): string {
@@ -1493,6 +1533,14 @@ export function serializePreparedNativeElement(
       element.text.style.verticalAlignment
     ];
     const wrap = powerPointWrapMode(element);
+    const verticalOverflow = textSegments(element).some((segment) =>
+      segment.text.includes("\n")
+    )
+      ? "overflow"
+      : "clip";
+    const horizontalOverflow = verticalOverflow === "overflow"
+      ? "overflow"
+      : "clip";
     const container = element.text.containerShape;
     const authoredBoxBounds = element.text.layout?.boxBounds.px;
     const shapeBounds = container?.bounds.px ??
@@ -1512,7 +1560,7 @@ export function serializePreparedNativeElement(
     const paint = container
       ? shapePaintXml(container.shape, element.opacity)
       : "<a:noFill/><a:ln><a:noFill/></a:ln>";
-    return `<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId}" name="${name}"/>${container ? "<p:cNvSpPr/>" : '<p:cNvSpPr txBox="1"/>'}<p:nvPr/></p:nvSpPr><p:spPr>${transformRectXml(shapeBounds, element.rotationDeg)}${geometry}${paint}</p:spPr><p:txBody><a:bodyPr wrap="${wrap}" horzOverflow="clip" vertOverflow="clip" anchor="${anchor}" lIns="${emu(insets.left)}" tIns="${emu(insets.top)}" rIns="${emu(insets.right)}" bIns="${emu(insets.bottom)}">${powerPointAutofitXml(element)}</a:bodyPr><a:lstStyle/>${paragraphsXml(element, options)}</p:txBody></p:sp>`;
+    return `<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId}" name="${name}"/>${container ? "<p:cNvSpPr/>" : '<p:cNvSpPr txBox="1"/>'}<p:nvPr/></p:nvSpPr><p:spPr>${transformRectXml(shapeBounds, element.rotationDeg)}${geometry}${paint}</p:spPr><p:txBody><a:bodyPr wrap="${wrap}" horzOverflow="${horizontalOverflow}" vertOverflow="${verticalOverflow}" anchor="${anchor}" lIns="${emu(insets.left)}" tIns="${emu(insets.top)}" rIns="${emu(insets.right)}" bIns="${emu(insets.bottom)}">${powerPointAutofitXml(element)}</a:bodyPr><a:lstStyle/>${paragraphsXml(element, options)}</p:txBody></p:sp>`;
   }
   if (item.kind === "shape") {
     const element = item.source;

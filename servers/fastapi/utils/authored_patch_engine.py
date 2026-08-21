@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import html as html_lib
 import re
+from urllib.parse import unquote, urlsplit
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
@@ -60,6 +61,8 @@ _TEXT_TAGS = frozenset(
         "li",
         "p",
         "span",
+        "td",
+        "th",
     }
 )
 _CSS_DANGER = re.compile(
@@ -184,8 +187,48 @@ class CropAction(_ActionBase):
     position: str = Field(default="50% 50%", min_length=1, max_length=64)
 
 
+class ReplaceImageAction(_ActionBase):
+    action: Literal["replaceImage"]
+    src: str = Field(min_length=1, max_length=4096)
+    alt: str | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def validate_source(self):
+        source = self.src.strip()
+        try:
+            parsed = urlsplit(source)
+        except ValueError as error:
+            raise ValueError("replaceImage src must be a valid local asset URL") from error
+        path = unquote(parsed.path)
+        allowed_root = path.startswith(
+            ("/app_data/images/", "/app_data/uploads/", "/static/")
+        )
+        if (
+            parsed.scheme
+            or parsed.netloc
+            or not allowed_root
+            or any(segment in {"", ".", ".."} for segment in path.split("/")[2:])
+        ):
+            raise ValueError(
+                "replaceImage src must be an approved root-relative asset URL"
+            )
+        if any(ord(char) < 32 for char in source) or "\\" in source:
+            raise ValueError("replaceImage src contains unsafe characters")
+        self.src = source
+        if self.alt is not None and any(
+            ord(char) < 32 and char not in "\n\r\t" for char in self.alt
+        ):
+            raise ValueError("replaceImage alt contains unsupported control characters")
+        return self
+
+
 PatchAction = Annotated[
-    SetTextAction | SetStyleAction | MoveAction | ResizeAction | CropAction,
+    SetTextAction
+    | SetStyleAction
+    | MoveAction
+    | ResizeAction
+    | CropAction
+    | ReplaceImageAction,
     Field(discriminator="action"),
 ]
 
@@ -215,7 +258,9 @@ class AuthoredPatchPlan(BaseModel):
 class PatchChange(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    action: Literal["setText", "setStyle", "move", "resize", "crop"]
+    action: Literal[
+        "setText", "setStyle", "move", "resize", "crop", "replaceImage"
+    ]
     qid: str
     before: dict[str, Any]
     after: dict[str, Any]
@@ -442,34 +487,64 @@ def _replace_start_tag_style(start_tag: str, style: str) -> str:
     return start_tag[:close_at] + f' style="{escaped}"' + start_tag[close_at:]
 
 
+def _replace_start_tag_attribute(start_tag: str, name: str, value: str) -> str:
+    """Replace one safe attribute without serializing the surrounding tag."""
+
+    escaped = html_lib.escape(value, quote=True)
+    pattern = re.compile(
+        rf"(?is)(\s{re.escape(name)}\s*=\s*)(?:([\"'])(.*?)\2|([^\s>]+))"
+    )
+    match = pattern.search(start_tag)
+    if match is not None:
+        value_start = match.start(3) if match.group(3) is not None else match.start(4)
+        value_end = match.end(3) if match.group(3) is not None else match.end(4)
+        if match.group(3) is not None:
+            return start_tag[:value_start] + escaped + start_tag[value_end:]
+        return start_tag[:value_start] + f'"{escaped}"' + start_tag[value_end:]
+    close_at = start_tag.rfind("/>")
+    if close_at < 0:
+        close_at = start_tag.rfind(">")
+    if close_at < 0:
+        raise ValueError("malformed target start tag")
+    return start_tag[:close_at] + f' {name}="{escaped}"' + start_tag[close_at:]
+
+
 def _apply_surgical_edits(
     source: str,
     *,
     targets: Mapping[str, _Element],
     style_qids: set[str],
     text_qids: set[str],
+    attribute_qids: Mapping[str, tuple[str, ...]],
 ) -> str:
     locator = _DocumentSpanParser(source)
     locator.feed(source)
     locator.close()
     replacements: list[tuple[int, int, str]] = []
-    for qid in style_qids | text_qids:
+    for qid in style_qids | text_qids | set(attribute_qids):
         span = locator.spans.get(qid)
         target = targets.get(qid)
         if span is None or target is None:
             raise PermissionError(f"data-qid span {qid!r} was not found")
+        start_tag = source[span.start : span.start_end]
+        start_tag_changed = False
         if qid in style_qids:
-            start_tag = source[span.start : span.start_end]
-            replacements.append(
-                (
-                    span.start,
-                    span.start_end,
-                    _replace_start_tag_style(
-                        start_tag,
-                        target.get_attr("style") or "",
-                    ),
-                )
+            start_tag = _replace_start_tag_style(
+                start_tag,
+                target.get_attr("style") or "",
             )
+            start_tag_changed = True
+        if qid in attribute_qids:
+            for name in attribute_qids[qid]:
+                value = target.get_attr(name)
+                if value is None:
+                    raise PermissionError(
+                        f"data-qid attribute {name!r} was not materialized"
+                    )
+                start_tag = _replace_start_tag_attribute(start_tag, name, value)
+            start_tag_changed = True
+        if start_tag_changed:
+            replacements.append((span.start, span.start_end, start_tag))
         if qid in text_qids:
             if span.content_end is None:
                 raise PermissionError(f"data-qid text span {qid!r} is not closed")
@@ -831,6 +906,129 @@ def _failure(html: str, reason: str, fallback_reason: str) -> PatchApplicationRe
     )
 
 
+_READ_ONLY_CSS_PROPERTIES = frozenset(
+    {
+        "animation",
+        "animation-name",
+        "backdrop-filter",
+        "background-image",
+        "box-shadow",
+        "clip-path",
+        "filter",
+        "mask",
+        "mask-image",
+        "mix-blend-mode",
+        "perspective",
+        "text-shadow",
+    }
+)
+
+
+def inspect_authored_edit_capabilities(html: str) -> list[dict[str, Any]]:
+    """Describe only edits that the allowlisted patch engine can preserve safely.
+
+    The result intentionally marks complex CSS, nested/composite elements, SVG, and
+    arbitrary charts read-only. Simple table cells remain editable as leaf text;
+    this is the bounded table-data contract rather than a claim that arbitrary
+    table layout is natively editable.
+    """
+
+    canonical = ensure_authored_qids(html)
+    parser = _parse_document(canonical)
+    capabilities: list[dict[str, Any]] = []
+
+    def visit(nodes: list[Any], *, in_svg: bool = False, in_table: bool = False) -> None:
+        for node in nodes:
+            if not isinstance(node, _Element):
+                continue
+            attrs = {name.lower(): value or "" for name, value in node.attrs}
+            qid = attrs.get("data-qid")
+            nested = list(_descendant_elements(node))
+            chart_marker = any(
+                key in attrs
+                for key in ("data-chart", "data-chart-type", "data-authored-chart")
+            )
+            unsupported_css = False
+            try:
+                declarations = _split_declarations(attrs.get("style", ""))
+                unsupported_css = any(
+                    name in _READ_ONLY_CSS_PROPERTIES
+                    or "gradient(" in value.lower()
+                    or bool(_CSS_DANGER.search(value))
+                    for name, value in declarations
+                )
+            except ValueError:
+                unsupported_css = True
+
+            kind = "unsupported"
+            editable = False
+            reason: str | None = "unsupported_complex_element"
+            fields: list[str] = []
+            value: Any = None
+            inside_svg = in_svg or node.tag == "svg"
+            inside_table = in_table or node.tag == "table"
+            if node.tag in _NON_EDITABLE_TAGS:
+                reason = "non_editable_tag"
+            elif inside_svg or node.tag == "canvas" or chart_marker:
+                kind = "chart"
+                reason = "chart_data_contract_unsupported"
+            elif node.tag == "table":
+                kind = "table"
+                reason = "edit_simple_cells_individually"
+            elif node.tag in {"td", "th"}:
+                kind = "table"
+                span = attrs.get("rowspan", "1") != "1" or attrs.get("colspan", "1") != "1"
+                if span or nested:
+                    reason = "complex_table_cell_unsupported"
+                else:
+                    editable = True
+                    reason = None
+                    fields = ["text", "style"]
+                    value = _text_content(node)
+            elif unsupported_css:
+                reason = "unsupported_css"
+            elif node.tag == "img":
+                kind = "image"
+                editable = True
+                reason = None
+                fields = ["source", "crop", "style", "position", "size"]
+                value = {"src": attrs.get("src", ""), "alt": attrs.get("alt", "")}
+            elif (
+                attrs.get("data-authored-kind") == "shape"
+                or attrs.get("data-native-kind") == "shape"
+                or (node.tag in {"div", "aside", "section"} and not nested and not _text_content(node).strip())
+            ):
+                kind = "shape"
+                editable = True
+                reason = None
+                fields = ["style", "position", "size"]
+                value = {"style": attrs.get("style", "")}
+            elif node.tag in _TEXT_TAGS and not nested:
+                kind = "text"
+                editable = True
+                reason = None
+                fields = ["text", "style", "position", "size"]
+                value = _text_content(node)
+            elif nested:
+                reason = "composite_element_read_only"
+
+            if qid is not None:
+                capabilities.append(
+                    {
+                        "qid": qid,
+                        "kind": kind,
+                        "editable": editable,
+                        "reason": reason,
+                        "fields": fields,
+                        "value": value,
+                    }
+                )
+            visit(node.children, in_svg=inside_svg, in_table=inside_table)
+
+    visit(parser.root)
+    return capabilities
+
+
 def apply_authored_patch(
     html: str,
     plan: AuthoredPatchPlan | Mapping[str, Any],
@@ -871,6 +1069,7 @@ def apply_authored_patch(
     changes: list[PatchChange] = []
     style_qids: set[str] = set()
     text_qids: set[str] = set()
+    attribute_qids: dict[str, tuple[str, ...]] = {}
     try:
         for action in parsed_plan.actions:
             target = targets.get(action.qid)
@@ -933,7 +1132,7 @@ def apply_authored_patch(
                 _set_style_values(target, style_changes)
                 after = {"styles": style_changes}
                 style_qids.add(action.qid)
-            else:
+            elif isinstance(action, CropAction):
                 if target.tag != "img":
                     raise PermissionError("crop is allowed only on img elements")
                 style_changes = {
@@ -947,6 +1146,23 @@ def apply_authored_patch(
                 _set_style_values(target, style_changes)
                 after = {"styles": style_changes}
                 style_qids.add(action.qid)
+            else:
+                if target.tag != "img":
+                    raise PermissionError("replaceImage is allowed only on img elements")
+                before = {
+                    "src": target.get_attr("src"),
+                    "alt": target.get_attr("alt"),
+                }
+                target.set_attr("src", action.src)
+                attributes = ["src"]
+                if action.alt is not None:
+                    target.set_attr("alt", action.alt)
+                    attributes.append("alt")
+                after = {
+                    "src": target.get_attr("src"),
+                    "alt": target.get_attr("alt"),
+                }
+                attribute_qids[action.qid] = tuple(attributes)
 
             if before == after:
                 raise ValueError(f"{action.action} on {action.qid!r} has no effect")
@@ -964,6 +1180,7 @@ def apply_authored_patch(
             targets=targets,
             style_qids=style_qids,
             text_qids=text_qids,
+            attribute_qids=attribute_qids,
         )
         verified = _parse_document(candidate)
         _, candidate_qids = _qid_index(verified)
@@ -995,8 +1212,10 @@ __all__ = [
     "PatchChange",
     "ReferenceMode",
     "ResizeAction",
+    "ReplaceImageAction",
     "SetStyleAction",
     "SetTextAction",
     "apply_authored_patch",
+    "inspect_authored_edit_capabilities",
     "validate_patch_plan",
 ]

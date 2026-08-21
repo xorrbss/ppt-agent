@@ -14,6 +14,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from pydantic.alias_generators import to_camel
 from sqlalchemy import (
     JSON,
     BigInteger,
@@ -122,11 +123,22 @@ class ExportFreshnessProvenance(BaseModel):
 
     source_revision: int = PydanticField(ge=0)
     source_snapshot_sha256: str
+    html_source_sha256: str | None = None
+    composition_sha256: str | None = None
+    asset_manifest_sha256: str | None = None
+    renderer_source_sha256: str | None = None
     package_sha256: str | None = None
     asset_digests_match: bool
     package_digest_match: bool
 
-    @field_validator("source_snapshot_sha256", "package_sha256")
+    @field_validator(
+        "source_snapshot_sha256",
+        "html_source_sha256",
+        "composition_sha256",
+        "asset_manifest_sha256",
+        "renderer_source_sha256",
+        "package_sha256",
+    )
     @classmethod
     def validate_digest(cls, value: str | None) -> str | None:
         if value is None:
@@ -135,6 +147,110 @@ class ExportFreshnessProvenance(BaseModel):
         if not _is_sha256(normalized):
             raise ValueError("export freshness digests must be SHA-256 values")
         return normalized
+
+
+class ExportCoverageSource(BaseModel):
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra="forbid",
+    )
+
+    presentation_revision: int = PydanticField(ge=0)
+    source_digest: str
+
+    @field_validator("source_digest")
+    @classmethod
+    def validate_source_digest(cls, value: str) -> str:
+        normalized = value.lower()
+        if not _is_sha256(normalized):
+            raise ValueError("export coverage source digest must be SHA-256")
+        return normalized
+
+
+class ExportSlideCoverage(BaseModel):
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra="forbid",
+    )
+
+    slide_number: int = PydanticField(ge=1)
+    native_text: int = PydanticField(ge=0)
+    native_image: int = PydanticField(ge=0)
+    native_shape: int = PydanticField(ge=0)
+    native_table: int = PydanticField(ge=0)
+    native_chart: int = PydanticField(ge=0)
+    raster_remaining: int = PydanticField(ge=0)
+    fallback_reasons: list[str] = PydanticField(max_length=256)
+    visual_parity: Literal["fidelity-backplate-retained", "not-verified"]
+    native_backplate_de_duplication: Literal["applied", "not-applicable"]
+
+    @field_validator("fallback_reasons")
+    @classmethod
+    def validate_fallback_reasons(cls, value: list[str]) -> list[str]:
+        normalized = sorted({reason.strip() for reason in value if reason.strip()})
+        if any(len(reason) > 128 for reason in normalized):
+            raise ValueError("export coverage fallback reason is too long")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_declared_support(self) -> "ExportSlideCoverage":
+        # The current authored Hybrid serializer has no native table/chart
+        # implementation. Refuse optimistic counts until that implementation
+        # and readback evidence are added together.
+        if self.native_table != 0 or self.native_chart != 0:
+            raise ValueError("native table/chart coverage is not implemented")
+        native_count = self.native_text + self.native_image + self.native_shape
+        expected = "applied" if native_count > 0 else "not-applicable"
+        if self.native_backplate_de_duplication != expected:
+            raise ValueError("native/backplate de-duplication evidence is inconsistent")
+        return self
+
+
+class PresentationExportCoverageManifest(BaseModel):
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra="forbid",
+    )
+
+    schema_version: Literal["presenton.authored-hybrid-coverage/v1"]
+    mode: Literal["hybrid"]
+    source: ExportCoverageSource
+    total_slides: int = PydanticField(ge=1)
+    native_text: int = PydanticField(ge=0)
+    native_image: int = PydanticField(ge=0)
+    native_shape: int = PydanticField(ge=0)
+    native_table: int = PydanticField(ge=0)
+    native_chart: int = PydanticField(ge=0)
+    raster_remaining: int = PydanticField(ge=0)
+    fully_editable: bool
+    slides: list[ExportSlideCoverage] = PydanticField(min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def validate_totals(self) -> "PresentationExportCoverageManifest":
+        if self.total_slides != len(self.slides):
+            raise ValueError("export coverage slide total is inconsistent")
+        if [slide.slide_number for slide in self.slides] != list(
+            range(1, self.total_slides + 1)
+        ):
+            raise ValueError("export coverage slide numbers must be contiguous")
+        totals = {
+            "native_text": sum(slide.native_text for slide in self.slides),
+            "native_image": sum(slide.native_image for slide in self.slides),
+            "native_shape": sum(slide.native_shape for slide in self.slides),
+            "native_table": sum(slide.native_table for slide in self.slides),
+            "native_chart": sum(slide.native_chart for slide in self.slides),
+            "raster_remaining": sum(
+                slide.raster_remaining for slide in self.slides
+            ),
+        }
+        if any(getattr(self, field) != value for field, value in totals.items()):
+            raise ValueError("export coverage native/raster totals are inconsistent")
+        if self.fully_editable != (self.raster_remaining == 0):
+            raise ValueError("export coverage editability claim is inconsistent")
+        return self
 
 
 class PresentationExportAttemptProvenance(BaseModel):
@@ -151,6 +267,7 @@ class PresentationExportAttemptProvenance(BaseModel):
     asset_digests: dict[str, str] = PydanticField(default_factory=dict)
     compiler_runtime: ExportCompilerRuntimeProvenance
     freshness: ExportFreshnessProvenance
+    coverage_manifest: PresentationExportCoverageManifest | None = None
 
     @field_validator("adapter_chain")
     @classmethod
@@ -190,6 +307,19 @@ class PresentationExportAttemptProvenance(BaseModel):
             raise ValueError("export adapter fallback requires a stable reason")
         if self.fallback_reason is not None:
             self.fallback_reason = self.fallback_reason.strip()
+        if self.coverage_manifest is not None:
+            if self.compiler_runtime.compiler != "authored-hybrid":
+                raise ValueError("Hybrid coverage requires the authored Hybrid compiler")
+            if (
+                self.coverage_manifest.source.presentation_revision
+                != self.freshness.source_revision
+            ):
+                raise ValueError("export coverage revision does not match freshness")
+            if (
+                self.freshness.renderer_source_sha256
+                != self.coverage_manifest.source.source_digest
+            ):
+                raise ValueError("export coverage source digest does not match renderer")
         return self
 
 

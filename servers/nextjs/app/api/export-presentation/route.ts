@@ -6,7 +6,10 @@ import {
   runBundledPresentationExport,
 } from "@/lib/run-bundled-presentation-export";
 import { resolveAppDataDirectory } from "@/lib/app-data-directory";
-import { runAuthoredHybridPresentationExport } from "@/lib/authored-hybrid/export";
+import {
+  runAuthoredFidelityPresentationExport,
+  runAuthoredHybridPresentationExport,
+} from "@/lib/authored-hybrid/export";
 import {
   executeExportPresentationRouteRequest,
   ExportPresentationRequestError,
@@ -78,6 +81,18 @@ export async function POST(req: NextRequest) {
               title,
               cookieHeader,
               expectedPresentationSha256,
+              expectedPresentationRevision,
+            }),
+          authoredFidelity: ({
+            presentationId,
+            title,
+            cookieHeader,
+            expectedPresentationRevision,
+          }) =>
+            runAuthoredFidelityPresentationExport({
+              presentationId,
+              title,
+              cookieHeader,
               expectedPresentationRevision,
             }),
           hybrid: ({

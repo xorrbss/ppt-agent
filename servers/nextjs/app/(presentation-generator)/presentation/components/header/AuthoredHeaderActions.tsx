@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 
 import AuthoredPageRemake from "../AuthoredPageRemake";
 import AuthoredTemplateChanger from "../AuthoredTemplateChanger";
+import AuthoredElementEditor from "../AuthoredElementEditor";
 import type { PresentationMasterPin } from "../../utils/masterPresentation";
 import type {
   WorkspaceCommandDispatcher,
@@ -29,6 +30,7 @@ const AuthoredHeaderActions = ({
   onWorkspaceCommand,
   onWorkspaceQualityReviewRequest,
   onWorkspacePageRemakeRequest,
+  onCanonicalSaved,
   handleQualityReview,
 }: {
   presentation_id: string;
@@ -41,9 +43,15 @@ const AuthoredHeaderActions = ({
   onWorkspaceCommand?: WorkspaceCommandDispatcher;
   onWorkspaceQualityReviewRequest?: WorkspaceQualityReviewRequester;
   onWorkspacePageRemakeRequest?: WorkspacePageRemakeRequester;
+  onCanonicalSaved?: () => void | Promise<void>;
   handleQualityReview: () => void;
 }) => (
   <>
+    <AuthoredElementEditor
+      presentationId={presentation_id}
+      disabled={isStreaming === true || isPresentationSaving}
+      onSaved={onCanonicalSaved}
+    />
     <AuthoredTemplateChanger
       presentationId={presentation_id}
       currentStyleId={getAuthoredStyleId(theme)}

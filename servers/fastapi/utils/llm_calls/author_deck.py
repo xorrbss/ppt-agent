@@ -16,6 +16,11 @@ from typing import Any, List, Mapping, Optional, Sequence, Tuple
 from models.authored_chapter_plan import AuthoredChapterPlan
 from models.authored_header_contract import AuthoredHeaderContract
 from models.authored_illustration_plan import AuthoredIllustrationPlan
+from models.authored_visual_plan import (
+    AuthoredSlideVisualIntent,
+    AuthoredVisualPlan,
+    StoryKind,
+)
 from models.presentation_outline_model import PresentationOutlineModel
 from utils.authored_header_validation import validate_header_contract
 from services.source_images.models import SourceImageCandidate
@@ -105,6 +110,10 @@ class AuthoredDeckPlan:
     # slide-level instruction ("no pictures", "keep it text-only") reaches the
     # slide it is about rather than only the deck-scoped planners.
     instructions: Optional[str] = None
+    # Deck-wide narrative/silhouette decisions for ordinary Authored HTML.
+    # None is intentional for exact reconstruction and structured/template-owned
+    # geometry: those modes must not be recomposed by this prompt-only plan.
+    visual_plan: AuthoredVisualPlan | None = None
 
 
 # Concurrency is bounded PROCESS-WIDE inside author_slide_html (the AUTHOR_CONCURRENCY-sized
@@ -126,6 +135,46 @@ _TIMELINE_HINTS = (
 _ARCHITECTURE_HINTS = (
     "아키텍처", "구조", "시스템", "에이전트", "architecture", "system", "platform",
     "layer", "integration", "agent",
+)
+_COMPARISON_HINTS = (
+    "비교",
+    "대비",
+    "증감",
+    "추이",
+    "변화",
+    "전년",
+    "versus",
+    " vs ",
+    "trend",
+    "compare",
+    "comparison",
+)
+_DATA_FACT_PATTERN = re.compile(
+    r"(?<![\w.-])(?:[$€£¥₩]?\d[\d,.]*(?:%|배|명|건|개|원|억|조|일|월|년|분기|x)?)(?![\w.-])",
+    re.IGNORECASE,
+)
+_MARKDOWN_TABLE_DIVIDER = re.compile(
+    r"(?m)^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$"
+)
+
+_SILHOUETTES: dict[StoryKind, tuple[str, ...]] = {
+    "cover": ("cover-asymmetric-hero",),
+    "closing": ("closing-single-statement",),
+    "section": ("section-full-bleed-index",),
+    "agenda": ("agenda-numbered-spine",),
+    "editorial": ("editorial-left-rail", "editorial-top-focus"),
+    "pillars": ("pillars-asymmetric-cluster", "pillars-numbered-spine"),
+    "metric": ("metric-hero-with-evidence", "metric-evidence-rail"),
+    "process": ("process-horizontal-rail", "process-stepped-path"),
+    "architecture": ("architecture-layered-map", "architecture-core-and-satellites"),
+    "image": ("copy-left-image-right", "image-left-copy-right"),
+    "dataTable": ("table-main-callout-side", "callout-top-table-below"),
+    "dataChart": ("chart-left-insight-right", "insight-left-chart-right"),
+}
+_SILHOUETTE_FALLBACKS = (
+    "editorial-diagonal-balance",
+    "editorial-narrow-wide",
+    "editorial-wide-narrow",
 )
 
 _ZONE_ID_PATTERN = re.compile(r"^ai-zone:[a-z0-9][a-z0-9._-]*$")
@@ -408,6 +457,123 @@ def plan_deck_roles(
     return roles
 
 
+def _has_structured_table(content: str) -> bool:
+    lines = [line for line in content.splitlines() if line.count("|") >= 2]
+    return len(lines) >= 3 and bool(_MARKDOWN_TABLE_DIVIDER.search(content))
+
+
+def _story_kind(
+    content: str,
+    role: str,
+    *,
+    illustration_allowed: bool,
+) -> StoryKind:
+    normalized_role = (role or "").strip().upper()
+    if normalized_role == "COVER":
+        return "cover"
+    if normalized_role == "CLOSING":
+        return "closing"
+    if normalized_role == "SECTION":
+        return "section"
+    if normalized_role == "AGENDA":
+        return "agenda"
+
+    lowered = content.lower()
+    # A table is promoted only from a real row/column contract.  Mere wording
+    # such as "표로 보여줘" is not structured data and must not become a native
+    # table claim or invite the author to invent cells.
+    if _has_structured_table(content):
+        return "dataTable"
+    fact_count = len(_DATA_FACT_PATTERN.findall(content))
+    if fact_count >= 3 and (
+        normalized_role == "OUTCOMES"
+        or any(hint.lower() in lowered for hint in _TIMELINE_HINTS)
+        or any(hint in lowered for hint in _COMPARISON_HINTS)
+    ):
+        return "dataChart"
+    if normalized_role == "ARCHITECTURE":
+        return "architecture"
+    if normalized_role == "ROADMAP":
+        return "process"
+    if illustration_allowed:
+        return "image"
+    if normalized_role == "OUTCOMES" or fact_count:
+        return "metric"
+    if normalized_role == "PILLARS":
+        return "pillars"
+    return "editorial"
+
+
+def _hybrid_metadata(story_kind: StoryKind) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    candidates: tuple[str, ...]
+    reasons = ["bespoke_css_and_decorations_require_raster_backplate"]
+    if story_kind == "dataTable":
+        candidates = ("text", "shape", "table")
+        reasons.append("native_table_requires_structured_cell_readback")
+    elif story_kind == "dataChart":
+        candidates = ("text", "shape", "chart")
+        reasons.append("native_chart_requires_structured_series_readback")
+    elif story_kind == "image":
+        candidates = ("text", "shape", "image")
+        reasons.append("unsupported_image_effect_or_mask_requires_raster")
+    elif story_kind in {"process", "architecture"}:
+        candidates = ("text", "shape")
+        reasons.append("complex_connectors_or_groups_require_raster")
+    else:
+        candidates = ("text", "shape")
+    return candidates, tuple(reasons)
+
+
+def plan_authored_visual_story(
+    contents: Sequence[str],
+    roles: Sequence[str],
+    *,
+    illustration_slots: Sequence[bool] = (),
+) -> AuthoredVisualPlan:
+    """Freeze deck-wide story/silhouette choices before parallel authoring.
+
+    This planner only steers Authored HTML composition.  It does not emit Scene
+    geometry and its Hybrid metadata deliberately describes candidates plus the
+    raster remainder rather than claiming complete native editability.
+    """
+    if len(contents) != len(roles):
+        raise ValueError("visual plan contents and roles must have matching lengths")
+    if illustration_slots and len(illustration_slots) != len(contents):
+        raise ValueError("visual plan illustration slots must match slide count")
+
+    planned: list[AuthoredSlideVisualIntent] = []
+    for index, (content, role) in enumerate(zip(contents, roles)):
+        story_kind = _story_kind(
+            content,
+            role,
+            illustration_allowed=bool(illustration_slots and illustration_slots[index]),
+        )
+        candidates = _SILHOUETTES[story_kind]
+        recent = {item.silhouette for item in planned[-2:]}
+        pivot = index % len(candidates)
+        ordered = candidates[pivot:] + candidates[:pivot]
+        silhouette = next(
+            (candidate for candidate in ordered if candidate not in recent),
+            next(
+                candidate
+                for candidate in _SILHOUETTE_FALLBACKS
+                if candidate not in recent
+            ),
+        )
+        native_candidates, fallback_reasons = _hybrid_metadata(story_kind)
+        planned.append(
+            AuthoredSlideVisualIntent(
+                slide_index=index,
+                role=role,
+                story_kind=story_kind,
+                silhouette=silhouette,
+                hybrid_native_candidates=native_candidates,
+                raster_fallback_reasons=fallback_reasons,
+            )
+        )
+    return AuthoredVisualPlan(slides=tuple(planned))
+
+
 async def _author_one_resilient(
     content: str,
     design_system: str,
@@ -425,6 +591,7 @@ async def _author_one_resilient(
     chapter_prefix: str | None = None,
     instructions: str | None = None,
     illustration_allowed: bool | None = None,
+    visual_intent: AuthoredSlideVisualIntent | None = None,
     # Pictures the user already owns that this slide may place. Empty is the
     # pre-feature request, byte for byte.
     source_images: Sequence[SourceImageCandidate] = (),
@@ -472,6 +639,7 @@ async def _author_one_resilient(
                     chapter_prefix=chapter_prefix,
                     instructions=instructions,
                     illustration_allowed=illustration_allowed,
+                    visual_intent=visual_intent,
                     **kwargs,
                 )
             else:
@@ -494,6 +662,7 @@ async def _author_one_resilient(
                     chapter_prefix=chapter_prefix,
                     instructions=instructions,
                     illustration_allowed=illustration_allowed,
+                    visual_intent=visual_intent,
                     **kwargs,
                 )
             if is_valid_slide_html(html):
@@ -682,6 +851,20 @@ def prepare_authored_deck(
         if reference_mode == EXACT_RECONSTRUCTION or structured
         else header_contract
     )
+    illustration_slots = (
+        tuple(illustration_plan.allows(i) for i in range(len(slides)))
+        if illustration_plan is not None
+        else ()
+    )
+    visual_plan = (
+        None
+        if reference_mode == EXACT_RECONSTRUCTION or structured
+        else plan_authored_visual_story(
+            contents,
+            roles,
+            illustration_slots=illustration_slots,
+        )
+    )
     return AuthoredDeckPlan(
         contents=contents,
         roles=roles,
@@ -702,12 +885,9 @@ def prepare_authored_deck(
             if chapter_plan is not None and effective_contract is not None
             else ()
         ),
-        illustration_slots=(
-            tuple(illustration_plan.allows(i) for i in range(len(slides)))
-            if illustration_plan is not None
-            else ()
-        ),
+        illustration_slots=illustration_slots,
         instructions=instructions,
+        visual_plan=visual_plan,
     )
 
 
@@ -727,6 +907,7 @@ async def author_planned_slide(
     # objects that carry only the fields they need, and a missing field here has
     # a well-defined meaning — no plan, so the model decides as it did before.
     illustration_slots = getattr(plan, "illustration_slots", ())
+    visual_plan = getattr(plan, "visual_plan", None)
     return await _author_one_resilient(
         plan.contents[index],
         plan.design_system,
@@ -747,6 +928,7 @@ async def author_planned_slide(
         illustration_allowed=(
             illustration_slots[index] if illustration_slots else None
         ),
+        visual_intent=(visual_plan.at(index) if visual_plan is not None else None),
         source_images=source_images,
     )
 

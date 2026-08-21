@@ -5,8 +5,10 @@ import test from "node:test";
 
 const root = path.join(process.cwd(), "app", "(presentation-generator)", "authored-vnext");
 
-test("integrated route is default-off behind the shared Master feature flag", () => {
+test("independent generation UI is frozen behind an internal compatibility gate", () => {
   const source = readFileSync(path.join(root, "page.tsx"), "utf8");
+  assert.match(source, /AUTHORED_VNEXT_INTERNAL_COMPATIBILITY_UI/);
+  assert.match(source, /internalCompatibilityUi/);
   assert.match(source, /isAuthoredVnextMasterEnabled/);
   assert.match(source, /notFound\(\)/);
 });

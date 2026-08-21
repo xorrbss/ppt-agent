@@ -573,6 +573,18 @@ def test_transform_is_admitted_on_every_svg_shape() -> None:
         )
 
 
+def test_inert_raster_fallback_hint_is_admitted_without_widening_data_attributes() -> None:
+    renderer_isolation.admit_authored_html(
+        "<!doctype html><html><head><meta charset=\"utf-8\"></head>"
+        '<body><main><div data-raster-fallback="complex-css">ok</div></main></body></html>'
+    )
+    with pytest.raises(renderer_isolation.RendererPolicyError):
+        renderer_isolation.admit_authored_html(
+            "<!doctype html><html><head><meta charset=\"utf-8\"></head>"
+            '<body><main><div data-unreviewed="x">no</div></main></body></html>'
+        )
+
+
 def test_svg_paint_attributes_still_refuse_remote_references() -> None:
     """Widening which elements carry paint must not widen what paint may say."""
     markup = (

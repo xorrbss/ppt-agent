@@ -33,6 +33,7 @@ from utils.llm_calls.author_deck import (
     AuthoredDeckResult,
     author_deck,
     build_image_pptx,
+    plan_authored_visual_story,
     plan_deck_roles,
 )
 from utils.llm_calls.author_slide import (
@@ -2023,6 +2024,63 @@ def test_plan_deck_roles_cover_and_closing():
     roles = plan_deck_roles(_outline(5))
     assert roles[0] == "COVER"
     assert roles[-1] == "CLOSING"
+
+
+def test_visual_story_plan_varies_silhouettes_and_keeps_hybrid_claims_partial():
+    contents = [
+        "전환 전략",
+        "현재 운영 병목",
+        "| 지표 | 현재 | 목표 |\n|---|---:|---:|\n| 리드타임 | 10일 | 4일 |",
+        "2024 20%, 2025 35%, 2026 52%로 증가한 추이",
+        "데이터 계층과 서비스 계층의 시스템 아키텍처",
+        "현장 설비의 운영 장면",
+        "실행을 시작합니다",
+    ]
+    roles = [
+        "COVER",
+        "PROBLEM",
+        "PILLARS",
+        "OUTCOMES",
+        "ARCHITECTURE",
+        "PILLARS",
+        "CLOSING",
+    ]
+    plan = plan_authored_visual_story(
+        contents,
+        roles,
+        illustration_slots=(False, False, False, False, False, True, False),
+    )
+
+    assert [slide.story_kind for slide in plan.slides] == [
+        "cover",
+        "editorial",
+        "dataTable",
+        "dataChart",
+        "architecture",
+        "image",
+        "closing",
+    ]
+    assert all(
+        current.silhouette != previous.silhouette
+        for previous, current in zip(plan.slides, plan.slides[1:])
+    )
+    assert "table" in plan.at(2).hybrid_native_candidates
+    assert "chart" in plan.at(3).hybrid_native_candidates
+    assert "image" in plan.at(5).hybrid_native_candidates
+    assert all(slide.raster_fallback_reasons for slide in plan.slides)
+
+    prompt = author_slide_mod._author_prompt(
+        contents[3],
+        "DESIGN",
+        _brand(),
+        roles[3],
+        3,
+        len(contents),
+        visual_intent=plan.at(3),
+    )
+    assert "story=dataChart" in prompt
+    assert "not a promise of complete editability" in prompt
+    assert "Never duplicate native-candidate" in prompt
 
 
 def test_resolve_brand_language_fonts():

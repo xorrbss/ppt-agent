@@ -81,6 +81,14 @@ _WS = re.compile(r"\s+")
 _NUMBER_OR_SYMBOL = re.compile(r"(?:\d+(?:[,.]\d+)*%?|[$€£¥₩]|[→←↑↓↔±×÷#@&])")
 _HEX_COLOR = re.compile(r"^#(?P<value>[0-9a-fA-F]{3,8})$")
 _RGB_COLOR = re.compile(r"^rgba?\((.+)\)$", re.IGNORECASE)
+_CJK_GLYPH = re.compile(
+    "["
+    "\u3040-\u30ff"  # Hiragana and Katakana
+    "\u3400-\u4dbf"  # CJK Extension A
+    "\u4e00-\u9fff"  # CJK Unified Ideographs
+    "\uac00-\ud7a3"  # Hangul syllables
+    "]"
+)
 
 
 @dataclass(frozen=True)
@@ -651,6 +659,83 @@ def _color_rgb(value: object) -> tuple[int, int, int] | None:
     return None
 
 
+def _css_pixel_value(value: object) -> float:
+    match = re.match(
+        r"^\s*(\d+(?:\.\d+)?)px\s*$", str(value or ""), re.IGNORECASE
+    )
+    return float(match.group(1)) if match else 0.0
+
+
+def _measured_cjk_line_fit_detail(
+    item: Mapping[str, Any], text: str
+) -> str | None:
+    """Return a CJK line-fit defect proven by Chromium's resolved font boxes.
+
+    Character-count estimates are unreliable for Korean/Japanese/Chinese.  The
+    capture probe already reports the actual Range rectangles after fonts settle;
+    use those rectangles and the resolved computed type metrics instead.
+    """
+    if not text or _CJK_GLYPH.search(text) is None:
+        return None
+    if bool(item.get("glyph_clipped", False)) or bool(
+        item.get("line_box_clipped", False)
+    ):
+        return "resolved CJK font glyph or line box is clipped"
+
+    raw_fragments = item.get("text_fragments")
+    if not isinstance(raw_fragments, Sequence) or isinstance(
+        raw_fragments, (str, bytes)
+    ):
+        return None
+    fragments = [
+        box
+        for value in raw_fragments
+        if (box := _coerce_bbox(value)) is not None and box.height > 0
+    ]
+    if len(fragments) < 2:
+        return None
+
+    # Collapse multiple text nodes occupying the same rendered line.
+    line_tops: list[float] = []
+    line_heights: list[float] = []
+    for fragment in sorted(fragments, key=lambda box: (box.y, box.x)):
+        match_index = next(
+            (
+                index
+                for index, top in enumerate(line_tops)
+                if abs(fragment.y - top) <= 2
+            ),
+            None,
+        )
+        if match_index is None:
+            line_tops.append(fragment.y)
+            line_heights.append(fragment.height)
+        else:
+            line_heights[match_index] = max(
+                line_heights[match_index], fragment.height
+            )
+    if len(line_tops) < 2:
+        return None
+
+    style = item.get("computed_style", item.get("style", {}))
+    style = style if isinstance(style, Mapping) else {}
+    font_size = _coerce_number(item.get("font_size")) or _css_pixel_value(
+        style.get("fontSize", style.get("font_size"))
+    )
+    line_height = _css_pixel_value(style.get("lineHeight", style.get("line_height")))
+    if font_size > 0 and line_height > 0 and line_height < font_size * 1.08:
+        return (
+            f"resolved CJK line-height {line_height:.1f}px is too tight for "
+            f"{font_size:.1f}px text"
+        )
+
+    ordered = sorted(zip(line_tops, line_heights))
+    for (top, height), (next_top, next_height) in zip(ordered, ordered[1:]):
+        if next_top - top < min(height, next_height) * 0.92:
+            return "resolved CJK glyph boxes collide across adjacent lines"
+    return None
+
+
 def _contrast_ratio(foreground: object, background: object) -> float | None:
     fg, bg = _color_rgb(foreground), _color_rgb(background)
     if fg is None or bg is None:
@@ -984,6 +1069,18 @@ def inspect_authored_dom(
             item.get("rendered_text", item.get("text", item.get("text_content", ""))),
             limit=2000,
         )
+        cjk_line_fit_detail = (
+            _measured_cjk_line_fit_detail(item, actual_text)
+            if owned_geometry_is_actionable
+            and bool(item.get("font_loaded", True))
+            else None
+        )
+        if cjk_line_fit_detail:
+            issues.append(
+                DomQualityIssue(
+                    "font", "medium", cjk_line_fit_detail, (qid,), mode
+                )
+            )
         required = expected.get(
             qid, _normal_text(item.get("expected_text", ""), limit=2000)
         )

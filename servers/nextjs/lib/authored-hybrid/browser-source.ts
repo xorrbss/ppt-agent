@@ -3186,7 +3186,9 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
           element.style.setProperty("background", "none", "important");
           element.style.setProperty("border-color", "transparent", "important");
           element.style.setProperty("outline", "none", "important");
-          element.style.setProperty("box-shadow", "none", "important");
+          // CSS shadows are intentionally not promoted. With the base paint
+          // removed, the shadow remains as a declared residual backplate layer
+          // without duplicating the native shape itself.
         }
       } else if (kind === "image") {
         if (

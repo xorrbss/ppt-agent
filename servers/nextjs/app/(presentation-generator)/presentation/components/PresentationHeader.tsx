@@ -1,9 +1,5 @@
 "use client";
-import {
-  Loader2,
-  AlertTriangle,
-  Sparkles,
-} from "lucide-react";
+import { Loader2, AlertTriangle, Sparkles } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Image from "next/image";
@@ -25,6 +21,9 @@ import { KeyboardShortcutsDialog } from "./KeyboardShortcutsDialog";
 import AuthoredHeaderActions from "./header/AuthoredHeaderActions";
 import ExportMenu from "./header/ExportMenu";
 import ExportQualityDialog from "./header/ExportQualityDialog";
+import HybridCoverageDialog, {
+  type HybridCoverageManifest,
+} from "./header/HybridCoverageDialog";
 import HeaderToolbar from "./header/HeaderToolbar";
 import PresentationTitleEditor from "./header/PresentationTitleEditor";
 import RegenerateConfirmDialog from "./header/RegenerateConfirmDialog";
@@ -57,6 +56,7 @@ const PresentationHeader = ({
   onWorkspaceCommand,
   onWorkspaceQualityReviewRequest,
   onWorkspacePageRemakeRequest,
+  onCanonicalSaved,
   headerFeatures,
 }: {
   presentation_id: string;
@@ -69,6 +69,7 @@ const PresentationHeader = ({
   onWorkspaceCommand?: WorkspaceCommandDispatcher;
   onWorkspaceQualityReviewRequest?: WorkspaceQualityReviewRequester;
   onWorkspacePageRemakeRequest?: WorkspacePageRemakeRequester;
+  onCanonicalSaved?: () => void | Promise<void>;
   headerFeatures?: PresentationHeaderFeatureSlots;
 }) => {
   const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false);
@@ -77,6 +78,8 @@ const PresentationHeader = ({
   const [isRegenerateConfirmOpen, setIsRegenerateConfirmOpen] = useState(false);
   const [exportQuality, setExportQuality] =
     useState<PresentationExportQualityReport | null>(null);
+  const [hybridCoverage, setHybridCoverage] =
+    useState<HybridCoverageManifest | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const titleInputRef = useRef<HTMLInputElement>(null);
   /** Avoid committing on blur when Save/Cancel was used (focus/click ordering) */
@@ -86,7 +89,7 @@ const PresentationHeader = ({
   const dispatch = useDispatch();
 
   const { presentationData, isStreaming } = useSelector(
-    (state: RootState) => state.presentationGeneration
+    (state: RootState) => state.presentationGeneration,
   );
   const appliedMasterPin = isAuthoredDeck
     ? presentationMasterPin(presentationData)
@@ -105,7 +108,7 @@ const PresentationHeader = ({
   const historyEnabled = workspaceHistoryEnabled;
   const { onUndo, onRedo, canUndo, canRedo } = usePresentationUndoRedo(
     false,
-    workspaceHistoryEnabled ? onWorkspaceCommand : undefined
+    workspaceHistoryEnabled ? onWorkspaceCommand : undefined,
   );
 
   useEffect(() => {
@@ -177,12 +180,45 @@ const PresentationHeader = ({
 
   const handleExportPptx = async (
     pptxMode?: PptxExportMode,
-    fontEmbedding = false
+    fontEmbedding = false,
   ) => {
     if (isStreaming || !workspaceCommandsEnabled || !onWorkspaceCommand) return;
-    const option = pptxMode === "hybrid" ? "편집 가능한 요소를 분리해 " : "";
-    const fontOption = fontEmbedding ? "(허용된 글꼴 포함) " : "";
     try {
+      if (isAuthoredDeck && pptxMode === "hybrid") {
+        const response = await fetch("/api/export-presentation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            format: "pptx",
+            id: presentation_id,
+            title: presentationData?.title ?? "presentation",
+            pptxMode: "hybrid",
+            fontEmbedding,
+            ...(typeof presentationData?.revision === "number"
+              ? { expectedPresentationRevision: presentationData.revision }
+              : {}),
+          }),
+        });
+        const result = (await response.json().catch(() => null)) as {
+          path?: string;
+          exportMetadata?: { coverageManifest?: HybridCoverageManifest };
+          error?: string;
+        } | null;
+        if (!response.ok || !result?.path) {
+          throw new Error(result?.error ?? "hybrid_export_failed");
+        }
+        const coverage = result.exportMetadata?.coverageManifest;
+        if (coverage?.mode === "hybrid") setHybridCoverage(coverage);
+        const anchor = window.document.createElement("a");
+        anchor.href = result.path;
+        anchor.download = "";
+        window.document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        return;
+      }
+      const option = pptxMode === "hybrid" ? "편집 가능한 요소를 분리해 " : "";
+      const fontOption = fontEmbedding ? "(허용된 글꼴 포함) " : "";
       await onWorkspaceCommand(`${option}${fontOption}PPTX로 내보내기`, {
         commandType: "export.pptx",
         context: {
@@ -217,7 +253,8 @@ const PresentationHeader = ({
       !workspaceCommandsEnabled ||
       !onWorkspaceQualityReviewRequest ||
       isStreaming
-    ) return;
+    )
+      return;
     onWorkspaceQualityReviewRequest(currentSlide);
   };
   const handleReGenerate = () => {
@@ -232,13 +269,13 @@ const PresentationHeader = ({
     });
     // regenerate=true forces the stream to re-run generation; without it the
     // stream now replays existing slides idempotently (so a refresh can't wipe edits).
-    router.push(`/presentation?id=${presentation_id}&stream=true&regenerate=true`);
+    router.push(
+      `/presentation?id=${presentation_id}&stream=true&regenerate=true`,
+    );
   };
 
   const handleStartPresentation = () => {
-    const to = `?id=${presentation_id}&mode=present&slide=${
-      currentSlide || 0
-    }`;
+    const to = `?id=${presentation_id}&mode=present&slide=${currentSlide || 0}`;
     trackEvent(MixpanelEvent.Presentation_Mode_Entered, {
       pathname,
       presentation_id,
@@ -259,7 +296,7 @@ const PresentationHeader = ({
     <div
       className={cn(
         "min-w-0 flex-1 transition-[box-shadow] duration-200",
-        isEditingTitle && "relative z-[60]"
+        isEditingTitle && "relative z-[60]",
       )}
     >
       <PresentationTitleEditor
@@ -295,7 +332,10 @@ const PresentationHeader = ({
             height={40}
             className="h-10 w-10 shrink-0 cursor-pointer object-contain"
           />
-          {mutationsEnabled && presentationData && !isStreaming && !isEditingTitle ? (
+          {mutationsEnabled &&
+          presentationData &&
+          !isStreaming &&
+          !isEditingTitle ? (
             <ToolTip content="발표자료 이름 변경">{titleBlock}</ToolTip>
           ) : (
             titleBlock
@@ -316,7 +356,10 @@ const PresentationHeader = ({
             </div>
           )}
           {isPresentationSaveFailed && !isPresentationSaving && (
-            <div className="flex items-center gap-1.5 text-red-600" role="status">
+            <div
+              className="flex items-center gap-1.5 text-red-600"
+              role="status"
+            >
               <AlertTriangle className="w-3.5 h-3.5" />
               <span className="text-xs font-medium">저장 안 됨</span>
             </div>
@@ -334,6 +377,7 @@ const PresentationHeader = ({
               onWorkspaceCommand={onWorkspaceCommand}
               onWorkspaceQualityReviewRequest={onWorkspaceQualityReviewRequest}
               onWorkspacePageRemakeRequest={onWorkspacePageRemakeRequest}
+              onCanonicalSaved={onCanonicalSaved}
               handleQualityReview={handleQualityReview}
             />
           )}
@@ -376,6 +420,10 @@ const PresentationHeader = ({
       <ExportQualityDialog
         exportQuality={exportQuality}
         setExportQuality={setExportQuality}
+      />
+      <HybridCoverageDialog
+        manifest={hybridCoverage}
+        onClose={() => setHybridCoverage(null)}
       />
       <RegenerateConfirmDialog
         open={mutationsEnabled && isRegenerateConfirmOpen}

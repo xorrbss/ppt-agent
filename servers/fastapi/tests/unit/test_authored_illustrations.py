@@ -5,7 +5,10 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from utils import authored_illustrations as illustrations_mod
-from utils.authored_illustrations import apply_authored_illustrations
+from utils.authored_illustrations import (
+    apply_authored_illustration,
+    apply_authored_illustrations,
+)
 from utils.authored_styles import load_authored_styles
 from utils.llm_calls.author_slide import Brand, build_design_system
 
@@ -53,6 +56,20 @@ def test_no_illustration_style_returns_htmls_unchanged():
         )
     )
     assert out == htmls
+    assert service.prompts == []
+
+
+def test_disabled_generation_drops_slot_without_calling_provider():
+    service = _Service(RuntimeError("disabled provider must not be called"))
+    out = _run(
+        apply_authored_illustration(
+            _SLOT_HTML,
+            _style(),
+            service,
+            generate_fallback=False,
+        )
+    )
+    assert "<img" not in out
     assert service.prompts == []
 
 

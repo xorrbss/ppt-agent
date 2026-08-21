@@ -35,6 +35,8 @@ FIXTURE = (
 
 def _client(monkeypatch, tmp_path):
     monkeypatch.setenv("AUTHORED_VNEXT_GENERATION_ENABLED", "true")
+    monkeypatch.setenv("AUTHORED_VNEXT_INTERNAL_COMPATIBILITY_ENABLED", "true")
+    monkeypatch.setenv("AUTHORED_VNEXT_NEW_GENERATION_ENABLED", "true")
     engine = create_engine(
         f"sqlite:///{tmp_path / 'public-flow.db'}",
         connect_args={"check_same_thread": False},

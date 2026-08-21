@@ -39,6 +39,7 @@ from utils.llm_calls.author_slide import (
     validate_authored_slide_html,
 )
 from utils.llm_calls.author_slide_patch import propose_authored_slide_patch
+from utils.llm_calls.author_deck import plan_authored_visual_story
 from utils.authored_styles import reference_images_for_role
 from utils.llm_calls.critique_slide import (
     CRITIQUE_PROMPT_VERSION,
@@ -488,6 +489,15 @@ async def revise_authored_deck(
     reference_mode = normalize_reference_mode(
         getattr(style, "reference_mode", STYLE_REFERENCE)
     )
+    visual_plan = (
+        None
+        if reference_mode == EXACT_RECONSTRUCTION
+        else plan_authored_visual_story(
+            contents,
+            roles,
+            illustration_slots=tuple(illustration_slots or ()),
+        )
+    )
     exact_source_images: Optional[List[bytes]] = None
     if reference_mode == EXACT_RECONSTRUCTION:
         if reference_images_by_slide is None or len(reference_images_by_slide) != n:
@@ -554,6 +564,8 @@ async def revise_authored_deck(
             and illustration_slots is not None
         ):
             reference_kwargs["illustration_allowed"] = illustration_allowed
+        if visual_plan is not None:
+            reference_kwargs["visual_intent"] = visual_plan.at(i)
         new_html = await author_slide_html(
             content,
             design_system,

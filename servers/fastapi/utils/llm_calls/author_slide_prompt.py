@@ -7,6 +7,7 @@ from dataclasses import replace
 import json
 from typing import Any
 
+from models.authored_visual_plan import AuthoredSlideVisualIntent
 from services.source_images.models import SourceImageCandidate
 from utils.prompt_safety import format_untrusted_source_documents
 
@@ -300,6 +301,47 @@ def illustration_marker(illustration_allowed: bool | None) -> str:
     )
 
 
+_STORY_RULES = {
+    "cover": "Keep the cover minimal: one decisive title hierarchy and one focal field.",
+    "closing": "End with one decisive statement and a restrained next-step cue, not a recap grid.",
+    "section": "Treat the chapter label as the single visual event; keep supporting items quiet.",
+    "agenda": "Use a numbered reading path with aligned chapter labels and no dashboard cards.",
+    "editorial": "Build one clear editorial argument with a dominant claim and subordinate evidence.",
+    "pillars": "Make the pillars visibly distinct in hierarchy without repeating identical heavy cards.",
+    "metric": "Make one stated metric dominant and place its stated context immediately beside it.",
+    "process": "Show the stated sequence as a directional rail; preserve order and do not invent steps.",
+    "architecture": "Show the stated layers and relationships with simple DOM boxes and connectors.",
+    "image": "Use the single allowed image for context while all claims and numbers remain in HTML text.",
+    "dataTable": (
+        "Render the supplied rows and columns as a real semantic HTML table. Highlight the decisive "
+        "row or column only when CONTENT supports it; never invent a cell, total, or rank."
+    ),
+    "dataChart": (
+        "Turn only the numeric series stated in CONTENT into a labelled HTML/CSS chart and pair it "
+        "with one explicit takeaway. Preserve every value and unit verbatim; never fabricate a series."
+    ),
+}
+
+
+def visual_story_marker(visual_intent: AuthoredSlideVisualIntent | None) -> str:
+    """Render the deck-wide visual choice without overstating native coverage."""
+    if visual_intent is None:
+        return ""
+    native_candidates = ", ".join(visual_intent.hybrid_native_candidates) or "none"
+    raster_reasons = ", ".join(visual_intent.raster_fallback_reasons) or "none"
+    return (
+        "VISUAL STORY PLAN FOR THIS SLIDE (frozen before parallel authoring): "
+        f"story={visual_intent.story_kind}; silhouette={visual_intent.silhouette}. "
+        f"{_STORY_RULES[visual_intent.story_kind]} Do not reuse a neighbouring slide's "
+        "silhouette. Keep narrative text and candidate objects in separate semantic DOM "
+        "elements so deterministic data-qid migration can address them. "
+        "EDITABILITY TRUTH: Hybrid native candidates are only "
+        f"[{native_candidates}]; they are not a promise of complete editability. "
+        f"Raster fallback remains declared for [{raster_reasons}]. Never duplicate native-candidate "
+        "text, images, shapes, tables, or charts inside a decorative image or backplate."
+    )
+
+
 def user_direction_brief(instructions: str | None) -> str:
     """The user's own request for this deck, stated to the slide author.
 
@@ -344,6 +386,7 @@ def author_prompt(
     *,
     instructions: str | None = None,
     illustration_allowed: bool | None = None,
+    visual_intent: AuthoredSlideVisualIntent | None = None,
 ) -> str:
     if page_number_mode == "companyStandard":
         page_marker = (
@@ -413,13 +456,15 @@ def author_prompt(
     structure_block = f"{structure}\n\n" if structure else ""
     illustration = illustration_marker(illustration_allowed)
     illustration_block = f"{illustration}\n\n" if illustration else ""
+    visual_story = visual_story_marker(visual_intent)
+    visual_story_block = f"{visual_story}\n\n" if visual_story else ""
     direction = user_direction_brief(instructions)
     direction_block = f"{direction}\n\n" if direction else ""
     return (
         f"Author slide {index + 1} of {n}. Deck topic: {brand.topic}. This slide's ROLE: "
         f"{role}. CONTENT: {content}.{wordmark}{structured_contract}\n\n"
         f"{page_marker}\n\n{structure_block}{chapter_block}{requirement_block}"
-        f"{illustration_block}{direction_block}{design_system}\n\n"
+        f"{illustration_block}{visual_story_block}{direction_block}{design_system}\n\n"
         "Design THIS slide bespoke and premium within the shared system, vary the layout to "
         "suit the role, output ONLY the complete self-contained HTML document."
     )
@@ -430,6 +475,7 @@ __all__ = [
     "author_prompt",
     "chapter_marker",
     "illustration_marker",
+    "visual_story_marker",
     "structure_role_brief",
     "build_design_system",
     "css_font_stack",

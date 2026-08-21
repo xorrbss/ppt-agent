@@ -102,6 +102,14 @@ export async function executeExportAtProductionBoundary<
     {
       general: (executionParams) =>
         attachArtifact(() => dependencies.registry.general(executionParams)),
+      ...(dependencies.registry.authoredFidelity
+        ? {
+            authoredFidelity: (executionParams: PresentationExportExecutionParams) =>
+              attachArtifact(() =>
+                dependencies.registry.authoredFidelity!(executionParams),
+              ),
+          }
+        : {}),
       hybrid: (executionParams) =>
         attachArtifact(() => dependencies.registry.hybrid(executionParams)),
     },

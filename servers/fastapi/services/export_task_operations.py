@@ -144,6 +144,7 @@ class ExportTaskOperationsMixin:
                 detail="PPTX-to-JSON export produced invalid output",
             ) from exc
 
+    @staticmethod
     def _move_export_to_owner(output_path: str) -> str:
         if get_current_owner_id() is None:
             return output_path

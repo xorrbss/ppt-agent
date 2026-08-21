@@ -54,6 +54,40 @@ def _require_enabled() -> None:
         raise HTTPException(status_code=404, detail="authored_vnext_generation_disabled")
 
 
+def _require_internal_new_generation() -> None:
+    """Keep independent vNext creation frozen behind an internal double gate.
+
+    Existing deck reads, downloads and compatibility mutations continue to use
+    this router.  A new vNext deck may only be minted by an explicitly enabled
+    internal compatibility worker; the user product creates Authored documents
+    through the canonical presentation endpoint instead.
+    """
+
+    internal_compat = (
+        os.getenv("AUTHORED_VNEXT_INTERNAL_COMPATIBILITY_ENABLED", "false")
+        .strip()
+        .lower()
+        == "true"
+    )
+    new_generation = (
+        os.getenv("AUTHORED_VNEXT_NEW_GENERATION_ENABLED", "false")
+        .strip()
+        .lower()
+        == "true"
+    )
+    if internal_compat and new_generation:
+        return
+    raise HTTPException(
+        status_code=409,
+        detail={
+            "code": "authored_vnext_independent_generation_frozen",
+            "requiredUserEngine": "authored",
+            "compatibilityReadOpen": True,
+            "promotionReady": False,
+        },
+    )
+
+
 @lru_cache(maxsize=32)
 def _repository_for_owner(owner_id: str) -> SqlGenerationRepository:
     owner_uuid = uuid.UUID(owner_id)
@@ -166,6 +200,7 @@ def get_master_pin(
 
 @AUTHORED_VNEXT_GENERATION_ROUTER.post("/decks", response_model=GenerationResult)
 def generate_deck(request: GenerateOperationRequest, repository: Repository) -> GenerationResult:
+    _require_internal_new_generation()
     command = request.command
     try:
         require_published_deck_size(len(command.outline.items))

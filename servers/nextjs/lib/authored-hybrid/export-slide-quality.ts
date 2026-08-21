@@ -20,7 +20,24 @@ export function noFontRenderingTelemetry(): PreparedSlideFontRendering {
 
 export function fallbackElementForContractElement(element: Awaited<ReturnType<typeof extractAuthoredSlideDom>>["elements"][number]): PresentationExportFallbackElement {
   const candidateKind = element.classification.mode === "native" ? element.classification.kind : element.classification.candidateKind;
-  return { elementId: element.id, domPath: element.domPath, candidateKind, reasons: element.classification.mode === "raster" ? element.classification.reasons : ["native-preparation-or-layer-safety-rejected"] };
+  const nativeBackplateReasons =
+    element.classification.mode === "native" && "shape" in element
+      ? [
+          ...(element.shape.gradient ? ["gradient-backplate-only"] : []),
+          ...(element.shape.shadowLayers?.length ? ["shadow-backplate-only"] : []),
+        ]
+      : [];
+  return {
+    elementId: element.id,
+    domPath: element.domPath,
+    candidateKind,
+    reasons:
+      element.classification.mode === "raster"
+        ? element.classification.reasons
+        : nativeBackplateReasons.length
+          ? nativeBackplateReasons
+          : ["native-preparation-or-layer-safety-rejected"],
+  };
 }
 
 export type PreparedSlideLayer = AuthoredHybridSlideLayer | null;

@@ -195,7 +195,7 @@ test("affine pseudo paint is promoted only after it is flattened to safe freefor
   assert.match(serializePreparedNativeElement(prepared[0], 3), /<a:custGeom>/);
 });
 
-test("asymmetric-radius freeforms retain shadow and dashed per-side borders as editable shapes", async () => {
+test("asymmetric-radius freeforms keep shadows raster and native paint de-duplicated", async () => {
   const element = rasterShape({
     id: "paint-stack",
     rotationDeg: -6,
@@ -248,11 +248,11 @@ test("asymmetric-radius freeforms retain shadow and dashed per-side borders as e
   });
 
   assert.equal(prepared.length, 1);
-  assert.equal(preparedNativeElementNonVisualIdCount(prepared[0]), 4);
+  assert.equal(preparedNativeElementNonVisualIdCount(prepared[0]), 3);
   const xml = serializePreparedNativeElement(prepared[0], 3);
-  assert.equal((xml.match(/<p:sp>/g) ?? []).length, 4);
-  assert.match(xml, /Presenton hybrid raster paint-stack shadow 1/);
-  assert.match(xml, /<a:srgbClr val="102A56">/);
+  assert.equal((xml.match(/<p:sp>/g) ?? []).length, 3);
+  assert.doesNotMatch(xml, /Presenton hybrid raster paint-stack shadow/);
+  assert.doesNotMatch(xml, /<a:srgbClr val="102A56">/);
   assert.match(xml, /<a:prstDash val="dash"\/>/);
   assert.match(xml, /<a:prstDash val="dot"\/>/);
   assert.match(xml, /rot="21240000"/);

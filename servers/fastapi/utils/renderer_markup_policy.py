@@ -37,6 +37,10 @@ DROP_TAGS = {
 GLOBAL_ATTRIBUTES = {
     "id", "class", "role", "aria-label", "aria-hidden", "lang", "dir", "style",
     "title", "data-qid", "data-qid-ignore", "data-allow-overlap",
+    # Inert export-planning hint occasionally emitted by Authored.  It carries
+    # no URL or executable value; Hybrid still derives authoritative coverage
+    # from the admitted DOM instead of trusting this hint.
+    "data-raster-fallback",
     # Inert authored-header markers. They carry no behaviour and no URL; the
     # deck's header contract validator is what constrains their values.
     "data-header-part", "data-requirement-ids", "data-header-band",

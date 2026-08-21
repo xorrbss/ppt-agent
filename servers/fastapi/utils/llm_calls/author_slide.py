@@ -32,6 +32,7 @@ from llmai import get_client
 from llmai.shared import SystemMessage, TextContentPart, UserMessage
 
 from models.authored_header_contract import AuthoredHeaderContract
+from models.authored_visual_plan import AuthoredSlideVisualIntent
 from utils.authored_font_policy import enforce_authored_font_floor
 from utils.authored_header_prompt import render_header_contract
 from utils.get_env import is_authored_source_images_enabled
@@ -267,6 +268,7 @@ def _author_prompt(
     *,
     instructions: Optional[str] = None,
     illustration_allowed: Optional[bool] = None,
+    visual_intent: Optional[AuthoredSlideVisualIntent] = None,
 ) -> str:
     return author_slide_prompt.author_prompt(
         content,
@@ -282,6 +284,7 @@ def _author_prompt(
         chapter_prefix=chapter_prefix,
         instructions=instructions,
         illustration_allowed=illustration_allowed,
+        visual_intent=visual_intent,
     )
 
 
@@ -663,6 +666,7 @@ async def author_slide_html(
     # both default to absent, reproducing the prompt for callers that have neither.
     instructions: Optional[str] = None,
     illustration_allowed: Optional[bool] = None,
+    visual_intent: Optional[AuthoredSlideVisualIntent] = None,
 ) -> str:
     """Author one bespoke, self-contained 1280x720 HTML slide. Single text-generation
     call against the configured provider; returns the cleaned HTML document.
@@ -689,6 +693,7 @@ async def author_slide_html(
         chapter_prefix=chapter_prefix,
         instructions=instructions,
         illustration_allowed=illustration_allowed,
+        visual_intent=visual_intent,
     )
     reference_image_parts = reference_parts(requested_images)
     if mode == EXACT_RECONSTRUCTION and not (

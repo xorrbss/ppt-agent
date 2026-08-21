@@ -23,11 +23,21 @@ LEGACY_NEW_GENERATION_DISABLED: Final = "legacy_generation_admission_closed"
 
 @dataclass(frozen=True, slots=True)
 class AuthoredVNextPromotionReadiness:
-    """Server-owned promotion conditions for the authored-vNext product path."""
+    """Server-owned compatibility state for the frozen authored-vNext path.
+
+    Authored is the only user-facing generation/design engine.  The vNext name
+    remains in this compatibility DTO because existing clients already consume
+    it, but independent vNext generation is not a promotion target.
+    """
 
     contract_version: int
     product_name: str
     canonical_driver: str
+    authored_only_user_engine: bool
+    canonical_authored_document_required: bool
+    vnext_independent_generation: bool
+    fidelity_default_export: bool
+    hybrid_partial_edit_only: bool
     scene_ir_required: bool
     compatibility_freeze: bool
     legacy_open_preview_export: bool
@@ -46,7 +56,11 @@ class AuthoredVNextPromotionReadiness:
         return (
             self.contract_version == AUTHORED_VNEXT_CONTRACT_VERSION
             and self.canonical_driver == AUTHORED_VNEXT_DRIVER
-            and self.scene_ir_required
+            and self.authored_only_user_engine
+            and self.canonical_authored_document_required
+            and not self.vnext_independent_generation
+            and self.fidelity_default_export
+            and self.hybrid_partial_edit_only
             and self.compatibility_freeze
             and self.legacy_open_preview_export
             and not self.template_v2_new_generation
@@ -67,7 +81,11 @@ class AuthoredVNextPromotionReadiness:
         return (
             self.contract_version == AUTHORED_VNEXT_CONTRACT_VERSION
             and self.canonical_driver == AUTHORED_VNEXT_DRIVER
-            and self.scene_ir_required
+            and self.authored_only_user_engine
+            and self.canonical_authored_document_required
+            and not self.vnext_independent_generation
+            and self.fidelity_default_export
+            and self.hybrid_partial_edit_only
             and self.compatibility_freeze
             and self.legacy_open_preview_export
             and not self.template_v2_new_generation
@@ -85,6 +103,11 @@ class AuthoredVNextPromotionReadiness:
             "contract_version": self.contract_version,
             "product_name": self.product_name,
             "canonical_driver": self.canonical_driver,
+            "authored_only_user_engine": self.authored_only_user_engine,
+            "canonical_authored_document_required": self.canonical_authored_document_required,
+            "vnext_independent_generation": self.vnext_independent_generation,
+            "fidelity_default_export": self.fidelity_default_export,
+            "hybrid_partial_edit_only": self.hybrid_partial_edit_only,
             "scene_ir_required": self.scene_ir_required,
             "compatibility_freeze": self.compatibility_freeze,
             "legacy_open_preview_export": self.legacy_open_preview_export,
@@ -108,9 +131,17 @@ def authored_vnext_promotion_readiness() -> AuthoredVNextPromotionReadiness:
 
     return AuthoredVNextPromotionReadiness(
         contract_version=AUTHORED_VNEXT_CONTRACT_VERSION,
-        product_name="authored-vNext",
+        product_name="Authored",
         canonical_driver=AUTHORED_VNEXT_DRIVER,
-        scene_ir_required=True,
+        authored_only_user_engine=True,
+        canonical_authored_document_required=True,
+        vnext_independent_generation=False,
+        fidelity_default_export=True,
+        hybrid_partial_edit_only=True,
+        # Scene documents remain readable through the compatibility runtime,
+        # but new Authored creation is no longer admitted on the condition that
+        # an independent heuristic Scene compiler must keep expanding.
+        scene_ir_required=False,
         compatibility_freeze=True,
         legacy_open_preview_export=True,
         template_v2_new_generation=False,

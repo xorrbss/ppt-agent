@@ -35,9 +35,7 @@ import {
 import { PresentationPageProps } from "../types";
 import LoadingState from "./LoadingState";
 import { applyPresentationThemeToElement } from "../utils/applyPresentationThemeDom";
-import {
-  tryResolveServerIssuedPresentationProfile,
-} from "@/lib/presentation-profile";
+import { tryResolveServerIssuedPresentationProfile } from "@/lib/presentation-profile";
 import PresentationHeader from "./PresentationHeader";
 import PresentationShell, {
   PresentationFeatureSlot,
@@ -58,7 +56,10 @@ import {
   getSlideNavigationIntent,
   isEditorEditableTarget,
 } from "../utils/slideKeyboardNavigation";
-import { PresentationLoadError, PresentationModeView } from "./PresentationTerminalStates";
+import {
+  PresentationLoadError,
+  PresentationModeView,
+} from "./PresentationTerminalStates";
 import { renderArtifactSlides } from "@/lib/render-service";
 import { usePresentationPreviewArtifact } from "../hooks/usePresentationPreviewArtifact";
 import { getWorkspaceTimeline } from "../../services/api/workspace";
@@ -76,7 +77,8 @@ const WORKSPACE_STAGING_FAILURE_STATES = new Set([
   "rejected",
   "expired",
 ]);
-const NAVIGATION_HINT_STORAGE_KEY = "ppt-agent:workbench-slide-navigation-hint:v1";
+const NAVIGATION_HINT_STORAGE_KEY =
+  "ppt-agent:workbench-slide-navigation-hint:v1";
 const NAVIGATION_HINT_KEYS = ["←", "↑", "↓", "→"];
 const NAVIGATION_HINT_TIMEOUT_MS = 5_000;
 const NAVIGATION_SCROLL_THRESHOLD = 240;
@@ -140,9 +142,15 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   const [selectedSlide, setSelectedSlide] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isAgentWorking, setIsAgentWorking] = useState(false);
-  const [agentFocusedSlide, setAgentFocusedSlide] = useState<number | null>(null);
-  const [agentFocusEventId, setAgentFocusEventId] = useState<string | null>(null);
-  const [glowingSlideIndex, setGlowingSlideIndex] = useState<number | null>(null);
+  const [agentFocusedSlide, setAgentFocusedSlide] = useState<number | null>(
+    null,
+  );
+  const [agentFocusEventId, setAgentFocusEventId] = useState<string | null>(
+    null,
+  );
+  const [glowingSlideIndex, setGlowingSlideIndex] = useState<number | null>(
+    null,
+  );
   const [chatTargetedSlides, setChatTargetedSlides] = useState<number[]>([]);
   const [error, setError] = useState(false);
   const [compactWorkspacePane, setCompactWorkspacePane] = useState<
@@ -178,16 +186,17 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     },
     [],
   );
-  const handleWorkspacePageRemakeRequest = useCallback<WorkspacePageRemakeRequester>(
-    (requested) => {
-      setCompactWorkspacePane("chat");
-      setWorkspaceDrawerOpen(true);
-      workspacePageRemakeRequester?.(requested);
-    },
-    [workspacePageRemakeRequester],
-  );
+  const handleWorkspacePageRemakeRequest =
+    useCallback<WorkspacePageRemakeRequester>(
+      (requested) => {
+        setCompactWorkspacePane("chat");
+        setWorkspaceDrawerOpen(true);
+        workspacePageRemakeRequester?.(requested);
+      },
+      [workspacePageRemakeRequester],
+    );
   const { presentationData, isStreaming } = useSelector(
-    (state: RootState) => state.presentationGeneration
+    (state: RootState) => state.presentationGeneration,
   );
   const presentationRuntime = useMemo(
     () => tryResolveServerIssuedPresentationProfile(presentationData),
@@ -224,7 +233,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   const { fetchUserSlides } = usePresentationData(
     presentation_id,
     setLoading,
-    setError
+    setError,
   );
   useEffect(() => {
     if (!workspaceStaging || slidesLength > 0) return;
@@ -233,15 +242,24 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     let timer: number | null = null;
     const scheduleNextPoll = () => {
       if (!cancelled) {
-        timer = window.setTimeout(pollWorkspaceStaging, WORKSPACE_STAGING_POLL_INTERVAL_MS);
+        timer = window.setTimeout(
+          pollWorkspaceStaging,
+          WORKSPACE_STAGING_POLL_INTERVAL_MS,
+        );
       }
     };
     const pollWorkspaceStaging = async () => {
       try {
-        const timeline = await getWorkspaceTimeline(presentation_id, { limit: 8 });
+        const timeline = await getWorkspaceTimeline(presentation_id, {
+          limit: 8,
+        });
         if (cancelled) return;
         const designOperation = timeline.items.reduce<
-          Extract<(typeof timeline.items)[number], { anchorType: "operation" }> | undefined
+          | Extract<
+              (typeof timeline.items)[number],
+              { anchorType: "operation" }
+            >
+          | undefined
         >((latest, item) => {
           if (
             item.anchorType !== "operation" ||
@@ -279,7 +297,10 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
           return;
         }
       } catch (pollError) {
-        console.warn("Failed to refresh workspace staging presentation", pollError);
+        console.warn(
+          "Failed to refresh workspace staging presentation",
+          pollError,
+        );
       }
       scheduleNextPoll();
     };
@@ -310,7 +331,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     presentation_id,
     selectedSlide,
     setSelectedSlide,
-    setIsFullscreen
+    setIsFullscreen,
   );
   const handleMobileThumbnailSelect = useCallback(
     (slideIndex: number) => {
@@ -351,7 +372,10 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   }, [isPresentMode, isStreaming, loading, selectedSlide, slidesLength]);
   useEffect(() => {
     if (!showNavigationHint) return;
-    const timer = window.setTimeout(dismissNavigationHint, NAVIGATION_HINT_TIMEOUT_MS);
+    const timer = window.setTimeout(
+      dismissNavigationHint,
+      NAVIGATION_HINT_TIMEOUT_MS,
+    );
     return () => window.clearTimeout(timer);
   }, [dismissNavigationHint, showNavigationHint]);
   useEffect(() => {
@@ -406,17 +430,27 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     };
     scrollContainer.addEventListener("wheel", handleWheel, { passive: true });
     return () => scrollContainer.removeEventListener("wheel", handleWheel);
-  }, [isPresentMode, isStreaming, loading, selectedSlide, showNavigationHint, slidesLength]);
+  }, [
+    isPresentMode,
+    isStreaming,
+    loading,
+    selectedSlide,
+    showNavigationHint,
+    slidesLength,
+  ]);
   useEffect(() => {
     if (isPresentMode || slidesLength <= 1) return;
     const handleEditorArrowNavigation = (event: KeyboardEvent) => {
       const intent = getSlideNavigationIntent(event);
       if (intent === null) return;
       event.preventDefault();
-      handleSlideClick(Math.min(Math.max(selectedSlide + intent, 0), slidesLength - 1));
+      handleSlideClick(
+        Math.min(Math.max(selectedSlide + intent, 0), slidesLength - 1),
+      );
     };
     window.addEventListener("keydown", handleEditorArrowNavigation);
-    return () => window.removeEventListener("keydown", handleEditorArrowNavigation);
+    return () =>
+      window.removeEventListener("keydown", handleEditorArrowNavigation);
   }, [handleSlideClick, isPresentMode, selectedSlide, slidesLength]);
   useEffect(() => {
     const desktopRail = window.matchMedia("(min-width: 768px)");
@@ -432,7 +466,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     stream,
     setLoading,
     setError,
-    fetchUserSlides
+    fetchUserSlides,
   );
   useEffect(() => {
     if (!isStreaming) return;
@@ -445,7 +479,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
       }
       if (lastStreamingSlideIndex === undefined) return;
       const slideElement = document.getElementById(
-        `slide-${lastStreamingSlideIndex}`
+        `slide-${lastStreamingSlideIndex}`,
       );
       if (!slideElement) return;
       const containerRect = scrollContainer.getBoundingClientRect();
@@ -478,29 +512,35 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   const onSlideChange = (newSlide: number) => {
     handleSlideChange(newSlide, presentationData);
   };
-  const handlePresentationChanged = useCallback(async (
-    change?: WorkspacePresentationChange,
-  ) => {
-    const refreshed = await fetchUserSlides({ clearHistory: false });
-    if (!refreshed) {
-      throw new Error("The committed presentation revision could not be loaded.");
-    }
-    const slideCount = refreshed?.slides?.length ?? 0;
-    if (
-      slideCount === 0 ||
-      (selectedSlide >= 0 && selectedSlide < slideCount)
-    ) {
-      return;
-    }
-    const fallbackIndex = change?.fixedSlideIndexes?.find(
-      (index) => index >= 0 && index < slideCount,
-    ) ?? 0;
-    window.requestAnimationFrame(() => handleSlideClick(fallbackIndex));
-  }, [fetchUserSlides, handleSlideClick, selectedSlide]);
+  const handlePresentationChanged = useCallback(
+    async (change?: WorkspacePresentationChange) => {
+      const refreshed = await fetchUserSlides({ clearHistory: false });
+      if (!refreshed) {
+        throw new Error(
+          "The committed presentation revision could not be loaded.",
+        );
+      }
+      const slideCount = refreshed?.slides?.length ?? 0;
+      if (
+        slideCount === 0 ||
+        (selectedSlide >= 0 && selectedSlide < slideCount)
+      ) {
+        return;
+      }
+      const fallbackIndex =
+        change?.fixedSlideIndexes?.find(
+          (index) => index >= 0 && index < slideCount,
+        ) ?? 0;
+      window.requestAnimationFrame(() => handleSlideClick(fallbackIndex));
+    },
+    [fetchUserSlides, handleSlideClick, selectedSlide],
+  );
   const handleAgentActivityChange = useCallback((working: boolean) => {
     setIsAgentWorking(working);
     if (working) {
-      setChatTargetedSlides((previous) => (previous.length === 0 ? previous : []));
+      setChatTargetedSlides((previous) =>
+        previous.length === 0 ? previous : [],
+      );
       return;
     }
     setAgentFocusedSlide(null);
@@ -514,16 +554,16 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
       setAgentFocusedSlide(slideIndex);
       setAgentFocusEventId(eventId);
       setChatTargetedSlides((previous) =>
-        previous.includes(slideIndex) ? previous : [...previous, slideIndex]
+        previous.includes(slideIndex) ? previous : [...previous, slideIndex],
       );
     },
-    []
+    [],
   );
   const totalSlides = presentationData?.slides?.length ?? 0;
   const highlightedSlideIndex = glowingSlideIndex;
   const targetedSlidesSet = useMemo(
     () => new Set(chatTargetedSlides),
-    [chatTargetedSlides]
+    [chatTargetedSlides],
   );
   const handleSlidesScroll = useCallback(() => {
     if (slideScrollSyncFrameRef.current !== null) return;
@@ -585,7 +625,10 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
       }
       return;
     }
-    const targetIndex = Math.min(Math.max(agentFocusedSlide, 0), totalSlides - 1);
+    const targetIndex = Math.min(
+      Math.max(agentFocusedSlide, 0),
+      totalSlides - 1,
+    );
     setGlowingSlideIndex(targetIndex);
   }, [
     isAgentWorking,
@@ -646,6 +689,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
               ? handleWorkspacePageRemakeRequest
               : undefined
           }
+          onCanonicalSaved={handlePresentationChanged}
           headerFeatures={{
             showAuthoredActions: presentationFeatureView.authored,
             exportActions: presentationFeatureView.slots.exportActions,
@@ -664,98 +708,106 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
           data-testid="presentation-export-actions-slot"
         />
       </PresentationFeatureSlot>
-        {isAuthoredDeck && (
-          <div className="shrink-0 bg-[#EFF4FF] border-y border-[#C7D7FE] px-6 py-2 text-center text-xs text-[#2D4E9A] font-medium">
-            이 발표자료는 <span className="font-bold">AI 저작(고품질)</span> 모드입니다 — 인앱은 보기 전용입니다. 내보낸 PPTX를 PowerPoint에서 편집하세요.
-          </div>
-        )}
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-3 py-2 xl:hidden">
-          <div
-            className="flex min-w-0 flex-1 gap-1 lg:hidden"
-            role="tablist"
-            aria-label="작업 영역"
-          >
-            <button
-              type="button"
-              id="compact-slides-tab"
-              role="tab"
-              aria-selected={compactWorkspacePane === "slides"}
-              aria-controls="presentation-slides-pane"
-              data-testid="responsive-slides-tab"
-              onClick={() => setCompactWorkspacePane("slides")}
-              className={`min-w-0 flex-1 rounded-md px-3 py-2 text-sm font-medium ${
-                compactWorkspacePane === "slides"
-                  ? "bg-slate-900 text-white"
-                  : "text-slate-600 hover:bg-slate-100"
-              }`}
-            >
-              슬라이드
-            </button>
-            <button
-              type="button"
-              id="compact-chat-tab"
-              role="tab"
-              aria-selected={compactWorkspacePane === "chat"}
-              aria-controls="workspace-chat-pane"
-              data-testid="responsive-chat-tab"
-              onClick={() => setCompactWorkspacePane("chat")}
-              className={`min-w-0 flex-1 rounded-md px-3 py-2 text-sm font-medium ${
-                compactWorkspacePane === "chat"
-                  ? "bg-slate-900 text-white"
-                  : "text-slate-600 hover:bg-slate-100"
-              }`}
-            >
-              작업 대화
-            </button>
-          </div>
-          <Sheet open={mobileThumbnailsOpen} onOpenChange={setMobileThumbnailsOpen}>
-            <SheetTrigger asChild>
-              <button
-                type="button"
-                data-testid="mobile-thumbnail-drawer-trigger"
-                aria-label={mobileThumbnailsOpen ? "슬라이드 목록 닫기" : "슬라이드 목록 열기"}
-                className="ml-2 inline-flex h-11 shrink-0 items-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 outline-none hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-violet-700 focus-visible:ring-offset-2 md:hidden"
-              >
-                <PanelLeft aria-hidden="true" className="h-4 w-4" />
-                <span className="hidden sm:inline">슬라이드 목록</span>
-              </button>
-            </SheetTrigger>
-            <SheetContent
-              side="left"
-              data-testid="mobile-thumbnail-drawer"
-              className="flex h-dvh w-[min(320px,calc(100vw-16px))] max-w-none flex-col gap-3 p-4 [&>button]:h-11 [&>button]:w-11"
-            >
-              <SheetHeader className="pr-12 text-left">
-                <SheetTitle>슬라이드 목록</SheetTitle>
-                <SheetDescription>
-                  이동할 슬라이드를 선택하세요.
-                </SheetDescription>
-              </SheetHeader>
-              <div className="min-h-0 flex-1 overflow-hidden pt-2">
-                <SidePanel
-                  selectedSlide={selectedSlide}
-                  onSlideClick={handleMobileThumbnailSelect}
-                  presentationId={presentation_id}
-                  loading={loading}
-                  mutationsEnabled={INLINE_MUTATIONS_ENABLED}
-                  displayMode="drawer"
-                />
-              </div>
-            </SheetContent>
-          </Sheet>
+      {isAuthoredDeck && (
+        <div className="shrink-0 bg-[#EFF4FF] border-y border-[#C7D7FE] px-6 py-2 text-center text-xs text-[#2D4E9A] font-medium">
+          이 발표자료는 <span className="font-bold">AI 저작(고품질)</span>{" "}
+          모드입니다 — 상단 <span className="font-bold">요소 편집</span>에서
+          지원되는 data-qid 요소만 안전하게 수정할 수 있으며, 복합 CSS와 지원
+          불가 요소는 읽기 전용입니다.
+        </div>
+      )}
+      <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-3 py-2 xl:hidden">
+        <div
+          className="flex min-w-0 flex-1 gap-1 lg:hidden"
+          role="tablist"
+          aria-label="작업 영역"
+        >
           <button
             type="button"
-            aria-expanded={workspaceDrawerOpen}
-            aria-controls="workspace-chat-pane"
-            data-testid="workspace-drawer-toggle"
-            onClick={() => setWorkspaceDrawerOpen((isOpen) => !isOpen)}
-            className="ml-auto hidden rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 lg:inline-flex xl:hidden"
+            id="compact-slides-tab"
+            role="tab"
+            aria-selected={compactWorkspacePane === "slides"}
+            aria-controls="presentation-slides-pane"
+            data-testid="responsive-slides-tab"
+            onClick={() => setCompactWorkspacePane("slides")}
+            className={`min-w-0 flex-1 rounded-md px-3 py-2 text-sm font-medium ${
+              compactWorkspacePane === "slides"
+                ? "bg-slate-900 text-white"
+                : "text-slate-600 hover:bg-slate-100"
+            }`}
           >
-            {workspaceDrawerOpen ? "작업 대화 닫기" : "작업 대화 열기"}
+            슬라이드
+          </button>
+          <button
+            type="button"
+            id="compact-chat-tab"
+            role="tab"
+            aria-selected={compactWorkspacePane === "chat"}
+            aria-controls="workspace-chat-pane"
+            data-testid="responsive-chat-tab"
+            onClick={() => setCompactWorkspacePane("chat")}
+            className={`min-w-0 flex-1 rounded-md px-3 py-2 text-sm font-medium ${
+              compactWorkspacePane === "chat"
+                ? "bg-slate-900 text-white"
+                : "text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            작업 대화
           </button>
         </div>
-        <div className="relative flex flex-1 min-h-0 gap-6 overflow-hidden">
-          <PresentationFeatureSlot name="editorSurface">
+        <Sheet
+          open={mobileThumbnailsOpen}
+          onOpenChange={setMobileThumbnailsOpen}
+        >
+          <SheetTrigger asChild>
+            <button
+              type="button"
+              data-testid="mobile-thumbnail-drawer-trigger"
+              aria-label={
+                mobileThumbnailsOpen
+                  ? "슬라이드 목록 닫기"
+                  : "슬라이드 목록 열기"
+              }
+              className="ml-2 inline-flex h-11 shrink-0 items-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 outline-none hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-violet-700 focus-visible:ring-offset-2 md:hidden"
+            >
+              <PanelLeft aria-hidden="true" className="h-4 w-4" />
+              <span className="hidden sm:inline">슬라이드 목록</span>
+            </button>
+          </SheetTrigger>
+          <SheetContent
+            side="left"
+            data-testid="mobile-thumbnail-drawer"
+            className="flex h-dvh w-[min(320px,calc(100vw-16px))] max-w-none flex-col gap-3 p-4 [&>button]:h-11 [&>button]:w-11"
+          >
+            <SheetHeader className="pr-12 text-left">
+              <SheetTitle>슬라이드 목록</SheetTitle>
+              <SheetDescription>이동할 슬라이드를 선택하세요.</SheetDescription>
+            </SheetHeader>
+            <div className="min-h-0 flex-1 overflow-hidden pt-2">
+              <SidePanel
+                selectedSlide={selectedSlide}
+                onSlideClick={handleMobileThumbnailSelect}
+                presentationId={presentation_id}
+                loading={loading}
+                mutationsEnabled={INLINE_MUTATIONS_ENABLED}
+                displayMode="drawer"
+              />
+            </div>
+          </SheetContent>
+        </Sheet>
+        <button
+          type="button"
+          aria-expanded={workspaceDrawerOpen}
+          aria-controls="workspace-chat-pane"
+          data-testid="workspace-drawer-toggle"
+          onClick={() => setWorkspaceDrawerOpen((isOpen) => !isOpen)}
+          className="ml-auto hidden rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 lg:inline-flex xl:hidden"
+        >
+          {workspaceDrawerOpen ? "작업 대화 닫기" : "작업 대화 열기"}
+        </button>
+      </div>
+      <div className="relative flex flex-1 min-h-0 gap-6 overflow-hidden">
+        <PresentationFeatureSlot name="editorSurface">
           <div
             id="presentation-slides-pane"
             role="tabpanel"
@@ -764,177 +816,188 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
               compactWorkspacePane === "slides" ? "flex" : "hidden lg:flex"
             }`}
           >
-          <div className="hidden md:block w-[120px] h-full shrink-0 self-start sticky top-0 pt-[18px]">
-            <SidePanel
-              selectedSlide={selectedSlide}
-              onSlideClick={handleSlideClick}
-              presentationId={presentation_id}
-              loading={loading}
-              mutationsEnabled={INLINE_MUTATIONS_ENABLED}
-            />
-          </div>
-          <div className="w-full min-w-0 h-full flex-1 pt-[18px]">
-            <div
-              ref={slidesScrollContainerRef}
-              data-testid="slides-scroll-container"
-              onScroll={handleSlidesScroll}
-              className="font-inter h-full overflow-y-auto hide-scrollbar scroll-pt-[18px]"
-            >
-              {showNavigationHint ? (
-                <div
-                  className="pointer-events-none fixed top-[72px] z-[95] hidden items-center gap-3 rounded-full border border-violet-200 bg-white/95 py-2 pl-3 pr-2 text-[13px] text-slate-700 shadow-[0_8px_24px_rgba(16,24,40,0.14)] backdrop-blur md:flex"
-                  role="status"
-                  aria-live="polite"
-                  data-testid="slide-navigation-hint"
-                  style={{ left: "50%", transform: "translateX(-50%)" }}
-                >
-                  <Keyboard className="h-4 w-4 text-violet-700" aria-hidden="true" />
-                  <span>화살표 키로 슬라이드를 이동할 수 있습니다</span>
-                  <span className="flex items-center gap-1" aria-label="방향키">
-                    {NAVIGATION_HINT_KEYS.map((key) => (
-                      <kbd
-                        key={key}
-                        className="flex h-6 min-w-6 items-center justify-center rounded-md border border-slate-200 bg-slate-50 px-1 text-[12px] font-medium text-slate-900 shadow-sm"
-                      >
-                        {key}
-                      </kbd>
-                    ))}
-                  </span>
-                  <span className="hidden lg:inline">또는 왼쪽 목록에서 선택하세요</span>
-                  <button
-                    type="button"
-                    aria-label="슬라이드 이동 안내 닫기"
-                    onClick={dismissNavigationHint}
-                    className="pointer-events-auto ml-1 flex h-11 w-11 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-700"
+            <div className="hidden md:block w-[120px] h-full shrink-0 self-start sticky top-0 pt-[18px]">
+              <SidePanel
+                selectedSlide={selectedSlide}
+                onSlideClick={handleSlideClick}
+                presentationId={presentation_id}
+                loading={loading}
+                mutationsEnabled={INLINE_MUTATIONS_ENABLED}
+              />
+            </div>
+            <div className="w-full min-w-0 h-full flex-1 pt-[18px]">
+              <div
+                ref={slidesScrollContainerRef}
+                data-testid="slides-scroll-container"
+                onScroll={handleSlidesScroll}
+                className="font-inter h-full overflow-y-auto hide-scrollbar scroll-pt-[18px]"
+              >
+                {showNavigationHint ? (
+                  <div
+                    className="pointer-events-none fixed top-[72px] z-[95] hidden items-center gap-3 rounded-full border border-violet-200 bg-white/95 py-2 pl-3 pr-2 text-[13px] text-slate-700 shadow-[0_8px_24px_rgba(16,24,40,0.14)] backdrop-blur md:flex"
+                    role="status"
+                    aria-live="polite"
+                    data-testid="slide-navigation-hint"
+                    style={{ left: "50%", transform: "translateX(-50%)" }}
                   >
-                    <X className="h-3.5 w-3.5" aria-hidden="true" />
-                  </button>
-                </div>
-              ) : null}
-              <div className="w-full max-w-[1280px] min-h-full mx-auto flex flex-col items-center pb-8">
-                {!presentationData ||
+                    <Keyboard
+                      className="h-4 w-4 text-violet-700"
+                      aria-hidden="true"
+                    />
+                    <span>화살표 키로 슬라이드를 이동할 수 있습니다</span>
+                    <span
+                      className="flex items-center gap-1"
+                      aria-label="방향키"
+                    >
+                      {NAVIGATION_HINT_KEYS.map((key) => (
+                        <kbd
+                          key={key}
+                          className="flex h-6 min-w-6 items-center justify-center rounded-md border border-slate-200 bg-slate-50 px-1 text-[12px] font-medium text-slate-900 shadow-sm"
+                        >
+                          {key}
+                        </kbd>
+                      ))}
+                    </span>
+                    <span className="hidden lg:inline">
+                      또는 왼쪽 목록에서 선택하세요
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="슬라이드 이동 안내 닫기"
+                      onClick={dismissNavigationHint}
+                      className="pointer-events-auto ml-1 flex h-11 w-11 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-700"
+                    >
+                      <X className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                  </div>
+                ) : null}
+                <div className="w-full max-w-[1280px] min-h-full mx-auto flex flex-col items-center pb-8">
+                  {!presentationData ||
                   loading ||
                   (previewArtifactRequired && previewSlides === null) ||
                   !presentationData?.slides ||
                   showWorkspaceStaging ||
                   (presentationData.slides.length === 0 && stream) ? (
-                  <div className="relative w-full h-[calc(100vh-120px)] mx-auto hide-scrollbar">
-                    {workspaceStagingFailure ? (
-                      <div
-                        className="flex h-full items-center justify-center px-6"
-                        data-testid="workspace-staging-failure"
-                      >
-                        <div className="flex max-w-lg flex-col items-center rounded-2xl border border-red-200 bg-white px-8 py-10 text-center shadow-sm">
-                          <AlertCircle className="mb-4 h-12 w-12 text-red-500" />
-                          <h2 className="text-xl font-semibold text-gray-950">
-                            디자인 변경에 실패했습니다
-                          </h2>
-                          <p className="mt-3 text-sm leading-6 text-gray-600">
-                            {workspaceStagingFailure}
-                          </p>
-                          <div className="mt-6 flex gap-2">
-                            <Button type="button" onClick={() => window.close()}>
-                              창 닫기
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => router.push("/dashboard")}
-                            >
-                              대시보드로 이동
-                            </Button>
+                    <div className="relative w-full h-[calc(100vh-120px)] mx-auto hide-scrollbar">
+                      {workspaceStagingFailure ? (
+                        <div
+                          className="flex h-full items-center justify-center px-6"
+                          data-testid="workspace-staging-failure"
+                        >
+                          <div className="flex max-w-lg flex-col items-center rounded-2xl border border-red-200 bg-white px-8 py-10 text-center shadow-sm">
+                            <AlertCircle className="mb-4 h-12 w-12 text-red-500" />
+                            <h2 className="text-xl font-semibold text-gray-950">
+                              디자인 변경에 실패했습니다
+                            </h2>
+                            <p className="mt-3 text-sm leading-6 text-gray-600">
+                              {workspaceStagingFailure}
+                            </p>
+                            <div className="mt-6 flex gap-2">
+                              <Button
+                                type="button"
+                                onClick={() => window.close()}
+                              >
+                                창 닫기
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => router.push("/dashboard")}
+                              >
+                                대시보드로 이동
+                              </Button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ) : (
-                      <>
-                        <div>
-                          {Array.from({ length: 2 }).map((_, index) => (
-                            <Skeleton
-                              key={index}
-                              className="aspect-video bg-gray-400 my-4 w-full mx-auto "
-                            />
-                          ))}
-                        </div>
-                        {(stream || showWorkspaceStaging) && (
-                          <div data-testid="workspace-staging-loading">
-                            <LoadingState />
+                      ) : (
+                        <>
+                          <div>
+                            {Array.from({ length: 2 }).map((_, index) => (
+                              <Skeleton
+                                key={index}
+                                className="aspect-video bg-gray-400 my-4 w-full mx-auto "
+                              />
+                            ))}
                           </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                ) : presentationData.slides.length === 0 ? (
-                  <div className="flex w-full h-[calc(100vh-160px)] flex-col items-center justify-center text-center">
-                    <div className="flex max-w-md flex-col items-center rounded-lg border border-gray-200 bg-white px-6 py-8 shadow-sm">
-                      <Layers className="mb-4 h-14 w-14 text-gray-400" />
-                      <h2 className="mb-2 text-lg font-semibold text-gray-800">
-                        슬라이드가 없습니다
-                      </h2>
-                      <p className="mb-5 text-sm text-gray-500">
-                        이 발표자료에는 아직 생성된 슬라이드가 없습니다. 다시
-                        불러오거나 상단의 재생성 버튼으로 슬라이드를 만들 수
-                        있습니다.
-                      </p>
-                      <div className="flex items-center justify-center gap-2">
-                        <Button
-                          onClick={() =>
-                            fetchUserSlides({ clearHistory: false })
-                          }
-                        >
-                          다시 불러오기
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            trackEvent(MixpanelEvent.Navigation, {
-                              from: pathname,
-                              to: "/dashboard",
-                            });
-                            router.push("/dashboard");
-                          }}
-                        >
-                          대시보드로 이동
-                        </Button>
+                          {(stream || showWorkspaceStaging) && (
+                            <div data-testid="workspace-staging-loading">
+                              <LoadingState />
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  ) : presentationData.slides.length === 0 ? (
+                    <div className="flex w-full h-[calc(100vh-160px)] flex-col items-center justify-center text-center">
+                      <div className="flex max-w-md flex-col items-center rounded-lg border border-gray-200 bg-white px-6 py-8 shadow-sm">
+                        <Layers className="mb-4 h-14 w-14 text-gray-400" />
+                        <h2 className="mb-2 text-lg font-semibold text-gray-800">
+                          슬라이드가 없습니다
+                        </h2>
+                        <p className="mb-5 text-sm text-gray-500">
+                          이 발표자료에는 아직 생성된 슬라이드가 없습니다. 다시
+                          불러오거나 상단의 재생성 버튼으로 슬라이드를 만들 수
+                          있습니다.
+                        </p>
+                        <div className="flex items-center justify-center gap-2">
+                          <Button
+                            onClick={() =>
+                              fetchUserSlides({ clearHistory: false })
+                            }
+                          >
+                            다시 불러오기
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              trackEvent(MixpanelEvent.Navigation, {
+                                from: pathname,
+                                to: "/dashboard",
+                              });
+                              router.push("/dashboard");
+                            }}
+                          >
+                            대시보드로 이동
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ) : (
-                  <>
-                    {previewSlides &&
-                      previewSlides.length > 0 &&
-                      previewSlides.map((slide: any, index: number) => (
-                        <SlideContent
-                          key={`${slide.type}-${index}-${slide.index}`}
-                          slide={slide}
-                          index={index}
-                          presentationId={presentation_id}
-                          mutationsEnabled={INLINE_MUTATIONS_ENABLED}
-                          deferRender
-                          renderPriority={
-                            index === selectedSlide ||
-                            index === highlightedSlideIndex ||
-                            targetedSlidesSet.has(index)
-                          }
-                          isChatEditing={
-                            highlightedSlideIndex !== null &&
-                            index === highlightedSlideIndex
-                          }
-                          isChatTargeted={
-                            isAgentWorking &&
-                            highlightedSlideIndex !== index &&
-                            targetedSlidesSet.has(index)
-                          }
-                        />
-                      ))}
-                  </>
-                )}
+                  ) : (
+                    <>
+                      {previewSlides &&
+                        previewSlides.length > 0 &&
+                        previewSlides.map((slide: any, index: number) => (
+                          <SlideContent
+                            key={`${slide.type}-${index}-${slide.index}`}
+                            slide={slide}
+                            index={index}
+                            presentationId={presentation_id}
+                            mutationsEnabled={INLINE_MUTATIONS_ENABLED}
+                            deferRender
+                            renderPriority={
+                              index === selectedSlide ||
+                              index === highlightedSlideIndex ||
+                              targetedSlidesSet.has(index)
+                            }
+                            isChatEditing={
+                              highlightedSlideIndex !== null &&
+                              index === highlightedSlideIndex
+                            }
+                            isChatTargeted={
+                              isAgentWorking &&
+                              highlightedSlideIndex !== index &&
+                              targetedSlidesSet.has(index)
+                            }
+                          />
+                        ))}
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-          </div>
-          </PresentationFeatureSlot>
-          <PresentationFeatureSlot name="assistantPanel">
+        </PresentationFeatureSlot>
+        <PresentationFeatureSlot name="assistantPanel">
           <div
             id="workspace-chat-pane"
             role="tabpanel"
@@ -966,7 +1029,10 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                 className="flex h-full flex-col items-center justify-center gap-3 border-l border-slate-200 bg-white px-6 text-center"
                 role="alert"
               >
-                <AlertCircle className="h-5 w-5 text-amber-600" aria-hidden="true" />
+                <AlertCircle
+                  className="h-5 w-5 text-amber-600"
+                  aria-hidden="true"
+                />
                 <div>
                   <p className="text-sm font-medium text-slate-800">
                     작업 대화를 연결할 수 없습니다.
@@ -995,8 +1061,8 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
               </div>
             )}
           </div>
-          </PresentationFeatureSlot>
-        </div>
+        </PresentationFeatureSlot>
+      </div>
     </PresentationShell>
   );
 };

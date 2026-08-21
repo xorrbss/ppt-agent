@@ -109,6 +109,8 @@ def test_public_generation_http_hides_owner_a_deck_and_operation_from_owner_b(
     tmp_path: Path,
 ) -> None:
     monkeypatch.setenv("AUTHORED_VNEXT_GENERATION_ENABLED", "true")
+    monkeypatch.setenv("AUTHORED_VNEXT_INTERNAL_COMPATIBILITY_ENABLED", "true")
+    monkeypatch.setenv("AUTHORED_VNEXT_NEW_GENERATION_ENABLED", "true")
     engine = create_engine(
         f"sqlite:///{tmp_path / 'generation-owner-isolation.db'}",
         connect_args={"check_same_thread": False},
