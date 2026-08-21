@@ -454,6 +454,92 @@ def test_five_cjk_points_use_measured_stacked_density_without_tail_folding() -> 
     assert len([item for item in scene.elements if item.semantic_role == "cardSurface"]) == 5
 
 
+def test_cover_is_one_editorial_field_and_preserves_planned_title_lines() -> None:
+    contract = _contract()
+    slide, plan, title_bounds = _slide_and_plan(
+        contract,
+        title="품질 동등성: Authored와 authored-vNext",
+        body="Authored 기준 82점 | authored-vNext 97점 | 네이티브 객체 5종 | 첫 저장 성공",
+        slide_id="slide:cover-editorial",
+    )
+    plan = plan.model_copy(update={"role": "cover"})
+    first = compile_slide_scene(
+        slide=slide,
+        visual_plan=plan,
+        title_bounds=title_bounds,
+        contract=contract,
+    )
+    second = compile_slide_scene(
+        slide=slide,
+        visual_plan=plan,
+        title_bounds=title_bounds,
+        contract=contract,
+    )
+    title = next(item for item in first.elements if item.semantic_role == "title")
+    body = [
+        item
+        for item in first.elements
+        if isinstance(item, SceneTextElement) and ".authored." in item.element_id
+    ]
+    assert title.text == "\n".join(slide.title.lines)
+    assert title.style is not None and title.style.font_size >= 35
+    assert len(body) == 1 and body[0].text.count("\n") == 1
+    assert "82점" in body[0].text.splitlines()[0]
+    assert "97점" in body[0].text.splitlines()[0]
+    assert any(item.semantic_role == "heroField" for item in first.elements)
+    assert all(item.semantic_role != "heroEvidence" for item in first.elements)
+    assert first.slide_digest == second.slide_digest
+
+
+def test_three_step_process_uses_an_ascending_non_card_silhouette() -> None:
+    scene = _compile(
+        hint="process",
+        title="안전한 생성 프로세스",
+        body="분석: 콘텐츠 구조화 → 레이아웃 선택: CJK 밀도 반영 → 검증: native readback과 PowerPoint 렌더",
+        slide_id="slide:ascending-process",
+    )
+    steps = [
+        item
+        for item in scene.elements
+        if isinstance(item, SceneShapeElement) and item.semantic_role == "processStep"
+    ]
+    assert len(steps) == 3
+    assert [item.bounds.height for item in steps] == sorted(
+        item.bounds.height for item in steps
+    )
+    assert max(item.bounds.bottom for item in steps) - min(
+        item.bounds.bottom for item in steps
+    ) < 0.01
+    assert all(item.shape == "rect" and item.stroke is None for item in steps)
+
+
+def test_long_cjk_slide_uses_explicit_title_breaks_and_editorial_columns() -> None:
+    scene = _compile(
+        hint=None,
+        title="긴 한글 제목과 中文日本語 혼합 문장이 실제 PowerPoint에서도 안전하게 맞아야 하는 품질 검증",
+        body="잘림 없음: 한국어 본문과 中文 설명 및 日本語 データ를 함께 배치해 실제 폰트 측정 기반 fit을 확인한다.",
+        slide_id="slide:long-cjk-editorial",
+    )
+    title = next(item for item in scene.elements if item.semantic_role == "title")
+    panel = next(item for item in scene.elements if item.semantic_role == "longTitlePanel")
+    divider = next(
+        item for item in scene.elements if item.semantic_role == "longTitleAccent"
+    )
+    body_text = [
+        item
+        for item in scene.elements
+        if isinstance(item, SceneTextElement) and ".authored.long-title-" in item.element_id
+    ]
+    assert "\n" in title.text
+    assert title.style is not None and 28 <= title.style.font_size <= 30
+    assert max(item.style.font_size for item in body_text if item.style is not None) <= 24
+    assert isinstance(panel, SceneShapeElement) and panel.shape == "rect"
+    assert isinstance(divider, SceneShapeElement)
+    assert len(body_text) == 2
+    assert body_text[0].bounds.right < body_text[1].bounds.x
+    assert all(item.style is not None and item.style.font_size >= 16 for item in body_text)
+
+
 def test_company_standard_swap_keeps_raw_scene_elements_byte_identical() -> None:
     first_contract = _contract()
     second_contract = _company_variant_contract()

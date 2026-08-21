@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 from hashlib import sha256
 from io import BytesIO
+from zipfile import ZipFile
 
 import pytest
 from pptx import Presentation
@@ -61,6 +62,55 @@ def _capabilities() -> list[SceneCapability]:
         )
         for kind in ("text", "image", "shape", "connector", "table", "chart", "group")
     ]
+
+
+def test_measured_multiline_title_disables_powerpoint_shape_autofit() -> None:
+    slide = seal_slide_scene(
+        slide_id="slide:measured-title",
+        revision=1,
+        elements=[
+            SceneTextElement(
+                kind="text",
+                element_id="element:measured-title.title",
+                z_order=1,
+                bounds=Rect(x=72, y=60, width=816, height=140),
+                semantic_role="title",
+                editability=SceneEditability(),
+                text="긴 한글 제목과 中文日本語\nPowerPoint 품질 검증",
+                style=SceneTextStyle(
+                    font_family="Malgun Gothic",
+                    font_size=30,
+                    font_weight=700,
+                    color="#102A56",
+                    text_align="left",
+                    vertical_align="top",
+                ),
+            )
+        ],
+    )
+    scene = seal_deck_scene(
+        deck_id="deck:measured-title",
+        revision=1,
+        composition_digest=f"sha256:{'1' * 64}",
+        source_digest=f"sha256:{'2' * 64}",
+        slides=[slide],
+        capabilities=_capabilities(),
+    )
+    content, _ = materialize_scene_pptx(
+        scene.model_dump(mode="json", by_alias=True),
+        [],
+        {
+            "slideSizePx": {"width": 960, "height": 540},
+            "tokens": {"color.background": "#F7F9FC"},
+            "furniture": [],
+        },
+    )
+
+    with ZipFile(BytesIO(content)) as package:
+        slide_xml = package.read("ppt/slides/slide1.xml").decode("utf-8")
+    assert "<a:noAutofit/>" in slide_xml
+    assert "<a:spAutoFit/>" not in slide_xml
+    assert slide_xml.count('<a:rPr sz="3000"') == 2
 
 
 def test_scene_materializes_digest_verified_image_table_and_chart_as_native_objects() -> None:

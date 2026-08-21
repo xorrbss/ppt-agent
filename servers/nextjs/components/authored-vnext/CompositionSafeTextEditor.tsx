@@ -4,6 +4,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type CSSProperties,
   type CompositionEvent,
   type KeyboardEvent,
 } from "react";
@@ -14,6 +15,7 @@ export interface CompositionSafeTextEditorProps {
   disabled?: boolean;
   multiline?: boolean;
   className?: string;
+  style?: CSSProperties;
   onCommit: (value: string) => void;
 }
 
@@ -23,6 +25,7 @@ export function CompositionSafeTextEditor({
   disabled = false,
   multiline = true,
   className = "",
+  style,
   onCommit,
 }: CompositionSafeTextEditorProps) {
   const [draft, setDraft] = useState(value);
@@ -78,6 +81,7 @@ export function CompositionSafeTextEditor({
       onKeyDown={handleKeyDown}
       rows={multiline ? 3 : 1}
       spellCheck
+      style={style}
       value={draft}
     />
   );

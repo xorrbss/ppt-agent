@@ -25,7 +25,7 @@ from pptx.chart.data import ChartData
 from pptx.dml.color import RGBColor
 from pptx.enum.chart import XL_CHART_TYPE
 from pptx.enum.shapes import MSO_AUTO_SHAPE_TYPE, MSO_SHAPE_TYPE
-from pptx.enum.text import PP_ALIGN, MSO_VERTICAL_ANCHOR
+from pptx.enum.text import MSO_AUTO_SIZE, PP_ALIGN, MSO_VERTICAL_ANCHOR
 from pptx.parts.image import Image as PptxImage
 from pptx.util import Inches, Pt
 
@@ -507,6 +507,12 @@ def _apply_text(shape: Any, element: dict[str, Any]) -> None:
     frame = shape.text_frame
     frame.clear()
     frame.word_wrap = True
+    if element.get("semanticRole") == "title":
+        # Scene compilation has already measured and fitted title copy.  The
+        # python-pptx default is SHAPE_TO_FIT_TEXT (<a:spAutoFit/>), which lets
+        # desktop PowerPoint resize a multi-line CJK title after generation and
+        # destroys the approved hierarchy.  Preserve the measured native size.
+        frame.auto_size = MSO_AUTO_SIZE.NONE
     frame.margin_left = Pt(2)
     frame.margin_right = Pt(2)
     frame.margin_top = Pt(1)
@@ -525,11 +531,18 @@ def _apply_text(shape: Any, element: dict[str, Any]) -> None:
         "right": PP_ALIGN.RIGHT,
         "justify": PP_ALIGN.JUSTIFY,
     }.get(style.get("textAlign"), PP_ALIGN.LEFT)
-    source_runs = runs or [{"text": text}]
-    for item in source_runs:
-        run = paragraph.add_run() if runs else paragraph.runs[0]
-        if runs:
+    if runs:
+        target_runs = []
+        for item in runs:
+            run = paragraph.add_run()
             run.text = str(item["text"])
+            target_runs.append((run, item))
+    else:
+        # Assigning text with explicit line breaks makes python-pptx create one
+        # run per visual line.  Style every generated run; styling only index 0
+        # leaves later Korean/CJK lines at the Office theme default.
+        target_runs = [(run, {"text": run.text}) for run in paragraph.runs]
+    for run, item in target_runs:
         run.font.name = str(item.get("fontFamily") or style.get("fontFamily") or "Aptos")
         font_size = item.get("fontSize") or item.get("fontPt") or style.get("fontSize") or style.get("fontPt")
         if font_size is not None:

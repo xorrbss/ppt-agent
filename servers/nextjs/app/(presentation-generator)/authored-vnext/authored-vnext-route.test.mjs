@@ -24,5 +24,8 @@ test("flow wires Master publish, ten-slide creation, typed outbox, conflict and 
   assert.match(source, /operation\/enqueue/);
   assert.match(callbacksSource, /conflict\/rebaseSucceeded/);
   assert.match(source, /export\.requested/);
+  assert.match(source, /Re-read the publication head at click time/);
+  assert.match(actionsSource, /deck\.scene\?\.assetManifest/);
+  assert.match(actionsSource, /expectedAssetDigests:\s*\[\.\.\.new Set/);
   assert.doesNotMatch(source, /dangerouslySetInnerHTML|\.innerHTML|slides\s*:\s*any/);
 });

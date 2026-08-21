@@ -509,24 +509,37 @@ export default function AuthoredVnextFlowClient() {
   };
 
   const exportDeck = async () => {
-    if (!canonicalDeck) return;
-    await exportDeckAction({
-      deck: canonicalDeck,
-      contract,
-      artifact,
-      createOperationId,
-      requested: (requestId) =>
-        dispatchFlow({ type: "export.requested", requestId, format: "pptx" }),
-      queued: (requestId) => dispatchFlow({ type: "export.queued", requestId }),
-      failed: (requestId, code) =>
-        dispatchFlow({
-          type: "export.failed",
-          requestId,
-          error: { code, message: code, retryable: true },
-        }),
-      setArtifact,
-      notice: (key, values) => setNotice(t(key, values)),
-    });
+    const deckId = canonicalDeck?.deckId ?? new URL(window.location.href)
+      .searchParams.get("authoredDeckId");
+    if (!deckId) return;
+    try {
+      // Re-read the publication head at click time.  Workbench commands update
+      // React and SQLite asynchronously; exporting a render-time closure can
+      // otherwise submit the pre-save revision or return early after restore.
+      const current = await generationClient.getDeck(deckId);
+      setCanonicalDeck(current.deck);
+      await exportDeckAction({
+        deck: current.deck,
+        contract,
+        artifact,
+        createOperationId,
+        requested: (requestId) =>
+          dispatchFlow({ type: "export.requested", requestId, format: "pptx" }),
+        queued: (requestId) => dispatchFlow({ type: "export.queued", requestId }),
+        failed: (requestId, code) =>
+          dispatchFlow({
+            type: "export.failed",
+            requestId,
+            error: { code, message: code, retryable: true },
+          }),
+        setArtifact,
+        notice: (key, values) => setNotice(t(key, values)),
+      });
+    } catch (error) {
+      setNotice(t("errors.export", {
+        code: error instanceof Error ? error.message : "authored_vnext_export_failed",
+      }));
+    }
   };
 
   const callbacks = flowClientCallbacks({ accept: () => void acceptCandidate(), canonicalDeck, contract, createOperationId, dispatch: dispatchWorkbench, enqueue: enqueueCommand, exportDeck: () => void exportDeck(), onDiscardError: (code) => setNotice(t("errors.discard", { code })), reject: () => setCandidate(null), reorder: (slideId, target) => { if (canonicalDeck) void reorderDeck({ deck: canonicalDeck, slideId, targetPosition: target, createOperationId, loadDeck: loadCanonicalDeck, notice: (key, values) => setNotice(t(key, values)) }); }, rollback: () => void rollbackLatest(), setCanonicalDeck, setSelectedElementId, workbench });

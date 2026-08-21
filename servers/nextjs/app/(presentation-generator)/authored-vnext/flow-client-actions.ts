@@ -231,7 +231,10 @@ export async function exportDeck({
       expectedMasterDigest: deck.master.masterDigest,
       expectedActiveArtifactRevision: artifact?.revision ?? 0,
       expectedActiveArtifactDigest: artifact?.digest ?? null,
-      expectedAssetDigests: masterAssetDigests(contract),
+      expectedAssetDigests: [...new Set([
+        ...masterAssetDigests(contract),
+        ...(deck.scene?.assetManifest ?? []).map((asset) => asset.assetDigest),
+      ])],
       expectedFontDigest: deck.master.fontManifestDigest,
       idempotencyKey: `${operationId}:export`,
       operationFence: 1,

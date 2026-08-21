@@ -533,6 +533,7 @@ def _fit_text_style(
     style: SceneTextStyle,
     minimum_font_pt: float,
     consumer: str,
+    maximum_lines: int | None = None,
 ) -> SceneTextStyle:
     if style.font_size is None:
         raise ValueError(f"{consumer} has no font size")
@@ -540,12 +541,28 @@ def _fit_text_style(
     minimum = min(candidate, max(8.0, float(minimum_font_pt)))
     while candidate + 1e-9 >= minimum:
         measured = style.model_copy(update={"font_size": round(candidate, 2)})
-        if _estimated_wrapped_text_height(
+        estimated_height = _estimated_wrapped_text_height(
             text,
             style=measured,
             width=bounds.width,
             contract=contract,
-        ) <= bounds.height:
+        )
+        if maximum_lines is not None:
+            if measured.font_family is None or measured.font_size is None:
+                raise ValueError(f"{consumer} has incomplete measured typography")
+            font = _measurement_font(
+                _measurement_font_path(contract, measured.font_family),
+                max(1, round(measured.font_size * (96.0 / 72.0))),
+            )
+            line_count = _actual_wrapped_line_count(
+                text,
+                font=font,
+                width=bounds.width,
+            )
+            if line_count == 0 or line_count > maximum_lines:
+                candidate -= 0.5
+                continue
+        if estimated_height <= bounds.height:
             return measured
         candidate -= 0.5
     raise SceneTextFitError(
@@ -984,174 +1001,80 @@ def _compose_cover(
             start += take
     else:
         parts = source_parts
-    if len(parts) == 1:
-        panel = _subrect(bounds, x=0.03, y=0.12, width=0.94, height=0.76)
-        text_bounds = _subrect(bounds, x=0.085, y=0.25, width=0.83, height=0.48)
-        style = _fit_text_style(
-            contract=contract,
-            text=body.text,
-            bounds=text_bounds,
-            style=_emphasis_style(
-                contract,
-                body.semantic_role,
-                preferred_font_pt=28.0,
-            ),
-            minimum_font_pt=_CANONICAL_BODY_MIN_FONT_PT,
-            consumer="cover",
-        )
-        _require_readable_panel(
-            panel=panel,
-            text_bounds=text_bounds,
-            text=body.text,
-            style=style,
-            consumer="cover",
-            minimum_panel_height=110,
-            minimum_text_height=70,
-            contract=contract,
-        )
-        return [
-            _shape(
-                slide_id=slide_id,
-                suffix="cover-body-panel",
-                z_order=5,
-                bounds=panel,
-                semantic_role="heroPanel",
-                shape="roundRect",
-                fill=surface,
-                stroke=accent,
-                stroke_width=2,
-            ),
-            _shape(
-                slide_id=slide_id,
-                suffix="cover-accent-rule",
-                z_order=6,
-                bounds=_subrect(bounds, x=0.03, y=0.04, width=0.22, height=0.025),
-                semantic_role="heroRule",
-                shape="rect",
-                fill=accent,
-            ),
-            _text(
-                slide_id=slide_id,
-                suffix="cover-body",
-                z_order=20,
-                bounds=text_bounds,
-                semantic_role="body",
-                text=body.text,
-                style=style,
-                text_editable=True,
-            ),
-        ]
-
-    count = len(parts)
-    columns = 2 if count == 4 else count
-    rows = 2 if count == 4 else 1
-    horizontal_gap = 0.022
-    vertical_gap = 0.04
-    width = (0.94 - horizontal_gap * (columns - 1)) / columns
-    height = (0.76 - vertical_gap * (rows - 1)) / rows
-    wide_last_card = count == 4 and len(_normalized_copy(parts[-1])) > 72
-    cover_grid = (
-        (
-            (0.03, 0.04, 0.30, 0.36),
-            (0.35, 0.04, 0.30, 0.36),
-            (0.67, 0.04, 0.30, 0.36),
-            (0.03, 0.44, 0.94, 0.48),
-        )
-        if wide_last_card
-        else (
-            (0.03, 0.10, 0.459, 0.35),
-            (0.511, 0.10, 0.459, 0.35),
-            (0.03, 0.49, 0.459, 0.35),
-            (0.511, 0.49, 0.459, 0.35),
-        )
-        if count == 4
-        else ()
+    # A cover is a single editorial statement, not a dashboard. Preserve the
+    # source fragments as explicit lines inside one field so evidence phrases
+    # do not become a grid of interchangeable cards.
+    if len(parts) == 4:
+        # Metric-led covers read as one typographic statement: the two headline
+        # measures form the first line and the capability proof closes it.
+        editorial_copy = f"{parts[0]}     {parts[1]}\n{parts[2]}  ·  {parts[3]}"
+    else:
+        editorial_copy = "\n".join(parts)
+    field = _subrect(bounds, x=0.03, y=0.13, width=0.94, height=0.74)
+    text_bounds = _subrect(bounds, x=0.095, y=0.22, width=0.81, height=0.56)
+    style = _fit_text_style(
+        contract=contract,
+        text=editorial_copy,
+        bounds=text_bounds,
+        style=_emphasis_style(
+            contract,
+            body.semantic_role,
+            preferred_font_pt=28.0 if len(parts) <= 4 else 22.0,
+        ).model_copy(update={"vertical_align": "middle"}),
+        minimum_font_pt=_CANONICAL_BODY_MIN_FONT_PT,
+        consumer="cover editorial statement",
+        maximum_lines=max(1, editorial_copy.count("\n") + 1),
     )
-    elements: list[SceneElement] = []
-    for index, part in enumerate(parts):
-        if cover_grid:
-            x, y, width, height = cover_grid[index]
-        else:
-            column = index % columns
-            row = index // columns
-            x = 0.03 + column * (width + horizontal_gap)
-            y = 0.12 + row * (height + vertical_gap)
-        panel = _subrect(bounds, x=x, y=y, width=width, height=height)
-        text_bounds = _subrect(
-            bounds,
-            x=x + width * (0.05 if cover_grid else 0.07),
-            y=y + height * (0.08 if cover_grid else 0.16),
-            width=width * (0.90 if cover_grid else 0.86),
-            height=height * (0.84 if cover_grid else 0.68),
-        )
-        style = _fit_text_style(
-            contract=contract,
-            text=part,
+    _require_readable_panel(
+        panel=field,
+        text_bounds=text_bounds,
+        text=editorial_copy,
+        style=style,
+        consumer="cover editorial statement",
+        minimum_panel_height=110,
+        minimum_text_height=72,
+        minimum_text_width=760,
+        contract=contract,
+    )
+    return [
+        _shape(
+            slide_id=slide_id,
+            suffix="cover-editorial-field",
+            z_order=5,
+            bounds=field,
+            semantic_role="heroField",
+            shape="rect",
+            fill=surface,
+        ),
+        _shape(
+            slide_id=slide_id,
+            suffix="cover-accent-rail",
+            z_order=6,
+            bounds=_subrect(bounds, x=0.03, y=0.13, width=0.014, height=0.74),
+            semantic_role="heroAccent",
+            shape="rect",
+            fill=accent,
+        ),
+        _shape(
+            slide_id=slide_id,
+            suffix="cover-accent-rule",
+            z_order=7,
+            bounds=_subrect(bounds, x=0.03, y=0.04, width=0.24, height=0.018),
+            semantic_role="heroAccent",
+            shape="rect",
+            fill=accent,
+        ),
+        _text(
+            slide_id=slide_id,
+            suffix="cover-editorial-body",
+            z_order=20,
             bounds=text_bounds,
-            style=_emphasis_style(
-                contract,
-                body.semantic_role,
-                preferred_font_pt=22.0,
-            ).model_copy(update={"vertical_align": "middle"}),
-            minimum_font_pt=_CANONICAL_BODY_MIN_FONT_PT,
-            consumer=f"cover evidence {index + 1}",
-        )
-        _require_readable_panel(
-            panel=panel,
-            text_bounds=text_bounds,
-            text=part,
+            semantic_role="body",
+            text=editorial_copy,
             style=style,
-            consumer=f"cover evidence {index + 1}",
-            minimum_panel_height=(
-                60 if wide_last_card and index < 3 else 88 if cover_grid else 110
-            ),
-            minimum_text_height=(
-                42 if wide_last_card and index < 3 else 48 if cover_grid else 60
-            ),
-            minimum_inset=4 if wide_last_card and index < 3 else 6 if cover_grid else 8,
-            contract=contract,
-        )
-        elements.extend(
-            [
-                _shape(
-                    slide_id=slide_id,
-                    suffix=f"cover-evidence-{index + 1}-panel",
-                    z_order=5 + index,
-                    bounds=panel,
-                    semantic_role="heroEvidence",
-                    shape="roundRect",
-                    fill=surface,
-                    stroke=_CANONICAL_BODY_COLORS["divider"],
-                    stroke_width=1,
-                ),
-                _shape(
-                    slide_id=slide_id,
-                    suffix=f"cover-evidence-{index + 1}-rule",
-                    z_order=10 + index,
-                    bounds=_subrect(
-                        bounds,
-                        x=x,
-                        y=max(0.0, y - 0.025),
-                        width=width,
-                        height=0.015,
-                    ),
-                    semantic_role="heroEvidenceRule",
-                    shape="rect",
-                    fill=accent,
-                ),
-                _text(
-                    slide_id=slide_id,
-                    suffix=f"cover-evidence-{index + 1}-body",
-                    z_order=20 + index,
-                    bounds=text_bounds,
-                    semantic_role="body" if index == 0 else "heroEvidenceBody",
-                    text=part,
-                    style=style,
-                    text_editable=True,
-                ),
-            ]
-        )
-    return elements
+            text_editable=True,
+        ),
+    ]
 
 
 def _compose_section(
@@ -1404,6 +1327,99 @@ def _compose_process(
         raise ValueError("authored_vnext_process_requires_at_least_two_steps")
     bounds = body.bounds
     count = len(parts)
+    if count == 3:
+        # The common three-step case gets an ascending editorial silhouette.
+        # The aligned baseline still communicates sequence while unequal step
+        # heights avoid another row of interchangeable UI cards.
+        step_specs = (
+            (0.005, 0.36, 0.32, 0.55),
+            (0.34, 0.22, 0.32, 0.69),
+            (0.675, 0.08, 0.32, 0.83),
+        )
+        style_base = _body_style(contract, body.semantic_role).model_copy(
+            update={"font_size": 20.0, "vertical_align": "middle"}
+        )
+        elements: list[SceneElement] = [
+            _shape(
+                slide_id=slide_id,
+                suffix="process-axis",
+                z_order=3,
+                bounds=_subrect(bounds, x=0.01, y=0.91, width=0.98, height=0.012),
+                semantic_role="processAxis",
+                shape="rect",
+                fill=_CANONICAL_BODY_COLORS["accent"],
+            )
+        ]
+        for index, (part, (x, y, width, height)) in enumerate(
+            zip(parts, step_specs, strict=True)
+        ):
+            panel = _subrect(bounds, x=x, y=y, width=width, height=height)
+            marker = _subrect(
+                bounds,
+                x=x + 0.025,
+                y=max(0.015, y - 0.035),
+                width=0.055,
+                height=0.13,
+            )
+            text_bounds = _subrect(
+                bounds,
+                x=x + 0.045,
+                y=y + 0.18 * height,
+                width=width - 0.09,
+                height=height * 0.68,
+            )
+            style = _fit_text_style(
+                contract=contract,
+                text=part,
+                bounds=text_bounds,
+                style=style_base,
+                minimum_font_pt=_CANONICAL_BODY_MIN_FONT_PT,
+                consumer=f"ascending process step {index + 1}",
+            )
+            _require_readable_panel(
+                panel=panel,
+                text_bounds=text_bounds,
+                text=part,
+                style=style,
+                consumer=f"ascending process step {index + 1}",
+                minimum_panel_height=110,
+                minimum_text_height=58,
+                minimum_inset=8,
+                contract=contract,
+            )
+            elements.extend(
+                [
+                    _shape(
+                        slide_id=slide_id,
+                        suffix=f"process-{index + 1}-step",
+                        z_order=5 + index,
+                        bounds=panel,
+                        semantic_role="processStep",
+                        shape="rect",
+                        fill=_CANONICAL_BODY_COLORS["surface"],
+                    ),
+                    _shape(
+                        slide_id=slide_id,
+                        suffix=f"process-{index + 1}-marker",
+                        z_order=10 + index,
+                        bounds=marker,
+                        semantic_role="processMarker",
+                        shape="ellipse",
+                        fill=_CANONICAL_BODY_COLORS["accent"],
+                    ),
+                    _text(
+                        slide_id=slide_id,
+                        suffix=f"process-{index + 1}-body",
+                        z_order=20 + index,
+                        bounds=text_bounds,
+                        semantic_role="body" if index == 0 else "processBody",
+                        text=part,
+                        style=style,
+                        text_editable=True,
+                    ),
+                ]
+            )
+        return elements
     gap = 0.022
     width = (0.94 - gap * (count - 1)) / count
     style_base = _body_style(contract, body.semantic_role).model_copy(
@@ -2206,27 +2222,27 @@ def _compose_long_title(
 ) -> list[SceneElement]:
     bounds = body.bounds
     accent = _CANONICAL_BODY_COLORS["accent"]
-    panel = _subrect(bounds, x=0.03, y=0.13, width=0.94, height=0.75)
+    panel = _subrect(bounds, x=0.03, y=0.14, width=0.94, height=0.72)
     heading, separator, detail = body.text.partition(":")
     split_hierarchy = bool(separator and heading.strip() and detail.strip())
     if split_hierarchy:
         text_specs = [
             (
                 "label",
-                _subrect(bounds, x=0.085, y=0.25, width=0.83, height=0.16),
+                _subrect(bounds, x=0.085, y=0.29, width=0.25, height=0.42),
                 f"{heading.strip()}:",
                 _emphasis_style(
                     contract,
                     body.semantic_role,
-                    preferred_font_pt=28.0,
-                ),
+                    preferred_font_pt=24.0,
+                ).model_copy(update={"vertical_align": "middle"}),
             ),
             (
                 "detail",
-                _subrect(bounds, x=0.085, y=0.45, width=0.83, height=0.27),
+                _subrect(bounds, x=0.40, y=0.25, width=0.515, height=0.50),
                 detail.strip(),
                 _body_style(contract, body.semantic_role).model_copy(
-                    update={"font_size": 20.0}
+                    update={"font_size": 21.0, "vertical_align": "middle"}
                 ),
             ),
         ]
@@ -2234,7 +2250,7 @@ def _compose_long_title(
         text_specs = [
             (
                 "body",
-                _subrect(bounds, x=0.085, y=0.28, width=0.83, height=0.43),
+                _subrect(bounds, x=0.085, y=0.25, width=0.83, height=0.50),
                 body.text,
                 _emphasis_style(
                     contract,
@@ -2280,21 +2296,31 @@ def _compose_long_title(
             z_order=6,
             bounds=panel,
             semantic_role="longTitlePanel",
-            shape="roundRect",
+            shape="rect",
             fill=_CANONICAL_BODY_COLORS["surface"],
-            stroke=_CANONICAL_BODY_COLORS["divider"],
-            stroke_width=1,
         ),
         _shape(
             slide_id=slide_id,
             suffix="long-title-rail",
             z_order=7,
-            bounds=_subrect(bounds, x=0.03, y=0.13, width=0.014, height=0.75),
+            bounds=_subrect(bounds, x=0.03, y=0.14, width=0.014, height=0.72),
             semantic_role="longTitleAccent",
             shape="rect",
             fill=accent,
         ),
     ]
+    if split_hierarchy:
+        elements.append(
+            _shape(
+                slide_id=slide_id,
+                suffix="long-title-divider",
+                z_order=8,
+                bounds=_subrect(bounds, x=0.365, y=0.24, width=0.004, height=0.52),
+                semantic_role="longTitleAccent",
+                shape="rect",
+                fill=_CANONICAL_BODY_COLORS["divider"],
+            )
+        )
     for index, (suffix, text_bounds, text, style) in enumerate(fitted_specs):
         elements.append(
             _text(
@@ -2363,7 +2389,20 @@ def _compose_authored_body(
             contract=contract,
             structured_inputs=structured_inputs,
         )
-        if intent.archetype == "process":
+        if (
+            len(slide.title.lines) > 1
+            and intent.archetype == "card"
+            and intent.cjk_ratio >= 0.35
+        ):
+            # Long mixed-CJK editorial slides can legitimately retain a
+            # standard source role.  Choose the composition from the measured
+            # content, while leaving explicit process/data/native roles intact.
+            composed = _compose_long_title(
+                slide_id=slide_id,
+                body=body,
+                contract=contract,
+            )
+        elif intent.archetype == "process":
             composed = _compose_process(
                 slide_id=slide_id,
                 body=body,
@@ -2465,9 +2504,24 @@ def compile_slide_scene(
         element.element_id: _scene_element_id(slide.slide_id, element.element_id)
         for element in visual_plan.elements
     }
+    preferred_title_pt, minimum_title_pt = {
+        "cover": (52.0, 35.0),
+        "section": (48.0, 35.0),
+        # Long Korean/CJK titles need a wider Office font-metric safety margin
+        # than Latin headings.  Thirty points still clears the authored title
+        # floor while keeping every explicit planner line at one native size.
+        "longTitle": (30.0, 28.0),
+        "standard": (40.0, 35.0),
+    }[visual_plan.role]
+    if len(slide.title.lines) > 1:
+        # The outline planner may retain a content layout for a long mixed-CJK
+        # title.  Honor its explicit multi-line decision without violating the
+        # 28pt long-title floor used by the canonical authored composition.
+        preferred_title_pt = min(preferred_title_pt, 30.0)
+        minimum_title_pt = min(minimum_title_pt, 28.0)
     title_style = SceneTextStyle(
         font_family=_CANONICAL_BODY_FONT,
-        font_size=38.0,
+        font_size=preferred_title_pt,
         font_weight=700,
         color=_contrasting_authored_color(
             contract,
@@ -2477,13 +2531,18 @@ def compile_slide_scene(
         text_align="left",
         vertical_align="top",
     )
+    # Preserve the planner's explicit CJK/kinsoku line decisions in the Scene.
+    # A one-line title therefore remains one line in preview and native export
+    # instead of being silently reflowed by a different host text engine.
+    title_text = "\n".join(slide.title.lines)
     title_style = _fit_text_style(
         contract=contract,
-        text=slide.title.text,
+        text=title_text,
         bounds=safe_title_bounds,
         style=title_style,
-        minimum_font_pt=28.0,
+        minimum_font_pt=minimum_title_pt,
         consumer="title",
+        maximum_lines=len(slide.title.lines),
     )
     elements: list[SceneElement] = [
         SceneTextElement(
@@ -2497,7 +2556,7 @@ def compile_slide_scene(
             # recomputed in the same CAS transaction. Advertising editability
             # while the mutation service rejects it would be a false capability.
             editability=SceneEditability(),
-            text=slide.title.text,
+            text=title_text,
             style=title_style,
         )
     ]

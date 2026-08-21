@@ -7,6 +7,7 @@ import { CompositionSafeTextEditor } from "./CompositionSafeTextEditor";
 import type {
   ActiveSlideScene,
   BodyLayerElement,
+  CanvasElementStyle,
   ElementBounds,
   SlideOutlineItem,
   WorkbenchEntityId,
@@ -145,6 +146,30 @@ function bodyFallback(element: BodyLayerElement) {
   return null;
 }
 
+function textPaint(style?: CanvasElementStyle): CSSProperties {
+  return {
+    color: style?.color,
+    fontFamily: style?.fontFamily,
+    fontSize: style?.fontSize,
+    fontWeight: style?.fontWeight,
+    lineHeight: 1.25,
+    overflowWrap: "anywhere",
+    textAlign: style?.textAlign,
+    whiteSpace: "pre-wrap",
+    wordBreak: "keep-all",
+  };
+}
+
+function masterFallback(element: ActiveSlideScene["masterElements"][number]) {
+  if (element.kind === "line") {
+    return <span className="block h-full w-full border-t-2" style={{ borderColor: element.style?.borderColor ?? element.style?.color ?? "#64748b" }} />;
+  }
+  if (element.kind === "shape") {
+    return <span className="block h-full w-full border" style={{ backgroundColor: element.style?.backgroundColor, borderColor: element.style?.borderColor ?? "#64748b" }} />;
+  }
+  return "text" in element ? element.text : null;
+}
+
 export function LayeredSlideCanvas({
   scene,
   selectedElementId,
@@ -188,24 +213,19 @@ export function LayeredSlideCanvas({
               <div
                 className="absolute overflow-hidden"
                 data-locked="true"
+                data-master-kind={element.kind}
                 key={element.id}
                 style={{
                   ...percentBounds(element.bounds),
                   backgroundColor: element.style?.backgroundColor,
                   borderColor: element.style?.borderColor,
-                  color: element.style?.color,
-                  fontFamily: element.style?.fontFamily,
-                  fontSize: element.style?.fontSize,
-                  fontWeight: element.style?.fontWeight,
-                  textAlign: element.style?.textAlign,
+                  ...textPaint(element.style),
                 }}
               >
                 {element.kind === "logo" && element.assetUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img alt="" className="h-full w-full object-contain" src={element.assetUrl} />
-                ) : "text" in element ? (
-                  element.text
-                ) : null}
+                ) : masterFallback(element)}
               </div>
             ))}
           </div>
@@ -237,6 +257,7 @@ export function LayeredSlideCanvas({
                           slideId: scene.slideId,
                         })
                       }
+                      style={textPaint(element.style)}
                       value={element.text}
                     />
                   ) : (

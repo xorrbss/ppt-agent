@@ -63,7 +63,7 @@
       "language": "ko",
       "title": "검증된 이미지 asset pipeline",
       "summary": "이미지 검색 결과를 digest와 bytes로 검증하고 cover crop을 적용한다.",
-      "patterns": ["infographic"],
+      "patterns": ["image"],
       "requiredText": ["이미지 검색", "digest", "crop"]
     },
     {
@@ -72,7 +72,7 @@
       "language": "ko",
       "title": "표 데이터 네이티브 편집",
       "summary": "표 데이터와 합계를 PowerPoint 네이티브 표로 생성하고 안전하게 편집한다.",
-      "patterns": ["comparison"],
+      "patterns": ["table"],
       "requiredText": ["표 데이터", "합계", "PowerPoint"]
     },
     {
@@ -81,7 +81,7 @@
       "language": "ko",
       "title": "차트 데이터 품질 점수",
       "summary": "2026 품질 점수를 PowerPoint 네이티브 차트로 생성하고 data digest를 보존한다.",
-      "patterns": ["metric"],
+      "patterns": ["chart"],
       "requiredText": ["차트 데이터", "품질 점수", "2026"]
     },
     {
@@ -90,7 +90,7 @@
       "language": "ko-CJK",
       "title": "긴 한글 제목과 中文日本語 혼합 문장이 실제 PowerPoint에서도 안전하게 맞아야 하는 품질 검증",
       "summary": "잘림 없음: 한국어 본문과 中文 설명 및 日本語 データ를 함께 배치해 폰트 측정 기반 fit을 확인한다.",
-      "patterns": ["card", "infographic"],
+      "patterns": ["long-cjk"],
       "requiredText": ["긴 한글 제목과 中文日本語 혼합 문장", "잘림 없음"]
     }
   ]

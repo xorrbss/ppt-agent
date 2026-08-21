@@ -1,6 +1,8 @@
 import React from "react";
 import { mount } from "cypress/react";
+import { NextIntlClientProvider } from "next-intl";
 
+import koMessages from "@/i18n/messages/ko.json";
 import { AuthoredWorkbench, type AuthoredWorkbenchProps } from "./AuthoredWorkbench";
 import type { AuthoredWorkbenchCallbacks } from "./types";
 
@@ -22,6 +24,7 @@ const scene: NonNullable<AuthoredWorkbenchProps["scene"]> = {
       kind: "text",
       label: "본문 제목",
       editability: { text: true, geometry: true, asset: false, data: false },
+      style: { color: "#172554", fontFamily: "Noto Sans KR", fontSize: 26, fontWeight: 700 },
       text: "초기 제목",
     },
   ],
@@ -32,6 +35,20 @@ const scene: NonNullable<AuthoredWorkbenchProps["scene"]> = {
       kind: "text",
       label: "회사 머리글",
       text: "ACME",
+    },
+    {
+      bounds: { height: 0.02, width: 0.8, x: 0.1, y: 0.14 },
+      id: "master-divider",
+      kind: "line",
+      label: "구분선",
+      style: { borderColor: "#2563eb" },
+    },
+    {
+      bounds: { height: 0.08, width: 0.1, x: 0.82, y: 0.04 },
+      id: "master-accent",
+      kind: "shape",
+      label: "강조 영역",
+      style: { backgroundColor: "#dbeafe", borderColor: "#2563eb" },
     },
   ],
   masterRevisionLabel: "master r7",
@@ -82,10 +99,18 @@ function createProps(callbacks: Partial<AuthoredWorkbenchCallbacks> = {}): Autho
   };
 }
 
+function mountWorkbench(component: React.ReactNode) {
+  mount(
+    <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="Asia/Seoul">
+      {component}
+    </NextIntlClientProvider>,
+  );
+}
+
 describe("AuthoredWorkbench", () => {
   it("renders only the virtual rail slice and emits keyboard reorder", () => {
     const onReorderSlide = cy.stub().as("reorder");
-    mount(<AuthoredWorkbench {...createProps({ onReorderSlide })} />);
+    mountWorkbench(<AuthoredWorkbench {...createProps({ onReorderSlide })} />);
 
     cy.get('[aria-label="가상화된 슬라이드 레일"] > li').should("have.length", 5);
     cy.get('button[aria-label^="2번 슬라이드"]').focus().type("{alt}{downarrow}");
@@ -97,11 +122,15 @@ describe("AuthoredWorkbench", () => {
 
   it("keeps master furniture locked and emits composition-safe typed text patches", () => {
     const onCommand = cy.stub().as("command");
-    mount(<AuthoredWorkbench {...createProps({ onCommand })} />);
+    mountWorkbench(<AuthoredWorkbench {...createProps({ onCommand })} />);
 
     cy.get('[data-layer="master"] [data-locked="true"]').should("contain.text", "ACME");
+    cy.get('[data-master-kind="line"] > span').should("have.css", "border-top-style", "solid");
+    cy.get('[data-master-kind="shape"] > span').should("have.css", "background-color", "rgb(219, 234, 254)");
     cy.get('[data-layer="master"]').should("have.class", "pointer-events-none");
     cy.get('[data-testid="authored-layered-canvas"]').should("have.css", "background-color", "rgb(229, 231, 235)");
+    cy.get('textarea[aria-label="본문 제목 텍스트 편집"]').should("have.css", "font-family").and("contain", "Noto Sans KR");
+    cy.get('textarea[aria-label="본문 제목 텍스트 편집"]').should("have.css", "word-break", "keep-all");
     cy.get('textarea[aria-label="본문 제목 텍스트 편집"]').then(([editor]) => {
       editor.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
       (editor as HTMLTextAreaElement).value = "한글 제목";
@@ -148,9 +177,35 @@ describe("AuthoredWorkbench", () => {
           rows: 2,
           columns: 2,
         },
+        {
+          assetDigest: `sha256:${"b".repeat(64)}`,
+          assetId: "asset:hero",
+          alt: "제품 화면",
+          bounds: { height: 0.2, width: 0.2, x: 0.1, y: 0.5 },
+          crop: "cover",
+          editability: { text: false, geometry: true, asset: true, data: false },
+          fit: "cover",
+          id: "element:image",
+          kind: "asset",
+          label: "제품 화면",
+          previewUrl: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Crect width='20' height='20' fill='%232563eb'/%3E%3C/svg%3E",
+        },
+        {
+          accessibilitySummary: "분기별 매출 추이",
+          bounds: { height: 0.2, width: 0.3, x: 0.35, y: 0.5 },
+          capabilityMessage: "Scene chart preview is data-pinned; only sealed data and geometry mutations are available.",
+          chartType: "line",
+          dataDigest: `sha256:${"c".repeat(64)}`,
+          dataId: "data:chart",
+          dataPayload: { categories: ["1분기", "2분기"], series: [{ name: "매출", values: [42, 67] }] },
+          editability: { text: false, geometry: true, asset: false, data: true },
+          id: "element:chart",
+          kind: "chart",
+          label: "매출 추이",
+        },
       ],
     };
-    mount(<AuthoredWorkbench {...createProps({ onCommand })} inspector={{ context: { elementId: "element:shape", expectedRevision: 3, slideId: "slide-1" }, kind: "geometry", bounds: sceneWithObjects.bodyElements[0].bounds }} scene={sceneWithObjects} selectedElementId="element:shape" />);
+    mountWorkbench(<AuthoredWorkbench {...createProps({ onCommand })} inspector={{ context: { elementId: "element:shape", expectedRevision: 3, slideId: "slide-1" }, kind: "geometry", bounds: sceneWithObjects.bodyElements[0].bounds }} scene={sceneWithObjects} selectedElementId="element:shape" />);
 
     cy.get('[data-element-id="element:shape"]').should("be.visible");
     cy.get('input[type="number"]').first().clear().type("0.2").blur();
@@ -160,12 +215,14 @@ describe("AuthoredWorkbench", () => {
       slideId: "slide-1",
     });
     cy.contains("도입").should("be.visible");
+    cy.get('img[alt="제품 화면"]').should("have.attr", "src").and("include", "data:image/svg+xml");
+    cy.get('[data-element-id="element:chart"] [role="img"]').should("have.attr", "aria-label", "분기별 매출 추이");
   });
 
   it("offers explicit conflict rebase and body-only regeneration decisions", () => {
     const onRebaseConflict = cy.stub().as("rebase");
     const onAcceptRegeneration = cy.stub().as("accept");
-    mount(
+    mountWorkbench(
       <AuthoredWorkbench
         {...createProps({ onAcceptRegeneration, onRebaseConflict })}
         conflict={{ actualRevision: 4, canRebase: true, expectedRevision: 3, message: "다른 편집이 먼저 반영되었습니다.", operationId: "operation-1" }}
@@ -181,7 +238,7 @@ describe("AuthoredWorkbench", () => {
   });
 
   it("does not mount the workbench when the feature flag is off", () => {
-    mount(<AuthoredWorkbench {...createProps()} fallback={<p>기존 편집기</p>} featureEnabled={false} />);
+    mountWorkbench(<AuthoredWorkbench {...createProps()} fallback={<p>기존 편집기</p>} featureEnabled={false} />);
     cy.contains("기존 편집기").should("exist");
     cy.get('[data-testid="authored-workbench"]').should("not.exist");
   });

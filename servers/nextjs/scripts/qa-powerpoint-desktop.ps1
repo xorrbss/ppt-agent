@@ -10,12 +10,17 @@ $powerPointPath = "C:\Program Files\Microsoft Office\root\Office16\POWERPNT.EXE"
 if (-not (Test-Path -LiteralPath $powerPointPath -PathType Leaf)) {
   throw "PowerPoint Desktop executable was not found: $powerPointPath"
 }
+$preexisting = @(Get-Process -Name "POWERPNT" -ErrorAction SilentlyContinue)
+if ($preexisting.Count -gt 0) {
+  throw "PowerPoint Desktop must not already be running for isolated COM QA."
+}
 
 $resolvedOutput = [System.IO.Path]::GetFullPath($OutputDirectory)
 [System.IO.Directory]::CreateDirectory($resolvedOutput) | Out-Null
 $launched = Start-Process -FilePath $powerPointPath -ArgumentList "/safe" -WindowStyle Hidden -PassThru
 $application = $null
 $attachedAt = $null
+$activationMethod = "safe-mode-running-object-table"
 try {
   for ($attempt = 0; $attempt -lt 40 -and $null -eq $application; $attempt += 1) {
     Start-Sleep -Milliseconds 500
@@ -29,7 +34,39 @@ try {
     }
   }
   if ($null -eq $application) {
-    throw "The isolated PowerPoint instance did not register for COM automation."
+    # Some Click-to-Run builds start /safe successfully but never publish that
+    # process to the Running Object Table. Shut down only our exact process and
+    # use COM activation, which still launches a fresh isolated POWERPNT.EXE.
+    if (-not $launched.HasExited) {
+      Stop-Process -Id $launched.Id -Force
+      Wait-Process -Id $launched.Id -Timeout 10 -ErrorAction SilentlyContinue
+    }
+    $shutdownDeadline = (Get-Date).AddSeconds(15)
+    do {
+      $remainingPowerPoint = @(
+        Get-Process -Name "POWERPNT" -ErrorAction SilentlyContinue
+      )
+      if ($remainingPowerPoint.Count -eq 0) {
+        break
+      }
+      Start-Sleep -Milliseconds 250
+    } while ((Get-Date) -lt $shutdownDeadline)
+    if ($remainingPowerPoint.Count -ne 0) {
+      throw "Safe-mode PowerPoint did not fully exit before COM activation."
+    }
+    # Click-to-Run releases the COM class factory shortly after the process exits.
+    Start-Sleep -Seconds 3
+    $application = New-Object -ComObject "PowerPoint.Application"
+    $attachedAt = Get-Date
+    $activationMethod = "com-create-instance"
+    $freshProcesses = @(
+      Get-Process -Name "POWERPNT" -ErrorAction SilentlyContinue |
+        Where-Object { $_.StartTime -ge $attachedAt.AddSeconds(-10) }
+    )
+    if ($freshProcesses.Count -ne 1) {
+      throw "COM activation did not create exactly one fresh PowerPoint process."
+    }
+    $launched = $freshProcesses[0]
   }
 
   $results = @()
@@ -79,6 +116,7 @@ try {
   [PSCustomObject]@{
     PowerPointVersion = [string]$application.Version
     LaunchedProcessId = [int]$launched.Id
+    ActivationMethod = $activationMethod
     AttachedAt = $attachedAt.ToString("o")
     Presentations = $results
   } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (

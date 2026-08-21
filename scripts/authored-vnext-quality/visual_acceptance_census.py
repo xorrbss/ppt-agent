@@ -572,6 +572,16 @@ def _pattern_checks(
                 )
                 if not visual_role:
                     issues.append(f"pattern_infographic_visual_missing:{slide_id}")
+            elif pattern == "image" and roles["bodyImage"] < 1:
+                issues.append(f"pattern_native_image_missing:{slide_id}")
+            elif pattern == "table" and roles["bodyTable"] < 1:
+                issues.append(f"pattern_native_table_missing:{slide_id}")
+            elif pattern == "chart" and roles["bodyChart"] < 1:
+                issues.append(f"pattern_native_chart_missing:{slide_id}")
+            elif pattern == "long-cjk" and (
+                roles["longTitlePanel"] < 1 or roles["longTitleBody"] < 1
+            ):
+                issues.append(f"pattern_long_cjk_editorial_missing:{slide_id}")
     return issues, evidence
 
 
