@@ -107,10 +107,25 @@ function mountWorkbench(component: React.ReactNode) {
   );
 }
 
+function ControlledRailWorkbench({
+  onReorderSlide,
+}: {
+  onReorderSlide: AuthoredWorkbenchCallbacks["onReorderSlide"];
+}) {
+  const [startIndex, setStartIndex] = React.useState(0);
+  return (
+    <AuthoredWorkbench
+      {...createProps({ onReorderSlide })}
+      onRailWindowChange={setStartIndex}
+      railWindow={{ rowHeight: 88, startIndex, visibleCount: 3 }}
+    />
+  );
+}
+
 describe("AuthoredWorkbench", () => {
   it("renders only the virtual rail slice and emits keyboard reorder", () => {
     const onReorderSlide = cy.stub().as("reorder");
-    mountWorkbench(<AuthoredWorkbench {...createProps({ onReorderSlide })} />);
+    mountWorkbench(<ControlledRailWorkbench onReorderSlide={onReorderSlide} />);
 
     cy.get('[aria-label="가상화된 슬라이드 레일"] > li').should("have.length", 5);
     cy.get('button[aria-label^="2번 슬라이드"]').focus().type("{alt}{downarrow}");
@@ -234,7 +249,7 @@ describe("AuthoredWorkbench", () => {
     cy.get("@rebase").should("have.been.calledWith", "operation-1");
     cy.contains("button", "본문만 적용").click();
     cy.get("@accept").should("have.been.calledWith", "candidate-1");
-    cy.contains("잠긴 마스터 레이어는 후보 비교와 적용 범위에 포함되지 않습니다.").should("exist");
+    cy.contains("잠긴 Master 레이어는 후보 비교와 적용 범위에 포함되지 않습니다.").should("exist");
   });
 
   it("does not mount the workbench when the feature flag is off", () => {
