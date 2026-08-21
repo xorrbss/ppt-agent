@@ -698,11 +698,10 @@ export class PresentationGenerationApi {
     }
   }
 
-  // Authored (high-quality) mode: the model authors bespoke HTML per slide, rendered
-  // to images and assembled into an image PPTX. It bypasses the layout/stream path, so
-  // it runs through the async generate endpoint (minutes-long) and is polled to
-  // completion. The reviewed outline is passed as slides_markdown so the user's edits
-  // are honoured. Returns the async task ({ id, status, ... }).
+  // Authored-vNext runs through the canonical Scene document. The same stable
+  // elements drive preview, Workbench CAS edits, persistence/publication and
+  // native PPTX export; raster/template-only generation is not a success path.
+  // The reviewed outline is passed as slides_markdown so user edits are honoured.
   static async generateAuthoredAsync(
     body: GenerationPreferences & {
       presentation_id: string;
@@ -735,6 +734,7 @@ export class PresentationGenerationApi {
             slides_markdown: body.slides_markdown,
             ...generationPreferencesPayload(body),
             template: "authored",
+            strategy: "authored",
             export_as: "pptx",
             // Optional self-correction pass (render + vision-critique + re-author flagged).
             // OFF by default — it adds a second authoring round (~doubles time); the
@@ -761,58 +761,6 @@ export class PresentationGenerationApi {
       };
     } catch (error) {
       console.warn("error starting authored generation", error);
-      throw error;
-    }
-  }
-
-  static async generateTemplateV2Async(
-    body: GenerationPreferences & {
-      presentation_id: string;
-      content: string;
-      slides_markdown: string[];
-      template_v2_id: string;
-      template_v2_revision: number;
-      idempotency_key?: string;
-    },
-  ): Promise<StartGenerationResponse> {
-    try {
-      const response = await fetch(
-        getApiUrl(`/api/v1/ppt/presentation/generate/async`),
-        {
-          method: "POST",
-          headers: {
-            ...getHeader(),
-            ...(body.idempotency_key
-              ? { "Idempotency-Key": body.idempotency_key }
-              : {}),
-          },
-          body: JSON.stringify({
-            presentation_id: body.presentation_id,
-            content: body.content,
-            slides_markdown: body.slides_markdown,
-            ...generationPreferencesPayload(body),
-            strategy: "template_v2",
-            template_v2_id: body.template_v2_id,
-            template_v2_revision: body.template_v2_revision,
-            export_as: "pptx",
-          }),
-          cache: "no-cache",
-        },
-      );
-
-      const result = await ApiResponseHandler.handleResponse(
-        response,
-        "Failed to start structured-template generation",
-      );
-      return {
-        ...result,
-        request_id:
-          result?.request_id ||
-          response.headers.get("x-request-id") ||
-          undefined,
-      };
-    } catch (error) {
-      console.warn("error starting structured-template generation", error);
       throw error;
     }
   }
@@ -1069,5 +1017,22 @@ export class PresentationGenerationApi {
       console.error("error in icon search", error);
       throw error;
     }
+  }
+
+  /**
+   * Frozen compatibility shim. Template V2 remains import/edit/export
+   * infrastructure, but it cannot start a new product generation request.
+   */
+  static async generateTemplateV2Async(
+    _body: GenerationPreferences & {
+      presentation_id: string;
+      content: string;
+      slides_markdown: string[];
+      template_v2_id: string;
+      template_v2_revision: number;
+      idempotency_key?: string;
+    },
+  ): Promise<StartGenerationResponse> {
+    throw new Error("template_v2_new_generation_disabled");
   }
 }

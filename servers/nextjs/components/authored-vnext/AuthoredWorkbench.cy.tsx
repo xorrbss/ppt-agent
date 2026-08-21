@@ -14,12 +14,14 @@ const slides: AuthoredWorkbenchProps["slides"] = Array.from({ length: 90 }, (_, 
 }));
 
 const scene: NonNullable<AuthoredWorkbenchProps["scene"]> = {
+  backgroundColor: "#E5E7EB",
   bodyElements: [
     {
       bounds: { height: 0.2, width: 0.8, x: 0.1, y: 0.2 },
       id: "body-title",
       kind: "text",
       label: "본문 제목",
+      editability: { text: true, geometry: true, asset: false, data: false },
       text: "초기 제목",
     },
   ],
@@ -99,6 +101,7 @@ describe("AuthoredWorkbench", () => {
 
     cy.get('[data-layer="master"] [data-locked="true"]').should("contain.text", "ACME");
     cy.get('[data-layer="master"]').should("have.class", "pointer-events-none");
+    cy.get('[data-testid="authored-layered-canvas"]').should("have.css", "background-color", "rgb(229, 231, 235)");
     cy.get('textarea[aria-label="본문 제목 텍스트 편집"]').then(([editor]) => {
       editor.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
       (editor as HTMLTextAreaElement).value = "한글 제목";
@@ -116,6 +119,47 @@ describe("AuthoredWorkbench", () => {
       kind: "text.patch",
       slideId: "slide-1",
     });
+  });
+
+  it("renders a Scene shape as a selectable geometry object and exposes unsupported Scene capability boundaries", () => {
+    const onCommand = cy.stub().as("scene-command");
+    const sceneWithObjects: NonNullable<AuthoredWorkbenchProps["scene"]> = {
+      ...scene,
+      bodyElements: [
+        {
+          bounds: { height: 0.15, width: 0.2, x: 0.1, y: 0.2 },
+          editability: { text: false, geometry: true, asset: false, data: false },
+          id: "element:shape",
+          kind: "shape",
+          label: "강조 패널",
+          shape: "roundRect",
+          style: { backgroundColor: "#2563eb" },
+        },
+        {
+          bounds: { height: 0.2, width: 0.4, x: 0.4, y: 0.2 },
+          capabilityMessage: "Scene table preview is data-pinned; only sealed data and geometry mutations are available.",
+          dataId: "data:table",
+          dataDigest: `sha256:${"a".repeat(64)}`,
+          dataPayload: { cells: [["항목", "값"], ["도입", "42"]] },
+          editability: { text: false, geometry: true, asset: false, data: true },
+          id: "element:table",
+          kind: "table",
+          label: "지표 표",
+          rows: 2,
+          columns: 2,
+        },
+      ],
+    };
+    mount(<AuthoredWorkbench {...createProps({ onCommand })} inspector={{ context: { elementId: "element:shape", expectedRevision: 3, slideId: "slide-1" }, kind: "geometry", bounds: sceneWithObjects.bodyElements[0].bounds }} scene={sceneWithObjects} selectedElementId="element:shape" />);
+
+    cy.get('[data-element-id="element:shape"]').should("be.visible");
+    cy.get('input[type="number"]').first().clear().type("0.2").blur();
+    cy.get("@scene-command").its("firstCall.args.0").should("deep.include", {
+      elementId: "element:shape",
+      kind: "geometry.patch",
+      slideId: "slide-1",
+    });
+    cy.contains("도입").should("be.visible");
   });
 
   it("offers explicit conflict rebase and body-only regeneration decisions", () => {

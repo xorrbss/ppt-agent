@@ -1,5 +1,4 @@
 import type {
-  AssetBodyNode,
   AssetId,
   BodyNode,
   Bounds,
@@ -8,11 +7,17 @@ import type {
   DeckId,
   Digest,
   ElementId,
+  ElementEditability,
+  ImageBodyNode,
   LayoutApplyOperation,
   MasterId,
+  NativeChartType,
   OperationId,
   SlideDocument,
   SlideId,
+  SceneAssetReference,
+  SceneDataReference,
+  SceneDataPayload,
   TextBodyNode,
   WorkbenchOperation,
 } from "./model.ts";
@@ -59,6 +64,13 @@ function finite(value: unknown, path: string): number {
   return value;
 }
 
+function signedInteger(value: unknown, path: string): number {
+  if (!Number.isSafeInteger(value)) {
+    throw new WorkbenchParseError(path, "safe integer required");
+  }
+  return Number(value);
+}
+
 function prefixed<T extends string>(value: unknown, prefix: string, path: string): T {
   const parsed = nonEmptyString(value, path);
   if (!parsed.startsWith(prefix) || parsed.length === prefix.length) {
@@ -94,54 +106,209 @@ function casPin(value: unknown, path: string): CasPin {
   return {
     deckRevision: integer(source.deckRevision, `${path}.deckRevision`),
     deckDigest: digest(source.deckDigest, `${path}.deckDigest`),
+    sceneDigest: digest(source.sceneDigest, `${path}.sceneDigest`),
     slideRevision: integer(source.slideRevision, `${path}.slideRevision`),
+    slideDigest: digest(source.slideDigest, `${path}.slideDigest`),
     masterDigest: digest(source.masterDigest, `${path}.masterDigest`),
   };
 }
 
-function bodyNode(value: unknown, path: string): BodyNode {
+function editability(value: unknown, path: string): ElementEditability {
+  const source = record(value, path);
+  const capability = (name: keyof ElementEditability): boolean => {
+    if (typeof source[name] !== "boolean") {
+      throw new WorkbenchParseError(`${path}.${name}`, "boolean capability required");
+    }
+    return source[name] as boolean;
+  };
+  return {
+    text: capability("text"),
+    geometry: capability("geometry"),
+    asset: capability("asset"),
+    data: capability("data"),
+  };
+}
+
+function mediaType(value: unknown, path: string): SceneAssetReference["mediaType"] {
+  if (value === "image/png" || value === "image/jpeg" || value === "image/svg+xml" || value === "image/webp") return value;
+  throw new WorkbenchParseError(path, "supported image media type required");
+}
+
+function nativeChartType(value: unknown, path: string): NativeChartType {
+  if (
+    value === "bar" || value === "column" || value === "line" ||
+    value === "area" || value === "pie" || value === "donut"
+  ) return value;
+  throw new WorkbenchParseError(path, "native authored chart type required");
+}
+
+function sceneDataPayload(value: unknown, path: string): SceneDataPayload {
+  return record(value, path);
+}
+
+function sceneAssetManifest(value: unknown, path: string): readonly SceneAssetReference[] {
+  if (!Array.isArray(value)) throw new WorkbenchParseError(path, "array required");
+  const entries = value.map((item, index) => {
+    const source = record(item, `${path}[${index}]`);
+    return {
+      assetId: prefixed<AssetId>(source.assetId, "asset:", `${path}[${index}].assetId`),
+      digest: digest(source.assetDigest, `${path}[${index}].assetDigest`),
+      mediaType: mediaType(source.mediaType, `${path}[${index}].mediaType`),
+      storageReference: nonEmptyString(source.storageReference, `${path}[${index}].storageReference`),
+      sizeBytes: integer(source.sizeBytes, `${path}[${index}].sizeBytes`),
+    } satisfies SceneAssetReference;
+  });
+  if (new Set(entries.map((entry) => entry.assetId)).size !== entries.length) throw new WorkbenchParseError(path, "duplicate stable asset id");
+  return entries;
+}
+
+function sceneDataManifest(value: unknown, path: string): readonly SceneDataReference[] {
+  if (!Array.isArray(value)) throw new WorkbenchParseError(path, "array required");
+  const entries = value.map((item, index) => {
+    const source = record(item, `${path}[${index}]`);
+    const kind = source.kind;
+    if (kind !== "table" && kind !== "chart") throw new WorkbenchParseError(`${path}[${index}].kind`, "table or chart required");
+    return {
+      dataId: prefixed<`data:${string}`>(source.dataId, "data:", `${path}[${index}].dataId`),
+      digest: digest(source.dataDigest, `${path}[${index}].dataDigest`),
+      kind,
+      payload: sceneDataPayload(source.payload, `${path}[${index}].payload`),
+    } satisfies SceneDataReference;
+  });
+  if (new Set(entries.map((entry) => entry.dataId)).size !== entries.length) throw new WorkbenchParseError(path, "duplicate stable data id");
+  return entries;
+}
+
+function canonicalBodyNode(
+  value: unknown,
+  path: string,
+  assets: ReadonlyMap<AssetId, SceneAssetReference> = new Map(),
+  data: ReadonlyMap<`data:${string}`, SceneDataReference> = new Map(),
+): BodyNode {
   const source = record(value, path);
   const kind = string(source.kind, `${path}.kind`);
   const common = {
-    id: prefixed<ElementId>(source.id, "element:", `${path}.id`),
-    layer: string(source.layer, `${path}.layer`),
-    editable: source.editable,
+    id: prefixed<ElementId>(source.elementId, "element:", `${path}.elementId`),
+    // DeckSceneIR owns authored body objects only; company furniture remains
+    // in the separately pinned master contract. Older in-memory documents may
+    // include `layer`, but canonical Scene payloads intentionally do not.
+    layer: source.layer === undefined ? "body" : string(source.layer, `${path}.layer`),
+    // A canonical canvasBackground intentionally sits behind authored body
+    // content, so Scene z-order is a signed ordering key rather than a list
+    // index. Keep it exact instead of dropping the background on restore.
+    zOrder: signedInteger(source.zOrder, `${path}.zOrder`),
     bounds: bounds(source.bounds, `${path}.bounds`),
+    rotation: finite(source.rotation, `${path}.rotation`),
+    semanticRole: nonEmptyString(source.semanticRole, `${path}.semanticRole`),
+    editability: editability(source.editability, `${path}.editability`),
   };
-  if (common.layer !== "body" || common.editable !== true) {
-    throw new WorkbenchParseError(path, "only editable body nodes are canonical");
+  if (common.layer !== "body") {
+    throw new WorkbenchParseError(path, "only body-layer scene elements are editable");
   }
   if (kind === "text") {
-    const role = string(source.role, `${path}.role`);
-    if (role !== "title" && role !== "body" && role !== "caption" && role !== "source") {
-      throw new WorkbenchParseError(`${path}.role`, "unsupported text role");
-    }
-    return { ...common, kind, layer: "body", editable: true, role, text: string(source.text, `${path}.text`) } satisfies TextBodyNode;
+    const role = common.semanticRole;
+    return { ...common, kind, layer: "body", role, text: string(source.text, `${path}.text`) } satisfies TextBodyNode;
   }
-  if (kind === "asset") {
+  if (kind === "image") {
+    const assetId = prefixed<AssetId>(source.assetId, "asset:", `${path}.assetId`);
+    const assetDigest = digest(source.assetDigest, `${path}.assetDigest`);
+    const manifest = assets.get(assetId);
+    if (assets.size > 0 && (!manifest || manifest.digest !== assetDigest)) {
+      throw new WorkbenchParseError(path, "image asset must match its sealed asset manifest entry");
+    }
+    const crop = source.crop === "contain" ? "contain" : source.crop === "cover" ? "cover" : (() => { throw new WorkbenchParseError(`${path}.crop`, "contain or cover required"); })();
     return {
       ...common,
       kind,
       layer: "body",
-      editable: true,
-      assetId: prefixed<AssetId>(source.assetId, "asset:", `${path}.assetId`),
-      digest: digest(source.digest, `${path}.digest`),
+      assetId,
+      digest: assetDigest,
       altText: nonEmptyString(source.altText, `${path}.altText`),
-    } satisfies AssetBodyNode;
+      crop,
+      fit: crop,
+      ...(manifest ? { mediaType: manifest.mediaType, storageReference: manifest.storageReference, sizeBytes: manifest.sizeBytes } : {}),
+    } satisfies ImageBodyNode;
   }
-  throw new WorkbenchParseError(`${path}.kind`, "unsupported node kind");
+  if (kind === "shape") {
+    return {
+      ...common,
+      kind,
+      layer: "body",
+      shape: nonEmptyString(source.shape, `${path}.shape`),
+      ...(source.fill == null ? {} : { fill: nonEmptyString(source.fill, `${path}.fill`) }),
+      ...(source.stroke == null ? {} : { stroke: nonEmptyString(source.stroke, `${path}.stroke`) }),
+    };
+  }
+  if (kind === "connector") {
+    return {
+      ...common,
+      kind,
+      layer: "body",
+      fromElementId: prefixed<ElementId>(source.fromElementId, "element:", `${path}.fromElementId`),
+      toElementId: prefixed<ElementId>(source.toElementId, "element:", `${path}.toElementId`),
+    };
+  }
+  if (kind === "table") {
+    const dataId = prefixed<`data:${string}`>(source.dataId, "data:", `${path}.dataId`);
+    const dataDigest = digest(source.dataDigest, `${path}.dataDigest`);
+    const manifest = data.get(dataId);
+    if (data.size > 0 && (!manifest || manifest.digest !== dataDigest || manifest.kind !== "table")) throw new WorkbenchParseError(path, "table data must match its sealed data manifest entry");
+    return {
+      ...common,
+      kind,
+      layer: "body",
+      dataId,
+      dataDigest,
+      rows: integer(source.rows, `${path}.rows`),
+      columns: integer(source.columns, `${path}.columns`),
+      ...(manifest ? { dataPayload: manifest.payload } : {}),
+    };
+  }
+  if (kind === "chart") {
+    const dataId = prefixed<`data:${string}`>(source.dataId, "data:", `${path}.dataId`);
+    const dataDigest = digest(source.dataDigest, `${path}.dataDigest`);
+    const manifest = data.get(dataId);
+    if (data.size > 0 && (!manifest || manifest.digest !== dataDigest || manifest.kind !== "chart")) throw new WorkbenchParseError(path, "chart data must match its sealed data manifest entry");
+    return {
+      ...common,
+      kind,
+      layer: "body",
+      dataId,
+      dataDigest,
+      chartType: nativeChartType(source.chartType, `${path}.chartType`),
+      ...(source.accessibilitySummary === undefined ? {} : { accessibilitySummary: nonEmptyString(source.accessibilitySummary, `${path}.accessibilitySummary`) }),
+      ...(manifest ? { dataPayload: manifest.payload } : {}),
+    };
+  }
+  if (kind === "group") {
+    if (!Array.isArray(source.childElementIds) || source.childElementIds.length === 0) {
+      throw new WorkbenchParseError(`${path}.childElementIds`, "non-empty array required");
+    }
+    const childElementIds = source.childElementIds.map((item, index) => prefixed<ElementId>(item, "element:", `${path}.childElementIds[${index}]`));
+    if (new Set(childElementIds).size !== childElementIds.length) {
+      throw new WorkbenchParseError(`${path}.childElementIds`, "duplicate stable element id");
+    }
+    return { ...common, kind, layer: "body", childElementIds };
+  }
+  throw new WorkbenchParseError(`${path}.kind`, "unsupported Scene IR element kind");
 }
 
-function slide(value: unknown, path: string): SlideDocument {
+function canonicalSlide(
+  value: unknown,
+  path: string,
+  assets: ReadonlyMap<AssetId, SceneAssetReference> = new Map(),
+  data: ReadonlyMap<`data:${string}`, SceneDataReference> = new Map(),
+): SlideDocument {
   const source = record(value, path);
-  if (!Array.isArray(source.nodes)) throw new WorkbenchParseError(`${path}.nodes`, "array required");
-  const nodes = source.nodes.map((node, index) => bodyNode(node, `${path}.nodes[${index}]`));
+  if (!Array.isArray(source.elements)) throw new WorkbenchParseError(`${path}.elements`, "array required");
+  const nodes = source.elements.map((node, index) => canonicalBodyNode(node, `${path}.elements[${index}]`, assets, data));
   const ids = new Set(nodes.map((node) => node.id));
   if (ids.size !== nodes.length) throw new WorkbenchParseError(`${path}.nodes`, "duplicate stable element id");
   return {
-    id: prefixed<SlideId>(source.id, "slide:", `${path}.id`),
+    id: prefixed<SlideId>(source.slideId, "slide:", `${path}.slideId`),
     revision: integer(source.revision, `${path}.revision`),
-    layoutId: nonEmptyString(source.layoutId, `${path}.layoutId`),
+    digest: digest(source.slideDigest ?? source.digest, `${path}.slideDigest`),
+    layoutId: typeof source.layoutId === "string" && source.layoutId.trim() ? source.layoutId : "layout:scene",
     nodes,
   };
 }
@@ -156,7 +323,11 @@ export function parseDeckDocument(value: unknown): DeckDocument {
     throw new WorkbenchParseError("deck.master", "master layer must be locked");
   }
   if (!Array.isArray(source.slides)) throw new WorkbenchParseError("deck.slides", "array required");
-  const parsedSlides = source.slides.map((item, index) => slide(item, `deck.slides[${index}]`));
+  const assetManifest = source.assetManifest === undefined ? [] : sceneAssetManifest(source.assetManifest, "deck.assetManifest");
+  const dataManifest = source.dataManifest === undefined ? [] : sceneDataManifest(source.dataManifest, "deck.dataManifest");
+  const assets = new Map(assetManifest.map((entry) => [entry.assetId, entry]));
+  const data = new Map(dataManifest.map((entry) => [entry.dataId, entry]));
+  const parsedSlides = source.slides.map((item, index) => canonicalSlide(item, `deck.slides[${index}]`, assets, data));
   if (parsedSlides.length === 0) throw new WorkbenchParseError("deck.slides", "at least one slide required");
   const ids = new Set(parsedSlides.map((item) => item.id));
   if (ids.size !== parsedSlides.length) throw new WorkbenchParseError("deck.slides", "duplicate stable slide id");
@@ -165,6 +336,9 @@ export function parseDeckDocument(value: unknown): DeckDocument {
     id: prefixed<DeckId>(source.id, "deck:", "deck.id"),
     revision: integer(source.revision, "deck.revision"),
     digest: digest(source.digest, "deck.digest"),
+    sceneDigest: digest(source.sceneDigest ?? source.digest, "deck.sceneDigest"),
+    assetManifest,
+    dataManifest,
     master: {
       id: prefixed<MasterId>(master.id, "master:", "deck.master.id"),
       revision: integer(master.revision, "deck.master.revision"),
@@ -198,10 +372,13 @@ function adaptedTextNode(
     id: `element:${suffix}:${role}`,
     kind: "text",
     layer: "body",
-    editable: true,
+    zOrder: role === "title" ? 1 : 2,
     role,
     text,
     bounds: nodeBounds,
+    rotation: 0,
+    semanticRole: role,
+    editability: { text: true, geometry: true, asset: false, data: false },
   };
 }
 
@@ -234,6 +411,42 @@ export function adaptDeckSnapshotToWorkbenchDocument(
   contract?: MasterGeometryContract,
 ): DeckDocument {
   const source = record(value, "snapshot");
+  if (source.scene !== undefined) {
+    const scene = record(source.scene, "snapshot.scene");
+    if (scene.schemaVersion !== "deck-scene-ir/v1") {
+      throw new WorkbenchParseError("snapshot.scene.schemaVersion", "deck-scene-ir/v1 required");
+    }
+    if (!Array.isArray(scene.slides) || scene.slides.length === 0) {
+      throw new WorkbenchParseError("snapshot.scene.slides", "non-empty array required");
+    }
+    const master = record(source.master, "snapshot.master");
+    const assetManifest = sceneAssetManifest(scene.assetManifest, "snapshot.scene.assetManifest");
+    const dataManifest = sceneDataManifest(scene.dataManifest, "snapshot.scene.dataManifest");
+    const assets = new Map(assetManifest.map((entry) => [entry.assetId, entry]));
+    const data = new Map(dataManifest.map((entry) => [entry.dataId, entry]));
+    const slides = scene.slides.map((item, index) => canonicalSlide(item, `snapshot.scene.slides[${index}]`, assets, data));
+    const ids = new Set(slides.map((item) => item.id));
+    if (ids.size !== slides.length) throw new WorkbenchParseError("snapshot.scene.slides", "duplicate stable slide id");
+    return {
+      schemaVersion: "authored-workbench/v1",
+      id: prefixed<DeckId>(scene.deckId, "deck:", "snapshot.scene.deckId"),
+      revision: integer(scene.revision, "snapshot.scene.revision"),
+      // Deck CAS and Scene identity are separate pins. Both must survive every
+      // Workbench save; using sceneDigest as the deck CAS silently weakens it.
+      digest: digest(source.digest, "snapshot.digest"),
+      sceneDigest: digest(scene.sceneDigest ?? scene.digest, "snapshot.scene.sceneDigest"),
+      assetManifest,
+      dataManifest,
+      master: {
+        id: prefixed<MasterId>(master.masterId, "master:", "snapshot.master.masterId"),
+        revision: integer(master.masterRevision, "snapshot.master.masterRevision"),
+        digest: digest(master.masterDigest, "snapshot.master.masterDigest"),
+        layer: "master",
+        locked: true,
+      },
+      slides,
+    };
+  }
   const generation = source.schemaVersion === "deck-generation-snapshot/v1";
   if (!generation && source.schemaVersion !== "deck-document/v1") {
     throw new WorkbenchParseError("snapshot.schemaVersion", "canonical deck snapshot required");
@@ -254,6 +467,12 @@ export function adaptDeckSnapshotToWorkbenchDocument(
     return {
       id: adaptedSlideId,
       revision: integer(rawSlide.revision, `${path}.revision`),
+      digest: digest(
+        generation
+          ? rawSlide.specDigest
+          : rawSlide.slideDigest ?? rawSlide.digest ?? source.digest,
+        `${path}.digest`,
+      ),
       layoutId,
       nodes: [
         adaptedTextNode(adaptedSlideId, "title", titleText, resolvedBounds.title),
@@ -270,7 +489,10 @@ export function adaptDeckSnapshotToWorkbenchDocument(
     schemaVersion: "authored-workbench/v1",
     id: prefixed<DeckId>(source.deckId, "deck:", "snapshot.deckId"),
     revision: integer(source.revision, "snapshot.revision"),
-    digest: digest(source.digest, "snapshot.digest"),
+      digest: digest(source.digest, "snapshot.digest"),
+      sceneDigest: digest(source.sceneDigest ?? source.digest, "snapshot.sceneDigest"),
+      assetManifest: [],
+      dataManifest: [],
     master: {
       id: prefixed<MasterId>(master.masterId, "master:", "snapshot.masterId"),
       revision: integer(master.masterRevision, "snapshot.masterRevision"),
@@ -299,6 +521,7 @@ export function parseWorkbenchOperation(value: unknown): WorkbenchOperation {
     return { kind, operationId, slideId, base, elementId, bounds: bounds(source.bounds, "operation.bounds") };
   }
   if (kind === "asset.set") {
+    const crop = source.crop === "contain" ? "contain" : source.crop === "cover" ? "cover" : (() => { throw new WorkbenchParseError("operation.crop", "contain or cover required"); })();
     return {
       kind,
       operationId,
@@ -308,6 +531,27 @@ export function parseWorkbenchOperation(value: unknown): WorkbenchOperation {
       assetId: prefixed<AssetId>(source.assetId, "asset:", "operation.assetId"),
       digest: digest(source.digest, "operation.digest"),
       altText: nonEmptyString(source.altText, "operation.altText"),
+      crop,
+      ...(source.mediaType === undefined ? {} : { mediaType: mediaType(source.mediaType, "operation.mediaType") }),
+      ...(source.storageReference === undefined ? {} : { storageReference: nonEmptyString(source.storageReference, "operation.storageReference") }),
+      sizeBytes: integer(source.sizeBytes, "operation.sizeBytes"),
+    };
+  }
+  if (kind === "data.set") {
+    const dataPayload = sceneDataPayload(source.dataPayload, "operation.dataPayload");
+    return {
+      kind,
+      operationId,
+      slideId,
+      base,
+      elementId,
+      dataId: prefixed<`data:${string}`>(source.dataId, "data:", "operation.dataId"),
+      dataDigest: digest(source.dataDigest, "operation.dataDigest"),
+      dataPayload,
+      ...(source.rows === undefined ? {} : { rows: integer(source.rows, "operation.rows") }),
+      ...(source.columns === undefined ? {} : { columns: integer(source.columns, "operation.columns") }),
+      ...(source.chartType === undefined ? {} : { chartType: nativeChartType(source.chartType, "operation.chartType") }),
+      ...(source.accessibilitySummary === undefined ? {} : { accessibilitySummary: nonEmptyString(source.accessibilitySummary, "operation.accessibilitySummary") }),
     };
   }
   throw new WorkbenchParseError("operation.kind", "unsupported typed operation");

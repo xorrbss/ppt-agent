@@ -28,6 +28,23 @@ export interface GenerationDeckSnapshot {
   parentRevisionDigest?: MasterDigest | null;
   master: GenerationMasterPin;
   sourceDigest: MasterDigest;
+  scene?: {
+    schemaVersion: "deck-scene-ir/v1";
+    deckId: `deck:${string}`;
+    revision: number;
+    sceneDigest: MasterDigest;
+    compositionDigest: MasterDigest;
+    slides: Array<{
+      schemaVersion: "slide-scene-ir/v1";
+      slideId: `slide:${string}`;
+      revision: number;
+      slideDigest: MasterDigest;
+      elements: Array<Record<string, unknown>>;
+    }>;
+    assetManifest: Array<Record<string, unknown>>;
+    dataManifest: Array<Record<string, unknown>>;
+    capabilities: Array<Record<string, unknown>>;
+  } | null;
   slides: ValidatedGenerationSlide[];
   createdAt: string;
 }
@@ -56,6 +73,19 @@ export interface RegenerationResult {
   schemaVersion: "regeneration-result/v1";
   operationId: `operation:${string}`;
   candidate: RegenerationCandidate;
+  deck: GenerationDeckSnapshot;
+  quality: Record<string, unknown> & { passed: boolean };
+  publishedByCas: true;
+}
+
+export interface SceneMutationResult {
+  schemaVersion: "scene-mutation-result/v1";
+  operationId: `operation:${string}`;
+  mutation: "text.replace" | "geometry.update" | "asset.set" | "data.update";
+  slideId: `slide:${string}`;
+  elementId: `element:${string}`;
+  slideDigest: MasterDigest;
+  sceneDigest: MasterDigest;
   deck: GenerationDeckSnapshot;
   quality: Record<string, unknown> & { passed: boolean };
   publishedByCas: true;
@@ -176,6 +206,17 @@ export class AuthoredVnextGenerationClient {
       `/api/v1/ppt/authored-vnext/generation/decks/${encodeURIComponent(deckId)}/reorder`,
       { method: "POST", body: JSON.stringify({ idempotencyKey, command }) },
     ) as Promise<{ deck: GenerationDeckSnapshot }>;
+  }
+
+  mutateScene(
+    deckId: string,
+    command: Record<string, unknown>,
+    idempotencyKey: string,
+  ): Promise<SceneMutationResult> {
+    return this.request(
+      `/api/v1/ppt/authored-vnext/generation/decks/${encodeURIComponent(deckId)}/scene-mutations`,
+      { method: "POST", body: JSON.stringify({ idempotencyKey, command }) },
+    ) as Promise<SceneMutationResult>;
   }
 
   createExport(command: Record<string, unknown>): Promise<ExportJob> {

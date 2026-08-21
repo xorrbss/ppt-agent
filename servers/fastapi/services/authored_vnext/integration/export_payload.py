@@ -1,8 +1,9 @@
-"""Canonical bridge from Python DeckMaster/SlideSpec to the OOXML worker."""
+"""Canonical bridge from authored Scene IR to the native OOXML worker."""
 
 from __future__ import annotations
 
 import hashlib
+import re
 from typing import Any
 
 from models.authored_vnext.master.contract import (
@@ -14,14 +15,133 @@ from models.authored_vnext.master.contract import (
 from models.authored_vnext.deck.operations import DeckGenerationSnapshot
 from models.authored_vnext.master.slide import DeckSnapshot, SlideSpecV2
 from services.authored_vnext.master.digests import canonical_json as _canonical_json
-from services.authored_vnext.body_grammar import (
-    BODY_GRAMMAR_VALUE_KEY,
-    build_body_grammar_snapshot,
-)
 
 
 ExportableDeck = DeckSnapshot | DeckGenerationSnapshot
-RESOLVED_SNAPSHOT_EVIDENCE_VALUE_KEY = "__resolvedSnapshotEvidence"
+SCENE_SCHEMA_VERSION = "deck-scene-ir/v1"
+
+
+def _model_payload(value: Any) -> dict[str, Any]:
+    if hasattr(value, "model_dump"):
+        # Scene digests include explicit nulls from the sealed Pydantic wire
+        # model, so export must not silently normalize them away.
+        payload = value.model_dump(mode="json", by_alias=True)
+    elif isinstance(value, dict):
+        payload = dict(value)
+    else:
+        raise ValueError("authored_vnext_scene_required")
+    if not isinstance(payload, dict):
+        raise ValueError("authored_vnext_scene_required")
+    return payload
+
+
+def worker_scene(deck: ExportableDeck) -> dict[str, Any]:
+    """Return the digest-sealed canonical Scene; never synthesize title/body."""
+
+    scene_value = getattr(deck, "scene", None)
+    if scene_value is None:
+        raise ValueError("authored_vnext_scene_required")
+    scene = _model_payload(scene_value)
+    if scene.get("schemaVersion") != SCENE_SCHEMA_VERSION:
+        raise ValueError("authored_vnext_scene_schema_unsupported")
+    scene_digest = scene.get("sceneDigest") or scene.get("digest")
+    if not isinstance(scene_digest, str) or not scene_digest.startswith("sha256:"):
+        raise ValueError("authored_vnext_scene_digest_invalid")
+    digest_payload = dict(scene)
+    digest_payload.pop("sceneDigest", None)
+    digest_payload.pop("digest", None)
+    if prefixed_sha256(digest_payload) != scene_digest:
+        raise ValueError("authored_vnext_scene_digest_mismatch")
+    if scene.get("deckId") not in {None, deck.deck_id}:
+        raise ValueError("authored_vnext_scene_deck_identity_mismatch")
+    slides = scene.get("slides")
+    if not isinstance(slides, list) or not slides:
+        raise ValueError("authored_vnext_scene_slides_invalid")
+    scene_slide_ids = [
+        item.get("slideId") if isinstance(item, dict) else None for item in slides
+    ]
+    deck_slide_ids = [
+        (item.slide if isinstance(deck, DeckGenerationSnapshot) else item).slide_id
+        for item in deck.slides
+    ]
+    if scene_slide_ids != deck_slide_ids:
+        raise ValueError("authored_vnext_scene_slide_identity_mismatch")
+    composition = getattr(deck, "composition", None)
+    composition_digest = getattr(composition, "digest", None)
+    scene_composition_digest = scene.get("compositionDigest")
+    if composition is not None and scene_composition_digest != composition_digest:
+        raise ValueError("authored_vnext_scene_composition_mismatch")
+    if composition is not None:
+        scene["compositionPin"] = composition.model_dump(
+            mode="json", by_alias=True, exclude_none=True
+        )
+    scene["sceneDigest"] = scene_digest
+    return scene
+
+
+def scene_asset_references(deck: ExportableDeck) -> dict[str, dict[str, Any]]:
+    """Collect image references and optional inline bytes from canonical Scene IR."""
+
+    scene = worker_scene(deck)
+    declared: dict[str, dict[str, Any]] = {}
+    for value in scene.get("assetManifest", scene.get("assets", [])):
+        if not isinstance(value, dict):
+            raise ValueError("authored_vnext_scene_assets_invalid")
+        asset_id = value.get("assetId")
+        digest = value.get("assetDigest") or value.get("digest")
+        media_type = value.get("mediaType", "image/png")
+        size_bytes = value.get("sizeBytes")
+        if (
+            not isinstance(asset_id, str)
+            or not isinstance(digest, str)
+            or re.fullmatch(r"sha256:[0-9a-f]{64}", digest) is None
+            or media_type not in {"image/png", "image/jpeg"}
+            or isinstance(size_bytes, bool)
+            or not isinstance(size_bytes, int)
+            or size_bytes < 1
+            or size_bytes > 100_000_000
+            or asset_id in declared
+        ):
+            raise ValueError("authored_vnext_scene_assets_invalid")
+        declared[asset_id] = {
+            "assetId": asset_id,
+            "digest": digest,
+            "mediaType": media_type,
+            "sizeBytes": size_bytes,
+            **(
+                {"storageReference": value["storageReference"]}
+                if isinstance(value.get("storageReference"), str)
+                else {}
+            ),
+            **(
+                {"bytesBase64": value["bytesBase64"]}
+                if isinstance(value.get("bytesBase64"), str)
+                else {}
+            ),
+        }
+    referenced: dict[str, dict[str, Any]] = {}
+    for slide in scene["slides"]:
+        elements = slide.get("elements") if isinstance(slide, dict) else None
+        if not isinstance(elements, list):
+            raise ValueError("authored_vnext_scene_elements_invalid")
+        for element in elements:
+            if not isinstance(element, dict):
+                raise ValueError("authored_vnext_scene_element_invalid")
+            kind = element.get("kind") or element.get("type")
+            if kind != "image":
+                continue
+            asset_id = element.get("assetId")
+            digest = element.get("assetDigest")
+            if not isinstance(asset_id, str) or not isinstance(digest, str):
+                raise ValueError("authored_vnext_scene_image_asset_invalid")
+            declaration = declared.get(asset_id)
+            if declaration is None or declaration["digest"] != digest:
+                raise ValueError("authored_vnext_scene_image_asset_unavailable")
+            previous = referenced.get(asset_id)
+            if previous is not None and previous["digest"] != digest:
+                raise ValueError("authored_vnext_scene_asset_digest_mismatch")
+            referenced[asset_id] = declaration
+    return referenced
 
 
 def semantic_asset_references(contract: DeckMasterContract) -> dict[str, str]:
@@ -279,98 +399,23 @@ def worker_master_contract(
 def worker_slides(
     deck: ExportableDeck, contract: DeckMasterContract
 ) -> list[dict[str, Any]]:
-    layouts = {
-        contract.layouts.cover.id: contract.layouts.cover,
-        contract.layouts.section.id: contract.layouts.section,
-        contract.layouts.standard.id: contract.layouts.standard,
-        contract.layouts.long_title.id: contract.layouts.long_title,
-    }
+    del contract  # Scene owns authored body layout; master is furniture-only.
+    scene = worker_scene(deck)
     result: list[dict[str, Any]] = []
-    for page_index, item in enumerate(deck.slides, start=1):
-        slide: SlideSpecV2 = item.slide if isinstance(deck, DeckGenerationSnapshot) else item
-        layout = layouts.get(slide.layout_id)
-        if layout is None:
-            raise ValueError("authored_vnext_slide_layout_not_in_master")
-        values: dict[str, str] = {}
-        for slot in layout.slots:
-            role = slot.id.removeprefix("slot:")
-            if slot.role == "title":
-                values[role] = "\n".join(slide.title.lines)
-            elif slot.role in {"body", "content"}:
-                values[role] = slide.body
-            else:
-                raise ValueError("authored_vnext_slide_slot_role_unsupported")
-        body_grammar = build_body_grammar_snapshot(contract, slide)
-        if body_grammar is not None:
-            values[BODY_GRAMMAR_VALUE_KEY] = _canonical_json(body_grammar)
-            if body_grammar.get("schemaVersion") == "authored-body-grammar/v3":
-                composition = (
-                    deck.composition
-                    if isinstance(deck, DeckGenerationSnapshot)
-                    else None
-                )
-                template = (
-                    composition.authored_template
-                    if composition is not None
-                    else None
-                )
-                policy = (
-                    composition.consistency_policy
-                    if composition is not None
-                    else None
-                )
-                resolved = (
-                    template.resolved_reference_layout
-                    if template is not None
-                    else None
-                )
-                if (
-                    composition is None
-                    or template is None
-                    or policy is None
-                    or resolved is None
-                    or template.resolved_reference_layout_digest != resolved.digest
-                    or body_grammar.get("referenceLayoutDigest") != resolved.digest
-                    or body_grammar.get("referenceSourceDigest")
-                    != resolved.source_digest
-                    or body_grammar.get("digest") is None
-                ):
-                    raise ValueError(
-                        "authored_vnext_resolved_reference_layout_mismatch"
-                    )
-                semantic_roles = body_grammar.get("semanticRolesUsed")
-                if not isinstance(semantic_roles, list) or not all(
-                    isinstance(role, str) and role
-                    for role in semantic_roles
-                ):
-                    raise ValueError(
-                        "authored_vnext_resolved_reference_layout_roles_invalid"
-                    )
-                layout_roles = [
-                    str(body_grammar[key])
-                    for key in ("referenceLayoutId", "archetype", "slideRole")
-                    if isinstance(body_grammar.get(key), str)
-                ]
-                evidence = {
-                    "schemaVersion": "resolved-snapshot-evidence/v1",
-                    "resolvedTemplateId": template.retained_reference_id,
-                    "resolvedReferenceLayoutDigest": resolved.digest,
-                    "resolvedCompositionDigest": composition.digest,
-                    "resolvedRuleDigest": policy.digest,
-                    "pageNumber": page_index,
-                    "slideCount": len(deck.slides),
-                    "semanticRolesUsed": list(dict.fromkeys(semantic_roles)),
-                    "layoutRolesUsed": list(dict.fromkeys(layout_roles)),
-                    "bodyGrammarDigest": body_grammar["digest"],
-                }
-                values[RESOLVED_SNAPSHOT_EVIDENCE_VALUE_KEY] = _canonical_json(
-                    evidence
-                )
+    for scene_slide, item in zip(scene["slides"], deck.slides, strict=True):
+        slide: SlideSpecV2 = (
+            item.slide if isinstance(deck, DeckGenerationSnapshot) else item
+        )
+        layout_id = scene_slide.get("layoutId") or slide.layout_id
+        if layout_id != slide.layout_id:
+            raise ValueError("authored_vnext_scene_layout_identity_mismatch")
         result.append(
             {
-                "slideId": slide.slide_id,
-                "layoutId": slide.layout_id,
-                "values": values,
+                "slideId": scene_slide["slideId"],
+                "layoutId": layout_id,
+                # Content is never projected back to synthetic title/body values.
+                # This list remains only as the durable worker/publication index.
+                "values": {},
             }
         )
     return result
@@ -410,43 +455,60 @@ def build_worker_request(
         if asset_id in references and references[asset_id] != digest:
             raise ValueError("authored_vnext_master_asset_reference_mismatch")
         references[asset_id] = digest
+    scene_references = scene_asset_references(deck)
+    for asset_id, reference in scene_references.items():
+        digest = reference["digest"]
+        if asset_id in references and references[asset_id] != digest:
+            raise ValueError("authored_vnext_scene_asset_digest_mismatch")
+        references[asset_id] = digest
     supplied = {asset.get("assetId"): asset for asset in assets}
     if len(supplied) != len(assets) or set(supplied) != set(references):
         raise ValueError("authored_vnext_master_asset_bytes_unavailable")
     for asset_id, digest in references.items():
         asset = supplied[asset_id]
+        expected_media_type = (
+            scene_references[asset_id]["mediaType"]
+            if asset_id in scene_references
+            else "image/png"
+        )
         if (
-            asset.get("mediaType") != "image/png"
+            asset.get("mediaType") != expected_media_type
             or f"sha256:{asset.get('sha256', '')}" != digest
+            or asset.get("sizeBytes")
+            != (
+                scene_references[asset_id]["sizeBytes"]
+                if asset_id in scene_references
+                else asset.get("sizeBytes")
+            )
             or not isinstance(asset.get("bytesBase64"), str)
         ):
-            raise ValueError("authored_vnext_master_asset_digest_mismatch")
+            raise ValueError("authored_vnext_scene_asset_digest_mismatch")
     raw_asset_digests = {
         asset_id: digest.removeprefix("sha256:")
         for asset_id, digest in references.items()
     }
-    composition = (
-        deck.composition
-        if isinstance(deck, DeckGenerationSnapshot)
-        else None
-    )
+    composition = getattr(deck, "composition", None)
     mapped_master = worker_master_contract(
         master,
         raw_asset_digests,
         composition.authored_template if composition is not None else None,
     )
     slides = worker_slides(deck, master)
+    scene = worker_scene(deck)
     asset_manifest = [
         {
             "assetId": asset["assetId"],
             "mediaType": asset["mediaType"],
             "sha256": asset["sha256"],
+            "sizeBytes": asset["sizeBytes"],
         }
         for asset in assets
     ]
     digests = {
         "master": f"sha256:{raw_sha256(mapped_master)}",
-        "spec": f"sha256:{raw_sha256(slides)}",
+        # Scene is the canonical authored spec.  Worker slides are only an
+        # ordered publication index and must never regain title/body ownership.
+        "spec": scene["sceneDigest"],
         "assetManifest": f"sha256:{raw_sha256(asset_manifest)}",
         "fontManifest": f"sha256:{raw_sha256(mapped_master['fontManifest'])}",
     }
@@ -457,6 +519,7 @@ def build_worker_request(
         "fencingToken": fence_token,
         "master": mapped_master,
         "slides": slides,
+        "scene": scene,
         "assets": assets,
         "digests": {
             "masterSha256": digests["master"].removeprefix("sha256:"),

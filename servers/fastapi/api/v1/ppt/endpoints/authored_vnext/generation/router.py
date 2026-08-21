@@ -16,12 +16,16 @@ from models.authored_vnext.deck import (
     MasterDigestPin,
     RegenerationResult,
     RollbackResult,
+    SceneMutationResult,
 )
 from models.authored_vnext.deck.quality import require_published_deck_size
 from services.authored_vnext.generation.core_bridge import DurableExportPlanBridge
 from services.authored_vnext.generation.errors import GenerationPipelineError
 from services.authored_vnext.generation.pipeline import AuthoredVNextGenerationPipeline
-from services.authored_vnext.generation.mutations import reorder_deck_slides
+from services.authored_vnext.generation.mutations import (
+    mutate_scene_element,
+    reorder_deck_slides,
+)
 from services.authored_vnext.generation.sql_repository import SqlGenerationRepository
 from services.authored_vnext.integration.sql_repository import AuthoredVNextSqlRepository
 from services.authored_vnext.master.digests import canonical_digest
@@ -37,6 +41,7 @@ from .models import (
     ReorderOperationRequest,
     ResumeOperationRequest,
     RollbackOperationRequest,
+    SceneMutationOperationRequest,
 )
 
 
@@ -317,6 +322,40 @@ def reorder_slides(
             expected_digest=command.publication_fence.expected_active_revision_digest,
             result_type=DeckMutationResult,
             execute=lambda: reorder_deck_slides(repository, bridge, command),
+        )
+    except Exception as error:
+        raise _error(error) from error
+
+
+@AUTHORED_VNEXT_GENERATION_ROUTER.post(
+    "/decks/{deck_id}/scene-mutations",
+    response_model=SceneMutationResult,
+)
+def mutate_scene(
+    request: SceneMutationOperationRequest,
+    repository: Repository,
+    deck_id: str = Path(pattern=r"^deck:[a-z0-9][a-z0-9._-]*$"),
+) -> SceneMutationResult:
+    command = request.command
+    if command.deck_id != deck_id:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "authored_vnext_path_mismatch"},
+        )
+    try:
+        return _run(
+            repository,
+            command=command,
+            idempotency_key=request.idempotency_key,
+            kind=f"scene.{command.kind}",
+            expected_revision=command.publication_fence.expected_deck_revision,
+            expected_digest=command.publication_fence.expected_active_revision_digest,
+            result_type=SceneMutationResult,
+            execute=lambda: mutate_scene_element(
+                repository,
+                DurableExportPlanBridge(),
+                command,
+            ),
         )
     except Exception as error:
         raise _error(error) from error

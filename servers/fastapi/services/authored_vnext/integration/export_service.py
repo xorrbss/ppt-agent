@@ -6,6 +6,7 @@ import base64
 import binascii
 from dataclasses import dataclass
 import json
+import re
 from typing import Any
 import uuid
 
@@ -15,6 +16,8 @@ from services.authored_vnext.integration.artifact_store import (
 )
 from services.authored_vnext.integration.export_payload import (
     build_worker_request,
+    prefixed_sha256,
+    scene_asset_references,
     semantic_asset_references,
 )
 from services.authored_vnext.integration.sql_repository import (
@@ -40,6 +43,102 @@ class ExportServiceError(RuntimeError):
         super().__init__(code)
         self.code = code
         self.retryable = retryable
+
+
+_HEX_COLOR = re.compile(r"^#?([0-9a-fA-F]{6})$")
+_BACKGROUND_FURNITURE_ID = "company-standard:background"
+
+
+def _hex_color(value: object, default: str) -> str:
+    match = _HEX_COLOR.fullmatch(value) if isinstance(value, str) else None
+    return f"#{(match.group(1) if match is not None else default).upper()}"
+
+
+def _master_background_identity(master: dict[str, Any]) -> dict[str, Any]:
+    tokens = master.get("tokens")
+    if not isinstance(tokens, dict):
+        raise ExportServiceError("authored_vnext_master_background_invalid")
+    value = tokens.get("color.background")
+    if not isinstance(value, str) or _HEX_COLOR.fullmatch(value) is None:
+        raise ExportServiceError("authored_vnext_master_background_invalid")
+    color = _hex_color(value, "FFFFFF")
+    return {
+        "furnitureId": _BACKGROUND_FURNITURE_ID,
+        "kind": "background",
+        "fill": color,
+        "styleDigest": prefixed_sha256({"fill": color}),
+    }
+
+
+def _relative_luminance(color: str) -> float:
+    match = _HEX_COLOR.fullmatch(color)
+    if match is None:
+        raise ExportServiceError("authored_vnext_master_furniture_color_invalid")
+    hexadecimal = match.group(1)
+    channels = [
+        int(hexadecimal[index:index + 2], 16) / 255 for index in (0, 2, 4)
+    ]
+    linear = [
+        value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4
+        for value in channels
+    ]
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+
+def _contrast_ratio(foreground: str, background: str) -> float:
+    left = _relative_luminance(foreground)
+    right = _relative_luminance(background)
+    lighter, darker = max(left, right), min(left, right)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def _expected_furniture_text_style(
+    item: dict[str, Any], master: dict[str, Any], background_color: str
+) -> dict[str, Any]:
+    requested = _hex_color(item.get("fill") or item.get("stroke"), "111827")
+    tokens = master.get("tokens", {})
+    tokens = tokens if isinstance(tokens, dict) else {}
+    candidates = [
+        requested,
+        *(
+            _hex_color(tokens[name], "111827")
+            for name in (
+                "color.text.primary",
+                "color.text.secondary",
+                "color.accent",
+                "color.warning",
+                "color.background",
+            )
+            if name in tokens
+        ),
+    ]
+    effective = next(
+        (
+            candidate
+            for candidate in dict.fromkeys(candidates)
+            if _contrast_ratio(candidate, background_color) >= 4.5
+        ),
+        None,
+    )
+    if effective is None:
+        raise ExportServiceError(
+            "authored_vnext_master_furniture_contrast_unsupported"
+        )
+    font_manifest = master.get("fontManifest", {})
+    font_manifest = font_manifest if isinstance(font_manifest, dict) else {}
+    font_family = tokens.get("font.body") or font_manifest.get("primary") or "Aptos"
+    if not isinstance(font_family, str) or not font_family:
+        raise ExportServiceError("authored_vnext_master_furniture_font_invalid")
+    return {
+        "requestedColor": requested,
+        "effectiveColor": effective,
+        "fontFamily": font_family,
+        "contrastRatio": round(_contrast_ratio(effective, background_color), 4),
+        "contrastAdjusted": effective != requested,
+        "styleDigest": prefixed_sha256(
+            {"fontColor": effective, "fontFamily": font_family}
+        ),
+    }
 
 
 def _assert_worker_readback(
@@ -82,6 +181,202 @@ def _assert_worker_readback(
         or len(receipt["slides"]) != len(payload["slides"])
     ):
         raise ExportServiceError("authored_vnext_worker_preservation_mismatch")
+    scene = payload.get("scene")
+    actual_scene = receipt.get("scene")
+    capabilities = receipt.get("capabilities")
+    native_counts = receipt.get("nativeObjectCounts")
+    if not isinstance(scene, dict) or not isinstance(actual_scene, dict):
+        raise ExportServiceError("authored_vnext_scene_read_back_invalid")
+    expected_scene_slides: list[dict[str, Any]] = []
+    expected_counts = {"chart": 0, "image": 0, "shape": 0, "table": 0, "text": 0}
+    data_manifest = {
+        item.get("dataId"): item
+        for item in scene.get("dataManifest", [])
+        if isinstance(item, dict) and isinstance(item.get("dataId"), str)
+    }
+    furniture = payload["master"].get("furniture", [])
+    background_furniture = _master_background_identity(payload["master"])
+    background_color = background_furniture["fill"]
+    for page_number, slide in enumerate(scene.get("slides", []), start=1):
+        if not isinstance(slide, dict) or not isinstance(slide.get("elements"), list):
+            raise ExportServiceError("authored_vnext_scene_read_back_invalid")
+        elements = sorted(
+            slide["elements"],
+            key=lambda item: (item.get("zOrder", -1), item.get("elementId", "")),
+        )
+        identities = []
+        for element in elements:
+            if element.get("semanticRole") == "canvasBackground":
+                raise ExportServiceError(
+                    "authored_vnext_scene_body_background_forbidden"
+                )
+            kind = element.get("kind") or element.get("type")
+            element_id = element.get("elementId") or element.get("id")
+            if kind not in expected_counts or not isinstance(element_id, str):
+                raise ExportServiceError("authored_vnext_scene_read_back_invalid")
+            expected_counts[kind] += 1
+            identity: dict[str, Any] = {"elementId": element_id, "kind": kind}
+            if kind == "text":
+                text = element.get("text")
+                if not isinstance(text, str):
+                    raise ExportServiceError("authored_vnext_scene_read_back_invalid")
+                identity["textDigest"] = prefixed_sha256({"text": text})
+            elif kind == "image":
+                identity["assetDigest"] = element.get("assetDigest")
+            elif kind in {"table", "chart"}:
+                manifest = data_manifest.get(element.get("dataId"))
+                if (
+                    not isinstance(manifest, dict)
+                    or manifest.get("kind") != kind
+                    or manifest.get("dataDigest") != element.get("dataDigest")
+                    or not isinstance(manifest.get("payload"), dict)
+                ):
+                    raise ExportServiceError(
+                        "authored_vnext_scene_data_manifest_invalid"
+                    )
+                identity["dataDigest"] = element.get("dataDigest")
+                identity["nativeDataDigest"] = prefixed_sha256(
+                    manifest["payload"]
+                )
+            else:
+                identity["nativeKind"] = "shape"
+            identities.append(identity)
+        furniture_items: list[dict[str, Any]] = [background_furniture]
+        for item in furniture:
+            visibility = item.get("visibility", "always")
+            if (
+                visibility == "hidden"
+                or visibility == "coverOnly" and page_number != 1
+                or visibility == "exceptCover" and page_number == 1
+            ):
+                continue
+            identity: dict[str, Any] = {
+                "furnitureId": item["id"],
+                "kind": item["kind"],
+            }
+            if item["kind"] in {"text", "pageNumber"}:
+                text = (
+                    str(page_number)
+                    if item["kind"] == "pageNumber"
+                    else str(item.get("text") or "")
+                )
+                identity["textDigest"] = prefixed_sha256({"text": text})
+                identity["textStyle"] = _expected_furniture_text_style(
+                    item, payload["master"], background_color
+                )
+            elif item["kind"] == "logo" and item.get("assetSha256"):
+                identity["assetDigest"] = f"sha256:{item['assetSha256']}"
+            elif item["kind"] == "logo":
+                identity["unconfigured"] = True
+            else:
+                identity["nativeKind"] = "shape"
+            furniture_items.append(identity)
+        expected_scene_slides.append(
+            {
+                "slideId": slide.get("slideId"),
+                "slideDigest": slide.get("slideDigest") or slide.get("digest"),
+                "elements": identities,
+                "furniture": furniture_items,
+                "stackingOrder": [
+                    {"layer": "furniture", "id": _BACKGROUND_FURNITURE_ID}
+                ]
+                + [
+                    {"layer": "scene", "id": item["elementId"]}
+                    for item in identities
+                ]
+                + [
+                    {"layer": "furniture", "id": item["furnitureId"]}
+                    for item in furniture_items[1:]
+                ],
+            }
+        )
+    expected_scene = {
+        "sceneDigest": scene.get("sceneDigest") or scene.get("digest"),
+        "compositionDigest": scene.get("compositionDigest"),
+        "compositionPin": scene.get("compositionPin"),
+        "slides": expected_scene_slides,
+    }
+    if capabilities != {
+        "supported": ["chart", "image", "shape", "table", "text"],
+        "unsupported": ["connector", "group"],
+    } or native_counts != expected_counts:
+        raise ExportServiceError("authored_vnext_scene_capability_read_back_mismatch")
+    if (
+        actual_scene.get("sceneDigest") != expected_scene["sceneDigest"]
+        or actual_scene.get("compositionDigest")
+        != expected_scene["compositionDigest"]
+        or actual_scene.get("compositionPin") != expected_scene["compositionPin"]
+        or not isinstance(actual_scene.get("slides"), list)
+        or len(actual_scene["slides"]) != len(expected_scene_slides)
+    ):
+        raise ExportServiceError("authored_vnext_scene_read_back_mismatch")
+    for expected_slide, reopened_slide in zip(
+        expected_scene_slides, actual_scene["slides"], strict=True
+    ):
+        if (
+            reopened_slide.get("slideId") != expected_slide["slideId"]
+            or reopened_slide.get("slideDigest") != expected_slide["slideDigest"]
+            or reopened_slide.get("furniture") != expected_slide["furniture"]
+            or reopened_slide.get("stackingOrder") != expected_slide["stackingOrder"]
+            or not isinstance(reopened_slide.get("elements"), list)
+            or len(reopened_slide["elements"]) != len(expected_slide["elements"])
+        ):
+            raise ExportServiceError("authored_vnext_scene_read_back_mismatch")
+        for expected_element, reopened_element in zip(
+            expected_slide["elements"], reopened_slide["elements"], strict=True
+        ):
+            bounds = reopened_element.get("renderedBounds")
+            if (
+                not isinstance(bounds, dict)
+                or any(
+                    isinstance(bounds.get(key), bool)
+                    or not isinstance(bounds.get(key), (int, float))
+                    for key in ("x", "y", "width", "height")
+                )
+                or bounds["x"] < 0
+                or bounds["y"] < 0
+                or bounds["width"] <= 0
+                or bounds["height"] <= 0
+            ):
+                raise ExportServiceError(
+                    "authored_vnext_scene_geometry_read_back_mismatch"
+                )
+            comparable = {
+                key: value
+                for key, value in reopened_element.items()
+                if key not in {"renderedBounds", "cropGeometry"}
+            }
+            if comparable != expected_element:
+                raise ExportServiceError(
+                    "authored_vnext_scene_element_read_back_mismatch"
+                )
+            if expected_element["kind"] == "image":
+                crop = reopened_element.get("cropGeometry")
+                if (
+                    not isinstance(crop, dict)
+                    or any(
+                        isinstance(crop.get(key), bool)
+                        or not isinstance(crop.get(key), (int, float))
+                        or crop[key] < 0
+                        or crop[key] >= 1
+                        for key in ("left", "top", "right", "bottom")
+                    )
+                    or crop["left"] + crop["right"] >= 1
+                    or crop["top"] + crop["bottom"] >= 1
+                ):
+                    raise ExportServiceError(
+                        "authored_vnext_scene_image_crop_read_back_mismatch"
+                    )
+    for expected_slide, actual_slide in zip(
+        expected_scene_slides, receipt["slides"], strict=True
+    ):
+        if (
+            actual_slide.get("slideId") != expected_slide["slideId"]
+            or actual_slide.get("slideDigest") != expected_slide["slideDigest"]
+            or actual_slide.get("elementIds")
+            != [item["elementId"] for item in expected_slide["elements"]]
+        ):
+            raise ExportServiceError("authored_vnext_scene_slide_read_back_mismatch")
     for page_number, (expected_slide, actual_slide) in enumerate(
         zip(payload["slides"], receipt["slides"], strict=True),
         start=1,
@@ -211,7 +506,7 @@ class AuthoredVNextExportService:
         except ValueError as error:
             raise ExportServiceError("authored_vnext_composition_mismatch") from error
 
-    def _worker_assets(self, master) -> list[dict[str, str]]:
+    def _worker_assets(self, master, deck) -> list[dict[str, Any]]:
         references = {
             asset.asset_id: asset.digest
             for asset in (master.brand_assets.logo, master.brand_assets.wordmark)
@@ -229,22 +524,87 @@ class AuthoredVNextExportService:
             )
             if item.asset_id is not None
         }
-        if not references and not furniture_ids and not semantic_references:
-            return []
-        if references.keys() != furniture_ids or self.master_asset_store is None:
+        if references.keys() != furniture_ids:
             raise ExportServiceError("authored_vnext_master_asset_reference_mismatch")
         for asset_id, digest in semantic_references.items():
             if asset_id in references and references[asset_id] != digest:
                 raise ExportServiceError("authored_vnext_master_asset_reference_mismatch")
             references[asset_id] = digest
+        try:
+            scene_references = scene_asset_references(deck)
+        except ValueError as error:
+            raise ExportServiceError(str(error)) from error
+        for asset_id, reference in scene_references.items():
+            digest = reference["digest"]
+            if asset_id in references and references[asset_id] != digest:
+                raise ExportServiceError("authored_vnext_scene_asset_digest_mismatch")
+            references[asset_id] = digest
+        if not references:
+            return []
         assets = []
         try:
             for asset_id, digest in sorted(references.items()):
-                value = self.master_asset_store.open_verified(asset_id, digest)
+                scene_reference = scene_references.get(asset_id)
+                encoded = (
+                    scene_reference.get("bytesBase64")
+                    if scene_reference is not None
+                    else None
+                )
+                storage_reference = (
+                    scene_reference.get("storageReference")
+                    if scene_reference is not None
+                    else f"asset-store:{asset_id}"
+                )
+                if (
+                    encoded is None
+                    and isinstance(storage_reference, str)
+                    and storage_reference.startswith("data:")
+                ):
+                    expected_prefix = (
+                        f"data:{scene_reference['mediaType']};base64,"
+                    )
+                    if not storage_reference.startswith(expected_prefix):
+                        raise ExportServiceError(
+                            "authored_vnext_scene_asset_storage_reference_invalid"
+                        )
+                    encoded = storage_reference.removeprefix(expected_prefix)
+                if isinstance(encoded, str):
+                    try:
+                        value = base64.b64decode(encoded, validate=True)
+                    except (ValueError, binascii.Error) as error:
+                        raise ExportServiceError(
+                            "authored_vnext_scene_asset_bytes_invalid"
+                        ) from error
+                    if self.artifact_store.digest_bytes(value) != digest:
+                        raise ExportServiceError(
+                            "authored_vnext_scene_asset_digest_mismatch"
+                        )
+                else:
+                    if storage_reference != f"asset-store:{asset_id}":
+                        raise ExportServiceError(
+                            "authored_vnext_scene_asset_storage_reference_invalid"
+                        )
+                    if self.master_asset_store is None:
+                        raise ExportServiceError(
+                            "authored_vnext_scene_image_asset_unavailable"
+                        )
+                    value = self.master_asset_store.open_verified(asset_id, digest)
+                if (
+                    scene_reference is not None
+                    and len(value) != scene_reference["sizeBytes"]
+                ):
+                    raise ExportServiceError(
+                        "authored_vnext_scene_asset_size_mismatch"
+                    )
                 assets.append({
                     "assetId": asset_id,
-                    "mediaType": "image/png",
+                    "mediaType": (
+                        scene_reference["mediaType"]
+                        if scene_reference is not None
+                        else "image/png"
+                    ),
                     "sha256": digest.removeprefix("sha256:"),
+                    "sizeBytes": len(value),
                     "bytesBase64": base64.b64encode(value).decode("ascii"),
                 })
         except MasterAssetError as error:
@@ -288,7 +648,7 @@ class AuthoredVNextExportService:
             expected_master_digest=master.digest,
         )
         try:
-            assets = self._worker_assets(export_contract)
+            assets = self._worker_assets(export_contract, deck)
             _, source_digests = build_worker_request(
                 operation_id="digest-probe",
                 fence_token=1,
@@ -365,7 +725,7 @@ class AuthoredVNextExportService:
                 claimed.request_payload,
                 expected_master_digest=master.digest,
             )
-            assets = self._worker_assets(export_contract)
+            assets = self._worker_assets(export_contract, deck)
             payload, digests = build_worker_request(
                 operation_id=str(claimed.id),
                 fence_token=claimed.fence_token,

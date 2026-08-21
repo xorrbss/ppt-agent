@@ -13,6 +13,7 @@ import {
   createAuthoredVnextFlowState,
   digestText,
   publicationPin,
+  sceneMutationRequestForOperation,
   sceneForMaster,
   serverOperationId,
   slideLabel,
@@ -152,9 +153,11 @@ export default function AuthoredVnextFlowClient() {
               ? ("geometry.patch" as const)
               : entry.operation.kind === "asset.set"
                 ? ("asset.replace" as const)
+                : entry.operation.kind === "data.set"
+                  ? ("data.set" as const)
                 : ("layout.apply" as const),
         status: entry.status,
-        detail: t("panels.patchOutbox"),
+        detail: entry.errorCode ?? t("panels.patchOutbox"),
       })),
     }),
     [candidate, prompt, t, workbench.outbox, workbench.undoStack],
@@ -236,48 +239,22 @@ export default function AuthoredVnextFlowClient() {
       operationId: operation.operationId,
     });
     const execute = async () => {
-      if (
-        operation.kind !== "text.replace" ||
-        !operation.elementId.endsWith(":body")
-      ) {
-        throw new Error("authored_vnext_typed_operation_unsupported");
+      if (!canonicalDeck.scene) {
+        throw new Error("authored_vnext_scene_mutation_unavailable");
       }
-      const target = canonicalDeck.slides.find(
-        (item) => item.slide.slideId === operation.slideId,
-      );
-      if (!target) throw new Error("authored_vnext_slide_not_found");
-      const prepareId = serverOperationId(
+      const mutationId = serverOperationId(
         operation.operationId,
-        `-prepare-r${canonicalDeck.revision}`,
+        `-scene-r${canonicalDeck.revision}`,
       );
-      const prepared = await generationClient.prepareRegeneration(
+      const request = sceneMutationRequestForOperation(
         canonicalDeck.deckId,
-        operation.slideId,
-        {
-          operationId: prepareId,
-          deckId: canonicalDeck.deckId,
-          slideId: operation.slideId,
-          expectedSlideRevision: target.slide.revision,
-          expectedSlideSpecDigest: target.slide.specDigest,
-          master: canonicalDeck.master,
-          sourceDigest: canonicalDeck.sourceDigest,
-          body: operation.text,
-          publicationFence: {
-            expectedDeckRevision: canonicalDeck.revision,
-            expectedActiveRevisionDigest: canonicalDeck.digest,
-          },
-        },
-        `${prepareId}:typed-edit`,
+        mutationId,
+        operation,
       );
-      const publishId = serverOperationId(
-        operation.operationId,
-        `-publish-r${canonicalDeck.revision}`,
-      );
-      const publishedResult = await generationClient.publishRegeneration(
+      const publishedResult = await generationClient.mutateScene(
         canonicalDeck.deckId,
-        prepared.candidate.candidateDigest,
-        publishId,
-        `${publishId}:typed-edit`,
+        request.command,
+        `${mutationId}:${request.idempotencyFence}`,
       );
       setCanonicalDeck(publishedResult.deck);
       dispatchWorkbench({
@@ -289,16 +266,35 @@ export default function AuthoredVnextFlowClient() {
         ),
       });
     };
-    void execute().catch((error) => {
+    void execute().catch(async (error) => {
       const code =
         error instanceof Error
           ? error.message
           : "authored_vnext_typed_operation_failed";
-      dispatchWorkbench({
-        type: "operation/conflicted",
-        operationId: operation.operationId,
-        code,
-      });
+      const status = error && typeof error === "object" && "status" in error
+        ? (error as { status?: unknown }).status
+        : undefined;
+      const isCasConflict = status === 409 && /(?:publication fence|slide CAS|master changed|compatibility slide not found)/iu.test(code);
+      if (isCasConflict) {
+        dispatchWorkbench({
+          type: "operation/conflicted",
+          operationId: operation.operationId,
+          code,
+        });
+      } else {
+        try {
+          const refreshed = await generationClient.getDeck(canonicalDeck.deckId);
+          setCanonicalDeck(refreshed.deck);
+          dispatchWorkbench({
+            type: "operation/failed",
+            operationId: operation.operationId,
+            code,
+            serverDeck: adaptDeckSnapshotToWorkbenchDocument(refreshed.deck, contract),
+          });
+        } catch {
+          dispatchWorkbench({ type: "operation/failed", operationId: operation.operationId, code });
+        }
+      }
       setNotice(t("errors.operation", { code }));
     });
   }, [canonicalDeck, contract, t, workbench]);
@@ -411,18 +407,61 @@ export default function AuthoredVnextFlowClient() {
 
   const enqueueCommand = (command: WorkbenchTypedCommand) => {
     if (!deck || !activeSlide) return;
-    if (command.kind !== "text.patch" || !command.elementId.endsWith(":body")) {
+    const targetSlide = deck.slides.find((item) => item.id === command.slideId);
+    const targetNode = targetSlide?.nodes.find((item) => item.id === command.elementId);
+    if (!targetSlide || !targetNode || command.kind === "layout.apply") {
       setNotice(t("errors.unsupportedEdit"));
       return;
     }
-    const operation: WorkbenchOperation = {
-      kind: "text.replace",
+    const common = {
       operationId: command.clientOperationId as OperationId,
       slideId: command.slideId as SlideId,
       elementId: command.elementId as ElementId,
-      text: command.patch.text,
-      base: publicationPin(deck, activeSlide.id),
+      base: publicationPin(deck, command.slideId as SlideId),
     };
+    let operation: WorkbenchOperation;
+    if (command.kind === "text.patch" && targetNode.kind === "text") {
+      operation = { ...common, kind: "text.replace", text: command.patch.text };
+    } else if (command.kind === "geometry.patch") {
+      operation = {
+        ...common,
+        kind: "geometry.update",
+        bounds: { ...targetNode.bounds, ...command.patch },
+      };
+    } else if (
+      command.kind === "asset.replace" &&
+      (targetNode.kind === "image" || targetNode.kind === "asset")
+    ) {
+      operation = {
+        ...common,
+        kind: "asset.set",
+        assetId: command.patch.assetId as `asset:${string}`,
+        digest: command.patch.assetDigest as `sha256:${string}`,
+        altText: command.patch.alt,
+        crop: command.patch.crop,
+        mediaType: command.patch.mediaType,
+        storageReference: command.patch.storageReference,
+        sizeBytes: command.patch.sizeBytes,
+      };
+    } else if (
+      command.kind === "data.set" &&
+      (targetNode.kind === "table" || targetNode.kind === "chart")
+    ) {
+      operation = {
+        ...common,
+        kind: "data.set",
+        dataId: command.patch.dataId as `data:${string}`,
+        dataDigest: command.patch.dataDigest as `sha256:${string}`,
+        dataPayload: command.patch.dataPayload,
+        rows: command.patch.rows,
+        columns: command.patch.columns,
+        chartType: command.patch.chartType,
+        accessibilitySummary: command.patch.accessibilitySummary,
+      };
+    } else {
+      setNotice(t("errors.unsupportedEdit"));
+      return;
+    }
     dispatchWorkbench({
       type: "operation/enqueue",
       operation,

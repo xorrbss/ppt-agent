@@ -104,8 +104,8 @@ from services.concurrent_service import CONCURRENT_SERVICE
 from services.database import async_session_maker, get_async_session, sql_engine
 from services.documents_loader import DocumentsLoader
 from services.generation_provider_admission import generation_provider_admitted
-from services.compatibility_migration.admission import (
-    require_authored_generation_admission,
+from services.compatibility_migration.authored_vnext_contract import (
+    require_authored_vnext_creation_admission,
 )
 from services.generation_pipeline import build_template_structure
 from services.image_generation_service import ImageGenerationService
@@ -329,11 +329,19 @@ async def _validate_authored_master_pin_admission(
         os.getenv("AUTHORED_VNEXT_MASTER_ENABLED", "true").strip().lower()
         == "true"
     )
-    if request.master_pin is None:
-        # Authored styles remain a complete full-canvas path when the user
-        # deliberately selects no master.  The feature gate controls whether
-        # a supplied master pin may be resolved; it does not make one mandatory.
-        return
+    if (
+        request.master_pin is None
+        and request._authored_master_pin is None
+        and request._authored_composition_pin is None
+    ):
+        # New image/HTML-only Authored creation is frozen as compatibility.
+        # Canonical authored-vNext creation requires an immutable master pin so
+        # Scene, furniture, Workbench CAS, publication, and export share one
+        # authority instead of silently taking the legacy full-canvas branch.
+        raise HTTPException(
+            status_code=422,
+            detail="authored_vnext_master_pin_required",
+        )
     if not master_enabled:
         raise HTTPException(status_code=404, detail="authored_vnext_master_disabled")
     owner_id = get_current_owner_id()
@@ -453,7 +461,7 @@ async def check_if_api_request_is_valid(
     # Fail before canonicalizing uploads or allocating any durable identity.
     # Existing legacy decks remain readable through the frozen compatibility
     # runtime; this boundary controls new generation only.
-    require_authored_generation_admission(request)
+    require_authored_vnext_creation_admission(request)
     presentation_id = uuid.uuid4()
     print(f"Presentation ID: {presentation_id}")
 
@@ -2069,6 +2077,10 @@ async def queue_presentation_generation(
     idempotency_key: Optional[str] = None,
 ) -> AsyncPresentationGenerationTaskModel:
     """Validate and atomically enqueue one durable, idempotent generation job."""
+    # Apply the authored-vNext creation contract before idempotency lookup or
+    # chat-first workspace bootstrap.  This keeps blocked Template V2/legacy
+    # requests from minting even a temporary durable presentation shell.
+    require_authored_vnext_creation_admission(request)
     # Workspace orchestration can deliberately create a separate, new deck
     # while keeping progress anchored to the source deck's operation timeline.
     # That nested generation job must use the existing durable generator rather

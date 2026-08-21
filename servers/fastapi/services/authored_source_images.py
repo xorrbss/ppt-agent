@@ -11,6 +11,8 @@ reads the feature gate.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 import uuid
 from collections.abc import Sequence
@@ -31,6 +33,23 @@ from utils.llm_calls.author_slide import (
 )
 
 LOGGER = logging.getLogger(__name__)
+_DIGEST_CHUNK_BYTES = 1024 * 1024
+
+
+def _candidate_bytes_match_digest(candidate: SourceImageCandidate) -> bool:
+    """Reopen the stored candidate and verify the bytes before offering it."""
+
+    expected = candidate.digest.removeprefix("sha256:").lower()
+    if len(expected) != 64 or any(char not in "0123456789abcdef" for char in expected):
+        return False
+    digest = hashlib.sha256()
+    try:
+        with candidate.path.open("rb") as stream:
+            while chunk := stream.read(_DIGEST_CHUNK_BYTES):
+                digest.update(chunk)
+    except OSError:
+        return False
+    return hmac.compare_digest(digest.hexdigest(), expected)
 
 
 async def _uploaded_source_paths(
@@ -69,19 +88,20 @@ async def collect_source_image_candidates(
 ) -> list[SourceImageCandidate]:
     """Register the pictures this deck may reuse, or decide it may reuse none.
 
-    Three decks never gain one. The feature is opt-in, so an unset gate has to
-    leave generation exactly as it was. A master-owned deck takes its pictures
-    from company-standard furniture. And exact reconstruction reproduces a
+    Two cases never gain one. The feature is opt-in, so an unset gate has to
+    leave generation exactly as it was. Exact reconstruction reproduces a
     source slide-for-slide, where adding an image the source does not have is
     the one thing that mode forbids.
+
+    A company standard owns furniture only. It must not suppress
+    authored-template body images, so master-owned authored-vNext requests use
+    this same verified registry and deterministic selection path.
 
     Never raises: a deck is worth more than its source images, so an unreadable
     upload, a storage failure, or a filtered-out candidate set all degrade to
     ordinary illustration rather than losing the generation.
     """
     if not is_authored_source_images_enabled():
-        return []
-    if request._authored_master_resolution is not None:
         return []
     if normalize_reference_mode(
         getattr(style, "reference_mode", STYLE_REFERENCE)
@@ -96,6 +116,8 @@ async def collect_source_image_candidates(
             presentation_id=presentation_id,
             upload_paths=upload_paths,
         )
+        if any(not _candidate_bytes_match_digest(candidate) for candidate in candidates):
+            raise RuntimeError("authored_source_image_digest_mismatch")
         # The registry only flushes; the caller owns the transaction. Commit it
         # here so the rows are durable before the long authoring run instead of
         # holding a write open across it.
@@ -135,7 +157,14 @@ def plan_slide_source_images(
     """
     if not candidates:
         return None
-    remaining = list(candidates)
+    remaining = [
+        candidate for candidate in candidates if _candidate_bytes_match_digest(candidate)
+    ]
+    if not remaining:
+        LOGGER.warning(
+            "[authored] source image bytes missing or changed; continuing without source images"
+        )
+        return None
     per_slide: list[dict[str, SourceImageCandidate]] = []
     try:
         for index, content in enumerate(contents):

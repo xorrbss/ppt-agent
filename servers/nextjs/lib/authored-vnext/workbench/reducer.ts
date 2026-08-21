@@ -31,6 +31,12 @@ export type WorkbenchAction =
   | { readonly type: "operation/sendStarted"; readonly operationId: OperationId }
   | { readonly type: "operation/acknowledged"; readonly operationId: OperationId; readonly serverDeck: DeckDocument }
   | {
+      readonly type: "operation/failed";
+      readonly operationId: OperationId;
+      readonly code: string;
+      readonly serverDeck?: DeckDocument;
+    }
+  | {
       readonly type: "operation/conflicted";
       readonly operationId: OperationId;
       readonly code: string;
@@ -57,6 +63,74 @@ export class WorkbenchInvariantError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "WorkbenchInvariantError";
+  }
+}
+
+const NATIVE_CHART_TYPES = new Set(["bar", "column", "line", "area", "pie", "donut"]);
+
+function assertSealedDataPayload(
+  node: Extract<BodyNode, { kind: "table" | "chart" }>,
+  operation: Extract<WorkbenchOperation, { kind: "data.set" }>,
+): void {
+  if (operation.dataId !== node.dataId) {
+    throw new WorkbenchInvariantError("Data operation must preserve the stable Scene data id");
+  }
+  const payload = operation.dataPayload;
+  if (node.kind === "table") {
+    if (operation.chartType !== undefined || operation.accessibilitySummary !== undefined) {
+      throw new WorkbenchInvariantError("Table operation cannot change chart-only fields");
+    }
+    const cells = payload.cells;
+    if (!Array.isArray(cells) || cells.length === 0 || cells.length > 100 || !cells.every(Array.isArray)) {
+      throw new WorkbenchInvariantError("Table data requires a non-empty bounded cell matrix");
+    }
+    const columns = cells[0]?.length ?? 0;
+    if (
+      columns < 1 || columns > 30 ||
+      cells.some((row) => row.length !== columns || row.some((cell) => typeof cell !== "string" || cell.length > 5000)) ||
+      (operation.rows !== undefined && operation.rows !== cells.length) ||
+      (operation.columns !== undefined && operation.columns !== columns)
+    ) {
+      throw new WorkbenchInvariantError("Table data must retain its bounded rectangular dimensions");
+    }
+    return;
+  }
+  if (operation.rows !== undefined || operation.columns !== undefined) {
+    throw new WorkbenchInvariantError("Chart operation cannot change table-only dimensions");
+  }
+  if (operation.chartType !== undefined && !NATIVE_CHART_TYPES.has(operation.chartType)) {
+    throw new WorkbenchInvariantError("Chart operation requires a native authored chart type");
+  }
+  const categories = payload.categories;
+  const series = payload.series;
+  if (
+    !Array.isArray(categories) || categories.length === 0 || categories.length > 100 ||
+    categories.some((category) => typeof category !== "string" || !category || category.length > 500) ||
+    !Array.isArray(series) || series.length === 0 || series.length > 30
+  ) {
+    throw new WorkbenchInvariantError("Chart data requires bounded categories and series");
+  }
+  const names = new Set<string>();
+  for (const entry of series) {
+    if (
+      !entry || typeof entry !== "object" || Array.isArray(entry) ||
+      Object.keys(entry as Record<string, unknown>).length !== 2 ||
+      !("name" in entry) || !("values" in entry) ||
+      typeof (entry as { name?: unknown }).name !== "string" ||
+      !(entry as { name: string }).name || (entry as { name: string }).name.length > 500 ||
+      !Array.isArray((entry as { values?: unknown }).values) ||
+      (entry as { values: unknown[] }).values.length !== categories.length ||
+      (entry as { values: unknown[] }).values.some((value) => typeof value !== "number" || !Number.isFinite(value))
+    ) {
+      throw new WorkbenchInvariantError("Chart series must retain bounded numeric values");
+    }
+    const name = (entry as { name: string }).name;
+    if (names.has(name)) throw new WorkbenchInvariantError("Chart series names must be unique");
+    names.add(name);
+  }
+  const chartType = operation.chartType ?? node.chartType;
+  if ((chartType === "pie" || chartType === "donut") && series.length !== 1) {
+    throw new WorkbenchInvariantError("Pie and donut charts require exactly one series");
   }
 }
 
@@ -88,7 +162,9 @@ function pinFor(deck: DeckDocument, slideId: SlideId): CasPin {
   return {
     deckRevision: deck.revision,
     deckDigest: deck.digest,
+    sceneDigest: deck.sceneDigest,
     slideRevision: slide.revision,
+    slideDigest: slide.digest,
     masterDigest: deck.master.digest,
   };
 }
@@ -98,7 +174,9 @@ function assertPin(operation: WorkbenchOperation, deck: DeckDocument): void {
   if (
     operation.base.deckRevision !== current.deckRevision ||
     operation.base.deckDigest !== current.deckDigest ||
+    operation.base.sceneDigest !== current.sceneDigest ||
     operation.base.slideRevision !== current.slideRevision ||
+    operation.base.slideDigest !== current.slideDigest ||
     operation.base.masterDigest !== current.masterDigest
   ) {
     throw new WorkbenchInvariantError("Operation CAS pin does not match the working document");
@@ -114,18 +192,50 @@ export function operationPatch(deck: DeckDocument, operation: WorkbenchOperation
   const node = findNode(slide, operation.elementId);
   if (operation.kind === "text.replace") {
     if (node.kind !== "text") throw new WorkbenchInvariantError("Text operation requires a text node");
+    if (!node.editability.text) throw new WorkbenchInvariantError("Text operation is not permitted by the Scene capability");
     return { kind: operation.kind, slideId: slide.id, elementId: node.id, before: node.text, after: operation.text };
   }
   if (operation.kind === "geometry.update") {
+    if (!node.editability.geometry) throw new WorkbenchInvariantError("Geometry operation is not permitted by the Scene capability");
     return { kind: operation.kind, slideId: slide.id, elementId: node.id, before: node.bounds, after: operation.bounds };
   }
-  if (node.kind !== "asset") throw new WorkbenchInvariantError("Asset operation requires an asset node");
+  if (operation.kind === "asset.set") {
+    if (node.kind !== "asset" && node.kind !== "image") throw new WorkbenchInvariantError("Asset operation requires an image node");
+    if (!node.editability.asset) throw new WorkbenchInvariantError("Asset operation is not permitted by the Scene capability");
+    if (!/^sha256:[0-9a-f]{64}$/.test(operation.digest)) throw new WorkbenchInvariantError("Asset operation requires a SHA-256 digest");
+    if (!Number.isSafeInteger(operation.sizeBytes) || operation.sizeBytes <= 0) throw new WorkbenchInvariantError("Asset operation requires a verified byte length");
+    if (
+      (operation.assetId !== node.assetId || operation.digest !== node.digest) &&
+      (!operation.mediaType || !operation.storageReference || operation.sizeBytes <= 0)
+    ) {
+      throw new WorkbenchInvariantError("New asset identity requires sealed media type and storage reference");
+    }
+    return {
+      kind: operation.kind,
+      slideId: slide.id,
+      elementId: node.id,
+      before: { assetId: node.assetId, digest: node.digest, altText: node.altText, crop: node.crop, fit: node.fit, mediaType: node.mediaType, storageReference: node.storageReference, sizeBytes: node.sizeBytes ?? operation.sizeBytes },
+      after: { assetId: operation.assetId, digest: operation.digest, altText: operation.altText, crop: operation.crop, fit: operation.crop, mediaType: operation.mediaType, storageReference: operation.storageReference, sizeBytes: operation.sizeBytes },
+    };
+  }
+  if (node.kind !== "table" && node.kind !== "chart") throw new WorkbenchInvariantError("Data operation requires a table or chart node");
+  if (!node.editability.data) throw new WorkbenchInvariantError("Data operation is not permitted by the Scene capability");
+  if (!/^sha256:[0-9a-f]{64}$/.test(operation.dataDigest)) throw new WorkbenchInvariantError("Data operation requires a SHA-256 digest");
+  assertSealedDataPayload(node, operation);
   return {
     kind: operation.kind,
     slideId: slide.id,
     elementId: node.id,
-    before: { assetId: node.assetId, digest: node.digest, altText: node.altText },
-    after: { assetId: operation.assetId, digest: operation.digest, altText: operation.altText },
+    before: { dataId: node.dataId, dataDigest: node.dataDigest, dataPayload: node.dataPayload ?? {} },
+    after: {
+      dataId: operation.dataId,
+      dataDigest: operation.dataDigest,
+      dataPayload: operation.dataPayload,
+      ...(operation.rows === undefined ? {} : { rows: operation.rows }),
+      ...(operation.columns === undefined ? {} : { columns: operation.columns }),
+      ...(operation.chartType === undefined ? {} : { chartType: operation.chartType }),
+      ...(operation.accessibilitySummary === undefined ? {} : { accessibilitySummary: operation.accessibilitySummary }),
+    },
   };
 }
 
@@ -162,8 +272,19 @@ export function applyPatch(deck: DeckDocument, patch: DocumentPatch): DeckDocume
       if (patch.kind === "geometry.update") {
         return sameBounds(node.bounds, patch.after) ? node : { ...node, bounds: patch.after };
       }
-      if (node.kind !== "asset") throw new WorkbenchInvariantError("Asset patch requires an asset node");
-      return { ...node, ...patch.after } satisfies AssetBodyNode;
+      if (patch.kind === "asset.set") {
+        if (node.kind !== "asset" && node.kind !== "image") throw new WorkbenchInvariantError("Asset patch requires an image node");
+        return { ...node, ...patch.after } satisfies AssetBodyNode;
+      }
+      if (node.kind !== "table" && node.kind !== "chart") throw new WorkbenchInvariantError("Data patch requires a table or chart node");
+      return {
+        ...node,
+        dataId: patch.after.dataId,
+        dataDigest: patch.after.dataDigest,
+        dataPayload: patch.after.dataPayload,
+        ...(node.kind === "table" ? { rows: patch.after.rows ?? node.rows, columns: patch.after.columns ?? node.columns } : {}),
+        ...(node.kind === "chart" ? { chartType: patch.after.chartType ?? node.chartType, accessibilitySummary: patch.after.accessibilitySummary ?? node.accessibilitySummary } : {}),
+      };
     });
   });
 }
@@ -184,7 +305,25 @@ function operationFromPatch(patch: DocumentPatch, operationId: OperationId, base
     return { kind: patch.kind, operationId, slideId: patch.slideId, elementId: patch.elementId, bounds: patch.after, base };
   }
   if (patch.kind === "asset.set") {
-    return { kind: patch.kind, operationId, slideId: patch.slideId, elementId: patch.elementId, ...patch.after, base };
+    if (patch.after.sizeBytes === undefined) throw new WorkbenchInvariantError("Asset patch must retain its verified byte length");
+    return { kind: patch.kind, operationId, slideId: patch.slideId, elementId: patch.elementId, ...patch.after, sizeBytes: patch.after.sizeBytes, base };
+  }
+  if (patch.kind === "data.set") {
+    if (patch.after.dataPayload === undefined) throw new WorkbenchInvariantError("Data patch must retain its sealed payload");
+    return {
+      kind: patch.kind,
+      operationId,
+      slideId: patch.slideId,
+      elementId: patch.elementId,
+      dataId: patch.after.dataId,
+      dataDigest: patch.after.dataDigest,
+      dataPayload: patch.after.dataPayload,
+      ...(patch.after.rows === undefined ? {} : { rows: patch.after.rows }),
+      ...(patch.after.columns === undefined ? {} : { columns: patch.after.columns }),
+      ...(patch.after.chartType === undefined ? {} : { chartType: patch.after.chartType }),
+      ...(patch.after.accessibilitySummary === undefined ? {} : { accessibilitySummary: patch.after.accessibilitySummary }),
+      base,
+    };
   }
   return { kind: patch.kind, operationId, slideId: patch.slideId, layoutId: patch.after, base };
 }
@@ -192,9 +331,10 @@ function operationFromPatch(patch: DocumentPatch, operationId: OperationId, base
 function replayOutbox(serverDeck: DeckDocument, entries: readonly OutboxEntry[]): { deck: DeckDocument; outbox: readonly OutboxEntry[] } {
   let deck = serverDeck;
   const outbox = entries.map((entry) => {
+    if (entry.status === "failed") return entry;
     const base = pinFor(serverDeck, entry.operation.slideId);
     deck = applyPatch(deck, entry.patch);
-    return { ...entry, operation: withBase(entry.operation, base), status: "queued" as const };
+    return { ...entry, operation: withBase(entry.operation, base), status: "queued" as const, errorCode: undefined };
   });
   return { deck, outbox };
 }
@@ -269,6 +409,17 @@ export function workbenchReducer(state: WorkbenchState, action: WorkbenchAction)
     }
     case "operation/sendStarted":
       return { ...state, outbox: state.outbox.map((entry) => entry.operation.operationId === action.operationId ? { ...entry, status: "sending" } : entry) };
+    case "operation/failed": {
+      if (!state.outbox.some((entry) => entry.operation.operationId === action.operationId)) return state;
+      const outbox = state.outbox.map((entry) => entry.operation.operationId === action.operationId
+        ? { ...entry, status: "failed" as const, errorCode: action.code }
+        : entry,
+      );
+      if (!action.serverDeck) return { ...state, outbox };
+      assertPinnedMaster(lastKnownGood(state.deck), action.serverDeck);
+      const replayed = replayOutbox(action.serverDeck, outbox);
+      return { ...state, deck: { status: "ready", data: replayed.deck }, outbox: replayed.outbox, conflict: null };
+    }
     case "operation/acknowledged": {
       const acknowledged = state.outbox.some((entry) => entry.operation.operationId === action.operationId);
       if (!acknowledged) return state;
@@ -393,6 +544,7 @@ export function workbenchReducer(state: WorkbenchState, action: WorkbenchAction)
 
 export function selectNextWorkbenchEffect(state: WorkbenchState): WorkbenchEffect | null {
   if (state.conflict) return null;
+  if (state.outbox.some((entry) => entry.status === "sending")) return null;
   const operation = state.outbox.find((entry) => entry.status === "queued");
   if (operation) return { effect: "dispatchOperation", operation: operation.operation };
   if (state.regeneration.status === "loading") return { effect: "regenerateBody", request: state.regeneration.request };

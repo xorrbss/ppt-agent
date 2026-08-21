@@ -347,6 +347,45 @@ def _role_policy(
     )
 
 
+def _canonical_role_policy(contract: DeckMasterContract, role: str) -> SlideRolePolicySnapshot:
+    """Return company-neutral Authored template geometry.
+
+    Furniture is an adapter overlay. Moving it must never move title/body Scene
+    elements or change their digest, so company AI zones and reserved edges are
+    evidence for overlay validation only, not inputs to authored layout.
+    """
+
+    if (
+        abs(contract.canvas.width_px - 1280.0) > 0.01
+        or abs(contract.canvas.height_px - 720.0) > 0.01
+    ):
+        raise ValueError(
+            "authored_vnext_canonical_canvas_unsupported: company composition "
+            "requires the 1280x720 authored canvas"
+        )
+    if role == "cover":
+        title = Rect(x=92.0, y=176.0, width=1096.0, height=180.0)
+    elif role in {"section", "closing"}:
+        title = Rect(x=92.0, y=146.0, width=1096.0, height=180.0)
+    else:
+        title = Rect(x=92.0, y=84.0, width=1096.0, height=140.0)
+    content = Rect(
+        x=60.0,
+        y=title.bottom + 24.0,
+        width=1160.0,
+        height=640.0 - title.bottom - 24.0,
+    )
+    return SlideRolePolicySnapshot(
+        role=role,
+        title_anchor=title,
+        content_rect=content,
+        max_title_lines=3 if role in {"cover", "closing"} else 2,
+        title_alignment="center" if role in {"cover", "closing"} else "left",
+        bullet_policy="none" if role in {"cover", "closing"} else "preserve",
+        show_document_id=role in {"cover", "closing"},
+    )
+
+
 def build_consistency_policy_snapshot(
     contract: DeckMasterContract,
 ) -> ConsistencyPolicySnapshot:
@@ -355,25 +394,12 @@ def build_consistency_policy_snapshot(
     furniture = _furniture_reserved_zones(contract)
     semantic, review = _semantic_policy_evidence(contract)
     zones = [*furniture, *semantic]
-    envelopes = _ai_edit_zone_envelopes(contract)
     content_rect = _canvas_rect(contract)
     role_policies = [
-        _role_policy(
-            role="cover",
-            envelope=envelopes["cover"],
-        ),
-        _role_policy(
-            role="section",
-            envelope=envelopes["section"],
-        ),
-        _role_policy(
-            role="content",
-            envelope=envelopes["content"],
-        ),
-        _role_policy(
-            role="closing",
-            envelope=envelopes["closing"],
-        ),
+        _canonical_role_policy(contract, "cover"),
+        _canonical_role_policy(contract, "section"),
+        _canonical_role_policy(contract, "content"),
+        _canonical_role_policy(contract, "closing"),
     ]
     return seal_consistency_policy_snapshot(
         source_master_digest=contract.digest,
@@ -936,6 +962,19 @@ def _materialize_company_policy_contract(
         )
     else:
         content_policy = _policy_by_role(policy, "content")
+        long_title_title = Rect(x=92.0, y=84.0, width=1096.0, height=176.0)
+        long_title_policy = content_policy.model_copy(
+            update={
+                "title_anchor": long_title_title,
+                "content_rect": Rect(
+                    x=60.0,
+                    y=long_title_title.bottom + 24.0,
+                    width=1160.0,
+                    height=640.0 - long_title_title.bottom - 24.0,
+                ),
+                "max_title_lines": 3,
+            }
+        )
         layouts = LayoutRegistry(
             cover=_policy_layout(
                 contract.layouts.cover,
@@ -946,7 +985,7 @@ def _materialize_company_policy_contract(
                 _policy_by_role(policy, "section"),
             ),
             standard=_policy_layout(contract.layouts.standard, content_policy),
-            long_title=_policy_layout(contract.layouts.long_title, content_policy),
+            long_title=_policy_layout(contract.layouts.long_title, long_title_policy),
         )
     marker_style = template.style_id or "system-fallback"
     markers = [

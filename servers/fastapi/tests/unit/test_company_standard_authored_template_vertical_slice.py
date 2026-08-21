@@ -24,7 +24,6 @@ from models.presentation_from_template import RetemplatePresentationRequest
 from models.presentation_outline_model import PresentationOutlineModel, SlideOutlineModel
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
-from services.authored_vnext.body_grammar import BODY_GRAMMAR_VALUE_KEY
 from services.authored_vnext.generation.composition import compose_authored_style
 from services.authored_vnext.generation.core_bridge import DeterministicCoreBridge
 from services.authored_vnext.generation.effective_style import (
@@ -326,56 +325,41 @@ def test_company_standard_authored_template_vertical_slice(
             for page_number, item in enumerate(persisted.slides, start=1)
         ]
         exported = worker_slides(persisted, effective)
-        exported_grammars = [
-            json.loads(item["values"][BODY_GRAMMAR_VALUE_KEY])
-            for item in exported
-        ]
         assert len(previews) == len(exported) == len(manuscript)
         assert all(
             f'id="furniture:page-number"' in preview
             and f'>{page_number}</div>' in preview
             for page_number, preview in enumerate(previews, start=1)
         )
-        assert all(grammar["schemaVersion"] == "authored-body-grammar/v3" for grammar in exported_grammars)
+        scene = persisted.scene
+        assert scene is not None
+        assert scene.scene_digest == result.checkpoint.scene_digest
+        assert scene.composition_digest == composition.digest
+        assert [slide.slide_id for slide in scene.slides] == [
+            item.slide.slide_id for item in persisted.slides
+        ]
+        assert all(item["values"] == {} for item in exported)
         assert all(
-            grammar["referenceLayoutDigest"]
-            == composition.authored_template.resolved_reference_layout_digest
-            for grammar in exported_grammars
+            {element.kind for element in slide.elements} >= {"text", "shape"}
+            for slide in scene.slides
         )
-        assert exported_grammars[0]["documentMetadata"] == {
-            "kind": "rfp",
-            "value": "RFP-OSB-2026-01",
-            "visible": True,
-        }
         assert all(
-            grammar["documentMetadata"]["visible"] is False
-            for grammar in exported_grammars[1:-1]
+            len({element.element_id for element in slide.elements})
+            == len(slide.elements)
+            for slide in scene.slides
         )
-        assert exported_grammars[-1]["documentMetadata"]["visible"] is True
+        assert all(
+            next(
+                element.text
+                for element in slide.elements
+                if element.kind == "text" and element.semantic_role == "body"
+            )
+            == persisted.slides[index].slide.body
+            for index, slide in enumerate(scene.slides)
+        )
         assert 'semantic-role-document-id' in previews[0]
         assert 'semantic-role-document-id' not in previews[1]
         assert 'semantic-role-document-id' in previews[-1]
-        assert len({grammar["archetype"] for grammar in exported_grammars}) >= 2
-        timeline_grammar = next(
-            grammar
-            for grammar in exported_grammars
-            if grammar["archetype"] == "timeline"
-        )
-        assert len(timeline_grammar["blocks"]) == 4
-        assert all(len(grammar["blocks"]) <= 4 for grammar in exported_grammars)
-        assert len(
-            {
-                block["semanticRole"]
-                for grammar in exported_grammars
-                for block in grammar["blocks"]
-            }
-        ) >= 3
-        assert all(
-            "".join(block["text"] for block in grammar["blocks"])
-            == persisted.slides[index].slide.body
-            for index, grammar in enumerate(exported_grammars)
-        )
-        assert all(grammar["digest"] in previews[index] for index, grammar in enumerate(exported_grammars))
 
         generation = LegacyMasterGeneration(
             result=result,
@@ -391,6 +375,10 @@ def test_company_standard_authored_template_vertical_slice(
         )
         assert export_payload["sourceSemanticSnapshot"] == semantic
         assert export_payload["sourceSemanticSnapshot"]["slideCount"] == len(exported)
+        assert export_payload["sceneDigest"] == scene.scene_digest
+        assert export_payload["scene"] == scene.model_dump(
+            mode="json", by_alias=True
+        )
         visual_evidence = _verified_resolved_snapshot_evidence(
             generation,
             readback_verified=True,

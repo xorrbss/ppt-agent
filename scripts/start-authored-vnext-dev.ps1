@@ -225,13 +225,14 @@ $sharedAuthoredEnvironment = @{
     "DISABLE_AUTH" = "true"
     "DISABLE_ANONYMOUS_TRACKING" = "true"
     "DISABLE_IMAGE_GENERATION" = "true"
+    "AUTHORED_SOURCE_IMAGES_ENABLED" = "true"
     "AUTHORED_VNEXT_MASTER_ENABLED" = "true"
     "AUTHORED_VNEXT_GENERATION_ENABLED" = "true"
     "AUTHORED_VNEXT_EXPORT_ENABLED" = "true"
     "AUTHORED_VNEXT_OOXML_PACKAGE_ENABLED" = "true"
     "AUTHORED_VNEXT_REPOSITORY_MODE" = "sql"
     "AUTHORED_VNEXT_LOCAL_SLIDE_COUNT" = "3"
-    "AUTHORED_ONLY_NEW_PRESENTATION_ADMISSION" = "false"
+    "AUTHORED_ONLY_NEW_PRESENTATION_ADMISSION" = "true"
     "AUTHORED_VNEXT_OOXML_WORKER_TOKEN" = $workerToken
 }
 
@@ -327,7 +328,7 @@ try {
     Write-Host "Presenton with PPT Master local development is ready."
     Write-Host "Open the existing flow: $proxyUrl/upload"
     Write-Host "Local slide count: 3"
-    Write-Host "New-presentation authored-only admission: false (fallback preserved)"
+    Write-Host "New-presentation authored-vNext admission: true (compatibility open/export preserved)"
     Write-Host "Database: $devDatabasePath"
     Write-Host "Logs: $logRoot"
     Write-Host "Press Ctrl+C to stop only the three processes started by this script."

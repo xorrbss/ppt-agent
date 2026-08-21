@@ -118,7 +118,11 @@ def _native_scene_image_source(element: dict) -> str | None:
         media_type = relationship.get("targetMediaType")
         encoded = relationship.get("targetBytesBase64")
         expected_digest = relationship.get("targetDigest")
-        if media_type not in _WEB_IMAGE_MEDIA_TYPES or not isinstance(encoded, str):
+        if (
+            media_type not in _WEB_IMAGE_MEDIA_TYPES
+            or media_type == "image/svg+xml"
+            or not isinstance(encoded, str)
+        ):
             continue
         try:
             value = base64.b64decode(encoded, validate=True)
@@ -151,6 +155,53 @@ def _native_scene_image_source(element: dict) -> str | None:
             except (OSError, ValueError) as error:
                 raise ValueError("native scene preview image is invalid") from error
         return f"data:{media_type};base64,{encoded}"
+    return None
+
+
+def _native_scene_inline_svg(element: dict) -> str | None:
+    """Return verified retained SVG as inline markup for the isolated renderer.
+
+    The renderer intentionally rejects SVG data URLs in ``img`` elements, but
+    admits inline SVG through its normal URL/style policy.  Keeping the SVG
+    inline preserves retained-reference furniture without weakening that
+    boundary or rasterizing the body Scene.
+    """
+
+    relationships = element.get("relationships")
+    if not isinstance(relationships, list):
+        raise ValueError("native scene relationships are invalid")
+    for relationship in relationships:
+        if not isinstance(relationship, dict) or relationship.get("external") is True:
+            continue
+        if relationship.get("targetMediaType") != "image/svg+xml":
+            continue
+        encoded = relationship.get("targetBytesBase64")
+        if not isinstance(encoded, str):
+            continue
+        try:
+            value = base64.b64decode(encoded, validate=True)
+            root = ET.fromstring(value)
+        except (ValueError, binascii.Error, ET.ParseError) as error:
+            raise ValueError("native scene SVG bytes are invalid") from error
+        actual_digest = f"sha256:{hashlib.sha256(value).hexdigest()}"
+        if relationship.get("targetDigest") != actual_digest:
+            raise ValueError("native scene SVG digest is invalid")
+        if root.tag.rsplit("}", 1)[-1].lower() != "svg":
+            raise ValueError("native scene SVG root is invalid")
+        # ElementTree invents ``ns0:`` prefixes which are valid XML but become
+        # unknown HTML tag names to the isolated HTML parser.  SVG-in-HTML uses
+        # the SVG namespace implicitly, so serialize local names and let the
+        # renderer's existing attribute/URL policy validate the result.
+        for node in root.iter():
+            if isinstance(node.tag, str):
+                node.tag = node.tag.rsplit("}", 1)[-1]
+            node.attrib = {
+                name.rsplit("}", 1)[-1]: value
+                for name, value in node.attrib.items()
+            }
+        root.set("width", "100%")
+        root.set("height", "100%")
+        return ET.tostring(root, encoding="unicode")
     return None
 
 
@@ -284,6 +335,12 @@ def _native_scene_element_html(
     if kind == "image":
         source = _native_scene_image_source(element)
         if source is None:
+            svg = _native_scene_inline_svg(element)
+            if svg is not None:
+                return (
+                    f'<div class="native-scene-element native-scene-image" {attributes} '
+                    f'style="{escape(common, quote=True)}">{svg}</div>'
+                )
             raise ValueError("native scene image has no web-compatible asset")
         return (
             f'<img class="native-scene-element native-scene-image" {attributes} '
@@ -885,6 +942,7 @@ def build_preview(
         f'line-height:{float(render_title_style["lineHeight"]):g};'
         f'font-weight:{int(render_title_style["fontWeight"])};'
         f'color:{render_title_style["color"]};text-align:{render_title_style["alignment"]};'
+        'background:#F8FAFC;border-radius:8px;'
         f'display:flex;flex-direction:column;'
         f'justify-content:{"center" if render_title_style["verticalAlignment"] == "middle" else "flex-end" if render_title_style["verticalAlignment"] == "bottom" else "flex-start"}">'
         f"{title_lines}</section>"

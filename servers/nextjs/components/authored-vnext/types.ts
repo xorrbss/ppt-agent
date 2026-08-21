@@ -59,11 +59,20 @@ export interface CanvasElementStyle {
   textAlign?: CSSProperties["textAlign"];
 }
 
+export interface FurnitureTextColorEvidence {
+  requestedColor: string;
+  effectiveColor: string;
+  contrastRatio: number;
+  contrastAdjusted: boolean;
+  source: "backend" | "computed";
+}
+
 interface MasterElementBase {
   id: WorkbenchEntityId;
   bounds: ElementBounds;
   label: string;
   style?: CanvasElementStyle;
+  furnitureTextColor?: FurnitureTextColorEvidence;
 }
 
 export type MasterLayerElement =
@@ -75,6 +84,13 @@ interface BodyElementBase {
   id: WorkbenchEntityId;
   bounds: ElementBounds;
   label: string;
+  semanticRole?: string;
+  editability: {
+    text: boolean;
+    geometry: boolean;
+    asset: boolean;
+    data: boolean;
+  };
 }
 
 export interface TextBodyElement extends BodyElementBase {
@@ -88,6 +104,13 @@ export interface AssetBodyElement extends BodyElementBase {
   assetId: WorkbenchEntityId;
   alt: string;
   previewUrl?: string;
+  /** Preview is absent unless a digest-pinned browser-safe reference exists. */
+  previewUnavailableReason?: string;
+  assetDigest: string;
+  mediaType?: "image/png" | "image/jpeg" | "image/svg+xml" | "image/webp";
+  storageReference?: string;
+  sizeBytes?: number;
+  crop: "contain" | "cover";
   fit: "contain" | "cover";
 }
 
@@ -97,15 +120,51 @@ export interface LayoutBodyElement extends BodyElementBase {
   name: string;
 }
 
+export interface ShapeBodyElement extends BodyElementBase {
+  kind: "shape";
+  shape: string;
+  style?: CanvasElementStyle;
+}
+
+/**
+ * These objects remain visible/selectable even while their specialized editor
+ * is unavailable. This prevents the old silent title/body-only downcast.
+ */
+export interface DataBodyElement extends BodyElementBase {
+  kind: "table" | "chart";
+  dataId: WorkbenchEntityId;
+  dataDigest: string;
+  dataPayload?: Record<string, unknown>;
+  rows?: number;
+  columns?: number;
+  chartType?: NativeChartType;
+  accessibilitySummary?: string;
+  capabilityMessage: string;
+}
+
+/** Matches the canonical Scene/OOXML chart vocabulary; no HTML-only chart type is accepted. */
+export type NativeChartType = "bar" | "column" | "line" | "area" | "pie" | "donut";
+
+export interface CapabilityBodyElement extends BodyElementBase {
+  kind: "connector" | "group";
+  capabilityMessage: string;
+  dataDigest?: string;
+}
+
 export type BodyLayerElement =
   | TextBodyElement
   | AssetBodyElement
-  | LayoutBodyElement;
+  | LayoutBodyElement
+  | ShapeBodyElement
+  | DataBodyElement
+  | CapabilityBodyElement;
 
 export interface ActiveSlideScene {
   slideId: WorkbenchEntityId;
   revision: number;
   title: string;
+  /** Company-standard furniture owns the canvas paint; canonical body Scene does not. */
+  backgroundColor: string;
   masterRevisionLabel: string;
   masterElements: readonly MasterLayerElement[];
   bodyElements: readonly BodyLayerElement[];
@@ -132,8 +191,25 @@ export interface AssetReplaceCommand extends CommandBase {
   kind: "asset.replace";
   patch: {
     assetId: WorkbenchEntityId;
+    assetDigest: string;
     alt: string;
-    fit: AssetBodyElement["fit"];
+    crop: AssetBodyElement["crop"];
+    mediaType?: AssetBodyElement["mediaType"];
+    storageReference?: string;
+    sizeBytes: number;
+  };
+}
+
+export interface DataSetCommand extends CommandBase {
+  kind: "data.set";
+  patch: {
+    dataId: WorkbenchEntityId;
+    dataDigest: string;
+    dataPayload: Record<string, unknown>;
+    rows?: number;
+    columns?: number;
+    chartType?: NativeChartType;
+    accessibilitySummary?: string;
   };
 }
 
@@ -146,6 +222,7 @@ export type WorkbenchTypedCommand =
   | TextPatchCommand
   | GeometryPatchCommand
   | AssetReplaceCommand
+  | DataSetCommand
   | LayoutApplyCommand;
 
 export interface CommandContext {
@@ -181,12 +258,38 @@ export type InspectorModel =
       assetId: WorkbenchEntityId;
       alt: string;
       fit: AssetBodyElement["fit"];
+      assetDigest: string;
+      mediaType?: AssetBodyElement["mediaType"];
+      storageReference?: string;
+      sizeBytes?: number;
+    }
+  | {
+      kind: "data";
+      context: CommandContext;
+      nodeKind: DataBodyElement["kind"];
+      label: string;
+      dataId: WorkbenchEntityId;
+      dataDigest: string;
+      dataPayload: Record<string, unknown>;
+      rows?: number;
+      columns?: number;
+      chartType?: NativeChartType;
+      accessibilitySummary?: string;
+      /** Table/chart data and geometry are independently sealed Scene capabilities. */
+      geometry?: ElementBounds;
     }
   | {
       kind: "layout";
       context: CommandContext;
       layoutId: WorkbenchEntityId;
       options: readonly { id: WorkbenchEntityId; label: string }[];
+    }
+  | {
+      kind: "capability";
+      nodeKind: CapabilityBodyElement["kind"];
+      label: string;
+      message: string;
+      editability: BodyElementBase["editability"];
     };
 
 export type WorkbenchPanelKind =

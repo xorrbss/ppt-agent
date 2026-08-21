@@ -54,6 +54,13 @@ export function flowClientCallbacks({ accept, canonicalDeck, contract, createOpe
     onRejectRegeneration: reject,
     onRebaseConflict: () => { dispatch({ type: "conflict/rebaseStarted" }); refresh("conflict/rebaseSucceeded"); },
     onDismissConflict: () => refresh("conflict/discarded"),
+    onRetry: () => {
+      if (!canonicalDeck || !contract) return;
+      void generationClient.getDeck(canonicalDeck.deckId).then(({ deck }) => {
+        setCanonicalDeck(deck);
+        dispatch({ type: "deck/loadSucceeded", deck: adaptDeckSnapshotToWorkbenchDocument(deck, contract) });
+      }).catch((error) => onDiscardError(error instanceof Error ? error.message : "authored_vnext_reload_failed"));
+    },
     onRequestExport: exportDeck,
   };
 }

@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from functools import wraps
 import hashlib
-from typing import Any
+import time
+from typing import Any, Callable
 
 from sqlalchemy import and_, or_, select, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import sessionmaker
 
 from models.authored_vnext.deck import (
@@ -18,6 +20,7 @@ from models.authored_vnext.deck import (
     GenerationResult,
     RegenerationResult,
     RollbackResult,
+    SceneMutationResult,
 )
 from models.authored_vnext.master.operations import MasterRevisionResponse
 from models.sql.authored_vnext_generation_operation import (
@@ -48,6 +51,9 @@ from .composition import remember_composition_pin
 from .sql_publication import append_generation_deck
 
 
+SQLITE_LOCK_RETRY_DELAYS = (0.025, 0.075, 0.15)
+
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -60,6 +66,37 @@ def _as_utc(value: datetime) -> datetime:
 
 def _hash(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _is_sqlite_lock(error: OperationalError, dialect_name: str) -> bool:
+    if dialect_name != "sqlite":
+        return False
+    original = error.orig
+    sqlite_error_code = getattr(original, "sqlite_errorcode", None)
+    if isinstance(sqlite_error_code, int) and sqlite_error_code & 0xFF in {5, 6}:
+        return True
+    message = str(original).lower()
+    return "database is locked" in message or "database table is locked" in message
+
+
+def _retry_sqlite_write(method: Callable[..., Any]) -> Callable[..., Any]:
+    """Retry only transient SQLite writer contention inside one API attempt."""
+
+    @wraps(method)
+    def wrapped(self: "SqlGenerationRepository", *args: Any, **kwargs: Any) -> Any:
+        for attempt in range(len(SQLITE_LOCK_RETRY_DELAYS) + 1):
+            try:
+                return method(self, *args, **kwargs)
+            except OperationalError as error:
+                if (
+                    not _is_sqlite_lock(error, self._base.engine.dialect.name)
+                    or attempt == len(SQLITE_LOCK_RETRY_DELAYS)
+                ):
+                    raise
+                time.sleep(SQLITE_LOCK_RETRY_DELAYS[attempt])
+        raise AssertionError("unreachable sqlite retry state")
+
+    return wrapped
 
 
 def _payload(model: Any) -> dict[str, Any]:
@@ -93,6 +130,19 @@ def _assert_generation_composition(
                     "generation composition changed before publication"
                 )
             remember_composition_pin(result.composition)
+        if deck.scene is None:
+            raise GenerationConflictError("new generation scene is missing")
+        if result.checkpoint.scene_digest != deck.scene.scene_digest:
+            raise GenerationConflictError(
+                "generation scene changed before publication"
+            )
+        if (
+            result.composition is not None
+            and deck.scene.composition_digest != result.composition.digest
+        ):
+            raise GenerationConflictError(
+                "generation scene composition changed before publication"
+            )
     else:
         remember_composition_pin(deck.composition)
 
@@ -178,6 +228,7 @@ class SqlGenerationRepository:
             remember_composition_pin(deck.composition)
             return deck
 
+    @_retry_sqlite_write
     def begin_operation(
         self,
         *,
@@ -233,8 +284,20 @@ class SqlGenerationRepository:
                 session.flush()
                 return row
         except IntegrityError as error:
+            with self._sessions() as session:
+                existing = session.scalar(
+                    select(AuthoredVNextGenerationOperation).where(
+                        *self._scope(AuthoredVNextGenerationOperation),
+                        AuthoredVNextGenerationOperation.kind == kind,
+                        AuthoredVNextGenerationOperation.idempotency_key_hash
+                        == idempotency_hash,
+                    )
+                )
+                if existing is not None and existing.request_hash == request_hash:
+                    return existing
             raise GenerationConflictError("operation already exists") from error
 
+    @_retry_sqlite_write
     def claim_operation(
         self,
         operation_id: str,
@@ -288,8 +351,10 @@ class SqlGenerationRepository:
             if changed != 1:
                 raise GenerationConflictError("operation lease unavailable")
             claim = GenerationClaim(operation_id, worker_id, next_fence, expires)
-            self._claim = claim
-            return claim
+        # Do not expose a claim whose transaction failed during context-manager
+        # commit. This is what keeps an internal lock retry inside attempt 1.
+        self._claim = claim
+        return claim
 
     def get_operation_row(self, operation_id: str) -> AuthoredVNextGenerationOperation:
         with self._sessions() as session:
@@ -303,6 +368,7 @@ class SqlGenerationRepository:
                 raise GenerationNotFoundError("operation not found")
             return row
 
+    @_retry_sqlite_write
     def complete_operation(self, operation_id: str, result_payload: dict[str, Any]) -> None:
         """Complete a lease-fenced operation that does not advance a deck head."""
         claim = self._claim
@@ -361,6 +427,7 @@ class SqlGenerationRepository:
             "regeneration-result/v1": RegenerationResult,
             "rollback-result/v1": RollbackResult,
             "deck-mutation-result/v1": DeckMutationResult,
+            "scene-mutation-result/v1": SceneMutationResult,
         }.get(schema)
         if model is None:
             raise GenerationConflictError("operation result schema is unsupported")
@@ -371,6 +438,7 @@ class SqlGenerationRepository:
             remember_composition_pin(result.deck.composition)
         return result
 
+    @_retry_sqlite_write
     def publish_result(
         self,
         deck: DeckGenerationSnapshot,
@@ -442,6 +510,7 @@ class SqlGenerationRepository:
         except IntegrityError as error:
             raise GenerationConflictError("deck publication race") from error
 
+    @_retry_sqlite_write
     def publish_legacy_master_apply(
         self,
         deck: DeckGenerationSnapshot,
@@ -575,6 +644,7 @@ class SqlGenerationRepository:
         except IntegrityError as error:
             raise GenerationConflictError("legacy master apply publication race") from error
 
+    @_retry_sqlite_write
     def fail_operation(self, operation_id: str, error: Exception) -> None:
         claim = self._claim
         if claim is None or claim.operation_id != operation_id:
@@ -599,7 +669,17 @@ class SqlGenerationRepository:
                 )
             )
 
+    @_retry_sqlite_write
     def save_candidate(self, candidate_digest: str, payload: dict[str, object]) -> None:
+        """Persist one idempotent candidate without consuming an outer job retry.
+
+        Authored generation stores AI-zone resolution before it publishes the
+        deck. A short-lived SQLite writer (for example, the preceding Workbench
+        edit) must not turn that first operation attempt back into ``queued``.
+        Each retry opens a fresh bounded transaction in the base repository;
+        digest+payload equality makes an ambiguous prior commit safe to replay.
+        """
+
         self._base.save_candidate(candidate_digest, payload)
 
     def get_candidate(self, candidate_digest: str) -> dict[str, Any]:

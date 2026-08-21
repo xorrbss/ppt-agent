@@ -18,7 +18,9 @@ export function publicationPin(deck: DeckDocument, slideId: SlideId) {
   return {
     deckRevision: deck.revision,
     deckDigest: deck.digest,
+    sceneDigest: deck.sceneDigest,
     slideRevision: slide.revision,
+    slideDigest: slide.digest,
     masterDigest: deck.master.digest,
   };
 }

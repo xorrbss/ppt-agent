@@ -65,10 +65,6 @@ from services.authored_vnext.generation.outline import (
 )
 from services.authored_vnext.generation.quality_wire import build_deck_quality_report
 from services.authored_vnext.integration.artifact_store import BufferedArtifactStore
-from services.authored_vnext.integration.export_payload import (
-    RESOLVED_SNAPSHOT_EVIDENCE_VALUE_KEY,
-    worker_slides,
-)
 from services.authored_vnext.integration.export_service import (
     AuthoredVNextExportService,
     CreateJobCommand,
@@ -93,6 +89,20 @@ from .legacy_pin import (
 
 
 _HEADING = re.compile(r"^\s{0,3}#{1,6}\s+")
+_OUTLINE_VISUAL_DIRECTIVE = re.compile(
+    r"^[-*•▪◦]\s*(?:카드(?:\s+구성)?|프로세스|타임라인|비교|메트릭|이미지|표|차트|긴\s+CJK)\s*패턴(?:\s+적용|으로|을|\?|$)",
+    re.IGNORECASE,
+)
+_OUTLINE_SELF_COMMENTARY = re.compile(
+    r"^[-*•▪◦]\s*(?:this\b|same\b|use\b|no\s+extras?\b|exact\b|比較\?|メトリック\?)",
+    re.IGNORECASE,
+)
+_OUTLINE_SELF_COMMENTARY_TAIL = re.compile(
+    r"\s+(?:lol\b|lmao\b|haha\b|wait\b|user\s+said\b|better\s+not\b|need\b|fix\b|다\s*됨ㅋ|哈哈).*$",
+    re.IGNORECASE,
+)
+_EXPLICIT_SLIDE_SEQUENCE_ANCHOR = "다음 순서와 제목을 정확히 유지:"
+_EXPLICIT_SLIDE_MARKER = re.compile(r"(?:^|,\s+)(\d{1,2})\s+")
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,8 +157,47 @@ def _title_and_body(content: str, index: int) -> tuple[str, str]:
     if not lines:
         return f"Slide {index + 1}", "Content pending"
     title = _HEADING.sub("", lines[0]).strip(" -*") or f"Slide {index + 1}"
-    body = "\n".join(lines[1:]).strip() or lines[0]
+    body_lines = []
+    for line in lines[1:]:
+        if _OUTLINE_VISUAL_DIRECTIVE.match(line) is not None:
+            continue
+        if _OUTLINE_SELF_COMMENTARY.match(line) is not None:
+            continue
+        cleaned = _OUTLINE_SELF_COMMENTARY_TAIL.sub("", line).rstrip(" .;:,-")
+        if cleaned:
+            body_lines.append(cleaned)
+    body = "\n".join(body_lines).strip() or lines[0]
     return title[:4000], body[:20000]
+
+
+def _explicit_numbered_slide_contents(
+    prompt: str, *, expected_count: int
+) -> list[str] | None:
+    anchor = prompt.find(_EXPLICIT_SLIDE_SEQUENCE_ANCHOR)
+    if anchor < 0:
+        return None
+    sequence = prompt[anchor + len(_EXPLICIT_SLIDE_SEQUENCE_ANCHOR) :].strip()
+    markers = list(_EXPLICIT_SLIDE_MARKER.finditer(sequence))
+    if len(markers) != expected_count:
+        return None
+    if [int(match.group(1)) for match in markers] != list(
+        range(1, expected_count + 1)
+    ):
+        return None
+    contents: list[str] = []
+    for index, marker in enumerate(markers):
+        end = markers[index + 1].start() if index + 1 < len(markers) else len(sequence)
+        item = sequence[marker.end() : end].strip(" ,.")
+        opening = item.find("(")
+        closing = item.rfind(")")
+        if opening <= 0 or closing <= opening:
+            return None
+        title = item[:opening].strip()
+        body = item[opening + 1 : closing].strip()
+        if not title or not body:
+            return None
+        contents.append(f"## {title}\n- {body}")
+    return contents
 
 
 def _generate_snapshot(
@@ -176,9 +225,13 @@ def _generate_snapshot(
         # Admission has already sealed the exact body visual snapshot. Replay
         # it directly so mutable style YAML cannot change preview or export.
         materialize_authored_composition(master.contract, composition_pin)
+    source_slides = _explicit_numbered_slide_contents(
+        ai_text_context.prompt,
+        expected_count=len(outline.slides),
+    ) or [slide.content for slide in outline.slides]
     source_payload = {
         "presentationId": str(presentation_id),
-        "slides": [slide.content for slide in outline.slides],
+        "slides": source_slides,
         "aiTextZoneContext": ai_text_context.model_dump(mode="json"),
         "compositionDigest": composition_pin.digest,
         "sourceSemanticSnapshotDigest": (
@@ -189,8 +242,8 @@ def _generate_snapshot(
     }
     source_digest = canonical_digest(source_payload)
     items = []
-    for index, slide in enumerate(outline.slides):
-        title, body = _title_and_body(slide.content, index)
+    for index, content in enumerate(source_slides):
+        title, body = _title_and_body(content, index)
         items.append(
             OutlineItem(
                 item_id=f"outline:legacy-{index + 1}",
@@ -460,11 +513,21 @@ def build_legacy_generation_export_payload(
     """One immutable preview/native-export envelope, exposed for verification."""
 
     deck = generation.result.deck
+    if deck.scene is None:
+        # Old image-authored documents remain readable through their frozen
+        # compatibility route, but cannot enter the new canonical export job.
+        raise RuntimeError("authored_vnext_scene_required")
     return {
         "source": "legacy-presentation-generate",
         "deckId": deck.deck_id,
         "deckRevision": deck.revision,
         "deckDigest": deck.digest,
+        "sceneDigest": deck.scene.scene_digest,
+        "scene": deck.scene.model_dump(mode="json", by_alias=True),
+        "assetManifest": [
+            item.model_dump(mode="json", by_alias=True)
+            for item in deck.scene.asset_manifest
+        ],
         "aiTextZones": generation.ai_text_zones.model_dump(mode="json"),
         "compositionPin": generation.composition_pin.model_dump(
             mode="json", by_alias=True
@@ -507,6 +570,8 @@ def _verified_resolved_snapshot_evidence(
     """Build UI evidence only after the native worker passed strict readback."""
 
     deck = generation.result.deck
+    if deck.scene is None:
+        raise RuntimeError("authored_vnext_scene_required")
     composition = deck.composition
     template = composition.authored_template if composition is not None else None
     policy = composition.consistency_policy if composition is not None else None
@@ -521,57 +586,23 @@ def _verified_resolved_snapshot_evidence(
     ):
         raise RuntimeError("authored_vnext_visual_evidence_incomplete")
 
-    page_numbers: list[int] = []
-    semantic_roles: list[str] = []
-    layout_roles: list[str] = []
-    # Tests and persisted replay may provide the source master, while the live
-    # generation path carries the already-composed contract (plus resolved AI
-    # text zones). Never apply the composition a second time.
-    effective_contract = (
-        materialize_authored_composition(generation.master.contract, composition)
-        if generation.master.contract.digest == composition.master_digest
-        else generation.master.contract
-    )
-    for slide in worker_slides(deck, effective_contract):
-        encoded = slide.get("values", {}).get(
-            RESOLVED_SNAPSHOT_EVIDENCE_VALUE_KEY
+    scene = deck.scene
+    if scene is None or len(scene.slides) != len(deck.slides):
+        raise RuntimeError("authored_vnext_visual_evidence_incomplete")
+    page_numbers = list(range(1, len(scene.slides) + 1))
+    semantic_roles = list(
+        dict.fromkeys(
+            element.semantic_role
+            for slide in scene.slides
+            for element in slide.elements
         )
-        try:
-            evidence = json.loads(encoded)
-        except (TypeError, ValueError) as error:
-            raise RuntimeError(
-                "authored_vnext_visual_evidence_incomplete"
-            ) from error
-        if not isinstance(evidence, dict):
-            raise RuntimeError("authored_vnext_visual_evidence_incomplete")
-        page_number = evidence.get("pageNumber")
-        if not isinstance(page_number, int):
-            raise RuntimeError("authored_vnext_visual_evidence_incomplete")
-        page_numbers.append(page_number)
-        slide_semantic_roles = evidence.get("semanticRolesUsed")
-        slide_layout_roles = evidence.get("layoutRolesUsed")
-        if (
-            not isinstance(slide_semantic_roles, list)
-            or not slide_semantic_roles
-            or any(
-                not isinstance(role, str) or not role
-                for role in slide_semantic_roles
-            )
-            or not isinstance(slide_layout_roles, list)
-            or not slide_layout_roles
-            or any(
-                not isinstance(role, str) or not role
-                for role in slide_layout_roles
-            )
-        ):
-            raise RuntimeError("authored_vnext_visual_evidence_incomplete")
-        semantic_roles.extend(slide_semantic_roles)
-        layout_roles.extend(slide_layout_roles)
+    )
+    layout_roles = list(
+        dict.fromkeys(item.slide.layout_id for item in deck.slides)
+    )
     slide_count = len(deck.slides)
     if page_numbers != list(range(1, slide_count + 1)):
         raise RuntimeError("authored_vnext_visual_evidence_incomplete")
-    semantic_roles = list(dict.fromkeys(semantic_roles))
-    layout_roles = list(dict.fromkeys(layout_roles))
     if not semantic_roles or not layout_roles:
         raise RuntimeError("authored_vnext_visual_evidence_incomplete")
 
@@ -604,6 +635,11 @@ def _verified_resolved_snapshot_evidence(
         "preview_snapshot": dict(snapshot),
         "native_pptx_snapshot": dict(snapshot),
         "readback_verified": True,
+        "scene_digest": deck.scene.scene_digest,
+        "scene_slide_digests": [
+            slide.slide_digest for slide in deck.scene.slides
+        ],
+        "scene_composition_digest": deck.scene.composition_digest,
         "visual_fidelity": {
             "status": "passed",
             "basis": "resolved-geometry-and-native-readback",
@@ -707,17 +743,28 @@ async def export_persisted_legacy_master_deck(
     deck_revision = projection.get("deckRevision")
     deck_digest = projection.get("deckDigest")
     source_digest = projection.get("sourceDigest")
+    scene_digest = projection.get("sceneDigest")
+    scene_payload = projection.get("scene")
     pin_payload = projection.get("masterPin")
     ai_text_zones = projection.get("aiTextZones")
     composition_pin = projection.get("compositionPin")
     source_semantic_snapshot = projection.get("sourceSemanticSnapshot")
+    projection_version = projection.get("schemaVersion")
     if (
-        projection.get("schemaVersion") != "legacy-authored-vnext-projection/v1"
+        projection_version
+        not in {
+            "legacy-authored-vnext-projection/v1",
+            "authored-vnext-scene-projection/v1",
+        }
         or not isinstance(deck_id, str)
         or not isinstance(deck_revision, int)
         or not isinstance(deck_digest, str)
         or not isinstance(source_digest, str)
         or not isinstance(pin_payload, dict)
+        or (
+            projection_version == "authored-vnext-scene-projection/v1"
+            and (not isinstance(scene_digest, str) or not isinstance(scene_payload, dict))
+        )
     ):
         raise RuntimeError("authored_vnext_export_projection_incomplete")
     service = _export_service(owner_id)
@@ -727,12 +774,19 @@ async def export_persisted_legacy_master_deck(
         if deck.composition is not None
         else None
     )
+    persisted_scene = (
+        deck.scene.model_dump(mode="json", by_alias=True)
+        if deck.scene is not None
+        else None
+    )
     if (
         deck.revision != deck_revision
         or deck.digest != deck_digest
         or deck.source_digest != source_digest
         or deck.master.model_dump(mode="json", by_alias=True) != pin_payload
         or persisted_composition != composition_pin
+        or (deck.scene.scene_digest if deck.scene is not None else None) != scene_digest
+        or persisted_scene != scene_payload
     ):
         raise RuntimeError("authored_vnext_export_projection_stale")
     if isinstance(source_semantic_snapshot, dict):
@@ -774,6 +828,20 @@ async def export_persisted_legacy_master_deck(
                     "deckId": deck.deck_id,
                     "deckRevision": deck.revision,
                     "deckDigest": deck.digest,
+                    **(
+                        {
+                            "sceneDigest": deck.scene.scene_digest,
+                            "scene": deck.scene.model_dump(
+                                mode="json", by_alias=True
+                            ),
+                            "assetManifest": [
+                                item.model_dump(mode="json", by_alias=True)
+                                for item in deck.scene.asset_manifest
+                            ],
+                        }
+                        if deck.scene is not None
+                        else {}
+                    ),
                     **(
                         {"aiTextZones": ai_text_zones}
                         if isinstance(ai_text_zones, dict)
@@ -965,6 +1033,8 @@ def _prepare_remaster(
     quality = build_deck_quality_report(new_master.contract, deck, plans)
     if not quality.passed:
         raise RuntimeError("authored_vnext_candidate_rejected")
+    if deck.scene is None:
+        raise RuntimeError("authored_vnext_scene_required")
     artifact = DurableExportPlanBridge().export(
         master=new_master.contract,
         master_revision=new_master.revision,
@@ -974,11 +1044,17 @@ def _prepare_remaster(
             layout_registry_digest=resolved.pin.layout_registry_digest,
             font_manifest_digest=resolved.pin.font_manifest_digest,
             source_digest=current.source_digest,
+            scene_digest=deck.scene.scene_digest,
         ),
+        scene=deck.scene,
     )
     result = GenerationResult(
         operation_id=operation_id,
-        checkpoint=_published_checkpoint(command, validated),
+        checkpoint=_published_checkpoint(
+            command,
+            validated,
+            scene_digest=deck.scene.scene_digest,
+        ),
         outline_assignments=OutlineAssignmentSet(
             source_digest=current.source_digest,
             master_digest=resolved.pin.master_digest,
@@ -1040,6 +1116,14 @@ async def apply_master_to_legacy_presentation(
         "deckId": result.deck.deck_id,
         "deckRevision": result.deck.revision,
         "deckDigest": result.deck.digest,
+        "sceneDigest": (
+            result.deck.scene.scene_digest if result.deck.scene is not None else None
+        ),
+        "scene": (
+            result.deck.scene.model_dump(mode="json", by_alias=True)
+            if result.deck.scene is not None
+            else None
+        ),
         "sourceDigest": result.deck.source_digest,
         "masterPin": result.deck.master.model_dump(mode="json", by_alias=True),
         "exportArtifactDigest": result.export_artifact_digest,
@@ -1059,6 +1143,14 @@ async def apply_master_to_legacy_presentation(
                     "layoutId": item.slide.layout_id,
                     "masterPin": pin_payload,
                     "slideSpecDigest": item.slide.spec_digest,
+                    "sceneSlideDigest": (
+                        item.scene.slide_digest if item.scene is not None else None
+                    ),
+                    "sceneSlide": (
+                        item.scene.model_dump(mode="json", by_alias=True)
+                        if item.scene is not None
+                        else None
+                    ),
                 },
                 "properties": {"image": image_refs[index]},
             }
@@ -1196,6 +1288,8 @@ def _prepare_body_regeneration(
     quality = build_deck_quality_report(effective_contract, published, plans)
     if not quality.passed:
         raise RuntimeError("authored_vnext_candidate_rejected")
+    if published.scene is None:
+        raise RuntimeError("authored_vnext_scene_required")
     DurableExportPlanBridge().export(
         master=effective_contract,
         master_revision=master.revision,
@@ -1206,7 +1300,9 @@ def _prepare_body_regeneration(
             font_manifest_digest=deck.master.font_manifest_digest,
             source_digest=deck.source_digest,
             composition=deck.composition,
+            scene_digest=published.scene.scene_digest,
         ),
+        scene=published.scene,
     )
     result = RegenerationResult(
         operation_id=operation_id,
@@ -1286,6 +1382,14 @@ async def regenerate_legacy_master_body(
         **projection,
         "deckRevision": result.deck.revision,
         "deckDigest": result.deck.digest,
+        "sceneDigest": (
+            result.deck.scene.scene_digest if result.deck.scene is not None else None
+        ),
+        "scene": (
+            result.deck.scene.model_dump(mode="json", by_alias=True)
+            if result.deck.scene is not None
+            else None
+        ),
     }
     pin_payload = result.deck.master.model_dump(mode="json", by_alias=True)
     slide_update = {
@@ -1301,6 +1405,14 @@ async def regenerate_legacy_master_body(
                 "layoutId": item.slide.layout_id,
                 "masterPin": pin_payload,
                 "slideSpecDigest": item.slide.spec_digest,
+                "sceneSlideDigest": (
+                    item.scene.slide_digest if item.scene is not None else None
+                ),
+                "sceneSlide": (
+                    item.scene.model_dump(mode="json", by_alias=True)
+                    if item.scene is not None
+                    else None
+                ),
             },
             "properties": {"image": image_ref},
         }

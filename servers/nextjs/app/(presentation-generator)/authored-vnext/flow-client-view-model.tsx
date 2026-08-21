@@ -7,16 +7,67 @@ export function inspectorView(
   selectedNode: BodyNode | null,
   activeSlide: SlideDocument | null,
 ): InspectorModel {
-  if (selectedNode?.kind !== "text" || !activeSlide) return { kind: "none" };
-  return {
-    kind: "text",
-    context: {
-      slideId: activeSlide.id,
-      elementId: selectedNode.id,
-      expectedRevision: activeSlide.revision,
-    },
-    text: selectedNode.text,
+  if (!selectedNode || !activeSlide) return { kind: "none" };
+  const context = {
+    slideId: activeSlide.id,
+    elementId: selectedNode.id,
+    expectedRevision: activeSlide.revision,
   };
+  if (selectedNode.kind === "text" && selectedNode.editability.text) {
+    return { kind: "text", context, text: selectedNode.text };
+  }
+  if (
+    (selectedNode.kind === "image" || selectedNode.kind === "asset") &&
+    selectedNode.editability.asset
+  ) {
+    return {
+      kind: "asset",
+      context,
+      assetId: selectedNode.assetId,
+      alt: selectedNode.altText,
+      fit: selectedNode.fit,
+      assetDigest: selectedNode.digest,
+      mediaType: selectedNode.mediaType,
+      storageReference: selectedNode.storageReference,
+      sizeBytes: selectedNode.sizeBytes,
+    };
+  }
+  if (
+    (selectedNode.kind === "table" || selectedNode.kind === "chart") &&
+    selectedNode.editability.data
+  ) {
+    return {
+      kind: "data",
+      context,
+      nodeKind: selectedNode.kind,
+      label: selectedNode.semanticRole,
+      dataId: selectedNode.dataId,
+      dataDigest: selectedNode.dataDigest,
+      dataPayload: { ...(selectedNode.dataPayload ?? {}) },
+      ...(selectedNode.kind === "table"
+        ? { rows: selectedNode.rows, columns: selectedNode.columns }
+        : {
+            chartType: selectedNode.chartType,
+            accessibilitySummary: selectedNode.accessibilitySummary,
+          }),
+      geometry: selectedNode.editability.geometry
+        ? selectedNode.bounds
+        : undefined,
+    };
+  }
+  if (selectedNode.editability.geometry) {
+    return { kind: "geometry", context, bounds: selectedNode.bounds };
+  }
+  if (["connector", "group"].includes(selectedNode.kind)) {
+    return {
+      kind: "capability",
+      nodeKind: selectedNode.kind as "connector" | "group",
+      label: selectedNode.semanticRole,
+      message: `authored_vnext_scene_edit_capability_read_only:${selectedNode.kind}`,
+      editability: selectedNode.editability,
+    };
+  }
+  return { kind: "none" };
 }
 
 export function roleHintForLayout(

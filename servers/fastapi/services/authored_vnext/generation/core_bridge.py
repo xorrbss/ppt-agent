@@ -8,6 +8,7 @@ from pydantic import Field
 
 from models.authored_vnext.master.base import Digest, StrictCamelModel
 from models.authored_vnext.deck.composition import AuthoredCompositionPin
+from models.authored_vnext.deck.scene import DeckSceneIR
 from models.authored_vnext.master.contract import DeckMasterContract
 from models.authored_vnext.master.operations import ExportPlan, ExportSlidePlan
 from models.authored_vnext.master.slide import SlideSpecV2
@@ -25,6 +26,9 @@ class CoreBridgeCheckpoint(StrictCamelModel):
     composition: AuthoredCompositionPin | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
+    scene_digest: Digest | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 class CoreBridgeArtifact(StrictCamelModel):
@@ -39,6 +43,20 @@ def _expected_contract_digest(checkpoint: CoreBridgeCheckpoint) -> str:
     return checkpoint.master_digest
 
 
+def _validate_scene(
+    checkpoint: CoreBridgeCheckpoint,
+    scene: DeckSceneIR | None,
+    *,
+    consumer: str,
+) -> None:
+    if checkpoint.scene_digest is None:
+        if scene is not None:
+            raise ValueError(f"{consumer} received an unpinned scene")
+        return
+    if scene is None or scene.scene_digest != checkpoint.scene_digest:
+        raise ValueError(f"{consumer} scene checkpoint mismatch")
+
+
 @runtime_checkable
 class AuthoringCoreBridgePort(Protocol):
     """Core-owned export port; generation never imports an OOXML implementation."""
@@ -50,6 +68,7 @@ class AuthoringCoreBridgePort(Protocol):
         master_revision: int,
         slides: Sequence[SlideSpecV2],
         checkpoint: CoreBridgeCheckpoint,
+        scene: DeckSceneIR | None = None,
     ) -> CoreBridgeArtifact: ...
 
 
@@ -66,6 +85,7 @@ class OoxmlCoreBridgeAdapter:
         master_revision: int,
         slides: Sequence[SlideSpecV2],
         checkpoint: CoreBridgeCheckpoint,
+        scene: DeckSceneIR | None = None,
     ) -> CoreBridgeArtifact:
         if master.digest != _expected_contract_digest(checkpoint):
             raise ValueError("core bridge master checkpoint mismatch")
@@ -77,9 +97,25 @@ class OoxmlCoreBridgeAdapter:
             )
             if layout_digest != checkpoint.layout_registry_digest:
                 raise ValueError("core bridge layout checkpoint mismatch")
+        _validate_scene(checkpoint, scene, consumer="core bridge")
+        if scene is not None:
+            scene.require_capability(consumer="nativePptxExport")
+            if any(
+                element.kind != "text"
+                for slide_scene in scene.slides
+                for element in slide_scene.elements
+            ):
+                raise ValueError(
+                    "OoxmlMasterCompilerPort cannot consume non-text canonical scene elements"
+                )
         canonical = canonical_digest(
             {
                 "checkpoint": checkpoint.model_dump(mode="json", by_alias=True),
+                "scene": (
+                    scene.model_dump(mode="json", by_alias=True)
+                    if scene is not None
+                    else None
+                ),
                 "slides": [
                     slide.model_dump(mode="json", by_alias=True) for slide in slides
                 ],
@@ -126,13 +162,16 @@ class DeterministicCoreBridge:
         master_revision: int,
         slides: Sequence[SlideSpecV2],
         checkpoint: CoreBridgeCheckpoint,
+        scene: DeckSceneIR | None = None,
     ) -> CoreBridgeArtifact:
         if master.digest != _expected_contract_digest(checkpoint):
             raise ValueError("deterministic bridge master checkpoint mismatch")
+        _validate_scene(checkpoint, scene, consumer="deterministic bridge")
         receipt = {
             "masterRevision": master_revision,
             "checkpoint": checkpoint.model_dump(mode="json", by_alias=True),
             "slideDigests": [slide.spec_digest for slide in slides],
+            "sceneDigest": scene.scene_digest if scene is not None else None,
         }
         artifact_digest = canonical_digest(receipt)
         self.calls.append(receipt)
@@ -157,14 +196,19 @@ class DurableExportPlanBridge:
         master_revision: int,
         slides: Sequence[SlideSpecV2],
         checkpoint: CoreBridgeCheckpoint,
+        scene: DeckSceneIR | None = None,
     ) -> CoreBridgeArtifact:
         if master.digest != _expected_contract_digest(checkpoint):
             raise ValueError("export plan master checkpoint mismatch")
+        _validate_scene(checkpoint, scene, consumer="export plan")
+        if scene is not None:
+            scene.require_capability(consumer="nativePptxExport")
         receipt = {
             "schemaVersion": "authored-vnext-export-plan-receipt/v1",
             "masterRevision": master_revision,
             "checkpoint": checkpoint.model_dump(mode="json", by_alias=True),
             "slideDigests": [slide.spec_digest for slide in slides],
+            "sceneDigest": scene.scene_digest if scene is not None else None,
         }
         digest = canonical_digest(receipt)
         return CoreBridgeArtifact(

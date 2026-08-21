@@ -1,0 +1,97 @@
+{
+  "schemaVersion": "authored-vnext-visual-acceptance/v1",
+  "contentId": "authored-vnext-quality-representative-20260821",
+  "requiredNativeObjects": ["text", "shape", "image", "table", "chart"],
+  "slides": [
+    {
+      "slideId": "quality-cover",
+      "role": "cover",
+      "language": "ko",
+      "title": "품질 동등성: Authored와 authored-vNext",
+      "summary": "Authored 기준 82점 | authored-vNext 96점 | 네이티브 객체 5종 | Workbench 검증 완료",
+      "patterns": ["metric"],
+      "requiredText": ["품질 동등성", "Authored", "authored-vNext"]
+    },
+    {
+      "slideId": "quality-card",
+      "role": "card",
+      "language": "ko",
+      "title": "콘텐츠 기반 카드 구성",
+      "summary": "콘텐츠 분석: 의미와 언어를 판별 | 근거 보존: stable ID와 digest 유지 | 품질 판정: 잘림·겹침·대비 검사",
+      "patterns": ["card"],
+      "requiredText": ["콘텐츠 분석", "근거 보존", "품질 판정"]
+    },
+    {
+      "slideId": "quality-process",
+      "role": "process",
+      "language": "ko",
+      "title": "안전한 생성 프로세스",
+      "summary": "분석: 콘텐츠 구조화 → 레이아웃 선택: CJK 밀도 반영 → 검증: native readback과 PowerPoint 렌더",
+      "patterns": ["process"],
+      "requiredText": ["분석", "레이아웃 선택", "검증"]
+    },
+    {
+      "slideId": "quality-timeline",
+      "role": "timeline",
+      "language": "zh",
+      "title": "2026 质量验证时间线",
+      "summary": "2026 Q1 基线 → Q2 场景编译 → Q3 PowerPoint 验证 → Q4 发布",
+      "patterns": ["timeline"],
+      "requiredText": ["时间线", "2026", "验证"]
+    },
+    {
+      "slideId": "quality-comparison",
+      "role": "comparison",
+      "language": "zh",
+      "title": "既存 Authored と authored-vNext 比較",
+      "summary": "既存 Authored: 래스터 중심 기준 | authored-vNext: Scene 네이티브 객체 | 共通: 동일 콘텐츠와 body design",
+      "patterns": ["comparison"],
+      "requiredText": ["比較", "既存 Authored", "authored-vNext"]
+    },
+    {
+      "slideId": "quality-infographic",
+      "role": "infographic",
+      "language": "ja",
+      "title": "品質指標と安全なデータ",
+      "summary": "指標: 視覚品質 | データ: digest 保全 | 安全: capability を明示",
+      "patterns": ["infographic"],
+      "requiredText": ["指標", "データ", "安全"]
+    },
+    {
+      "slideId": "quality-image",
+      "role": "image",
+      "language": "ko",
+      "title": "검증된 이미지 asset pipeline",
+      "summary": "이미지 검색 결과를 digest와 bytes로 검증하고 cover crop을 적용한다.",
+      "patterns": ["infographic"],
+      "requiredText": ["이미지 검색", "digest", "crop"]
+    },
+    {
+      "slideId": "quality-table",
+      "role": "table",
+      "language": "ko",
+      "title": "표 데이터 네이티브 편집",
+      "summary": "표 데이터와 합계를 PowerPoint 네이티브 표로 생성하고 안전하게 편집한다.",
+      "patterns": ["comparison"],
+      "requiredText": ["표 데이터", "합계", "PowerPoint"]
+    },
+    {
+      "slideId": "quality-chart",
+      "role": "chart",
+      "language": "ko",
+      "title": "차트 데이터 품질 점수",
+      "summary": "2026 품질 점수를 PowerPoint 네이티브 차트로 생성하고 data digest를 보존한다.",
+      "patterns": ["metric"],
+      "requiredText": ["차트 데이터", "품질 점수", "2026"]
+    },
+    {
+      "slideId": "quality-long-cjk",
+      "role": "long-title",
+      "language": "ko-CJK",
+      "title": "긴 한글 제목과 中文日本語 혼합 문장이 실제 PowerPoint에서도 안전하게 맞아야 하는 품질 검증",
+      "summary": "잘림 없음: 한국어 본문과 中文 설명 및 日本語 データ를 함께 배치해 폰트 측정 기반 fit을 확인한다.",
+      "patterns": ["card", "infographic"],
+      "requiredText": ["긴 한글 제목과 中文日本語 혼합 문장", "잘림 없음"]
+    }
+  ]
+}

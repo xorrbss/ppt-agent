@@ -774,7 +774,11 @@ async def resolve_deck_ai_text_zones(
         override_digest=override_digest,
         values=values,
     )
-    if use_repository_cache:
+    # Furniture-only company standards intentionally expose no model-owned text
+    # zones.  Persisting an empty resolution adds no replay value and creates an
+    # avoidable second SQLite writer between deck publication and checkpoint
+    # persistence.  Real zones remain digest-cached and idempotent as before.
+    if use_repository_cache and zones:
         repository.save_candidate(candidate_digest, payload)
     return ResolvedAITextZoneSet.model_validate(payload)
 

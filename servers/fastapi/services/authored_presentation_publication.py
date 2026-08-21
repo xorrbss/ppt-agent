@@ -59,12 +59,15 @@ def _require_immutable_composition_publication(
         return
     deck = master_generation.result.deck
     composition = deck.composition
+    scene = deck.scene
     requested = request._authored_composition_pin
     if (
-        composition is None
+        scene is None
+        or composition is None
         or requested is None
         or requested != composition
         or master_generation.composition_pin != composition
+        or scene.composition_digest != composition.digest
     ):
         raise AuthoredStageError(
             slide_index=0,
@@ -93,6 +96,11 @@ def _require_immutable_composition_publication(
         or preview.get("composition_digest") != composition.digest
         or native_export_evidence.get("resolved_composition_digest")
         != composition.digest
+        or native_export_evidence.get("scene_digest") != scene.scene_digest
+        or native_export_evidence.get("scene_composition_digest")
+        != scene.composition_digest
+        or native_export_evidence.get("scene_slide_digests")
+        != [slide.slide_digest for slide in scene.slides]
         or native_export_evidence.get("readback_verified") is not True
     ):
         raise AuthoredStageError(
@@ -246,13 +254,23 @@ async def publish_authored_presentation(
             )
         if master_generation is not None:
             deck = master_generation.result.deck
+            scene = deck.scene
+            if scene is None:
+                raise AuthoredStageError(
+                    slide_index=0,
+                    stage="persist",
+                    code="authored_vnext_scene_required",
+                    retryable=False,
+                )
             pin = deck.master
             presentation.theme["authored_vnext"] = {
-                "schemaVersion": "legacy-authored-vnext-projection/v1",
+                "schemaVersion": "authored-vnext-scene-projection/v1",
                 "deckId": deck.deck_id,
                 "deckRevision": deck.revision,
                 "deckDigest": deck.digest,
                 "sourceDigest": deck.source_digest,
+                "sceneDigest": scene.scene_digest,
+                "scene": scene.model_dump(mode="json", by_alias=True),
                 "masterPin": pin.model_dump(mode="json", by_alias=True),
                 **(
                     {
@@ -315,6 +333,10 @@ async def publish_authored_presentation(
                             "slideSpecDigest": master_generation.result.deck.slides[
                                 i
                             ].slide.spec_digest,
+                            "sceneSlideDigest": scene.slides[i].slide_digest,
+                            "sceneSlide": scene.slides[i].model_dump(
+                                mode="json", by_alias=True
+                            ),
                         }
                         if master_generation is not None
                         else {}
@@ -359,7 +381,12 @@ async def publish_authored_presentation(
             response = PresentationPathAndEditPath(
                 presentation_id=presentation_id,
                 path=published_path,
-                edit_path=f"/presentation?id={presentation_id}",
+                edit_path=(
+                    "/authored-vnext/workbench?authoredDeckId="
+                    f"{master_generation.result.deck.deck_id}"
+                    if master_generation is not None
+                    else f"/presentation?id={presentation_id}"
+                ),
             )
             async_status = await sql_session.get(
                 AsyncPresentationGenerationTaskModel,

@@ -6,9 +6,11 @@ from datetime import datetime, timezone
 from dataclasses import replace
 from models.authored_vnext.deck import (
     AuthoredCompositionPin,
+    BodyShapeElement,
     BodyTextElement,
     CandidateBundle,
     CompletedSlideCheckpoint,
+    DeckSceneIR,
     DeckGenerationSnapshot,
     GenerateDeckRequest,
     GenerationCheckpoint,
@@ -45,6 +47,11 @@ from .outline import plan_outline
 from .title_fit import fit_and_promote_title
 from .quality_wire import build_deck_quality_report, validate_pipeline_slide_candidate
 from .repository import GenerationRepository
+from .scene_compiler import (
+    compatibility_composition_digest,
+    compile_deck_scene,
+    compile_slide_scene,
+)
 
 
 def _now() -> str:
@@ -53,14 +60,38 @@ def _now() -> str:
     )
 
 
-def _plan_body_element(slide_id: str, bounds, body: str) -> BodyTextElement:
-    return BodyTextElement(
-        kind="text",
-        element_id=f"body:{slide_id.removeprefix('slide:')}",
-        bounds=bounds,
-        semantic_role="body",
-        text=body,
+def _plan_body_elements(slide_id: str, bounds, body: str):
+    """Emit a real authored object composition, not one synthetic body blob."""
+
+    suffix = slide_id.removeprefix("slide:")
+    inset = min(24.0, bounds.width / 12, bounds.height / 12)
+    text_bounds = bounds.model_copy(
+        update={
+            "x": bounds.x + inset,
+            "y": bounds.y + inset,
+            "width": bounds.width - (2 * inset),
+            "height": bounds.height - (2 * inset),
+        }
     )
+    return [
+        BodyShapeElement(
+            kind="shape",
+            element_id=f"body:{suffix}.card",
+            bounds=bounds,
+            z_order=0,
+            semantic_role="decoration",
+            shape="roundRect",
+            color_token="surface",
+        ),
+        BodyTextElement(
+            kind="text",
+            element_id=f"body:{suffix}.content",
+            bounds=text_bounds,
+            z_order=1,
+            semantic_role="body",
+            text=body,
+        ),
+    ]
 
 
 def _visual_plan(
@@ -76,9 +107,10 @@ def _visual_plan(
         "layoutId": layout_id,
         "bodySlotId": slot_id,
         "sourceDigest": source_digest,
-        "elements": [_plan_body_element(slide_id, bounds, body).model_dump(
-            mode="json", by_alias=True
-        )],
+        "elements": [
+            element.model_dump(mode="json", by_alias=True)
+            for element in _plan_body_elements(slide_id, bounds, body)
+        ],
     }
     return SlideVisualPlan(**payload, planDigest=canonical_digest(payload))
 
@@ -92,9 +124,10 @@ def _validated_slide(
     composition: AuthoredCompositionPin | None,
     policy: str,
     revision: int = 1,
+    structured_inputs: dict | None = None,
 ) -> tuple[SlideVisualPlan, ValidatedSlideSpecV2]:
-    body_slot = next(
-        slot
+    layout = next(
+        layout
         for layout in (
             master.contract.layouts.cover,
             master.contract.layouts.section,
@@ -102,9 +135,13 @@ def _validated_slide(
             master.contract.layouts.long_title,
         )
         if layout.id == planned.layout_id
-        for slot in layout.slots
-        if slot.id == planned.model_input.slot_id
     )
+    body_slot = next(
+        slot for slot in layout.slots if slot.id == planned.model_input.slot_id
+    )
+    title_slot = next((slot for slot in layout.slots if slot.role == "title"), None)
+    if title_slot is None:
+        raise ValueError("canonical scene requires an authored title slot")
     plan = _visual_plan(
         slide_id=planned.slide_id,
         item_id=item_id,
@@ -143,6 +180,13 @@ def _validated_slide(
         **slide_payload,
         specDigest=canonical_digest(slide_payload),
     )
+    scene = compile_slide_scene(
+        slide=slide,
+        visual_plan=plan,
+        title_bounds=title_slot.bounds,
+        contract=master.contract,
+        structured_inputs=structured_inputs,
+    )
     checkpoint = SlideValidationCheckpoint(
         master_digest=pin.master_digest,
         layout_registry_digest=pin.layout_registry_digest,
@@ -150,19 +194,52 @@ def _validated_slide(
         source_digest=source_digest,
         composition=composition,
         visual_plan_digest=plan.plan_digest,
+        scene_digest=scene.slide_digest,
         quality_policy_version=policy,
         layout_id=slide.layout_id,
         body_slot_id=body_slot.id,
         validated_at=_now(),
     )
-    return plan, ValidatedSlideSpecV2(slide=slide, checkpoint=checkpoint)
+    return plan, ValidatedSlideSpecV2(
+        slide=slide,
+        checkpoint=checkpoint,
+        scene=scene,
+    )
 
 
 def _seal_deck(
     *, deck_id: str, revision: int, parent: str | None, pin: MasterDigestPin,
     composition: AuthoredCompositionPin | None,
     source_digest: str, slides: list[ValidatedSlideSpecV2],
+    canonical_scene: DeckSceneIR | None = None,
+    asset_manifest=None,
+    data_manifest=None,
 ) -> DeckGenerationSnapshot:
+    scene_slides = [item.scene for item in slides]
+    if any(scene is None for scene in scene_slides):
+        raise ValueError("new authored deck requires every canonical slide scene")
+    expected_composition_digest = (
+        composition.digest
+        if composition is not None
+        else compatibility_composition_digest(master_pin=pin)
+    )
+    scene = canonical_scene or compile_deck_scene(
+        deck_id=deck_id,
+        revision=revision,
+        composition_digest=expected_composition_digest,
+        source_digest=source_digest,
+        slides=[item for item in scene_slides if item is not None],
+        asset_manifest=asset_manifest,
+        data_manifest=data_manifest,
+    )
+    if (
+        scene.deck_id != deck_id
+        or scene.revision != revision
+        or scene.composition_digest != expected_composition_digest
+        or scene.source_digest != source_digest
+        or list(scene.slides) != [item for item in scene_slides if item is not None]
+    ):
+        raise ValueError("canonical scene differs from deck publication inputs")
     payload = {
         "schemaVersion": "deck-generation-snapshot/v1",
         "deckId": deck_id,
@@ -170,6 +247,7 @@ def _seal_deck(
         "parentRevisionDigest": parent,
         "master": pin.model_dump(mode="json", by_alias=True),
         "sourceDigest": source_digest,
+        "scene": scene.model_dump(mode="json", by_alias=True),
         "slides": [item.model_dump(mode="json", by_alias=True) for item in slides],
         "createdAt": _now(),
     }
@@ -185,6 +263,9 @@ def _completed(slides: list[ValidatedSlideSpecV2]) -> list[CompletedSlideCheckpo
             slide_index=index,
             spec_digest=item.slide.spec_digest,
             validation_checkpoint_digest=canonical_digest(item.checkpoint),
+            slide_scene_digest=(
+                item.scene.slide_digest if item.scene is not None else None
+            ),
         )
         for index, item in enumerate(slides)
     ]
@@ -193,7 +274,7 @@ def _completed(slides: list[ValidatedSlideSpecV2]) -> list[CompletedSlideCheckpo
 def _published_checkpoint(
     request: GenerateDeckRequest,
     slides: list[ValidatedSlideSpecV2],
-    *, attempt: int = 1,
+    *, scene_digest: str | None = None, attempt: int = 1,
 ) -> GenerationCheckpoint:
     payload = {
         "schemaVersion": "deck-generation-checkpoint/v1",
@@ -208,6 +289,8 @@ def _published_checkpoint(
         "attempt": attempt,
         "createdAt": _now(),
     }
+    if scene_digest is not None:
+        payload["sceneDigest"] = scene_digest
     if request.composition is not None:
         payload["composition"] = request.composition.model_dump(mode="json", by_alias=True)
     return GenerationCheckpoint(**payload, checkpointDigest=canonical_digest(payload))
@@ -248,6 +331,22 @@ class AuthoredVNextGenerationPipeline:
         assignments: list[OutlineAssignment] = []
         validated: list[ValidatedSlideSpecV2] = []
         plans: list[SlideVisualPlan] = []
+        scene_inputs = {
+            item.outline_item_id: {
+                "roleHint": item.role_hint,
+                **(
+                    {"sourceImage": item.source_image}
+                    if item.source_image is not None
+                    else {}
+                ),
+                **(
+                    {"sourceData": item.source_data}
+                    if item.source_data is not None
+                    else {}
+                ),
+            }
+            for item in request.slide_scene_inputs
+        }
         for item, slide in zip(request.outline.items, planned.slides, strict=True):
             if item.role_hint == "longTitle" and slide.layout_id != effective_contract.layouts.long_title.id:
                 forced_title = fit_and_promote_title(
@@ -281,6 +380,7 @@ class AuthoredVNextGenerationPipeline:
             plan, sealed = _validated_slide(
                 planning_master, slide, item.item_id, request.outline.source_digest,
                 request.master, request.composition, request.quality_policy_version,
+                structured_inputs=scene_inputs.get(item.item_id),
             )
             plans.append(plan)
             validated.append(sealed)
@@ -301,6 +401,8 @@ class AuthoredVNextGenerationPipeline:
             deck_id=request.deck_id, revision=1, parent=None, pin=request.master,
             composition=request.composition,
             source_digest=request.outline.source_digest, slides=validated,
+            asset_manifest=request.asset_manifest,
+            data_manifest=request.data_manifest,
         )
         quality = build_deck_quality_report(effective_contract, deck, plans)
         if not quality.passed:
@@ -333,6 +435,8 @@ class AuthoredVNextGenerationPipeline:
                 f"generated deck failed quality gate: {evidence}"
             )
         montage = build_generation_montage_manifest(deck)
+        if deck.scene is None:
+            raise CandidateRejectedError("generated deck has no canonical scene")
         artifact = self.core_bridge.export(
             master=effective_contract, master_revision=master.revision,
             slides=[item.slide for item in validated],
@@ -342,9 +446,15 @@ class AuthoredVNextGenerationPipeline:
                 font_manifest_digest=request.master.font_manifest_digest,
                 source_digest=request.outline.source_digest,
                 composition=request.composition,
+                scene_digest=deck.scene.scene_digest,
             ),
+            scene=deck.scene,
         )
-        checkpoint = _published_checkpoint(request, validated)
+        checkpoint = _published_checkpoint(
+            request,
+            validated,
+            scene_digest=deck.scene.scene_digest,
+        )
         result = GenerationResult(
             operation_id=request.operation_id,
             checkpoint=checkpoint,
@@ -524,6 +634,8 @@ class AuthoredVNextGenerationPipeline:
         quality = build_deck_quality_report(effective_contract, published, plans)
         if not quality.passed:
             raise CandidateRejectedError("regenerated deck failed aggregate gate")
+        if published.scene is None:
+            raise CandidateRejectedError("regenerated deck has no canonical scene")
         self.core_bridge.export(
             master=effective_contract, master_revision=master.revision,
             slides=[item.slide for item in slides],
@@ -533,7 +645,9 @@ class AuthoredVNextGenerationPipeline:
                 font_manifest_digest=request.master.font_manifest_digest,
                 source_digest=request.source_digest,
                 composition=published.composition,
+                scene_digest=published.scene.scene_digest,
             ),
+            scene=published.scene,
         )
         result = RegenerationResult(
             operation_id=publication_operation_id or request.operation_id,

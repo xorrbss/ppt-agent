@@ -260,6 +260,11 @@ export interface MasterFurniture {
   assetId?: string;
   fill?: string;
   stroke?: string;
+  /**
+   * Optional server-sealed furniture colour after Scene-background contrast
+   * resolution. The Workbench must render it verbatim when supplied.
+   */
+  effectiveColor?: string;
   visibility: "always" | "exceptCover" | "coverOnly" | "hidden";
 }
 

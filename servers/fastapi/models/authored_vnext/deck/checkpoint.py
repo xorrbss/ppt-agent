@@ -9,6 +9,7 @@ from pydantic import Field, model_validator
 from ..master.base import DeckId, Digest, LayoutId, MasterId, SlideId, StrictCamelModel
 from ..master.slide import SlideSpecV2
 from .composition import AuthoredCompositionPin
+from .scene import SlideSceneIR
 
 
 OperationId = Annotated[str, Field(pattern=r"^operation:[a-z0-9][a-z0-9._-]*$")]
@@ -38,6 +39,9 @@ class SlideValidationCheckpoint(StrictCamelModel):
         default=None, exclude_if=lambda value: value is None
     )
     visual_plan_digest: Digest
+    scene_digest: Digest | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     quality_policy_version: str = Field(min_length=1, max_length=100)
     layout_id: LayoutId
     body_slot_id: str = Field(pattern=r"^slot:[a-z0-9][a-z0-9._-]*$")
@@ -48,6 +52,9 @@ class ValidatedSlideSpecV2(StrictCamelModel):
     schema_version: Literal["validated-slidespec/v2"] = "validated-slidespec/v2"
     slide: SlideSpecV2
     checkpoint: SlideValidationCheckpoint
+    scene: SlideSceneIR | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @model_validator(mode="after")
     def _digests_and_layout_are_sealed(self) -> "ValidatedSlideSpecV2":
@@ -69,6 +76,16 @@ class ValidatedSlideSpecV2(StrictCamelModel):
             raise ValueError("slide uses a different composition master digest")
         if self.slide.ownership.locked or not self.slide.ownership.model_writable:
             raise ValueError("validated slide must own only the writable body layer")
+        if self.scene is not None:
+            if (
+                self.scene.slide_id != self.slide.slide_id
+                or self.scene.revision != self.slide.revision
+            ):
+                raise ValueError("slide scene identity differs from compatibility slide")
+            if self.checkpoint.scene_digest != self.scene.slide_digest:
+                raise ValueError("slide scene digest was not sealed in checkpoint")
+        elif self.checkpoint.scene_digest is not None:
+            raise ValueError("checkpoint sceneDigest requires a slide scene")
         return self
 
 
@@ -77,6 +94,9 @@ class CompletedSlideCheckpoint(StrictCamelModel):
     slide_index: int = Field(ge=0, le=499)
     spec_digest: Digest
     validation_checkpoint_digest: Digest
+    slide_scene_digest: Digest | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 class GenerationCheckpoint(StrictCamelModel):
@@ -98,6 +118,9 @@ class GenerationCheckpoint(StrictCamelModel):
         default=None, exclude_if=lambda value: value is None
     )
     source_digest: Digest
+    scene_digest: Digest | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     quality_policy_version: str = Field(min_length=1, max_length=100)
     total_slides: int = Field(ge=1, le=500)
     completed_slides: list[CompletedSlideCheckpoint] = Field(
@@ -124,4 +147,8 @@ class GenerationCheckpoint(StrictCamelModel):
             self.completed_slides
         ) != self.total_slides:
             raise ValueError("completed stage requires every slide checkpoint")
+        if self.scene_digest is not None and any(
+            slide.slide_scene_digest is None for slide in self.completed_slides
+        ):
+            raise ValueError("canonical generation checkpoint requires every slide scene digest")
         return self

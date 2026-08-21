@@ -7,6 +7,8 @@ extraction, registry, selection and substitution modules have their own suites.
 """
 
 import asyncio
+import hashlib
+import os
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
@@ -47,13 +49,19 @@ _VALID = (
 
 
 def _candidate(asset_id: str, heading: str, slide_index: int = 0):
+    # Production now reopens every candidate and verifies the sealed digest
+    # before selection.  Keep these wiring fixtures byte-backed so a missing
+    # test file cannot accidentally exercise the degradation branch.
+    payload = (f"verified-source-image:{asset_id}").encode("utf-8")
+    path = Path(os.environ["APP_DATA_DIRECTORY"]) / f"{asset_id}.png"
+    path.write_bytes(payload)
     return SourceImageCandidate(
         asset_id=asset_id,
-        path=Path(f"/tmp/{asset_id}.png"),
+        path=path,
         mime_type="image/png",
         width=1600,
         height=900,
-        digest=asset_id * 4,
+        digest=hashlib.sha256(payload).hexdigest(),
         source_slide_index=slide_index,
         source_heading=heading,
     )
@@ -217,10 +225,23 @@ def test_reference_snapshot_assets_are_resolved_to_local_paths(monkeypatch):
     assert calls[0][1] == [Path("/private/store/deck.pptx")]
 
 
-def test_master_owned_decks_are_skipped(monkeypatch):
+def test_master_owned_decks_keep_body_source_images(monkeypatch, tmp_path):
     monkeypatch.setenv("AUTHORED_SOURCE_IMAGES_ENABLED", "true")
     calls = []
-    _install_registry(monkeypatch, calls, result=[_candidate("a", "매출")])
+    path = tmp_path / "a.png"
+    value = b"verified-body-image"
+    path.write_bytes(value)
+    candidate = SourceImageCandidate(
+        asset_id="a",
+        path=path,
+        mime_type="image/png",
+        width=1600,
+        height=900,
+        digest=hashlib.sha256(value).hexdigest(),
+        source_slide_index=0,
+        source_heading="매출",
+    )
+    _install_registry(monkeypatch, calls, result=[candidate])
 
     got = _run(
         seam.collect_source_image_candidates(
@@ -234,8 +255,8 @@ def test_master_owned_decks_are_skipped(monkeypatch):
         )
     )
 
-    assert got == []
-    assert calls == []
+    assert [candidate.asset_id for candidate in got] == ["a"]
+    assert len(calls) == 1
 
 
 def test_exact_reconstruction_is_skipped(monkeypatch):

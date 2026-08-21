@@ -9,6 +9,7 @@ from .sql_repository import (
     PublicationConflictError,
     SourceDigestMismatchError,
 )
+from .worker import NativeSceneOoxmlWorkerTransport
 
 __all__ = [
     "AuthoredVNextSqlRepository",
@@ -18,4 +19,5 @@ __all__ = [
     "OperationFenceError",
     "PublicationConflictError",
     "SourceDigestMismatchError",
+    "NativeSceneOoxmlWorkerTransport",
 ]

@@ -123,11 +123,24 @@ async def _validation_exception_handler(
             safe_message=definition.safe_message,
             retryable=definition.retryable,
         )
+    # Pydantic model-validator errors can carry the original ``ValueError``
+    # object in ``ctx``. Passing that object directly to JSONResponse raises a
+    # second serialization exception and turns an actionable 422 into an
+    # opaque 500. Keep the public validation location/message/type only; this
+    # also avoids reflecting submitted deck text or asset payloads.
+    public_errors = [
+        {
+            key: value
+            for key, value in error.items()
+            if key in {"type", "loc", "msg"}
+        }
+        for error in exception.errors()
+    ]
     return _error_response(
         request,
         exception,
         status_code=422,
-        detail=exception.errors(),
+        detail=public_errors,
         code="request_validation_error",
         message="Request validation failed",
     )

@@ -17,6 +17,8 @@ from models.authored_vnext.deck import (
     RollbackDeckRequest,
     RollbackResult,
     ReorderSlidesCommand,
+    SceneMutationCommand,
+    SceneMutationResult,
 )
 from models.authored_vnext.master.base import Digest, StrictCamelModel
 
@@ -72,6 +74,11 @@ class ReorderOperationRequest(StrictCamelModel):
     command: ReorderSlidesCommand
 
 
+class SceneMutationOperationRequest(StrictCamelModel):
+    idempotency_key: str = Field(min_length=8, max_length=256)
+    command: SceneMutationCommand
+
+
 class DeckResponse(StrictCamelModel):
     schema_version: Literal["authored-vnext-deck-response/v1"] = (
         "authored-vnext-deck-response/v1"
@@ -79,7 +86,9 @@ class DeckResponse(StrictCamelModel):
     deck: DeckGenerationSnapshot
 
 
-GenerationPublicResult = GenerationResult | RegenerationResult | RollbackResult
+GenerationPublicResult = (
+    GenerationResult | RegenerationResult | RollbackResult | SceneMutationResult
+)
 
 
 class CandidateReference(StrictCamelModel):

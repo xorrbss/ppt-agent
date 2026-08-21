@@ -28,24 +28,31 @@ const digestC = `sha256:${"c".repeat(64)}` as Digest;
 const digestD = `sha256:${"d".repeat(64)}` as Digest;
 const slideId = "slide:one" as SlideId;
 
-function deck(overrides: Partial<Pick<DeckDocument, "revision" | "digest" | "slides">> = {}): DeckDocument {
+function deck(overrides: Partial<Pick<DeckDocument, "revision" | "digest" | "sceneDigest" | "slides">> = {}): DeckDocument {
   return {
     schemaVersion: "authored-workbench/v1",
     id: "deck:test",
     revision: overrides.revision ?? 1,
     digest: overrides.digest ?? digestA,
+    sceneDigest: overrides.sceneDigest ?? digestB,
+    assetManifest: [{ assetId: "asset:old", digest: digestB, mediaType: "image/png", storageReference: "/assets/old.png", sizeBytes: 128 }],
+    dataManifest: [{ dataId: "data:kpis", digest: digestC, kind: "table", payload: { cells: [["42"]] } }],
     master: { id: "master:published", revision: 4, digest: digestD, layer: "master", locked: true },
     slides: overrides.slides ?? [
       {
         id: slideId,
         revision: 2,
+        digest: digestC,
         layoutId: "layout:standard",
         nodes: [
           {
             id: "element:title",
             kind: "text",
             layer: "body",
-            editable: true,
+            zOrder: 1,
+            rotation: 0,
+            semanticRole: "title",
+            editability: { text: true, geometry: true, asset: false, data: false },
             role: "title",
             text: "원본 제목",
             bounds: { x: 40, y: 40, width: 800, height: 80 },
@@ -54,11 +61,31 @@ function deck(overrides: Partial<Pick<DeckDocument, "revision" | "digest" | "sli
             id: "element:hero",
             kind: "asset",
             layer: "body",
-            editable: true,
+            zOrder: 2,
+            rotation: 0,
+            semanticRole: "hero-image",
+            editability: { text: false, geometry: true, asset: true, data: false },
             assetId: "asset:old",
             digest: digestB,
             altText: "기존 이미지",
+            crop: "contain",
+            fit: "contain",
             bounds: { x: 40, y: 140, width: 500, height: 300 },
+          },
+          {
+            id: "element:kpis",
+            kind: "table",
+            layer: "body",
+            zOrder: 3,
+            rotation: 0,
+            semanticRole: "kpiTable",
+            editability: { text: false, geometry: true, asset: false, data: true },
+            dataId: "data:kpis",
+            dataDigest: digestC,
+            rows: 1,
+            columns: 1,
+            dataPayload: { cells: [["42"]] },
+            bounds: { x: 560, y: 140, width: 300, height: 200 },
           },
         ],
       },
@@ -74,7 +101,9 @@ function pin(document = deck()): CasPin {
   return {
     deckRevision: document.revision,
     deckDigest: document.digest,
+    sceneDigest: document.sceneDigest,
     slideRevision: document.slides[0].revision,
+    slideDigest: document.slides[0].digest,
     masterDigest: document.master.digest,
   };
 }
@@ -91,9 +120,50 @@ function titleText(state: WorkbenchState): string | undefined {
 }
 
 test("unknown parsers enforce locked master, stable ids, body nodes, and typed operations", () => {
-  const parsed = parseDeckDocument(JSON.parse(JSON.stringify(deck())) as unknown);
+  const canonicalRaw = {
+    schemaVersion: "authored-workbench/v1",
+    id: "deck:test",
+    revision: 1,
+    digest: digestA,
+    sceneDigest: digestB,
+    assetManifest: [],
+    dataManifest: [],
+    master: { id: "master:published", revision: 4, digest: digestD, layer: "master", locked: true },
+    slides: [{
+      slideId,
+      revision: 2,
+      slideDigest: digestC,
+      layoutId: "layout:standard",
+      elements: [{
+        elementId: "element:title",
+        kind: "text",
+        layer: "body",
+        zOrder: 1,
+        bounds: { x: 40, y: 40, width: 800, height: 80 },
+        rotation: 0,
+        semanticRole: "title",
+        editability: { text: true, geometry: true, asset: false, data: false },
+        text: "원본 제목",
+      }, {
+        elementId: "element:canvas-background",
+        kind: "shape",
+        layer: "body",
+        zOrder: -100,
+        bounds: { x: 0, y: 0, width: 1280, height: 720 },
+        rotation: 0,
+        semanticRole: "canvasBackground",
+        editability: { text: false, geometry: false, asset: false, data: false },
+        shape: "rect",
+        fill: "#111827",
+      }],
+    }],
+  };
+  const parsed = parseDeckDocument(canonicalRaw);
   assert.equal(parsed.master.locked, true);
   assert.equal(parsed.slides[0].nodes[0].id, "element:title");
+  const canvasBackground = parsed.slides[0].nodes.find((node) => node.semanticRole === "canvasBackground");
+  assert.equal(canvasBackground?.kind, "shape");
+  assert.equal(canvasBackground?.kind === "shape" ? canvasBackground.fill : undefined, "#111827");
 
   const raw: unknown = {
     kind: "text.replace",
@@ -106,7 +176,7 @@ test("unknown parsers enforce locked master, stable ids, body nodes, and typed o
   assert.equal(isWorkbenchOperation(raw), true);
   assert.equal(parseWorkbenchOperation(raw).kind, "text.replace");
 
-  const unlocked: unknown = { ...deck(), master: { ...deck().master, locked: false } };
+  const unlocked: unknown = { ...canonicalRaw, master: { ...canonicalRaw.master, locked: false } };
   assert.throws(() => parseDeckDocument(unlocked), WorkbenchParseError);
   assert.equal(isWorkbenchOperation({ kind: "html.write", html: "<script />" }), false);
 });
@@ -146,7 +216,8 @@ test("text, geometry, asset, and layout commands preserve stable ids and queue o
   const commands: readonly WorkbenchOperation[] = [
     operation("op:text", { kind: "text.replace", elementId: "element:title", text: "수정 제목" }),
     operation("op:geometry", { kind: "geometry.update", elementId: "element:title", bounds: { x: 50, y: 50, width: 700, height: 90 } }),
-    operation("op:asset", { kind: "asset.set", elementId: "element:hero", assetId: "asset:new", digest: digestC, altText: "교체 이미지" }),
+    operation("op:asset", { kind: "asset.set", elementId: "element:hero", assetId: "asset:new", digest: digestC, altText: "교체 이미지", crop: "cover", mediaType: "image/png", storageReference: "/assets/new.png", sizeBytes: 256 }),
+    operation("op:data", { kind: "data.set", elementId: "element:kpis", dataId: "data:kpis", dataDigest: digestB, dataPayload: { cells: [["84"]] }, rows: 1, columns: 1 }),
     operation("op:layout", { kind: "layout.apply", layoutId: "layout:long-title" }),
   ];
   let state = loaded();
@@ -160,7 +231,7 @@ test("text, geometry, asset, and layout commands preserve stable ids and queue o
   assert.equal(current.slides[0].layoutId, "layout:long-title");
   assert.equal(selectInspectorNode(state, "element:title")?.id, "element:title");
   assert.equal(current.slides[0].nodes.find((node) => node.id === "element:hero")?.kind, "asset");
-  assert.equal(state.outbox.length, 4);
+  assert.equal(state.outbox.length, 5);
   assert.deepEqual(selectNextWorkbenchEffect(state), { effect: "dispatchOperation", operation: commands[0] });
   assert.equal("deck" in (selectNextWorkbenchEffect(state) ?? {}), false);
 });
@@ -201,6 +272,27 @@ test("ack rebases queued patches on the server snapshot and a CAS conflict requi
   assert.equal(state.outbox[0].status, "queued");
   assert.equal(state.outbox[0].operation.base.deckRevision, 2);
   assert.equal(titleText(state), "로컬 편집");
+});
+
+test("a definitive mutation failure restores the canonical snapshot and is never replayed", () => {
+  const edit = operation("op:rejected", { kind: "text.replace", elementId: "element:title", text: "로컬 미저장" });
+  let state = workbenchReducer(loaded(), {
+    type: "operation/enqueue",
+    operation: edit,
+    createdAt: "2026-08-13T00:00:00Z",
+  });
+  state = workbenchReducer(state, { type: "operation/sendStarted", operationId: edit.operationId });
+  assert.equal(selectNextWorkbenchEffect(state), null);
+  state = workbenchReducer(state, {
+    type: "operation/failed",
+    operationId: edit.operationId,
+    code: "authored_vnext_scene_asset_digest_mismatch",
+    serverDeck: deck({ revision: 2, digest: digestB }),
+  });
+  assert.equal(titleText(state), "원본 제목");
+  assert.equal(state.outbox[0]?.status, "failed");
+  assert.equal(state.outbox[0]?.errorCode, "authored_vnext_scene_asset_digest_mismatch");
+  assert.equal(selectNextWorkbenchEffect(state), null);
 });
 
 test("explicit rebase fails closed when the locked master changed", () => {

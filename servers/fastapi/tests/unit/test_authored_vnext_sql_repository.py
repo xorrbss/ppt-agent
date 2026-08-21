@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import multiprocessing
 from pathlib import Path
+import sqlite3
 import uuid
 
 from alembic import command
@@ -30,6 +31,9 @@ from services.authored_vnext.master.errors import (
     MasterRevisionConflictError,
 )
 from services.authored_vnext.master.service import AuthoredVNextMasterService
+import services.authored_vnext.generation.sql_repository as generation_sql_repository
+from services.authored_vnext.generation.sql_repository import SqlGenerationRepository
+import services.authored_vnext.integration.sql_repository as integration_sql_repository
 from tests.support.authored_vnext_master_fixture import (
     long_title_slide_payload,
     master_contract_payload,
@@ -42,10 +46,15 @@ DIGEST_C = "sha256:" + "c" * 64
 DIGEST_D = "sha256:" + "d" * 64
 
 
-def _repository(path: Path, *, owner: str = "owner-a") -> AuthoredVNextSqlRepository:
+def _repository(
+    path: Path,
+    *,
+    owner: str = "owner-a",
+    timeout: float = 30,
+) -> AuthoredVNextSqlRepository:
     engine = create_engine(
         f"sqlite:///{path}",
-        connect_args={"check_same_thread": False, "timeout": 30},
+        connect_args={"check_same_thread": False, "timeout": timeout},
     )
     User.__table__.create(engine, checkfirst=True)
     AuthoredVNextSqlRepository.create_schema(engine)
@@ -66,6 +75,42 @@ def _repository(path: Path, *, owner: str = "owner-a") -> AuthoredVNextSqlReposi
         tenant_id="tenant-a",
         owner_id=owner_id,
     )
+
+
+def test_candidate_write_recovers_sqlite_lock_within_first_call(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    path = tmp_path / "candidate-lock.db"
+    base = _repository(path, timeout=0)
+    repository = SqlGenerationRepository(base)
+    lock_holder = sqlite3.connect(path, timeout=0, check_same_thread=False)
+    lock_holder.execute("BEGIN IMMEDIATE")
+    delays: list[float] = []
+
+    def release_lock(delay: float) -> None:
+        delays.append(delay)
+        lock_holder.commit()
+
+    monkeypatch.setattr(generation_sql_repository.time, "sleep", release_lock)
+    digest = "sha256:" + "1" * 64
+    payload = {"schema_version": "authored-vnext-ai-text-zones/v1", "values": []}
+    try:
+        repository.save_candidate(digest, payload)
+        repository.save_candidate(digest, payload)
+    finally:
+        lock_holder.close()
+
+    assert delays == [generation_sql_repository.SQLITE_LOCK_RETRY_DELAYS[0]]
+    assert repository.get_candidate(digest) == payload
+    with Session(base.engine) as session:
+        assert session.scalar(
+            text(
+                "SELECT count(*) FROM authored_vnext_candidates "
+                "WHERE candidate_digest = :digest"
+            ),
+            {"digest": digest},
+        ) == 1
 
 
 def _publish_process(
@@ -260,6 +305,67 @@ def test_export_fence_fail_closed_and_last_known_good(tmp_path: Path) -> None:
             expected_generation=current_pointer.generation,
             expected_digest=current_pointer.digest,
         )
+
+
+def test_export_attempt_one_survives_sqlite_lock_and_idempotent_replay(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    path = tmp_path / "export-lock.db"
+    repository = _repository(path, timeout=0)
+    master, deck = _published_deck(repository)
+    job = _job(repository, master, deck, key="attempt-one-lock")
+    lock_holder = sqlite3.connect(path, timeout=0, check_same_thread=False)
+    delays: list[float] = []
+
+    def release_lock(delay: float) -> None:
+        delays.append(delay)
+        lock_holder.commit()
+
+    monkeypatch.setattr(integration_sql_repository.time, "sleep", release_lock)
+    try:
+        lock_holder.execute("BEGIN IMMEDIATE")
+        claimed = repository.claim_export_job(job.id, worker_id="worker-attempt-one")
+        assert claimed.attempt_count == 1
+
+        lock_holder.execute("BEGIN IMMEDIATE")
+        receipt = repository.complete_export_job(
+            job.id,
+            fence_token=claimed.fence_token,
+            artifact=_artifact(master, deck),
+        )
+    finally:
+        lock_holder.close()
+
+    replay = _job(repository, master, deck, key="attempt-one-lock")
+    completed = repository.get_export_job(job.id)
+    evidence = repository.get_active_export_evidence(deck.deck_id)
+    assert replay.id == job.id
+    assert completed.state == "succeeded"
+    assert completed.attempt_count == 1
+    assert evidence is not None
+    assert evidence["deckId"] == deck.deck_id
+    assert evidence["deckRevision"] == deck.revision
+    assert evidence["deckDigest"] == deck.digest
+    assert evidence["sceneDigest"] == completed.spec_digest
+    assert evidence["publicationRevision"] == 1
+    assert evidence["artifactDigest"] == receipt.artifact_digest
+    assert evidence["pptxSha256"] == receipt.artifact_digest
+    assert evidence["pngSha256"] == []
+    assert evidence["attemptCount"] == 1
+    assert evidence["readBackVerified"] is True
+    assert delays == [
+        integration_sql_repository.SQLITE_LOCK_RETRY_DELAYS[0],
+        integration_sql_repository.SQLITE_LOCK_RETRY_DELAYS[0],
+    ]
+    with Session(repository.engine) as session:
+        assert session.scalar(
+            text(
+                "SELECT count(*) FROM authored_vnext_export_artifact_receipts "
+                "WHERE job_id = :job_id"
+            ),
+            {"job_id": receipt.job_id.hex},
+        ) == 1
 
 
 def test_manual_export_retry_can_reset_an_exhausted_attempt_budget(

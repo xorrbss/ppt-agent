@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from api.error_handling import install_api_error_handling
 from models.api_error_model import APIErrorModel
@@ -8,6 +8,16 @@ from models.api_error_model import APIErrorModel
 
 class _RevisionPayload(BaseModel):
     revision: int
+
+
+class _SealedPayload(BaseModel):
+    digest: str
+
+    @model_validator(mode="after")
+    def reject_stale_digest(self):
+        if self.digest == "stale":
+            raise ValueError("stale checkpoint digest")
+        return self
 
 
 def _test_app() -> FastAPI:
@@ -23,6 +33,10 @@ def _test_app() -> FastAPI:
 
     @app.post("/schema")
     async def validate_schema(payload: _RevisionPayload):
+        return payload
+
+    @app.post("/sealed-schema")
+    async def validate_sealed_schema(payload: _SealedPayload):
         return payload
 
     @app.get("/unexpected")
@@ -81,6 +95,24 @@ def test_schema_error_uses_same_envelope_and_generated_request_id():
     assert body["error"]["status_code"] == 422
     assert body["error"]["code"] == "request_validation_error"
     assert body["error"]["message"] == "Request validation failed"
+
+
+def test_model_validator_error_is_a_serializable_clear_422():
+    client = TestClient(_test_app(), raise_server_exceptions=False)
+
+    response = client.post("/sealed-schema", json={"digest": "stale"})
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["error"]["code"] == "request_validation_error"
+    assert body["detail"] == [
+        {
+            "type": "value_error",
+            "loc": ["body"],
+            "msg": "Value error, stale checkpoint digest",
+        }
+    ]
+    assert "stale" not in str(body["detail"][0].get("input", ""))
 
 
 def test_unhandled_error_does_not_expose_internal_exception_text():

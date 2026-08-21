@@ -58,6 +58,18 @@ AssetStore = Annotated[OwnerMasterAssetStore, Depends(get_master_asset_store)]
 AUTHORED_VNEXT_MASTER_ASSET_ROUTER = APIRouter()
 
 
+async def _publish_png_asset(
+    store: OwnerMasterAssetStore,
+    file: UploadFile,
+) -> MasterAssetReceipt:
+    if not (file.filename or "").lower().endswith(".png"):
+        raise MasterAssetError("authored_vnext_master_asset_png_required")
+    value = await file.read(MAX_MASTER_ASSET_BYTES + 1)
+    if len(value) > MAX_MASTER_ASSET_BYTES or await file.read(1):
+        raise MasterAssetError("authored_vnext_master_asset_size_invalid")
+    return MasterAssetReceipt.model_validate(store.publish_png(value))
+
+
 @AUTHORED_VNEXT_MASTER_ASSET_ROUTER.post(
     "/assets/logo",
     response_model=MasterAssetReceipt,
@@ -68,12 +80,27 @@ async def upload_master_logo(
     file: Annotated[UploadFile, File()],
 ) -> MasterAssetReceipt:
     try:
-        if not (file.filename or "").lower().endswith(".png"):
-            raise MasterAssetError("authored_vnext_master_asset_png_required")
-        value = await file.read(MAX_MASTER_ASSET_BYTES + 1)
-        if len(value) > MAX_MASTER_ASSET_BYTES or await file.read(1):
-            raise MasterAssetError("authored_vnext_master_asset_size_invalid")
-        return MasterAssetReceipt.model_validate(store.publish_png(value))
+        return await _publish_png_asset(store, file)
+    except MasterAssetError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={"code": error.code},
+        ) from error
+
+
+@AUTHORED_VNEXT_MASTER_ASSET_ROUTER.post(
+    "/assets/body-image",
+    response_model=MasterAssetReceipt,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_authored_body_image(
+    store: AssetStore,
+    file: Annotated[UploadFile, File()],
+) -> MasterAssetReceipt:
+    """Publish an immutable body image without adding it to furniture."""
+
+    try:
+        return await _publish_png_asset(store, file)
     except MasterAssetError as error:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

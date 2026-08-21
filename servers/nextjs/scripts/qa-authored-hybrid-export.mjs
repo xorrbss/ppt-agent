@@ -332,8 +332,8 @@ if (
 if (!["plain", "embedded"].includes(embeddingMode)) usage();
 
 const slides = await readSlides(python, database, presentationId);
-if (slides.length !== 20) {
-  throw new Error(`Expected 20 slides, received ${slides.length}.`);
+if (slides.length < 1 || slides.length > 500) {
+  throw new Error(`Expected 1..500 slides, received ${slides.length}.`);
 }
 const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
 if (!chromeExecutable) throw new Error("Chrome/Chromium is unavailable.");

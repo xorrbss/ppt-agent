@@ -5,6 +5,9 @@ export type ElementId = `element:${string}`;
 export type AssetId = `asset:${string}`;
 export type OperationId = `op:${string}`;
 export type Digest = `sha256:${string}`;
+export type SceneDataPayload = Readonly<Record<string, unknown>>;
+/** Native authored-vNext chart types supported by the Scene and OOXML adapters. */
+export type NativeChartType = "bar" | "column" | "line" | "area" | "pie" | "donut";
 
 export interface Bounds {
   readonly x: number;
@@ -13,38 +16,110 @@ export interface Bounds {
   readonly height: number;
 }
 
+/**
+ * Server-sealed per-element capabilities.  A false capability is an explicit
+ * product boundary, never an invitation to synthesize HTML or raster edits.
+ */
+export interface ElementEditability {
+  readonly text: boolean;
+  readonly geometry: boolean;
+  readonly asset: boolean;
+  readonly data: boolean;
+}
+
 export interface CasPin {
   readonly deckRevision: number;
   readonly deckDigest: Digest;
+  readonly sceneDigest: Digest;
   readonly slideRevision: number;
+  readonly slideDigest: Digest;
   readonly masterDigest: Digest;
 }
 
 interface BodyNodeBase {
   readonly id: ElementId;
   readonly layer: "body";
-  readonly editable: true;
+  readonly zOrder: number;
   readonly bounds: Bounds;
+  readonly rotation: number;
+  readonly semanticRole: string;
+  readonly editability: ElementEditability;
 }
 
 export interface TextBodyNode extends BodyNodeBase {
   readonly kind: "text";
-  readonly role: "title" | "body" | "caption" | "source";
+  /** Canonical Scene roles are extensible (`card-body`, `metric-label`, …). */
+  readonly role: string;
   readonly text: string;
 }
 
-export interface AssetBodyNode extends BodyNodeBase {
-  readonly kind: "asset";
+export interface ImageBodyNode extends BodyNodeBase {
+  /** `asset` is retained only for frozen pre-Scene compatibility snapshots. */
+  readonly kind: "image" | "asset";
   readonly assetId: AssetId;
   readonly digest: Digest;
   readonly altText: string;
+  /** `crop` is the canonical Scene IR field; `fit` remains a compatibility alias. */
+  readonly crop: "contain" | "cover";
+  readonly fit: "contain" | "cover";
+  readonly mediaType?: "image/png" | "image/jpeg" | "image/svg+xml" | "image/webp";
+  readonly storageReference?: string;
+  readonly sizeBytes?: number;
 }
 
-export type BodyNode = TextBodyNode | AssetBodyNode;
+/** @deprecated Use ImageBodyNode. */
+export type AssetBodyNode = ImageBodyNode;
+
+export interface ShapeBodyNode extends BodyNodeBase {
+  readonly kind: "shape";
+  readonly shape: string;
+  /** Canonical Scene paint is retained for preview/export fidelity. */
+  readonly fill?: string;
+  readonly stroke?: string;
+}
+
+export interface ConnectorBodyNode extends BodyNodeBase {
+  readonly kind: "connector";
+  readonly fromElementId: ElementId;
+  readonly toElementId: ElementId;
+}
+
+export interface TableBodyNode extends BodyNodeBase {
+  readonly kind: "table";
+  readonly dataId: `data:${string}`;
+  readonly dataDigest: Digest;
+  readonly rows: number;
+  readonly columns: number;
+  readonly dataPayload?: SceneDataPayload;
+}
+
+export interface ChartBodyNode extends BodyNodeBase {
+  readonly kind: "chart";
+  readonly dataId: `data:${string}`;
+  readonly dataDigest: Digest;
+  readonly chartType: NativeChartType;
+  readonly accessibilitySummary?: string;
+  readonly dataPayload?: SceneDataPayload;
+}
+
+export interface GroupBodyNode extends BodyNodeBase {
+  readonly kind: "group";
+  readonly childElementIds: readonly ElementId[];
+}
+
+export type BodyNode =
+  | TextBodyNode
+  | ImageBodyNode
+  | ShapeBodyNode
+  | ConnectorBodyNode
+  | TableBodyNode
+  | ChartBodyNode
+  | GroupBodyNode;
 
 export interface SlideDocument {
   readonly id: SlideId;
   readonly revision: number;
+  readonly digest: Digest;
   readonly layoutId: string;
   readonly nodes: readonly BodyNode[];
 }
@@ -54,6 +129,10 @@ export interface DeckDocument {
   readonly id: DeckId;
   readonly revision: number;
   readonly digest: Digest;
+  readonly sceneDigest: Digest;
+  /** Sealed Scene manifests retained so preview/mutation never guess bytes or data. */
+  readonly assetManifest: readonly SceneAssetReference[];
+  readonly dataManifest: readonly SceneDataReference[];
   readonly master: {
     readonly id: MasterId;
     readonly revision: number;
@@ -62,6 +141,21 @@ export interface DeckDocument {
     readonly locked: true;
   };
   readonly slides: readonly SlideDocument[];
+}
+
+export interface SceneAssetReference {
+  readonly assetId: AssetId;
+  readonly digest: Digest;
+  readonly mediaType: "image/png" | "image/jpeg" | "image/svg+xml" | "image/webp";
+  readonly storageReference: string;
+  readonly sizeBytes: number;
+}
+
+export interface SceneDataReference {
+  readonly dataId: `data:${string}`;
+  readonly digest: Digest;
+  readonly kind: "table" | "chart";
+  readonly payload: SceneDataPayload;
 }
 
 interface OperationBase {
@@ -88,6 +182,22 @@ export interface AssetSetOperation extends OperationBase {
   readonly assetId: AssetId;
   readonly digest: Digest;
   readonly altText: string;
+  readonly crop: "contain" | "cover";
+  readonly mediaType?: SceneAssetReference["mediaType"];
+  readonly storageReference?: string;
+  readonly sizeBytes: number;
+}
+
+export interface DataSetOperation extends OperationBase {
+  readonly kind: "data.set";
+  readonly elementId: ElementId;
+  readonly dataDigest: Digest;
+  readonly dataId: `data:${string}`;
+  readonly dataPayload: SceneDataPayload;
+  readonly rows?: number;
+  readonly columns?: number;
+  readonly chartType?: NativeChartType;
+  readonly accessibilitySummary?: string;
 }
 
 export interface LayoutApplyOperation extends OperationBase {
@@ -99,6 +209,7 @@ export type WorkbenchOperation =
   | TextReplaceOperation
   | GeometryUpdateOperation
   | AssetSetOperation
+  | DataSetOperation
   | LayoutApplyOperation;
 
 export type DocumentPatch =
@@ -120,8 +231,15 @@ export type DocumentPatch =
       readonly kind: "asset.set";
       readonly slideId: SlideId;
       readonly elementId: ElementId;
-      readonly before: Pick<AssetBodyNode, "assetId" | "digest" | "altText">;
-      readonly after: Pick<AssetBodyNode, "assetId" | "digest" | "altText">;
+      readonly before: Pick<ImageBodyNode, "assetId" | "digest" | "altText" | "crop" | "fit" | "mediaType" | "storageReference" | "sizeBytes">;
+      readonly after: Pick<ImageBodyNode, "assetId" | "digest" | "altText" | "crop" | "fit" | "mediaType" | "storageReference" | "sizeBytes">;
+    }
+  | {
+      readonly kind: "data.set";
+      readonly slideId: SlideId;
+      readonly elementId: ElementId;
+      readonly before: Pick<TableBodyNode | ChartBodyNode, "dataId" | "dataDigest" | "dataPayload">;
+      readonly after: Pick<TableBodyNode | ChartBodyNode, "dataId" | "dataDigest" | "dataPayload"> & Partial<Pick<TableBodyNode, "rows" | "columns">> & Partial<Pick<ChartBodyNode, "chartType" | "accessibilitySummary">>;
     }
   | {
       readonly kind: "layout.apply";
@@ -136,12 +254,14 @@ export interface HistoryEntry {
   readonly inverse: readonly DocumentPatch[];
 }
 
-export type OutboxStatus = "queued" | "sending" | "conflict";
+/** A server-rejected command remains auditable but is never replayed automatically. */
+export type OutboxStatus = "queued" | "sending" | "conflict" | "failed";
 
 export interface OutboxEntry {
   readonly operation: WorkbenchOperation;
   readonly patch: DocumentPatch;
   readonly status: OutboxStatus;
+  readonly errorCode?: string;
   readonly source: "user" | "undo" | "redo";
   readonly createdAt: string;
 }

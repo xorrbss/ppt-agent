@@ -46,6 +46,10 @@ _OPENING = frozenset(
 class TitleFitPlanningError(ValueError):
     """The title cannot fit any layout permitted by the published master."""
 
+    code = "authored_vnext_title_fit_rejected"
+    status_code = 422
+    retryable = False
+
 
 @dataclass(frozen=True, slots=True)
 class PlannedTitle:

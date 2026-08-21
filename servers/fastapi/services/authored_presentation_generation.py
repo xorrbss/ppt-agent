@@ -171,10 +171,24 @@ async def _generate_authored_presentation(
     ):
         if generation_job is not None:
             await _cleanup_published_checkpoints(generation_job.id)
+        existing_projection = (
+            existing.theme.get("authored_vnext")
+            if isinstance(existing.theme, dict)
+            else None
+        )
+        existing_deck_id = (
+            existing_projection.get("deckId")
+            if isinstance(existing_projection, dict)
+            else None
+        )
         return PresentationPathAndEditPath(
             presentation_id=presentation_id,
             path=existing_export,
-            edit_path=f"/presentation?id={presentation_id}",
+            edit_path=(
+                f"/authored-vnext/workbench?authoredDeckId={existing_deck_id}"
+                if isinstance(existing_deck_id, str) and existing_deck_id
+                else f"/presentation?id={presentation_id}"
+            ),
         )
 
     # Chat-first admission creates a hidden shell in the same transaction as
@@ -254,10 +268,15 @@ async def _generate_authored_presentation(
             ) from error
         composition_pin = request._authored_composition_pin
         deck_composition = master_generation.result.deck.composition
+        deck_scene = master_generation.result.deck.scene
         if (
             composition_pin is None
+            or deck_scene is None
             or master_generation.composition_pin != composition_pin
             or deck_composition != composition_pin
+            or deck_scene.composition_digest != composition_pin.digest
+            or master_generation.result.checkpoint.scene_digest
+            != deck_scene.scene_digest
         ):
             raise AuthoredStageError(
                 slide_index=0,
@@ -273,6 +292,7 @@ async def _generate_authored_presentation(
             deck_composition.digest,
             consumer="generation-preview-checkpoint",
         )
+        deck_scene.require_capability(consumer="preview")
         roles = [
             item.slide.layout_id for item in master_generation.result.deck.slides
         ]
@@ -526,5 +546,10 @@ async def _generate_authored_presentation(
     return PresentationPathAndEditPath(
         presentation_id=presentation_id,
         path=published_path,
-        edit_path=f"/presentation?id={presentation_id}",
+        edit_path=(
+            "/authored-vnext/workbench?authoredDeckId="
+            f"{master_generation.result.deck.deck_id}"
+            if master_generation is not None
+            else f"/presentation?id={presentation_id}"
+        ),
     )
