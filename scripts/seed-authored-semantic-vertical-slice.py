@@ -145,7 +145,7 @@ def _html(slide: str) -> str:
 </section>
 <div data-qid='a-right-sentinel' class='boundary-sentinel' style='left:1248px;top:310px;width:2px;height:10px;background:#ef4444;border-color:#ef4444'></div>
 <div data-qid='a-bottom-sentinel' class='boundary-sentinel' style='left:640px;top:708px;width:10px;height:2px;background:#ef4444;border-color:#ef4444'></div>
-<p data-qid='a-body-mono' data-semantic-role='body' style='position:absolute;left:704px;top:160px;margin:0;font-family:"IBM Plex Mono",monospace;font-size:25px;color:#1e293b'>mono run 42</p>
+<p data-qid='a-body-mono' data-semantic-role='body' style='position:absolute;left:704px;top:160px;margin:0;font-family:"IBM Plex Mono",monospace;font-size:25px;color:#1e293b'>MONORUN</p>
 </body></html>""".replace("__IMAGE_DATA_URI__", _IMAGE_DATA_URI)
     if slide == "b":
         return """<!doctype html><html data-qid='b-document' lang='ko'><head><meta charset='utf-8'><style>
@@ -163,7 +163,7 @@ def _html(slide: str) -> str:
 </section>
 <div data-qid='b-right-sentinel' class='boundary-sentinel' style='left:1278px;top:300px;width:2px;height:12px;background:#ef4444;border-color:#ef4444'></div>
 <div data-qid='b-bottom-sentinel' class='boundary-sentinel' style='left:620px;top:718px;width:12px;height:2px;background:#ef4444;border-color:#ef4444'></div>
-<p data-qid='b-body-mono' data-semantic-role='body' style='position:absolute;left:722px;top:170px;margin:0;font-family:"IBM Plex Mono",monospace;font-size:23px;color:#431407'>fixed-width 007</p>
+<p data-qid='b-body-mono' data-semantic-role='body' style='position:absolute;left:722px;top:170px;margin:0;font-family:"IBM Plex Mono",monospace;font-size:23px;color:#431407'>FIXEDWIDTH</p>
 </body></html>""".replace("__IMAGE_DATA_URI__", _IMAGE_DATA_URI)
     raise ValueError(f"unknown slide: {slide}")
 
@@ -225,7 +225,7 @@ def _semantic_elements(slide: str, asset_digest: str) -> list[dict]:
     font_family = "Malgun Gothic" if slide == "a" else "Batang"
     text_color = "#0f172a" if slide == "a" else "#7c2d12"
     body_color = "#1e293b" if slide == "a" else "#431407"
-    mono_text = "mono run 42" if slide == "a" else "fixed-width 007"
+    mono_text = "MONORUN" if slide == "a" else "FIXEDWIDTH"
     root_children = [f"{prefix}body-root"]
     body_children = [
         f"{prefix}panel",
