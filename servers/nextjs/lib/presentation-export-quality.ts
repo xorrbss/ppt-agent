@@ -117,7 +117,7 @@ export interface PresentationExportQualityReport {
   rendererIsolation?: PresentationExportRendererIsolation;
   exportAttemptId?: string;
   atomicBinding?: {
-    presentationId?: string;
+    presentationId: string;
     presentationRevision: number;
     canonicalSourceDigest: string;
     rendererSourceDigest: string;

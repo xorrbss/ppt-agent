@@ -31,6 +31,7 @@ from services.presentation_export_attempt_service import (
     terminalize_export_attempt_succeeded,
 )
 from services.presentation_export_direct_attempt_service import (
+    _validate_hybrid_atomic_binding,
     list_direct_hybrid_export_attempt_history,
 )
 from services.presentation_export_adapters import PresentationExportAdapterResult
@@ -322,6 +323,33 @@ def test_hybrid_v2_binds_attempt_and_separates_logical_readback_backplate() -> N
     )
     with pytest.raises(ValueError, match="quality sidecar visual parity binding"):
         validate_export_attempt_provenance(provenance)
+
+
+def test_hybrid_atomic_binding_rejects_cross_presentation_sidecar() -> None:
+    expected = {
+        "presentationId": str(uuid.uuid4()),
+        "presentationRevision": 4,
+        "canonicalSourceDigest": "a" * 64,
+        "rendererSourceDigest": "b" * 64,
+        "pptxSha256": "c" * 64,
+    }
+    export_attempt_id = uuid.uuid4()
+    assert _validate_hybrid_atomic_binding(
+        expected,
+        expected,
+        export_attempt_id=export_attempt_id,
+    ).export_attempt_id == export_attempt_id
+    wrong_presentation = {**expected, "presentationId": str(uuid.uuid4())}
+
+    with pytest.raises(
+        PresentationExportContractError,
+        match="presentation_export_atomic_binding_mismatch",
+    ):
+        _validate_hybrid_atomic_binding(
+            wrong_presentation,
+            expected,
+            export_attempt_id=export_attempt_id,
+        )
 
 
 async def _seed_attempt_presentation(maker) -> uuid.UUID:

@@ -168,6 +168,34 @@ test("ancestor backplate paint does not reject an otherwise stable native title"
   assert.deepEqual(result.typographyIssues, []);
 });
 
+test("upper raster paint in a standalone text box's transparent margin stays promotable", () => {
+  const title = mixedTextElement();
+  const marginPaint = {
+    ...title,
+    id: "upper-margin-paint",
+    domPath: "body > div:nth-of-type(2)",
+    sourceIndex: title.sourceIndex + 1,
+    bounds: bounds(300, 72, 32, 24),
+    classification: {
+      mode: "raster",
+      candidateKind: "shape",
+      reasons: ["external-paint"],
+    },
+  };
+  delete marginPaint.text;
+
+  const result = preflightNativeTypography([title], {
+    embeddedTypefaceFaces: [
+      { typeface: "IBM Plex Mono", face: "bold" },
+      { typeface: "Noto Sans KR", face: "bold" },
+    ],
+    backplateElements: [marginPaint],
+  });
+
+  assert.deepEqual(result.promotableElementIds, ["mixed-1"]);
+  assert.deepEqual(result.typographyIssues, []);
+});
+
 test("unrepresented lines and a true upper raster sibling remain exact fallbacks", () => {
   const faces = [
     { typeface: "IBM Plex Mono", face: "bold" },

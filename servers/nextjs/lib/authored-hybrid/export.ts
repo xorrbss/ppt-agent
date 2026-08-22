@@ -765,6 +765,7 @@ async function runUncachedAuthoredHybridExport(
     );
     const result = await attachAuthoredHybridEvidence({ path: hybridPath }, quality, {
       exportAttemptId: params.exportAttemptId,
+      presentationId: params.presentationId,
       presentationRevision: Number(presentation.revision),
       canonicalSourceDigest: params.canonicalSourceDigest,
       sourceDigest: sourceSha256,

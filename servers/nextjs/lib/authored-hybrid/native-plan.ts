@@ -582,6 +582,36 @@ function rectsIntersectPx(a: AuthoredHybridRect, b: AuthoredHybridRect): boolean
     a.y < b.y + b.height && a.y + a.height > b.y;
 }
 
+function textPaintBoundsForCollision(
+  element: AuthoredHybridEditableTextElement,
+  correctedBounds: AuthoredHybridRect,
+  tolerance: number
+): AuthoredHybridRect {
+  // A standalone PowerPoint text box has transparent geometry outside its
+  // glyphs. An upper raster object may safely occupy that empty area because
+  // reordering the invisible box cannot change the slide paint. Prefer the
+  // browser-observed glyph union only when it is finite and still belongs to
+  // the corrected text box. Decorated/container text keeps its complete shape
+  // bounds because its fill or border is visible.
+  if (element.text.containerShape) return correctedBounds;
+  const painted = element.text.layout?.paintedTextBounds?.px;
+  if (
+    !painted ||
+    ![painted.x, painted.y, painted.width, painted.height].every(Number.isFinite) ||
+    painted.width <= 0 ||
+    painted.height <= 0 ||
+    !rectContains(correctedBounds, painted, tolerance)
+  ) {
+    return correctedBounds;
+  }
+  return {
+    x: painted.x - tolerance,
+    y: painted.y - tolerance,
+    width: painted.width + tolerance * 2,
+    height: painted.height + tolerance * 2,
+  };
+}
+
 function isStrictlyAbove(
   other: AuthoredHybridElement,
   element: AuthoredHybridElement
@@ -705,6 +735,11 @@ export function preflightNativeTypography(
     if (!rectContains({ x: 0, y: 0, width: 1280, height: 720 }, correctedBounds, tolerance)) {
       issues.push({ code: "bounds-overflow", elementId: element.id });
     }
+    const collisionBounds = textPaintBoundsForCollision(
+      candidate,
+      correctedBounds,
+      tolerance
+    );
     if (
       options.backplateElements?.some(
         (other) =>
@@ -712,7 +747,7 @@ export function preflightNativeTypography(
           other.classification.mode === "raster" &&
           isStrictlyAbove(other, element) &&
           !isAncestorPaint(other, element) &&
-          rectsIntersectPx(correctedBounds, other.bounds.px)
+          rectsIntersectPx(collisionBounds, other.bounds.px)
       )
     ) {
       issues.push({ code: "backplate-collision", elementId: element.id });
@@ -870,10 +905,6 @@ export function selectLayerSafeNativeElements(
       if (!promotedIds.has(item.source.id)) continue;
       if (options.promoteTextAboveRaster === true && item.kind === "text") continue;
       if (options.promoteShapesAboveRaster === true && item.kind === "shape") continue;
-      // A semantic HTML illustration is intentionally captured as one picture.
-      // Its child nodes still appear in the extraction list, so treating those
-      // children as raster occluders would incorrectly discard the picture.
-      if (isCompositeHtmlIllustration(item)) continue;
       if (
         allElements.some(
           (other) =>
@@ -884,6 +915,7 @@ export function selectLayerSafeNativeElements(
               other,
               options.retainedChildPaint ?? "all"
             ) &&
+            !isCapturedCompositeChildPaint(item, other) &&
             intersects(item.source, other)
         )
       ) {
@@ -946,6 +978,23 @@ function isCompositeHtmlIllustration(item: PreparedNativeElement): boolean {
   if (item.kind !== "image") return false;
   const tagName = item.source.tagName.trim().toLowerCase();
   return tagName !== "img" && tagName !== "svg" && item.source.image.alt.trim().length > 0;
+}
+
+function isCapturedCompositeChildPaint(
+  item: PreparedNativeElement,
+  other: AuthoredHybridElement
+): boolean {
+  if (!isCompositeHtmlIllustration(item)) return false;
+  const ownerPath = item.source.domPath.trim();
+  const otherPath = other.domPath.trim();
+  if (!ownerPath || !otherPath || !otherPath.startsWith(`${ownerPath} > `)) {
+    return false;
+  }
+  // Semantic illustration snapshots intentionally omit descendant glyphs so
+  // those labels can remain editable. If a label fails native preflight, it is
+  // not represented by the picture and must keep the composite on the raster
+  // backplate. Non-text child paint is already captured in the picture PNG.
+  return other.classification.candidateKind !== "text" && !("text" in other);
 }
 
 function transformXml(element: AuthoredHybridElement): string {

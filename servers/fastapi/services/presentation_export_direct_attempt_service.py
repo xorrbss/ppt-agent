@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_export_attempt import (
+    ExportAtomicBinding,
     ExportPowerPointQaEvidence,
     PresentationExportAttempt,
     PresentationExportCoverageManifest,
@@ -59,6 +60,54 @@ def _sha256_file(path: Path) -> str:
         while chunk := stream.read(1024 * 1024):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _validate_hybrid_atomic_binding(
+    value: Any,
+    expected: dict[str, Any],
+    *,
+    export_attempt_id: uuid.UUID,
+) -> ExportAtomicBinding:
+    """Reject sidecars whose atomic identity is not exactly this export."""
+
+    try:
+        if not isinstance(value, dict) or set(value) != {
+            "presentationId",
+            "presentationRevision",
+            "canonicalSourceDigest",
+            "rendererSourceDigest",
+            "pptxSha256",
+        }:
+            raise ValueError("hybrid atomic binding keys are invalid")
+        supplied = ExportAtomicBinding.model_validate(
+            {
+                "presentation_id": value["presentationId"],
+                "export_attempt_id": export_attempt_id,
+                "presentation_revision": value["presentationRevision"],
+                "canonical_source_sha256": value["canonicalSourceDigest"],
+                "renderer_source_sha256": value["rendererSourceDigest"],
+                "pptx_sha256": value["pptxSha256"],
+            }
+        )
+        expected_model = ExportAtomicBinding.model_validate(
+            {
+                "presentation_id": expected["presentationId"],
+                "export_attempt_id": export_attempt_id,
+                "presentation_revision": expected["presentationRevision"],
+                "canonical_source_sha256": expected["canonicalSourceDigest"],
+                "renderer_source_sha256": expected["rendererSourceDigest"],
+                "pptx_sha256": expected["pptxSha256"],
+            }
+        )
+    except (TypeError, ValueError) as error:
+        raise PresentationExportContractError(
+            "presentation_export_atomic_binding_mismatch"
+        ) from error
+    if supplied != expected_model:
+        raise PresentationExportContractError(
+            "presentation_export_atomic_binding_mismatch"
+        )
+    return supplied
 
 
 async def begin_direct_hybrid_export_attempt(
@@ -167,15 +216,12 @@ async def complete_direct_hybrid_export_attempt(
         "rendererSourceDigest": attempt.provenance["freshness"]["renderer_source_sha256"],
         "pptxSha256": pptx_sha256,
     }
-    if (
-        not isinstance(atomic, dict)
-        or quality.get("exportAttemptId") != str(attempt.id)
-        or any(
-            atomic.get(key) != value
-            for key, value in expected_binding.items()
-            if key != "presentationId"
-        )
-    ):
+    _validate_hybrid_atomic_binding(
+        atomic,
+        expected_binding,
+        export_attempt_id=attempt.id,
+    )
+    if quality.get("exportAttemptId") != str(attempt.id):
         raise PresentationExportContractError("presentation_export_atomic_binding_mismatch")
     source = manifest.source
     if (

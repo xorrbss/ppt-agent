@@ -876,6 +876,46 @@ test("raster fallback propagates through overlapping native layers", async () =>
   assert.deepEqual(selectLayerSafeNativeElements(elements, prepared), []);
 });
 
+test("semantic illustration falls back when an omitted child label is not promoted", () => {
+  const illustration = {
+    ...base("semantic-illustration", 0, 0, bounds(600, 80, 520, 520)),
+    domPath: "body > section:nth-of-type(1)",
+    tagName: "section",
+    classification: { mode: "native", kind: "image", confidence: "safe" },
+    image: {
+      src: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lM1nWQAAAABJRU5ErkJggg==",
+      alt: "Semantic illustration",
+      naturalWidth: 1,
+      naturalHeight: 1,
+      objectFit: "fill",
+      objectPosition: "50% 50%",
+      crop: { left: 0, top: 0, right: 0, bottom: 0 },
+    },
+  };
+  const omittedLabel = {
+    ...base("omitted-label", 1, 1, bounds(720, 160, 180, 40)),
+    domPath: "body > section:nth-of-type(1) > span:nth-of-type(1)",
+    classification: {
+      mode: "raster",
+      candidateKind: "text",
+      reasons: ["typography-backplate-collision"],
+    },
+    text: {
+      role: "label",
+      plainText: "Must remain visible",
+      paragraphs: ["Must remain visible"],
+      style: style(),
+      runs: [],
+    },
+  };
+  const prepared = [{ kind: "image", source: illustration, png: Buffer.from("png") }];
+
+  assert.deepEqual(
+    selectLayerSafeNativeElements([illustration, omittedLabel], prepared),
+    []
+  );
+});
+
 test("a simple line remains an editable OOXML line instead of a rectangle", async () => {
   const element = {
     ...base("line-one", 0, 0, bounds(120, 360, 420, 2)),

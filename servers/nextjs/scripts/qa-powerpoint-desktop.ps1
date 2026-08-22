@@ -72,16 +72,27 @@ try {
   $results = @()
   foreach ($inputPath in $Presentation) {
     $resolvedInput = (Resolve-Path -LiteralPath $inputPath).Path
-    $name = [System.IO.Path]::GetFileNameWithoutExtension($resolvedInput)
+    $originalName = [System.IO.Path]::GetFileNameWithoutExtension($resolvedInput)
+    $shortStem = if ($originalName.Length -gt 40) {
+      $originalName.Substring(0, 40)
+    } else {
+      $originalName
+    }
+    $inputDigestPrefix = (
+      Get-FileHash -Algorithm SHA256 -LiteralPath $resolvedInput
+    ).Hash.Substring(0, 12).ToLowerInvariant()
+    $name = "$shortStem-$inputDigestPrefix"
     $renderDirectory = Join-Path $resolvedOutput $name
     [System.IO.Directory]::CreateDirectory($renderDirectory) | Out-Null
+    $reopenedPath = Join-Path $renderDirectory "$name-reopened.pptx"
+    $sourceDeck = $null
     $deck = $null
     try {
       # ReadOnly=-1, Untitled=0, WithWindow=0.
-      $deck = $application.Presentations.Open($resolvedInput, -1, 0, 0)
+      $sourceDeck = $application.Presentations.Open($resolvedInput, -1, 0, 0)
       $fonts = @()
-      for ($index = 1; $index -le $deck.Fonts.Count; $index += 1) {
-        $font = $deck.Fonts.Item($index)
+      for ($index = 1; $index -le $sourceDeck.Fonts.Count; $index += 1) {
+        $font = $sourceDeck.Fonts.Item($index)
         $embedded = $null
         try {
           $embedded = [bool]$font.Embedded
@@ -93,22 +104,113 @@ try {
           Embedded = $embedded
         }
       }
+      $sourceShapeCounts = @(
+        for ($slideIndex = 1; $slideIndex -le $sourceDeck.Slides.Count; $slideIndex += 1) {
+          [int]$sourceDeck.Slides.Item($slideIndex).Shapes.Count
+        }
+      )
+      # ppSaveAsOpenXMLPresentation=24.  Save a copy, close the source, and
+      # inspect only the reopened copy so render/readback evidence cannot be
+      # satisfied by the initial in-memory representation.
+      $sourceDeck.SaveCopyAs($reopenedPath, 24)
+      $sourceDeck.Close()
+      [Runtime.InteropServices.Marshal]::FinalReleaseComObject($sourceDeck) | Out-Null
+      $sourceDeck = $null
+      $deck = $application.Presentations.Open($reopenedPath, -1, 0, 0)
+      $reopenedShapeCounts = @(
+        for ($slideIndex = 1; $slideIndex -le $deck.Slides.Count; $slideIndex += 1) {
+          [int]$deck.Slides.Item($slideIndex).Shapes.Count
+        }
+      )
+      $nativeText = 0
+      $nativeImage = 0
+      $nativeShape = 0
+      $nativeTable = 0
+      $nativeChart = 0
+      $typographyIssuesGt5Pt = 0
+      $typographyIssuesGt10Pt = 0
+      $inspectionFailures = 0
+      for ($slideIndex = 1; $slideIndex -le $deck.Slides.Count; $slideIndex += 1) {
+        $shapes = $deck.Slides.Item($slideIndex).Shapes
+        for ($shapeIndex = 1; $shapeIndex -le $shapes.Count; $shapeIndex += 1) {
+          $shape = $shapes.Item($shapeIndex)
+          try {
+            $hasText = [bool]$shape.HasTextFrame -and [bool]$shape.TextFrame2.HasText
+            $hasTable = [bool]$shape.HasTable
+            $hasChart = [bool]$shape.HasChart
+            $shapeName = ([string]$shape.Name).ToLowerInvariant()
+            $isBackplate = $shapeName.Contains("presenton hybrid backplate")
+            $shapeType = [int]$shape.Type
+            if ($hasText) { $nativeText += 1 }
+            if ($hasTable) { $nativeTable += 1 }
+            if ($hasChart) { $nativeChart += 1 }
+            if (-not $isBackplate -and $shapeType -in 11, 13) {
+              $nativeImage += 1
+            } elseif (-not $isBackplate -and -not $hasText -and -not $hasTable -and -not $hasChart -and $shapeType -notin 11, 13) {
+              $nativeShape += 1
+            }
+            if ($hasText) {
+              $textRange = $shape.TextFrame2.TextRange
+              $overflow = [Math]::Max(
+                [double]$textRange.BoundHeight - [double]$shape.Height,
+                [double]$textRange.BoundWidth - [double]$shape.Width
+              )
+              if ($overflow -gt 5) { $typographyIssuesGt5Pt += 1 }
+              if ($overflow -gt 10) { $typographyIssuesGt10Pt += 1 }
+            }
+          } catch {
+            $inspectionFailures += 1
+          } finally {
+            [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shape) | Out-Null
+          }
+        }
+        [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shapes) | Out-Null
+      }
       $deck.Export($renderDirectory, "PNG", 1280, 720)
+      $pngs = @(
+        Get-ChildItem -LiteralPath $renderDirectory -Filter "*.PNG" -File |
+          Sort-Object Name
+      )
+      $readbackPassed =
+        $sourceShapeCounts.Count -eq $reopenedShapeCounts.Count -and
+        (@(Compare-Object $sourceShapeCounts $reopenedShapeCounts -SyncWindow 0).Count -eq 0) -and
+        $pngs.Count -eq [int]$deck.Slides.Count -and
+        $typographyIssuesGt5Pt -eq 0 -and
+        $typographyIssuesGt10Pt -eq 0 -and
+        $inspectionFailures -eq 0
       $results += [PSCustomObject]@{
         Path = $resolvedInput
+        ReopenedPath = $reopenedPath
         OpenedReadOnly = [bool]$deck.ReadOnly
         SlideCount = [int]$deck.Slides.Count
         FontCount = [int]$deck.Fonts.Count
         Fonts = $fonts
-        ExportedPngs = @(
-          Get-ChildItem -LiteralPath $renderDirectory -Filter "*.PNG" -File
-        ).Count
+        SourceShapeCounts = $sourceShapeCounts
+        ReopenedShapeCounts = $reopenedShapeCounts
+        Reopened = $true
+        ReadbackPassed = $readbackPassed
+        ExportedPngs = $pngs.Count
+        RenderedPngSha256 = @($pngs | ForEach-Object {
+          (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant()
+        })
+        NativeText = $nativeText
+        NativeImage = $nativeImage
+        NativeShape = $nativeShape
+        NativeTable = $nativeTable
+        NativeChart = $nativeChart
+        TypographyIssuesGt5Pt = $typographyIssuesGt5Pt
+        TypographyIssuesGt10Pt = $typographyIssuesGt10Pt
+        InspectionFailures = $inspectionFailures
         RepairWarningObserved = $false
       }
     } finally {
       if ($null -ne $deck) {
         $deck.Close()
         [Runtime.InteropServices.Marshal]::FinalReleaseComObject($deck) | Out-Null
+      }
+      if ($null -ne $sourceDeck) {
+        $sourceDeck.Close()
+        [Runtime.InteropServices.Marshal]::FinalReleaseComObject($sourceDeck) | Out-Null
       }
     }
   }
