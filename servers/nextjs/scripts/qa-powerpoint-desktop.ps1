@@ -145,9 +145,19 @@ try {
             $isBackplate = $shapeName.Contains("presenton hybrid backplate")
             $shapeType = [int]$shape.Type
             $zOrderPosition = [int]$shape.ZOrderPosition
+            $isCanvasBackground =
+              -not $isBackplate -and
+              -not $hasText -and
+              -not $hasTable -and
+              -not $hasChart -and
+              $shapeType -notin 11, 13 -and
+              [Math]::Abs([double]$shape.Left) -lt 0.01 -and
+              [Math]::Abs([double]$shape.Top) -lt 0.01 -and
+              [Math]::Abs([double]$shape.Width - 960.0) -lt 0.01 -and
+              [Math]::Abs([double]$shape.Height - 540.0) -lt 0.01
             if ($isBackplate) {
               $backplateZOrderPositions += $zOrderPosition
-            } else {
+            } elseif (-not $isCanvasBackground) {
               $nativeZOrderPositions += $zOrderPosition
             }
             if ($hasText) { $nativeText += 1 }
@@ -174,6 +184,7 @@ try {
               Type = $shapeType
               ZOrderPosition = $zOrderPosition
               IsBackplate = $isBackplate
+              IsCanvasBackground = $isCanvasBackground
               HasText = $hasText
               Text = $textValue
               TextLineBreakCount = if ($null -ne $textValue) {
