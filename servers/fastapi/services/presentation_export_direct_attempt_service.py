@@ -86,6 +86,27 @@ async def _active_semantic_emission(
     )
 
 
+async def _current_export_canonical_digest(
+    session: AsyncSession,
+    *,
+    presentation: PresentationModel,
+    slides: list[SlideModel],
+) -> str:
+    """Resolve the same canonical source selected by the begin boundary."""
+
+    active = await _active_semantic_emission(session, presentation.id)
+    if active is not None and active.canonical_mode == "bundleGraph":
+        if (
+            active.presentation_revision != presentation.revision
+            or active.canonical_digest is None
+        ):
+            raise PresentationExportFreshnessError(
+                "authored_semantic_export_stale_manifest"
+            )
+        return active.canonical_digest.removeprefix("sha256:")
+    return build_export_source_snapshot_sha256(presentation, slides)
+
+
 async def _bind_completed_semantic_export_attempt(
     session: AsyncSession,
     *,
@@ -386,7 +407,12 @@ async def complete_direct_hybrid_export_attempt(
     ).scalars().all()
     if presentation is None or presentation.revision != attempt.source_revision:
         raise PresentationExportFreshnessError("stale_presentation_revision")
-    if build_export_source_snapshot_sha256(presentation, slides) != attempt.source_snapshot_sha256:
+    if (
+        await _current_export_canonical_digest(
+            session, presentation=presentation, slides=slides
+        )
+        != attempt.source_snapshot_sha256
+    ):
         raise PresentationExportFreshnessError("presentation_export_source_digest_mismatch")
     artifact = resolve_hybrid_artifact(artifact_path)
     actual_size = artifact.stat().st_size
@@ -573,7 +599,12 @@ async def complete_direct_fidelity_export_attempt(
     ).scalars().all()
     if presentation is None or presentation.revision != attempt.source_revision:
         raise PresentationExportFreshnessError("stale_presentation_revision")
-    if build_export_source_snapshot_sha256(presentation, slides) != attempt.source_snapshot_sha256:
+    if (
+        await _current_export_canonical_digest(
+            session, presentation=presentation, slides=slides
+        )
+        != attempt.source_snapshot_sha256
+    ):
         raise PresentationExportFreshnessError("presentation_export_source_digest_mismatch")
 
     artifact = resolve_hybrid_artifact(artifact_path)
