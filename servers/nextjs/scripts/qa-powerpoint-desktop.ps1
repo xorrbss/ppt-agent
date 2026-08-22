@@ -169,7 +169,12 @@ try {
       $deck.Export($renderDirectory, "PNG", 1280, 720)
       $pngs = @(
         Get-ChildItem -LiteralPath $renderDirectory -Filter "*.PNG" -File |
-          Sort-Object Name
+          Sort-Object @{ Expression = {
+            if ($_.BaseName -match "(\d+)$") {
+              return [int]$Matches[1]
+            }
+            return [int]::MaxValue
+          } }, Name
       )
       $readbackPassed =
         $sourceShapeCounts.Count -eq $reopenedShapeCounts.Count -and

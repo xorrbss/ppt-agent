@@ -52,6 +52,73 @@ export interface PersistedPresentationFetchOptions {
   fetchImpl?: typeof fetch;
 }
 
+export interface PersistedPresentationProjectionFetchResult {
+  presentation: PersistedPresentation;
+  /** Exact JSON handed to the renderer after wire refs are rehydrated. */
+  rendererBody: string;
+  sourceSha256: string;
+  wireBytes: number;
+  rendererBytes: number;
+}
+
+const PRESENTATION_EXPORT_PROJECTION = "authored-composition-dedup-v1";
+const PRESENTATION_EXPORT_PROJECTION_HEADER =
+  "x-presenton-presentation-projection";
+const COMPOSITION_PIN_REFERENCE_PATH =
+  "theme.authored_vnext.compositionPin";
+const COMPOSITION_PIN_REFERENCE_SCHEMA =
+  "presenton.export-composition-ref/v1";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isCompositionPinReference(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    Object.keys(value).length === 2 &&
+    value.$presentonRef === COMPOSITION_PIN_REFERENCE_PATH &&
+    value.schemaVersion === COMPOSITION_PIN_REFERENCE_SCHEMA
+  );
+}
+
+function rehydratePresentationExportProjection(
+  value: Record<string, unknown>
+): void {
+  const theme = isRecord(value.theme) ? value.theme : undefined;
+  const authoredVnextValue = theme?.authored_vnext;
+  const authoredVnext = isRecord(authoredVnextValue)
+    ? authoredVnextValue
+    : undefined;
+  const sharedPinValue = authoredVnext?.compositionPin;
+  const sharedPin = isRecord(sharedPinValue)
+    ? sharedPinValue
+    : undefined;
+  const restore = (container: Record<string, unknown> | undefined) => {
+    if (!container || !isCompositionPinReference(container.compositionPin)) {
+      return;
+    }
+    if (!sharedPin) {
+      throw new ExportPresentationRequestError(
+        "Presentation service returned an invalid response",
+        502
+      );
+    }
+    container.compositionPin = sharedPin;
+  };
+
+  const sceneValue = authoredVnext?.scene;
+  restore(isRecord(sceneValue) ? sceneValue : undefined);
+  if (Array.isArray(value.slides)) {
+    value.slides.forEach((slide) => {
+      const content = isRecord(slide) && isRecord(slide.content)
+        ? slide.content
+        : undefined;
+      restore(content);
+    });
+  }
+}
+
 function presentationServiceError(status: number): ExportPresentationRequestError {
   if (status === 401) {
     return new ExportPresentationRequestError("Authentication required", 401);
@@ -101,10 +168,10 @@ export async function readExportPresentationRouteBody(
   return body as ExportPresentationRouteBody;
 }
 
-export async function fetchPersistedPresentationForExport(
+export async function fetchPersistedPresentationProjectionForExport(
   presentationId: string,
   options: PersistedPresentationFetchOptions
-): Promise<PersistedPresentation> {
+): Promise<PersistedPresentationProjectionFetchResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), options.timeoutMs);
   const fetchImpl = options.fetchImpl ?? fetch;
@@ -119,7 +186,7 @@ export async function fetchPersistedPresentationForExport(
         headers.Cookie = options.cookieHeader;
       }
       response = await fetchImpl(
-        `${options.baseUrl.replace(/\/+$/, "")}/api/v1/ppt/presentation/${encodeURIComponent(presentationId)}`,
+        `${options.baseUrl.replace(/\/+$/, "")}/api/v1/ppt/presentation/${encodeURIComponent(presentationId)}/export-projection`,
         {
           method: "GET",
           headers,
@@ -157,6 +224,15 @@ export async function fetchPersistedPresentationForExport(
           504
         );
       }
+      if (
+        error instanceof Error &&
+        error.message === "response exceeded the hybrid size limit"
+      ) {
+        throw new ExportPresentationRequestError(
+          `Presentation export projection exceeded the ${options.maxResponseBytes} byte wire limit`,
+          413
+        );
+      }
       throw new ExportPresentationRequestError(
         "Presentation service returned an invalid response",
         502
@@ -178,17 +254,49 @@ export async function fetchPersistedPresentationForExport(
         502
       );
     }
+    if (
+      response.headers.get(PRESENTATION_EXPORT_PROJECTION_HEADER) !==
+      PRESENTATION_EXPORT_PROJECTION
+    ) {
+      throw new ExportPresentationRequestError(
+        "Presentation service returned an invalid response",
+        502
+      );
+    }
+    rehydratePresentationExportProjection(parsed as Record<string, unknown>);
+    const rendererBody = JSON.stringify(parsed);
+    const sourceSha256 = createHash("sha256")
+      .update(rendererBody)
+      .digest("hex");
     const presentation = parsed as PersistedPresentation;
     Object.defineProperty(presentation, PRESENTATION_SOURCE_SHA256, {
       configurable: false,
       enumerable: false,
-      value: createHash("sha256").update(body).digest("hex"),
+      value: sourceSha256,
       writable: false,
     });
-    return presentation;
+    return {
+      presentation,
+      rendererBody,
+      sourceSha256,
+      wireBytes: Buffer.byteLength(body, "utf8"),
+      rendererBytes: Buffer.byteLength(rendererBody, "utf8"),
+    };
   } finally {
     clearTimeout(timer);
   }
+}
+
+export async function fetchPersistedPresentationForExport(
+  presentationId: string,
+  options: PersistedPresentationFetchOptions
+): Promise<PersistedPresentation> {
+  return (
+    await fetchPersistedPresentationProjectionForExport(
+      presentationId,
+      options
+    )
+  ).presentation;
 }
 
 /**

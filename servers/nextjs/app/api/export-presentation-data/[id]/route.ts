@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import {
+  ExportPresentationRequestError,
+  fetchPersistedPresentationProjectionForExport,
+} from "@/lib/export-presentation-route";
+
+const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
+const MAX_PRESENTATION_RESPONSE_BYTES = 50 * 1024 * 1024;
+
 function getFastApiBaseUrl(): string {
   const internal = process.env.FAST_API_INTERNAL_URL?.trim();
   if (internal) {
@@ -41,28 +49,30 @@ export async function GET(
   }
 
   const normalizedId = normalizePresentationId(id);
-  const presentationUrl = `${getFastApiBaseUrl()}/api/v1/ppt/presentation/${encodeURIComponent(normalizedId)}`;
-
   try {
-    const response = await fetch(presentationUrl, {
-      method: "GET",
+    const fetched = await fetchPersistedPresentationProjectionForExport(
+      normalizedId,
+      {
+        baseUrl: getFastApiBaseUrl(),
+        cookieHeader,
+        timeoutMs: PRESENTATION_FETCH_TIMEOUT_MS,
+        maxResponseBytes: MAX_PRESENTATION_RESPONSE_BYTES,
+      }
+    );
+    return new NextResponse(fetched.rendererBody, {
+      status: 200,
       headers: {
-        Cookie: cookieHeader,
-      },
-      cache: "no-store",
-    });
-
-    const bodyText = await response.text();
-    const contentType = response.headers.get("content-type") ?? "application/json";
-
-    return new NextResponse(bodyText, {
-      status: response.status,
-      headers: {
-        "Content-Type": contentType,
+        "Content-Type": "application/json",
         "Cache-Control": "no-store",
       },
     });
   } catch (error) {
+    if (error instanceof ExportPresentationRequestError) {
+      return NextResponse.json(
+        { detail: error.message },
+        { status: error.status }
+      );
+    }
     console.error("[export-presentation-data] Failed to fetch presentation", error);
     return NextResponse.json(
       { detail: "Failed to fetch presentation data" },

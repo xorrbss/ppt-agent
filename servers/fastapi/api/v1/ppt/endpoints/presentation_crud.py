@@ -7,7 +7,7 @@ operations on a PresentationModel (no generation or export pipeline).
 import uuid
 from typing import Annotated, List, Literal, Optional
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Response
 from pydantic import BaseModel
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError, OperationalError
@@ -54,6 +54,11 @@ from services.presentation_deletion_service import (
     is_retryable_sqlite_lock,
 )
 from services.presentation_access_service import require_live_presentation
+from services.presentation_export_projection import (
+    PRESENTATION_EXPORT_PROJECTION,
+    PRESENTATION_EXPORT_PROJECTION_HEADER,
+    project_presentation_for_export,
+)
 from services.references import (
     ReferenceProviderError,
     admit_reference_snapshots,
@@ -229,10 +234,9 @@ async def get_all_presentations(
     )
 
 
-@PRESENTATION_CRUD_ROUTER.get("/{id}", response_model=PresentationWithSlides)
-async def get_presentation(
+async def _get_presentation_with_slides(
     id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session)
-):
+) -> PresentationWithSlides:
     presentation = await require_live_presentation(sql_session, id)
     slides_result = await sql_session.scalars(
         select(SlideModel)
@@ -245,6 +249,31 @@ async def get_presentation(
         **presentation.model_dump(exclude={"fonts"}),
         slides=slides,
         fonts=fonts,
+    )
+
+
+@PRESENTATION_CRUD_ROUTER.get("/{id}", response_model=PresentationWithSlides)
+async def get_presentation(
+    id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session)
+):
+    return await _get_presentation_with_slides(id, sql_session)
+
+
+@PRESENTATION_CRUD_ROUTER.get(
+    "/{id}/export-projection",
+    response_model=PresentationWithSlides,
+)
+async def get_presentation_export_projection(
+    id: uuid.UUID,
+    response: Response,
+    sql_session: AsyncSession = Depends(get_async_session),
+):
+    presentation = await _get_presentation_with_slides(id, sql_session)
+    response.headers[PRESENTATION_EXPORT_PROJECTION_HEADER] = (
+        PRESENTATION_EXPORT_PROJECTION
+    )
+    return project_presentation_for_export(
+        presentation.model_dump(mode="json")
     )
 
 

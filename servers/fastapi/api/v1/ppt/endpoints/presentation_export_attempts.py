@@ -12,8 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.database import get_async_session
 from services.presentation_export_direct_attempt_service import (
+    begin_direct_fidelity_export_attempt,
     begin_direct_hybrid_export_attempt,
+    complete_direct_fidelity_export_attempt,
     complete_direct_hybrid_export_attempt,
+    fail_direct_fidelity_export_attempt,
     fail_direct_hybrid_export_attempt,
     list_direct_hybrid_export_attempt_history,
 )
@@ -48,6 +51,17 @@ class CompleteHybridAttemptRequest(_CamelModel):
     quality: dict[str, Any]
     coverage: dict[str, Any]
     power_point_qa: dict[str, Any] | None = None
+
+    @field_validator("pptx_sha256")
+    @classmethod
+    def validate_digest(cls, value: str) -> str:
+        return BeginHybridAttemptRequest.validate_digest(value)
+
+
+class CompleteFidelityAttemptRequest(_CamelModel):
+    pptx_sha256: str
+    pptx_size_bytes: int = Field(ge=22, le=512 * 1024 * 1024)
+    artifact_path: str = Field(min_length=1, max_length=4096)
 
     @field_validator("pptx_sha256")
     @classmethod
@@ -93,6 +107,35 @@ async def begin_hybrid_attempt(
 
 
 @PRESENTATION_EXPORT_ATTEMPT_ROUTER.post(
+    "/{presentation_id}/export-attempts/fidelity/begin"
+)
+async def begin_fidelity_attempt(
+    presentation_id: uuid.UUID,
+    request: BeginHybridAttemptRequest,
+    session: AsyncSession = Depends(get_async_session),
+):
+    try:
+        attempt, evidence = await begin_direct_fidelity_export_attempt(
+            session,
+            presentation_id=presentation_id,
+            expected_revision=request.expected_presentation_revision,
+            renderer_source_sha256=request.renderer_source_sha256,
+            idempotency_key=request.idempotency_key,
+        )
+    except PresentationExportContractError as error:
+        _raise_contract(error)
+    return {
+        "exportAttemptId": str(attempt.id),
+        "presentationRevision": evidence["presentation_revision"],
+        "canonicalSourceDigest": evidence["canonical_source_digest"],
+        "rendererSourceDigest": evidence["renderer_source_digest"],
+        "htmlSourceDigest": evidence["html_source_digest"],
+        "compositionDigest": evidence["composition_digest"],
+        "promotionReady": False,
+    }
+
+
+@PRESENTATION_EXPORT_ATTEMPT_ROUTER.post(
     "/{presentation_id}/export-attempts/hybrid/{attempt_id}/complete"
 )
 async def complete_hybrid_attempt(
@@ -116,6 +159,45 @@ async def complete_hybrid_attempt(
     except PresentationExportContractError as error:
         try:
             await fail_direct_hybrid_export_attempt(
+                session,
+                presentation_id=presentation_id,
+                attempt_id=attempt_id,
+                failure_code=error.code,
+            )
+        except PresentationExportContractError:
+            await session.rollback()
+        _raise_contract(error)
+    return {
+        "exportAttemptId": str(attempt.id),
+        "state": attempt.state,
+        "presentationRevision": attempt.source_revision,
+        "canonicalSourceDigest": attempt.source_snapshot_sha256,
+        "pptxSha256": attempt.artifact_sha256,
+        **finalized,
+    }
+
+
+@PRESENTATION_EXPORT_ATTEMPT_ROUTER.post(
+    "/{presentation_id}/export-attempts/fidelity/{attempt_id}/complete"
+)
+async def complete_fidelity_attempt(
+    presentation_id: uuid.UUID,
+    attempt_id: uuid.UUID,
+    request: CompleteFidelityAttemptRequest,
+    session: AsyncSession = Depends(get_async_session),
+):
+    try:
+        attempt, finalized = await complete_direct_fidelity_export_attempt(
+            session,
+            presentation_id=presentation_id,
+            attempt_id=attempt_id,
+            pptx_sha256=request.pptx_sha256,
+            pptx_size_bytes=request.pptx_size_bytes,
+            artifact_path=request.artifact_path,
+        )
+    except PresentationExportContractError as error:
+        try:
+            await fail_direct_fidelity_export_attempt(
                 session,
                 presentation_id=presentation_id,
                 attempt_id=attempt_id,
@@ -159,6 +241,28 @@ async def fail_hybrid_attempt(
 ) -> Response:
     try:
         await fail_direct_hybrid_export_attempt(
+            session,
+            presentation_id=presentation_id,
+            attempt_id=attempt_id,
+            failure_code=request.failure_code,
+        )
+    except PresentationExportContractError as error:
+        _raise_contract(error)
+    return Response(status_code=204)
+
+
+@PRESENTATION_EXPORT_ATTEMPT_ROUTER.post(
+    "/{presentation_id}/export-attempts/fidelity/{attempt_id}/fail",
+    status_code=204,
+)
+async def fail_fidelity_attempt(
+    presentation_id: uuid.UUID,
+    attempt_id: uuid.UUID,
+    request: FailHybridAttemptRequest,
+    session: AsyncSession = Depends(get_async_session),
+) -> Response:
+    try:
+        await fail_direct_fidelity_export_attempt(
             session,
             presentation_id=presentation_id,
             attempt_id=attempt_id,

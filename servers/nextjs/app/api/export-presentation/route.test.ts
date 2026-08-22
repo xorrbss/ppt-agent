@@ -5,6 +5,7 @@ import {
   executeExportPresentationRouteRequest,
   ExportPresentationRequestError,
   fetchPersistedPresentationForExport,
+  fetchPersistedPresentationProjectionForExport,
   readExportPresentationRouteBody,
 } from "../../../lib/export-presentation-route.ts";
 import {
@@ -585,7 +586,7 @@ test("presentation fetch preserves safe client status without exposing backend b
         async fetchImpl(input) {
           assert.equal(
             String(input),
-            "http://fastapi.test/api/v1/ppt/presentation/persisted%2Fid"
+            "http://fastapi.test/api/v1/ppt/presentation/persisted%2Fid/export-projection"
           );
           return new Response("private backend diagnostic", {
             status: backendStatus,
@@ -689,10 +690,10 @@ test("presentation fetch enforces a streamed byte limit before JSON parsing", as
     })
   );
 
-  assert.equal(error.status, 502);
+  assert.equal(error.status, 413);
   assert.equal(
     error.message,
-    "Presentation service returned an invalid response"
+    "Presentation export projection exceeded the 16 byte wire limit"
   );
   assert.equal(cancelled, true);
 });
@@ -709,17 +710,25 @@ test("presentation fetch forwards only configured auth and cookie headers", asyn
       async fetchImpl(input, init) {
         assert.equal(
           String(input),
-          "http://fastapi.test/api/v1/ppt/presentation/persisted-id"
+          "http://fastapi.test/api/v1/ppt/presentation/persisted-id/export-projection"
         );
         assert.deepEqual(init?.headers, {
           Accept: "application/json",
           Authorization: "Basic test",
           Cookie: "session=test",
         });
-        return Response.json({
-          version: "v2-standard",
-          slides: [{ ui: { id: "native" } }],
-        });
+        return Response.json(
+          {
+            version: "v2-standard",
+            slides: [{ ui: { id: "native" } }],
+          },
+          {
+            headers: {
+              "X-Presenton-Presentation-Projection":
+                "authored-composition-dedup-v1",
+            },
+          }
+        );
       },
     }
   );
@@ -740,7 +749,12 @@ test("general export receives the exact persisted snapshot digest", async () => 
       timeoutMs: 100,
       maxResponseBytes: 1024,
       async fetchImpl() {
-        return new Response(body);
+        return new Response(body, {
+          headers: {
+            "X-Presenton-Presentation-Projection":
+              "authored-composition-dedup-v1",
+          },
+        });
       },
     }
   );
@@ -771,5 +785,63 @@ test("general export receives the exact persisted snapshot digest", async () => 
   assert.equal(
     renderedDigest,
     presentation[PRESENTATION_SOURCE_SHA256]
+  );
+});
+
+test("export projection rehydrates repeated composition pins after the bounded wire read", async () => {
+  const compositionPin = {
+    digest: "a".repeat(64),
+    retainedPayload: "x".repeat(4096),
+  };
+  const reference = {
+    $presentonRef: "theme.authored_vnext.compositionPin",
+    schemaVersion: "presenton.export-composition-ref/v1",
+  };
+  const projected = {
+    mode: "authored",
+    theme: {
+      authored_vnext: {
+        compositionPin,
+        scene: { compositionPin: reference },
+      },
+    },
+    slides: [
+      { content: { compositionPin: reference }, html_content: "<main>one</main>" },
+      { content: { compositionPin: reference }, html_content: "<main>two</main>" },
+    ],
+  };
+  const wireBody = JSON.stringify(projected);
+  const wireLimit = Buffer.byteLength(wireBody, "utf8") + 16;
+
+  const fetched = await fetchPersistedPresentationProjectionForExport(
+    "persisted-id",
+    {
+      baseUrl: "http://fastapi.test",
+      timeoutMs: 100,
+      maxResponseBytes: wireLimit,
+      async fetchImpl() {
+        return new Response(wireBody, {
+          headers: {
+            "X-Presenton-Presentation-Projection":
+              "authored-composition-dedup-v1",
+          },
+        });
+      },
+    }
+  );
+
+  const hydrated = fetched.presentation as Record<string, any>;
+  assert.deepEqual(
+    hydrated.theme.authored_vnext.scene.compositionPin,
+    compositionPin
+  );
+  assert.deepEqual(hydrated.slides[0].content.compositionPin, compositionPin);
+  assert.deepEqual(hydrated.slides[1].content.compositionPin, compositionPin);
+  assert.ok(fetched.wireBytes < fetched.rendererBytes);
+  assert.ok(fetched.wireBytes <= wireLimit);
+  assert.ok(fetched.rendererBytes > wireLimit);
+  assert.equal(
+    fetched.presentation[PRESENTATION_SOURCE_SHA256],
+    fetched.sourceSha256
   );
 });

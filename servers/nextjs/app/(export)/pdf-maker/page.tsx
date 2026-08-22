@@ -5,6 +5,9 @@ import {
   assertPresentationSnapshotIntegrity,
   normalizeExpectedPresentationSha256,
 } from "@/lib/presentation-snapshot-integrity";
+import {
+  fetchPersistedPresentationProjectionForExport,
+} from "@/lib/export-presentation-route";
 import { RENDER_ARTIFACT_CONTRACT } from "@/lib/render-service";
 import {
   getFastApiAuthHeaders,
@@ -13,6 +16,9 @@ import {
 import { UiLocaleSwitcher } from "@/components/i18n/UiLocaleSwitcher";
 import { getServerI18n } from "@/i18n/server";
 import { createTranslator } from "next-intl";
+
+const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
+const MAX_PRESENTATION_RESPONSE_BYTES = 50 * 1024 * 1024;
 
 type PdfMakerRouteProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -46,34 +52,21 @@ async function fetchInitialPresentation(
 
   const normalizedId = normalizePresentationId(id);
   try {
-    const response = await fetch(
-      `${getFastApiBaseUrl()}/api/v1/ppt/presentation/${encodeURIComponent(normalizedId)}`,
+    const fetched = await fetchPersistedPresentationProjectionForExport(
+      normalizedId,
       {
-        headers: {
-          ...authHeaders,
-          ...(cookieHeader ? { Cookie: cookieHeader } : {}),
-        },
-        cache: "no-store",
+        baseUrl: getFastApiBaseUrl(),
+        authHeaders,
+        cookieHeader,
+        timeoutMs: PRESENTATION_FETCH_TIMEOUT_MS,
+        maxResponseBytes: MAX_PRESENTATION_RESPONSE_BYTES,
       }
     );
-    if (!response.ok) {
-      if (expectedSha256 || renderArtifactRequired) {
-        throw new Error(
-          `Presentation snapshot fetch failed with status ${response.status}.`
-        );
-      }
-      console.error("[pdf-maker] Initial presentation fetch failed", {
-        id: normalizedId,
-        status: response.status,
-      });
-      return undefined;
-    }
-    const body = await response.text();
     const sourceSha256 = assertPresentationSnapshotIntegrity(
-      body,
+      fetched.rendererBody,
       expectedSha256,
     );
-    const presentation = JSON.parse(body) as PresentationData;
+    const presentation = fetched.presentation as PresentationData;
     if (
       expectedRevision !== undefined &&
       Number(presentation.revision) !== expectedRevision

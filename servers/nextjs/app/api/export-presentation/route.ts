@@ -52,11 +52,17 @@ function isHybridPptxRequest(body: ExportPresentationRouteBody): boolean {
   return body.format === "pptx" && body.pptxMode === "hybrid";
 }
 
+function isFidelityPptxRequest(body: ExportPresentationRouteBody): boolean {
+  return body.format === "pptx" && body.pptxMode === "fidelity";
+}
+
 async function postHybridAttempt(
   pathname: string,
   cookieHeader: string,
   body: Record<string, unknown>,
+  attemptMode: "hybrid" | "fidelity" = "hybrid",
 ): Promise<unknown> {
+  const modeLabel = attemptMode === "hybrid" ? "Hybrid" : "Fidelity";
   let response: Response;
   try {
     response = await fetch(`${getFastApiBaseUrl()}${pathname}`, {
@@ -71,13 +77,13 @@ async function postHybridAttempt(
     });
   } catch {
     throw new ExportPresentationRequestError(
-      "Hybrid export attempt service is unavailable",
+      `${modeLabel} export attempt service is unavailable`,
       502,
     );
   }
   if (!response.ok) {
     throw new ExportPresentationRequestError(
-      "Hybrid export attempt was rejected",
+      `${modeLabel} export attempt was rejected`,
       response.status === 401 || response.status === 403 ? response.status : 502,
     );
   }
@@ -86,13 +92,16 @@ async function postHybridAttempt(
     return await response.json();
   } catch {
     throw new ExportPresentationRequestError(
-      "Hybrid export attempt returned an invalid response",
+      `${modeLabel} export attempt returned an invalid response`,
       502,
     );
   }
 }
 
-function readHybridAttemptBinding(value: unknown): HybridAttemptBinding {
+function readHybridAttemptBinding(
+  value: unknown,
+  attemptMode: "hybrid" | "fidelity" = "hybrid",
+): HybridAttemptBinding {
   if (
     !isRecord(value) ||
     typeof value.exportAttemptId !== "string" ||
@@ -104,7 +113,7 @@ function readHybridAttemptBinding(value: unknown): HybridAttemptBinding {
     !isSha256(value.compositionDigest)
   ) {
     throw new ExportPresentationRequestError(
-      "Hybrid export attempt returned an invalid response",
+      `${attemptMode === "hybrid" ? "Hybrid" : "Fidelity"} export attempt returned an invalid response`,
       502,
     );
   }
@@ -163,6 +172,8 @@ export async function POST(req: NextRequest) {
   const cookieHeader = req.headers.get("cookie") ?? "";
   let body: ExportPresentationRouteBody | undefined;
   let routeOwnedAttempt: HybridAttemptBinding | undefined;
+  let routeOwnedAttemptMode: "hybrid" | "fidelity" | undefined;
+  let completedAttemptReceipt: unknown;
   let completedAttempt = false;
   let completedPowerPointQa: unknown;
 
@@ -173,12 +184,16 @@ export async function POST(req: NextRequest) {
       | Awaited<ReturnType<typeof fetchPersistedPresentation>>
       | undefined;
 
-    // Direct browser Hybrid exports have no durable attempt yet. Begin one
-    // against the same persisted snapshot that the exporter will consume;
-    // callers arriving from FastAPI already provide the binding and must not
-    // create/complete a duplicate attempt here.
+    // Direct browser Authored PPTX exports begin a durable attempt against the
+    // exact persisted snapshot consumed by the renderer. Callers arriving
+    // from FastAPI with a Hybrid binding must not create a duplicate attempt.
+    const requestedAttemptMode = isHybridPptxRequest(body)
+      ? "hybrid"
+      : isFidelityPptxRequest(body)
+        ? "fidelity"
+        : undefined;
     if (
-      isHybridPptxRequest(body) &&
+      requestedAttemptMode &&
       body.exportAttemptId === undefined &&
       body.canonicalSourceDigest === undefined &&
       typeof body.id === "string" &&
@@ -199,33 +214,38 @@ export async function POST(req: NextRequest) {
           !Number.isSafeInteger(expectedPresentationRevision)
         ) {
           throw new ExportPresentationRequestError(
-            "Hybrid export attempt source is invalid",
+            `${requestedAttemptMode === "hybrid" ? "Hybrid" : "Fidelity"} export attempt source is invalid`,
             409,
           );
         }
         routeOwnedAttempt = readHybridAttemptBinding(
           await postHybridAttempt(
-            `/api/v1/ppt/presentation/${encodeURIComponent(body.id)}/export-attempts/hybrid/begin`,
+            `/api/v1/ppt/presentation/${encodeURIComponent(body.id)}/export-attempts/${requestedAttemptMode}/begin`,
             cookieHeader,
             {
               expectedPresentationRevision,
               rendererSourceSha256,
               idempotencyKey: randomUUID(),
             },
+            requestedAttemptMode,
           ),
+          requestedAttemptMode,
         );
+        routeOwnedAttemptMode = requestedAttemptMode;
         if (routeOwnedAttempt.rendererSourceDigest !== rendererSourceSha256) {
           throw new ExportPresentationRequestError(
-            "Hybrid export attempt source binding mismatch",
+            `${requestedAttemptMode === "hybrid" ? "Hybrid" : "Fidelity"} export attempt source binding mismatch`,
             409,
           );
         }
-        exportBody = {
-          ...body,
-          exportAttemptId: routeOwnedAttempt.exportAttemptId,
-          canonicalSourceDigest: routeOwnedAttempt.canonicalSourceDigest,
-          operationId: routeOwnedAttempt.exportAttemptId,
-        };
+        if (requestedAttemptMode === "hybrid") {
+          exportBody = {
+            ...body,
+            exportAttemptId: routeOwnedAttempt.exportAttemptId,
+            canonicalSourceDigest: routeOwnedAttempt.canonicalSourceDigest,
+            operationId: routeOwnedAttempt.exportAttemptId,
+          };
+        }
       }
     }
     const exportResult = await executeExportPresentationRouteRequest(
@@ -292,7 +312,7 @@ export async function POST(req: NextRequest) {
     const coverage = exportResult.exportMetadata?.coverageManifest;
     let responseQuality = exportResult.quality;
     let responseExportMetadata = exportResult.exportMetadata;
-    if (routeOwnedAttempt) {
+    if (routeOwnedAttempt && routeOwnedAttemptMode === "hybrid") {
       const coverageSource = coverage?.source as
         | {
             exportAttemptId?: string;
@@ -340,6 +360,21 @@ export async function POST(req: NextRequest) {
         } as typeof exportResult.exportMetadata;
       }
       completedAttempt = true;
+    } else if (routeOwnedAttempt && routeOwnedAttemptMode === "fidelity") {
+      const { pptxSha256, pptxSizeBytes } = await exportedPptxDigest(
+        exportResult.path,
+      );
+      completedAttemptReceipt = await postHybridAttempt(
+        `/api/v1/ppt/presentation/${encodeURIComponent(String(exportBody.id))}/export-attempts/fidelity/${encodeURIComponent(routeOwnedAttempt.exportAttemptId)}/complete`,
+        cookieHeader,
+        {
+          pptxSha256,
+          pptxSizeBytes,
+          artifactPath: exportResult.path,
+        },
+        "fidelity",
+      );
+      completedAttempt = true;
     }
 
     const embedding = responseQuality?.fontEmbeddingStatus;
@@ -356,7 +391,9 @@ export async function POST(req: NextRequest) {
           ...(responseExportMetadata
             ? { exportMetadata: responseExportMetadata }
             : {}),
-          ...(routeOwnedAttempt ? { exportAttempt: routeOwnedAttempt } : {}),
+          ...(routeOwnedAttempt
+            ? { exportAttempt: completedAttemptReceipt ?? routeOwnedAttempt }
+            : {}),
           ...(completedPowerPointQa ? { powerPointQa: completedPowerPointQa } : {}),
         },
         { status: 409 },
@@ -370,16 +407,24 @@ export async function POST(req: NextRequest) {
       ...(responseExportMetadata
         ? { exportMetadata: responseExportMetadata }
         : {}),
-      ...(routeOwnedAttempt ? { exportAttempt: routeOwnedAttempt } : {}),
+      ...(routeOwnedAttempt
+        ? { exportAttempt: completedAttemptReceipt ?? routeOwnedAttempt }
+        : {}),
       ...(completedPowerPointQa ? { powerPointQa: completedPowerPointQa } : {}),
     });
   } catch (e) {
     if (routeOwnedAttempt && !completedAttempt && typeof body?.id === "string") {
       try {
         await postHybridAttempt(
-          `/api/v1/ppt/presentation/${encodeURIComponent(body.id)}/export-attempts/hybrid/${encodeURIComponent(routeOwnedAttempt.exportAttemptId)}/fail`,
+          `/api/v1/ppt/presentation/${encodeURIComponent(body.id)}/export-attempts/${routeOwnedAttemptMode ?? "hybrid"}/${encodeURIComponent(routeOwnedAttempt.exportAttemptId)}/fail`,
           cookieHeader,
-          { failureCode: "next_hybrid_export_failed" },
+          {
+            failureCode:
+              routeOwnedAttemptMode === "fidelity"
+                ? "next_fidelity_export_failed"
+                : "next_hybrid_export_failed",
+          },
+          routeOwnedAttemptMode ?? "hybrid",
         );
       } catch {
         // The original export failure remains the client-visible error.

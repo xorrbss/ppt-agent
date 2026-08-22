@@ -110,13 +110,14 @@ def _validate_hybrid_atomic_binding(
     return supplied
 
 
-async def begin_direct_hybrid_export_attempt(
+async def _begin_direct_authored_export_attempt(
     session: AsyncSession,
     *,
     presentation_id: uuid.UUID,
     expected_revision: int,
     renderer_source_sha256: str,
     idempotency_key: str,
+    export_mode: str,
 ) -> tuple[PresentationExportAttempt, dict[str, str | int]]:
     presentation = await session.get(PresentationModel, presentation_id)
     if presentation is None:
@@ -160,7 +161,7 @@ async def begin_direct_hybrid_export_attempt(
         asset_manifest_sha256=asset_manifest_digest,
         renderer_source_sha256=renderer_source_sha256,
     )
-    provenance["capability_evidence"]["export_mode"] = "hybrid"
+    provenance["capability_evidence"]["export_mode"] = export_mode
     attempt = await begin_export_attempt(
         session,
         presentation_id=presentation_id,
@@ -206,6 +207,8 @@ async def complete_direct_hybrid_export_attempt(
         raise PresentationExportContractError("presentation_export_attempt_not_found")
     if attempt.state != "running":
         raise PresentationExportContractError("presentation_export_attempt_not_running")
+    if (attempt.provenance.get("capability_evidence") or {}).get("export_mode") != "hybrid":
+        raise PresentationExportContractError("presentation_export_attempt_mode_mismatch")
     manifest = PresentationExportCoverageManifest.model_validate(coverage)
     del powerpoint_qa  # Caller QA is never trusted.
     atomic = quality.get("atomicBinding")
@@ -346,6 +349,134 @@ async def complete_direct_hybrid_export_attempt(
         "coverageSidecarSha256": provenance["visual_parity"][
             "coverage_sidecar_sha256"
         ],
+    }
+
+
+async def begin_direct_hybrid_export_attempt(
+    session: AsyncSession,
+    *,
+    presentation_id: uuid.UUID,
+    expected_revision: int,
+    renderer_source_sha256: str,
+    idempotency_key: str,
+) -> tuple[PresentationExportAttempt, dict[str, str | int]]:
+    return await _begin_direct_authored_export_attempt(
+        session,
+        presentation_id=presentation_id,
+        expected_revision=expected_revision,
+        renderer_source_sha256=renderer_source_sha256,
+        idempotency_key=idempotency_key,
+        export_mode="hybrid",
+    )
+
+
+async def begin_direct_fidelity_export_attempt(
+    session: AsyncSession,
+    *,
+    presentation_id: uuid.UUID,
+    expected_revision: int,
+    renderer_source_sha256: str,
+    idempotency_key: str,
+) -> tuple[PresentationExportAttempt, dict[str, str | int]]:
+    return await _begin_direct_authored_export_attempt(
+        session,
+        presentation_id=presentation_id,
+        expected_revision=expected_revision,
+        renderer_source_sha256=renderer_source_sha256,
+        idempotency_key=idempotency_key,
+        export_mode="fidelity",
+    )
+
+
+async def complete_direct_fidelity_export_attempt(
+    session: AsyncSession,
+    *,
+    presentation_id: uuid.UUID,
+    attempt_id: uuid.UUID,
+    pptx_sha256: str,
+    pptx_size_bytes: int,
+    artifact_path: str,
+) -> tuple[PresentationExportAttempt, dict[str, Any]]:
+    attempt = await session.get(PresentationExportAttempt, attempt_id)
+    if (
+        attempt is None
+        or attempt.presentation_id != presentation_id
+        or attempt.owner_id != get_current_owner_id()
+        or attempt.owner_scope != get_workspace_owner_scope()
+    ):
+        raise PresentationExportContractError("presentation_export_attempt_not_found")
+    if attempt.state != "running":
+        raise PresentationExportContractError("presentation_export_attempt_not_running")
+    capability_evidence = attempt.provenance.get("capability_evidence") or {}
+    if capability_evidence.get("export_mode") != "fidelity":
+        raise PresentationExportContractError("presentation_export_attempt_mode_mismatch")
+
+    presentation = await session.get(PresentationModel, presentation_id)
+    slides = (
+        await session.execute(
+            select(SlideModel)
+            .where(SlideModel.presentation == presentation_id)
+            .order_by(SlideModel.index, SlideModel.id)
+        )
+    ).scalars().all()
+    if presentation is None or presentation.revision != attempt.source_revision:
+        raise PresentationExportFreshnessError("stale_presentation_revision")
+    if build_export_source_snapshot_sha256(presentation, slides) != attempt.source_snapshot_sha256:
+        raise PresentationExportFreshnessError("presentation_export_source_digest_mismatch")
+
+    artifact = resolve_hybrid_artifact(artifact_path)
+    actual_size = artifact.stat().st_size
+    actual_sha256 = await asyncio.to_thread(_sha256_file, artifact)
+    if actual_size != pptx_size_bytes or not hmac.compare_digest(actual_sha256, pptx_sha256):
+        raise PresentationExportFreshnessError("presentation_export_artifact_digest_mismatch")
+
+    renderer_source_sha256 = attempt.provenance["freshness"]["renderer_source_sha256"]
+    atomic_binding = {
+        "presentation_id": str(presentation_id),
+        "export_attempt_id": str(attempt.id),
+        "presentation_revision": attempt.source_revision,
+        "canonical_source_sha256": attempt.source_snapshot_sha256,
+        "renderer_source_sha256": renderer_source_sha256,
+        "pptx_sha256": pptx_sha256,
+    }
+    provenance = dict(attempt.provenance)
+    provenance["compiler_runtime"] = {
+        "compiler": "authored-fidelity",
+        "compiler_version": "1",
+        "runtime": "chromium-dom-export",
+        "runtime_version": "presenton.render-artifact/v1",
+    }
+    freshness = dict(provenance["freshness"])
+    freshness["package_sha256"] = pptx_sha256
+    provenance["freshness"] = freshness
+    provenance["atomic_binding"] = atomic_binding
+    await terminalize_export_attempt_succeeded(
+        session,
+        attempt_id=attempt.id,
+        presentation_id=presentation_id,
+        expected_owner_id=attempt.owner_id,
+        expected_owner_scope=attempt.owner_scope,
+        expected_workspace_operation_id=None,
+        source_revision=attempt.source_revision,
+        source_snapshot_sha256=attempt.source_snapshot_sha256,
+        selected_adapter="general",
+        artifact_sha256=pptx_sha256,
+        artifact_size_bytes=pptx_size_bytes,
+        provenance=provenance,
+    )
+    await session.commit()
+    await session.refresh(attempt)
+    return attempt, {
+        "visualParity": "not-verified",
+        "promotionReady": False,
+        "atomicBinding": {
+            "presentationId": str(presentation_id),
+            "exportAttemptId": str(attempt.id),
+            "presentationRevision": attempt.source_revision,
+            "canonicalSourceDigest": attempt.source_snapshot_sha256,
+            "rendererSourceDigest": renderer_source_sha256,
+            "pptxSha256": pptx_sha256,
+        },
     }
 
 
@@ -540,6 +671,36 @@ async def fail_direct_hybrid_export_attempt(
         or attempt.owner_scope != get_workspace_owner_scope()
     ):
         raise PresentationExportContractError("presentation_export_attempt_not_found")
+    if (attempt.provenance.get("capability_evidence") or {}).get("export_mode") != "hybrid":
+        raise PresentationExportContractError("presentation_export_attempt_mode_mismatch")
+    await terminalize_export_attempt_failed(
+        session,
+        attempt_id=attempt.id,
+        expected_owner_id=attempt.owner_id,
+        expected_owner_scope=attempt.owner_scope,
+        expected_workspace_operation_id=None,
+        failure_code=failure_code,
+        failure_path=None,
+    )
+
+
+async def fail_direct_fidelity_export_attempt(
+    session: AsyncSession,
+    *,
+    presentation_id: uuid.UUID,
+    attempt_id: uuid.UUID,
+    failure_code: str,
+) -> None:
+    attempt = await session.get(PresentationExportAttempt, attempt_id)
+    if (
+        attempt is None
+        or attempt.presentation_id != presentation_id
+        or attempt.owner_id != get_current_owner_id()
+        or attempt.owner_scope != get_workspace_owner_scope()
+    ):
+        raise PresentationExportContractError("presentation_export_attempt_not_found")
+    if (attempt.provenance.get("capability_evidence") or {}).get("export_mode") != "fidelity":
+        raise PresentationExportContractError("presentation_export_attempt_mode_mismatch")
     await terminalize_export_attempt_failed(
         session,
         attempt_id=attempt.id,
@@ -553,7 +714,10 @@ async def fail_direct_hybrid_export_attempt(
 
 __all__ = [
     "begin_direct_hybrid_export_attempt",
+    "begin_direct_fidelity_export_attempt",
     "complete_direct_hybrid_export_attempt",
+    "complete_direct_fidelity_export_attempt",
     "fail_direct_hybrid_export_attempt",
+    "fail_direct_fidelity_export_attempt",
     "list_direct_hybrid_export_attempt_history",
 ]

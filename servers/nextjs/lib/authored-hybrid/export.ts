@@ -12,6 +12,7 @@ import {
   runBundledPresentationExport,
   type BundledPresentationExportResult,
 } from "@/lib/run-bundled-presentation-export";
+import { fetchPersistedPresentationProjectionForExport } from "@/lib/export-presentation-route";
 
 import { resolveAuthoredHybridChromeExecutable } from "./index.ts";
 import {
@@ -21,7 +22,6 @@ import {
 } from "./pptx-assembler.ts";
 import { isAuthoredPresentation } from "./presentation-mode.ts";
 import { authoredRendererIsolationPolicy } from "./renderer-isolation.ts";
-import { readBoundedResponseText } from "./security.ts";
 import {
   beginExportProgress,
   recordExportProgress,
@@ -156,43 +156,20 @@ async function fetchPresentation(
   presentationId: string,
   cookieHeader: string,
 ): Promise<FetchedPresentation> {
-  const controller = new AbortController();
-  const timer = setTimeout(
-    () => controller.abort(),
-    PRESENTATION_FETCH_TIMEOUT_MS,
+  const fetched = await fetchPersistedPresentationProjectionForExport(
+    presentationId,
+    {
+      baseUrl: getFastApiBaseUrl(),
+      authHeaders: getFastApiAuthHeaders(),
+      cookieHeader,
+      timeoutMs: PRESENTATION_FETCH_TIMEOUT_MS,
+      maxResponseBytes: MAX_PRESENTATION_RESPONSE_BYTES,
+    },
   );
-  try {
-    const headers: Record<string, string> = {
-      Accept: "application/json",
-      ...getFastApiAuthHeaders(),
-    };
-    if (cookieHeader.trim()) headers.Cookie = cookieHeader;
-    const response = await fetch(
-      `${getFastApiBaseUrl()}/api/v1/ppt/presentation/${encodeURIComponent(presentationId)}`,
-      {
-        method: "GET",
-        headers,
-        cache: "no-store",
-        signal: controller.signal,
-      },
-    );
-    if (!response.ok) {
-      throw new Error(`presentation fetch returned HTTP ${response.status}`);
-    }
-    const body = await readBoundedResponseText(
-      response,
-      MAX_PRESENTATION_RESPONSE_BYTES,
-    );
-    const parsed: unknown = JSON.parse(body);
-    if (!isRecord(parsed))
-      throw new Error("presentation response is not an object");
-    return {
-      presentation: parsed as StoredPresentation,
-      sourceSha256: createHash("sha256").update(body).digest("hex"),
-    };
-  } finally {
-    clearTimeout(timer);
-  }
+  return {
+    presentation: fetched.presentation as StoredPresentation,
+    sourceSha256: fetched.sourceSha256,
+  };
 }
 
 async function resolveSafeFidelityPptx(outPath: string): Promise<string> {

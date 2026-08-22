@@ -31,6 +31,7 @@ from services.presentation_export_attempt_service import (
     terminalize_export_attempt_succeeded,
 )
 from services.presentation_export_direct_attempt_service import (
+    begin_direct_fidelity_export_attempt,
     _validate_hybrid_atomic_binding,
     list_direct_hybrid_export_attempt_history,
 )
@@ -54,6 +55,7 @@ TABLES = [
     WorkspaceOperation.__table__,
     WorkspaceAsset.__table__,
     PresentationExportAttempt.__table__,
+    SlideModel.__table__,
 ]
 
 
@@ -350,6 +352,30 @@ def test_hybrid_atomic_binding_rejects_cross_presentation_sidecar() -> None:
             expected,
             export_attempt_id=export_attempt_id,
         )
+
+
+def test_fidelity_begin_persists_renderer_binding_without_hybrid_evidence(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        engine, maker = await _database(tmp_path / "fidelity-attempt.db")
+        try:
+            presentation_id = await _seed_attempt_presentation(maker)
+            async with maker() as session:
+                attempt, evidence = await begin_direct_fidelity_export_attempt(
+                    session,
+                    presentation_id=presentation_id,
+                    expected_revision=4,
+                    renderer_source_sha256="b" * 64,
+                    idempotency_key="fidelity-test",
+                )
+            assert attempt.provenance["capability_evidence"]["export_mode"] == "fidelity"
+            assert attempt.provenance["freshness"]["renderer_source_sha256"] == "b" * 64
+            assert evidence["canonical_source_digest"] == attempt.source_snapshot_sha256
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
 
 
 async def _seed_attempt_presentation(maker) -> uuid.UUID:
