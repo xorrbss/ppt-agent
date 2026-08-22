@@ -130,6 +130,9 @@ try {
       $typographyIssuesGt5Pt = 0
       $typographyIssuesGt10Pt = 0
       $inspectionFailures = 0
+      $shapeReadback = @()
+      $backplateZOrderPositions = @()
+      $nativeZOrderPositions = @()
       for ($slideIndex = 1; $slideIndex -le $deck.Slides.Count; $slideIndex += 1) {
         $shapes = $deck.Slides.Item($slideIndex).Shapes
         for ($shapeIndex = 1; $shapeIndex -le $shapes.Count; $shapeIndex += 1) {
@@ -141,6 +144,12 @@ try {
             $shapeName = ([string]$shape.Name).ToLowerInvariant()
             $isBackplate = $shapeName.Contains("presenton hybrid backplate")
             $shapeType = [int]$shape.Type
+            $zOrderPosition = [int]$shape.ZOrderPosition
+            if ($isBackplate) {
+              $backplateZOrderPositions += $zOrderPosition
+            } else {
+              $nativeZOrderPositions += $zOrderPosition
+            }
             if ($hasText) { $nativeText += 1 }
             if ($hasTable) { $nativeTable += 1 }
             if ($hasChart) { $nativeChart += 1 }
@@ -157,6 +166,25 @@ try {
               )
               if ($overflow -gt 5) { $typographyIssuesGt5Pt += 1 }
               if ($overflow -gt 10) { $typographyIssuesGt10Pt += 1 }
+            }
+            $textValue = if ($hasText) { [string]$shape.TextFrame2.TextRange.Text } else { $null }
+            $shapeReadback += [PSCustomObject]@{
+              SlideNumber = $slideIndex
+              Name = [string]$shape.Name
+              Type = $shapeType
+              ZOrderPosition = $zOrderPosition
+              IsBackplate = $isBackplate
+              HasText = $hasText
+              Text = $textValue
+              TextLineBreakCount = if ($null -ne $textValue) {
+                [regex]::Matches($textValue, "[`r`n`v]").Count
+              } else { 0 }
+              Typeface = if ($hasText) { [string]$shape.TextFrame2.TextRange.Font.Name } else { $null }
+              EastAsianTypeface = if ($hasText) { [string]$shape.TextFrame2.TextRange.Font.NameFarEast } else { $null }
+              LeftPt = [double]$shape.Left
+              TopPt = [double]$shape.Top
+              WidthPt = [double]$shape.Width
+              HeightPt = [double]$shape.Height
             }
           } catch {
             $inspectionFailures += 1
@@ -206,6 +234,14 @@ try {
         TypographyIssuesGt5Pt = $typographyIssuesGt5Pt
         TypographyIssuesGt10Pt = $typographyIssuesGt10Pt
         InspectionFailures = $inspectionFailures
+        ShapeReadback = $shapeReadback
+        BackplateCount = $backplateZOrderPositions.Count
+        NativeBackplateZOrderViolations = @(
+          $nativeZOrderPositions | Where-Object {
+            $backplateZOrderPositions.Count -gt 0 -and
+            $_ -le ($backplateZOrderPositions | Measure-Object -Maximum).Maximum
+          }
+        ).Count
         RepairWarningObserved = $false
       }
     } finally {
