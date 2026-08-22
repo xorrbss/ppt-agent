@@ -53,6 +53,61 @@ const receipts = () => ["cjk", "chart", "zBand", "degradation"].map((receiptId) 
   receiptDigest: digest("f"),
 }));
 
+const releaseCapabilityIds = [
+  "shape.gradient", "shape.shadow", "layout.transform", "layout.flex", "layout.grid",
+  "shape.borderRadius", "shape.opacity", "shape.clip", "receipt.cjk", "receipt.chart",
+  "receipt.zBand", "receipt.degradation", "renderer.attestation", "evidence.visual",
+];
+const promotionCapabilityIds = [
+  "receipt.cjk", "receipt.chart", "receipt.zBand", "receipt.degradation",
+  "renderer.attestation", "evidence.visual",
+];
+
+function readinessV2(overrides = {}) {
+  return {
+    schemaVersion: "workbench-capability-projection/v2",
+    presentationId: "deck-1",
+    presentationRevision: 7,
+    canonicalMode: "bundleGraph",
+    canonicalDigest: digest("9"),
+    manifestDigest: digest("8"),
+    degradedFidelityOnly: false,
+    releaseProfile: {
+      schemaVersion: "authored-release-profile/v2",
+      profileId: "profile:staging",
+      platformScope: { platform: "windows", renderer: "external-worker", archetypes: ["title"] },
+      evaluatedAt: "2026-08-23T00:00:00Z",
+      expiresAt: "2026-08-24T00:00:00Z",
+      promotionReady: false,
+      boundedNativeParityReady: false,
+      independentGenerationReady: false,
+      requiredCapabilityIds: promotionCapabilityIds,
+      boundedNativeCapabilityIds: releaseCapabilityIds,
+      readyReceiptDigests: [digest("a")],
+      reasonCode: "release_evidence_incomplete",
+    },
+    capabilities: releaseCapabilityIds.map((capabilityId) => ({
+      capabilityId,
+      state: capabilityId === "receipt.cjk" ? "ready" : "shadow",
+      reasonCode: capabilityId === "receipt.cjk" ? "cjk_receipt_verified" : "serializer_scope_unverified",
+      receiptDigest: capabilityId === "receipt.cjk" ? digest("b") : null,
+      scope: { platform: "windows", renderer: "external-worker", archetypes: ["title"] },
+      serializerId: "presenton-authored-hybrid",
+      serializerVersion: "v2",
+      expiresAt: capabilityId === "receipt.cjk" ? "2026-08-24T00:00:00Z" : null,
+    })),
+    rendererAttestation: {
+      state: "unattested",
+      reasonCode: "renderer_attestation_missing",
+      attestationDigest: null,
+      environment: { os: "windows", boundary: "external-worker" },
+      expiresAt: null,
+    },
+    killSwitches: [],
+    ...overrides,
+  };
+}
+
 function projection(overrides = {}) {
   return {
     schemaVersion: "workbench-capability-projection/v1",
@@ -144,5 +199,17 @@ test("capability projection fails closed without complete server-issued matrix a
         }),
       ),
     /invalid receipts\[3\]\.reasonCode/,
+  );
+});
+
+test("v2 release readiness requires every server-issued scoped capability and attestation", async () => {
+  const { normalizeAuthoredReleaseReadinessProjectionV2 } = await loadCapabilityClient();
+  const normalized = normalizeAuthoredReleaseReadinessProjectionV2({ data: readinessV2() });
+  assert.equal(normalized.releaseProfile.promotionReady, false);
+  assert.equal(normalized.capabilities.length, 14);
+  assert.equal(normalized.rendererAttestation.state, "unattested");
+  assert.throws(
+    () => normalizeAuthoredReleaseReadinessProjectionV2(readinessV2({ capabilities: readinessV2().capabilities.slice(1) })),
+    /incomplete capabilities/,
   );
 });

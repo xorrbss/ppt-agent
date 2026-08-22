@@ -2,13 +2,31 @@
 
 import type {
   AuthoredEmissionCapabilityProjection,
+  AuthoredEmissionReadinessStatus,
   AuthoredSemanticDecision,
 } from "../../../services/api/authored-emission-capability";
 
 export type AuthoredEmissionCapabilityStatus =
   | { state: "checking" }
   | { state: "unavailable"; reason?: string }
-  | { state: "ready"; projection: AuthoredEmissionCapabilityProjection };
+  | { state: "ready"; readiness: AuthoredEmissionReadinessStatus };
+
+const releaseCapabilityLabels: Record<string, string> = {
+  "shape.gradient": "그라데이션",
+  "shape.shadow": "그림자",
+  "layout.transform": "Transform",
+  "layout.flex": "Flex",
+  "layout.grid": "Grid",
+  "shape.borderRadius": "모서리 반경",
+  "shape.opacity": "Opacity",
+  "shape.clip": "Clip",
+  "receipt.cjk": "CJK receipt",
+  "receipt.chart": "Chart receipt",
+  "receipt.zBand": "z-band receipt",
+  "receipt.degradation": "Degradation receipt",
+  "renderer.attestation": "Renderer attestation",
+  "evidence.visual": "Visual evidence",
+};
 
 const capabilityLabels: Record<string, string> = {
   "shape.gradient": "그라데이션",
@@ -49,7 +67,20 @@ export function authoredHybridUnavailableReason(
 ): string | undefined {
   if (status.state === "checking") return "capability projection을 확인하는 중입니다.";
   if (status.state === "unavailable") return status.reason ?? "Hybrid capability projection을 확인하지 못했습니다.";
-  const { projection } = status;
+  const { readiness } = status;
+  if (readiness.version === "v2") {
+    const { projection } = readiness;
+    if (expectedRevision !== undefined && projection.presentationRevision !== expectedRevision) {
+      return "현재 revision과 v2 release readiness binding이 일치하지 않습니다.";
+    }
+    const activeKillSwitch = projection.killSwitches.find((item) => item.active);
+    if (activeKillSwitch) return `${activeKillSwitch.capabilityId}: ${activeKillSwitch.reasonCode}`;
+    if (projection.degradedFidelityOnly) return "semantic source가 Fidelity 전용으로 강등되었습니다.";
+    if (projection.canonicalMode !== "bundleGraph") return "legacy HTML revision은 Hybrid admission을 제공하지 않습니다.";
+    if (!projection.canonicalDigest || !projection.manifestDigest) return "immutable manifest binding digest가 없습니다.";
+    return undefined;
+  }
+  const projection = readiness.projection;
   if (expectedRevision !== undefined && projection.presentationRevision !== expectedRevision) {
     return "현재 revision과 capability projection의 manifest binding이 일치하지 않습니다.";
   }
@@ -87,7 +118,52 @@ export default function AuthoredEmissionCapabilityStatusView({
   if (status.state === "unavailable") {
     return <p className="text-[11px] leading-4 text-amber-800" data-testid="authored-capability-status">Fidelity만 사용할 수 있습니다. {status.reason ?? "Hybrid capability projection을 확인하지 못했습니다."}</p>;
   }
-  const { projection } = status;
+  const { readiness } = status;
+  if (readiness.version === "v2") {
+    const { projection } = readiness;
+    const hybridReason = authoredHybridUnavailableReason(status, expectedRevision);
+    const activeKillSwitches = projection.killSwitches.filter((item) => item.active);
+    return (
+      <div className="space-y-1 text-[11px] leading-4" data-testid="authored-capability-status" data-readiness-version="v2">
+        <p className={hybridReason ? "text-amber-800" : "text-emerald-800"}>
+          {hybridReason ? `Hybrid 제한: ${hybridReason}` : "Fidelity와 Hybrid가 같은 immutable v2 manifest에 묶여 있습니다."}
+        </p>
+        <p className="break-all text-slate-500">
+          profile {projection.releaseProfile.profileId} · {projection.releaseProfile.platformScope.platform}/{projection.releaseProfile.platformScope.renderer} · {projection.releaseProfile.reasonCode}
+        </p>
+        <p className="text-slate-500">
+          promotionReady: {String(projection.releaseProfile.promotionReady)} · boundedNativeParityReady: {String(projection.releaseProfile.boundedNativeParityReady)} · independentGenerationReady: {String(projection.releaseProfile.independentGenerationReady)}
+        </p>
+        <section className="border-t border-slate-100 pt-1.5" aria-label="서버 발행 v2 scoped capabilities">
+          <p className="font-medium text-slate-700">서버 발행 scoped capabilities</p>
+          <div className="mt-1 grid gap-x-3 gap-y-1 sm:grid-cols-2">
+            {projection.capabilities.map((capability) => (
+              <div key={capability.capabilityId} className="min-w-0" data-testid={`authored-release-capability-${capability.capabilityId}`}>
+                <span className="text-slate-600">{releaseCapabilityLabels[capability.capabilityId]}: </span>
+                <span className={capability.state === "ready" ? "text-emerald-800" : capability.state === "shadow" ? "text-amber-800" : "text-rose-800"}>{capability.state}</span>
+                <span className="text-slate-500"> · {capability.reasonCode} · {capability.scope.platform}/{capability.scope.renderer}</span>
+                <span className="sr-only"> · receipt {capability.receiptDigest}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="border-t border-slate-100 pt-1.5" aria-label="서버 발행 renderer attestation">
+          <p className="font-medium text-slate-700">renderer attestation</p>
+          <p className={projection.rendererAttestation.state === "attested" ? "text-emerald-800" : "text-amber-800"}>
+            {projection.rendererAttestation.state} · {projection.rendererAttestation.reasonCode}
+            <span className="sr-only"> · attestation {projection.rendererAttestation.attestationDigest}</span>
+          </p>
+        </section>
+        <section className="border-t border-slate-100 pt-1.5" aria-label="서버 발행 capability kill switches">
+          <p className="font-medium text-slate-700">capability kill switches</p>
+          {activeKillSwitches.length ? activeKillSwitches.map((item) => (
+            <p key={item.capabilityId} className="text-rose-800">{item.capabilityId} · active · {item.reasonCode}</p>
+          )) : <p className="text-slate-500">서버가 보고한 active kill switch 없음</p>}
+        </section>
+      </div>
+    );
+  }
+  const projection: AuthoredEmissionCapabilityProjection = readiness.projection;
   const hybridReason = authoredHybridUnavailableReason(status, expectedRevision);
   return (
     <div className="space-y-1 text-[11px] leading-4" data-testid="authored-capability-status">

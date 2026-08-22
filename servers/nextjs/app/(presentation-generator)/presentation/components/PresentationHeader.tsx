@@ -48,7 +48,7 @@ import {
   type HybridExportHistory,
 } from "../../services/api/hybrid-export-history";
 import {
-  getAuthoredEmissionCapabilityProjection,
+  getAuthoredEmissionReadinessStatus,
 } from "../../services/api/authored-emission-capability";
 
 export interface PresentationHeaderFeatureSlots {
@@ -123,10 +123,10 @@ const PresentationHeader = ({
     if (!isAuthoredDeck) return;
     const controller = new AbortController();
     setAuthoredCapabilityStatus({ state: "checking" });
-    getAuthoredEmissionCapabilityProjection(presentation_id, controller.signal)
-      .then((projection) => {
+    getAuthoredEmissionReadinessStatus(presentation_id, controller.signal)
+      .then((readiness) => {
         if (!controller.signal.aborted) {
-          setAuthoredCapabilityStatus({ state: "ready", projection });
+          setAuthoredCapabilityStatus({ state: "ready", readiness });
         }
       })
       .catch((error: unknown) => {
@@ -508,9 +508,11 @@ const PresentationHeader = ({
               historyDisabled={isStreaming === true}
               hybridDisabledReason={hybridDisabledReason}
               manifestBindingLabel={
-                authoredCapabilityStatus.state === "ready"
-                  ? `동일 manifest · revision ${authoredCapabilityStatus.projection.presentationRevision} · ${authoredCapabilityStatus.projection.manifestDigest ?? "미기록"}`
-                  : undefined
+                authoredCapabilityStatus.state === "ready" && authoredCapabilityStatus.readiness.version === "v1-fallback"
+                  ? `동일 manifest · revision ${authoredCapabilityStatus.readiness.projection.presentationRevision} · ${authoredCapabilityStatus.readiness.projection.manifestDigest ?? "미기록"}`
+                  : authoredCapabilityStatus.state === "ready" && authoredCapabilityStatus.readiness.version === "v2"
+                    ? `v2 release profile · revision ${authoredCapabilityStatus.readiness.projection.presentationRevision} · ${authoredCapabilityStatus.readiness.projection.releaseProfile.profileId}`
+                    : undefined
               }
             />
           )}

@@ -40,7 +40,7 @@ function makeBundle() {
   const seedBytes = Buffer.from(JSON.stringify(seedValue));
   const seed = write(root, "seed.json", seedBytes);
   const paths = { seed };
-  const modes = ["fidelity", "hybrid"].map((mode, index) => {
+  const modes = ["authored", "fidelity", "hybrid"].map((mode, index) => {
     const pptxBytes = Buffer.concat([Buffer.from("PK\x03\x04"), Buffer.from(mode)]);
     const pptxName = `${mode}.pptx`;
     const pptx = write(root, pptxName, pptxBytes);
@@ -53,6 +53,8 @@ function makeBundle() {
     const render = write(root, `${mode}-render.json`, Buffer.from(JSON.stringify(renderValue)));
     const quality = write(root, `${mode}-quality.json`, Buffer.from(JSON.stringify(qualityValue)));
     const pngs = Array.from({ length: 8 }, (_, slideIndex) => write(root, `${mode}-slide-${slideIndex + 1}.png`, Buffer.from(`${mode}-png-${slideIndex + 1}`)));
+    const firstOpenPngs = Array.from({ length: 8 }, (_, slideIndex) => write(root, `${mode}-first-open-${slideIndex + 1}.png`, Buffer.from(`${mode}-powerpoint-png-${slideIndex + 1}`)));
+    const reopenPngs = Array.from({ length: 8 }, (_, slideIndex) => write(root, `${mode}-reopen-${slideIndex + 1}.png`, Buffer.from(`${mode}-powerpoint-png-${slideIndex + 1}`)));
     return {
       mode,
       attemptId: `${index + 1}6666666-6666-4666-8666-66666666666${index}`,
@@ -66,11 +68,12 @@ function makeBundle() {
       pptx,
       reports: { com: { ...com, pptxSha256: pptx.sha256 }, render: { ...render, pptxSha256: pptx.sha256 }, quality: { ...quality, pptxSha256: pptx.sha256 } },
       renderedPngs: pngs,
+      powerPoint: { firstOpen: true, reopened: true, pptxSha256: pptx.sha256, firstOpenPngs, reopenPngs },
       checks: { repairObserved: false, overflowGt5Pt: 0, overflowGt10Pt: 0, lineBreakChanges: 0, clipping: 0, overlap: 0, ghosting: 0, nativeBackplateCollision: 0 },
     };
   });
   const manifest = {
-    schemaVersion: "authored-semantic-vertical-slice-evidence/v2",
+    schemaVersion: "authored-semantic-vertical-slice-evidence/v3",
     fixtureId: "authored-semantic-dual-output-eight-slide-v1",
     evidenceBundleId: "77777777-7777-4777-8777-777777777777",
     status: "not-verified",
@@ -80,8 +83,22 @@ function makeBundle() {
     operationId,
     generationAttemptId,
     seedReceipt: { ...seed, path: "seed.json" },
-    freshness: { reusedFrom: null, previousEvidenceDigest: null },
+    freshness: { runId: "run-001", generatedAt: "2026-08-23T00:00:00Z", reusedFrom: null, previousEvidenceDigest: null },
     modes,
+    slideRegistry: [
+      { slideId: "slide-01", language: "ko", archetypes: ["card", "metric", "table"] },
+      { slideId: "slide-02", language: "zh", archetypes: ["process", "architecture"] },
+      { slideId: "slide-03", language: "ja", archetypes: ["timeline", "roadmap"] },
+      { slideId: "slide-04", language: "ko", archetypes: ["comparison"] },
+      { slideId: "slide-05", language: "zh", archetypes: ["infographic"] },
+      { slideId: "slide-06", language: "ja", archetypes: ["chart"] },
+      { slideId: "slide-07", language: "ko", archetypes: ["image"] },
+      { slideId: "slide-08", language: "zh", archetypes: ["card"] },
+    ],
+    registryDigest: "",
+    diffPolicy: { maxChangedPixelRatio: 0.02, minSsim: 0.98 },
+    perSlideDiffs: [],
+    manualReviewLedger: { entries: [{ reviewer: "qa-reviewer-01", reviewedAt: "2026-08-23T00:00:00Z", decision: "accept", scope: ["all-slides", "all-modes"] }] },
     recoveryAttempts: [],
     promotionReady: false,
     fullNativeParityReady: false,
@@ -95,16 +112,26 @@ function makeBundle() {
     const response = { kind, code: rejectionCode, accepted: false };
     manifest.recoveryAttempts.push({ kind, attemptId, operationId, generationAttemptId, observedRevision: 0, outcome: "rejected", rejectionCode, request, response, requestDigest: canonicalSha256(request), responseDigest: canonicalSha256(response) });
   }
+  manifest.registryDigest = canonicalSha256(manifest.slideRegistry);
+  for (let slideNumber = 1; slideNumber <= 8; slideNumber += 1) {
+    manifest.perSlideDiffs.push({ slideNumber, pairs: Object.fromEntries(["authored-fidelity", "authored-hybrid", "fidelity-hybrid"].map((pair) => [pair, { status: "pass", changedPixelRatio: 0.001, ssim: 0.999 }])) });
+  }
+  const exportAttemptIds = modes.map((mode) => mode.exportAttemptId).sort();
+  const receiptValue = { schemaVersion: "authored-db-attempt-receipt/v1", presentationId, presentationRevision: 1, operationId, generationAttemptId, attemptId: "db-attempt-001", status: "succeeded", exportAttemptIds };
+  const receipt = write(root, "db-attempt-receipt.json", Buffer.from(JSON.stringify(receiptValue)));
+  manifest.dbAttemptResolution = { schemaVersion: "authored-db-attempt-resolution/v1", authority: "database", status: "resolved", presentationId, operationId, generationAttemptId, attemptId: "db-attempt-001", receipt: { ...receipt, pptxSha256: undefined }, receiptSha256: receipt.sha256 };
+  manifest.atomicBinding = { fixtureId: manifest.fixtureId, presentationId, presentationRevision: 1, operationId, generationAttemptId, manifestDigest, registryDigest: manifest.registryDigest, exportAttemptIds };
+  manifest.atomicBindingDigest = canonicalSha256(manifest.atomicBinding);
   const manifestPath = path.join(root, "evidence.json");
   fs.writeFileSync(manifestPath, JSON.stringify(manifest));
   return { root, manifest, manifestPath };
 }
 
-test("verifies fresh eight-slide two-mode evidence and keeps promotion flags false", () => {
+test("verifies fresh eight-slide three-mode evidence and keeps promotion flags false", () => {
   const bundle = makeBundle();
   const result = verifyEvidenceManifest(bundle.manifestPath);
   assert.equal(result.status, "not-verified");
-  assert.equal(result.modes.length, 2);
+  assert.equal(result.modes.length, 3);
   assert.equal(result.promotionReady, false);
   assert.equal(typeof result.evidenceDigest, "string");
 });

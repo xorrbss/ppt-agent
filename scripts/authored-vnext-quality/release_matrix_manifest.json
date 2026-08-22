@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "authored-vnext-release-matrix/v1",
+  "matrixId": "authored-release-readiness-matrix-20260823",
+  "seedScript": "scripts/seed-authored-semantic-vertical-slice.py",
+  "requiredSlideCount": 8,
+  "requiredLanguages": ["ko", "zh", "ja"],
+  "requiredArchetypes": [
+    "card",
+    "process",
+    "timeline",
+    "comparison",
+    "metric",
+    "infographic",
+    "table",
+    "chart",
+    "image",
+    "architecture",
+    "roadmap"
+  ],
+  "decks": [
+    {
+      "matrixDeckId": "fresh-deck-a",
+      "seed": "authored-semantic-vertical-slice-v2",
+      "languages": ["ko", "zh", "ja"],
+      "archetypes": ["card", "process", "timeline", "comparison", "metric", "infographic", "table", "chart", "image", "architecture", "roadmap"]
+    },
+    {
+      "matrixDeckId": "fresh-deck-b",
+      "seed": "authored-semantic-vertical-slice-v2",
+      "languages": ["ko", "zh", "ja"],
+      "archetypes": ["card", "process", "timeline", "comparison", "metric", "infographic", "table", "chart", "image", "architecture", "roadmap"]
+    }
+  ]
+}

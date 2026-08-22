@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Verify a fresh, atomic 2-slide Fidelity/Hybrid evidence descriptor.
+ * Verify a fresh, atomic eight-slide Authored/Fidelity/Hybrid evidence descriptor.
  *
  * This command deliberately verifies artifacts; it does not infer a visual
  * pass, run PowerPoint, or turn a missing report into success.  Every file is
@@ -16,10 +16,13 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { canonicalSha256 } from "../contracts/authored_vnext/semantic/fixtures/canonical-json.mjs";
 
-export const EVIDENCE_SCHEMA = "authored-semantic-vertical-slice-evidence/v2";
+export const EVIDENCE_SCHEMA = "authored-semantic-vertical-slice-evidence/v3";
 export const VERIFICATION_SCHEMA = "authored-semantic-vertical-slice-evidence-verification/v1";
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
 const SLIDE_COUNT = 8;
+const MODES = ["authored", "fidelity", "hybrid"];
+const REQUIRED_LANGUAGES = new Set(["ko", "zh", "ja"]);
+const REQUIRED_ARCHETYPES = new Set(["card", "process", "timeline", "comparison", "metric", "infographic", "table", "chart", "image", "architecture", "roadmap"]);
 
 function fail(code, detail = "") {
   throw new Error(detail ? `${code}:${detail}` : code);
@@ -130,9 +133,78 @@ function verifyQualityReport(root, descriptor, pptxDigest, exportAttemptId, path
   return report;
 }
 
+function verifyRegistry(evidence) {
+  if (!Array.isArray(evidence.slideRegistry) || evidence.slideRegistry.length !== SLIDE_COUNT) fail("eight-slide-registry-required");
+  const languages = new Set();
+  const archetypes = new Set();
+  const ids = new Set();
+  for (const slide of evidence.slideRegistry) {
+    requiredString(slide?.slideId, "slideRegistry:slideId");
+    if (ids.has(slide.slideId)) fail("slide-registry-id-reused", slide.slideId);
+    ids.add(slide.slideId);
+    const language = requiredString(slide.language, `slideRegistry:${slide.slideId}:language`).toLowerCase().split("-")[0];
+    languages.add(language);
+    if (!Array.isArray(slide.archetypes) || slide.archetypes.length === 0) fail("slide-registry-archetypes-required", slide.slideId);
+    slide.archetypes.forEach((archetype) => archetypes.add(requiredString(archetype, `slideRegistry:${slide.slideId}:archetype`)));
+  }
+  for (const language of REQUIRED_LANGUAGES) if (!languages.has(language)) fail("slide-registry-language-missing", language);
+  for (const archetype of REQUIRED_ARCHETYPES) if (!archetypes.has(archetype)) fail("slide-registry-archetype-missing", archetype);
+  const registryDigest = canonicalSha256(evidence.slideRegistry);
+  if (evidence.registryDigest !== registryDigest) fail("slide-registry-digest-mismatch");
+  return { registryDigest, languages: [...languages].sort(), archetypes: [...archetypes].sort() };
+}
+
+function verifyDiffPolicy(evidence) {
+  const policy = evidence.diffPolicy;
+  if (!policy || typeof policy !== "object") fail("diff-policy-required");
+  if (typeof policy.maxChangedPixelRatio !== "number" || policy.maxChangedPixelRatio < 0 || policy.maxChangedPixelRatio > 1) fail("diff-policy-ratio-invalid");
+  if (typeof policy.minSsim !== "number" || policy.minSsim < 0 || policy.minSsim > 1) fail("diff-policy-ssim-invalid");
+  if (!Array.isArray(evidence.perSlideDiffs) || evidence.perSlideDiffs.length !== SLIDE_COUNT) fail("per-slide-diffs-eight-required");
+  const slides = new Set();
+  for (const entry of evidence.perSlideDiffs) {
+    if (!Number.isInteger(entry?.slideNumber) || entry.slideNumber < 1 || entry.slideNumber > SLIDE_COUNT || slides.has(entry.slideNumber)) fail("per-slide-diff-number-invalid");
+    slides.add(entry.slideNumber);
+    if (!entry.pairs || typeof entry.pairs !== "object" || Object.keys(entry.pairs).sort().join(",") !== "authored-fidelity,authored-hybrid,fidelity-hybrid") fail("per-slide-diff-pairs-required", String(entry.slideNumber));
+    for (const [pair, value] of Object.entries(entry.pairs)) {
+      if (value?.status !== "pass") fail("per-slide-diff-not-passed", `${entry.slideNumber}:${pair}`);
+      if (typeof value.changedPixelRatio !== "number" || value.changedPixelRatio < 0 || value.changedPixelRatio > policy.maxChangedPixelRatio) fail("per-slide-diff-ratio-exceeded", `${entry.slideNumber}:${pair}`);
+      if (typeof value.ssim !== "number" || value.ssim < policy.minSsim || value.ssim > 1) fail("per-slide-diff-ssim-below-policy", `${entry.slideNumber}:${pair}`);
+    }
+  }
+  if (slides.size !== SLIDE_COUNT) fail("per-slide-diff-slides-incomplete");
+  return { policy, slides: evidence.perSlideDiffs };
+}
+
+function verifyManualLedger(evidence) {
+  if (!evidence.manualReviewLedger || !Array.isArray(evidence.manualReviewLedger.entries) || evidence.manualReviewLedger.entries.length === 0) fail("manual-review-ledger-required");
+  const reviewers = new Set();
+  for (const entry of evidence.manualReviewLedger.entries) {
+    const reviewer = requiredString(entry?.reviewer, "manual-review:reviewer");
+    if (reviewers.has(reviewer)) fail("manual-review-reviewer-reused");
+    reviewers.add(reviewer);
+    requiredString(entry.reviewedAt, "manual-review:reviewedAt");
+    if (entry.decision !== "accept" || !Array.isArray(entry.scope) || entry.scope.length === 0) fail("manual-review-not-accepted");
+  }
+  return evidence.manualReviewLedger.entries;
+}
+
+function verifyDbAttemptResolution(root, evidence, expected, paths, exportAttemptIds) {
+  const resolution = evidence.dbAttemptResolution;
+  if (!resolution || resolution.schemaVersion !== "authored-db-attempt-resolution/v1" || resolution.authority !== "database" || resolution.status !== "resolved") fail("db-attempt-resolution-required");
+  for (const key of ["presentationId", "operationId", "generationAttemptId", "attemptId"]) requiredString(resolution[key], `db-resolution:${key}`);
+  for (const key of ["presentationId", "operationId", "generationAttemptId"]) if (resolution[key] !== expected[key]) fail("db-resolution-binding-mismatch", key);
+  const receipt = verifyFile(root, resolution.receipt, "dbAttemptResolution:receipt", paths);
+  if (resolution.receiptSha256 !== receipt.sha256) fail("db-resolution-receipt-digest-mismatch");
+  const receiptValue = readJson(receipt.path, "dbAttemptResolution:receipt");
+  if (receiptValue.status !== "succeeded" || receiptValue.attemptId !== resolution.attemptId) fail("db-resolution-attempt-not-succeeded");
+  for (const key of ["presentationId", "operationId", "generationAttemptId"]) if (receiptValue[key] !== expected[key]) fail("db-receipt-binding-mismatch", key);
+  if (!(new Set(receiptValue.exportAttemptIds || []).size === exportAttemptIds.size && new Set(receiptValue.exportAttemptIds || []).size === [...exportAttemptIds].filter((id) => receiptValue.exportAttemptIds.includes(id)).length)) fail("db-receipt-export-attempts-mismatch");
+  return { attemptId: resolution.attemptId, receiptSha256: receipt.sha256 };
+}
+
 function verifyMode(root, mode, expected, paths) {
   if (!mode || typeof mode !== "object") fail("mode-descriptor-required");
-  if (!["fidelity", "hybrid"].includes(mode.mode)) fail("unsupported-mode", String(mode.mode));
+  if (!MODES.includes(mode.mode)) fail("unsupported-mode", String(mode.mode));
   for (const key of ["attemptId", "exportAttemptId", "presentationId", "operationId", "generationAttemptId"]) requiredString(mode[key], `${mode.mode}:${key}`);
   if (mode.presentationId !== expected.presentationId || mode.presentationRevision !== expected.presentationRevision || mode.manifestDigest !== expected.manifestDigest || mode.operationId !== expected.operationId || mode.generationAttemptId !== expected.generationAttemptId) {
     fail("mode-binding-mismatch", mode.mode);
@@ -148,13 +220,19 @@ function verifyMode(root, mode, expected, paths) {
   const quality = verifyQualityReport(root, reports.quality, pptxDigest, mode.exportAttemptId, paths);
   if (!Array.isArray(mode.renderedPngs) || mode.renderedPngs.length !== SLIDE_COUNT) fail("eight-rendered-pngs-required", mode.mode);
   const pngs = mode.renderedPngs.map((item, index) => verifyFile(root, item, `${mode.mode}:png:${index + 1}`, paths));
+  const powerPoint = mode.powerPoint;
+  if (!powerPoint || powerPoint.firstOpen !== true || powerPoint.reopened !== true || powerPoint.pptxSha256 !== pptxDigest) fail("powerpoint-first-open-reopen-required", mode.mode);
+  if (!Array.isArray(powerPoint.firstOpenPngs) || powerPoint.firstOpenPngs.length !== SLIDE_COUNT || !Array.isArray(powerPoint.reopenPngs) || powerPoint.reopenPngs.length !== SLIDE_COUNT) fail("powerpoint-first-open-reopen-pngs-required", mode.mode);
+  const firstOpenPngs = powerPoint.firstOpenPngs.map((item, index) => verifyFile(root, item, `${mode.mode}:first-open-png:${index + 1}`, paths));
+  const reopenPngs = powerPoint.reopenPngs.map((item, index) => verifyFile(root, item, `${mode.mode}:reopen-png:${index + 1}`, paths));
+  if (firstOpenPngs.map((item) => item.sha256).join(",") !== reopenPngs.map((item) => item.sha256).join(",")) fail("powerpoint-reopen-render-hash-mismatch", mode.mode);
   const checks = mode.checks;
   if (!checks || typeof checks !== "object") fail("checks-required", mode.mode);
   if (checks.repairObserved === true) fail("repair-observed", mode.mode);
   for (const key of ["overflowGt5Pt", "overflowGt10Pt", "lineBreakChanges", "clipping", "overlap", "ghosting", "nativeBackplateCollision"]) {
     if (!Number.isInteger(checks[key]) || checks[key] < 0) fail("invalid-check-count", `${mode.mode}:${key}`);
   }
-  return { mode: mode.mode, attemptId: mode.attemptId, exportAttemptId: mode.exportAttemptId, pptxSha256: pptxDigest, comReportSha256: com.sha256, renderReportSha256: render.sha256, qualityReportSha256: quality.sha256, pngSha256: pngs.map((item) => item.sha256), checks };
+  return { mode: mode.mode, attemptId: mode.attemptId, exportAttemptId: mode.exportAttemptId, pptxSha256: pptxDigest, comReportSha256: com.sha256, renderReportSha256: render.sha256, qualityReportSha256: quality.sha256, pngSha256: pngs.map((item) => item.sha256), firstOpenPngSha256: firstOpenPngs.map((item) => item.sha256), reopenPngSha256: reopenPngs.map((item) => item.sha256), checks };
 }
 
 function verifyRecoveryAttempts(evidence, expected) {
@@ -196,7 +274,10 @@ export function verifyEvidenceManifest(manifestPath) {
   normalizeDigest(expected.manifestDigest, "manifestDigest");
   const paths = new Set([absoluteManifest]);
   verifySeed(root, evidence.seedReceipt, expected, paths);
-  if (!Array.isArray(evidence.modes) || evidence.modes.length !== 2) fail("fidelity-hybrid-pair-required");
+  const registry = verifyRegistry(evidence);
+  const diffs = verifyDiffPolicy(evidence);
+  const ledger = verifyManualLedger(evidence);
+  if (!Array.isArray(evidence.modes) || evidence.modes.length !== MODES.length) fail("authored-fidelity-hybrid-mode-set-required");
   const modes = new Set();
   const attempts = new Set();
   const exportAttempts = new Set();
@@ -210,11 +291,18 @@ export function verifyEvidenceManifest(manifestPath) {
     exportAttempts.add(mode?.exportAttemptId);
     verifiedModes.push(verifyMode(root, mode, expected, paths));
   }
-  if (!modes.has("fidelity") || !modes.has("hybrid")) fail("fidelity-hybrid-pair-missing");
+  if (modes.size !== MODES.length || MODES.some((mode) => !modes.has(mode))) fail("authored-fidelity-hybrid-mode-set-incomplete");
   verifyRecoveryAttempts(evidence, expected);
-  if (verifiedModes[0].pptxSha256 === verifiedModes[1].pptxSha256) fail("pptx-reused-across-modes");
+  if (new Set(verifiedModes.map((mode) => mode.pptxSha256)).size !== MODES.length) fail("pptx-reused-across-modes");
+  const dbResolution = verifyDbAttemptResolution(root, evidence, expected, paths, exportAttempts);
+  const atomicBinding = evidence.atomicBinding;
+  if (!atomicBinding || typeof atomicBinding !== "object") fail("atomic-binding-required");
+  for (const [key, value] of Object.entries({ ...expected, registryDigest: registry.registryDigest, exportAttemptIds: [...exportAttempts].sort() })) if (JSON.stringify(atomicBinding[key]) !== JSON.stringify(value)) fail("atomic-binding-mismatch", key);
+  if (evidence.atomicBindingDigest !== canonicalSha256(atomicBinding)) fail("atomic-binding-digest-mismatch");
   const freshness = evidence.freshness;
   if (!freshness || freshness.reusedFrom !== null || freshness.previousEvidenceDigest !== null) fail("fresh-evidence-required");
+  requiredString(freshness.runId, "freshness:runId");
+  requiredString(freshness.generatedAt, "freshness:generatedAt");
   const result = {
     schemaVersion: VERIFICATION_SCHEMA,
     evidenceBundleId: evidence.evidenceBundleId,
@@ -226,6 +314,11 @@ export function verifyEvidenceManifest(manifestPath) {
     operationId: expected.operationId,
     generationAttemptId: expected.generationAttemptId,
     modes: verifiedModes,
+    registry,
+    diffs,
+    manualReviewLedger: ledger,
+    dbAttemptResolution: dbResolution,
+    atomicBindingDigest: evidence.atomicBindingDigest,
     promotionReady: false,
     fullNativeParityReady: false,
     independentVnextGenerationReady: false,

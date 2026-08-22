@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "repository": "ibizsoftware/devax-ppt",
+  "protectedBranches": ["main"],
+  "requiredPipelineSteps": [
+    "Authored release readiness configuration",
+    "Run shared Next.js CI Node suite",
+    "Workspace chat-first browser E2E"
+  ],
+  "requiredPipelineAnchors": [
+    "*authored-release-readiness-config",
+    "*nextjs-ci-node-contracts",
+    "*workspace-chat-first-e2e"
+  ],
+  "liveVerification": {
+    "branchRestrictionKind": "require_passing_builds_to_merge",
+    "environmentToken": "BITBUCKET_API_TOKEN"
+  }
+}

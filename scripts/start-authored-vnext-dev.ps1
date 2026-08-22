@@ -253,6 +253,10 @@ $fastApiEnvironment["NEXT_INTERNAL_URL"] = "http://127.0.0.1:$NextPort"
 $fastApiEnvironment["NEXT_PUBLIC_URL"] = $proxyUrl
 
 $nextEnvironment = $sharedAuthoredEnvironment.Clone()
+# The verification UI consumes existing deterministic presentations and must
+# not be redirected into provider onboarding. Keep FastAPI locally mutable so
+# provider availability is not asserted during startup.
+$nextEnvironment["CAN_CHANGE_KEYS"] = "false"
 $nextEnvironment["FAST_API_INTERNAL_URL"] = $fastApiUrl
 $nextEnvironment["NEXT_INTERNAL_URL"] = $proxyUrl
 $nextEnvironment["NEXT_PUBLIC_URL"] = $proxyUrl
