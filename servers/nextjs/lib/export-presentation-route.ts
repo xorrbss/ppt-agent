@@ -403,6 +403,7 @@ export async function executeExportPresentationRouteRequest<
       title: typeof body.title === "string" ? body.title : undefined,
       cookieHeader,
       pptxMode: resolvedPptxMode.value,
+      explicitPptxMode: body.pptxMode !== undefined,
       fontEmbedding,
       ...(typeof body.exportAttemptId === "string"
         ? { exportAttemptId: body.exportAttemptId.trim() }

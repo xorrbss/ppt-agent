@@ -392,6 +392,8 @@ function convertElement(
   });
   const base: AuthoredHybridElementBase = {
     id: observation.id,
+    identityAuthority: observation.identityAuthority,
+    parentElementId: observation.parentElementId,
     domPath: observation.domPath,
     tagName: observation.tagName,
     sourceIndex: observation.sourceIndex,
@@ -586,6 +588,12 @@ export function assertAuthoredHybridSlide(
     invariant(typeof element.id === "string" && element.id.length > 0, `elements[${index}].id is invalid`);
     invariant(!ids.has(element.id), `duplicate element id ${element.id}`);
     ids.add(element.id);
+    if (element.identityAuthority !== undefined) {
+      oneOf(element.identityAuthority, ["declared-qid", "compatibility-ordinal"], `element ${element.id}.identityAuthority`);
+    }
+    if (element.parentElementId !== undefined && element.parentElementId !== null) {
+      invariant(typeof element.parentElementId === "string" && element.parentElementId.length > 0, `element ${element.id}.parentElementId is invalid`);
+    }
     invariant(typeof element.domPath === "string" && element.domPath.length > 0, `element ${element.id} has invalid domPath`);
     invariant(typeof element.tagName === "string" && element.tagName.length > 0, `element ${element.id} has invalid tagName`);
     invariant(element.zOrder === index, `element ${element.id} has non-contiguous zOrder`);
@@ -708,6 +716,18 @@ export function assertAuthoredHybridSlide(
         assertShapePayload(element.shape, `element ${element.id} shape`);
         if (isEditableRasterShapePayload(element)) eligibleIds.push(element.id);
       }
+    }
+  });
+  slide.elements.forEach((element) => {
+    if (element.parentElementId) {
+      invariant(ids.has(element.parentElementId), `element ${element.id} has unknown parentElementId`);
+      invariant(element.parentElementId !== element.id, `element ${element.id} cannot parent itself`);
+    }
+    if (element.identityAuthority === "declared-qid") {
+      invariant(
+        /^[A-Za-z][A-Za-z0-9._:-]{0,127}$/.test(element.id),
+        `element ${element.id} has invalid declared data-qid identity`
+      );
     }
   });
 

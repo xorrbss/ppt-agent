@@ -75,6 +75,7 @@ export const AUTHORED_HYBRID_FALLBACK_REASONS = [
   "text-shadow",
   "transformed-ancestor",
   "unknown-z-order",
+  "z-band-unsafe",
   "unsupported-background",
   "unsupported-color",
   "unsupported-direction",
@@ -289,6 +290,9 @@ export interface AuthoredHybridShapePayload {
 
 export interface AuthoredHybridElementBase {
   id: string;
+  /** Authored-declared identity is the exact data-qid; compatibility is ordinal. */
+  identityAuthority?: "declared-qid" | "compatibility-ordinal";
+  parentElementId?: string | null;
   domPath: string;
   tagName: string;
   sourceIndex: number;
@@ -399,4 +403,6 @@ export interface AuthoredHybridBackplateRenderResult {
   appliedPromotedElementIds: string[];
   /** Requested elements left rasterised because their DOM identity drifted. */
   fallbackElementIds: string[];
+  /** Digest of the exact PNG bytes returned by the isolated renderer. */
+  capturePngSha256?: string;
 }

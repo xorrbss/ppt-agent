@@ -29,6 +29,10 @@ import HeaderToolbar from "./header/HeaderToolbar";
 import PresentationTitleEditor from "./header/PresentationTitleEditor";
 import RegenerateConfirmDialog from "./header/RegenerateConfirmDialog";
 import type { PptxExportMode } from "./header/types";
+import AuthoredEmissionCapabilityStatusView, {
+  authoredHybridUnavailableReason,
+  type AuthoredEmissionCapabilityStatus,
+} from "./header/AuthoredEmissionCapabilityStatus";
 import MasterLayoutBadge from "./header/MasterLayoutBadge";
 import {
   masterPinCommandContext,
@@ -43,6 +47,9 @@ import {
   getHybridExportHistory,
   type HybridExportHistory,
 } from "../../services/api/hybrid-export-history";
+import {
+  getAuthoredEmissionCapabilityProjection,
+} from "../../services/api/authored-emission-capability";
 
 export interface PresentationHeaderFeatureSlots {
   /** Computed by PresentationShell's server-issued capability projection. */
@@ -91,6 +98,8 @@ const PresentationHeader = ({
     useState(false);
   const [hybridExportHistoryError, setHybridExportHistoryError] =
     useState<string | null>(null);
+  const [authoredCapabilityStatus, setAuthoredCapabilityStatus] =
+    useState<AuthoredEmissionCapabilityStatus>({ state: "checking" });
   const [draftTitle, setDraftTitle] = useState("");
   const titleInputRef = useRef<HTMLInputElement>(null);
   /** Avoid committing on blur when Save/Cancel was used (focus/click ordering) */
@@ -105,6 +114,34 @@ const PresentationHeader = ({
   const appliedMasterPin = isAuthoredDeck
     ? presentationMasterPin(presentationData)
     : null;
+  const expectedRevision =
+    typeof presentationData?.revision === "number"
+      ? presentationData.revision
+      : undefined;
+
+  useEffect(() => {
+    if (!isAuthoredDeck) return;
+    const controller = new AbortController();
+    setAuthoredCapabilityStatus({ state: "checking" });
+    getAuthoredEmissionCapabilityProjection(presentation_id, controller.signal)
+      .then((projection) => {
+        if (!controller.signal.aborted) {
+          setAuthoredCapabilityStatus({ state: "ready", projection });
+        }
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setAuthoredCapabilityStatus({
+          state: "unavailable",
+          reason: error instanceof Error ? error.message : undefined,
+        });
+      });
+    return () => controller.abort();
+  }, [expectedRevision, isAuthoredDeck, presentation_id]);
+
+  const hybridDisabledReason = isAuthoredDeck
+    ? authoredHybridUnavailableReason(authoredCapabilityStatus, expectedRevision)
+    : undefined;
   // Compatibility facade for isolated header consumers. The presentation page
   // always supplies the server-derived projection; this fallback is removable
   // once those stories/tests consume PresentationShell as well.
@@ -194,6 +231,7 @@ const PresentationHeader = ({
     fontEmbedding?: boolean,
   ) => {
     if (isStreaming || !workspaceCommandsEnabled || !onWorkspaceCommand) return;
+    if (pptxMode === "hybrid" && hybridDisabledReason !== undefined) return;
     try {
       if (isAuthoredDeck && (pptxMode === "hybrid" || pptxMode === "fidelity")) {
         // A caller must explicitly choose false to request the compatibility
@@ -211,8 +249,8 @@ const PresentationHeader = ({
             ...(pptxMode === "hybrid"
               ? { fontEmbedding: requestedFontEmbedding }
               : {}),
-            ...(typeof presentationData?.revision === "number"
-              ? { expectedPresentationRevision: presentationData.revision }
+            ...(expectedRevision !== undefined
+              ? { expectedPresentationRevision: expectedRevision }
               : {}),
           }),
         });
@@ -468,10 +506,24 @@ const PresentationHeader = ({
               onExportPdf={handleExportPdf}
               onOpenHybridExportHistory={openHybridExportHistory}
               historyDisabled={isStreaming === true}
+              hybridDisabledReason={hybridDisabledReason}
+              manifestBindingLabel={
+                authoredCapabilityStatus.state === "ready"
+                  ? `동일 manifest · revision ${authoredCapabilityStatus.projection.presentationRevision} · ${authoredCapabilityStatus.projection.manifestDigest ?? "미기록"}`
+                  : undefined
+              }
             />
           )}
         </div>
       </div>
+      {isAuthoredDeck ? (
+        <div className="border-t border-slate-100 px-4 py-2 sm:px-6">
+          <AuthoredEmissionCapabilityStatusView
+            status={authoredCapabilityStatus}
+            expectedRevision={expectedRevision}
+          />
+        </div>
+      ) : null}
       <ExportQualityDialog
         exportQuality={exportQuality}
         setExportQuality={setExportQuality}

@@ -62,6 +62,12 @@ export interface AuthoredHybridSlideCoverage {
    */
   visualParity: "preflight" | "passed" | "failed" | "not-verified";
   nativeBackplateDeDuplication: "applied" | "not-applicable";
+  semanticReceipts?: {
+    observationReceiptDigest?: string;
+    nativeAdmissionReceiptDigest?: string;
+    hybridPlanDigest?: string;
+    rasterDegradationReceiptDigest?: string;
+  };
 }
 
 export interface AuthoredHybridCoverageManifest {
@@ -117,6 +123,7 @@ interface CoverageQualitySlide {
   backplateCount: number;
   typographyIssues: ReadonlyArray<{ code: string; elementId?: string }>;
   fallbackReasons: readonly string[];
+  semanticReceipts?: AuthoredHybridSlideCoverage["semanticReceipts"];
 }
 
 export interface AuthoredHybridCoverageQuality {
@@ -187,6 +194,9 @@ export function createAuthoredHybridCoverageManifest(
         visualParity: "not-verified" as const,
         nativeBackplateDeDuplication:
           nativeCount > 0 ? ("applied" as const) : ("not-applicable" as const),
+        ...(slide.semanticReceipts
+          ? { semanticReceipts: { ...slide.semanticReceipts } }
+          : {}),
       };
     })
     .sort((left, right) => left.slideNumber - right.slideNumber);

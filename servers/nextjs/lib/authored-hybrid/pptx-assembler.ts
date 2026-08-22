@@ -391,8 +391,7 @@ function assembleSlide(
   // overlays, and native images sit above it. This preserves raster-only
   // illustrations without baking editable boxes and lines into the background.
   const canvasBackgroundXml: string[] = [];
-  const underlayXml: string[] = [];
-  const overlayXml: string[] = [];
+  const orderedNativeXml: string[] = [];
   const ordered = [...layer.elements].sort(
     (left, right) =>
       left.source.zOrder - right.source.zOrder ||
@@ -432,11 +431,10 @@ function assembleSlide(
     );
     if (overlay && item.kind === "text") overlay = hardenTextOverlay(overlay, item, options);
     if (underlay) {
-      (isCanvasBackgroundShape(item) ? canvasBackgroundXml : underlayXml).push(
-        underlay
-      );
+      if (isCanvasBackgroundShape(item)) canvasBackgroundXml.push(underlay);
+      else orderedNativeXml.push(underlay);
     }
-    if (overlay) overlayXml.push(overlay);
+    if (overlay) orderedNativeXml.push(overlay);
     nextNonVisualId += preparedNativeElementNonVisualIdCount(item);
   });
 
@@ -444,7 +442,7 @@ function assembleSlide(
   const replacement =
     `<p:spTree>${GROUP_ROOT_XML}${useSlideBackground ? "" : canvasBackgroundXml.join("")}` +
     `${useSlideBackground ? "" : backplatePictureXml(backplateRelationshipId)}` +
-    `${underlayXml.join("")}${overlayXml.join("")}</p:spTree>`;
+    `${orderedNativeXml.join("")}</p:spTree>`;
   // Pass a replacer function so `$&`, `$'`, `$\`` and `$$` sequences inside the
   // assembled shape XML (e.g. text like "US$'000") are inserted literally instead
   // of being expanded as String.replace special patterns.

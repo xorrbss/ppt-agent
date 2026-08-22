@@ -151,8 +151,19 @@ const NOTO_SANS_KR_CANDIDATES: readonly AllowlistedCandidate[] = [
   },
 ];
 
+const IBM_PLEX_MONO_CANDIDATES: readonly AllowlistedCandidate[] = [
+  {
+    fileName: "IBMPlexMono-Regular.ttf",
+    variable: false,
+    source: "server-font-allowlist",
+    derivedFromVariable: false,
+    faces: [{ face: "regular", weight: 400, style: "normal" }],
+  },
+];
+
 const ALLOWLIST = new Map<string, readonly AllowlistedCandidate[]>([
   ["noto sans kr", NOTO_SANS_KR_CANDIDATES],
+  ["ibm plex mono", IBM_PLEX_MONO_CANDIDATES],
 ]);
 
 function normalizeFamily(family: string): string {

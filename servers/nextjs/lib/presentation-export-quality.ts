@@ -56,6 +56,13 @@ export interface PresentationExportSlideQuality {
    * `rasterFallbackElements`.
    */
   fallbackElements?: PresentationExportFallbackElement[];
+  /** Digest-only semantic receipts; bounded and safe for attempt binding. */
+  semanticReceipts?: {
+    observationReceiptDigest?: string;
+    nativeAdmissionReceiptDigest?: string;
+    hybridPlanDigest?: string;
+    rasterDegradationReceiptDigest?: string;
+  };
 }
 
 export interface PresentationExportCoverageCounts {

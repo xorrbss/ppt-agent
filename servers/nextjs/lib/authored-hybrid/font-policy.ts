@@ -468,6 +468,23 @@ const MONOSPACE_TYPEFACES = new Set([
   "ui-monospace",
 ]);
 
+const CJK_SERIF_TYPEFACES = new Set([
+  "serif",
+  "ui-serif",
+  "noto serif kr",
+  "noto serif cjk kr",
+  "source serif 4",
+  "batang",
+  "batangche",
+  "cambria",
+]);
+
+export function isCjkSerifFontStack(families: readonly string[]): boolean {
+  return families.some((family) =>
+    CJK_SERIF_TYPEFACES.has(normalizedFontName(family))
+  );
+}
+
 export function isMonospaceFontStack(families: readonly string[]): boolean {
   return families.some((family) =>
     MONOSPACE_TYPEFACES.has(normalizedFontName(family))
@@ -491,6 +508,13 @@ export function resolveScriptAwareTypeface(
   families: readonly string[]
 ): AuthoredScriptTypefaceResolution {
   if (script === "cjk") {
+    if (isCjkSerifFontStack(families)) {
+      return {
+        typeface: "Noto Serif KR",
+        fallbackTypeface: "Batang",
+        requiresEmbedding: true,
+      };
+    }
     return {
       typeface: "Noto Sans KR",
       fallbackTypeface: "Malgun Gothic",

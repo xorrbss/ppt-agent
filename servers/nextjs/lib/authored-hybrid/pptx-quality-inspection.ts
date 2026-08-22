@@ -1,4 +1,4 @@
-import { readPptxArchive } from "./pptx-archive.ts";
+import { decodeXmlAttributeValue, readPptxArchive } from "./pptx-archive.ts";
 import {
   createPresentationExportQuality,
   type PresentationExportFallbackElement,
@@ -47,6 +47,78 @@ function pictureIdentity(block: string, index: number): string {
 
 function isHybridBackplate(block: string): boolean {
   return /<p:cNvPr\b[^>]*\bname="Presenton hybrid backplate"/.test(block);
+}
+
+export interface AuthoredHybridNativeReadbackElement {
+  readonly slideNumber: number;
+  readonly elementId: string;
+  readonly kind: "text" | "shape" | "image";
+  readonly latinTypefaces: readonly string[];
+  readonly eastAsianTypefaces: readonly string[];
+  readonly lineBreakCount: number;
+}
+
+function typefaces(xml: string, tag: "latin" | "ea"): string[] {
+  return [...xml.matchAll(new RegExp(`<a:${tag}\\b[^>]*\\btypeface="([^"]*)"`, "g"))]
+    .map((match) => decodeXmlAttributeValue(match[1]).trim())
+    .filter((value, index, values) => value.length > 0 && values.indexOf(value) === index);
+}
+
+function hybridIdentity(name: string): {
+  kind: "text" | "shape" | "image";
+  elementId: string;
+} | null {
+  const decoded = decodeXmlAttributeValue(name).trim();
+  const match = /^Presenton hybrid (?:native |raster )?(text|shape|image) (.+?)(?:-container)?(?: (?:outline|shadow \d+|(?:top|right|bottom|left) border))?$/.exec(decoded);
+  if (!match) return null;
+  return {
+    kind: match[1] as "text" | "shape" | "image",
+    elementId: match[2],
+  };
+}
+
+/**
+ * Structural native readback keyed by the declared QID stored in cNvPr.name.
+ * This reports the actual OOXML run faces and explicit breaks; it does not
+ * substitute for PowerPoint COM save/reopen/render evidence.
+ */
+export function inspectPptxNativeElementReadback(
+  pptxBytes: Buffer
+): AuthoredHybridNativeReadbackElement[] {
+  const archive = readPptxArchive(pptxBytes);
+  const results: AuthoredHybridNativeReadbackElement[] = [];
+  for (const [name, bytes] of archive) {
+    const slideMatch = /^ppt\/slides\/slide(\d+)\.xml$/.exec(name);
+    if (!slideMatch) continue;
+    const slideNumber = Number(slideMatch[1]);
+    const xml = bytes.toString("utf8");
+    for (const block of [
+      ...xml.matchAll(/<p:sp\b[\s\S]*?<\/p:sp>/g),
+      ...xml.matchAll(/<p:pic\b[\s\S]*?<\/p:pic>/g),
+    ].map((match) => match[0])) {
+      const rawName = block.match(/<p:cNvPr\b[^>]*\bname="([^"]*)"/)?.[1];
+      if (!rawName) continue;
+      const identity = hybridIdentity(rawName);
+      if (!identity || results.some((entry) =>
+        entry.slideNumber === slideNumber &&
+        entry.elementId === identity.elementId &&
+        entry.kind === identity.kind
+      )) continue;
+      results.push({
+        slideNumber,
+        elementId: identity.elementId,
+        kind: identity.kind,
+        latinTypefaces: typefaces(block, "latin"),
+        eastAsianTypefaces: typefaces(block, "ea"),
+        lineBreakCount: occurrences(block, /<a:br\/>/g),
+      });
+    }
+  }
+  return results.sort((left, right) =>
+    left.slideNumber - right.slideNumber ||
+    left.elementId.localeCompare(right.elementId) ||
+    left.kind.localeCompare(right.kind)
+  );
 }
 
 function coversWholeSlide(

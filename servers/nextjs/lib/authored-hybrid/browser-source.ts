@@ -23,6 +23,13 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
   var WIDTH = 1280;
   var HEIGHT = 720;
   var config = window.__PRESENTON_AUTHORED_HYBRID_CONFIG__ || {};
+  var captureMode = ["observation", "hybrid-backplate", "fidelity"].includes(
+    config.captureMode
+  ) ? config.captureMode : "observation";
+  var declaredElementIds = Array.isArray(config.declaredElementIds)
+    ? config.declaredElementIds
+    : [];
+  var declaredIdentity = declaredElementIds.length > 0;
   var completionToken = typeof config.completionToken === "string" ? config.completionToken : "";
   var promotedElements = Array.isArray(config.promotedElements)
     ? config.promotedElements
@@ -226,50 +233,18 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     return result;
   }
 
-  function cssFontFamilyStack(families) {
-    var generic = new Set([
-      "serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui"
-    ]);
-    return families.map(function (family) {
-      return generic.has(family.toLowerCase())
-        ? family
-        : '"' + family.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
-    }).join(", ");
-  }
-
-  function applyFontFallbackPolicy() {
-    [document.documentElement, document.body]
-      .concat(Array.from(document.body.querySelectorAll("*")))
-      .forEach(function (element) {
-        if (
-          !element ||
-          ["SCRIPT", "STYLE", "TEXTAREA", "NOSCRIPT", "TEMPLATE"].includes(
-            element.tagName
-          )
-        ) return;
-        var authored = fontFamilies(getComputedStyle(element).fontFamily || "sans-serif");
-        var expanded = expandedFontFamilies(authored);
-        if (
-          expanded.length !== authored.length ||
-          expanded.some(function (family, index) { return family !== authored[index]; })
-        ) {
-          element.style.setProperty(
-            "font-family",
-            cssFontFamilyStack(expanded),
-            "important"
-          );
-        }
-      });
-  }
-
   function cjkFallbacks(text, families) {
     if (!/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u.test(text)) return [];
+    var serifIntent = families.some(function (family) {
+      return /(?:^|\s)(?:serif|batang|batangche|cambria)(?:\s|$)/i.test(family) ||
+        /(?:noto|source)\s+serif/i.test(family);
+    });
     var fallback = [
-      "Malgun Gothic",
-      "Batang",
+      serifIntent ? "Noto Serif KR" : "Malgun Gothic",
+      serifIntent ? "Batang" : "Noto Sans KR",
       "Apple SD Gothic Neo",
       "Arial Unicode MS",
-      "sans-serif",
+      serifIntent ? "serif" : "sans-serif",
     ];
     var knownCjk = new Set(
       fallback.map(function (family) {
@@ -3112,64 +3087,99 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     }
   }
 
-  function waitForStablePage() {
-    var fontReady = document.fonts && document.fonts.ready
-      ? document.fonts.ready.catch(function () {})
-      : Promise.resolve();
-    var imageReady = Promise.allSettled(
-      Array.from(document.images).map(function (image) {
-        if (image.complete) return Promise.resolve();
-        if (typeof image.decode === "function") return image.decode();
-        return new Promise(function (resolve) {
-          image.addEventListener("load", resolve, { once: true });
-          image.addEventListener("error", resolve, { once: true });
-        });
-      })
-    );
-    var ready = Promise.allSettled([fontReady, imageReady]);
-    var timeout = new Promise(function (resolve) { setTimeout(resolve, 4000); });
-    return Promise.race([ready, timeout]).then(waitForTwoPaints);
-  }
-
-  function enforceMinimumEditableFontSize() {
-    var minimumPx = 12; // 12 CSS px = 9 PowerPoint points.
-    var pseudoRules = [];
-    [document.body].concat(Array.from(document.body.querySelectorAll("*"))).forEach(
-      function (element, index) {
-        if (["SCRIPT", "STYLE", "TEXTAREA", "NOSCRIPT", "TEMPLATE"].includes(element.tagName)) {
-          return;
+  async function waitForStablePage() {
+    var readinessStarted = performance.now();
+    var mutationCount = 0;
+    var observer = typeof MutationObserver === "function"
+      ? new MutationObserver(function (entries) { mutationCount += entries.length; })
+      : null;
+    if (observer) {
+      observer.observe(document.documentElement, {
+        attributes: true,
+        childList: true,
+        characterData: true,
+        subtree: true,
+      });
+    }
+    var timeoutToken;
+    var timeout = new Promise(function (_resolve, reject) {
+      timeoutToken = setTimeout(function () {
+        reject(new Error("authored_render_readiness_timeout"));
+      }, 4000);
+    });
+    var images = Array.from(document.images);
+    var decodedImageCount = 0;
+    var unresolvedResources = [];
+    async function decodeImage(image, index) {
+      try {
+        if (!image.complete) {
+          await new Promise(function (resolve, reject) {
+            image.addEventListener("load", resolve, { once: true });
+            image.addEventListener("error", reject, { once: true });
+          });
         }
-        var hasOwnText = Array.from(element.childNodes).some(function (node) {
-          return node.nodeType === Node.TEXT_NODE && Boolean((node.textContent || "").trim());
-        });
-        var style = getComputedStyle(element);
-        if (hasOwnText && number(style.fontSize, minimumPx) < minimumPx) {
-          element.style.setProperty("font-size", minimumPx + "px", "important");
+        if (typeof image.decode === "function") await image.decode();
+        if (image.naturalWidth <= 0 || image.naturalHeight <= 0) {
+          throw new Error("empty-image");
         }
-        ["::before", "::after"].forEach(function (pseudo) {
-          var pseudoStyle = getComputedStyle(element, pseudo);
-          var content = pseudoStyle.content;
-          if (
-            content &&
-            content !== "none" &&
-            content !== "normal" &&
-            number(pseudoStyle.fontSize, minimumPx) < minimumPx
-          ) {
-            var attribute = "data-presenton-min-font-" + index +
-              (pseudo === "::before" ? "-before" : "-after");
-            element.setAttribute(attribute, "true");
-            pseudoRules.push(
-              "[" + attribute + "]" + pseudo + "{font-size:" + minimumPx + "px!important}"
-            );
-          }
-        });
+        decodedImageCount += 1;
+      } catch (_error) {
+        unresolvedResources.push("image:" + index);
       }
-    );
-    if (pseudoRules.length) {
-      var sheet = document.createElement("style");
-      sheet.setAttribute("data-presenton-minimum-font-size", "true");
-      sheet.textContent = pseudoRules.join("\n");
-      document.head.appendChild(sheet);
+    }
+    try {
+      await Promise.race([
+        Promise.all([
+          document.fonts && document.fonts.ready
+            ? document.fonts.ready
+            : Promise.resolve(),
+          Promise.all(images.map(decodeImage)),
+        ]),
+        timeout,
+      ]);
+      if (document.fonts && document.fonts.status !== "loaded") {
+        unresolvedResources.push("fonts:pending");
+      }
+      if (
+        typeof document.getAnimations === "function" &&
+        document.getAnimations().some(function (animation) {
+          return animation.playState === "running" || animation.playState === "pending";
+        })
+      ) unresolvedResources.push("animation:active");
+      if (unresolvedResources.length) {
+        throw new Error(
+          "authored_render_resources_unresolved:" + unresolvedResources.join(",")
+        );
+      }
+
+      var stableSince = performance.now();
+      var previousMutationCount = mutationCount;
+      while (performance.now() - stableSince < 100) {
+        await new Promise(function (resolve) { setTimeout(resolve, 20); });
+        if (mutationCount !== previousMutationCount) {
+          previousMutationCount = mutationCount;
+          stableSince = performance.now();
+        }
+        if (performance.now() - readinessStarted > 3800) {
+          throw new Error("authored_render_mutation_window_unstable");
+        }
+      }
+      await waitForTwoPaints();
+      return {
+        schemaVersion: "browser-render-readiness/v1",
+        status: "ready",
+        fontStatus: document.fonts ? "loaded" : "unsupported",
+        imageCount: images.length,
+        decodedImageCount: decodedImageCount,
+        unresolvedResources: [],
+        mutationFreeWindowMs: 100,
+        continuousPaintEpochs: 2,
+        captureEpoch: Math.round(performance.now() * 1000),
+        captureMode: captureMode,
+      };
+    } finally {
+      clearTimeout(timeoutToken);
+      if (observer) observer.disconnect();
     }
   }
 
@@ -3219,12 +3229,19 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     var observation = record.observation;
     var expectedBounds = expected.boundsPx || {};
     var actualBounds = observation.boundsPx;
+    var declaredQidMatches =
+      expected.identityAuthority === "declared-qid" &&
+      observation.identityAuthority === "declared-qid" &&
+      record.element.getAttribute("data-qid") === expected.id;
+    var compatibilityIdentityMatches =
+      expected.identityAuthority !== "declared-qid" &&
+      observation.domPath === expected.domPath &&
+      observation.sourceIndex === expected.sourceIndex;
     return (
       (["text", "shape"].includes(expected.candidateKind) || observation.fallbackReasons.length === 0) &&
       observation.id === expected.id &&
-      observation.domPath === expected.domPath &&
+      (declaredQidMatches || compatibilityIdentityMatches) &&
       observation.tagName === expected.tagName &&
-      observation.sourceIndex === expected.sourceIndex &&
       observation.candidateKind === expected.candidateKind &&
       observationContentKey(observation) === expected.contentKey &&
       nearlyEqual(actualBounds.x, expectedBounds.x, 0.25) &&
@@ -3343,22 +3360,66 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     var marker = document.createElement("script");
     marker.type = "application/json";
     marker.id = MARKER_ID;
+    marker.hidden = true;
+    marker.style.setProperty("display", "none", "important");
     marker.textContent = btoa(binary);
     document.body.appendChild(marker);
     if (completionToken) {
       var completion = document.createElement("meta");
       completion.name = COMPLETION_MARKER_NAME;
       completion.content = completionToken;
+      completion.hidden = true;
       document.body.appendChild(completion);
     }
   }
 
   try {
     await ensureFixedViewport();
-    applyFontFallbackPolicy();
-    await waitForStablePage();
-    enforceMinimumEditableFontSize();
-    await waitForTwoPaints();
+    var renderReadiness = await waitForStablePage();
+    if (captureMode === "fidelity") {
+      writeResult({
+        ok: true,
+        value: {
+          viewport: {
+            widthPx: window.innerWidth,
+            heightPx: window.innerHeight,
+            devicePixelRatio: window.devicePixelRatio,
+          },
+          elements: [],
+          warnings: [],
+          appliedPromotedElementIds: [],
+          rejectedPromotedElementIds: [],
+          renderReadiness: renderReadiness,
+        },
+      });
+      return;
+    }
+
+    var declaredIdSet = new Set(declaredElementIds);
+    if (declaredIdentity) {
+      if (declaredIdSet.size !== declaredElementIds.length) {
+        throw new Error("authored_semantic_qid_duplicate");
+      }
+      declaredElementIds.forEach(function (elementId) {
+        if (
+          typeof elementId !== "string" ||
+          !/^[A-Za-z][A-Za-z0-9._:-]{0,127}$/.test(elementId)
+        ) throw new Error("authored_semantic_qid_invalid");
+      });
+      var observedQids = Array.from(document.querySelectorAll("[data-qid]"))
+        .map(function (element) { return element.getAttribute("data-qid") || ""; });
+      if (
+        observedQids.length !== new Set(observedQids).size ||
+        observedQids.some(function (qid) {
+          return !/^[A-Za-z][A-Za-z0-9._:-]{0,127}$/.test(qid);
+        })
+      ) throw new Error("authored_semantic_qid_invalid");
+      if (
+        observedQids.length !== declaredElementIds.length ||
+        observedQids.some(function (qid) { return !declaredIdSet.has(qid); }) ||
+        declaredElementIds.some(function (qid) { return !observedQids.includes(qid); })
+      ) throw new Error("authored_semantic_qid_mismatch");
+    }
 
     // A direct text node next to a block/flex/grid child is rendered as an
     // anonymous box. querySelectorAll cannot observe that box, so labels next
@@ -3367,7 +3428,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     // host bounds start before the generated item, which makes editable text
     // overlap eyebrow bars and chip bullets. Materialize those direct text
     // nodes as neutral spans so Chromium gives us their true laid-out bounds.
-    Array.from(document.body.querySelectorAll("*")).forEach(function (element) {
+    if (!declaredIdentity) Array.from(document.body.querySelectorAll("*")).forEach(function (element) {
       if (["SCRIPT", "STYLE", "TEXTAREA", "NOSCRIPT", "TEMPLATE", "SVG"].includes(element.tagName)) {
         return;
       }
@@ -3395,7 +3456,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     // the DOM, but are laid out as independent boxes by CSS. Preserve that
     // separation in PowerPoint so right-aligned KPIs and badges do not get
     // appended to the preceding paragraph at its left edge.
-    Array.from(document.body.querySelectorAll("*")).forEach(function (element) {
+    if (!declaredIdentity) Array.from(document.body.querySelectorAll("*")).forEach(function (element) {
       if (
         getComputedStyle(element).cssFloat !== "none" &&
         Boolean((element.innerText || element.textContent || "").trim())
@@ -3446,6 +3507,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
         return;
       }
       if (
+        !declaredIdentity &&
         !element.hasAttribute(ISOLATED_INLINE_ATTRIBUTE) &&
         coveredRoots.some(function (root) { return root.contains(element); })
       ) return;
@@ -3466,8 +3528,14 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       else if (looksLikeShape(element)) candidateKind = "shape";
       if (!candidateKind) return;
 
-      var id = "h1-" + String(records.length + 1).padStart(4, "0");
-      element.setAttribute(ELEMENT_ATTRIBUTE, id);
+      var declaredQid = element.getAttribute("data-qid");
+      if (declaredIdentity && (!declaredQid || !declaredIdSet.has(declaredQid))) {
+        return;
+      }
+
+      var id = declaredIdentity
+        ? declaredQid
+        : "h1-" + String(records.length + 1).padStart(4, "0");
       var transform = analyzeTransform(element);
       var rotationDeg = effectiveRigidRotation(element, transform);
       var reasons = safetyReasons(element, candidateKind, transform);
@@ -3498,6 +3566,13 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       var zIndex = /^-?\d+$/.test(zIndexText) ? Number.parseInt(zIndexText, 10) : null;
       var observation = {
         id: id,
+        identityAuthority: declaredIdentity ? "declared-qid" : "compatibility-ordinal",
+        parentElementId: declaredIdentity
+          ? (function () {
+              var parent = element.parentElement && element.parentElement.closest("[data-qid]");
+              return parent ? parent.getAttribute("data-qid") : null;
+            })()
+          : null,
         domPath: domPath(element),
         tagName: element.tagName.toLowerCase(),
         sourceIndex: sourceIndex,
@@ -3594,7 +3669,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     allElements.forEach(function (element, index) {
       elementSourceIndexes.set(element, index);
     });
-    allElements.forEach(function (element) {
+    if (!declaredIdentity) allElements.forEach(function (element) {
       ["::before", "::after"].forEach(function (pseudo) {
         var hostSourceIndex = elementSourceIndexes.get(element) || 0;
         var pseudoSourceIndex = hostSourceIndex;
@@ -3668,6 +3743,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
         warnings: warnings,
         appliedPromotedElementIds: suppression.applied,
         rejectedPromotedElementIds: suppression.rejected,
+        renderReadiness: renderReadiness,
       },
     });
   } catch (error) {

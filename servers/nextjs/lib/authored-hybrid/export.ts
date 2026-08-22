@@ -29,7 +29,13 @@ import {
 import {
   prepareFidelitySlideLayer,
   prepareSlideLayer,
+  semanticRasterDegradationDigest,
 } from "./slide-layer.ts";
+import {
+  bindActiveAuthoredEmissionForExport,
+  fetchActiveAuthoredEmission,
+  type ActiveEmissionExportBinding,
+} from "./active-emission.ts";
 import {
   mapWithConcurrency,
   parseBoundedPositiveInt,
@@ -93,6 +99,7 @@ const inFlightHybridExports = new Map<
 >();
 
 interface StoredSlide {
+  id?: unknown;
   index?: unknown;
   layout_group?: unknown;
   html_content?: unknown;
@@ -117,6 +124,8 @@ export interface AuthoredHybridExportParams {
   /** Durable FastAPI attempt identity; optional only at the shared type boundary. */
   exportAttemptId?: string;
   canonicalSourceDigest?: string;
+  /** Internal route fact: distinguishes an explicit Fidelity selection from the legacy default. */
+  explicitPptxMode?: boolean;
 }
 
 interface FetchedPresentation {
@@ -170,6 +179,29 @@ async function fetchPresentation(
     presentation: fetched.presentation as StoredPresentation,
     sourceSha256: fetched.sourceSha256,
   };
+}
+
+async function resolveActiveEmissionBinding(
+  params: AuthoredHybridExportParams,
+  presentation: StoredPresentation,
+  mode: "fidelity" | "hybrid",
+): Promise<ActiveEmissionExportBinding> {
+  const revision = Number(presentation.revision);
+  const active = await fetchActiveAuthoredEmission(
+    params.presentationId,
+    params.cookieHeader ?? "",
+  );
+  const slides = Array.isArray(presentation.slides) ? presentation.slides : [];
+  const slideIds = slides.map((slide) =>
+    isRecord(slide) && typeof slide.id === "string" ? slide.id : "");
+  return bindActiveAuthoredEmissionForExport(active, {
+    mode,
+    explicitMode: mode === "hybrid" || params.explicitPptxMode === true,
+    presentationId: params.presentationId,
+    presentationRevision: revision,
+    canonicalSourceDigest: params.canonicalSourceDigest,
+    slideIds,
+  });
 }
 
 async function resolveSafeFidelityPptx(outPath: string): Promise<string> {
@@ -489,6 +521,11 @@ export async function runAuthoredFidelityPresentationExport(
   ) {
     throw new Error("authored_fidelity_source_invalid");
   }
+  const activeBinding = await resolveActiveEmissionBinding(
+    params,
+    presentation,
+    "fidelity",
+  );
 
   const fidelity = await runBundledPresentationExport({
     format: "pptx",
@@ -523,6 +560,16 @@ export async function runAuthoredFidelityPresentationExport(
     undefined,
     [],
     "authored-fidelity",
+    {
+      ...(params.exportAttemptId ? { exportAttemptId: params.exportAttemptId } : {}),
+      presentationRevision: Number(presentation.revision),
+      ...(activeBinding.canonicalDigest
+        ? { canonicalSourceDigest: activeBinding.canonicalDigest }
+        : params.canonicalSourceDigest
+          ? { canonicalSourceDigest: params.canonicalSourceDigest }
+          : {}),
+      sourceDigest: fetched.sourceSha256,
+    },
   );
   return { path: resultPath };
 }
@@ -531,6 +578,7 @@ async function runUncachedAuthoredHybridExport(
   params: AuthoredHybridExportParams,
   presentation: StoredPresentation,
   sourceSha256: string,
+  activeBinding: ActiveEmissionExportBinding,
   fontEmbeddingPlan: FontEmbeddingPlan,
   cacheKey: string,
   requestStartedAt: number,
@@ -565,13 +613,14 @@ async function runUncachedAuthoredHybridExport(
     }
 
     const slideInputs = slides.map((rawSlide, arrayIndex) => {
+      const semantic = activeBinding.slides[arrayIndex];
       if (!isRecord(rawSlide)) {
-        return { html: "", slideNumber: arrayIndex + 1 };
+        return { html: "", slideNumber: arrayIndex + 1, semantic };
       }
       const slide = rawSlide as StoredSlide;
       const html =
         typeof slide.html_content === "string" ? slide.html_content : "";
-      return { html, slideNumber: arrayIndex + 1 };
+      return { html, slideNumber: arrayIndex + 1, semantic };
     });
 
     const deckStart = Date.now();
@@ -599,7 +648,7 @@ async function runUncachedAuthoredHybridExport(
     const preparedSlides = await mapWithConcurrency(
       slideInputs,
       HYBRID_EXPORT_CONCURRENCY,
-      async ({ html, slideNumber }) => {
+      async ({ html, slideNumber, semantic }) => {
         try {
           if (Date.now() - deckStart > HYBRID_DECK_BUDGET_MS) {
             if (!budgetWarningWritten) {
@@ -611,10 +660,19 @@ async function runUncachedAuthoredHybridExport(
             }
             return {
               layer: null,
-              quality: imageFallbackSlide(
-                slideNumber,
-                "deck-time-budget-exhausted",
-              ),
+              quality: {
+                ...imageFallbackSlide(slideNumber, "deck-time-budget-exhausted"),
+                semanticReceipts: {
+                  rasterDegradationReceiptDigest: semanticRasterDegradationDigest(
+                    {
+                      inputBundleDigest: semantic.bundleDigest,
+                      rendererSourceDigest: sourceSha256,
+                    },
+                    slideNumber,
+                    "deck-time-budget-exhausted",
+                  ),
+                },
+              },
               fontRendering: noFontRenderingTelemetry(),
             };
           }
@@ -625,6 +683,14 @@ async function runUncachedAuthoredHybridExport(
               chromeExecutable,
               fontEmbedding.embeddedTypefaceFamilies,
               fontEmbedding.embeddedTypefaceFaces,
+              {
+                exportAttemptId: params.exportAttemptId!,
+                inputBundleDigest: semantic.bundleDigest,
+                rendererSourceDigest: sourceSha256,
+                fontSetDigest: semantic.fontManifestDigest,
+                declaredElementIds: semantic.declaredElementIds,
+                declaredElements: semantic.declaredElements,
+              },
             );
           } catch (error) {
             console.warn(
@@ -633,10 +699,19 @@ async function runUncachedAuthoredHybridExport(
             );
             return {
               layer: null,
-              quality: imageFallbackSlide(
-                slideNumber,
-                "slide-processing-failed",
-              ),
+              quality: {
+                ...imageFallbackSlide(slideNumber, "slide-processing-failed"),
+                semanticReceipts: {
+                  rasterDegradationReceiptDigest: semanticRasterDegradationDigest(
+                    {
+                      inputBundleDigest: semantic.bundleDigest,
+                      rendererSourceDigest: sourceSha256,
+                    },
+                    slideNumber,
+                    "slide-processing-failed",
+                  ),
+                },
+              },
               fontRendering: noFontRenderingTelemetry(),
             };
           }
@@ -771,6 +846,9 @@ export async function runAuthoredHybridPresentationExport(
   params: AuthoredHybridExportParams,
 ): Promise<BundledPresentationExportResult> {
   const requestStartedAt = performance.now();
+  if (!params.exportAttemptId || !params.canonicalSourceDigest) {
+    throw new Error("authored_hybrid_export_attempt_binding_required");
+  }
   let fetched: FetchedPresentation;
   try {
     fetched = await fetchPresentation(
@@ -808,10 +886,17 @@ export async function runAuthoredHybridPresentationExport(
   ) {
     throw new Error("authored_hybrid_slide_count_unsupported");
   }
+  const activeBinding = await resolveActiveEmissionBinding(
+    params,
+    presentation,
+    "hybrid",
+  );
 
   const fontEmbeddingPlan = await resolveFontEmbeddingPlan({
     requested: params.fontEmbedding !== false,
-    families: ["Noto Sans KR"],
+    families: [
+      ...new Set(activeBinding.slides.flatMap((slide) => slide.fontFamilies)),
+    ],
     // Full-font embedding keeps newly typed Hangul editable. The opt-in API can
     // add subset selection later without changing this safe default.
     strategy: "full",
@@ -850,6 +935,7 @@ export async function runAuthoredHybridPresentationExport(
     params,
     presentation,
     fetched.sourceSha256,
+    activeBinding,
     fontEmbeddingPlan,
     cacheKey,
     requestStartedAt,

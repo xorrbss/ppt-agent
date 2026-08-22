@@ -18,6 +18,8 @@ interface ExportMenuProps {
   onExportPdf: () => Promise<void>;
   onOpenHybridExportHistory?: () => void;
   historyDisabled?: boolean;
+  hybridDisabledReason?: string;
+  manifestBindingLabel?: string;
 }
 
 const ExportMenu = ({
@@ -29,6 +31,8 @@ const ExportMenu = ({
   onExportPdf,
   onOpenHybridExportHistory,
   historyDisabled = false,
+  hybridDisabledReason,
+  manifestBindingLabel,
 }: ExportMenuProps) => {
   const t = useTranslations("exportMenu");
   const [open, setOpen] = useState(false);
@@ -48,14 +52,16 @@ const ExportMenu = ({
             <span className="min-w-0 flex-1"><span className="block font-semibold leading-5">Fidelity PPTX · 시각 고정</span><span className="mt-0.5 block text-[11px] font-normal leading-[1.45] text-[#5F5B66]">각 슬라이드를 격리 캡처해 시각 품질을 보존하며, native 편집 요소는 제공하지 않습니다.</span></span>
             <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           </Button>
-          {!hasMasterPin && <Button type="button" onClick={() => { closeExportOptions(); void onExportPptx("hybrid", true); }} disabled={exportDisabled} data-testid="authored-export-hybrid" variant="ghost" className="h-auto min-h-[88px] w-full items-start justify-between gap-3 whitespace-normal rounded-xl border border-violet-200 bg-violet-50/60 px-3 py-3 text-left text-xs text-black hover:bg-violet-50 focus-visible:ring-[#B8B3F5] disabled:cursor-not-allowed" aria-label="Hybrid PPTX 내보내기, 글꼴 포함 기본값">
+          {!hasMasterPin && <Button type="button" onClick={() => { closeExportOptions(); void onExportPptx("hybrid", true); }} disabled={exportDisabled || hybridDisabledReason !== undefined} data-testid="authored-export-hybrid" variant="ghost" className="h-auto min-h-[88px] w-full items-start justify-between gap-3 whitespace-normal rounded-xl border border-violet-200 bg-violet-50/60 px-3 py-3 text-left text-xs text-black hover:bg-violet-50 focus-visible:ring-[#B8B3F5] disabled:cursor-not-allowed" aria-label="Hybrid PPTX 내보내기, 글꼴 포함 기본값">
             <span className="min-w-0 flex-1"><span className="block font-semibold leading-5">Hybrid PPTX · 글꼴 포함 (기본)</span><span className="mt-0.5 block text-[11px] font-normal leading-[1.45] text-violet-950" role="note">지원되는 요소만 native로 분리합니다. 글꼴 포함이 적용되지 않으면 다운로드하지 않고 사유를 표시합니다.</span></span>
             <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           </Button>}
-          {!hasMasterPin && <Button type="button" onClick={() => { closeExportOptions(); void onExportPptx("hybrid", false); }} disabled={exportDisabled} data-testid="authored-export-hybrid-compatibility" variant="ghost" className="h-auto min-h-[88px] w-full items-start justify-between gap-3 whitespace-normal rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-3 text-left text-xs text-black hover:bg-amber-50 focus-visible:ring-[#B8B3F5] disabled:cursor-not-allowed" aria-label="Hybrid PPTX 호환 모드, 글꼴 미포함">
+          {!hasMasterPin && <Button type="button" onClick={() => { closeExportOptions(); void onExportPptx("hybrid", false); }} disabled={exportDisabled || hybridDisabledReason !== undefined} data-testid="authored-export-hybrid-compatibility" variant="ghost" className="h-auto min-h-[88px] w-full items-start justify-between gap-3 whitespace-normal rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-3 text-left text-xs text-black hover:bg-amber-50 focus-visible:ring-[#B8B3F5] disabled:cursor-not-allowed" aria-label="Hybrid PPTX 호환 모드, 글꼴 미포함">
             <span className="min-w-0 flex-1"><span className="block font-semibold leading-5">Hybrid PPTX · 호환 모드 (글꼴 미포함)</span><span className="mt-0.5 block text-[11px] font-normal leading-[1.45] text-amber-900" role="note">명시적 저품질 호환 옵션입니다. PowerPoint에서 typeface 대체가 발생할 수 있습니다.</span></span>
             <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           </Button>}
+          {isAuthoredDeck && manifestBindingLabel ? <p className="px-3 text-[11px] leading-4 text-slate-500" data-testid="authored-export-manifest-binding">{manifestBindingLabel}</p> : null}
+          {isAuthoredDeck && hybridDisabledReason ? <p className="px-3 text-[11px] leading-4 text-amber-800" role="note" data-testid="authored-export-hybrid-unavailable">Hybrid 비활성: {hybridDisabledReason}</p> : null}
           {!hasMasterPin && onOpenHybridExportHistory && <Button type="button" onClick={() => { closeExportOptions(); onOpenHybridExportHistory(); }} disabled={historyDisabled} data-testid="authored-export-hybrid-history" variant="ghost" className="h-auto min-h-10 w-full justify-between gap-3 whitespace-normal rounded-lg px-3 py-2.5 text-xs text-black hover:bg-[#F6F6F9] focus-visible:ring-[#B8B3F5] disabled:cursor-not-allowed">
             Hybrid 내보내기 이력 및 증거 <ArrowUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           </Button>}

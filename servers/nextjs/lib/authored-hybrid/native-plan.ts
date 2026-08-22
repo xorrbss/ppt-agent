@@ -76,6 +76,20 @@ export interface LayerSelectionOptions {
   retainedChildPaint?: "all" | "slide-root" | "none";
 }
 
+export interface LayerSafetyDemotion {
+  readonly elementId: string;
+  readonly reason: "z-band-unsafe";
+  readonly blockedByElementIds: readonly string[];
+}
+
+export interface LayerSafetyPlan {
+  readonly strategy: "single-backplate-fixed-point";
+  readonly fixedPointReached: true;
+  readonly selected: readonly PreparedNativeElement[];
+  readonly demotions: readonly LayerSafetyDemotion[];
+  readonly slideDemotedToRaster: boolean;
+}
+
 /**
  * Typeface names are preserved only after OOXML font packaging reports that
  * the corresponding family was actually embedded. With this option omitted
@@ -882,14 +896,15 @@ function isRetainedChildPaint(
  * A single backplate is below every native object. Do not promote an object if
  * a higher raster object overlaps it, because that would invert their z-order.
  */
-export function selectLayerSafeNativeElements(
+export function planLayerSafeNativeElements(
   allElements: readonly AuthoredHybridElement[],
   prepared: readonly PreparedNativeElement[],
   allowedIds: ReadonlySet<string> = new Set(prepared.map((item) => item.source.id)),
   options: LayerSelectionOptions = {}
-): PreparedNativeElement[] {
+): LayerSafetyPlan {
   const eligible = prepared.filter((item) => allowedIds.has(item.source.id));
   const promotedIds = new Set(eligible.map((item) => item.source.id));
+  const demotionBlockers = new Map<string, Set<string>>();
   const isAbove = (other: AuthoredHybridElement, item: PreparedNativeElement) =>
     other.zOrder > item.source.zOrder ||
     (other.zOrder === item.source.zOrder &&
@@ -905,9 +920,8 @@ export function selectLayerSafeNativeElements(
       if (!promotedIds.has(item.source.id)) continue;
       if (options.promoteTextAboveRaster === true && item.kind === "text") continue;
       if (options.promoteShapesAboveRaster === true && item.kind === "shape") continue;
-      if (
-        allElements.some(
-          (other) =>
+      const blockers = allElements.filter(
+        (other) =>
             !promotedIds.has(other.id) &&
             isAbove(other, item) &&
             !isRetainedChildPaint(
@@ -917,21 +931,52 @@ export function selectLayerSafeNativeElements(
             ) &&
             !isCapturedCompositeChildPaint(item, other) &&
             intersects(item.source, other)
-        )
-      ) {
+      );
+      if (blockers.length) {
         promotedIds.delete(item.source.id);
+        demotionBlockers.set(
+          item.source.id,
+          new Set(blockers.map((element) => element.id))
+        );
         changed = true;
       }
     }
   }
 
-  return eligible
+  const selected = eligible
     .filter((item) => promotedIds.has(item.source.id))
     .sort(
       (left, right) =>
         left.source.zOrder - right.source.zOrder ||
         left.source.sourceIndex - right.source.sourceIndex
     );
+  return {
+    strategy: "single-backplate-fixed-point",
+    fixedPointReached: true,
+    selected,
+    demotions: eligible
+      .filter((item) => !promotedIds.has(item.source.id))
+      .map((item) => ({
+        elementId: item.source.id,
+        reason: "z-band-unsafe" as const,
+        blockedByElementIds: [...(demotionBlockers.get(item.source.id) ?? [])].sort(),
+      })),
+    slideDemotedToRaster: selected.length === 0,
+  };
+}
+
+export function selectLayerSafeNativeElements(
+  allElements: readonly AuthoredHybridElement[],
+  prepared: readonly PreparedNativeElement[],
+  allowedIds: ReadonlySet<string> = new Set(prepared.map((item) => item.source.id)),
+  options: LayerSelectionOptions = {}
+): PreparedNativeElement[] {
+  return [...planLayerSafeNativeElements(
+    allElements,
+    prepared,
+    allowedIds,
+    options
+  ).selected];
 }
 
 function escapeXml(value: string): string {

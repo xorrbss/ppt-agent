@@ -38,6 +38,8 @@ export interface PresentationExportExecutionParams {
   title?: string;
   cookieHeader?: string;
   pptxMode?: PptxMode;
+  /** True only when the caller selected Fidelity/Hybrid rather than accepting the default. */
+  explicitPptxMode?: boolean;
   /** Hybrid requests embed by default; only explicit false selects compatibility mode. */
   fontEmbedding?: boolean;
   /** Durable FastAPI attempt supplied by the caller or created by the Next route. */

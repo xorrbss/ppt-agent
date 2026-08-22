@@ -1,12 +1,16 @@
+import { createHash } from "node:crypto";
+
 import {
+  extractDeclaredAuthoredSlideDom,
   extractAuthoredSlideDom,
   renderAuthoredBackplate,
+  renderAuthoredFidelityBackplate,
 } from "./index.ts";
 import {
   preflightNativeTypography,
+  planLayerSafeNativeElements,
   preparedNativeElementNonVisualIdCount,
   prepareNativeElements,
-  selectLayerSafeNativeElements,
   serializePreparedNativeElement,
   type PowerPointTypefaceSerializationOptions,
   type PreparedNativeElement,
@@ -25,6 +29,10 @@ import {
   fallbackElementForContractElement,
   imageFallbackSlide,
 } from "./export-slide-quality.ts";
+import {
+  buildBrowserObservationReceiptV1,
+  type DeclaredSemanticElementForObservation,
+} from "./semantic-reconciliation.ts";
 
 // The collector adds a bounded network step ahead of each browser pass, so
 // the per-pass ceiling is higher than the pre-collection 20s.
@@ -37,6 +45,58 @@ export interface PreparedSlideOutcome {
     browserFontFilesCollected: number;
     browserCollectionFailures: number;
   };
+  paintPlan?: {
+    readonly schemaVersion: "hybrid-paint-plan/browser-v1";
+    readonly strategy: "single-backplate-fixed-point";
+    readonly fixedPointReached: true;
+    readonly slideDemotedToRaster: boolean;
+    readonly demotions: ReadonlyArray<{
+      readonly elementId: string;
+      readonly fallbackReason: "z-band-unsafe";
+      readonly blockedByElementIds: readonly string[];
+    }>;
+  };
+}
+
+export interface AuthoredSemanticSlideContext {
+  readonly exportAttemptId: string;
+  readonly inputBundleDigest: string;
+  readonly rendererSourceDigest: string;
+  readonly fontSetDigest: string;
+  readonly declaredElementIds: readonly string[];
+  readonly declaredElements: readonly DeclaredSemanticElementForObservation[];
+}
+
+function canonical(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record).sort().map((key) =>
+    `${JSON.stringify(key)}:${canonical(record[key])}`
+  ).join(",")}}`;
+}
+
+function semanticDigest(value: unknown): string {
+  return `sha256:${createHash("sha256").update(canonical(value), "utf8").digest("hex")}`;
+}
+
+function normalizeDigest(value: string): string {
+  return value.startsWith("sha256:") ? value : `sha256:${value}`;
+}
+
+export function semanticRasterDegradationDigest(
+  context: Pick<AuthoredSemanticSlideContext, "inputBundleDigest" | "rendererSourceDigest">,
+  slideNumber: number,
+  reason: string,
+): string {
+  return semanticDigest({
+    schemaVersion: "hybrid-raster-degradation-receipt/browser-v1",
+    inputBundleDigest: context.inputBundleDigest,
+    rendererSourceDigest: normalizeDigest(context.rendererSourceDigest),
+    slideNumber,
+    state: "degradedFidelityOnly",
+    reason,
+  });
 }
 
 export interface PreparedFidelitySlideOutcome {
@@ -87,7 +147,8 @@ export async function prepareSlideLayer(
   slideNumber: number,
   chromeExecutable: string,
   embeddedTypefaceFamilies: readonly string[] = [],
-  embeddedTypefaceFaces: readonly AuthoredEmbeddedTypefaceFaceEvidence[] = []
+  embeddedTypefaceFaces: readonly AuthoredEmbeddedTypefaceFaceEvidence[] = [],
+  semanticContext?: AuthoredSemanticSlideContext,
 ): Promise<PreparedSlideOutcome> {
   // Network access is permitted only in this validated server-side collector.
   // The resulting document is self-contained before isolated Chrome receives it.
@@ -117,8 +178,34 @@ export async function prepareSlideLayer(
   const extractionOptions = {
     chromeExecutable,
     timeoutMs: HYBRID_BROWSER_PASS_TIMEOUT_MS,
+    ...(semanticContext
+      ? { declaredElementIds: semanticContext.declaredElementIds }
+      : {}),
   };
-  const contract = await extractAuthoredSlideDom(collectedHtml, extractionOptions);
+  const declaredCapture = semanticContext
+    ? await extractDeclaredAuthoredSlideDom(
+        collectedHtml,
+        semanticContext.declaredElementIds,
+        extractionOptions,
+      )
+    : undefined;
+  const contract = declaredCapture?.slide ??
+    await extractAuthoredSlideDom(collectedHtml, extractionOptions);
+  const observationReceipt =
+    semanticContext && declaredCapture
+      ? buildBrowserObservationReceiptV1(
+          semanticContext.declaredElements,
+          declaredCapture.observation,
+          {
+            inputBundleDigest: semanticContext.inputBundleDigest,
+            rendererSourceDigest: normalizeDigest(semanticContext.rendererSourceDigest),
+            rendererVersion: "presenton-authored-chromium/v1",
+            policyVersion: "authored-declared-observation/v1",
+            fontSetDigest: semanticContext.fontSetDigest,
+            capturedPngDigest: declaredCapture.capturedPngSha256,
+          },
+        )
+      : undefined;
   let nativeLayoutElements = contract.elements;
   try {
     const layoutContract = await extractAuthoredSlideDom(collectedHtml, {
@@ -150,24 +237,40 @@ export async function prepareSlideLayer(
     ).filter((element) => !typographyRejected.has(element.source.id)),
     { embeddedTypefaceFamilies, embeddedTypefaceFaces }
   );
-  let selected = selectLayerSafeNativeElements(
+  let layerSafetyPlan = planLayerSafeNativeElements(
     nativeLayoutElements,
     prepared,
     undefined,
-    // Text remains editable above the residual backplate. Shapes only move to
-    // the native layer when doing so preserves their authored stacking order;
-    // otherwise translucent ancestor cards would wash out later SVG artwork.
+    // The current serializer has one residual backplate. Promote text or shape
+    // only when every overlapping higher paint can also be native; otherwise
+    // fixed-point demotion preserves the authored stack without inventing a
+    // z-band that this serializer cannot safely encode.
     {
-      promoteTextAboveRaster: true,
+      promoteTextAboveRaster: false,
       promoteShapesAboveRaster: false,
       retainedChildPaint: "slide-root",
     }
   );
+  let selected = [...layerSafetyPlan.selected];
   if (!selected.length) {
     return {
       layer: null,
-      quality: imageFallbackSlide(slideNumber, "no-safe-native-elements"),
+      quality: imageFallbackSlide(
+        slideNumber,
+        layerSafetyPlan.demotions.length ? "z-band-unsafe" : "no-safe-native-elements"
+      ),
       fontRendering,
+      paintPlan: {
+        schemaVersion: "hybrid-paint-plan/browser-v1",
+        strategy: layerSafetyPlan.strategy,
+        fixedPointReached: true,
+        slideDemotedToRaster: true,
+        demotions: layerSafetyPlan.demotions.map((demotion) => ({
+          elementId: demotion.elementId,
+          fallbackReason: demotion.reason,
+          blockedByElementIds: demotion.blockedByElementIds,
+        })),
+      },
     };
   }
 
@@ -178,21 +281,39 @@ export async function prepareSlideLayer(
     extractionOptions
   );
   const applied = new Set(backplate.appliedPromotedElementIds);
-  const finalSelected = selectLayerSafeNativeElements(
+  const finalLayerSafetyPlan = planLayerSafeNativeElements(
     nativeLayoutElements,
     prepared,
     applied,
     {
-      promoteTextAboveRaster: true,
+      promoteTextAboveRaster: false,
       promoteShapesAboveRaster: false,
       retainedChildPaint: "slide-root",
     }
   );
+  const finalSelected = [...finalLayerSafetyPlan.selected];
+  layerSafetyPlan = finalLayerSafetyPlan;
   if (!finalSelected.length) {
     return {
       layer: null,
-      quality: imageFallbackSlide(slideNumber, "backplate-identity-mismatch"),
+      quality: imageFallbackSlide(
+        slideNumber,
+        finalLayerSafetyPlan.demotions.length
+          ? "z-band-unsafe"
+          : "backplate-identity-mismatch"
+      ),
       fontRendering,
+      paintPlan: {
+        schemaVersion: "hybrid-paint-plan/browser-v1",
+        strategy: finalLayerSafetyPlan.strategy,
+        fixedPointReached: true,
+        slideDemotedToRaster: true,
+        demotions: finalLayerSafetyPlan.demotions.map((demotion) => ({
+          elementId: demotion.elementId,
+          fallbackReason: demotion.reason,
+          blockedByElementIds: demotion.blockedByElementIds,
+        })),
+      },
     };
   }
 
@@ -251,6 +372,9 @@ export async function prepareSlideLayer(
   const selectedIds = new Set(
     selected.map((element) => element.source.id)
   );
+  const zBandDemotions = new Set(
+    layerSafetyPlan.demotions.map((demotion) => demotion.elementId)
+  );
   const fallbackElements = nativeLayoutElements
     .filter(
       (element) =>
@@ -261,7 +385,78 @@ export async function prepareSlideLayer(
             element.shape.gradient || element.shape.shadowLayers?.length
           ))
     )
-    .map(fallbackElementForContractElement);
+    .map((element) =>
+      fallbackElementForContractElement(
+        element,
+        zBandDemotions.has(element.id) ? ["z-band-unsafe"] : []
+      )
+    );
+  const semanticReceipts = semanticContext && observationReceipt
+    ? (() => {
+        const fallbackById = new Map(
+          fallbackElements.map((element) => [element.elementId, element.reasons] as const),
+        );
+        const admissionUnsigned = {
+          schemaVersion: "native-admission-receipt/v1" as const,
+          inputBundleDigest: semanticContext.inputBundleDigest,
+          observationReceiptDigest: observationReceipt.receiptDigest,
+          reconciliationPolicyVersion: "authored-native-admission/v1",
+          serializerId: "presenton-authored-hybrid",
+          serializerVersion: "v1",
+          elements: semanticContext.declaredElements.map((element) => {
+            const admitted = selectedIds.has(element.elementId);
+            return {
+              elementId: element.elementId,
+              kind: element.kind,
+              state: admitted ? "admitted" as const : "rasterFallback" as const,
+              admittedFeatures: admitted
+                ? [...(element.requiredFeatures ?? [])].sort()
+                : [],
+              fallbackReason: admitted
+                ? null
+                : fallbackById.get(element.elementId)?.[0] ?? "native-admission-rejected",
+            };
+          }),
+        };
+        const nativeAdmissionReceiptDigest = semanticDigest(admissionUnsigned);
+        const paintEntries = [
+          {
+            elementId: null,
+            paintOwner: "rasterIsland" as const,
+            zBand: 0,
+            artifactDigest: `sha256:${createHash("sha256")
+              .update(backplate.backplatePng)
+              .digest("hex")}`,
+            fallbackReason: fallbackElements.length ? "raster-residual" : null,
+          },
+          ...selected
+            .slice()
+            .sort((left, right) => left.source.zOrder - right.source.zOrder)
+            .map((element, index) => ({
+              elementId: element.source.id,
+              paintOwner: "native" as const,
+              zBand: index + 1,
+              artifactDigest: null,
+              fallbackReason: null,
+            })),
+        ];
+        const planUnsigned = {
+          schemaVersion: "hybrid-export-plan/v1" as const,
+          exportAttemptId: semanticContext.exportAttemptId,
+          inputBundleDigest: semanticContext.inputBundleDigest,
+          admissionReceiptDigest: nativeAdmissionReceiptDigest,
+          rendererSourceDigest: normalizeDigest(semanticContext.rendererSourceDigest),
+          paintEntries,
+          fixedPointReached: true,
+          slideDemotedToRaster: false,
+        };
+        return {
+          observationReceiptDigest: observationReceipt.receiptDigest,
+          nativeAdmissionReceiptDigest,
+          hybridPlanDigest: semanticDigest(planUnsigned),
+        };
+      })()
+    : undefined;
 
   return {
     layer: {
@@ -303,8 +498,20 @@ export async function prepareSlideLayer(
       })),
       fallbackReasons: fallbackElements.flatMap((element) => element.reasons),
       fallbackElements,
+      ...(semanticReceipts ? { semanticReceipts } : {}),
     },
     fontRendering,
+    paintPlan: {
+      schemaVersion: "hybrid-paint-plan/browser-v1",
+      strategy: layerSafetyPlan.strategy,
+      fixedPointReached: layerSafetyPlan.fixedPointReached,
+      slideDemotedToRaster: layerSafetyPlan.slideDemotedToRaster,
+      demotions: layerSafetyPlan.demotions.map((demotion) => ({
+        elementId: demotion.elementId,
+        fallbackReason: demotion.reason,
+        blockedByElementIds: demotion.blockedByElementIds,
+      })),
+    },
   };
 }
 
@@ -332,14 +539,8 @@ export async function prepareFidelitySlideLayer(
     chromeExecutable,
     timeoutMs: HYBRID_BROWSER_PASS_TIMEOUT_MS,
   };
-  const contract = await extractAuthoredSlideDom(
+  const backplate = await renderAuthoredFidelityBackplate(
     fontCollection.htmlForChrome,
-    extractionOptions
-  );
-  const backplate = await renderAuthoredBackplate(
-    fontCollection.htmlForChrome,
-    contract,
-    [],
     extractionOptions
   );
   if (backplate.appliedPromotedElementIds.length !== 0) {

@@ -3,6 +3,7 @@ export * from "./units.ts";
 export * from "./classifier.ts";
 export * from "./contract.ts";
 export * from "./extractor.ts";
+export * from "./semantic-reconciliation.ts";
 export {
   resolveAuthoredHybridChromeExecutable,
   type AuthoredHybridChromeOptions,

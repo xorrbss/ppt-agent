@@ -238,14 +238,12 @@ export async function POST(req: NextRequest) {
             409,
           );
         }
-        if (requestedAttemptMode === "hybrid") {
-          exportBody = {
-            ...body,
-            exportAttemptId: routeOwnedAttempt.exportAttemptId,
-            canonicalSourceDigest: routeOwnedAttempt.canonicalSourceDigest,
-            operationId: routeOwnedAttempt.exportAttemptId,
-          };
-        }
+        exportBody = {
+          ...body,
+          exportAttemptId: routeOwnedAttempt.exportAttemptId,
+          canonicalSourceDigest: routeOwnedAttempt.canonicalSourceDigest,
+          operationId: routeOwnedAttempt.exportAttemptId,
+        };
       }
     }
     const exportResult = await executeExportPresentationRouteRequest(
@@ -277,13 +275,19 @@ export async function POST(req: NextRequest) {
             presentationId,
             title,
             cookieHeader,
+            exportAttemptId,
+            canonicalSourceDigest,
             expectedPresentationRevision,
+            explicitPptxMode,
           }) =>
             runAuthoredFidelityPresentationExport({
               presentationId,
               title,
               cookieHeader,
+              exportAttemptId,
+              canonicalSourceDigest,
               expectedPresentationRevision,
+              explicitPptxMode,
             }),
           hybrid: ({
             presentationId,
