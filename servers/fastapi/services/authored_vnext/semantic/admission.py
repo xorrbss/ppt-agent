@@ -8,6 +8,7 @@ from models.authored_vnext.semantic.contracts import (
     AdmissionElementV1,
     AuthoredSemanticSourceV1,
     BrowserObservationReceiptV1,
+    ChartElementV1,
     ImageElementV1,
     NativeAdmissionReceiptV1,
     ShapeElementV1,
@@ -25,6 +26,9 @@ class SerializerRegistryV1:
     text_features: frozenset[str] = frozenset({"plain-text", "mixed-runs", "explicit-breaks"})
     image_features: frozenset[str] = frozenset({"crop", "object-fit", "object-position"})
     shape_features: frozenset[str] = frozenset({"solid-fill", "solid-stroke", "radius"})
+    chart_features: frozenset[str] = frozenset(
+        {"chart", "native-chart", "chart-data", "chart.axes", "chart.legend", "chart.fonts"}
+    )
 
 
 def reconcile_and_issue_native_admission(
@@ -97,7 +101,7 @@ def reconcile_and_issue_native_admission(
 def _element_source_digest(element) -> str:
     if isinstance(element, ImageElementV1):
         return element.payload.asset_digest
-    if isinstance(element, (TextElementV1, ShapeElementV1)):
+    if isinstance(element, (TextElementV1, ShapeElementV1, ChartElementV1)):
         return canonical_digest(element.payload)
     return element.source_ref
 
@@ -109,6 +113,8 @@ def _supported_features(element, registry: SerializerRegistryV1) -> frozenset[st
         return registry.image_features
     if isinstance(element, ShapeElementV1):
         return registry.shape_features
+    if isinstance(element, ChartElementV1):
+        return registry.chart_features
     return None
 
 

@@ -312,7 +312,10 @@ def _materialize_component(
                 origin_generation_attempt_id=generation_attempt_id,
                 authored_html_digest=html_digest,
                 failure_code=failure_code,  # type: ignore[arg-type]
-                bounded_attempt_count=1,
+                bounded_attempt_count=max(
+                    0,
+                    min(8, int(unavailable.get("boundedAttemptCount", 1))),
+                ),
                 compiler_version=DEFAULT_SEMANTIC_COMPILER,
                 policy_version="authored-semantic-bounded-retry/v1",
             )

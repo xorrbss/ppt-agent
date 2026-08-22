@@ -362,12 +362,28 @@ class ExportSlideCoverage(BaseModel):
 
     @model_validator(mode="after")
     def validate_declared_support(self) -> "ExportSlideCoverage":
-        # The current authored Hybrid serializer has no native table/chart
-        # implementation. Refuse optimistic counts until that implementation
-        # and readback evidence are added together.
-        if self.native_table != 0 or self.native_chart != 0:
-            raise ValueError("native table/chart coverage is not implemented")
-        native_count = self.native_text + self.native_image + self.native_shape
+        # Native tables remain unsupported. Native charts are accepted only
+        # when the semantic plan and exact OOXML package readback agree; this
+        # keeps a serializer claim from creating authority on its own.
+        if self.native_table != 0:
+            raise ValueError("native table coverage is not implemented")
+        if self.native_chart:
+            if (
+                self.logical_coverage is None
+                or self.ooxml_readback is None
+                or self.ooxml_readback.status != "passed"
+                or self.logical_coverage.native_chart != self.native_chart
+                or self.ooxml_readback.native_chart != self.native_chart
+            ):
+                raise ValueError(
+                    "native chart coverage requires matching semantic and OOXML readback"
+                )
+        native_count = (
+            self.native_text
+            + self.native_image
+            + self.native_shape
+            + self.native_chart
+        )
         expected = "applied" if native_count > 0 else "not-applicable"
         if self.native_backplate_de_duplication != expected:
             raise ValueError("native/backplate de-duplication evidence is inconsistent")

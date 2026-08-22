@@ -13,11 +13,22 @@ from models.authored_vnext.semantic.contracts import (
     ExportAttemptDigestBindingV1,
     WorkbenchCapabilityProjectionV1,
 )
+from models.authored_vnext.semantic.lifecycle import (
+    AuthoredEmissionLifecycleReceiptV1,
+    AuthoredLegacyCutoverRequestV1,
+    AuthoredManifestRollbackRequestV1,
+    AuthoredOrderedRemakeRequestV1,
+)
 from services.authored_vnext.semantic.canonical import SemanticContractError
 from services.authored_vnext.semantic.export_binding import bind_existing_export_attempt
 from services.authored_vnext.semantic.query import (
     get_active_authored_emission,
     get_workbench_capability_projection,
+)
+from services.authored_vnext.semantic.lifecycle import (
+    cutover_authored_emission_to_legacy,
+    remake_ordered_authored_emission,
+    rollback_authored_emission_manifest,
 )
 from services.database import get_async_session
 from utils.owner_context import get_current_owner_id
@@ -46,6 +57,12 @@ def _error(error: SemanticContractError) -> HTTPException:
         "authored_semantic_cas_conflict",
         "authored_semantic_export_stale_manifest",
         "authored_semantic_export_attempt_already_bound",
+        "authored_semantic_lifecycle_stale_revision",
+        "authored_semantic_lifecycle_stale_generation",
+        "authored_semantic_lifecycle_stale_manifest",
+        "authored_semantic_lifecycle_attempt_reused",
+        "authored_semantic_lifecycle_cas_conflict",
+        "authored_semantic_rollback_slide_cas_conflict",
     }:
         return HTTPException(status_code=409, detail={"code": error.code})
     return HTTPException(status_code=422, detail={"code": error.code})
@@ -118,6 +135,89 @@ async def create_export_attempt_binding(
         )
         await session.commit()
         return sealed
+    except SemanticContractError as error:
+        await session.rollback()
+        raise _error(error) from error
+
+
+def _writes_enabled() -> None:
+    if os.getenv("AUTHORED_SEMANTIC_BUNDLE_WRITES_ENABLED", "false").lower() != "true":
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "authored_semantic_bundle_writes_disabled"},
+        )
+
+
+@AUTHORED_SEMANTIC_ROUTER.post(
+    "/presentation/{presentation_id}/authored-emission/remake-ordered-set",
+    response_model=AuthoredEmissionLifecycleReceiptV1,
+)
+async def remake_ordered_set(
+    request: AuthoredOrderedRemakeRequestV1,
+    presentation_id: uuid.UUID = Path(),
+    session: AsyncSession = Depends(get_async_session),
+) -> AuthoredEmissionLifecycleReceiptV1:
+    _writes_enabled()
+    try:
+        receipt = await remake_ordered_authored_emission(
+            session,
+            presentation_id=presentation_id,
+            owner_id=_owner(),
+            request=request,
+            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+        )
+        await session.commit()
+        return receipt
+    except SemanticContractError as error:
+        await session.rollback()
+        raise _error(error) from error
+
+
+@AUTHORED_SEMANTIC_ROUTER.post(
+    "/presentation/{presentation_id}/authored-emission/rollback-manifest",
+    response_model=AuthoredEmissionLifecycleReceiptV1,
+)
+async def rollback_manifest(
+    request: AuthoredManifestRollbackRequestV1,
+    presentation_id: uuid.UUID = Path(),
+    session: AsyncSession = Depends(get_async_session),
+) -> AuthoredEmissionLifecycleReceiptV1:
+    _writes_enabled()
+    try:
+        receipt = await rollback_authored_emission_manifest(
+            session,
+            presentation_id=presentation_id,
+            owner_id=_owner(),
+            request=request,
+            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+        )
+        await session.commit()
+        return receipt
+    except SemanticContractError as error:
+        await session.rollback()
+        raise _error(error) from error
+
+
+@AUTHORED_SEMANTIC_ROUTER.post(
+    "/presentation/{presentation_id}/authored-emission/cutover-legacy-html",
+    response_model=AuthoredEmissionLifecycleReceiptV1,
+)
+async def cutover_legacy_html(
+    request: AuthoredLegacyCutoverRequestV1,
+    presentation_id: uuid.UUID = Path(),
+    session: AsyncSession = Depends(get_async_session),
+) -> AuthoredEmissionLifecycleReceiptV1:
+    _writes_enabled()
+    try:
+        receipt = await cutover_authored_emission_to_legacy(
+            session,
+            presentation_id=presentation_id,
+            owner_id=_owner(),
+            request=request,
+            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+        )
+        await session.commit()
+        return receipt
     except SemanticContractError as error:
         await session.rollback()
         raise _error(error) from error

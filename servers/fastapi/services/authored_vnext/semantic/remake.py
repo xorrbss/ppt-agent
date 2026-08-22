@@ -14,7 +14,7 @@ from models.authored_vnext.semantic.contracts import AssetManifestV1, FontManife
 from models.sql.authored_semantic_bundle import AuthoredSemanticArtifact
 from models.sql.slide import SlideModel
 
-from .canonical import SemanticContractError
+from .canonical import SemanticContractError, bytes_digest
 from .publication import publish_authored_semantic_bundle_graph
 from .query import get_active_authored_emission
 
@@ -114,7 +114,11 @@ async def republish_authored_semantic_bundle_graph_for_remake(
 async def _load_manifest_artifact(session, *, owner_id, tenant_id, digest, model):
     content = await _load_bytes(session, owner_id, tenant_id, digest)
     try:
-        return model.model_validate_json(content)
+        # Canonical JSON can represent an integral value in exponent form
+        # (for example 740 as 7.4e2). JSON decoders surface that token as a
+        # float, so rehydrate with numeric coercion after the artifact bytes
+        # themselves have been digest-verified.
+        return model.model_validate_json(content, strict=False)
     except Exception as error:
         raise SemanticContractError("authored_semantic_manifest_artifact_invalid") from error
 
@@ -131,7 +135,10 @@ async def _load_bytes(
     )
     if artifact is None:
         raise SemanticContractError("authored_semantic_artifact_unresolvable")
-    return artifact.content_bytes
+    content = bytes(artifact.content_bytes)
+    if bytes_digest(content) != digest:
+        raise SemanticContractError("authored_semantic_artifact_digest_mismatch")
+    return content
 
 
 __all__ = ["republish_authored_semantic_bundle_graph_for_remake"]

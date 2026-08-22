@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 from html.parser import HTMLParser
 import re
+from collections.abc import Callable
 from typing import Any
 
 from utils.authored_dom_quality import validate_declared_authored_qids
@@ -217,6 +218,7 @@ def semantic_unavailable_receipt(
     *,
     slide_index: int,
     failure_code: str,
+    bounded_attempt_count: int = 1,
 ) -> dict[str, Any]:
     return {
         "schemaVersion": "semantic-unavailable-receipt/v1",
@@ -225,8 +227,46 @@ def semantic_unavailable_receipt(
         "htmlDigest": _sha256_bytes(html.encode("utf-8")),
         "failureCode": failure_code,
         "retryPolicy": "authored-semantic-bounded-retry/v1",
+        "boundedAttemptCount": bounded_attempt_count,
         "hybridEligible": False,
         "workbenchEditable": False,
+    }
+
+
+def compile_semantic_component_with_bounded_retry(
+    html: str,
+    *,
+    slide_index: int,
+    max_attempts: int = 2,
+    compiler: Callable[..., dict[str, Any]] = compile_authored_semantic_source,
+) -> dict[str, Any]:
+    """Compile once-or-twice, then emit an explicit Fidelity-only receipt.
+
+    The retry bound is server-owned.  Callers cannot turn repeated invalid
+    semantic output into native eligibility, and the receipt records the exact
+    number of compiler attempts that were consumed.
+    """
+
+    if max_attempts < 1 or max_attempts > 2:
+        raise ValueError("authored_semantic_retry_bound_invalid")
+    last_code = "authored_semantic_generation_failed"
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return {"semanticSource": compiler(html, slide_index=slide_index)}
+        except (TypeError, ValueError) as error:
+            last_code = (
+                str(error)
+                if str(error).startswith("authored_semantic_")
+                else "authored_semantic_validation_failed"
+            )
+    return {
+        "semanticUnavailableReceipt": semantic_unavailable_receipt(
+            html,
+            slide_index=slide_index,
+            failure_code="authored_semantic_retry_exhausted",
+            bounded_attempt_count=max_attempts,
+        )
+        | {"lastFailureCode": last_code}
     }
 
 
@@ -235,26 +275,18 @@ def compile_semantic_components(htmls: list[str]) -> list[dict[str, Any]]:
 
     components: list[dict[str, Any]] = []
     for slide_index, html in enumerate(htmls):
-        try:
-            components.append(
-                {"semanticSource": compile_authored_semantic_source(html, slide_index=slide_index)}
+        components.append(
+            compile_semantic_component_with_bounded_retry(
+                html,
+                slide_index=slide_index,
             )
-        except (TypeError, ValueError) as error:
-            code = str(error) if str(error).startswith("authored_semantic_") else "authored_semantic_validation_failed"
-            components.append(
-                {
-                    "semanticUnavailableReceipt": semantic_unavailable_receipt(
-                        html,
-                        slide_index=slide_index,
-                        failure_code=code,
-                    )
-                }
-            )
+        )
     return components
 
 
 __all__ = [
     "compile_authored_semantic_source",
+    "compile_semantic_component_with_bounded_retry",
     "compile_semantic_components",
     "semantic_unavailable_receipt",
 ]

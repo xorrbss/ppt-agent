@@ -134,6 +134,70 @@ def test_hybrid_coverage_accepts_strict_semantic_receipt_digests() -> None:
     )
 
 
+def test_hybrid_coverage_accepts_native_chart_only_with_matching_readback() -> None:
+    slide = {
+        "slideNumber": 1,
+        "nativeText": 0,
+        "nativeImage": 0,
+        "nativeShape": 0,
+        "nativeTable": 0,
+        "nativeChart": 1,
+        "logicalCoverage": {
+            "nativeText": 0,
+            "nativeImage": 0,
+            "nativeShape": 0,
+            "nativeTable": 0,
+            "nativeChart": 1,
+            "rasterRemaining": 1,
+        },
+        "ooxmlReadback": {
+            "status": "passed",
+            "nativeText": 0,
+            "nativeImage": 0,
+            "nativeShape": 0,
+            "nativeTable": 0,
+            "nativeChart": 1,
+            "rasterRemaining": 1,
+        },
+        "backplateCount": 0,
+        "typographyIssues": [],
+        "rasterRemaining": 1,
+        "fallbackReasons": ["raster-residual"],
+        "visualParity": "not-verified",
+        "nativeBackplateDeDuplication": "applied",
+    }
+    document = {
+        "schemaVersion": "presenton.authored-hybrid-coverage/v2",
+        "mode": "hybrid",
+        "source": {
+            "exportAttemptId": str(uuid.uuid4()),
+            "presentationRevision": 1,
+            "canonicalSourceDigest": "b" * 64,
+            "sourceDigest": "c" * 64,
+        },
+        "totalSlides": 1,
+        "nativeText": 0,
+        "nativeImage": 0,
+        "nativeShape": 0,
+        "nativeTable": 0,
+        "nativeChart": 1,
+        "logicalCoverage": slide["logicalCoverage"],
+        "ooxmlReadback": slide["ooxmlReadback"],
+        "backplateCount": 0,
+        "typographyIssues": [],
+        "rasterRemaining": 1,
+        "fullyEditable": False,
+        "visualParity": "not-verified",
+        "slides": [slide],
+    }
+    manifest = PresentationExportCoverageManifest.model_validate(document)
+    assert manifest.native_chart == 1
+    document["slides"] = [{**slide, "nativeChart": 2}]
+    document["nativeChart"] = 2
+    with pytest.raises(ValueError, match="matching semantic and OOXML readback"):
+        PresentationExportCoverageManifest.model_validate(document)
+
+
 TABLES = [
     User.__table__,
     PresentationModel.__table__,

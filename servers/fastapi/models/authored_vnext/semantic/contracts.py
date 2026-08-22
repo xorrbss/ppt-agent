@@ -181,14 +181,65 @@ class ShapeElementV1(SemanticElementBaseV1):
     payload: ShapePayloadV1
 
 
+class ChartSeriesV1(StrictCamelModel):
+    name: str = Field(min_length=1, max_length=256)
+    values: list[float] = Field(min_length=1, max_length=256)
+    color: str | None = Field(
+        default=None, pattern=r"^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$"
+    )
+
+
+class ChartTextStyleV1(StrictCamelModel):
+    title: str | None = Field(default=None, max_length=512)
+    font_family: str | None = Field(default=None, min_length=1, max_length=128)
+    font_size_pt: float | None = Field(default=None, ge=6, le=72)
+    color: str | None = Field(
+        default=None, pattern=r"^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$"
+    )
+
+
+class ChartLegendV1(ChartTextStyleV1):
+    visible: bool = True
+    position: Literal["top", "bottom", "left", "right"] = "right"
+
+
+class ChartPayloadV1(StrictCamelModel):
+    chart_type: Literal["column", "bar", "line", "area", "pie", "donut"]
+    categories: list[str] = Field(min_length=1, max_length=256)
+    series: list[ChartSeriesV1] = Field(min_length=1, max_length=32)
+    title: str | None = Field(default=None, max_length=512)
+    legend: ChartLegendV1 | None = None
+    category_axis: ChartTextStyleV1 | None = None
+    value_axis: ChartTextStyleV1 | None = None
+    font_family: str | None = Field(default=None, min_length=1, max_length=128)
+    font_size_pt: float | None = Field(default=None, ge=6, le=72)
+    text_color: str | None = Field(
+        default=None, pattern=r"^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$"
+    )
+    palette: list[str] = Field(default_factory=list, max_length=32)
+
+    @model_validator(mode="after")
+    def aligned_series(self) -> "ChartPayloadV1":
+        if any(len(item.values) != len(self.categories) for item in self.series):
+            raise ValueError("authored_chart_category_series_mismatch")
+        if any(not re.fullmatch(r"#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?", item) for item in self.palette):
+            raise ValueError("authored_chart_palette_invalid")
+        return self
+
+
+class ChartElementV1(SemanticElementBaseV1):
+    kind: Literal["chart"]
+    payload: ChartPayloadV1
+
+
 class ReferencedElementV1(SemanticElementBaseV1):
-    kind: Literal["connector", "group", "table", "chart", "complexIsland"]
+    kind: Literal["connector", "group", "table", "complexIsland"]
     source_ref: Digest
     raster_reason: str | None = Field(default=None, max_length=128)
 
 
 SemanticElementV1: TypeAlias = (
-    TextElementV1 | ImageElementV1 | ShapeElementV1 | ReferencedElementV1
+    TextElementV1 | ImageElementV1 | ShapeElementV1 | ChartElementV1 | ReferencedElementV1
 )
 
 
@@ -366,6 +417,7 @@ class ActiveAuthoredEmissionResponseV1(StrictCamelModel):
     presentation_id: uuid.UUID
     canonical_mode: Literal["legacyHtml", "bundleGraph"]
     presentation_revision: int = Field(ge=0)
+    active_generation: int = Field(default=0, ge=0)
     canonical_digest: Digest | None = None
     manifest: AuthoredDeckEmissionManifestV1 | None = None
     bundles: list[EmissionBundleV1] = Field(default_factory=list, max_length=100)
@@ -463,6 +515,41 @@ class KillSwitchProjectionV1(StrictCamelModel):
     expires_at: datetime | None = None
 
 
+SemanticDecisionV1: TypeAlias = Literal[
+    "native",
+    "representationFallback",
+    "identityFailure",
+    "ownershipFailure",
+    "assetPublicationFailure",
+    "blocked",
+]
+
+
+class SemanticCapabilityDecisionV1(StrictCamelModel):
+    capability_id: Literal[
+        "shape.gradient",
+        "shape.shadow",
+        "layout.transform",
+        "layout.flex",
+        "layout.grid",
+        "shape.borderRadius",
+        "shape.opacity",
+        "shape.clip",
+    ]
+    state: Literal["disabled", "shadow", "ready", "blocked"]
+    decision: SemanticDecisionV1
+    reason_code: str = Field(pattern=r"^[a-z][a-z0-9._-]{1,127}$")
+    receipt_digest: Digest
+
+
+class SemanticReceiptDecisionV1(StrictCamelModel):
+    receipt_id: Literal["cjk", "chart", "zBand", "degradation"]
+    state: Literal["disabled", "shadow", "ready", "blocked"]
+    decision: SemanticDecisionV1
+    reason_code: str = Field(pattern=r"^[a-z][a-z0-9._-]{1,127}$")
+    receipt_digest: Digest
+
+
 class WorkbenchCapabilityProjectionV1(StrictCamelModel):
     schema_version: Literal["workbench-capability-projection/v1"] = (
         "workbench-capability-projection/v1"
@@ -475,12 +562,35 @@ class WorkbenchCapabilityProjectionV1(StrictCamelModel):
     degraded_fidelity_only: bool
     fidelity: CapabilityAvailabilityV1
     hybrid: HybridAvailabilityV1
+    capability_matrix: list["SemanticCapabilityDecisionV1"] = Field(
+        min_length=8, max_length=8
+    )
+    receipts: list["SemanticReceiptDecisionV1"] = Field(min_length=4, max_length=4)
     readiness: ProductReadinessProjectionV1 = Field(
         default_factory=ProductReadinessProjectionV1
     )
     kill_switches: list[KillSwitchProjectionV1] = Field(default_factory=list, max_length=128)
     elements: list[EditableElementProjectionV1] = Field(default_factory=list, max_length=1024)
     projection_digest: Digest | None = None
+
+    @model_validator(mode="after")
+    def complete_server_registry(self) -> "WorkbenchCapabilityProjectionV1":
+        expected_capabilities = {
+            "shape.gradient",
+            "shape.shadow",
+            "layout.transform",
+            "layout.flex",
+            "layout.grid",
+            "shape.borderRadius",
+            "shape.opacity",
+            "shape.clip",
+        }
+        expected_receipts = {"cjk", "chart", "zBand", "degradation"}
+        if {item.capability_id for item in self.capability_matrix} != expected_capabilities:
+            raise ValueError("authored_capability_matrix_incomplete")
+        if {item.receipt_id for item in self.receipts} != expected_receipts:
+            raise ValueError("authored_capability_receipts_incomplete")
+        return self
 
 
 class AdmissionElementV1(StrictCamelModel):
@@ -492,7 +602,7 @@ class AdmissionElementV1(StrictCamelModel):
 
     @model_validator(mode="after")
     def truthful_state(self) -> "AdmissionElementV1":
-        if self.state == "admitted" and (self.fallback_reason or self.kind not in {"text", "image", "shape"}):
+        if self.state == "admitted" and (self.fallback_reason or self.kind not in {"text", "image", "shape", "chart"}):
             raise ValueError("authored_native_admission_unsupported")
         if self.state != "admitted" and not self.fallback_reason:
             raise ValueError("authored_native_fallback_reason_required")

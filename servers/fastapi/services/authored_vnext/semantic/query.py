@@ -14,6 +14,7 @@ from models.authored_vnext.semantic.contracts import (
     AuthoredDeckEmissionManifestV1,
     AuthoredEmissionBundleV1,
     CapabilityAvailabilityV1,
+    ChartElementV1,
     EditableElementProjectionV1,
     EmissionBundleV1,
     HybridAvailabilityV1,
@@ -21,6 +22,8 @@ from models.authored_vnext.semantic.contracts import (
     LegacyHtmlBundleV1,
     ImageElementV1,
     ShapeElementV1,
+    SemanticCapabilityDecisionV1,
+    SemanticReceiptDecisionV1,
     SemanticUnavailableReceiptV1,
     TextElementV1,
     WorkbenchCapabilityProjectionV1,
@@ -57,11 +60,19 @@ async def get_active_authored_emission(
             AuthoredDeckEmissionActivePointer.presentation_id == presentation_id,
         )
     )
-    if pointer is None or pointer.canonical_mode == "legacyHtml":
+    if pointer is None:
         return ActiveAuthoredEmissionResponseV1(
             presentation_id=presentation_id,
             canonical_mode="legacyHtml",
             presentation_revision=presentation.revision,
+        )
+    if pointer.canonical_mode == "legacyHtml":
+        return ActiveAuthoredEmissionResponseV1(
+            presentation_id=presentation_id,
+            canonical_mode="legacyHtml",
+            presentation_revision=pointer.presentation_revision,
+            active_generation=pointer.generation,
+            canonical_digest=pointer.canonical_digest,
         )
     manifest_record = await session.scalar(
         select(AuthoredDeckEmissionManifestRecord).where(
@@ -107,6 +118,7 @@ async def get_active_authored_emission(
         presentation_id=presentation_id,
         canonical_mode="bundleGraph",
         presentation_revision=pointer.presentation_revision,
+        active_generation=pointer.generation,
         canonical_digest=pointer.canonical_digest,
         manifest=manifest,
         bundles=bundles,
@@ -139,12 +151,14 @@ async def get_workbench_capability_projection(
     )
     elements: list[EditableElementProjectionV1] = []
     declared_kinds: set[str] = set()
+    declared_features: set[str] = set()
     for bundle in active.bundles:
         if not isinstance(bundle, AuthoredEmissionBundleV1) or isinstance(
             bundle.semantic_component, SemanticUnavailableReceiptV1
         ):
             continue
         for element in bundle.semantic_component.elements:
+            declared_features.update(element.required_features)
             if isinstance(element, TextElementV1):
                 declared_kinds.add("text")
                 editable_fields = ["text"]
@@ -157,6 +171,10 @@ async def get_workbench_capability_projection(
                 declared_kinds.add("shape")
                 editable_fields = ["fill", "stroke"]
                 read_only_reason = None
+            elif isinstance(element, ChartElementV1):
+                declared_kinds.add("chart")
+                editable_fields = []
+                read_only_reason = "native_chart_editing_projection_pending"
             else:
                 editable_fields = []
                 read_only_reason = "serializer_kind_unsupported"
@@ -213,6 +231,142 @@ async def get_workbench_capability_projection(
             ),
         )
 
+    def matrix_decision(
+        capability_id: str,
+        *,
+        native: bool,
+        native_reason: str,
+        fallback_reason: str,
+    ) -> SemanticCapabilityDecisionV1:
+        if disabled:
+            state = "disabled"
+            decision = "blocked"
+            reason = disabled_reason
+        elif native:
+            state = "ready"
+            decision = "native"
+            reason = native_reason
+        else:
+            state = "blocked"
+            decision = "representationFallback"
+            reason = fallback_reason
+        return SemanticCapabilityDecisionV1(
+            capability_id=capability_id,
+            state=state,
+            decision=decision,
+            reason_code=reason,
+            receipt_digest=receipt_digest(capability_id, state, reason),
+        )
+
+    capability_matrix = [
+        matrix_decision(
+            "shape.gradient",
+            native=False,
+            native_reason="serializer_native_gradient",
+            fallback_reason="serializer_gradient_requires_raster",
+        ),
+        matrix_decision(
+            "shape.shadow",
+            native=False,
+            native_reason="serializer_native_shadow",
+            fallback_reason="serializer_shadow_requires_raster",
+        ),
+        matrix_decision(
+            "layout.transform",
+            native=False,
+            native_reason="serializer_native_transform",
+            fallback_reason="serializer_transform_requires_raster",
+        ),
+        matrix_decision(
+            "layout.flex",
+            native=False,
+            native_reason="serializer_native_flex",
+            fallback_reason="serializer_flex_requires_raster",
+        ),
+        matrix_decision(
+            "layout.grid",
+            native=False,
+            native_reason="serializer_native_grid",
+            fallback_reason="serializer_grid_requires_raster",
+        ),
+        matrix_decision(
+            "shape.borderRadius",
+            native=True,
+            native_reason="serializer_bounded_radius_native",
+            fallback_reason="serializer_radius_requires_raster",
+        ),
+        matrix_decision(
+            "shape.opacity",
+            native=False,
+            native_reason="serializer_native_opacity",
+            fallback_reason="serializer_opacity_requires_raster",
+        ),
+        matrix_decision(
+            "shape.clip",
+            native=False,
+            native_reason="serializer_native_clip",
+            fallback_reason="serializer_clip_requires_raster",
+        ),
+    ]
+
+    def semantic_receipt(
+        receipt_id: str, *, state: str, decision: str, reason: str
+    ) -> SemanticReceiptDecisionV1:
+        return SemanticReceiptDecisionV1(
+            receipt_id=receipt_id,
+            state=state,
+            decision=decision,
+            reason_code=reason,
+            receipt_digest=receipt_digest(f"receipt.{receipt_id}", state, reason),
+        )
+
+    if disabled:
+        receipt_state = "disabled"
+        receipt_decision = "blocked"
+        receipt_reason = disabled_reason
+        cjk_receipt = semantic_receipt(
+            "cjk", state=receipt_state, decision=receipt_decision, reason=receipt_reason
+        )
+        chart_receipt = semantic_receipt(
+            "chart", state=receipt_state, decision=receipt_decision, reason=receipt_reason
+        )
+        zband_receipt = semantic_receipt(
+            "zBand", state=receipt_state, decision=receipt_decision, reason=receipt_reason
+        )
+    else:
+        cjk_receipt = semantic_receipt(
+            "cjk",
+            state="shadow",
+            decision="blocked",
+            reason="native_typography_readback_pending",
+        )
+        chart_receipt = semantic_receipt(
+            "chart",
+            state="shadow" if "chart" in declared_kinds else "disabled",
+            decision="blocked",
+            reason=(
+                "native_chart_readback_pending"
+                if "chart" in declared_kinds
+                else "native_chart_not_declared"
+            ),
+        )
+        zband_receipt = semantic_receipt(
+            "zBand",
+            state="shadow",
+            decision="blocked",
+            reason="hybrid_paint_graph_receipt_pending",
+        )
+    degradation_receipt = semantic_receipt(
+        "degradation",
+        state="blocked" if degraded else "ready",
+        decision="representationFallback" if degraded else "native",
+        reason=(
+            "semantic_retry_exhausted_fidelity_only"
+            if degraded
+            else "semantic_components_available"
+        ),
+    )
+
     projection = WorkbenchCapabilityProjectionV1(
         presentation_id=presentation_id,
         canonical_mode=active.canonical_mode,
@@ -229,6 +383,8 @@ async def get_workbench_capability_projection(
             image=availability("image"),
             shape=availability("shape"),
         ),
+        capability_matrix=capability_matrix,
+        receipts=[cjk_receipt, chart_receipt, zband_receipt, degradation_receipt],
         kill_switches=[
             KillSwitchProjectionV1(
                 capability_id="hybrid.all",
