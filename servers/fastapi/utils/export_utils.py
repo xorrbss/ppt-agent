@@ -358,8 +358,6 @@ async def export_authored_fidelity_presentation(
                 "title": title,
                 "pptxMode": "fidelity",
                 "expectedPresentationRevision": expected_revision,
-                "exportAttemptId": str(export_attempt_id),
-                "canonicalSourceDigest": canonical_source_digest,
             },
         )
         response.raise_for_status()

@@ -49,7 +49,6 @@ import {
   attachPresentationExportOoxmlReadback,
   createPresentationExportQuality,
   type PresentationExportFontEmbeddingStatus,
-  type PresentationExportQualityReport,
   type PresentationExportRendererIsolation,
 } from "../presentation-export-quality.ts";
 import { inspectPptxEditability } from "./pptx-quality-inspection.ts";
@@ -65,9 +64,10 @@ const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
 // Total wall-clock budget for the bounded-concurrency per-slide hybrid pass. Each slide can
 // take ~90s worst case (extract + font-layout + backplate relaunches); without a ceiling a
 // pathological deck holds the export request for tens of minutes. When the budget is
-// spent the remaining slides simply keep their fidelity (image) render.
+// spent the remaining slides receive a separately isolated fidelity capture below. Never
+// retain the bundled export's shared-DOM raster: authored slide styles can collide there.
 const HYBRID_DECK_BUDGET_MS = 15 * 60_000;
-const HYBRID_CACHE_VERSION = "authored-hybrid-v14-multiline-overflow";
+const HYBRID_CACHE_VERSION = "authored-hybrid-v15-isolated-raster-fallback";
 const HYBRID_RESULT_CACHE_LIMIT = 24;
 const HYBRID_EXPORT_CONCURRENCY = parseBoundedPositiveInt(
   process.env.AUTHORED_HYBRID_CONCURRENCY,
@@ -558,7 +558,7 @@ async function runUncachedAuthoredHybridExport(
               budgetWarningWritten = true;
               console.warn(
                 "[authored-hybrid] deck time budget exhausted; remaining slides " +
-                  "keep the fidelity render",
+                  "use isolated fidelity captures",
               );
             }
             return {
@@ -599,14 +599,14 @@ async function runUncachedAuthoredHybridExport(
         }
       },
     );
-    const preparedLayers = preparedSlides
-      .map((prepared) => prepared.layer)
-      .filter((layer): layer is AuthoredHybridSlideLayer => layer !== null);
     // Native decorative geometry without any typography that survived the
     // PowerPoint preflight provides little editing value and can visibly drift
-    // from the authored raster. Keep the exact fidelity package in that case;
-    // the code path remains Hybrid (font parts, attempt provenance and honest
-    // coverage), but every logical element is reported as raster fallback.
+    // from the authored raster. Replace every slide with a separately isolated
+    // full-slide capture in that case; the bundled Fidelity export renders all
+    // slide documents in one DOM, where generic authored CSS selectors can
+    // collide across slides. The code path remains Hybrid (font parts, attempt
+    // provenance and honest coverage), but every logical element is reported
+    // as raster fallback.
     const deckRasterFallback =
       preparedSlides.length > 0 &&
       preparedSlides.every(
@@ -615,7 +615,45 @@ async function runUncachedAuthoredHybridExport(
       preparedSlides.some(
         (prepared) => prepared.quality.typographyIssues.length > 0,
       );
-    const layers = deckRasterFallback ? [] : preparedLayers;
+    const rasterFallbackInputs = deckRasterFallback
+      ? slideInputs
+      : slideInputs.filter(
+          ({ slideNumber }) => preparedSlides[slideNumber - 1]?.layer === null,
+        );
+    const isolatedRasterLayers = await mapWithConcurrency(
+      rasterFallbackInputs,
+      HYBRID_EXPORT_CONCURRENCY,
+      async ({ html, slideNumber }) => {
+        const isolated = await prepareFidelitySlideLayer(
+          html,
+          slideNumber,
+          chromeExecutable,
+        );
+        if (!isolated.layer) {
+          throw new Error("authored_hybrid_isolated_raster_fallback_failed");
+        }
+        return isolated.layer;
+      },
+    );
+    const isolatedRasterBySlide = new Map(
+      isolatedRasterLayers.map((layer) => [layer.slideNumber, layer] as const),
+    );
+    const layers = deckRasterFallback
+      ? slideInputs.map(({ slideNumber }) => {
+          const layer = isolatedRasterBySlide.get(slideNumber);
+          if (!layer) {
+            throw new Error("authored_hybrid_isolated_raster_fallback_missing");
+          }
+          return layer;
+        })
+      : slideInputs.map(({ slideNumber }) => {
+          const prepared = preparedSlides[slideNumber - 1]?.layer;
+          const layer = prepared ?? isolatedRasterBySlide.get(slideNumber);
+          if (!layer) {
+            throw new Error("authored_hybrid_slide_layer_missing");
+          }
+          return layer;
+        });
     const qualitySlides = deckRasterFallback
       ? preparedSlides.map((prepared) => {
           const quality = prepared.quality;
@@ -649,14 +687,26 @@ async function runUncachedAuthoredHybridExport(
               nativeGroup: 0,
               rasterRemaining: 0,
             },
-            backplateCount: 0,
+            backplateCount: 1,
             fallbackReasons: [
               ...quality.fallbackReasons,
               "deck-native-typography-unverified-raster-fallback",
+              "isolated-fidelity-raster-fallback",
             ],
           };
         })
-      : preparedSlides.map((prepared) => prepared.quality);
+      : preparedSlides.map((prepared) =>
+          prepared.layer
+            ? prepared.quality
+            : {
+                ...prepared.quality,
+                backplateCount: 1,
+                fallbackReasons: [
+                  ...prepared.quality.fallbackReasons,
+                  "isolated-fidelity-raster-fallback",
+                ],
+              },
+        );
     const logicalQuality = createPresentationExportQuality(
       "hybrid",
       qualitySlides,
@@ -678,9 +728,6 @@ async function runUncachedAuthoredHybridExport(
       },
     );
     const slidesMs = elapsedMs(slidesStartedAt);
-    if (!layers.length && !deckRasterFallback) {
-      throw new Error("authored_hybrid_no_native_elements");
-    }
     const assemblyStartedAt = performance.now();
     recordExportProgress(cacheKey, { phase: "assembly" });
     if (!params.exportAttemptId || !params.canonicalSourceDigest) {
@@ -716,7 +763,7 @@ async function runUncachedAuthoredHybridExport(
     console.info(
       `[authored-hybrid] complete total=${elapsedMs(requestStartedAt)}ms ` +
         `fidelity=${fidelityMs}ms slides=${slidesMs}ms assembly=${assemblyMs}ms ` +
-        `editable=${layers.length}/${slides.length} ` +
+        `editable=${layers.filter((layer) => layer.elements.length > 0).length}/${slides.length} ` +
         `concurrency=${HYBRID_EXPORT_CONCURRENCY}`,
     );
     return result;
