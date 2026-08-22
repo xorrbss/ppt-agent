@@ -112,7 +112,7 @@ function normalizeNativeCapability(value: unknown, field: string): AuthoredNativ
   return {
     state: capabilityState(raw.state, `${field}.state`),
     receiptDigest:
-      raw.receiptDigest === undefined
+      raw.receiptDigest === undefined || raw.receiptDigest === null
         ? undefined
         : requiredDigest(raw.receiptDigest, `${field}.receiptDigest`),
     reason: text(raw.reason),

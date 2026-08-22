@@ -179,13 +179,38 @@ async def get_workbench_capability_projection(
         else "server_admission_shadow_only"
     )
 
+    def receipt_digest(capability_id: str, state: str, reason: str | None) -> str:
+        return canonical_digest(
+            {
+                "schemaVersion": "authored-capability-projection-receipt/v1",
+                "capabilityId": capability_id,
+                "state": state,
+                "reason": reason,
+                "presentationId": str(presentation_id),
+                "presentationRevision": active.presentation_revision,
+                "manifestDigest": active.canonical_digest,
+                "registryVersion": "semantic-native-registry/v1",
+            }
+        )
+
     def availability(kind: str) -> CapabilityAvailabilityV1:
         if disabled:
-            return CapabilityAvailabilityV1(state="disabled", reason=disabled_reason)
+            return CapabilityAvailabilityV1(
+                state="disabled",
+                reason=disabled_reason,
+                receipt_digest=receipt_digest(f"hybrid.{kind}", "disabled", disabled_reason),
+            )
         if kind in declared_kinds:
-            return CapabilityAvailabilityV1(state="ready")
+            return CapabilityAvailabilityV1(
+                state="ready",
+                receipt_digest=receipt_digest(f"hybrid.{kind}", "ready", None),
+            )
         return CapabilityAvailabilityV1(
-            state="shadow", reason="no_declared_element_for_capability"
+            state="shadow",
+            reason="no_declared_element_for_capability",
+            receipt_digest=receipt_digest(
+                f"hybrid.{kind}", "shadow", "no_declared_element_for_capability"
+            ),
         )
 
     projection = WorkbenchCapabilityProjectionV1(
@@ -195,7 +220,10 @@ async def get_workbench_capability_projection(
         canonical_digest=active.canonical_digest,
         manifest_digest=active.manifest.canonical_digest if active.manifest else None,
         degraded_fidelity_only=degraded,
-        fidelity=CapabilityAvailabilityV1(state="ready"),
+        fidelity=CapabilityAvailabilityV1(
+            state="ready",
+            receipt_digest=receipt_digest("fidelity", "ready", None),
+        ),
         hybrid=HybridAvailabilityV1(
             text=availability("text"),
             image=availability("image"),
