@@ -7,6 +7,7 @@ import type {
   AuthoredHybridShapePayload,
   AuthoredHybridTextBoxEdgesPx,
   AuthoredHybridTextRole,
+  AuthoredHybridTextScript,
   AuthoredHybridTextStyle,
 } from "./schema.ts";
 
@@ -15,6 +16,7 @@ export interface BrowserTextRunObservation {
   boundsPx: AuthoredHybridRect;
   fragmentRectsPx: AuthoredHybridRect[];
   style: AuthoredHybridTextStyle;
+  script?: AuthoredHybridTextScript;
   breakKind?: "soft" | "line" | "paragraph";
 }
 
@@ -34,6 +36,7 @@ export interface BrowserTextLayoutObservation {
   textAlignSource: "self" | "inherited" | "default";
   lineCount: number;
   singleLine: boolean;
+  lineRectsPx?: AuthoredHybridRect[];
   paragraphSpacingPx: {
     before: number;
     after: number;

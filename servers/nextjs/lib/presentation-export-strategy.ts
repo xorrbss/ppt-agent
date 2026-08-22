@@ -38,8 +38,12 @@ export interface PresentationExportExecutionParams {
   title?: string;
   cookieHeader?: string;
   pptxMode?: PptxMode;
-  /** Explicit opt-in. Omitted and false are both non-embedding requests. */
+  /** Hybrid requests embed by default; only explicit false selects compatibility mode. */
   fontEmbedding?: boolean;
+  /** Durable FastAPI attempt supplied by the caller or created by the Next route. */
+  exportAttemptId?: string;
+  /** Canonical FastAPI snapshot digest bound to `exportAttemptId`. */
+  canonicalSourceDigest?: string;
   expectedPresentationSha256?: string;
   /** Server-bound optimistic revision; client hints never select an adapter. */
   expectedPresentationRevision?: number;
@@ -273,10 +277,14 @@ export async function executePersistedPresentationExport<
     params.pptxMode === "hybrid" &&
     strategy === "authored-hybrid"
   ) {
+    const hybridParams = {
+      ...params,
+      fontEmbedding: params.fontEmbedding !== false,
+    };
     return validateCanonicalExportResult(
       presentation,
-      params,
-      await registry.hybrid(params),
+      hybridParams,
+      await registry.hybrid(hybridParams),
     );
   }
   if (

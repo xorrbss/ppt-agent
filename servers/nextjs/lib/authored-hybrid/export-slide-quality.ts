@@ -11,7 +11,39 @@ export interface PreparedSlideFontRendering {
 }
 
 export function imageFallbackSlide(slideNumber: number, reason: string): PresentationExportSlideQuality {
-  return { slideNumber, editable: false, imageFallback: true, nativeTextElements: 0, nativeShapeElements: 0, nativeGroupElements: 0, nativeImageElements: 0, rasterFallbackElements: 1, fallbackReasons: [reason], fallbackElements: [{ elementId: `slide:${slideNumber}`, candidateKind: "slide", reasons: [reason] }] };
+  return {
+    slideNumber,
+    editable: false,
+    imageFallback: true,
+    nativeTextElements: 0,
+    nativeShapeElements: 0,
+    nativeGroupElements: 0,
+    nativeImageElements: 0,
+    rasterFallbackElements: 1,
+    logicalCoverage: {
+      nativeText: 0,
+      nativeImage: 0,
+      nativeShape: 0,
+      nativeGroup: 0,
+      rasterRemaining: 1,
+    },
+    ooxmlReadback: {
+      status: "not-run",
+      nativeText: 0,
+      nativeImage: 0,
+      nativeShape: 0,
+      nativeGroup: 0,
+      rasterRemaining: 0,
+    },
+    backplateCount: 1,
+    typographyIssues: [],
+    fallbackReasons: [reason],
+    fallbackElements: [{
+      elementId: `slide:${slideNumber}`,
+      candidateKind: "slide",
+      reasons: [reason],
+    }],
+  };
 }
 
 export function noFontRenderingTelemetry(): PreparedSlideFontRendering {

@@ -38,6 +38,8 @@ def _validated_hybrid_coverage(
     result: dict,
     *,
     expected_revision: int,
+    expected_attempt_id: uuid.UUID,
+    expected_canonical_digest: str,
 ) -> dict:
     metadata = result.get("exportMetadata")
     raw_coverage = (
@@ -49,6 +51,11 @@ def _validated_hybrid_coverage(
         raise RuntimeError("authored_hybrid_export_coverage_invalid") from error
     if coverage.source.presentation_revision != expected_revision:
         raise RuntimeError("authored_hybrid_export_coverage_revision_mismatch")
+    if (
+        coverage.source.export_attempt_id != expected_attempt_id
+        or coverage.source.canonical_source_digest != expected_canonical_digest
+    ):
+        raise RuntimeError("authored_hybrid_export_coverage_attempt_mismatch")
 
     quality = result.get("quality")
     if not isinstance(quality, dict):
@@ -223,6 +230,8 @@ async def export_authored_hybrid_presentation(
     *,
     cookie_header: str | None,
     expected_revision: int,
+    export_attempt_id: uuid.UUID,
+    canonical_source_digest: str,
     font_embedding: bool = False,
     workspace_operation_id: uuid.UUID | None = None,
 ) -> PresentationAndPath:
@@ -273,6 +282,8 @@ async def export_authored_hybrid_presentation(
         coverage_manifest = _validated_hybrid_coverage(
             result,
             expected_revision=expected_revision,
+            expected_attempt_id=export_attempt_id,
+            expected_canonical_digest=canonical_source_digest,
         )
         renderer_source_sha256 = coverage_manifest["source"]["sourceDigest"]
 
@@ -347,6 +358,8 @@ async def export_authored_fidelity_presentation(
                 "title": title,
                 "pptxMode": "fidelity",
                 "expectedPresentationRevision": expected_revision,
+                "exportAttemptId": str(export_attempt_id),
+                "canonicalSourceDigest": canonical_source_digest,
             },
         )
         response.raise_for_status()

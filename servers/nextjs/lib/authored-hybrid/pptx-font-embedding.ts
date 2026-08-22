@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
 
-import { readPptxArchive, writePptxArchive } from "./pptx-archive.ts";
+import {
+  readPptxArchive,
+  relationshipTargetPath,
+  writePptxArchive,
+  xmlAttributeValue,
+} from "./pptx-archive.ts";
 
 const RELATIONSHIPS_NS =
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -95,8 +100,16 @@ function xmlEscapeAttribute(value: string): string {
 
 function nextRelationshipNumber(xml: string): number {
   let result = 1;
-  for (const match of xml.matchAll(/\bId\s*=\s*["']rId(\d+)["']/gi)) {
-    result = Math.max(result, Number(match[1]) + 1);
+  const seen = new Set<string>();
+  for (const match of xml.matchAll(/<(?:[A-Za-z_][\w.-]*:)?Relationship\b[^>]*>/gi)) {
+    const id = xmlAttributeValue(match[0], "Id");
+    if (!id || seen.has(id)) throw new Error("PPTX presentation relationship Id is missing or duplicated.");
+    seen.add(id);
+    const numeric = id.match(/^rId(\d+)$/i)?.[1];
+    if (numeric === undefined) continue;
+    const value = Number(numeric);
+    if (!Number.isSafeInteger(value)) throw new Error("PPTX presentation relationship Id is out of range.");
+    result = Math.max(result, value + 1);
   }
   return result;
 }
@@ -217,6 +230,76 @@ function allocateFontPartName(
   return { name: `ppt/fonts/font${number}.fntdata`, next: number + 1 };
 }
 
+function fontNameKey(value: string): string {
+  return value.normalize("NFKC").replace(/[\s_-]+/g, " ").trim().toLowerCase();
+}
+
+function assertEmbeddedFontPackage(
+  entries: ReadonlyMap<string, Buffer>,
+  fonts: readonly EmbeddedPowerPointTypeface[]
+): void {
+  const presentation = entries.get("ppt/presentation.xml")?.toString("utf8") ?? "";
+  const relationships = entries.get("ppt/_rels/presentation.xml.rels")?.toString("utf8") ?? "";
+  const contentTypes = entries.get("[Content_Types].xml")?.toString("utf8") ?? "";
+  const list = presentation.match(/<p:embeddedFontLst\b[^>]*>[\s\S]*?<\/p:embeddedFontLst>/i)?.[0];
+  const declarations = list
+    ? [...list.matchAll(/<p:embeddedFont\b[^>]*>([\s\S]*?)<\/p:embeddedFont>/gi)]
+    : [];
+  if (declarations.length !== fonts.length) {
+    throw new Error("PPTX embedded-font declarations do not match the packaged typefaces.");
+  }
+  const expectedFaces = new Map<string, EmbeddedPowerPointFontFace>();
+  declarations.forEach((declaration, index) => {
+    const fontTag = declaration[1].match(/<p:font\b[^>]*\/>/i)?.[0];
+    if (!fontTag ||
+        xmlAttributeValue(fontTag, "typeface") !== fonts[index].typeface ||
+        Number(xmlAttributeValue(fontTag, "pitchFamily")) !== fonts[index].pitchFamily ||
+        Number(xmlAttributeValue(fontTag, "charset")) !== fonts[index].charset) {
+      throw new Error("PPTX embedded-font declaration typeface is inconsistent.");
+    }
+    const declaredFaces = [...declaration[1].matchAll(
+      /<p:(regular|bold|italic|boldItalic)\b[^>]*\/>/gi
+    )];
+    if (declaredFaces.length !== fonts[index].faces.length) {
+      throw new Error(`PPTX embedded ${fonts[index].typeface} face declarations are incomplete.`);
+    }
+    declaredFaces.forEach((match, faceIndex) => {
+      const expected = fonts[index].faces[faceIndex];
+      const relationshipId = xmlAttributeValue(match[0], "r:id");
+      if (match[1] !== expected.face || relationshipId !== expected.relationshipId || expectedFaces.has(expected.relationshipId)) {
+        throw new Error(`PPTX embedded ${fonts[index].typeface} face declaration is inconsistent.`);
+      }
+      expectedFaces.set(expected.relationshipId, expected);
+    });
+  });
+
+  const relationshipFaces = new Map<string, string>();
+  for (const match of relationships.matchAll(/<(?:[A-Za-z_][\w.-]*:)?Relationship\b[^>]*>/gi)) {
+    if (xmlAttributeValue(match[0], "Type") !== FONT_RELATIONSHIP) continue;
+    const id = xmlAttributeValue(match[0], "Id");
+    const target = xmlAttributeValue(match[0], "Target");
+    const targetPath = target ? relationshipTargetPath("ppt/_rels/presentation.xml.rels", target) : null;
+    if (!id || !targetPath || relationshipFaces.has(id)) {
+      throw new Error("PPTX embedded-font relationship is malformed or duplicated.");
+    }
+    relationshipFaces.set(id, targetPath);
+  }
+  if (relationshipFaces.size !== expectedFaces.size) {
+    throw new Error("PPTX embedded-font relationships do not match the face declarations.");
+  }
+  for (const [id, face] of expectedFaces) {
+    if (relationshipFaces.get(id) !== face.partName || !entries.get(face.partName)?.length) {
+      throw new Error(`PPTX embedded-font part is missing or misrelated: ${face.partName}.`);
+    }
+  }
+  const fontDefaults = [...contentTypes.matchAll(/<Default\b[^>]*>/gi)].filter(
+    (match) => xmlAttributeValue(match[0], "Extension")?.toLowerCase() === "fntdata"
+  );
+  if (fontDefaults.length !== 1 || xmlAttributeValue(fontDefaults[0][0], "ContentType") !== FONT_CONTENT_TYPE) {
+    throw new Error("PPTX embedded-font content type is missing or inconsistent.");
+  }
+}
+
 /**
  * Add real PresentationML embedded-font declarations and EOT font parts.
  *
@@ -229,17 +312,7 @@ export function embedPowerPointFonts(
   requestedFonts: readonly PowerPointTypefaceInput[]
 ): EmbeddedPowerPointPptx {
   if (requestedFonts.length === 0) {
-    return {
-      pptx: Buffer.from(pptxBytes),
-      result: {
-        requested: true,
-        applied: false,
-        embeddedFontFiles: 0,
-        embeddedTypefaces: 0,
-        fonts: [],
-        reason: "No embeddable font faces were supplied.",
-      },
-    };
+    throw new Error("PowerPoint font embedding was requested without any embeddable faces.");
   }
   const entries = readPptxArchive(pptxBytes);
   const presentationPath = "ppt/presentation.xml";
@@ -296,6 +369,11 @@ export function embedPowerPointFonts(
       });
       const expectedBold = face === "bold" || face === "boldItalic";
       const expectedItalic = face === "italic" || face === "boldItalic";
+      if (fontNameKey(wrapped.metadata.family) !== fontNameKey(typeface)) {
+        throw new Error(
+          `Embedded ${typeface} ${face} face declares the SFNT family ${wrapped.metadata.family}.`
+        );
+      }
       if (expectedBold !== (wrapped.metadata.weight >= 700)) {
         throw new Error(`Embedded ${typeface} ${face} face has incompatible weight metadata.`);
       }
@@ -355,11 +433,12 @@ export function embedPowerPointFonts(
   const output = writePptxArchive(entries);
   // Re-read our output so truncated or internally inconsistent packages fail
   // before the caller can label embedding as applied.
-  readPptxArchive(output);
+  const verifiedEntries = readPptxArchive(output);
   const embeddedFontFiles = embeddedFonts.reduce(
     (sum, item) => sum + item.faces.length,
     0
   );
+  assertEmbeddedFontPackage(verifiedEntries, embeddedFonts);
   return {
     pptx: output,
     result: {

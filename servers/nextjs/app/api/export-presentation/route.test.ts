@@ -215,7 +215,7 @@ test("route request forwards explicit font embedding only to authored hybrid", a
   assert.equal(receivedExpectedRevision, 4);
 });
 
-test("route request defaults font embedding off and rejects invalid values", async () => {
+test("route request defaults Hybrid font embedding on; explicit false is compatibility mode", async () => {
   let receivedFontEmbedding: boolean | undefined;
   const { dependencies } = boundarySpies({
     version: "v1-standard",
@@ -231,6 +231,18 @@ test("route request defaults font embedding off and rejects invalid values", asy
 
   await executeExportPresentationRouteRequest(
     { format: "pptx", id: "persisted-id", pptxMode: "hybrid" },
+    "session=test",
+    dependencies
+  );
+  assert.equal(receivedFontEmbedding, true);
+
+  await executeExportPresentationRouteRequest(
+    {
+      format: "pptx",
+      id: "persisted-id",
+      pptxMode: "hybrid",
+      fontEmbedding: false,
+    },
     "session=test",
     dependencies
   );
@@ -400,6 +412,63 @@ test("route request uses the default general mode for authored PPTX", async () =
   assert.deepEqual(calls, { fetch: 1, general: 1, hybrid: 0 });
 });
 
+test("route request forwards a complete supplied Hybrid attempt binding", async () => {
+  let received: PresentationExportExecutionParams | undefined;
+  const { dependencies } = boundarySpies({
+    version: "v1-standard",
+    mode: "authored",
+    slides: [{ ui: null, html_content: "<section>editable</section>" }],
+  });
+  dependencies.registry.hybrid = async (params) => {
+    received = params;
+    return { path: "hybrid.pptx" };
+  };
+
+  await executeExportPresentationRouteRequest(
+    {
+      format: "pptx",
+      id: "persisted-id",
+      pptxMode: "hybrid",
+      exportAttemptId: "attempt-1",
+      canonicalSourceDigest: "c".repeat(64),
+    },
+    "session=test",
+    dependencies,
+  );
+
+  assert.equal(received?.exportAttemptId, "attempt-1");
+  assert.equal(received?.canonicalSourceDigest, "c".repeat(64));
+  assert.equal(received?.fontEmbedding, true);
+});
+
+test("route request rejects incomplete or malformed Hybrid attempt bindings", async () => {
+  const { dependencies } = boundarySpies({
+    version: "v1-standard",
+    mode: "authored",
+    slides: [{ ui: null, html_content: "<section>editable</section>" }],
+  });
+  for (const request of [
+    { exportAttemptId: "attempt-1" },
+    { canonicalSourceDigest: "c".repeat(64) },
+    { exportAttemptId: "", canonicalSourceDigest: "c".repeat(64) },
+    { exportAttemptId: "attempt-1", canonicalSourceDigest: "not-a-digest" },
+  ]) {
+    const error = await rejectedRequestError(
+      executeExportPresentationRouteRequest(
+        {
+          format: "pptx",
+          id: "persisted-id",
+          pptxMode: "hybrid",
+          ...request,
+        },
+        "session=test",
+        dependencies,
+      ),
+    );
+    assert.equal(error.status, 400);
+  }
+});
+
 test("route request rejects an invalid expected revision", async () => {
   const { calls, dependencies } = boundarySpies({
     version: "v1-standard",
@@ -459,7 +528,7 @@ test("route request rejects conflicting identity before either runner", async ()
       "session=test",
       dependencies
     ),
-    /presentation_identity_conflict/
+    /unsupported_presentation_identity/
   );
   assert.deepEqual(calls, { fetch: 1, general: 0, hybrid: 0 });
 });

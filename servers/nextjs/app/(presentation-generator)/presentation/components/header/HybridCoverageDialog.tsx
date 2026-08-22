@@ -9,11 +9,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import type { PresentationExportQualityReport } from "@/lib/presentation-export-quality";
 
 export type HybridCoverageManifest = {
-  schemaVersion: "presenton.authored-hybrid-coverage/v1";
+  schemaVersion: string;
   mode: "hybrid";
-  source: { presentationRevision: number; sourceDigest: string };
+  source: {
+    presentationRevision: number;
+    sourceDigest: string;
+    canonicalSourceDigest?: string;
+    exportAttemptId?: string;
+  };
   totalSlides: number;
   nativeText: number;
   nativeImage: number;
@@ -38,9 +44,11 @@ export type HybridCoverageManifest = {
 
 const HybridCoverageDialog = ({
   manifest,
+  exportQuality,
   onClose,
 }: {
   manifest: HybridCoverageManifest | null;
+  exportQuality?: PresentationExportQualityReport | null;
   onClose: () => void;
 }) => (
   <Dialog open={manifest !== null} onOpenChange={(open) => !open && onClose()}>
@@ -58,18 +66,52 @@ const HybridCoverageDialog = ({
       {manifest ? (
         <div className="space-y-3 text-sm text-slate-700">
           <div
-            className={`rounded-lg p-3 ${manifest.fullyEditable && manifest.rasterRemaining === 0 ? "bg-emerald-50 text-emerald-950" : "bg-amber-50 text-amber-950"}`}
+            className="rounded-lg bg-amber-50 p-3 text-amber-950"
             role="status"
           >
-            {manifest.fullyEditable && manifest.rasterRemaining === 0
-              ? "이 export의 선언된 요소는 native입니다."
+            {manifest.rasterRemaining === 0
+              ? "raster 잔여는 보고되지 않았습니다. 그러나 완전 편집 가능 또는 시각 동일성은 이 결과만으로 주장하지 않습니다."
               : `raster 잔여 ${manifest.rasterRemaining}개가 있어 완전 편집 가능 파일이 아닙니다.`}
+          </div>
+          <div className="rounded-lg border border-slate-200 p-3 text-xs text-slate-700">
+            <p>export attempt: {manifest.source.exportAttemptId ?? "미기록"}</p>
+            <p className="mt-1 break-all">renderer digest: {manifest.source.sourceDigest}</p>
+            <p className="mt-1 break-all">canonical digest: {manifest.source.canonicalSourceDigest ?? "미기록"}</p>
           </div>
           <p>
             native 텍스트 {manifest.nativeText} · 이미지 {manifest.nativeImage}{" "}
             · 도형 {manifest.nativeShape} · 표 {manifest.nativeTable} · 차트{" "}
             {manifest.nativeChart} · raster {manifest.rasterRemaining}
           </p>
+          {exportQuality ? (
+            <div className="rounded-lg border border-slate-200 p-3 text-xs text-slate-700">
+              <p className="font-medium text-slate-900">범위 및 readback 근거</p>
+              <p className="mt-1">논리적 coverage: 텍스트 {exportQuality.logicalCoverage.nativeText} · 이미지 {exportQuality.logicalCoverage.nativeImage} · 도형 {exportQuality.logicalCoverage.nativeShape} · 그룹 {exportQuality.logicalCoverage.nativeGroup} · raster {exportQuality.logicalCoverage.rasterRemaining}</p>
+              <p className="mt-1">OOXML readback ({exportQuality.ooxmlReadback.status}): 텍스트 {exportQuality.ooxmlReadback.nativeText} · 이미지 {exportQuality.ooxmlReadback.nativeImage} · 도형 {exportQuality.ooxmlReadback.nativeShape} · 그룹 {exportQuality.ooxmlReadback.nativeGroup} · raster {exportQuality.ooxmlReadback.rasterRemaining}</p>
+              <p className="mt-1">backplate {exportQuality.backplateCount}개. native paint 제거 구성은 시각 동일성 검증이 아닙니다.</p>
+              <p className="mt-1">PowerPoint QA: {exportQuality.powerPointQa ? `${exportQuality.powerPointQa.platform} · ${exportQuality.powerPointQa.status}` : "미기록"}</p>
+              <p className="mt-1 break-all">PPTX digest: {exportQuality.atomicBinding?.pptxSha256 ?? "미기록"}</p>
+              <p className="font-medium text-slate-900">글꼴 및 typography</p>
+              <p className="mt-1">
+                요청: {exportQuality.fontEmbeddingStatus?.requested ? "예" : "아니오"} · 적용: {exportQuality.fontEmbeddingStatus?.applied ? "예" : "아니오"} · 사유: {exportQuality.fontEmbeddingStatus?.reason ?? "미기록"}
+              </p>
+              <p className="mt-1">
+                browser 글꼴 수집 {exportQuality.fontRendering?.browserFontFilesCollected ?? 0}개 · 수집 실패 {exportQuality.fontRendering?.browserCollectionFailures ?? 0}개 · typeface 정책 {exportQuality.fontRendering?.powerpointTypefacePolicy ?? "미기록"}
+              </p>
+              {(exportQuality.fontEmbeddingStatus?.failures?.length ?? 0) > 0 ? (
+                <p className="mt-1 text-amber-800">
+                  글꼴 fallback 사유: {exportQuality.fontEmbeddingStatus?.failures?.map((failure) => `${failure.family ?? "unknown"}: ${failure.reason}`).join(", ")}
+                </p>
+              ) : null}
+              {exportQuality.typographyIssues.length > 0 ? (
+                <p className="mt-1 text-amber-800">
+                  typography fallback 사유: {exportQuality.typographyIssues.map((issue) => `${issue.elementId ?? "unknown"}: ${issue.code}`).join(", ")}
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <p className="text-xs text-amber-800">글꼴 적용 상태와 typography 증거가 응답에 없어 미검증입니다.</p>
+          )}
           <div className="overflow-hidden rounded-lg border border-slate-200">
             {manifest.slides.map((slide) => (
               <div
@@ -85,7 +127,7 @@ const HybridCoverageDialog = ({
                 <p className="mt-1 text-xs text-slate-500">
                   시각 기준:{" "}
                   {slide.visualParity === "fidelity-backplate-retained"
-                    ? "fidelity backplate 유지"
+                    ? "backplate 구성 유지 (시각 동일성은 별도 검증 필요)"
                     : "시각 동일성 미검증"}{" "}
                   · backplate 중복 방지:{" "}
                   {slide.nativeBackplateDeDuplication === "applied"

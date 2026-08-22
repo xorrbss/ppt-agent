@@ -79,6 +79,7 @@ class PresentationExportRouteResult:
     def provenance(
         self,
         *,
+        attempt_id: uuid.UUID | None = None,
         source_revision: int,
         source_snapshot_sha256: str,
         html_source_sha256: str | None = None,
@@ -110,6 +111,22 @@ class PresentationExportRouteResult:
                     "package_digest_match": True,
                 },
                 "coverage_manifest": self.result.coverage_manifest,
+                "atomic_binding": (
+                    {
+                        "export_attempt_id": str(attempt_id),
+                        "presentation_revision": source_revision,
+                        "canonical_source_sha256": source_snapshot_sha256,
+                        "renderer_source_sha256": self.result.renderer_source_sha256,
+                        "pptx_sha256": self.result.artifact_sha256,
+                    }
+                    if (
+                        attempt_id is not None
+                        and self.result.coverage_manifest is not None
+                        and self.result.coverage_manifest.get("schemaVersion")
+                        == "presenton.authored-hybrid-coverage/v2"
+                    )
+                    else None
+                ),
             }
         )
 
@@ -137,6 +154,7 @@ class PresentationExportExecution:
     @property
     def provenance(self) -> dict:
         return self.route.provenance(
+            attempt_id=self.attempt_id,
             source_revision=self.source_revision,
             source_snapshot_sha256=self.source_snapshot_sha256,
             html_source_sha256=self.html_source_sha256,
@@ -385,6 +403,8 @@ async def execute_presentation_export(
                 slides=slide_inputs,
                 template_target=template_target,
                 workspace_operation_id=workspace_operation_id,
+                export_attempt_id=attempt.id,
+                canonical_source_digest=source_snapshot_sha256,
             ),
             analysis,
             asset_digests_verified=True,

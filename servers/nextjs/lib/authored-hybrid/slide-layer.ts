@@ -3,6 +3,7 @@ import {
   renderAuthoredBackplate,
 } from "./index.ts";
 import {
+  preflightNativeTypography,
   preparedNativeElementNonVisualIdCount,
   prepareNativeElements,
   selectLayerSafeNativeElements,
@@ -10,6 +11,7 @@ import {
   type PowerPointTypefaceSerializationOptions,
   type PreparedNativeElement,
 } from "./native-plan.ts";
+import type { AuthoredEmbeddedTypefaceFaceEvidence } from "./font-policy.ts";
 import {
   isCanvasBackgroundShape,
   isOpaqueRgbPng,
@@ -84,7 +86,8 @@ export async function prepareSlideLayer(
   html: string,
   slideNumber: number,
   chromeExecutable: string,
-  embeddedTypefaceFamilies: readonly string[] = []
+  embeddedTypefaceFamilies: readonly string[] = [],
+  embeddedTypefaceFaces: readonly AuthoredEmbeddedTypefaceFaceEvidence[] = []
 ): Promise<PreparedSlideOutcome> {
   // Network access is permitted only in this validated server-side collector.
   // The resulting document is self-contained before isolated Chrome receives it.
@@ -125,22 +128,30 @@ export async function prepareSlideLayer(
     const merged = mergePowerPointTextLayout(
       contract.elements,
       layoutContract.elements,
-      { embeddedTypefaceFamilies }
+      { embeddedTypefaceFamilies, embeddedTypefaceFaces }
     );
     nativeLayoutElements = merged.elements;
   } catch {
     // The mapped-font pass is an accuracy enhancement. Source extraction and
     // fidelity backplate remain a safe compatible fallback if it cannot run.
   }
+  const typographyPreflight = preflightNativeTypography(nativeLayoutElements, {
+    embeddedTypefaceFaces,
+    backplateElements: contract.elements,
+  });
+  nativeLayoutElements = typographyPreflight.elements;
+  const typographyRejected = new Set(typographyPreflight.rejectedElementIds);
   const prepared = preSerializePreparedElements(
-    await prepareNativeElements(nativeLayoutElements, {
-      includeRasterText: true,
-      includeRasterShapes: true,
-    }),
-    { embeddedTypefaceFamilies }
+    (
+      await prepareNativeElements(nativeLayoutElements, {
+        includeRasterText: true,
+        includeRasterShapes: true,
+      })
+    ).filter((element) => !typographyRejected.has(element.source.id)),
+    { embeddedTypefaceFamilies, embeddedTypefaceFaces }
   );
   let selected = selectLayerSafeNativeElements(
-    contract.elements,
+    nativeLayoutElements,
     prepared,
     undefined,
     // Text remains editable above the residual backplate. Shapes only move to
@@ -168,7 +179,7 @@ export async function prepareSlideLayer(
   );
   const applied = new Set(backplate.appliedPromotedElementIds);
   const finalSelected = selectLayerSafeNativeElements(
-    contract.elements,
+    nativeLayoutElements,
     prepared,
     applied,
     {
@@ -240,7 +251,7 @@ export async function prepareSlideLayer(
   const selectedIds = new Set(
     selected.map((element) => element.source.id)
   );
-  const fallbackElements = contract.elements
+  const fallbackElements = nativeLayoutElements
     .filter(
       (element) =>
         !selectedIds.has(element.id) ||
@@ -270,6 +281,26 @@ export async function prepareSlideLayer(
       nativeImageElements: selected.filter((element) => element.kind === "image")
         .length,
       rasterFallbackElements: fallbackElements.length,
+      logicalCoverage: {
+        nativeText: selected.filter((element) => element.kind === "text").length,
+        nativeImage: selected.filter((element) => element.kind === "image").length,
+        nativeShape: selected.filter((element) => element.kind === "shape").length,
+        nativeGroup: 0,
+        rasterRemaining: fallbackElements.length,
+      },
+      ooxmlReadback: {
+        status: "not-run",
+        nativeText: 0,
+        nativeImage: 0,
+        nativeShape: 0,
+        nativeGroup: 0,
+        rasterRemaining: 0,
+      },
+      backplateCount: 1,
+      typographyIssues: typographyPreflight.typographyIssues.map((issue) => ({
+        code: issue.code,
+        elementId: issue.elementId,
+      })),
       fallbackReasons: fallbackElements.flatMap((element) => element.reasons),
       fallbackElements,
     },

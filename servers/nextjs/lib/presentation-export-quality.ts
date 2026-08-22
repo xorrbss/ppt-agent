@@ -22,69 +22,17 @@ export interface PresentationExportFallbackElement {
   reasons: string[];
 }
 
-export interface PresentationExportFontEmbeddingStatus {
-  /** Embedding remains an explicit opt-in even when a future exporter supports it. */
-  policy: "opt-in";
-  requested: boolean;
-  applied: boolean;
-  embeddedFontFiles: number;
-  embeddedTypefaces?: number;
-  strategy?: "full" | "subset";
-  /**
-   * Subset fonts cover all characters in this deck, but newly typed characters
-   * outside that set may be substituted by PowerPoint.
-   */
-  editLimitation?:
-    | "none"
-    | "characters-outside-subset-may-substitute";
-  faces?: PresentationExportEmbeddedFontFaceStatus[];
-  failures?: PresentationExportFontEmbeddingFailure[];
-  reason:
-    | "not-requested"
-    | "embedded"
-    | "unsupported"
-    | "failed";
-}
+import type {
+  PresentationExportFontEmbeddingStatus,
+  PresentationExportFontRenderingQuality,
+} from "./presentation-export-font-quality.ts";
 
-export interface PresentationExportEmbeddedFontFaceStatus {
-  typeface: string;
-  face: "regular" | "bold" | "italic" | "boldItalic";
-  weight: number;
-  style: "normal" | "italic";
-  source: string;
-  /** Server-safe allowlist-relative source identifier, never a client path. */
-  sourcePath?: string;
-  sourceSha256: string;
-  sourceBytes: number;
-  embeddedBytes: number;
-  fsType: number;
-  licenseDecision:
-    | "allowed-installable"
-    | "allowed-editable"
-    | "denied-restricted"
-    | "denied-preview-print"
-    | "denied-bitmap-only"
-    | "denied-invalid";
-  subset: boolean;
-  strategy: "full" | "subset";
-  partName: string;
-  format: string;
-  derivedFromVariable?: boolean;
-}
-
-export interface PresentationExportFontEmbeddingFailure {
-  family?: string;
-  face?: "regular" | "bold" | "italic" | "boldItalic";
-  reason: string;
-  detail?: string;
-}
-
-export interface PresentationExportFontRenderingQuality {
-  browserFontFilesCollected: number;
-  browserCollectionFailures: number;
-  /** Identifies the stable authored-font to PowerPoint-typeface mapping policy. */
-  powerpointTypefacePolicy: "central-compatible-fallbacks";
-}
+export type {
+  PresentationExportEmbeddedFontFaceStatus,
+  PresentationExportFontEmbeddingFailure,
+  PresentationExportFontEmbeddingStatus,
+  PresentationExportFontRenderingQuality,
+} from "./presentation-export-font-quality.ts";
 
 export interface PresentationExportSlideQuality {
   slideNumber: number;
@@ -95,6 +43,12 @@ export interface PresentationExportSlideQuality {
   nativeGroupElements?: number;
   nativeImageElements: number;
   rasterFallbackElements: number;
+  /** Logical DOM candidates that remain raster; backplates are counted separately. */
+  logicalCoverage: PresentationExportCoverageCounts;
+  /** Native objects observed by reopening the assembled OOXML package. */
+  ooxmlReadback: PresentationExportOoxmlReadback;
+  backplateCount: number;
+  typographyIssues: PresentationExportTypographyIssue[];
   fallbackReasons: string[];
   /**
    * Element-level detail is additive. Older exporters may only know aggregate
@@ -102,6 +56,24 @@ export interface PresentationExportSlideQuality {
    * `rasterFallbackElements`.
    */
   fallbackElements?: PresentationExportFallbackElement[];
+}
+
+export interface PresentationExportCoverageCounts {
+  nativeText: number;
+  nativeImage: number;
+  nativeShape: number;
+  nativeGroup: number;
+  rasterRemaining: number;
+}
+
+export interface PresentationExportOoxmlReadback
+  extends PresentationExportCoverageCounts {
+  status: "not-run" | "passed" | "failed";
+}
+
+export interface PresentationExportTypographyIssue {
+  code: string;
+  elementId?: string;
 }
 
 export interface PresentationExportRendererIsolation {
@@ -126,6 +98,10 @@ export interface PresentationExportQualityReport {
   nativeGroupElements?: number;
   nativeImageElements: number;
   rasterFallbackElements: number;
+  logicalCoverage: PresentationExportCoverageCounts;
+  ooxmlReadback: PresentationExportOoxmlReadback;
+  backplateCount: number;
+  typographyIssues: PresentationExportTypographyIssue[];
   fallbackReasonCounts?: Record<string, number>;
   slides: PresentationExportSlideQuality[];
   /** Kept for v1 consumers that only need a boolean. */
@@ -139,14 +115,34 @@ export interface PresentationExportQualityReport {
    * that never consult the isolation policy may omit it.
    */
   rendererIsolation?: PresentationExportRendererIsolation;
+  exportAttemptId?: string;
+  atomicBinding?: {
+    presentationRevision: number;
+    canonicalSourceDigest: string;
+    rendererSourceDigest: string;
+    pptxSha256: string;
+  };
+  powerPointQa?: {
+    status: "preflight" | "not-verified" | "passed" | "failed";
+    platform: "windows" | "unsupported" | "unknown";
+  };
 }
 
 export type PresentationExportSlideQualityInput = Omit<
   PresentationExportSlideQuality,
-  "nativeGroupElements" | "fallbackElements"
+  | "nativeGroupElements"
+  | "fallbackElements"
+  | "logicalCoverage"
+  | "ooxmlReadback"
+  | "backplateCount"
+  | "typographyIssues"
 > & {
   nativeGroupElements?: number;
   fallbackElements?: readonly PresentationExportFallbackElement[];
+  logicalCoverage?: Partial<PresentationExportCoverageCounts>;
+  ooxmlReadback?: Partial<PresentationExportOoxmlReadback>;
+  backplateCount?: number;
+  typographyIssues?: readonly PresentationExportTypographyIssue[];
 };
 
 export interface PresentationExportQualityOptions {
@@ -161,6 +157,21 @@ function nonNegativeInteger(value: number): number {
 
 function cleanStrings(values: readonly string[]): string[] {
   return [...new Set(values.filter(Boolean))].sort();
+}
+
+function coverageCounts(
+  value: Partial<PresentationExportCoverageCounts> | undefined,
+  fallback: PresentationExportCoverageCounts
+): PresentationExportCoverageCounts {
+  return {
+    nativeText: nonNegativeInteger(value?.nativeText ?? fallback.nativeText),
+    nativeImage: nonNegativeInteger(value?.nativeImage ?? fallback.nativeImage),
+    nativeShape: nonNegativeInteger(value?.nativeShape ?? fallback.nativeShape),
+    nativeGroup: nonNegativeInteger(value?.nativeGroup ?? fallback.nativeGroup),
+    rasterRemaining: nonNegativeInteger(
+      value?.rasterRemaining ?? fallback.rasterRemaining
+    ),
+  };
 }
 
 function normalizeFallbackElement(
@@ -195,14 +206,29 @@ export function createPresentationExportQuality(
       const fallbackElements = (slide.fallbackElements ?? []).map(
         normalizeFallbackElement
       );
+      const nativeGroupElements = nonNegativeInteger(
+        slide.nativeGroupElements ?? 0
+      );
+      const logicalCoverage = coverageCounts(slide.logicalCoverage, {
+        nativeText: nonNegativeInteger(slide.nativeTextElements),
+        nativeImage: nonNegativeInteger(slide.nativeImageElements),
+        nativeShape: nonNegativeInteger(slide.nativeShapeElements),
+        nativeGroup: nativeGroupElements,
+        rasterRemaining: nonNegativeInteger(slide.rasterFallbackElements),
+      });
+      const readback = coverageCounts(slide.ooxmlReadback, {
+        nativeText: 0,
+        nativeImage: 0,
+        nativeShape: 0,
+        nativeGroup: 0,
+        rasterRemaining: 0,
+      });
       return {
         ...slide,
         slideNumber: Math.max(1, Math.trunc(slide.slideNumber)),
         nativeTextElements: nonNegativeInteger(slide.nativeTextElements),
         nativeShapeElements: nonNegativeInteger(slide.nativeShapeElements),
-        nativeGroupElements: nonNegativeInteger(
-          slide.nativeGroupElements ?? 0
-        ),
+        nativeGroupElements,
         nativeImageElements: nonNegativeInteger(slide.nativeImageElements),
         rasterFallbackElements: nonNegativeInteger(
           slide.rasterFallbackElements
@@ -212,6 +238,18 @@ export function createPresentationExportQuality(
           ...fallbackElements.flatMap((element) => element.reasons),
         ]),
         fallbackElements,
+        logicalCoverage,
+        ooxmlReadback: {
+          ...readback,
+          status: slide.ooxmlReadback?.status ?? "not-run",
+        },
+        backplateCount: nonNegativeInteger(slide.backplateCount ?? 0),
+        typographyIssues: (slide.typographyIssues ?? []).map((issue) => ({
+          code: issue.code.trim() || "unknown",
+          ...(issue.elementId?.trim()
+            ? { elementId: issue.elementId.trim() }
+            : {}),
+        })),
       };
     })
     .sort((a, b) => a.slideNumber - b.slideNumber);
@@ -350,6 +388,27 @@ export function createPresentationExportQuality(
       0
     ),
     rasterFallbackElements,
+    logicalCoverage: {
+      nativeText: slides.reduce((sum, slide) => sum + slide.logicalCoverage.nativeText, 0),
+      nativeImage: slides.reduce((sum, slide) => sum + slide.logicalCoverage.nativeImage, 0),
+      nativeShape: slides.reduce((sum, slide) => sum + slide.logicalCoverage.nativeShape, 0),
+      nativeGroup: slides.reduce((sum, slide) => sum + slide.logicalCoverage.nativeGroup, 0),
+      rasterRemaining: slides.reduce((sum, slide) => sum + slide.logicalCoverage.rasterRemaining, 0),
+    },
+    ooxmlReadback: {
+      status: slides.length > 0 && slides.every((slide) => slide.ooxmlReadback.status === "passed")
+        ? "passed"
+        : slides.some((slide) => slide.ooxmlReadback.status === "failed")
+          ? "failed"
+          : "not-run",
+      nativeText: slides.reduce((sum, slide) => sum + slide.ooxmlReadback.nativeText, 0),
+      nativeImage: slides.reduce((sum, slide) => sum + slide.ooxmlReadback.nativeImage, 0),
+      nativeShape: slides.reduce((sum, slide) => sum + slide.ooxmlReadback.nativeShape, 0),
+      nativeGroup: slides.reduce((sum, slide) => sum + slide.ooxmlReadback.nativeGroup, 0),
+      rasterRemaining: slides.reduce((sum, slide) => sum + slide.ooxmlReadback.rasterRemaining, 0),
+    },
+    backplateCount: slides.reduce((sum, slide) => sum + slide.backplateCount, 0),
+    typographyIssues: slides.flatMap((slide) => slide.typographyIssues),
     fallbackReasonCounts: Object.fromEntries(
       [...fallbackReasonCounts.entries()].sort(([a], [b]) =>
         a.localeCompare(b)
@@ -391,5 +450,42 @@ export function createImageOnlyExportQuality(
       fallbackReasons: [reason],
     })),
     options
+  );
+}
+
+/** Join logical DOM promotion facts with readback from the exact assembled PPTX. */
+export function attachPresentationExportOoxmlReadback(
+  logical: PresentationExportQualityReport,
+  readback: PresentationExportQualityReport
+): PresentationExportQualityReport {
+  const readbackBySlide = new Map(
+    readback.slides.map((slide) => [slide.slideNumber, slide])
+  );
+  if (
+    logical.totalSlides !== readback.totalSlides ||
+    logical.slides.some((slide) => !readbackBySlide.has(slide.slideNumber))
+  ) {
+    throw new Error("presentation_export_ooxml_readback_slide_mismatch");
+  }
+  return createPresentationExportQuality(
+    logical.mode,
+    logical.slides.map((slide) => {
+      const observed = readbackBySlide.get(slide.slideNumber)!;
+      return {
+        ...slide,
+        logicalCoverage: slide.logicalCoverage,
+        ooxmlReadback: observed.ooxmlReadback,
+        backplateCount: observed.backplateCount,
+        typographyIssues: [
+          ...slide.typographyIssues,
+          ...observed.typographyIssues,
+        ],
+      };
+    }),
+    {
+      fontEmbeddingStatus: logical.fontEmbeddingStatus,
+      fontRendering: logical.fontRendering,
+      rendererIsolation: logical.rendererIsolation,
+    }
   );
 }

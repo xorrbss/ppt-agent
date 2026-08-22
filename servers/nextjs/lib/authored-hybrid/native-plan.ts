@@ -1,6 +1,13 @@
 import sharp from "sharp";
 
-import { resolvePowerPointTypeface } from "./font-policy.ts";
+import {
+  embeddedFaceForStyle,
+  hasEmbeddedTypefaceFace,
+  resolvePowerPointTypeface,
+  resolveScriptAwareTypeface,
+  splitTextByScript,
+  type AuthoredEmbeddedTypefaceFaceEvidence,
+} from "./font-policy.ts";
 import type {
   AuthoredHybridBounds,
   AuthoredHybridColor,
@@ -12,7 +19,10 @@ import type {
   AuthoredHybridRect,
   AuthoredHybridShapePayload,
   AuthoredHybridTextPayload,
+  AuthoredHybridTextRun,
+  AuthoredHybridTextScript,
   AuthoredHybridTextStyle,
+  AuthoredHybridTypographyIssue,
 } from "./schema.ts";
 import { validateHybridDataImageUrl } from "./security.ts";
 
@@ -56,6 +66,8 @@ type AuthoredHybridPromotableElement =
 export interface PrepareNativeElementOptions {
   includeRasterText?: boolean;
   includeRasterShapes?: boolean;
+  /** Optional strict gate; omitted to preserve the v1 preparation contract. */
+  typographyPreflight?: NativeTypographyPreflightOptions;
 }
 
 export interface LayerSelectionOptions {
@@ -72,6 +84,22 @@ export interface LayerSelectionOptions {
  */
 export interface PowerPointTypefaceSerializationOptions {
   embeddedTypefaceFamilies?: readonly string[];
+  /** Exact regular/bold/italic face evidence from OOXML packaging. */
+  embeddedTypefaceFaces?: readonly AuthoredEmbeddedTypefaceFaceEvidence[];
+}
+
+export interface NativeTypographyPreflightOptions {
+  readonly embeddedTypefaceFaces: readonly AuthoredEmbeddedTypefaceFaceEvidence[];
+  /** Residual elements that will remain painted on the fidelity backplate. */
+  readonly backplateElements?: readonly AuthoredHybridElement[];
+  readonly boundsTolerancePx?: number;
+}
+
+export interface NativeTypographyPreflightResult {
+  readonly elements: AuthoredHybridElement[];
+  readonly promotableElementIds: string[];
+  readonly rejectedElementIds: string[];
+  readonly typographyIssues: AuthoredHybridTypographyIssue[];
 }
 
 function isEditableRasterText(
@@ -106,7 +134,14 @@ function hasUnrepresentedVisualLineBreak(
   // The extraction contract cannot always distinguish that layout boundary
   // from same-line emphasis, so keep the whole heading on the fidelity layer
   // unless it carries an explicit/captured break.
-  if (element.text.role === "title") return true;
+  if (element.text.role === "title") {
+    // Script-aware extraction deliberately creates adjacent CJK/Latin runs.
+    // A browser-measured single visual line proves those runs share a row;
+    // only legacy/unmeasured rich titles remain conservative here.
+    const measuredLineCount = element.text.layout?.lineRects?.length;
+    if (measuredLineCount === 1) return false;
+    if (measuredLineCount === undefined) return true;
+  }
   const rects = element.text.runs
     .flatMap((run) =>
       run.fragments.length
@@ -454,11 +489,246 @@ async function renderImageToBox(
   return png.length <= 32 * 1024 * 1024 ? png : null;
 }
 
+function scriptForRun(run: AuthoredHybridTextRun): AuthoredHybridTextScript {
+  if (run.script) return run.script;
+  const scripts = splitTextByScript(run.text)
+    .map((segment) => segment.script)
+    .filter((script) => script !== "common");
+  return scripts[0] ?? "common";
+}
+
+function scriptAwareRuns(
+  runs: readonly AuthoredHybridTextRun[]
+): AuthoredHybridTextRun[] {
+  return runs.flatMap((run) => {
+    if (run.text === "\n") return [{ ...run, script: "common" as const }];
+    const segments = splitTextByScript(run.text);
+    if (segments.length <= 1) {
+      return [{ ...run, script: segments[0]?.script ?? "common" }];
+    }
+    const totalPoints = Math.max(1, [...run.text].length);
+    let consumedPoints = 0;
+    return segments.map((segment) => {
+      const segmentPoints = [...segment.text].length;
+      const startRatio = consumedPoints / totalPoints;
+      const endRatio = (consumedPoints + segmentPoints) / totalPoints;
+      consumedPoints += segmentPoints;
+      const sliceBounds = (bounds: AuthoredHybridBounds): AuthoredHybridBounds => ({
+        px: {
+          x: bounds.px.x + bounds.px.width * startRatio,
+          y: bounds.px.y,
+          width: bounds.px.width * (endRatio - startRatio),
+          height: bounds.px.height,
+        },
+        inches: {
+          x: bounds.inches.x + bounds.inches.width * startRatio,
+          y: bounds.inches.y,
+          width: bounds.inches.width * (endRatio - startRatio),
+          height: bounds.inches.height,
+        },
+      });
+      return {
+        ...run,
+        text: segment.text,
+        script: segment.script,
+        bounds: sliceBounds(run.bounds),
+        fragments:
+          run.fragments.length === 1
+            ? [sliceBounds(run.fragments[0])]
+            : run.fragments,
+      };
+    });
+  });
+}
+
+function styleForScriptRun(
+  style: AuthoredHybridTextStyle,
+  script: AuthoredHybridTextScript
+): AuthoredHybridTextStyle {
+  const resolution = resolveScriptAwareTypeface(script, style.fontFamilies);
+  if (script === "common") return style;
+  if (script === "cjk") {
+    return {
+      ...style,
+      fontFamily: resolution.typeface,
+      fontFamilies: [resolution.typeface, resolution.fallbackTypeface, "sans-serif"],
+      cjkFallbackFamilies: [resolution.typeface, resolution.fallbackTypeface],
+    };
+  }
+  if (resolution.typeface === "IBM Plex Mono") {
+    return {
+      ...style,
+      fontFamily: resolution.typeface,
+      fontFamilies: [resolution.typeface, resolution.fallbackTypeface, "monospace"],
+      cjkFallbackFamilies: [],
+    };
+  }
+  return style;
+}
+
+function rectContains(
+  outer: AuthoredHybridRect,
+  inner: AuthoredHybridRect,
+  tolerance: number
+): boolean {
+  return inner.x >= outer.x - tolerance &&
+    inner.y >= outer.y - tolerance &&
+    inner.x + inner.width <= outer.x + outer.width + tolerance &&
+    inner.y + inner.height <= outer.y + outer.height + tolerance;
+}
+
+function rectsIntersectPx(a: AuthoredHybridRect, b: AuthoredHybridRect): boolean {
+  return a.x < b.x + b.width && a.x + a.width > b.x &&
+    a.y < b.y + b.height && a.y + a.height > b.y;
+}
+
+const ISSUE_FALLBACK_REASON = {
+  "embedding-face-missing": "typography-embedding-face-missing",
+  "font-substitution": "typography-font-substitution",
+  "bounds-overflow": "typography-bounds-overflow",
+  "backplate-collision": "typography-backplate-collision",
+  "line-break-mismatch": "typography-line-break-mismatch",
+} as const;
+
+/**
+ * Fail-closed native typography gate. It rewrites mixed text into script-safe
+ * runs, verifies the exact embedded face required by every run, and rejects
+ * text whose measured browser lines cannot be represented without moving into
+ * another backplate object. The source text itself is never copied into an
+ * issue record.
+ */
+export function preflightNativeTypography(
+  elements: readonly AuthoredHybridElement[],
+  options: NativeTypographyPreflightOptions
+): NativeTypographyPreflightResult {
+  const tolerance = Math.max(0, options.boundsTolerancePx ?? 2);
+  const allIssues: AuthoredHybridTypographyIssue[] = [];
+  const rejectedElementIds: string[] = [];
+  const promotableElementIds: string[] = [];
+
+  const rewritten = elements.map((element): AuthoredHybridElement => {
+    if (!("text" in element) || !element.text) return element;
+    const runs = scriptAwareRuns(element.text.runs).map((run) => ({
+      ...run,
+      style: styleForScriptRun(run.style, scriptForRun(run)),
+    }));
+    const issues: AuthoredHybridTypographyIssue[] = [];
+    runs.forEach((run, runIndex) => {
+      if (run.text === "\n" || !run.text) return;
+      const script = scriptForRun(run);
+      if (script === "common") return;
+      const resolution = resolveScriptAwareTypeface(script, run.style.fontFamilies);
+      const face = embeddedFaceForStyle(run.style);
+      const embedded = hasEmbeddedTypefaceFace(
+        options.embeddedTypefaceFaces,
+        resolution.typeface,
+        face
+      );
+      if (resolution.requiresEmbedding && !embedded) {
+        issues.push({
+          code: "embedding-face-missing",
+          elementId: element.id,
+          runIndex,
+          script,
+          requiredTypeface: resolution.typeface,
+          requiredFace: face,
+          actualTypeface: resolution.fallbackTypeface,
+        });
+        if (resolution.fallbackTypeface !== resolution.typeface) {
+          issues.push({
+            code: "font-substitution",
+            elementId: element.id,
+            runIndex,
+            script,
+            requiredTypeface: resolution.typeface,
+            requiredFace: face,
+            actualTypeface: resolution.fallbackTypeface,
+          });
+        }
+      }
+    });
+
+    const layout = element.text.layout;
+    if (layout?.lineRects) {
+      const breakCount = runs.filter((run) => run.text === "\n").length;
+      if (
+        layout.lineRects.length !== layout.lineCount ||
+        (layout.lineCount > 0 && breakCount + 1 !== layout.lineCount)
+      ) {
+        issues.push({ code: "line-break-mismatch", elementId: element.id });
+      }
+      if (
+        layout.lineRects.some(
+          (line) => !rectContains(layout.contentBounds.px, line.px, tolerance)
+        )
+      ) {
+        issues.push({ code: "bounds-overflow", elementId: element.id });
+      }
+    }
+
+    const text = { ...element.text, runs };
+    const candidate = { ...element, text } as AuthoredHybridEditableTextElement;
+    const correctedBounds = powerPointSafeTextBounds(
+      candidate,
+      text.containerShape?.bounds.px ?? text.layout?.boxBounds.px ?? element.bounds.px
+    );
+    if (!rectContains({ x: 0, y: 0, width: 1280, height: 720 }, correctedBounds, tolerance)) {
+      issues.push({ code: "bounds-overflow", elementId: element.id });
+    }
+    if (
+      options.backplateElements?.some(
+        (other) =>
+          other.id !== element.id &&
+          other.classification.mode === "raster" &&
+          other.zOrder >= element.zOrder &&
+          rectsIntersectPx(correctedBounds, other.bounds.px)
+      )
+    ) {
+      issues.push({ code: "backplate-collision", elementId: element.id });
+    }
+
+    const uniqueIssues = issues.filter(
+      (issue, index, list) =>
+        list.findIndex((candidateIssue) =>
+          JSON.stringify(candidateIssue) === JSON.stringify(issue)
+        ) === index
+    );
+    if (!uniqueIssues.length) {
+      promotableElementIds.push(element.id);
+      return { ...element, text } as AuthoredHybridElement;
+    }
+
+    rejectedElementIds.push(element.id);
+    allIssues.push(...uniqueIssues);
+    const reasons = [...new Set(uniqueIssues.map((issue) => ISSUE_FALLBACK_REASON[issue.code]))];
+    return {
+      ...element,
+      text,
+      typographyIssues: uniqueIssues,
+      classification: {
+        mode: "raster",
+        candidateKind: "text",
+        reasons,
+      },
+    } as AuthoredHybridElement;
+  });
+
+  return {
+    elements: rewritten,
+    promotableElementIds,
+    rejectedElementIds,
+    typographyIssues: allIssues,
+  };
+}
+
 export async function prepareNativeElements(
   elements: readonly AuthoredHybridElement[],
   options: PrepareNativeElementOptions = {}
 ): Promise<PreparedNativeElement[]> {
-  const candidates = elements
+  const preflightedElements = options.typographyPreflight
+    ? preflightNativeTypography(elements, options.typographyPreflight).elements
+    : elements;
+  const candidates = preflightedElements
     .filter(
       (element): element is AuthoredHybridPromotableElement =>
         element.classification.mode === "native" ||
@@ -670,7 +940,15 @@ function runPropertiesXml(
   opacity: number,
   options: PowerPointTypefaceSerializationOptions
 ): string {
-  const embeddedFamilies = new Set(options.embeddedTypefaceFamilies ?? []);
+  const requiredFace = embeddedFaceForStyle(style);
+  const exactFaceEvidence = options.embeddedTypefaceFaces;
+  const embeddedFamilies = new Set(
+    exactFaceEvidence
+      ? exactFaceEvidence
+          .filter((entry) => entry.face === requiredFace)
+          .map((entry) => entry.typeface)
+      : options.embeddedTypefaceFamilies ?? []
+  );
   const normalizedEmbeddedFamilies = new Set(
     [...embeddedFamilies].map((family) =>
       family.trim().replace(/^['"]|['"]$/g, "").toLowerCase()
@@ -1073,6 +1351,33 @@ function powerPointSafeTextBounds(
 ): AuthoredHybridRect {
   if (Math.abs(element.rotationDeg) >= 0.001) return bounds;
   let adjustedBounds = bounds;
+  const measuredLines = element.text.layout?.lineRects?.map((line) => line.px) ?? [];
+  if (
+    !element.text.containerShape &&
+    measuredLines.length > 0 &&
+    (element.text.role === "numeric" || element.text.role === "caption")
+  ) {
+    const measuredLeft = Math.min(...measuredLines.map((line) => line.x));
+    const measuredRight = Math.max(
+      ...measuredLines.map((line) => line.x + line.width)
+    );
+    const sideTolerance = Math.max(4, element.text.style.fontSizePt / 0.75 * 0.12);
+    const requiredWidth = measuredRight - measuredLeft + sideTolerance * 2;
+    if (requiredWidth > adjustedBounds.width) {
+      const centered = element.text.style.horizontalAlignment === "center";
+      const rightAligned = element.text.style.horizontalAlignment === "right";
+      const x = rightAligned
+        ? adjustedBounds.x + adjustedBounds.width - requiredWidth
+        : centered
+          ? adjustedBounds.x - (requiredWidth - adjustedBounds.width) / 2
+          : adjustedBounds.x;
+      adjustedBounds = {
+        ...adjustedBounds,
+        x: Math.max(0, Math.min(1280 - requiredWidth, x)),
+        width: Math.min(1280, requiredWidth),
+      };
+    }
+  }
   if (
     !element.text.containerShape &&
     element.text.style.verticalAlignment === "top"
@@ -1089,7 +1394,7 @@ function powerPointSafeTextBounds(
           .map((fragment) => fragment.px.y)
       )
     );
-    const upwardShift = bounds.y - paintedTop;
+    const upwardShift = adjustedBounds.y - paintedTop;
     const fontSizePx = element.text.style.fontSizePt / 0.75;
     // A browser line box can begin a few pixels below its painted glyph
     // range, especially for Korean headings. PowerPoint starts its own glyph
@@ -1104,9 +1409,12 @@ function powerPointSafeTextBounds(
     ) {
       const y = Math.max(0, paintedTop);
       adjustedBounds = {
-        ...bounds,
+        ...adjustedBounds,
         y,
-        height: Math.min(720 - y, bounds.height + bounds.y - y),
+        height: Math.min(
+          720 - y,
+          adjustedBounds.height + adjustedBounds.y - y
+        ),
       };
     }
   }
@@ -1142,12 +1450,23 @@ function powerPointSafeTextBounds(
   // the largest run height on each line and add six pixels of metric tolerance
   // per line. Grow only standalone text boxes; container text must stay within
   // its authored card.
+  const measuredHeight = measuredLines.length
+    ? Math.max(...measuredLines.map((line) => line.y + line.height)) -
+      Math.min(...measuredLines.map((line) => line.y))
+    : 0;
+  const roleHeightTolerance =
+    element.text.role === "title" || lineCount > 1
+      ? Math.max(4, lineCount * 6)
+      : 4;
   const requiredHeight = Math.min(
     720,
-    lineHeightsPx.reduce(
-      (total, height) => total + Math.max(height, fallbackLineHeightPx),
-      0
-    ) + Math.max(4, lineCount * 6)
+    Math.max(
+      lineHeightsPx.reduce(
+        (total, height) => total + Math.max(height, fallbackLineHeightPx),
+        0
+      ),
+      measuredHeight
+    ) + roleHeightTolerance
   );
   if (adjustedBounds.height >= requiredHeight - 0.01) return adjustedBounds;
 
@@ -1165,6 +1484,20 @@ function powerPointSafeTextBounds(
     width: adjustedBounds.width,
     height: requiredHeight,
   };
+}
+
+/** Browser-measured bounds after the PowerPoint title/multiline/label guard. */
+export function powerPointTextBoundsForPreflight(
+  element: AuthoredHybridElement
+): AuthoredHybridRect | null {
+  if (!("text" in element) || !element.text) return null;
+  const editable = element as AuthoredHybridEditableTextElement;
+  return powerPointSafeTextBounds(
+    editable,
+    editable.text.containerShape?.bounds.px ??
+      editable.text.layout?.boxBounds.px ??
+      editable.bounds.px
+  );
 }
 
 function shapePreset(shape: AuthoredHybridShapePayload): string {

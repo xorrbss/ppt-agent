@@ -2,6 +2,11 @@ import type {
   AuthoredHybridElement,
   AuthoredHybridTextPayload,
 } from "./schema.ts";
+import {
+  embeddedFaceForStyle,
+  hasEmbeddedTypefaceFace,
+  type AuthoredEmbeddedTypefaceFaceEvidence,
+} from "./font-policy.ts";
 
 export interface PowerPointTextLayoutMergeResult {
   elements: AuthoredHybridElement[];
@@ -15,6 +20,8 @@ export interface PowerPointTextLayoutMergeOptions {
    * typeface instead of the mapped fallback metrics.
    */
   embeddedTypefaceFamilies?: readonly string[];
+  /** Exact face evidence takes precedence over the legacy family-only list. */
+  embeddedTypefaceFaces?: readonly AuthoredEmbeddedTypefaceFaceEvidence[];
 }
 
 function textPayload(
@@ -29,9 +36,21 @@ function normalizedTypefaceName(value: string): string {
 
 function usesEmbeddedTypeface(
   text: AuthoredHybridTextPayload,
-  embeddedFamilies: ReadonlySet<string>
+  embeddedFamilies: ReadonlySet<string>,
+  embeddedFaces?: readonly AuthoredEmbeddedTypefaceFaceEvidence[]
 ): boolean {
   const styles = [text.style, ...text.runs.map((run) => run.style)];
+  if (embeddedFaces) {
+    return styles.every((style) =>
+      style.fontFamilies.some((family) =>
+        hasEmbeddedTypefaceFace(
+          embeddedFaces,
+          family,
+          embeddedFaceForStyle(style)
+        )
+      )
+    );
+  }
   return styles.some((style) =>
     style.fontFamilies.some((family) =>
       embeddedFamilies.has(normalizedTypefaceName(family))
@@ -65,7 +84,11 @@ export function mergePowerPointTextLayout(
     if (!sourceText) return source;
     if (
       embeddedFamilies.size > 0 &&
-      usesEmbeddedTypeface(sourceText, embeddedFamilies)
+      usesEmbeddedTypeface(
+        sourceText,
+        embeddedFamilies,
+        options.embeddedTypefaceFaces
+      )
     ) {
       return source;
     }

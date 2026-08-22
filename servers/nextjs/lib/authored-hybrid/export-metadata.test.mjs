@@ -63,6 +63,10 @@ test("reports truthful per-slide native and raster coverage", () => {
           nativeImageElements: 1,
           nativeShapeElements: 1,
           rasterFallbackElements: 3,
+          logicalCoverage: { nativeText: 2, nativeImage: 1, nativeShape: 1, nativeGroup: 0, rasterRemaining: 3 },
+          ooxmlReadback: { status: "not-run", nativeText: 0, nativeImage: 0, nativeShape: 0, nativeGroup: 0, rasterRemaining: 0 },
+          backplateCount: 0,
+          typographyIssues: [],
           fallbackReasons: ["complex-chart", "text-shadow"],
         },
         {
@@ -73,11 +77,20 @@ test("reports truthful per-slide native and raster coverage", () => {
           nativeImageElements: 0,
           nativeShapeElements: 0,
           rasterFallbackElements: 0,
+          logicalCoverage: { nativeText: 0, nativeImage: 0, nativeShape: 0, nativeGroup: 0, rasterRemaining: 0 },
+          ooxmlReadback: { status: "not-run", nativeText: 0, nativeImage: 0, nativeShape: 0, nativeGroup: 0, rasterRemaining: 0 },
+          backplateCount: 0,
+          typographyIssues: [],
           fallbackReasons: ["slide-processing-failed"],
         },
       ],
     },
-    { presentationRevision: 7, sourceDigest: "a".repeat(64) }
+    {
+      exportAttemptId: "11111111-1111-4111-8111-111111111111",
+      presentationRevision: 7,
+      canonicalSourceDigest: "b".repeat(64),
+      sourceDigest: "a".repeat(64),
+    }
   );
 
   assert.equal(coverage.nativeText, 2);
@@ -86,6 +99,9 @@ test("reports truthful per-slide native and raster coverage", () => {
   assert.equal(coverage.nativeTable, 0);
   assert.equal(coverage.nativeChart, 0);
   assert.equal(coverage.rasterRemaining, 4);
+  assert.equal(coverage.logicalCoverage.rasterRemaining, 4);
+  assert.equal(coverage.ooxmlReadback.status, "not-run");
+  assert.equal(coverage.backplateCount, 0);
   assert.equal(coverage.fullyEditable, false);
   assert.deepEqual(coverage.slides[0].fallbackReasons, [
     "complex-chart",

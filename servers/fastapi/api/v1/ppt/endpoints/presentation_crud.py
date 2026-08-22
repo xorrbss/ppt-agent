@@ -77,8 +77,14 @@ from services.workspace_service import (
 )
 from utils.document_path_security import validate_document_paths
 from utils.owner_context import get_current_owner_id
+from api.v1.ppt.endpoints.presentation_export_attempts import (
+    PRESENTATION_EXPORT_ATTEMPT_ROUTER,
+)
 
 PRESENTATION_CRUD_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation"])
+PRESENTATION_CRUD_ROUTER.include_router(PRESENTATION_EXPORT_ATTEMPT_ROUTER)
+
+
 def _chat_first_create_enabled() -> bool:
     """Fail closed when the SQL runtime cannot host the operation store."""
 

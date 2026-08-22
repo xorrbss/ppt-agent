@@ -98,6 +98,12 @@ test("Template V2 delegates only to the existing general executor", async () => 
 
 test("authored HTML delegates only to the existing hybrid executor", async () => {
   const { calls, registry } = spyRegistry();
+  let receivedFontEmbedding: boolean | undefined;
+  registry.hybrid = async (params) => {
+    receivedFontEmbedding = params.fontEmbedding;
+    calls.hybrid += 1;
+    return { path: "hybrid.pptx" };
+  };
   const result = await executePersistedPresentationExport(
     validAuthored(),
     { ...pptxParams, pptxMode: "hybrid" },
@@ -106,6 +112,24 @@ test("authored HTML delegates only to the existing hybrid executor", async () =>
 
   assert.equal(result.path, "hybrid.pptx");
   assert.deepEqual(calls, { general: 0, hybrid: 1 });
+  assert.equal(receivedFontEmbedding, true);
+});
+
+test("authored Hybrid accepts explicit false only as the no-font compatibility path", async () => {
+  const { registry } = spyRegistry();
+  let receivedFontEmbedding: boolean | undefined;
+  registry.hybrid = async (params) => {
+    receivedFontEmbedding = params.fontEmbedding;
+    return { path: "hybrid-compatibility.pptx" };
+  };
+
+  await executePersistedPresentationExport(
+    validAuthored(),
+    { ...pptxParams, pptxMode: "hybrid", fontEmbedding: false },
+    registry,
+  );
+
+  assert.equal(receivedFontEmbedding, false);
 });
 
 for (const [label, pptxMode] of [
@@ -243,7 +267,7 @@ test("canonical export artifacts are checked against the fetched revision and di
   });
   const accepted = await executePersistedPresentationExport(
     source,
-    { ...pptxParams, expectedPresentationRevision: 4 },
+    { ...pptxParams, pptxMode: "hybrid", expectedPresentationRevision: 4 },
     {
       async general() { throw new Error("unexpected_general"); },
       async hybrid() { return { path: "canonical.pptx", renderArtifact: artifact }; },
@@ -258,7 +282,7 @@ test("canonical export artifacts are checked against the fetched revision and di
   await assert.rejects(
     executePersistedPresentationExport(
       source,
-      { ...pptxParams, expectedPresentationRevision: 4 },
+      { ...pptxParams, pptxMode: "hybrid", expectedPresentationRevision: 4 },
       {
         async general() { throw new Error("unexpected_general"); },
         async hybrid() { return { path: "stale.pptx", renderArtifact: stale }; },

@@ -12,7 +12,10 @@ from sqlmodel import SQLModel
 
 from models.presentation_and_path import PresentationAndPath
 from models.sql.presentation import PresentationModel
-from models.sql.presentation_export_attempt import PresentationExportAttempt
+from models.sql.presentation_export_attempt import (
+    PresentationExportAttempt,
+    validate_export_attempt_provenance,
+)
 from models.sql.slide import SlideModel
 from models.sql.user import User
 from models.sql.workspace import (
@@ -164,6 +167,80 @@ def test_general_analysis_collects_persisted_assets_and_rejects_missing_digest()
                 {"content": {"image": {"asset_id": asset_id}}},
             ),
         )
+
+
+def test_hybrid_v2_binds_attempt_and_separates_logical_readback_backplate() -> None:
+    attempt_id = uuid.uuid4()
+    canonical = "a" * 64
+    renderer = "b" * 64
+    pptx = "c" * 64
+    counts = {
+        "nativeText": 1,
+        "nativeImage": 0,
+        "nativeShape": 0,
+        "nativeTable": 0,
+        "nativeChart": 0,
+        "rasterRemaining": 0,
+    }
+    slide = {
+        "slideNumber": 1,
+        **counts,
+        "logicalCoverage": counts,
+        "ooxmlReadback": {"status": "passed", **counts},
+        "backplateCount": 1,
+        "typographyIssues": [],
+        "fallbackReasons": [],
+        "visualParity": "not-verified",
+        "nativeBackplateDeDuplication": "applied",
+    }
+    coverage = {
+        "schemaVersion": "presenton.authored-hybrid-coverage/v2",
+        "mode": "hybrid",
+        "source": {
+            "exportAttemptId": str(attempt_id),
+            "presentationRevision": 4,
+            "canonicalSourceDigest": canonical,
+            "sourceDigest": renderer,
+        },
+        "totalSlides": 1,
+        **counts,
+        "logicalCoverage": counts,
+        "ooxmlReadback": {"status": "passed", **counts},
+        "backplateCount": 1,
+        "typographyIssues": [],
+        "fullyEditable": True,
+        "slides": [slide],
+    }
+    provenance = _provenance(
+        source_snapshot_sha256=canonical,
+    )
+    provenance["compiler_runtime"]["compiler"] = "authored-hybrid"
+    provenance["freshness"]["renderer_source_sha256"] = renderer
+    provenance["freshness"]["package_sha256"] = pptx
+    provenance["coverage_manifest"] = coverage
+    provenance["atomic_binding"] = {
+        "export_attempt_id": str(attempt_id),
+        "presentation_revision": 4,
+        "canonical_source_sha256": canonical,
+        "renderer_source_sha256": renderer,
+        "pptx_sha256": pptx,
+    }
+    provenance["powerpoint_qa"] = {
+        "status": "not-verified",
+        "platform": "windows",
+    }
+
+    validated = validate_export_attempt_provenance(provenance)
+    assert validated["coverage_manifest"]["backplate_count"] == 1
+    assert validated["coverage_manifest"]["logical_coverage"]["raster_remaining"] == 0
+
+    provenance["powerpoint_qa"] = {
+        "status": "passed",
+        "platform": "windows",
+        "supported": True,
+    }
+    with pytest.raises(ValueError, match="COM reopen/render/readback"):
+        validate_export_attempt_provenance(provenance)
 
 
 async def _seed_attempt_presentation(maker) -> uuid.UUID:

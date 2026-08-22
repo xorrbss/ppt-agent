@@ -1,7 +1,6 @@
 """Persistence helpers for one durable export-attempt identity."""
 
 from __future__ import annotations
-
 import asyncio
 from collections.abc import Sequence
 from datetime import datetime, timezone
@@ -245,6 +244,7 @@ def initial_export_attempt_provenance(
     html_source_sha256: str | None = None,
     composition_sha256: str | None = None,
     asset_manifest_sha256: str | None = None,
+    renderer_source_sha256: str | None = None,
 ) -> dict[str, Any]:
     return validate_export_attempt_provenance(
         {
@@ -269,7 +269,7 @@ def initial_export_attempt_provenance(
                 "html_source_sha256": html_source_sha256,
                 "composition_sha256": composition_sha256,
                 "asset_manifest_sha256": asset_manifest_sha256,
-                "renderer_source_sha256": None,
+                "renderer_source_sha256": renderer_source_sha256,
                 "package_sha256": None,
                 "asset_digests_match": True,
                 "package_digest_match": True,

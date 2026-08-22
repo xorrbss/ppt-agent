@@ -18,6 +18,8 @@ export interface ExportPresentationRouteBody {
   title?: unknown;
   pptxMode?: unknown;
   fontEmbedding?: unknown;
+  exportAttemptId?: unknown;
+  canonicalSourceDigest?: unknown;
   expectedPresentationRevision?: unknown;
   operationId?: unknown;
 }
@@ -226,13 +228,41 @@ export async function executeExportPresentationRouteRequest<
       400
     );
   }
-  const fontEmbedding = body.fontEmbedding === true;
+  // Keep non-Hybrid requests unchanged. For an authored Hybrid request the
+  // strategy normalizes an omitted option to true; false is the sole
+  // compatibility escape hatch.
+  const fontEmbedding = body.fontEmbedding as boolean | undefined;
   if (
-    fontEmbedding &&
+    fontEmbedding === true &&
     (body.format !== "pptx" || resolvedPptxMode.value !== "hybrid")
   ) {
     throw new ExportPresentationRequestError(
       "Font embedding requires hybrid PPTX export",
+      400
+    );
+  }
+  if (
+    body.exportAttemptId !== undefined &&
+    (typeof body.exportAttemptId !== "string" || !body.exportAttemptId.trim())
+  ) {
+    throw new ExportPresentationRequestError("Invalid export attempt ID", 400);
+  }
+  if (
+    body.canonicalSourceDigest !== undefined &&
+    (typeof body.canonicalSourceDigest !== "string" ||
+      !/^[a-f0-9]{64}$/i.test(body.canonicalSourceDigest))
+  ) {
+    throw new ExportPresentationRequestError(
+      "Invalid canonical source digest",
+      400
+    );
+  }
+  if (
+    (body.exportAttemptId !== undefined) !==
+    (body.canonicalSourceDigest !== undefined)
+  ) {
+    throw new ExportPresentationRequestError(
+      "Export attempt binding is incomplete",
       400
     );
   }
@@ -266,6 +296,12 @@ export async function executeExportPresentationRouteRequest<
       cookieHeader,
       pptxMode: resolvedPptxMode.value,
       fontEmbedding,
+      ...(typeof body.exportAttemptId === "string"
+        ? { exportAttemptId: body.exportAttemptId.trim() }
+        : {}),
+      ...(typeof body.canonicalSourceDigest === "string"
+        ? { canonicalSourceDigest: body.canonicalSourceDigest.toLowerCase() }
+        : {}),
       expectedPresentationRevision:
         body.expectedPresentationRevision as number | undefined,
       ...(operationId ? { operationId } : {}),

@@ -15,6 +15,36 @@ export type AuthoredHybridTextRole =
   | "numeric"
   | "caption";
 
+export type AuthoredHybridTextScript = "cjk" | "latin" | "common";
+
+export type AuthoredHybridEmbeddedFontFace =
+  | "regular"
+  | "bold"
+  | "italic"
+  | "boldItalic";
+
+export const AUTHORED_HYBRID_TYPOGRAPHY_ISSUE_CODES = [
+  "embedding-face-missing",
+  "font-substitution",
+  "bounds-overflow",
+  "backplate-collision",
+  "line-break-mismatch",
+] as const;
+
+export type AuthoredHybridTypographyIssueCode =
+  (typeof AUTHORED_HYBRID_TYPOGRAPHY_ISSUE_CODES)[number];
+
+export interface AuthoredHybridTypographyIssue {
+  code: AuthoredHybridTypographyIssueCode;
+  /** Stable text element identity; no source text is copied into diagnostics. */
+  elementId: string;
+  runIndex?: number;
+  script?: AuthoredHybridTextScript;
+  requiredTypeface?: string;
+  requiredFace?: AuthoredHybridEmbeddedFontFace;
+  actualTypeface?: string;
+}
+
 export const AUTHORED_HYBRID_FALLBACK_REASONS = [
   "ambiguous-whitespace",
   "animated",
@@ -55,6 +85,11 @@ export const AUTHORED_HYBRID_FALLBACK_REASONS = [
   "unsupported-role",
   "unsupported-shape",
   "vertical-writing",
+  "typography-embedding-face-missing",
+  "typography-font-substitution",
+  "typography-bounds-overflow",
+  "typography-backplate-collision",
+  "typography-line-break-mismatch",
 ] as const;
 
 export type AuthoredHybridFallbackReason =
@@ -110,6 +145,8 @@ export interface AuthoredHybridTextRun {
   bounds: AuthoredHybridBounds;
   fragments: AuthoredHybridBounds[];
   style: AuthoredHybridTextStyle;
+  /** Script bucket used to keep CJK and Latin/number typefaces independent. */
+  script?: AuthoredHybridTextScript;
   /**
    * Present only on an extracted newline run. Soft breaks are browser wrapping,
    * line breaks come from authored <br>/preserved source newlines, and paragraph
@@ -149,6 +186,8 @@ export interface AuthoredHybridTextLayout {
   textAlignSource: "self" | "inherited" | "default";
   lineCount: number;
   singleLine: boolean;
+  /** Browser-painted visual lines in authored order. */
+  lineRects?: AuthoredHybridBounds[];
   paragraphSpacingPx: {
     before: number;
     after: number;
@@ -260,6 +299,8 @@ export interface AuthoredHybridElementBase {
   bounds: AuthoredHybridBounds;
   rotationDeg: number;
   opacity: number;
+  /** Native-promotion blockers collected by the typography preflight. */
+  typographyIssues?: AuthoredHybridTypographyIssue[];
 }
 
 export interface AuthoredHybridNativeTextElement

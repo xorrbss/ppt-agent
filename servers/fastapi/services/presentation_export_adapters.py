@@ -93,6 +93,8 @@ class PresentationExportAdapterRequest:
     # Progress correlation only. It selects no adapter and gates nothing, so an
     # absent value costs the caller narration, never the export itself.
     workspace_operation_id: uuid.UUID | None = None
+    export_attempt_id: uuid.UUID | None = None
+    canonical_source_digest: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -291,6 +293,8 @@ async def run_general_adapter(
             expected_revision=request.expected_revision,
             font_embedding=request.font_embedding,
             workspace_operation_id=request.workspace_operation_id,
+            export_attempt_id=request.export_attempt_id,
+            canonical_source_digest=request.canonical_source_digest,
         )
     elif authored_fidelity:
         exported = await export_authored_fidelity_presentation(

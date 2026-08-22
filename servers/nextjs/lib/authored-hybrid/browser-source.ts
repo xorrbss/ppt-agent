@@ -296,6 +296,50 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     );
   }
 
+  function textScript(character) {
+    if (/[⺀-⿿々-〇぀-ヿ㄀-ㄯㆠ-ㆿㇰ-ㇿ㐀-䶿一-鿿가-힯豈-﫿]/u.test(character)) {
+      return "cjk";
+    }
+    if (/[0-9A-Za-zÀ-ʯ]/u.test(character)) return "latin";
+    return "common";
+  }
+
+  function scriptSlices(text) {
+    if (!text) return [];
+    var points = Array.from(text);
+    var scripts = points.map(textScript);
+    scripts.forEach(function (script, index) {
+      if (script !== "common") return;
+      var previous = index > 0 ? scripts[index - 1] : null;
+      if (previous && previous !== "common") {
+        scripts[index] = previous;
+        return;
+      }
+      var following = scripts.slice(index + 1).find(function (candidate) {
+        return candidate !== "common";
+      });
+      if (following) scripts[index] = following;
+    });
+    var result = [];
+    var utf16Offset = 0;
+    var start = 0;
+    var value = "";
+    var activeScript = scripts[0];
+    points.forEach(function (point, index) {
+      var script = scripts[index];
+      if (value && script !== activeScript) {
+        result.push({ text: value, start: start, end: utf16Offset, script: activeScript });
+        start = utf16Offset;
+        value = "";
+        activeScript = script;
+      }
+      value += point;
+      utf16Offset += point.length;
+    });
+    result.push({ text: value, start: start, end: utf16Offset, script: activeScript });
+    return result;
+  }
+
   function textStyle(element, text) {
     var style = getComputedStyle(element);
     var families = expandedFontFamilies(
@@ -1323,17 +1367,20 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       if (end <= start) return;
       var text = (node.textContent || "").slice(start, end);
       if (!text) return;
-      var range = document.createRange();
-      range.setStart(node, start);
-      range.setEnd(node, end);
-      var fragments = Array.from(range.getClientRects())
-        .filter(function (rect) { return rect.width > 0 || rect.height > 0; })
-        .map(rectValue);
-      runs.push({
-        text: text,
-        boundsPx: rectValue(range.getBoundingClientRect()),
-        fragmentRectsPx: fragments,
-        style: textStyle(parent, text),
+      scriptSlices(text).forEach(function (slice) {
+        var range = document.createRange();
+        range.setStart(node, start + slice.start);
+        range.setEnd(node, start + slice.end);
+        var fragments = Array.from(range.getClientRects())
+          .filter(function (rect) { return rect.width > 0 || rect.height > 0; })
+          .map(rectValue);
+        runs.push({
+          text: slice.text,
+          boundsPx: rectValue(range.getBoundingClientRect()),
+          fragmentRectsPx: fragments,
+          style: textStyle(parent, slice.text),
+          script: slice.script,
+        });
       });
     }
 
@@ -1542,6 +1589,46 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     };
   }
 
+  function measuredLineRects(runs) {
+    var lines = [];
+    runs.forEach(function (run) {
+      if (run.text === "\n") return;
+      (run.fragmentRectsPx || []).forEach(function (rect) {
+        if (!rect || rect.height <= 0 || !Object.values(rect).every(Number.isFinite)) return;
+        var match = lines.find(function (line) {
+          var overlap = Math.min(line.bottom, rect.y + rect.height) -
+            Math.max(line.top, rect.y);
+          return overlap >= Math.min(line.height, rect.height) * 0.25;
+        });
+        if (!match) {
+          lines.push({
+            left: rect.x,
+            top: rect.y,
+            right: rect.x + rect.width,
+            bottom: rect.y + rect.height,
+            height: rect.height,
+          });
+          return;
+        }
+        match.left = Math.min(match.left, rect.x);
+        match.top = Math.min(match.top, rect.y);
+        match.right = Math.max(match.right, rect.x + rect.width);
+        match.bottom = Math.max(match.bottom, rect.y + rect.height);
+        match.height = Math.max(1, match.bottom - match.top);
+      });
+    });
+    return lines
+      .sort(function (left, right) { return left.top - right.top || left.left - right.left; })
+      .map(function (line) {
+        return {
+          x: round(line.left),
+          y: round(line.top),
+          width: round(Math.max(0, line.right - line.left)),
+          height: round(Math.max(0, line.bottom - line.top)),
+        };
+      });
+  }
+
   function computedTextAlignSource(element, style) {
     var parent = element.parentElement;
     if (!parent) return "default";
@@ -1563,9 +1650,11 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       return run.text !== "\n" && Boolean(run.text) &&
         (run.fragmentRectsPx || []).length > 0;
     });
-    var lineCount = hasPaintedText
+    var lineRectsPx = measuredLineRects(runs);
+    var explicitLineCount = hasPaintedText
       ? 1 + runs.filter(function (run) { return run.text === "\n"; }).length
       : 0;
+    var lineCount = Math.max(explicitLineCount, lineRectsPx.length);
     return {
       boxBoundsPx: boxBounds,
       contentBoundsPx: contentBounds,
@@ -1582,6 +1671,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       textAlignSource: computedTextAlignSource(element, style),
       lineCount: lineCount,
       singleLine: lineCount === 1,
+      lineRectsPx: lineRectsPx,
       // The root element's CSS margins have already participated in layout
       // and are therefore represented by boxBoundsPx. Reapplying them as
       // DrawingML paragraph spacing would move the text a second time inside
@@ -3096,6 +3186,8 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
             boundsPx: run.boundsPx,
             fragmentRectsPx: run.fragmentRectsPx,
             style: run.style,
+            script: run.script,
+            breakKind: run.breakKind,
           };
         }),
         containerShape: observation.text.containerShape,

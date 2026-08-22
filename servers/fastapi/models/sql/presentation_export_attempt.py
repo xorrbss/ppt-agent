@@ -149,6 +149,79 @@ class ExportFreshnessProvenance(BaseModel):
         return normalized
 
 
+class ExportAtomicBinding(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    export_attempt_id: uuid.UUID
+    presentation_revision: int = PydanticField(ge=0)
+    canonical_source_sha256: str
+    renderer_source_sha256: str
+    pptx_sha256: str
+
+    @field_validator(
+        "canonical_source_sha256", "renderer_source_sha256", "pptx_sha256"
+    )
+    @classmethod
+    def validate_binding_digest(cls, value: str) -> str:
+        normalized = value.lower()
+        if not _is_sha256(normalized):
+            raise ValueError("export atomic binding digest must be SHA-256")
+        return normalized
+
+
+class ExportPowerPointQaEvidence(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["preflight", "not-verified", "passed", "failed"]
+    platform: Literal["windows", "unsupported", "unknown"]
+    supported: bool = False
+    automation: Literal["PowerPoint.COM"] | None = None
+    reopened: bool = False
+    rendered: bool = False
+    readback: bool = False
+    repair_dialogs: int | None = PydanticField(default=None, ge=0)
+    rendered_png_sha256: list[str] = PydanticField(default_factory=list, max_length=100)
+    powerpoint_version: str | None = PydanticField(default=None, max_length=64)
+    slide_count: int | None = PydanticField(default=None, ge=1, le=100)
+    typography_issues_gt_5pt: int = PydanticField(default=0, ge=0)
+    typography_issues_gt_10pt: int = PydanticField(default=0, ge=0)
+    native_text: int | None = PydanticField(default=None, ge=0)
+    native_table: int | None = PydanticField(default=None, ge=0)
+    native_chart: int | None = PydanticField(default=None, ge=0)
+
+    @field_validator("rendered_png_sha256")
+    @classmethod
+    def validate_rendered_digests(cls, value: list[str]) -> list[str]:
+        normalized = [digest.lower() for digest in value]
+        if len(normalized) != len(set(normalized)) or any(
+            not _is_sha256(digest) for digest in normalized
+        ):
+            raise ValueError("PowerPoint rendered PNG digests are invalid")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_passed_gate(self) -> "ExportPowerPointQaEvidence":
+        if self.status == "passed" and not (
+            self.platform == "windows"
+            and self.supported
+            and self.automation == "PowerPoint.COM"
+            and self.reopened
+            and self.rendered
+            and self.readback
+            and self.repair_dialogs == 0
+            and self.rendered_png_sha256
+            and self.typography_issues_gt_5pt == 0
+            and self.typography_issues_gt_10pt == 0
+        ):
+            raise ValueError("PowerPoint visual parity requires COM reopen/render/readback evidence")
+        if self.platform == "unsupported" and self.status not in {
+            "preflight",
+            "not-verified",
+        }:
+            raise ValueError("unsupported platforms cannot claim PowerPoint QA")
+        return self
+
+
 class ExportCoverageSource(BaseModel):
     model_config = ConfigDict(
         alias_generator=to_camel,
@@ -156,16 +229,42 @@ class ExportCoverageSource(BaseModel):
         extra="forbid",
     )
 
+    export_attempt_id: uuid.UUID | None = None
     presentation_revision: int = PydanticField(ge=0)
+    canonical_source_digest: str | None = None
     source_digest: str
 
-    @field_validator("source_digest")
+    @field_validator("source_digest", "canonical_source_digest")
     @classmethod
-    def validate_source_digest(cls, value: str) -> str:
+    def validate_source_digest(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         normalized = value.lower()
         if not _is_sha256(normalized):
             raise ValueError("export coverage source digest must be SHA-256")
         return normalized
+
+
+class ExportCoverageCounts(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid")
+
+    native_text: int = PydanticField(ge=0)
+    native_image: int = PydanticField(ge=0)
+    native_shape: int = PydanticField(ge=0)
+    native_table: int = PydanticField(ge=0)
+    native_chart: int = PydanticField(ge=0)
+    raster_remaining: int = PydanticField(ge=0)
+
+
+class ExportOoxmlReadback(ExportCoverageCounts):
+    status: Literal["not-run", "passed", "failed"]
+
+
+class ExportTypographyIssue(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid")
+
+    code: str = PydanticField(min_length=1, max_length=128)
+    element_id: str | None = PydanticField(default=None, max_length=512)
 
 
 class ExportSlideCoverage(BaseModel):
@@ -181,9 +280,17 @@ class ExportSlideCoverage(BaseModel):
     native_shape: int = PydanticField(ge=0)
     native_table: int = PydanticField(ge=0)
     native_chart: int = PydanticField(ge=0)
+    logical_coverage: ExportCoverageCounts | None = None
+    ooxml_readback: ExportOoxmlReadback | None = None
+    backplate_count: int = PydanticField(default=0, ge=0)
+    typography_issues: list[ExportTypographyIssue] = PydanticField(
+        default_factory=list, max_length=1024
+    )
     raster_remaining: int = PydanticField(ge=0)
     fallback_reasons: list[str] = PydanticField(max_length=256)
-    visual_parity: Literal["fidelity-backplate-retained", "not-verified"]
+    visual_parity: Literal[
+        "fidelity-backplate-retained", "not-verified", "passed", "failed"
+    ]
     native_backplate_de_duplication: Literal["applied", "not-applicable"]
 
     @field_validator("fallback_reasons")
@@ -215,7 +322,10 @@ class PresentationExportCoverageManifest(BaseModel):
         extra="forbid",
     )
 
-    schema_version: Literal["presenton.authored-hybrid-coverage/v1"]
+    schema_version: Literal[
+        "presenton.authored-hybrid-coverage/v1",
+        "presenton.authored-hybrid-coverage/v2",
+    ]
     mode: Literal["hybrid"]
     source: ExportCoverageSource
     total_slides: int = PydanticField(ge=1)
@@ -224,6 +334,12 @@ class PresentationExportCoverageManifest(BaseModel):
     native_shape: int = PydanticField(ge=0)
     native_table: int = PydanticField(ge=0)
     native_chart: int = PydanticField(ge=0)
+    logical_coverage: ExportCoverageCounts | None = None
+    ooxml_readback: ExportOoxmlReadback | None = None
+    backplate_count: int = PydanticField(default=0, ge=0)
+    typography_issues: list[dict[str, Any]] = PydanticField(
+        default_factory=list, max_length=4096
+    )
     raster_remaining: int = PydanticField(ge=0)
     fully_editable: bool
     slides: list[ExportSlideCoverage] = PydanticField(min_length=1, max_length=100)
@@ -250,6 +366,28 @@ class PresentationExportCoverageManifest(BaseModel):
             raise ValueError("export coverage native/raster totals are inconsistent")
         if self.fully_editable != (self.raster_remaining == 0):
             raise ValueError("export coverage editability claim is inconsistent")
+        if self.schema_version.endswith("/v2"):
+            if (
+                self.source.export_attempt_id is None
+                or self.source.canonical_source_digest is None
+                or self.logical_coverage is None
+                or self.ooxml_readback is None
+                or any(
+                    slide.logical_coverage is None or slide.ooxml_readback is None
+                    for slide in self.slides
+                )
+            ):
+                raise ValueError("export coverage v2 atomic evidence is incomplete")
+            if self.logical_coverage.raster_remaining != self.raster_remaining:
+                raise ValueError("logical raster coverage is inconsistent")
+            if self.backplate_count != sum(
+                slide.backplate_count for slide in self.slides
+            ):
+                raise ValueError("export coverage backplate total is inconsistent")
+            if any(slide.visual_parity != "not-verified" for slide in self.slides):
+                raise ValueError(
+                    "export coverage v2 visual parity requires trusted finalization"
+                )
         return self
 
 
@@ -268,6 +406,8 @@ class PresentationExportAttemptProvenance(BaseModel):
     compiler_runtime: ExportCompilerRuntimeProvenance
     freshness: ExportFreshnessProvenance
     coverage_manifest: PresentationExportCoverageManifest | None = None
+    atomic_binding: ExportAtomicBinding | None = None
+    powerpoint_qa: ExportPowerPointQaEvidence | None = None
 
     @field_validator("adapter_chain")
     @classmethod
@@ -320,6 +460,25 @@ class PresentationExportAttemptProvenance(BaseModel):
                 != self.coverage_manifest.source.source_digest
             ):
                 raise ValueError("export coverage source digest does not match renderer")
+            if self.coverage_manifest.schema_version.endswith("/v2"):
+                binding = self.atomic_binding
+                source = self.coverage_manifest.source
+                if binding is None:
+                    raise ValueError("export coverage v2 requires atomic binding")
+                if (
+                    source.export_attempt_id != binding.export_attempt_id
+                    or source.presentation_revision != binding.presentation_revision
+                    or source.canonical_source_digest
+                    != binding.canonical_source_sha256
+                    or self.freshness.source_snapshot_sha256
+                    != binding.canonical_source_sha256
+                    or self.freshness.renderer_source_sha256
+                    != binding.renderer_source_sha256
+                ):
+                    raise ValueError("export coverage atomic binding is inconsistent")
+        if self.powerpoint_qa is not None and self.powerpoint_qa.status == "passed":
+            if self.atomic_binding is None:
+                raise ValueError("PowerPoint QA requires atomic artifact binding")
         return self
 
 

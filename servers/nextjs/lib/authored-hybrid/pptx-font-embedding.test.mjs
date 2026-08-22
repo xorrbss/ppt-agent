@@ -47,6 +47,7 @@ function decryptEotFontData(eot) {
 }
 
 const WINDOWS_STATIC_TTF = "C:\\Windows\\Fonts\\arial.ttf";
+const WINDOWS_STATIC_BOLD_TTF = "C:\\Windows\\Fonts\\arialbd.ttf";
 
 test("EOT writer records license metadata, XOR flag, and recoverable SFNT bytes", async (t) => {
   let font;
@@ -74,10 +75,12 @@ test("EOT writer records license metadata, XOR flag, and recoverable SFNT bytes"
 
 test("packager writes real PresentationML font parts, relationships, and content type", async (t) => {
   let font;
+  let boldFont;
   try {
     font = await readFile(WINDOWS_STATIC_TTF);
+    boldFont = await readFile(WINDOWS_STATIC_BOLD_TTF);
   } catch {
-    t.skip("Windows Arial static TTF is unavailable");
+    t.skip("Windows Arial regular/bold static TTFs are unavailable");
     return;
   }
   const embedded = embedPowerPointFonts(skeleton(), [
@@ -85,7 +88,10 @@ test("packager writes real PresentationML font parts, relationships, and content
       typeface: "Arial",
       pitchFamily: 34,
       charset: 0,
-      faces: { regular: { data: font, source: WINDOWS_STATIC_TTF } },
+      faces: {
+        regular: { data: font, source: WINDOWS_STATIC_TTF },
+        bold: { data: boldFont, source: WINDOWS_STATIC_BOLD_TTF },
+      },
     },
   ]);
   const entries = readPptxArchive(embedded.pptx);
@@ -96,13 +102,13 @@ test("packager writes real PresentationML font parts, relationships, and content
   const contentTypes = entries.get("[Content_Types].xml").toString("utf8");
 
   assert.equal(embedded.result.applied, true);
-  assert.equal(embedded.result.embeddedFontFiles, 1);
+  assert.equal(embedded.result.embeddedFontFiles, 2);
   assert.equal(embedded.result.embeddedTypefaces, 1);
   assert.match(presentation, /xmlns:r="http:\/\/schemas\.openxmlformats\.org\/officeDocument\/2006\/relationships"/);
   assert.match(presentation, /<p:presentation\b[^>]*\bembedTrueTypeFonts="1"/);
   assert.match(
     presentation,
-    /<p:embeddedFontLst><p:embeddedFont><p:font typeface="Arial" pitchFamily="34" charset="0"\/><p:regular r:id="rId3"\/><\/p:embeddedFont><\/p:embeddedFontLst>/
+    /<p:embeddedFontLst><p:embeddedFont><p:font typeface="Arial" pitchFamily="34" charset="0"\/><p:regular r:id="rId3"\/><p:bold r:id="rId4"\/><\/p:embeddedFont><\/p:embeddedFontLst>/
   );
   assert.ok(presentation.indexOf("<p:embeddedFontLst>") < presentation.indexOf("<p:defaultTextStyle"));
   assert.match(
@@ -110,12 +116,19 @@ test("packager writes real PresentationML font parts, relationships, and content
     /Id="rId3" Type="http:\/\/schemas\.openxmlformats\.org\/officeDocument\/2006\/relationships\/font" Target="fonts\/font1\.fntdata"/
   );
   assert.match(
+    relationships,
+    /Id="rId4" Type="http:\/\/schemas\.openxmlformats\.org\/officeDocument\/2006\/relationships\/font" Target="fonts\/font2\.fntdata"/
+  );
+  assert.match(
     contentTypes,
     /<Default Extension="fntdata" ContentType="application\/x-fontdata"\/>/
   );
   const fontPart = entries.get("ppt/fonts/font1.fntdata");
+  const boldFontPart = entries.get("ppt/fonts/font2.fntdata");
   assert.ok(fontPart);
+  assert.ok(boldFontPart);
   assert.deepEqual(decryptEotFontData(fontPart), font);
+  assert.deepEqual(decryptEotFontData(boldFontPart), boldFont);
 });
 
 test("packager converts unsigned Win32 charsets to signed OOXML bytes", async (t) => {
@@ -128,7 +141,7 @@ test("packager converts unsigned Win32 charsets to signed OOXML bytes", async (t
   }
   const embedded = embedPowerPointFonts(skeleton(), [
     {
-      typeface: "Korean test face",
+      typeface: "Arial",
       pitchFamily: 34,
       charset: 129,
       faces: { regular: { data: font } },
@@ -140,24 +153,17 @@ test("packager converts unsigned Win32 charsets to signed OOXML bytes", async (t
 
   assert.match(
     presentation,
-    /<p:font typeface="Korean test face" pitchFamily="34" charset="-127"\/>/
+    /<p:font typeface="Arial" pitchFamily="34" charset="-127"\/>/
   );
   assert.equal(embedded.result.fonts[0].charset, -127);
   assert.equal(fontPart[26], 129);
 });
 
-test("packager is opt-in/no-op for an empty approved face set", () => {
-  const source = skeleton();
-  const embedded = embedPowerPointFonts(source, []);
-  assert.deepEqual(embedded.pptx, source);
-  assert.deepEqual(embedded.result, {
-    requested: true,
-    applied: false,
-    embeddedFontFiles: 0,
-    embeddedTypefaces: 0,
-    fonts: [],
-    reason: "No embeddable font faces were supplied.",
-  });
+test("packager fails closed instead of returning a font-less requested success", () => {
+  assert.throws(
+    () => embedPowerPointFonts(skeleton(), []),
+    /requested without any embeddable faces/
+  );
 });
 
 test("packager rejects variable fonts instead of claiming PowerPoint compatibility", async (t) => {
@@ -194,6 +200,13 @@ test("packager rejects a mismatched face declaration and existing embedding", as
         { typeface: "Arial", faces: { bold: { data: font } } },
       ]),
     /incompatible weight metadata/
+  );
+  assert.throws(
+    () =>
+      embedPowerPointFonts(skeleton(), [
+        { typeface: "Times New Roman", faces: { regular: { data: font } } },
+      ]),
+    /declares the SFNT family Arial/
   );
   const once = embedPowerPointFonts(skeleton(), [
     { typeface: "Arial", faces: { regular: { data: font } } },

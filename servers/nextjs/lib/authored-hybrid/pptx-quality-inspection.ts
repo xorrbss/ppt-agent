@@ -114,11 +114,6 @@ export function inspectPptxEditability(
       const editable =
         nativeTextElements + nativeShapeElements + nativeImageElements > 0;
       const fallbackElements: PresentationExportFallbackElement[] = [
-        ...backplates.map(({ block, index }) => ({
-          elementId: pictureIdentity(block, index),
-          candidateKind: "slide" as const,
-          reasons: ["residual-backplate-present"],
-        })),
         ...fullSlideRasterPictures.map(({ block, index }) => ({
           elementId: pictureIdentity(block, index),
           candidateKind: "slide" as const,
@@ -134,13 +129,6 @@ export function inspectPptxEditability(
             ]
           : []),
       ];
-      if (!editable && fallbackElements.length === 0) {
-        fallbackElements.push({
-          elementId: "ooxml:no-native-content",
-          candidateKind: "slide",
-          reasons: ["no-native-ooxml-elements"],
-        });
-      }
       return {
         slideNumber,
         editable,
@@ -150,6 +138,23 @@ export function inspectPptxEditability(
         nativeGroupElements,
         nativeImageElements,
         rasterFallbackElements: fallbackElements.length,
+        logicalCoverage: {
+          nativeText: 0,
+          nativeImage: 0,
+          nativeShape: 0,
+          nativeGroup: 0,
+          rasterRemaining: 0,
+        },
+        ooxmlReadback: {
+          status: "passed" as const,
+          nativeText: nativeTextElements,
+          nativeImage: nativeImageElements,
+          nativeShape: nativeShapeElements,
+          nativeGroup: nativeGroupElements,
+          rasterRemaining: fullSlideRasterPictures.length + rasterBackgrounds,
+        },
+        backplateCount: backplates.length,
+        typographyIssues: [],
         fallbackElements,
         fallbackReasons: fallbackElements.flatMap((element) => element.reasons),
       };

@@ -17,6 +17,7 @@ import { resolveAuthoredHybridChromeExecutable } from "./index.ts";
 import {
   assembleAuthoredHybridPptx,
   type AuthoredHybridSlideLayer,
+  type AuthoredHybridPptxProvenance,
 } from "./pptx-assembler.ts";
 import { isAuthoredPresentation } from "./presentation-mode.ts";
 import { authoredRendererIsolationPolicy } from "./renderer-isolation.ts";
@@ -34,10 +35,7 @@ import {
   parseBoundedPositiveInt,
   resolveHybridExportConcurrencyDefault,
 } from "./export-performance.ts";
-import {
-  createAuthoredHybridCoverageManifest,
-  summarizeAuthoredHybridExport,
-} from "./export-metadata.ts";
+import { attachAuthoredHybridEvidence } from "./export-evidence.ts";
 import {
   resolveFontEmbeddingPlan,
   type FontEmbeddingPlan,
@@ -46,12 +44,15 @@ import {
   embedPowerPointFonts,
   type PowerPointTypefaceInput,
 } from "./pptx-font-embedding.ts";
+import type { AuthoredEmbeddedTypefaceFaceEvidence } from "./font-policy.ts";
 import {
+  attachPresentationExportOoxmlReadback,
   createPresentationExportQuality,
   type PresentationExportFontEmbeddingStatus,
   type PresentationExportQualityReport,
   type PresentationExportRendererIsolation,
 } from "../presentation-export-quality.ts";
+import { inspectPptxEditability } from "./pptx-quality-inspection.ts";
 import {
   imageFallbackSlide,
   noFontRenderingTelemetry,
@@ -109,6 +110,9 @@ export interface AuthoredHybridExportParams {
   expectedPresentationRevision?: number;
   /** Correlates this export with the caller polling /api/internal/export-progress. */
   operationId?: string;
+  /** Durable FastAPI attempt identity; optional only at the shared type boundary. */
+  exportAttemptId?: string;
+  canonicalSourceDigest?: string;
 }
 
 interface FetchedPresentation {
@@ -216,6 +220,7 @@ interface PreparedFontEmbedding {
   pptx: Buffer;
   status: PresentationExportFontEmbeddingStatus;
   embeddedTypefaceFamilies: readonly string[];
+  embeddedTypefaceFaces: readonly AuthoredEmbeddedTypefaceFaceEvidence[];
 }
 
 function fontEmbeddingFailures(
@@ -274,6 +279,7 @@ async function prepareFontEmbedding(
     return {
       pptx: fidelityBytes,
       embeddedTypefaceFamilies: [],
+      embeddedTypefaceFaces: [],
       status: {
         policy: "opt-in",
         requested: false,
@@ -287,21 +293,7 @@ async function prepareFontEmbedding(
     };
   }
   if (!plan.status.eligible) {
-    return {
-      pptx: fidelityBytes,
-      embeddedTypefaceFamilies: [],
-      status: {
-        policy: "opt-in",
-        requested: true,
-        applied: false,
-        embeddedFontFiles: 0,
-        embeddedTypefaces: 0,
-        strategy: plan.strategy,
-        editLimitation: "none",
-        failures,
-        reason: "unsupported",
-      },
-    };
+    throw new Error("authored_hybrid_font_embedding_ineligible");
   }
 
   try {
@@ -310,29 +302,7 @@ async function prepareFontEmbedding(
       powerPointFontInputs(plan),
     );
     if (!packaged.result.applied) {
-      return {
-        pptx: fidelityBytes,
-        embeddedTypefaceFamilies: [],
-        status: {
-          policy: "opt-in",
-          requested: true,
-          applied: false,
-          embeddedFontFiles: 0,
-          embeddedTypefaces: 0,
-          strategy: plan.strategy,
-          editLimitation: "none",
-          failures: [
-            ...failures,
-            {
-              reason: "packaging-not-applied",
-              detail:
-                packaged.result.reason ??
-                "The OOXML packager did not add any embedded font parts.",
-            },
-          ],
-          reason: "failed",
-        },
-      };
+      throw new Error("authored_hybrid_font_embedding_not_applied");
     }
 
     const filesById = new Map(plan.files.map((file) => [file.sourceId, file]));
@@ -377,6 +347,10 @@ async function prepareFontEmbedding(
     return {
       pptx: packaged.pptx,
       embeddedTypefaceFamilies,
+      embeddedTypefaceFaces: faceStatus.map((face) => ({
+        typeface: face.typeface,
+        face: face.face,
+      })),
       status: {
         policy: "opt-in",
         requested: true,
@@ -394,27 +368,13 @@ async function prepareFontEmbedding(
       },
     };
   } catch (error) {
-    return {
-      pptx: fidelityBytes,
-      embeddedTypefaceFamilies: [],
-      status: {
-        policy: "opt-in",
-        requested: true,
-        applied: false,
-        embeddedFontFiles: 0,
-        embeddedTypefaces: 0,
-        strategy: plan.strategy,
-        editLimitation: "none",
-        failures: [
-          ...failures,
-          {
-            reason: "packaging-failed",
-            detail: error instanceof Error ? error.message : String(error),
-          },
-        ],
-        reason: "failed",
-      },
-    };
+    if (
+      error instanceof Error &&
+      error.message === "authored_hybrid_font_embedding_not_applied"
+    ) {
+      throw error;
+    }
+    throw new Error("authored_hybrid_font_embedding_failed", { cause: error });
   }
 }
 
@@ -424,11 +384,13 @@ async function writeHybridPptx(
   basePptx?: Buffer,
   embeddedTypefaceFamilies: readonly string[] = [],
   artifactKind: "hybrid" | "authored-fidelity" = "hybrid",
+  provenance?: AuthoredHybridPptxProvenance,
 ): Promise<string> {
   const safeFidelityPath = await resolveSafeFidelityPptx(fidelityPath);
   const fidelityBytes = basePptx ?? (await fs.readFile(safeFidelityPath));
   const hybridBytes = assembleAuthoredHybridPptx(fidelityBytes, layers, {
     embeddedTypefaceFamilies,
+    provenance,
   });
   const parsed = path.parse(safeFidelityPath);
   const suffix = randomUUID();
@@ -515,70 +477,6 @@ export async function runAuthoredFidelityPresentationExport(
     "authored-fidelity",
   );
   return { path: resultPath };
-}
-
-async function attachQualityReport(
-  result: BundledPresentationExportResult,
-  quality: PresentationExportQualityReport,
-  source: { presentationRevision: number; sourceDigest: string },
-): Promise<BundledPresentationExportResult> {
-  const qualityPath = `${result.path}.quality.json`;
-  const coveragePath = `${result.path}.coverage.json`;
-  const suffix = randomUUID();
-  const temporaryQualityPath = `${qualityPath}.${suffix}.tmp`;
-  const temporaryCoveragePath = `${coveragePath}.${suffix}.tmp`;
-  const coverageManifest = createAuthoredHybridCoverageManifest(
-    quality,
-    source,
-  );
-  let qualityPublished = false;
-  let coveragePublished = false;
-  try {
-    await fs.writeFile(temporaryQualityPath, JSON.stringify(quality, null, 2), {
-      flag: "wx",
-      mode: 0o600,
-    });
-    await fs.writeFile(
-      temporaryCoveragePath,
-      JSON.stringify(coverageManifest, null, 2),
-      { flag: "wx", mode: 0o600 },
-    );
-    await fs.rename(temporaryQualityPath, qualityPath);
-    qualityPublished = true;
-    await fs.rename(temporaryCoveragePath, coveragePath);
-    coveragePublished = true;
-    await fs.chmod(qualityPath, 0o644);
-    await fs.chmod(coveragePath, 0o644);
-  } catch (error) {
-    // Coverage is part of the Hybrid artifact contract. Returning a PPTX after
-    // either sidecar failed would silently discard the evidence needed to tell
-    // users what remained raster, so fail the explicit Hybrid request.
-    await Promise.all([
-      fs.rm(temporaryQualityPath, { force: true }).catch(() => {}),
-      fs.rm(temporaryCoveragePath, { force: true }).catch(() => {}),
-      ...(qualityPublished
-        ? [fs.rm(qualityPath, { force: true }).catch(() => {})]
-        : []),
-      ...(coveragePublished
-        ? [fs.rm(coveragePath, { force: true }).catch(() => {})]
-        : []),
-      fs.rm(result.path, { force: true }).catch(() => {}),
-    ]);
-    throw new Error("authored_hybrid_coverage_publication_failed", {
-      cause: error,
-    });
-  }
-  // The client-facing summary is derived from the same per-slide quality the
-  // sidecar records, so the editor toast and the persisted report can never
-  // disagree about how many slides stayed editable.
-  const exportMetadata = summarizeAuthoredHybridExport(
-    quality.slides.map((slide) => ({
-      editable: slide.editable,
-      fallbackReason: slide.fallbackReasons[0],
-    })),
-  );
-  exportMetadata.coverageManifest = coverageManifest;
-  return { ...result, quality, exportMetadata };
 }
 
 async function runUncachedAuthoredHybridExport(
@@ -678,6 +576,7 @@ async function runUncachedAuthoredHybridExport(
               slideNumber,
               chromeExecutable,
               fontEmbedding.embeddedTypefaceFamilies,
+              fontEmbedding.embeddedTypefaceFaces,
             );
           } catch (error) {
             console.warn(
@@ -700,12 +599,67 @@ async function runUncachedAuthoredHybridExport(
         }
       },
     );
-    const layers = preparedSlides
+    const preparedLayers = preparedSlides
       .map((prepared) => prepared.layer)
       .filter((layer): layer is AuthoredHybridSlideLayer => layer !== null);
-    const quality = createPresentationExportQuality(
+    // Native decorative geometry without any typography that survived the
+    // PowerPoint preflight provides little editing value and can visibly drift
+    // from the authored raster. Keep the exact fidelity package in that case;
+    // the code path remains Hybrid (font parts, attempt provenance and honest
+    // coverage), but every logical element is reported as raster fallback.
+    const deckRasterFallback =
+      preparedSlides.length > 0 &&
+      preparedSlides.every(
+        (prepared) => prepared.quality.nativeTextElements === 0,
+      ) &&
+      preparedSlides.some(
+        (prepared) => prepared.quality.typographyIssues.length > 0,
+      );
+    const layers = deckRasterFallback ? [] : preparedLayers;
+    const qualitySlides = deckRasterFallback
+      ? preparedSlides.map((prepared) => {
+          const quality = prepared.quality;
+          const logicalRasterRemaining =
+            quality.logicalCoverage.nativeText +
+            quality.logicalCoverage.nativeImage +
+            quality.logicalCoverage.nativeShape +
+            quality.logicalCoverage.nativeGroup +
+            quality.logicalCoverage.rasterRemaining;
+          return {
+            ...quality,
+            editable: false,
+            imageFallback: true,
+            nativeTextElements: 0,
+            nativeShapeElements: 0,
+            nativeGroupElements: 0,
+            nativeImageElements: 0,
+            rasterFallbackElements: logicalRasterRemaining,
+            logicalCoverage: {
+              nativeText: 0,
+              nativeImage: 0,
+              nativeShape: 0,
+              nativeGroup: 0,
+              rasterRemaining: logicalRasterRemaining,
+            },
+            ooxmlReadback: {
+              status: "not-run" as const,
+              nativeText: 0,
+              nativeImage: 0,
+              nativeShape: 0,
+              nativeGroup: 0,
+              rasterRemaining: 0,
+            },
+            backplateCount: 0,
+            fallbackReasons: [
+              ...quality.fallbackReasons,
+              "deck-native-typography-unverified-raster-fallback",
+            ],
+          };
+        })
+      : preparedSlides.map((prepared) => prepared.quality);
+    const logicalQuality = createPresentationExportQuality(
       "hybrid",
-      preparedSlides.map((prepared) => prepared.quality),
+      qualitySlides,
       {
         fontEmbeddingStatus: fontEmbedding.status,
         rendererIsolation: rendererIsolationRecord(),
@@ -724,21 +678,39 @@ async function runUncachedAuthoredHybridExport(
       },
     );
     const slidesMs = elapsedMs(slidesStartedAt);
-    if (!layers.length) {
+    if (!layers.length && !deckRasterFallback) {
       throw new Error("authored_hybrid_no_native_elements");
     }
     const assemblyStartedAt = performance.now();
     recordExportProgress(cacheKey, { phase: "assembly" });
+    if (!params.exportAttemptId || !params.canonicalSourceDigest) {
+      throw new Error("authored_hybrid_export_attempt_binding_required");
+    }
     const hybridPath = await writeHybridPptx(
       fidelity.path,
       layers,
       fontEmbedding.pptx,
       fontEmbedding.embeddedTypefaceFamilies,
+      "hybrid",
+      {
+        exportAttemptId: params.exportAttemptId,
+        presentationRevision: Number(presentation.revision),
+        canonicalSourceDigest: params.canonicalSourceDigest,
+        sourceDigest: sourceSha256,
+      },
     );
     const assemblyMs = elapsedMs(assemblyStartedAt);
-    const result = await attachQualityReport({ path: hybridPath }, quality, {
+    const hybridBytes = await fs.readFile(hybridPath);
+    const quality = attachPresentationExportOoxmlReadback(
+      logicalQuality,
+      inspectPptxEditability(hybridBytes),
+    );
+    const result = await attachAuthoredHybridEvidence({ path: hybridPath }, quality, {
+      exportAttemptId: params.exportAttemptId,
       presentationRevision: Number(presentation.revision),
+      canonicalSourceDigest: params.canonicalSourceDigest,
       sourceDigest: sourceSha256,
+      pptxSha256: createHash("sha256").update(hybridBytes).digest("hex"),
     });
     await rememberCompletedHybridExport(cacheKey, result);
     console.info(
@@ -802,7 +774,7 @@ export async function runAuthoredHybridPresentationExport(
   }
 
   const fontEmbeddingPlan = await resolveFontEmbeddingPlan({
-    requested: params.fontEmbedding === true,
+    requested: params.fontEmbedding !== false,
     families: ["Noto Sans KR"],
     // Full-font embedding keeps newly typed Hangul editable. The opt-in API can
     // add subset selection later without changing this safe default.
@@ -816,6 +788,8 @@ export async function runAuthoredHybridPresentationExport(
       ? (presentation.revision as number)
       : params.expectedPresentationRevision,
     fontEmbeddingPlan.cacheDiscriminator,
+    params.exportAttemptId,
+    params.canonicalSourceDigest,
   );
   const cached = await readCompletedHybridExport(cacheKey);
   if (cached) {
@@ -868,6 +842,8 @@ function createHybridCacheKey(
   sourceSha256: string,
   sourceRevision: number | undefined,
   fontEmbeddingDiscriminator: string,
+  exportAttemptId: string | undefined,
+  canonicalSourceDigest: string | undefined,
 ): string {
   return createHash("sha256")
     .update(HYBRID_CACHE_VERSION)
@@ -879,6 +855,10 @@ function createHybridCacheKey(
     .update(sourceRevision === undefined ? "unknown" : String(sourceRevision))
     .update("\0")
     .update(fontEmbeddingDiscriminator)
+    .update("\0")
+    .update(exportAttemptId ?? "unbound")
+    .update("\0")
+    .update(canonicalSourceDigest ?? "unbound")
     .digest("hex");
 }
 

@@ -24,17 +24,16 @@ test("structural editability inspection covers all 20 slides", () => {
   assert.equal(report.imageFallbackSlides, 2);
   assert.equal(report.nativeTextElements, 18);
   assert.equal(report.nativeGroupElements, 0);
-  assert.equal(report.rasterFallbackElements, 20);
+  assert.equal(report.rasterFallbackElements, 0);
+  assert.equal(report.backplateCount, 20);
+  assert.equal(report.ooxmlReadback.status, "passed");
   assert.deepEqual(
     report.slides
       .filter((slide) => slide.imageFallback)
       .map((slide) => slide.slideNumber),
     [19, 20]
   );
-  assert.equal(
-    report.fallbackReasonCounts["residual-backplate-present"],
-    20
-  );
+  assert.equal(report.fallbackReasonCounts["residual-backplate-present"], undefined);
 });
 
 test("structural inspection distinguishes groups, connectors, small images, and full-slide fallback", () => {
@@ -70,7 +69,8 @@ test("structural inspection distinguishes groups, connectors, small images, and 
   assert.equal(report.slides[0].nativeShapeElements, 2);
   assert.equal(report.slides[0].nativeGroupElements, 1);
   assert.equal(report.slides[0].nativeImageElements, 1);
-  assert.equal(report.slides[0].rasterFallbackElements, 1);
+  assert.equal(report.slides[0].rasterFallbackElements, 0);
+  assert.equal(report.slides[0].backplateCount, 1);
   assert.equal(report.slides[1].editable, false);
   assert.equal(report.slides[1].imageFallback, true);
   assert.equal(report.slides[1].nativeImageElements, 0);

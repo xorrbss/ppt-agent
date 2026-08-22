@@ -63,6 +63,11 @@ const FALLBACK_REASON_ORDER: readonly AuthoredHybridFallbackReason[] = [
   "unsupported-shape",
   "ambiguous-whitespace",
   "run-extraction-error",
+  "typography-embedding-face-missing",
+  "typography-font-substitution",
+  "typography-bounds-overflow",
+  "typography-backplate-collision",
+  "typography-line-break-mismatch",
 ];
 
 const FALLBACK_ORDER = new Map(

@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import path from "node:path";
 
 import {
   preparedNativeElementNonVisualIdCount,
@@ -9,20 +8,36 @@ import {
   type PowerPointTypefaceSerializationOptions,
   type PreparedNativeElement,
 } from "./native-plan.ts";
-import { readPptxArchive, writePptxArchive } from "./pptx-archive.ts";
+import {
+  decodeXmlAttributeValue,
+  opcPartComparisonKey,
+  rawXmlAttribute as rawRelationshipAttribute,
+  readPptxArchive,
+  referencedPackageTargets,
+  relationshipTargetPath,
+  upsertPptxCustomProperties,
+  writePptxArchive,
+  xmlAttributeValue as relationshipAttribute,
+} from "./pptx-archive.ts";
 
 const SLIDE_WIDTH_EMU = 12_192_000;
 const SLIDE_HEIGHT_EMU = 6_858_000;
 const SLIDE_WIDTH_PX = 1_280;
 const SLIDE_HEIGHT_PX = 720;
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
-
 export interface AuthoredHybridSlideLayer {
   /** One-based OOXML slide number. */
   slideNumber: number;
   backplatePng: Buffer;
   /** Already filtered in ascending browser paint order. */
   elements: readonly PreparedNativeElement[];
+}
+export interface AuthoredHybridPptxProvenance {
+  readonly exportAttemptId?: string; readonly presentationRevision?: number;
+  readonly canonicalSourceDigest?: string; readonly sourceDigest?: string;
+}
+export interface AuthoredHybridAssemblerOptions extends PowerPointTypefaceSerializationOptions {
+  readonly provenance?: AuthoredHybridPptxProvenance;
 }
 
 function xmlAttribute(xml: string, element: string, attribute: string): number | null {
@@ -175,95 +190,6 @@ export function isOpaqueRgbPng(png: Buffer): boolean {
   return png.length > 25 && png[25] === 2;
 }
 
-function rawRelationshipAttribute(tag: string, attribute: string): string | null {
-  const value = tag.match(
-    new RegExp(`(?:^|\\s)${attribute}\\s*=\\s*(["'])(.*?)\\1`, "i")
-  )?.[2];
-  return value ?? null;
-}
-
-function validXmlCodePoint(codePoint: number): boolean {
-  return (
-    codePoint === 0x9 ||
-    codePoint === 0xa ||
-    codePoint === 0xd ||
-    (codePoint >= 0x20 && codePoint <= 0xd7ff) ||
-    (codePoint >= 0xe000 && codePoint <= 0xfffd) ||
-    (codePoint >= 0x10000 && codePoint <= 0x10ffff)
-  );
-}
-
-function decodeXmlAttributeValue(value: string): string | null {
-  let decoded = "";
-  let cursor = 0;
-  while (cursor < value.length) {
-    const entityStart = value.indexOf("&", cursor);
-    const literalEnd = entityStart === -1 ? value.length : entityStart;
-    const literal = value.slice(cursor, literalEnd);
-    if (/[<\0]/.test(literal)) return null;
-    decoded += literal;
-    if (entityStart === -1) break;
-
-    const entityEnd = value.indexOf(";", entityStart + 1);
-    if (entityEnd === -1) return null;
-    const entity = value.slice(entityStart + 1, entityEnd);
-    const predefined: Readonly<Record<string, string>> = {
-      amp: "&",
-      apos: "'",
-      gt: ">",
-      lt: "<",
-      quot: '"',
-    };
-    let replacement = predefined[entity];
-    if (replacement === undefined) {
-      const hexadecimal = entity.match(/^#x([0-9A-Fa-f]+)$/)?.[1];
-      const decimal = entity.match(/^#([0-9]+)$/)?.[1];
-      if (hexadecimal === undefined && decimal === undefined) return null;
-      const codePoint = Number.parseInt(hexadecimal ?? decimal!, hexadecimal ? 16 : 10);
-      if (!Number.isSafeInteger(codePoint) || !validXmlCodePoint(codePoint)) return null;
-      replacement = String.fromCodePoint(codePoint);
-    }
-    decoded += replacement;
-    cursor = entityEnd + 1;
-  }
-  return decoded;
-}
-
-function relationshipAttribute(tag: string, attribute: string): string | null {
-  const raw = rawRelationshipAttribute(tag, attribute);
-  return raw === null ? null : decodeXmlAttributeValue(raw);
-}
-
-function relationshipTargetPath(relsPath: string, target: string): string | null {
-  if (/[<>&\0?#%]/.test(target)) return null;
-  const marker = "/_rels/";
-  const comparisonPath = opcPartComparisonKey(relsPath);
-  const markerIndex = comparisonPath.lastIndexOf(marker);
-  let sourcePath: string;
-  if (comparisonPath === "_rels/.rels") {
-    sourcePath = "";
-  } else if (markerIndex >= 0 && comparisonPath.endsWith(".rels")) {
-    const ownerDirectory = relsPath.slice(0, markerIndex);
-    const ownerName = relsPath.slice(markerIndex + marker.length, -".rels".length);
-    sourcePath = ownerDirectory ? `${ownerDirectory}/${ownerName}` : ownerName;
-  } else {
-    return null;
-  }
-
-  const normalizedTarget = target.replaceAll("\\", "/");
-  const resolved = path.posix.normalize(
-    normalizedTarget.startsWith("/")
-      ? normalizedTarget.slice(1)
-      : path.posix.join(path.posix.dirname(sourcePath || "."), normalizedTarget)
-  );
-  if (!resolved || resolved === ".." || resolved.startsWith("../")) return null;
-  return resolved;
-}
-
-function opcPartComparisonKey(partPath: string): string {
-  return partPath.replace(/[A-Z]/g, (character) => character.toLowerCase());
-}
-
 function referencedRelationshipIds(slideXml: string): {
   ids: ReadonlySet<string>;
   complete: boolean;
@@ -318,51 +244,121 @@ function pruneUnusedImageRelationships(
   return { xml, removedMediaPaths };
 }
 
-function referencedPackageTargets(entries: ReadonlyMap<string, Buffer>): {
-  targets: ReadonlySet<string>;
-  complete: boolean;
-} {
-  const targets = new Set<string>();
-  let complete = true;
-  for (const [relsPath, bytes] of entries) {
-    if (!opcPartComparisonKey(relsPath).endsWith(".rels")) continue;
-    const relationshipsXml = bytes.toString("utf8");
-    for (const match of relationshipsXml.matchAll(
-      /<(?:[A-Za-z_][\w.-]*:)?Relationship\b[^>]*>/gi
-    )) {
-      const rawTargetMode = rawRelationshipAttribute(match[0], "TargetMode");
-      const targetMode =
-        rawTargetMode === null ? null : decodeXmlAttributeValue(rawTargetMode);
-      if (rawTargetMode !== null && targetMode === null) {
-        complete = false;
-        continue;
-      }
-      if (targetMode?.toLowerCase() === "external") continue;
-      const rawTarget = rawRelationshipAttribute(match[0], "Target");
-      const target = rawTarget === null ? null : decodeXmlAttributeValue(rawTarget);
-      if (target === null) {
-        complete = false;
-        continue;
-      }
-      const targetPath = relationshipTargetPath(relsPath, target);
-      if (targetPath) {
-        targets.add(opcPartComparisonKey(targetPath));
-      } else {
-        complete = false;
-      }
-    }
-  }
-  return { targets, complete };
-}
-
 const GROUP_ROOT_XML =
   '<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>' +
   '<p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>';
 
+const CJK_TEXT = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u;
+const CJK_TYPEFACE = /(?:malgun|noto.*(?:kr|cjk)|pretendard|맑은|고딕|명조)/i;
+function escapeXmlAttribute(value: string): string {
+  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll('"', "&quot;");
+}
+
+function authoredBreakCount(item: Extract<PreparedNativeElement, { kind: "text" }>): number {
+  const explicit = item.source.text.runs.reduce(
+    (count, run) => count + (
+      run.breakKind === "line" || run.breakKind === "paragraph"
+        ? (run.text.match(/\n/g) ?? []).length
+        : 0
+    ),
+    0
+  );
+  return Math.max(explicit, Math.max(0, item.source.text.paragraphs.length - 1));
+}
+
+function expandStandaloneTextBounds(
+  xml: string,
+  item: Extract<PreparedNativeElement, { kind: "text" }>
+): string {
+  if (item.source.text.containerShape || Math.abs(item.source.rotationDeg) >= 0.001) return xml;
+  const match = xml.match(
+    /<a:xfrm><a:off x="(-?\d+)" y="(-?\d+)"\/><a:ext cx="(\d+)" cy="(\d+)"\/><\/a:xfrm>/
+  );
+  if (!match) throw new Error(`Hybrid text ${item.source.id} has no bounded transform.`);
+  const [x, y, width, height] = match.slice(1).map(Number);
+  const horizontalSlack = Math.round(
+    Math.max(8, Math.min(16, item.source.text.style.fontSizePt * 0.4 + 4)) * 9_525
+  );
+  const verticalSlack = Math.round(
+    Math.max(4, Math.min(12, authoredBreakCount(item) > 0 ? 10 : 4)) * 9_525
+  );
+  const horizontal = item.source.text.style.horizontalAlignment;
+  const vertical = item.source.text.style.verticalAlignment;
+  const left = horizontal === "right" ? horizontalSlack : horizontal === "center" ? horizontalSlack / 2 : 0;
+  const right = horizontal === "left" ? horizontalSlack : horizontal === "center" ? horizontalSlack / 2 : 0;
+  const top = vertical === "bottom" ? verticalSlack : vertical === "middle" ? verticalSlack / 2 : 0;
+  const bottom = vertical === "top" ? verticalSlack : vertical === "middle" ? verticalSlack / 2 : 0;
+  const nextX = Math.max(0, Math.round(x - left));
+  const nextY = Math.max(0, Math.round(y - top));
+  const nextRight = Math.min(SLIDE_WIDTH_EMU, Math.round(x + width + right));
+  const nextBottom = Math.min(SLIDE_HEIGHT_EMU, Math.round(y + height + bottom));
+  return xml.replace(
+    match[0],
+    `<a:xfrm><a:off x="${nextX}" y="${nextY}"/><a:ext cx="${Math.max(1, nextRight - nextX)}" cy="${Math.max(1, nextBottom - nextY)}"/></a:xfrm>`
+  );
+}
+function hardenTextOverlay(
+  xml: string,
+  item: Extract<PreparedNativeElement, { kind: "text" }>,
+  options: AuthoredHybridAssemblerOptions
+): string {
+  const fallback = options.embeddedTypefaceFamilies?.find((family) => CJK_TYPEFACE.test(family)) ??
+    "Malgun Gothic";
+  let hardened = xml.replace(
+    /<a:r>[\s\S]*?<a:t\b[^>]*>([\s\S]*?)<\/a:t><\/a:r>/g,
+    (runXml, text: string) => CJK_TEXT.test(text)
+      ? runXml.replace(
+        /<a:(latin|ea|cs) typeface="Consolas"\/>/gi,
+        (_font: string, script: string) => `<a:${script} typeface="${escapeXmlAttribute(fallback)}"/>`
+      )
+      : runXml
+  );
+  const expectedBreaks = authoredBreakCount(item);
+  const serializedBreaks = (hardened.match(/<a:br\/>/g) ?? []).length +
+    Math.max(0, (hardened.match(/<a:p>/g) ?? []).length - 1);
+  if (serializedBreaks < expectedBreaks) {
+    throw new Error(`Hybrid text ${item.source.id} lost an authored line break.`);
+  }
+  const embeddedCjk = options.embeddedTypefaceFamilies?.some((family) => CJK_TYPEFACE.test(family));
+  const families = [...item.source.text.style.fontFamilies, ...item.source.text.style.cjkFallbackFamilies];
+  const usesMonospace = families.some((family) => /(?:consolas|monospace|courier)/i.test(family));
+  const needsAutofit = expectedBreaks > 0 ||
+    (CJK_TEXT.test(item.source.text.plainText) && (usesMonospace || !embeddedCjk));
+  hardened = hardened
+    .replace(/\bhorzOverflow="(?:overflow|clip)"/, 'horzOverflow="clip"')
+    .replace(/\bvertOverflow="(?:overflow|clip)"/, 'vertOverflow="clip"')
+    .replace(/<a:(?:normAutofit|noAutofit)\/>/, needsAutofit ? "<a:normAutofit/>" : "<a:noAutofit/>");
+  return expandStandaloneTextBounds(hardened, item);
+}
+function provenanceProperties(provenance?: AuthoredHybridPptxProvenance) {
+  if (!provenance) return [];
+  const digest = (value: string | undefined, label: string): string | undefined => {
+    if (value === undefined) return undefined;
+    if (!/^(?:sha256:)?[0-9a-f]{64}$/i.test(value)) {
+      throw new Error(`Hybrid ${label} is not a SHA-256 digest.`);
+    }
+    return value.toLowerCase();
+  };
+  if (provenance.exportAttemptId !== undefined &&
+      (!provenance.exportAttemptId.trim() || /[\0\r\n]/.test(provenance.exportAttemptId))) {
+    throw new Error("Hybrid exportAttemptId is invalid.");
+  }
+  if (provenance.presentationRevision !== undefined &&
+      (!Number.isSafeInteger(provenance.presentationRevision) || provenance.presentationRevision < 0)) {
+    throw new Error("Hybrid presentationRevision is invalid.");
+  }
+  return [
+    provenance.exportAttemptId === undefined ? null : { name: "Presenton.ExportAttemptId", value: provenance.exportAttemptId },
+    provenance.presentationRevision === undefined ? null : { name: "Presenton.PresentationRevision", value: provenance.presentationRevision },
+    digest(provenance.canonicalSourceDigest, "canonicalSourceDigest") === undefined ? null : { name: "Presenton.CanonicalSourceDigest", value: digest(provenance.canonicalSourceDigest, "canonicalSourceDigest")! },
+    digest(provenance.sourceDigest, "sourceDigest") === undefined ? null : { name: "Presenton.SourceDigest", value: digest(provenance.sourceDigest, "sourceDigest")! },
+  ].filter((property): property is { name: string; value: string | number } => property !== null);
+}
+
 function assembleSlide(
   entries: Map<string, Buffer>,
   layer: AuthoredHybridSlideLayer,
-  options: PowerPointTypefaceSerializationOptions
+  options: AuthoredHybridAssemblerOptions
 ): ReadonlySet<string> {
   if (!Number.isInteger(layer.slideNumber) || layer.slideNumber < 1) {
     throw new Error("Hybrid slide number is invalid.");
@@ -433,12 +429,13 @@ function assembleSlide(
       nextNonVisualId,
       options
     );
-    const overlay = serializePreparedNativeElementOverlay(
+    let overlay = serializePreparedNativeElementOverlay(
       item,
       nextNonVisualId + underlayCount,
       relationshipId,
       options
     );
+    if (overlay && item.kind === "text") overlay = hardenTextOverlay(overlay, item, options);
     if (underlay) {
       (isCanvasBackgroundShape(item) ? canvasBackgroundXml : underlayXml).push(
         underlay
@@ -484,9 +481,9 @@ function assembleSlide(
 export function assembleAuthoredHybridPptx(
   fidelityPptx: Buffer,
   layers: readonly AuthoredHybridSlideLayer[],
-  options: PowerPointTypefaceSerializationOptions = {}
+  options: AuthoredHybridAssemblerOptions = {}
 ): Buffer {
-  if (!layers.length) return Buffer.from(fidelityPptx);
+  if (!layers.length && !options.provenance) return Buffer.from(fidelityPptx);
   const slideNumbers = new Set<number>();
   for (const layer of layers) {
     if (slideNumbers.has(layer.slideNumber)) {
@@ -496,12 +493,14 @@ export function assembleAuthoredHybridPptx(
   }
 
   const entries = readPptxArchive(fidelityPptx);
-  assertPresentationSize(entries);
-  addPngContentType(entries);
   const removedMediaPaths = new Set<string>();
-  for (const layer of layers) {
-    for (const mediaPath of assembleSlide(entries, layer, options)) {
-      removedMediaPaths.add(mediaPath);
+  if (layers.length) {
+    assertPresentationSize(entries);
+    addPngContentType(entries);
+    for (const layer of layers) {
+      for (const mediaPath of assembleSlide(entries, layer, options)) {
+        removedMediaPaths.add(mediaPath);
+      }
     }
   }
   const remainingTargets = referencedPackageTargets(entries);
@@ -512,6 +511,7 @@ export function assembleAuthoredHybridPptx(
       }
     }
   }
+  upsertPptxCustomProperties(entries, provenanceProperties(options.provenance));
   const output = writePptxArchive(entries);
   readPptxArchive(output);
   return output;

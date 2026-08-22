@@ -13,6 +13,100 @@ export interface AuthoredFontFallback {
   generic: "sans-serif" | "serif" | "monospace";
 }
 
+export type AuthoredFontScript = "cjk" | "latin" | "common";
+
+export type AuthoredEmbeddedFontFace =
+  | "regular"
+  | "bold"
+  | "italic"
+  | "boldItalic";
+
+/** Exact face evidence produced by the OOXML font packager. */
+export interface AuthoredEmbeddedTypefaceFaceEvidence {
+  readonly typeface: string;
+  readonly face: AuthoredEmbeddedFontFace;
+}
+
+export interface AuthoredScriptRun {
+  readonly text: string;
+  readonly start: number;
+  readonly end: number;
+  readonly script: AuthoredFontScript;
+}
+
+const CJK_CHARACTER =
+  /[\u2e80-\u2fff\u3005-\u3007\u3040-\u30ff\u3100-\u312f\u31a0-\u31bf\u31f0-\u31ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uf900-\ufaff]/u;
+const LATIN_OR_NUMBER_CHARACTER = /[\p{Script=Latin}\p{Number}]/u;
+
+function characterScript(value: string): AuthoredFontScript {
+  if (CJK_CHARACTER.test(value)) return "cjk";
+  if (LATIN_OR_NUMBER_CHARACTER.test(value)) return "latin";
+  return "common";
+}
+
+/**
+ * Split text at Unicode code-point boundaries. Neutral punctuation and spaces
+ * stay with the preceding strong script, or the following script when leading,
+ * so mixed Korean/Latin labels do not turn every separator into its own run.
+ */
+export function splitTextByScript(value: string): AuthoredScriptRun[] {
+  if (!value) return [];
+  const codePoints = Array.from(value);
+  const scripts = codePoints.map(characterScript);
+  for (let index = 0; index < scripts.length; index += 1) {
+    if (scripts[index] !== "common") continue;
+    const previous = index > 0 ? scripts[index - 1] : undefined;
+    if (previous && previous !== "common") {
+      scripts[index] = previous;
+      continue;
+    }
+    const following = scripts.slice(index + 1).find((script) => script !== "common");
+    if (following) scripts[index] = following;
+  }
+
+  const result: AuthoredScriptRun[] = [];
+  let utf16Offset = 0;
+  let runStart = 0;
+  let runText = "";
+  let runScript = scripts[0];
+  codePoints.forEach((codePoint, index) => {
+    const script = scripts[index];
+    if (runText && script !== runScript) {
+      result.push({ text: runText, start: runStart, end: utf16Offset, script: runScript });
+      runStart = utf16Offset;
+      runText = "";
+      runScript = script;
+    }
+    runText += codePoint;
+    utf16Offset += codePoint.length;
+  });
+  result.push({ text: runText, start: runStart, end: utf16Offset, script: runScript });
+  return result;
+}
+
+export function embeddedFaceForStyle(style: {
+  readonly bold: boolean;
+  readonly italic: boolean;
+  readonly fontWeight: number;
+}): AuthoredEmbeddedFontFace {
+  const bold = style.bold || style.fontWeight >= 600;
+  if (bold && style.italic) return "boldItalic";
+  if (bold) return "bold";
+  return style.italic ? "italic" : "regular";
+}
+
+export function hasEmbeddedTypefaceFace(
+  evidence: readonly AuthoredEmbeddedTypefaceFaceEvidence[],
+  typeface: string,
+  face: AuthoredEmbeddedFontFace
+): boolean {
+  const expected = normalizedFontName(typeface);
+  return evidence.some(
+    (entry) =>
+      normalizedFontName(entry.typeface) === expected && entry.face === face
+  );
+}
+
 export const FONT_FALLBACK_REGISTRY: readonly AuthoredFontFallback[] =
   Object.freeze([
     { logical: "Noto Sans KR", local: "Malgun Gothic", generic: "sans-serif" },
@@ -365,4 +459,59 @@ export function resolvePowerPointTypeface(
     if (!isGenericFontFamily(normalized)) return normalized.slice(0, 127);
   }
   return fallback.trim().slice(0, 127);
+}
+
+const MONOSPACE_TYPEFACES = new Set([
+  "ibm plex mono",
+  "consolas",
+  "monospace",
+  "ui-monospace",
+]);
+
+export function isMonospaceFontStack(families: readonly string[]): boolean {
+  return families.some((family) =>
+    MONOSPACE_TYPEFACES.has(normalizedFontName(family))
+  );
+}
+
+export interface AuthoredScriptTypefaceResolution {
+  readonly typeface: string;
+  readonly fallbackTypeface: string;
+  readonly requiresEmbedding: boolean;
+}
+
+/**
+ * Script-aware native policy. CJK never inherits a Latin monospace face.
+ * Conversely, the IBM Plex Mono/Consolas pair is considered only for a run
+ * that contains Latin letters or numbers and whose authored stack requested
+ * monospace styling.
+ */
+export function resolveScriptAwareTypeface(
+  script: AuthoredFontScript,
+  families: readonly string[]
+): AuthoredScriptTypefaceResolution {
+  if (script === "cjk") {
+    return {
+      typeface: "Noto Sans KR",
+      fallbackTypeface: "Malgun Gothic",
+      requiresEmbedding: true,
+    };
+  }
+  if (script === "latin" && isMonospaceFontStack(families)) {
+    return {
+      typeface: "IBM Plex Mono",
+      fallbackTypeface: "Consolas",
+      requiresEmbedding: true,
+    };
+  }
+  const typeface = resolvePowerPointTypeface(families, "Aptos", {
+    preserveAuthoredFamilies: new Set(families),
+  });
+  return {
+    typeface,
+    fallbackTypeface: resolveFontFamily(typeface) || "Aptos",
+    requiresEmbedding:
+      resolveFontFamily(typeface).toLocaleLowerCase("en-US") !==
+      typeface.toLocaleLowerCase("en-US"),
+  };
 }

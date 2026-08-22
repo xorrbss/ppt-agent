@@ -21,11 +21,23 @@ export interface AuthoredHybridExportMetadata {
 }
 
 export const AUTHORED_HYBRID_COVERAGE_SCHEMA_VERSION =
-  "presenton.authored-hybrid-coverage/v1" as const;
+  "presenton.authored-hybrid-coverage/v2" as const;
 
 export interface AuthoredHybridCoverageSource {
+  exportAttemptId: string;
   presentationRevision: number;
+  canonicalSourceDigest: string;
+  /** Digest of the exact persisted GET payload rendered by Next.js. */
   sourceDigest: string;
+}
+
+export interface AuthoredHybridCoverageCounts {
+  nativeText: number;
+  nativeImage: number;
+  nativeShape: number;
+  nativeTable: number;
+  nativeChart: number;
+  rasterRemaining: number;
 }
 
 export interface AuthoredHybridSlideCoverage {
@@ -36,13 +48,19 @@ export interface AuthoredHybridSlideCoverage {
   /** Tables and charts remain zero until their OOXML serializers are real. */
   nativeTable: number;
   nativeChart: number;
+  logicalCoverage: AuthoredHybridCoverageCounts;
+  ooxmlReadback: AuthoredHybridCoverageCounts & {
+    status: "not-run" | "passed" | "failed";
+  };
+  backplateCount: number;
+  typographyIssues: Array<{ code: string; elementId?: string }>;
   rasterRemaining: number;
   fallbackReasons: string[];
   /**
    * This records construction evidence, not a pixel-parity claim. Native paint
    * is removed from the fidelity backplate before the native layer is inserted.
    */
-  visualParity: "fidelity-backplate-retained" | "not-verified";
+  visualParity: "passed" | "failed" | "not-verified";
   nativeBackplateDeDuplication: "applied" | "not-applicable";
 }
 
@@ -56,6 +74,16 @@ export interface AuthoredHybridCoverageManifest {
   nativeShape: number;
   nativeTable: number;
   nativeChart: number;
+  logicalCoverage: AuthoredHybridCoverageCounts;
+  ooxmlReadback: AuthoredHybridCoverageCounts & {
+    status: "not-run" | "passed" | "failed";
+  };
+  backplateCount: number;
+  typographyIssues: Array<{
+    slideNumber: number;
+    code: string;
+    elementId?: string;
+  }>;
   rasterRemaining: number;
   /** False whenever even one raster element remains. */
   fullyEditable: boolean;
@@ -70,6 +98,23 @@ interface CoverageQualitySlide {
   nativeImageElements: number;
   nativeShapeElements: number;
   rasterFallbackElements: number;
+  logicalCoverage: {
+    nativeText: number;
+    nativeImage: number;
+    nativeShape: number;
+    nativeGroup: number;
+    rasterRemaining: number;
+  };
+  ooxmlReadback: {
+    status: "not-run" | "passed" | "failed";
+    nativeText: number;
+    nativeImage: number;
+    nativeShape: number;
+    nativeGroup: number;
+    rasterRemaining: number;
+  };
+  backplateCount: number;
+  typographyIssues: ReadonlyArray<{ code: string; elementId?: string }>;
   fallbackReasons: readonly string[];
 }
 
@@ -102,8 +147,27 @@ export function createAuthoredHybridCoverageManifest(
       // older quality producer omitted the aggregate element count.
       const rasterRemaining = Math.max(
         slide.imageFallback ? 1 : 0,
-        nonNegativeInteger(slide.rasterFallbackElements),
+        nonNegativeInteger(slide.logicalCoverage.rasterRemaining),
       );
+      const logicalCoverage = {
+        nativeText: nonNegativeInteger(slide.logicalCoverage.nativeText),
+        nativeImage: nonNegativeInteger(slide.logicalCoverage.nativeImage),
+        nativeShape: nonNegativeInteger(slide.logicalCoverage.nativeShape),
+        nativeTable: 0,
+        nativeChart: 0,
+        rasterRemaining,
+      };
+      const ooxmlReadback = {
+        status: slide.ooxmlReadback.status,
+        nativeText: nonNegativeInteger(slide.ooxmlReadback.nativeText),
+        nativeImage: nonNegativeInteger(slide.ooxmlReadback.nativeImage),
+        nativeShape: nonNegativeInteger(slide.ooxmlReadback.nativeShape),
+        nativeTable: 0,
+        nativeChart: 0,
+        rasterRemaining: nonNegativeInteger(
+          slide.ooxmlReadback.rasterRemaining,
+        ),
+      };
       return {
         slideNumber: Math.max(1, Math.trunc(slide.slideNumber)),
         nativeText,
@@ -111,6 +175,10 @@ export function createAuthoredHybridCoverageManifest(
         nativeShape,
         nativeTable: 0,
         nativeChart: 0,
+        logicalCoverage,
+        ooxmlReadback,
+        backplateCount: nonNegativeInteger(slide.backplateCount),
+        typographyIssues: slide.typographyIssues.map((issue) => ({ ...issue })),
         rasterRemaining,
         fallbackReasons: normalizedReasons(slide.fallbackReasons),
         // Construction removes native paint from the backplate, but only the
@@ -128,14 +196,20 @@ export function createAuthoredHybridCoverageManifest(
     (sum, slide) => sum + slide.rasterRemaining,
     0,
   );
+  const sumLogical = (field: keyof AuthoredHybridCoverageCounts) =>
+    slides.reduce((sum, slide) => sum + slide.logicalCoverage[field], 0);
+  const sumReadback = (field: keyof AuthoredHybridCoverageCounts) =>
+    slides.reduce((sum, slide) => sum + slide.ooxmlReadback[field], 0);
   return {
     schemaVersion: AUTHORED_HYBRID_COVERAGE_SCHEMA_VERSION,
     mode: "hybrid",
     source: {
+      exportAttemptId: source.exportAttemptId,
       presentationRevision: Math.max(
         0,
         Math.trunc(source.presentationRevision),
       ),
+      canonicalSourceDigest: source.canonicalSourceDigest.toLowerCase(),
       sourceDigest: source.sourceDigest.toLowerCase(),
     },
     totalSlides: slides.length,
@@ -144,6 +218,39 @@ export function createAuthoredHybridCoverageManifest(
     nativeShape,
     nativeTable: 0,
     nativeChart: 0,
+    logicalCoverage: {
+      nativeText: sumLogical("nativeText"),
+      nativeImage: sumLogical("nativeImage"),
+      nativeShape: sumLogical("nativeShape"),
+      nativeTable: 0,
+      nativeChart: 0,
+      rasterRemaining: sumLogical("rasterRemaining"),
+    },
+    ooxmlReadback: {
+      status:
+        slides.length > 0 &&
+        slides.every((slide) => slide.ooxmlReadback.status === "passed")
+          ? "passed"
+          : slides.some((slide) => slide.ooxmlReadback.status === "failed")
+            ? "failed"
+            : "not-run",
+      nativeText: sumReadback("nativeText"),
+      nativeImage: sumReadback("nativeImage"),
+      nativeShape: sumReadback("nativeShape"),
+      nativeTable: 0,
+      nativeChart: 0,
+      rasterRemaining: sumReadback("rasterRemaining"),
+    },
+    backplateCount: slides.reduce(
+      (sum, slide) => sum + slide.backplateCount,
+      0,
+    ),
+    typographyIssues: slides.flatMap((slide) =>
+      slide.typographyIssues.map((issue) => ({
+        slideNumber: slide.slideNumber,
+        ...issue,
+      })),
+    ),
     rasterRemaining,
     fullyEditable: slides.length > 0 && rasterRemaining === 0,
     slides,

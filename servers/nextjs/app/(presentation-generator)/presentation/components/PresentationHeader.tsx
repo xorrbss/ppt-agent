@@ -1,5 +1,5 @@
 "use client";
-import { Loader2, AlertTriangle, Sparkles } from "lucide-react";
+import { Loader2, AlertTriangle } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Image from "next/image";
@@ -180,11 +180,14 @@ const PresentationHeader = ({
 
   const handleExportPptx = async (
     pptxMode?: PptxExportMode,
-    fontEmbedding = false,
+    fontEmbedding?: boolean,
   ) => {
     if (isStreaming || !workspaceCommandsEnabled || !onWorkspaceCommand) return;
     try {
       if (isAuthoredDeck && pptxMode === "hybrid") {
+        // A caller must explicitly choose false to request the compatibility
+        // path. Hybrid exports otherwise request embedding by default.
+        const requestedFontEmbedding = fontEmbedding !== false;
         const response = await fetch("/api/export-presentation", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -193,21 +196,41 @@ const PresentationHeader = ({
             id: presentation_id,
             title: presentationData?.title ?? "presentation",
             pptxMode: "hybrid",
-            fontEmbedding,
+            fontEmbedding: requestedFontEmbedding,
             ...(typeof presentationData?.revision === "number"
               ? { expectedPresentationRevision: presentationData.revision }
               : {}),
           }),
         });
         const result = (await response.json().catch(() => null)) as {
+          success?: boolean;
           path?: string;
+          quality?: PresentationExportQualityReport;
+          powerPointQa?: PresentationExportQualityReport["powerPointQa"];
           exportMetadata?: { coverageManifest?: HybridCoverageManifest };
           error?: string;
         } | null;
+        const coverage = result?.exportMetadata?.coverageManifest;
+        const quality =
+          result?.quality && result.powerPointQa
+            ? { ...result.quality, powerPointQa: result.powerPointQa }
+            : result?.quality;
         if (!response.ok || !result?.path) {
+          if (quality) setExportQuality(quality);
+          else if (coverage?.mode === "hybrid") setHybridCoverage(coverage);
           throw new Error(result?.error ?? "hybrid_export_failed");
         }
-        const coverage = result.exportMetadata?.coverageManifest;
+        const embedding = quality?.fontEmbeddingStatus;
+        if (
+          requestedFontEmbedding &&
+          (!embedding?.requested || !embedding.applied)
+        ) {
+          // Never treat an unaudited/failed embedding result as a successful
+          // font-preserving download, even if an older server returned a path.
+          if (quality) setExportQuality(quality);
+          throw new Error("font_embedding_not_applied");
+        }
+        if (quality) setExportQuality(quality);
         if (coverage?.mode === "hybrid") setHybridCoverage(coverage);
         const anchor = window.document.createElement("a");
         anchor.href = result.path;
@@ -218,13 +241,14 @@ const PresentationHeader = ({
         return;
       }
       const option = pptxMode === "hybrid" ? "편집 가능한 요소를 분리해 " : "";
-      const fontOption = fontEmbedding ? "(허용된 글꼴 포함) " : "";
+      const requestedFontEmbedding = pptxMode === "hybrid" && fontEmbedding !== false;
+      const fontOption = requestedFontEmbedding ? "(글꼴 포함 요청) " : "";
       await onWorkspaceCommand(`${option}${fontOption}PPTX로 내보내기`, {
         commandType: "export.pptx",
         context: {
           format: "pptx",
           ...(pptxMode ? { pptx_mode: pptxMode } : {}),
-          ...(pptxMode ? { font_embedding: fontEmbedding } : {}),
+          ...(pptxMode ? { font_embedding: requestedFontEmbedding } : {}),
           ...masterPinCommandContext(appliedMasterPin),
         },
       });
@@ -423,6 +447,7 @@ const PresentationHeader = ({
       />
       <HybridCoverageDialog
         manifest={hybridCoverage}
+        exportQuality={exportQuality}
         onClose={() => setHybridCoverage(null)}
       />
       <RegenerateConfirmDialog

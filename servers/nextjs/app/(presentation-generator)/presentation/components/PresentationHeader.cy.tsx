@@ -112,8 +112,6 @@ describe("PresentationHeader workspace controls", () => {
     cy.get('[data-testid="export-pdf"]').click({ force: true });
     openExportOptions();
     cy.get('[data-testid="export-pptx"]').click({ force: true });
-    openExportOptions();
-    cy.get('[data-testid="authored-export-hybrid"]').click({ force: true });
 
     cy.wrap(null).then(() => {
       expect(workspaceCommand.getCall(0).args).to.deep.equal([
@@ -124,15 +122,21 @@ describe("PresentationHeader workspace controls", () => {
         "PPTX로 내보내기",
         { commandType: "export.pptx", context: { format: "pptx" } },
       ]);
-      expect(workspaceCommand.getCall(2).args).to.deep.equal([
-        "편집 가능한 요소를 분리해 PPTX로 내보내기",
-        {
-          commandType: "export.pptx",
-          context: { format: "pptx", pptx_mode: "hybrid", font_embedding: false },
-        },
-      ]);
     });
     cy.get("@updatePresentationContent").should("not.have.been.called");
+  });
+
+  it("labels font-free Hybrid as an explicit compatibility option", () => {
+    const workspaceCommand = cy.stub().as("workspaceCommand").resolves();
+    mountHeader(true, false, { enabled: true, command: workspaceCommand });
+
+    openExportOptions();
+    cy.get('[data-testid="authored-export-hybrid"]')
+      .should("contain.text", "글꼴 포함 (기본)")
+      .and("contain.text", "적용되지 않으면 다운로드하지 않고");
+    cy.get('[data-testid="authored-export-hybrid-compatibility"]')
+      .should("contain.text", "호환 모드 (글꼴 미포함)")
+      .and("contain.text", "명시적 저품질 호환 옵션");
   });
 
   it("dispatches durable version restore commands for chat-first undo and redo", () => {

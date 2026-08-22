@@ -4,6 +4,7 @@ import {
   AUTHORED_CSS_DPI,
   AUTHORED_HYBRID_FALLBACK_REASONS,
   AUTHORED_HYBRID_SCHEMA_VERSION,
+  AUTHORED_HYBRID_TYPOGRAPHY_ISSUE_CODES,
   AUTHORED_SLIDE_HEIGHT_PX,
   AUTHORED_SLIDE_WIDTH_PX,
   type AuthoredHybridElement,
@@ -26,6 +27,9 @@ import {
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 const HEX_COLOR_PATTERN = /^[A-F0-9]{6}$/;
 const FALLBACK_REASON_SET = new Set<string>(AUTHORED_HYBRID_FALLBACK_REASONS);
+const TYPOGRAPHY_ISSUE_CODE_SET = new Set<string>(
+  AUTHORED_HYBRID_TYPOGRAPHY_ISSUE_CODES
+);
 
 function invariant(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`Invalid authored hybrid contract: ${message}`);
@@ -189,6 +193,37 @@ function assertTextLayout(value: unknown, label: string): void {
   const spacing = layout.paragraphSpacingPx as Record<string, unknown>;
   invariant(finite(spacing.before) && spacing.before >= 0, `${label}.paragraphSpacingPx.before is invalid`);
   invariant(finite(spacing.after) && spacing.after >= 0, `${label}.paragraphSpacingPx.after is invalid`);
+  if (layout.lineRects !== undefined) {
+    invariant(Array.isArray(layout.lineRects), `${label}.lineRects must be an array`);
+    layout.lineRects.forEach((rect, index) =>
+      assertBounds(rect, `${label}.lineRects[${index}]`)
+    );
+    invariant(
+      layout.lineRects.length <= layout.lineCount,
+      `${label}.lineRects cannot exceed lineCount`
+    );
+  }
+}
+
+function assertTypographyIssues(value: unknown, label: string): void {
+  invariant(Array.isArray(value), `${label} must be an array`);
+  value.forEach((entry, index) => {
+    invariant(typeof entry === "object" && entry !== null, `${label}[${index}] is invalid`);
+    const issue = entry as Record<string, unknown>;
+    invariant(
+      typeof issue.code === "string" && TYPOGRAPHY_ISSUE_CODE_SET.has(issue.code),
+      `${label}[${index}].code is invalid`
+    );
+    invariant(typeof issue.elementId === "string" && issue.elementId.length > 0, `${label}[${index}].elementId is invalid`);
+    if (issue.runIndex !== undefined) {
+      invariant(Number.isInteger(issue.runIndex) && (issue.runIndex as number) >= 0, `${label}[${index}].runIndex is invalid`);
+    }
+    if (issue.script !== undefined) oneOf(issue.script, ["cjk", "latin", "common"], `${label}[${index}].script`);
+    if (issue.requiredFace !== undefined) oneOf(issue.requiredFace, ["regular", "bold", "italic", "boldItalic"], `${label}[${index}].requiredFace`);
+    for (const key of ["requiredTypeface", "actualTypeface"] as const) {
+      if (issue[key] !== undefined) invariant(typeof issue[key] === "string", `${label}[${index}].${key} is invalid`);
+    }
+  });
 }
 
 function assertShapePayload(value: unknown, label: string): void {
@@ -302,6 +337,7 @@ function convertTextPayload(
       bounds: rectPxToBounds(run.boundsPx),
       fragments: run.fragmentRectsPx.map(rectPxToBounds),
       style: run.style,
+      ...(run.script ? { script: run.script } : {}),
       ...(run.breakKind ? { breakKind: run.breakKind } : {}),
     })),
     ...(layout
@@ -324,6 +360,9 @@ function convertTextPayload(
             textAlignSource: layout.textAlignSource,
             lineCount: layout.lineCount,
             singleLine: layout.singleLine,
+            ...(layout.lineRectsPx
+              ? { lineRects: layout.lineRectsPx.map(rectPxToBounds) }
+              : {}),
             paragraphSpacingPx: layout.paragraphSpacingPx,
           },
         }
@@ -555,6 +594,9 @@ export function assertAuthoredHybridSlide(
     invariant(finite(element.rotationDeg), `element ${element.id} has invalid rotation`);
     invariant(finite(element.opacity) && element.opacity >= 0 && element.opacity <= 1, `element ${element.id} has invalid opacity`);
     assertBounds(element.bounds, `element ${element.id}.bounds`);
+    if (element.typographyIssues !== undefined) {
+      assertTypographyIssues(element.typographyIssues, `element ${element.id}.typographyIssues`);
+    }
 
     if (element.classification.mode === "native") {
       eligibleIds.push(element.id);
@@ -580,6 +622,9 @@ export function assertAuthoredHybridSlide(
             assertBounds(fragment, `element ${element.id} run ${runIndex}.fragments[${fragmentIndex}]`)
           );
           assertTextStyle(run.style, `element ${element.id} run ${runIndex}.style`);
+          if (run.script !== undefined) {
+            oneOf(run.script, ["cjk", "latin", "common"], `element ${element.id} run ${runIndex}.script`);
+          }
           if (run.breakKind !== undefined) {
             oneOf(run.breakKind, ["soft", "line", "paragraph"], `element ${element.id} run ${runIndex}.breakKind`);
             invariant(run.text === "\n", `element ${element.id} run ${runIndex}.breakKind requires a newline run`);
@@ -640,6 +685,9 @@ export function assertAuthoredHybridSlide(
             assertBounds(fragment, `element ${element.id} run ${runIndex}.fragments[${fragmentIndex}]`)
           );
           assertTextStyle(run.style, `element ${element.id} run ${runIndex}.style`);
+          if (run.script !== undefined) {
+            oneOf(run.script, ["cjk", "latin", "common"], `element ${element.id} run ${runIndex}.script`);
+          }
           if (run.breakKind !== undefined) {
             oneOf(run.breakKind, ["soft", "line", "paragraph"], `element ${element.id} run ${runIndex}.breakKind`);
             invariant(run.text === "\n", `element ${element.id} run ${runIndex}.breakKind requires a newline run`);
