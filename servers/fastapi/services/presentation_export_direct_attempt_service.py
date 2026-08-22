@@ -25,7 +25,7 @@ from models.sql.presentation_export_attempt import (
 from models.sql.slide import SlideModel
 from models.authored_vnext.semantic.contracts import (
     AuthoredEmissionBundleV1,
-    ExportAttemptDigestBindingV1,
+    ExportAttemptDigestBindingV2,
     SemanticUnavailableReceiptV1,
 )
 from models.sql.workspace import get_workspace_owner_scope
@@ -65,6 +65,14 @@ from utils.owner_context import get_current_owner_id
 
 HYBRID_ATTEMPT_RETENTION_DAYS = 180
 HYBRID_EVIDENCE_RETENTION_DAYS = 30
+
+
+def _visual_parity_status_from_powerpoint_qa(
+    qa: ExportPowerPointQaEvidence,
+) -> str:
+    """Return only the visual claim justified by desktop QA alone."""
+
+    return "failed" if qa.status == "failed" else "not-verified"
 
 
 def _prefixed_digest(value: str) -> str:
@@ -149,7 +157,7 @@ async def _bind_completed_semantic_export_attempt(
             )
         semantic_digests.append(bundle.semantic_component.digest)
         origins.append(bundle.origin_generation_attempt_id)
-    binding = ExportAttemptDigestBindingV1(
+    binding = ExportAttemptDigestBindingV2(
         export_attempt_id=attempt.id,
         presentation_id=attempt.presentation_id,
         presentation_revision=attempt.source_revision,
@@ -438,7 +446,12 @@ async def complete_direct_hybrid_export_attempt(
         or qa.native_chart != manifest.ooxml_readback.native_chart
     ):
         qa = qa.model_copy(update={"status": "failed"})
-    visual_parity_status = qa.status
+    # PowerPoint COM proves packaging, reopen, render, and native-object
+    # readback.  It does not compare the Authored, browser Fidelity/Hybrid, and
+    # first-open/reopened PowerPoint renders or complete the per-slide manual
+    # issue ledger.  Keep visual parity truthful until a separately bound
+    # visual-acceptance receipt has passed those gates.
+    visual_parity_status = _visual_parity_status_from_powerpoint_qa(qa)
     finalized_quality = deepcopy(quality)
     finalized_quality["atomicBinding"] = expected_binding
     finalized_quality["powerPointQa"] = qa.model_dump(mode="json", by_alias=True)

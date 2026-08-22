@@ -103,6 +103,9 @@ from models.sql.authored_semantic_bundle import (  # noqa: F401, E402
     AuthoredSemanticArtifact,
     AuthoredSemanticExportBinding,
 )
+from models.sql.authored_capability_receipt import (  # noqa: F401, E402
+    AuthoredCapabilityReceiptRecordV2,
+)
 from models.sql.provider_runtime_reservation import (  # noqa: F401, E402
     ProviderRuntimeBudget,
     ProviderRuntimeCircuit,

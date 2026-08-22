@@ -12,6 +12,7 @@ from models.authored_vnext.semantic.contracts import (
     AuthoredDeckEmissionManifestV1,
     AuthoredEmissionBundleV1,
     ExportAttemptDigestBindingV1,
+    ExportAttemptDigestBindingV2,
     LegacyHtmlBundleV1,
 )
 from models.sql.authored_semantic_bundle import (
@@ -23,15 +24,16 @@ from models.sql.authored_semantic_bundle import (
 from models.sql.presentation_export_attempt import PresentationExportAttempt
 
 from .canonical import SemanticContractError, canonical_digest, seal_export_binding
+from .readiness import validate_attempt_receipt_pins
 
 
 async def bind_existing_export_attempt(
     session: AsyncSession,
     *,
     owner_id: uuid.UUID,
-    binding: ExportAttemptDigestBindingV1,
+    binding: ExportAttemptDigestBindingV1 | ExportAttemptDigestBindingV2,
     tenant_id: str = "default",
-) -> ExportAttemptDigestBindingV1:
+) -> ExportAttemptDigestBindingV1 | ExportAttemptDigestBindingV2:
     """Append an immutable binding after resolving the DB attempt and graph."""
 
     sealed = seal_export_binding(binding)
@@ -48,6 +50,15 @@ async def bind_existing_export_attempt(
         raise SemanticContractError("authored_semantic_export_attempt_not_found")
     if attempt.source_revision != sealed.presentation_revision:
         raise SemanticContractError("authored_semantic_export_revision_mismatch")
+    if isinstance(sealed, ExportAttemptDigestBindingV2):
+        await validate_attempt_receipt_pins(
+            session,
+            tenant_id=tenant_id,
+            receipt_digests=sealed.release_authority_receipt_digests,
+            serializer_id=sealed.serializer_id,
+            serializer_version=sealed.serializer_version,
+            renderer_source_digest=sealed.renderer_source_digest,
+        )
     pointer = await session.scalar(
         select(AuthoredDeckEmissionActivePointer).where(
             AuthoredDeckEmissionActivePointer.owner_id == owner_id,

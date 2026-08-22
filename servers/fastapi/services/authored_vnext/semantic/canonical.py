@@ -24,6 +24,7 @@ from models.authored_vnext.semantic.contracts import (
     CapabilityReceiptV1,
     ElementIdentityRegistryV1,
     ExportAttemptDigestBindingV1,
+    ExportAttemptDigestBindingV2,
     FontManifestV1,
     HybridExportPlanV1,
     LegacyHtmlBundleV1,
@@ -216,7 +217,9 @@ def seal_hybrid_plan(plan: HybridExportPlanV1) -> HybridExportPlanV1:
     return seal_component(plan, "plan_digest")  # type: ignore[return-value]
 
 
-def seal_export_binding(binding: ExportAttemptDigestBindingV1) -> ExportAttemptDigestBindingV1:
+def seal_export_binding(
+    binding: ExportAttemptDigestBindingV1 | ExportAttemptDigestBindingV2,
+) -> ExportAttemptDigestBindingV1 | ExportAttemptDigestBindingV2:
     return seal_component(binding, "binding_digest")  # type: ignore[return-value]
 
 

@@ -711,6 +711,17 @@ class ExportAttemptDigestBindingV1(StrictCamelModel):
     binding_digest: Digest | None = None
 
 
+class ExportAttemptDigestBindingV2(ExportAttemptDigestBindingV1):
+    """Export binding with release-authority pins kept distinct from evidence receipts."""
+
+    schema_version: Literal["authored-export-attempt-binding/v2"] = (
+        "authored-export-attempt-binding/v2"
+    )
+    release_authority_receipt_digests: list[Digest] = Field(
+        default_factory=list, max_length=128
+    )
+
+
 def _require_unique(values: Any, code: str) -> None:
     items = list(values)
     if len(items) != len(set(items)):

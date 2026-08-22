@@ -13,6 +13,8 @@ from sqlmodel import SQLModel
 from models.presentation_and_path import PresentationAndPath
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_export_attempt import (
+    ExportPowerPointQaEvidence,
+    ExportVisualParityEvidence,
     PresentationExportCoverageManifest,
     PresentationExportAttempt,
     validate_export_attempt_provenance,
@@ -32,6 +34,7 @@ from services.presentation_export_attempt_service import (
     terminalize_export_attempt_succeeded,
 )
 from services.presentation_export_direct_attempt_service import (
+    _visual_parity_status_from_powerpoint_qa,
     begin_direct_fidelity_export_attempt,
     _validate_hybrid_atomic_binding,
     list_direct_hybrid_export_attempt_history,
@@ -47,6 +50,69 @@ from services.presentation_export_router import (
     PresentationExportRouteResult,
     terminalize_standalone_presentation_export,
 )
+
+
+def test_powerpoint_qa_does_not_self_promote_visual_parity() -> None:
+    passed = ExportPowerPointQaEvidence.model_validate(
+        {
+            "status": "passed",
+            "platform": "windows",
+            "supported": True,
+            "automation": "PowerPoint.COM",
+            "reopened": True,
+            "rendered": True,
+            "readback": True,
+            "repairDialogs": 0,
+            "renderedPngSha256": ["a" * 64],
+            "slideCount": 1,
+        }
+    )
+    failed = passed.model_copy(update={"status": "failed"})
+
+    assert _visual_parity_status_from_powerpoint_qa(passed) == "not-verified"
+    assert _visual_parity_status_from_powerpoint_qa(failed) == "failed"
+
+
+def test_passed_powerpoint_qa_allows_truthful_unverified_visual_parity() -> None:
+    digest = "a" * 64
+    binding = {
+        "presentation_id": str(uuid.uuid4()),
+        "export_attempt_id": str(uuid.uuid4()),
+        "presentation_revision": 1,
+        "canonical_source_sha256": digest,
+        "renderer_source_sha256": digest,
+        "pptx_sha256": digest,
+    }
+    qa = {
+        "status": "passed",
+        "platform": "windows",
+        "supported": True,
+        "automation": "PowerPoint.COM",
+        "reopened": True,
+        "rendered": True,
+        "readback": True,
+        "repairDialogs": 0,
+        "renderedPngSha256": [digest],
+        "slideCount": 1,
+        "typographyIssuesGt5Pt": 0,
+        "typographyIssuesGt10Pt": 0,
+        "nativeText": 1,
+        "nativeImage": 0,
+        "nativeShape": 0,
+        "nativeTable": 0,
+        "nativeChart": 0,
+    }
+    evidence = ExportVisualParityEvidence.model_validate(
+        {
+            "status": "not-verified",
+            "binding": binding,
+            "qualitySidecarSha256": digest,
+            "coverageSidecarSha256": digest,
+            "powerpointQa": qa,
+        }
+    )
+
+    assert evidence.status == "not-verified"
 
 
 def test_hybrid_coverage_accepts_strict_semantic_receipt_digests() -> None:

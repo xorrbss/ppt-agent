@@ -508,8 +508,14 @@ class ExportVisualParityEvidence(BaseModel):
 
     @model_validator(mode="after")
     def validate_qa_status(self) -> "ExportVisualParityEvidence":
-        if self.status != self.powerpoint_qa.status:
-            raise ValueError("visual parity status does not match PowerPoint QA")
+        # COM package/readback QA is necessary but is not itself visual-parity
+        # evidence.  A passed visual claim requires passed COM QA, while a
+        # passed COM observation may truthfully remain not-verified until a
+        # separate bound visual comparison is supplied.
+        if self.status == "passed" and self.powerpoint_qa.status != "passed":
+            raise ValueError("passed visual parity requires passed PowerPoint QA")
+        if self.status == "not-verified" and self.powerpoint_qa.status == "failed":
+            raise ValueError("failed PowerPoint QA cannot be visually not-verified")
         if self.status == "passed" and (
             self.binding.presentation_id is None
             or self.powerpoint_qa.native_text is None
