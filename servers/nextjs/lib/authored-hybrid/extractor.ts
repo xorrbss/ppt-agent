@@ -206,6 +206,8 @@ function promotedElementContentKey(
         boundsPx: run.bounds.px,
         fragmentRectsPx: run.fragments.map((fragment) => fragment.px),
         style: run.style,
+        script: run.script,
+        breakKind: run.breakKind,
       })),
       containerShape: element.text.containerShape
         ? {

@@ -915,6 +915,33 @@ test("Chrome suppresses decorated raster text selected by editable export", asyn
   assert.deepEqual(result.fallbackElementIds, []);
 });
 
+test("declared script-aware text keeps an identical backplate content key", async (t) => {
+  const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
+  if (!chromeExecutable) {
+    if (process.env.CI === "true") assert.fail("CI must provide Chrome/Chromium");
+    t.skip("Chrome/Chromium is unavailable");
+    return;
+  }
+
+  const html = `<!doctype html><html><head><style>
+    html,body{width:1280px;height:720px;margin:0;overflow:hidden}
+    p{position:absolute;left:704px;top:160px;margin:0;font:25px/30px "IBM Plex Mono",monospace;color:#123}
+  </style></head><body><p data-qid="mono.run" data-semantic-role="body">MONORUN</p></body></html>`;
+  const options = {
+    chromeExecutable,
+    timeoutMs: 30_000,
+    declaredElementIds: ["mono.run"],
+  };
+  const slide = await extractAuthoredSlideDom(html, options);
+  const text = slide.elements.find((element) => element.id === "mono.run");
+  assert.ok(text && "text" in text && text.text);
+  assert.ok(text.text.runs.some((run) => run.script === "latin"));
+
+  const result = await renderAuthoredBackplate(html, slide, ["mono.run"], options);
+  assert.deepEqual(result.appliedPromotedElementIds, ["mono.run"]);
+  assert.deepEqual(result.fallbackElementIds, []);
+});
+
 test("inline-only mixed-style prose is one editable text root while highlight paint stays on the backplate", async (t) => {
   const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
   if (!chromeExecutable) {
