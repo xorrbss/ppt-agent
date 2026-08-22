@@ -1,0 +1,54 @@
+{
+  "schemaVersion": "authored-semantic-vertical-slice-fixture/v1",
+  "fixtureId": "authored-semantic-two-slide-v1",
+  "presentationId": "fixture-presentation-2slide",
+  "presentationRevision": 7,
+  "operationId": "fixture-operation-0007",
+  "generationAttemptId": "fixture-generation-0007",
+  "masterContractBytes": "fixture-master-contract/v1",
+  "compositionBytes": "fixture-composition/v1",
+  "qualityPolicyVersion": "authored-quality/fixture-v1",
+  "slides": [
+    {
+      "slideId": "fixture-slide-a",
+      "slideRevision": 3,
+      "genericCssClass": "fixture-card",
+      "html": "<section data-slide='a' class='fixture-card'><h1 data-qid='a-title'>혼합 Korean Latin 2026</h1><span data-qid='a-mono'>01: IBM Plex Mono</span><img data-qid='a-image' src='artifact://fixture/image-a'/><div data-qid='a-shape-1'></div><div data-qid='a-shape-2'></div><div data-qid='a-shape-3'></div><div data-qid='a-chart' data-raster-island='chart'></div></section>",
+      "semanticElements": [
+        {"elementId": "a-title", "kind": "text", "semanticRole": "title", "requiredFeatures": ["cjk", "latin", "number"]},
+        {"elementId": "a-mono", "kind": "text", "semanticRole": "metric", "requiredFeatures": ["mono-font-run"]},
+        {"elementId": "a-image", "kind": "image", "semanticRole": "illustration", "requiredFeatures": []},
+        {"elementId": "a-shape-1", "kind": "shape", "semanticRole": "decoration", "requiredFeatures": []},
+        {"elementId": "a-shape-2", "kind": "shape", "semanticRole": "decoration", "requiredFeatures": []},
+        {"elementId": "a-shape-3", "kind": "shape", "semanticRole": "decoration", "requiredFeatures": []},
+        {"elementId": "a-chart", "kind": "complexIsland", "semanticRole": "chart", "requiredFeatures": ["chart-data-unavailable"]}
+      ],
+      "assets": [{"assetId": "fixture-image-a", "locator": "artifact://fixture/image-a", "bytes": "fixture-image-a-bytes", "mediaType": "image/svg+xml"}],
+      "fonts": [{"faceId": "fixture-ibm-plex-mono", "family": "IBM Plex Mono", "locator": "artifact://fixture/font/ibm-plex-mono", "bytes": "fixture-ibm-plex-mono-font-bytes"}],
+      "sentinels": []
+    },
+    {
+      "slideId": "fixture-slide-b",
+      "slideRevision": 3,
+      "genericCssClass": "fixture-card",
+      "html": "<section data-slide='b' class='fixture-card'><h1 data-qid='b-title'>다른 내용과 Style</h1><div data-qid='b-shape'></div><span data-qid='b-right-sentinel'>RIGHT-BOUNDARY</span><span data-qid='b-bottom-sentinel'>BOTTOM-BOUNDARY</span><span data-qid='b-probe'>INTERNAL-PROBE</span></section>",
+      "semanticElements": [
+        {"elementId": "b-title", "kind": "text", "semanticRole": "title", "requiredFeatures": ["cjk", "latin"]},
+        {"elementId": "b-shape", "kind": "shape", "semanticRole": "decoration", "requiredFeatures": []},
+        {"elementId": "b-right-sentinel", "kind": "text", "semanticRole": "sentinel", "requiredFeatures": ["right-boundary"]},
+        {"elementId": "b-bottom-sentinel", "kind": "text", "semanticRole": "sentinel", "requiredFeatures": ["bottom-boundary"]},
+        {"elementId": "b-probe", "kind": "text", "semanticRole": "sentinel", "requiredFeatures": ["internal-probe"]}
+      ],
+      "assets": [],
+      "fonts": [],
+      "sentinels": ["b-right-sentinel", "b-bottom-sentinel", "b-probe"]
+    }
+  ],
+  "expected": {
+    "hybridNativeKinds": ["text", "image", "shape"],
+    "forcedRasterQids": ["a-chart"],
+    "promotionReady": false,
+    "fullNativeParityReady": false,
+    "independentVnextGenerationReady": false
+  }
+}

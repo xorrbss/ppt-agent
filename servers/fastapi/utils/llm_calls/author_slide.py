@@ -34,6 +34,7 @@ from llmai.shared import SystemMessage, TextContentPart, UserMessage
 from models.authored_header_contract import AuthoredHeaderContract
 from models.authored_visual_plan import AuthoredSlideVisualIntent
 from utils.authored_font_policy import enforce_authored_font_floor
+from utils.authored_dom_quality import validate_declared_authored_qids
 from utils.authored_header_prompt import render_header_contract
 from utils.get_env import is_authored_source_images_enabled
 from utils.llm_calls.author_slide_images import (
@@ -81,6 +82,19 @@ def _env_nonnegative_float(name: str, default: float) -> float:
         return value if value >= 0 else default
     except (TypeError, ValueError):
         return default
+
+
+def authored_semantic_dual_output_mode() -> str:
+    """Return the fail-closed rollout mode for new Authored candidates."""
+
+    value = os.getenv("AUTHORED_SEMANTIC_DUAL_OUTPUT_MODE", "shadow").strip().lower()
+    if value not in {"shadow", "declared"}:
+        logger.warning(
+            "Unsupported AUTHORED_SEMANTIC_DUAL_OUTPUT_MODE=%r; using shadow",
+            value,
+        )
+        return "shadow"
+    return value
 
 
 # Per-slide authoring makes a blocking provider call (~75s of model reasoning). Run it
@@ -807,7 +821,10 @@ async def author_slide_html(
     authored_html = _strip_nonvisual_pointer_events(authored_html)
     if mode != EXACT_RECONSTRUCTION:
         authored_html = enforce_authored_font_floor(authored_html)
-    return validate_authored_slide_html(
+    authored_html = validate_authored_slide_html(
         authored_html,
         allow_illustration_slots=True,
     )
+    if authored_semantic_dual_output_mode() == "declared":
+        validate_declared_authored_qids(authored_html)
+    return authored_html

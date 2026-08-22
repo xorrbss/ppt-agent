@@ -10,6 +10,7 @@ import hmac
 from pathlib import Path
 from typing import Any
 import uuid
+import os
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +23,11 @@ from models.sql.presentation_export_attempt import (
     PresentationExportCoverageManifest,
 )
 from models.sql.slide import SlideModel
+from models.authored_vnext.semantic.contracts import (
+    AuthoredEmissionBundleV1,
+    ExportAttemptDigestBindingV1,
+    SemanticUnavailableReceiptV1,
+)
 from models.sql.workspace import get_workspace_owner_scope
 from services.presentation_export_attempt_service import (
     begin_export_attempt,
@@ -47,11 +53,114 @@ from services.presentation_export_powerpoint_qa import (
     resolve_hybrid_artifact,
     trusted_powerpoint_qa,
 )
+from services.authored_vnext.semantic.canonical import (
+    canonical_digest as semantic_canonical_digest,
+)
+from services.authored_vnext.semantic.export_binding import (
+    bind_existing_export_attempt,
+)
+from services.authored_vnext.semantic.query import get_active_authored_emission
 from utils.owner_context import get_current_owner_id
 
 
 HYBRID_ATTEMPT_RETENTION_DAYS = 180
 HYBRID_EVIDENCE_RETENTION_DAYS = 30
+
+
+def _prefixed_digest(value: str) -> str:
+    return value if value.startswith("sha256:") else f"sha256:{value}"
+
+
+async def _active_semantic_emission(
+    session: AsyncSession,
+    presentation_id: uuid.UUID,
+):
+    owner_id = get_current_owner_id()
+    if owner_id is None:
+        return None
+    return await get_active_authored_emission(
+        session,
+        presentation_id=presentation_id,
+        owner_id=owner_id,
+        tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+    )
+
+
+async def _bind_completed_semantic_export_attempt(
+    session: AsyncSession,
+    *,
+    attempt: PresentationExportAttempt,
+    mode: str,
+    renderer_source_sha256: str,
+    pptx_sha256: str,
+    receipt_payloads: list[dict[str, Any]],
+) -> str | None:
+    active = await _active_semantic_emission(session, attempt.presentation_id)
+    owner_id = get_current_owner_id()
+    if (
+        active is None
+        or owner_id is None
+        or active.canonical_mode != "bundleGraph"
+        or active.manifest is None
+        or active.manifest.canonical_digest is None
+    ):
+        return None
+    manifest = active.manifest
+    if (
+        active.presentation_revision != attempt.source_revision
+        or active.canonical_digest is None
+        or active.canonical_digest.removeprefix("sha256:")
+        != attempt.source_snapshot_sha256
+    ):
+        raise PresentationExportFreshnessError(
+            "authored_semantic_export_stale_manifest"
+        )
+    semantic_digests: list[str] = []
+    origins: list[uuid.UUID | None] = []
+    for bundle in active.bundles:
+        if not isinstance(bundle, AuthoredEmissionBundleV1):
+            raise PresentationExportContractError(
+                "authored_semantic_export_bundle_kind_unsupported"
+            )
+        if bundle.semantic_component.digest is None:
+            raise PresentationExportContractError(
+                "authored_semantic_export_component_digest_missing"
+            )
+        semantic_digests.append(bundle.semantic_component.digest)
+        origins.append(bundle.origin_generation_attempt_id)
+    binding = ExportAttemptDigestBindingV1(
+        export_attempt_id=attempt.id,
+        presentation_id=attempt.presentation_id,
+        presentation_revision=attempt.source_revision,
+        operation_id=manifest.operation_id,
+        generation_attempt_id=manifest.generation_attempt_id,
+        slide_origin_generation_attempt_ids=origins,
+        canonical_digest=active.canonical_digest,
+        manifest_digest=manifest.canonical_digest,
+        semantic_digests=semantic_digests,
+        master_contract_digest=manifest.master_contract_digest,
+        composition_digest=manifest.composition_digest,
+        font_manifest_digest=manifest.font_manifest_digest,
+        asset_manifest_digest=manifest.asset_manifest_digest,
+        quality_policy_digest=semantic_canonical_digest(
+            {"qualityPolicyVersion": manifest.quality_policy_version}
+        ),
+        mode=mode,
+        renderer_source_digest=_prefixed_digest(renderer_source_sha256),
+        serializer_id=("authored-hybrid" if mode == "hybrid" else "authored-fidelity"),
+        serializer_version=("2" if mode == "hybrid" else "1"),
+        receipt_digests=[
+            semantic_canonical_digest(payload) for payload in receipt_payloads
+        ],
+        pptx_digest=_prefixed_digest(pptx_sha256),
+    )
+    sealed = await bind_existing_export_attempt(
+        session,
+        owner_id=owner_id,
+        binding=binding,
+        tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+    )
+    return sealed.binding_digest
 
 
 def _sha256_file(path: Path) -> str:
@@ -142,6 +251,39 @@ async def _begin_direct_authored_export_attempt(
         ),
     )
     asset_manifest_digest = build_export_asset_manifest_sha256(analysis.asset_digests)
+    active_semantic = await _active_semantic_emission(session, presentation_id)
+    if active_semantic is not None and active_semantic.canonical_mode == "bundleGraph":
+        if (
+            active_semantic.presentation_revision != expected_revision
+            or active_semantic.canonical_digest is None
+        ):
+            raise PresentationExportFreshnessError(
+                "authored_semantic_export_stale_manifest"
+            )
+        canonical_digest = active_semantic.canonical_digest.removeprefix("sha256:")
+        if export_mode == "hybrid" and any(
+            not isinstance(bundle, AuthoredEmissionBundleV1)
+            or isinstance(
+                bundle.semantic_component,
+                SemanticUnavailableReceiptV1,
+            )
+            for bundle in active_semantic.bundles
+        ):
+            raise PresentationExportContractError(
+                "authored_semantic_hybrid_degraded_fidelity_only"
+            )
+        if active_semantic.manifest is not None:
+            composition_digest = (
+                active_semantic.manifest.composition_digest.removeprefix("sha256:")
+            )
+    elif (
+        export_mode == "hybrid"
+        and os.getenv("AUTHORED_SEMANTIC_BUNDLE_WRITES_ENABLED", "false").lower()
+        == "true"
+    ):
+        raise PresentationExportContractError(
+            "authored_semantic_hybrid_manifest_required"
+        )
     await require_export_asset_digests(
         session, expected_asset_digests=analysis.asset_digests
     )
@@ -336,6 +478,15 @@ async def complete_direct_hybrid_export_attempt(
         artifact_size_bytes=pptx_size_bytes,
         provenance=provenance,
     )
+    await session.refresh(attempt)
+    semantic_binding_digest = await _bind_completed_semantic_export_attempt(
+        session,
+        attempt=attempt,
+        mode="hybrid",
+        renderer_source_sha256=expected_binding["rendererSourceDigest"],
+        pptx_sha256=pptx_sha256,
+        receipt_payloads=[finalized_quality, finalized_coverage_json, qa.model_dump(mode="json")],
+    )
     await session.commit()
     await session.refresh(attempt)
     return attempt, {
@@ -343,6 +494,7 @@ async def complete_direct_hybrid_export_attempt(
         "visualParity": visual_parity_status,
         "quality": finalized_quality,
         "coverage": finalized_coverage_json,
+        "semanticBindingDigest": semantic_binding_digest,
         "qualitySidecarSha256": provenance["visual_parity"][
             "quality_sidecar_sha256"
         ],
@@ -464,11 +616,21 @@ async def complete_direct_fidelity_export_attempt(
         artifact_size_bytes=pptx_size_bytes,
         provenance=provenance,
     )
+    await session.refresh(attempt)
+    semantic_binding_digest = await _bind_completed_semantic_export_attempt(
+        session,
+        attempt=attempt,
+        mode="fidelity",
+        renderer_source_sha256=renderer_source_sha256,
+        pptx_sha256=pptx_sha256,
+        receipt_payloads=[atomic_binding],
+    )
     await session.commit()
     await session.refresh(attempt)
     return attempt, {
         "visualParity": "not-verified",
         "promotionReady": False,
+        "semanticBindingDigest": semantic_binding_digest,
         "atomicBinding": {
             "presentationId": str(presentation_id),
             "exportAttemptId": str(attempt.id),

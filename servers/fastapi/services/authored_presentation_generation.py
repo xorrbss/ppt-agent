@@ -48,6 +48,7 @@ from services.authored_header_contract_service import (
 )
 from services.authored_presentation_pipeline import _author_illustrate_render_pipeline
 from services.authored_presentation_publication import publish_authored_presentation
+from services.authored_semantic_candidate import compile_semantic_components
 from services.image_generation_service import ImageGenerationService
 from services.authored_source_images import collect_source_image_candidates
 from services.provider_usage_instrumentation import provider_usage_scope, record_local_stage
@@ -63,6 +64,7 @@ from utils.llm_calls.author_slide import (
     STYLE_REFERENCE,
     apply_style_defaults,
     normalize_reference_mode,
+    authored_semantic_dual_output_mode,
 )
 from utils.llm_calls.author_vision_qa import revise_authored_deck
 from utils.slide_capture import _placeholder_png, find_chrome
@@ -241,7 +243,11 @@ async def _generate_authored_presentation(
     authored_deck = pipeline.deck
     # Persist stable edit targets for future local quality-review patches. Attribute
     # insertion is deterministic and has no visual effect on the already-rendered PNG.
-    htmls = [ensure_authored_qids(html) for html in authored_deck.htmls]
+    semantic_mode = authored_semantic_dual_output_mode()
+    if semantic_mode == "declared":
+        htmls = list(authored_deck.htmls)
+    else:
+        htmls = [ensure_authored_qids(html) for html in authored_deck.htmls]
     pngs = pipeline.pngs
 
     fixed_count = 0
@@ -361,6 +367,7 @@ async def _generate_authored_presentation(
             )
         raise error from exc
     export_elapsed = time.monotonic() - export_started
+    semantic_components = compile_semantic_components(htmls)
     published_path, persist_elapsed = await publish_authored_presentation(
         request=request,
         presentation_id=presentation_id,
@@ -377,6 +384,7 @@ async def _generate_authored_presentation(
         chapter_plan=chapter_plan,
         illustration_plan=illustration_plan,
         htmls=htmls,
+        semantic_components=semantic_components,
         pngs=pngs,
         out_path=out_path,
         attempt_token=attempt_token,

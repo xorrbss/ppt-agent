@@ -334,7 +334,9 @@ def visual_story_marker(visual_intent: AuthoredSlideVisualIntent | None) -> str:
         f"story={visual_intent.story_kind}; silhouette={visual_intent.silhouette}. "
         f"{_STORY_RULES[visual_intent.story_kind]} Do not reuse a neighbouring slide's "
         "silhouette. Keep narrative text and candidate objects in separate semantic DOM "
-        "elements so deterministic data-qid migration can address them. "
+        "elements. Give every visible semantic DOM element one explicit, unique data-qid "
+        "using a stable token (letters/numbers plus . _ : - only). The server rejects missing, "
+        "invalid, or duplicate declared QIDs and never silently rewrites them. "
         "EDITABILITY TRUTH: Hybrid native candidates are only "
         f"[{native_candidates}]; they are not a promise of complete editability. "
         f"Raster fallback remains declared for [{raster_reasons}]. Never duplicate native-candidate "
@@ -466,7 +468,9 @@ def author_prompt(
         f"{page_marker}\n\n{structure_block}{chapter_block}{requirement_block}"
         f"{illustration_block}{visual_story_block}{direction_block}{design_system}\n\n"
         "Design THIS slide bespoke and premium within the shared system, vary the layout to "
-        "suit the role, output ONLY the complete self-contained HTML document."
+        "suit the role. Every visible text, image, simple shape, chart/table container, and "
+        "meaningful grouping element must carry a unique stable data-qid. Output ONLY the "
+        "complete self-contained HTML document."
     )
 
 

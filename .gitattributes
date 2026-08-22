@@ -5,3 +5,7 @@ servers/fastapi/tests/fixtures/slidespec_active_bundle_*_slide_*.html -text
 contracts/template_v2/v1/schema.json text eol=lf
 servers/nextjs/lib/template-v2-html/template-v2-contract.generated.* text eol=lf
 servers/nextjs/lib/template-v2-json-to-html.ts text eol=lf
+
+# Template-package manifests pin the byte length and SHA-256 of these JSON
+# entrypoints, so Windows worktrees must retain the Git blob's LF bytes.
+templates/**/template.json text eol=lf

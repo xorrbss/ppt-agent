@@ -1,0 +1,4 @@
+{
+  "canonicalJson": "{\"boolean\":true,\"empty\":null,\"numbers\":[0,0,1,1.25,1e-6,1e5,1e-7,-1.25e1],\"object\":{\"a\":\"first\",\"nested\":{\"composed\":\"é\",\"decomposed\":\"é\"},\"z\":\"last\"},\"schemaVersion\":\"canonical-json-fixture/v1\",\"unicode\":\"Café — 한글\"}",
+  "sha256": "sha256:fde8cdde6d58ef681d7781235378b9d9c2fed09e66405f734aa2a7968eff1292"
+}

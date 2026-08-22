@@ -42,6 +42,10 @@ from services.workspace_artifact_publication_service import (
     publish_workspace_generation_artifact,
 )
 from services.presentation_export_attempt_service import sha256_canonical_json
+from services.authored_vnext.semantic.canonical import SemanticContractError
+from services.authored_vnext.semantic.publication import (
+    publish_authored_semantic_bundle_graph,
+)
 from utils.llm_calls.author_slide import Brand
 
 
@@ -181,6 +185,7 @@ async def publish_authored_presentation(
     roles: list[str],
     exact_provenance,
     htmls: list[str],
+    semantic_components: list[dict[str, object]],
     pngs: list[bytes],
     out_path: str,
     attempt_token: str | None,
@@ -211,6 +216,20 @@ async def publish_authored_presentation(
         lifecycle_status=PRESENTATION_LIFECYCLE_STAGING,
     )
     expected_revision = presentation.revision
+    if presentation.owner_id is None:
+        raise AuthoredStageError(
+            slide_index=0,
+            stage="persist",
+            code="authored_semantic_owner_required",
+            retryable=False,
+        )
+    if len(semantic_components) != len(htmls):
+        raise AuthoredStageError(
+            slide_index=0,
+            stage="persist",
+            code="authored_semantic_component_count_mismatch",
+            retryable=False,
+        )
     try:
         _require_immutable_composition_publication(
             request=request,
@@ -406,6 +425,69 @@ async def publish_authored_presentation(
         ]
         sql_session.add(presentation)
         sql_session.add_all(slides)
+        operation_id = (
+            generation_job.workspace_operation_id
+            if generation_job is not None
+            and generation_job.workspace_operation_id is not None
+            else uuid.uuid5(
+                uuid.NAMESPACE_URL,
+                f"presenton:authored:{presentation_id}:{expected_revision + 1}",
+            )
+        )
+        master_resolution = request._authored_master_resolution
+        composition_pin = request._authored_composition_pin
+        master_contract_digest = (
+            master_resolution.pin.master_digest
+            if master_resolution is not None
+            else "sha256:"
+            + sha256_canonical_json(
+                {
+                    "schemaVersion": "authored-unpinned-master/v1",
+                    "styleId": style.id,
+                    "brand": {
+                        "primary": brand.primary,
+                        "fonts": brand.fonts,
+                        "language": brand.language,
+                    },
+                }
+            )
+        )
+        composition_digest = (
+            composition_pin.digest
+            if composition_pin is not None
+            else "sha256:"
+            + sha256_canonical_json(
+                {
+                    "schemaVersion": "authored-unapplied-composition/v1",
+                    "masterContractDigest": master_contract_digest,
+                    "furnitureApplied": False,
+                }
+            )
+        )
+        try:
+            await publish_authored_semantic_bundle_graph(
+                sql_session,
+                presentation_id=presentation_id,
+                owner_id=presentation.owner_id,
+                expected_presentation_revision=expected_revision,
+                operation_id=operation_id,
+                generation_attempt_id=(
+                    generation_job.id if generation_job is not None else None
+                ),
+                slides=slides,
+                htmls=htmls,
+                semantic_drafts=semantic_components,
+                master_contract_digest=master_contract_digest,
+                composition_digest=composition_digest,
+            )
+        except SemanticContractError as error:
+            raise AuthoredStageError(
+                slide_index=0,
+                stage="persist",
+                code=str(error),
+                retryable=False,
+                cause=error,
+            ) from error
         if exact_provenance is not None:
             sql_session.add(
                 AuthoredExactProvenance(

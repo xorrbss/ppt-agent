@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "canonical-json-fixture/v1",
+  "unicode": "Café — 한글",
+  "numbers": [0, -0.0, 1, 1.25, 0.000001, 100000, 1e-7, -12.5],
+  "object": {
+    "z": "last",
+    "a": "first",
+    "nested": {
+      "decomposed": "é",
+      "composed": "é"
+    }
+  },
+  "boolean": true,
+  "empty": null
+}
