@@ -4,6 +4,7 @@ import type {
   BrowserAuthoredHybridObservation,
   BrowserElementObservation,
 } from "./observation.ts";
+import { validateHybridDataImageUrl } from "./security.ts";
 
 const QID = /^[A-Za-z][A-Za-z0-9._:-]{0,127}$/;
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
@@ -85,6 +86,31 @@ export class AuthoredSemanticPublicationError extends Error {
     this.name = "AuthoredSemanticPublicationError";
     this.code = code;
   }
+}
+
+export function digestObservedDeclaredAssets(
+  declaredElements: readonly DeclaredSemanticElementForObservation[],
+  observation: BrowserAuthoredHybridObservation,
+): Readonly<Record<string, string>> {
+  const declaredAssetIds = new Set(
+    declaredElements
+      .filter((element) => Boolean(element.assetContentDigest))
+      .map((element) => element.elementId),
+  );
+  const digests: Record<string, string> = {};
+  for (const element of observation.elements) {
+    if (!declaredAssetIds.has(element.id)) continue;
+    const image = element.image
+      ? validateHybridDataImageUrl(element.image.src)
+      : { ok: false as const, reason: "declared-asset-is-not-an-image" };
+    if (!image.ok) {
+      throw new AuthoredSemanticPublicationError("authored_semantic_asset_mismatch");
+    }
+    digests[element.id] = `sha256:${createHash("sha256")
+      .update(image.bytes)
+      .digest("hex")}`;
+  }
+  return digests;
 }
 
 function canonical(value: unknown): string {

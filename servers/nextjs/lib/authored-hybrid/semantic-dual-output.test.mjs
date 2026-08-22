@@ -9,6 +9,7 @@ import { instrumentAuthoredHtml } from "./html-instrumentation.ts";
 import { planLayerSafeNativeElements, prepareNativeElements } from "./native-plan.ts";
 import {
   buildBrowserObservationReceiptV1,
+  digestObservedDeclaredAssets,
   reconcileDeclaredObservation,
 } from "./semantic-reconciliation.ts";
 import { assembleAuthoredHybridPptx } from "./pptx-assembler.ts";
@@ -148,6 +149,64 @@ test("declared QID reconciliation ignores diagnostic DOM path and fails closed o
   assert.throws(
     () => reconcileDeclaredObservation(childDeclared, observation),
     /authored_semantic_qid_mismatch/
+  );
+});
+
+test("declared image asset authority uses decoded bytes and fails closed on mismatch", () => {
+  const pngBytes = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAEElEQVR42mP8z8AARQAFAAH+Av6pAAAAAElFTkSuQmCC",
+    "base64",
+  );
+  const dataUrl = `data:image/png;base64,${pngBytes.toString("base64")}`;
+  const assetDigest = digest(pngBytes);
+  const declared = [{
+    elementId: "image.hero",
+    kind: "image",
+    parentId: null,
+    childIds: [],
+    sourceDigest: digest("image-source"),
+    assetContentDigest: assetDigest,
+  }];
+  const observation = {
+    viewport: { widthPx: 1280, heightPx: 720, devicePixelRatio: 1 },
+    elements: [{
+      id: "image.hero",
+      identityAuthority: "declared-qid",
+      parentElementId: null,
+      domPath: "body > img",
+      tagName: "img",
+      sourceIndex: 0,
+      cssZIndex: null,
+      boundsPx: { x: 0, y: 0, width: 1, height: 1 },
+      rotationDeg: 0,
+      opacity: 1,
+      candidateKind: "image",
+      fallbackReasons: [],
+      image: {
+        src: dataUrl,
+        alt: "pixel",
+        naturalWidth: 1,
+        naturalHeight: 1,
+        objectFit: "fill",
+        objectPosition: "50% 50%",
+        crop: { left: 0, top: 0, right: 0, bottom: 0 },
+      },
+    }],
+    warnings: [],
+    appliedPromotedElementIds: [],
+    rejectedPromotedElementIds: [],
+  };
+  const observedDigests = digestObservedDeclaredAssets(declared, observation);
+  assert.equal(observedDigests["image.hero"], assetDigest);
+  assert.equal(
+    reconcileDeclaredObservation(declared, observation, observedDigests).elements[0].state,
+    "matched",
+  );
+  assert.throws(
+    () => reconcileDeclaredObservation(declared, observation, {
+      "image.hero": digest("different-image"),
+    }),
+    /authored_semantic_asset_mismatch/,
   );
 });
 

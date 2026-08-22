@@ -31,6 +31,7 @@ import {
 } from "./export-slide-quality.ts";
 import {
   buildBrowserObservationReceiptV1,
+  digestObservedDeclaredAssets,
   type DeclaredSemanticElementForObservation,
 } from "./semantic-reconciliation.ts";
 
@@ -203,6 +204,10 @@ export async function prepareSlideLayer(
             policyVersion: "authored-declared-observation/v1",
             fontSetDigest: semanticContext.fontSetDigest,
             capturedPngDigest: declaredCapture.capturedPngSha256,
+            observedAssetContentDigests: digestObservedDeclaredAssets(
+              semanticContext.declaredElements,
+              declaredCapture.observation,
+            ),
           },
         )
       : undefined;

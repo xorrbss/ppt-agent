@@ -31,6 +31,7 @@ import {
   prepareSlideLayer,
   semanticRasterDegradationDigest,
 } from "./slide-layer.ts";
+import { AuthoredSemanticPublicationError } from "./semantic-reconciliation.ts";
 import {
   bindActiveAuthoredEmissionForExport,
   fetchActiveAuthoredEmission,
@@ -693,6 +694,9 @@ async function runUncachedAuthoredHybridExport(
               },
             );
           } catch (error) {
+            if (error instanceof AuthoredSemanticPublicationError) {
+              throw error;
+            }
             console.warn(
               `[authored-hybrid:slide-${slideNumber}] fidelity fallback after slide processing failure`,
               error,
