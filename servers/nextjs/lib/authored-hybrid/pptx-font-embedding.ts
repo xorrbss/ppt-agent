@@ -6,6 +6,7 @@ import {
   writePptxArchive,
   xmlAttributeValue,
 } from "./pptx-archive.ts";
+import { extractSfntCollectionFace, inspectSfntCollection } from "./font-sfnt-inspection.ts";
 
 const RELATIONSHIPS_NS =
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -28,6 +29,32 @@ export interface PowerPointFontFaceInput {
   /** True only when the supplied SFNT has already been subsetted upstream. */
   readonly subset?: boolean;
   readonly source?: string;
+  /** Zero-based TTC face requested by semantic font authority. */
+  readonly collectionFaceIndex?: number;
+}
+
+export interface PowerPointFontCollectionReceiptV1 {
+  readonly schemaVersion: "powerpoint-font-collection-receipt/v1";
+  readonly state: "standalone-sfnt" | "collection-face-extracted" | "collection-face-not-found" | "variable-face-unsupported" | "unsafe-shared-table" | "invalid-collection";
+  readonly reasonCode: null | "pptx_font_collection_face_not_found" | "pptx_font_collection_variable_face_unsupported" | "pptx_font_collection_unsafe_shared_table" | "pptx_font_collection_invalid";
+  readonly requestedFaceIndex: number | null;
+  readonly faces: readonly { readonly faceIndex: number; readonly familyNames: readonly string[]; readonly fullNames: readonly string[] }[];
+}
+
+export function inspectPowerPointFontCollectionInput(input: PowerPointFontFaceInput): PowerPointFontCollectionReceiptV1 {
+  if (input.data.toString("ascii", 0, 4) !== "ttcf") return { schemaVersion: "powerpoint-font-collection-receipt/v1", state: "standalone-sfnt", reasonCode: null, requestedFaceIndex: null, faces: [] };
+  try {
+    const collection = inspectSfntCollection(input.data); const requested = input.collectionFaceIndex ?? null;
+    const faces = collection.faces.map(({ faceIndex, familyNames, fullNames }) => ({ faceIndex, familyNames, fullNames }));
+    if (requested === null || !collection.faces.some((face) => face.faceIndex === requested)) return { schemaVersion: "powerpoint-font-collection-receipt/v1", state: "collection-face-not-found", reasonCode: "pptx_font_collection_face_not_found", requestedFaceIndex: requested, faces };
+    extractSfntCollectionFace(input.data, requested);
+    return { schemaVersion: "powerpoint-font-collection-receipt/v1", state: "collection-face-extracted", reasonCode: null, requestedFaceIndex: requested, faces };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    const state = message.includes("variable_face") ? "variable-face-unsupported" as const : message.includes("unsafe_shared_table") ? "unsafe-shared-table" as const : "invalid-collection" as const;
+    const reasonCode = state === "variable-face-unsupported" ? "pptx_font_collection_variable_face_unsupported" as const : state === "unsafe-shared-table" ? "pptx_font_collection_unsafe_shared_table" as const : "pptx_font_collection_invalid" as const;
+    return { schemaVersion: "powerpoint-font-collection-receipt/v1", state, reasonCode, requestedFaceIndex: input.collectionFaceIndex ?? null, faces: [] };
+  }
 }
 
 export interface PowerPointTypefaceInput {
@@ -363,7 +390,14 @@ export function embedPowerPointFonts(
     for (const face of FACE_ORDER) {
       const input = requested.faces[face];
       if (!input) continue;
-      const wrapped = createPowerPointFontData(input.data, {
+      const collectionReceipt = inspectPowerPointFontCollectionInput(input);
+      if (collectionReceipt.reasonCode) {
+        throw new Error(`${collectionReceipt.reasonCode}:${JSON.stringify(collectionReceipt)}`);
+      }
+      const fontData = collectionReceipt.state === "collection-face-extracted"
+        ? extractSfntCollectionFace(input.data, input.collectionFaceIndex!).data
+        : input.data;
+      const wrapped = createPowerPointFontData(fontData, {
         subset: input.subset,
         charset: charset.eot,
       });

@@ -56,7 +56,7 @@ function isHybridBackplate(block: string): boolean {
 export interface AuthoredHybridNativeReadbackElement {
   readonly slideNumber: number;
   readonly elementId: string;
-  readonly kind: "text" | "shape" | "image" | "chart";
+  readonly kind: "text" | "shape" | "image" | "table" | "chart";
   readonly latinTypefaces: readonly string[];
   readonly eastAsianTypefaces: readonly string[];
   readonly lineBreakCount: number;
@@ -71,6 +71,8 @@ export interface AuthoredHybridNativeReadbackElement {
     readonly hasValueAxis: boolean;
     readonly legendPosition: "bottom" | "top" | "right" | "left" | null;
   };
+  readonly table?: { readonly rows: number; readonly columns: number; readonly cellTexts: readonly string[] };
+  readonly imageCrop?: { readonly left: number; readonly top: number; readonly right: number; readonly bottom: number };
 }
 
 function typefaces(xml: string, tag: "latin" | "ea"): string[] {
@@ -80,14 +82,14 @@ function typefaces(xml: string, tag: "latin" | "ea"): string[] {
 }
 
 function hybridIdentity(name: string): {
-  kind: "text" | "shape" | "image" | "chart";
+  kind: "text" | "shape" | "image" | "table" | "chart";
   elementId: string;
 } | null {
   const decoded = decodeXmlAttributeValue(name).trim();
-  const match = /^Presenton hybrid (?:native |raster )?(text|shape|image|chart) (.+?)(?:-container)?(?: (?:outline|shadow \d+|(?:top|right|bottom|left) border))?$/.exec(decoded);
+  const match = /^Presenton hybrid (?:native |raster )?(text|shape|image|table|chart) (.+?)(?:-container)?(?: (?:outline|shadow \d+|(?:top|right|bottom|left) border))?$/.exec(decoded);
   if (!match) return null;
   return {
-    kind: match[1] as "text" | "shape" | "image" | "chart",
+    kind: match[1] as "text" | "shape" | "image" | "table" | "chart",
     elementId: match[2],
   };
 }
@@ -195,6 +197,9 @@ export function inspectPptxNativeElementReadback(
         ? relatedChartXml(archive, slideNumber, block)
         : null;
       const chart = chartXml ? chartReadback(chartXml) : null;
+      const tableRows = identity.kind === "table" ? occurrences(block, /<a:tr\b/g) : 0;
+      const firstRow = identity.kind === "table" ? block.match(/<a:tr\b[\s\S]*?<\/a:tr>/)?.[0] ?? "" : "";
+      const sourceRect = identity.kind === "image" ? block.match(/<a:srcRect\b[^>]*\/>/)?.[0] : undefined;
       results.push({
         slideNumber,
         elementId: identity.elementId,
@@ -203,6 +208,8 @@ export function inspectPptxNativeElementReadback(
         eastAsianTypefaces: typefaces(chartXml ?? block, "ea"),
         lineBreakCount: occurrences(block, /<a:br\/>/g),
         ...(chart ? { chart } : {}),
+        ...(identity.kind === "table" ? { table: { rows: tableRows, columns: occurrences(firstRow, /<a:tc\b/g), cellTexts: [...block.matchAll(/<a:t>([\s\S]*?)<\/a:t>/g)].map((match) => decodeXmlAttributeValue(match[1])) } } : {}),
+        ...(sourceRect ? { imageCrop: { left: Number(sourceRect.match(/\bl="(\d+)"/)?.[1] ?? 0), top: Number(sourceRect.match(/\bt="(\d+)"/)?.[1] ?? 0), right: Number(sourceRect.match(/\br="(\d+)"/)?.[1] ?? 0), bottom: Number(sourceRect.match(/\bb="(\d+)"/)?.[1] ?? 0) } } : {}),
       });
     }
   }
@@ -250,6 +257,7 @@ export function inspectPptxEditability(
     )
     .sort((a, b) => a.slideNumber - b.slideNumber);
 
+  const nativeReadback = inspectPptxNativeElementReadback(pptxBytes);
   return createPresentationExportQuality(
     "hybrid",
     slideEntries.map(({ slideNumber, bytes }) => {
@@ -305,6 +313,8 @@ export function inspectPptxEditability(
         nativeTextElements,
         nativeShapeElements,
         nativeChartElements,
+        nativeTableElements: occurrences(xml, /<p:graphicFrame\b[\s\S]*?<a:tbl\b/g),
+        qidCoverage: nativeReadback.filter((entry) => entry.slideNumber === slideNumber).map((entry) => ({ elementId: entry.elementId, kind: entry.kind, logical: "native" as const, ooxml: "present" as const, com: "not-run" as const })),
         nativeGroupElements,
         nativeImageElements,
         rasterFallbackElements: fallbackElements.length,

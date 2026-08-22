@@ -8,6 +8,7 @@ import {
 import { readBoundedResponseText } from "./security.ts";
 import type { DeclaredSemanticElementForObservation } from "./semantic-reconciliation.ts";
 import { parseAuthoredNativeChartPayload } from "./native-chart.ts";
+import { parseAuthoredNativeTablePayload } from "./native-table.ts";
 
 const ACTIVE_EMISSION_RESPONSE_BYTES = 24 * 1024 * 1024;
 const ACTIVE_EMISSION_TIMEOUT_MS = 20_000;
@@ -282,6 +283,9 @@ function parseSemanticComponent(value: unknown): {
       const chartPayload = element.kind === "chart"
         ? parseAuthoredNativeChartPayload(element.payload)
         : null;
+      const tablePayload = element.kind === "table"
+        ? parseAuthoredNativeTablePayload(element.payload)
+        : null;
       if (
         element.kind === "text" &&
         isRecord(element.payload) &&
@@ -305,7 +309,9 @@ function parseSemanticComponent(value: unknown): {
         ...(assetContentDigest ? { assetContentDigest } : {}),
         ...(chartPayload
           ? { payload: chartPayload as unknown as Readonly<Record<string, unknown>> }
-          : {}),
+          : tablePayload
+            ? { payload: tablePayload as unknown as Readonly<Record<string, unknown>> }
+            : {}),
         requiredFeatures: Object.freeze(requiredFeatures),
       });
     });

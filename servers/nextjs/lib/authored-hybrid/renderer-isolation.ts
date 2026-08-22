@@ -3,8 +3,8 @@ import { createHash } from "node:crypto";
 const TRUE_VALUES = new Set(["1", "true", "yes", "on"]);
 const FALSE_VALUES = new Set(["0", "false", "no", "off"]);
 
-function booleanEnvironment(name: string, fallback: boolean): boolean {
-  const value = process.env[name]?.trim().toLowerCase();
+function booleanEnvironment(name: string, fallback: boolean, source: NodeJS.ProcessEnv = process.env): boolean {
+  const value = source[name]?.trim().toLowerCase();
   if (!value) return fallback;
   if (TRUE_VALUES.has(value)) return true;
   if (FALSE_VALUES.has(value)) return false;
@@ -23,6 +23,20 @@ export interface AuthoredRendererIsolationPolicy {
     | "development-unattested"
     | "local-native-unattested";
   executionBoundary: "external-worker" | "development-local" | "local-native";
+}
+
+export interface AuthoredRendererAttestationProjection {
+  schemaVersion: "authored-renderer-attestation/v1";
+  state: "unattested" | "attested" | "expired" | "blocked";
+  reasonCode: string;
+  /** Opaque receipt reference only; never a credential or renderer command. */
+  attestationDigest: string | null;
+  environment: {
+    nodeEnvironment: "production" | "development";
+    osIsolation: string;
+    executionBoundary: string;
+  };
+  expiresAt: string | null;
 }
 
 const REQUIRED_PRODUCTION_OS_ISOLATION =
@@ -45,10 +59,10 @@ const LOCAL_NATIVE_BOUNDARY = "local-native" as const;
 
 /** Evaluated for every capture so an operations kill switch takes effect
  * without restarting or silently selecting the legacy file renderer. */
-export function authoredRendererIsolationPolicy(): AuthoredRendererIsolationPolicy {
-  const production = process.env.NODE_ENV === "production";
-  const osIsolation = process.env.AUTHORED_RENDERER_OS_ISOLATION?.trim();
-  const configuredBoundary = process.env.AUTHORED_RENDERER_EXECUTION_BOUNDARY?.trim();
+export function authoredRendererIsolationPolicy(environment: NodeJS.ProcessEnv = process.env): AuthoredRendererIsolationPolicy {
+  const production = environment.NODE_ENV === "production";
+  const osIsolation = environment.AUTHORED_RENDERER_OS_ISOLATION?.trim();
+  const configuredBoundary = environment.AUTHORED_RENDERER_EXECUTION_BOUNDARY?.trim();
   const localNative = production && osIsolation === LOCAL_NATIVE_OS_ISOLATION;
   if (production && !localNative && osIsolation !== REQUIRED_PRODUCTION_OS_ISOLATION) {
     throw new Error(
@@ -71,13 +85,12 @@ export function authoredRendererIsolationPolicy(): AuthoredRendererIsolationPoli
   }
   // Only an attested production deployment is barred from driving Chrome itself.
   const externalWorker = production && !localNative;
-  const globalKillSwitch = booleanEnvironment("AUTHORED_RENDERER_KILL_SWITCH", false);
+  const globalKillSwitch = booleanEnvironment("AUTHORED_RENDERER_KILL_SWITCH", false, environment);
   return {
     rendererEnabled:
-      !externalWorker && !globalKillSwitch && booleanEnvironment("AUTHORED_VNEXT_RENDERER_ENABLED", false),
+      !externalWorker && !globalKillSwitch && booleanEnvironment("AUTHORED_VNEXT_RENDERER_ENABLED", false, environment),
     legacyFileFallbackEnabled: booleanEnvironment(
-      "AUTHORED_LEGACY_FILE_RENDERER_ENABLED",
-      false
+      "AUTHORED_LEGACY_FILE_RENDERER_ENABLED", false, environment
     ),
     browserSandbox: true,
     webSecurity: true,
@@ -94,6 +107,53 @@ export function authoredRendererIsolationPolicy(): AuthoredRendererIsolationPoli
         ? "external-worker"
         : "development-local",
   };
+}
+
+function optionalAttestationDigest(value: string | undefined): string | null {
+  const normalized = value?.trim().toLowerCase();
+  return normalized && /^sha256:[a-f0-9]{64}$/.test(normalized) ? normalized : null;
+}
+
+/**
+ * Operational, server-side projection for the v2 release-readiness endpoint.
+ * It reports an environment claim but never makes a Next.js browser process an
+ * attestation issuer or changes renderer authorization.
+ */
+export function authoredRendererAttestationProjection(
+  environment: NodeJS.ProcessEnv = process.env,
+  now = Date.now(),
+): AuthoredRendererAttestationProjection {
+  const nodeEnvironment = environment.NODE_ENV === "production" ? "production" : "development";
+  const osIsolation = environment.AUTHORED_RENDERER_OS_ISOLATION?.trim() || "undeclared";
+  const executionBoundary = environment.AUTHORED_RENDERER_EXECUTION_BOUNDARY?.trim() || "undeclared";
+  const base = {
+    schemaVersion: "authored-renderer-attestation/v1" as const,
+    attestationDigest: optionalAttestationDigest(environment.AUTHORED_RENDERER_ATTESTATION_DIGEST),
+    environment: { nodeEnvironment, osIsolation, executionBoundary },
+    expiresAt: environment.AUTHORED_RENDERER_ATTESTATION_EXPIRES_AT?.trim() || null,
+  };
+  if (booleanEnvironment("AUTHORED_RENDERER_KILL_SWITCH", false, environment)) {
+    return { ...base, state: "blocked", reasonCode: "authored_renderer_kill_switch_active" };
+  }
+  try {
+    authoredRendererIsolationPolicy(environment);
+  } catch {
+    return { ...base, state: "blocked", reasonCode: "renderer_isolation_policy_invalid" };
+  }
+  const expiresAt = base.expiresAt ? Date.parse(base.expiresAt) : Number.NaN;
+  if (base.expiresAt && (!Number.isFinite(expiresAt) || expiresAt <= now)) {
+    return { ...base, state: "expired", reasonCode: "renderer_attestation_expired" };
+  }
+  if (
+    nodeEnvironment === "production" &&
+    osIsolation === REQUIRED_PRODUCTION_OS_ISOLATION &&
+    executionBoundary === "external-worker" &&
+    base.attestationDigest &&
+    base.expiresAt
+  ) {
+    return { ...base, state: "attested", reasonCode: "renderer_attestation_reported" };
+  }
+  return { ...base, state: "unattested", reasonCode: "renderer_attestation_missing" };
 }
 
 function sha256CspSource(script: string): string {

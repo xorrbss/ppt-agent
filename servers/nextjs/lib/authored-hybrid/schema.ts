@@ -370,6 +370,7 @@ export interface AuthoredHybridBackplatePlan {
   eligibleElementIds: string[];
   /** Server-admitted semantic charts added after browser observation. */
   nativeChartElementIds?: string[];
+  nativeTableElementIds?: string[];
   rasterElementIds: string[];
 }
 

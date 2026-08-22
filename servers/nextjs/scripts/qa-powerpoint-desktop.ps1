@@ -73,8 +73,10 @@ try {
   foreach ($inputPath in $Presentation) {
     $resolvedInput = (Resolve-Path -LiteralPath $inputPath).Path
     $originalName = [System.IO.Path]::GetFileNameWithoutExtension($resolvedInput)
-    $shortStem = if ($originalName.Length -gt 40) {
-      $originalName.Substring(0, 40)
+    # Keep the two nested render directories and reopened copy below the
+    # Office COM 255-character filename boundary on Windows worktrees.
+    $shortStem = if ($originalName.Length -gt 24) {
+      $originalName.Substring(0, 24)
     } else {
       $originalName
     }
@@ -109,6 +111,56 @@ try {
           [int]$sourceDeck.Slides.Item($slideIndex).Shapes.Count
         }
       )
+      $sourceShapeReadback = @()
+      for ($slideIndex = 1; $slideIndex -le $sourceDeck.Slides.Count; $slideIndex += 1) {
+        $sourceShapes = $sourceDeck.Slides.Item($slideIndex).Shapes
+        for ($shapeIndex = 1; $shapeIndex -le $sourceShapes.Count; $shapeIndex += 1) {
+          $sourceShape = $sourceShapes.Item($shapeIndex)
+          try {
+            $sourceHasText = [bool]$sourceShape.HasTextFrame -and [bool]$sourceShape.TextFrame2.HasText
+            $sourceText = if ($sourceHasText) {
+              [string]$sourceShape.TextFrame2.TextRange.Text
+            } else { $null }
+            $sourceShapeReadback += [PSCustomObject]@{
+              SlideNumber = $slideIndex
+              Name = [string]$sourceShape.Name
+              Type = [int]$sourceShape.Type
+              ZOrderPosition = [int]$sourceShape.ZOrderPosition
+              HasText = $sourceHasText
+              Text = $sourceText
+              TextLineBreakCount = if ($null -ne $sourceText) {
+                [regex]::Matches($sourceText, "[`r`n`v]").Count
+              } else { 0 }
+              Typeface = if ($sourceHasText) {
+                [string]$sourceShape.TextFrame2.TextRange.Font.Name
+              } else { $null }
+              EastAsianTypeface = if ($sourceHasText) {
+                [string]$sourceShape.TextFrame2.TextRange.Font.NameFarEast
+              } else { $null }
+              LeftPt = [double]$sourceShape.Left
+              TopPt = [double]$sourceShape.Top
+              WidthPt = [double]$sourceShape.Width
+              HeightPt = [double]$sourceShape.Height
+            }
+          } finally {
+            [Runtime.InteropServices.Marshal]::FinalReleaseComObject($sourceShape) | Out-Null
+          }
+        }
+        [Runtime.InteropServices.Marshal]::FinalReleaseComObject($sourceShapes) | Out-Null
+      }
+      $firstOpenRenderDirectory = Join-Path $renderDirectory "first-open"
+      [System.IO.Directory]::CreateDirectory($firstOpenRenderDirectory) | Out-Null
+      $sourceDeck.Export($firstOpenRenderDirectory, "PNG", 1280, 720)
+      $firstOpenPngs = @(
+        Get-ChildItem -LiteralPath $firstOpenRenderDirectory -Filter "*.PNG" -File |
+          Sort-Object @{ Expression = {
+            if ($_.BaseName -match "(\d+)$") { return [int]$Matches[1] }
+            return [int]::MaxValue
+          } }, Name
+      )
+      $firstOpenRenderedPngSha256 = @($firstOpenPngs | ForEach-Object {
+        (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant()
+      })
       # ppSaveAsOpenXMLPresentation=24.  Save a copy, close the source, and
       # inspect only the reopened copy so render/readback evidence cannot be
       # satisfied by the initial in-memory representation.
@@ -205,9 +257,11 @@ try {
         }
         [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shapes) | Out-Null
       }
-      $deck.Export($renderDirectory, "PNG", 1280, 720)
+      $reopenedRenderDirectory = Join-Path $renderDirectory "reopened-render"
+      [System.IO.Directory]::CreateDirectory($reopenedRenderDirectory) | Out-Null
+      $deck.Export($reopenedRenderDirectory, "PNG", 1280, 720)
       $pngs = @(
-        Get-ChildItem -LiteralPath $renderDirectory -Filter "*.PNG" -File |
+        Get-ChildItem -LiteralPath $reopenedRenderDirectory -Filter "*.PNG" -File |
           Sort-Object @{ Expression = {
             if ($_.BaseName -match "(\d+)$") {
               return [int]$Matches[1]
@@ -215,10 +269,25 @@ try {
             return [int]::MaxValue
           } }, Name
       )
+      $reopenedShapeReadback = @($shapeReadback | Select-Object `
+        SlideNumber, Name, Type, ZOrderPosition, HasText, Text, `
+        TextLineBreakCount, Typeface, EastAsianTypeface, `
+        LeftPt, TopPt, WidthPt, HeightPt)
+      $shapeReadbackPreserved =
+        ($sourceShapeReadback | ConvertTo-Json -Depth 4 -Compress) -eq
+        ($reopenedShapeReadback | ConvertTo-Json -Depth 4 -Compress)
+      $renderHashesPreserved =
+        $firstOpenRenderedPngSha256.Count -eq $pngs.Count -and
+        (@(Compare-Object $firstOpenRenderedPngSha256 @($pngs | ForEach-Object {
+          (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant()
+        }) -SyncWindow 0).Count -eq 0)
       $readbackPassed =
         $sourceShapeCounts.Count -eq $reopenedShapeCounts.Count -and
         (@(Compare-Object $sourceShapeCounts $reopenedShapeCounts -SyncWindow 0).Count -eq 0) -and
         $pngs.Count -eq [int]$deck.Slides.Count -and
+        $firstOpenPngs.Count -eq [int]$deck.Slides.Count -and
+        $shapeReadbackPreserved -and
+        $renderHashesPreserved -and
         $typographyIssuesGt5Pt -eq 0 -and
         $typographyIssuesGt10Pt -eq 0 -and
         $inspectionFailures -eq 0
@@ -237,6 +306,10 @@ try {
         RenderedPngSha256 = @($pngs | ForEach-Object {
           (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant()
         })
+        FirstOpenRenderedPngSha256 = $firstOpenRenderedPngSha256
+        FirstOpenReopenedRenderHashesMatch = $renderHashesPreserved
+        ShapeReadbackPreserved = $shapeReadbackPreserved
+        SourceShapeReadback = $sourceShapeReadback
         NativeText = $nativeText
         NativeImage = $nativeImage
         NativeShape = $nativeShape

@@ -37,6 +37,7 @@ import {
   type DeclaredSemanticElementForObservation,
 } from "./semantic-reconciliation.ts";
 import { prepareDeclaredNativeCharts } from "./native-chart.ts";
+import { prepareDeclaredNativeTables } from "./native-table.ts";
 
 // The collector adds a bounded network step ahead of each browser pass, so
 // the per-pass ceiling is higher than the pre-collection 20s.
@@ -170,7 +171,7 @@ function withAdmittedSemanticChartEligibility(
   selected: readonly PreparedNativeElement[],
   semanticContext?: AuthoredSemanticSlideContext,
 ): AuthoredHybridSlideV1 {
-  if (!semanticContext || !selected.some((element) => element.kind === "chart")) {
+  if (!semanticContext || !selected.some((element) => element.kind === "chart" || element.kind === "table")) {
     return contract;
   }
   const declaredCharts = new Set(
@@ -183,16 +184,20 @@ function withAdmittedSemanticChartEligibility(
       (element) => element.kind === "chart" && declaredCharts.has(element.source.id),
     )
     .map((element) => element.source.id);
-  if (!admittedChartIds.length) return contract;
+  const declaredTables = new Set(semanticContext.declaredElements.filter((element) => element.kind === "table").map((element) => element.elementId));
+  const admittedTableIds = selected.filter((element) => element.kind === "table" && declaredTables.has(element.source.id)).map((element) => element.source.id);
+  if (!admittedChartIds.length && !admittedTableIds.length) return contract;
   return {
     ...contract,
     backplate: {
       ...contract.backplate,
       nativeChartElementIds: admittedChartIds,
+      nativeTableElementIds: admittedTableIds,
       eligibleElementIds: [
         ...new Set([
           ...contract.backplate.eligibleElementIds,
           ...admittedChartIds,
+          ...admittedTableIds,
         ]),
       ],
     },
@@ -333,6 +338,9 @@ export async function prepareSlideLayer(
           "unsupported-native-chart" | "unsupported-chart-css"
         >(),
       };
+  const declaredTablePreparation = semanticContext && declaredCapture
+    ? prepareDeclaredNativeTables(semanticContext.declaredElements, declaredCapture.observation.elements)
+    : { tables: [], rejections: new Map<string, "unsupported-native-table" | "unsupported-table-css">() };
   const prepared = preSerializePreparedElements(
     (
       await prepareNativeElements(nativeLayoutElements, {
@@ -343,7 +351,7 @@ export async function prepareSlideLayer(
       declaredChartPreparation.charts.map((source) => ({
         kind: "chart" as const,
         source,
-      })),
+      })).concat(declaredTablePreparation.tables.map((source) => ({ kind: "table" as const, source }))),
     ),
     { embeddedTypefaceFamilies, embeddedTypefaceFaces }
   );
@@ -500,11 +508,7 @@ export async function prepareSlideLayer(
   const selectedIds = new Set(
     selected.map((element) => element.source.id)
   );
-  const selectedNativeChartIds = new Set(
-    selected
-      .filter((element) => element.kind === "chart")
-      .map((element) => element.source.id)
-  );
+  const selectedSemanticIslandIds = new Set(selected.filter((element) => element.kind === "chart" || element.kind === "table").map((element) => element.source.id));
   const zBandDemotions = new Set(
     layerSafetyPlan.demotions.map((demotion) => demotion.elementId)
   );
@@ -513,7 +517,7 @@ export async function prepareSlideLayer(
       (element) =>
         !selectedIds.has(element.id) ||
         (element.classification.mode === "raster" &&
-          !selectedNativeChartIds.has(element.id)) ||
+          !selectedSemanticIslandIds.has(element.id)) ||
         ("shape" in element &&
           Boolean(
             element.shape.gradient || element.shape.shadowLayers?.length
@@ -526,6 +530,9 @@ export async function prepareSlideLayer(
           ...(zBandDemotions.has(element.id) ? ["z-band-unsafe"] : []),
           ...(declaredChartPreparation.rejections.has(element.id)
             ? [declaredChartPreparation.rejections.get(element.id)!]
+            : []),
+          ...(declaredTablePreparation.rejections.has(element.id)
+            ? [declaredTablePreparation.rejections.get(element.id)!]
             : []),
         ]
       )
@@ -613,6 +620,7 @@ export async function prepareSlideLayer(
         .length,
       nativeChartElements: selected.filter((element) => element.kind === "chart")
         .length,
+      nativeTableElements: selected.filter((element) => element.kind === "table").length,
       nativeGroupElements: 0,
       nativeImageElements: selected.filter((element) => element.kind === "image")
         .length,
@@ -641,6 +649,10 @@ export async function prepareSlideLayer(
       })),
       fallbackReasons: fallbackElements.flatMap((element) => element.reasons),
       fallbackElements,
+      qidCoverage: semanticContext?.declaredElements.map((element) => {
+        const native = selectedIds.has(element.elementId);
+        return { elementId: element.elementId, kind: element.kind === "connector" || element.kind === "group" || element.kind === "complexIsland" ? "shape" as const : element.kind, logical: native ? "native" as const : "raster" as const, ooxml: "not-run" as const, com: "not-run" as const };
+      }),
       ...(semanticReceipts ? { semanticReceipts } : {}),
     },
     fontRendering,

@@ -41,6 +41,7 @@ export interface PresentationExportSlideQuality {
   nativeTextElements: number;
   nativeShapeElements: number;
   nativeChartElements?: number;
+  nativeTableElements?: number;
   nativeGroupElements?: number;
   nativeImageElements: number;
   rasterFallbackElements: number;
@@ -64,6 +65,16 @@ export interface PresentationExportSlideQuality {
     hybridPlanDigest?: string;
     rasterDegradationReceiptDigest?: string;
   };
+  /** Single declared-QID authority across logical admission, OOXML, and optional COM reopen. */
+  qidCoverage?: PresentationExportQidCoverage[];
+}
+
+export interface PresentationExportQidCoverage {
+  readonly elementId: string;
+  readonly kind: "text" | "image" | "shape" | "table" | "chart";
+  readonly logical: "native" | "raster";
+  readonly ooxml: "not-run" | "present" | "missing";
+  readonly com: "not-run" | "present" | "missing";
 }
 
 export interface PresentationExportCoverageCounts {
@@ -250,6 +261,7 @@ export function createPresentationExportQuality(
                 slide.nativeChartElements,
               ),
             }),
+        ...(slide.nativeTableElements === undefined ? {} : { nativeTableElements: nonNegativeInteger(slide.nativeTableElements) }),
         nativeGroupElements,
         nativeImageElements: nonNegativeInteger(slide.nativeImageElements),
         rasterFallbackElements: nonNegativeInteger(
@@ -548,11 +560,13 @@ export function attachPresentationExportOoxmlReadback(
     logical.mode,
     logical.slides.map((slide) => {
       const observed = readbackBySlide.get(slide.slideNumber)!;
+      const observedQids = new Set((observed.qidCoverage ?? []).filter((entry) => entry.ooxml === "present").map((entry) => `${entry.kind}:${entry.elementId}`));
       return {
         ...slide,
         logicalCoverage: slide.logicalCoverage,
         ooxmlReadback: observed.ooxmlReadback,
         backplateCount: observed.backplateCount,
+        ...(slide.qidCoverage ? { qidCoverage: slide.qidCoverage.map((entry) => ({ ...entry, ooxml: observedQids.has(`${entry.kind}:${entry.elementId}`) ? "present" as const : "missing" as const })) } : {}),
         typographyIssues: [
           ...slide.typographyIssues,
           ...observed.typographyIssues,

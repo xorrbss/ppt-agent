@@ -28,6 +28,9 @@ import type {
 } from "./schema.ts";
 import { validateHybridDataImageUrl } from "./security.ts";
 import type { AuthoredHybridNativeChartSource } from "./native-chart.ts";
+import type { AuthoredHybridNativeTableSource } from "./native-table.ts";
+import { serializeNativeTableFrame } from "./native-table.ts";
+import { nativeCropSourceRectXml } from "./native-image-crop.ts";
 
 export const EMU_PER_CSS_PX = 9_525;
 export const MIN_EDITABLE_FONT_SIZE_PT = 9;
@@ -47,7 +50,8 @@ export type PreparedNativeElement =
       source: AuthoredHybridNativeImageElement;
       png: Buffer;
     }
-  | { kind: "chart"; source: AuthoredHybridNativeChartSource };
+  | { kind: "chart"; source: AuthoredHybridNativeChartSource }
+  | { kind: "table"; source: AuthoredHybridNativeTableSource };
 
 type AuthoredHybridNativeElement =
   | AuthoredHybridNativeTextElement
@@ -489,10 +493,10 @@ async function renderImageToBox(
   if (element.image.objectFit === "fill") {
     pipeline = input.resize(width, height, { fit: "fill" });
   } else if (element.image.objectFit === "cover") {
-    pipeline = input.resize(width, height, {
-      fit: "cover",
-      position: "centre",
-    });
+    // Keep the complete source bitmap. DrawingML's a:srcRect below carries
+    // the authored crop, so PowerPoint can edit object-position without a
+    // second lossy raster crop.
+    pipeline = input;
   } else if (element.image.objectFit === "contain") {
     pipeline = input.resize(width, height, {
       fit: "contain",
@@ -897,7 +901,7 @@ export async function prepareNativeElements(
 }
 
 function intersects(
-  a: Pick<AuthoredHybridElement, "bounds"> | AuthoredHybridNativeChartSource,
+  a: Pick<AuthoredHybridElement, "bounds"> | AuthoredHybridNativeChartSource | AuthoredHybridNativeTableSource,
   b: Pick<AuthoredHybridElement, "bounds">,
 ): boolean {
   const ar = a.bounds.px;
@@ -2076,7 +2080,7 @@ function powerPointAutofitXml(): string {
 }
 
 function nonVisualName(
-  element: AuthoredHybridElement | AuthoredHybridNativeChartSource,
+  element: AuthoredHybridElement | AuthoredHybridNativeChartSource | AuthoredHybridNativeTableSource,
 ): string {
   return `Presenton hybrid ${element.classification.mode === "native" ? element.classification.kind : "raster"} ${element.id}`;
 }
@@ -2177,11 +2181,15 @@ export function serializePreparedNativeElement(
     const name = escapeXml(nonVisualName(element));
     return `<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="${nonVisualId}" name="${name}" descr="presenton-authored-native-chart"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="${coordinateEmu(element.bounds.px.x)}" y="${coordinateEmu(element.bounds.px.y)}"/><a:ext cx="${Math.max(1, coordinateEmu(element.bounds.px.width))}" cy="${Math.max(1, coordinateEmu(element.bounds.px.height))}"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="${relationshipId}"/></a:graphicData></a:graphic></p:graphicFrame>`;
   }
+  if (item.kind === "table") return serializeNativeTableFrame(item.source, nonVisualId);
   if (!relationshipId) throw new Error("Native image relationship is missing.");
   const element = item.source;
   const name = escapeXml(nonVisualName(element));
   const imageAlpha = Math.max(0, Math.min(100_000, Math.round(element.opacity * 100_000)));
-  return `<p:pic><p:nvPicPr><p:cNvPr id="${nonVisualId}" name="${name}" descr="${escapeXml(element.image.alt)}"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${relationshipId}">${imageAlpha < 100_000 ? `<a:alphaModFix amt="${imageAlpha}"/>` : ""}</a:blip><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr>${transformXml(element)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr></p:pic>`;
+  const sourceRect = element.image.objectFit === "cover"
+    ? nativeCropSourceRectXml(element.image.crop)
+    : "";
+  return `<p:pic><p:nvPicPr><p:cNvPr id="${nonVisualId}" name="${name}" descr="${escapeXml(element.image.alt)}"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${relationshipId}">${imageAlpha < 100_000 ? `<a:alphaModFix amt="${imageAlpha}"/>` : ""}</a:blip>${sourceRect}<a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr>${transformXml(element)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr></p:pic>`;
 }
 
 export function serializePreparedNativeElementUnderlay(

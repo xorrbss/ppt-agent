@@ -1675,7 +1675,19 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       objectFit = "fill";
     }
     var objectPosition = (style.objectPosition || "50% 50%").trim();
-    if (!/^(?:50%|center)(?:\s+(?:50%|center))?$/i.test(objectPosition)) {
+    var positionTokens = objectPosition.split(/\s+/).filter(Boolean);
+    var positionValue = function (token, horizontal) {
+      token = (token || "center").toLowerCase();
+      if (token === "center") return 0.5;
+      if ((horizontal && token === "left") || (!horizontal && token === "top")) return 0;
+      if ((horizontal && token === "right") || (!horizontal && token === "bottom")) return 1;
+      var match = /^(\d+(?:\.\d+)?)%$/.exec(token);
+      var value = match ? Number(match[1]) / 100 : NaN;
+      return Number.isFinite(value) && value >= 0 && value <= 1 ? value : null;
+    };
+    var positionX = positionTokens.length <= 2 ? positionValue(positionTokens[0], true) : null;
+    var positionY = positionTokens.length <= 2 ? positionValue(positionTokens[1], false) : null;
+    if (positionX === null || positionY === null) {
       reasons.push("unsupported-object-position");
     }
     var crop = { left: 0, top: 0, right: 0, bottom: 0 };
@@ -1684,10 +1696,12 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       var imageRatio = element.naturalWidth / element.naturalHeight;
       if (imageRatio > boxRatio) {
         var visibleWidth = boxRatio / imageRatio;
-        crop.left = crop.right = round((1 - visibleWidth) / 2);
+        crop.left = round((1 - visibleWidth) * positionX);
+        crop.right = round((1 - visibleWidth) * (1 - positionX));
       } else if (imageRatio < boxRatio) {
         var visibleHeight = imageRatio / boxRatio;
-        crop.top = crop.bottom = round((1 - visibleHeight) / 2);
+        crop.top = round((1 - visibleHeight) * positionY);
+        crop.bottom = round((1 - visibleHeight) * (1 - positionY));
       }
     }
     return {
