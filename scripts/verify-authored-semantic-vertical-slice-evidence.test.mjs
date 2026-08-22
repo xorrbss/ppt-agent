@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { canonicalSha256 } from "../contracts/authored_vnext/semantic/fixtures/canonical-json.mjs";
 import { verifyEvidenceManifest } from "./verify-authored-semantic-vertical-slice-evidence.mjs";
 
 function sha(bytes) {
@@ -24,13 +25,14 @@ function makeBundle() {
   const generationAttemptId = "33333333-3333-4333-8333-333333333333";
   const manifestDigest = "sha256:" + "a".repeat(64);
   const seedValue = {
-    schemaVersion: "authored-semantic-vertical-slice-seed/v1",
+    schemaVersion: "authored-semantic-vertical-slice-seed/v2",
+    fixtureId: "authored-semantic-dual-output-eight-slide-v1",
     presentationId,
     presentationRevision: 1,
     manifestDigest,
     operationId,
     generationAttemptId,
-    slideIds: ["44444444-4444-4444-8444-444444444444", "55555555-5555-4555-8555-555555555555"],
+    slideIds: Array.from({ length: 8 }, (_, index) => `44444444-4444-4444-8444-44444444444${index}`),
     promotionReady: false,
     fullNativeParityReady: false,
     independentVnextGenerationReady: false,
@@ -43,15 +45,18 @@ function makeBundle() {
     const pptxName = `${mode}.pptx`;
     const pptx = write(root, pptxName, pptxBytes);
     const comValue = { Presentations: [{ Path: path.resolve(root, pptxName), ReadbackPassed: true, Reopened: true }] };
-    const renderValue = { sourcePptx: { sha256: pptx.sha256 }, slideCount: 2 };
-    const qualityValue = { pptxSha256: pptx.sha256, status: "not-verified" };
+    const exportAttemptId = `${index + 1}eeeeeee-eeee-4eee-8eee-eeeeeeeeeee${index}`;
+    const renderValue = { exportAttemptId, sourcePptx: { sha256: pptx.sha256 }, slideCount: 8 };
+    const qualityValue = { exportAttemptId, pptxSha256: pptx.sha256, status: "not-verified" };
+    comValue.exportAttemptId = exportAttemptId;
     const com = write(root, `${mode}-com.json`, Buffer.from(JSON.stringify(comValue)));
     const render = write(root, `${mode}-render.json`, Buffer.from(JSON.stringify(renderValue)));
     const quality = write(root, `${mode}-quality.json`, Buffer.from(JSON.stringify(qualityValue)));
-    const pngs = [write(root, `${mode}-slide-1.png`, Buffer.from(`${mode}-png-1`)), write(root, `${mode}-slide-2.png`, Buffer.from(`${mode}-png-2`))];
+    const pngs = Array.from({ length: 8 }, (_, slideIndex) => write(root, `${mode}-slide-${slideIndex + 1}.png`, Buffer.from(`${mode}-png-${slideIndex + 1}`)));
     return {
       mode,
       attemptId: `${index + 1}6666666-6666-4666-8666-66666666666${index}`,
+      exportAttemptId,
       presentationId,
       presentationRevision: 1,
       manifestDigest,
@@ -65,7 +70,8 @@ function makeBundle() {
     };
   });
   const manifest = {
-    schemaVersion: "authored-semantic-vertical-slice-evidence/v1",
+    schemaVersion: "authored-semantic-vertical-slice-evidence/v2",
+    fixtureId: "authored-semantic-dual-output-eight-slide-v1",
     evidenceBundleId: "77777777-7777-4777-8777-777777777777",
     status: "not-verified",
     presentationId,
@@ -76,22 +82,38 @@ function makeBundle() {
     seedReceipt: { ...seed, path: "seed.json" },
     freshness: { reusedFrom: null, previousEvidenceDigest: null },
     modes,
+    recoveryAttempts: [],
     promotionReady: false,
     fullNativeParityReady: false,
     independentVnextGenerationReady: false,
   };
+  for (const [kind, attemptId, generationAttemptId, rejectionCode] of [
+    ["remake", "88888888-8888-4888-8888-888888888888", "99999999-9999-4999-8999-999999999999", "STALE_REVISION"],
+    ["rollback", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "STALE_ATTEMPT"],
+  ]) {
+    const request = { kind, expectedRevision: 1, generationAttemptId };
+    const response = { kind, code: rejectionCode, accepted: false };
+    manifest.recoveryAttempts.push({ kind, attemptId, operationId, generationAttemptId, observedRevision: 0, outcome: "rejected", rejectionCode, request, response, requestDigest: canonicalSha256(request), responseDigest: canonicalSha256(response) });
+  }
   const manifestPath = path.join(root, "evidence.json");
   fs.writeFileSync(manifestPath, JSON.stringify(manifest));
   return { root, manifest, manifestPath };
 }
 
-test("verifies fresh two-mode evidence and keeps promotion flags false", () => {
+test("verifies fresh eight-slide two-mode evidence and keeps promotion flags false", () => {
   const bundle = makeBundle();
   const result = verifyEvidenceManifest(bundle.manifestPath);
   assert.equal(result.status, "not-verified");
   assert.equal(result.modes.length, 2);
   assert.equal(result.promotionReady, false);
   assert.equal(typeof result.evidenceDigest, "string");
+});
+
+test("rejects remake or rollback evidence that claims success", () => {
+  const bundle = makeBundle();
+  bundle.manifest.recoveryAttempts[1].accepted = true;
+  fs.writeFileSync(bundle.manifestPath, JSON.stringify(bundle.manifest));
+  assert.throws(() => verifyEvidenceManifest(bundle.manifestPath), /recovery-success-claim/);
 });
 
 test("rejects reused attempt ids and artifact digests", () => {

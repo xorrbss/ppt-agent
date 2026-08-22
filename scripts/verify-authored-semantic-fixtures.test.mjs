@@ -15,13 +15,13 @@ test("canonical JSON fixture is stable and NFC-normalized", () => {
   assert.equal(canonicalSha256(value), expected.sha256);
 });
 
-test("two-slide fixture derives ordered bundle and manifest digests", () => {
+test("eight-slide fixture derives ordered bundle and manifest digests", () => {
   const result = verifyFixture();
   assert.equal(result.status, "not-verified");
   assert.equal(result.promotionReady, false);
   assert.equal(result.fullNativeParityReady, false);
   assert.equal(result.independentVnextGenerationReady, false);
-  assert.equal(result.bundleDigests.length, 2);
+  assert.equal(result.bundleDigests.length, 8);
   assert.match(result.canonicalDigest, /^sha256:[0-9a-f]{64}$/);
 });
 
@@ -32,7 +32,7 @@ test("evidence verifier binds fresh mode artifacts and rejects reuse", () => {
     const modes = ["fidelity", "hybrid"].map((mode) => {
       const attemptId = `fixture-${mode}-attempt-0007`;
       const rendererSourceDigest = canonicalSha256({ canonicalDigest: result.canonicalDigest, mode, attemptId });
-      const artifacts = ["pptx", "slide-a", "slide-b"].map((kind) => {
+      const artifacts = ["pptx", ...Array.from({ length: 8 }, (_, index) => `slide-${index + 1}`)].map((kind) => {
         const relative = `${mode}/${kind}.artifact`;
         const absolute = path.join(temp, relative);
         fs.mkdirSync(path.dirname(absolute), { recursive: true });
@@ -42,22 +42,22 @@ test("evidence verifier binds fresh mode artifacts and rejects reuse", () => {
       return {
         mode,
         attemptId,
-        presentationRevision: 7,
+        presentationRevision: 8,
         canonicalDigest: result.canonicalDigest,
         rendererSourceDigest,
         visualParity: "not-verified",
         status: "not-verified",
         artifacts,
-        slides: [{ slideId: "fixture-slide-a" }, { slideId: "fixture-slide-b" }],
+        slides: Array.from({ length: 8 }, (_, index) => ({ slideId: `fixture-slide-${String(index + 1).padStart(2, "0")}` })),
       };
     });
     const evidence = {
-      schemaVersion: "authored-semantic-atomic-evidence/v1",
-      fixtureId: "authored-semantic-two-slide-v1",
-      presentationId: "fixture-presentation-2slide",
-      presentationRevision: 7,
-      operationId: "fixture-operation-0007",
-      generationAttemptId: "fixture-generation-0007",
+      schemaVersion: "authored-semantic-atomic-evidence/v2",
+      fixtureId: "authored-semantic-dual-output-eight-slide-v1",
+      presentationId: "fixture-presentation-8slide",
+      presentationRevision: 8,
+      operationId: "fixture-operation-0008",
+      generationAttemptId: "fixture-generation-0008",
       canonicalDigest: result.canonicalDigest,
       promotionReady: false,
       fullNativeParityReady: false,

@@ -9,7 +9,9 @@ import { canonicalJson, canonicalSha256, bytesSha256 } from "../contracts/author
 
 const DEFAULT_FIXTURE = path.resolve("contracts/authored_vnext/semantic/fixtures/vertical-slice-fixture.json");
 const SHA256 = /^sha256:[0-9a-f]{64}$/;
-const SCHEMA = "authored-semantic-atomic-evidence/v1";
+const SCHEMA = "authored-semantic-atomic-evidence/v2";
+const SLIDE_COUNT = 8;
+const REQUIRED_SCENARIOS = ["table", "native-chart", "diagram-shapes", "cropped-image", "long-korean", "multi-column", "mixed-css", "boundary-sentinels"];
 
 function fail(message) {
   throw new Error(message);
@@ -88,15 +90,21 @@ function deriveFixture(fixture) {
   requireString(fixture.presentationId, "presentationId");
   requireString(fixture.operationId, "operationId");
   requireString(fixture.generationAttemptId, "generationAttemptId");
-  if (fixture.schemaVersion !== "authored-semantic-vertical-slice-fixture/v1") fail("fixture-schema-unsupported");
-  if (!Array.isArray(fixture.slides) || fixture.slides.length !== 2) fail("fixture-must-have-two-slides");
+  if (fixture.schemaVersion !== "authored-semantic-vertical-slice-fixture/v2") fail("fixture-schema-unsupported");
+  if (!Array.isArray(fixture.slides) || fixture.slides.length !== SLIDE_COUNT) fail("fixture-must-have-eight-slides");
+  if (JSON.stringify(fixture.scenarios) !== JSON.stringify(REQUIRED_SCENARIOS)) fail("fixture-scenario-order-mismatch");
   unique(fixture.slides.map((slide) => slide.slideId), "slide-id");
-  if (fixture.slides[0].genericCssClass !== fixture.slides[1].genericCssClass) fail("generic-class-pair-missing");
-  if (fixture.slides[0].html === fixture.slides[1].html) fail("slide-html-must-differ");
+  if (fixture.slides.some((slide) => slide.genericCssClass !== fixture.genericCssClass)) fail("generic-class-isolation-missing");
+  unique(fixture.slides.map((slide) => slide.scopeId), "slide-scope-id");
+  if (fixture.slides.some((slide) => !slide.html.includes(`data-scope='${slide.scopeId}'`) || !slide.html.includes(`class='${fixture.genericCssClass}'`))) fail("slide-scope-css-binding-missing");
+  if (new Set(fixture.slides.map((slide) => slide.scenario)).size !== SLIDE_COUNT) fail("slide-scenario-duplicate");
+  for (const scenario of REQUIRED_SCENARIOS) if (!fixture.slides.some((slide) => slide.scenario === scenario)) fail(`scenario-missing:${scenario}`);
+  if (new Set(fixture.slides.map((slide) => slide.html)).size !== SLIDE_COUNT) fail("slide-html-must-differ");
   const bundles = fixture.slides.map((slide) => deriveBundle(slide, fixture));
-  const slideB = bundles[1];
-  for (const sentinel of fixture.slides[1].sentinels) {
-    if (!slideB.qids.includes(sentinel)) fail(`sentinel-missing:${sentinel}`);
+  for (const bundle of bundles) {
+    for (const sentinel of bundle.slide.sentinels) {
+      if (!bundle.qids.includes(sentinel)) fail(`sentinel-missing:${bundle.slide.slideId}:${sentinel}`);
+    }
   }
   const mergedAssets = bundles.flatMap((bundle) => bundle.assets);
   const mergedFonts = bundles.flatMap((bundle) => bundle.fonts);
@@ -165,7 +173,7 @@ function verifyEvidence(derived, evidencePath) {
       const actual = bytesSha256(fs.readFileSync(resolved));
       if (artifact.sha256 !== actual) fail(`artifact-digest-mismatch:${relative}`);
     }
-    if (!Array.isArray(mode.slides) || mode.slides.length !== 2) fail(`slide-evidence-incomplete:${mode.mode}`);
+    if (!Array.isArray(mode.slides) || mode.slides.length !== SLIDE_COUNT) fail(`slide-evidence-incomplete:${mode.mode}`);
   }
   if (!modes.has("fidelity") || !modes.has("hybrid")) fail("fidelity-hybrid-pair-missing");
   return { status: "not-verified", evidencePath };
@@ -173,7 +181,7 @@ function verifyEvidence(derived, evidencePath) {
 
 export function verifyFixture(fixturePath = DEFAULT_FIXTURE, evidencePath = null) {
   const derived = deriveFixture(readJson(fixturePath));
-  const result = { status: "not-verified", fixturePath, canonicalDigest: derived.canonicalDigest, bundleDigests: derived.bundles.map((bundle) => bundle.bundleDigest), promotionReady: false, fullNativeParityReady: false, independentVnextGenerationReady: false };
+  const result = { status: "not-verified", fixturePath, fixtureId: derived.fixture.fixtureId, presentationId: derived.fixture.presentationId, presentationRevision: derived.fixture.presentationRevision, operationId: derived.fixture.operationId, generationAttemptId: derived.fixture.generationAttemptId, canonicalDigest: derived.canonicalDigest, bundleDigests: derived.bundles.map((bundle) => bundle.bundleDigest), promotionReady: false, fullNativeParityReady: false, independentVnextGenerationReady: false };
   if (evidencePath) Object.assign(result, verifyEvidence(derived, evidencePath));
   return result;
 }

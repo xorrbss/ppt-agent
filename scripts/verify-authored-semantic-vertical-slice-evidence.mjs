@@ -16,9 +16,10 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { canonicalSha256 } from "../contracts/authored_vnext/semantic/fixtures/canonical-json.mjs";
 
-export const EVIDENCE_SCHEMA = "authored-semantic-vertical-slice-evidence/v1";
+export const EVIDENCE_SCHEMA = "authored-semantic-vertical-slice-evidence/v2";
 export const VERIFICATION_SCHEMA = "authored-semantic-vertical-slice-evidence-verification/v1";
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
+const SLIDE_COUNT = 8;
 
 function fail(code, detail = "") {
   throw new Error(detail ? `${code}:${detail}` : code);
@@ -79,20 +80,21 @@ function verifyFile(root, descriptor, label, paths, expectedPptxDigest = null) {
 function verifySeed(root, descriptor, expected, paths) {
   const seed = verifyFile(root, descriptor, "seedReceipt", paths);
   const value = readJson(seed.path, "seedReceipt");
-  if (value.schemaVersion !== "authored-semantic-vertical-slice-seed/v1") fail("seed-schema-unsupported");
+  if (value.schemaVersion !== "authored-semantic-vertical-slice-seed/v2") fail("seed-schema-unsupported");
   for (const [key, expectedValue] of Object.entries(expected)) {
     if (value[key] !== expectedValue) fail("seed-binding-mismatch", key);
   }
   for (const key of ["promotionReady", "fullNativeParityReady", "independentVnextGenerationReady"]) {
     if (value[key] !== false) fail("promotion-flag-not-false", `seed:${key}`);
   }
-  if (!Array.isArray(value.slideIds) || value.slideIds.length !== 2) fail("seed-two-slide-contract-required");
+  if (!Array.isArray(value.slideIds) || value.slideIds.length !== SLIDE_COUNT) fail("seed-eight-slide-contract-required");
   return seed;
 }
 
-function verifyComReport(root, descriptor, pptxDigest, pptxPath, paths) {
+function verifyComReport(root, descriptor, pptxDigest, pptxPath, exportAttemptId, paths) {
   const report = verifyFile(root, descriptor, "comReport", paths, pptxDigest);
   const value = readJson(report.path, "comReport");
+  if (value.exportAttemptId !== exportAttemptId) fail("com-report-attempt-binding-mismatch");
   const entries = Array.isArray(value.Presentations) ? value.Presentations : Array.isArray(value.presentations) ? value.presentations : null;
   if (entries) {
     const matching = entries.find((entry) => {
@@ -109,17 +111,20 @@ function verifyComReport(root, descriptor, pptxDigest, pptxPath, paths) {
   return report;
 }
 
-function verifyRenderReport(root, descriptor, pptxDigest, paths) {
+function verifyRenderReport(root, descriptor, pptxDigest, exportAttemptId, paths) {
   const report = verifyFile(root, descriptor, "renderReport", paths, pptxDigest);
   const value = readJson(report.path, "renderReport");
+  if (value.exportAttemptId !== exportAttemptId) fail("render-report-attempt-binding-mismatch");
+  if (value.slideCount !== SLIDE_COUNT) fail("render-report-slide-count-mismatch");
   const sourceDigest = value?.sourcePptx?.sha256 ?? value?.sourcePptxSha256 ?? value?.pptxSha256;
   if (sourceDigest !== undefined && normalizeDigest(sourceDigest, "renderReport:sourcePptx") !== pptxDigest) fail("render-report-pptx-binding-mismatch");
   return report;
 }
 
-function verifyQualityReport(root, descriptor, pptxDigest, paths) {
+function verifyQualityReport(root, descriptor, pptxDigest, exportAttemptId, paths) {
   const report = verifyFile(root, descriptor, "qualityReport", paths, pptxDigest);
   const value = readJson(report.path, "qualityReport");
+  if (value.exportAttemptId !== exportAttemptId) fail("quality-report-attempt-binding-mismatch");
   const sourceDigest = value?.sourcePptx?.sha256 ?? value?.sourcePptxSha256 ?? value?.pptxSha256;
   if (sourceDigest !== undefined && normalizeDigest(sourceDigest, "qualityReport:sourcePptx") !== pptxDigest) fail("quality-report-pptx-binding-mismatch");
   return report;
@@ -128,7 +133,7 @@ function verifyQualityReport(root, descriptor, pptxDigest, paths) {
 function verifyMode(root, mode, expected, paths) {
   if (!mode || typeof mode !== "object") fail("mode-descriptor-required");
   if (!["fidelity", "hybrid"].includes(mode.mode)) fail("unsupported-mode", String(mode.mode));
-  for (const key of ["attemptId", "presentationId", "operationId", "generationAttemptId"]) requiredString(mode[key], `${mode.mode}:${key}`);
+  for (const key of ["attemptId", "exportAttemptId", "presentationId", "operationId", "generationAttemptId"]) requiredString(mode[key], `${mode.mode}:${key}`);
   if (mode.presentationId !== expected.presentationId || mode.presentationRevision !== expected.presentationRevision || mode.manifestDigest !== expected.manifestDigest || mode.operationId !== expected.operationId || mode.generationAttemptId !== expected.generationAttemptId) {
     fail("mode-binding-mismatch", mode.mode);
   }
@@ -138,10 +143,10 @@ function verifyMode(root, mode, expected, paths) {
   const pptxDigest = pptx.sha256;
   const reports = mode.reports;
   if (!reports || typeof reports !== "object") fail("reports-required", mode.mode);
-  const com = verifyComReport(root, reports.com, pptxDigest, pptx.path, paths);
-  const render = verifyRenderReport(root, reports.render, pptxDigest, paths);
-  const quality = verifyQualityReport(root, reports.quality, pptxDigest, paths);
-  if (!Array.isArray(mode.renderedPngs) || mode.renderedPngs.length !== 2) fail("two-rendered-pngs-required", mode.mode);
+  const com = verifyComReport(root, reports.com, pptxDigest, pptx.path, mode.exportAttemptId, paths);
+  const render = verifyRenderReport(root, reports.render, pptxDigest, mode.exportAttemptId, paths);
+  const quality = verifyQualityReport(root, reports.quality, pptxDigest, mode.exportAttemptId, paths);
+  if (!Array.isArray(mode.renderedPngs) || mode.renderedPngs.length !== SLIDE_COUNT) fail("eight-rendered-pngs-required", mode.mode);
   const pngs = mode.renderedPngs.map((item, index) => verifyFile(root, item, `${mode.mode}:png:${index + 1}`, paths));
   const checks = mode.checks;
   if (!checks || typeof checks !== "object") fail("checks-required", mode.mode);
@@ -149,7 +154,29 @@ function verifyMode(root, mode, expected, paths) {
   for (const key of ["overflowGt5Pt", "overflowGt10Pt", "lineBreakChanges", "clipping", "overlap", "ghosting", "nativeBackplateCollision"]) {
     if (!Number.isInteger(checks[key]) || checks[key] < 0) fail("invalid-check-count", `${mode.mode}:${key}`);
   }
-  return { mode: mode.mode, attemptId: mode.attemptId, pptxSha256: pptxDigest, comReportSha256: com.sha256, renderReportSha256: render.sha256, qualityReportSha256: quality.sha256, pngSha256: pngs.map((item) => item.sha256), checks };
+  return { mode: mode.mode, attemptId: mode.attemptId, exportAttemptId: mode.exportAttemptId, pptxSha256: pptxDigest, comReportSha256: com.sha256, renderReportSha256: render.sha256, qualityReportSha256: quality.sha256, pngSha256: pngs.map((item) => item.sha256), checks };
+}
+
+function verifyRecoveryAttempts(evidence, expected) {
+  if (!Array.isArray(evidence.recoveryAttempts) || evidence.recoveryAttempts.length !== 2) fail("remake-rollback-recovery-pair-required");
+  const kinds = new Set();
+  for (const attempt of evidence.recoveryAttempts) {
+    if (!attempt || typeof attempt !== "object") fail("recovery-attempt-required");
+    if (!["remake", "rollback"].includes(attempt.kind)) fail("unsupported-recovery-kind", String(attempt.kind));
+    if (kinds.has(attempt.kind)) fail("duplicate-recovery-kind", attempt.kind);
+    kinds.add(attempt.kind);
+    for (const key of ["attemptId", "operationId", "generationAttemptId", "requestDigest", "responseDigest", "rejectionCode"]) requiredString(attempt[key], `recovery:${attempt.kind}:${key}`);
+    if (!attempt.request || typeof attempt.request !== "object" || !attempt.response || typeof attempt.response !== "object") fail("recovery-payloads-required", attempt.kind);
+    if (attempt.operationId !== expected.operationId) fail("recovery-lineage-mismatch", attempt.kind);
+    if (attempt.kind === "rollback" && attempt.generationAttemptId === expected.generationAttemptId) fail("rollback-stale-attempt-lineage-required");
+    if (attempt.outcome !== "rejected" || attempt.status === "passed" || attempt.accepted === true) fail("recovery-success-claim", attempt.kind);
+    if (attempt.kind === "remake" && attempt.rejectionCode !== "STALE_REVISION") fail("remake-stale-revision-evidence-required");
+    if (attempt.kind === "rollback" && attempt.rejectionCode !== "STALE_ATTEMPT") fail("rollback-stale-attempt-evidence-required");
+    if (!Number.isInteger(attempt.observedRevision) || attempt.observedRevision >= expected.presentationRevision) fail("recovery-revision-not-stale", attempt.kind);
+    if (normalizeDigest(attempt.requestDigest, `recovery:${attempt.kind}:requestDigest`) !== canonicalSha256(attempt.request)) fail("recovery-request-digest-mismatch", attempt.kind);
+    if (normalizeDigest(attempt.responseDigest, `recovery:${attempt.kind}:responseDigest`) !== canonicalSha256(attempt.response)) fail("recovery-response-digest-mismatch", attempt.kind);
+  }
+  if (!kinds.has("remake") || !kinds.has("rollback")) fail("remake-rollback-recovery-pair-missing");
 }
 
 export function verifyEvidenceManifest(manifestPath) {
@@ -163,7 +190,7 @@ export function verifyEvidenceManifest(manifestPath) {
     if (evidence[key] !== false) fail("promotion-flag-not-false", `evidence:${key}`);
   }
   const expected = {};
-  for (const key of ["presentationId", "operationId", "generationAttemptId", "manifestDigest"]) expected[key] = requiredString(evidence[key], key);
+  for (const key of ["fixtureId", "presentationId", "operationId", "generationAttemptId", "manifestDigest"]) expected[key] = requiredString(evidence[key], key);
   if (!Number.isInteger(evidence.presentationRevision) || evidence.presentationRevision < 1) fail("invalid-presentation-revision");
   expected.presentationRevision = evidence.presentationRevision;
   normalizeDigest(expected.manifestDigest, "manifestDigest");
@@ -172,15 +199,19 @@ export function verifyEvidenceManifest(manifestPath) {
   if (!Array.isArray(evidence.modes) || evidence.modes.length !== 2) fail("fidelity-hybrid-pair-required");
   const modes = new Set();
   const attempts = new Set();
+  const exportAttempts = new Set();
   const verifiedModes = [];
   for (const mode of evidence.modes) {
     if (modes.has(mode?.mode)) fail("duplicate-mode", String(mode?.mode));
     modes.add(mode?.mode);
     if (attempts.has(mode?.attemptId)) fail("attempt-reused", String(mode?.attemptId));
     attempts.add(mode?.attemptId);
+    if (exportAttempts.has(mode?.exportAttemptId)) fail("export-attempt-reused", String(mode?.exportAttemptId));
+    exportAttempts.add(mode?.exportAttemptId);
     verifiedModes.push(verifyMode(root, mode, expected, paths));
   }
   if (!modes.has("fidelity") || !modes.has("hybrid")) fail("fidelity-hybrid-pair-missing");
+  verifyRecoveryAttempts(evidence, expected);
   if (verifiedModes[0].pptxSha256 === verifiedModes[1].pptxSha256) fail("pptx-reused-across-modes");
   const freshness = evidence.freshness;
   if (!freshness || freshness.reusedFrom !== null || freshness.previousEvidenceDigest !== null) fail("fresh-evidence-required");
@@ -188,6 +219,7 @@ export function verifyEvidenceManifest(manifestPath) {
     schemaVersion: VERIFICATION_SCHEMA,
     evidenceBundleId: evidence.evidenceBundleId,
     status: "not-verified",
+    fixtureId: expected.fixtureId,
     presentationId: expected.presentationId,
     presentationRevision: expected.presentationRevision,
     manifestDigest: normalizeDigest(expected.manifestDigest, "manifestDigest"),
