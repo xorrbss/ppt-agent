@@ -272,6 +272,7 @@ export function inspectPptxEditability(
         xml,
         /<p:graphicFrame\b[\s\S]*?<c:chart\b/g,
       );
+      const nativeTableElements = occurrences(xml, /<p:graphicFrame\b[\s\S]*?<a:tbl\b/g);
       const pictures = pictureBlocks(xml);
       const backplates = pictures
         .map((block, index) => ({ block, index }))
@@ -289,7 +290,7 @@ export function inspectPptxEditability(
       );
       const editable =
         nativeTextElements + nativeShapeElements + nativeImageElements +
-          nativeChartElements > 0;
+          nativeChartElements + nativeTableElements > 0;
       const fallbackElements: PresentationExportFallbackElement[] = [
         ...fullSlideRasterPictures.map(({ block, index }) => ({
           elementId: pictureIdentity(block, index),
@@ -313,7 +314,8 @@ export function inspectPptxEditability(
         nativeTextElements,
         nativeShapeElements,
         nativeChartElements,
-        nativeTableElements: occurrences(xml, /<p:graphicFrame\b[\s\S]*?<a:tbl\b/g),
+        nativeTableElements,
+        nativeImageCropElements: pictures.filter((block) => /<a:srcRect\b[^>]*\/>/.test(block)).length,
         qidCoverage: nativeReadback.filter((entry) => entry.slideNumber === slideNumber).map((entry) => ({ elementId: entry.elementId, kind: entry.kind, logical: "native" as const, ooxml: "present" as const, com: "not-run" as const })),
         nativeGroupElements,
         nativeImageElements,
@@ -342,4 +344,23 @@ export function inspectPptxEditability(
       };
     })
   );
+}
+
+/** Preserve stage2 structural counters after the generic logical/readback join. */
+export function attachAuthoredHybridStage2ReadbackMetadata<
+  T extends PresentationExportQualityReport,
+>(quality: T, pptxBytes: Buffer): T {
+  const structural = inspectPptxEditability(pptxBytes);
+  const bySlide = new Map(structural.slides.map((slide) => [slide.slideNumber, slide as typeof slide & { nativeTableElements?: number; nativeImageCropElements?: number }]));
+  return {
+    ...quality,
+    slides: quality.slides.map((slide) => {
+      const observed = bySlide.get(slide.slideNumber);
+      return {
+        ...slide,
+        nativeTableElements: observed?.nativeTableElements ?? 0,
+        nativeImageCropElements: observed?.nativeImageCropElements ?? 0,
+      };
+    }),
+  } as T;
 }

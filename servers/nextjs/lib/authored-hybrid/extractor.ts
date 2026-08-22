@@ -233,7 +233,10 @@ function promotedElementContentKey(
     element.classification.mode === "raster" &&
     element.classification.candidateKind === "complex"
   ) {
-    return `complex:${JSON.stringify([...element.classification.reasons].sort())}`;
+    return `complex:${JSON.stringify({
+      fallbackReasons: [...element.classification.reasons].sort(),
+      tableEvidence: element.tableEvidence ?? null,
+    })}`;
   }
   throw new Error(`Authored hybrid element ${element.id} is not native.`);
 }
@@ -260,10 +263,15 @@ function expectedPromotedElements(
       element.classification.mode === "raster" &&
       element.classification.candidateKind === "complex" &&
       element.classification.reasons.includes("complex-chart");
+    const rasterDeclaredTable =
+      element?.identityAuthority === "declared-qid" &&
+      element.classification.mode === "raster" &&
+      element.classification.candidateKind === "complex" &&
+      element.classification.reasons.includes("complex-table");
     if (
       !element ||
       (element.classification.mode !== "native" && !rasterText &&
-        !rasterShape && !rasterDeclaredChart)
+        !rasterShape && !rasterDeclaredChart && !rasterDeclaredTable)
     ) {
       throw new Error(`Authored hybrid element ${id} is not a promotable candidate.`);
     }
@@ -287,7 +295,7 @@ function expectedPromotedElements(
       contentKey: promotedElementContentKey(element),
       // Suppress glyph paint only. Hiding a styled text container wholesale can
       // also hide inline SVG/icon descendants that must remain on the backplate.
-      suppressWholeElement: rasterDeclaredChart,
+      suppressWholeElement: rasterDeclaredChart || rasterDeclaredTable,
       suppressContainerPaint: Boolean(
         "text" in element && element.text?.containerShape
       ),

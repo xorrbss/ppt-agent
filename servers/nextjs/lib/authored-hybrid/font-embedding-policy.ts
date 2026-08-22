@@ -10,6 +10,7 @@ import {
   type FontEmbeddingStrategy,
   type SfntFontInspection,
   assessEmbeddingLicense,
+  extractSfntCollectionFace,
   inspectSfntFont,
 } from "./font-sfnt-inspection.ts";
 
@@ -36,6 +37,7 @@ export interface ResolvedEmbeddedFontFile {
   data: Buffer;
   inspection: SfntFontInspection;
   license: FontEmbeddingLicenseAssessment;
+  collectionFaceIndex?: number;
 }
 
 export interface ResolvedEmbeddedFontFace {
@@ -99,6 +101,7 @@ interface AllowlistedCandidate {
   source: ResolvedEmbeddedFontFile["source"];
   derivedFromVariable: boolean;
   faces: readonly Omit<ResolvedEmbeddedFontFace, "family" | "sourceId">[];
+  collectionFaceIndex?: number;
 }
 
 const NOTO_SANS_KR_CANDIDATES: readonly AllowlistedCandidate[] = [
@@ -181,15 +184,16 @@ const MALGUN_GOTHIC_CANDIDATES: readonly AllowlistedCandidate[] = [
 
 const BATANG_COLLECTION_CANDIDATES: readonly AllowlistedCandidate[] = [
   {
-    // TTC remains deliberately fail-closed until the OOXML packager can bind
-    // an explicit collection index. The attempt is retained as an invalid-font
-    // receipt instead of silently substituting a different serif face.
     fileName: "batang.ttc",
     variable: false,
     source: "windows-system-reviewed",
     derivedFromVariable: false,
     faces: [{ face: "regular", weight: 400, style: "normal" }],
+    collectionFaceIndex: 0,
   },
+];
+const BATANG_CHE_COLLECTION_CANDIDATES: readonly AllowlistedCandidate[] = [
+  { ...BATANG_COLLECTION_CANDIDATES[0], collectionFaceIndex: 1 },
 ];
 
 const CONSOLAS_CANDIDATES: readonly AllowlistedCandidate[] = [
@@ -214,7 +218,7 @@ const ALLOWLIST = new Map<string, readonly AllowlistedCandidate[]>([
   ["ibm plex mono", IBM_PLEX_MONO_CANDIDATES],
   ["malgun gothic", MALGUN_GOTHIC_CANDIDATES],
   ["batang", BATANG_COLLECTION_CANDIDATES],
-  ["batangche", BATANG_COLLECTION_CANDIDATES],
+  ["batangche", BATANG_CHE_COLLECTION_CANDIDATES],
   ["consolas", CONSOLAS_CANDIDATES],
 ]);
 
@@ -270,7 +274,9 @@ async function loadAllowlistedCandidate(
         continue;
       }
       const data = await readFile(resolvedFile);
-      const inspection = inspectSfntFont(data);
+      const inspection = candidate.collectionFaceIndex === undefined
+        ? inspectSfntFont(data)
+        : extractSfntCollectionFace(data, candidate.collectionFaceIndex).inspection;
       const expectedFamily = family.toLowerCase();
       if (
         !inspection.familyNames.some(
@@ -300,7 +306,7 @@ async function loadAllowlistedCandidate(
         throw new Error("font license evidence is not reviewed");
       }
       return {
-        sourceId: `${candidate.source}:${candidate.fileName}`,
+        sourceId: `${candidate.source}:${candidate.fileName}${candidate.collectionFaceIndex === undefined ? "" : `#face${candidate.collectionFaceIndex}`}`,
         source: candidate.source,
         sourcePath: candidate.fileName,
         fileName: candidate.fileName,
@@ -310,6 +316,7 @@ async function loadAllowlistedCandidate(
         data,
         inspection,
         license,
+        ...(candidate.collectionFaceIndex === undefined ? {} : { collectionFaceIndex: candidate.collectionFaceIndex }),
       };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;

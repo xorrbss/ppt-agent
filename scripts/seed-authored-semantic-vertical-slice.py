@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Seed one real Authored 2-slide semantic vertical slice into product SQLite.
+"""Seed one real Authored eight-slide semantic vertical slice into product SQLite.
 
 This is an additive local fixture command.  It uses the product SQL models and
 the atomic semantic publication service; it never calls the LLM, mocks a
@@ -12,7 +12,9 @@ Run from the repository root, for example:
       --database-url sqlite:///app_data/fastapi.db
 
 The command prints a JSON seed receipt containing the presentation id,
-revision, operation lineage, active manifest digest, and the exact QID set.
+revision, operation lineage, active manifest digest, semantic HTML/source
+proof, and the exact QID set. ``--variant`` makes release-matrix decks
+content-distinct while preserving the same bounded archetype coverage.
 The ``--font-path`` and CJK face paths must point at actual font bytes.  On
 Windows, Malgun Gothic and Batang are used as defaults when present.  The
 command fails closed when any required face is unavailable; it never labels
@@ -137,6 +139,11 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="Optional path for the atomic JSON seed receipt.",
     )
+    parser.add_argument(
+        "--variant",
+        default="default",
+        help="Content variant label; release matrix decks must use distinct labels.",
+    )
     return parser.parse_args()
 
 
@@ -180,33 +187,37 @@ def _html(slide: str) -> str:
     raise ValueError(f"unknown slide: {slide}")
 
 
-def _eight_slide_htmls() -> list[str]:
+def _eight_slide_htmls(variant: str = "default") -> list[str]:
     image = _IMAGE_DATA_URI
     bodies = [
-        """<h1 data-qid='s01-title'>분기별 운영 지표</h1><table data-qid='s01-table'><tr data-qid-ignore><th data-qid-ignore>분기</th><th data-qid-ignore>정확도</th><th data-qid-ignore>처리량</th></tr><tr data-qid-ignore><td data-qid-ignore>1분기</td><td data-qid-ignore>92%</td><td data-qid-ignore>1,240</td></tr><tr data-qid-ignore><td data-qid-ignore>2분기</td><td data-qid-ignore>96%</td><td data-qid-ignore>1,680</td></tr></table><p data-qid='s01-caption'>표현 복잡도는 raster island로 보존됩니다.</p>""",
-        """<h1 data-qid='s02-title'>월별 성장 추이</h1><div data-qid='s02-chart' class='chart-native'></div><p data-qid='s02-chart-label'>매출 · 영업이익 · 2026</p>""",
-        """<h1 data-qid='s03-title'>검토 프로세스</h1><div data-qid='s03-node-a' class='node n1'>수집</div><div data-qid='s03-node-b' class='node n2'>검증</div><div data-qid='s03-node-c' class='node n3'>배포</div><div data-qid='s03-arrow-a' class='arrow a1'>→</div><div data-qid='s03-arrow-b' class='arrow a2'>→</div>""",
-        f"""<h1 data-qid='s04-title'>이미지 크롭 기준</h1><img data-qid='s04-image' src='{image}' alt='cropped evidence image'><p data-qid='s04-caption'>object-fit: cover · 50% 25%</p>""",
-        """<h1 data-qid='s05-title'>긴 한국어 제목과 본문이 줄바꿈과 여백을 보존하는지 검증합니다</h1><p data-qid='s05-body'>이 문장은 실제 저작물에서 발생하는 긴 한국어 문장입니다. Korean typography / 2026 숫자와 행간, 자간, 단어 단위 줄바꿈이 PowerPoint 저장 후에도 유지되어야 합니다.</p><code data-qid='s05-mono'>MONO-2026-검증</code>""",
-        """<h1 data-qid='s06-title'>세 가지 실행 축</h1><div data-qid='s06-grid' class='columns'><section data-qid-ignore><h2 data-qid='s06-col-a'>수집</h2><p data-qid='s06-copy-a'>원본 보존</p></section><section data-qid-ignore><h2 data-qid='s06-col-b'>분석</h2><p data-qid='s06-copy-b'>계약 검증</p></section><section data-qid-ignore><h2 data-qid='s06-col-c'>공유</h2><p data-qid='s06-copy-c'>증거 결속</p></section></div>""",
-        """<h1 data-qid='s07-title'>혼합 CSS 장식</h1><div data-qid='s07-gradient' class='gradient'></div><div data-qid='s07-badge' class='badge'>Hybrid</div><p data-qid='s07-copy'>gradient · shadow · transform · radius · opacity · clip은 안정 reason code로 강등됩니다.</p>""",
+        """<h1 data-qid='s01-title'>분기별 운영 지표 카드</h1><table data-qid='s01-table'><tr data-qid-ignore><th data-qid-ignore>분기</th><th data-qid-ignore>정확도</th><th data-qid-ignore>처리량</th></tr><tr data-qid-ignore><td data-qid-ignore>1분기</td><td data-qid-ignore>92%</td><td data-qid-ignore>1,240</td></tr><tr data-qid-ignore><td data-qid-ignore>2분기</td><td data-qid-ignore>96%</td><td data-qid-ignore>1,680</td></tr></table><p data-qid='s01-caption'>카드 지표 표 데이터와 합계를 네이티브 편집 대상으로 보존합니다.</p>""",
+        """<h1 data-qid='s02-title'>月度增长趋势 时间线</h1><div data-qid='s02-chart' class='chart-native'></div><p data-qid='s02-chart-label'>图表 · 时间线 · 营收 · 2026</p>""",
+        """<h1 data-qid='s03-title'>検討プロセス アーキテクチャ</h1><div data-qid='s03-node-a' class='node n1'>収集</div><div data-qid='s03-node-b' class='node n2'>検証</div><div data-qid='s03-node-c' class='node n3'>配布</div><div data-qid='s03-arrow-a' class='arrow a1'>→</div><div data-qid='s03-arrow-b' class='arrow a2'>→</div>""",
+        f"""<h1 data-qid='s04-title'>이미지 크롭 비교</h1><img data-qid='s04-image' src='{image}' alt='cropped evidence image'><p data-qid='s04-caption'>object-fit: cover · 50% 25% · 比較 / 比较</p>""",
+        """<h1 data-qid='s05-title'>긴 한국어 제목과 中文説明 및 日本語データ가 줄바꿈과 여백을 보존하는지 검증합니다</h1><p data-qid='s05-body'>이 문장은 실제 저작물에서 발생하는 긴 한국어 문장입니다. 中文 설명과 日本語 データ, Korean typography / 2026 숫자와 행간, 자간, 단어 단위 줄바꿈이 PowerPoint 저장 후에도 유지되어야 합니다. インフォグラフィック 품질을 함께 확인합니다.</p><code data-qid='s05-mono'>MONO-2026-検証-검증</code>""",
+        """<h1 data-qid='s06-title'>세 가지 실행 축 로드맵</h1><div data-qid='s06-grid' class='columns'><section data-qid-ignore><h2 data-qid='s06-col-a'>수집</h2><p data-qid='s06-copy-a'>원본 보존</p></section><section data-qid-ignore><h2 data-qid='s06-col-b'>분석</h2><p data-qid='s06-copy-b'>계약 검증</p></section><section data-qid-ignore><h2 data-qid='s06-col-c'>공유</h2><p data-qid='s06-copy-c'>로드맵 증거 결속</p></section></div>""",
+        """<h1 data-qid='s07-title'>混合 CSS 比較装飾</h1><div data-qid='s07-gradient' class='gradient'></div><div data-qid='s07-badge' class='badge'>Hybrid</div><p data-qid='s07-copy'>gradient · shadow · transform · radius · opacity · clip은 안정 reason code로 강등됩니다. 比較 가능한 인포그래픽 장식입니다.</p>""",
         """<h1 data-qid='s08-title'>경계 보존 센티넬</h1><p data-qid='s08-copy'>오른쪽과 아래쪽 경계, 내부 요소의 clipping과 ghosting을 확인합니다.</p><span data-qid='s08-right' class='right-sentinel'>R</span><span data-qid='s08-bottom' class='bottom-sentinel'>B</span><span data-qid='s08-internal' class='internal-sentinel'>INTERNAL</span>""",
     ]
     scoped_css = [
-        "table{border-collapse:collapse;width:760px;font-size:24px}th,td{border:1px solid #94a3b8;padding:14px;text-align:left}",
+        "table{border-collapse:collapse;width:760px;font-size:24px}th,td{border:1px solid #94a3b8;padding:14px;text-align:left}th{background:#2563eb;color:#fff;font-weight:700}td{background:transparent;color:#202020;font-weight:400}",
         ".chart-native{position:absolute;left:120px;top:185px;width:880px;height:350px}",
         ".node{position:absolute;top:280px;width:210px;padding:28px;border-radius:18px;background:#dbeafe;text-align:center;font-size:30px}.n1{left:110px}.n2{left:500px}.n3{left:890px}.arrow{position:absolute;top:292px;font-size:54px}.a1{left:385px}.a2{left:775px}",
-        "img{position:absolute;left:100px;top:160px;width:720px;height:400px;object-fit:cover;object-position:50% 25%;border-radius:24px}p{position:absolute;left:860px;top:260px;width:280px;font-size:24px}",
+        "img{position:absolute;left:100px;top:160px;width:720px;height:400px;object-fit:cover;object-position:50% 25%}p{position:absolute;left:860px;top:260px;width:280px;font-size:24px}",
         "h1{font-family:'Batang',serif;max-width:1060px;line-height:1.18}p{font-family:'Batang',serif;width:980px;font-size:25px;line-height:1.62}code{display:block;margin-top:34px;font-family:'IBM Plex Mono',monospace;font-size:24px}",
         ".columns{display:grid;grid-template-columns:repeat(3,1fr);gap:28px}.columns section{padding:28px;background:#eff6ff;border-top:6px solid #2563eb;min-height:280px}.columns h2{font-size:30px}.columns p{font-size:23px}",
         ".gradient{height:220px;border-radius:26px;background:linear-gradient(135deg,#0ea5e9,#1d4ed8);box-shadow:0 18px 40px #0f172a55;opacity:.88;clip-path:polygon(0 0,100% 0,88% 100%,0 100%)}.badge{position:absolute;right:100px;top:250px;padding:24px 48px;background:#facc15;border-radius:18px;transform:rotate(-5deg);font-size:30px}.fixture-panel p{font-size:24px}",
         ".right-sentinel{position:absolute;right:0;top:320px}.bottom-sentinel{position:absolute;bottom:0;left:620px}.internal-sentinel{position:absolute;right:90px;bottom:80px}.right-sentinel,.bottom-sentinel,.internal-sentinel{padding:6px;background:#ef4444;color:white;font-weight:700}",
     ]
+    if variant != "default":
+        bodies[0] = bodies[0].replace("</h1>", f" · {variant}</h1>")
+        bodies[7] = bodies[7].replace("</h1>", f" · {variant}</h1>")
+    languages = ["ko", "zh", "ja", "ko", "ko", "ko", "zh", "ko"]
     htmls: list[str] = []
     for index, (body, css) in enumerate(zip(bodies, scoped_css, strict=True), start=1):
         scope = f"scope-{index:02d}"
         htmls.append(
-            "<!doctype html><html lang='ko'><head><meta charset='utf-8'><style>"
+            f"<!doctype html><html lang='{languages[index - 1]}'><head><meta charset='utf-8'><style>"
             "*{box-sizing:border-box}html,body{margin:0;width:1280px;height:720px;overflow:hidden;background:#f8fafc}"
             ".fixture-panel{position:relative;width:100%;height:100%;padding:64px 72px;font-family:'Malgun Gothic',sans-serif;color:#0f172a}"
             ".fixture-panel h1{margin:0 0 42px;font-size:42px;line-height:1.2}"
@@ -290,7 +301,29 @@ def _eight_slide_semantic_drafts(
                         "objectPosition": "50% 25%",
                     },
                 }
-            elif any(token in qid for token in ("table", "grid", "gradient", "badge", "root")):
+            elif qid == "s01-table":
+                element = base | {
+                    "kind": "table",
+                    "semanticRole": "nativeTable",
+                    "requiredFeatures": ["table", "table-v1", "cell-text", "cell-fill"],
+                    "payload": {
+                        "schemaVersion": "authored-native-table/v1",
+                        "headerRows": 1,
+                        "fontFamily": "Malgun Gothic",
+                        "fontSizePt": 18,
+                        "columnWidths": [1.0, 1.0, 1.0],
+                        "rows": [
+                            [
+                                {"text": "분기", "fill": "#2563EB", "textColor": "#FFFFFF", "bold": True},
+                                {"text": "정확도", "fill": "#2563EB", "textColor": "#FFFFFF", "bold": True},
+                                {"text": "처리량", "fill": "#2563EB", "textColor": "#FFFFFF", "bold": True},
+                            ],
+                            [{"text": "1분기"}, {"text": "92%"}, {"text": "1,240"}],
+                            [{"text": "2분기"}, {"text": "96%"}, {"text": "1,680"}],
+                        ],
+                    },
+                }
+            elif any(token in qid for token in ("grid", "gradient", "badge", "root")):
                 features = {
                     "s01-table": ["table", "table-grid"],
                     "s06-grid": ["grid", "multi-column"],
@@ -326,7 +359,9 @@ def _eight_slide_semantic_drafts(
                     if match
                     else qid.replace("-", " ")
                 )
-                family = "Batang" if slide_index == 5 and qid != "s05-mono" else "Malgun Gothic"
+                family = "Batang" if slide_index in (3, 5) and qid != "s05-mono" else "Malgun Gothic"
+                language_by_slide = ["ko", "zh", "ja", "ko", "ko", "ko", "zh", "ko"]
+                language = language_by_slide[slide_index - 1]
                 script = "cjk"
                 runs = (
                     [
@@ -342,7 +377,7 @@ def _eight_slide_semantic_drafts(
                         },
                         {
                             "text": "검증",
-                            "language": "ko",
+                            "language": language,
                             "script": "cjk",
                             "fontFamily": "BatangChe",
                             "fontFace": "Regular",
@@ -715,7 +750,7 @@ async def _seed(args: argparse.Namespace) -> dict:
                 presentation = PresentationModel(
                     id=presentation_id,
                     owner_id=owner_id,
-                    content="Authored semantic dual-output deterministic vertical slice",
+                    content=f"Authored semantic dual-output deterministic vertical slice ({args.variant})",
                     n_slides=args.slide_count,
                     language="Korean",
                     title="Authored Semantic Vertical Slice",
@@ -723,14 +758,14 @@ async def _seed(args: argparse.Namespace) -> dict:
                     version="v1-standard",
                     lifecycle_status="staging",
                     revision=0,
-                    theme={"mode": "authored", "seed": "semantic-vertical-slice-v1"},
+                    theme={"mode": "authored", "seed": "semantic-vertical-slice-v2", "variant": args.variant},
                 )
                 session.add(presentation)
                 await session.flush()
                 conversation = WorkspaceConversation(owner_id=owner_id, presentation_id=presentation_id, next_position=args.slide_count)
                 session.add(conversation)
                 await session.flush()
-                request_payload = {"seed": "authored-semantic-vertical-slice-v2", "slideCount": args.slide_count, "template": "authored"}
+                request_payload = {"seed": "authored-semantic-vertical-slice-v2", "slideCount": args.slide_count, "template": "authored", "variant": args.variant}
                 operation = WorkspaceOperation(
                     id=operation_id,
                     owner_id=owner_id,
@@ -750,7 +785,7 @@ async def _seed(args: argparse.Namespace) -> dict:
                 )
                 session.add(operation)
                 htmls = (
-                    _eight_slide_htmls()
+                    _eight_slide_htmls(args.variant)
                     if args.slide_count == 8
                     else [_html("a"), _html("b")]
                 )
@@ -759,8 +794,8 @@ async def _seed(args: argparse.Namespace) -> dict:
                     slide = SlideModel(
                         id=uuid.uuid4(), owner_id=owner_id, presentation=presentation_id,
                         layout_group="authored", layout="authored:semantic-vertical-slice-v2",
-                        index=index, content={"__authored__": True, "seed": "authored-semantic-vertical-slice-v2", "slide": index + 1},
-                        html_content=html, properties={"seed": "authored-semantic-vertical-slice-v2", "scope": f"scope-{index + 1:02d}"},
+                        index=index, content={"__authored__": True, "seed": "authored-semantic-vertical-slice-v2", "slide": index + 1, "variant": args.variant},
+                        html_content=html, properties={"seed": "authored-semantic-vertical-slice-v2", "scope": f"scope-{index + 1:02d}", "variant": args.variant},
                     )
                     session.add(slide)
                     slides.append(slide)
@@ -796,8 +831,8 @@ async def _seed(args: argparse.Namespace) -> dict:
                         embeddingPermitted=cjk_mono_receipt.embedding_eligible, subsettingPermitted=cjk_mono_receipt.subsetting_permitted, retentionClass="active",
                     ),
                 ])
-                master_digest = canonical_digest({"schemaVersion": "authored-master-contract/v1", "seed": "semantic-vertical-slice-v1"})
-                composition_digest = canonical_digest({"schemaVersion": "authored-composition/v1", "seed": "semantic-vertical-slice-v1", "cssIsolation": "slide-root-v1"})
+                master_digest = canonical_digest({"schemaVersion": "authored-master-contract/v1", "seed": "semantic-vertical-slice-v2", "variant": args.variant})
+                composition_digest = canonical_digest({"schemaVersion": "authored-composition/v1", "seed": "semantic-vertical-slice-v2", "cssIsolation": "slide-root-v1", "variant": args.variant})
                 manifest = await publish_authored_semantic_bundle_graph(
                     session,
                     presentation_id=presentation_id,
@@ -836,8 +871,28 @@ async def _seed(args: argparse.Namespace) -> dict:
                     if args.slide_count == 8
                     else [item["elementId"] for slide in ("a", "b") for item in _semantic_elements(slide, image_digest)]
                 )
+                semantic_drafts_for_receipt = (
+                    _eight_slide_semantic_drafts(htmls, image_digest)
+                    if args.slide_count == 8
+                    else [_semantic_draft("a", image_digest), _semantic_draft("b", image_digest)]
+                )
+                semantic_manifest = {
+                    "schemaVersion": "authored-semantic-proof/v1",
+                    "variant": args.variant,
+                    "slides": [
+                        {
+                            "slideId": f"s{index + 1:02d}-root",
+                            "slideIndex": index + 1,
+                            "language": __import__("re").search(r"<html[^>]*lang=['\"]([^'\"]+)", html, __import__("re").IGNORECASE).group(1),
+                            "html": html,
+                            "semanticSource": draft["semanticSource"],
+                        }
+                        for index, (html, draft) in enumerate(zip(htmls, semantic_drafts_for_receipt, strict=True))
+                    ],
+                }
                 receipt = {
-                    "schemaVersion": "authored-semantic-vertical-slice-seed/v2",
+                    "schemaVersion": "authored-semantic-vertical-slice-seed/v3",
+                    "variant": args.variant,
                     "presentationId": str(presentation_id),
                     "ownerId": str(owner_id),
                     "presentationRevision": 1,
@@ -846,6 +901,8 @@ async def _seed(args: argparse.Namespace) -> dict:
                     "generationAttemptId": str(generation_attempt_id),
                     "slideIds": [str(slide.id) for slide in slides],
                     "slideCount": args.slide_count,
+                    "semanticManifest": semantic_manifest,
+                    "semanticManifestDigest": canonical_digest(semantic_manifest),
                     "qids": qids,
                     "genericCssClass": "fixture-panel" if args.slide_count == 8 else "panel",
                     "assetDigest": image_digest,
@@ -860,7 +917,7 @@ async def _seed(args: argparse.Namespace) -> dict:
                         for receipt in (mono_receipt, sans_receipt, serif_receipt, cjk_mono_receipt)
                     ],
                     "expectedRasterDemotionQids": (
-                        ["s01-table", "s06-grid", "s07-gradient", "s07-badge"]
+                        ["s06-grid", "s07-gradient", "s07-badge"]
                         if args.slide_count == 8
                         else ["a-chart", "a-shape-secondary", "b-chart", "b-shape-secondary"]
                     ),

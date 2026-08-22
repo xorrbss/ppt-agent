@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 
 import {
+  extractDeclaredAuthoredSlideDom,
   extractAuthoredSlideDom,
   renderAuthoredBackplate,
   resolveAuthoredHybridChromeExecutable,
@@ -15,6 +16,97 @@ import {
   prepareNativeElements,
   selectLayerSafeNativeElements,
 } from "./native-plan.ts";
+
+test("declared HTML table is observed as one complex-table ownership node", async (t) => {
+  const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
+  if (!chromeExecutable) {
+    if (process.env.CI === "true") assert.fail("CI must provide Chrome/Chromium");
+    t.skip("Chrome/Chromium is unavailable");
+    return;
+  }
+  const html = `<!doctype html><html><head><style>
+    html,body{width:1280px;height:720px;margin:0;overflow:hidden}
+    table{position:absolute;left:72px;top:160px;width:760px;border-collapse:collapse}
+    th,td{border:1px solid #94a3b8;padding:14px;font-family:Arial,sans-serif;font-size:20px}
+    th{background:#112233;color:#fff;font-weight:700}td{background:transparent;color:#202020;font-weight:400}
+  </style></head><body><table data-qid="table.release"><tr data-qid-ignore><th data-qid-ignore>분기</th><th data-qid-ignore>값</th></tr><tr data-qid-ignore><td data-qid-ignore>1분기</td><td data-qid-ignore>96%</td></tr></table></body></html>`;
+  const result = await extractDeclaredAuthoredSlideDom(html, ["table.release"], {
+    chromeExecutable,
+    timeoutMs: 30_000,
+    declaredElementIds: ["table.release"],
+  });
+  const table = result.observation.elements.find((element) => element.id === "table.release");
+  assert.ok(table);
+  assert.equal(table.candidateKind, "complex");
+  assert.deepEqual(table.fallbackReasons, ["complex-table"]);
+  assert.deepEqual(table.tableEvidence, { rows: [
+    [
+      { text: "분기", fill: "#112233", textColor: "#FFFFFF", bold: true, fontFamily: "Arial", fontSizePt: 15 },
+      { text: "값", fill: "#112233", textColor: "#FFFFFF", bold: true, fontFamily: "Arial", fontSizePt: 15 },
+    ],
+    [
+      { text: "1분기", textColor: "#202020", bold: false, fontFamily: "Arial", fontSizePt: 15 },
+      { text: "96%", textColor: "#202020", bold: false, fontFamily: "Arial", fontSizePt: 15 },
+    ],
+  ] });
+  assert.equal(result.observation.elements.length, 1);
+  const backplate = await renderAuthoredBackplate(
+    html,
+    {
+      ...result.slide,
+      backplate: {
+        ...result.slide.backplate,
+        nativeTableElementIds: ["table.release"],
+        eligibleElementIds: [
+          ...new Set([...result.slide.backplate.eligibleElementIds, "table.release"]),
+        ],
+      },
+    },
+    ["table.release"],
+    { chromeExecutable, timeoutMs: 30_000, declaredElementIds: ["table.release"] },
+  );
+  assert.deepEqual(backplate.appliedPromotedElementIds, ["table.release"]);
+  assert.deepEqual(backplate.fallbackElementIds, []);
+  const changedBackplate = await renderAuthoredBackplate(
+    html,
+    {
+      ...result.slide,
+      elements: result.slide.elements.map((element) =>
+        element.id === "table.release"
+          ? {
+              ...element,
+              tableEvidence: {
+                rows: element.tableEvidence.rows.map((row, rowIndex) =>
+                  row.map((cell, cellIndex) =>
+                    rowIndex === 1 && cellIndex === 1 ? { ...cell, text: "97%" } : cell,
+                  ),
+                ),
+              },
+            }
+          : element,
+      ),
+      backplate: {
+        ...result.slide.backplate,
+        nativeTableElementIds: ["table.release"],
+        eligibleElementIds: [...new Set([...result.slide.backplate.eligibleElementIds, "table.release"])],
+      },
+    },
+    ["table.release"],
+    { chromeExecutable, timeoutMs: 30_000, declaredElementIds: ["table.release"] },
+  );
+  assert.deepEqual(changedBackplate.appliedPromotedElementIds, []);
+  assert.deepEqual(changedBackplate.fallbackElementIds, ["table.release"]);
+
+  const unsafe = await extractDeclaredAuthoredSlideDom(
+    html.replace("border-collapse:collapse", "border-collapse:collapse;filter:blur(1px)"),
+    ["table.release"],
+    { chromeExecutable, timeoutMs: 30_000, declaredElementIds: ["table.release"] },
+  );
+  assert.deepEqual(
+    unsafe.observation.elements[0].fallbackReasons.slice().sort(),
+    ["complex-table", "filter"],
+  );
+});
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE_PATH = path.join(HERE, "fixtures", "hybrid-v1.html");

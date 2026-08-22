@@ -4,6 +4,7 @@ import asyncio
 import uuid
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from models.authored_vnext.semantic.contracts import (
@@ -15,6 +16,7 @@ from models.authored_vnext.semantic.contracts import (
     FontManifestV1,
     ShapeElementV1,
     ShapePayloadV1,
+    TablePayloadV1,
 )
 from models.sql.authored_semantic_bundle import (
     AuthoredDeckEmissionActivePointer,
@@ -101,6 +103,70 @@ def test_declared_bundle_rejects_qid_mismatch_without_rewrite() -> None:
     )
     with pytest.raises(SemanticContractError, match="authored_semantic_qid_mismatch"):
         validate_and_seal_candidate(html, bundle)
+
+
+def test_native_table_seed_contract_is_first_class_and_strict() -> None:
+    base = {
+        "elementId": "s01-table",
+        "kind": "table",
+        "semanticRole": "nativeTable",
+        "parentId": None,
+        "childIds": [],
+        "intendedOrder": 0,
+        "requiredFeatures": ["table", "table-v1", "cell-text", "cell-fill"],
+        "payload": {
+            "schemaVersion": "authored-native-table/v1",
+            "headerRows": 1,
+            "fontFamily": "Malgun Gothic",
+            "fontSizePt": 18.0,
+            "columnWidths": [1.0, 1.0, 1.0],
+            "rows": [
+                [
+                    {"text": "분기", "fill": "#2563EB", "textColor": "#FFFFFF", "bold": True},
+                    {"text": "정확도", "fill": "#2563EB", "textColor": "#FFFFFF", "bold": True},
+                    {"text": "처리량", "fill": "#2563EB", "textColor": "#FFFFFF", "bold": True},
+                ],
+                [{"text": "1분기"}, {"text": "92%"}, {"text": "1,240"}],
+                [{"text": "2분기"}, {"text": "96%"}, {"text": "1,680"}],
+            ],
+        },
+    }
+    source = AuthoredSemanticSourceV1.model_validate(
+        {
+            "presentationId": uuid.uuid4(),
+            "slideId": uuid.uuid4(),
+            "slideRevision": 1,
+            "operationId": uuid.uuid4(),
+            "authoredHtmlDigest": _digest("table-seed"),
+            "elements": [base],
+            "identityRegistry": {"activeQids": ["s01-table"]},
+        }
+    )
+    assert source.elements[0].payload.schema_version == "authored-native-table/v1"
+    assert len(source.elements[0].payload.rows[0]) == 3
+
+    for invalid_payload, code in [
+        ({**base["payload"], "rows": [base["payload"]["rows"][0], [{"text": "short"}]]}, "authored_table_row_column_mismatch"),
+        ({**base["payload"], "headerRows": 4}, "authored_table_header_rows_invalid"),
+        ({**base["payload"], "columnWidths": [1.0, 1.0]}, "authored_table_column_widths_mismatch"),
+    ]:
+        with pytest.raises(ValidationError, match=code):
+            TablePayloadV1.model_validate(invalid_payload)
+
+    legacy = {key: value for key, value in base.items() if key != "payload"}
+    legacy.update(sourceRef=_digest("legacy-table"), rasterReason="table_serializer_unavailable")
+    legacy_source = AuthoredSemanticSourceV1.model_validate(
+        {
+            "presentationId": uuid.uuid4(),
+            "slideId": uuid.uuid4(),
+            "slideRevision": 1,
+            "operationId": uuid.uuid4(),
+            "authoredHtmlDigest": _digest("legacy-table-seed"),
+            "elements": [legacy],
+            "identityRegistry": {"activeQids": ["s01-table"]},
+        }
+    )
+    assert legacy_source.elements[0].source_ref == _digest("legacy-table")
 
 
 def test_atomic_degraded_graph_publish_and_legacy_compatible_read() -> None:

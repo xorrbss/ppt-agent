@@ -25,8 +25,13 @@ from models.sql.presentation_export_attempt import (
 from models.sql.slide import SlideModel
 from models.authored_vnext.semantic.contracts import (
     AuthoredEmissionBundleV1,
-    ExportAttemptDigestBindingV2,
+    ExportAttemptDigestBindingV1,
     SemanticUnavailableReceiptV1,
+)
+from models.authored_vnext.semantic.readiness import (
+    ExportAuthorityClaimV2,
+    ReleasePinnedExportAttemptDigestBindingV2,
+    WorkbenchCapabilityProjectionV2,
 )
 from models.sql.workspace import get_workspace_owner_scope
 from services.presentation_export_attempt_service import (
@@ -60,6 +65,11 @@ from services.authored_vnext.semantic.export_binding import (
     bind_existing_export_attempt,
 )
 from services.authored_vnext.semantic.query import get_active_authored_emission
+from services.authored_vnext.semantic.readiness import (
+    build_export_authority_claim,
+    get_workbench_capability_projection_v2,
+    validate_export_authority_claim,
+)
 from utils.owner_context import get_current_owner_id
 
 
@@ -77,6 +87,52 @@ def _visual_parity_status_from_powerpoint_qa(
 
 def _prefixed_digest(value: str) -> str:
     return value if value.startswith("sha256:") else f"sha256:{value}"
+
+
+def _release_authority_pin_from_projection(
+    projection: WorkbenchCapabilityProjectionV2,
+    *,
+    export_mode: str,
+) -> dict[str, Any]:
+    profile = projection.release_profile
+    claim_kind = (
+        "boundedNative"
+        if export_mode == "hybrid" and profile.bounded_native_parity_ready
+        else "promotion"
+    )
+    claim_ready = (
+        profile.bounded_native_parity_ready
+        if claim_kind == "boundedNative"
+        else profile.promotion_ready
+    )
+    pin: dict[str, Any] = {
+        "schemaVersion": "authored-export-release-authority-pin/v2",
+        "state": "ready" if claim_ready else "nonPromotable",
+        "kind": claim_kind,
+        "profileId": projection.release_profile.profile_id,
+        "profileDefinitionDigest": projection.release_profile.profile_definition_digest,
+        "projectionDigest": projection.projection_digest,
+        "reasonCode": projection.release_profile.reason_code,
+    }
+    if claim_ready:
+        pin["claim"] = build_export_authority_claim(
+            projection, kind=claim_kind
+        ).model_dump(mode="json", by_alias=True)
+    return pin
+
+
+def _completed_export_binding(
+    binding_values: dict[str, Any],
+    claim: ExportAuthorityClaimV2 | None,
+) -> ExportAttemptDigestBindingV1 | ReleasePinnedExportAttemptDigestBindingV2:
+    if claim is None:
+        return ExportAttemptDigestBindingV1(**binding_values)
+    return ReleasePinnedExportAttemptDigestBindingV2(
+        **binding_values,
+        release_authority_receipt_digests=claim.receipt_digests,
+        release_projection_digest=claim.projection_digest,
+        export_authority_claim=claim,
+    )
 
 
 async def _active_semantic_emission(
@@ -157,7 +213,7 @@ async def _bind_completed_semantic_export_attempt(
             )
         semantic_digests.append(bundle.semantic_component.digest)
         origins.append(bundle.origin_generation_attempt_id)
-    binding = ExportAttemptDigestBindingV2(
+    binding_values = dict(
         export_attempt_id=attempt.id,
         presentation_id=attempt.presentation_id,
         presentation_revision=attempt.source_revision,
@@ -183,6 +239,30 @@ async def _bind_completed_semantic_export_attempt(
         ],
         pptx_digest=_prefixed_digest(pptx_sha256),
     )
+    release_pin = (
+        ((attempt.provenance or {}).get("capability_evidence") or {}).get(
+            "release_authority"
+        )
+        or {}
+    )
+    claim_payload = release_pin.get("claim")
+    if claim_payload is None:
+        claim = None
+    else:
+        try:
+            claim = ExportAuthorityClaimV2.model_validate(claim_payload)
+        except ValueError as error:
+            raise PresentationExportContractError(
+                "presentation_export_release_authority_pin_invalid"
+            ) from error
+        projection = await get_workbench_capability_projection_v2(
+            session,
+            presentation_id=attempt.presentation_id,
+            owner_id=owner_id,
+            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+        )
+        validate_export_authority_claim(projection, claim)
+    binding = _completed_export_binding(binding_values, claim)
     sealed = await bind_existing_export_attempt(
         session,
         owner_id=owner_id,
@@ -333,6 +413,21 @@ async def _begin_direct_authored_export_attempt(
         renderer_source_sha256=renderer_source_sha256,
     )
     provenance["capability_evidence"]["export_mode"] = export_mode
+    if active_semantic is not None and active_semantic.canonical_mode == "bundleGraph":
+        owner_id = get_current_owner_id()
+        if owner_id is None:
+            raise PresentationExportContractError("presentation_owner_required")
+        projection = await get_workbench_capability_projection_v2(
+            session,
+            presentation_id=presentation_id,
+            owner_id=owner_id,
+            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+        )
+        provenance["capability_evidence"]["release_authority"] = (
+            _release_authority_pin_from_projection(
+                projection, export_mode=export_mode
+            )
+        )
     attempt = await begin_export_attempt(
         session,
         presentation_id=presentation_id,
@@ -444,6 +539,7 @@ async def complete_direct_hybrid_export_attempt(
         or qa.native_shape != manifest.ooxml_readback.native_shape
         or qa.native_table != manifest.ooxml_readback.native_table
         or qa.native_chart != manifest.ooxml_readback.native_chart
+        or qa.native_image_crop != manifest.ooxml_readback.native_image_crop
     ):
         qa = qa.model_copy(update={"status": "failed"})
     # PowerPoint COM proves packaging, reopen, render, and native-object

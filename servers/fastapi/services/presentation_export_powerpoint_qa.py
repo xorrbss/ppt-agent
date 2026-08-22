@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import nullcontext
 from hashlib import sha256
 import hmac
 import json
@@ -106,7 +107,231 @@ def _powerpoint_executable_available() -> bool:
     return any(candidate and Path(candidate).is_file() for candidate in candidates)
 
 
-def _run_powerpoint_com_qa(path: Path, expected_slides: int) -> dict[str, Any]:
+def _rgb_hex(value: object) -> str:
+    return f"#{int(value) & 0xFFFFFF:06X}"
+
+
+def _font_snapshot(text_range) -> dict[str, Any]:
+    font = text_range.Font
+    return {
+        "latinTypeface": str(font.Name or ""),
+        "eastAsianTypeface": str(font.NameFarEast or ""),
+        "sizePt": round(float(font.Size), 3),
+        "bold": bool(font.Bold),
+        "fill": _rgb_hex(font.Fill.ForeColor.RGB),
+    }
+
+
+def _table_snapshot(shape) -> dict[str, Any]:
+    table = shape.Table
+    rows = int(table.Rows.Count)
+    columns = int(table.Columns.Count)
+    cells: list[list[dict[str, Any]]] = []
+    for row_index in range(1, rows + 1):
+        row: list[dict[str, Any]] = []
+        for column_index in range(1, columns + 1):
+            cell_shape = table.Cell(row_index, column_index).Shape
+            text_range = cell_shape.TextFrame2.TextRange
+            row.append(
+                {
+                    "text": str(text_range.Text or "").replace("\r\n", "\n").replace("\r", "\n"),
+                    "font": _font_snapshot(text_range),
+                    "fill": _rgb_hex(cell_shape.Fill.ForeColor.RGB),
+                }
+            )
+        cells.append(row)
+    return {"rows": rows, "columns": columns, "cells": cells}
+
+
+def _variant_values(value: object) -> list[Any]:
+    values = value if isinstance(value, (tuple, list)) else (value,)
+    return [
+        round(float(item), 6) if isinstance(item, float) else item
+        for item in values
+    ]
+
+
+def _chart_snapshot(shape) -> dict[str, Any]:
+    chart = shape.Chart
+    series_collection = chart.SeriesCollection()
+    series: list[dict[str, Any]] = []
+    for index in range(1, int(series_collection.Count) + 1):
+        item = series_collection.Item(index)
+        series.append(
+            {
+                "name": str(item.Name or ""),
+                "categories": _variant_values(item.XValues),
+                "values": _variant_values(item.Values),
+            }
+        )
+    axes: dict[str, Any] = {}
+    for axis_name, axis_type in (("category", 1), ("value", 2)):
+        axis = chart.Axes(axis_type)
+        axes[axis_name] = {
+            "hasTitle": bool(axis.HasTitle),
+            "title": str(axis.AxisTitle.Text or "") if bool(axis.HasTitle) else "",
+            "tickLabelTypeface": str(axis.TickLabels.Font.Name or ""),
+            "tickLabelSizePt": round(float(axis.TickLabels.Font.Size), 3),
+        }
+    has_legend = bool(chart.HasLegend)
+    legend = {"present": has_legend, "typeface": "", "sizePt": None}
+    if has_legend:
+        legend_range = chart.Legend.Format.TextFrame2.TextRange
+        legend["typeface"] = str(legend_range.Font.Name or "")
+        legend["sizePt"] = round(float(legend_range.Font.Size), 3)
+    return {
+        "chartType": int(chart.ChartType),
+        "series": series,
+        "axes": axes,
+        "legend": legend,
+    }
+
+
+def _crop_snapshot(shape) -> dict[str, float] | None:
+    if int(shape.Type) not in {11, 13}:
+        return None
+    picture = shape.PictureFormat
+    return {
+        "leftPt": round(float(picture.CropLeft), 3),
+        "topPt": round(float(picture.CropTop), 3),
+        "rightPt": round(float(picture.CropRight), 3),
+        "bottomPt": round(float(picture.CropBottom), 3),
+    }
+
+
+def _powerpoint_deck_snapshot(deck) -> tuple[list[list[dict[str, Any]]], int]:
+    slides: list[list[dict[str, Any]]] = []
+    failures = 0
+    for slide_index in range(1, int(deck.Slides.Count) + 1):
+        records: list[dict[str, Any]] = []
+        shapes = deck.Slides.Item(slide_index).Shapes
+        for shape_index in range(1, int(shapes.Count) + 1):
+            try:
+                shape = shapes.Item(shape_index)
+                has_text = bool(shape.HasTextFrame) and bool(shape.TextFrame2.HasText)
+                text = latin_face = east_asian_face = ""
+                if has_text:
+                    text_range = shape.TextFrame2.TextRange
+                    text = str(text_range.Text or "").replace("\r\n", "\n").replace("\r", "\n")
+                    try:
+                        latin_face = str(text_range.Font.Name or "")
+                    except Exception:
+                        latin_face = ""
+                    try:
+                        east_asian_face = str(text_range.Font.NameFarEast or "")
+                    except Exception:
+                        east_asian_face = ""
+                has_table = bool(shape.HasTable)
+                has_chart = bool(shape.HasChart)
+                records.append(
+                    {
+                        "shapeIndex": shape_index,
+                        "name": str(shape.Name or ""),
+                        "type": int(shape.Type),
+                        "left": round(float(shape.Left), 3),
+                        "top": round(float(shape.Top), 3),
+                        "width": round(float(shape.Width), 3),
+                        "height": round(float(shape.Height), 3),
+                        "hasText": has_text,
+                        "hasTable": has_table,
+                        "hasChart": has_chart,
+                        "text": text,
+                        "lineBreakCount": text.count("\n"),
+                        "latinTypeface": latin_face,
+                        "eastAsianTypeface": east_asian_face,
+                        "table": _table_snapshot(shape) if has_table else None,
+                        "chart": _chart_snapshot(shape) if has_chart else None,
+                        "crop": _crop_snapshot(shape),
+                    }
+                )
+            except Exception:
+                failures += 1
+        slides.append(records)
+    return slides, failures
+
+
+def _snapshot_comparison(
+    first: list[list[dict[str, Any]]], reopened: list[list[dict[str, Any]]]
+) -> dict[str, int | bool]:
+    shape_count_changes = geometry_gt_5pt = geometry_gt_10pt = 0
+    line_break_changes = typeface_changes = text_changes = 0
+    object_identity_changes = table_content_changes = chart_content_changes = 0
+    crop_changes = 0
+    if len(first) != len(reopened):
+        shape_count_changes += abs(len(first) - len(reopened))
+    for first_slide, reopened_slide in zip(first, reopened):
+        if len(first_slide) != len(reopened_slide):
+            shape_count_changes += abs(len(first_slide) - len(reopened_slide))
+        for first_shape, reopened_shape in zip(first_slide, reopened_slide):
+            if any(
+                first_shape[key] != reopened_shape[key]
+                for key in ("name", "type", "hasText", "hasTable", "hasChart")
+            ):
+                object_identity_changes += 1
+            drift = max(
+                abs(float(first_shape[key]) - float(reopened_shape[key]))
+                for key in ("left", "top", "width", "height")
+            )
+            if drift > 5:
+                geometry_gt_5pt += 1
+            if drift > 10:
+                geometry_gt_10pt += 1
+            if first_shape["text"] != reopened_shape["text"]:
+                text_changes += 1
+            if first_shape["lineBreakCount"] != reopened_shape["lineBreakCount"]:
+                line_break_changes += 1
+            if (
+                first_shape["latinTypeface"] != reopened_shape["latinTypeface"]
+                or first_shape["eastAsianTypeface"]
+                != reopened_shape["eastAsianTypeface"]
+            ):
+                typeface_changes += 1
+            if first_shape.get("table") != reopened_shape.get("table"):
+                table_content_changes += 1
+            if first_shape.get("chart") != reopened_shape.get("chart"):
+                chart_content_changes += 1
+            if first_shape.get("crop") != reopened_shape.get("crop"):
+                crop_changes += 1
+    return {
+        "shape_count_changes": shape_count_changes,
+        "object_identity_changes": object_identity_changes,
+        "geometry_changes_gt_5pt": geometry_gt_5pt,
+        "geometry_changes_gt_10pt": geometry_gt_10pt,
+        "text_changes": text_changes,
+        "line_break_changes": line_break_changes,
+        "typeface_changes": typeface_changes,
+        "table_content_changes": table_content_changes,
+        "chart_content_changes": chart_content_changes,
+        "crop_changes": crop_changes,
+        "readback_match": not any(
+            (
+                shape_count_changes,
+                object_identity_changes,
+                geometry_gt_5pt,
+                geometry_gt_10pt,
+                text_changes,
+                line_break_changes,
+                typeface_changes,
+                table_content_changes,
+                chart_content_changes,
+                crop_changes,
+            )
+        ),
+    }
+
+
+def _snapshot_sha256(value: list[list[dict[str, Any]]]) -> str:
+    payload = json.dumps(
+        value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    return sha256(payload).hexdigest()
+
+
+def _run_powerpoint_com_qa(
+    path: Path,
+    expected_slides: int,
+    evidence_directory: Path | None = None,
+) -> dict[str, Any]:
     import pythoncom  # type: ignore[import-not-found]
     import win32com.client  # type: ignore[import-not-found]
 
@@ -115,7 +340,18 @@ def _run_powerpoint_com_qa(path: Path, expected_slides: int) -> dict[str, Any]:
     try:
         application = win32com.client.DispatchEx("PowerPoint.Application")
         application.DisplayAlerts = 1
-        with tempfile.TemporaryDirectory(prefix="presenton-powerpoint-qa-") as temp:
+        if evidence_directory is None:
+            evidence_context = tempfile.TemporaryDirectory(
+                prefix="presenton-powerpoint-qa-"
+            )
+        else:
+            if evidence_directory.exists():
+                raise PresentationExportContractError(
+                    "presentation_export_powerpoint_evidence_exists"
+                )
+            evidence_directory.mkdir(parents=True)
+            evidence_context = nullcontext(str(evidence_directory))
+        with evidence_context as temp:
             temp_root = Path(temp)
             first_render = temp_root / "first-render"
             reopen_render = temp_root / "reopen-render"
@@ -128,6 +364,7 @@ def _run_powerpoint_com_qa(path: Path, expected_slides: int) -> dict[str, Any]:
                 int(first.Slides.Item(i).Shapes.Count)
                 for i in range(1, slide_count + 1)
             ]
+            first_snapshot, first_snapshot_failures = _powerpoint_deck_snapshot(first)
             first.Export(str(first_render), "PNG", 1280, 720)
             first.SaveCopyAs(str(copy_path), 24)
             first.Close()
@@ -138,8 +375,12 @@ def _run_powerpoint_com_qa(path: Path, expected_slides: int) -> dict[str, Any]:
                 int(reopened.Slides.Item(i).Shapes.Count)
                 for i in range(1, reopened_count + 1)
             ]
+            reopened_snapshot, reopened_snapshot_failures = _powerpoint_deck_snapshot(
+                reopened
+            )
             typography_gt_5pt = typography_gt_10pt = inspection_failures = 0
             native_text = native_image = native_shape = native_table = native_chart = 0
+            native_image_crop = 0
             for slide_index in range(1, reopened_count + 1):
                 shapes = reopened.Slides.Item(slide_index).Shapes
                 for shape_index in range(1, int(shapes.Count) + 1):
@@ -159,6 +400,9 @@ def _run_powerpoint_com_qa(path: Path, expected_slides: int) -> dict[str, Any]:
                         shape_type = int(shape.Type)
                         if not is_backplate and shape_type in {11, 13}:
                             native_image += 1
+                            crop = _crop_snapshot(shape)
+                            if crop is not None and any(abs(value) > 0.01 for value in crop.values()):
+                                native_image_crop += 1
                         elif (
                             not is_backplate
                             and not has_text
@@ -180,17 +424,34 @@ def _run_powerpoint_com_qa(path: Path, expected_slides: int) -> dict[str, Any]:
                     except Exception:
                         inspection_failures += 1
             reopened.Export(str(reopen_render), "PNG", 1280, 720)
+            first_pngs = sorted(first_render.glob("*.PNG"))
             pngs = sorted(reopen_render.glob("*.PNG"))
+            first_png_hashes = [_sha256_file(png) for png in first_pngs]
+            reopen_png_hashes = [_sha256_file(png) for png in pngs]
+            comparison = _snapshot_comparison(first_snapshot, reopened_snapshot)
+            inspection_failures += first_snapshot_failures + reopened_snapshot_failures
+            if evidence_directory is not None:
+                (temp_root / "first-open-readback.json").write_text(
+                    json.dumps(first_snapshot, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+                (temp_root / "reopen-readback.json").write_text(
+                    json.dumps(reopened_snapshot, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
             passed = not (
                 slide_count != expected_slides
                 or reopened_count != expected_slides
                 or shape_counts != reopened_shapes
+                or len(first_pngs) != expected_slides
                 or len(pngs) != expected_slides
+                or first_png_hashes != reopen_png_hashes
                 or typography_gt_5pt > 0
                 or typography_gt_10pt > 0
                 or inspection_failures > 0
+                or comparison["readback_match"] is not True
             )
-            return {
+            report = {
                 "status": "passed" if passed else "failed",
                 "platform": "windows",
                 "supported": True,
@@ -198,8 +459,25 @@ def _run_powerpoint_com_qa(path: Path, expected_slides: int) -> dict[str, Any]:
                 "reopened": True,
                 "rendered": True,
                 "readback": True,
-                "repair_dialogs": 0,
-                "rendered_png_sha256": [_sha256_file(png) for png in pngs],
+                "verification_scope": "powerpoint-first-open-save-reopen-stability",
+                "semantic_payload_binding": "not-verified",
+                "repair_dialogs": None,
+                "repair_observation": "not-observable-via-noninteractive-com",
+                "rendered_png_sha256": reopen_png_hashes,
+                "first_open_rendered_png_sha256": first_png_hashes,
+                "reopen_rendered_png_sha256": reopen_png_hashes,
+                "render_hashes_match": first_png_hashes == reopen_png_hashes,
+                "first_open_readback_sha256": _snapshot_sha256(first_snapshot),
+                "reopen_readback_sha256": _snapshot_sha256(reopened_snapshot),
+                **(
+                    {
+                        "first_open_readback_artifact": "first-open-readback.json",
+                        "reopen_readback_artifact": "reopen-readback.json",
+                    }
+                    if evidence_directory is not None
+                    else {}
+                ),
+                **comparison,
                 "powerpoint_version": str(application.Version),
                 "slide_count": reopened_count,
                 "typography_issues_gt_5pt": typography_gt_5pt,
@@ -209,7 +487,14 @@ def _run_powerpoint_com_qa(path: Path, expected_slides: int) -> dict[str, Any]:
                 "native_shape": native_shape,
                 "native_table": native_table,
                 "native_chart": native_chart,
+                "native_image_crop": native_image_crop,
             }
+            if evidence_directory is not None:
+                (temp_root / "powerpoint-qa.json").write_text(
+                    json.dumps(report, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+            return report
     finally:
         for deck in (reopened, first):
             if deck is not None:
@@ -225,13 +510,23 @@ def _run_powerpoint_com_qa(path: Path, expected_slides: int) -> dict[str, Any]:
         pythoncom.CoUninitialize()
 
 
-async def trusted_powerpoint_qa(path: Path, expected_slides: int) -> dict[str, Any]:
+async def trusted_powerpoint_qa(
+    path: Path,
+    expected_slides: int,
+    *,
+    evidence_directory: Path | None = None,
+) -> dict[str, Any]:
     if os.name != "nt":
         return {"status": "preflight", "platform": "unsupported"}
     if not _powerpoint_executable_available():
         return {"status": "not-verified", "platform": "windows"}
     try:
-        return await asyncio.to_thread(_run_powerpoint_com_qa, path, expected_slides)
+        return await asyncio.to_thread(
+            _run_powerpoint_com_qa,
+            path,
+            expected_slides,
+            evidence_directory,
+        )
     except Exception as error:
         return {
             "status": "failed",

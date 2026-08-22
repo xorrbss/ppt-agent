@@ -1229,7 +1229,11 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
   function complexKind(element) {
     // SVG DOM tagName values are lowercase in Chromium, unlike HTML tagName.
     var tag = element.tagName.toUpperCase();
-    // HTML tables are decomposed into editable table/cell rectangles and text.
+    // Declared tables are admitted through the authored-native-table contract
+    // as one editable DrawingML table. Keep the whole TABLE as the observed
+    // complex ownership node; declared extraction excludes data-qid-ignore
+    // row/cell descendants so they cannot become duplicate native paint.
+    if (tag === "TABLE") return "complex-table";
     // Canvas and SVG still need a fidelity fallback because their authored
     // primitives are not represented by ordinary DOM boxes.
     if (tag === "SVG") {
@@ -1713,6 +1717,46 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       objectPosition: objectPosition,
       crop: crop,
     };
+  }
+
+  function tableCellEvidence(element) {
+    if (element.tagName.toUpperCase() !== "TABLE" || !element.rows) return null;
+    var rows = Array.from(element.rows);
+    if (!rows.length || rows.length > 100) return null;
+    var width = rows[0].cells.length;
+    if (!width || width > 20 || rows.some(function (row) { return row.cells.length !== width; })) return null;
+    var result = [];
+    for (var rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+      var row = rows[rowIndex];
+      var cells = [];
+      for (var cellIndex = 0; cellIndex < row.cells.length; cellIndex += 1) {
+        var cell = row.cells[cellIndex];
+        if (cell.rowSpan !== 1 || cell.colSpan !== 1) return null;
+        var style = getComputedStyle(cell);
+        var fill = parseColor(style.backgroundColor);
+        var color = parseColor(style.color);
+        var families = fontFamilies(style.fontFamily || "");
+        var sizePx = number(style.fontSize, Number.NaN);
+        var weight = Number.parseInt(style.fontWeight, 10);
+        if (!Number.isFinite(weight)) weight = style.fontWeight === "bold" ? 700 : 400;
+        if (
+          !color || color.alpha !== 1 || !families.length || !Number.isFinite(sizePx) ||
+          (fill && fill.alpha !== 0 && fill.alpha !== 1) ||
+          style.fontStyle !== "normal" ||
+          (style.textDecorationLine && style.textDecorationLine !== "none")
+        ) return null;
+        cells.push({
+          text: String(cell.innerText || cell.textContent || "").replace(/\r\n?/g, "\n").trim(),
+          ...(fill && fill.alpha === 1 ? { fill: "#" + fill.hex } : {}),
+          textColor: "#" + color.hex,
+          bold: weight >= 600,
+          fontFamily: families[0],
+          fontSizePt: round(sizePx * 0.75),
+        });
+      }
+      result.push(cells);
+    }
+    return { rows: result };
   }
 
   function svgSerializationMarkup(element, bounds) {
@@ -3232,7 +3276,10 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       return "shape:" + JSON.stringify(observation.shape);
     }
     if (observation.candidateKind === "complex") {
-      return "complex:" + JSON.stringify(observation.fallbackReasons.slice().sort());
+      return "complex:" + JSON.stringify({
+        fallbackReasons: observation.fallbackReasons.slice().sort(),
+        tableEvidence: observation.tableEvidence || null,
+      });
     }
     return "";
   }
@@ -3617,6 +3664,10 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
         candidateKind: candidateKind,
         fallbackReasons: reasons,
       };
+      if (complexReason === "complex-table" && candidateKind === "complex") {
+        var tableEvidence = tableCellEvidence(element);
+        if (tableEvidence) observation.tableEvidence = tableEvidence;
+      }
 
       try {
         if (candidateKind === "text") {

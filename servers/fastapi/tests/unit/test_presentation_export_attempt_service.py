@@ -101,6 +101,7 @@ def test_passed_powerpoint_qa_allows_truthful_unverified_visual_parity() -> None
         "nativeShape": 0,
         "nativeTable": 0,
         "nativeChart": 0,
+        "nativeImageCrop": 0,
     }
     evidence = ExportVisualParityEvidence.model_validate(
         {
@@ -200,29 +201,32 @@ def test_hybrid_coverage_accepts_strict_semantic_receipt_digests() -> None:
     )
 
 
-def test_hybrid_coverage_accepts_native_chart_only_with_matching_readback() -> None:
+def test_hybrid_coverage_accepts_table_chart_and_crop_only_with_matching_readback() -> None:
     slide = {
         "slideNumber": 1,
         "nativeText": 0,
-        "nativeImage": 0,
+        "nativeImage": 1,
         "nativeShape": 0,
-        "nativeTable": 0,
+        "nativeTable": 1,
         "nativeChart": 1,
+        "nativeImageCrop": 1,
         "logicalCoverage": {
             "nativeText": 0,
-            "nativeImage": 0,
+            "nativeImage": 1,
             "nativeShape": 0,
-            "nativeTable": 0,
+            "nativeTable": 1,
             "nativeChart": 1,
+            "nativeImageCrop": 1,
             "rasterRemaining": 1,
         },
         "ooxmlReadback": {
             "status": "passed",
             "nativeText": 0,
-            "nativeImage": 0,
+            "nativeImage": 1,
             "nativeShape": 0,
-            "nativeTable": 0,
+            "nativeTable": 1,
             "nativeChart": 1,
+            "nativeImageCrop": 1,
             "rasterRemaining": 1,
         },
         "backplateCount": 0,
@@ -243,10 +247,11 @@ def test_hybrid_coverage_accepts_native_chart_only_with_matching_readback() -> N
         },
         "totalSlides": 1,
         "nativeText": 0,
-        "nativeImage": 0,
+        "nativeImage": 1,
         "nativeShape": 0,
-        "nativeTable": 0,
+        "nativeTable": 1,
         "nativeChart": 1,
+        "nativeImageCrop": 1,
         "logicalCoverage": slide["logicalCoverage"],
         "ooxmlReadback": slide["ooxmlReadback"],
         "backplateCount": 0,
@@ -257,7 +262,9 @@ def test_hybrid_coverage_accepts_native_chart_only_with_matching_readback() -> N
         "slides": [slide],
     }
     manifest = PresentationExportCoverageManifest.model_validate(document)
+    assert manifest.native_table == 1
     assert manifest.native_chart == 1
+    assert manifest.native_image_crop == 1
     document["slides"] = [{**slide, "nativeChart": 2}]
     document["nativeChart"] = 2
     with pytest.raises(ValueError, match="matching semantic and OOXML readback"):
@@ -485,6 +492,7 @@ def test_hybrid_v2_binds_attempt_and_separates_logical_readback_backplate() -> N
         "native_shape": 0,
         "native_table": 0,
         "native_chart": 0,
+        "native_image_crop": 0,
     }
     coverage["visualParity"] = "passed"
     coverage["slides"][0]["visualParity"] = "passed"
@@ -518,6 +526,7 @@ def test_hybrid_v2_binds_attempt_and_separates_logical_readback_backplate() -> N
             "nativeShape": 0,
             "nativeTable": 0,
             "nativeChart": 0,
+            "nativeImageCrop": 0,
         },
     }
     provenance["coverage_manifest"] = coverage

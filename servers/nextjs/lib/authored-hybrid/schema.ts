@@ -288,6 +288,19 @@ export interface AuthoredHybridShapePayload {
   preserveContents?: boolean;
 }
 
+export interface AuthoredHybridTableCellEvidence {
+  text: string;
+  fill?: string;
+  textColor: string;
+  bold: boolean;
+  fontFamily: string;
+  fontSizePt: number;
+}
+
+export interface AuthoredHybridTableEvidence {
+  rows: AuthoredHybridTableCellEvidence[][];
+}
+
 export interface AuthoredHybridElementBase {
   id: string;
   /** Authored-declared identity is the exact data-qid; compatibility is ordinal. */
@@ -305,6 +318,8 @@ export interface AuthoredHybridElementBase {
   opacity: number;
   /** Native-promotion blockers collected by the typography preflight. */
   typographyIssues?: AuthoredHybridTypographyIssue[];
+  /** Browser-computed table cell evidence retained only for semantic admission/suppression. */
+  tableEvidence?: AuthoredHybridTableEvidence;
 }
 
 export interface AuthoredHybridNativeTextElement

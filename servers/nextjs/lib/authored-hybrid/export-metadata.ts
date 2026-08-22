@@ -37,6 +37,8 @@ export interface AuthoredHybridCoverageCounts {
   nativeShape: number;
   nativeTable: number;
   nativeChart: number;
+  /** Native images whose editable OOXML crop was read back as a:srcRect. */
+  nativeImageCrop?: number;
   rasterRemaining: number;
 }
 
@@ -45,8 +47,8 @@ export interface AuthoredHybridSlideCoverage {
   nativeText: number;
   nativeImage: number;
   nativeShape: number;
-  /** Tables remain zero until their OOXML serializer is real. */
   nativeTable: number;
+  nativeImageCrop?: number;
   nativeChart: number;
   logicalCoverage: AuthoredHybridCoverageCounts;
   ooxmlReadback: AuthoredHybridCoverageCounts & {
@@ -79,6 +81,7 @@ export interface AuthoredHybridCoverageManifest {
   nativeImage: number;
   nativeShape: number;
   nativeTable: number;
+  nativeImageCrop?: number;
   nativeChart: number;
   logicalCoverage: AuthoredHybridCoverageCounts;
   ooxmlReadback: AuthoredHybridCoverageCounts & {
@@ -105,12 +108,16 @@ interface CoverageQualitySlide {
   nativeImageElements: number;
   nativeShapeElements: number;
   nativeChartElements?: number;
+  nativeTableElements?: number;
+  nativeImageCropElements?: number;
   rasterFallbackElements: number;
   logicalCoverage: {
     nativeText: number;
     nativeImage: number;
     nativeShape: number;
     nativeChart?: number;
+    nativeTable?: number;
+    nativeImageCrop?: number;
     nativeGroup: number;
     rasterRemaining: number;
   };
@@ -120,6 +127,8 @@ interface CoverageQualitySlide {
     nativeImage: number;
     nativeShape: number;
     nativeChart?: number;
+    nativeTable?: number;
+    nativeImageCrop?: number;
     nativeGroup: number;
     rasterRemaining: number;
   };
@@ -154,7 +163,9 @@ export function createAuthoredHybridCoverageManifest(
       const nativeImage = nonNegativeInteger(slide.nativeImageElements);
       const nativeShape = nonNegativeInteger(slide.nativeShapeElements);
       const nativeChart = nonNegativeInteger(slide.nativeChartElements ?? 0);
-      const nativeCount = nativeText + nativeImage + nativeShape + nativeChart;
+      const nativeTable = nonNegativeInteger(slide.nativeTableElements ?? 0);
+      const nativeImageCrop = nonNegativeInteger(slide.nativeImageCropElements ?? 0);
+      const nativeCount = nativeText + nativeImage + nativeShape + nativeTable + nativeChart;
       // An image-only fallback is one retained full-slide raster even when an
       // older quality producer omitted the aggregate element count.
       const rasterRemaining = Math.max(
@@ -165,8 +176,9 @@ export function createAuthoredHybridCoverageManifest(
         nativeText: nonNegativeInteger(slide.logicalCoverage.nativeText),
         nativeImage: nonNegativeInteger(slide.logicalCoverage.nativeImage),
         nativeShape: nonNegativeInteger(slide.logicalCoverage.nativeShape),
-        nativeTable: 0,
+        nativeTable: nonNegativeInteger(slide.logicalCoverage.nativeTable ?? nativeTable),
         nativeChart: nonNegativeInteger(slide.logicalCoverage.nativeChart ?? nativeChart),
+        nativeImageCrop: nonNegativeInteger(slide.logicalCoverage.nativeImageCrop ?? nativeImageCrop),
         rasterRemaining,
       };
       const ooxmlReadback = {
@@ -174,8 +186,9 @@ export function createAuthoredHybridCoverageManifest(
         nativeText: nonNegativeInteger(slide.ooxmlReadback.nativeText),
         nativeImage: nonNegativeInteger(slide.ooxmlReadback.nativeImage),
         nativeShape: nonNegativeInteger(slide.ooxmlReadback.nativeShape),
-        nativeTable: 0,
+        nativeTable: nonNegativeInteger(slide.ooxmlReadback.nativeTable ?? (slide.ooxmlReadback.status === "passed" ? nativeTable : 0)),
         nativeChart: nonNegativeInteger(slide.ooxmlReadback.nativeChart ?? 0),
+        nativeImageCrop: nonNegativeInteger(slide.ooxmlReadback.nativeImageCrop ?? (slide.ooxmlReadback.status === "passed" ? nativeImageCrop : 0)),
         rasterRemaining: nonNegativeInteger(
           slide.ooxmlReadback.rasterRemaining,
         ),
@@ -185,7 +198,8 @@ export function createAuthoredHybridCoverageManifest(
         nativeText,
         nativeImage,
         nativeShape,
-        nativeTable: 0,
+        nativeTable,
+        nativeImageCrop,
         nativeChart,
         logicalCoverage,
         ooxmlReadback,
@@ -208,14 +222,16 @@ export function createAuthoredHybridCoverageManifest(
   const nativeImage = slides.reduce((sum, slide) => sum + slide.nativeImage, 0);
   const nativeShape = slides.reduce((sum, slide) => sum + slide.nativeShape, 0);
   const nativeChart = slides.reduce((sum, slide) => sum + slide.nativeChart, 0);
+  const nativeTable = slides.reduce((sum, slide) => sum + slide.nativeTable, 0);
+  const nativeImageCrop = slides.reduce((sum, slide) => sum + (slide.nativeImageCrop ?? 0), 0);
   const rasterRemaining = slides.reduce(
     (sum, slide) => sum + slide.rasterRemaining,
     0,
   );
   const sumLogical = (field: keyof AuthoredHybridCoverageCounts) =>
-    slides.reduce((sum, slide) => sum + slide.logicalCoverage[field], 0);
+    slides.reduce((sum, slide) => sum + (slide.logicalCoverage[field] ?? 0), 0);
   const sumReadback = (field: keyof AuthoredHybridCoverageCounts) =>
-    slides.reduce((sum, slide) => sum + slide.ooxmlReadback[field], 0);
+    slides.reduce((sum, slide) => sum + (slide.ooxmlReadback[field] ?? 0), 0);
   return {
     schemaVersion: AUTHORED_HYBRID_COVERAGE_SCHEMA_VERSION,
     mode: "hybrid",
@@ -232,14 +248,16 @@ export function createAuthoredHybridCoverageManifest(
     nativeText,
     nativeImage,
     nativeShape,
-    nativeTable: 0,
+    nativeTable,
+    nativeImageCrop,
     nativeChart,
     logicalCoverage: {
       nativeText: sumLogical("nativeText"),
       nativeImage: sumLogical("nativeImage"),
       nativeShape: sumLogical("nativeShape"),
-      nativeTable: 0,
+      nativeTable: sumLogical("nativeTable"),
       nativeChart: sumLogical("nativeChart"),
+      nativeImageCrop: sumLogical("nativeImageCrop"),
       rasterRemaining: sumLogical("rasterRemaining"),
     },
     ooxmlReadback: {
@@ -253,8 +271,9 @@ export function createAuthoredHybridCoverageManifest(
       nativeText: sumReadback("nativeText"),
       nativeImage: sumReadback("nativeImage"),
       nativeShape: sumReadback("nativeShape"),
-      nativeTable: 0,
+      nativeTable: sumReadback("nativeTable"),
       nativeChart: sumReadback("nativeChart"),
+      nativeImageCrop: sumReadback("nativeImageCrop"),
       rasterRemaining: sumReadback("rasterRemaining"),
     },
     backplateCount: slides.reduce(

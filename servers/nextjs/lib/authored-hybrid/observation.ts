@@ -9,6 +9,7 @@ import type {
   AuthoredHybridTextRole,
   AuthoredHybridTextScript,
   AuthoredHybridTextStyle,
+  AuthoredHybridTableEvidence,
 } from "./schema.ts";
 
 export interface BrowserTextRunObservation {
@@ -85,6 +86,8 @@ export interface BrowserElementObservation {
   text?: BrowserTextObservation;
   image?: BrowserImageObservation;
   shape?: BrowserShapeObservation;
+  /** Computed, normalized evidence for bounded declared-table admission. */
+  tableEvidence?: AuthoredHybridTableEvidence;
 }
 
 /** Serializable identity token carried from extraction into backplate capture. */

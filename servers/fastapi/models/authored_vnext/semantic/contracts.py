@@ -232,14 +232,67 @@ class ChartElementV1(SemanticElementBaseV1):
     payload: ChartPayloadV1
 
 
+class TableCellV1(StrictCamelModel):
+    text: str = Field(max_length=10000)
+    fill: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    text_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    bold: bool = False
+    font_family: str | None = Field(default=None, min_length=1, max_length=128)
+    font_size_pt: float | None = Field(default=None, ge=6, le=72)
+
+
+class TablePayloadV1(StrictCamelModel):
+    schema_version: Literal["authored-native-table/v1"] = "authored-native-table/v1"
+    rows: list[list[TableCellV1]] = Field(min_length=1, max_length=100)
+    column_widths: list[float] | None = Field(default=None, min_length=1, max_length=20)
+    header_rows: int = Field(default=0, ge=0, le=100)
+    font_family: str | None = Field(default=None, min_length=1, max_length=128)
+    font_size_pt: float | None = Field(default=None, ge=6, le=72)
+
+    @model_validator(mode="after")
+    def rectangular_bounded_grid(self) -> "TablePayloadV1":
+        column_count = len(self.rows[0])
+        if column_count < 1 or column_count > 20:
+            raise ValueError("authored_table_column_count_invalid")
+        if any(len(row) != column_count for row in self.rows):
+            raise ValueError("authored_table_row_column_mismatch")
+        if self.header_rows > len(self.rows):
+            raise ValueError("authored_table_header_rows_invalid")
+        if self.column_widths is not None:
+            if len(self.column_widths) != column_count:
+                raise ValueError("authored_table_column_widths_mismatch")
+            if any(width <= 0 for width in self.column_widths):
+                raise ValueError("authored_table_column_width_invalid")
+        return self
+
+
+class TableElementV1(SemanticElementBaseV1):
+    kind: Literal["table"]
+    payload: TablePayloadV1
+
+
+class ReferencedTableElementV1(SemanticElementBaseV1):
+    """Compatibility form for legacy table islands without native cell data."""
+
+    kind: Literal["table"]
+    source_ref: Digest
+    raster_reason: str | None = Field(default=None, max_length=128)
+
+
 class ReferencedElementV1(SemanticElementBaseV1):
-    kind: Literal["connector", "group", "table", "complexIsland"]
+    kind: Literal["connector", "group", "complexIsland"]
     source_ref: Digest
     raster_reason: str | None = Field(default=None, max_length=128)
 
 
 SemanticElementV1: TypeAlias = (
-    TextElementV1 | ImageElementV1 | ShapeElementV1 | ChartElementV1 | ReferencedElementV1
+    TextElementV1
+    | ImageElementV1
+    | ShapeElementV1
+    | ChartElementV1
+    | TableElementV1
+    | ReferencedTableElementV1
+    | ReferencedElementV1
 )
 
 
@@ -602,7 +655,7 @@ class AdmissionElementV1(StrictCamelModel):
 
     @model_validator(mode="after")
     def truthful_state(self) -> "AdmissionElementV1":
-        if self.state == "admitted" and (self.fallback_reason or self.kind not in {"text", "image", "shape", "chart"}):
+        if self.state == "admitted" and (self.fallback_reason or self.kind not in {"text", "image", "shape", "table", "chart"}):
             raise ValueError("authored_native_admission_unsupported")
         if self.state != "admitted" and not self.fallback_reason:
             raise ValueError("authored_native_fallback_reason_required")

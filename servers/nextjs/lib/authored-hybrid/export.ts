@@ -62,7 +62,7 @@ import {
   type PresentationExportFontEmbeddingStatus,
   type PresentationExportRendererIsolation,
 } from "../presentation-export-quality.ts";
-import { inspectPptxEditability } from "./pptx-quality-inspection.ts";
+import { attachAuthoredHybridStage2ReadbackMetadata, inspectPptxEditability } from "./pptx-quality-inspection.ts";
 import {
   imageFallbackSlide,
   noFontRenderingTelemetry,
@@ -324,7 +324,7 @@ function powerPointFontInputs(
     Partial<
       Record<
         "regular" | "bold" | "italic" | "boldItalic",
-        { data: Buffer; subset: boolean; source: string }
+        { data: Buffer; subset: boolean; source: string; collectionFaceIndex?: number }
       >
     >
   >();
@@ -336,6 +336,7 @@ function powerPointFontInputs(
       data: file.data,
       subset: plan.strategy === "subset",
       source: file.sourceId,
+      ...(file.collectionFaceIndex === undefined ? {} : { collectionFaceIndex: file.collectionFaceIndex }),
     };
     byFamily.set(face.family, faces);
   }
@@ -455,7 +456,10 @@ async function prepareFontEmbedding(
     ) {
       throw error;
     }
-    throw new Error("authored_hybrid_font_embedding_failed", { cause: error });
+    const stableCollectionReason = error instanceof Error
+      ? error.message.match(/^(pptx_font_collection_[a-z_]+)/)?.[1]
+      : undefined;
+    throw new Error(stableCollectionReason ?? "authored_hybrid_font_embedding_failed", { cause: error });
   }
 }
 
@@ -815,9 +819,9 @@ async function runUncachedAuthoredHybridExport(
     );
     const assemblyMs = elapsedMs(assemblyStartedAt);
     const hybridBytes = await fs.readFile(hybridPath);
-    const quality = attachPresentationExportOoxmlReadback(
-      logicalQuality,
-      inspectPptxEditability(hybridBytes),
+    const quality = attachAuthoredHybridStage2ReadbackMetadata(
+      attachPresentationExportOoxmlReadback(logicalQuality, inspectPptxEditability(hybridBytes)),
+      hybridBytes,
     );
     const result = await attachAuthoredHybridEvidence({ path: hybridPath }, quality, {
       exportAttemptId: params.exportAttemptId,

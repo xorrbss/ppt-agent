@@ -100,6 +100,14 @@ export interface PowerPointFontEmbeddingResult {
   readonly embeddedTypefaces: number;
   readonly fonts: readonly EmbeddedPowerPointTypeface[];
   readonly reason?: string;
+  readonly reopenReceipt: {
+    readonly schemaVersion: "powerpoint-font-reopen-receipt/v1";
+    readonly state: "package-reopened";
+    readonly embeddedFontFiles: number;
+    readonly embeddedTypefaces: number;
+    readonly collectionFaces: readonly PowerPointFontCollectionReceiptV1[];
+    readonly reasonCode: null;
+  };
 }
 
 export interface EmbeddedPowerPointPptx {
@@ -365,6 +373,7 @@ export function embedPowerPointFonts(
   let nextRelationship = nextRelationshipNumber(relationships);
   let nextPart = 1;
   const embeddedFonts: EmbeddedPowerPointTypeface[] = [];
+  const collectionReceipts: PowerPointFontCollectionReceiptV1[] = [];
   const declarations: string[] = [];
   for (const requested of requestedFonts) {
     const typeface = requested.typeface.trim();
@@ -394,6 +403,7 @@ export function embedPowerPointFonts(
       if (collectionReceipt.reasonCode) {
         throw new Error(`${collectionReceipt.reasonCode}:${JSON.stringify(collectionReceipt)}`);
       }
+      if (collectionReceipt.state === "collection-face-extracted") collectionReceipts.push(collectionReceipt);
       const fontData = collectionReceipt.state === "collection-face-extracted"
         ? extractSfntCollectionFace(input.data, input.collectionFaceIndex!).data
         : input.data;
@@ -481,6 +491,14 @@ export function embedPowerPointFonts(
       embeddedFontFiles,
       embeddedTypefaces: embeddedFonts.length,
       fonts: embeddedFonts,
+      reopenReceipt: {
+        schemaVersion: "powerpoint-font-reopen-receipt/v1",
+        state: "package-reopened",
+        embeddedFontFiles,
+        embeddedTypefaces: embeddedFonts.length,
+        collectionFaces: collectionReceipts,
+        reasonCode: null,
+      },
     },
   };
 }

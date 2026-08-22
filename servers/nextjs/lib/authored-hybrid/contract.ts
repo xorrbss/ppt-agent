@@ -402,6 +402,7 @@ function convertElement(
     bounds: rectPxToBounds(observation.boundsPx),
     rotationDeg: observation.rotationDeg,
     opacity: observation.opacity,
+    ...(observation.tableEvidence ? { tableEvidence: observation.tableEvidence } : {}),
   };
 
   if (classification.mode === "raster") {

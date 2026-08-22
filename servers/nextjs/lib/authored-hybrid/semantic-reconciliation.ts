@@ -251,6 +251,7 @@ function paintEvidence(element: BrowserElementObservation): unknown {
     } : undefined,
     image: element.image,
     shape: element.shape,
+    tableEvidence: element.tableEvidence,
   };
 }
 

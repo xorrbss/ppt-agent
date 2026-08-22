@@ -340,7 +340,7 @@ export async function prepareSlideLayer(
       };
   const declaredTablePreparation = semanticContext && declaredCapture
     ? prepareDeclaredNativeTables(semanticContext.declaredElements, declaredCapture.observation.elements)
-    : { tables: [], rejections: new Map<string, "unsupported-native-table" | "unsupported-table-css">() };
+    : { tables: [], rejections: new Map<string, "unsupported-native-table" | "unsupported-table-css" | "table-observation-mismatch">() };
   const prepared = preSerializePreparedElements(
     (
       await prepareNativeElements(nativeLayoutElements, {
