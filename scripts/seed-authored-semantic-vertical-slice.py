@@ -137,7 +137,8 @@ def _html(slide: str) -> str:
 .boundary-sentinel{position:absolute;background:transparent;border:1px dashed transparent}.image-card{position:absolute;left:82px;top:300px;width:260px;height:170px;object-fit:cover}
 </style></head><body data-qid='a-body-root'><section data-qid='a-panel' class='panel' data-semantic-role='panel'>
 <h1 data-qid='a-title' data-semantic-role='title' style='position:absolute;left:34px;top:28px;font-size:34px;color:#0f172a'>Authored 품질 Slice A</h1>
-<p data-qid='a-body' data-semantic-role='body' style='position:absolute;left:38px;top:106px;width:650px;height:100px;font-size:25px;line-height:1.35;color:#1e293b'>혼합 텍스트 Korean / Latin / 2026 숫자 <span data-qid='a-body-mono' style='font-family:"IBM Plex Mono",monospace'>mono run 42</span></p>
+<p data-qid='a-body' data-semantic-role='body' style='position:absolute;left:38px;top:106px;width:590px;height:100px;font-size:25px;line-height:1.35;color:#1e293b'>혼합 텍스트 Korean / Latin / 2026 숫자</p>
+<span data-qid='a-body-mono' style='position:absolute;left:650px;top:114px;font-family:"IBM Plex Mono",monospace;font-size:25px;color:#1e293b'>mono run 42</span>
 <img data-qid='a-image' class='image-card' alt='simple image fixture' src='__IMAGE_DATA_URI__'>
 <div data-qid='a-shape-primary' class='simple-shape' role='presentation' style='left:390px;top:310px;width:250px;height:72px;background:#2563eb'></div>
 <div data-qid='a-shape-secondary' class='simple-shape' role='presentation' style='left:820px;top:430px;width:190px;height:56px;background:#f59e0b'></div>
@@ -154,7 +155,8 @@ def _html(slide: str) -> str:
 .boundary-sentinel{position:absolute;background:transparent;border:1px dashed transparent}.image-card{position:absolute;left:92px;top:290px;width:230px;height:190px;object-fit:contain}
 </style></head><body data-qid='b-body-root'><section data-qid='b-panel' class='panel' data-semantic-role='panel'>
 <h1 data-qid='b-title' data-semantic-role='title' style='position:absolute;left:28px;top:24px;font-size:32px;color:#7c2d12'>동일 class, 다른 내용 B</h1>
-<p data-qid='b-body' data-semantic-role='body' style='position:absolute;left:32px;top:100px;width:640px;height:108px;font-size:23px;line-height:1.45;color:#431407'>다른 content / Latin-KR / 3.14159 <span data-qid='b-body-mono' style='font-family:"IBM Plex Mono",monospace'>fixed-width 007</span></p>
+<p data-qid='b-body' data-semantic-role='body' style='position:absolute;left:32px;top:100px;width:600px;height:108px;font-size:23px;line-height:1.45;color:#431407'>다른 content / Latin-KR / 3.14159</p>
+<span data-qid='b-body-mono' style='position:absolute;left:650px;top:108px;font-family:"IBM Plex Mono",monospace;font-size:23px;color:#431407'>fixed-width 007</span>
 <img data-qid='b-image' class='image-card' alt='simple image fixture' src='__IMAGE_DATA_URI__'>
 <div data-qid='b-shape-primary' class='simple-shape' role='presentation' style='left:370px;top:310px;width:270px;height:80px;background:#ea580c'></div>
 <div data-qid='b-shape-secondary' class='simple-shape' role='presentation' style='left:840px;top:430px;width:160px;height:44px;background:#16a34a'></div>
@@ -233,6 +235,7 @@ def _semantic_elements(slide: str, asset_digest: str) -> list[dict]:
     children = [
         f"{prefix}title",
         f"{prefix}body",
+        f"{prefix}body-mono",
         f"{prefix}image",
         f"{prefix}shape-primary",
         f"{prefix}shape-secondary",
@@ -288,7 +291,7 @@ def _semantic_elements(slide: str, asset_digest: str) -> list[dict]:
             "kind": "text",
             "semanticRole": "body",
             "parentId": f"{prefix}panel",
-            "childIds": [f"{prefix}body-mono"],
+            "childIds": [],
             "intendedOrder": 4,
             "intendedBounds": _bounds(86, 152, 620, 80),
             "requiredFeatures": [],
@@ -298,7 +301,7 @@ def _semantic_elements(slide: str, asset_digest: str) -> list[dict]:
             "elementId": f"{prefix}body-mono",
             "kind": "text",
             "semanticRole": "bodyMonoRun",
-            "parentId": f"{prefix}body",
+            "parentId": f"{prefix}panel",
             "childIds": [],
             "intendedOrder": 5,
             "intendedBounds": _bounds(530, 164, 180, 34),
