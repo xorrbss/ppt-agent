@@ -3533,6 +3533,11 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       else if (looksLikeShape(element) && (nestedBlockContent(element) || !textRoot(element))) candidateKind = "shape";
       else if (textRoot(element)) candidateKind = "text";
       else if (looksLikeShape(element)) candidateKind = "shape";
+      // Declared QIDs are identity nodes even when Chromium propagates their
+      // paint (notably the <html> canvas background) and ordinary heuristics
+      // would omit them. Preserve that ownership node as a shape observation;
+      // reconciliation/admission can still demote it truthfully.
+      else if (declaredIdentity && element.hasAttribute("data-qid")) candidateKind = "shape";
       if (!candidateKind) return;
 
       var declaredQid = element.getAttribute("data-qid");
