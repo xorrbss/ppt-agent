@@ -142,9 +142,10 @@ def _html(slide: str) -> str:
 <div data-qid='a-shape-primary' class='simple-shape' role='presentation' style='left:390px;top:310px;width:250px;height:72px;background:#2563eb'></div>
 <div data-qid='a-shape-secondary' class='simple-shape' role='presentation' style='left:820px;top:430px;width:190px;height:56px;background:#f59e0b'></div>
 <div data-qid='a-chart' class='chart complex-island' data-semantic-role='chart' aria-label='complex chart raster island'></div>
+</section>
 <div data-qid='a-right-sentinel' class='boundary-sentinel' style='left:1248px;top:310px;width:2px;height:10px;background:#ef4444;border-color:#ef4444'></div>
 <div data-qid='a-bottom-sentinel' class='boundary-sentinel' style='left:640px;top:708px;width:10px;height:2px;background:#ef4444;border-color:#ef4444'></div>
-</section></body></html>""".replace("__IMAGE_DATA_URI__", _IMAGE_DATA_URI)
+</body></html>""".replace("__IMAGE_DATA_URI__", _IMAGE_DATA_URI)
     if slide == "b":
         return """<!doctype html><html data-qid='b-document' lang='ko'><head><meta charset='utf-8'><style>
 *{box-sizing:border-box}html,body{margin:0;width:1280px;height:720px;overflow:hidden;background:#fff7ed}
@@ -158,9 +159,10 @@ def _html(slide: str) -> str:
 <div data-qid='b-shape-primary' class='simple-shape' role='presentation' style='left:370px;top:310px;width:270px;height:80px;background:#ea580c'></div>
 <div data-qid='b-shape-secondary' class='simple-shape' role='presentation' style='left:840px;top:430px;width:160px;height:44px;background:#16a34a'></div>
 <div data-qid='b-chart' class='chart complex-island' data-semantic-role='chart' aria-label='complex chart raster island'></div>
+</section>
 <div data-qid='b-right-sentinel' class='boundary-sentinel' style='left:1278px;top:300px;width:2px;height:12px;background:#ef4444;border-color:#ef4444'></div>
 <div data-qid='b-bottom-sentinel' class='boundary-sentinel' style='left:620px;top:718px;width:12px;height:2px;background:#ef4444;border-color:#ef4444'></div>
-</section></body></html>""".replace("__IMAGE_DATA_URI__", _IMAGE_DATA_URI)
+</body></html>""".replace("__IMAGE_DATA_URI__", _IMAGE_DATA_URI)
     raise ValueError(f"unknown slide: {slide}")
 
 
