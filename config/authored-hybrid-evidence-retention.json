@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "presenton.authored-hybrid-evidence-retention/v1",
+  "attemptRetentionDays": 180,
+  "evidenceRetentionDays": 30,
+  "expiryAction": "mark_expired_retain_metadata",
+  "deletionAuthorized": false,
+  "ciArtifactRetentionDays": 30
+}

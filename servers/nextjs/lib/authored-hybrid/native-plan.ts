@@ -582,6 +582,35 @@ function rectsIntersectPx(a: AuthoredHybridRect, b: AuthoredHybridRect): boolean
     a.y < b.y + b.height && a.y + a.height > b.y;
 }
 
+function isStrictlyAbove(
+  other: AuthoredHybridElement,
+  element: AuthoredHybridElement
+): boolean {
+  return other.zOrder > element.zOrder ||
+    (other.zOrder === element.zOrder && other.sourceIndex > element.sourceIndex);
+}
+
+function isAncestorPaint(
+  possibleAncestor: AuthoredHybridElement,
+  element: AuthoredHybridElement
+): boolean {
+  const ancestorPath = possibleAncestor.domPath.trim();
+  const elementPath = element.domPath.trim();
+  return Boolean(
+    ancestorPath &&
+      elementPath &&
+      (elementPath.startsWith(`${ancestorPath} > `) ||
+        elementPath.startsWith(`${ancestorPath}::`))
+  );
+}
+
+function capturedBreakCount(runs: readonly AuthoredHybridTextRun[]): number {
+  return runs.reduce(
+    (count, run) => count + (run.text.match(/\n/gu)?.length ?? 0),
+    0
+  );
+}
+
 const ISSUE_FALLBACK_REASON = {
   "embedding-face-missing": "typography-embedding-face-missing",
   "font-substitution": "typography-font-substitution",
@@ -650,7 +679,7 @@ export function preflightNativeTypography(
 
     const layout = element.text.layout;
     if (layout?.lineRects) {
-      const breakCount = runs.filter((run) => run.text === "\n").length;
+      const breakCount = capturedBreakCount(runs);
       if (
         layout.lineRects.length !== layout.lineCount ||
         (layout.lineCount > 0 && breakCount + 1 !== layout.lineCount)
@@ -658,8 +687,9 @@ export function preflightNativeTypography(
         issues.push({ code: "line-break-mismatch", elementId: element.id });
       }
       if (
-        layout.lineRects.some(
-          (line) => !rectContains(layout.contentBounds.px, line.px, tolerance)
+        element.text.containerShape &&
+        layout.lineRects.some((line) =>
+          !rectContains(layout.contentBounds.px, line.px, tolerance)
         )
       ) {
         issues.push({ code: "bounds-overflow", elementId: element.id });
@@ -680,7 +710,8 @@ export function preflightNativeTypography(
         (other) =>
           other.id !== element.id &&
           other.classification.mode === "raster" &&
-          other.zOrder >= element.zOrder &&
+          isStrictlyAbove(other, element) &&
+          !isAncestorPaint(other, element) &&
           rectsIntersectPx(correctedBounds, other.bounds.px)
       )
     ) {
@@ -1352,6 +1383,36 @@ function powerPointSafeTextBounds(
   if (Math.abs(element.rotationDeg) >= 0.001) return bounds;
   let adjustedBounds = bounds;
   const measuredLines = element.text.layout?.lineRects?.map((line) => line.px) ?? [];
+  if (!element.text.containerShape && measuredLines.length > 0) {
+    const fontSizePx = element.text.style.fontSizePt / 0.75;
+    const guardPx = element.text.role === "title"
+      ? Math.max(2, fontSizePx * 0.06)
+      : 2;
+    const measuredLeft = Math.min(...measuredLines.map((line) => line.x));
+    const measuredTop = Math.min(...measuredLines.map((line) => line.y));
+    const measuredRight = Math.max(
+      ...measuredLines.map((line) => line.x + line.width)
+    );
+    const measuredBottom = Math.max(
+      ...measuredLines.map((line) => line.y + line.height)
+    );
+    const left = Math.min(adjustedBounds.x, measuredLeft - guardPx);
+    const top = Math.min(adjustedBounds.y, measuredTop - guardPx);
+    const right = Math.max(
+      adjustedBounds.x + adjustedBounds.width,
+      measuredRight + guardPx
+    );
+    const bottom = Math.max(
+      adjustedBounds.y + adjustedBounds.height,
+      measuredBottom + guardPx
+    );
+    adjustedBounds = {
+      x: left,
+      y: top,
+      width: right - left,
+      height: bottom - top,
+    };
+  }
   if (
     !element.text.containerShape &&
     measuredLines.length > 0 &&
@@ -1811,9 +1872,8 @@ function powerPointWrapMode(
     segment.text.includes("\n")
   );
   // Once Chromium has supplied the authored visual lines, PowerPoint must not
-  // invent a second set of wraps with the wider Office fallback typeface.
-  // Explicit <a:br/> nodes remain editable and normAutofit below can absorb
-  // small cross-platform width differences without changing line membership.
+  // invent a second set of wraps. Explicit <a:br/> nodes preserve membership;
+  // the preflight rejects metric drift instead of shrinking it with autofit.
   if (hasCapturedLineBreak) return "none";
   const lineHeightPx = element.text.style.lineHeight.points / 0.75;
   const isSingleLineHeight =
@@ -1829,24 +1889,12 @@ function powerPointWrapMode(
   return isSingleLineHeight ? "none" : "square";
 }
 
-function powerPointAutofitXml(
-  element: AuthoredHybridEditableTextElement
-): string {
-  const hasCapturedLineBreak = textSegments(element).some((segment) =>
-    segment.text.includes("\n")
-  );
-  const usesCjkTypeface = /(?:malgun|noto\s+sans\s+(?:kr|jp|sc|tc)|pretendard|맑은|고딕|명조)/i
-    .test(element.text.style.fontFamily);
-  const containsCjk = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u
-    .test(element.text.plainText);
-  // Office CJK substitution is measurably wider than Chromium web fonts.
-  // Editable one-line labels otherwise escape their authored boxes and collide
-  // with neighbouring native objects. Let PowerPoint shrink only those
-  // substitute-typeface cases (and browser-captured multiline text); Latin
-  // exact-font text keeps its authored point size.
-  return hasCapturedLineBreak || usesCjkTypeface || containsCjk
-    ? "<a:normAutofit/>"
-    : "<a:noAutofit/>";
+function powerPointAutofitXml(): string {
+  // Font substitution, line membership, and bounds are decided by the
+  // typography preflight. Never make an unstable candidate appear safe by
+  // silently shrinking it in PowerPoint; rejected text stays on the raster
+  // backplate with an exact typography fallback reason.
+  return "<a:noAutofit/>";
 }
 
 function nonVisualName(element: AuthoredHybridElement): string {
@@ -1893,7 +1941,7 @@ export function serializePreparedNativeElement(
     const paint = container
       ? shapePaintXml(container.shape, element.opacity)
       : "<a:noFill/><a:ln><a:noFill/></a:ln>";
-    return `<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId}" name="${name}"/>${container ? "<p:cNvSpPr/>" : '<p:cNvSpPr txBox="1"/>'}<p:nvPr/></p:nvSpPr><p:spPr>${transformRectXml(shapeBounds, element.rotationDeg)}${geometry}${paint}</p:spPr><p:txBody><a:bodyPr wrap="${wrap}" horzOverflow="${horizontalOverflow}" vertOverflow="${verticalOverflow}" anchor="${anchor}" lIns="${emu(insets.left)}" tIns="${emu(insets.top)}" rIns="${emu(insets.right)}" bIns="${emu(insets.bottom)}">${powerPointAutofitXml(element)}</a:bodyPr><a:lstStyle/>${paragraphsXml(element, options)}</p:txBody></p:sp>`;
+    return `<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId}" name="${name}"/>${container ? "<p:cNvSpPr/>" : '<p:cNvSpPr txBox="1"/>'}<p:nvPr/></p:nvSpPr><p:spPr>${transformRectXml(shapeBounds, element.rotationDeg)}${geometry}${paint}</p:spPr><p:txBody><a:bodyPr wrap="${wrap}" horzOverflow="${horizontalOverflow}" vertOverflow="${verticalOverflow}" anchor="${anchor}" lIns="${emu(insets.left)}" tIns="${emu(insets.top)}" rIns="${emu(insets.right)}" bIns="${emu(insets.bottom)}">${powerPointAutofitXml()}</a:bodyPr><a:lstStyle/>${paragraphsXml(element, options)}</p:txBody></p:sp>`;
   }
   if (item.kind === "shape") {
     const element = item.source;

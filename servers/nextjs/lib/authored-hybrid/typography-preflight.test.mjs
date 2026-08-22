@@ -137,6 +137,79 @@ test("face-complete mixed text promotes with Noto CJK and IBM Plex Mono Latin ru
   });
   assert.match(xml, /typeface="IBM Plex Mono"/);
   assert.match(xml, /typeface="Noto Sans KR"/);
+  assert.doesNotMatch(xml, /typeface="Consolas"/);
+  assert.match(xml, /<a:noAutofit\/>/);
+  assert.doesNotMatch(xml, /<a:normAutofit\/>/);
+});
+
+test("ancestor backplate paint does not reject an otherwise stable native title", () => {
+  const title = mixedTextElement();
+  const ancestor = {
+    ...title,
+    id: "card-parent",
+    domPath: "body",
+    sourceIndex: 0,
+    classification: {
+      mode: "raster",
+      candidateKind: "shape",
+      reasons: ["external-paint"],
+    },
+  };
+  delete ancestor.text;
+  const result = preflightNativeTypography([title], {
+    embeddedTypefaceFaces: [
+      { typeface: "IBM Plex Mono", face: "bold" },
+      { typeface: "Noto Sans KR", face: "bold" },
+    ],
+    backplateElements: [ancestor],
+  });
+
+  assert.deepEqual(result.promotableElementIds, ["mixed-1"]);
+  assert.deepEqual(result.typographyIssues, []);
+});
+
+test("unrepresented lines and a true upper raster sibling remain exact fallbacks", () => {
+  const faces = [
+    { typeface: "IBM Plex Mono", face: "bold" },
+    { typeface: "Noto Sans KR", face: "bold" },
+  ];
+  const lineMismatch = mixedTextElement();
+  lineMismatch.id = "line-mismatch";
+  lineMismatch.text.layout.lineCount = 2;
+  lineMismatch.text.layout.singleLine = false;
+  lineMismatch.text.layout.lineRects = [
+    bounds(80, 70, 180, 20),
+    bounds(80, 92, 120, 20),
+  ];
+  const collision = mixedTextElement();
+  collision.id = "collision";
+  const upperSibling = {
+    ...collision,
+    id: "upper-raster",
+    domPath: "body > div:nth-of-type(2)",
+    sourceIndex: collision.sourceIndex + 1,
+    classification: {
+      mode: "raster",
+      candidateKind: "shape",
+      reasons: ["external-paint"],
+    },
+  };
+  delete upperSibling.text;
+
+  const mismatched = preflightNativeTypography([lineMismatch], {
+    embeddedTypefaceFaces: faces,
+  });
+  assert.deepEqual(mismatched.elements[0].classification.reasons, [
+    "typography-line-break-mismatch",
+  ]);
+
+  const collided = preflightNativeTypography([collision], {
+    embeddedTypefaceFaces: faces,
+    backplateElements: [upperSibling],
+  });
+  assert.deepEqual(collided.elements[0].classification.reasons, [
+    "typography-backplate-collision",
+  ]);
 });
 
 test("browser-measured title height and numeric label width receive PPT guards", () => {

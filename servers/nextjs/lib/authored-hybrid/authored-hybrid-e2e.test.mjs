@@ -26,6 +26,18 @@ const FIXTURES = [
   "e2e-cjk-9pt-lines-long-text.html",
   "e2e-image-svg-hybrid.html",
 ];
+const CSS_ISOLATION_FIXTURES = [
+  {
+    file: "css-isolation-right-edge-red.html",
+    edgeRgb: [239, 68, 68],
+    innerProbeRgb: [243, 251, 255],
+  },
+  {
+    file: "css-isolation-right-edge-blue.html",
+    edgeRgb: [37, 99, 235],
+    innerProbeRgb: [37, 99, 235],
+  },
+];
 
 const CONTENT_TYPES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -115,8 +127,37 @@ async function buildLayer(html, slideNumber, chromeExecutable) {
   };
 }
 
+async function buildFidelityLayer(html, slideNumber, chromeExecutable) {
+  const preflight = preflightAuthoredHtmlForHybrid(html);
+  assert.equal(preflight.ok, true, preflight.reason);
+  const options = { chromeExecutable, timeoutMs: 30_000 };
+  const contract = await extractAuthoredSlideDom(html, options);
+  const backplate = await renderAuthoredBackplate(html, contract, [], options);
+  assert.deepEqual(backplate.appliedPromotedElementIds, []);
+  return {
+    slideNumber,
+    backplatePng: backplate.backplatePng,
+    elements: [],
+  };
+}
+
 function slideXml(entries, slideNumber) {
   return entries.get(`ppt/slides/slide${slideNumber}.xml`).toString("utf8");
+}
+
+async function rgbAt(png, x, y) {
+  const { data, info } = await sharp(png).ensureAlpha().raw().toBuffer({
+    resolveWithObject: true,
+  });
+  const offset = (y * info.width + x) * info.channels;
+  return [...data.subarray(offset, offset + 3)];
+}
+
+function assertRgb(actual, expected, message) {
+  assert.ok(
+    actual.every((channel, index) => Math.abs(channel - expected[index]) <= 1),
+    `${message}: expected ${expected.join(",")}, received ${actual.join(",")}`,
+  );
 }
 
 test("v0.4.8 authored-hybrid representative fixtures preserve editable structure end to end", async (t) => {
@@ -247,4 +288,79 @@ test("v0.4.8 authored-hybrid representative fixtures preserve editable structure
     [...entries.keys()].filter((name) => /^ppt\/media\/hybrid-s\d+-backplate-/.test(name)).length >= 3,
     "each representative slide must receive a hybrid backplate"
   );
+});
+
+test("isolated authored CSS keeps each slide's right-edge sentinel through PPTX readback", async (t) => {
+  const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
+  if (!chromeExecutable) {
+    if (process.env.CI === "true") assert.fail("CI must provide Chrome/Chromium");
+    t.skip("Chrome/Chromium is unavailable");
+    return;
+  }
+
+  const htmlSlides = await Promise.all(
+    CSS_ISOLATION_FIXTURES.map(({ file }) =>
+      fs.readFile(path.join(HERE, "fixtures", file), "utf8")
+    )
+  );
+  // These captures intentionally run concurrently. Each call launches its own
+  // document so generic authored selectors cannot leak between slide sources.
+  const prepared = await Promise.all(
+    htmlSlides.map((html, index) =>
+      buildFidelityLayer(html, index + 1, chromeExecutable)
+    )
+  );
+  const layers = prepared;
+
+  for (let index = 0; index < layers.length; index += 1) {
+    const metadata = await sharp(layers[index].backplatePng).metadata();
+    assert.deepEqual(
+      [metadata.width, metadata.height],
+      [1280, 720],
+      `slide ${index + 1} capture changed the authored viewport`
+    );
+    assertRgb(
+      await rgbAt(layers[index].backplatePng, 1279, 360),
+      CSS_ISOLATION_FIXTURES[index].edgeRgb,
+      `slide ${index + 1} lost its rightmost sentinel pixel during Chrome capture`
+    );
+    assertRgb(
+      await rgbAt(layers[index].backplatePng, 1220, 360),
+      CSS_ISOLATION_FIXTURES[index].innerProbeRgb,
+      `slide ${index + 1} inherited the other slide's generic class width`
+    );
+  }
+
+  const pptx = assembleAuthoredHybridPptx(fidelitySkeleton(layers.length), layers);
+  const entries = readPptxArchive(pptx);
+  assert.match(
+    entries.get("ppt/presentation.xml").toString("utf8"),
+    /<p:sldSz cx="12192000" cy="6858000"\/>/,
+    "assembled presentation changed the 1280x720 slide aspect"
+  );
+  for (let slideNumber = 1; slideNumber <= layers.length; slideNumber += 1) {
+    const xml = slideXml(entries, slideNumber);
+    assert.ok(
+      /<p:bg>/.test(xml) || /name="Presenton hybrid backplate"/.test(xml),
+      `slide ${slideNumber} has neither a slide background nor a full-slide backplate`
+    );
+    const mediaPath = [...entries.keys()].find((name) =>
+      new RegExp(`^ppt/media/hybrid-s${slideNumber}-backplate-[0-9a-f]+\\.png$`).test(name)
+    );
+    assert.ok(mediaPath, `slide ${slideNumber} has no assembled backplate media`);
+    const relationships = entries
+      .get(`ppt/slides/_rels/slide${slideNumber}.xml.rels`)
+      .toString("utf8");
+    assert.ok(
+      relationships.includes(`Target="../media/${path.posix.basename(mediaPath)}"`),
+      `slide ${slideNumber} does not reference its assembled backplate media`
+    );
+    const readbackPng = entries.get(mediaPath);
+    assert.deepEqual(readbackPng, layers[slideNumber - 1].backplatePng);
+    assertRgb(
+      await rgbAt(readbackPng, 1279, 360),
+      CSS_ISOLATION_FIXTURES[slideNumber - 1].edgeRgb,
+      `slide ${slideNumber} lost its rightmost sentinel pixel after PPTX assembly/readback`
+    );
+  }
 });

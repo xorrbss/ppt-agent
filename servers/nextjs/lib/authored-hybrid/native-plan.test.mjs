@@ -164,9 +164,9 @@ test("rich CJK body text, a simple shape, and a safe data image become native OO
   assert.match(textXml, /wrap="square"/);
   assert.match(textXml, /horzOverflow="clip"/);
   assert.match(textXml, /vertOverflow="clip"/);
-  assert.match(textXml, /<a:normAutofit\/>/);
+  assert.match(textXml, /<a:noAutofit\/>/);
   assert.match(textXml, /<a:lnSpc><a:spcPts val="3000"\/><\/a:lnSpc>/);
-  assert.doesNotMatch(textXml, /<a:noAutofit/);
+  assert.doesNotMatch(textXml, /<a:normAutofit/);
   assert.match(textXml, /rot="21150000"/);
   assert.match(textXml, /<a:alpha val="80000"\/>/);
 
@@ -348,7 +348,7 @@ test("invalid native images and z-order inversions stay on the raster backplate"
   assert.deepEqual(explicitlyRejected, []);
 });
 
-test("nowrap substitute-CJK text stays on one line with shrink-to-fit", async () => {
+test("nowrap text stays on one line without hidden shrink-to-fit", async () => {
   const element = {
     ...base("nowrap-title", 0, 0, bounds(1120, 40, 150, 50)),
     classification: { mode: "native", kind: "text", confidence: "safe" },
@@ -365,8 +365,8 @@ test("nowrap substitute-CJK text stays on one line with shrink-to-fit", async ()
   assert.match(xml, /wrap="none"/);
   assert.match(xml, /horzOverflow="clip"/);
   assert.match(xml, /vertOverflow="clip"/);
-  assert.match(xml, /<a:normAutofit\/>/);
-  assert.doesNotMatch(xml, /<a:noAutofit/);
+  assert.match(xml, /<a:noAutofit\/>/);
+  assert.doesNotMatch(xml, /<a:normAutofit/);
   assert.match(xml, /<a:off x="10668000" y="381000"\/>/);
   assert.match(xml, /<a:ext cx="1428750" cy="476250"\/>/);
 });
@@ -437,7 +437,7 @@ test("editable text and runs are clamped to 9pt", async () => {
   const xml = serializePreparedNativeElement(prepared[0], 3);
   assert.match(xml, /sz="900"/);
   assert.doesNotMatch(xml, /sz="[1-8]\d\d"/);
-  assert.match(xml, /<a:normAutofit\/>/);
+  assert.match(xml, /<a:noAutofit\/>/);
 });
 
 test("a browser-confirmed single line cannot rewrap into the content below", async () => {
@@ -492,7 +492,7 @@ test("standalone top-aligned text follows the browser painted glyph top", async 
   assert.match(xml, /<a:ext cx="4647456" cy="405575"\/>/);
 });
 
-test("captured visual lines disable PowerPoint rewrap and use editable autofit", async () => {
+test("captured visual lines disable PowerPoint rewrap without autofit", async () => {
   const runStyle = style({
     fontSizePt: 13.5,
     lineHeight: { points: 17, multiple: 1.259259, source: "computed" },
@@ -516,8 +516,8 @@ test("captured visual lines disable PowerPoint rewrap and use editable autofit",
   const xml = serializePreparedNativeElement(prepared[0], 3);
   assert.match(xml, /wrap="none"/);
   assert.match(xml, /<a:br\/>/);
-  assert.match(xml, /<a:normAutofit\/>/);
-  assert.doesNotMatch(xml, /<a:noAutofit\/>/);
+  assert.match(xml, /<a:noAutofit\/>/);
+  assert.doesNotMatch(xml, /<a:normAutofit\/>/);
   assert.equal((xml.match(/<a:p>/g) || []).length, 1);
   assert.match(xml, /<a:spcBef><a:spcPts val="0"\/><\/a:spcBef>/);
   assert.match(xml, /<a:spcAft><a:spcPts val="0"\/><\/a:spcAft>/);
@@ -681,7 +681,7 @@ test("centered mixed-weight runs keep one centered paragraph across a browser so
   assert.match(xml, /algn="ctr"/);
   assert.match(xml, /anchor="ctr"/);
   assert.match(xml, /wrap="none"/);
-  assert.match(xml, /<a:normAutofit\/>/);
+  assert.match(xml, /<a:noAutofit\/>/);
   assert.match(xml, /<a:lnSpc><a:spcPts val="2000"\/><\/a:lnSpc>/);
   assert.equal((xml.match(/\sb="1"/g) ?? []).length, 1);
   assert.equal((xml.match(/\sb="0"/g) ?? []).length, 1);

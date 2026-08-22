@@ -142,6 +142,9 @@ export interface WorkspaceOperationAnchor {
   target?: Record<string, unknown>;
   expectedRevision?: number;
   resultRevision?: number;
+  /** Derived UI-only audit state. The immutable operation status is preserved. */
+  historicalResolution?: "resolved" | "superseded";
+  supersededByOperationId?: string;
   activitySummary?: string;
   createdAt?: string;
   updatedAt?: string;

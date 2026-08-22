@@ -91,6 +91,15 @@ describe("PresentationHeader workspace controls", () => {
     const workspaceCommand = cy.stub().as("workspaceCommand").resolves();
     const qualityReview = cy.stub().as("qualityReview");
     const pageRemake = cy.stub().as("pageRemake");
+    cy.intercept("POST", "/api/export-presentation", (request) => {
+      expect(request.body).to.include({
+        format: "pptx",
+        id: "deck-1",
+        pptxMode: "fidelity",
+      });
+      expect(request.body).not.to.have.property("fontEmbedding");
+      request.reply({ success: true, path: "/api/export-presentation/file?name=fidelity.pptx" });
+    }).as("fidelityExport");
     mountHeader(true, false, {
       enabled: true,
       command: workspaceCommand,
@@ -112,16 +121,14 @@ describe("PresentationHeader workspace controls", () => {
     cy.get('[data-testid="export-pdf"]').click({ force: true });
     openExportOptions();
     cy.get('[data-testid="export-pptx"]').click({ force: true });
+    cy.wait("@fidelityExport");
 
     cy.wrap(null).then(() => {
       expect(workspaceCommand.getCall(0).args).to.deep.equal([
         "PDF로 내보내기",
         { commandType: "export.pdf", context: { format: "pdf" } },
       ]);
-      expect(workspaceCommand.getCall(1).args).to.deep.equal([
-        "PPTX로 내보내기",
-        { commandType: "export.pptx", context: { format: "pptx" } },
-      ]);
+      expect(workspaceCommand).to.have.been.calledOnce;
     });
     cy.get("@updatePresentationContent").should("not.have.been.called");
   });
@@ -131,6 +138,9 @@ describe("PresentationHeader workspace controls", () => {
     mountHeader(true, false, { enabled: true, command: workspaceCommand });
 
     openExportOptions();
+    cy.get('[data-testid="export-pptx"]')
+      .should("contain.text", "Fidelity PPTX")
+      .and("contain.text", "격리 캡처");
     cy.get('[data-testid="authored-export-hybrid"]')
       .should("contain.text", "글꼴 포함 (기본)")
       .and("contain.text", "적용되지 않으면 다운로드하지 않고");

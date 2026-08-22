@@ -44,7 +44,11 @@ import {
   embedPowerPointFonts,
   type PowerPointTypefaceInput,
 } from "./pptx-font-embedding.ts";
-import type { AuthoredEmbeddedTypefaceFaceEvidence } from "./font-policy.ts";
+import {
+  embeddedFaceForStyle,
+  resolvePowerPointTypeface,
+  type AuthoredEmbeddedTypefaceFaceEvidence,
+} from "./font-policy.ts";
 import {
   attachPresentationExportOoxmlReadback,
   createPresentationExportQuality,
@@ -221,6 +225,73 @@ interface PreparedFontEmbedding {
   status: PresentationExportFontEmbeddingStatus;
   embeddedTypefaceFamilies: readonly string[];
   embeddedTypefaceFaces: readonly AuthoredEmbeddedTypefaceFaceEvidence[];
+}
+
+function normalizedTypeface(value: string): string {
+  return value.trim().replace(/^['"]|['"]$/g, "").toLocaleLowerCase("en-US");
+}
+
+function nativeFontUsage(
+  layers: readonly AuthoredHybridSlideLayer[],
+  embedding: PreparedFontEmbedding,
+): Pick<
+  PresentationExportFontEmbeddingStatus,
+  | "nativeTextUsage"
+  | "nativeTextElements"
+  | "nativeTextElementsUsingEmbeddedTypefaces"
+  | "nativeTypefaceFamilies"
+> {
+  const textElements = layers.flatMap((layer) =>
+    layer.elements.filter((element) => element.kind === "text"),
+  );
+  const usedFamilies = new Set<string>();
+  let usingEmbedded = 0;
+  for (const element of textElements) {
+    const usesEmbedded = element.source.text.runs.some((run) => {
+      const face = embeddedFaceForStyle(run.style);
+      const faceFamilies = new Set(
+        embedding.embeddedTypefaceFaces
+          .filter((entry) => entry.face === face)
+          .map((entry) => entry.typeface),
+      );
+      if (!faceFamilies.size) return false;
+      const normalizedEmbedded = new Set(
+        [...faceFamilies].map(normalizedTypeface),
+      );
+      const latin = resolvePowerPointTypeface(run.style.fontFamilies, "Aptos", {
+        preserveAuthoredFamilies: faceFamilies,
+      });
+      const eastAsian = normalizedEmbedded.has(normalizedTypeface(latin))
+        ? latin
+        : resolvePowerPointTypeface(
+            run.style.cjkFallbackFamilies,
+            process.platform === "win32" ? "Malgun Gothic" : "Noto Sans CJK KR",
+            { preserveAuthoredFamilies: faceFamilies },
+          );
+      for (const typeface of [latin, eastAsian]) {
+        if (normalizedEmbedded.has(normalizedTypeface(typeface))) {
+          usedFamilies.add(typeface);
+          return true;
+        }
+      }
+      return false;
+    });
+    if (usesEmbedded) usingEmbedded += 1;
+  }
+  const nativeTextElements = textElements.length;
+  const nativeTextUsage = !embedding.status.applied
+    ? "not-embedded"
+    : nativeTextElements === 0
+      ? "raster-only-unused"
+      : usingEmbedded > 0
+        ? "used"
+        : "not-used";
+  return {
+    nativeTextUsage,
+    nativeTextElements,
+    nativeTextElementsUsingEmbeddedTypefaces: usingEmbedded,
+    nativeTypefaceFamilies: [...usedFamilies].sort(),
+  };
 }
 
 function fontEmbeddingFailures(
@@ -599,27 +670,13 @@ async function runUncachedAuthoredHybridExport(
         }
       },
     );
-    // Native decorative geometry without any typography that survived the
-    // PowerPoint preflight provides little editing value and can visibly drift
-    // from the authored raster. Replace every slide with a separately isolated
-    // full-slide capture in that case; the bundled Fidelity export renders all
-    // slide documents in one DOM, where generic authored CSS selectors can
-    // collide across slides. The code path remains Hybrid (font parts, attempt
-    // provenance and honest coverage), but every logical element is reported
-    // as raster fallback.
-    const deckRasterFallback =
-      preparedSlides.length > 0 &&
-      preparedSlides.every(
-        (prepared) => prepared.quality.nativeTextElements === 0,
-      ) &&
-      preparedSlides.some(
-        (prepared) => prepared.quality.typographyIssues.length > 0,
-      );
-    const rasterFallbackInputs = deckRasterFallback
-      ? slideInputs
-      : slideInputs.filter(
-          ({ slideNumber }) => preparedSlides[slideNumber - 1]?.layer === null,
-        );
+    // Typography failures are element-scoped. Do not discard safe native
+    // shapes or text on unrelated slides merely because another candidate did
+    // not survive preflight; only a slide with no safe native layer receives an
+    // isolated full-slide raster capture.
+    const rasterFallbackInputs = slideInputs.filter(
+      ({ slideNumber }) => preparedSlides[slideNumber - 1]?.layer === null,
+    );
     const isolatedRasterLayers = await mapWithConcurrency(
       rasterFallbackInputs,
       HYBRID_EXPORT_CONCURRENCY,
@@ -638,80 +695,34 @@ async function runUncachedAuthoredHybridExport(
     const isolatedRasterBySlide = new Map(
       isolatedRasterLayers.map((layer) => [layer.slideNumber, layer] as const),
     );
-    const layers = deckRasterFallback
-      ? slideInputs.map(({ slideNumber }) => {
-          const layer = isolatedRasterBySlide.get(slideNumber);
-          if (!layer) {
-            throw new Error("authored_hybrid_isolated_raster_fallback_missing");
-          }
-          return layer;
-        })
-      : slideInputs.map(({ slideNumber }) => {
-          const prepared = preparedSlides[slideNumber - 1]?.layer;
-          const layer = prepared ?? isolatedRasterBySlide.get(slideNumber);
-          if (!layer) {
-            throw new Error("authored_hybrid_slide_layer_missing");
-          }
-          return layer;
-        });
-    const qualitySlides = deckRasterFallback
-      ? preparedSlides.map((prepared) => {
-          const quality = prepared.quality;
-          const logicalRasterRemaining =
-            quality.logicalCoverage.nativeText +
-            quality.logicalCoverage.nativeImage +
-            quality.logicalCoverage.nativeShape +
-            quality.logicalCoverage.nativeGroup +
-            quality.logicalCoverage.rasterRemaining;
-          return {
-            ...quality,
-            editable: false,
-            imageFallback: true,
-            nativeTextElements: 0,
-            nativeShapeElements: 0,
-            nativeGroupElements: 0,
-            nativeImageElements: 0,
-            rasterFallbackElements: logicalRasterRemaining,
-            logicalCoverage: {
-              nativeText: 0,
-              nativeImage: 0,
-              nativeShape: 0,
-              nativeGroup: 0,
-              rasterRemaining: logicalRasterRemaining,
-            },
-            ooxmlReadback: {
-              status: "not-run" as const,
-              nativeText: 0,
-              nativeImage: 0,
-              nativeShape: 0,
-              nativeGroup: 0,
-              rasterRemaining: 0,
-            },
+    const layers = slideInputs.map(({ slideNumber }) => {
+      const prepared = preparedSlides[slideNumber - 1]?.layer;
+      const layer = prepared ?? isolatedRasterBySlide.get(slideNumber);
+      if (!layer) {
+        throw new Error("authored_hybrid_slide_layer_missing");
+      }
+      return layer;
+    });
+    const qualitySlides = preparedSlides.map((prepared) =>
+      prepared.layer
+        ? prepared.quality
+        : {
+            ...prepared.quality,
             backplateCount: 1,
             fallbackReasons: [
-              ...quality.fallbackReasons,
-              "deck-native-typography-unverified-raster-fallback",
+              ...prepared.quality.fallbackReasons,
               "isolated-fidelity-raster-fallback",
             ],
-          };
-        })
-      : preparedSlides.map((prepared) =>
-          prepared.layer
-            ? prepared.quality
-            : {
-                ...prepared.quality,
-                backplateCount: 1,
-                fallbackReasons: [
-                  ...prepared.quality.fallbackReasons,
-                  "isolated-fidelity-raster-fallback",
-                ],
-              },
-        );
+          },
+    );
     const logicalQuality = createPresentationExportQuality(
       "hybrid",
       qualitySlides,
       {
-        fontEmbeddingStatus: fontEmbedding.status,
+        fontEmbeddingStatus: {
+          ...fontEmbedding.status,
+          ...nativeFontUsage(layers, fontEmbedding),
+        },
         rendererIsolation: rendererIsolationRecord(),
         fontRendering: {
           browserFontFilesCollected: preparedSlides.reduce(

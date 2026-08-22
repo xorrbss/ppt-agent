@@ -1,0 +1,36 @@
+name: Authored Hybrid evidence policy
+
+on:
+  pull_request:
+    paths:
+      - config/authored-hybrid-evidence-retention.json
+      - scripts/authored-hybrid-evidence-retention.mjs
+      - scripts/authored-hybrid-evidence-retention.test.mjs
+      - docs/authored-hybrid-evidence-retention.md
+  push:
+    branches: [main]
+    paths:
+      - config/authored-hybrid-evidence-retention.json
+      - scripts/authored-hybrid-evidence-retention.mjs
+      - scripts/authored-hybrid-evidence-retention.test.mjs
+      - docs/authored-hybrid-evidence-retention.md
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+      - name: Check immutable-evidence retention policy
+        run: node --test scripts/authored-hybrid-evidence-retention.test.mjs | tee authored-hybrid-evidence-policy.tap
+      - name: Retain policy evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: authored-hybrid-evidence-policy
+          path: authored-hybrid-evidence-policy.tap
+          retention-days: 30

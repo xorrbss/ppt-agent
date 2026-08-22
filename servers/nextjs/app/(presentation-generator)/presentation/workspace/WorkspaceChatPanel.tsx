@@ -45,6 +45,7 @@ import {
 import {
   CONNECTION_LABELS,
   parseQualityReviewSlideRange,
+  resolveHistoricalExportOperations,
   type QualityReviewScope,
   type SlideRangeParseResult,
 } from "./workspaceChatPanelUtils";
@@ -190,7 +191,9 @@ export default function WorkspaceChatPanel({
 
   const timelineItems = useMemo(
     () =>
-      withGenerationContext(presentationId, generationInfo, projection.items),
+      resolveHistoricalExportOperations(
+        withGenerationContext(presentationId, generationInfo, projection.items),
+      ),
     [generationInfo, presentationId, projection.items],
   );
 

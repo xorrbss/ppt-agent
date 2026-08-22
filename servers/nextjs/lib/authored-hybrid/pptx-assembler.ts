@@ -319,15 +319,10 @@ function hardenTextOverlay(
   if (serializedBreaks < expectedBreaks) {
     throw new Error(`Hybrid text ${item.source.id} lost an authored line break.`);
   }
-  const embeddedCjk = options.embeddedTypefaceFamilies?.some((family) => CJK_TYPEFACE.test(family));
-  const families = [...item.source.text.style.fontFamilies, ...item.source.text.style.cjkFallbackFamilies];
-  const usesMonospace = families.some((family) => /(?:consolas|monospace|courier)/i.test(family));
-  const needsAutofit = expectedBreaks > 0 ||
-    (CJK_TEXT.test(item.source.text.plainText) && (usesMonospace || !embeddedCjk));
   hardened = hardened
     .replace(/\bhorzOverflow="(?:overflow|clip)"/, 'horzOverflow="clip"')
     .replace(/\bvertOverflow="(?:overflow|clip)"/, 'vertOverflow="clip"')
-    .replace(/<a:(?:normAutofit|noAutofit)\/>/, needsAutofit ? "<a:normAutofit/>" : "<a:noAutofit/>");
+    .replace(/<a:(?:normAutofit|noAutofit)\/>/, "<a:noAutofit/>");
   return expandStandaloneTextBounds(hardened, item);
 }
 function provenanceProperties(provenance?: AuthoredHybridPptxProvenance) {

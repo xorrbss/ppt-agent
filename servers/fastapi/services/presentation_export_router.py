@@ -80,6 +80,7 @@ class PresentationExportRouteResult:
         self,
         *,
         attempt_id: uuid.UUID | None = None,
+        presentation_id: uuid.UUID | None = None,
         source_revision: int,
         source_snapshot_sha256: str,
         html_source_sha256: str | None = None,
@@ -113,6 +114,7 @@ class PresentationExportRouteResult:
                 "coverage_manifest": self.result.coverage_manifest,
                 "atomic_binding": (
                     {
+                        "presentation_id": str(presentation_id),
                         "export_attempt_id": str(attempt_id),
                         "presentation_revision": source_revision,
                         "canonical_source_sha256": source_snapshot_sha256,
@@ -121,6 +123,7 @@ class PresentationExportRouteResult:
                     }
                     if (
                         attempt_id is not None
+                        and presentation_id is not None
                         and self.result.coverage_manifest is not None
                         and self.result.coverage_manifest.get("schemaVersion")
                         == "presenton.authored-hybrid-coverage/v2"
@@ -155,6 +158,7 @@ class PresentationExportExecution:
     def provenance(self) -> dict:
         return self.route.provenance(
             attempt_id=self.attempt_id,
+            presentation_id=self.attempt_presentation_id,
             source_revision=self.source_revision,
             source_snapshot_sha256=self.source_snapshot_sha256,
             html_source_sha256=self.html_source_sha256,

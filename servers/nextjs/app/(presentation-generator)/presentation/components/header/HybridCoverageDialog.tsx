@@ -28,6 +28,7 @@ export type HybridCoverageManifest = {
   nativeChart: number;
   rasterRemaining: number;
   fullyEditable: boolean;
+  visualParity?: "preflight" | "not-verified" | "passed" | "failed";
   slides: Array<{
     slideNumber: number;
     nativeText: number;
@@ -37,7 +38,12 @@ export type HybridCoverageManifest = {
     nativeChart: number;
     rasterRemaining: number;
     fallbackReasons: string[];
-    visualParity: "fidelity-backplate-retained" | "not-verified";
+    visualParity:
+      | "fidelity-backplate-retained"
+      | "preflight"
+      | "not-verified"
+      | "passed"
+      | "failed";
     nativeBackplateDeDuplication: "applied" | "not-applicable";
   }>;
 };
@@ -75,6 +81,7 @@ const HybridCoverageDialog = ({
           </div>
           <div className="rounded-lg border border-slate-200 p-3 text-xs text-slate-700">
             <p>export attempt: {manifest.source.exportAttemptId ?? "미기록"}</p>
+            <p className="mt-1">visualParity: {manifest.visualParity ?? "not-verified"}</p>
             <p className="mt-1 break-all">renderer digest: {manifest.source.sourceDigest}</p>
             <p className="mt-1 break-all">canonical digest: {manifest.source.canonicalSourceDigest ?? "미기록"}</p>
           </div>
@@ -98,6 +105,23 @@ const HybridCoverageDialog = ({
               <p className="mt-1">
                 browser 글꼴 수집 {exportQuality.fontRendering?.browserFontFilesCollected ?? 0}개 · 수집 실패 {exportQuality.fontRendering?.browserCollectionFailures ?? 0}개 · typeface 정책 {exportQuality.fontRendering?.powerpointTypefacePolicy ?? "미기록"}
               </p>
+              <p className="mt-1">
+                글꼴 파트 {exportQuality.fontEmbeddingStatus?.embeddedFontFiles ?? 0}개 · native 텍스트 {exportQuality.fontEmbeddingStatus?.nativeTextElements ?? exportQuality.nativeTextElements}개 · 포함 글꼴 사용 native 텍스트 {exportQuality.fontEmbeddingStatus?.nativeTextElementsUsingEmbeddedTypefaces ?? "미검증"}개
+              </p>
+              <p className="mt-1">
+                실사용 의미: {exportQuality.fontEmbeddingStatus?.nativeTextUsage === "used"
+                  ? "포함된 글꼴을 실제 native 텍스트가 사용"
+                  : exportQuality.fontEmbeddingStatus?.nativeTextUsage === "raster-only-unused"
+                    ? "글꼴 파트는 포함됐지만 native 텍스트가 0개라 미사용 (텍스트는 raster 유지)"
+                    : exportQuality.fontEmbeddingStatus?.nativeTextUsage === "not-used"
+                      ? "글꼴 파트는 포함됐지만 native 텍스트가 해당 글꼴을 사용하지 않음"
+                      : exportQuality.fontEmbeddingStatus?.nativeTextUsage === "not-embedded"
+                        ? "글꼴 파트 미포함"
+                        : "native 텍스트의 포함 글꼴 실사용 미검증"}
+              </p>
+              {(exportQuality.fontEmbeddingStatus?.nativeTypefaceFamilies?.length ?? 0) > 0 ? (
+                <p className="mt-1">native 사용 글꼴: {exportQuality.fontEmbeddingStatus?.nativeTypefaceFamilies?.join(", ")}</p>
+              ) : null}
               {(exportQuality.fontEmbeddingStatus?.failures?.length ?? 0) > 0 ? (
                 <p className="mt-1 text-amber-800">
                   글꼴 fallback 사유: {exportQuality.fontEmbeddingStatus?.failures?.map((failure) => `${failure.family ?? "unknown"}: ${failure.reason}`).join(", ")}
@@ -126,9 +150,15 @@ const HybridCoverageDialog = ({
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
                   시각 기준:{" "}
-                  {slide.visualParity === "fidelity-backplate-retained"
-                    ? "backplate 구성 유지 (시각 동일성은 별도 검증 필요)"
-                    : "시각 동일성 미검증"}{" "}
+                  {slide.visualParity === "passed"
+                    ? "동일 attempt·revision·digest·PPTX의 PowerPoint COM 검증 통과"
+                    : slide.visualParity === "failed"
+                      ? "PowerPoint 시각 검증 실패"
+                      : slide.visualParity === "preflight"
+                        ? "사전 점검만 완료 (PowerPoint 미검증)"
+                        : slide.visualParity === "fidelity-backplate-retained"
+                          ? "backplate 구성 유지 (시각 동일성은 별도 검증 필요)"
+                          : "시각 동일성 미검증"}{" "}
                   · backplate 중복 방지:{" "}
                   {slide.nativeBackplateDeDuplication === "applied"
                     ? "적용"

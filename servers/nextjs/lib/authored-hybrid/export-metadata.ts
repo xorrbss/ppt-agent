@@ -60,7 +60,7 @@ export interface AuthoredHybridSlideCoverage {
    * This records construction evidence, not a pixel-parity claim. Native paint
    * is removed from the fidelity backplate before the native layer is inserted.
    */
-  visualParity: "passed" | "failed" | "not-verified";
+  visualParity: "preflight" | "passed" | "failed" | "not-verified";
   nativeBackplateDeDuplication: "applied" | "not-applicable";
 }
 
@@ -87,6 +87,7 @@ export interface AuthoredHybridCoverageManifest {
   rasterRemaining: number;
   /** False whenever even one raster element remains. */
   fullyEditable: boolean;
+  visualParity: "preflight" | "passed" | "failed" | "not-verified";
   slides: AuthoredHybridSlideCoverage[];
 }
 
@@ -253,6 +254,7 @@ export function createAuthoredHybridCoverageManifest(
     ),
     rasterRemaining,
     fullyEditable: slides.length > 0 && rasterRemaining === 0,
+    visualParity: "not-verified",
     slides,
   };
 }

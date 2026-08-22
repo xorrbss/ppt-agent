@@ -15,6 +15,7 @@ from services.presentation_export_direct_attempt_service import (
     begin_direct_hybrid_export_attempt,
     complete_direct_hybrid_export_attempt,
     fail_direct_hybrid_export_attempt,
+    list_direct_hybrid_export_attempt_history,
 )
 from services.presentation_export_capabilities import PresentationExportContractError
 
@@ -101,7 +102,7 @@ async def complete_hybrid_attempt(
     session: AsyncSession = Depends(get_async_session),
 ):
     try:
-        attempt, qa = await complete_direct_hybrid_export_attempt(
+        attempt, finalized = await complete_direct_hybrid_export_attempt(
             session,
             presentation_id=presentation_id,
             attempt_id=attempt_id,
@@ -113,6 +114,15 @@ async def complete_hybrid_attempt(
             powerpoint_qa=request.power_point_qa,
         )
     except PresentationExportContractError as error:
+        try:
+            await fail_direct_hybrid_export_attempt(
+                session,
+                presentation_id=presentation_id,
+                attempt_id=attempt_id,
+                failure_code=error.code,
+            )
+        except PresentationExportContractError:
+            await session.rollback()
         _raise_contract(error)
     return {
         "exportAttemptId": str(attempt.id),
@@ -120,8 +130,21 @@ async def complete_hybrid_attempt(
         "presentationRevision": attempt.source_revision,
         "canonicalSourceDigest": attempt.source_snapshot_sha256,
         "pptxSha256": attempt.artifact_sha256,
-        "powerPointQa": qa,
+        **finalized,
     }
+
+
+@PRESENTATION_EXPORT_ATTEMPT_ROUTER.get(
+    "/{presentation_id}/export-attempts/hybrid/history"
+)
+async def hybrid_attempt_history(
+    presentation_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+):
+    return await list_direct_hybrid_export_attempt_history(
+        session,
+        presentation_id=presentation_id,
+    )
 
 
 @PRESENTATION_EXPORT_ATTEMPT_ROUTER.post(

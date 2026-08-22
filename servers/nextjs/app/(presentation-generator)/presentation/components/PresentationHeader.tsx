@@ -24,6 +24,7 @@ import ExportQualityDialog from "./header/ExportQualityDialog";
 import HybridCoverageDialog, {
   type HybridCoverageManifest,
 } from "./header/HybridCoverageDialog";
+import HybridExportHistoryDialog from "./header/HybridExportHistoryDialog";
 import HeaderToolbar from "./header/HeaderToolbar";
 import PresentationTitleEditor from "./header/PresentationTitleEditor";
 import RegenerateConfirmDialog from "./header/RegenerateConfirmDialog";
@@ -38,6 +39,10 @@ import type {
   WorkspacePageRemakeRequester,
   WorkspaceQualityReviewRequester,
 } from "../workspace";
+import {
+  getHybridExportHistory,
+  type HybridExportHistory,
+} from "../../services/api/hybrid-export-history";
 
 export interface PresentationHeaderFeatureSlots {
   /** Computed by PresentationShell's server-issued capability projection. */
@@ -80,6 +85,12 @@ const PresentationHeader = ({
     useState<PresentationExportQualityReport | null>(null);
   const [hybridCoverage, setHybridCoverage] =
     useState<HybridCoverageManifest | null>(null);
+  const [hybridExportHistory, setHybridExportHistory] =
+    useState<HybridExportHistory | null>(null);
+  const [hybridExportHistoryLoading, setHybridExportHistoryLoading] =
+    useState(false);
+  const [hybridExportHistoryError, setHybridExportHistoryError] =
+    useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const titleInputRef = useRef<HTMLInputElement>(null);
   /** Avoid committing on blur when Save/Cancel was used (focus/click ordering) */
@@ -184,10 +195,11 @@ const PresentationHeader = ({
   ) => {
     if (isStreaming || !workspaceCommandsEnabled || !onWorkspaceCommand) return;
     try {
-      if (isAuthoredDeck && pptxMode === "hybrid") {
+      if (isAuthoredDeck && (pptxMode === "hybrid" || pptxMode === "fidelity")) {
         // A caller must explicitly choose false to request the compatibility
         // path. Hybrid exports otherwise request embedding by default.
-        const requestedFontEmbedding = fontEmbedding !== false;
+        const requestedFontEmbedding =
+          pptxMode === "hybrid" && fontEmbedding !== false;
         const response = await fetch("/api/export-presentation", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -195,8 +207,10 @@ const PresentationHeader = ({
             format: "pptx",
             id: presentation_id,
             title: presentationData?.title ?? "presentation",
-            pptxMode: "hybrid",
-            fontEmbedding: requestedFontEmbedding,
+            pptxMode,
+            ...(pptxMode === "hybrid"
+              ? { fontEmbedding: requestedFontEmbedding }
+              : {}),
             ...(typeof presentationData?.revision === "number"
               ? { expectedPresentationRevision: presentationData.revision }
               : {}),
@@ -222,6 +236,7 @@ const PresentationHeader = ({
         }
         const embedding = quality?.fontEmbeddingStatus;
         if (
+          pptxMode === "hybrid" &&
           requestedFontEmbedding &&
           (!embedding?.requested || !embedding.applied)
         ) {
@@ -269,6 +284,20 @@ const PresentationHeader = ({
       });
     } catch {
       // The durable timeline owns request errors and explicit retry UI.
+    }
+  };
+
+  const openHybridExportHistory = async () => {
+    if (!isAuthoredDeck || isStreaming) return;
+    setHybridExportHistory(null);
+    setHybridExportHistoryError(null);
+    setHybridExportHistoryLoading(true);
+    try {
+      setHybridExportHistory(await getHybridExportHistory(presentation_id));
+    } catch {
+      setHybridExportHistoryError("Hybrid 내보내기 이력을 불러오지 못했습니다. 기존 내보내기 파일은 변경하지 않았습니다.");
+    } finally {
+      setHybridExportHistoryLoading(false);
     }
   };
 
@@ -437,6 +466,8 @@ const PresentationHeader = ({
               workspaceCommandsEnabled={workspaceCommandsEnabled}
               onExportPptx={handleExportPptx}
               onExportPdf={handleExportPdf}
+              onOpenHybridExportHistory={openHybridExportHistory}
+              historyDisabled={isStreaming === true}
             />
           )}
         </div>
@@ -449,6 +480,16 @@ const PresentationHeader = ({
         manifest={hybridCoverage}
         exportQuality={exportQuality}
         onClose={() => setHybridCoverage(null)}
+      />
+      <HybridExportHistoryDialog
+        history={hybridExportHistory}
+        loading={hybridExportHistoryLoading}
+        error={hybridExportHistoryError}
+        onClose={() => {
+          setHybridExportHistory(null);
+          setHybridExportHistoryError(null);
+          setHybridExportHistoryLoading(false);
+        }}
       />
       <RegenerateConfirmDialog
         open={mutationsEnabled && isRegenerateConfirmOpen}

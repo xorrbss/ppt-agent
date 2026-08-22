@@ -1,5 +1,10 @@
 export type QualityReviewScope = "all" | "current" | "subset";
 
+import type {
+  WorkspaceOperationAnchor,
+  WorkspaceTimelineAnchor,
+} from "./types";
+
 export interface SlideRangeParseResult { indices: number[]; normalized: string }
 
 export function parseQualityReviewSlideRange(value: string, slideCount?: number): SlideRangeParseResult {
@@ -21,3 +26,51 @@ export function parseQualityReviewSlideRange(value: string, slideCount?: number)
 }
 
 export const CONNECTION_LABELS = { connecting: "Connecting", live: "Live", polling: "Reconnecting", offline: "Offline" };
+
+function exportResolutionKey(operation: WorkspaceOperationAnchor): string | null {
+  if (operation.operationType !== "export.pptx" && operation.operationType !== "export.pdf") {
+    return null;
+  }
+  const revision = operation.expectedRevision ?? operation.resultRevision;
+  return revision === undefined ? null : `${operation.operationType}:${revision}`;
+}
+
+/**
+ * Keep historical operations intact while marking earlier terminal exports
+ * that a later success for the same presentation/revision/format supersedes.
+ */
+export function resolveHistoricalExportOperations(
+  items: readonly WorkspaceTimelineAnchor[],
+): WorkspaceTimelineAnchor[] {
+  const latestSuccess = new Map<string, WorkspaceOperationAnchor>();
+  const resolved = new Map<string, WorkspaceOperationAnchor>();
+  const operations = items
+    .filter((item): item is WorkspaceOperationAnchor => item.anchorType === "operation")
+    .sort((left, right) => right.position - left.position);
+
+  for (const operation of operations) {
+    const key = exportResolutionKey(operation);
+    if (!key) continue;
+    const successor = latestSuccess.get(key);
+    if (successor) {
+      if (operation.status === "failed" || operation.status === "dead_letter") {
+        resolved.set(operation.id, {
+          ...operation,
+          historicalResolution: "resolved",
+          supersededByOperationId: successor.operationId,
+        });
+      } else if (operation.status === "succeeded") {
+        resolved.set(operation.id, {
+          ...operation,
+          historicalResolution: "superseded",
+          supersededByOperationId: successor.operationId,
+        });
+      }
+    }
+    if (operation.status === "succeeded" && !successor) {
+      latestSuccess.set(key, operation);
+    }
+  }
+
+  return items.map((item) => resolved.get(item.id) ?? item);
+}

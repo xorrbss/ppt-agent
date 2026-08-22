@@ -26,8 +26,12 @@ from models.sql.workspace import (
 from services.presentation_export_attempt_service import (
     begin_export_attempt,
     build_export_source_snapshot_sha256,
+    sha256_canonical_json,
     terminalize_export_attempt_failed,
     terminalize_export_attempt_succeeded,
+)
+from services.presentation_export_direct_attempt_service import (
+    list_direct_hybrid_export_attempt_history,
 )
 from services.presentation_export_adapters import PresentationExportAdapterResult
 from services.presentation_export_capabilities import (
@@ -170,6 +174,7 @@ def test_general_analysis_collects_persisted_assets_and_rejects_missing_digest()
 
 
 def test_hybrid_v2_binds_attempt_and_separates_logical_readback_backplate() -> None:
+    presentation_id = uuid.uuid4()
     attempt_id = uuid.uuid4()
     canonical = "a" * 64
     renderer = "b" * 64
@@ -219,6 +224,7 @@ def test_hybrid_v2_binds_attempt_and_separates_logical_readback_backplate() -> N
     provenance["freshness"]["package_sha256"] = pptx
     provenance["coverage_manifest"] = coverage
     provenance["atomic_binding"] = {
+        "presentation_id": str(presentation_id),
         "export_attempt_id": str(attempt_id),
         "presentation_revision": 4,
         "canonical_source_sha256": canonical,
@@ -242,6 +248,81 @@ def test_hybrid_v2_binds_attempt_and_separates_logical_readback_backplate() -> N
     with pytest.raises(ValueError, match="COM reopen/render/readback"):
         validate_export_attempt_provenance(provenance)
 
+    passed_qa = {
+        "status": "passed",
+        "platform": "windows",
+        "supported": True,
+        "automation": "PowerPoint.COM",
+        "reopened": True,
+        "rendered": True,
+        "readback": True,
+        "repair_dialogs": 0,
+        "rendered_png_sha256": ["d" * 64],
+        "slide_count": 1,
+        "typography_issues_gt_5pt": 0,
+        "typography_issues_gt_10pt": 0,
+        "native_text": 1,
+        "native_image": 0,
+        "native_shape": 0,
+        "native_table": 0,
+        "native_chart": 0,
+    }
+    coverage["visualParity"] = "passed"
+    coverage["slides"][0]["visualParity"] = "passed"
+    quality = {
+        "schemaVersion": "presenton.export-quality/v1",
+        "status": "fully-editable",
+        "exportAttemptId": str(attempt_id),
+        "atomicBinding": {
+            "presentationId": str(presentation_id),
+            "presentationRevision": 4,
+            "canonicalSourceDigest": canonical,
+            "rendererSourceDigest": renderer,
+            "pptxSha256": pptx,
+        },
+        "powerPointQa": {
+            "status": "passed",
+            "platform": "windows",
+            "supported": True,
+            "automation": "PowerPoint.COM",
+            "reopened": True,
+            "rendered": True,
+            "readback": True,
+            "repairDialogs": 0,
+            "renderedPngSha256": ["d" * 64],
+            "powerpointVersion": None,
+            "slideCount": 1,
+            "typographyIssuesGt5Pt": 0,
+            "typographyIssuesGt10Pt": 0,
+            "nativeText": 1,
+            "nativeImage": 0,
+            "nativeShape": 0,
+            "nativeTable": 0,
+            "nativeChart": 0,
+        },
+    }
+    provenance["coverage_manifest"] = coverage
+    provenance["quality_sidecar"] = quality
+    provenance["powerpoint_qa"] = passed_qa
+    provenance["visual_parity"] = {
+        "status": "passed",
+        "binding": provenance["atomic_binding"],
+        "quality_sidecar_sha256": sha256_canonical_json(quality),
+        "coverage_sidecar_sha256": sha256_canonical_json(coverage),
+        "powerpoint_qa": passed_qa,
+    }
+    assert validate_export_attempt_provenance(provenance)["visual_parity"][
+        "status"
+    ] == "passed"
+
+    quality["atomicBinding"]["presentationId"] = str(uuid.uuid4())
+    provenance["quality_sidecar"] = quality
+    provenance["visual_parity"]["quality_sidecar_sha256"] = sha256_canonical_json(
+        quality
+    )
+    with pytest.raises(ValueError, match="quality sidecar visual parity binding"):
+        validate_export_attempt_provenance(provenance)
+
 
 async def _seed_attempt_presentation(maker) -> uuid.UUID:
     async with maker() as session, session.begin():
@@ -256,6 +337,7 @@ async def _begin(
     presentation_id: uuid.UUID,
     *,
     request_hash: str = "d" * 64,
+    idempotency_key_hash: str = "e" * 64,
 ) -> PresentationExportAttempt:
     async with maker() as session:
         return await begin_export_attempt(
@@ -268,7 +350,7 @@ async def _begin(
             source_revision=4,
             source_snapshot_sha256="c" * 64,
             request_hash=request_hash,
-            idempotency_key_hash="e" * 64,
+            idempotency_key_hash=idempotency_key_hash,
             requested_adapter="auto",
             provenance=_provenance(),
         )
@@ -476,6 +558,87 @@ def test_standalone_terminalization_rejects_concurrently_overwritten_artifact(
                 )
                 assert stored.artifact_sha256 is None
                 assert stored.artifact_size_bytes is None
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_hybrid_history_derives_resolved_failed_attempt_without_deleting_it(
+    tmp_path: Path,
+) -> None:
+    async def scenario():
+        engine, maker = await _database(tmp_path / "hybrid-history.db")
+        try:
+            presentation_id = await _seed_attempt_presentation(maker)
+            failed = await _begin(maker, presentation_id, request_hash="1" * 64)
+            failed_provenance = dict(failed.provenance)
+            failed_provenance["capability_evidence"] = {
+                **failed_provenance["capability_evidence"],
+                "export_mode": "hybrid",
+            }
+            async with maker() as session:
+                await terminalize_export_attempt_failed(
+                    session,
+                    attempt_id=failed.id,
+                    expected_owner_id=None,
+                    expected_owner_scope="anonymous",
+                    expected_workspace_operation_id=None,
+                    failure_code="stale_presentation_revision",
+                    failure_path=None,
+                    provenance=failed_provenance,
+                )
+
+            succeeded = await _begin(
+                maker,
+                presentation_id,
+                request_hash="2" * 64,
+                idempotency_key_hash="f" * 64,
+            )
+            succeeded_provenance = dict(succeeded.provenance)
+            succeeded_provenance["capability_evidence"] = {
+                **succeeded_provenance["capability_evidence"],
+                "export_mode": "hybrid",
+            }
+            async with maker() as session, session.begin():
+                await terminalize_export_attempt_succeeded(
+                    session,
+                    attempt_id=succeeded.id,
+                    presentation_id=presentation_id,
+                    expected_owner_id=None,
+                    expected_owner_scope="anonymous",
+                    expected_workspace_operation_id=None,
+                    source_revision=4,
+                    source_snapshot_sha256="c" * 64,
+                    selected_adapter="general",
+                    artifact_sha256="a" * 64,
+                    artifact_size_bytes=10,
+                    provenance=succeeded_provenance,
+                )
+
+            async with maker() as session:
+                history = await list_direct_hybrid_export_attempt_history(
+                    session,
+                    presentation_id=presentation_id,
+                )
+            by_id = {
+                item["exportAttemptId"]: item for item in history["attempts"]
+            }
+            assert by_id[str(failed.id)]["resolution"] == "resolved"
+            assert by_id[str(failed.id)]["supersededByAttemptId"] == str(
+                succeeded.id
+            )
+            assert by_id[str(succeeded.id)]["resolution"] == "active"
+            assert history["retention"] == {
+                "attemptRetentionDays": 180,
+                "evidenceRetentionDays": 30,
+                "expiryAction": "mark_expired_retain_metadata",
+                "deletionAuthorized": False,
+            }
+            async with maker() as session:
+                assert await session.scalar(
+                    select(func.count()).select_from(PresentationExportAttempt)
+                ) == 2
         finally:
             await engine.dispose()
 

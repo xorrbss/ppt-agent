@@ -290,6 +290,8 @@ export async function POST(req: NextRequest) {
     );
 
     const coverage = exportResult.exportMetadata?.coverageManifest;
+    let responseQuality = exportResult.quality;
+    let responseExportMetadata = exportResult.exportMetadata;
     if (routeOwnedAttempt) {
       const coverageSource = coverage?.source as
         | {
@@ -328,10 +330,19 @@ export async function POST(req: NextRequest) {
       completedPowerPointQa = isRecord(completed)
         ? completed.powerPointQa
         : undefined;
+      if (isRecord(completed) && isRecord(completed.quality)) {
+        responseQuality = completed.quality as typeof exportResult.quality;
+      }
+      if (isRecord(completed) && isRecord(completed.coverage)) {
+        responseExportMetadata = {
+          ...exportResult.exportMetadata,
+          coverageManifest: completed.coverage,
+        } as typeof exportResult.exportMetadata;
+      }
       completedAttempt = true;
     }
 
-    const embedding = exportResult.quality?.fontEmbeddingStatus;
+    const embedding = responseQuality?.fontEmbeddingStatus;
     if (
       exportResult.exportMetadata?.strategy === "authored-hybrid" &&
       exportBody.fontEmbedding !== false &&
@@ -341,9 +352,9 @@ export async function POST(req: NextRequest) {
         {
           success: false,
           error: "Font embedding was requested but was not applied",
-          ...(exportResult.quality ? { quality: exportResult.quality } : {}),
-          ...(exportResult.exportMetadata
-            ? { exportMetadata: exportResult.exportMetadata }
+          ...(responseQuality ? { quality: responseQuality } : {}),
+          ...(responseExportMetadata
+            ? { exportMetadata: responseExportMetadata }
             : {}),
           ...(routeOwnedAttempt ? { exportAttempt: routeOwnedAttempt } : {}),
           ...(completedPowerPointQa ? { powerPointQa: completedPowerPointQa } : {}),
@@ -355,9 +366,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       path: buildExportDownloadUrl(exportResult.path),
-      ...(exportResult.quality ? { quality: exportResult.quality } : {}),
-      ...(exportResult.exportMetadata
-        ? { exportMetadata: exportResult.exportMetadata }
+      ...(responseQuality ? { quality: responseQuality } : {}),
+      ...(responseExportMetadata
+        ? { exportMetadata: responseExportMetadata }
         : {}),
       ...(routeOwnedAttempt ? { exportAttempt: routeOwnedAttempt } : {}),
       ...(completedPowerPointQa ? { powerPointQa: completedPowerPointQa } : {}),

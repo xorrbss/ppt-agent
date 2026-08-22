@@ -506,7 +506,7 @@ test("assembler preserves authored breaks, bounds text safely, and never emits C
   assert.doesNotMatch(riskyXml, /typeface="Consolas"/i);
   assert.match(riskyXml, /typeface="Noto Sans KR"/);
   assert.match(riskyXml, /horzOverflow="clip" vertOverflow="clip"/);
-  assert.match(riskyXml, /<a:normAutofit\/>/);
+  assert.match(riskyXml, /<a:noAutofit\/>/);
   assert.match(stableXml, /<a:noAutofit\/>/);
   const transform = riskyXml.match(/<a:off x="(\d+)" y="(\d+)"\/><a:ext cx="(\d+)" cy="(\d+)"\/>/);
   assert.ok(transform);

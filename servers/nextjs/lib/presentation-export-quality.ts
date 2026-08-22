@@ -117,6 +117,7 @@ export interface PresentationExportQualityReport {
   rendererIsolation?: PresentationExportRendererIsolation;
   exportAttemptId?: string;
   atomicBinding?: {
+    presentationId?: string;
     presentationRevision: number;
     canonicalSourceDigest: string;
     rendererSourceDigest: string;
@@ -311,6 +312,34 @@ export function createPresentationExportQuality(
     applied,
     embeddedFontFiles,
     reason: embeddingReason,
+    ...(options.fontEmbeddingStatus?.nativeTextUsage
+      ? { nativeTextUsage: options.fontEmbeddingStatus.nativeTextUsage }
+      : {}),
+    ...(options.fontEmbeddingStatus?.nativeTextElements !== undefined
+      ? {
+          nativeTextElements: nonNegativeInteger(
+            options.fontEmbeddingStatus.nativeTextElements,
+          ),
+        }
+      : {}),
+    ...(options.fontEmbeddingStatus
+      ?.nativeTextElementsUsingEmbeddedTypefaces !== undefined
+      ? {
+          nativeTextElementsUsingEmbeddedTypefaces: nonNegativeInteger(
+            options.fontEmbeddingStatus
+              .nativeTextElementsUsingEmbeddedTypefaces,
+          ),
+        }
+      : {}),
+    ...(options.fontEmbeddingStatus?.nativeTypefaceFamilies
+      ? {
+          nativeTypefaceFamilies: cleanStrings(
+            options.fontEmbeddingStatus.nativeTypefaceFamilies.map((family) =>
+              family.trim().slice(0, 127),
+            ),
+          ),
+        }
+      : {}),
     ...(options.fontEmbeddingStatus?.strategy
       ? { strategy: options.fontEmbeddingStatus.strategy }
       : {}),

@@ -280,6 +280,8 @@ export function WorkspaceOperationCard({
   const retryAction = allowedAction("retry");
   const retryUnavailable =
     operation.retryable === false || retryAction?.enabled === false;
+  const historicalResolution = operation.historicalResolution;
+  const resolvedByLaterSuccess = historicalResolution === "resolved";
   const progress =
     operation.progress === undefined
       ? undefined
@@ -672,7 +674,11 @@ export function WorkspaceOperationCard({
             role="status"
             aria-live="polite"
           >
-            {capacityWaiting
+            {historicalResolution === "resolved"
+              ? "후속 성공으로 해결됨"
+              : historicalResolution === "superseded"
+                ? "후속 성공으로 대체됨"
+              : capacityWaiting
               ? "생성 용량 대기 중"
               : operation.status === "succeeded" && isTemplateApply && !templateEvidenceComplete
               ? "시각 검증 증거 대기"
@@ -1110,7 +1116,16 @@ export function WorkspaceOperationCard({
           )}
         </section>
       )}
-      {operation.error && operation.status !== "succeeded" && (
+      {historicalResolution && operation.supersededByOperationId && (
+        <p
+          className="mt-2 rounded-lg bg-emerald-50 px-2.5 py-2 text-xs text-emerald-800"
+          role="status"
+          data-testid="operation-superseded-resolution"
+        >
+          감사 이력은 유지됩니다. 후속 성공 작업 {operation.supersededByOperationId}이(가) 같은 revision과 형식의 현재 결과입니다.
+        </p>
+      )}
+      {operation.error && operation.status !== "succeeded" && !resolvedByLaterSuccess && (
         <p
           className="mt-2 rounded-lg bg-red-50 px-2.5 py-2 text-xs text-red-700"
           role="alert"
@@ -1135,7 +1150,7 @@ export function WorkspaceOperationCard({
           승인 기한이 만료되었습니다. 작업을 다시 시도해 주세요.
         </p>
       )}
-      {retryUnavailable && (
+      {retryUnavailable && !resolvedByLaterSuccess && (
         <p
           className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-xs text-amber-800"
           role="status"
@@ -1150,7 +1165,7 @@ export function WorkspaceOperationCard({
           .filter((action) =>
             ["retry", "approve", "reject", "cancel", "undo"].includes(
               action.id,
-            ),
+            ) && !(resolvedByLaterSuccess && action.id === "retry"),
           )
           .map((action) => {
             const unavailable =

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+from hashlib import sha256
+import json
 from datetime import datetime
 from typing import Any, Literal, Optional
 import uuid
@@ -152,6 +154,8 @@ class ExportFreshnessProvenance(BaseModel):
 class ExportAtomicBinding(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    # Optional only for replaying pre-atomic provenance. Trusted parity requires it.
+    presentation_id: uuid.UUID | None = None
     export_attempt_id: uuid.UUID
     presentation_revision: int = PydanticField(ge=0)
     canonical_source_sha256: str
@@ -170,7 +174,11 @@ class ExportAtomicBinding(BaseModel):
 
 
 class ExportPowerPointQaEvidence(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra="forbid",
+    )
 
     status: Literal["preflight", "not-verified", "passed", "failed"]
     platform: Literal["windows", "unsupported", "unknown"]
@@ -186,6 +194,8 @@ class ExportPowerPointQaEvidence(BaseModel):
     typography_issues_gt_5pt: int = PydanticField(default=0, ge=0)
     typography_issues_gt_10pt: int = PydanticField(default=0, ge=0)
     native_text: int | None = PydanticField(default=None, ge=0)
+    native_image: int | None = PydanticField(default=None, ge=0)
+    native_shape: int | None = PydanticField(default=None, ge=0)
     native_table: int | None = PydanticField(default=None, ge=0)
     native_chart: int | None = PydanticField(default=None, ge=0)
 
@@ -289,7 +299,11 @@ class ExportSlideCoverage(BaseModel):
     raster_remaining: int = PydanticField(ge=0)
     fallback_reasons: list[str] = PydanticField(max_length=256)
     visual_parity: Literal[
-        "fidelity-backplate-retained", "not-verified", "passed", "failed"
+        "fidelity-backplate-retained",
+        "preflight",
+        "not-verified",
+        "passed",
+        "failed",
     ]
     native_backplate_de_duplication: Literal["applied", "not-applicable"]
 
@@ -342,6 +356,9 @@ class PresentationExportCoverageManifest(BaseModel):
     )
     raster_remaining: int = PydanticField(ge=0)
     fully_editable: bool
+    visual_parity: Literal["preflight", "not-verified", "passed", "failed"] = (
+        "not-verified"
+    )
     slides: list[ExportSlideCoverage] = PydanticField(min_length=1, max_length=100)
 
     @model_validator(mode="after")
@@ -384,10 +401,63 @@ class PresentationExportCoverageManifest(BaseModel):
                 slide.backplate_count for slide in self.slides
             ):
                 raise ValueError("export coverage backplate total is inconsistent")
-            if any(slide.visual_parity != "not-verified" for slide in self.slides):
+            if any(
+                slide.visual_parity != self.visual_parity for slide in self.slides
+            ):
                 raise ValueError(
-                    "export coverage v2 visual parity requires trusted finalization"
+                    "export coverage v2 visual parity status is inconsistent"
                 )
+        return self
+
+
+def _canonical_sidecar_sha256(value: dict[str, Any]) -> str:
+    return sha256(
+        json.dumps(
+            value,
+            allow_nan=False,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+class ExportVisualParityEvidence(BaseModel):
+    """One immutable identity shared by both sidecars and trusted desktop QA."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra="forbid",
+    )
+
+    status: Literal["preflight", "not-verified", "passed", "failed"]
+    binding: ExportAtomicBinding
+    quality_sidecar_sha256: str
+    coverage_sidecar_sha256: str
+    powerpoint_qa: ExportPowerPointQaEvidence
+
+    @field_validator("quality_sidecar_sha256", "coverage_sidecar_sha256")
+    @classmethod
+    def validate_sidecar_digest(cls, value: str) -> str:
+        normalized = value.lower()
+        if not _is_sha256(normalized):
+            raise ValueError("visual parity sidecar digest must be SHA-256")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_qa_status(self) -> "ExportVisualParityEvidence":
+        if self.status != self.powerpoint_qa.status:
+            raise ValueError("visual parity status does not match PowerPoint QA")
+        if self.status == "passed" and (
+            self.binding.presentation_id is None
+            or self.powerpoint_qa.native_text is None
+            or self.powerpoint_qa.native_image is None
+            or self.powerpoint_qa.native_shape is None
+            or self.powerpoint_qa.native_table is None
+            or self.powerpoint_qa.native_chart is None
+        ):
+            raise ValueError("passed visual parity requires complete native readback")
         return self
 
 
@@ -406,8 +476,10 @@ class PresentationExportAttemptProvenance(BaseModel):
     compiler_runtime: ExportCompilerRuntimeProvenance
     freshness: ExportFreshnessProvenance
     coverage_manifest: PresentationExportCoverageManifest | None = None
+    quality_sidecar: dict[str, Any] | None = None
     atomic_binding: ExportAtomicBinding | None = None
     powerpoint_qa: ExportPowerPointQaEvidence | None = None
+    visual_parity: ExportVisualParityEvidence | None = None
 
     @field_validator("adapter_chain")
     @classmethod
@@ -479,6 +551,63 @@ class PresentationExportAttemptProvenance(BaseModel):
         if self.powerpoint_qa is not None and self.powerpoint_qa.status == "passed":
             if self.atomic_binding is None:
                 raise ValueError("PowerPoint QA requires atomic artifact binding")
+        if self.visual_parity is not None:
+            binding = self.atomic_binding
+            quality = self.quality_sidecar
+            coverage = self.coverage_manifest
+            evidence = self.visual_parity
+            if (
+                binding is None
+                or quality is None
+                or coverage is None
+                or self.powerpoint_qa is None
+                or binding.presentation_id is None
+            ):
+                raise ValueError("visual parity requires both bound sidecars and QA")
+            if evidence.binding != binding or evidence.powerpoint_qa != self.powerpoint_qa:
+                raise ValueError("visual parity evidence binding is inconsistent")
+            if (
+                binding.presentation_revision != self.freshness.source_revision
+                or binding.canonical_source_sha256
+                != self.freshness.source_snapshot_sha256
+                or binding.renderer_source_sha256
+                != self.freshness.renderer_source_sha256
+                or binding.pptx_sha256 != self.freshness.package_sha256
+            ):
+                raise ValueError("visual parity freshness binding is inconsistent")
+            quality_binding = quality.get("atomicBinding")
+            if not isinstance(quality_binding, dict) or (
+                quality.get("exportAttemptId") != str(binding.export_attempt_id)
+                or quality_binding.get("presentationId") != str(binding.presentation_id)
+                or quality_binding.get("presentationRevision")
+                != binding.presentation_revision
+                or quality_binding.get("canonicalSourceDigest")
+                != binding.canonical_source_sha256
+                or quality_binding.get("rendererSourceDigest")
+                != binding.renderer_source_sha256
+                or quality_binding.get("pptxSha256") != binding.pptx_sha256
+                or quality.get("powerPointQa")
+                != self.powerpoint_qa.model_dump(mode="json", by_alias=True)
+            ):
+                raise ValueError("quality sidecar visual parity binding is inconsistent")
+            if (
+                coverage.source.export_attempt_id != binding.export_attempt_id
+                or coverage.source.presentation_revision != binding.presentation_revision
+                or coverage.source.canonical_source_digest
+                != binding.canonical_source_sha256
+                or coverage.source.source_digest != binding.renderer_source_sha256
+                or coverage.visual_parity != evidence.status
+            ):
+                raise ValueError("coverage sidecar visual parity binding is inconsistent")
+            quality_json = dict(quality)
+            coverage_json = coverage.model_dump(mode="json", by_alias=True)
+            if (
+                _canonical_sidecar_sha256(quality_json)
+                != evidence.quality_sidecar_sha256
+                or _canonical_sidecar_sha256(coverage_json)
+                != evidence.coverage_sidecar_sha256
+            ):
+                raise ValueError("visual parity sidecar digest is inconsistent")
         return self
 
 

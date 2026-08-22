@@ -9,6 +9,15 @@ export interface PresentationExportFontEmbeddingStatus {
   faces?: PresentationExportEmbeddedFontFaceStatus[];
   failures?: PresentationExportFontEmbeddingFailure[];
   reason: "not-requested" | "embedded" | "unsupported" | "failed";
+  nativeTextUsage?:
+    | "used"
+    | "not-used"
+    | "raster-only-unused"
+    | "not-embedded"
+    | "unverified";
+  nativeTextElements?: number;
+  nativeTextElementsUsingEmbeddedTypefaces?: number;
+  nativeTypefaceFamilies?: string[];
 }
 
 export interface PresentationExportEmbeddedFontFaceStatus {
