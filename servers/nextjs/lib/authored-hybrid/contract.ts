@@ -509,6 +509,7 @@ export function buildAuthoredHybridSlide(
       widthPx: AUTHORED_SLIDE_WIDTH_PX,
       heightPx: AUTHORED_SLIDE_HEIGHT_PX,
       transparentBackground: true,
+      nativeChartElementIds: [],
       eligibleElementIds: elements
         .filter(
           (element) =>
@@ -739,8 +740,21 @@ export function assertAuthoredHybridSlide(
       slide.backplate.transparentBackground === true,
     "backplate dimensions/transparency are invalid"
   );
+  const nativeChartElementIds = slide.backplate.nativeChartElementIds ?? [];
   invariant(
-    JSON.stringify(slide.backplate.eligibleElementIds) === JSON.stringify(eligibleIds),
+    Array.isArray(nativeChartElementIds) &&
+      new Set(nativeChartElementIds).size === nativeChartElementIds.length &&
+      nativeChartElementIds.every((id) => {
+        const element = slide.elements.find((candidate) => candidate.id === id);
+        return element?.classification.mode === "raster" &&
+          element.classification.candidateKind === "complex";
+      }),
+    "backplate native chart IDs are invalid"
+  );
+  invariant(
+    JSON.stringify(slide.backplate.eligibleElementIds) === JSON.stringify([
+      ...new Set([...eligibleIds, ...nativeChartElementIds]),
+    ]),
     "backplate eligible IDs do not match promotable elements"
   );
   invariant(

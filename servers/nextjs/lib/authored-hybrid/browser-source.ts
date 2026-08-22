@@ -3217,6 +3217,9 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     if (observation.candidateKind === "shape" && observation.shape) {
       return "shape:" + JSON.stringify(observation.shape);
     }
+    if (observation.candidateKind === "complex") {
+      return "complex:" + JSON.stringify(observation.fallbackReasons.slice().sort());
+    }
     return "";
   }
 
@@ -3238,7 +3241,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       observation.domPath === expected.domPath &&
       observation.sourceIndex === expected.sourceIndex;
     return (
-      (["text", "shape"].includes(expected.candidateKind) || observation.fallbackReasons.length === 0) &&
+      (["text", "shape", "complex"].includes(expected.candidateKind) || observation.fallbackReasons.length === 0) &&
       observation.id === expected.id &&
       (declaredQidMatches || compatibilityIdentityMatches) &&
       observation.tagName === expected.tagName &&
@@ -3336,6 +3339,11 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
             element.setAttribute("data-presenton-authored-hybrid-suppress-pseudo", "true");
           }
         }
+      } else if (kind === "complex" && expected.suppressWholeElement) {
+        // Only server-admitted declared chart islands enter this branch. Hide
+        // the complete authored chart after identity/content verification so
+        // its semantic data can be represented exactly once by native OOXML.
+        element.style.setProperty("visibility", "hidden", "important");
       }
       if (!record.pseudo && element === document.body) {
         // Chromium propagates the body background to the canvas. Clearing both

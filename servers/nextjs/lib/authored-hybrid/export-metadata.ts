@@ -45,7 +45,7 @@ export interface AuthoredHybridSlideCoverage {
   nativeText: number;
   nativeImage: number;
   nativeShape: number;
-  /** Tables and charts remain zero until their OOXML serializers are real. */
+  /** Tables remain zero until their OOXML serializer is real. */
   nativeTable: number;
   nativeChart: number;
   logicalCoverage: AuthoredHybridCoverageCounts;
@@ -104,11 +104,13 @@ interface CoverageQualitySlide {
   nativeTextElements: number;
   nativeImageElements: number;
   nativeShapeElements: number;
+  nativeChartElements?: number;
   rasterFallbackElements: number;
   logicalCoverage: {
     nativeText: number;
     nativeImage: number;
     nativeShape: number;
+    nativeChart?: number;
     nativeGroup: number;
     rasterRemaining: number;
   };
@@ -117,6 +119,7 @@ interface CoverageQualitySlide {
     nativeText: number;
     nativeImage: number;
     nativeShape: number;
+    nativeChart?: number;
     nativeGroup: number;
     rasterRemaining: number;
   };
@@ -150,7 +153,8 @@ export function createAuthoredHybridCoverageManifest(
       const nativeText = nonNegativeInteger(slide.nativeTextElements);
       const nativeImage = nonNegativeInteger(slide.nativeImageElements);
       const nativeShape = nonNegativeInteger(slide.nativeShapeElements);
-      const nativeCount = nativeText + nativeImage + nativeShape;
+      const nativeChart = nonNegativeInteger(slide.nativeChartElements ?? 0);
+      const nativeCount = nativeText + nativeImage + nativeShape + nativeChart;
       // An image-only fallback is one retained full-slide raster even when an
       // older quality producer omitted the aggregate element count.
       const rasterRemaining = Math.max(
@@ -162,7 +166,7 @@ export function createAuthoredHybridCoverageManifest(
         nativeImage: nonNegativeInteger(slide.logicalCoverage.nativeImage),
         nativeShape: nonNegativeInteger(slide.logicalCoverage.nativeShape),
         nativeTable: 0,
-        nativeChart: 0,
+        nativeChart: nonNegativeInteger(slide.logicalCoverage.nativeChart ?? nativeChart),
         rasterRemaining,
       };
       const ooxmlReadback = {
@@ -171,7 +175,7 @@ export function createAuthoredHybridCoverageManifest(
         nativeImage: nonNegativeInteger(slide.ooxmlReadback.nativeImage),
         nativeShape: nonNegativeInteger(slide.ooxmlReadback.nativeShape),
         nativeTable: 0,
-        nativeChart: 0,
+        nativeChart: nonNegativeInteger(slide.ooxmlReadback.nativeChart ?? 0),
         rasterRemaining: nonNegativeInteger(
           slide.ooxmlReadback.rasterRemaining,
         ),
@@ -182,7 +186,7 @@ export function createAuthoredHybridCoverageManifest(
         nativeImage,
         nativeShape,
         nativeTable: 0,
-        nativeChart: 0,
+        nativeChart,
         logicalCoverage,
         ooxmlReadback,
         backplateCount: nonNegativeInteger(slide.backplateCount),
@@ -203,6 +207,7 @@ export function createAuthoredHybridCoverageManifest(
   const nativeText = slides.reduce((sum, slide) => sum + slide.nativeText, 0);
   const nativeImage = slides.reduce((sum, slide) => sum + slide.nativeImage, 0);
   const nativeShape = slides.reduce((sum, slide) => sum + slide.nativeShape, 0);
+  const nativeChart = slides.reduce((sum, slide) => sum + slide.nativeChart, 0);
   const rasterRemaining = slides.reduce(
     (sum, slide) => sum + slide.rasterRemaining,
     0,
@@ -228,13 +233,13 @@ export function createAuthoredHybridCoverageManifest(
     nativeImage,
     nativeShape,
     nativeTable: 0,
-    nativeChart: 0,
+    nativeChart,
     logicalCoverage: {
       nativeText: sumLogical("nativeText"),
       nativeImage: sumLogical("nativeImage"),
       nativeShape: sumLogical("nativeShape"),
       nativeTable: 0,
-      nativeChart: 0,
+      nativeChart: sumLogical("nativeChart"),
       rasterRemaining: sumLogical("rasterRemaining"),
     },
     ooxmlReadback: {
@@ -249,7 +254,7 @@ export function createAuthoredHybridCoverageManifest(
       nativeImage: sumReadback("nativeImage"),
       nativeShape: sumReadback("nativeShape"),
       nativeTable: 0,
-      nativeChart: 0,
+      nativeChart: sumReadback("nativeChart"),
       rasterRemaining: sumReadback("rasterRemaining"),
     },
     backplateCount: slides.reduce(

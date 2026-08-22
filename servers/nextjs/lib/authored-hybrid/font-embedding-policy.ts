@@ -26,7 +26,7 @@ const DEFAULT_WINDOWS_FONT_ROOT = "C:\\Windows\\Fonts";
 
 export interface ResolvedEmbeddedFontFile {
   sourceId: string;
-  source: "server-font-allowlist" | "local-derived-static";
+  source: "server-font-allowlist" | "local-derived-static" | "windows-system-reviewed";
   /** Allowlist-relative name only; never exposes an arbitrary server path. */
   sourcePath: string;
   fileName: string;
@@ -56,6 +56,7 @@ export interface FontEmbeddingPlanFailure {
     | "invalid-font"
     | "family-mismatch"
     | "license-restricted"
+    | "license-unreviewed"
     | "variable-font-unsupported";
   detail: string;
 }
@@ -161,9 +162,60 @@ const IBM_PLEX_MONO_CANDIDATES: readonly AllowlistedCandidate[] = [
   },
 ];
 
+const MALGUN_GOTHIC_CANDIDATES: readonly AllowlistedCandidate[] = [
+  {
+    fileName: "malgun.ttf",
+    variable: false,
+    source: "windows-system-reviewed",
+    derivedFromVariable: false,
+    faces: [{ face: "regular", weight: 400, style: "normal" }],
+  },
+  {
+    fileName: "malgunbd.ttf",
+    variable: false,
+    source: "windows-system-reviewed",
+    derivedFromVariable: false,
+    faces: [{ face: "bold", weight: 700, style: "normal" }],
+  },
+];
+
+const BATANG_COLLECTION_CANDIDATES: readonly AllowlistedCandidate[] = [
+  {
+    // TTC remains deliberately fail-closed until the OOXML packager can bind
+    // an explicit collection index. The attempt is retained as an invalid-font
+    // receipt instead of silently substituting a different serif face.
+    fileName: "batang.ttc",
+    variable: false,
+    source: "windows-system-reviewed",
+    derivedFromVariable: false,
+    faces: [{ face: "regular", weight: 400, style: "normal" }],
+  },
+];
+
+const CONSOLAS_CANDIDATES: readonly AllowlistedCandidate[] = [
+  {
+    fileName: "consola.ttf",
+    variable: false,
+    source: "windows-system-reviewed",
+    derivedFromVariable: false,
+    faces: [{ face: "regular", weight: 400, style: "normal" }],
+  },
+  {
+    fileName: "consolab.ttf",
+    variable: false,
+    source: "windows-system-reviewed",
+    derivedFromVariable: false,
+    faces: [{ face: "bold", weight: 700, style: "normal" }],
+  },
+];
+
 const ALLOWLIST = new Map<string, readonly AllowlistedCandidate[]>([
   ["noto sans kr", NOTO_SANS_KR_CANDIDATES],
   ["ibm plex mono", IBM_PLEX_MONO_CANDIDATES],
+  ["malgun gothic", MALGUN_GOTHIC_CANDIDATES],
+  ["batang", BATANG_COLLECTION_CANDIDATES],
+  ["batangche", BATANG_COLLECTION_CANDIDATES],
+  ["consolas", CONSOLAS_CANDIDATES],
 ]);
 
 function normalizeFamily(family: string): string {
@@ -235,6 +287,18 @@ async function loadAllowlistedCandidate(
         );
       }
       const license = assessEmbeddingLicense(inspection.fsType, strategy);
+      if (
+        candidate.source === "windows-system-reviewed" &&
+        !inspection.licenseDescriptions.some((description) => {
+          const normalized = description.toLowerCase().replace(/\s+/g, " ");
+          return (
+            normalized.includes("microsoft supplied font") &&
+            normalized.includes("embedding restrictions included in this font")
+          );
+        })
+      ) {
+        throw new Error("font license evidence is not reviewed");
+      }
       return {
         sourceId: `${candidate.source}:${candidate.fileName}`,
         source: candidate.source,
@@ -333,6 +397,8 @@ export async function resolveFontEmbeddingPlan(
           family,
           reason: String(error).includes("family does not match")
             ? "family-mismatch"
+            : String(error).includes("license evidence")
+              ? "license-unreviewed"
             : "invalid-font",
           detail: error instanceof Error ? error.message : String(error),
         });

@@ -182,6 +182,41 @@ export interface WorkbenchCapabilityProjectionV1 {
   readonly degradedFidelityOnly: boolean;
   readonly fidelity: Readonly<Record<string, unknown>>;
   readonly hybrid: Readonly<Record<string, unknown>>;
+  /** Server-issued decisions only; browser code must not synthesize a capability. */
+  readonly capabilityMatrix: readonly {
+    readonly capabilityId:
+      | "shape.gradient"
+      | "shape.shadow"
+      | "layout.transform"
+      | "layout.flex"
+      | "layout.grid"
+      | "shape.borderRadius"
+      | "shape.opacity"
+      | "shape.clip";
+    readonly state: "disabled" | "shadow" | "ready" | "blocked";
+    readonly decision:
+      | "native"
+      | "representationFallback"
+      | "identityFailure"
+      | "ownershipFailure"
+      | "assetPublicationFailure"
+      | "blocked";
+    readonly reasonCode: string;
+    readonly receiptDigest: DigestV1;
+  }[];
+  readonly receipts: readonly {
+    readonly receiptId: "cjk" | "chart" | "zBand" | "degradation";
+    readonly state: "disabled" | "shadow" | "ready" | "blocked";
+    readonly decision:
+      | "native"
+      | "representationFallback"
+      | "identityFailure"
+      | "ownershipFailure"
+      | "assetPublicationFailure"
+      | "blocked";
+    readonly reasonCode: string;
+    readonly receiptDigest: DigestV1;
+  }[];
   readonly readiness: {
     readonly authoredCreationReady: boolean;
     readonly fidelityExportReady: boolean;

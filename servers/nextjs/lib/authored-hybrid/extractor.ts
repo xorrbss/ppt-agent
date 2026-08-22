@@ -229,6 +229,12 @@ function promotedElementContentKey(
     })}`;
   }
   if ("shape" in element) return `shape:${JSON.stringify(element.shape)}`;
+  if (
+    element.classification.mode === "raster" &&
+    element.classification.candidateKind === "complex"
+  ) {
+    return `complex:${JSON.stringify([...element.classification.reasons].sort())}`;
+  }
   throw new Error(`Authored hybrid element ${element.id} is not native.`);
 }
 
@@ -249,7 +255,16 @@ function expectedPromotedElements(
       element.classification.candidateKind === "shape" &&
       "shape" in element &&
       element.shape !== undefined;
-    if (!element || (element.classification.mode !== "native" && !rasterText && !rasterShape)) {
+    const rasterDeclaredChart =
+      element?.identityAuthority === "declared-qid" &&
+      element.classification.mode === "raster" &&
+      element.classification.candidateKind === "complex" &&
+      element.classification.reasons.includes("complex-chart");
+    if (
+      !element ||
+      (element.classification.mode !== "native" && !rasterText &&
+        !rasterShape && !rasterDeclaredChart)
+    ) {
       throw new Error(`Authored hybrid element ${id} is not a promotable candidate.`);
     }
     return {
@@ -263,14 +278,16 @@ function expectedPromotedElements(
           ? element.classification.kind
           : rasterText
             ? "text"
-            : "shape",
+            : rasterShape
+              ? "shape"
+              : "complex",
       boundsPx: element.bounds.px,
       rotationDeg: element.rotationDeg,
       opacity: element.opacity,
       contentKey: promotedElementContentKey(element),
       // Suppress glyph paint only. Hiding a styled text container wholesale can
       // also hide inline SVG/icon descendants that must remain on the backplate.
-      suppressWholeElement: false,
+      suppressWholeElement: rasterDeclaredChart,
       suppressContainerPaint: Boolean(
         "text" in element && element.text?.containerShape
       ),

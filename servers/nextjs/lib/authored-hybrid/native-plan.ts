@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import sharp from "sharp";
 
 import {
@@ -25,6 +27,7 @@ import type {
   AuthoredHybridTypographyIssue,
 } from "./schema.ts";
 import { validateHybridDataImageUrl } from "./security.ts";
+import type { AuthoredHybridNativeChartSource } from "./native-chart.ts";
 
 export const EMU_PER_CSS_PX = 9_525;
 export const MIN_EDITABLE_FONT_SIZE_PT = 9;
@@ -43,7 +46,8 @@ export type PreparedNativeElement =
       kind: "image";
       source: AuthoredHybridNativeImageElement;
       png: Buffer;
-    };
+    }
+  | { kind: "chart"; source: AuthoredHybridNativeChartSource };
 
 type AuthoredHybridNativeElement =
   | AuthoredHybridNativeTextElement
@@ -85,9 +89,43 @@ export interface LayerSafetyDemotion {
 export interface LayerSafetyPlan {
   readonly strategy: "single-backplate-fixed-point";
   readonly fixedPointReached: true;
+  readonly closureIterations: number;
+  readonly closureDigest: string;
   readonly selected: readonly PreparedNativeElement[];
   readonly demotions: readonly LayerSafetyDemotion[];
   readonly slideDemotedToRaster: boolean;
+  readonly paintGraph: readonly {
+    readonly elementId: string;
+    readonly parentElementId: string | null;
+    readonly paintOwner: "native" | "rasterIsland";
+    readonly zBand: number;
+    readonly opacity: number;
+    readonly blockedByElementIds: readonly string[];
+  }[];
+  readonly downgradeReceipt: {
+    readonly schemaVersion: "hybrid-layer-downgrade-receipt/browser-v1";
+    readonly state: "closed" | "slideRaster";
+    readonly reason: "no-closed-native-z-band" | null;
+    readonly demotedElementIds: readonly string[];
+    readonly receiptDigest: string;
+  };
+}
+
+function canonicalLayerValue(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalLayerValue).join(",")}]`;
+  }
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record).sort().map((key) =>
+    `${JSON.stringify(key)}:${canonicalLayerValue(record[key])}`
+  ).join(",")}}`;
+}
+
+function layerDigest(value: unknown): string {
+  return `sha256:${createHash("sha256")
+    .update(canonicalLayerValue(value), "utf8")
+    .digest("hex")}`;
 }
 
 /**
@@ -858,7 +896,10 @@ export async function prepareNativeElements(
   return prepared;
 }
 
-function intersects(a: AuthoredHybridElement, b: AuthoredHybridElement): boolean {
+function intersects(
+  a: Pick<AuthoredHybridElement, "bounds"> | AuthoredHybridNativeChartSource,
+  b: Pick<AuthoredHybridElement, "bounds">,
+): boolean {
   const ar = a.bounds.px;
   const br = b.bounds.px;
   return (
@@ -914,7 +955,9 @@ export function planLayerSafeNativeElements(
   // rasterised element can in turn occlude a lower candidate, so converge to a
   // fixed point instead of making a single pass over the initial raster set.
   let changed = true;
+  let closureIterations = 0;
   while (changed) {
+    closureIterations += 1;
     changed = false;
     for (const item of eligible) {
       if (!promotedIds.has(item.source.id)) continue;
@@ -950,18 +993,59 @@ export function planLayerSafeNativeElements(
         left.source.zOrder - right.source.zOrder ||
         left.source.sourceIndex - right.source.sourceIndex
     );
+  const demotions = eligible
+    .filter((item) => !promotedIds.has(item.source.id))
+    .map((item) => ({
+      elementId: item.source.id,
+      reason: "z-band-unsafe" as const,
+      blockedByElementIds: [...(demotionBlockers.get(item.source.id) ?? [])].sort(),
+    }));
+  const selectedBand = new Map(
+    selected.map((item, index) => [item.source.id, index + 1]),
+  );
+  const demotionById = new Map(
+    demotions.map((item) => [item.elementId, item.blockedByElementIds]),
+  );
+  const paintGraph = allElements
+    .map((element) => ({
+      elementId: element.id,
+      parentElementId: element.parentElementId ?? null,
+      paintOwner: selectedBand.has(element.id)
+        ? "native" as const
+        : "rasterIsland" as const,
+      zBand: selectedBand.get(element.id) ?? 0,
+      opacity: element.opacity,
+      blockedByElementIds: demotionById.get(element.id) ?? [],
+    }))
+    .sort((left, right) =>
+      left.zBand - right.zBand || left.elementId.localeCompare(right.elementId)
+    );
+  const closureUnsigned = {
+    schemaVersion: "hybrid-paint-graph-closure/browser-v1",
+    strategy: "single-backplate-fixed-point",
+    closureIterations,
+    paintGraph,
+  };
+  const slideDemotedToRaster = selected.length === 0;
+  const downgradeUnsigned = {
+    schemaVersion: "hybrid-layer-downgrade-receipt/browser-v1" as const,
+    state: slideDemotedToRaster ? "slideRaster" as const : "closed" as const,
+    reason: slideDemotedToRaster ? "no-closed-native-z-band" as const : null,
+    demotedElementIds: demotions.map((item) => item.elementId).sort(),
+  };
   return {
     strategy: "single-backplate-fixed-point",
     fixedPointReached: true,
+    closureIterations,
+    closureDigest: layerDigest(closureUnsigned),
     selected,
-    demotions: eligible
-      .filter((item) => !promotedIds.has(item.source.id))
-      .map((item) => ({
-        elementId: item.source.id,
-        reason: "z-band-unsafe" as const,
-        blockedByElementIds: [...(demotionBlockers.get(item.source.id) ?? [])].sort(),
-      })),
-    slideDemotedToRaster: selected.length === 0,
+    demotions,
+    slideDemotedToRaster,
+    paintGraph,
+    downgradeReceipt: {
+      ...downgradeUnsigned,
+      receiptDigest: layerDigest(downgradeUnsigned),
+    },
   };
 }
 
@@ -1991,7 +2075,9 @@ function powerPointAutofitXml(): string {
   return "<a:noAutofit/>";
 }
 
-function nonVisualName(element: AuthoredHybridElement): string {
+function nonVisualName(
+  element: AuthoredHybridElement | AuthoredHybridNativeChartSource,
+): string {
   return `Presenton hybrid ${element.classification.mode === "native" ? element.classification.kind : "raster"} ${element.id}`;
 }
 
@@ -2084,6 +2170,12 @@ export function serializePreparedNativeElement(
       idOffset += 1;
     });
     return shapes.join("");
+  }
+  if (item.kind === "chart") {
+    if (!relationshipId) throw new Error("Native chart relationship is missing.");
+    const element = item.source;
+    const name = escapeXml(nonVisualName(element));
+    return `<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="${nonVisualId}" name="${name}" descr="presenton-authored-native-chart"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="${coordinateEmu(element.bounds.px.x)}" y="${coordinateEmu(element.bounds.px.y)}"/><a:ext cx="${Math.max(1, coordinateEmu(element.bounds.px.width))}" cy="${Math.max(1, coordinateEmu(element.bounds.px.height))}"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="${relationshipId}"/></a:graphicData></a:graphic></p:graphicFrame>`;
   }
   if (!relationshipId) throw new Error("Native image relationship is missing.");
   const element = item.source;

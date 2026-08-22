@@ -6,6 +6,42 @@ const SCHEMA_VERSION = "workbench-capability-projection/v1";
 
 export type AuthoredCanonicalMode = "legacyHtml" | "bundleGraph";
 export type AuthoredCapabilityState = "disabled" | "shadow" | "ready" | "blocked";
+export type AuthoredSemanticCapabilityId =
+  | "shape.gradient"
+  | "shape.shadow"
+  | "layout.transform"
+  | "layout.flex"
+  | "layout.grid"
+  | "shape.borderRadius"
+  | "shape.opacity"
+  | "shape.clip";
+export type AuthoredSemanticReceiptId = "cjk" | "chart" | "zBand" | "degradation";
+export type AuthoredSemanticDecision =
+  | "native"
+  | "representationFallback"
+  | "identityFailure"
+  | "ownershipFailure"
+  | "assetPublicationFailure"
+  | "blocked";
+
+export interface AuthoredSemanticCapabilityDecision {
+  capabilityId: AuthoredSemanticCapabilityId;
+  state: AuthoredCapabilityState;
+  /** Server-issued operation result; never inferred from a browser feature. */
+  decision: AuthoredSemanticDecision;
+  /** Stable, server-issued machine reason code. */
+  reasonCode: string;
+  receiptDigest: string;
+}
+
+export interface AuthoredSemanticReceiptDecision {
+  receiptId: AuthoredSemanticReceiptId;
+  state: AuthoredCapabilityState;
+  /** Distinguishes normal representation fallback from publication authority failures. */
+  decision: AuthoredSemanticDecision;
+  reasonCode: string;
+  receiptDigest: string;
+}
 
 export interface AuthoredEmissionCapabilityProjection {
   schemaVersion: typeof SCHEMA_VERSION;
@@ -26,6 +62,13 @@ export interface AuthoredEmissionCapabilityProjection {
     image: AuthoredNativeCapability;
     shape: AuthoredNativeCapability;
   };
+  /**
+   * Complete, server-issued serializer decision matrix. The browser only
+   * displays it; missing entries never become client-side capability defaults.
+   */
+  capabilityMatrix: AuthoredSemanticCapabilityDecision[];
+  /** Server-issued CJK, chart, z-band, and degradation receipt decisions. */
+  receipts: AuthoredSemanticReceiptDecision[];
   readiness: {
     authoredCreationReady: boolean;
     fidelityExportReady: boolean;
@@ -107,6 +150,83 @@ function capabilityState(value: unknown, field: string): AuthoredCapabilityState
   throw new Error(`Capability projection has invalid ${field}`);
 }
 
+const CAPABILITY_IDS = [
+  "shape.gradient",
+  "shape.shadow",
+  "layout.transform",
+  "layout.flex",
+  "layout.grid",
+  "shape.borderRadius",
+  "shape.opacity",
+  "shape.clip",
+] as const satisfies readonly AuthoredSemanticCapabilityId[];
+
+const RECEIPT_IDS = ["cjk", "chart", "zBand", "degradation"] as const satisfies readonly AuthoredSemanticReceiptId[];
+
+function requiredReasonCode(value: unknown, field: string): string {
+  const code = requiredText(value, field);
+  if (!/^[a-z][a-z0-9._-]{1,127}$/.test(code)) {
+    throw new Error(`Capability projection has invalid ${field}`);
+  }
+  return code;
+}
+
+function semanticDecision(value: unknown, field: string): AuthoredSemanticDecision {
+  if (
+    value === "native" ||
+    value === "representationFallback" ||
+    value === "identityFailure" ||
+    value === "ownershipFailure" ||
+    value === "assetPublicationFailure" ||
+    value === "blocked"
+  ) {
+    return value;
+  }
+  throw new Error(`Capability projection has invalid ${field}`);
+}
+
+function matrixEntries<T extends string>(
+  value: unknown,
+  field: string,
+  ids: readonly T[],
+  key: "capabilityId" | "receiptId",
+): Array<{
+  [K in typeof key]: T;
+} & {
+  state: AuthoredCapabilityState;
+  decision: AuthoredSemanticDecision;
+  reasonCode: string;
+  receiptDigest: string;
+}> {
+  if (!Array.isArray(value) || value.length !== ids.length) {
+    throw new Error(`Capability projection has incomplete ${field}`);
+  }
+  const expected = new Set<string>(ids);
+  const seen = new Set<string>();
+  return value.map((item, index) => {
+    const raw = record(item);
+    const id = requiredText(raw[key], `${field}[${index}].${key}`) as T;
+    if (!expected.has(id) || seen.has(id)) {
+      throw new Error(`Capability projection has invalid ${field}[${index}].${key}`);
+    }
+    seen.add(id);
+    return {
+      [key]: id,
+      state: capabilityState(raw.state, `${field}[${index}].state`),
+      decision: semanticDecision(raw.decision, `${field}[${index}].decision`),
+      reasonCode: requiredReasonCode(raw.reasonCode, `${field}[${index}].reasonCode`),
+      receiptDigest: requiredDigest(raw.receiptDigest, `${field}[${index}].receiptDigest`),
+    } as {
+      [K in typeof key]: T;
+    } & {
+      state: AuthoredCapabilityState;
+      decision: AuthoredSemanticDecision;
+      reasonCode: string;
+      receiptDigest: string;
+    };
+  });
+}
+
 function normalizeNativeCapability(value: unknown, field: string): AuthoredNativeCapability {
   const raw = record(value);
   return {
@@ -184,6 +304,18 @@ export function normalizeAuthoredEmissionCapabilityProjection(
       image: normalizeNativeCapability(hybrid.image, "hybrid.image"),
       shape: normalizeNativeCapability(hybrid.shape, "hybrid.shape"),
     },
+    capabilityMatrix: matrixEntries(
+      data.capabilityMatrix,
+      "capabilityMatrix",
+      CAPABILITY_IDS,
+      "capabilityId",
+    ) as AuthoredSemanticCapabilityDecision[],
+    receipts: matrixEntries(
+      data.receipts,
+      "receipts",
+      RECEIPT_IDS,
+      "receiptId",
+    ) as AuthoredSemanticReceiptDecision[],
     readiness: normalizedReadiness,
     killSwitches: killSwitches.map((item, index) => {
       const switchValue = record(item);

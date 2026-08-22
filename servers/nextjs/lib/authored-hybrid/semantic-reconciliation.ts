@@ -27,6 +27,8 @@ export interface DeclaredSemanticElementForObservation {
   readonly sourceDigest: string;
   readonly assetContentDigest?: string;
   readonly requiredFeatures?: readonly string[];
+  /** Validated semantic source payload retained for bounded native serializers. */
+  readonly payload?: Readonly<Record<string, unknown>>;
 }
 
 export interface BrowserObservationReceiptElementV1 {

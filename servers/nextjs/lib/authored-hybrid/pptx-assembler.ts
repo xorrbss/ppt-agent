@@ -8,6 +8,7 @@ import {
   type PowerPointTypefaceSerializationOptions,
   type PreparedNativeElement,
 } from "./native-plan.ts";
+import { serializeNativeChartPart } from "./native-chart.ts";
 import {
   decodeXmlAttributeValue,
   opcPartComparisonKey,
@@ -25,6 +26,12 @@ const SLIDE_HEIGHT_EMU = 6_858_000;
 const SLIDE_WIDTH_PX = 1_280;
 const SLIDE_HEIGHT_PX = 720;
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+const IMAGE_RELATIONSHIP_TYPE =
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
+const CHART_RELATIONSHIP_TYPE =
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
+const CHART_CONTENT_TYPE =
+  "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
 export interface AuthoredHybridSlideLayer {
   /** One-based OOXML slide number. */
   slideNumber: number;
@@ -100,16 +107,45 @@ export function isCanvasBackgroundShape(item: PreparedNativeElement): boolean {
 function appendRelationship(
   relationshipsXml: string,
   relationshipId: string,
-  target: string
+  target: string,
+  relationshipType = IMAGE_RELATIONSHIP_TYPE,
 ): string {
   if (!/<Relationships\b[^>]*>[\s\S]*<\/Relationships>\s*$/i.test(relationshipsXml)) {
     throw new Error("PPTX slide relationship document is malformed.");
   }
   const relationship =
     `<Relationship Id="${relationshipId}" ` +
-    `Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" ` +
+    `Type="${relationshipType}" ` +
     `Target="${target}"/>`;
   return relationshipsXml.replace(/<\/Relationships>\s*$/i, `${relationship}</Relationships>`);
+}
+
+function nextChartNumber(entries: ReadonlyMap<string, Buffer>): number {
+  let maximum = 0;
+  for (const name of entries.keys()) {
+    const number = /^ppt\/charts\/chart(\d+)\.xml$/i.exec(name)?.[1];
+    if (number) maximum = Math.max(maximum, Number(number));
+  }
+  return maximum + 1;
+}
+
+function addChartContentType(
+  entries: Map<string, Buffer>,
+  chartPath: string,
+): void {
+  const path = "[Content_Types].xml";
+  const original = entries.get(path)?.toString("utf8");
+  if (!original) throw new Error("PPTX content types document is missing.");
+  if (original.includes(`PartName="/${chartPath}"`)) return;
+  if (!/<\/Types>\s*$/i.test(original)) {
+    throw new Error("PPTX content types document is malformed.");
+  }
+  const override =
+    `<Override PartName="/${chartPath}" ContentType="${CHART_CONTENT_TYPE}"/>`;
+  entries.set(
+    path,
+    Buffer.from(original.replace(/<\/Types>\s*$/i, `${override}</Types>`), "utf8"),
+  );
 }
 
 function nextRelationshipNumber(relationshipsXml: string): number {
@@ -416,6 +452,23 @@ function assembleSlide(
         `../media/${mediaName}`
       );
       entries.set(`ppt/media/${mediaName}`, Buffer.from(item.png));
+    }
+    if (item.kind === "chart") {
+      const chartNumber = nextChartNumber(entries);
+      const chartPath = `ppt/charts/chart${chartNumber}.xml`;
+      relationshipId = `rId${relationshipNumber}`;
+      relationshipNumber += 1;
+      relationshipsXml = appendRelationship(
+        relationshipsXml,
+        relationshipId,
+        `../charts/chart${chartNumber}.xml`,
+        CHART_RELATIONSHIP_TYPE,
+      );
+      entries.set(
+        chartPath,
+        Buffer.from(serializeNativeChartPart(item.source), "utf8"),
+      );
+      addChartContentType(entries, chartPath);
     }
     const underlayCount = preparedNativeElementUnderlayNonVisualIdCount(item);
     const underlay = serializePreparedNativeElementUnderlay(

@@ -1,11 +1,47 @@
 "use client";
 
-import type { AuthoredEmissionCapabilityProjection } from "../../../services/api/authored-emission-capability";
+import type {
+  AuthoredEmissionCapabilityProjection,
+  AuthoredSemanticDecision,
+} from "../../../services/api/authored-emission-capability";
 
 export type AuthoredEmissionCapabilityStatus =
   | { state: "checking" }
   | { state: "unavailable"; reason?: string }
   | { state: "ready"; projection: AuthoredEmissionCapabilityProjection };
+
+const capabilityLabels: Record<string, string> = {
+  "shape.gradient": "그라데이션",
+  "shape.shadow": "그림자",
+  "layout.transform": "변환",
+  "layout.flex": "Flex",
+  "layout.grid": "Grid",
+  "shape.borderRadius": "모서리 반경",
+  "shape.opacity": "불투명도",
+  "shape.clip": "클리핑",
+};
+
+const receiptLabels: Record<string, string> = {
+  cjk: "CJK 글꼴",
+  chart: "차트",
+  zBand: "z-band",
+  degradation: "degradation",
+};
+
+const decisionLabels: Record<AuthoredSemanticDecision, string> = {
+  native: "Native",
+  representationFallback: "표현 fallback",
+  identityFailure: "ID 검증 실패",
+  ownershipFailure: "소유권 불일치",
+  assetPublicationFailure: "asset 게시 실패",
+  blocked: "차단됨",
+};
+
+function decisionClass(decision: AuthoredSemanticDecision): string {
+  if (decision === "native") return "text-emerald-800";
+  if (decision === "representationFallback") return "text-amber-800";
+  return "text-rose-800";
+}
 
 export function authoredHybridUnavailableReason(
   status: AuthoredEmissionCapabilityStatus,
@@ -64,6 +100,32 @@ export default function AuthoredEmissionCapabilityStatusView({
       <p className="text-slate-500">
         promotionReady: false · fullNativeParityReady: false · independentVnextGenerationReady: false
       </p>
+      <section className="border-t border-slate-100 pt-1.5" aria-label="서버 발행 semantic capability matrix">
+        <p className="font-medium text-slate-700">서버 발행 capability matrix</p>
+        <div className="mt-1 grid gap-x-3 gap-y-1 sm:grid-cols-2">
+          {projection.capabilityMatrix.map((capability) => (
+            <div key={capability.capabilityId} className="min-w-0" data-testid={`authored-capability-${capability.capabilityId}`}>
+              <span className="text-slate-600">{capabilityLabels[capability.capabilityId]}: </span>
+              <span className={decisionClass(capability.decision)}>{decisionLabels[capability.decision]}</span>
+              <span className="text-slate-500"> · {capability.state} · {capability.reasonCode}</span>
+              <span className="sr-only"> · receipt {capability.receiptDigest}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+      <section className="border-t border-slate-100 pt-1.5" aria-label="서버 발행 semantic receipts">
+        <p className="font-medium text-slate-700">서버 발행 receipts</p>
+        <div className="mt-1 grid gap-x-3 gap-y-1 sm:grid-cols-2">
+          {projection.receipts.map((receipt) => (
+            <div key={receipt.receiptId} className="min-w-0" data-testid={`authored-receipt-${receipt.receiptId}`}>
+              <span className="text-slate-600">{receiptLabels[receipt.receiptId]}: </span>
+              <span className={decisionClass(receipt.decision)}>{decisionLabels[receipt.decision]}</span>
+              <span className="text-slate-500"> · {receipt.state} · {receipt.reasonCode}</span>
+              <span className="sr-only"> · receipt {receipt.receiptDigest}</span>
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }

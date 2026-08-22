@@ -368,6 +368,8 @@ export interface AuthoredHybridBackplatePlan {
   transparentBackground: true;
   /** H2 may promote native items and extracted editable raster text/shapes. */
   eligibleElementIds: string[];
+  /** Server-admitted semantic charts added after browser observation. */
+  nativeChartElementIds?: string[];
   rasterElementIds: string[];
 }
 

@@ -393,6 +393,7 @@ test("active bundle graph binds ordered slide QIDs and fails closed for Hybrid d
     presentationId,
     canonicalMode: "bundleGraph",
     presentationRevision: 4,
+    activeGeneration: 7,
     canonicalDigest,
     manifest: {
       schemaVersion: "authored-deck-emission-manifest/v1",
@@ -420,6 +421,7 @@ test("active bundle graph binds ordered slide QIDs and fails closed for Hybrid d
     slideIds: [slideId],
   });
   assert.deepEqual(bound.slides[0].declaredElementIds, ["title.main"]);
+  assert.equal(bound.activeGeneration, 7);
   assert.deepEqual(bound.slides[0].fontFamilies, ["IBM Plex Mono"]);
   assert.throws(
     () => bindActiveAuthoredEmissionForExport(parsed, {
@@ -473,12 +475,14 @@ test("active bundle graph binds ordered slide QIDs and fails closed for Hybrid d
 });
 
 test("legacy active mode is allowed only for default or attempt-bound Fidelity", () => {
+  const legacyDigest = digest("legacy-cutover");
   const legacy = parseActiveAuthoredEmissionResponseV1({
     schemaVersion: "active-authored-emission-response/v1",
     presentationId: "11111111-1111-4111-8111-111111111111",
     canonicalMode: "legacyHtml",
     presentationRevision: 2,
-    canonicalDigest: null,
+    activeGeneration: 3,
+    canonicalDigest: legacyDigest,
     manifest: null,
     bundles: [],
   });
@@ -487,11 +491,13 @@ test("legacy active mode is allowed only for default or attempt-bound Fidelity",
     presentationRevision: 2,
     slideIds: [],
   };
-  assert.equal(bindActiveAuthoredEmissionForExport(legacy, {
+  const defaultBinding = bindActiveAuthoredEmissionForExport(legacy, {
     ...common,
     mode: "fidelity",
     explicitMode: false,
-  }).canonicalMode, "legacyHtml");
+  });
+  assert.equal(defaultBinding.canonicalMode, "legacyHtml");
+  assert.equal(defaultBinding.canonicalDigest, legacyDigest);
   assert.throws(
     () => bindActiveAuthoredEmissionForExport(legacy, {
       ...common,

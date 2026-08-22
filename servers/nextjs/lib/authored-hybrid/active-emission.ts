@@ -7,6 +7,7 @@ import {
 
 import { readBoundedResponseText } from "./security.ts";
 import type { DeclaredSemanticElementForObservation } from "./semantic-reconciliation.ts";
+import { parseAuthoredNativeChartPayload } from "./native-chart.ts";
 
 const ACTIVE_EMISSION_RESPONSE_BYTES = 24 * 1024 * 1024;
 const ACTIVE_EMISSION_TIMEOUT_MS = 20_000;
@@ -52,6 +53,7 @@ export interface ActiveAuthoredEmissionResponseV1 {
   readonly presentationId: string;
   readonly canonicalMode: CanonicalMode;
   readonly presentationRevision: number;
+  readonly activeGeneration: number;
   readonly canonicalDigest: string | null;
   readonly manifest: ParsedManifestV1 | null;
   readonly bundles: readonly ParsedBundleV1[];
@@ -73,6 +75,7 @@ export interface ActiveEmissionExportBinding {
   readonly schemaVersion: "authored-active-export-binding/browser-v1";
   readonly canonicalMode: CanonicalMode;
   readonly presentationRevision: number;
+  readonly activeGeneration: number;
   readonly canonicalDigest: string | null;
   readonly slides: readonly ActiveEmissionSlideBinding[];
 }
@@ -276,6 +279,9 @@ function parseSemanticComponent(value: unknown): {
         typeof element.payload.assetDigest === "string"
           ? digestValue(element.payload.assetDigest)
           : undefined;
+      const chartPayload = element.kind === "chart"
+        ? parseAuthoredNativeChartPayload(element.payload)
+        : null;
       if (
         element.kind === "text" &&
         isRecord(element.payload) &&
@@ -297,6 +303,9 @@ function parseSemanticComponent(value: unknown): {
         childIds,
         sourceDigest: contentDigest(element),
         ...(assetContentDigest ? { assetContentDigest } : {}),
+        ...(chartPayload
+          ? { payload: chartPayload as unknown as Readonly<Record<string, unknown>> }
+          : {}),
         requiredFeatures: Object.freeze(requiredFeatures),
       });
     });
@@ -546,6 +555,7 @@ export function parseActiveAuthoredEmissionResponseV1(
     "presentationId",
     "canonicalMode",
     "presentationRevision",
+    "activeGeneration",
     "canonicalDigest",
     "manifest",
     "bundles",
@@ -563,7 +573,7 @@ export function parseActiveAuthoredEmissionResponseV1(
   const canonicalDigest = nullableDigestValue(value.canonicalDigest);
   if (
     (canonicalMode === "legacyHtml" &&
-      (manifest !== null || bundles.length !== 0 || canonicalDigest !== null)) ||
+      (manifest !== null || bundles.length !== 0)) ||
     (canonicalMode === "bundleGraph" &&
       (manifest === null ||
         canonicalDigest === null ||
@@ -577,6 +587,7 @@ export function parseActiveAuthoredEmissionResponseV1(
     presentationId: stringValue(value.presentationId),
     canonicalMode,
     presentationRevision: revisionValue(value.presentationRevision, true),
+    activeGeneration: revisionValue(value.activeGeneration, true),
     canonicalDigest,
     manifest,
     bundles: Object.freeze(bundles),
@@ -613,7 +624,8 @@ export function bindActiveAuthoredEmissionForExport(
       schemaVersion: "authored-active-export-binding/browser-v1",
       canonicalMode: "legacyHtml",
       presentationRevision: active.presentationRevision,
-      canonicalDigest: attemptDigest ?? null,
+      activeGeneration: active.activeGeneration,
+      canonicalDigest: attemptDigest ?? active.canonicalDigest,
       slides: Object.freeze([]),
     });
   }
@@ -658,6 +670,7 @@ export function bindActiveAuthoredEmissionForExport(
     schemaVersion: "authored-active-export-binding/browser-v1",
     canonicalMode: "bundleGraph",
     presentationRevision: active.presentationRevision,
+    activeGeneration: active.activeGeneration,
     canonicalDigest: active.canonicalDigest,
     slides: Object.freeze(slides),
   });

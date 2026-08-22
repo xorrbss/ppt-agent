@@ -94,7 +94,7 @@ export interface AuthoredHybridExpectedPromotedElement {
   domPath: string;
   tagName: string;
   sourceIndex: number;
-  candidateKind: AuthoredHybridNativeKind;
+  candidateKind: AuthoredHybridNativeKind | "complex";
   boundsPx: AuthoredHybridRect;
   rotationDeg: number;
   opacity: number;

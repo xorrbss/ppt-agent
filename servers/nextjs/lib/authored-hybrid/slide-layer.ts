@@ -12,6 +12,7 @@ import {
   preparedNativeElementNonVisualIdCount,
   prepareNativeElements,
   serializePreparedNativeElement,
+  type LayerSafetyPlan,
   type PowerPointTypefaceSerializationOptions,
   type PreparedNativeElement,
 } from "./native-plan.ts";
@@ -25,6 +26,7 @@ import { preflightAuthoredHtmlForHybrid } from "./security.ts";
 import { getGoogleFontsCollector } from "./google-fonts-runtime.ts";
 import { mergePowerPointTextLayout } from "./font-layout.ts";
 import type { PresentationExportSlideQuality } from "../presentation-export-quality.ts";
+import type { AuthoredHybridSlideV1 } from "./schema.ts";
 import {
   fallbackElementForContractElement,
   imageFallbackSlide,
@@ -34,6 +36,7 @@ import {
   digestObservedDeclaredAssets,
   type DeclaredSemanticElementForObservation,
 } from "./semantic-reconciliation.ts";
+import { prepareDeclaredNativeCharts } from "./native-chart.ts";
 
 // The collector adds a bounded network step ahead of each browser pass, so
 // the per-pass ceiling is higher than the pre-collection 20s.
@@ -50,7 +53,20 @@ export interface PreparedSlideOutcome {
     readonly schemaVersion: "hybrid-paint-plan/browser-v1";
     readonly strategy: "single-backplate-fixed-point";
     readonly fixedPointReached: true;
+    readonly closureIterations: number;
+    readonly closureDigest: string;
     readonly slideDemotedToRaster: boolean;
+    readonly downgradeReceipt: {
+      readonly schemaVersion: "hybrid-layer-downgrade-receipt/browser-v1";
+      readonly state: "closed" | "slideRaster";
+      readonly reason:
+        | "no-closed-native-z-band"
+        | "backplate-identity-mismatch"
+        | "opaque-backplate-collision"
+        | null;
+      readonly demotedElementIds: readonly string[];
+      readonly receiptDigest: string;
+    };
     readonly demotions: ReadonlyArray<{
       readonly elementId: string;
       readonly fallbackReason: "z-band-unsafe";
@@ -122,12 +138,18 @@ function preSerializePreparedElements(
       serializePreparedNativeElement(
         element,
         serializable.length + 3,
-        element.kind === "image" ? "rId999" : undefined,
+        element.kind === "image" || element.kind === "chart"
+          ? "rId999"
+          : undefined,
         options
       );
       serializable.push(element);
-    } catch {
+    } catch (error) {
       // Never hide an element whose final OOXML cannot be constructed.
+      console.warn(
+        "[authored-hybrid] native pre-serialization rejected",
+        { elementId: element.source.id, kind: element.kind, error },
+      );
     }
   }
   return serializable;
@@ -141,6 +163,72 @@ function sameIds(
     elements.length === ids.length &&
     elements.every((element, index) => element.source.id === ids[index])
   );
+}
+
+function withAdmittedSemanticChartEligibility(
+  contract: AuthoredHybridSlideV1,
+  selected: readonly PreparedNativeElement[],
+  semanticContext?: AuthoredSemanticSlideContext,
+): AuthoredHybridSlideV1 {
+  if (!semanticContext || !selected.some((element) => element.kind === "chart")) {
+    return contract;
+  }
+  const declaredCharts = new Set(
+    semanticContext.declaredElements
+      .filter((element) => element.kind === "chart")
+      .map((element) => element.elementId),
+  );
+  const admittedChartIds = selected
+    .filter(
+      (element) => element.kind === "chart" && declaredCharts.has(element.source.id),
+    )
+    .map((element) => element.source.id);
+  if (!admittedChartIds.length) return contract;
+  return {
+    ...contract,
+    backplate: {
+      ...contract.backplate,
+      nativeChartElementIds: admittedChartIds,
+      eligibleElementIds: [
+        ...new Set([
+          ...contract.backplate.eligibleElementIds,
+          ...admittedChartIds,
+        ]),
+      ],
+    },
+  };
+}
+
+function slideRasterPaintPlan(
+  plan: LayerSafetyPlan,
+  reason: "backplate-identity-mismatch" | "opaque-backplate-collision",
+): NonNullable<PreparedSlideOutcome["paintPlan"]> {
+  const downgradeUnsigned = {
+    schemaVersion: "hybrid-layer-downgrade-receipt/browser-v1" as const,
+    state: "slideRaster" as const,
+    reason,
+    demotedElementIds: plan.selected
+      .map((element) => element.source.id)
+      .concat(plan.demotions.map((item) => item.elementId))
+      .sort(),
+  };
+  return {
+    schemaVersion: "hybrid-paint-plan/browser-v1",
+    strategy: plan.strategy,
+    fixedPointReached: true,
+    closureIterations: plan.closureIterations,
+    closureDigest: plan.closureDigest,
+    slideDemotedToRaster: true,
+    downgradeReceipt: {
+      ...downgradeUnsigned,
+      receiptDigest: semanticDigest(downgradeUnsigned),
+    },
+    demotions: plan.demotions.map((demotion) => ({
+      elementId: demotion.elementId,
+      fallbackReason: demotion.reason,
+      blockedByElementIds: demotion.blockedByElementIds,
+    })),
+  };
 }
 
 export async function prepareSlideLayer(
@@ -233,13 +321,30 @@ export async function prepareSlideLayer(
   });
   nativeLayoutElements = typographyPreflight.elements;
   const typographyRejected = new Set(typographyPreflight.rejectedElementIds);
+  const declaredChartPreparation = semanticContext && declaredCapture
+    ? prepareDeclaredNativeCharts(
+        semanticContext.declaredElements,
+        declaredCapture.observation.elements,
+      )
+    : {
+        charts: [],
+        rejections: new Map<
+          string,
+          "unsupported-native-chart" | "unsupported-chart-css"
+        >(),
+      };
   const prepared = preSerializePreparedElements(
     (
       await prepareNativeElements(nativeLayoutElements, {
         includeRasterText: true,
         includeRasterShapes: true,
       })
-    ).filter((element) => !typographyRejected.has(element.source.id)),
+    ).filter((element) => !typographyRejected.has(element.source.id)).concat(
+      declaredChartPreparation.charts.map((source) => ({
+        kind: "chart" as const,
+        source,
+      })),
+    ),
     { embeddedTypefaceFamilies, embeddedTypefaceFaces }
   );
   let layerSafetyPlan = planLayerSafeNativeElements(
@@ -269,7 +374,10 @@ export async function prepareSlideLayer(
         schemaVersion: "hybrid-paint-plan/browser-v1",
         strategy: layerSafetyPlan.strategy,
         fixedPointReached: true,
+        closureIterations: layerSafetyPlan.closureIterations,
+        closureDigest: layerSafetyPlan.closureDigest,
         slideDemotedToRaster: true,
+        downgradeReceipt: layerSafetyPlan.downgradeReceipt,
         demotions: layerSafetyPlan.demotions.map((demotion) => ({
           elementId: demotion.elementId,
           fallbackReason: demotion.reason,
@@ -281,7 +389,7 @@ export async function prepareSlideLayer(
 
   let backplate = await renderAuthoredBackplate(
     collectedHtml,
-    contract,
+    withAdmittedSemanticChartEligibility(contract, selected, semanticContext),
     selected.map((element) => element.source.id),
     extractionOptions
   );
@@ -312,7 +420,10 @@ export async function prepareSlideLayer(
         schemaVersion: "hybrid-paint-plan/browser-v1",
         strategy: finalLayerSafetyPlan.strategy,
         fixedPointReached: true,
+        closureIterations: finalLayerSafetyPlan.closureIterations,
+        closureDigest: finalLayerSafetyPlan.closureDigest,
         slideDemotedToRaster: true,
+        downgradeReceipt: finalLayerSafetyPlan.downgradeReceipt,
         demotions: finalLayerSafetyPlan.demotions.map((demotion) => ({
           elementId: demotion.elementId,
           fallbackReason: demotion.reason,
@@ -326,7 +437,7 @@ export async function prepareSlideLayer(
     selected = finalSelected;
     backplate = await renderAuthoredBackplate(
       collectedHtml,
-      contract,
+      withAdmittedSemanticChartEligibility(contract, selected, semanticContext),
       selected.map((element) => element.source.id),
       extractionOptions
     );
@@ -335,6 +446,10 @@ export async function prepareSlideLayer(
         layer: null,
         quality: imageFallbackSlide(slideNumber, "backplate-identity-mismatch"),
         fontRendering,
+        paintPlan: slideRasterPaintPlan(
+          layerSafetyPlan,
+          "backplate-identity-mismatch",
+        ),
       };
     }
   } else {
@@ -355,13 +470,17 @@ export async function prepareSlideLayer(
       if (!selected.length) {
         return {
           layer: null,
-          quality: imageFallbackSlide(slideNumber, "no-safe-native-elements"),
+          quality: imageFallbackSlide(slideNumber, "opaque-backplate-collision"),
           fontRendering,
+          paintPlan: slideRasterPaintPlan(
+            layerSafetyPlan,
+            "opaque-backplate-collision",
+          ),
         };
       }
       backplate = await renderAuthoredBackplate(
         collectedHtml,
-        contract,
+        withAdmittedSemanticChartEligibility(contract, selected, semanticContext),
         selected.map((element) => element.source.id),
         extractionOptions
       );
@@ -370,12 +489,21 @@ export async function prepareSlideLayer(
           layer: null,
           quality: imageFallbackSlide(slideNumber, "backplate-identity-mismatch"),
           fontRendering,
+          paintPlan: slideRasterPaintPlan(
+            layerSafetyPlan,
+            "backplate-identity-mismatch",
+          ),
         };
       }
     }
   }
   const selectedIds = new Set(
     selected.map((element) => element.source.id)
+  );
+  const selectedNativeChartIds = new Set(
+    selected
+      .filter((element) => element.kind === "chart")
+      .map((element) => element.source.id)
   );
   const zBandDemotions = new Set(
     layerSafetyPlan.demotions.map((demotion) => demotion.elementId)
@@ -384,7 +512,8 @@ export async function prepareSlideLayer(
     .filter(
       (element) =>
         !selectedIds.has(element.id) ||
-        element.classification.mode === "raster" ||
+        (element.classification.mode === "raster" &&
+          !selectedNativeChartIds.has(element.id)) ||
         ("shape" in element &&
           Boolean(
             element.shape.gradient || element.shape.shadowLayers?.length
@@ -393,7 +522,12 @@ export async function prepareSlideLayer(
     .map((element) =>
       fallbackElementForContractElement(
         element,
-        zBandDemotions.has(element.id) ? ["z-band-unsafe"] : []
+        [
+          ...(zBandDemotions.has(element.id) ? ["z-band-unsafe"] : []),
+          ...(declaredChartPreparation.rejections.has(element.id)
+            ? [declaredChartPreparation.rejections.get(element.id)!]
+            : []),
+        ]
       )
     );
   const semanticReceipts = semanticContext && observationReceipt
@@ -477,6 +611,8 @@ export async function prepareSlideLayer(
         .length,
       nativeShapeElements: selected.filter((element) => element.kind === "shape")
         .length,
+      nativeChartElements: selected.filter((element) => element.kind === "chart")
+        .length,
       nativeGroupElements: 0,
       nativeImageElements: selected.filter((element) => element.kind === "image")
         .length,
@@ -485,6 +621,7 @@ export async function prepareSlideLayer(
         nativeText: selected.filter((element) => element.kind === "text").length,
         nativeImage: selected.filter((element) => element.kind === "image").length,
         nativeShape: selected.filter((element) => element.kind === "shape").length,
+        nativeChart: selected.filter((element) => element.kind === "chart").length,
         nativeGroup: 0,
         rasterRemaining: fallbackElements.length,
       },
@@ -493,6 +630,7 @@ export async function prepareSlideLayer(
         nativeText: 0,
         nativeImage: 0,
         nativeShape: 0,
+        nativeChart: 0,
         nativeGroup: 0,
         rasterRemaining: 0,
       },
@@ -510,7 +648,10 @@ export async function prepareSlideLayer(
       schemaVersion: "hybrid-paint-plan/browser-v1",
       strategy: layerSafetyPlan.strategy,
       fixedPointReached: layerSafetyPlan.fixedPointReached,
+      closureIterations: layerSafetyPlan.closureIterations,
+      closureDigest: layerSafetyPlan.closureDigest,
       slideDemotedToRaster: layerSafetyPlan.slideDemotedToRaster,
+      downgradeReceipt: layerSafetyPlan.downgradeReceipt,
       demotions: layerSafetyPlan.demotions.map((demotion) => ({
         elementId: demotion.elementId,
         fallbackReason: demotion.reason,

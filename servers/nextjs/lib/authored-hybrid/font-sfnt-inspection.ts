@@ -18,6 +18,8 @@ export interface SfntFontInspection {
   familyNames: readonly string[];
   fullNames: readonly string[];
   postscriptNames: readonly string[];
+  licenseDescriptions: readonly string[];
+  licenseUrls: readonly string[];
   tableTags: readonly string[];
   weightClass: number;
   fsType: number;
@@ -70,6 +72,7 @@ function readNameTable(
 ): Pick<
   SfntFontInspection,
   "familyNames" | "fullNames" | "postscriptNames"
+  | "licenseDescriptions" | "licenseUrls"
 > {
   if (tableLength < 6 || tableOffset + tableLength > buffer.length) {
     throw new Error("invalid name table bounds");
@@ -87,6 +90,8 @@ function readNameTable(
     [4, new Set()],
     [6, new Set()],
     [16, new Set()],
+    [13, new Set()],
+    [14, new Set()],
   ]);
   for (let index = 0; index < count; index += 1) {
     const recordOffset = tableOffset + 6 + index * 12;
@@ -113,6 +118,8 @@ function readNameTable(
     familyNames: [...familyNames].sort(),
     fullNames: [...(names.get(4) ?? [])].sort(),
     postscriptNames: [...(names.get(6) ?? [])].sort(),
+    licenseDescriptions: [...(names.get(13) ?? [])].sort(),
+    licenseUrls: [...(names.get(14) ?? [])].sort(),
   };
 }
 

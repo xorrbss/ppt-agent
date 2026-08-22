@@ -1,4 +1,8 @@
-import { decodeXmlAttributeValue, readPptxArchive } from "./pptx-archive.ts";
+import {
+  decodeXmlAttributeValue,
+  readPptxArchive,
+  relationshipTargetPath,
+} from "./pptx-archive.ts";
 import {
   createPresentationExportQuality,
   type PresentationExportFallbackElement,
@@ -52,10 +56,21 @@ function isHybridBackplate(block: string): boolean {
 export interface AuthoredHybridNativeReadbackElement {
   readonly slideNumber: number;
   readonly elementId: string;
-  readonly kind: "text" | "shape" | "image";
+  readonly kind: "text" | "shape" | "image" | "chart";
   readonly latinTypefaces: readonly string[];
   readonly eastAsianTypefaces: readonly string[];
   readonly lineBreakCount: number;
+  readonly chart?: {
+    readonly chartType: "bar" | "column" | "line" | "area" | "pie" | "donut";
+    readonly categories: readonly string[];
+    readonly series: readonly {
+      readonly name: string;
+      readonly values: readonly number[];
+    }[];
+    readonly hasCategoryAxis: boolean;
+    readonly hasValueAxis: boolean;
+    readonly legendPosition: "bottom" | "top" | "right" | "left" | null;
+  };
 }
 
 function typefaces(xml: string, tag: "latin" | "ea"): string[] {
@@ -65,16 +80,87 @@ function typefaces(xml: string, tag: "latin" | "ea"): string[] {
 }
 
 function hybridIdentity(name: string): {
-  kind: "text" | "shape" | "image";
+  kind: "text" | "shape" | "image" | "chart";
   elementId: string;
 } | null {
   const decoded = decodeXmlAttributeValue(name).trim();
-  const match = /^Presenton hybrid (?:native |raster )?(text|shape|image) (.+?)(?:-container)?(?: (?:outline|shadow \d+|(?:top|right|bottom|left) border))?$/.exec(decoded);
+  const match = /^Presenton hybrid (?:native |raster )?(text|shape|image|chart) (.+?)(?:-container)?(?: (?:outline|shadow \d+|(?:top|right|bottom|left) border))?$/.exec(decoded);
   if (!match) return null;
   return {
-    kind: match[1] as "text" | "shape" | "image",
+    kind: match[1] as "text" | "shape" | "image" | "chart",
     elementId: match[2],
   };
+}
+
+function chartPointValues(xml: string): string[] {
+  return [...xml.matchAll(/<c:pt\b[^>]*\bidx="(\d+)"[^>]*>[\s\S]*?<c:v>([\s\S]*?)<\/c:v>[\s\S]*?<\/c:pt>/g)]
+    .sort((left, right) => Number(left[1]) - Number(right[1]))
+    .map((match) => decodeXmlAttributeValue(match[2]) ?? "");
+}
+
+function chartReadback(xml: string): NonNullable<AuthoredHybridNativeReadbackElement["chart"]> | null {
+  const chartType = /<c:doughnutChart\b/.test(xml)
+    ? "donut" as const
+    : /<c:pieChart\b/.test(xml)
+      ? "pie" as const
+      : /<c:lineChart\b/.test(xml)
+        ? "line" as const
+        : /<c:areaChart\b/.test(xml)
+          ? "area" as const
+          : /<c:barChart\b[\s\S]*?<c:barDir\b[^>]*\bval="bar"/.test(xml)
+            ? "bar" as const
+            : /<c:barChart\b/.test(xml)
+              ? "column" as const
+              : null;
+  if (!chartType) return null;
+  const series = [...xml.matchAll(/<c:ser\b[\s\S]*?<\/c:ser>/g)].map((match) => {
+    const block = match[0];
+    const name = block.match(/<c:tx>[\s\S]*?<c:v>([\s\S]*?)<\/c:v>[\s\S]*?<\/c:tx>/)?.[1] ?? "";
+    const valuesBlock = block.match(/<c:val>([\s\S]*?)<\/c:val>/)?.[1] ?? "";
+    return {
+      name: decodeXmlAttributeValue(name) ?? "",
+      values: chartPointValues(valuesBlock)
+        .map(Number)
+        .filter((value) => Number.isFinite(value)),
+    };
+  });
+  const categoryBlock = xml.match(/<c:cat>([\s\S]*?)<\/c:cat>/)?.[1] ?? "";
+  const legend = xml.match(/<c:legendPos\b[^>]*\bval="([btrl])"/)?.[1];
+  return {
+    chartType,
+    categories: chartPointValues(categoryBlock),
+    series,
+    hasCategoryAxis: /<c:catAx\b/.test(xml),
+    hasValueAxis: /<c:valAx\b/.test(xml),
+    legendPosition: legend
+      ? ({ b: "bottom", t: "top", r: "right", l: "left" } as const)[legend as "b" | "t" | "r" | "l"]
+      : null,
+  };
+}
+
+function relatedChartXml(
+  archive: ReadonlyMap<string, Buffer>,
+  slideNumber: number,
+  block: string,
+): string | null {
+  const rawId = block.match(/<c:chart\b[^>]*\br:id="([^"]+)"/)?.[1];
+  if (!rawId) return null;
+  const relationshipId = decodeXmlAttributeValue(rawId);
+  if (!relationshipId) return null;
+  const relsPath = `ppt/slides/_rels/slide${slideNumber}.xml.rels`;
+  const rels = archive.get(relsPath)?.toString("utf8");
+  if (!rels) return null;
+  const relationship = [...rels.matchAll(/<(?:[A-Za-z_][\w.-]*:)?Relationship\b[^>]*\/?\s*>/gi)]
+    .map((match) => match[0])
+    .find((entry) => decodeXmlAttributeValue(
+      entry.match(/\bId="([^"]+)"/)?.[1] ?? "",
+    ) === relationshipId);
+  const rawTarget = relationship?.match(/\bTarget="([^"]+)"/)?.[1];
+  if (!rawTarget) return null;
+  const decodedTarget = decodeXmlAttributeValue(rawTarget);
+  if (!decodedTarget) return null;
+  const target = relationshipTargetPath(relsPath, decodedTarget);
+  return target ? archive.get(target)?.toString("utf8") ?? null : null;
 }
 
 /**
@@ -95,6 +181,7 @@ export function inspectPptxNativeElementReadback(
     for (const block of [
       ...xml.matchAll(/<p:sp\b[\s\S]*?<\/p:sp>/g),
       ...xml.matchAll(/<p:pic\b[\s\S]*?<\/p:pic>/g),
+      ...xml.matchAll(/<p:graphicFrame\b[\s\S]*?<\/p:graphicFrame>/g),
     ].map((match) => match[0])) {
       const rawName = block.match(/<p:cNvPr\b[^>]*\bname="([^"]*)"/)?.[1];
       if (!rawName) continue;
@@ -104,13 +191,18 @@ export function inspectPptxNativeElementReadback(
         entry.elementId === identity.elementId &&
         entry.kind === identity.kind
       )) continue;
+      const chartXml = identity.kind === "chart"
+        ? relatedChartXml(archive, slideNumber, block)
+        : null;
+      const chart = chartXml ? chartReadback(chartXml) : null;
       results.push({
         slideNumber,
         elementId: identity.elementId,
         kind: identity.kind,
-        latinTypefaces: typefaces(block, "latin"),
-        eastAsianTypefaces: typefaces(block, "ea"),
+        latinTypefaces: typefaces(chartXml ?? block, "latin"),
+        eastAsianTypefaces: typefaces(chartXml ?? block, "ea"),
         lineBreakCount: occurrences(block, /<a:br\/>/g),
+        ...(chart ? { chart } : {}),
       });
     }
   }
@@ -168,6 +260,10 @@ export function inspectPptxEditability(
       const nativeShapeElements =
         Math.max(0, allShapes - nativeTextElements) + connectorElements;
       const nativeGroupElements = occurrences(xml, /<p:grpSp\b/g);
+      const nativeChartElements = occurrences(
+        xml,
+        /<p:graphicFrame\b[\s\S]*?<c:chart\b/g,
+      );
       const pictures = pictureBlocks(xml);
       const backplates = pictures
         .map((block, index) => ({ block, index }))
@@ -184,7 +280,8 @@ export function inspectPptxEditability(
         pictures.length - backplates.length - fullSlideRasterPictures.length
       );
       const editable =
-        nativeTextElements + nativeShapeElements + nativeImageElements > 0;
+        nativeTextElements + nativeShapeElements + nativeImageElements +
+          nativeChartElements > 0;
       const fallbackElements: PresentationExportFallbackElement[] = [
         ...fullSlideRasterPictures.map(({ block, index }) => ({
           elementId: pictureIdentity(block, index),
@@ -207,6 +304,7 @@ export function inspectPptxEditability(
         imageFallback: !editable,
         nativeTextElements,
         nativeShapeElements,
+        nativeChartElements,
         nativeGroupElements,
         nativeImageElements,
         rasterFallbackElements: fallbackElements.length,
@@ -214,6 +312,7 @@ export function inspectPptxEditability(
           nativeText: 0,
           nativeImage: 0,
           nativeShape: 0,
+          nativeChart: 0,
           nativeGroup: 0,
           rasterRemaining: 0,
         },
@@ -222,6 +321,7 @@ export function inspectPptxEditability(
           nativeText: nativeTextElements,
           nativeImage: nativeImageElements,
           nativeShape: nativeShapeElements,
+          nativeChart: nativeChartElements,
           nativeGroup: nativeGroupElements,
           rasterRemaining: fullSlideRasterPictures.length + rasterBackgrounds,
         },

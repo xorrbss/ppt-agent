@@ -28,6 +28,31 @@ async function loadCapabilityClient() {
 
 const digest = (character) => `sha256:${character.repeat(64)}`;
 
+const capabilityMatrix = () => [
+  "shape.gradient",
+  "shape.shadow",
+  "layout.transform",
+  "layout.flex",
+  "layout.grid",
+  "shape.borderRadius",
+  "shape.opacity",
+  "shape.clip",
+].map((capabilityId) => ({
+  capabilityId,
+  state: "ready",
+  decision: "native",
+  reasonCode: "serializer_verified",
+  receiptDigest: digest("e"),
+}));
+
+const receipts = () => ["cjk", "chart", "zBand", "degradation"].map((receiptId) => ({
+  receiptId,
+  state: "ready",
+  decision: "native",
+  reasonCode: "receipt_verified",
+  receiptDigest: digest("f"),
+}));
+
 function projection(overrides = {}) {
   return {
     schemaVersion: "workbench-capability-projection/v1",
@@ -43,6 +68,8 @@ function projection(overrides = {}) {
       image: { state: "shadow" },
       shape: { state: "blocked", reason: "serializer_unavailable" },
     },
+    capabilityMatrix: capabilityMatrix(),
+    receipts: receipts(),
     readiness: {
       authoredCreationReady: true,
       fidelityExportReady: true,
@@ -84,5 +111,38 @@ test("capability projection rejects a client-side readiness promotion", async ()
         }),
       ),
     /unsupported readiness promotion/,
+  );
+});
+
+test("capability projection fails closed without complete server-issued matrix and receipts", async () => {
+  const { normalizeAuthoredEmissionCapabilityProjection } = await loadCapabilityClient();
+  assert.throws(
+    () =>
+      normalizeAuthoredEmissionCapabilityProjection(
+        projection({
+          capabilityMatrix: capabilityMatrix().slice(1),
+          receipts: receipts().map((receipt) =>
+            receipt.receiptId === "zBand"
+              ? { ...receipt, decision: "ownershipFailure", reasonCode: "authored_semantic_ownership_mismatch" }
+              : receipt,
+          ),
+        }),
+      ),
+    /incomplete capabilityMatrix/,
+  );
+
+  assert.throws(
+    () =>
+      normalizeAuthoredEmissionCapabilityProjection(
+        projection({
+          capabilityMatrix: capabilityMatrix(),
+          receipts: receipts().map((receipt) =>
+            receipt.receiptId === "degradation"
+              ? { ...receipt, reasonCode: "not a stable reason" }
+              : receipt,
+          ),
+        }),
+      ),
+    /invalid receipts\[3\]\.reasonCode/,
   );
 });

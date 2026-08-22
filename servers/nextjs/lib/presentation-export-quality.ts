@@ -40,6 +40,7 @@ export interface PresentationExportSlideQuality {
   imageFallback: boolean;
   nativeTextElements: number;
   nativeShapeElements: number;
+  nativeChartElements?: number;
   nativeGroupElements?: number;
   nativeImageElements: number;
   rasterFallbackElements: number;
@@ -69,6 +70,7 @@ export interface PresentationExportCoverageCounts {
   nativeText: number;
   nativeImage: number;
   nativeShape: number;
+  nativeChart?: number;
   nativeGroup: number;
   rasterRemaining: number;
 }
@@ -102,6 +104,7 @@ export interface PresentationExportQualityReport {
   imageFallbackSlides: number;
   nativeTextElements: number;
   nativeShapeElements: number;
+  nativeChartElements?: number;
   nativeGroupElements?: number;
   nativeImageElements: number;
   rasterFallbackElements: number;
@@ -171,11 +174,15 @@ function coverageCounts(
   value: Partial<PresentationExportCoverageCounts> | undefined,
   fallback: PresentationExportCoverageCounts
 ): PresentationExportCoverageCounts {
+  const nativeChart = value?.nativeChart ?? fallback.nativeChart;
   return {
     nativeText: nonNegativeInteger(value?.nativeText ?? fallback.nativeText),
     nativeImage: nonNegativeInteger(value?.nativeImage ?? fallback.nativeImage),
     nativeShape: nonNegativeInteger(value?.nativeShape ?? fallback.nativeShape),
     nativeGroup: nonNegativeInteger(value?.nativeGroup ?? fallback.nativeGroup),
+    ...(nativeChart === undefined
+      ? {}
+      : { nativeChart: nonNegativeInteger(nativeChart) }),
     rasterRemaining: nonNegativeInteger(
       value?.rasterRemaining ?? fallback.rasterRemaining
     ),
@@ -236,6 +243,13 @@ export function createPresentationExportQuality(
         slideNumber: Math.max(1, Math.trunc(slide.slideNumber)),
         nativeTextElements: nonNegativeInteger(slide.nativeTextElements),
         nativeShapeElements: nonNegativeInteger(slide.nativeShapeElements),
+        ...(slide.nativeChartElements === undefined
+          ? {}
+          : {
+              nativeChartElements: nonNegativeInteger(
+                slide.nativeChartElements,
+              ),
+            }),
         nativeGroupElements,
         nativeImageElements: nonNegativeInteger(slide.nativeImageElements),
         rasterFallbackElements: nonNegativeInteger(
@@ -400,6 +414,9 @@ export function createPresentationExportQuality(
       : {}),
   };
 
+  const hasNativeChartCounts = slides.some(
+    (slide) => slide.nativeChartElements !== undefined,
+  );
   return {
     schemaVersion: PRESENTATION_EXPORT_QUALITY_SCHEMA_VERSION,
     mode,
@@ -415,6 +432,14 @@ export function createPresentationExportQuality(
       (sum, slide) => sum + slide.nativeShapeElements,
       0
     ),
+    ...(hasNativeChartCounts
+      ? {
+          nativeChartElements: slides.reduce(
+            (sum, slide) => sum + (slide.nativeChartElements ?? 0),
+            0,
+          ),
+        }
+      : {}),
     nativeGroupElements: slides.reduce(
       (sum, slide) => sum + slide.nativeGroupElements,
       0
@@ -428,6 +453,14 @@ export function createPresentationExportQuality(
       nativeText: slides.reduce((sum, slide) => sum + slide.logicalCoverage.nativeText, 0),
       nativeImage: slides.reduce((sum, slide) => sum + slide.logicalCoverage.nativeImage, 0),
       nativeShape: slides.reduce((sum, slide) => sum + slide.logicalCoverage.nativeShape, 0),
+      ...(slides.some((slide) => slide.logicalCoverage.nativeChart !== undefined)
+        ? {
+            nativeChart: slides.reduce(
+              (sum, slide) => sum + (slide.logicalCoverage.nativeChart ?? 0),
+              0,
+            ),
+          }
+        : {}),
       nativeGroup: slides.reduce((sum, slide) => sum + slide.logicalCoverage.nativeGroup, 0),
       rasterRemaining: slides.reduce((sum, slide) => sum + slide.logicalCoverage.rasterRemaining, 0),
     },
@@ -440,6 +473,14 @@ export function createPresentationExportQuality(
       nativeText: slides.reduce((sum, slide) => sum + slide.ooxmlReadback.nativeText, 0),
       nativeImage: slides.reduce((sum, slide) => sum + slide.ooxmlReadback.nativeImage, 0),
       nativeShape: slides.reduce((sum, slide) => sum + slide.ooxmlReadback.nativeShape, 0),
+      ...(slides.some((slide) => slide.ooxmlReadback.nativeChart !== undefined)
+        ? {
+            nativeChart: slides.reduce(
+              (sum, slide) => sum + (slide.ooxmlReadback.nativeChart ?? 0),
+              0,
+            ),
+          }
+        : {}),
       nativeGroup: slides.reduce((sum, slide) => sum + slide.ooxmlReadback.nativeGroup, 0),
       rasterRemaining: slides.reduce((sum, slide) => sum + slide.ooxmlReadback.rasterRemaining, 0),
     },
