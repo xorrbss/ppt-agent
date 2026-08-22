@@ -31,7 +31,14 @@ The v2 response contains:
 - server-issued capability receipts;
 - exact renderer/environment attestation;
 - active kill switches;
-- a read-only aggregate decision.
+- when the server has issued ready authority, `releaseProjectionDigest` and an
+  `exportAuthorityClaim` with exact profile/projection/receipt pins. The UI
+  only displays this server-issued claim and rejects mismatched pins.
+
+For an unconfigured or non-ready projection,
+`releaseAuthorityReceiptDigests` is empty and `releaseProjectionDigest` and
+`exportAuthorityClaim` are `null` or absent. That is an authoritative
+non-promotion state, not a client-side readiness inference or a fallback.
 
 The client never supplies or derives a `ready` state. Only a server authority may
 append, supersede, or revoke a receipt. A ready receipt is valid only when its
@@ -46,28 +53,38 @@ not enable independent generation.
 feature set and archetype matrix is native, editable, and visually accepted in
 the declared platform scope. It never makes a claim about out-of-scope CSS.
 
-## 3. Required capability set
+## 3. Capability IDs and exact pins
 
-The first Windows PowerPoint 16 profile evaluates these capability IDs
-independently:
+The single source is `contracts/authored_vnext/semantic/release-profile.v2.json`.
+The projection preserves `requiredCapabilityIds` as a compatibility alias, but
+its authoritative name is `promotionCapabilityIds`; both ordered lists must be
+identical. The first Windows PowerPoint 16 profile has these bounded-native IDs:
 
-- `fidelity.export`
-- `hybrid.text`
-- `hybrid.image`
-- `hybrid.shape`
-- `hybrid.table`
-- `hybrid.chart`
-- `typography.cjk`
-- `paint.zband`
-- `workbench.edit`
-- `lifecycle.rollback`
+- `shape.gradient`
+- `shape.shadow`
+- `layout.transform`
+- `layout.flex`
+- `layout.grid`
+- `shape.borderRadius`
+- `shape.opacity`
+- `shape.clip`
 - `renderer.attestation`
 - `evidence.visual`
-- `operations.rollback`
-- `ci.required-checks`
+- `receipt.cjk`
+- `receipt.chart`
+- `receipt.zBand`
+- `receipt.degradation`
 
-The aggregate is false if a required receipt is missing, expired, revoked,
-environment-mismatched, shadow, disabled, or blocked.
+`promotionCapabilityIds` is the release-profile subset defined by that JSON;
+`boundedNativeCapabilityIds` is the complete bounded-native set above. The
+server projects `profileDefinitionDigest`, promotion/bounded-native receipt
+lists, and `releaseAuthorityReceiptDigests`. It issues
+`releaseProjectionDigest` and an `authored-export-authority-claim/v2` only for
+ready authority. When a claim is issued, its profile ID, profile digest,
+projection digest, and ordered receipt digests must exactly match their paired
+projection pins. A missing pin in a non-ready state remains non-promotable; a
+mismatched issued pin is unavailable, never a client fallback or inferred
+readiness.
 
 ## 4. Truthful visual acceptance
 
@@ -100,6 +117,10 @@ and kind authority. Counts that cannot be reconciled block the capability
 receipt. Out-of-scope representation features retain stable fallback reason
 codes and do not masquerade as editable.
 
+A `shadow` or `blocked` receipt cannot grant release promotion authority. It
+does not by itself prohibit a non-promotable Hybrid diagnostic export; the
+server remains the final authority for that export admission and its receipt.
+
 ## 6. Evidence matrix
 
 Fresh versioned fixtures cover Korean, Chinese, and Japanese text plus card,
@@ -131,4 +152,3 @@ by the named release profile has a current ready receipt and the aggregate
 calculation itself is sealed. `boundedNativeParityReady` is calculated
 separately. `independentGenerationReady` remains false for this Authored-first
 release.
-

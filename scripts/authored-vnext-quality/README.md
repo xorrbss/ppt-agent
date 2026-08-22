@@ -13,4 +13,7 @@ The release matrix fixture is two fresh eight-slide product seeds. Run
 and real font/database arguments to create the presentation IDs, operation
 IDs, generation attempts, and seed receipts consumed by the export stage. The
 receipt is explicitly `seeded-not-verified` until actual UI/export/PowerPoint
-evidence is supplied.
+evidence is supplied. Each receipt also carries a digest-bound semantic proof
+with the slide HTML and semantic source. The matrix runner derives languages
+and archetypes from that proof and rejects two variants that are only cloned
+declarations.

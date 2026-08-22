@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
+import hmac
 import json
+import os
 from pathlib import Path
 import struct
 import tempfile
 import unittest
+from unittest.mock import patch
 import zlib
 
 from visual_parity_gate import GateFailure, canonical_digest, verify_gate
@@ -85,6 +88,29 @@ def make_manifest(root: Path) -> Path:
             ]
         },
     }
+    proof_slides = []
+    language_by_id = {slide["slideId"]: slide["language"] for slide in registry}
+    for slide in registry:
+        archetypes = slide["archetypes"]
+        marker = " ".join(archetypes)
+        metric_suffix = " %" if "metric" in archetypes else ""
+        html = f"<html lang='{language_by_id[slide['slideId']]}'><body><main class='{'card' if 'card' in archetypes else 'panel'}'>{marker}{metric_suffix}</main>"
+        elements = [{"kind": "text", "semanticRole": "body", "text": marker}]
+        if "process" in archetypes:
+            elements.append({"kind": "shape", "semanticRole": "diagramNode", "text": "process"})
+        if "table" in archetypes:
+            html += "<table><tr><td>table</td></tr></table>"
+            elements.append({"kind": "table", "semanticRole": "nativeTable", "text": "table"})
+        if "chart" in archetypes:
+            html += "<div class='chart'>chart</div>"
+            elements.append({"kind": "chart", "semanticRole": "nativeChart", "text": "chart"})
+        if "image" in archetypes:
+            html += "<img style='object-fit:cover' alt='image'/>"
+            elements.append({"kind": "image", "semanticRole": "croppedImage", "text": "image"})
+        html += "</body></html>"
+        proof_slides.append({"slideId": slide["slideId"], "slideIndex": len(proof_slides) + 1, "language": slide["language"], "html": html, "semanticSource": {"schemaVersion": "authored-semantic-source/v1", "elements": elements}})
+    proof_descriptor = descriptor(root, "semantic/semantic-proof.json", json.dumps({"schemaVersion": "authored-semantic-proof/v1", "slides": proof_slides}, ensure_ascii=False, sort_keys=True).encode())
+    manifest["semanticProof"] = proof_descriptor
     export_attempt_ids = set()
     for mode_index, mode_name in enumerate(("authored", "fidelity", "hybrid"), start=1):
         export_attempt_id = f"export-attempt-{mode_name}-001"
@@ -180,6 +206,19 @@ class VisualParityGateTests(unittest.TestCase):
             self.assertFalse(result["promotionReady"])
             self.assertEqual(result["languages"], ["ja", "ko", "zh"])
 
+    def test_report_is_sealed_when_trusted_signing_key_is_configured(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            key = "visual-gate-test-key-with-at-least-32-bytes"
+            with patch.dict(os.environ, {"AUTHORED_RELEASE_VISUAL_GATE_HMAC_KEY": key}):
+                result = verify_gate(make_manifest(Path(directory)))
+            signature = result.pop("authoritySignature")
+            expected = "hmac-sha256:" + hmac.new(
+                key.encode(),
+                json.dumps(result, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode(),
+                hashlib.sha256,
+            ).hexdigest()
+            self.assertEqual(signature, expected)
+
     def test_missing_mode_is_blocked(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = make_manifest(Path(directory))
@@ -205,6 +244,24 @@ class VisualParityGateTests(unittest.TestCase):
             value["dbAttemptResolution"]["authority"] = "fixture"
             path.write_text(json.dumps(value), encoding="utf-8")
             with self.assertRaisesRegex(GateFailure, "db_attempt_resolution_required"):
+                verify_gate(path)
+
+    def test_expired_freshness_is_blocked(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = make_manifest(Path(directory))
+            value = json.loads(path.read_text())
+            value["freshness"]["generatedAt"] = (datetime.now(timezone.utc) - timedelta(days=31)).isoformat()
+            path.write_text(json.dumps(value), encoding="utf-8")
+            with self.assertRaisesRegex(GateFailure, "freshness_generatedAt_expired"):
+                verify_gate(path)
+
+    def test_future_skewed_freshness_is_blocked(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = make_manifest(Path(directory))
+            value = json.loads(path.read_text())
+            value["freshness"]["generatedAt"] = (datetime.now(timezone.utc) + timedelta(minutes=6)).isoformat()
+            path.write_text(json.dumps(value), encoding="utf-8")
+            with self.assertRaisesRegex(GateFailure, "freshness_generatedAt_future"):
                 verify_gate(path)
 
 

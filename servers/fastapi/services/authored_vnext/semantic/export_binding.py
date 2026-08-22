@@ -22,9 +22,16 @@ from models.sql.authored_semantic_bundle import (
     AuthoredSemanticExportBinding,
 )
 from models.sql.presentation_export_attempt import PresentationExportAttempt
+from models.authored_vnext.semantic.readiness import (
+    ReleasePinnedExportAttemptDigestBindingV2,
+)
 
 from .canonical import SemanticContractError, canonical_digest, seal_export_binding
-from .readiness import validate_attempt_receipt_pins
+from .readiness import (
+    get_workbench_capability_projection_v2,
+    validate_attempt_receipt_pins,
+    validate_export_authority_claim,
+)
 
 
 async def bind_existing_export_attempt(
@@ -51,12 +58,20 @@ async def bind_existing_export_attempt(
     if attempt.source_revision != sealed.presentation_revision:
         raise SemanticContractError("authored_semantic_export_revision_mismatch")
     if isinstance(sealed, ExportAttemptDigestBindingV2):
+        if not isinstance(sealed, ReleasePinnedExportAttemptDigestBindingV2):
+            raise SemanticContractError("authored_export_v2_release_claim_required")
+        projection = await get_workbench_capability_projection_v2(
+            session,
+            presentation_id=sealed.presentation_id,
+            owner_id=owner_id,
+            tenant_id=tenant_id,
+        )
+        validate_export_authority_claim(projection, sealed.export_authority_claim)
         await validate_attempt_receipt_pins(
             session,
             tenant_id=tenant_id,
             receipt_digests=sealed.release_authority_receipt_digests,
-            serializer_id=sealed.serializer_id,
-            serializer_version=sealed.serializer_version,
+            claim=sealed.export_authority_claim,
             renderer_source_digest=sealed.renderer_source_digest,
         )
     pointer = await session.scalar(

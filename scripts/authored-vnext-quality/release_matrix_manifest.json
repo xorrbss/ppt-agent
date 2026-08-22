@@ -21,12 +21,14 @@
     {
       "matrixDeckId": "fresh-deck-a",
       "seed": "authored-semantic-vertical-slice-v2",
+      "variant": "release-matrix-a",
       "languages": ["ko", "zh", "ja"],
       "archetypes": ["card", "process", "timeline", "comparison", "metric", "infographic", "table", "chart", "image", "architecture", "roadmap"]
     },
     {
       "matrixDeckId": "fresh-deck-b",
       "seed": "authored-semantic-vertical-slice-v2",
+      "variant": "release-matrix-b",
       "languages": ["ko", "zh", "ja"],
       "archetypes": ["card", "process", "timeline", "comparison", "metric", "infographic", "table", "chart", "image", "architecture", "roadmap"]
     }

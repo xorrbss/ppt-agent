@@ -10,9 +10,11 @@ at the point of verification.
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
+import hmac
 import json
+import os
 from pathlib import Path
 import re
 import struct
@@ -24,6 +26,8 @@ SCHEMA_VERSION = "authored-vnext-visual-parity-gate/v1"
 REPORT_SCHEMA_VERSION = "authored-vnext-visual-parity-gate-report/v1"
 DB_RESOLUTION_SCHEMA = "authored-db-attempt-resolution/v1"
 MODES = ("authored", "fidelity", "hybrid")
+FRESHNESS_TTL = timedelta(days=30)
+FRESHNESS_MAX_FUTURE_SKEW = timedelta(minutes=5)
 REQUIRED_LANGUAGES = frozenset({"ko", "zh", "ja"})
 REQUIRED_ARCHETYPES = frozenset(
     {
@@ -122,6 +126,30 @@ def _iso(value: Any, label: str) -> str:
     return text
 
 
+def _freshness_timestamp(value: Any) -> datetime:
+    text = _text(value, "freshness_generatedAt")
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise GateFailure("freshness_generatedAt_invalid") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise GateFailure("freshness_generatedAt_timezone_required")
+    return parsed.astimezone(timezone.utc)
+
+
+def _verify_freshness(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict) or value.get("reusedFrom") is not None or value.get("previousEvidenceDigest") is not None:
+        raise GateFailure("freshness_reuse_forbidden")
+    run_id = _text(value.get("runId"), "freshness_runId")
+    generated_at = _freshness_timestamp(value.get("generatedAt"))
+    now = datetime.now(timezone.utc)
+    if generated_at > now + FRESHNESS_MAX_FUTURE_SKEW:
+        raise GateFailure("freshness_generatedAt_future")
+    if now - generated_at > FRESHNESS_TTL:
+        raise GateFailure("freshness_generatedAt_expired")
+    return {"runId": run_id, "generatedAt": value["generatedAt"]}
+
+
 def _render_hashes(root: Path, value: Any, slide_count: int, label: str, seen: set[Path]) -> list[str]:
     if not isinstance(value, list) or len(value) != slide_count:
         raise GateFailure(f"{label}_exact_slide_count_required")
@@ -158,6 +186,71 @@ def _render_paths(root: Path, value: Any, slide_count: int, label: str, seen: se
     if sorted(numbers) != list(range(1, slide_count + 1)):
         raise GateFailure(f"{label}_slide_numbers_incomplete")
     return paths
+
+
+def _derived_archetypes(html: str, elements: list[dict[str, Any]]) -> set[str]:
+    lowered = html.lower()
+    text = " ".join(str(element.get("text", "")) for element in elements).lower() + " " + lowered
+    kinds = {str(element.get("kind", "")).lower() for element in elements}
+    roles = {str(element.get("semanticRole", "")).lower() for element in elements}
+    result: set[str] = set()
+    if "table" in kinds or "<table" in lowered:
+        result.add("table")
+    if "chart" in kinds or "chart" in lowered:
+        result.add("chart")
+    if "image" in kinds and "object-fit" in lowered and "cover" in lowered:
+        result.add("image")
+    if roles.intersection({"diagramnode", "diagramconnector"}) or any(token in text for token in ("process", "프로세스", "プロセス")):
+        result.add("process")
+    if any(token in text for token in ("architecture", "アーキテクチャ", "架构")) or "architecture" in roles:
+        result.add("architecture")
+    if any(token in text for token in ("timeline", "시간선", "时间线", "タイムライン")) or "timeline" in roles:
+        result.add("timeline")
+    if any(token in text for token in ("comparison", "비교", "比较", "比較")) or "comparison" in roles:
+        result.add("comparison")
+    if "metric" in roles or any(token in text for token in ("metric", "지표", "指标", "指標", "%")):
+        result.add("metric")
+    if any(token in text for token in ("infographic", "인포그래픽", "信息图", "インフォグラフィック")) or "infographic" in roles:
+        result.add("infographic")
+    if any(token in text for token in ("roadmap", "로드맵", "路线图", "ロードマップ")) or "roadmap" in roles:
+        result.add("roadmap")
+    if "card" in lowered or "카드" in text or "card" in roles:
+        result.add("card")
+    return result
+
+
+def _semantic_proof(root: Path, descriptor: Any, registry: list[dict[str, Any]], seen: set[Path]) -> tuple[str, dict[str, Any]]:
+    proof_path, proof_digest = _path(root, descriptor, "semanticProof", seen)
+    proof = _read_json(proof_path, "semanticProof")
+    if proof.get("schemaVersion") != "authored-semantic-proof/v1" or not isinstance(proof.get("slides"), list):
+        raise GateFailure("semantic_proof_schema_invalid")
+    if len(proof["slides"]) != len(registry):
+        raise GateFailure("semantic_proof_slide_count_mismatch")
+    registry_by_id = {slide["slideId"]: slide for slide in registry}
+    proof_ids: set[str] = set()
+    for index, slide in enumerate(proof["slides"], start=1):
+        slide_id = _text(slide.get("slideId"), f"semanticProof:{index}:slideId")
+        if slide_id in proof_ids or slide_id not in registry_by_id:
+            raise GateFailure(f"semantic_proof_slide_identity_invalid:{slide_id}")
+        proof_ids.add(slide_id)
+        html = _text(slide.get("html"), f"semanticProof:{slide_id}:html")
+        language = _text(slide.get("language"), f"semanticProof:{slide_id}:language").lower().split("-")[0]
+        match = re.search(r"<html[^>]*\blang=['\"]([^'\"]+)", html, re.IGNORECASE)
+        if not match or match.group(1).lower().split("-")[0] != language:
+            raise GateFailure(f"semantic_proof_language_binding_invalid:{slide_id}")
+        source = slide.get("semanticSource")
+        elements = source.get("elements") if isinstance(source, dict) else None
+        if not isinstance(elements, list) or not elements:
+            raise GateFailure(f"semantic_proof_elements_required:{slide_id}")
+        derived = _derived_archetypes(html, elements)
+        expected = set(registry_by_id[slide_id].get("archetypes", []))
+        if derived != expected:
+            raise GateFailure(f"semantic_proof_archetype_mismatch:{slide_id}")
+        if registry_by_id[slide_id].get("language", "").lower().split("-")[0] != language:
+            raise GateFailure(f"semantic_proof_registry_language_mismatch:{slide_id}")
+    if proof_ids != set(registry_by_id):
+        raise GateFailure("semantic_proof_slide_set_incomplete")
+    return proof_digest, {"schemaVersion": proof["schemaVersion"], "sha256": proof_digest, "slideCount": len(proof["slides"])}
 
 
 def _png_gray(path: Path) -> tuple[int, int, list[int]]:
@@ -467,10 +560,7 @@ def verify_gate(manifest_path: Path) -> dict[str, Any]:
     presentation_revision = _int(manifest.get("presentationRevision"), "presentationRevision", 1)
     registry_digest, slide_count, languages, archetypes = _registry(manifest)
     freshness = manifest.get("freshness")
-    if not isinstance(freshness, dict) or freshness.get("reusedFrom") is not None or freshness.get("previousEvidenceDigest") is not None:
-        raise GateFailure("freshness_reuse_forbidden")
-    _text(freshness.get("runId"), "freshness_runId")
-    _iso(freshness.get("generatedAt"), "freshness_generatedAt")
+    _verify_freshness(freshness)
     expected = {
         "presentationId": manifest["presentationId"],
         "presentationRevision": presentation_revision,
@@ -478,6 +568,7 @@ def verify_gate(manifest_path: Path) -> dict[str, Any]:
         "generationAttemptId": manifest["generationAttemptId"],
     }
     seen: set[Path] = {manifest_path}
+    semantic_proof_digest, semantic_proof = _semantic_proof(root, manifest.get("semanticProof"), manifest["slideRegistry"], seen)
     modes = manifest.get("modes")
     if not isinstance(modes, list) or len(modes) != len(MODES):
         raise GateFailure("authored_fidelity_hybrid_modes_required")
@@ -506,6 +597,7 @@ def verify_gate(manifest_path: Path) -> dict[str, Any]:
     atomic_digest = canonical_digest(atomic)
     if manifest.get("atomicBindingDigest") != atomic_digest:
         raise GateFailure("atomic_binding_digest_mismatch")
+    public_mode_results = [{key: value for key, value in mode.items() if not key.startswith("_")} for mode in mode_results]
     identity = {
         "gateId": manifest["gateId"],
         "presentationId": manifest["presentationId"],
@@ -513,8 +605,9 @@ def verify_gate(manifest_path: Path) -> dict[str, Any]:
         "operationId": manifest["operationId"],
         "generationAttemptId": manifest["generationAttemptId"],
         "registryDigest": registry_digest,
+        "semanticProof": semantic_proof,
         "slideCount": slide_count,
-        "modes": mode_results,
+        "modes": public_mode_results,
         "diffs": diffs,
         "ledger": ledger,
         "releaseAuthority": release_authority,
@@ -522,7 +615,7 @@ def verify_gate(manifest_path: Path) -> dict[str, Any]:
         "freshness": freshness,
         "atomicBindingDigest": atomic_digest,
     }
-    return {
+    report = {
         "schemaVersion": REPORT_SCHEMA_VERSION,
         "status": "passed",
         "promotionReady": False,
@@ -531,7 +624,16 @@ def verify_gate(manifest_path: Path) -> dict[str, Any]:
         "archetypes": sorted(archetypes),
         "identity": identity,
         "evidenceDigest": canonical_digest(identity),
+        "trustedIssuer": "authored-visual-parity-gate/v1",
     }
+    signing_key = os.getenv("AUTHORED_RELEASE_VISUAL_GATE_HMAC_KEY", "").encode("utf-8")
+    if len(signing_key) >= 32:
+        report["authoritySignature"] = "hmac-sha256:" + hmac.new(
+            signing_key,
+            json.dumps(report, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+    return report
 
 
 def main(argv: list[str] | None = None) -> int:

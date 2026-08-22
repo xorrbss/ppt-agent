@@ -1,0 +1,69 @@
+{
+  "schemaVersion": "authored-release-profile-definition/v2",
+  "profileId": "windows-powerpoint-production",
+  "platformScope": {
+    "platform": "windows-x64",
+    "renderer": "presentation-export",
+    "archetypes": [
+      "architecture",
+      "card",
+      "chart",
+      "comparison",
+      "image",
+      "infographic",
+      "metric",
+      "process",
+      "roadmap",
+      "table",
+      "timeline"
+    ]
+  },
+  "serializerVersion": "2",
+  "promotionCapabilityIds": [
+    "receipt.cjk",
+    "receipt.chart",
+    "receipt.zBand",
+    "receipt.degradation",
+    "renderer.attestation",
+    "evidence.visual"
+  ],
+  "boundedNativeCapabilityIds": [
+    "shape.gradient",
+    "shape.shadow",
+    "layout.transform",
+    "layout.flex",
+    "layout.grid",
+    "shape.borderRadius",
+    "shape.opacity",
+    "shape.clip",
+    "receipt.cjk",
+    "receipt.chart",
+    "receipt.zBand",
+    "receipt.degradation",
+    "renderer.attestation",
+    "evidence.visual"
+  ],
+  "rendererAttestationCapabilityId": "renderer.attestation",
+  "visualEvidenceCapabilityId": "evidence.visual",
+  "visualEvidencePolicy": {
+    "policyId": "authored-visual-parity-gate/v1",
+    "reportSchemaVersion": "authored-vnext-visual-parity-gate-report/v1",
+    "receiptTtlSeconds": 2592000,
+    "requiredStatus": "passed",
+    "requiredVisualParity": "passed",
+    "requiredLanguages": ["ja", "ko", "zh"],
+    "requiredArchetypes": [
+      "architecture",
+      "card",
+      "chart",
+      "comparison",
+      "image",
+      "infographic",
+      "metric",
+      "process",
+      "roadmap",
+      "table",
+      "timeline"
+    ]
+  }
+}

@@ -16,6 +16,8 @@ import subprocess
 import sys
 from typing import Any
 
+from visual_parity_gate import _derived_archetypes
+
 
 REQUIRED_LANGUAGES = {"ko", "zh", "ja"}
 REQUIRED_ARCHETYPES = {
@@ -90,6 +92,8 @@ def seed_matrix(
     decks: list[dict[str, Any]] = []
     seen_presentations: set[str] = set()
     seen_attempts: set[str] = set()
+    seen_semantic_digests: set[str] = set()
+    seen_variants: set[str] = set()
     for deck in manifest["decks"]:
         receipt_path = output_directory / f"{deck['matrixDeckId']}-seed-receipt.json"
         command = [
@@ -101,6 +105,8 @@ def seed_matrix(
             str(font_path),
             "--slide-count",
             "8",
+            "--variant",
+            str(deck["variant"]),
             "--receipt-path",
             str(receipt_path),
         ]
@@ -114,8 +120,28 @@ def seed_matrix(
         if completed.returncode != 0:
             raise MatrixFixtureFailure(f"seed_failed:{deck['matrixDeckId']}:{completed.stderr[-1000:]}")
         receipt = _read(receipt_path)
-        if receipt.get("schemaVersion") != "authored-semantic-vertical-slice-seed/v2" or receipt.get("slideCount") != 8:
+        if receipt.get("schemaVersion") != "authored-semantic-vertical-slice-seed/v3" or receipt.get("slideCount") != 8 or receipt.get("variant") != deck.get("variant"):
             raise MatrixFixtureFailure(f"seed_receipt_contract_invalid:{deck['matrixDeckId']}")
+        if not isinstance(receipt.get("semanticManifest"), dict) or not receipt.get("semanticManifestDigest"):
+            raise MatrixFixtureFailure(f"seed_semantic_manifest_missing:{deck['matrixDeckId']}")
+        proof_slides = receipt["semanticManifest"].get("slides")
+        if not isinstance(proof_slides, list) or len(proof_slides) != 8:
+            raise MatrixFixtureFailure(f"seed_semantic_manifest_slide_count_invalid:{deck['matrixDeckId']}")
+        proof_languages = set()
+        proof_archetypes = set()
+        for proof_slide in proof_slides:
+            proof_languages.add(str(proof_slide.get("language", "")).lower().split("-")[0])
+            source = proof_slide.get("semanticSource") if isinstance(proof_slide, dict) else None
+            elements = source.get("elements") if isinstance(source, dict) else None
+            proof_archetypes.update(_derived_archetypes(str(proof_slide.get("html", "")), elements if isinstance(elements, list) else []))
+        if proof_languages != REQUIRED_LANGUAGES or proof_archetypes != REQUIRED_ARCHETYPES:
+            raise MatrixFixtureFailure(f"seed_semantic_registry_derived_incomplete:{deck['matrixDeckId']}")
+        semantic_digest = receipt["semanticManifestDigest"]
+        variant = receipt.get("variant")
+        if semantic_digest in seen_semantic_digests or variant in seen_variants:
+            raise MatrixFixtureFailure("matrix_decks_must_have_distinct_semantic_content")
+        seen_semantic_digests.add(semantic_digest)
+        seen_variants.add(variant)
         presentation_id = receipt.get("presentationId")
         attempt_id = receipt.get("generationAttemptId")
         if not isinstance(presentation_id, str) or presentation_id in seen_presentations:
@@ -132,6 +158,8 @@ def seed_matrix(
                 "operationId": receipt.get("operationId"),
                 "generationAttemptId": attempt_id,
                 "manifestDigest": receipt.get("manifestDigest"),
+                "variant": receipt.get("variant"),
+                "semanticManifestDigest": semantic_digest,
                 "seedReceipt": str(receipt_path),
                 "status": "seeded-not-verified",
             }

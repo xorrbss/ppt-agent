@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
+from hashlib import sha256
+import hmac
+import json
 import os
+from pathlib import Path
 import uuid
 
 from sqlalchemy import select
@@ -19,56 +24,79 @@ from models.authored_vnext.semantic.readiness import (
     CapabilityReceiptRevokeRequestV2,
     CapabilityReceiptV2,
     CapabilityScopeV2,
+    ExportAuthorityClaimV2,
     ProductReadinessProjectionV2,
+    ReleaseProfileDefinitionV2,
     RendererAttestationProjectionV2,
     WorkbenchCapabilityProjectionV2,
+    VisualEvidenceArtifactPublishRequestV2,
+    VisualEvidenceArtifactV2,
+    VisualParityGateReportV1,
 )
 from models.sql.authored_capability_receipt import AuthoredCapabilityReceiptRecordV2
-from services.authored_vnext.semantic.canonical import SemanticContractError, canonical_digest
+from models.sql.authored_semantic_bundle import AuthoredSemanticArtifact
+from models.sql.presentation import PresentationModel
+from models.sql.presentation_export_attempt import PresentationExportAttempt
+from services.authored_vnext.semantic.canonical import (
+    SemanticContractError,
+    canonical_digest,
+    canonical_json,
+)
 from services.authored_vnext.semantic.query import get_active_authored_emission
 from utils.datetime_utils import get_current_utc_datetime
 
 
-REQUIRED_CAPABILITY_IDS_V2 = (
-    "shape.gradient",
-    "shape.shadow",
-    "layout.transform",
-    "layout.flex",
-    "layout.grid",
-    "shape.borderRadius",
-    "shape.opacity",
-    "shape.clip",
-    "receipt.cjk",
-    "receipt.chart",
-    "receipt.zBand",
-    "receipt.degradation",
-    "renderer.attestation",
-    "evidence.visual",
-)
-PROMOTION_REQUIRED_CAPABILITY_IDS_V2 = (
-    "receipt.cjk",
-    "receipt.chart",
-    "receipt.zBand",
-    "receipt.degradation",
-    "renderer.attestation",
-    "evidence.visual",
-)
-_RENDERER_ATTESTATION_ID = "renderer.attestation"
-_VISUAL_EVIDENCE_ID = "evidence.visual"
 _MAX_RECEIPT_TTL = timedelta(days=31)
 _ZERO_DIGEST = "sha256:" + "0" * 64
+_RELEASE_PROFILE_PATH = (
+    Path(__file__).resolve().parents[5]
+    / "contracts"
+    / "authored_vnext"
+    / "semantic"
+    / "release-profile.v2.json"
+)
+
+
+@lru_cache(maxsize=1)
+def load_release_profile_definition() -> tuple[ReleaseProfileDefinitionV2, str]:
+    try:
+        payload = json.loads(_RELEASE_PROFILE_PATH.read_text(encoding="utf-8"))
+        definition = ReleaseProfileDefinitionV2.model_validate(payload, strict=False)
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as error:
+        raise SemanticContractError("authored_release_profile_definition_invalid") from error
+    return definition, canonical_digest(definition)
+
+
+_PROFILE_DEFINITION, _PROFILE_DEFINITION_DIGEST = load_release_profile_definition()
+REQUIRED_CAPABILITY_IDS_V2 = tuple(
+    _PROFILE_DEFINITION.bounded_native_capability_ids
+)
+PROMOTION_REQUIRED_CAPABILITY_IDS_V2 = tuple(
+    _PROFILE_DEFINITION.promotion_capability_ids
+)
+_RENDERER_ATTESTATION_ID = _PROFILE_DEFINITION.renderer_attestation_capability_id
+_VISUAL_EVIDENCE_ID = _PROFILE_DEFINITION.visual_evidence_capability_id
+_VISUAL_GATE_ISSUER = "authored-visual-parity-gate/v1"
+_VISUAL_GATE_SIGNING_KEY_ENV = "AUTHORED_RELEASE_VISUAL_GATE_HMAC_KEY"
 
 
 @dataclass(frozen=True)
 class ReleaseAuthorityTargetV2:
     profile_id: str
+    profile_definition: ReleaseProfileDefinitionV2
+    profile_definition_digest: str
     scope: CapabilityScopeV2
     environment: CapabilityEnvironmentV2
     configured: bool
 
 
 VisualEvidenceValidatorV2 = Callable[
-    [CapabilityReceiptIssueRequestV2, ReleaseAuthorityTargetV2], None
+    [AsyncSession, CapabilityReceiptIssueRequestV2, ReleaseAuthorityTargetV2, str],
+    Awaitable[None],
+]
+CapabilityEvidenceValidatorV2 = Callable[
+    [AsyncSession, CapabilityReceiptIssueRequestV2, ReleaseAuthorityTargetV2, str],
+    Awaitable[None],
 ]
 
 
@@ -82,17 +110,26 @@ def _digest_model(value: object) -> str:
     return canonical_digest(value)
 
 
+def _validate_visual_gate_signature(report: VisualParityGateReportV1) -> None:
+    """Require a server-held authority key; admin-uploaded JSON is not authority."""
+
+    signing_key = os.getenv(_VISUAL_GATE_SIGNING_KEY_ENV, "").encode("utf-8")
+    if len(signing_key) < 32 or report.trusted_issuer != _VISUAL_GATE_ISSUER:
+        raise SemanticContractError("authored_visual_evidence_trusted_issuer_unconfigured")
+    supplied = report.authority_signature or ""
+    payload = report.model_dump(mode="json", by_alias=True, exclude_none=True)
+    payload.pop("authoritySignature", None)
+    expected = "hmac-sha256:" + hmac.new(
+        signing_key,
+        canonical_json(payload).encode("utf-8"),
+        sha256,
+    ).hexdigest()
+    if not hmac.compare_digest(supplied, expected):
+        raise SemanticContractError("authored_visual_evidence_signature_invalid")
+
+
 def release_authority_target_from_environment() -> ReleaseAuthorityTargetV2:
-    profile_id = os.getenv("AUTHORED_RELEASE_PROFILE_ID", "unconfigured")
-    platform = os.getenv("AUTHORED_RELEASE_PLATFORM", "unconfigured")
-    renderer = os.getenv("AUTHORED_RELEASE_RENDERER", "unconfigured")
-    archetypes = sorted(
-        {
-            item.strip()
-            for item in os.getenv("AUTHORED_RELEASE_ARCHETYPES", "unconfigured").split(",")
-            if item.strip()
-        }
-    )
+    definition, definition_digest = load_release_profile_definition()
     deployment = os.getenv("AUTHORED_RELEASE_DEPLOYMENT_ENVIRONMENT", "development")
     if deployment not in {"development", "staging", "production"}:
         deployment = "development"
@@ -104,22 +141,16 @@ def release_authority_target_from_environment() -> ReleaseAuthorityTargetV2:
     digests = [os.getenv(name, _ZERO_DIGEST) for name in digest_names]
     configured = all(
         (
-            profile_id != "unconfigured",
-            platform != "unconfigured",
-            renderer != "unconfigured",
-            archetypes and archetypes != ["unconfigured"],
             bool(os.getenv("AUTHORED_RELEASE_OS_BUILD")),
             bool(os.getenv("AUTHORED_RELEASE_OFFICE_BUILD")),
             all(value != _ZERO_DIGEST for value in digests),
         )
     )
     return ReleaseAuthorityTargetV2(
-        profile_id=profile_id,
-        scope=CapabilityScopeV2(
-            platform=platform,
-            renderer=renderer,
-            archetypes=archetypes or ["unconfigured"],
-        ),
+        profile_id=definition.profile_id,
+        profile_definition=definition,
+        profile_definition_digest=definition_digest,
+        scope=definition.platform_scope,
         environment=CapabilityEnvironmentV2(
             deployment_environment=deployment,
             os_build=os.getenv("AUTHORED_RELEASE_OS_BUILD", "unconfigured"),
@@ -132,31 +163,198 @@ def release_authority_target_from_environment() -> ReleaseAuthorityTargetV2:
     )
 
 
-def validate_visual_evidence_authority(
+async def publish_visual_evidence_artifact(
+    session: AsyncSession,
+    *,
+    presentation_id: uuid.UUID,
+    request: VisualEvidenceArtifactPublishRequestV2,
+    publisher_principal_id: uuid.UUID | None,
+    publisher_is_admin: bool,
+    tenant_id: str = "default",
+) -> VisualEvidenceArtifactV2:
+    """Persist one owner-scoped canonical gate report as immutable evidence."""
+
+    owner_id = _require_issuer_authority(
+        issuer_principal_id=publisher_principal_id,
+        issuer_is_admin=publisher_is_admin,
+    )
+    presentation = await session.get(PresentationModel, presentation_id)
+    if presentation is None or presentation.owner_id != owner_id:
+        raise SemanticContractError("authored_visual_evidence_presentation_not_found")
+    if request.report.identity.presentation_id != str(presentation_id):
+        raise SemanticContractError("authored_visual_evidence_presentation_mismatch")
+    content = canonical_json(request.report).encode("utf-8")
+    digest = "sha256:" + sha256(content).hexdigest()
+    artifact_ref = "artifact://sha256/" + digest.removeprefix("sha256:")
+    existing = await session.scalar(
+        select(AuthoredSemanticArtifact).where(
+            AuthoredSemanticArtifact.owner_id == owner_id,
+            AuthoredSemanticArtifact.tenant_id == tenant_id,
+            AuthoredSemanticArtifact.content_digest == digest,
+        )
+    )
+    if existing is not None:
+        if (
+            existing.artifact_ref != artifact_ref
+            or existing.content_digest != digest
+            or bytes(existing.content_bytes) != content
+            or existing.byte_length != len(content)
+            or existing.media_type != "application/json"
+        ):
+            raise SemanticContractError("authored_semantic_artifact_digest_collision")
+    else:
+        session.add(
+            AuthoredSemanticArtifact(
+                owner_id=owner_id,
+                tenant_id=tenant_id,
+                artifact_ref=artifact_ref,
+                content_digest=digest,
+                byte_length=len(content),
+                media_type="application/json",
+                resolver_version="authored-visual-evidence/v2",
+                retention_class="evidence",
+                content_bytes=content,
+            )
+        )
+        await session.flush()
+    return VisualEvidenceArtifactV2(
+        presentation_id=presentation_id,
+        report_artifact_ref=artifact_ref,
+        report_artifact_digest=digest,
+        byte_length=len(content),
+    )
+
+
+async def validate_visual_evidence_authority(
+    session: AsyncSession,
     request: CapabilityReceiptIssueRequestV2,
     target: ReleaseAuthorityTargetV2,
+    tenant_id: str,
 ) -> None:
-    """Validate stable visual-gate authority instead of trusting request status."""
+    """Resolve and validate the immutable visual gate report against live authority."""
 
-    expected_expiry = os.getenv("AUTHORED_RELEASE_VISUAL_EVIDENCE_EXPIRES_AT")
+    authority = request.visual_evidence_authority
+    if authority is None:
+        raise SemanticContractError("authored_visual_evidence_authority_required")
+    binding = authority.binding
+    presentation = await session.get(PresentationModel, binding.presentation_id)
+    if presentation is None:
+        raise SemanticContractError("authored_visual_evidence_presentation_not_found")
+    artifact = await session.scalar(
+        select(AuthoredSemanticArtifact).where(
+            AuthoredSemanticArtifact.tenant_id == tenant_id,
+            AuthoredSemanticArtifact.owner_id == presentation.owner_id,
+            AuthoredSemanticArtifact.artifact_ref == binding.report_artifact_ref,
+            AuthoredSemanticArtifact.content_digest == binding.report_artifact_digest,
+        )
+    )
+    if artifact is None or (
+        "sha256:" + sha256(artifact.content_bytes).hexdigest()
+        != binding.report_artifact_digest
+    ):
+        raise SemanticContractError("authored_visual_evidence_report_unresolvable")
     try:
-        expiry = datetime.fromisoformat(expected_expiry.replace("Z", "+00:00")) if expected_expiry else None
+        report_payload = json.loads(artifact.content_bytes.decode("utf-8-sig"))
+        report = VisualParityGateReportV1.model_validate(report_payload, strict=False)
+    except (UnicodeError, json.JSONDecodeError, ValueError) as error:
+        raise SemanticContractError("authored_visual_evidence_report_invalid") from error
+    definition = target.profile_definition
+    policy = definition.visual_evidence_policy
+    identity = report.identity
+    _validate_visual_gate_signature(report)
+    if report.schema_version != policy.report_schema_version:
+        raise SemanticContractError("authored_visual_evidence_report_schema_mismatch")
+    if (
+        report.status != policy.required_status
+        or report.visual_parity != policy.required_visual_parity
+        or report.promotion_ready is not False
+        or report.languages != policy.required_languages
+        or report.archetypes != policy.required_archetypes
+        or canonical_digest(identity) != report.evidence_digest
+        or request.evidence_digest != report.evidence_digest
+        or request.evidence_policy_id != policy.policy_id
+        or request.policy_digest != target.profile_definition_digest
+    ):
+        raise SemanticContractError("authored_visual_evidence_report_claim_invalid")
+    freshness_time = identity.freshness.get("generatedAt")
+    try:
+        generated_at = (
+            datetime.fromisoformat(freshness_time.replace("Z", "+00:00"))
+            if isinstance(freshness_time, str)
+            else None
+        )
     except ValueError:
-        expiry = None
+        generated_at = None
+    expected_expiry = (
+        _utc(generated_at) + timedelta(seconds=policy.receipt_ttl_seconds)
+        if generated_at is not None
+        else None
+    )
+    observed_at = _utc(get_current_utc_datetime())
     if (
         not target.configured
         or request.scope != target.scope
         or request.environment != target.environment
-        or request.evidence_policy_id
-        != os.getenv("AUTHORED_RELEASE_VISUAL_POLICY_ID")
-        or request.policy_digest
-        != os.getenv("AUTHORED_RELEASE_VISUAL_POLICY_DIGEST")
-        or request.evidence_digest
-        != os.getenv("AUTHORED_RELEASE_VISUAL_EVIDENCE_DIGEST")
-        or expiry is None
-        or _utc(request.expires_at) != _utc(expiry)
+        or expected_expiry is None
+        or _utc(request.expires_at) != expected_expiry
+        or generated_at is None
+        or _utc(generated_at) > observed_at + timedelta(minutes=5)
+        or expected_expiry <= observed_at
     ):
         raise SemanticContractError("authored_visual_evidence_authority_invalid")
+    active = await get_active_authored_emission(
+        session,
+        presentation_id=binding.presentation_id,
+        owner_id=presentation.owner_id,
+        tenant_id=artifact.tenant_id,
+    )
+    manifest = active.manifest
+    if (
+        active.canonical_mode != "bundleGraph"
+        or manifest is None
+        or active.presentation_revision != binding.presentation_revision
+        or active.canonical_digest != binding.manifest_digest
+        or manifest.canonical_digest != binding.manifest_digest
+        or manifest.generation_attempt_id != binding.generation_attempt_id
+        or str(binding.presentation_id) != identity.presentation_id
+        or binding.presentation_revision != identity.presentation_revision
+        or str(manifest.operation_id) != identity.operation_id
+        or str(binding.generation_attempt_id) != identity.generation_attempt_id
+    ):
+        raise SemanticContractError("authored_visual_evidence_manifest_identity_mismatch")
+    mode_names: set[str] = set()
+    attempt_ids: set[uuid.UUID] = set()
+    for mode in identity.modes:
+        mode_name = mode.get("mode")
+        attempt_id_value = mode.get("exportAttemptId")
+        try:
+            attempt_id = uuid.UUID(attempt_id_value)
+        except (TypeError, ValueError, AttributeError) as error:
+            raise SemanticContractError(
+                "authored_visual_evidence_export_attempt_mismatch"
+            ) from error
+        if mode_name not in {"authored", "fidelity", "hybrid"}:
+            raise SemanticContractError("authored_visual_evidence_mode_set_invalid")
+        if mode_name in mode_names or attempt_id in attempt_ids:
+            raise SemanticContractError("authored_visual_evidence_mode_set_invalid")
+        mode_names.add(mode_name)
+        attempt_ids.add(attempt_id)
+        attempt = await session.get(PresentationExportAttempt, attempt_id)
+        if (
+            attempt is None
+            or attempt.presentation_id != binding.presentation_id
+            or attempt.source_revision != binding.presentation_revision
+            or attempt.state != "succeeded"
+            or attempt.artifact_sha256 is None
+            or mode.get("pptxSha256") != "sha256:" + attempt.artifact_sha256
+        ):
+            raise SemanticContractError(
+                "authored_visual_evidence_export_attempt_mismatch"
+            )
+    if mode_names != {"authored", "fidelity", "hybrid"} or (
+        binding.export_attempt_id not in attempt_ids
+    ):
+        raise SemanticContractError("authored_visual_evidence_mode_set_invalid")
 
 
 def _receipt_from_record(record: AuthoredCapabilityReceiptRecordV2) -> CapabilityReceiptV2:
@@ -206,6 +404,7 @@ async def issue_capability_receipt(
     now: datetime | None = None,
     release_target: ReleaseAuthorityTargetV2 | None = None,
     visual_evidence_validator: VisualEvidenceValidatorV2 = validate_visual_evidence_authority,
+    capability_validators: Mapping[str, CapabilityEvidenceValidatorV2] | None = None,
 ) -> CapabilityReceiptV2:
     issuer_id = _require_issuer_authority(
         issuer_principal_id=issuer_principal_id,
@@ -222,10 +421,21 @@ async def issue_capability_receipt(
         not target.configured
         or request.scope != target.scope
         or request.environment != target.environment
+        or request.serializer_id != target.scope.renderer
+        or request.serializer_version != target.profile_definition.serializer_version
     ):
         raise SemanticContractError("authored_capability_receipt_authority_scope_mismatch")
     if request.capability_id == _VISUAL_EVIDENCE_ID and request.state == "ready":
-        visual_evidence_validator(request, target)
+        await visual_evidence_validator(session, request, target, tenant_id)
+    elif request.visual_evidence_authority is not None:
+        raise SemanticContractError("authored_visual_evidence_authority_unexpected")
+    elif request.state == "ready":
+        validator = (capability_validators or {}).get(request.capability_id)
+        if validator is None:
+            raise SemanticContractError(
+                "authored_capability_receipt_trusted_validator_unavailable"
+            )
+        await validator(session, request, target, tenant_id)
 
     records = await _records(session, tenant_id=tenant_id)
     active = _active_records(records)
@@ -275,6 +485,7 @@ async def issue_capability_receipt(
         supersedes_receipt_digest=(
             transition_target.receipt_digest if transition_target else None
         ),
+        visual_evidence_authority=request.visual_evidence_authority,
     )
     value = receipt.model_dump(mode="json", by_alias=True)
     value.pop("receiptDigest", None)
@@ -353,6 +564,7 @@ async def revoke_capability_receipt(
         reason_code=request.reason_code,
         transition_kind="revoke",
         revokes_receipt_digest=receipt_digest,
+        visual_evidence_authority=target.visual_evidence_authority,
     )
     value = receipt.model_dump(mode="json", by_alias=True)
     value.pop("receiptDigest", None)
@@ -416,6 +628,9 @@ async def get_workbench_capability_projection_v2(
     )
     evaluated_at = _utc(now or get_current_utc_datetime())
     target = target or release_authority_target_from_environment()
+    definition = target.profile_definition
+    promotion_capability_ids = tuple(definition.promotion_capability_ids)
+    bounded_capability_ids = tuple(definition.bounded_native_capability_ids)
     scope_digest = _digest_model(target.scope)
     environment_digest = _digest_model(target.environment)
     records = [
@@ -423,13 +638,13 @@ async def get_workbench_capability_projection_v2(
         for item in await _records(session, tenant_id=tenant_id)
         if item.scope_digest == scope_digest
         and item.environment_digest == environment_digest
-        and item.capability_id in REQUIRED_CAPABILITY_IDS_V2
+        and item.capability_id in bounded_capability_ids
     ]
     active_records = _active_records(records)
     capabilities: list[CapabilityProjectionEntryV2] = []
     ready_receipts: list[str] = []
     receipts_by_capability: dict[str, CapabilityReceiptV2] = {}
-    for capability_id in REQUIRED_CAPABILITY_IDS_V2:
+    for capability_id in bounded_capability_ids:
         matches = [item for item in active_records if item.capability_id == capability_id]
         if len(matches) != 1:
             reason = (
@@ -449,11 +664,24 @@ async def get_workbench_capability_projection_v2(
             )
             continue
         receipt = _receipt_from_record(matches[0])
-        receipts_by_capability[capability_id] = receipt
         expired = _utc(receipt.expires_at) <= evaluated_at
-        state = "blocked" if expired else receipt.state
-        reason = "capability_receipt_expired" if expired else receipt.reason_code
-        digest = None if expired else receipt.receipt_digest
+        serializer_mismatch = (
+            receipt.serializer_id != definition.platform_scope.renderer
+            or receipt.serializer_version != definition.serializer_version
+        )
+        if not expired and not serializer_mismatch:
+            receipts_by_capability[capability_id] = receipt
+        state = "blocked" if expired or serializer_mismatch else receipt.state
+        reason = (
+            "capability_receipt_expired"
+            if expired
+            else (
+                "capability_receipt_serializer_mismatch"
+                if serializer_mismatch
+                else receipt.reason_code
+            )
+        )
+        digest = None if expired or serializer_mismatch else receipt.receipt_digest
         if state == "ready" and digest:
             ready_receipts.append(digest)
         capabilities.append(
@@ -472,10 +700,23 @@ async def get_workbench_capability_projection_v2(
     ready_capability_ids = {
         item.capability_id for item in capabilities if item.state == "ready"
     }
-    promotion_complete = set(PROMOTION_REQUIRED_CAPABILITY_IDS_V2).issubset(
-        ready_capability_ids
+    promotion_complete = set(promotion_capability_ids).issubset(ready_capability_ids)
+    bounded_complete = set(bounded_capability_ids).issubset(ready_capability_ids)
+    receipt_by_capability = {
+        item.capability_id: item.receipt_digest
+        for item in capabilities
+        if item.state == "ready" and item.receipt_digest is not None
+    }
+    promotion_receipts = (
+        [receipt_by_capability[item] for item in promotion_capability_ids]
+        if promotion_complete
+        else []
     )
-    bounded_complete = set(REQUIRED_CAPABILITY_IDS_V2).issubset(ready_capability_ids)
+    bounded_receipts = (
+        [receipt_by_capability[item] for item in bounded_capability_ids]
+        if bounded_complete
+        else []
+    )
     degraded_fidelity_only = active_emission.canonical_mode != "bundleGraph" or any(
         getattr(
             getattr(bundle, "semantic_component", None)
@@ -538,9 +779,17 @@ async def get_workbench_capability_projection_v2(
             expires_at=profile_expires_at,
             promotion_ready=promotion_ready,
             bounded_native_parity_ready=bounded_native_parity_ready,
-            required_capability_ids=list(PROMOTION_REQUIRED_CAPABILITY_IDS_V2),
-            bounded_native_capability_ids=list(REQUIRED_CAPABILITY_IDS_V2),
+            profile_definition_digest=target.profile_definition_digest,
+            promotion_capability_ids=list(promotion_capability_ids),
+            required_capability_ids=list(promotion_capability_ids),
+            bounded_native_capability_ids=list(bounded_capability_ids),
             ready_receipt_digests=ready_receipts,
+            promotion_receipt_digests=(
+                promotion_receipts if promotion_ready else []
+            ),
+            bounded_native_receipt_digests=(
+                bounded_receipts if bounded_native_parity_ready else []
+            ),
             reason_code=reason_code,
         ),
         capabilities=capabilities,
@@ -554,8 +803,94 @@ async def get_workbench_capability_projection_v2(
         kill_switches=switches,
     )
     value = projection.model_dump(mode="json", by_alias=True)
-    value.pop("projectionDigest", None)
-    return projection.model_copy(update={"projection_digest": canonical_digest(value)})
+    for field in (
+        "projectionDigest",
+        "releaseAuthorityReceiptDigests",
+        "releaseProjectionDigest",
+        "exportAuthorityClaim",
+    ):
+        value.pop(field, None)
+    projection_digest = canonical_digest(value)
+    projection = projection.model_copy(
+        update={
+            "projection_digest": projection_digest,
+            "release_projection_digest": projection_digest,
+        }
+    )
+    claim: ExportAuthorityClaimV2 | None = None
+    if bounded_native_parity_ready:
+        claim = build_export_authority_claim(projection, kind="boundedNative")
+    elif promotion_ready:
+        claim = build_export_authority_claim(projection, kind="promotion")
+    return WorkbenchCapabilityProjectionV2.model_validate(
+        projection.model_copy(
+            update={
+                "release_authority_receipt_digests": (
+                    list(claim.receipt_digests) if claim is not None else []
+                ),
+                "export_authority_claim": claim,
+            }
+        ).model_dump(mode="python", by_alias=False)
+    )
+
+
+def build_export_authority_claim(
+    projection: WorkbenchCapabilityProjectionV2,
+    *,
+    kind: str,
+) -> ExportAuthorityClaimV2:
+    """Build the only release claim accepted by both projection and binding."""
+
+    definition, definition_digest = load_release_profile_definition()
+    profile = projection.release_profile
+    if (
+        projection.projection_digest is None
+        or profile.profile_id != definition.profile_id
+        or profile.profile_definition_digest != definition_digest
+        or profile.promotion_capability_ids != definition.promotion_capability_ids
+        or profile.required_capability_ids != definition.promotion_capability_ids
+        or profile.bounded_native_capability_ids
+        != definition.bounded_native_capability_ids
+    ):
+        raise SemanticContractError("authored_export_authority_profile_mismatch")
+    if kind == "promotion":
+        ready = profile.promotion_ready
+        receipt_digests = profile.promotion_receipt_digests
+        capability_ids = definition.promotion_capability_ids
+    elif kind == "boundedNative":
+        ready = profile.bounded_native_parity_ready
+        receipt_digests = profile.bounded_native_receipt_digests
+        capability_ids = definition.bounded_native_capability_ids
+    else:
+        raise SemanticContractError("authored_export_authority_claim_kind_invalid")
+    receipt_by_capability = {
+        item.capability_id: item.receipt_digest
+        for item in projection.capabilities
+        if item.state == "ready" and item.receipt_digest is not None
+    }
+    expected = (
+        [receipt_by_capability[item] for item in capability_ids]
+        if set(capability_ids).issubset(receipt_by_capability)
+        else []
+    )
+    if not ready or not receipt_digests or receipt_digests != expected:
+        raise SemanticContractError("authored_export_authority_claim_not_ready")
+    return ExportAuthorityClaimV2(
+        kind=kind,
+        profile_id=definition.profile_id,
+        profile_definition_digest=definition_digest,
+        projection_digest=projection.projection_digest,
+        receipt_digests=receipt_digests,
+    )
+
+
+def validate_export_authority_claim(
+    projection: WorkbenchCapabilityProjectionV2,
+    claim: ExportAuthorityClaimV2,
+) -> None:
+    expected = build_export_authority_claim(projection, kind=claim.kind)
+    if expected != claim:
+        raise SemanticContractError("authored_export_authority_claim_stale")
 
 
 async def validate_attempt_receipt_pins(
@@ -563,15 +898,14 @@ async def validate_attempt_receipt_pins(
     *,
     tenant_id: str,
     receipt_digests: list[str],
-    serializer_id: str,
-    serializer_version: str,
+    claim: ExportAuthorityClaimV2,
     renderer_source_digest: str,
     now: datetime | None = None,
 ) -> None:
     """Validate exact active receipt authority before an attempt binding is appended."""
 
     if not receipt_digests:
-        return  # v1 compatibility: legacy bindings did not carry v2 authority pins.
+        raise SemanticContractError("authored_export_release_authority_pins_required")
     if len(receipt_digests) != len(set(receipt_digests)):
         raise SemanticContractError("authored_export_receipt_pins_duplicate")
     evaluated_at = _utc(now or get_current_utc_datetime())
@@ -583,9 +917,18 @@ async def validate_attempt_receipt_pins(
     pinned_records = [item for item in pinned if item is not None]
     active_digests = {item.receipt_digest for item in _active_records(records)}
     receipts = [_receipt_from_record(item) for item in pinned_records]
+    definition, definition_digest = load_release_profile_definition()
+    required_ids = (
+        definition.promotion_capability_ids
+        if claim.kind == "promotion"
+        else definition.bounded_native_capability_ids
+    )
     if (
-        {item.capability_id for item in receipts} != set(REQUIRED_CAPABILITY_IDS_V2)
-        or len(receipts) != len(REQUIRED_CAPABILITY_IDS_V2)
+        claim.profile_id != definition.profile_id
+        or claim.profile_definition_digest != definition_digest
+        or claim.receipt_digests != receipt_digests
+        or {item.capability_id for item in receipts} != set(required_ids)
+        or len(receipts) != len(required_ids)
     ):
         raise SemanticContractError("authored_export_receipt_pins_incomplete")
     if len({item.scope_digest for item in pinned_records}) != 1 or len(
@@ -596,8 +939,8 @@ async def validate_attempt_receipt_pins(
         item.receipt_digest not in active_digests
         or item.state != "ready"
         or _utc(item.expires_at) <= evaluated_at
-        or item.serializer_id != serializer_id
-        or item.serializer_version != serializer_version
+        or item.serializer_id != definition.platform_scope.renderer
+        or item.serializer_version != definition.serializer_version
         for item in receipts
     ):
         raise SemanticContractError("authored_export_receipt_pin_inactive")
@@ -614,8 +957,11 @@ __all__ = [
     "ReleaseAuthorityTargetV2",
     "get_workbench_capability_projection_v2",
     "issue_capability_receipt",
+    "load_release_profile_definition",
+    "publish_visual_evidence_artifact",
     "release_authority_target_from_environment",
     "revoke_capability_receipt",
     "validate_attempt_receipt_pins",
+    "validate_export_authority_claim",
     "validate_visual_evidence_authority",
 ]

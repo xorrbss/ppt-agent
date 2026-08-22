@@ -81,9 +81,13 @@ function readinessV2(overrides = {}) {
       promotionReady: false,
       boundedNativeParityReady: false,
       independentGenerationReady: false,
+      promotionCapabilityIds,
       requiredCapabilityIds: promotionCapabilityIds,
       boundedNativeCapabilityIds: releaseCapabilityIds,
-      readyReceiptDigests: [digest("a")],
+      readyReceiptDigests: [],
+      profileDefinitionDigest: digest("6"),
+      promotionReceiptDigests: [],
+      boundedNativeReceiptDigests: [],
       reasonCode: "release_evidence_incomplete",
     },
     capabilities: releaseCapabilityIds.map((capabilityId) => ({
@@ -104,6 +108,7 @@ function readinessV2(overrides = {}) {
       expiresAt: null,
     },
     killSwitches: [],
+    releaseAuthorityReceiptDigests: [],
     ...overrides,
   };
 }
@@ -208,8 +213,50 @@ test("v2 release readiness requires every server-issued scoped capability and at
   assert.equal(normalized.releaseProfile.promotionReady, false);
   assert.equal(normalized.capabilities.length, 14);
   assert.equal(normalized.rendererAttestation.state, "unattested");
+  assert.equal(normalized.exportAuthorityClaim, undefined);
+  const profileScoped = readinessV2({
+    releaseProfile: {
+      ...readinessV2().releaseProfile,
+      promotionCapabilityIds: ["receipt.cjk"],
+      requiredCapabilityIds: ["receipt.cjk"],
+      boundedNativeCapabilityIds: ["shape.gradient", "receipt.cjk"],
+    },
+    capabilities: readinessV2().capabilities.filter((capability) =>
+      ["shape.gradient", "receipt.cjk"].includes(capability.capabilityId),
+    ),
+  });
+  assert.deepEqual(
+    normalizeAuthoredReleaseReadinessProjectionV2(profileScoped).releaseProfile.boundedNativeCapabilityIds,
+    ["shape.gradient", "receipt.cjk"],
+  );
   assert.throws(
     () => normalizeAuthoredReleaseReadinessProjectionV2(readinessV2({ capabilities: readinessV2().capabilities.slice(1) })),
     /incomplete capabilities/,
+  );
+});
+
+test("v2 validates exact claim pins only when an export authority claim is issued", async () => {
+  const { normalizeAuthoredReleaseReadinessProjectionV2 } = await loadCapabilityClient();
+  const pinned = readinessV2({
+    releaseProfile: {
+      ...readinessV2().releaseProfile,
+      promotionReceiptDigests: [digest("7")],
+    },
+    releaseAuthorityReceiptDigests: [digest("7")],
+    releaseProjectionDigest: digest("5"),
+    exportAuthorityClaim: {
+      schemaVersion: "authored-export-authority-claim/v2",
+      kind: "promotion",
+      profileId: "profile:staging",
+      profileDefinitionDigest: digest("6"),
+      projectionDigest: digest("5"),
+      receiptDigests: [digest("7")],
+      state: "ready",
+    },
+  });
+  assert.equal(normalizeAuthoredReleaseReadinessProjectionV2(pinned).exportAuthorityClaim?.state, "ready");
+  assert.throws(
+    () => normalizeAuthoredReleaseReadinessProjectionV2({ ...pinned, releaseAuthorityReceiptDigests: [digest("4")] }),
+    /mismatched exportAuthorityClaim\.receiptDigests/,
   );
 });

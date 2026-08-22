@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.authored_vnext.semantic.contracts import (
     ActiveAuthoredEmissionResponseV1,
     ExportAttemptDigestBindingV1,
-    ExportAttemptDigestBindingV2,
     WorkbenchCapabilityProjectionV1,
 )
 from models.authored_vnext.semantic.lifecycle import (
@@ -24,6 +23,9 @@ from models.authored_vnext.semantic.readiness import (
     CapabilityReceiptIssueRequestV2,
     CapabilityReceiptRevokeRequestV2,
     CapabilityReceiptV2,
+    ReleasePinnedExportAttemptDigestBindingV2,
+    VisualEvidenceArtifactPublishRequestV2,
+    VisualEvidenceArtifactV2,
     WorkbenchCapabilityProjectionV2,
 )
 from services.authored_vnext.semantic.canonical import SemanticContractError
@@ -40,6 +42,7 @@ from services.authored_vnext.semantic.lifecycle import (
 from services.authored_vnext.semantic.readiness import (
     get_workbench_capability_projection_v2,
     issue_capability_receipt,
+    publish_visual_evidence_artifact,
     revoke_capability_receipt,
 )
 from services.database import get_async_session
@@ -175,6 +178,33 @@ async def create_capability_receipt_v2(
 
 
 @AUTHORED_SEMANTIC_ROUTER.post(
+    "/presentation/{presentation_id}/authored-emission/visual-evidence-artifacts-v2",
+    response_model=VisualEvidenceArtifactV2,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_visual_evidence_artifact_v2(
+    request: VisualEvidenceArtifactPublishRequestV2,
+    presentation_id: uuid.UUID = Path(),
+    session: AsyncSession = Depends(get_async_session),
+) -> VisualEvidenceArtifactV2:
+    publisher_id = _admin_owner()
+    try:
+        artifact = await publish_visual_evidence_artifact(
+            session,
+            presentation_id=presentation_id,
+            request=request,
+            publisher_principal_id=publisher_id,
+            publisher_is_admin=True,
+            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+        )
+        await session.commit()
+        return artifact
+    except SemanticContractError as error:
+        await session.rollback()
+        raise _error(error) from error
+
+
+@AUTHORED_SEMANTIC_ROUTER.post(
     "/authored-emission/capability-receipts-v2/{receipt_digest}/revoke",
     response_model=CapabilityReceiptV2,
     status_code=status.HTTP_201_CREATED,
@@ -237,14 +267,14 @@ async def create_export_attempt_binding(
 
 @AUTHORED_SEMANTIC_ROUTER.post(
     "/presentation/{presentation_id}/authored-emission/export-attempt-bindings-v2",
-    response_model=ExportAttemptDigestBindingV2,
+    response_model=ReleasePinnedExportAttemptDigestBindingV2,
     status_code=status.HTTP_201_CREATED,
 )
 async def create_export_attempt_binding_v2(
-    binding: ExportAttemptDigestBindingV2,
+    binding: ReleasePinnedExportAttemptDigestBindingV2,
     presentation_id: uuid.UUID = Path(),
     session: AsyncSession = Depends(get_async_session),
-) -> ExportAttemptDigestBindingV2:
+) -> ReleasePinnedExportAttemptDigestBindingV2:
     """Bind evidence receipts and independently validated release-authority pins."""
 
     if os.getenv("AUTHORED_SEMANTIC_BUNDLE_WRITES_ENABLED", "false").lower() != "true":
@@ -264,7 +294,7 @@ async def create_export_attempt_binding_v2(
             binding=binding,
             tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
         )
-        if not isinstance(sealed, ExportAttemptDigestBindingV2):
+        if not isinstance(sealed, ReleasePinnedExportAttemptDigestBindingV2):
             raise SemanticContractError("authored_semantic_export_binding_version_mismatch")
         await session.commit()
         return sealed

@@ -128,9 +128,13 @@ export interface AuthoredReleaseReadinessProjectionV2 {
     promotionReady: boolean;
     boundedNativeParityReady: boolean;
     independentGenerationReady: boolean;
+    promotionCapabilityIds: AuthoredReleaseCapabilityId[];
     requiredCapabilityIds: AuthoredReleaseCapabilityId[];
     boundedNativeCapabilityIds: AuthoredReleaseCapabilityId[];
     readyReceiptDigests: string[];
+    profileDefinitionDigest: string;
+    promotionReceiptDigests: string[];
+    boundedNativeReceiptDigests: string[];
     reasonCode: string;
   };
   capabilities: AuthoredReleaseReadinessCapability[];
@@ -147,6 +151,17 @@ export interface AuthoredReleaseReadinessProjectionV2 {
     reasonCode: string;
     expiresAt?: string;
   }>;
+  releaseAuthorityReceiptDigests: string[];
+  releaseProjectionDigest?: string;
+  exportAuthorityClaim?: {
+    schemaVersion: "authored-export-authority-claim/v2";
+    kind: "promotion" | "boundedNative";
+    profileId: string;
+    profileDefinitionDigest: string;
+    projectionDigest: string;
+    receiptDigests: string[];
+    state: "ready";
+  };
 }
 
 export type AuthoredEmissionReadinessStatus =
@@ -233,12 +248,10 @@ const CAPABILITY_IDS = [
 ] as const satisfies readonly AuthoredSemanticCapabilityId[];
 
 const RECEIPT_IDS = ["cjk", "chart", "zBand", "degradation"] as const satisfies readonly AuthoredSemanticReceiptId[];
-const RELEASE_CAPABILITY_IDS = [
+// Type guard only. The active capability sets are server-loaded from the
+// release profile and are deliberately not duplicated in this client.
+const KNOWN_RELEASE_CAPABILITY_IDS = [
   ...CAPABILITY_IDS,
-  "receipt.cjk", "receipt.chart", "receipt.zBand", "receipt.degradation",
-  "renderer.attestation", "evidence.visual",
-] as const satisfies readonly AuthoredReleaseCapabilityId[];
-const PROMOTION_CAPABILITY_IDS = [
   "receipt.cjk", "receipt.chart", "receipt.zBand", "receipt.degradation",
   "renderer.attestation", "evidence.visual",
 ] as const satisfies readonly AuthoredReleaseCapabilityId[];
@@ -267,7 +280,7 @@ function semanticDecision(value: unknown, field: string): AuthoredSemanticDecisi
 
 function requiredReleaseCapabilityId(value: unknown, field: string): AuthoredReleaseCapabilityId {
   const id = requiredText(value, field) as AuthoredReleaseCapabilityId;
-  if (!(RELEASE_CAPABILITY_IDS as readonly string[]).includes(id)) {
+  if (!(KNOWN_RELEASE_CAPABILITY_IDS as readonly string[]).includes(id)) {
     throw new Error(`Capability projection has invalid ${field}`);
   }
   return id;
@@ -464,25 +477,78 @@ export function normalizeAuthoredReleaseReadinessProjectionV2(value: unknown): A
     throw new Error("Capability projection has invalid releaseProfile.schemaVersion");
   }
   const requiredCapabilityIds = profile.requiredCapabilityIds;
-  if (!Array.isArray(requiredCapabilityIds) || requiredCapabilityIds.length !== PROMOTION_CAPABILITY_IDS.length) {
+  if (!Array.isArray(requiredCapabilityIds) || requiredCapabilityIds.length === 0) {
     throw new Error("Capability projection has incomplete releaseProfile.requiredCapabilityIds");
   }
   const requiredIds = requiredCapabilityIds.map((id, index) => requiredReleaseCapabilityId(id, `releaseProfile.requiredCapabilityIds[${index}]`));
-  if (new Set(requiredIds).size !== PROMOTION_CAPABILITY_IDS.length || PROMOTION_CAPABILITY_IDS.some((id) => !requiredIds.includes(id))) {
-    throw new Error("Capability projection has invalid releaseProfile.requiredCapabilityIds");
+  if (new Set(requiredIds).size !== requiredIds.length) throw new Error("Capability projection has duplicate releaseProfile.requiredCapabilityIds");
+  const promotionCapabilityIds = profile.promotionCapabilityIds;
+  if (!Array.isArray(promotionCapabilityIds) || promotionCapabilityIds.length === 0) {
+    throw new Error("Capability projection has incomplete releaseProfile.promotionCapabilityIds");
+  }
+  const promotionIds = promotionCapabilityIds.map((id, index) => requiredReleaseCapabilityId(id, `releaseProfile.promotionCapabilityIds[${index}]`));
+  if (!promotionIds.every((id, index) => id === requiredIds[index])) {
+    throw new Error("Capability projection has mismatched releaseProfile.promotionCapabilityIds");
   }
   const boundedNativeCapabilityIds = profile.boundedNativeCapabilityIds;
-  if (!Array.isArray(boundedNativeCapabilityIds) || boundedNativeCapabilityIds.length !== RELEASE_CAPABILITY_IDS.length) {
+  if (!Array.isArray(boundedNativeCapabilityIds) || boundedNativeCapabilityIds.length === 0) {
     throw new Error("Capability projection has incomplete releaseProfile.boundedNativeCapabilityIds");
   }
   const boundedNativeIds = boundedNativeCapabilityIds.map((id, index) => requiredReleaseCapabilityId(id, `releaseProfile.boundedNativeCapabilityIds[${index}]`));
-  if (new Set(boundedNativeIds).size !== RELEASE_CAPABILITY_IDS.length || RELEASE_CAPABILITY_IDS.some((id) => !boundedNativeIds.includes(id))) {
-    throw new Error("Capability projection has invalid releaseProfile.boundedNativeCapabilityIds");
+  if (new Set(boundedNativeIds).size !== boundedNativeIds.length) throw new Error("Capability projection has duplicate releaseProfile.boundedNativeCapabilityIds");
+  if (!promotionIds.every((id) => boundedNativeIds.includes(id))) {
+    throw new Error("Capability projection has invalid releaseProfile.promotionCapabilityIds");
   }
   const readyReceiptDigests = profile.readyReceiptDigests;
   if (!Array.isArray(readyReceiptDigests)) throw new Error("Capability projection has invalid releaseProfile.readyReceiptDigests");
+  const digestList = (value: unknown, field: string, nonEmpty = false): string[] => {
+    if (!Array.isArray(value) || (nonEmpty && value.length === 0)) throw new Error(`Capability projection has invalid ${field}`);
+    const digests = value.map((digest, index) => requiredDigest(digest, `${field}[${index}]`));
+    if (new Set(digests).size !== digests.length) throw new Error(`Capability projection has duplicate ${field}`);
+    return digests;
+  };
+  const promotionReceiptDigests = digestList(profile.promotionReceiptDigests, "releaseProfile.promotionReceiptDigests");
+  const boundedNativeReceiptDigests = digestList(profile.boundedNativeReceiptDigests, "releaseProfile.boundedNativeReceiptDigests");
+  const releaseAuthorityReceiptDigests = digestList(data.releaseAuthorityReceiptDigests ?? [], "releaseAuthorityReceiptDigests");
+  const exportAuthorityClaim = data.exportAuthorityClaim === undefined || data.exportAuthorityClaim === null
+    ? undefined
+    : record(data.exportAuthorityClaim);
+  const exactDigestList = (left: readonly string[], right: readonly string[]) => left.length === right.length && left.every((item, index) => item === right[index]);
+  const profileDefinitionDigest = requiredDigest(profile.profileDefinitionDigest, "releaseProfile.profileDefinitionDigest");
+  let releaseProjectionDigest: string | undefined;
+  let normalizedExportAuthorityClaim: AuthoredReleaseReadinessProjectionV2["exportAuthorityClaim"];
+  if (exportAuthorityClaim) {
+    if (exportAuthorityClaim.schemaVersion !== "authored-export-authority-claim/v2") throw new Error("Capability projection has invalid exportAuthorityClaim.schemaVersion");
+    if (exportAuthorityClaim.kind !== "promotion" && exportAuthorityClaim.kind !== "boundedNative") throw new Error("Capability projection has invalid exportAuthorityClaim.kind");
+    if (exportAuthorityClaim.state !== "ready") throw new Error("Capability projection has invalid exportAuthorityClaim.state");
+    const claimReceiptDigests = digestList(exportAuthorityClaim.receiptDigests, "exportAuthorityClaim.receiptDigests", true);
+    if (!releaseAuthorityReceiptDigests.length || !exactDigestList(claimReceiptDigests, releaseAuthorityReceiptDigests)) {
+      throw new Error("Capability projection has mismatched exportAuthorityClaim.receiptDigests");
+    }
+    const claimedReceiptSet = exportAuthorityClaim.kind === "promotion" ? promotionReceiptDigests : boundedNativeReceiptDigests;
+    if (!exactDigestList(claimReceiptDigests, claimedReceiptSet)) {
+      throw new Error("Capability projection has mismatched exportAuthorityClaim receipt pins");
+    }
+    releaseProjectionDigest = requiredDigest(data.releaseProjectionDigest, "releaseProjectionDigest");
+    if (
+      requiredText(exportAuthorityClaim.profileId, "exportAuthorityClaim.profileId") !== requiredText(profile.profileId, "releaseProfile.profileId") ||
+      requiredDigest(exportAuthorityClaim.profileDefinitionDigest, "exportAuthorityClaim.profileDefinitionDigest") !== profileDefinitionDigest ||
+      requiredDigest(exportAuthorityClaim.projectionDigest, "exportAuthorityClaim.projectionDigest") !== releaseProjectionDigest
+    ) {
+      throw new Error("Capability projection has mismatched exportAuthorityClaim binding pins");
+    }
+    normalizedExportAuthorityClaim = {
+      schemaVersion: "authored-export-authority-claim/v2",
+      kind: exportAuthorityClaim.kind,
+      profileId: requiredText(exportAuthorityClaim.profileId, "exportAuthorityClaim.profileId"),
+      profileDefinitionDigest,
+      projectionDigest: releaseProjectionDigest,
+      receiptDigests: claimReceiptDigests,
+      state: "ready",
+    };
+  }
   const capabilities = data.capabilities;
-  if (!Array.isArray(capabilities) || capabilities.length !== RELEASE_CAPABILITY_IDS.length) {
+  if (!Array.isArray(capabilities) || capabilities.length !== boundedNativeIds.length) {
     throw new Error("Capability projection has incomplete capabilities");
   }
   const seen = new Set<string>();
@@ -515,6 +581,9 @@ export function normalizeAuthoredReleaseReadinessProjectionV2(value: unknown): A
         : requiredDate(capability.expiresAt, `capabilities[${index}].expiresAt`),
     };
   });
+  if (!boundedNativeIds.every((id) => seen.has(id))) {
+    throw new Error("Capability projection has invalid capabilities");
+  }
   const attestation = record(data.rendererAttestation);
   const profileScope = record(profile.platformScope);
   const profileArchetypes = profileScope.archetypes;
@@ -546,9 +615,13 @@ export function normalizeAuthoredReleaseReadinessProjectionV2(value: unknown): A
       promotionReady: booleanField(profile.promotionReady, "releaseProfile.promotionReady"),
       boundedNativeParityReady: booleanField(profile.boundedNativeParityReady, "releaseProfile.boundedNativeParityReady"),
       independentGenerationReady: booleanField(profile.independentGenerationReady, "releaseProfile.independentGenerationReady"),
+      promotionCapabilityIds: promotionIds,
       requiredCapabilityIds: requiredIds,
       boundedNativeCapabilityIds: boundedNativeIds,
       readyReceiptDigests: readyReceiptDigests.map((digest, index) => requiredDigest(digest, `releaseProfile.readyReceiptDigests[${index}]`)),
+      profileDefinitionDigest,
+      promotionReceiptDigests,
+      boundedNativeReceiptDigests,
       reasonCode: requiredReasonCode(profile.reasonCode, "releaseProfile.reasonCode"),
     },
     capabilities: normalizedCapabilities,
@@ -572,6 +645,9 @@ export function normalizeAuthoredReleaseReadinessProjectionV2(value: unknown): A
         expiresAt: current.expiresAt === undefined || current.expiresAt === null ? undefined : requiredDate(current.expiresAt, `killSwitches[${index}].expiresAt`),
       };
     }),
+    releaseAuthorityReceiptDigests,
+    ...(releaseProjectionDigest ? { releaseProjectionDigest } : {}),
+    ...(normalizedExportAuthorityClaim ? { exportAuthorityClaim: normalizedExportAuthorityClaim } : {}),
   };
 }
 
