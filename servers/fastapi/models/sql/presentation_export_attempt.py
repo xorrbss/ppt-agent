@@ -277,6 +277,47 @@ class ExportTypographyIssue(BaseModel):
     element_id: str | None = PydanticField(default=None, max_length=512)
 
 
+class ExportSemanticReceipts(BaseModel):
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra="forbid",
+    )
+
+    observation_receipt_digest: str | None = None
+    native_admission_receipt_digest: str | None = None
+    hybrid_plan_digest: str | None = None
+    raster_degradation_receipt_digest: str | None = None
+
+    @field_validator(
+        "observation_receipt_digest",
+        "native_admission_receipt_digest",
+        "hybrid_plan_digest",
+        "raster_degradation_receipt_digest",
+    )
+    @classmethod
+    def validate_receipt_digest(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.lower()
+        if not normalized.startswith("sha256:") or not _is_sha256(normalized[7:]):
+            raise ValueError("semantic receipt digest must be prefixed SHA-256")
+        return normalized
+
+    @model_validator(mode="after")
+    def require_one_receipt(self) -> "ExportSemanticReceipts":
+        if not any(
+            (
+                self.observation_receipt_digest,
+                self.native_admission_receipt_digest,
+                self.hybrid_plan_digest,
+                self.raster_degradation_receipt_digest,
+            )
+        ):
+            raise ValueError("semantic receipt set must not be empty")
+        return self
+
+
 class ExportSlideCoverage(BaseModel):
     model_config = ConfigDict(
         alias_generator=to_camel,
@@ -295,6 +336,10 @@ class ExportSlideCoverage(BaseModel):
     backplate_count: int = PydanticField(default=0, ge=0)
     typography_issues: list[ExportTypographyIssue] = PydanticField(
         default_factory=list, max_length=1024
+    )
+    semantic_receipts: ExportSemanticReceipts | None = PydanticField(
+        default=None,
+        exclude_if=lambda value: value is None,
     )
     raster_remaining: int = PydanticField(ge=0)
     fallback_reasons: list[str] = PydanticField(max_length=256)

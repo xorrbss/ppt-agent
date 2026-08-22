@@ -13,6 +13,7 @@ from sqlmodel import SQLModel
 from models.presentation_and_path import PresentationAndPath
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_export_attempt import (
+    PresentationExportCoverageManifest,
     PresentationExportAttempt,
     validate_export_attempt_provenance,
 )
@@ -46,6 +47,91 @@ from services.presentation_export_router import (
     PresentationExportRouteResult,
     terminalize_standalone_presentation_export,
 )
+
+
+def test_hybrid_coverage_accepts_strict_semantic_receipt_digests() -> None:
+    digest = "sha256:" + ("a" * 64)
+    manifest = PresentationExportCoverageManifest.model_validate(
+        {
+            "schemaVersion": "presenton.authored-hybrid-coverage/v2",
+            "mode": "hybrid",
+            "source": {
+                "exportAttemptId": str(uuid.uuid4()),
+                "presentationRevision": 1,
+                "canonicalSourceDigest": "b" * 64,
+                "sourceDigest": "c" * 64,
+            },
+            "totalSlides": 1,
+            "nativeText": 0,
+            "nativeImage": 0,
+            "nativeShape": 0,
+            "nativeTable": 0,
+            "nativeChart": 0,
+            "logicalCoverage": {
+                "nativeText": 0,
+                "nativeImage": 0,
+                "nativeShape": 0,
+                "nativeTable": 0,
+                "nativeChart": 0,
+                "rasterRemaining": 1,
+            },
+            "ooxmlReadback": {
+                "status": "passed",
+                "nativeText": 0,
+                "nativeImage": 0,
+                "nativeShape": 0,
+                "nativeTable": 0,
+                "nativeChart": 0,
+                "rasterRemaining": 1,
+            },
+            "backplateCount": 1,
+            "typographyIssues": [],
+            "rasterRemaining": 1,
+            "fullyEditable": False,
+            "visualParity": "not-verified",
+            "slides": [
+                {
+                    "slideNumber": 1,
+                    "nativeText": 0,
+                    "nativeImage": 0,
+                    "nativeShape": 0,
+                    "nativeTable": 0,
+                    "nativeChart": 0,
+                    "logicalCoverage": {
+                        "nativeText": 0,
+                        "nativeImage": 0,
+                        "nativeShape": 0,
+                        "nativeTable": 0,
+                        "nativeChart": 0,
+                        "rasterRemaining": 1,
+                    },
+                    "ooxmlReadback": {
+                        "status": "passed",
+                        "nativeText": 0,
+                        "nativeImage": 0,
+                        "nativeShape": 0,
+                        "nativeTable": 0,
+                        "nativeChart": 0,
+                        "rasterRemaining": 1,
+                    },
+                    "backplateCount": 1,
+                    "typographyIssues": [],
+                    "rasterRemaining": 1,
+                    "fallbackReasons": ["complex-chart"],
+                    "visualParity": "not-verified",
+                    "nativeBackplateDeDuplication": "not-applicable",
+                    "semanticReceipts": {
+                        "rasterDegradationReceiptDigest": digest
+                    },
+                }
+            ],
+        }
+    )
+    assert manifest.slides[0].semantic_receipts is not None
+    assert (
+        manifest.slides[0].semantic_receipts.raster_degradation_receipt_digest
+        == digest
+    )
 
 
 TABLES = [

@@ -3468,7 +3468,14 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     // Body owns the full-slide background in many authored templates. Treat it
     // as an editable rectangle so the residual PNG can stay transparent above
     // native cards and connector geometry.
-    var allElements = [document.body].concat(Array.from(document.body.querySelectorAll("*")));
+    // Declared identity may assign the semantic document root to <html>. Keep
+    // it in the observation graph so a data-qid on <body> never points at an
+    // unobserved parent. Compatibility extraction retains its historic body
+    // root and ordinal behavior.
+    var allElements = (declaredIdentity
+      ? [document.documentElement, document.body]
+      : [document.body]
+    ).concat(Array.from(document.body.querySelectorAll("*")));
     var complexSvgImagePayloads = new Map();
     var complexHtmlImagePayloads = new Map();
     for (var svgIndex = 0; svgIndex < allElements.length; svgIndex += 1) {
