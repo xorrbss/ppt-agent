@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import json
 from pathlib import Path
+import subprocess
 import uuid
 
 from cryptography.hazmat.primitives import serialization
@@ -31,7 +32,7 @@ from models.sql.authored_release_evidence_v3 import (
     AuthoredReleaseNonceV3,
 )
 from models.sql.authored_semantic_bundle import AuthoredSemanticExportBinding
-from services.authored_vnext.semantic.canonical import SemanticContractError
+from services.authored_vnext.semantic.canonical import SemanticContractError, canonical_digest
 from services.authored_vnext.semantic import release_authority_v3 as release_authority_service
 from services.authored_vnext.semantic.qualification_v3 import (
     bind_durable_artifact_v3,
@@ -125,6 +126,55 @@ def _authority(
     return envelope.model_copy(
         update={"signature_base64": base64.b64encode(private_key.sign(digest.encode("ascii"))).decode("ascii")}
     )
+
+
+def test_actual_product_authority_digest_matches_gate1_node_canonical_v2() -> None:
+    now = datetime(2026, 8, 23, 19, 1, 27, tzinfo=timezone.utc)
+    envelope = EvidenceIssuerEnvelopeV3(
+        authority_domain="actual_product",
+        evidence_class="actual_product_completion",
+        issuer_id="completion.issuer",
+        signer_key_id="completion.key-1",
+        environment_id="release-test",
+        key_purpose="actual-product-completion",
+        rotation_epoch=1,
+        issued_at=now,
+        expires_at=now + timedelta(minutes=15),
+        nonce="cross_runtime_authority_nonce_0001",
+        signature_algorithm="Ed25519",
+        signature_base64=base64.b64encode(b"0" * 64).decode("ascii"),
+    )
+    receipt = {
+        "schemaVersion": "authored-cross-runtime-authority-fixture/v1",
+        "artifactCount": 70,
+        "byteLength": 29_370_701,
+        "presentationRevision": 3,
+        "normalizedText": "분기별\r\n운영 지표",
+        "orderedCounts": [1, 67, 29_370_701],
+    }
+    authority = envelope.model_dump(mode="json", by_alias=True)
+    authority.pop("signatureBase64")
+    signed_payload = {"receipt": receipt, "authority": authority}
+
+    node_script = """
+import fs from "node:fs";
+import { canonicalSha256 } from "./scripts/authored-bounded-release-contracts.mjs";
+const payload = JSON.parse(fs.readFileSync(0, "utf8"));
+process.stdout.write(canonicalSha256(payload));
+"""
+    repository_root = Path(__file__).resolve().parents[4]
+    completed = subprocess.run(
+        ["node", "--input-type=module", "-e", node_script],
+        cwd=repository_root,
+        input=json.dumps(signed_payload, ensure_ascii=False),
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    digest = actual_product_authority_digest(receipt, envelope)
+    assert digest == completed.stdout
+    assert digest != canonical_digest(signed_payload)
 
 
 @pytest.mark.parametrize(

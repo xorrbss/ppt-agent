@@ -6,14 +6,16 @@ import base64
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import json
+import math
 import os
 from typing import Any
+import unicodedata
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives import serialization
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -301,8 +303,65 @@ def _signed_payload(receipt_payload: dict[str, Any], authority: EvidenceIssuerEn
     return {"receipt": receipt_payload, "authority": authority_payload}
 
 
+_JS_SAFE_INTEGER_MAX = (1 << 53) - 1
+
+
+def _actual_product_canonical_json_v2(value: Any, *, path: str = "$") -> str:
+    """Match the Gate 1 JavaScript canonical-v2 wire contract exactly.
+
+    Actual-product signatures cross a Python/JavaScript authority boundary.  They
+    therefore use the release runner's integer-only wire canonicalization rather
+    than the more permissive semantic-model canonicalization used elsewhere.
+    """
+
+    if isinstance(value, BaseModel):
+        value = value.model_dump(mode="json", by_alias=True)
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, str):
+        normalized = unicodedata.normalize("NFC", value.replace("\r\n", "\n").replace("\r", "\n"))
+        return json.dumps(normalized, ensure_ascii=False, separators=(",", ":"))
+    if isinstance(value, (int, float)):
+        if isinstance(value, float):
+            if not math.isfinite(value):
+                raise SemanticContractError(f"authored_release_canonical_number_non_finite:{path}")
+            if value == 0 and math.copysign(1.0, value) < 0:
+                raise SemanticContractError(f"authored_release_canonical_number_negative_zero:{path}")
+            if not value.is_integer():
+                raise SemanticContractError(f"authored_release_canonical_number_fractional:{path}")
+        integer = int(value)
+        if abs(integer) > _JS_SAFE_INTEGER_MAX:
+            raise SemanticContractError(f"authored_release_canonical_number_out_of_safe_range:{path}")
+        return str(integer)
+    if isinstance(value, (list, tuple)):
+        return "[" + ",".join(
+            _actual_product_canonical_json_v2(item, path=f"{path}[{index}]")
+            for index, item in enumerate(value)
+        ) + "]"
+    if isinstance(value, dict):
+        normalized: list[tuple[str, Any]] = []
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise SemanticContractError(f"authored_release_canonical_key_invalid:{path}")
+            normalized_key = unicodedata.normalize("NFC", key.replace("\r\n", "\n").replace("\r", "\n"))
+            normalized.append((normalized_key, item))
+        if len({key for key, _ in normalized}) != len(normalized):
+            raise SemanticContractError(f"authored_release_canonical_key_nfc_collision:{path}")
+        normalized.sort(key=lambda entry: entry[0].encode("utf-8"))
+        return "{" + ",".join(
+            json.dumps(key, ensure_ascii=False, separators=(",", ":"))
+            + ":"
+            + _actual_product_canonical_json_v2(item, path=f"{path}.{key}")
+            for key, item in normalized
+        ) + "}"
+    raise SemanticContractError(f"authored_release_canonical_type_unsupported:{path}")
+
+
 def actual_product_authority_digest(receipt_payload: dict[str, Any], authority: EvidenceIssuerEnvelopeV3) -> str:
-    return canonical_digest(_signed_payload(receipt_payload, authority))
+    canonical = _actual_product_canonical_json_v2(_signed_payload(receipt_payload, authority))
+    return "sha256:" + sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def validate_actual_product_authority_v3(
