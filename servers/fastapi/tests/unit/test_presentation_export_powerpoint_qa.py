@@ -1,4 +1,43 @@
-from services.presentation_export_powerpoint_qa import _snapshot_comparison
+from services.presentation_export_powerpoint_qa import (
+    _contains_presenton_qid,
+    _powerpoint_main_hwnd,
+    _snapshot_comparison,
+)
+
+
+class _Application:
+    Caption = ""
+
+
+class _WindowApi:
+    def __init__(self, application):
+        self.application = application
+
+    def EnumWindows(self, callback, context):
+        callback(101, context)
+        callback(202, context)
+
+    @staticmethod
+    def GetClassName(hwnd):
+        return "PPTFrameClass" if hwnd == 101 else "OtherWindow"
+
+    def GetWindowText(self, hwnd):
+        return self.application.Caption if hwnd == 101 else ""
+
+
+def test_powerpoint_qid_owner_and_interactive_hwnd_contracts():
+    assert _contains_presenton_qid("Presenton hybrid text q-title", "q-title")
+    assert _contains_presenton_qid(
+        "Presenton hybrid shape q-badge-container", "q-badge"
+    )
+    assert _contains_presenton_qid(
+        "Presenton hybrid shape q-root top border", "q-root"
+    )
+    assert not _contains_presenton_qid(
+        "Presenton raster visual fragment 5", "q-badge"
+    )
+    application = _Application()
+    assert _powerpoint_main_hwnd(application, _WindowApi(application)) == 101
 
 
 def _shape(**overrides):

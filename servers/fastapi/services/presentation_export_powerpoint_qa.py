@@ -289,7 +289,9 @@ def _powerpoint_deck_snapshot(deck) -> tuple[list[list[dict[str, Any]]], int]:
 def _contains_presenton_qid(name: str, qid: str) -> bool:
     marker = f" {qid}"
     return name.startswith("Presenton hybrid ") and (
-        name.endswith(marker) or f"{marker} " in name
+        name.endswith(marker)
+        or name.endswith(f"{marker}-container")
+        or f"{marker} " in name
     )
 
 
@@ -352,6 +354,33 @@ def _start_powerpoint_dialog_watch(main_hwnd: int):
     )
     thread.start()
     return stop, thread, observed
+
+
+def _powerpoint_main_hwnd(application, window_api=None) -> int:
+    """Resolve the exact DispatchEx window without trusting pywin32's HWND shim."""
+
+    if window_api is None:
+        import win32gui as window_api  # type: ignore[import-not-found]
+
+    token = f"Presenton QA {uuid.uuid4().hex}"
+    application.Caption = token
+    matches: list[int] = []
+
+    def visit(hwnd: int, _context: object) -> bool:
+        try:
+            if (
+                window_api.GetClassName(hwnd) == "PPTFrameClass"
+                and window_api.GetWindowText(hwnd) == token
+            ):
+                matches.append(hwnd)
+        except Exception:
+            pass
+        return True
+
+    window_api.EnumWindows(visit, None)
+    if len(matches) != 1:
+        raise ValueError("powerpoint_main_hwnd_unavailable")
+    return matches[0]
 
 
 def _snapshot_comparison(
@@ -452,7 +481,9 @@ def _run_powerpoint_com_qa(
         if interactive_observation:
             try:
                 application.Visible = True
-                dialog_watch = _start_powerpoint_dialog_watch(int(application.HWND))
+                dialog_watch = _start_powerpoint_dialog_watch(
+                    _powerpoint_main_hwnd(application)
+                )
             except Exception:
                 interactive_observation = False
         if evidence_directory is None:
