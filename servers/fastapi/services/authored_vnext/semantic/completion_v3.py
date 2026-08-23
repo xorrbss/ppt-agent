@@ -31,10 +31,11 @@ from models.sql.authored_semantic_bundle import AuthoredDeckEmissionActivePointe
 from models.sql.authored_semantic_bundle import AuthoredSemanticExportBinding
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_export_attempt import PresentationExportAttempt
-from services.authored_vnext.semantic.canonical import SemanticContractError, canonical_digest
+from services.authored_vnext.semantic.canonical import SemanticContractError
 from services.authored_vnext.semantic.readiness_v3 import load_release_profile_definition_v3
 from services.authored_vnext.semantic.readiness import _active_records, _records
 from services.authored_vnext.semantic.release_authority_v3 import (
+    actual_product_canonical_digest_v2,
     consume_authority_nonce_v3,
     validate_actual_product_authority_v3,
     validate_actual_product_record_v3,
@@ -73,7 +74,7 @@ def _graph_projection(request: EvidenceGraphRootCreateRequestV3) -> dict[str, An
 
 
 def _graph_response(record: AuthoredEvidenceGraphRootV3) -> EvidenceGraphRootV3:
-    pin_digest = canonical_digest(
+    pin_digest = actual_product_canonical_digest_v2(
         {
             "sourceTreeCensusDigest": record.source_tree_census_digest,
             "sourceHeadCommit": record.source_head_commit,
@@ -196,12 +197,12 @@ async def _revalidate_subject(session: AsyncSession, graph: AuthoredEvidenceGrap
     if (
         graph.base_artifact_ids != base_artifact_ids
         or graph.base_artifact_ids_digest != GATE1_GRAPH_BASE_ARTIFACT_IDS_DIGEST_V3
-        or canonical_digest(graph.base_artifact_ids) != graph.base_artifact_ids_digest
+        or actual_product_canonical_digest_v2(graph.base_artifact_ids) != graph.base_artifact_ids_digest
         or graph.final_required_artifact_ids_digest != GATE1_REQUIRED_ARTIFACT_IDS_DIGEST_V3
         or len(artifact_inventory_ids) != len(graph.artifact_inventory)
         or len(set(artifact_inventory_ids)) != len(artifact_inventory_ids)
         or artifact_inventory_ids != base_artifact_ids
-        or canonical_digest(graph.artifact_inventory) != graph.artifact_inventory_digest
+        or actual_product_canonical_digest_v2(graph.artifact_inventory) != graph.artifact_inventory_digest
     ):
         raise SemanticContractError("authored_evidence_graph_required_artifacts_invalid")
     for field, expected in pins.items():
@@ -259,7 +260,7 @@ async def _revalidate_subject(session: AsyncSession, graph: AuthoredEvidenceGrap
         or com_job.evidence_policy_digest != graph.evidence_policy_digest
         or com_job.authority_domain != "actual_product"
         or com_job.state != "sealed"
-        or canonical_digest(com_job.evidence) != graph.com_qualification_result_digest
+        or actual_product_canonical_digest_v2(com_job.evidence) != graph.com_qualification_result_digest
         or export_attempt.owner_scope != str(graph.owner_id)
         or export_attempt.presentation_id != graph.presentation_id
         or export_attempt.source_revision != graph.presentation_revision
@@ -294,11 +295,11 @@ async def create_evidence_graph_root_v3(
     signed_payload.pop("completionDigest", None)
     authority_digest = validate_actual_product_authority_v3(signed_payload, request.authority, now=observed_at)
     await consume_authority_nonce_v3(session, authority=request.authority, subject_digest=authority_digest)
-    expected_inventory_digest = canonical_digest(
+    expected_inventory_digest = actual_product_canonical_digest_v2(
         [item.model_dump(mode="json", by_alias=True) for item in request.artifact_inventory]
     )
-    expected_root_digest = canonical_digest(_graph_projection(request))
-    request_digest = canonical_digest(signed_payload)
+    expected_root_digest = actual_product_canonical_digest_v2(_graph_projection(request))
+    request_digest = actual_product_canonical_digest_v2(signed_payload)
     if request.artifact_inventory_digest != expected_inventory_digest or request.root_digest != expected_root_digest:
         raise SemanticContractError("authored_evidence_graph_digest_mismatch")
     for item in request.artifact_inventory:
@@ -382,7 +383,7 @@ async def create_evidence_bundle_completion_v3(
     existing = await session.scalar(
         select(AuthoredEvidenceBundleCompletionV3).where(AuthoredEvidenceBundleCompletionV3.graph_root_id == graph.id)
     )
-    pending_digest = canonical_digest(
+    pending_digest = actual_product_canonical_digest_v2(
         {
             "graphRootDigest": graph.root_digest,
             "requiredCapabilityIds": request.required_capability_ids,
@@ -402,7 +403,9 @@ async def create_evidence_bundle_completion_v3(
         required_capability_ids=request.required_capability_ids,
         receipt_digests=[],
         completion_digest=pending_digest,
-        create_request_digest=canonical_digest(request.model_dump(mode="json", by_alias=True)),
+        create_request_digest=actual_product_canonical_digest_v2(
+            request.model_dump(mode="json", by_alias=True)
+        ),
         receipt_identities=[],
     )
     session.add(record)
@@ -429,7 +432,7 @@ async def seal_evidence_bundle_completion_v3(
     signed_payload.pop("completionDigest", None)
     authority_digest = validate_actual_product_authority_v3(signed_payload, request.authority, now=observed_at)
     await consume_authority_nonce_v3(session, authority=request.authority, subject_digest=authority_digest)
-    expected_completion_digest = canonical_digest(
+    expected_completion_digest = actual_product_canonical_digest_v2(
         {
             "graphRootDigest": graph.root_digest,
             "requiredCapabilityIds": completion.required_capability_ids,
@@ -510,7 +513,9 @@ async def seal_evidence_bundle_completion_v3(
         )
     except CompletionSealCasConflictV3 as error:
         raise _actual_product_cas_error(error) from error
-    completion.seal_request_digest = canonical_digest(request.model_dump(mode="json", by_alias=True))
+    completion.seal_request_digest = actual_product_canonical_digest_v2(
+        request.model_dump(mode="json", by_alias=True)
+    )
     completion.receipt_identities = receipt_identities
     await session.flush()
     return _completion_response(completion, graph)

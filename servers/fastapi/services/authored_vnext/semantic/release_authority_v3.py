@@ -32,7 +32,6 @@ from models.sql.authored_release_evidence_v3 import AuthoredReleaseNonceV3
 from models.sql.authored_semantic_bundle import AuthoredSemanticExportBinding
 from services.authored_vnext.semantic.canonical import (
     SemanticContractError,
-    canonical_digest,
 )
 from services.authored_vnext.semantic.readiness import CapabilityEvidenceValidatorV2
 from services.authored_vnext.semantic.readiness_v3 import (
@@ -224,7 +223,7 @@ def sign_server_readback_v3(
             "executionNonce": execution_nonce,
         }
     )
-    digest = canonical_digest(unsigned)
+    digest = actual_product_canonical_digest_v2(unsigned)
     return {
         **unsigned,
         "serverReadbackDigest": digest,
@@ -258,7 +257,7 @@ def release_trust_readback_v3(*, execution_nonce: str) -> dict[str, Any]:
         "schemaVersion": "authored-release-trust-readback/v3",
         "environmentId": environment_id,
         "registeredKeys": keys,
-        "trustBundleDigest": canonical_digest(keys),
+        "trustBundleDigest": actual_product_canonical_digest_v2(keys),
     }
     return sign_server_readback_v3(body, execution_nonce=execution_nonce)
 
@@ -289,7 +288,7 @@ def validate_server_readback_v3(
     unsigned = dict(payload)
     for field in ("serverReadbackDigest", "readbackSignerKeyId", "readbackSignatureBase64"):
         unsigned.pop(field, None)
-    if canonical_digest(unsigned) != digest:
+    if actual_product_canonical_digest_v2(unsigned) != digest:
         raise SemanticContractError("authored_release_readback_digest_mismatch")
     try:
         Ed25519PublicKey.from_public_bytes(public_key_bytes).verify(signature, digest.encode("ascii"))
@@ -359,9 +358,15 @@ def _actual_product_canonical_json_v2(value: Any, *, path: str = "$") -> str:
     raise SemanticContractError(f"authored_release_canonical_type_unsupported:{path}")
 
 
-def actual_product_authority_digest(receipt_payload: dict[str, Any], authority: EvidenceIssuerEnvelopeV3) -> str:
-    canonical = _actual_product_canonical_json_v2(_signed_payload(receipt_payload, authority))
+def actual_product_canonical_digest_v2(value: Any) -> str:
+    """Digest an actual-product wire value with the Gate1 JS canonical-v2 contract."""
+
+    canonical = _actual_product_canonical_json_v2(value)
     return "sha256:" + sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def actual_product_authority_digest(receipt_payload: dict[str, Any], authority: EvidenceIssuerEnvelopeV3) -> str:
+    return actual_product_canonical_digest_v2(_signed_payload(receipt_payload, authority))
 
 
 def validate_actual_product_authority_v3(
@@ -618,6 +623,7 @@ __all__ = [
     "READBACK_PUBLIC_KEY_DIGEST_V3",
     "READBACK_SIGNER_KEY_ID_V3",
     "actual_product_authority_digest",
+    "actual_product_canonical_digest_v2",
     "authority_metadata_v3",
     "build_bound_capability_subject_v3",
     "consume_authority_nonce_v3",

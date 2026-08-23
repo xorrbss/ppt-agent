@@ -52,6 +52,7 @@ from services.authored_vnext.semantic.readiness_validators import (
 from services.authored_vnext.semantic.release_authority_v3 import (
     BoundEvidenceSubjectRejectionV3,
     actual_product_authority_digest,
+    actual_product_canonical_digest_v2,
     build_bound_capability_subject_v3,
     issue_actual_product_capability_receipt_v3,
     validate_actual_product_record_v3,
@@ -442,10 +443,15 @@ def test_server_readback_rejects_wrong_nonce_and_stale_window(
         )
     now = datetime.now(timezone.utc).replace(microsecond=0)
     stale = release_authority_service.sign_server_readback_v3(
-        {"schemaVersion": "test/v1"},
+        {"schemaVersion": "test/v1", "artifactCount": 70, "byteLength": 69_329},
         execution_nonce="sealed_gate1_nonce_20260823",
         now=now - timedelta(minutes=10),
     )
+    unsigned = dict(stale)
+    for field in ("serverReadbackDigest", "readbackSignerKeyId", "readbackSignatureBase64"):
+        unsigned.pop(field)
+    assert stale["serverReadbackDigest"] == actual_product_canonical_digest_v2(unsigned)
+    assert stale["serverReadbackDigest"] != canonical_digest(unsigned)
     with pytest.raises(SemanticContractError, match="authored_release_readback_stale"):
         validate_server_readback_v3(
             stale,

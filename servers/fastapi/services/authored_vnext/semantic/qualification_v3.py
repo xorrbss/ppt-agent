@@ -23,8 +23,9 @@ from models.sql.authored_release_evidence_v3 import (
     AuthoredComQualificationJobV3,
     AuthoredReleaseArtifactV3,
 )
-from services.authored_vnext.semantic.canonical import SemanticContractError, canonical_digest
+from services.authored_vnext.semantic.canonical import SemanticContractError
 from services.authored_vnext.semantic.release_authority_v3 import (
+    actual_product_canonical_digest_v2,
     consume_authority_nonce_v3,
     validate_actual_product_authority_v3,
 )
@@ -77,7 +78,9 @@ def _job(record: AuthoredComQualificationJobV3) -> ComQualificationJobV3:
         heartbeat_at=record.heartbeat_at,
         attempt_count=record.attempt_count,
         evidence=dict(record.evidence),
-        result_digest=(canonical_digest(record.evidence) if record.state == "sealed" else None),
+        result_digest=(
+            actual_product_canonical_digest_v2(record.evidence) if record.state == "sealed" else None
+        ),
         failure_code=record.failure_code,
     )
 

@@ -3,8 +3,10 @@ from __future__ import annotations
 import asyncio
 import base64
 from datetime import datetime, timedelta, timezone
+from hashlib import sha256
 import json
 from pathlib import Path
+import subprocess
 import uuid
 
 from cryptography.hazmat.primitives import serialization
@@ -28,6 +30,7 @@ from models.sql.authored_release_evidence_v3 import (
     AuthoredComQualificationJobV3,
     AuthoredEvidenceBundleCompletionV3,
     AuthoredEvidenceGraphRootV3,
+    AuthoredReleaseArtifactV3,
     AuthoredReleaseNonceV3,
 )
 from models.sql.authored_semantic_bundle import (
@@ -42,6 +45,7 @@ from services.authored_vnext.semantic import completion_v3
 from services.authored_vnext.semantic.canonical import SemanticContractError, canonical_digest
 from services.authored_vnext.semantic.completion_v3 import (
     create_evidence_bundle_completion_v3,
+    create_evidence_graph_root_v3,
     seal_evidence_bundle_completion_v3,
 )
 from services.authored_vnext.semantic.readiness_v3 import (
@@ -50,6 +54,7 @@ from services.authored_vnext.semantic.readiness_v3 import (
 )
 from services.authored_vnext.semantic.release_authority_v3 import (
     actual_product_authority_digest,
+    actual_product_canonical_digest_v2,
 )
 
 
@@ -93,7 +98,7 @@ def _graph_request_values() -> dict[str, object]:
         "base_artifact_ids_digest": GATE1_GRAPH_BASE_ARTIFACT_IDS_DIGEST_V3,
         "final_required_artifact_ids_digest": GATE1_REQUIRED_ARTIFACT_IDS_DIGEST_V3,
         "artifact_inventory": inventory,
-        "artifact_inventory_digest": canonical_digest(
+        "artifact_inventory_digest": actual_product_canonical_digest_v2(
             [item.model_dump(mode="json", by_alias=True) for item in inventory]
         ),
         "root_digest": "sha256:" + "d" * 64,
@@ -124,6 +129,140 @@ def test_release_profile_authority_digest_matches_gate1_sealed_raw_contract() ->
         "sha256:2e2ead14dc6f72a952323f2625a9f4e539a3295e6f58141753fb2b8d6d82edd9"
     )
     assert authority_digest != load_release_profile_model_projection_digest_v3()
+
+
+def test_attempt22_graph_request_matches_gate1_node_canonical_v2() -> None:
+    """Regression for the real attempt22 graph request shape that exposed integer drift."""
+
+    request_without_authority = {
+        "schemaVersion": "authored-evidence-graph-root-create/v3",
+        "presentationId": "ea18b250-a58c-473c-a120-3bb64d689e7b",
+        "presentationRevision": 3,
+        "exportAttemptId": "4bb66bf4-28e1-490b-a18f-66dfeaa113f7",
+        "artifactInventory": [
+            {
+                "schemaVersion": "authored-durable-artifact-ref/v3",
+                "exportAttemptId": "4bb66bf4-28e1-490b-a18f-66dfeaa113f7",
+                "artifactId": "semantic-source-json",
+                "versionId": "ab1c016f-665d-4876-b3e7-86b179e4c7de",
+                "sha256": "sha256:1ef2ac4dc2d83e02cac1bc6bfd43db9f697138c4cbdee0b0eadf2be3985f399c",
+                "byteLength": 69_329,
+                "mediaType": "application/json",
+                "encryptionKeyRef": "local-evidence/gate1-v3",
+                "storageGeneration": 1,
+                "state": "bound",
+            }
+        ],
+        "rootDigest": "sha256:ce3163fddcf008eca61c3d80ba631805ce647555e58b4d156f342dfa818bb0c9",
+    }
+    node_script = """
+import fs from "node:fs";
+import { canonicalSha256 } from "./scripts/authored-bounded-release-contracts.mjs";
+process.stdout.write(canonicalSha256(JSON.parse(fs.readFileSync(0, "utf8"))));
+"""
+    repository_root = Path(__file__).resolve().parents[4]
+    completed = subprocess.run(
+        ["node", "--input-type=module", "-e", node_script],
+        cwd=repository_root,
+        input=json.dumps(request_without_authority, ensure_ascii=False),
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert actual_product_canonical_digest_v2(request_without_authority) == completed.stdout
+    assert actual_product_canonical_digest_v2(request_without_authority) != canonical_digest(
+        request_without_authority
+    )
+
+
+def test_graph_persists_gate1_canonical_v2_request_digest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    values = _graph_request_values()
+    export_attempt_id = values["export_attempt_id"]
+    artifacts: list[AuthoredReleaseArtifactV3] = []
+    inventory: list[DurableArtifactRefV3] = []
+    for index, artifact_id in enumerate(GATE1_GRAPH_BASE_ARTIFACT_IDS_V3):
+        content = bytes([65 + index % 26]) * (20 + index)
+        digest = "sha256:" + sha256(content).hexdigest()
+        version_id = uuid.uuid4()
+        artifacts.append(
+            AuthoredReleaseArtifactV3(
+                version_id=version_id,
+                tenant_id="t",
+                export_attempt_id=export_attempt_id,
+                artifact_id=artifact_id,
+                sha256=digest,
+                byte_length=len(content),
+                media_type="application/octet-stream",
+                encryption_key_ref="kms:test/key-1",
+                storage_generation=1,
+                state="bound",
+                content_bytes=content,
+            )
+        )
+        inventory.append(
+            DurableArtifactRefV3(
+                export_attempt_id=export_attempt_id,
+                artifact_id=artifact_id,
+                version_id=version_id,
+                sha256=digest,
+                byte_length=len(content),
+                media_type="application/octet-stream",
+                encryption_key_ref="kms:test/key-1",
+                storage_generation=1,
+                state="bound",
+            )
+        )
+    values["artifact_inventory"] = inventory
+    values["artifact_inventory_digest"] = actual_product_canonical_digest_v2(
+        [item.model_dump(mode="json", by_alias=True) for item in inventory]
+    )
+    provisional = EvidenceGraphRootCreateRequestV3(**values)
+    values["root_digest"] = actual_product_canonical_digest_v2(
+        completion_v3._graph_projection(provisional)
+    )
+    request = EvidenceGraphRootCreateRequestV3(**values)
+    signed_payload = request.model_dump(mode="json", by_alias=True)
+    signed_payload.pop("authority")
+    expected_request_digest = actual_product_canonical_digest_v2(signed_payload)
+    assert expected_request_digest != canonical_digest(signed_payload)
+
+    async def no_nonce(*args, **kwargs) -> None:
+        return None
+
+    async def no_revalidation(*args, **kwargs) -> None:
+        return None
+
+    monkeypatch.setattr(completion_v3, "validate_actual_product_authority_v3", lambda *args, **kwargs: "ok")
+    monkeypatch.setattr(completion_v3, "consume_authority_nonce_v3", no_nonce)
+    monkeypatch.setattr(completion_v3, "_revalidate_subject", no_revalidation)
+
+    async def scenario() -> None:
+        engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'graph-digest.db'}")
+        maker = async_sessionmaker(engine, expire_on_commit=False)
+        async with engine.begin() as connection:
+            await connection.run_sync(
+                SQLModel.metadata.create_all,
+                tables=[AuthoredReleaseArtifactV3.__table__, AuthoredEvidenceGraphRootV3.__table__],
+            )
+        async with maker() as session:
+            session.add_all(artifacts)
+            await session.flush()
+            response = await create_evidence_graph_root_v3(
+                session,
+                request=request,
+                owner_id=uuid.uuid4(),
+                tenant_id="t",
+            )
+            assert response.request_digest == expected_request_digest
+            stored = await session.get(AuthoredEvidenceGraphRootV3, response.graph_root_id)
+            assert stored is not None
+            assert stored.request_digest == expected_request_digest
+        await engine.dispose()
+
+    asyncio.run(scenario())
 
 
 @pytest.mark.parametrize("mutation", ["missing", "extra", "duplicate"])
@@ -233,12 +372,12 @@ def test_graph_revalidation_rejects_cross_attempt_binding(tmp_path: Path, monkey
             environment_attestation_digest=pin_values["AUTHORED_RELEASE_ENVIRONMENT_ATTESTATION_DIGEST"],
             worker_attestation_digest=pin_values["AUTHORED_RELEASE_WORKER_ATTESTATION_DIGEST"],
             com_qualification_job_id=com_job_id,
-            com_qualification_result_digest=canonical_digest({}),
+            com_qualification_result_digest=actual_product_canonical_digest_v2({}),
             base_artifact_ids=base_ids,
             base_artifact_ids_digest=GATE1_GRAPH_BASE_ARTIFACT_IDS_DIGEST_V3,
             final_required_artifact_ids_digest=GATE1_REQUIRED_ARTIFACT_IDS_DIGEST_V3,
             artifact_inventory=inventory,
-            artifact_inventory_digest=canonical_digest(inventory),
+            artifact_inventory_digest=actual_product_canonical_digest_v2(inventory),
             root_digest="sha256:" + "d" * 64,
             request_digest="sha256:" + "e" * 64,
         )
@@ -501,13 +640,20 @@ def test_completion_is_exact_set_single_cas_and_second_seal_conflicts(
                 ),
                 tenant_id="t",
             )
+            assert pending.create_request_digest == actual_product_canonical_digest_v2(
+                {
+                    "schemaVersion": "authored-evidence-bundle-completion-create/v3",
+                    "graphRootId": str(graph.id),
+                    "requiredCapabilityIds": definition.all_required_capability_ids,
+                }
+            )
             signed_payload = {
                 "schemaVersion": "authored-evidence-bundle-completion-seal/v3",
                 "expectedCasVersion": 0,
                 "receiptDigests": receipt_digests,
             }
             envelope, authority_digest = authority(signed_payload, "completion_nonce_0000000001")
-            completion_digest = canonical_digest(
+            completion_digest = actual_product_canonical_digest_v2(
                 {
                     "graphRootDigest": graph.root_digest,
                     "requiredCapabilityIds": definition.all_required_capability_ids,
@@ -530,6 +676,9 @@ def test_completion_is_exact_set_single_cas_and_second_seal_conflicts(
                 now=now,
             )
             assert sealed.state == "sealed"
+            assert sealed.seal_request_digest == actual_product_canonical_digest_v2(
+                seal_request.model_dump(mode="json", by_alias=True)
+            )
             assert (
                 await seal_evidence_bundle_completion_v3(
                     session,
@@ -547,7 +696,7 @@ def test_completion_is_exact_set_single_cas_and_second_seal_conflicts(
                 "receiptDigests": reversed_receipts,
             }
             second_authority, second_authority_digest = authority(second_payload, "completion_nonce_0000000002")
-            second_digest = canonical_digest(
+            second_digest = actual_product_canonical_digest_v2(
                 {
                     "graphRootDigest": graph.root_digest,
                     "requiredCapabilityIds": definition.all_required_capability_ids,
