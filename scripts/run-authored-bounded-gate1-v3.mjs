@@ -61,7 +61,7 @@ function artifactPath(bundleDir, bindings, artifactId) {
   return resolveInside(bundleDir, binding.locator, artifactId);
 }
 
-function decodePng(filePath, artifactId) {
+export function decodePng(filePath, artifactId) {
   const bytes = fs.readFileSync(filePath);
   if (!bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) throw new Error(`gate1-png-signature-invalid:${artifactId}`);
   let offset = 8; let width; let height; let colorType; let bitDepth; let interlace; const idat = [];
@@ -94,7 +94,7 @@ function decodePng(filePath, artifactId) {
   return { width, height, rgba };
 }
 
-function computedVisualMetrics(left, right) {
+export function computedVisualMetrics(left, right) {
   if (left.width !== right.width || left.height !== right.height) throw new Error("gate1-visual-dimension-mismatch");
   const pixels = left.width * left.height; let changed = 0; let absolute = 0; let squares = 0;
   for (let index = 0; index < left.rgba.length; index += 4) {
@@ -115,7 +115,7 @@ function computedVisualMetrics(left, right) {
   return { changedPixelRatioPpm: Math.round(changed * 1_000_000 / pixels), block8LumaSsimMillionths: Math.round(ssimSum * 1_000_000 / blocks), meanAbsoluteChannelDeltaMilli: Math.round(absolute * 1000 / (pixels * 4)), rmseMilli: Math.round(Math.sqrt(squares / (pixels * 4)) * 1000) };
 }
 
-function expectedVisualComparisons() {
+export function expectedVisualComparisons() {
   const result = [];
   for (let slide = 1; slide <= 8; slide += 1) {
     const number = String(slide).padStart(2, "0");
