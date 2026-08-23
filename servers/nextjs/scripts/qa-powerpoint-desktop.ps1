@@ -268,18 +268,29 @@ try {
       $sourceDeck = $application.Presentations.Open($resolvedInput, -1, 0, -1)
       $firstOpenCallReturnedAt = (Get-Date).ToUniversalTime().ToString("o")
       $fonts = @()
-      for ($index = 1; $index -le $sourceDeck.Fonts.Count; $index += 1) {
-        $font = $sourceDeck.Fonts.Item($index)
-        $embedded = $null
-        try {
-          $embedded = [bool]$font.Embedded
-        } catch {
-          $embedded = $null
+      $sourceFonts = $sourceDeck.Fonts
+      try {
+        for ($index = 1; $index -le $sourceFonts.Count; $index += 1) {
+          $font = $sourceFonts.Item($index)
+          try {
+            $embedded = $null
+            try {
+              $embedded = [bool]$font.Embedded
+            } catch {
+              $embedded = $null
+            }
+            $fonts += [PSCustomObject]@{
+              Name = [string]$font.Name
+              Embedded = $embedded
+            }
+          } finally {
+            [Runtime.InteropServices.Marshal]::FinalReleaseComObject($font) | Out-Null
+            $font = $null
+          }
         }
-        $fonts += [PSCustomObject]@{
-          Name = [string]$font.Name
-          Embedded = $embedded
-        }
+      } finally {
+        [Runtime.InteropServices.Marshal]::FinalReleaseComObject($sourceFonts) | Out-Null
+        $sourceFonts = $null
       }
       $sourceShapeCounts = @(
         for ($slideIndex = 1; $slideIndex -le $sourceDeck.Slides.Count; $slideIndex += 1) {
@@ -378,6 +389,7 @@ try {
         $shapes = $deck.Slides.Item($slideIndex).Shapes
         for ($shapeIndex = 1; $shapeIndex -le $shapes.Count; $shapeIndex += 1) {
           $shape = $shapes.Item($shapeIndex)
+          $textRange = $null
           try {
             $hasText = [bool]$shape.HasTextFrame -and [bool]$shape.TextFrame2.HasText
             $hasTable = [bool]$shape.HasTable
@@ -457,6 +469,10 @@ try {
           } catch {
             $inspectionFailures += 1
           } finally {
+            if ($null -ne $textRange) {
+              [Runtime.InteropServices.Marshal]::FinalReleaseComObject($textRange) | Out-Null
+              $textRange = $null
+            }
             [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shape) | Out-Null
           }
         }
@@ -610,6 +626,14 @@ try {
     }
     [Runtime.InteropServices.Marshal]::FinalReleaseComObject($application) |
       Out-Null
+    # PowerPoint can remain alive until transient RCWs created by collection
+    # property access (Presentations/Slides/Shapes) are finalized.  Drain both
+    # finalizer generations before the authoritative process census so a
+    # script-host lifetime artifact is not reported as a desktop survivor.
+    [GC]::Collect()
+    [GC]::WaitForPendingFinalizers()
+    [GC]::Collect()
+    [GC]::WaitForPendingFinalizers()
   }
   if ($null -ne $launched) {
     try {
