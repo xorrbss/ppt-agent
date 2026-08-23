@@ -377,7 +377,11 @@ def _powerpoint_main_hwnd(application, window_api=None) -> int:
             pass
         return True
 
-    window_api.EnumWindows(visit, None)
+    deadline = time.monotonic() + 2.0
+    while not matches and time.monotonic() < deadline:
+        window_api.EnumWindows(visit, None)
+        if not matches:
+            time.sleep(0.05)
     if len(matches) != 1:
         raise ValueError("powerpoint_main_hwnd_unavailable")
     return matches[0]
