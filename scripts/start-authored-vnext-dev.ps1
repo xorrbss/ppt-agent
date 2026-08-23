@@ -287,6 +287,10 @@ $nextEnvironment["AUTHORED_VNEXT_RENDERER_ENABLED"] = "true"
 $nextEnvironment["PRESENTON_TEST_NEXT_DIST_DIR"] = $nextDistDirectoryName
 $nextEnvironment["CYPRESS_BASE_URL"] = $proxyUrl
 $nextEnvironment["WORKSPACE_LIVE_BACKEND"] = $fastApiUrl
+$boundedNativeMode = [Environment]::GetEnvironmentVariable("AUTHORED_HYBRID_BOUNDED_NATIVE_MODE")
+if (-not [string]::IsNullOrWhiteSpace($boundedNativeMode)) {
+    $nextEnvironment["AUTHORED_HYBRID_BOUNDED_NATIVE_MODE"] = $boundedNativeMode
+}
 
 $proxyEnvironment = @{
     "FASTAPI_PORT" = [string]$FastApiPort

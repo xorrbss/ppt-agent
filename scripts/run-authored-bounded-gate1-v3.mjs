@@ -64,14 +64,17 @@ function artifactPath(bundleDir, bindings, artifactId) {
 export function decodePng(filePath, artifactId) {
   const bytes = fs.readFileSync(filePath);
   if (!bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) throw new Error(`gate1-png-signature-invalid:${artifactId}`);
-  let offset = 8; let width; let height; let colorType; let bitDepth; let interlace; const idat = [];
+  let offset = 8; let width; let height; let colorType; let bitDepth; let interlace; let palette; let transparency; const idat = [];
   while (offset + 12 <= bytes.length) {
     const length = bytes.readUInt32BE(offset); const type = bytes.toString("ascii", offset + 4, offset + 8); const data = bytes.subarray(offset + 8, offset + 8 + length); offset += 12 + length;
     if (type === "IHDR") { width = data.readUInt32BE(0); height = data.readUInt32BE(4); bitDepth = data[8]; colorType = data[9]; interlace = data[12]; }
+    if (type === "PLTE") palette = data;
+    if (type === "tRNS") transparency = data;
     if (type === "IDAT") idat.push(data);
     if (type === "IEND") break;
   }
-  if (!width || !height || bitDepth !== 8 || interlace !== 0 || ![0, 2, 6].includes(colorType) || idat.length === 0) throw new Error(`gate1-png-format-unsupported:${artifactId}`);
+  if (!width || !height || bitDepth !== 8 || interlace !== 0 || ![0, 2, 3, 6].includes(colorType) || idat.length === 0) throw new Error(`gate1-png-format-unsupported:${artifactId}`);
+  if (colorType === 3 && (!palette || palette.length === 0 || palette.length % 3 !== 0)) throw new Error(`gate1-png-palette-invalid:${artifactId}`);
   const channels = colorType === 6 ? 4 : colorType === 2 ? 3 : 1; const stride = width * channels;
   const inflated = zlib.inflateSync(Buffer.concat(idat));
   if (inflated.length !== (stride + 1) * height) throw new Error(`gate1-png-decoded-length:${artifactId}`);
@@ -88,8 +91,14 @@ export function decodePng(filePath, artifactId) {
   }
   const rgba = Buffer.alloc(width * height * 4);
   for (let i = 0, j = 0; i < raw.length; i += channels, j += 4) {
-    if (channels === 1) rgba[j] = rgba[j + 1] = rgba[j + 2] = raw[i]; else { rgba[j] = raw[i]; rgba[j + 1] = raw[i + 1]; rgba[j + 2] = raw[i + 2]; }
-    rgba[j + 3] = channels === 4 ? raw[i + 3] : 255;
+    if (colorType === 3) {
+      const paletteOffset = raw[i] * 3;
+      if (paletteOffset + 2 >= palette.length) throw new Error(`gate1-png-palette-index-invalid:${artifactId}`);
+      rgba[j] = palette[paletteOffset]; rgba[j + 1] = palette[paletteOffset + 1]; rgba[j + 2] = palette[paletteOffset + 2]; rgba[j + 3] = transparency && raw[i] < transparency.length ? transparency[raw[i]] : 255;
+    } else {
+      if (channels === 1) rgba[j] = rgba[j + 1] = rgba[j + 2] = raw[i]; else { rgba[j] = raw[i]; rgba[j + 1] = raw[i + 1]; rgba[j + 2] = raw[i + 2]; }
+      rgba[j + 3] = channels === 4 ? raw[i + 3] : 255;
+    }
   }
   return { width, height, rgba };
 }
@@ -268,7 +277,7 @@ function validateGate1ArtifactContents(bundleDir, bindings, inventory, manifest,
     if (record.mediaType !== pptxType || bytes.length < 4 || !bytes.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))) throw new Error(`gate1-pptx-package-invalid:${artifactId}`);
   }
   const activeManifestValue = readJson(artifactPath(bundleDir, bindings, "active-manifest-json"));
-  if (canonicalSha256(activeManifestValue) !== pins.activeManifestDigest) throw new Error("gate1-active-manifest-artifact-pin-mismatch");
+  if (canonicalSha256Excluding(activeManifestValue, ["$.canonicalDigest"]) !== pins.activeManifestDigest) throw new Error("gate1-active-manifest-artifact-pin-mismatch");
   const semanticSource = readJson(artifactPath(bundleDir, bindings, "semantic-source-json")); const qids = [...collectSemanticQids(semanticSource)].sort();
   if (qids.length === 0) throw new Error("gate1-semantic-source-qids-missing");
   for (const mode of ["fidelity", "hybrid"]) for (const state of ["input", "saved"]) {

@@ -78,7 +78,7 @@ const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
 // spent the remaining slides receive a separately isolated fidelity capture below. Never
 // retain the bundled export's shared-DOM raster: authored slide styles can collide there.
 const HYBRID_DECK_BUDGET_MS = 15 * 60_000;
-const HYBRID_CACHE_VERSION = "authored-hybrid-v15-isolated-raster-fallback";
+const HYBRID_CACHE_VERSION = "authored-hybrid-v16-bounded-release-raster-fallback";
 const HYBRID_RESULT_CACHE_LIMIT = 24;
 const HYBRID_EXPORT_CONCURRENCY = parseBoundedPositiveInt(
   process.env.AUTHORED_HYBRID_CONCURRENCY,
@@ -86,6 +86,10 @@ const HYBRID_EXPORT_CONCURRENCY = parseBoundedPositiveInt(
   1,
   12,
 );
+
+function boundedReleaseRasterOnly(): boolean {
+  return process.env.AUTHORED_HYBRID_BOUNDED_NATIVE_MODE?.trim().toLowerCase() === "raster-only";
+}
 
 interface CompletedHybridExport {
   result: BundledPresentationExportResult;
@@ -660,6 +664,26 @@ async function runUncachedAuthoredHybridExport(
       HYBRID_EXPORT_CONCURRENCY,
       async ({ html, slideNumber, semantic }) => {
         try {
+          if (boundedReleaseRasterOnly()) {
+            const reason = "bounded-release-visual-parity-raster-required";
+            return {
+              layer: null,
+              quality: {
+                ...imageFallbackSlide(slideNumber, reason),
+                semanticReceipts: {
+                  rasterDegradationReceiptDigest: semanticRasterDegradationDigest(
+                    {
+                      inputBundleDigest: semantic.bundleDigest,
+                      rendererSourceDigest: sourceSha256,
+                    },
+                    slideNumber,
+                    reason,
+                  ),
+                },
+              },
+              fontRendering: noFontRenderingTelemetry(),
+            };
+          }
           if (Date.now() - deckStart > HYBRID_DECK_BUDGET_MS) {
             if (!budgetWarningWritten) {
               budgetWarningWritten = true;
