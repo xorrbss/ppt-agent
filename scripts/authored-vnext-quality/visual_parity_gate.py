@@ -10,17 +10,16 @@ at the point of verification.
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac
 import json
 import os
-from pathlib import Path
 import re
 import struct
-from typing import Any
 import zlib
-
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any
 
 SCHEMA_VERSION = "authored-vnext-visual-parity-gate/v1"
 REPORT_SCHEMA_VERSION = "authored-vnext-visual-parity-gate-report/v1"
@@ -42,6 +41,18 @@ REQUIRED_ARCHETYPES = frozenset(
         "image",
         "architecture",
         "roadmap",
+    }
+)
+REQUIRED_RELEASE_ARCHETYPES = frozenset(
+    {
+        "boundary",
+        "chart",
+        "diagram",
+        "image-crop",
+        "long-text",
+        "mixed-css",
+        "multi-column",
+        "table",
     }
 )
 DEFECT_FIELDS = ("titleLineBreakChanges", "clipping", "overlap", "ghosting", "nativeBackplateCollision")
@@ -219,7 +230,72 @@ def _derived_archetypes(html: str, elements: list[dict[str, Any]]) -> set[str]:
     return result
 
 
-def _semantic_proof(root: Path, descriptor: Any, registry: list[dict[str, Any]], seen: set[Path]) -> tuple[str, dict[str, Any]]:
+def _derived_release_archetypes(
+    html: str, elements: list[dict[str, Any]]
+) -> set[str]:
+    lowered = html.lower()
+    kinds = {str(element.get("kind", "")).lower() for element in elements}
+    roles = {
+        str(element.get("semanticRole", "")).lower() for element in elements
+    }
+    text = " ".join(
+        str(
+            run.get("text", "")
+            if isinstance(run, dict)
+            else ""
+        )
+        for element in elements
+        if isinstance(element, dict)
+        for paragraph in (
+            element.get("payload", {}).get("paragraphs", [])
+            if isinstance(element.get("payload"), dict)
+            else []
+        )
+        if isinstance(paragraph, dict)
+        for run in paragraph.get("runs", [])
+    )
+    result: set[str] = set()
+    if "table" in kinds or "<table" in lowered:
+        result.add("table")
+    if "chart" in kinds or "chart-native" in lowered:
+        result.add("chart")
+    if (
+        roles.intersection({"diagramnode", "diagramconnector"})
+        or "class='node" in lowered
+        or 'class="node' in lowered
+    ):
+        result.add("diagram")
+    if "image" in kinds and "object-fit:cover" in lowered.replace(" ", ""):
+        result.add("image-crop")
+    if len(text) >= 100:
+        result.add("long-text")
+    if any(
+        token in lowered
+        for token in (
+            "linear-gradient(",
+            "box-shadow:",
+            "transform:",
+            "clip-path:",
+            "opacity:",
+        )
+    ):
+        result.add("mixed-css")
+    if any(
+        token in lowered
+        for token in ("display:grid", "display:flex", "grid-template-columns")
+    ):
+        result.add("multi-column")
+    if "sentinel" in lowered or "boundarysentinel" in roles:
+        result.add("boundary")
+    return result
+
+
+def _semantic_proof(
+    root: Path,
+    descriptor: Any,
+    registry: list[dict[str, Any]],
+    seen: set[Path],
+) -> tuple[str, dict[str, Any], set[str]]:
     proof_path, proof_digest = _path(root, descriptor, "semanticProof", seen)
     proof = _read_json(proof_path, "semanticProof")
     if proof.get("schemaVersion") != "authored-semantic-proof/v1" or not isinstance(proof.get("slides"), list):
@@ -228,6 +304,7 @@ def _semantic_proof(root: Path, descriptor: Any, registry: list[dict[str, Any]],
         raise GateFailure("semantic_proof_slide_count_mismatch")
     registry_by_id = {slide["slideId"]: slide for slide in registry}
     proof_ids: set[str] = set()
+    release_archetypes: set[str] = set()
     for index, slide in enumerate(proof["slides"], start=1):
         slide_id = _text(slide.get("slideId"), f"semanticProof:{index}:slideId")
         if slide_id in proof_ids or slide_id not in registry_by_id:
@@ -243,6 +320,7 @@ def _semantic_proof(root: Path, descriptor: Any, registry: list[dict[str, Any]],
         if not isinstance(elements, list) or not elements:
             raise GateFailure(f"semantic_proof_elements_required:{slide_id}")
         derived = _derived_archetypes(html, elements)
+        release_archetypes.update(_derived_release_archetypes(html, elements))
         expected = set(registry_by_id[slide_id].get("archetypes", []))
         if derived != expected:
             raise GateFailure(f"semantic_proof_archetype_mismatch:{slide_id}")
@@ -250,7 +328,15 @@ def _semantic_proof(root: Path, descriptor: Any, registry: list[dict[str, Any]],
             raise GateFailure(f"semantic_proof_registry_language_mismatch:{slide_id}")
     if proof_ids != set(registry_by_id):
         raise GateFailure("semantic_proof_slide_set_incomplete")
-    return proof_digest, {"schemaVersion": proof["schemaVersion"], "sha256": proof_digest, "slideCount": len(proof["slides"])}
+    return (
+        proof_digest,
+        {
+            "schemaVersion": proof["schemaVersion"],
+            "sha256": proof_digest,
+            "slideCount": len(proof["slides"]),
+        },
+        release_archetypes,
+    )
 
 
 def _png_gray(path: Path) -> tuple[int, int, list[int]]:
@@ -568,7 +654,22 @@ def verify_gate(manifest_path: Path) -> dict[str, Any]:
         "generationAttemptId": manifest["generationAttemptId"],
     }
     seen: set[Path] = {manifest_path}
-    semantic_proof_digest, semantic_proof = _semantic_proof(root, manifest.get("semanticProof"), manifest["slideRegistry"], seen)
+    _semantic_proof_digest, semantic_proof, release_archetypes = _semantic_proof(
+        root, manifest.get("semanticProof"), manifest["slideRegistry"], seen
+    )
+    release_profile_id = manifest.get("releaseProfileId")
+    bounded_release = release_profile_id == "authored-windows-powerpoint-hybrid-v1"
+    if release_profile_id is not None and not bounded_release:
+        raise GateFailure("release_profile_unsupported")
+    if bounded_release and release_archetypes != REQUIRED_RELEASE_ARCHETYPES:
+        missing = sorted(REQUIRED_RELEASE_ARCHETYPES - release_archetypes)
+        unexpected = sorted(release_archetypes - REQUIRED_RELEASE_ARCHETYPES)
+        raise GateFailure(
+            "semantic_proof_release_archetype_mismatch:"
+            + ",".join(missing)
+            + ":"
+            + ",".join(unexpected)
+        )
     modes = manifest.get("modes")
     if not isinstance(modes, list) or len(modes) != len(MODES):
         raise GateFailure("authored_fidelity_hybrid_modes_required")
@@ -614,6 +715,7 @@ def verify_gate(manifest_path: Path) -> dict[str, Any]:
         "dbAttemptResolution": db_resolution,
         "freshness": freshness,
         "atomicBindingDigest": atomic_digest,
+        **({"releaseProfileId": release_profile_id} if bounded_release else {}),
     }
     report = {
         "schemaVersion": REPORT_SCHEMA_VERSION,
@@ -621,7 +723,7 @@ def verify_gate(manifest_path: Path) -> dict[str, Any]:
         "promotionReady": False,
         "visualParity": "passed",
         "languages": sorted(languages),
-        "archetypes": sorted(archetypes),
+        "archetypes": sorted(release_archetypes if bounded_release else archetypes),
         "identity": identity,
         "evidenceDigest": canonical_digest(identity),
         "trustedIssuer": "authored-visual-parity-gate/v1",

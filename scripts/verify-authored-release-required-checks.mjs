@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { readFile } from "node:fs/promises";
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -25,10 +25,11 @@ function branchBlock(source, branch) {
 }
 
 export async function verifyConfigOnly() {
-  const [configSource, pipeline] = await Promise.all([
+  const [configSource, pipelineSource] = await Promise.all([
     readFile(configPath, "utf8"),
     readFile(pipelinePath, "utf8"),
   ]);
+  const pipeline = pipelineSource.replace(/\r\n?/gu, "\n");
   const config = JSON.parse(configSource);
   if (
     config.schemaVersion !== 1 ||
@@ -119,6 +120,10 @@ export async function verifyLive(fetchImpl = fetch, environment = process.env) {
   const config = JSON.parse(await readFile(configPath, "utf8"));
   const token = environment[config.liveVerification.environmentToken];
   if (!token) fail("Bitbucket authentication is required for live required-check verification");
+  const evidenceKey = environment.AUTHORED_RELEASE_CI_EVIDENCE_HMAC_KEY;
+  if (!evidenceKey || Buffer.byteLength(evidenceKey, "utf8") < 32) {
+    fail("Authored CI evidence signing key is required for live required-check verification");
+  }
   const commit = environment.BITBUCKET_COMMIT?.trim();
   if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(commit ?? "")) fail("BITBUCKET_COMMIT is required for live required-check verification");
   const headers = { Authorization: `Bearer ${token}`, Accept: "application/json" };
@@ -160,7 +165,9 @@ export async function verifyLive(fetchImpl = fetch, environment = process.env) {
       .sort(),
     verifiedAt: new Date().toISOString(),
   };
-  return { status: "verified", ...unsigned, receiptDigest: receiptDigest(unsigned) };
+  const digest = receiptDigest(unsigned);
+  const authoritySignature = `hmac-sha256:${createHmac("sha256", evidenceKey).update(digest, "utf8").digest("hex")}`;
+  return { status: "verified", ...unsigned, receiptDigest: digest, authoritySignature };
 }
 
 async function main() {

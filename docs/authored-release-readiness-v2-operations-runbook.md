@@ -2,9 +2,9 @@
 
 ## 범위와 권한
 
-v2는 release profile, scoped capability receipt, renderer attestation, kill switch를 **표시**하는 계약이다. UI나 Next.js가 serializer readiness 또는 promotion을 승인하지 않는다. `promotionReady=true`는 서버가 발행한 상태일 뿐이며, 아래 운영 증거와 별도 승인 없이 배포를 허용하지 않는다. `shadow` 또는 `blocked` receipt는 release promotion authority를 줄 수 없지만, non-promotable Hybrid 진단 export 자체를 자동으로 금지하지는 않는다. 해당 export admission과 receipt는 서버가 최종 결정한다.
+v2는 release profile, scoped capability receipt, renderer attestation, kill switch를 **표시**하는 계약이다. UI나 Next.js가 serializer readiness 또는 promotion을 승인하지 않는다. v3가 제공되면 UI는 v3의 `deckEvidenceReady`, `serializerProfileReady`, `nativeSubsetReady`, `releaseCommitReady`, `promotionReady`, `deploymentAuthorized`를 서버 값 그대로 표시한다. `promotionReady=true`는 배포 승인이 아니며 `deploymentAuthorized`와 독립이다. `shadow` 또는 `blocked` receipt는 release promotion authority를 줄 수 없지만, non-promotable Hybrid 진단 export 자체를 자동으로 금지하지는 않는다. 해당 export admission과 receipt는 서버가 최종 결정한다.
 
-v1 endpoint는 호환 경로다. v2 route가 404/410/501인 경우에만 UI가 v1로 내려가며, v1의 `promotionReady`, `fullNativeParityReady`, `independentVnextGenerationReady`는 계속 false다. 인증 오류·5xx·형식 오류는 fallback하지 않고 fail-closed한다.
+v3 route가 404/410/501인 경우에만 UI가 v2로 내려가고, v2 route도 같은 경우에만 v1로 내려간다. v1의 `promotionReady`, `fullNativeParityReady`, `independentVnextGenerationReady`는 계속 false다. v3의 deprecated full/independent 상태는 모두 `notApplicable`이며 주 readiness boolean이 아니다. 인증 오류·5xx·형식 오류는 fallback하지 않고 fail-closed한다.
 
 ## 4단계 운영 절차
 

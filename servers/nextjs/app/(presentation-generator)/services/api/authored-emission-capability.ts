@@ -4,6 +4,7 @@ import { getHeader } from "./header";
 const ROOT = "/api/v1/ppt/presentation";
 const SCHEMA_VERSION = "workbench-capability-projection/v1";
 const READINESS_V2_SCHEMA_VERSION = "workbench-capability-projection/v2";
+const READINESS_V3_SCHEMA_VERSION = "workbench-capability-projection/v3";
 
 export type AuthoredCanonicalMode = "legacyHtml" | "bundleGraph";
 export type AuthoredCapabilityState = "disabled" | "shadow" | "ready" | "blocked";
@@ -164,7 +165,70 @@ export interface AuthoredReleaseReadinessProjectionV2 {
   };
 }
 
+export type AuthoredBoundedReleaseCapabilityId =
+  | AuthoredReleaseCapabilityId
+  | "receipt.table"
+  | "receipt.imageCrop"
+  | "ci.requiredChecks";
+
+export interface AuthoredBoundedReleaseCapability {
+  capabilityId: AuthoredBoundedReleaseCapabilityId;
+  state: AuthoredCapabilityState;
+  reasonCode: string;
+  receiptDigest?: string;
+  scope: { platform: string; renderer: string; archetypes: string[] };
+  serializerId: string;
+  serializerVersion: string;
+  expiresAt?: string;
+}
+
+/** Bounded release v3 is a server-issued display projection. None of its
+ * readiness booleans are client-side authorization signals. */
+export interface AuthoredReleaseReadinessProjectionV3 {
+  schemaVersion: typeof READINESS_V3_SCHEMA_VERSION;
+  presentationId: string;
+  presentationRevision: number;
+  canonicalMode: AuthoredCanonicalMode;
+  canonicalDigest?: string;
+  manifestDigest?: string;
+  degradedFidelityOnly: boolean;
+  releaseProfile: {
+    schemaVersion: "authored-bounded-hybrid-release-readiness/v3";
+    profileId: string;
+    platformScope: { platform: string; renderer: string; archetypes: string[] };
+    evaluatedAt: string;
+    expiresAt: string;
+    deckEvidenceReady: boolean;
+    serializerProfileReady: boolean;
+    nativeSubsetReady: boolean;
+    releaseCommitReady: boolean;
+    promotionReady: boolean;
+    deploymentAuthorized: boolean;
+    fullNativeParityStatus: "notApplicable";
+    independentVnextGenerationStatus: "notApplicable";
+    deckEvidenceCapabilityIds: AuthoredBoundedReleaseCapabilityId[];
+    serializerProfileCapabilityIds: AuthoredBoundedReleaseCapabilityId[];
+    nativeSubsetCapabilityIds: AuthoredBoundedReleaseCapabilityId[];
+    releaseCommitCapabilityIds: AuthoredBoundedReleaseCapabilityId[];
+    allRequiredCapabilityIds: AuthoredBoundedReleaseCapabilityId[];
+    profileDefinitionDigest: string;
+    deckEvidenceReceiptDigests: string[];
+    serializerProfileReceiptDigests: string[];
+    nativeSubsetReceiptDigests: string[];
+    releaseCommitReceiptDigests: string[];
+    promotionReceiptDigests: string[];
+    reasonCode: string;
+  };
+  capabilities: AuthoredBoundedReleaseCapability[];
+  rendererAttestation: AuthoredReleaseReadinessProjectionV2["rendererAttestation"];
+  killSwitches: AuthoredReleaseReadinessProjectionV2["killSwitches"];
+  releaseAuthorityReceiptDigests: string[];
+  releaseProjectionDigest?: string;
+  exportAuthorityClaim?: AuthoredReleaseReadinessProjectionV2["exportAuthorityClaim"];
+}
+
 export type AuthoredEmissionReadinessStatus =
+  | { version: "v3"; projection: AuthoredReleaseReadinessProjectionV3 }
   | { version: "v2"; projection: AuthoredReleaseReadinessProjectionV2 }
   | { version: "v1-fallback"; projection: AuthoredEmissionCapabilityProjection };
 
@@ -255,6 +319,12 @@ const KNOWN_RELEASE_CAPABILITY_IDS = [
   "receipt.cjk", "receipt.chart", "receipt.zBand", "receipt.degradation",
   "renderer.attestation", "evidence.visual",
 ] as const satisfies readonly AuthoredReleaseCapabilityId[];
+const KNOWN_BOUNDED_RELEASE_CAPABILITY_IDS = [
+  ...KNOWN_RELEASE_CAPABILITY_IDS,
+  "receipt.table",
+  "receipt.imageCrop",
+  "ci.requiredChecks",
+] as const satisfies readonly AuthoredBoundedReleaseCapabilityId[];
 
 function requiredReasonCode(value: unknown, field: string): string {
   const code = requiredText(value, field);
@@ -651,6 +721,250 @@ export function normalizeAuthoredReleaseReadinessProjectionV2(value: unknown): A
   };
 }
 
+function requiredBoundedReleaseCapabilityId(value: unknown, field: string): AuthoredBoundedReleaseCapabilityId {
+  const id = requiredText(value, field) as AuthoredBoundedReleaseCapabilityId;
+  if (!(KNOWN_BOUNDED_RELEASE_CAPABILITY_IDS as readonly string[]).includes(id)) {
+    throw new Error(`Capability projection has invalid ${field}`);
+  }
+  return id;
+}
+
+/** Strictly parse bounded release v3. Unknown schemas, profile-set drift, and
+ * claim-pin mismatches are unavailable; this client does not reconstruct them. */
+export function normalizeAuthoredReleaseReadinessProjectionV3(value: unknown): AuthoredReleaseReadinessProjectionV3 {
+  const raw = record(value);
+  const data = raw.data && typeof raw.data === "object" ? record(raw.data) : raw;
+  if (data.schemaVersion !== READINESS_V3_SCHEMA_VERSION) {
+    throw new Error("Unsupported authored bounded release readiness schema");
+  }
+  const profile = record(data.releaseProfile);
+  if (profile.schemaVersion !== "authored-bounded-hybrid-release-readiness/v3") {
+    throw new Error("Capability projection has invalid releaseProfile.schemaVersion");
+  }
+  const v2OnlyProfileFields = [
+    "promotionCapabilityIds",
+    "requiredCapabilityIds",
+    "boundedNativeCapabilityIds",
+    "readyReceiptDigests",
+  ];
+  if (v2OnlyProfileFields.some((field) => Object.hasOwn(profile, field))) {
+    throw new Error("Capability projection has invalid v2-only releaseProfile fields");
+  }
+  const capabilityIds = (value: unknown, field: string, nonEmpty = true): AuthoredBoundedReleaseCapabilityId[] => {
+    if (!Array.isArray(value) || (nonEmpty && value.length === 0)) {
+      throw new Error(`Capability projection has incomplete ${field}`);
+    }
+    const ids = value.map((id, index) => requiredBoundedReleaseCapabilityId(id, `${field}[${index}]`));
+    if (new Set(ids).size !== ids.length) throw new Error(`Capability projection has duplicate ${field}`);
+    return ids;
+  };
+  const deckEvidenceIds = capabilityIds(profile.deckEvidenceCapabilityIds, "releaseProfile.deckEvidenceCapabilityIds");
+  const serializerProfileIds = capabilityIds(profile.serializerProfileCapabilityIds, "releaseProfile.serializerProfileCapabilityIds");
+  const nativeSubsetIds = capabilityIds(profile.nativeSubsetCapabilityIds, "releaseProfile.nativeSubsetCapabilityIds");
+  const releaseCommitIds = capabilityIds(profile.releaseCommitCapabilityIds, "releaseProfile.releaseCommitCapabilityIds");
+  const allRequiredIds = capabilityIds(profile.allRequiredCapabilityIds, "releaseProfile.allRequiredCapabilityIds");
+  if (!nativeSubsetIds.every((id) => serializerProfileIds.includes(id))) {
+    throw new Error("Capability projection has invalid releaseProfile.nativeSubsetCapabilityIds");
+  }
+  const canonicalAllRequiredIds = [...new Set([
+    ...deckEvidenceIds,
+    ...serializerProfileIds,
+    ...nativeSubsetIds,
+    ...releaseCommitIds,
+  ])].sort();
+  if (allRequiredIds.length !== canonicalAllRequiredIds.length || !allRequiredIds.every((id, index) => id === canonicalAllRequiredIds[index])) {
+    throw new Error("Capability projection has mismatched releaseProfile.allRequiredCapabilityIds");
+  }
+  const digestList = (input: unknown, field: string, nonEmpty = false): string[] => {
+    if (!Array.isArray(input) || (nonEmpty && input.length === 0)) throw new Error(`Capability projection has invalid ${field}`);
+    const digests = input.map((digest, index) => requiredDigest(digest, `${field}[${index}]`));
+    if (new Set(digests).size !== digests.length) throw new Error(`Capability projection has duplicate ${field}`);
+    return digests;
+  };
+  const deckEvidenceReceiptDigests = digestList(profile.deckEvidenceReceiptDigests, "releaseProfile.deckEvidenceReceiptDigests");
+  const serializerProfileReceiptDigests = digestList(profile.serializerProfileReceiptDigests, "releaseProfile.serializerProfileReceiptDigests");
+  const nativeSubsetReceiptDigests = digestList(profile.nativeSubsetReceiptDigests, "releaseProfile.nativeSubsetReceiptDigests");
+  const releaseCommitReceiptDigests = digestList(profile.releaseCommitReceiptDigests, "releaseProfile.releaseCommitReceiptDigests");
+  const promotionReceiptDigests = digestList(profile.promotionReceiptDigests, "releaseProfile.promotionReceiptDigests");
+  const releaseAuthorityReceiptDigests = digestList(data.releaseAuthorityReceiptDigests ?? [], "releaseAuthorityReceiptDigests");
+  const exactDigestList = (left: readonly string[], right: readonly string[]) => left.length === right.length && left.every((item, index) => item === right[index]);
+  const profileDefinitionDigest = requiredDigest(profile.profileDefinitionDigest, "releaseProfile.profileDefinitionDigest");
+  const exportAuthorityClaim = data.exportAuthorityClaim === undefined || data.exportAuthorityClaim === null
+    ? undefined
+    : record(data.exportAuthorityClaim);
+  let releaseProjectionDigest: string | undefined;
+  let normalizedExportAuthorityClaim: AuthoredReleaseReadinessProjectionV3["exportAuthorityClaim"];
+  if (exportAuthorityClaim) {
+    if (exportAuthorityClaim.schemaVersion !== "authored-export-authority-claim/v2") throw new Error("Capability projection has invalid exportAuthorityClaim.schemaVersion");
+    if (exportAuthorityClaim.kind !== "promotion" && exportAuthorityClaim.kind !== "boundedNative") throw new Error("Capability projection has invalid exportAuthorityClaim.kind");
+    if (exportAuthorityClaim.state !== "ready") throw new Error("Capability projection has invalid exportAuthorityClaim.state");
+    const claimReceiptDigests = digestList(exportAuthorityClaim.receiptDigests, "exportAuthorityClaim.receiptDigests", true);
+    if (!releaseAuthorityReceiptDigests.length || !exactDigestList(claimReceiptDigests, releaseAuthorityReceiptDigests)) {
+      throw new Error("Capability projection has mismatched exportAuthorityClaim.receiptDigests");
+    }
+    const claimedReceiptSet = exportAuthorityClaim.kind === "promotion" ? promotionReceiptDigests : nativeSubsetReceiptDigests;
+    if (!exactDigestList(claimReceiptDigests, claimedReceiptSet)) throw new Error("Capability projection has mismatched exportAuthorityClaim receipt pins");
+    releaseProjectionDigest = requiredDigest(data.releaseProjectionDigest, "releaseProjectionDigest");
+    if (
+      requiredText(exportAuthorityClaim.profileId, "exportAuthorityClaim.profileId") !== requiredText(profile.profileId, "releaseProfile.profileId") ||
+      requiredDigest(exportAuthorityClaim.profileDefinitionDigest, "exportAuthorityClaim.profileDefinitionDigest") !== profileDefinitionDigest ||
+      requiredDigest(exportAuthorityClaim.projectionDigest, "exportAuthorityClaim.projectionDigest") !== releaseProjectionDigest
+    ) {
+      throw new Error("Capability projection has mismatched exportAuthorityClaim binding pins");
+    }
+    normalizedExportAuthorityClaim = {
+      schemaVersion: "authored-export-authority-claim/v2",
+      kind: exportAuthorityClaim.kind,
+      profileId: requiredText(exportAuthorityClaim.profileId, "exportAuthorityClaim.profileId"),
+      profileDefinitionDigest,
+      projectionDigest: releaseProjectionDigest,
+      receiptDigests: claimReceiptDigests,
+      state: "ready",
+    };
+  } else if (
+    releaseAuthorityReceiptDigests.length > 0 ||
+    (data.releaseProjectionDigest !== undefined && data.releaseProjectionDigest !== null)
+  ) {
+    throw new Error("Capability projection has unclaimed release authority pins");
+  }
+  const capabilities = data.capabilities;
+  if (!Array.isArray(capabilities) || capabilities.length !== allRequiredIds.length) {
+    throw new Error("Capability projection has incomplete capabilities");
+  }
+  const seen = new Set<string>();
+  const normalizedCapabilities = capabilities.map((item, index) => {
+    const capability = record(item);
+    const capabilityId = requiredBoundedReleaseCapabilityId(capability.capabilityId, `capabilities[${index}].capabilityId`);
+    if (seen.has(capabilityId)) throw new Error(`Capability projection has duplicate capabilities[${index}].capabilityId`);
+    seen.add(capabilityId);
+    const scope = record(capability.scope);
+    const archetypes = scope.archetypes;
+    if (!Array.isArray(archetypes) || archetypes.length === 0 || !archetypes.every((entry) => typeof entry === "string" && entry.trim())) {
+      throw new Error(`Capability projection has invalid capabilities[${index}].scope.archetypes`);
+    }
+    return {
+      capabilityId,
+      state: capabilityState(capability.state, `capabilities[${index}].state`),
+      reasonCode: requiredReasonCode(capability.reasonCode, `capabilities[${index}].reasonCode`),
+      receiptDigest: capability.receiptDigest === undefined || capability.receiptDigest === null ? undefined : requiredDigest(capability.receiptDigest, `capabilities[${index}].receiptDigest`),
+      scope: {
+        platform: requiredText(scope.platform, `capabilities[${index}].scope.platform`),
+        renderer: requiredText(scope.renderer, `capabilities[${index}].scope.renderer`),
+        archetypes: archetypes.map((entry) => entry.trim()),
+      },
+      serializerId: requiredText(capability.serializerId, `capabilities[${index}].serializerId`),
+      serializerVersion: requiredText(capability.serializerVersion, `capabilities[${index}].serializerVersion`),
+      expiresAt: capability.expiresAt === undefined || capability.expiresAt === null ? undefined : requiredDate(capability.expiresAt, `capabilities[${index}].expiresAt`),
+    };
+  });
+  if (!allRequiredIds.every((id) => seen.has(id))) throw new Error("Capability projection has invalid capabilities");
+  const receiptByCapabilityId = new Map(normalizedCapabilities.map((capability) => [capability.capabilityId, capability.receiptDigest]));
+  const exactReceiptPins = (ids: readonly AuthoredBoundedReleaseCapabilityId[], pins: readonly string[]) =>
+    ids.length === pins.length && ids.every((id, index) => receiptByCapabilityId.get(id) === pins[index]);
+  const exactDeckEvidencePins = exactReceiptPins(deckEvidenceIds, deckEvidenceReceiptDigests);
+  const exactSerializerProfilePins = exactReceiptPins(serializerProfileIds, serializerProfileReceiptDigests);
+  const exactNativeSubsetPins = exactReceiptPins(nativeSubsetIds, nativeSubsetReceiptDigests);
+  const exactReleaseCommitPins = exactReceiptPins(releaseCommitIds, releaseCommitReceiptDigests);
+  const exactPromotionPins = exactReceiptPins(allRequiredIds, promotionReceiptDigests);
+  const deckEvidenceReady = booleanField(profile.deckEvidenceReady, "releaseProfile.deckEvidenceReady");
+  const serializerProfileReady = booleanField(profile.serializerProfileReady, "releaseProfile.serializerProfileReady");
+  const nativeSubsetReady = booleanField(profile.nativeSubsetReady, "releaseProfile.nativeSubsetReady");
+  const releaseCommitReady = booleanField(profile.releaseCommitReady, "releaseProfile.releaseCommitReady");
+  if (
+    deckEvidenceReady !== exactDeckEvidencePins ||
+    serializerProfileReady !== exactSerializerProfilePins ||
+    nativeSubsetReady !== exactNativeSubsetPins ||
+    releaseCommitReady !== exactReleaseCommitPins
+  ) {
+    throw new Error("Capability projection has mismatched release readiness receipt pins");
+  }
+  const profileScope = record(profile.platformScope);
+  const profileArchetypes = profileScope.archetypes;
+  if (!Array.isArray(profileArchetypes) || profileArchetypes.length === 0 || !profileArchetypes.every((entry) => typeof entry === "string" && entry.trim())) {
+    throw new Error("Capability projection has invalid releaseProfile.platformScope.archetypes");
+  }
+  const attestation = record(data.rendererAttestation);
+  const switches = data.killSwitches;
+  if (!Array.isArray(switches)) throw new Error("Capability projection has invalid killSwitches");
+  const normalizedSwitches = switches.map((item, index) => {
+    const current = record(item);
+    return {
+      capabilityId: requiredText(current.capabilityId, `killSwitches[${index}].capabilityId`),
+      active: booleanField(current.active, `killSwitches[${index}].active`),
+      reasonCode: requiredReasonCode(current.reasonCode, `killSwitches[${index}].reasonCode`),
+      expiresAt: current.expiresAt === undefined || current.expiresAt === null ? undefined : requiredDate(current.expiresAt, `killSwitches[${index}].expiresAt`),
+    };
+  });
+  const expectedPromotionReady =
+    deckEvidenceReady &&
+    serializerProfileReady &&
+    nativeSubsetReady &&
+    releaseCommitReady &&
+    exactPromotionPins &&
+    normalizedCapabilities.every((capability) => capability.state === "ready") &&
+    !normalizedSwitches.some((killSwitch) => killSwitch.active);
+  if (booleanField(profile.promotionReady, "releaseProfile.promotionReady") !== expectedPromotionReady) {
+    throw new Error("Capability projection has mismatched releaseProfile.promotionReady");
+  }
+  if (profile.fullNativeParityStatus !== "notApplicable" || profile.independentVnextGenerationStatus !== "notApplicable") {
+    throw new Error("Capability projection has invalid deprecated readiness status");
+  }
+  return {
+    schemaVersion: READINESS_V3_SCHEMA_VERSION,
+    presentationId: requiredText(data.presentationId, "presentationId"),
+    presentationRevision: requiredNonNegativeInteger(data.presentationRevision, "presentationRevision"),
+    canonicalMode: data.canonicalMode === "legacyHtml" || data.canonicalMode === "bundleGraph"
+      ? data.canonicalMode
+      : (() => { throw new Error("Capability projection has invalid canonicalMode"); })(),
+    canonicalDigest: data.canonicalDigest === undefined || data.canonicalDigest === null ? undefined : requiredDigest(data.canonicalDigest, "canonicalDigest"),
+    manifestDigest: data.manifestDigest === undefined || data.manifestDigest === null ? undefined : requiredDigest(data.manifestDigest, "manifestDigest"),
+    degradedFidelityOnly: booleanField(data.degradedFidelityOnly, "degradedFidelityOnly"),
+    releaseProfile: {
+      schemaVersion: "authored-bounded-hybrid-release-readiness/v3",
+      profileId: requiredText(profile.profileId, "releaseProfile.profileId"),
+      platformScope: {
+        platform: requiredText(profileScope.platform, "releaseProfile.platformScope.platform"),
+        renderer: requiredText(profileScope.renderer, "releaseProfile.platformScope.renderer"),
+        archetypes: profileArchetypes.map((entry) => entry.trim()),
+      },
+      evaluatedAt: requiredDate(profile.evaluatedAt, "releaseProfile.evaluatedAt"),
+      expiresAt: requiredDate(profile.expiresAt, "releaseProfile.expiresAt"),
+      deckEvidenceReady,
+      serializerProfileReady,
+      nativeSubsetReady,
+      releaseCommitReady,
+      promotionReady: booleanField(profile.promotionReady, "releaseProfile.promotionReady"),
+      deploymentAuthorized: booleanField(profile.deploymentAuthorized, "releaseProfile.deploymentAuthorized"),
+      fullNativeParityStatus: "notApplicable",
+      independentVnextGenerationStatus: "notApplicable",
+      deckEvidenceCapabilityIds: deckEvidenceIds,
+      serializerProfileCapabilityIds: serializerProfileIds,
+      nativeSubsetCapabilityIds: nativeSubsetIds,
+      releaseCommitCapabilityIds: releaseCommitIds,
+      allRequiredCapabilityIds: allRequiredIds,
+      profileDefinitionDigest,
+      deckEvidenceReceiptDigests,
+      serializerProfileReceiptDigests,
+      nativeSubsetReceiptDigests,
+      releaseCommitReceiptDigests,
+      promotionReceiptDigests,
+      reasonCode: requiredReasonCode(profile.reasonCode, "releaseProfile.reasonCode"),
+    },
+    capabilities: normalizedCapabilities,
+    rendererAttestation: {
+      state: rendererAttestationState(attestation.state, "rendererAttestation.state"),
+      reasonCode: requiredReasonCode(attestation.reasonCode, "rendererAttestation.reasonCode"),
+      attestationDigest: attestation.attestationDigest === undefined || attestation.attestationDigest === null ? undefined : requiredDigest(attestation.attestationDigest, "rendererAttestation.attestationDigest"),
+      environment: stringRecord(attestation.environment, "rendererAttestation.environment"),
+      expiresAt: attestation.expiresAt === undefined || attestation.expiresAt === null ? undefined : requiredDate(attestation.expiresAt, "rendererAttestation.expiresAt"),
+    },
+    killSwitches: normalizedSwitches,
+    releaseAuthorityReceiptDigests,
+    ...(releaseProjectionDigest ? { releaseProjectionDigest } : {}),
+    ...(normalizedExportAuthorityClaim ? { exportAuthorityClaim: normalizedExportAuthorityClaim } : {}),
+  };
+}
+
 export async function getAuthoredEmissionCapabilityProjection(
   presentationId: string,
   signal?: AbortSignal,
@@ -671,6 +985,20 @@ export async function getAuthoredEmissionReadinessStatus(
   presentationId: string,
   signal?: AbortSignal,
 ): Promise<AuthoredEmissionReadinessStatus> {
+  const v3 = await fetch(
+    getApiUrl(`${ROOT}/${encodeURIComponent(presentationId)}/authored-emission/capability-projection-v3`),
+    { headers: getHeader(), credentials: "include", signal, cache: "no-store" },
+  );
+  if (v3.ok) {
+    return { version: "v3", projection: normalizeAuthoredReleaseReadinessProjectionV3(await v3.json().catch(() => ({}))) };
+  }
+  // Retain a compatibility route only when the v3 endpoint is genuinely absent
+  // or explicitly unsupported. Any auth, server, or malformed response fails
+  // closed instead of widening a release claim through a downgrade.
+  if (v3.status !== 404 && v3.status !== 410 && v3.status !== 501) {
+    const body = record(await v3.json().catch(() => ({})));
+    throw new AuthoredEmissionCapabilityError(v3.status, text(body.code) ?? text(body.detail));
+  }
   const v2 = await fetch(
     getApiUrl(`${ROOT}/${encodeURIComponent(presentationId)}/authored-emission/capability-projection-v2`),
     { headers: getHeader(), credentials: "include", signal, cache: "no-store" },

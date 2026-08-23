@@ -6,6 +6,7 @@ import {
 import {
   createPresentationExportQuality,
   type PresentationExportFallbackElement,
+  type PresentationExportNativeElementReadback,
   type PresentationExportQualityReport,
 } from "../presentation-export-quality.ts";
 
@@ -53,7 +54,7 @@ function isHybridBackplate(block: string): boolean {
   return /<p:cNvPr\b[^>]*\bname="Presenton hybrid backplate"/.test(block);
 }
 
-export interface AuthoredHybridNativeReadbackElement {
+export interface AuthoredHybridNativeReadbackElement extends PresentationExportNativeElementReadback {
   readonly slideNumber: number;
   readonly elementId: string;
   readonly kind: "text" | "shape" | "image" | "table" | "chart";
@@ -67,9 +68,26 @@ export interface AuthoredHybridNativeReadbackElement {
       readonly name: string;
       readonly values: readonly number[];
     }[];
-    readonly hasCategoryAxis: boolean;
-    readonly hasValueAxis: boolean;
-    readonly legendPosition: "bottom" | "top" | "right" | "left" | null;
+    readonly categoryAxis: {
+      readonly present: boolean;
+      readonly title: string | null;
+      readonly latinTypefaces: readonly string[];
+      readonly eastAsianTypefaces: readonly string[];
+    };
+    readonly valueAxis: {
+      readonly present: boolean;
+      readonly title: string | null;
+      readonly latinTypefaces: readonly string[];
+      readonly eastAsianTypefaces: readonly string[];
+    };
+    readonly legend: {
+      readonly present: boolean;
+      readonly title: null;
+      readonly position: "bottom" | "top" | "right" | "left" | null;
+      readonly latinTypefaces: readonly string[];
+      readonly eastAsianTypefaces: readonly string[];
+    };
+    readonly title: string | null;
   };
   readonly table?: { readonly rows: number; readonly columns: number; readonly cellTexts: readonly string[] };
   readonly imageCrop?: { readonly left: number; readonly top: number; readonly right: number; readonly bottom: number };
@@ -100,6 +118,21 @@ function chartPointValues(xml: string): string[] {
     .map((match) => decodeXmlAttributeValue(match[2]) ?? "");
 }
 
+function chartText(block: string): string | null {
+  const value = block.match(/<a:t>([\s\S]*?)<\/a:t>/)?.[1];
+  return value === undefined ? null : decodeXmlAttributeValue(value);
+}
+
+function chartTextReadback(xml: string, tag: "catAx" | "valAx") {
+  const block = xml.match(new RegExp(`<c:${tag}\\b[\\s\\S]*?<\\/c:${tag}>`))?.[0];
+  return {
+    present: Boolean(block),
+    title: block ? chartText(block.match(/<c:title\b[\s\S]*?<\/c:title>/)?.[0] ?? "") : null,
+    latinTypefaces: block ? typefaces(block, "latin") : [],
+    eastAsianTypefaces: block ? typefaces(block, "ea") : [],
+  };
+}
+
 function chartReadback(xml: string): NonNullable<AuthoredHybridNativeReadbackElement["chart"]> | null {
   const chartType = /<c:doughnutChart\b/.test(xml)
     ? "donut" as const
@@ -127,16 +160,28 @@ function chartReadback(xml: string): NonNullable<AuthoredHybridNativeReadbackEle
     };
   });
   const categoryBlock = xml.match(/<c:cat>([\s\S]*?)<\/c:cat>/)?.[1] ?? "";
-  const legend = xml.match(/<c:legendPos\b[^>]*\bval="([btrl])"/)?.[1];
+  const legendBlock = xml.match(/<c:legend\b[\s\S]*?<\/c:legend>/)?.[0] ?? "";
+  const legend = legendBlock.match(/<c:legendPos\b[^>]*\bval="([btrl])"/)?.[1];
+  const chartPrefix = xml.slice(0, Math.max(0, xml.indexOf("<c:plotArea")));
+  const titleBlock = chartPrefix.match(/<c:title\b[\s\S]*?<\/c:title>/)?.[0] ?? "";
   return {
     chartType,
+    title: chartText(titleBlock),
+    titleLatinTypefaces: typefaces(titleBlock, "latin"),
+    titleEastAsianTypefaces: typefaces(titleBlock, "ea"),
     categories: chartPointValues(categoryBlock),
     series,
-    hasCategoryAxis: /<c:catAx\b/.test(xml),
-    hasValueAxis: /<c:valAx\b/.test(xml),
-    legendPosition: legend
-      ? ({ b: "bottom", t: "top", r: "right", l: "left" } as const)[legend as "b" | "t" | "r" | "l"]
-      : null,
+    categoryAxis: chartTextReadback(xml, "catAx"),
+    valueAxis: chartTextReadback(xml, "valAx"),
+    legend: {
+      present: Boolean(legendBlock),
+      title: null,
+      position: legend
+        ? ({ b: "bottom", t: "top", r: "right", l: "left" } as const)[legend as "b" | "t" | "r" | "l"]
+        : null,
+      latinTypefaces: typefaces(legendBlock, "latin"),
+      eastAsianTypefaces: typefaces(legendBlock, "ea"),
+    },
   };
 }
 
@@ -351,6 +396,7 @@ export function attachAuthoredHybridStage2ReadbackMetadata<
   T extends PresentationExportQualityReport,
 >(quality: T, pptxBytes: Buffer): T {
   const structural = inspectPptxEditability(pptxBytes);
+  const nativeReadback = inspectPptxNativeElementReadback(pptxBytes);
   const bySlide = new Map(structural.slides.map((slide) => [slide.slideNumber, slide as typeof slide & { nativeTableElements?: number; nativeImageCropElements?: number }]));
   return {
     ...quality,
@@ -360,6 +406,9 @@ export function attachAuthoredHybridStage2ReadbackMetadata<
         ...slide,
         nativeTableElements: observed?.nativeTableElements ?? 0,
         nativeImageCropElements: observed?.nativeImageCropElements ?? 0,
+        nativeElementReadback: nativeReadback.filter(
+          (entry) => entry.slideNumber === slide.slideNumber,
+        ),
       };
     }),
   } as T;

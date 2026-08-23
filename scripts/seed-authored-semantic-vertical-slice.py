@@ -26,15 +26,14 @@ from __future__ import annotations
 import argparse
 import asyncio
 import base64
-from datetime import datetime, timezone
 import hashlib
 import json
 import os
-from pathlib import Path
 import sys
-from urllib.parse import urlsplit
 import uuid
-
+from datetime import datetime, timezone
+from pathlib import Path
+from urllib.parse import urlsplit
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 FASTAPI_ROOT = REPO_ROOT / "servers" / "fastapi"
@@ -74,8 +73,16 @@ def _app_data_directory(database_url: str | None) -> Path:
     raise RuntimeError("app_data_directory_required_for_font_allowlist")
 
 
-def _materialize_font_allowlist(font_bytes: bytes, digest: str, database_url: str | None) -> Path:
-    target = _app_data_directory(database_url) / "font-embedding-allowlist" / "IBMPlexMono-Regular.ttf"
+def _materialize_font_allowlist(
+    font_bytes: bytes,
+    digest: str,
+    database_url: str | None,
+    *,
+    file_name: str,
+) -> Path:
+    if file_name not in {"IBMPlexMono-Regular.ttf", "consola.ttf"}:
+        raise RuntimeError("font_allowlist_file_name_invalid")
+    target = _app_data_directory(database_url) / "font-embedding-allowlist" / file_name
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.exists():
         if not target.is_file() or _sha256(target.read_bytes()) != digest:
@@ -109,8 +116,9 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--font-path",
-        required=True,
-        help="Actual IBM Plex Mono font bytes to persist.",
+        default="C:/Windows/Fonts/consola.ttf" if os.name == "nt" else None,
+        required=os.name != "nt",
+        help="Actual allowlisted mono font bytes (Windows Consolas is the default on Windows).",
     )
     parser.add_argument(
         "--cjk-sans-font-path",
@@ -147,7 +155,7 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _html(slide: str) -> str:
+def _html(slide: str, *, mono_family: str = "Consolas") -> str:
     if slide == "a":
         return """<!doctype html><html data-qid='a-document' lang='ko'><head><meta charset='utf-8'><style>
 *{box-sizing:border-box}html,body{margin:0;width:1280px;height:720px;overflow:hidden;background:#f8fafc}
@@ -165,7 +173,9 @@ def _html(slide: str) -> str:
 <div data-qid='a-right-sentinel' class='boundary-sentinel' style='left:1248px;top:310px;width:2px;height:10px;background:#ef4444;border-color:#ef4444'></div>
 <div data-qid='a-bottom-sentinel' class='boundary-sentinel' style='left:640px;top:708px;width:10px;height:2px;background:#ef4444;border-color:#ef4444'></div>
 <p data-qid='a-body-mono' data-semantic-role='body' style='position:absolute;left:704px;top:160px;margin:0;font-family:"IBM Plex Mono",monospace;font-size:25px;color:#1e293b'>MONORUN</p>
-</body></html>""".replace("__IMAGE_DATA_URI__", _IMAGE_DATA_URI)
+</body></html>""".replace("__IMAGE_DATA_URI__", _IMAGE_DATA_URI).replace(
+            "IBM Plex Mono", mono_family
+        )
     if slide == "b":
         return """<!doctype html><html data-qid='b-document' lang='ko'><head><meta charset='utf-8'><style>
 *{box-sizing:border-box}html,body{margin:0;width:1280px;height:720px;overflow:hidden;background:#fff7ed}
@@ -183,11 +193,15 @@ def _html(slide: str) -> str:
 <div data-qid='b-right-sentinel' class='boundary-sentinel' style='left:1278px;top:300px;width:2px;height:12px;background:#ef4444;border-color:#ef4444'></div>
 <div data-qid='b-bottom-sentinel' class='boundary-sentinel' style='left:620px;top:718px;width:12px;height:2px;background:#ef4444;border-color:#ef4444'></div>
 <p data-qid='b-body-mono' data-semantic-role='body' style='position:absolute;left:722px;top:170px;margin:0;font-family:"IBM Plex Mono",monospace;font-size:23px;color:#431407'>FIXEDWIDTH</p>
-</body></html>""".replace("__IMAGE_DATA_URI__", _IMAGE_DATA_URI)
+</body></html>""".replace("__IMAGE_DATA_URI__", _IMAGE_DATA_URI).replace(
+            "IBM Plex Mono", mono_family
+        )
     raise ValueError(f"unknown slide: {slide}")
 
 
-def _eight_slide_htmls(variant: str = "default") -> list[str]:
+def _eight_slide_htmls(
+    variant: str = "default", *, mono_family: str = "Consolas"
+) -> list[str]:
     image = _IMAGE_DATA_URI
     bodies = [
         """<h1 data-qid='s01-title'>분기별 운영 지표 카드</h1><table data-qid='s01-table'><tr data-qid-ignore><th data-qid-ignore>분기</th><th data-qid-ignore>정확도</th><th data-qid-ignore>처리량</th></tr><tr data-qid-ignore><td data-qid-ignore>1분기</td><td data-qid-ignore>92%</td><td data-qid-ignore>1,240</td></tr><tr data-qid-ignore><td data-qid-ignore>2분기</td><td data-qid-ignore>96%</td><td data-qid-ignore>1,680</td></tr></table><p data-qid='s01-caption'>카드 지표 표 데이터와 합계를 네이티브 편집 대상으로 보존합니다.</p>""",
@@ -204,8 +218,8 @@ def _eight_slide_htmls(variant: str = "default") -> list[str]:
         ".chart-native{position:absolute;left:120px;top:185px;width:880px;height:350px}",
         ".node{position:absolute;top:280px;width:210px;padding:28px;border-radius:18px;background:#dbeafe;text-align:center;font-size:30px}.n1{left:110px}.n2{left:500px}.n3{left:890px}.arrow{position:absolute;top:292px;font-size:54px}.a1{left:385px}.a2{left:775px}",
         "img{position:absolute;left:100px;top:160px;width:720px;height:400px;object-fit:cover;object-position:50% 25%}p{position:absolute;left:860px;top:260px;width:280px;font-size:24px}",
-        "h1{font-family:'Batang',serif;max-width:1060px;line-height:1.18}p{font-family:'Batang',serif;width:980px;font-size:25px;line-height:1.62}code{display:block;margin-top:34px;font-family:'IBM Plex Mono',monospace;font-size:24px}",
-        ".columns{display:grid;grid-template-columns:repeat(3,1fr);gap:28px}.columns section{padding:28px;background:#eff6ff;border-top:6px solid #2563eb;min-height:280px}.columns h2{font-size:30px}.columns p{font-size:23px}",
+        f"h1{{font-family:'Batang',serif;max-width:1060px;line-height:1.18}}p{{font-family:'Batang',serif;width:980px;font-size:25px;line-height:1.62}}code{{display:block;margin-top:34px;font-family:'{mono_family}',monospace;font-size:24px}}",
+        ".columns{display:grid;grid-template-columns:repeat(3,1fr);gap:28px}.columns section{display:flex;flex-direction:column;justify-content:flex-start;padding:28px;background:#eff6ff;border-top:6px solid #2563eb;min-height:280px}.columns h2{font-size:30px}.columns p{font-size:23px}",
         ".gradient{height:220px;border-radius:26px;background:linear-gradient(135deg,#0ea5e9,#1d4ed8);box-shadow:0 18px 40px #0f172a55;opacity:.88;clip-path:polygon(0 0,100% 0,88% 100%,0 100%)}.badge{position:absolute;right:100px;top:250px;padding:24px 48px;background:#facc15;border-radius:18px;transform:rotate(-5deg);font-size:30px}.fixture-panel p{font-size:24px}",
         ".right-sentinel{position:absolute;right:0;top:320px}.bottom-sentinel{position:absolute;bottom:0;left:620px}.internal-sentinel{position:absolute;right:90px;bottom:80px}.right-sentinel,.bottom-sentinel,.internal-sentinel{padding:6px;background:#ef4444;color:white;font-weight:700}",
     ]
@@ -231,7 +245,7 @@ def _eight_slide_htmls(variant: str = "default") -> list[str]:
 
 
 def _eight_slide_semantic_drafts(
-    htmls: list[str], image_digest: str
+    htmls: list[str], image_digest: str, *, mono_family: str = "Consolas"
 ) -> list[dict]:
     import re
 
@@ -244,9 +258,7 @@ def _eight_slide_semantic_drafts(
         for qid in qids:
             if qid == root_qid:
                 parent_by_qid[qid] = None
-            elif slide_index == 6 and (
-                qid.startswith("s06-col-") or qid.startswith("s06-copy-")
-            ):
+            elif slide_index == 6 and qid.startswith(("s06-col-", "s06-copy-")):
                 parent_by_qid[qid] = "s06-grid"
             else:
                 parent_by_qid[qid] = root_qid
@@ -326,7 +338,7 @@ def _eight_slide_semantic_drafts(
             elif any(token in qid for token in ("grid", "gradient", "badge", "root")):
                 features = {
                     "s01-table": ["table", "table-grid"],
-                    "s06-grid": ["grid", "multi-column"],
+                    "s06-grid": ["flex", "grid", "multi-column"],
                     "s07-gradient": ["gradient", "shadow", "opacity", "clip-path"],
                     "s07-badge": ["transform", "border-radius"],
                 }.get(qid, [])
@@ -369,7 +381,7 @@ def _eight_slide_semantic_drafts(
                             "text": "MONO-2026-",
                             "language": "en",
                             "script": "latin",
-                            "fontFamily": "IBM Plex Mono",
+                            "fontFamily": mono_family,
                             "fontFace": "Regular",
                             "fontSizePt": 18,
                             "weight": 400,
@@ -400,6 +412,7 @@ def _eight_slide_semantic_drafts(
                 )
                 element = base | {
                     "kind": "text",
+                    "requiredFeatures": ["cjk"],
                     "payload": {
                         "paragraphs": [{"runs": runs}],
                         "whitespace": "normal",
@@ -467,7 +480,9 @@ def _text_payload(text: str, *, title: bool = False, body: bool = False, font_fa
     return {"paragraphs": [{"runs": runs}], "whitespace": "normal"}
 
 
-def _semantic_elements(slide: str, asset_digest: str) -> list[dict]:
+def _semantic_elements(
+    slide: str, asset_digest: str, *, mono_family: str = "Consolas"
+) -> list[dict]:
     prefix = f"{slide}-"
     if slide == "a":
         title = "Authored 품질 Slice A"
@@ -559,7 +574,9 @@ def _semantic_elements(slide: str, asset_digest: str) -> list[dict]:
             "intendedOrder": 5,
             "intendedBounds": _bounds(530, 164, 180, 34),
             "requiredFeatures": [],
-            "payload": _text_payload(mono_text, font_family="IBM Plex Mono", color=body_color),
+            "payload": _text_payload(
+                mono_text, font_family=mono_family, color=body_color
+            ),
         },
         {
             "elementId": f"{prefix}image",
@@ -628,8 +645,10 @@ def _semantic_elements(slide: str, asset_digest: str) -> list[dict]:
     return elements
 
 
-def _semantic_draft(slide: str, asset_digest: str) -> dict:
-    elements = _semantic_elements(slide, asset_digest)
+def _semantic_draft(
+    slide: str, asset_digest: str, *, mono_family: str = "Consolas"
+) -> dict:
+    elements = _semantic_elements(slide, asset_digest, mono_family=mono_family)
     return {
         "semanticSource": {
             "schemaVersion": "authored-semantic-source/v1",
@@ -667,15 +686,6 @@ async def _seed(args: argparse.Namespace) -> dict:
     sans_font_digest = _sha256(sans_font_bytes)
     serif_font_digest = _sha256(serif_font_bytes)
 
-    from sqlalchemy import select
-    from services.database import async_session_maker, dispose_engines, sql_engine
-    from models.sql.presentation import PresentationModel
-    from models.sql.slide import SlideModel
-    from models.sql.user import User
-    from models.sql.workspace import WorkspaceConversation, WorkspaceOperation
-    from services.authored_vnext.semantic.canonical import canonical_digest
-    from services.authored_vnext.semantic.publication import publish_authored_semantic_bundle_graph
-    from services.authored_vnext.semantic.typography import NativeFontByteRegistry
     from models.authored_vnext.semantic.contracts import (
         ArtifactPointerV1,
         AssetManifestV1,
@@ -683,6 +693,17 @@ async def _seed(args: argparse.Namespace) -> dict:
         ResolvedAssetV1,
         ResolvedFontV1,
     )
+    from models.sql.presentation import PresentationModel
+    from models.sql.slide import SlideModel
+    from models.sql.user import User
+    from models.sql.workspace import WorkspaceConversation, WorkspaceOperation
+    from services.authored_vnext.semantic.canonical import canonical_digest
+    from services.authored_vnext.semantic.publication import (
+        publish_authored_semantic_bundle_graph,
+    )
+    from services.authored_vnext.semantic.typography import NativeFontByteRegistry
+    from services.database import async_session_maker, dispose_engines, sql_engine
+    from sqlalchemy import select
     from utils.owner_context import reset_current_owner_id, set_current_owner_id
 
     required_tables = {
@@ -703,13 +724,16 @@ async def _seed(args: argparse.Namespace) -> dict:
     serif_receipt = font_registry.register(serif_font_bytes, collection_index=0)
     cjk_mono_receipt = font_registry.register(serif_font_bytes, collection_index=1)
     expected_families = {
-        mono_receipt.family.casefold(): "ibm plex mono",
         sans_receipt.family.casefold(): "malgun gothic",
         serif_receipt.family.casefold(): "batang",
         cjk_mono_receipt.family.casefold(): "batangche",
     }
     if any(actual != expected for actual, expected in expected_families.items()):
         raise RuntimeError("authored_semantic_seed_font_family_mismatch")
+    if mono_receipt.family.casefold() not in {"ibm plex mono", "consolas"}:
+        raise RuntimeError("authored_semantic_seed_mono_font_family_mismatch")
+    if mono_receipt.face_class != "mono":
+        raise RuntimeError("authored_semantic_seed_mono_font_class_mismatch")
     if not all(
         receipt.embedding_eligible
         for receipt in (mono_receipt, sans_receipt, serif_receipt, cjk_mono_receipt)
@@ -719,6 +743,11 @@ async def _seed(args: argparse.Namespace) -> dict:
         font_bytes,
         font_digest,
         args.database_url or os.getenv("DATABASE_URL"),
+        file_name=(
+            "IBMPlexMono-Regular.ttf"
+            if mono_receipt.family.casefold() == "ibm plex mono"
+            else "consola.ttf"
+        ),
     )
     if owner_id is None:
         async with async_session_maker() as session:
@@ -785,9 +814,12 @@ async def _seed(args: argparse.Namespace) -> dict:
                 )
                 session.add(operation)
                 htmls = (
-                    _eight_slide_htmls(args.variant)
+                    _eight_slide_htmls(args.variant, mono_family=mono_receipt.family)
                     if args.slide_count == 8
-                    else [_html("a"), _html("b")]
+                    else [
+                        _html("a", mono_family=mono_receipt.family),
+                        _html("b", mono_family=mono_receipt.family),
+                    ]
                 )
                 slides = []
                 for index, html in enumerate(htmls):
@@ -843,9 +875,18 @@ async def _seed(args: argparse.Namespace) -> dict:
                     slides=slides,
                     htmls=htmls,
                     semantic_drafts=(
-                        _eight_slide_semantic_drafts(htmls, image_digest)
+                        _eight_slide_semantic_drafts(
+                            htmls, image_digest, mono_family=mono_receipt.family
+                        )
                         if args.slide_count == 8
-                        else [_semantic_draft("a", image_digest), _semantic_draft("b", image_digest)]
+                        else [
+                            _semantic_draft(
+                                "a", image_digest, mono_family=mono_receipt.family
+                            ),
+                            _semantic_draft(
+                                "b", image_digest, mono_family=mono_receipt.family
+                            ),
+                        ]
                     ),
                     master_contract_digest=master_digest,
                     composition_digest=composition_digest,
@@ -869,12 +910,27 @@ async def _seed(args: argparse.Namespace) -> dict:
                         for qid in __import__("re").findall(r"data-qid=['\"]([^'\"]+)['\"]", html)
                     ]
                     if args.slide_count == 8
-                    else [item["elementId"] for slide in ("a", "b") for item in _semantic_elements(slide, image_digest)]
+                    else [
+                        item["elementId"]
+                        for slide in ("a", "b")
+                        for item in _semantic_elements(
+                            slide, image_digest, mono_family=mono_receipt.family
+                        )
+                    ]
                 )
                 semantic_drafts_for_receipt = (
-                    _eight_slide_semantic_drafts(htmls, image_digest)
+                    _eight_slide_semantic_drafts(
+                        htmls, image_digest, mono_family=mono_receipt.family
+                    )
                     if args.slide_count == 8
-                    else [_semantic_draft("a", image_digest), _semantic_draft("b", image_digest)]
+                    else [
+                        _semantic_draft(
+                            "a", image_digest, mono_family=mono_receipt.family
+                        ),
+                        _semantic_draft(
+                            "b", image_digest, mono_family=mono_receipt.family
+                        ),
+                    ]
                 )
                 semantic_manifest = {
                     "schemaVersion": "authored-semantic-proof/v1",

@@ -67,6 +67,63 @@ export interface PresentationExportSlideQuality {
   };
   /** Single declared-QID authority across logical admission, OOXML, and optional COM reopen. */
   qidCoverage?: PresentationExportQidCoverage[];
+  /** Immutable detailed OOXML projection, keyed by the declared QID. */
+  nativeElementReadback?: PresentationExportNativeElementReadback[];
+  /** Fixed-point paint closure that produced this native/backplate layering. */
+  paintPlan?: PresentationExportPaintPlanReadback;
+}
+
+export interface PresentationExportNativeElementReadback {
+  readonly slideNumber: number;
+  readonly elementId: string;
+  readonly kind: "text" | "shape" | "image" | "table" | "chart";
+  readonly latinTypefaces: readonly string[];
+  readonly eastAsianTypefaces: readonly string[];
+  readonly lineBreakCount: number;
+  readonly chart?: {
+    readonly chartType: "bar" | "column" | "line" | "area" | "pie" | "donut";
+    readonly title: string | null;
+    readonly titleLatinTypefaces: readonly string[];
+    readonly titleEastAsianTypefaces: readonly string[];
+    readonly categories: readonly string[];
+    readonly series: readonly { readonly name: string; readonly values: readonly number[] }[];
+    readonly categoryAxis: PresentationExportChartTextReadback;
+    readonly valueAxis: PresentationExportChartTextReadback;
+    readonly legend: PresentationExportChartLegendReadback;
+  };
+}
+
+export interface PresentationExportChartTextReadback {
+  readonly present: boolean;
+  readonly title: string | null;
+  readonly latinTypefaces: readonly string[];
+  readonly eastAsianTypefaces: readonly string[];
+}
+
+export interface PresentationExportChartLegendReadback extends PresentationExportChartTextReadback {
+  readonly position: "bottom" | "top" | "right" | "left" | null;
+}
+
+export interface PresentationExportPaintPlanReadback {
+  readonly schemaVersion: "hybrid-paint-plan/browser-v1";
+  readonly strategy: "single-backplate-fixed-point";
+  readonly fixedPointReached: true;
+  readonly closureIterations: number;
+  readonly closureDigest: string;
+  readonly hybridPlanDigest: string;
+  readonly slideDemotedToRaster: boolean;
+  readonly downgradeReceipt: {
+    readonly schemaVersion: "hybrid-layer-downgrade-receipt/browser-v1";
+    readonly state: "closed" | "slideRaster";
+    readonly reason: "no-closed-native-z-band" | "backplate-identity-mismatch" | "opaque-backplate-collision" | null;
+    readonly demotedElementIds: readonly string[];
+    readonly receiptDigest: string;
+  };
+  readonly demotions: readonly {
+    readonly elementId: string;
+    readonly fallbackReason: "z-band-unsafe";
+    readonly blockedByElementIds: readonly string[];
+  }[];
 }
 
 export interface PresentationExportQidCoverage {

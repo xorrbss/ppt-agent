@@ -206,6 +206,45 @@ class VisualParityGateTests(unittest.TestCase):
             self.assertFalse(result["promotionReady"])
             self.assertEqual(result["languages"], ["ja", "ko", "zh"])
 
+    def test_bounded_release_profile_requires_and_reports_exact_eight_archetypes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = make_manifest(root)
+            value = json.loads(path.read_text(encoding="utf-8"))
+            proof_path = root / value["semanticProof"]["path"]
+            proof = json.loads(proof_path.read_text(encoding="utf-8"))
+            first_slide = proof["slides"][0]
+            first_slide["html"] = first_slide["html"].replace(
+                "</body>",
+                "<div class='sentinel' style='display:flex;linear-gradient(#fff,#000)'>boundary</div></body>",
+            )
+            first_slide["semanticSource"]["elements"][0]["payload"] = {
+                "paragraphs": [{"runs": [{"text": "긴 한국어 본문 " * 20}]}]
+            }
+            proof_bytes = json.dumps(
+                proof, ensure_ascii=False, sort_keys=True
+            ).encode("utf-8")
+            value["semanticProof"] = descriptor(
+                root, "semantic/semantic-proof.json", proof_bytes
+            )
+            value["releaseProfileId"] = "authored-windows-powerpoint-hybrid-v1"
+            path.write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")
+
+            result = verify_gate(path)
+
+            self.assertEqual(
+                result["archetypes"],
+                [
+                    "boundary", "chart", "diagram", "image-crop", "long-text",
+                    "mixed-css", "multi-column", "table",
+                ],
+            )
+            self.assertEqual(
+                result["identity"]["releaseProfileId"],
+                "authored-windows-powerpoint-hybrid-v1",
+            )
+            self.assertFalse(result["promotionReady"])
+
     def test_report_is_sealed_when_trusted_signing_key_is_configured(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             key = "visual-gate-test-key-with-at-least-32-bytes"

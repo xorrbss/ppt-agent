@@ -763,8 +763,8 @@ async function runUncachedAuthoredHybridExport(
       }
       return layer;
     });
-    const qualitySlides = preparedSlides.map((prepared) =>
-      prepared.layer
+    const qualitySlides = preparedSlides.map((prepared) => {
+      const quality = prepared.layer
         ? prepared.quality
         : {
             ...prepared.quality,
@@ -773,8 +773,20 @@ async function runUncachedAuthoredHybridExport(
               ...prepared.quality.fallbackReasons,
               "isolated-fidelity-raster-fallback",
             ],
-          },
-    );
+          };
+      return {
+        ...quality,
+        ...(prepared.paintPlan && prepared.quality.semanticReceipts?.hybridPlanDigest
+          ? {
+              paintPlan: {
+                ...prepared.paintPlan,
+                hybridPlanDigest:
+                  prepared.quality.semanticReceipts.hybridPlanDigest,
+              },
+            }
+          : {}),
+      };
+    });
     const logicalQuality = createPresentationExportQuality(
       "hybrid",
       qualitySlides,

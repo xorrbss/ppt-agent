@@ -24,6 +24,9 @@ const releaseCapabilityLabels: Record<string, string> = {
   "receipt.chart": "Chart receipt",
   "receipt.zBand": "z-band receipt",
   "receipt.degradation": "Degradation receipt",
+  "receipt.table": "Table receipt",
+  "receipt.imageCrop": "Image crop receipt",
+  "ci.requiredChecks": "CI required checks",
   "renderer.attestation": "Renderer attestation",
   "evidence.visual": "Visual evidence",
 };
@@ -68,10 +71,10 @@ export function authoredHybridUnavailableReason(
   if (status.state === "checking") return "capability projection을 확인하는 중입니다.";
   if (status.state === "unavailable") return status.reason ?? "Hybrid capability projection을 확인하지 못했습니다.";
   const { readiness } = status;
-  if (readiness.version === "v2") {
+  if (readiness.version === "v3" || readiness.version === "v2") {
     const { projection } = readiness;
     if (expectedRevision !== undefined && projection.presentationRevision !== expectedRevision) {
-      return "현재 revision과 v2 release readiness binding이 일치하지 않습니다.";
+      return `현재 revision과 ${readiness.version} release readiness binding이 일치하지 않습니다.`;
     }
     const activeKillSwitch = projection.killSwitches.find((item) => item.active);
     if (activeKillSwitch) return `${activeKillSwitch.capabilityId}: ${activeKillSwitch.reasonCode}`;
@@ -119,16 +122,16 @@ export default function AuthoredEmissionCapabilityStatusView({
     return <p className="text-[11px] leading-4 text-amber-800" data-testid="authored-capability-status">Fidelity만 사용할 수 있습니다. {status.reason ?? "Hybrid capability projection을 확인하지 못했습니다."}</p>;
   }
   const { readiness } = status;
-  if (readiness.version === "v2") {
+  if (readiness.version === "v3" || readiness.version === "v2") {
     const { projection } = readiness;
     const hybridReason = authoredHybridUnavailableReason(status, expectedRevision);
     const activeKillSwitches = projection.killSwitches.filter((item) => item.active);
     return (
-      <div className="space-y-1 text-[11px] leading-4" data-testid="authored-capability-status" data-readiness-version="v2">
+      <div className="space-y-1 text-[11px] leading-4" data-testid="authored-capability-status" data-readiness-version={readiness.version}>
         <p className={hybridReason ? "text-amber-800" : "text-emerald-800"}>
           {hybridReason
             ? `Hybrid 제한: ${hybridReason}`
-            : "Fidelity와 Hybrid가 같은 immutable v2 manifest에 묶여 있습니다. shadow/blocked receipt는 release promotion authority를 부여하지 않으며, non-promotable Hybrid 진단 export admission은 서버가 결정합니다."}
+            : `Fidelity와 Hybrid가 같은 immutable ${readiness.version} manifest에 묶여 있습니다. shadow/blocked receipt는 release promotion authority를 부여하지 않으며, non-promotable Hybrid 진단 export admission은 서버가 결정합니다.`}
         </p>
         <p className="break-all text-slate-500">
           profile {projection.releaseProfile.profileId} · {projection.releaseProfile.platformScope.platform}/{projection.releaseProfile.platformScope.renderer} · {projection.releaseProfile.reasonCode}
@@ -136,19 +139,39 @@ export default function AuthoredEmissionCapabilityStatusView({
         <p className="break-all text-slate-500">
           binding claim: {projection.canonicalMode} · canonical {projection.canonicalDigest ?? "미기록"} · manifest {projection.manifestDigest ?? "미기록"} · projection {projection.releaseProjectionDigest ?? "미발행"}
         </p>
-        <p className="text-slate-500">
-          promotionReady: {String(projection.releaseProfile.promotionReady)} · boundedNativeParityReady: {String(projection.releaseProfile.boundedNativeParityReady)} · independentGenerationReady: {String(projection.releaseProfile.independentGenerationReady)}
-        </p>
+        {readiness.version === "v3" ? (
+          <>
+            <p className="text-slate-500">
+              deckEvidenceReady: {String(readiness.projection.releaseProfile.deckEvidenceReady)} · serializerProfileReady: {String(readiness.projection.releaseProfile.serializerProfileReady)} · nativeSubsetReady: {String(readiness.projection.releaseProfile.nativeSubsetReady)}
+            </p>
+            <p className="text-slate-500">
+              releaseCommitReady: {String(readiness.projection.releaseProfile.releaseCommitReady)} · promotionReady: {String(readiness.projection.releaseProfile.promotionReady)} · deploymentAuthorized: {String(readiness.projection.releaseProfile.deploymentAuthorized)}
+            </p>
+            <p className="text-slate-500">
+              deprecated status: fullNativeParity {readiness.projection.releaseProfile.fullNativeParityStatus} · independentVnextGeneration {readiness.projection.releaseProfile.independentVnextGenerationStatus}. promotionReady는 배포 승인이 아닙니다.
+            </p>
+          </>
+        ) : (
+          <p className="text-slate-500">
+            promotionReady: {String(projection.releaseProfile.promotionReady)} · boundedNativeParityReady: {String(projection.releaseProfile.boundedNativeParityReady)} · independentGenerationReady: {String(projection.releaseProfile.independentGenerationReady)}
+          </p>
+        )}
         <p className="break-all text-slate-500">
           exact pins: profile {projection.releaseProfile.profileDefinitionDigest} · claim {projection.exportAuthorityClaim ? `${projection.exportAuthorityClaim.kind}/${projection.exportAuthorityClaim.state}` : "미발행"} · authority receipts {projection.releaseAuthorityReceiptDigests.length}
         </p>
         <p className="text-slate-500">
           release projection digest와 export authority claim은 ready authority가 발행한 경우에만 표시됩니다. 비승격 상태의 미발행은 client-side readiness 판단이 아닙니다.
         </p>
-        <p className="break-all text-slate-500">
-          promotion [{projection.releaseProfile.promotionCapabilityIds.join(", ")}] · bounded native [{projection.releaseProfile.boundedNativeCapabilityIds.join(", ")}]
-        </p>
-        <section className="border-t border-slate-100 pt-1.5" aria-label="서버 발행 v2 scoped capabilities">
+        {readiness.version === "v3" ? (
+          <p className="break-all text-slate-500">
+            deck evidence [{readiness.projection.releaseProfile.deckEvidenceCapabilityIds.join(", ")}] · serializer profile [{readiness.projection.releaseProfile.serializerProfileCapabilityIds.join(", ")}] · native subset [{readiness.projection.releaseProfile.nativeSubsetCapabilityIds.join(", ")}] · release commit [{readiness.projection.releaseProfile.releaseCommitCapabilityIds.join(", ")}] · all required [{readiness.projection.releaseProfile.allRequiredCapabilityIds.join(", ")}]
+          </p>
+        ) : (
+          <p className="break-all text-slate-500">
+            promotion [{projection.releaseProfile.promotionCapabilityIds.join(", ")}] · bounded native [{projection.releaseProfile.boundedNativeCapabilityIds.join(", ")}]
+          </p>
+        )}
+        <section className="border-t border-slate-100 pt-1.5" aria-label={`서버 발행 ${readiness.version} scoped capabilities`}>
           <p className="font-medium text-slate-700">서버 발행 scoped capabilities</p>
           <div className="mt-1 grid gap-x-3 gap-y-1 sm:grid-cols-2">
             {projection.capabilities.map((capability) => (

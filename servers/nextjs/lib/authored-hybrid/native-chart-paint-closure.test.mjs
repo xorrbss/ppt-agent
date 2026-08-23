@@ -11,6 +11,7 @@ import { planLayerSafeNativeElements } from "./native-plan.ts";
 import { assembleAuthoredHybridPptx } from "./pptx-assembler.ts";
 import { createAuthoredHybridCoverageManifest } from "./export-metadata.ts";
 import {
+  attachAuthoredHybridStage2ReadbackMetadata,
   inspectPptxEditability,
   inspectPptxNativeElementReadback,
 } from "./pptx-quality-inspection.ts";
@@ -172,20 +173,41 @@ test("bounded semantic chart becomes native OOXML with data, axes, legend, and f
   assert.equal(readback[0].kind, "chart");
   assert.deepEqual(readback[0].chart, {
     chartType: "column",
+    title: "분기별 성과",
+    titleLatinTypefaces: ["Aptos"],
+    titleEastAsianTypefaces: ["Aptos"],
     categories: ["Q1", "Q2", "Q3"],
     series: [
       { name: "Revenue", values: [12, 18, 27] },
       { name: "Margin", values: [7, 11, 16] },
     ],
-    hasCategoryAxis: true,
-    hasValueAxis: true,
-    legendPosition: "right",
+    categoryAxis: {
+      present: true,
+      title: "분기",
+      latinTypefaces: ["Noto Sans KR"],
+      eastAsianTypefaces: ["Noto Sans KR"],
+    },
+    valueAxis: {
+      present: true,
+      title: "백만 원",
+      latinTypefaces: ["Noto Sans KR"],
+      eastAsianTypefaces: ["Noto Sans KR"],
+    },
+    legend: {
+      present: true,
+      title: null,
+      position: "right",
+      latinTypefaces: ["IBM Plex Sans"],
+      eastAsianTypefaces: ["IBM Plex Sans"],
+    },
   });
   assert.ok(readback[0].latinTypefaces.includes("Noto Sans KR"));
   const quality = inspectPptxEditability(pptx);
   assert.equal(quality.nativeChartElements, 1);
   assert.equal(quality.ooxmlReadback.nativeChart, 1);
   assert.equal(quality.status, "fully-editable");
+  const detailedQuality = attachAuthoredHybridStage2ReadbackMetadata(quality, pptx);
+  assert.deepEqual(detailedQuality.slides[0].nativeElementReadback, readback);
   const coverage = createAuthoredHybridCoverageManifest(quality, {
     exportAttemptId: "attempt-chart-readback",
     presentationRevision: 7,

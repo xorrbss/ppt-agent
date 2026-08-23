@@ -4,6 +4,7 @@ import test from "node:test";
 import { verifyConfigOnly, verifyLive } from "./verify-authored-release-required-checks.mjs";
 
 const commit = "a".repeat(40);
+const evidenceKey = "test-only-ci-evidence-key-32-bytes-minimum";
 const ok = (body) => ({ ok: true, status: 200, json: async () => body });
 
 function fetchFixture(url) {
@@ -34,9 +35,11 @@ test("Bitbucket required-check verifier validates configuration and sealed live 
   const result = await verifyLive(fetchFixture, {
     BITBUCKET_API_TOKEN: "redacted",
     BITBUCKET_COMMIT: commit,
+    AUTHORED_RELEASE_CI_EVIDENCE_HMAC_KEY: evidenceKey,
   });
   assert.equal(result.status, "verified");
   assert.match(result.receiptDigest, /^sha256:[a-f0-9]{64}$/);
+  assert.match(result.authoritySignature, /^hmac-sha256:[a-f0-9]{64}$/);
   assert.equal(result.pipelineUuid, "{pipeline-1}");
 });
 
@@ -45,13 +48,18 @@ test("Bitbucket verifier rejects missing authentication and a zero merge-check v
   await assert.rejects(
     () => verifyLive(async (url) => url.endsWith("/branch-restrictions") ? ok({ values: [{ kind: "require_passing_builds_to_merge", pattern: "main", value: 0 }] }) : fetchFixture(url), {
       BITBUCKET_API_TOKEN: "redacted", BITBUCKET_COMMIT: commit,
+      AUTHORED_RELEASE_CI_EVIDENCE_HMAC_KEY: evidenceKey,
     }),
     /passing-build merge check is missing/,
   );
 });
 
 test("Bitbucket verifier rejects stale pipeline and commit-status success", async () => {
-  const environment = { BITBUCKET_API_TOKEN: "redacted", BITBUCKET_COMMIT: commit };
+  const environment = {
+    BITBUCKET_API_TOKEN: "redacted",
+    BITBUCKET_COMMIT: commit,
+    AUTHORED_RELEASE_CI_EVIDENCE_HMAC_KEY: evidenceKey,
+  };
   await assert.rejects(
     () => verifyLive(async (url) => {
       if (url.includes("/pipelines/?")) return ok({ values: [

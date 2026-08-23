@@ -113,6 +113,56 @@ function readinessV2(overrides = {}) {
   };
 }
 
+function readinessV3(overrides = {}) {
+  const v2 = readinessV2();
+  const capabilityIds = [
+    "receipt.cjk", "receipt.table", "shape.gradient", "receipt.imageCrop", "ci.requiredChecks",
+  ];
+  const capabilityDigests = Object.fromEntries(capabilityIds.map((capabilityId, index) => [capabilityId, digest(String(index + 1))]));
+  return {
+    ...v2,
+    schemaVersion: "workbench-capability-projection/v3",
+    releaseProfile: {
+      schemaVersion: "authored-bounded-hybrid-release-readiness/v3",
+      profileId: "profile:bounded-hybrid",
+      platformScope: { platform: "windows", renderer: "external-worker", archetypes: ["title"] },
+      evaluatedAt: "2026-08-23T00:00:00Z",
+      expiresAt: "2026-08-24T00:00:00Z",
+      deckEvidenceReady: false,
+      serializerProfileReady: false,
+      nativeSubsetReady: false,
+      releaseCommitReady: false,
+      promotionReady: false,
+      deploymentAuthorized: false,
+      fullNativeParityStatus: "notApplicable",
+      independentVnextGenerationStatus: "notApplicable",
+      deckEvidenceCapabilityIds: ["receipt.cjk", "receipt.table"],
+      serializerProfileCapabilityIds: ["shape.gradient", "receipt.imageCrop"],
+      nativeSubsetCapabilityIds: ["shape.gradient"],
+      releaseCommitCapabilityIds: ["ci.requiredChecks"],
+      allRequiredCapabilityIds: [...capabilityIds].sort(),
+      profileDefinitionDigest: digest("6"),
+      deckEvidenceReceiptDigests: [],
+      serializerProfileReceiptDigests: [],
+      nativeSubsetReceiptDigests: [],
+      releaseCommitReceiptDigests: [],
+      promotionReceiptDigests: [],
+      reasonCode: "release_evidence_incomplete",
+    },
+    capabilities: capabilityIds.map((capabilityId) => ({
+      capabilityId,
+      state: "ready",
+      reasonCode: "receipt_verified",
+      receiptDigest: capabilityDigests[capabilityId],
+      scope: { platform: "windows", renderer: "external-worker", archetypes: ["title"] },
+      serializerId: "presenton-authored-hybrid",
+      serializerVersion: "v3",
+      expiresAt: "2026-08-24T00:00:00Z",
+    })),
+    ...overrides,
+  };
+}
+
 function projection(overrides = {}) {
   return {
     schemaVersion: "workbench-capability-projection/v1",
@@ -258,5 +308,53 @@ test("v2 validates exact claim pins only when an export authority claim is issue
   assert.throws(
     () => normalizeAuthoredReleaseReadinessProjectionV2({ ...pinned, releaseAuthorityReceiptDigests: [digest("4")] }),
     /mismatched exportAuthorityClaim\.receiptDigests/,
+  );
+});
+
+test("v3 displays only server-issued bounded release readiness and rejects profile drift", async () => {
+  const { normalizeAuthoredReleaseReadinessProjectionV3 } = await loadCapabilityClient();
+  const serverIssued = readinessV3({
+    releaseProfile: {
+      ...readinessV3().releaseProfile,
+      deckEvidenceReady: true,
+      serializerProfileReady: true,
+      nativeSubsetReady: true,
+      releaseCommitReady: true,
+      promotionReady: true,
+      deploymentAuthorized: false,
+      deckEvidenceReceiptDigests: [digest("1"), digest("2")],
+      serializerProfileReceiptDigests: [digest("3"), digest("4")],
+      nativeSubsetReceiptDigests: [digest("3")],
+      releaseCommitReceiptDigests: [digest("5")],
+      promotionReceiptDigests: [digest("5"), digest("1"), digest("4"), digest("2"), digest("3")],
+    },
+  });
+  const normalized = normalizeAuthoredReleaseReadinessProjectionV3({ data: serverIssued });
+  assert.equal(normalized.releaseProfile.promotionReady, true);
+  assert.equal(normalized.releaseProfile.deploymentAuthorized, false);
+  assert.equal(normalized.releaseProfile.fullNativeParityStatus, "notApplicable");
+  assert.throws(
+    () => normalizeAuthoredReleaseReadinessProjectionV3({
+      ...serverIssued,
+      releaseProfile: { ...serverIssued.releaseProfile, independentVnextGenerationStatus: "ready" },
+    }),
+    /invalid deprecated readiness status/,
+  );
+  assert.throws(
+    () => normalizeAuthoredReleaseReadinessProjectionV3({
+      ...serverIssued,
+      releaseProfile: {
+        ...serverIssued.releaseProfile,
+        allRequiredCapabilityIds: [...serverIssued.releaseProfile.allRequiredCapabilityIds].reverse(),
+      },
+    }),
+    /mismatched releaseProfile\.allRequiredCapabilityIds/,
+  );
+  assert.throws(
+    () => normalizeAuthoredReleaseReadinessProjectionV3({
+      ...serverIssued,
+      releaseAuthorityReceiptDigests: [digest("1")],
+    }),
+    /unclaimed release authority pins/,
   );
 });
