@@ -78,3 +78,22 @@ test("structural inspection distinguishes groups, connectors, small images, and 
     "full-slide-image-fallback",
   ]);
 });
+
+test("semantic raster ownership carriers do not inflate native shape coverage", () => {
+  const entries = new Map([
+    ["[Content_Types].xml", Buffer.from("<Types/>")],
+    [
+      "ppt/slides/slide1.xml",
+      Buffer.from(
+        '<p:sld><p:cSld><p:spTree>' +
+          '<p:sp><p:nvSpPr><p:cNvPr id="3" name="Presenton raster visual fragment s01-title semantic-owner" hidden="1"/></p:nvSpPr><p:spPr/></p:sp>' +
+          '<p:sp><p:nvSpPr><p:cNvPr id="4" name="Presenton raster visual fragment s01-chart semantic-owner" hidden="1"/></p:nvSpPr><p:spPr/></p:sp>' +
+          '</p:spTree></p:cSld></p:sld>',
+      ),
+    ],
+  ]);
+  const report = inspectPptxEditability(writePptxArchive(entries));
+  assert.equal(report.slides[0].nativeShapeElements, 0);
+  assert.equal(report.slides[0].editable, false);
+  assert.equal(report.slides[0].imageFallback, true);
+});

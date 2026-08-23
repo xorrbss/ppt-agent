@@ -609,6 +609,9 @@ export async function prepareSlideLayer(
       slideNumber,
       backplatePng: backplate.backplatePng,
       elements: selected,
+      ...(semanticContext
+        ? { semanticOwnerQids: [...semanticContext.declaredElementIds] }
+        : {}),
     },
     quality: {
       slideNumber,

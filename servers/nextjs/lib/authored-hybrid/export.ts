@@ -556,7 +556,12 @@ export async function runAuthoredFidelityPresentationExport(
         chromeExecutable,
       );
       if (!prepared.layer) throw new Error("authored_fidelity_slide_capture_failed");
-      return prepared.layer;
+      return {
+        ...prepared.layer,
+        semanticOwnerQids: [
+          ...activeBinding.slides[arrayIndex].declaredElementIds,
+        ],
+      };
     },
   );
   const resultPath = await writeHybridPptx(
@@ -740,7 +745,7 @@ async function runUncachedAuthoredHybridExport(
     const isolatedRasterLayers = await mapWithConcurrency(
       rasterFallbackInputs,
       HYBRID_EXPORT_CONCURRENCY,
-      async ({ html, slideNumber }) => {
+      async ({ html, slideNumber, semantic }) => {
         const isolated = await prepareFidelitySlideLayer(
           html,
           slideNumber,
@@ -749,7 +754,10 @@ async function runUncachedAuthoredHybridExport(
         if (!isolated.layer) {
           throw new Error("authored_hybrid_isolated_raster_fallback_failed");
         }
-        return isolated.layer;
+        return {
+          ...isolated.layer,
+          semanticOwnerQids: [...semantic.declaredElementIds],
+        };
       },
     );
     const isolatedRasterBySlide = new Map(

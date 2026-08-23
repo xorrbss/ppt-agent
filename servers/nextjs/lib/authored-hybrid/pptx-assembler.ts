@@ -38,6 +38,8 @@ export interface AuthoredHybridSlideLayer {
   backplatePng: Buffer;
   /** Already filtered in ascending browser paint order. */
   elements: readonly PreparedNativeElement[];
+  /** Ordered semantic QIDs represented by native objects or this slide's raster. */
+  semanticOwnerQids?: readonly string[];
 }
 export interface AuthoredHybridPptxProvenance {
   readonly exportAttemptId?: string; readonly presentationRevision?: number;
@@ -209,8 +211,67 @@ function allocateMediaName(
   return candidate;
 }
 
-function backplatePictureXml(relationshipId: string): string {
-  return `<p:pic><p:nvPicPr><p:cNvPr id="2" name="Presenton hybrid backplate"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${relationshipId}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${SLIDE_WIDTH_EMU}" cy="${SLIDE_HEIGHT_EMU}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr></p:pic>`;
+export const SEMANTIC_OWNERSHIP_ALT_TEXT_PREFIX =
+  "presenton-semantic-raster-ownership-v1:";
+
+function semanticOwnerQids(layer: AuthoredHybridSlideLayer): string[] {
+  const qids = [...(layer.semanticOwnerQids ?? [])];
+  if (qids.length > 2048) {
+    throw new Error("Hybrid semantic ownership QID count exceeds the bounded limit.");
+  }
+  const unique = new Set<string>();
+  for (const qid of qids) {
+    if (
+      typeof qid !== "string" ||
+      qid.length < 1 ||
+      qid.length > 512 ||
+      qid !== qid.trim() ||
+      /[\u0000-\u001f\u007f]/u.test(qid) ||
+      unique.has(qid)
+    ) {
+      throw new Error("Hybrid semantic ownership QIDs must be unique bounded strings.");
+    }
+    unique.add(qid);
+  }
+  return qids;
+}
+
+function semanticOwnershipAltText(slideNumber: number, qids: readonly string[]): string {
+  const qidSetDigest = `sha256:${createHash("sha256")
+    .update(qids.join("\n"), "utf8")
+    .digest("hex")}`;
+  const payload = Buffer.from(JSON.stringify({
+    schemaVersion: "presenton-semantic-raster-ownership/v1",
+    slideNumber,
+    qids,
+    qidSetDigest,
+  }), "utf8").toString("base64url");
+  return `${SEMANTIC_OWNERSHIP_ALT_TEXT_PREFIX}${payload}`;
+}
+
+function backplatePictureXml(
+  relationshipId: string,
+  slideNumber: number,
+  qids: readonly string[],
+): string {
+  const description = qids.length
+    ? ` descr="${escapeXmlAttribute(semanticOwnershipAltText(slideNumber, qids))}"`
+    : "";
+  return `<p:pic><p:nvPicPr><p:cNvPr id="2" name="Presenton hybrid backplate"${description}/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${relationshipId}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${SLIDE_WIDTH_EMU}" cy="${SLIDE_HEIGHT_EMU}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr></p:pic>`;
+}
+
+function semanticOwnershipShapeXml(
+  nonVisualId: number,
+  slideNumber: number,
+  qid: string,
+): string {
+  const name = escapeXmlAttribute(
+    `Presenton raster visual fragment ${qid} semantic-owner`,
+  );
+  const description = escapeXmlAttribute(
+    semanticOwnershipAltText(slideNumber, [qid]),
+  );
+  return `<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId}" name="${name}" descr="${description}" hidden="1"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1" cy="1"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr></p:sp>`;
 }
 
 function backplateBackgroundXml(relationshipId: string): string {
@@ -421,6 +482,7 @@ function assembleSlide(
     `../media/${backplateName}`
   );
   const useSlideBackground = isOpaqueRgbPng(layer.backplatePng);
+  const ownershipQids = semanticOwnerQids(layer);
 
   // A full-canvas page-colour rectangle belongs below the residual raster.
   // All other promoted geometry, text-owned container paint, transparent text
@@ -433,7 +495,10 @@ function assembleSlide(
       left.source.zOrder - right.source.zOrder ||
       left.source.sourceIndex - right.source.sourceIndex
   );
-  let nextNonVisualId = 3;
+  const semanticOwnershipXml = ownershipQids.map((qid, index) =>
+    semanticOwnershipShapeXml(index + 3, layer.slideNumber, qid)
+  );
+  let nextNonVisualId = 3 + semanticOwnershipXml.length;
   ordered.forEach((item, index) => {
     let relationshipId: string | undefined;
     if (item.kind === "image") {
@@ -494,7 +559,8 @@ function assembleSlide(
   entries.set(`ppt/media/${backplateName}`, Buffer.from(layer.backplatePng));
   const replacement =
     `<p:spTree>${GROUP_ROOT_XML}${useSlideBackground ? "" : canvasBackgroundXml.join("")}` +
-    `${useSlideBackground ? "" : backplatePictureXml(backplateRelationshipId)}` +
+    `${useSlideBackground ? "" : backplatePictureXml(backplateRelationshipId, layer.slideNumber, ownershipQids)}` +
+    `${semanticOwnershipXml.join("")}` +
     `${orderedNativeXml.join("")}</p:spTree>`;
   // Pass a replacer function so `$&`, `$'`, `$\`` and `$$` sequences inside the
   // assembled shape XML (e.g. text like "US$'000") are inserted literally instead

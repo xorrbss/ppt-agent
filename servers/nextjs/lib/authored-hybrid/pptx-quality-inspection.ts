@@ -309,9 +309,16 @@ export function inspectPptxEditability(
       const xml = bytes.toString("utf8");
       const nativeTextElements = occurrences(xml, /<p:txBody\b/g);
       const allShapes = occurrences(xml, /<p:sp\b/g);
+      const semanticOwnershipCarrierElements = occurrences(
+        xml,
+        /<p:cNvPr\b[^>]*\bname="Presenton raster visual fragment [^"]+ semantic-owner"/g,
+      );
       const connectorElements = occurrences(xml, /<p:cxnSp\b/g);
       const nativeShapeElements =
-        Math.max(0, allShapes - nativeTextElements) + connectorElements;
+        Math.max(
+          0,
+          allShapes - nativeTextElements - semanticOwnershipCarrierElements,
+        ) + connectorElements;
       const nativeGroupElements = occurrences(xml, /<p:grpSp\b/g);
       const nativeChartElements = occurrences(
         xml,
