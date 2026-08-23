@@ -179,6 +179,88 @@ process.stdout.write(canonicalSha256(payload));
 
 
 @pytest.mark.parametrize(
+    ("field", "entries"),
+    [
+        ("capabilityIds", ["z-capability", "a-capability", "m-capability"]),
+        (
+            "receiptDigests",
+            ["sha256:" + "f" * 64, "sha256:" + "1" * 64, "sha256:" + "a" * 64],
+        ),
+        (
+            "orderedResults",
+            [
+                {"ordinal": 10, "caseId": "case-b"},
+                {"ordinal": 2, "caseId": "case-z"},
+                {"ordinal": 2, "caseId": "case-a"},
+            ],
+        ),
+        (
+            "cases",
+            [
+                {"ordinal": 10, "caseId": "case-b"},
+                {"ordinal": 1, "caseId": "case-z"},
+                {"ordinal": 1, "caseId": "case-a"},
+            ],
+        ),
+        (
+            "artifacts",
+            [
+                {"artifactId": "z-json", "sha256": "sha256:" + "1" * 64},
+                {"artifactId": "a-json", "sha256": "sha256:" + "f" * 64},
+                {"artifactId": "a-json", "sha256": "sha256:" + "1" * 64},
+            ],
+        ),
+        (
+            "fontFaces",
+            [
+                {
+                    "family": "Noto Sans CJK KR",
+                    "subfamily": "Regular",
+                    "weight": 700,
+                    "italic": False,
+                    "ttcCollectionIndex": 10,
+                },
+                {
+                    "family": "Noto Sans CJK KR",
+                    "subfamily": "Regular",
+                    "weight": 400,
+                    "italic": False,
+                    "ttcCollectionIndex": 2,
+                },
+                {
+                    "family": "Arial",
+                    "subfamily": "Bold",
+                    "weight": 700,
+                    "italic": True,
+                    "ttcCollectionIndex": 0,
+                },
+            ],
+        ),
+    ],
+)
+def test_actual_product_canonical_v2_matches_gate1_exact_root_array_sorting(
+    field: str, entries: list[object]
+) -> None:
+    payload = {"schemaVersion": "canonical-v2-array-sort-fixture/v1", "casVersion": 10, field: entries}
+    node_script = """
+import fs from "node:fs";
+import { canonicalSha256 } from "./scripts/authored-bounded-release-contracts.mjs";
+process.stdout.write(canonicalSha256(JSON.parse(fs.readFileSync(0, "utf8"))));
+"""
+    repository_root = Path(__file__).resolve().parents[4]
+    completed = subprocess.run(
+        ["node", "--input-type=module", "-e", node_script],
+        cwd=repository_root,
+        input=json.dumps(payload, ensure_ascii=False),
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert actual_product_canonical_digest_v2(payload) == completed.stdout
+
+
+@pytest.mark.parametrize(
     ("evidence_class", "key_purpose"),
     [
         ("actual_product_ci", "actual-product-ci"),

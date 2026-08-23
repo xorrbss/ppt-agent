@@ -8,6 +8,7 @@ from hashlib import sha256
 import json
 import math
 import os
+from functools import cmp_to_key
 from typing import Any
 import unicodedata
 
@@ -303,6 +304,56 @@ def _signed_payload(receipt_payload: dict[str, Any], authority: EvidenceIssuerEn
 
 
 _JS_SAFE_INTEGER_MAX = (1 << 53) - 1
+_ACTUAL_PRODUCT_ARRAY_SORT_KEYS_V2 = {
+    "$.capabilityIds": ("scalar",),
+    "$.receiptDigests": ("scalar",),
+    "$.orderedResults": ("ordinal", "caseId"),
+    "$.cases": ("ordinal", "caseId"),
+    "$.artifacts": ("artifactId", "sha256"),
+    "$.fontFaces": ("family", "subfamily", "weight", "italic", "ttcCollectionIndex"),
+}
+
+
+def _js_string_v2(value: Any) -> str:
+    if value is None:
+        return "null"
+    if value is True:
+        return "true"
+    if value is False:
+        return "false"
+    if isinstance(value, int) and not isinstance(value, bool):
+        return str(value)
+    if isinstance(value, float):
+        return str(int(value)) if value.is_integer() else str(value)
+    if isinstance(value, dict):
+        return "[object Object]"
+    if isinstance(value, (list, tuple)):
+        return ",".join(_js_string_v2(item) for item in value)
+    return str(value)
+
+
+def _compare_actual_product_array_entries_v2(left: Any, right: Any, fields: tuple[str, ...]) -> int:
+    if fields == ("scalar",):
+        left_bytes = _js_string_v2(left).encode("utf-8")
+        right_bytes = _js_string_v2(right).encode("utf-8")
+        return (left_bytes > right_bytes) - (left_bytes < right_bytes)
+    for field in fields:
+        left_value = left.get(field) if isinstance(left, dict) else None
+        right_value = right.get(field) if isinstance(right, dict) else None
+        if (
+            isinstance(left_value, (int, float))
+            and not isinstance(left_value, bool)
+            and isinstance(right_value, (int, float))
+            and not isinstance(right_value, bool)
+            and left_value != right_value
+        ):
+            return (left_value > right_value) - (left_value < right_value)
+        left_bytes = _js_string_v2(left_value if left_value is not None else "").encode("utf-8")
+        right_bytes = _js_string_v2(right_value if right_value is not None else "").encode("utf-8")
+        result = (left_bytes > right_bytes) - (left_bytes < right_bytes)
+        if result:
+            return result
+    return 0
 
 
 def _actual_product_canonical_json_v2(value: Any, *, path: str = "$") -> str:
@@ -335,9 +386,20 @@ def _actual_product_canonical_json_v2(value: Any, *, path: str = "$") -> str:
             raise SemanticContractError(f"authored_release_canonical_number_out_of_safe_range:{path}")
         return str(integer)
     if isinstance(value, (list, tuple)):
+        fields = _ACTUAL_PRODUCT_ARRAY_SORT_KEYS_V2.get(path)
+        entries = (
+            sorted(
+                value,
+                key=cmp_to_key(
+                    lambda left, right: _compare_actual_product_array_entries_v2(left, right, fields)
+                ),
+            )
+            if fields is not None
+            else value
+        )
         return "[" + ",".join(
             _actual_product_canonical_json_v2(item, path=f"{path}[{index}]")
-            for index, item in enumerate(value)
+            for index, item in enumerate(entries)
         ) + "]"
     if isinstance(value, dict):
         normalized: list[tuple[str, Any]] = []
