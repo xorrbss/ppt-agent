@@ -142,6 +142,43 @@ test("face-complete mixed text promotes with Noto CJK and IBM Plex Mono Latin ru
   assert.doesNotMatch(xml, /<a:normAutofit\/>/);
 });
 
+test("reviewed Windows fallback faces admit logical CJK and mono CSS names", async () => {
+  const mixed = mixedTextElement();
+  const serif = structuredClone(mixedTextElement());
+  serif.id = "serif-1";
+  serif.text.plainText = "전략과 실행";
+  serif.text.paragraphs = ["전략과 실행"];
+  serif.text.style.fontFamily = "Noto Serif KR";
+  serif.text.style.fontFamilies = ["Noto Serif KR", "Batang", "serif"];
+  serif.text.runs = [{
+    ...serif.text.runs[0],
+    text: "전략과 실행",
+    style: serif.text.style,
+  }];
+  const faces = [
+    { typeface: "Consolas", face: "bold" },
+    { typeface: "Malgun Gothic", face: "bold" },
+    { typeface: "Batang", face: "bold" },
+  ];
+
+  const result = preflightNativeTypography([mixed, serif], {
+    embeddedTypefaceFaces: faces,
+  });
+  assert.deepEqual(result.rejectedElementIds, []);
+  assert.deepEqual(result.typographyIssues, []);
+
+  const prepared = await prepareNativeElements(result.elements);
+  const xml = prepared.map((element, index) =>
+    serializePreparedNativeElement(element, index + 3, undefined, {
+      embeddedTypefaceFaces: faces,
+    })
+  ).join("");
+  assert.match(xml, /typeface="Consolas"/);
+  assert.match(xml, /typeface="Malgun Gothic"/);
+  assert.match(xml, /typeface="Batang"/);
+  assert.doesNotMatch(xml, /typeface="(?:IBM Plex Mono|Noto Sans KR|Noto Serif KR)"/);
+});
+
 test("ancestor backplate paint does not reject an otherwise stable native title", () => {
   const title = mixedTextElement();
   const ancestor = {

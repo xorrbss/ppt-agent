@@ -2093,7 +2093,11 @@ export function serializePreparedNativeElement(
 ): string {
   if (item.kind === "text") {
     const element = item.source;
-    const name = escapeXml(nonVisualName(element));
+    const name = escapeXml(
+      element.classification.mode === "raster" && element.text.containerShape
+        ? `Presenton raster visual fragment ${nonVisualId}`
+        : nonVisualName(element)
+    );
     const anchor = { top: "t", middle: "ctr", bottom: "b" }[
       element.text.style.verticalAlignment
     ];

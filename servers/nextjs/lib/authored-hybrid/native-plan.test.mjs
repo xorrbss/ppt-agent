@@ -9,6 +9,7 @@ import {
   selectLayerSafeNativeElements,
   serializePreparedNativeElement,
   serializePreparedNativeElementUnderlay,
+  serializePreparedNativeElementOverlay,
 } from "./native-plan.ts";
 
 const bounds = (x, y, width, height) => ({
@@ -1265,6 +1266,7 @@ test("outlined circular text containers retain editable outline, border, and num
   assert.equal(preparedNativeElementNonVisualIdCount(prepared[0]), 3);
 
   const underlay = serializePreparedNativeElementUnderlay(prepared[0], 3);
+  const overlay = serializePreparedNativeElementOverlay(prepared[0], 5);
   assert.equal((underlay.match(/<p:sp>/g) ?? []).length, 2);
   assert.match(underlay, /Presenton hybrid shape step-node-container outline/);
   assert.match(underlay, /<a:off x="942975" y="942975"\/><a:ext cx="428625" cy="428625"\/>/);
@@ -1272,6 +1274,16 @@ test("outlined circular text containers retain editable outline, border, and num
   assert.match(underlay, /<a:off x="952500" y="952500"\/><a:ext cx="409575" cy="409575"\/>/);
   assert.match(underlay, /<a:srgbClr val="182235">/);
   assert.match(underlay, /<a:srgbClr val="F4F7F4">/);
+  assert.match(overlay, /Presenton raster visual fragment 5/);
+  assert.doesNotMatch(overlay, /Presenton hybrid raster step-node/);
+
+  const qidOwners = [...`${underlay}${overlay}`.matchAll(/name="([^"]+)"/g)]
+    .map((match) => match[1])
+    .filter((name) =>
+      name.startsWith("Presenton hybrid ") &&
+      (name.endsWith(" step-node") || name.endsWith(" step-node-container"))
+    );
+  assert.deepEqual(qidOwners, ["Presenton hybrid shape step-node-container"]);
 });
 
 test("backplate decoration keeps a transparent outer box for multiline fit", async () => {
