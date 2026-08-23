@@ -344,6 +344,14 @@ try {
         -StderrPath (Join-Path $logRoot "next.stderr.log")
     $processes.Add($next)
     Wait-HttpReady -Name "Next.js" -Uri "http://127.0.0.1:$NextPort/upload" -Process $next -TimeoutSeconds 240
+    # Next dev rewrites these tracked project files when it registers the
+    # per-session dist directory. Restore only those exact generated edits as
+    # soon as startup is ready so release source censuses remain stable while
+    # the official local stack is running.
+    Restore-NextGeneratedProjectFiles `
+        -NextEnvOriginal $nextEnvOriginalBytes `
+        -TsConfigOriginal $nextTsConfigOriginalBytes `
+        -DistDirectoryName $nextDistDirectoryName
 
     $proxy = Start-LoggedProcess `
         -Name "single-origin proxy" `

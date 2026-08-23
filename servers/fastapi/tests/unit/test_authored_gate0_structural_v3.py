@@ -41,6 +41,8 @@ from services.authored_vnext.semantic.gate0_structural_v3 import (
     execute_gate0_structural_case_v3,
     gate0_structural_sealed_completion_count_v3,
 )
+from services import database  # noqa: F401  # register production owner scoping hooks
+from utils.owner_context import reset_current_owner_id, set_current_owner_id
 
 
 def test_gate0_structural_34_cases_are_signed_and_never_promote(
@@ -93,65 +95,79 @@ def test_gate0_structural_34_cases_are_signed_and_never_promote(
             )
         cases = [manifest["positiveCase"], *manifest["mutationRegistry"]]
         run_id = uuid.uuid4()
+        request_owner_id = uuid.uuid4()
         async with maker() as session:
-            for case in cases:
-                case_id = case["caseId"]
-                ordinal = case["ordinal"]
-                expected_status = case["expectedHttpStatus"]
-                expected_error = case.get("expectedErrorCode")
-                request = Gate0StructuralCaseExecutionV1(
-                    run_id=run_id,
-                    manifest_digest=manifest_digest,
-                    case_id=case_id,
-                    ordinal=ordinal,
-                    mutation=(
-                        None
-                        if ordinal == 1
-                        else {
-                            "jsonPaths": case["jsonPaths"],
-                            "operator": case["operator"],
-                            "phase": case.get("mutationPhase"),
-                        }
-                    ),
+            session.add(
+                User(
+                    id=request_owner_id,
+                    username=f"gate0-{request_owner_id.hex}",
+                    hashed_password="not-used",
+                    is_superuser=True,
                 )
-                status_code, payload = await execute_gate0_structural_case_v3(session, request=request)
-                assert status_code == expected_status
-                assert payload["errorCode"] == expected_error
-                assert payload["authorityDomain"] == "structural_test"
-                assert payload["productionAuthorityGranted"] is False
-                assert payload["productionValidatorAccepted"] is False
-                assert payload["releaseReportStatus"] == "not-verified"
-                assert len(payload["executionTrace"]["spans"]) == 7
-                for span in payload["executionTrace"]["spans"]:
-                    assert span["serverObserved"] is True
-                    assert span["operationId"]
-                    assert span["inputDigest"].startswith("sha256:")
-                    assert span["outputDigest"].startswith("sha256:")
-                    assert span["evidenceRef"]
-                if ordinal > 1:
-                    evidence = payload["mutationEvidence"]
-                    assert evidence["baselineSubjectDigest"] != evidence["mutatedSubjectDigest"]
-                    digest_value = dict(evidence)
-                    mutation_digest = digest_value.pop("mutationDigest")
-                    assert canonical_digest(digest_value) == mutation_digest
-                assert payload["postState"]["sealedCompletionCount"] == 0
-                assert payload["postState"]["actualProductReceiptCount"] == 0
-                assert payload["postState"]["actualProductPromotionReady"] is False
-                if ordinal == 34:
-                    attempts = payload["executionTrace"]["completionCasAttempts"]
-                    assert [item["outcome"] for item in attempts] == [
-                        "sealed",
-                        "conflict",
-                    ]
-                    assert attempts[0]["durableRecordId"] == attempts[1]["durableRecordId"]
-                    assert attempts[1]["errorCode"] == "completion-seal-conflict"
-                    assert payload["postState"]["structuralCompletionState"] == "sealed"
-                trace = dict(payload["executionTrace"])
-                signature = base64.b64decode(trace.pop("signatureBase64"), validate=True)
-                trace_digest = trace.pop("traceDigest")
-                assert canonical_digest(trace) == trace_digest
-                private_key.public_key().verify(signature, trace_digest.encode("ascii"))
-                assert await gate0_structural_sealed_completion_count_v3(session, run_id=run_id, case_id=case_id) == 0
+            )
+            await session.flush()
+            owner_token = set_current_owner_id(request_owner_id)
+            try:
+                for case in cases:
+                    case_id = case["caseId"]
+                    ordinal = case["ordinal"]
+                    expected_status = case["expectedHttpStatus"]
+                    expected_error = case.get("expectedErrorCode")
+                    request = Gate0StructuralCaseExecutionV1(
+                        run_id=run_id,
+                        manifest_digest=manifest_digest,
+                        case_id=case_id,
+                        ordinal=ordinal,
+                        mutation=(
+                            None
+                            if ordinal == 1
+                            else {
+                                "jsonPaths": case["jsonPaths"],
+                                "operator": case["operator"],
+                                "phase": case.get("mutationPhase"),
+                            }
+                        ),
+                    )
+                    status_code, payload = await execute_gate0_structural_case_v3(session, request=request)
+                    assert status_code == expected_status
+                    assert payload["errorCode"] == expected_error
+                    assert payload["authorityDomain"] == "structural_test"
+                    assert payload["productionAuthorityGranted"] is False
+                    assert payload["productionValidatorAccepted"] is False
+                    assert payload["releaseReportStatus"] == "not-verified"
+                    assert len(payload["executionTrace"]["spans"]) == 7
+                    for span in payload["executionTrace"]["spans"]:
+                        assert span["serverObserved"] is True
+                        assert span["operationId"]
+                        assert span["inputDigest"].startswith("sha256:")
+                        assert span["outputDigest"].startswith("sha256:")
+                        assert span["evidenceRef"]
+                    if ordinal > 1:
+                        evidence = payload["mutationEvidence"]
+                        assert evidence["baselineSubjectDigest"] != evidence["mutatedSubjectDigest"]
+                        digest_value = dict(evidence)
+                        mutation_digest = digest_value.pop("mutationDigest")
+                        assert canonical_digest(digest_value) == mutation_digest
+                    assert payload["postState"]["sealedCompletionCount"] == 0
+                    assert payload["postState"]["actualProductReceiptCount"] == 0
+                    assert payload["postState"]["actualProductPromotionReady"] is False
+                    if ordinal == 34:
+                        attempts = payload["executionTrace"]["completionCasAttempts"]
+                        assert [item["outcome"] for item in attempts] == [
+                            "sealed",
+                            "conflict",
+                        ]
+                        assert attempts[0]["durableRecordId"] == attempts[1]["durableRecordId"]
+                        assert attempts[1]["errorCode"] == "completion-seal-conflict"
+                        assert payload["postState"]["structuralCompletionState"] == "sealed"
+                    trace = dict(payload["executionTrace"])
+                    signature = base64.b64decode(trace.pop("signatureBase64"), validate=True)
+                    trace_digest = trace.pop("traceDigest")
+                    assert canonical_digest(trace) == trace_digest
+                    private_key.public_key().verify(signature, trace_digest.encode("ascii"))
+                    assert await gate0_structural_sealed_completion_count_v3(session, run_id=run_id, case_id=case_id) == 0
+            finally:
+                reset_current_owner_id(owner_token)
             await session.commit()
         await engine.dispose()
 

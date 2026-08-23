@@ -62,6 +62,7 @@ from services.authored_vnext.semantic.release_authority_v3 import (
     BoundEvidenceSubjectRejectionV3,
     validate_bound_evidence_subject_v3,
 )
+from utils.owner_context import get_current_owner_id
 
 
 _CASE_ORDINALS: dict[str, int] = {
@@ -377,7 +378,10 @@ async def execute_gate0_structural_case_v3(
         raise SemanticContractError("authored_gate0_structural_case_replay_conflict")
 
     now = datetime.now(timezone.utc).replace(microsecond=0)
-    owner_id = _uuid(request.run_id, request.case_id, "owner")
+    # Request-scoped writes are stamped with the authenticated owner during
+    # flush. Use that same identity for the structural graph and its immediate
+    # readback; direct service tests retain a deterministic isolated owner.
+    owner_id = get_current_owner_id() or _uuid(request.run_id, request.case_id, "owner")
     presentation_id = _uuid(request.run_id, request.case_id, "presentation")
     operation_id = _uuid(request.run_id, request.case_id, "operation")
     generation_attempt_id = _uuid(request.run_id, request.case_id, "generation")
