@@ -95,6 +95,12 @@ def _coverage(attempt_id: uuid.UUID) -> dict[str, object]:
     return {
         "schemaVersion": "presenton.authored-hybrid-coverage/v2",
         "mode": "hybrid",
+        "cjkCoverageProfileId": "ja-ko-zh-bounded-fixture-v1",
+        "nativeTextPolicy": {
+            "koreanLatin": "bounded-native",
+            "japanese": "raster-required",
+            "chinese": "raster-required",
+        },
         "source": {
             "exportAttemptId": str(attempt_id),
             "presentationRevision": 1,

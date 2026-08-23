@@ -336,6 +336,20 @@ class ExportOoxmlReadback(ExportCoverageCounts):
     status: Literal["not-run", "passed", "failed"]
 
 
+class ExportNativeTextPolicy(BaseModel):
+    """Exact bounded CJK native-text policy emitted by the Hybrid serializer."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra="forbid",
+    )
+
+    korean_latin: Literal["bounded-native"]
+    japanese: Literal["raster-required"]
+    chinese: Literal["raster-required"]
+
+
 class ExportTypographyIssue(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid")
 
@@ -482,6 +496,13 @@ class PresentationExportCoverageManifest(BaseModel):
         "presenton.authored-hybrid-coverage/v2",
     ]
     mode: Literal["hybrid"]
+    cjk_coverage_profile_id: Literal["ja-ko-zh-bounded-fixture-v1"] | None = (
+        PydanticField(default=None, exclude_if=lambda value: value is None)
+    )
+    native_text_policy: ExportNativeTextPolicy | None = PydanticField(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
     source: ExportCoverageSource
     total_slides: int = PydanticField(ge=1)
     native_text: int = PydanticField(ge=0)
@@ -530,7 +551,9 @@ class PresentationExportCoverageManifest(BaseModel):
             raise ValueError("export coverage editability claim is inconsistent")
         if self.schema_version.endswith("/v2"):
             if (
-                self.source.export_attempt_id is None
+                self.cjk_coverage_profile_id is None
+                or self.native_text_policy is None
+                or self.source.export_attempt_id is None
                 or self.source.canonical_source_digest is None
                 or self.logical_coverage is None
                 or self.ooxml_readback is None
