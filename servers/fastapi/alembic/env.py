@@ -106,6 +106,14 @@ from models.sql.authored_semantic_bundle import (  # noqa: F401, E402
 from models.sql.authored_capability_receipt import (  # noqa: F401, E402
     AuthoredCapabilityReceiptRecordV2,
 )
+from models.sql.authored_release_evidence_v3 import (  # noqa: F401, E402
+    AuthoredComQualificationJobV3,
+    AuthoredReleaseArtifactV3,
+    AuthoredReleaseNonceV3,
+    AuthoredEvidenceGraphRootV3,
+    AuthoredEvidenceBundleCompletionV3,
+    AuthoredGate0StructuralTraceV3,
+)
 from models.sql.provider_runtime_reservation import (  # noqa: F401, E402
     ProviderRuntimeBudget,
     ProviderRuntimeCircuit,

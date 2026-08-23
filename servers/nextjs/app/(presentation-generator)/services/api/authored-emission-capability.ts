@@ -286,6 +286,19 @@ function requiredDate(value: unknown, field: string): string {
   return result;
 }
 
+/**
+ * Capability projections are advisory UI input, not authority. A stale
+ * receipt must make the projection unusable rather than leave a previously
+ * issued ready state visible until the next server refresh.
+ */
+function requiredFreshDate(value: unknown, field: string): string {
+  const result = requiredDate(value, field);
+  if (Date.parse(result) <= Date.now()) {
+    throw new Error(`Capability projection has expired ${field}`);
+  }
+  return result;
+}
+
 function booleanField(value: unknown, field: string): boolean {
   if (typeof value !== "boolean") {
     throw new Error(`Capability projection has invalid ${field}`);
@@ -858,6 +871,18 @@ export function normalizeAuthoredReleaseReadinessProjectionV3(value: unknown): A
     };
   });
   if (!allRequiredIds.every((id) => seen.has(id))) throw new Error("Capability projection has invalid capabilities");
+  // Every ready v3 capability is an immutable release receipt. Missing or
+  // expired receipt pins must not leave a client-side ready/promotion state.
+  for (const capability of normalizedCapabilities) {
+    if (capability.state !== "ready") continue;
+    if (!capability.receiptDigest) {
+      throw new Error(`Capability projection has missing ${capability.capabilityId} receiptDigest`);
+    }
+    if (!capability.expiresAt) {
+      throw new Error(`Capability projection has missing ${capability.capabilityId} expiresAt`);
+    }
+    requiredFreshDate(capability.expiresAt, `capabilities.${capability.capabilityId}.expiresAt`);
+  }
   const receiptByCapabilityId = new Map(normalizedCapabilities.map((capability) => [capability.capabilityId, capability.receiptDigest]));
   const exactReceiptPins = (ids: readonly AuthoredBoundedReleaseCapabilityId[], pins: readonly string[]) =>
     ids.length === pins.length && ids.every((id, index) => receiptByCapabilityId.get(id) === pins[index]);
@@ -895,6 +920,16 @@ export function normalizeAuthoredReleaseReadinessProjectionV3(value: unknown): A
       expiresAt: current.expiresAt === undefined || current.expiresAt === null ? undefined : requiredDate(current.expiresAt, `killSwitches[${index}].expiresAt`),
     };
   });
+  const rendererAttestationStateValue = rendererAttestationState(attestation.state, "rendererAttestation.state");
+  const rendererAttestationDigest = attestation.attestationDigest === undefined || attestation.attestationDigest === null
+    ? undefined
+    : requiredDigest(attestation.attestationDigest, "rendererAttestation.attestationDigest");
+  const rendererAttestationExpiresAt = attestation.expiresAt === undefined || attestation.expiresAt === null
+    ? undefined
+    : requiredFreshDate(attestation.expiresAt, "rendererAttestation.expiresAt");
+  if (rendererAttestationStateValue === "attested" && (!rendererAttestationDigest || !rendererAttestationExpiresAt)) {
+    throw new Error("Capability projection has incomplete renderer attestation");
+  }
   const expectedPromotionReady =
     deckEvidenceReady &&
     serializerProfileReady &&
@@ -902,6 +937,8 @@ export function normalizeAuthoredReleaseReadinessProjectionV3(value: unknown): A
     releaseCommitReady &&
     exactPromotionPins &&
     normalizedCapabilities.every((capability) => capability.state === "ready") &&
+    rendererAttestationStateValue === "attested" &&
+    Boolean(rendererAttestationDigest && rendererAttestationExpiresAt) &&
     !normalizedSwitches.some((killSwitch) => killSwitch.active);
   if (booleanField(profile.promotionReady, "releaseProfile.promotionReady") !== expectedPromotionReady) {
     throw new Error("Capability projection has mismatched releaseProfile.promotionReady");
@@ -928,7 +965,7 @@ export function normalizeAuthoredReleaseReadinessProjectionV3(value: unknown): A
         archetypes: profileArchetypes.map((entry) => entry.trim()),
       },
       evaluatedAt: requiredDate(profile.evaluatedAt, "releaseProfile.evaluatedAt"),
-      expiresAt: requiredDate(profile.expiresAt, "releaseProfile.expiresAt"),
+      expiresAt: requiredFreshDate(profile.expiresAt, "releaseProfile.expiresAt"),
       deckEvidenceReady,
       serializerProfileReady,
       nativeSubsetReady,
@@ -952,11 +989,11 @@ export function normalizeAuthoredReleaseReadinessProjectionV3(value: unknown): A
     },
     capabilities: normalizedCapabilities,
     rendererAttestation: {
-      state: rendererAttestationState(attestation.state, "rendererAttestation.state"),
+      state: rendererAttestationStateValue,
       reasonCode: requiredReasonCode(attestation.reasonCode, "rendererAttestation.reasonCode"),
-      attestationDigest: attestation.attestationDigest === undefined || attestation.attestationDigest === null ? undefined : requiredDigest(attestation.attestationDigest, "rendererAttestation.attestationDigest"),
+      attestationDigest: rendererAttestationDigest,
       environment: stringRecord(attestation.environment, "rendererAttestation.environment"),
-      expiresAt: attestation.expiresAt === undefined || attestation.expiresAt === null ? undefined : requiredDate(attestation.expiresAt, "rendererAttestation.expiresAt"),
+      expiresAt: rendererAttestationExpiresAt,
     },
     killSwitches: normalizedSwitches,
     releaseAuthorityReceiptDigests,

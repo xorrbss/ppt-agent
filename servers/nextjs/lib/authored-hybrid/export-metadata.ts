@@ -22,6 +22,8 @@ export interface AuthoredHybridExportMetadata {
 
 export const AUTHORED_HYBRID_COVERAGE_SCHEMA_VERSION =
   "presenton.authored-hybrid-coverage/v2" as const;
+export const AUTHORED_BOUNDED_CJK_COVERAGE_PROFILE_ID =
+  "ja-ko-zh-bounded-fixture-v1" as const;
 
 export interface AuthoredHybridCoverageSource {
   exportAttemptId: string;
@@ -75,6 +77,12 @@ export interface AuthoredHybridSlideCoverage {
 export interface AuthoredHybridCoverageManifest {
   schemaVersion: typeof AUTHORED_HYBRID_COVERAGE_SCHEMA_VERSION;
   mode: "hybrid";
+  cjkCoverageProfileId: typeof AUTHORED_BOUNDED_CJK_COVERAGE_PROFILE_ID;
+  nativeTextPolicy: {
+    koreanLatin: "bounded-native";
+    japanese: "raster-required";
+    chinese: "raster-required";
+  };
   source: AuthoredHybridCoverageSource;
   totalSlides: number;
   nativeText: number;
@@ -235,6 +243,12 @@ export function createAuthoredHybridCoverageManifest(
   return {
     schemaVersion: AUTHORED_HYBRID_COVERAGE_SCHEMA_VERSION,
     mode: "hybrid",
+    cjkCoverageProfileId: AUTHORED_BOUNDED_CJK_COVERAGE_PROFILE_ID,
+    nativeTextPolicy: {
+      koreanLatin: "bounded-native",
+      japanese: "raster-required",
+      chinese: "raster-required",
+    },
     source: {
       exportAttemptId: source.exportAttemptId,
       presentationRevision: Math.max(

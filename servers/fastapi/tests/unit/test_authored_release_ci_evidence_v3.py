@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import hmac
+import json
 from pathlib import Path
 import uuid
 
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
@@ -16,6 +20,8 @@ from models.authored_vnext.semantic.release_evidence_v3 import (
     BitbucketRequiredChecksReceiptV3,
     CiEvidenceArtifactPublishRequestV3,
 )
+from models.authored_vnext.semantic.release_authority_v3 import EvidenceIssuerEnvelopeV3
+from models.sql.authored_release_evidence_v3 import AuthoredReleaseNonceV3
 from models.sql.authored_semantic_bundle import AuthoredSemanticArtifact
 from services.authored_vnext.semantic.canonical import (
     SemanticContractError,
@@ -34,7 +40,7 @@ from services.authored_vnext.semantic.release_evidence_v3 import (
 )
 
 
-def _configure(monkeypatch: pytest.MonkeyPatch) -> tuple[str, str]:
+def _configure(monkeypatch: pytest.MonkeyPatch) -> tuple[str, str, Ed25519PrivateKey]:
     commit = "a" * 40
     key = "test-only-ci-evidence-key-32-bytes-minimum"
     monkeypatch.setenv("AUTHORED_RELEASE_CI_EVIDENCE_HMAC_KEY", key)
@@ -48,7 +54,65 @@ def _configure(monkeypatch: pytest.MonkeyPatch) -> tuple[str, str]:
         ("AUTHORED_RELEASE_BACKEND_BUILD_DIGEST", "3"),
     ):
         monkeypatch.setenv(name, "sha256:" + digit * 64)
-    return commit, key
+    private_key = Ed25519PrivateKey.generate()
+    public_key = private_key.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    monkeypatch.setenv("AUTHORED_RELEASE_AUTHORITY_ENVIRONMENT_ID", "release-test")
+    monkeypatch.setenv(
+        "AUTHORED_RELEASE_SIGNER_TRUST_BUNDLE_JSON",
+        json.dumps(
+            [
+                {
+                    "authorityDomain": "actual_product",
+                    "issuerId": "ci.verifier",
+                    "signerKeyId": "ci.release.key-1",
+                    "environmentId": "release-test",
+                    "keyPurpose": "actual-product-ci",
+                    "rotationEpoch": 1,
+                    "algorithm": "Ed25519",
+                    "revoked": False,
+                    "publicKeyBase64": base64.b64encode(public_key).decode("ascii"),
+                }
+            ]
+        ),
+    )
+    return commit, key, private_key
+
+
+def _ci_authority(
+    report: BitbucketRequiredChecksReceiptV3,
+    private_key: Ed25519PrivateKey,
+    now: datetime,
+) -> EvidenceIssuerEnvelopeV3:
+    unsigned = {
+        "schemaVersion": "authored-evidence-issuer-envelope/v3",
+        "authorityDomain": "actual_product",
+        "evidenceClass": "actual_product_ci",
+        "issuerId": "ci.verifier",
+        "signerKeyId": "ci.release.key-1",
+        "environmentId": "release-test",
+        "keyPurpose": "actual-product-ci",
+        "rotationEpoch": 1,
+        "issuedAt": now,
+        "expiresAt": now + timedelta(minutes=15),
+        "nonce": "ci_nonce_0000000000000001",
+        "signatureAlgorithm": "Ed25519",
+    }
+    digest = canonical_digest(
+        {
+            "receipt": report.model_dump(mode="json", by_alias=True),
+            "authority": EvidenceIssuerEnvelopeV3.model_validate(
+                {**unsigned, "signatureBase64": base64.b64encode(b"0" * 64).decode("ascii")}
+            ).model_dump(mode="json", by_alias=True, exclude={"signature_base64"}),
+        }
+    )
+    return EvidenceIssuerEnvelopeV3.model_validate(
+        {
+            **unsigned,
+            "signatureBase64": base64.b64encode(private_key.sign(digest.encode("ascii"))).decode("ascii"),
+        }
+    )
 
 
 def _report(commit: str, key: str, now: datetime) -> BitbucketRequiredChecksReceiptV3:
@@ -83,7 +147,7 @@ def _report(commit: str, key: str, now: datetime) -> BitbucketRequiredChecksRece
 def test_signed_ci_evidence_is_immutable_and_commit_scoped(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    commit, key = _configure(monkeypatch)
+    commit, key, private_key = _configure(monkeypatch)
     now = datetime.now(timezone.utc).replace(microsecond=0)
     report = _report(commit, key, now)
     validate_ci_evidence_report_v3(report, now=now)
@@ -94,14 +158,17 @@ def test_signed_ci_evidence_is_immutable_and_commit_scoped(
         async with engine.begin() as connection:
             await connection.run_sync(
                 SQLModel.metadata.create_all,
-                tables=[AuthoredSemanticArtifact.__table__],
+                tables=[AuthoredSemanticArtifact.__table__, AuthoredReleaseNonceV3.__table__],
             )
         owner_id = uuid.uuid4()
         target = release_authority_target_v3_from_environment()
         async with maker() as session:
             artifact = await publish_ci_evidence_artifact_v3(
                 session,
-                request=CiEvidenceArtifactPublishRequestV3(receipt=report),
+                request=CiEvidenceArtifactPublishRequestV3(
+                    receipt=report,
+                    authority=_ci_authority(report, private_key, now),
+                ),
                 publisher_principal_id=owner_id,
                 publisher_is_admin=True,
                 tenant_id="default",

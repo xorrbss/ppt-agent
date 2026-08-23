@@ -29,6 +29,7 @@ export const AUTHORED_HYBRID_TYPOGRAPHY_ISSUE_CODES = [
   "bounds-overflow",
   "backplate-collision",
   "line-break-mismatch",
+  "unqualified-ja-zh-text",
 ] as const;
 
 export type AuthoredHybridTypographyIssueCode =
@@ -91,6 +92,7 @@ export const AUTHORED_HYBRID_FALLBACK_REASONS = [
   "typography-bounds-overflow",
   "typography-backplate-collision",
   "typography-line-break-mismatch",
+  "typography-unqualified-ja-zh-text",
 ] as const;
 
 export type AuthoredHybridFallbackReason =

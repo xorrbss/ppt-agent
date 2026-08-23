@@ -25,6 +25,10 @@ from services.authored_vnext.semantic.canonical import (
     canonical_digest,
     canonical_json,
 )
+from services.authored_vnext.semantic.release_authority_v3 import (
+    consume_authority_nonce_v3,
+    validate_actual_product_authority_v3,
+)
 from utils.datetime_utils import get_current_utc_datetime
 
 
@@ -89,7 +93,14 @@ async def publish_ci_evidence_artifact_v3(
     if publisher_principal_id is None or not publisher_is_admin:
         raise SemanticContractError("authored_capability_receipt_admin_required")
     validate_ci_evidence_report_v3(request.receipt)
-    content = canonical_json(request.receipt).encode("utf-8")
+    receipt_wire = request.receipt.model_dump(mode="json", by_alias=True)
+    authority_digest = validate_actual_product_authority_v3(
+        receipt_wire, request.authority
+    )
+    await consume_authority_nonce_v3(
+        session, authority=request.authority, subject_digest=authority_digest
+    )
+    content = canonical_json(request).encode("utf-8")
     artifact_digest = "sha256:" + sha256(content).hexdigest()
     artifact_ref = f"artifact://sha256/{artifact_digest.removeprefix('sha256:')}"
     artifact = await session.scalar(
@@ -125,6 +136,7 @@ async def publish_ci_evidence_artifact_v3(
         artifact_ref=artifact_ref,
         artifact_digest=artifact_digest,
         receipt_digest=request.receipt.receipt_digest,
+        authority_digest=authority_digest,
         byte_length=len(content),
     )
 
@@ -163,12 +175,15 @@ async def validate_ci_required_checks_evidence_v3(
     ):
         raise SemanticContractError("authored_ci_evidence_artifact_unresolvable")
     try:
-        report = BitbucketRequiredChecksReceiptV3.model_validate_json(
+        published = CiEvidenceArtifactPublishRequestV3.model_validate_json(
             bytes(artifact.content_bytes), strict=False
         )
     except (UnicodeError, ValidationError, ValueError) as error:
         raise SemanticContractError("authored_ci_evidence_artifact_invalid") from error
+    report = published.receipt
     validate_ci_evidence_report_v3(report)
+    receipt_wire = report.model_dump(mode="json", by_alias=True)
+    validate_actual_product_authority_v3(receipt_wire, published.authority)
     if (
         request.evidence_digest != report.receipt_digest
         or _utc(request.expires_at) > _utc(report.verified_at) + _MAX_CI_EVIDENCE_AGE

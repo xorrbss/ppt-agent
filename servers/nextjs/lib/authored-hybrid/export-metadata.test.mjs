@@ -93,6 +93,13 @@ test("reports truthful per-slide native and raster coverage", () => {
     }
   );
 
+  assert.equal(coverage.cjkCoverageProfileId, "ja-ko-zh-bounded-fixture-v1");
+  assert.deepEqual(coverage.nativeTextPolicy, {
+    koreanLatin: "bounded-native",
+    japanese: "raster-required",
+    chinese: "raster-required",
+  });
+
   assert.equal(coverage.nativeText, 2);
   assert.equal(coverage.nativeImage, 1);
   assert.equal(coverage.nativeShape, 1);

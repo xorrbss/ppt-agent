@@ -1,0 +1,81 @@
+{
+  "schemaVersion": "authored-gate-minus1-observation-envelope/v1",
+  "attemptId": "authored-bounded-gate-minus1-20260823T173740KST-attempt-03",
+  "authority": "design-feasibility-observation-only",
+  "bindingStatus": "nonconforming-post-hoc-analysis",
+  "suiteDisposition": "not-verified",
+  "manifestClaimedByLegacyAnalyzerDigest": "sha256:d36cf5cf45339f41f38fe84a7e80a8c45a9b08e55b192ec32e9006e8eedc7b44",
+  "legacyAnalyzerResultSetDigest": "sha256:c16c28ad57c6a313c465fa1a04ce99a7f5dcbe6fe3e120ba7ac1f911a43b93ee",
+  "legacyDigestIsAuthoritative": false,
+  "nonconformanceReasons": [
+    "manifest and result digest projections formed a cycle",
+    "legacy analyzer canonicalized fractional JSON numbers outside presenton-canonical-json/v2",
+    "legacy result vocabulary used underscore states not admitted by the manifest",
+    "QID and package tag relationship graph, decoded carrier map, and duplicate-orphan collector were absent",
+    "chart categories and finite values were absent",
+    "p:bg picture-plane and effects-zero collectors were absent",
+    "uppercase-safe D2/U2/Q2/K2/R2 carriers and maximum encoded QID length were not probed",
+    "raw cleanup record retained POWERPNT PID 10576 while the analyzer hard-coded zero survivors",
+    "repair-dialog negative witness was not durably observable during blocking COM Open"
+  ],
+  "actualEnvironment": {
+    "powerPointVersion": "16.0",
+    "powerPointBuild": "20326",
+    "operatingSystem": "Windows 64-bit 10.00",
+    "environmentReceiptDigest": "sha256:d6ca3ad1b02fcb10c7421532c7762d8c684f2927574023e9faaf44d6fc9b2260"
+  },
+  "actualCounts": {
+    "requestedCaseCount": 18,
+    "legacyAnalyzerCaseCount": 18,
+    "schemaConformingCaseCount": 0,
+    "authoritativeFeasibleCaseCount": 0
+  },
+  "candidateObservations": [
+    { "ordinal": 1, "caseId": "gminus1.text.utf16-surrogate", "candidateObservation": "COM length 4; Characters positions 2 and 3 both expanded to Start 2 Length 2", "authority": "not-verified" },
+    { "ordinal": 2, "caseId": "gminus1.text.combining-nfc", "candidateObservation": "PowerPoint preserved emitted composed and decomposed sequences", "authority": "not-verified" },
+    { "ordinal": 3, "caseId": "gminus1.text.newline-crlf", "candidateObservation": "CRLF input appeared as one COM CR", "authority": "not-verified" },
+    { "ordinal": 4, "caseId": "gminus1.text.soft-break", "candidateObservation": "OOXML soft break appeared as COM VT U+000B", "authority": "not-verified" },
+    { "ordinal": 5, "caseId": "gminus1.text.empty-repeated-whitespace", "candidateObservation": "whole-text stream was stable; zero-length run identity was not durable", "authority": "not-verified" },
+    { "ordinal": 6, "caseId": "gminus1.text.mixed-bold-italic", "candidateObservation": "whole-range Bold and Italic returned raw mixed state -2; per-run values reopened", "authority": "not-verified" },
+    { "ordinal": 7, "caseId": "gminus1.text.east-asian-typeface", "candidateObservation": "Name and NameFarEast labels reopened; exact face was not independently established", "authority": "not-verified" },
+    { "ordinal": 8, "caseId": "gminus1.text.autofit-none", "candidateObservation": "AutoSize zero and sampled line bounds reopened", "authority": "not-verified" },
+    { "ordinal": 9, "caseId": "gminus1.text.autofit-shrink", "candidateObservation": "requested 16 point became effective 15 point on the sampled host", "authority": "raster-required" },
+    { "ordinal": 10, "caseId": "gminus1.text.line-bounds-long-ko", "candidateObservation": "sampled maximum line-bound delta was zero point", "authority": "not-verified" },
+    { "ordinal": 11, "caseId": "gminus1.text.small-overflow", "candidateObservation": "requested 0.25 point deficit reopened as 0.200001 point residual", "authority": "not-verified" },
+    { "ordinal": 12, "caseId": "gminus1.qid.shape-tags-roundtrip", "candidateObservation": "raw lowercase tag values reopened; relationship graph and uppercase-safe carrier were not observed", "authority": "blocked" },
+    { "ordinal": 13, "caseId": "gminus1.package.presentation-tags-roundtrip", "candidateObservation": "raw lowercase presentation tags reopened; decoded carrier and duplicate-orphan collectors were absent", "authority": "blocked" },
+    { "ordinal": 14, "caseId": "gminus1.font.saved-embedded-parts", "candidateObservation": "six embedded part digest-length pairs persisted across input and three saves on one host", "authority": "not-verified" },
+    { "ordinal": 15, "caseId": "gminus1.paint.p-bg-roundtrip", "candidateObservation": "solid p:bg and FollowMasterBackground false persisted; plane/effects collectors were absent", "authority": "blocked" },
+    { "ordinal": 16, "caseId": "gminus1.chart.line-style-roundtrip", "candidateObservation": "AddChart2 line type and explicit stroke RGB reopened; category/value and cached-literal no-workbook carrier were not observed", "authority": "blocked" },
+    { "ordinal": 17, "caseId": "gminus1.chart.pie-point-style-roundtrip", "candidateObservation": "AddChart2 pie point RGB reopened; category/value and cached-literal no-workbook carrier were not observed", "authority": "blocked" },
+    { "ordinal": 18, "caseId": "gminus1.com.repair-dialog-witness", "candidateObservation": "visible COM Open returned but could not prove absence of a repair dialog during the blocking call", "authority": "blocked" }
+  ],
+  "candidateMeasurementIntegers": {
+    "observedMaxLineBoundDeltaMicroPoint": 0,
+    "observedSmallOverflowResidualMicroPoint": 200001,
+    "observedMaxChangedPixelRatioPpmMicrounits": 972222222,
+    "observedMinBlock8LumaSsimPartsPerTrillion": 998912730747,
+    "observedMaxMeanAbsoluteChannelDeltaNanounits": 62671441,
+    "observedMaxRmseMicrounits": 2486023,
+    "observedMaxOpenOrReopenMs": 125,
+    "observedMaxSaveCopyMs": 4893
+  },
+  "evidenceArtifacts": [
+    { "artifactId": "input-pptx", "byteLength": 13295163, "sha256": "sha256:50ffe66fb1288107bc0a338c19d47c9344ae347e42de732713fe05a7a4ea0823", "locator": "attempt-03/gate-minus1-input.pptx" },
+    { "artifactId": "saved-trial-01-pptx", "byteLength": 13295263, "sha256": "sha256:b5fbe31245fab9d78ec2e0a3f0314c1ec7e4c1b35ae8930d2f70f61d90163977", "locator": "attempt-03/gate-minus1-saved-trial-01.pptx" },
+    { "artifactId": "saved-trial-02-pptx", "byteLength": 13295262, "sha256": "sha256:b9f31a741212b1d8a869fe0b53edb398ca188955c42e35258578bde242298faf", "locator": "attempt-03/gate-minus1-saved-trial-02.pptx" },
+    { "artifactId": "saved-trial-03-pptx", "byteLength": 13295263, "sha256": "sha256:9268675f9d4b1b0a67158320360d5511bfe31f4cfb62bfe9e3510c1287b76ae1", "locator": "attempt-03/gate-minus1-saved-trial-03.pptx" },
+    { "artifactId": "raw-observations-json", "byteLength": 199221, "sha256": "sha256:32d3702e3c6562f0cf1fb0239a674362bbbc58845c4970bf01710f46a4110952", "locator": "attempt-03/gate-minus1-raw-observations.json" },
+    { "artifactId": "extra-com-observations-json", "byteLength": 16748, "sha256": "sha256:30b4692605f6f94974f3a1cd1e6b2978ee9acb42d8eb9aaea1a63eb651e529aa", "locator": "attempt-03/gate-minus1-extra-com-observations.json" },
+    { "artifactId": "font-inventory-json", "byteLength": 6429, "sha256": "sha256:d10e998f4c9c5e7e9a876cc37b89b87c8d7601a8168dd619f20f05f0bbfef4ec", "locator": "attempt-03/gate-minus1-font-inventory.json" },
+    { "artifactId": "legacy-analysis-json", "byteLength": 37824, "sha256": "sha256:269ec3cd7a86e1a80d4f54a0f120dd00cd28fd678ed95b1e723d05d3e45a9b5a", "locator": "attempt-03/gate-minus1-analysis.json" }
+  ],
+  "requiredNextExecution": {
+    "requiredManifestSchemaId": "urn:presenton:authored:gate-minus1-case-manifest:v1",
+    "mustVersionManifestWithFreshInput": true,
+    "mustUseResultSchemaId": "urn:presenton:authored:gate-minus1-result-set:v1",
+    "mustRerunAll18Cases": true,
+    "mustBindFreshInputArtifactBeforeSeal": true,
+    "noLegacyResultPromotion": true
+  }
+}

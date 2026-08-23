@@ -1,0 +1,101 @@
+{
+  "schemaVersion": "authored-gate-minus1-semantic-validator-contract/v1",
+  "contractId": "authored-gate-minus1-semantic-validator/v1",
+  "canonicalProfileId": "presenton-canonical-json/v2",
+  "policyCandidateDigest": "sha256:81a822b8b51b973492784316c7cec4c04f45d0b54fd3365db7e7f80be7f87d4f",
+  "manifestCaseContractSource": "$.cases[*].{ordinal,caseId,expectedObservationFields,assertions,allowedDispositions}",
+  "globalInvariants": [
+    "ordered case IDs and ordinals exactly equal the sealed manifest",
+    "observed field IDs exactly equal expectedObservationFields for every feasible case",
+    "every observation value is typed and integer-scaled according to the result schema",
+    "for every structured payload observations[*].fieldId is unique and in exact fieldIds order and the observations field-ID sequence equals the case contract fieldIds sequence",
+    "every evidenceArtifactId resolves to one unique immutable artifact inventory record",
+    "every digest-valued observation equals the digest of exactly one evidenceArtifactId whose payload validates against a required case schema; arbitrary or orphan digests fail",
+    "requiredCommonObservationFields are present exactly once in the result common observation set and use this registry",
+    "the executionSealArtifactRef in the result exactly equals the final manifest executionPins outer artifact ref and resolves through exactly one artifactInventory record; outer byteLength mediaType schemaId and sha256 revalidate the exact payload bytes and payloadExecutionSealDigest equals the parsed payload executionSealDigest",
+    "executionSealSignatureBase64 verifies with executionSealSignerId Ed25519 public key over exactly the 71 ASCII bytes of the lowercase executionSealDigest string sha256:<64 lowercase hexadecimal digits> with no BOM terminator whitespace or newline",
+    "the parsed execution seal payload manifestCoreDigest equals the recomputed manifest core",
+    "freshInputCreatedAt is not later than manifestSealedAt which is not later than executionSealIssuedAt and executionSealIssuedAt is earlier than executionSealExpiresAt in the signed execution seal payload; input and environment age at issuance do not exceed the pinned policy environmentAttestationMaxAgeSeconds and acceptedFutureSkewSeconds",
+    "environment policy input and watcher digests equal the sealed execution pins",
+    "actual pinned artifact role multiset equals the six-role set exactly once each and its recomputed digest equals executionArtifactRoleSetDigest",
+    "before-open after-grace and after-timeout POWERPNT process censuses are present and feasible requires zero unexpected survivor PIDs",
+    "receipt subjectManifestDigest equals manifestDigest",
+    "receipt subjectResultCoreDigest equals resultCoreDigest",
+    "receipt semanticValidatorContractDigest equals this contract digest",
+    "issuer key nonce Ed25519 signature and freshness validate in gate_minus1_actual_probe trust domain",
+    "feasible has zero skipped missing duplicate unexpected blocked failed and not-verified cases"
+  ],
+  "executionArtifactRoleSet": ["input-pptx", "probe-script", "dialog-watcher-script", "cleanup-census-script", "environment-receipt", "source-tree-census"],
+  "executionArtifactRoleSetDigest": "sha256:c952db10303f25aea35ebed316e1a866be2924135964884c6103a0c66ae90190",
+  "structuredPayloadSchemaDocument": {
+    "schemaId": "urn:presenton:authored:gate-minus1-structured-observation-payloads:v1",
+    "fileName": "gate-minus1-structured-observation-payloads.v1.schema.json",
+    "fileSha256": "sha256:7a2b8e401a42e062de97d372255d69bec6a8aba143e92618141b036551cd1b6d"
+  },
+  "executionSealSchemaDocument": {
+    "schemaId": "urn:presenton:authored:gate-minus1-execution-seal:v1",
+    "fileName": "gate-minus1-execution-seal.v1.schema.json",
+    "fileSha256": "sha256:1d6dc24f90ffb2a1ddd2001449ffe20c381eb2d62ee0941b1eb50ced4359635e"
+  },
+  "structuredSchemaRegistry": {
+    "utf16-span-observation/v1": "#/$defs/utf16SpanObservationV1",
+    "unicode-normalization-observation/v1": "#/$defs/unicodeNormalizationObservationV1",
+    "newline-paragraph-mapping-observation/v1": "#/$defs/newlineParagraphMappingObservationV1",
+    "soft-break-mapping-observation/v1": "#/$defs/softBreakMappingObservationV1",
+    "whitespace-run-observation/v1": "#/$defs/whitespaceRunObservationV1",
+    "run-style-observation/v1": "#/$defs/runStyleObservationV1",
+    "exact-face-conjunction-observation/v1": "#/$defs/exactFaceConjunctionObservationV1",
+    "autofit-line-observation/v1": "#/$defs/autofitLineObservationV1",
+    "autofit-shrink-observation/v1": "#/$defs/autofitShrinkObservationV1",
+    "line-bounds-render-observation/v1": "#/$defs/lineBoundsRenderObservationV1",
+    "overflow-render-observation/v1": "#/$defs/overflowRenderObservationV1",
+    "ooxml-tag-relationship-graph/v1": "#/$defs/ooxmlTagRelationshipGraphV1",
+    "decoded-qid-carrier-map/v1": "#/$defs/decodedQidCarrierMapV1",
+    "decoded-package-marker-map/v1": "#/$defs/decodedPackageMarkerMapV1",
+    "font-inventory-embedding-observation/v1": "#/$defs/fontInventoryEmbeddingObservationV1",
+    "p-bg-plane-effect-readback/v1": "#/$defs/pBgPlaneEffectReadbackV1",
+    "cached-literal-chart-readback/v1": "#/$defs/cachedLiteralChartReadbackV1",
+    "attended-window-event-witness/v1": "#/$defs/attendedWindowEventWitnessV1"
+  },
+  "observationValueContractRules": {
+    "unregisteredFieldDisposition": "failed",
+    "fieldMustAppearInExactlyOneRule": true,
+    "rules": [
+      { "valueType": "digest", "unit": "sha256", "scaleInteger": 1, "fieldIds": ["attendedWitnessDigest", "categories", "charactersStartLengthText", "cmapDigest", "comTagMap", "decodedMarkerMap", "decodedSemanticTagMap", "embeddedFontRelationship", "embeddedPartDigest", "extractedSfntDigest", "finiteValuesBinary64", "firstReopenRenderMetricsFixedInteger", "inputEmbeddedPartDigest", "interiorRectEmu", "lineBoundsMicroPoint", "lineBoundsRoundedEmu", "lineSpans", "lineStartLengthTextDigest", "marginEmu", "observedDialogEvents", "ooxmlBreakTokens", "ooxmlOrderedTextTokens", "ooxmlParagraphTokens", "ooxmlTagRelationshipGraph", "paragraphTerminatorRanges", "pointIndexCategoryValueFillRgb", "renderMetricsFixedInteger", "runStartLength", "savedEmbeddedPartDigest", "shapeRectEmu", "softBreakRanges", "sourceContainerDigest", "sourceFaceDigest", "sourceNewlineTokens", "textBoundsMicroPoint", "whitespaceRanges"] },
+      { "valueType": "integer", "unit": "count", "scaleInteger": 1, "fieldIds": ["categoryCount", "comLength", "duplicateOrOrphanCount", "effectsCount", "emptyParagraphCount", "lineCount", "picturePlaneCount", "powerPointHwnd", "seriesCount", "slideXmlPBgCount", "ttcIndex"] },
+      { "valueType": "integer", "unit": "emu", "scaleInteger": 1, "fieldIds": ["firstReopenDeltaEmu", "overflowXEmu", "overflowYEmu"] },
+      { "valueType": "integer", "unit": "micro-point", "scaleInteger": 1, "fieldIds": ["effectiveFontSizeMicroPoint", "fontSizeMicroPoint", "requestedFontSizeMicroPoint", "runSizeMicroPoint"] },
+      { "valueType": "integer", "unit": "raw-com-enum", "scaleInteger": 1, "fieldIds": ["comAutoSizeRaw", "comFillType", "fsType", "runBoldRaw", "runItalicRaw", "wholeRangeTriStateRaw"] },
+      { "valueType": "boolean", "unit": "boolean", "scaleInteger": 1, "fieldIds": ["firstReopenEquality", "followMasterBackground"] },
+      { "valueType": "utf16-le-hex", "unit": "utf16-code-unit", "scaleInteger": 1, "fieldIds": ["comTextUtf16LeHex", "emittedUtf16LeHex", "normalizedNfcUtf16LeHex", "sourceUtf16LeHex"] },
+      { "valueType": "string", "unit": "hex", "scaleInteger": 1, "fieldIds": ["comFillRgb", "seriesLineRgb", "slideXmlSrgb"] },
+      { "valueType": "string", "unit": "none", "scaleInteger": 1, "fieldIds": ["chartType", "dialogWatcherStartedAt", "displayName", "eastAsianFamily", "latinFamily", "ooxmlBodyPrAutofit", "ooxmlEastAsianTypeface", "ooxmlLatinTypeface", "openCallReturnedAt", "openCallStartedAt", "quarantineDecision", "runFontName", "runFontNameFarEast", "seriesName", "titleText", "visibleDesktopIdentity"] }
+      ,{ "valueType": "digest", "unit": "sha256", "scaleInteger": 1, "fieldIds": ["environmentReceiptDigest", "fontInventoryDigest", "inputPptxDigest", "inputOoxmlReadbackDigest", "firstOpenComObservationDigest", "firstOpenRenderArtifactDigests", "savedCopyPptxDigest", "savedOoxmlReadbackDigest", "reopenInputPptxDigest", "reopenComObservationDigest", "reopenRenderArtifactDigests", "originalInputDigestAfterRun", "rawArtifactRefs", "powerPointProcessCensusBeforeOpen", "powerPointProcessCensusAfterCleanupGrace", "powerPointProcessCensusAfterCleanupTimeout"] }
+      ,{ "valueType": "integer", "unit": "milliseconds", "scaleInteger": 1, "fieldIds": ["elapsedMs"] }
+      ,{ "valueType": "integer", "unit": "count", "scaleInteger": 1, "fieldIds": ["unexpectedPowerPointPidCountAfterGrace", "unexpectedPowerPointPidCountAfterTimeout"] }
+      ,{ "valueType": "string", "unit": "none", "scaleInteger": 1, "fieldIds": ["officeVersionBuildBitness", "cleanupState"] }
+    ]
+  },
+  "structuredCaseContracts": {
+    "gminus1.text.utf16-surrogate": { "requiredSchemas": ["utf16-span-observation/v1"], "invariants": ["source emitted COM and reopen UTF-16 streams and Characters ranges are artifact-bound"] },
+    "gminus1.text.combining-nfc": { "requiredSchemas": ["unicode-normalization-observation/v1"], "invariants": ["source NFC emitted COM and reopen streams are artifact-bound"] },
+    "gminus1.text.newline-crlf": { "requiredSchemas": ["newline-paragraph-mapping-observation/v1"], "invariants": ["source OOXML paragraph and COM terminator mappings are artifact-bound"] },
+    "gminus1.text.soft-break": { "requiredSchemas": ["soft-break-mapping-observation/v1"], "invariants": ["OOXML break and COM VT ranges are artifact-bound"] },
+    "gminus1.text.empty-repeated-whitespace": { "requiredSchemas": ["whitespace-run-observation/v1"], "invariants": ["ordered text whitespace and empty paragraph facts are artifact-bound"] },
+    "gminus1.text.mixed-bold-italic": { "requiredSchemas": ["run-style-observation/v1"], "invariants": ["raw tri-state and every run range style face and size are artifact-bound"] },
+    "gminus1.text.east-asian-typeface": { "requiredSchemas": ["exact-face-conjunction-observation/v1"], "invariants": ["registry cmap OOXML embedded part and COM family observations are artifact-bound"] },
+    "gminus1.text.autofit-none": { "requiredSchemas": ["autofit-line-observation/v1"], "invariants": ["OOXML bodyPr COM AutoSize line spans bounds and size are artifact-bound"] },
+    "gminus1.text.autofit-shrink": { "requiredSchemas": ["autofit-shrink-observation/v1"], "invariants": ["requested and effective size and line spans are artifact-bound and disposition is raster-required"] },
+    "gminus1.text.line-bounds-long-ko": { "requiredSchemas": ["line-bounds-render-observation/v1"], "invariants": ["line membership raw fixed-point bounds rounded EMU deltas and metrics are artifact-bound"] },
+    "gminus1.text.small-overflow": { "requiredSchemas": ["overflow-render-observation/v1"], "invariants": ["shape interior text bounds overflow line spans and metrics are artifact-bound"] },
+    "gminus1.qid.shape-tags-roundtrip": { "requiredSchemas": ["ooxml-tag-relationship-graph/v1", "decoded-qid-carrier-map/v1"], "invariants": ["exactly one Q2 K2 and R2 carrier per expected owner", "decoded QID kind and role equal the canonical plan", "orphan duplicate truncated and unexpected counts are zero", "maximum encoded QID fixture is present and untruncated"] },
+    "gminus1.package.presentation-tags-roundtrip": { "requiredSchemas": ["ooxml-tag-relationship-graph/v1", "decoded-package-marker-map/v1"], "invariants": ["exactly one D2 plan digest U2 attempt ID and D2 policy digest carrier", "decoded values equal sealed manifest identities", "orphan duplicate truncated and unexpected counts are zero"] },
+    "gminus1.paint.p-bg-roundtrip": { "requiredSchemas": ["p-bg-plane-effect-readback/v1"], "invariants": ["solid opaque p:bg only", "picture plane count zero", "effect count zero", "first-open saved and reopen values exact"] },
+    "gminus1.chart.line-style-roundtrip": { "requiredSchemas": ["cached-literal-chart-readback/v1"], "invariants": ["no embedded workbook relationship", "category and binary64 value arrays exact", "line type title series and explicit stroke RGB exact"] },
+    "gminus1.chart.pie-point-style-roundtrip": { "requiredSchemas": ["cached-literal-chart-readback/v1"], "invariants": ["no embedded workbook relationship", "category and binary64 value arrays exact", "one-series pie point index category value and explicit fill RGB exact"] },
+    "gminus1.font.saved-embedded-parts": { "requiredSchemas": ["font-inventory-embedding-observation/v1"], "invariants": ["source container TTC face cmap fsType OOXML relationship and input saved part identities are artifact-bound"] },
+    "gminus1.com.repair-dialog-witness": { "requiredSchemas": ["attended-window-event-witness/v1"], "invariants": ["watcher starts before COM Open", "dialog HWND events are durably recorded without dismissal", "witness and quarantine decision are signed"] }
+  },
+  "digestProjection": { "algorithm": "sha256", "canonicalProfileId": "presenton-canonical-json/v2", "includedJsonPath": "$", "excludedJsonPaths": ["$.contractDigest"] },
+  "contractDigest": "sha256:fe1cbd606accab30def980e874c37578160b1c0a6bba74afab6abc1870e48ab8"
+}

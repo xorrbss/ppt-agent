@@ -1,0 +1,143 @@
+{
+  "schemaVersion": "authored-evidence-policy/v2",
+  "policyId": "authored-evidence-policy/v2-frozen-20260823-build20326",
+  "status": "frozen-after-corrected-gate-minus1",
+  "policyFreezeAuthorized": true,
+  "measurementProfile": {
+    "powerPointVersion": "16.0",
+    "powerPointBuild": "20326",
+    "renderWidthPx": 1280,
+    "renderHeightPx": 720,
+    "trialCount": 3,
+    "candidateObservationLegacyAnalyzerDigest": "sha256:c16c28ad57c6a313c465fa1a04ce99a7f5dcbe6fe3e120ba7ac1f911a43b93ee",
+    "candidateObservationIsAuthoritativeGateResult": false,
+    "authoritativeGateMinus1TrialResultSetDigests": [
+      "sha256:174fd57a5a2524f655607eaa0e56e75ee3b81e90d8c960361c0083ca8b9f5e4b",
+      "sha256:adecc1e933b4b3bff75cccaf94f49742ea107cf6bdebdf4acdb901901135fb0b",
+      "sha256:eadcd80b3fde6b073b8464d7b3a0b283126520de18d31cdb5f6bef52f1d6b8fb"
+    ],
+    "authoritativeGateMinus1TrialReceiptArtifactDigests": [
+      "sha256:8158b1fb1857b42d2928b8a45e38a643a98f6ba9321a78a6ca924f584cdfcc6f",
+      "sha256:d465af9cbbf8b8d8b2c5a9b71b79996c697b6f5d10d9513c6f7bd048669ac4a1",
+      "sha256:398ec058f59729f33a49bbc0b9cc7ec8a6b48705d704e27f9ab39c1be926afa3"
+    ],
+    "observedMaxLineBoundDeltaMicroPoint": 0,
+    "observedSmallOverflowResidualMicroPoint": 200001,
+    "observedMaxChangedPixelRatioPpmMicrounits": 0,
+    "observedMinBlock8LumaSsimPartsPerTrillion": 1000000000000,
+    "observedMaxSaveCopyMs": 4893,
+    "observedMaxOpenOrReopenMs": 125
+  },
+  "geometryAndOverflow": {
+    "pointToEmu": 12700,
+    "lineBoundRoundingQuantumEmu": 127,
+    "lineBoundFirstReopenToleranceEmu": 254,
+    "nativeShapeSideDriftMaxEmu": 3175,
+    "nativeShapeSideDriftMaxMicroPoint": 250000,
+    "smallOverflowMaxEmu": 3175,
+    "smallOverflowMaxMicroPoint": 250000,
+    "cropAndSentinelMaxRenderedPixels": 1,
+    "diagnosticDriftCounter5PtEmu": 63500,
+    "severeDriftCounter10PtEmu": 127000,
+    "lineMembershipDriftAllowed": 0,
+    "clippingAllowed": 0,
+    "ghostingAllowed": 0,
+    "nativeRasterCollisionAllowed": 0,
+    "derivation": "Raw line-bound drift was 0pt in 33 paired shape observations. The rounding quantum is 0.01pt and the release delta is two quanta. A requested 0.25pt deficit reopened as 0.200001pt, so 0.25pt is the hard residual ceiling; values above it rasterize before admission. Five and ten point counters remain diagnostics and never relax the 0.25pt release ceiling."
+  },
+  "visualMetrics": {
+    "algorithmId": "decoded-rgba-1280x720-block8-luma-ssim/v1",
+    "changedPixelRatioMaxPpm": 1500,
+    "block8LumaSsimMinMillionths": 998500,
+    "meanAbsoluteChannelDeltaMaxMilli": 100,
+    "rmseMaxMilli": 3200,
+    "firstOpenVsReopen": true,
+    "fidelitySourceVsFirstOpen": true,
+    "fidelitySourceVsReopen": true,
+    "hybridVsFidelityFirstOpen": true,
+    "hybridVsFidelityReopen": true,
+    "structuralZeroDefectsStillRequired": true,
+    "derivation": "The worst no-op save/reopen sample was 972.222222 ppm changed pixels, SSIM 0.998912730747, mean absolute channel delta 0.062671441, and RMSE 2.486023. Limits use approximately 1.5x pixel and mean-delta margins, 0.000412731 SSIM margin, and 1.29x RMSE margin. These strict limits may create false negatives; they never permit structural defects."
+  },
+  "chart": {
+    "admittedFamilies": ["line", "pie"],
+    "rasterFamilies": ["column", "bar", "area", "donut"],
+    "chartNumericToleranceUlp": 0,
+    "explicitSrgbMismatchAllowed": 0,
+    "customChartTypographyAllowed": false,
+    "automaticOrThemeColorAllowed": false,
+    "lineMarkersAllowed": false,
+    "pieSeriesCountMax": 1,
+    "derivation": "Three corrected sealed Gate -1 trials observed exact first/reopen category, value, cache-literal and explicit sRGB style carriers for the bounded line and single-series pie fixtures. Only those two families are admitted; every other chart family and any automatic/theme color, marker, custom typography or multi-series pie remains raster."
+  },
+  "paintGraph": {
+    "maxSemanticOwnersPerSlide": 256,
+    "maxPhysicalPaintNodesPerOwner": 4,
+    "maxPaintNodesPerSlide": 1024,
+    "maxOverlapDegreePerNode": 32,
+    "maxOverlapEdgesPerSlide": 16384,
+    "maxPromotionUnitsPerSlide": 256,
+    "maxClosureIterations": 256,
+    "maxContributionCapturesPerSlide": 32,
+    "captureTimeoutSeconds": 10,
+    "captureBudgetSecondsPerSlide": 120,
+    "zBandModel": "single-raster-underlay-cut",
+    "complexityOverflowOutcome": "slide-raster-required",
+    "derivation": "The bounded profile caps 256 logical owners and four physical nodes per owner. The edge cap is the undirected 32-neighbor bound 1024*32/2. Any interleaving above the single raster-underlay cut, atomic opacity/filter/mask/transform group, or budget overflow demotes the promotion unit or the slide."
+  },
+  "workerTiming": {
+    "maxAttempts": 2,
+    "retryBackoffSeconds": 30,
+    "retryableOnlyBeforeState": "assembled",
+    "openTimeoutSeconds": 30,
+    "saveCopyTimeoutSeconds": 60,
+    "reopenTimeoutSeconds": 30,
+    "renderTimeoutSecondsPerSlide": 30,
+    "attemptWallTimeoutSeconds": 600,
+    "leaseSeconds": 900,
+    "heartbeatSeconds": 15,
+    "staleLeaseSeconds": 45,
+    "dialogObservationWindowSeconds": 35,
+    "processCleanupGraceSeconds": 10,
+    "processCleanupTimeoutSeconds": 30,
+    "nonRetryableFailureClasses": [
+      "repair-dialog",
+      "desktop-interference",
+      "identity-mismatch",
+      "artifact-digest-mismatch",
+      "tag-mismatch",
+      "ooxml-repair",
+      "font-inventory-mismatch"
+    ],
+    "derivation": "Observed open/reopen maxima were 125ms and save-copy maximum was 4893ms. Stage limits are at least 12x the observed maxima and the 600s attempt wall covers sixteen 30s slide renders plus open/save/reopen allowance. One retry is allowed only for transient infrastructure failure before assembly; evidence failures quarantine immediately."
+  },
+  "freshness": {
+    "maxObservedClockSkewSeconds": 10,
+    "acceptedFutureSkewSeconds": 30,
+    "workerAttestationMaxAgeSeconds": 900,
+    "environmentAttestationMaxAgeSeconds": 900,
+    "ciSealMaxAgeSeconds": 1800,
+    "evidenceCompletionMaxAgeSeconds": 1800,
+    "projectionTtlSeconds": 300,
+    "deploymentReceiptTtlSeconds": 600,
+    "nonceReuseAllowed": false,
+    "derivation": "A worker must first attest measured clock skew no greater than 10s; the validator permits three times that value. Worker/environment evidence covers one 600s attempt plus 300s margin. CI and completion cover two bounded attempts. Projection and deployment receipts are shorter use-time decisions."
+  },
+  "retention": {
+    "attemptMetadataDays": 180,
+    "evidenceArtifactDays": 30,
+    "unboundArtifactGcGraceHours": 24,
+    "automaticPhysicalDeletion": false,
+    "activeReceiptPinsArtifacts": true,
+    "legalHoldPrecedence": true,
+    "ownerDeletionMode": "tombstone-then-approved-cryptographic-erasure-after-retention-and-hold-release",
+    "derivation": "The 180-day metadata and 30-day evidence values retain the existing reviewed v1 policy. Evidence v2 adds a 24-hour digest-verified unbound grace, active-receipt pins, legal-hold precedence, and a separately authorized erasure controller; this design performs no deletion."
+  },
+  "digestProjection": {
+    "algorithm": "sha256",
+    "canonicalProfileId": "presenton-canonical-json/v2",
+    "includedJsonPath": "$",
+    "excludedJsonPaths": ["$.policyDigest"]
+  },
+  "policyDigest": "sha256:81a822b8b51b973492784316c7cec4c04f45d0b54fd3365db7e7f80be7f87d4f"
+}

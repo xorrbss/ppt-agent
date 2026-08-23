@@ -179,6 +179,42 @@ test("reviewed Windows fallback faces admit logical CJK and mono CSS names", asy
   assert.doesNotMatch(xml, /typeface="(?:IBM Plex Mono|Noto Sans KR|Noto Serif KR)"/);
 });
 
+test("Japanese and Chinese text stays on the Fidelity raster layer until separately qualified", () => {
+  const candidate = mixedTextElement();
+  candidate.id = "ja-zh-bounded-fixture";
+  candidate.text = {
+    ...candidate.text,
+    plainText: "한국어와 中文説明 및 日本語データ",
+    runs: [
+      {
+        ...candidate.text.runs[0],
+        text: "한국어와 中文説明 및 日本語データ",
+      },
+    ],
+  };
+
+  const result = preflightNativeTypography([candidate], {
+    embeddedTypefaceFaces: [
+      { typeface: "IBM Plex Mono", face: "bold" },
+      { typeface: "Noto Sans KR", face: "bold" },
+    ],
+  });
+
+  assert.deepEqual(result.promotableElementIds, []);
+  assert.deepEqual(result.rejectedElementIds, ["ja-zh-bounded-fixture"]);
+  assert.ok(
+    result.typographyIssues.some(
+      (issue) => issue.code === "unqualified-ja-zh-text",
+    ),
+  );
+  assert.equal(result.elements[0].classification.mode, "raster");
+  assert.ok(
+    result.elements[0].classification.reasons.includes(
+      "typography-unqualified-ja-zh-text",
+    ),
+  );
+});
+
 test("ancestor backplate paint does not reject an otherwise stable native title", () => {
   const title = mixedTextElement();
   const ancestor = {

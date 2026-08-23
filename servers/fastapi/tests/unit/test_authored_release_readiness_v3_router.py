@@ -45,7 +45,7 @@ def test_v3_routes_delegate_with_owner_authority_and_commit(monkeypatch) -> None
     monkeypatch.setattr(router, "_owner", lambda: owner_id)
     monkeypatch.setattr(router, "_admin_owner", lambda: owner_id)
     monkeypatch.setattr(router, "get_workbench_capability_projection_v3", project)
-    monkeypatch.setattr(router, "issue_capability_receipt_v3", issue)
+    monkeypatch.setattr(router, "issue_actual_product_capability_receipt_v3", issue)
     monkeypatch.setenv("AUTHORED_VNEXT_TENANT_ID", "tenant-router-v3")
 
     assert (
@@ -105,7 +105,7 @@ def test_v3_receipt_error_rolls_back_with_stable_code(monkeypatch) -> None:
         raise SemanticContractError("authored_capability_receipt_scope_mismatch")
 
     monkeypatch.setattr(router, "_admin_owner", uuid.uuid4)
-    monkeypatch.setattr(router, "issue_capability_receipt_v3", reject)
+    monkeypatch.setattr(router, "issue_actual_product_capability_receipt_v3", reject)
 
     with pytest.raises(HTTPException) as caught:
         asyncio.run(router.create_capability_receipt_v3(request=object(), session=session))

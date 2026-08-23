@@ -703,7 +703,13 @@ const ISSUE_FALLBACK_REASON = {
   "bounds-overflow": "typography-bounds-overflow",
   "backplate-collision": "typography-backplate-collision",
   "line-break-mismatch": "typography-line-break-mismatch",
+  "unqualified-ja-zh-text": "typography-unqualified-ja-zh-text",
 } as const;
+
+// Corrected Gate -1 qualifies the bounded Korean/Latin fixture only. Japanese
+// kana and CJK unified ideographs remain Fidelity/raster until a separately
+// sealed ja/zh font, cmap, embedding, COM and visual evidence profile exists.
+const UNQUALIFIED_JA_ZH_TEXT = /[\u3040-\u30ff\u3400-\u9fff]/u;
 
 /**
  * Fail-closed native typography gate. It rewrites mixed text into script-safe
@@ -731,6 +737,14 @@ export function preflightNativeTypography(
     runs.forEach((run, runIndex) => {
       if (run.text === "\n" || !run.text) return;
       const script = scriptForRun(run);
+      if (UNQUALIFIED_JA_ZH_TEXT.test(run.text)) {
+        issues.push({
+          code: "unqualified-ja-zh-text",
+          elementId: element.id,
+          runIndex,
+          script: "cjk",
+        });
+      }
       if (script === "common") return;
       const resolution = resolveScriptAwareTypeface(script, run.style.fontFamilies);
       const face = embeddedFaceForStyle(run.style);

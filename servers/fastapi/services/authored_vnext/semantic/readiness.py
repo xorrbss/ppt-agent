@@ -11,6 +11,7 @@ import hmac
 import json
 import os
 from pathlib import Path
+from typing import Any
 import uuid
 
 from sqlalchemy import select
@@ -410,6 +411,7 @@ async def issue_capability_receipt(
     visual_evidence_validator: VisualEvidenceValidatorV2 = validate_visual_evidence_authority,
     capability_validators: Mapping[str, CapabilityEvidenceValidatorV2] | None = None,
     allowed_capability_ids: Collection[str] | None = None,
+    authority_metadata: Mapping[str, Any] | None = None,
 ) -> CapabilityReceiptV2:
     issuer_id = _require_issuer_authority(
         issuer_principal_id=issuer_principal_id,
@@ -511,6 +513,61 @@ async def issue_capability_receipt(
             serializer_version=receipt.serializer_version,
             issuer_principal_id=issuer_id,
             issuer_authority=receipt.issuer_authority,
+            authority_domain=(
+                str(authority_metadata["authority_domain"])
+                if authority_metadata is not None
+                else "structural_test"
+            ),
+            evidence_class=(
+                str(authority_metadata["evidence_class"])
+                if authority_metadata is not None
+                else "synthetic_structural_only"
+            ),
+            issuer_id=(
+                str(authority_metadata["issuer_id"])
+                if authority_metadata is not None
+                else None
+            ),
+            signer_key_id=(
+                str(authority_metadata["signer_key_id"])
+                if authority_metadata is not None
+                else None
+            ),
+            environment_id=(
+                str(authority_metadata["environment_id"])
+                if authority_metadata is not None
+                else None
+            ),
+            rotation_epoch=(
+                int(authority_metadata["rotation_epoch"])
+                if authority_metadata is not None
+                else None
+            ),
+            nonce=(
+                str(authority_metadata["nonce"])
+                if authority_metadata is not None
+                else None
+            ),
+            signature_algorithm=(
+                str(authority_metadata["signature_algorithm"])
+                if authority_metadata is not None
+                else None
+            ),
+            signature_base64=(
+                str(authority_metadata["signature_base64"])
+                if authority_metadata is not None
+                else None
+            ),
+            authority_digest=(
+                str(authority_metadata["authority_digest"])
+                if authority_metadata is not None
+                else None
+            ),
+            authority_payload=(
+                dict(authority_metadata["authority_payload"])
+                if authority_metadata is not None
+                else None
+            ),
             evaluated_at=evaluated_at,
             expires_at=expires_at,
             transition_kind=receipt.transition_kind,

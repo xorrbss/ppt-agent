@@ -79,7 +79,7 @@
   "visualEvidencePolicy": {
     "policyId": "authored-visual-parity-gate/v1",
     "reportSchemaVersion": "authored-vnext-visual-parity-gate-report/v1",
-    "receiptTtlSeconds": 2592000,
+    "receiptTtlSeconds": 1800,
     "requiredStatus": "passed",
     "requiredVisualParity": "passed",
     "requiredLanguages": ["ja", "ko", "zh"],

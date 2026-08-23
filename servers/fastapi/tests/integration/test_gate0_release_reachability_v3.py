@@ -9,6 +9,7 @@ until the product exposes them, the test proves the API remains fail-closed.
 from __future__ import annotations
 
 import asyncio
+import base64
 from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac
@@ -17,6 +18,8 @@ from pathlib import Path
 import uuid
 
 import httpx
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi import FastAPI, Request
 import pytest
 from sqlalchemy import select
@@ -27,6 +30,17 @@ from api.v1.ppt.endpoints.authored_vnext.semantic.router import (
     AUTHORED_SEMANTIC_ROUTER,
 )
 from models.sql.authored_capability_receipt import AuthoredCapabilityReceiptRecordV2
+from models.sql.authored_release_evidence_v3 import (
+    AuthoredComQualificationJobV3,
+    AuthoredEvidenceBundleCompletionV3,
+    AuthoredEvidenceGraphRootV3,
+    AuthoredGate0StructuralCompletionV3,
+    AuthoredGate0StructuralEventV3,
+    AuthoredGate0StructuralSubjectV3,
+    AuthoredGate0StructuralTraceV3,
+    AuthoredReleaseArtifactV3,
+    AuthoredReleaseNonceV3,
+)
 from models.sql.authored_semantic_bundle import (
     AuthoredDeckEmissionActivePointer,
     AuthoredDeckEmissionManifestRecord,
@@ -49,6 +63,12 @@ from models.authored_vnext.semantic.readiness import (
 )
 from models.authored_vnext.semantic.release_evidence_v3 import (
     BitbucketRequiredChecksReceiptV3,
+)
+from models.authored_vnext.semantic.release_authority_v3 import (
+    EvidenceIssuerEnvelopeV3,
+    GATE1_GRAPH_BASE_ARTIFACT_IDS_DIGEST_V3,
+    GATE1_GRAPH_BASE_ARTIFACT_IDS_V3,
+    GATE1_REQUIRED_ARTIFACT_IDS_DIGEST_V3,
 )
 from models.authored_vnext.semantic.typography import (
     NativeTypographyReadbackV1,
@@ -73,6 +93,11 @@ from services.authored_vnext.semantic.readiness_validators import (
     trusted_capability_evidence_policy_id,
     trusted_capability_feature_set_digest,
 )
+from services.authored_vnext.semantic.release_authority_v3 import (
+    actual_product_authority_digest,
+    build_bound_capability_subject_v3,
+)
+from services.authored_vnext.semantic import release_authority_v3 as release_authority_service
 from services.authored_vnext.semantic.typography import (
     admit_native_typography,
     load_bounded_windows_cjk_registry,
@@ -93,6 +118,18 @@ from utils.owner_context import (
     set_current_owner_id,
     set_current_owner_is_admin,
 )
+
+
+_RELEASE_V3_GRAPH_AND_GATE0_TABLES = [
+    AuthoredReleaseArtifactV3.__table__,
+    AuthoredComQualificationJobV3.__table__,
+    AuthoredEvidenceGraphRootV3.__table__,
+    AuthoredEvidenceBundleCompletionV3.__table__,
+    AuthoredGate0StructuralSubjectV3.__table__,
+    AuthoredGate0StructuralEventV3.__table__,
+    AuthoredGate0StructuralCompletionV3.__table__,
+    AuthoredGate0StructuralTraceV3.__table__,
+]
 
 
 V3_PROJECTION_FIELDS = (
@@ -134,6 +171,109 @@ def _configure_exact_release_environment(monkeypatch, *, font_inventory_digest: 
     monkeypatch.setenv(
         "AUTHORED_RELEASE_FONT_INVENTORY_DIGEST",
         font_inventory_digest or "sha256:" + "2" * 64,
+    )
+    monkeypatch.setenv("AUTHORED_RELEASE_SOURCE_TREE_CENSUS_DIGEST", _sha("source-tree-census"))
+    monkeypatch.setenv("AUTHORED_RELEASE_SOURCE_HEAD_COMMIT", "a" * 64)
+    monkeypatch.setenv("AUTHORED_RELEASE_EVIDENCE_POLICY_DIGEST", _sha("evidence-policy"))
+    monkeypatch.setenv("AUTHORED_RELEASE_FEATURE_SET_DIGEST", _sha("feature-set"))
+    monkeypatch.setenv("AUTHORED_RELEASE_GATE_MINUS1_MANIFEST_DIGEST", _sha("gate-minus1-manifest"))
+    monkeypatch.setenv("AUTHORED_RELEASE_GATE_MINUS1_RESULT_SET_DIGEST", _sha("gate-minus1-result-set"))
+    monkeypatch.setenv(
+        "AUTHORED_RELEASE_GATE_MINUS1_RECEIPT_ARTIFACT_DIGEST",
+        _sha("gate-minus1-receipt-artifact"),
+    )
+    monkeypatch.setenv(
+        "AUTHORED_RELEASE_GATE_MINUS1_VALIDATOR_CONTRACT_DIGEST",
+        _sha("gate-minus1-validator-contract"),
+    )
+    monkeypatch.setenv("AUTHORED_RELEASE_ENVIRONMENT_ATTESTATION_DIGEST", _sha("environment-attestation"))
+    monkeypatch.setenv("AUTHORED_RELEASE_WORKER_ATTESTATION_DIGEST", _sha("worker-attestation"))
+
+
+def _configure_actual_product_signers(monkeypatch) -> Ed25519PrivateKey:
+    private_key = Ed25519PrivateKey.generate()
+    public_key = private_key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+    entries = []
+    for evidence_class, purpose in (
+        ("actual_product_capability", "actual-product-capability"),
+        ("actual_product_ci", "actual-product-ci"),
+        ("actual_product_com_qualification", "actual-product-com-qualification"),
+        ("actual_product_completion", "actual-product-completion"),
+    ):
+        issuer_id = "gate0.com.worker" if evidence_class == "actual_product_com_qualification" else "gate0.verifier"
+        entries.append(
+            {
+                "authorityDomain": "actual_product",
+                "issuerId": issuer_id,
+                "signerKeyId": f"gate0.{evidence_class}.key-1",
+                "environmentId": "gate0-product",
+                "keyPurpose": purpose,
+                "rotationEpoch": 1,
+                "algorithm": "Ed25519",
+                "revoked": False,
+                "publicKeyBase64": base64.b64encode(public_key).decode("ascii"),
+            }
+        )
+    monkeypatch.setenv("AUTHORED_RELEASE_AUTHORITY_ENVIRONMENT_ID", "gate0-product")
+    monkeypatch.setenv("AUTHORED_RELEASE_GATE1_EXECUTION_NONCE", "gate1_execution_nonce_20260823")
+    monkeypatch.setenv("AUTHORED_RELEASE_SIGNER_TRUST_BUNDLE_JSON", json.dumps(entries))
+    monkeypatch.setenv("AUTHORED_RELEASE_READBACK_SIGNER_KEY_ID", "gate0.readback.key-1")
+    monkeypatch.setenv(
+        "AUTHORED_RELEASE_READBACK_ED25519_PRIVATE_KEY_BASE64",
+        base64.b64encode(
+            private_key.private_bytes(
+                serialization.Encoding.Raw,
+                serialization.PrivateFormat.Raw,
+                serialization.NoEncryption(),
+            )
+        ).decode("ascii"),
+    )
+    monkeypatch.setattr(
+        release_authority_service,
+        "READBACK_PUBLIC_KEY_DIGEST_V3",
+        "sha256:" + hashlib.sha256(public_key).hexdigest(),
+    )
+    return private_key
+
+
+def _actual_product_authority(
+    private_key: Ed25519PrivateKey,
+    payload: dict,
+    *,
+    evidence_class: str,
+    nonce: str,
+    now: datetime,
+) -> EvidenceIssuerEnvelopeV3:
+    purpose = {
+        "actual_product_capability": "actual-product-capability",
+        "actual_product_ci": "actual-product-ci",
+        "actual_product_com_qualification": "actual-product-com-qualification",
+        "actual_product_completion": "actual-product-completion",
+    }[evidence_class]
+    issuer_id = "gate0.com.worker" if evidence_class == "actual_product_com_qualification" else "gate0.verifier"
+    envelope = EvidenceIssuerEnvelopeV3(
+        authority_domain="actual_product",
+        evidence_class=evidence_class,
+        issuer_id=issuer_id,
+        signer_key_id=f"gate0.{evidence_class}.key-1",
+        environment_id="gate0-product",
+        key_purpose=purpose,
+        rotation_epoch=1,
+        issued_at=now,
+        expires_at=now
+        + timedelta(
+            minutes=30
+            if evidence_class
+            in {"actual_product_capability", "actual_product_com_qualification", "actual_product_completion"}
+            else 15
+        ),
+        nonce=nonce,
+        signature_algorithm="Ed25519",
+        signature_base64=base64.b64encode(b"0" * 64).decode("ascii"),
+    )
+    digest = actual_product_authority_digest(payload, envelope)
+    return envelope.model_copy(
+        update={"signature_base64": base64.b64encode(private_key.sign(digest.encode("ascii"))).decode("ascii")}
     )
 
 
@@ -179,6 +319,287 @@ async def _seed_legacy_presentation(maker: async_sessionmaker, presentation_id: 
 
 def _sha(seed: str) -> str:
     return "sha256:" + hashlib.sha256(seed.encode("utf-8")).hexdigest()
+
+
+async def _seal_actual_product_completion_chain(
+    client: httpx.AsyncClient,
+    *,
+    private_key: Ed25519PrivateKey,
+    presentation_id: uuid.UUID,
+    presentation_revision: int,
+    export_attempt_id: uuid.UUID,
+    manifest_digest: str,
+    release_profile_digest: str,
+    required_capability_ids: list[str],
+    receipt_digests: list[str],
+    issued_at: datetime,
+) -> None:
+    """Build the acyclic 67 + graph + phase + completion product chain."""
+
+    def verify_readback(payload: dict) -> None:
+        unsigned = dict(payload)
+        digest = unsigned.pop("serverReadbackDigest")
+        unsigned.pop("readbackSignerKeyId")
+        signature = base64.b64decode(unsigned.pop("readbackSignatureBase64"), validate=True)
+        assert canonical_digest(unsigned) == digest
+        private_key.public_key().verify(signature, digest.encode("ascii"))
+
+    async def publish_bound(artifact_id: str, content: bytes) -> dict:
+        digest = "sha256:" + hashlib.sha256(content).hexdigest()
+        created = await client.post(
+            "/api/v1/ppt/authored-emission/release-artifacts-v3",
+            json={
+                "schemaVersion": "authored-durable-artifact-put/v3",
+                "exportAttemptId": str(export_attempt_id),
+                "artifactId": artifact_id,
+                "sha256": digest,
+                "mediaType": "application/json",
+                "encryptionKeyRef": "local-test/evidence-key-v3",
+                "storageGeneration": 1,
+                "contentBase64": base64.b64encode(content).decode("ascii"),
+            },
+        )
+        assert created.status_code == 201, f"{artifact_id}: {created.text}"
+        durable = created.json()
+        bound = await client.post(
+            f"/api/v1/ppt/authored-emission/release-artifacts-v3/{artifact_id}/bind",
+            json={
+                "schemaVersion": "authored-durable-artifact-bind/v3",
+                "exportAttemptId": str(export_attempt_id),
+                "expectedVersionId": durable["versionId"],
+                "expectedSha256": digest,
+            },
+        )
+        assert bound.status_code == 200, f"{artifact_id}: {bound.text}"
+        return bound.json()
+
+    inventory = []
+    for artifact_id in GATE1_GRAPH_BASE_ARTIFACT_IDS_V3:
+        inventory.append(
+            await publish_bound(
+                artifact_id,
+                canonical_json(
+                    {
+                        "schemaVersion": "authored-gate1-fixture-artifact/v1",
+                        "artifactId": artifact_id,
+                        "exportAttemptId": str(export_attempt_id),
+                    }
+                ).encode("utf-8"),
+            )
+        )
+
+    com_created = await client.post(
+        "/api/v1/ppt/authored-emission/com-qualification-jobs-v3",
+        json={
+            "schemaVersion": "authored-com-qualification-create/v3",
+            "exportAttemptId": str(export_attempt_id),
+            "evidencePolicyDigest": _sha("evidence-policy"),
+        },
+    )
+    assert com_created.status_code == 201, com_created.text
+    com_job = com_created.json()
+    claimed = await client.post(
+        f"/api/v1/ppt/authored-emission/com-qualification-jobs-v3/{com_job['jobId']}/claim",
+        json={"schemaVersion": "authored-com-qualification-claim/v3", "workerId": "gate0.com.worker"},
+    )
+    assert claimed.status_code == 200, claimed.text
+    lease_token = claimed.json()["leaseToken"]
+    artifact_digests = {item["artifactId"]: item["sha256"] for item in inventory}
+    final_evidence = {
+        "schemaVersion": "authored-com-qualification-evidence/v3",
+        "repairDialogs": 0,
+        "powerPointSurvivorPids": [],
+        "desktopInterference": False,
+        "ooxmlRepairObserved": False,
+        "inputPptxDigest": artifact_digests["hybrid-input-pptx"],
+        "savedCopyPptxDigest": artifact_digests["hybrid-saved-pptx"],
+        "reopenInputPptxDigest": artifact_digests["hybrid-saved-pptx"],
+        "firstOpenSnapshotDigest": artifact_digests["hybrid-first-open-slide-01-png"],
+        "reopenSnapshotDigest": artifact_digests["hybrid-reopen-slide-01-png"],
+        "comSnapshotDigest": artifact_digests["hybrid-reopen-com-json"],
+        "ooxmlReadbackDigest": artifact_digests["hybrid-saved-ooxml-json"],
+        "workerAttestationDigest": _sha("worker-attestation"),
+        "environmentAttestationDigest": _sha("environment-attestation"),
+        "artifactDigests": artifact_digests,
+        "comState": {
+            "firstOpen": "observed",
+            "savedCopy": "verified",
+            "reopen": "observed",
+            "readback": "verified",
+        },
+    }
+    states = [
+        "captured",
+        "planned",
+        "assembled",
+        "inputOoxmlVerified",
+        "firstOpenObserved",
+        "savedCopyVerified",
+        "reopenObserved",
+        "comVerified",
+        "sealed",
+    ]
+    for sequence, (expected_state, next_state) in enumerate(zip(states[:-1], states[1:], strict=True)):
+        transition_payload = {
+            "schemaVersion": "authored-com-qualification-transition/v3",
+            "workerId": "gate0.com.worker",
+            "leaseToken": lease_token,
+            "expectedState": expected_state,
+            "expectedTransitionSequence": sequence,
+            "nextState": next_state,
+            "evidence": final_evidence if next_state == "sealed" else {},
+            "failureCode": None,
+        }
+        transition = await client.post(
+            f"/api/v1/ppt/authored-emission/com-qualification-jobs-v3/{com_job['jobId']}/transition",
+            json={
+                **transition_payload,
+                "authority": _actual_product_authority(
+                    private_key,
+                    transition_payload,
+                    evidence_class="actual_product_com_qualification",
+                    nonce=f"gate0_com_transition_nonce_{sequence:02d}",
+                    now=issued_at,
+                ).model_dump(mode="json", by_alias=True),
+            },
+        )
+        assert transition.status_code == 200, transition.text
+        com_job = transition.json()
+    assert com_job["state"] == "sealed"
+    com_readback = await client.get(
+        f"/api/v1/ppt/authored-emission/com-qualification-jobs-v3/{com_job['jobId']}",
+        params={"executionNonce": "gate1_execution_nonce_20260823"},
+    )
+    assert com_readback.status_code == 200, com_readback.text
+    verify_readback(com_readback.json())
+
+    graph_payload = {
+        "schemaVersion": "authored-evidence-graph-root-create/v3",
+        "presentationId": str(presentation_id),
+        "presentationRevision": presentation_revision,
+        "exportAttemptId": str(export_attempt_id),
+        "evidencePolicyDigest": _sha("evidence-policy"),
+        "activeManifestDigest": manifest_digest,
+        "sourceTreeCensusDigest": _sha("source-tree-census"),
+        "sourceHeadCommit": "a" * 64,
+        "releaseProfileDigest": release_profile_digest,
+        "featureSetDigest": _sha("feature-set"),
+        "gateMinus1ManifestDigest": _sha("gate-minus1-manifest"),
+        "gateMinus1ResultSetDigest": _sha("gate-minus1-result-set"),
+        "gateMinus1ReceiptArtifactDigest": _sha("gate-minus1-receipt-artifact"),
+        "gateMinus1ValidatorContractDigest": _sha("gate-minus1-validator-contract"),
+        "environmentAttestationDigest": _sha("environment-attestation"),
+        "workerAttestationDigest": _sha("worker-attestation"),
+        "comQualificationJobId": com_job["jobId"],
+        "comQualificationResultDigest": com_job["resultDigest"],
+        "baseArtifactIds": list(GATE1_GRAPH_BASE_ARTIFACT_IDS_V3),
+        "baseArtifactIdsDigest": GATE1_GRAPH_BASE_ARTIFACT_IDS_DIGEST_V3,
+        "finalRequiredArtifactIdsDigest": GATE1_REQUIRED_ARTIFACT_IDS_DIGEST_V3,
+        "artifactInventory": inventory,
+        "artifactInventoryDigest": canonical_digest(inventory),
+    }
+    graph_payload["rootDigest"] = canonical_digest(graph_payload)
+    graph_payload["authority"] = _actual_product_authority(
+        private_key,
+        graph_payload,
+        evidence_class="actual_product_completion",
+        nonce="gate0_completion_graph_nonce_0001",
+        now=issued_at,
+    ).model_dump(mode="json", by_alias=True)
+    graph_created = await client.post(
+        "/api/v1/ppt/authored-emission/evidence-graph-roots-v3",
+        json=graph_payload,
+    )
+    assert graph_created.status_code == 201, graph_created.text
+    graph = graph_created.json()
+    graph_readback = await client.get(
+        f"/api/v1/ppt/authored-emission/evidence-graph-roots-v3/{graph['graphRootId']}",
+        params={"executionNonce": "gate1_execution_nonce_20260823"},
+    )
+    assert graph_readback.status_code == 200, graph_readback.text
+    verify_readback(graph_readback.json())
+    assert graph_readback.json()["persistedRecordId"] == graph["graphRootId"]
+
+    await publish_bound(
+        "phase-result-set-json",
+        canonical_json(
+            {
+                "schemaVersion": "authored-gate1-phase-result-set/v3",
+                "phaseCount": 37,
+                "passed": 37,
+                "graphRootDigest": graph["rootDigest"],
+            }
+        ).encode("utf-8"),
+    )
+    await publish_bound(
+        "evidence-graph-root-json",
+        canonical_json(graph).encode("utf-8"),
+    )
+
+    completion_created = await client.post(
+        "/api/v1/ppt/authored-emission/evidence-bundle-completions-v3",
+        json={
+            "schemaVersion": "authored-evidence-bundle-completion-create/v3",
+            "graphRootId": graph["graphRootId"],
+            "requiredCapabilityIds": required_capability_ids,
+        },
+    )
+    assert completion_created.status_code == 201, completion_created.text
+    completion = completion_created.json()
+    signed_seal = {
+        "schemaVersion": "authored-evidence-bundle-completion-seal/v3",
+        "expectedCasVersion": completion["casVersion"],
+        "receiptDigests": receipt_digests,
+    }
+    seal_authority = _actual_product_authority(
+        private_key,
+        signed_seal,
+        evidence_class="actual_product_completion",
+        nonce="gate0_completion_seal_nonce_0001",
+        now=issued_at,
+    )
+    authority_digest = actual_product_authority_digest(signed_seal, seal_authority)
+    completion_digest = canonical_digest(
+        {
+            "graphRootDigest": graph["rootDigest"],
+            "requiredCapabilityIds": required_capability_ids,
+            "receiptDigests": receipt_digests,
+            "authorityDigest": authority_digest,
+            "state": "sealed",
+        }
+    )
+    sealed = await client.post(
+        f"/api/v1/ppt/authored-emission/evidence-bundle-completions-v3/{completion['completionId']}/seal",
+        json={
+            **signed_seal,
+            "completionDigest": completion_digest,
+            "authority": seal_authority.model_dump(mode="json", by_alias=True),
+        },
+    )
+    assert sealed.status_code == 200, sealed.text
+    assert sealed.json()["state"] == "sealed"
+    completion_readback = await client.get(
+        f"/api/v1/ppt/authored-emission/evidence-bundle-completions-v3/{completion['completionId']}",
+        params={"executionNonce": "gate1_execution_nonce_20260823"},
+    )
+    assert completion_readback.status_code == 200, completion_readback.text
+    verify_readback(completion_readback.json())
+    assert len(completion_readback.json()["receiptIdentities"]) == len(required_capability_ids)
+    trust_readback = await client.get(
+        "/api/v1/ppt/authored-emission/release-trust-readback-v3",
+        params={"executionNonce": "gate1_execution_nonce_20260823"},
+    )
+    assert trust_readback.status_code == 200, trust_readback.text
+    verify_readback(trust_readback.json())
+    wrong_nonce = await client.get(
+        "/api/v1/ppt/authored-emission/release-trust-readback-v3",
+        params={"executionNonce": "wrong_execution_nonce_20260823"},
+    )
+    assert wrong_nonce.status_code == 422
+    await publish_bound(
+        "completion-seal-json",
+        canonical_json(sealed.json()).encode("utf-8"),
+    )
 
 
 def _sidecar_sha(value: dict) -> str:
@@ -876,6 +1297,7 @@ def test_gate0_actual_router_fails_closed_until_v3_projection_exists(tmp_path: P
                     PresentationModel.__table__,
                     AuthoredCapabilityReceiptRecordV2.__table__,
                     AuthoredDeckEmissionActivePointer.__table__,
+                    *_RELEASE_V3_GRAPH_AND_GATE0_TABLES,
                 ],
             )
         await _seed_legacy_presentation(maker, presentation_id, owner_id)
@@ -914,6 +1336,7 @@ def test_gate0_actual_router_requires_owner_before_projection(tmp_path: Path, mo
                     PresentationModel.__table__,
                     AuthoredCapabilityReceiptRecordV2.__table__,
                     AuthoredDeckEmissionActivePointer.__table__,
+                    *_RELEASE_V3_GRAPH_AND_GATE0_TABLES,
                 ],
             )
         app = FastAPI()
@@ -951,6 +1374,7 @@ def test_gate0_v3_http_and_receipt_post_seams_fail_closed_until_wired(tmp_path: 
                     PresentationModel.__table__,
                     AuthoredCapabilityReceiptRecordV2.__table__,
                     AuthoredDeckEmissionActivePointer.__table__,
+                    *_RELEASE_V3_GRAPH_AND_GATE0_TABLES,
                 ],
             )
         await _seed_legacy_presentation(maker, presentation_id, owner_id)
@@ -991,6 +1415,7 @@ def test_gate0_v3_http_cjk_release_authority_boundary(tmp_path: Path, monkeypatc
     async def scenario() -> None:
         registry_digest = load_bounded_windows_cjk_registry().digest if actual_cjk_evidence else None
         _configure_exact_release_environment(monkeypatch, font_inventory_digest=registry_digest)
+        signer_private_key = _configure_actual_product_signers(monkeypatch)
         monkeypatch.setenv("AUTHORED_RELEASE_VISUAL_GATE_HMAC_KEY", "visual-gate-test-key-01234567890123456789")
         monkeypatch.setenv("AUTHORED_RELEASE_CI_EVIDENCE_HMAC_KEY", "ci-evidence-test-key-01234567890123456789")
         monkeypatch.setenv("AUTHORED_RELEASE_BACKEND_COMMIT_SHA", "a" * 64)
@@ -1010,6 +1435,8 @@ def test_gate0_v3_http_cjk_release_authority_boundary(tmp_path: Path, monkeypatc
                     PresentationExportAttempt.__table__,
                     AuthoredSemanticExportBinding.__table__,
                     AuthoredCapabilityReceiptRecordV2.__table__,
+                    AuthoredReleaseNonceV3.__table__,
+                    *_RELEASE_V3_GRAPH_AND_GATE0_TABLES,
                 ],
             )
         seeded = await _seed_fresh_authoritative_bundle(
@@ -1105,7 +1532,6 @@ def test_gate0_v3_http_cjk_release_authority_boundary(tmp_path: Path, monkeypatc
             )
             assert visual_publish.status_code == 201, visual_publish.text
             visual_artifact = visual_publish.json()
-            visual_expires = generated_at + timedelta(seconds=2592000)
             visual_authority = {
                 "schemaVersion": "authored-visual-evidence-authority/v2",
                 "binding": {
@@ -1177,11 +1603,19 @@ def test_gate0_v3_http_cjk_release_authority_boundary(tmp_path: Path, monkeypatc
                 json={
                     "schemaVersion": "authored-ci-evidence-artifact-publish/v3",
                     "receipt": ci_report.model_dump(mode="json", by_alias=True),
+                    "authority": _actual_product_authority(
+                        signer_private_key,
+                        ci_report.model_dump(mode="json", by_alias=True),
+                        evidence_class="actual_product_ci",
+                        nonce="gate0_ci_nonce_000000000001",
+                        now=ci_verified_at,
+                    ).model_dump(mode="json", by_alias=True),
                 },
             )
             assert ci_publish.status_code == 201, ci_publish.text
             ci_artifact = ci_publish.json()
 
+            receipt_digests: list[str] = []
             for capability in target.profile_definition.all_required_capability_ids:
                 if capability == "ci.requiredChecks":
                     evidence_bundle_id = ci_artifact["evidenceBundleId"]
@@ -1193,13 +1627,10 @@ def test_gate0_v3_http_cjk_release_authority_boundary(tmp_path: Path, monkeypatc
                     evidence_bundle_id = str(hybrid_attempt_id)
                     evidence_digest = export_evidence_digests[capability]
                 expires_at = (
-                    visual_expires
+                    generated_at
+                    + timedelta(seconds=target.profile_definition.visual_evidence_policy.receipt_ttl_seconds)
                     if capability == "evidence.visual"
-                    else (
-                        ci_verified_at + timedelta(hours=72)
-                        if capability == "ci.requiredChecks"
-                        else datetime.now(timezone.utc) + timedelta(days=1)
-                    )
+                    else ci_verified_at + timedelta(minutes=10)
                 )
                 request = CapabilityReceiptIssueRequestV2(
                     capability_id=capability,
@@ -1221,14 +1652,74 @@ def test_gate0_v3_http_cjk_release_authority_boundary(tmp_path: Path, monkeypatc
                         else None
                     ),
                 )
+                receipt_wire = request.model_dump(mode="json", by_alias=True)
+                capability_nonce = (
+                    "gate0_capability_nonce_" + hashlib.sha256(capability.encode("utf-8")).hexdigest()[:24]
+                )
+                capability_authority = _actual_product_authority(
+                    signer_private_key,
+                    {},
+                    evidence_class="actual_product_capability",
+                    nonce=capability_nonce,
+                    now=ci_verified_at,
+                )
+                signed_receipt_subject = build_bound_capability_subject_v3(
+                    receipt_wire=receipt_wire,
+                    authority=capability_authority,
+                    binding=binding_record,
+                    target=target,
+                    tenant_id="default",
+                )
+                capability_digest = actual_product_authority_digest(signed_receipt_subject, capability_authority)
+                capability_authority = capability_authority.model_copy(
+                    update={
+                        "signature_base64": base64.b64encode(
+                            signer_private_key.sign(capability_digest.encode("ascii"))
+                        ).decode("ascii")
+                    }
+                )
                 receipt_response = await client.post(
-                    V3_RECEIPT_PATH, json=request.model_dump(mode="json", by_alias=True)
+                    V3_RECEIPT_PATH,
+                    json={
+                        "schemaVersion": "authored-capability-receipt-issue/v3",
+                        "receipt": receipt_wire,
+                        "exportAttemptId": str(hybrid_attempt_id),
+                        "bindingDigest": binding_record.binding_digest,
+                        "authority": capability_authority.model_dump(mode="json", by_alias=True),
+                    },
                 )
                 if capability == "receipt.cjk" and not actual_cjk_evidence:
                     assert receipt_response.status_code == 422, receipt_response.text
                     assert receipt_response.json()["detail"]["code"] == ("authored_trusted_cjk_native_evidence_invalid")
                 else:
                     assert receipt_response.status_code == 201, f"{capability}: {receipt_response.text}"
+                    receipt_digests.append(receipt_response.json()["receiptDigest"])
+
+            if actual_cjk_evidence:
+                assert len(receipt_digests) == len(target.profile_definition.all_required_capability_ids)
+                await _seal_actual_product_completion_chain(
+                    client,
+                    private_key=signer_private_key,
+                    presentation_id=presentation_id,
+                    presentation_revision=revision,
+                    export_attempt_id=hybrid_attempt_id,
+                    manifest_digest=manifest.canonical_digest,
+                    release_profile_digest=target.profile_definition_digest,
+                    required_capability_ids=target.profile_definition.all_required_capability_ids,
+                    receipt_digests=receipt_digests,
+                    issued_at=ci_verified_at,
+                )
+                async with maker() as session:
+                    artifacts = list(
+                        await session.scalars(
+                            select(AuthoredReleaseArtifactV3).where(
+                                AuthoredReleaseArtifactV3.export_attempt_id == hybrid_attempt_id
+                            )
+                        )
+                    )
+                    assert len(artifacts) == 70
+                    assert len({artifact.artifact_id for artifact in artifacts}) == 70
+                    assert all(artifact.state == "bound" for artifact in artifacts)
 
             projection = await client.get(V3_PROJECTION_PATH.format(presentation_id=presentation_id))
             assert projection.status_code == 200, projection.text

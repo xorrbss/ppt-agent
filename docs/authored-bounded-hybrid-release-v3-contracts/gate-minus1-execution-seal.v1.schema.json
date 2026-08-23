@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:presenton:authored:gate-minus1-execution-seal:v1",
+  "title": "Authored Gate -1 signed execution seal v1",
+  "description": "Acyclic execution authority: the seal binds the manifest core that excludes executionPins and manifestDigest; the final manifest binds the immutable outer seal artifact reference.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "executionSealId", "manifestCoreDigestProjection", "manifestCoreDigest", "policyCandidateDigest", "freshInputCreatedAt", "manifestSealedAt", "inputArtifactDigest", "environmentReceiptDigest", "sourceTreeCensusDigest", "pinnedArtifactRoleSetDigest", "pinnedArtifacts", "executionSealSignerId", "executionSealSignatureAlgorithm", "executionSealSignatureInput", "executionSealSignatureBase64", "executionSealNonce", "executionSealIssuedAt", "executionSealExpiresAt", "executionSealDigestProjection", "executionSealDigest"],
+  "properties": {
+    "schemaVersion": { "const": "authored-gate-minus1-execution-seal/v1" },
+    "executionSealId": { "type": "string", "minLength": 16 },
+    "manifestCoreDigestProjection": { "const": { "algorithm": "sha256", "canonicalProfileId": "presenton-canonical-json/v2", "includedJsonPath": "$", "excludedJsonPaths": ["$.executionPins", "$.manifestDigest"] } },
+    "manifestCoreDigest": { "$ref": "#/$defs/digest" },
+    "policyCandidateDigest": { "$ref": "#/$defs/digest" },
+    "freshInputCreatedAt": { "$ref": "#/$defs/time" },
+    "manifestSealedAt": { "$ref": "#/$defs/time" },
+    "inputArtifactDigest": { "$ref": "#/$defs/digest" },
+    "environmentReceiptDigest": { "$ref": "#/$defs/digest" },
+    "sourceTreeCensusDigest": { "$ref": "#/$defs/digest" },
+    "pinnedArtifactRoleSetDigest": { "const": "sha256:c952db10303f25aea35ebed316e1a866be2924135964884c6103a0c66ae90190" },
+    "pinnedArtifacts": { "type": "array", "minItems": 6, "maxItems": 6, "uniqueItems": true, "items": { "$ref": "#/$defs/pinnedArtifact" }, "allOf": [
+      { "contains": { "type": "object", "properties": { "role": { "const": "input-pptx" } }, "required": ["role"] }, "minContains": 1, "maxContains": 1 },
+      { "contains": { "type": "object", "properties": { "role": { "const": "probe-script" } }, "required": ["role"] }, "minContains": 1, "maxContains": 1 },
+      { "contains": { "type": "object", "properties": { "role": { "const": "dialog-watcher-script" } }, "required": ["role"] }, "minContains": 1, "maxContains": 1 },
+      { "contains": { "type": "object", "properties": { "role": { "const": "cleanup-census-script" } }, "required": ["role"] }, "minContains": 1, "maxContains": 1 },
+      { "contains": { "type": "object", "properties": { "role": { "const": "environment-receipt" } }, "required": ["role"] }, "minContains": 1, "maxContains": 1 },
+      { "contains": { "type": "object", "properties": { "role": { "const": "source-tree-census" } }, "required": ["role"] }, "minContains": 1, "maxContains": 1 }
+    ] },
+    "executionSealSignerId": { "type": "string", "minLength": 1 },
+    "executionSealSignatureAlgorithm": { "const": "Ed25519" },
+    "executionSealSignatureInput": { "const": { "encoding": "ascii", "sourceField": "$.executionSealDigest", "exactByteLength": 71, "byteContract": "ASCII bytes of the exact lowercase string sha256:<64 lowercase hexadecimal digits>; no BOM, terminator, whitespace, or newline" } },
+    "executionSealSignatureBase64": { "type": "string", "pattern": "^[A-Za-z0-9+/]{86}==$" },
+    "executionSealNonce": { "type": "string", "minLength": 16 },
+    "executionSealIssuedAt": { "$ref": "#/$defs/time" },
+    "executionSealExpiresAt": { "$ref": "#/$defs/time" },
+    "executionSealDigestProjection": { "const": { "algorithm": "sha256", "canonicalProfileId": "presenton-canonical-json/v2", "includedJsonPath": "$", "excludedJsonPaths": ["$.executionSealDigest", "$.executionSealSignatureBase64"] } },
+    "executionSealDigest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "time": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$" },
+    "pinnedArtifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["artifactId", "role", "versionId", "mediaType", "byteLength", "sha256", "locator"],
+      "properties": {
+        "artifactId": { "type": "string", "minLength": 1 },
+        "role": { "enum": ["input-pptx", "probe-script", "dialog-watcher-script", "cleanup-census-script", "environment-receipt", "source-tree-census"] },
+        "versionId": { "type": "string", "minLength": 1 },
+        "mediaType": { "type": "string", "minLength": 1 },
+        "byteLength": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/$defs/digest" },
+        "locator": { "type": "string", "minLength": 1 }
+      }
+    },
+    "outerArtifactRef": {
+      "type": "object", "additionalProperties": false,
+      "required": ["artifactId", "versionId", "mediaType", "byteLength", "sha256", "schemaId", "payloadExecutionSealDigest"],
+      "properties": {
+        "artifactId": { "type": "string", "minLength": 1 },
+        "versionId": { "type": "string", "minLength": 1 },
+        "mediaType": { "const": "application/json" },
+        "byteLength": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/$defs/digest" },
+        "schemaId": { "const": "urn:presenton:authored:gate-minus1-execution-seal:v1" },
+        "payloadExecutionSealDigest": { "$ref": "#/$defs/digest" }
+      }
+    }
+  }
+}

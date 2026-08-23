@@ -328,6 +328,13 @@ test("v3 displays only server-issued bounded release readiness and rejects profi
       releaseCommitReceiptDigests: [digest("5")],
       promotionReceiptDigests: [digest("5"), digest("1"), digest("4"), digest("2"), digest("3")],
     },
+    rendererAttestation: {
+      state: "attested",
+      reasonCode: "renderer_attestation_verified",
+      attestationDigest: digest("a"),
+      environment: { os: "windows", boundary: "external-worker" },
+      expiresAt: "2026-08-24T00:00:00Z",
+    },
   });
   const normalized = normalizeAuthoredReleaseReadinessProjectionV3({ data: serverIssued });
   assert.equal(normalized.releaseProfile.promotionReady, true);
@@ -356,5 +363,38 @@ test("v3 displays only server-issued bounded release readiness and rejects profi
       releaseAuthorityReceiptDigests: [digest("1")],
     }),
     /unclaimed release authority pins/,
+  );
+});
+
+test("v3 fails closed for stale release receipts and unattested promotion", async () => {
+  const { normalizeAuthoredReleaseReadinessProjectionV3 } = await loadCapabilityClient();
+  const stale = readinessV3({
+    capabilities: readinessV3().capabilities.map((capability, index) =>
+      index === 0 ? { ...capability, expiresAt: "2020-01-01T00:00:00Z" } : capability,
+    ),
+  });
+  assert.throws(
+    () => normalizeAuthoredReleaseReadinessProjectionV3(stale),
+    /expired capabilities\.receipt\.cjk\.expiresAt/,
+  );
+
+  const promotionWithoutAttestation = readinessV3({
+    releaseProfile: {
+      ...readinessV3().releaseProfile,
+      deckEvidenceReady: true,
+      serializerProfileReady: true,
+      nativeSubsetReady: true,
+      releaseCommitReady: true,
+      promotionReady: true,
+      deckEvidenceReceiptDigests: [digest("1"), digest("2")],
+      serializerProfileReceiptDigests: [digest("3"), digest("4")],
+      nativeSubsetReceiptDigests: [digest("3")],
+      releaseCommitReceiptDigests: [digest("5")],
+      promotionReceiptDigests: [digest("5"), digest("1"), digest("4"), digest("2"), digest("3")],
+    },
+  });
+  assert.throws(
+    () => normalizeAuthoredReleaseReadinessProjectionV3(promotionWithoutAttestation),
+    /mismatched releaseProfile\.promotionReady/,
   );
 });

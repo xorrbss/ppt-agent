@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:presenton:authored:gate-minus1-result-set:v1",
+  "title": "Authored Gate -1 result set v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "manifestDigest", "requiredCaseIdsDigest", "semanticValidatorContractDigest", "suiteStatus", "requiredCaseCount", "executedCaseCount", "blockedCaseCount", "failedCaseCount", "notVerifiedCaseCount", "skippedCaseCount", "missingCaseIds", "duplicateCaseIds", "unexpectedCaseIds", "orderedResults", "commonObservations", "environmentReceiptDigest", "executionSealArtifactRef", "artifactInventory", "artifactInventoryDigestProjection", "artifactInventoryDigest", "semanticValidation", "resultCoreDigestProjection", "resultCoreDigest", "semanticValidationReceiptRef", "digestProjection", "resultSetDigest"],
+  "properties": {
+    "schemaVersion": { "const": "authored-gate-minus1-result-set/v1" },
+    "manifestDigest": { "$ref": "#/$defs/digest" },
+    "requiredCaseIdsDigest": { "const": "sha256:37b5a3dc034e9eab066ffcdd3e6dc2bb143af9123e75b732da10be71cc2c51f1" },
+    "semanticValidatorContractDigest": { "const": "sha256:fe1cbd606accab30def980e874c37578160b1c0a6bba74afab6abc1870e48ab8" },
+    "suiteStatus": { "enum": ["feasible", "blocked", "failed"] },
+    "requiredCaseCount": { "const": 18 },
+    "executedCaseCount": { "const": 18 },
+    "blockedCaseCount": { "type": "integer", "minimum": 0, "maximum": 18 },
+    "failedCaseCount": { "type": "integer", "minimum": 0, "maximum": 18 },
+    "notVerifiedCaseCount": { "type": "integer", "minimum": 0, "maximum": 18 },
+    "skippedCaseCount": { "const": 0 },
+    "missingCaseIds": { "$ref": "#/$defs/idArray" },
+    "duplicateCaseIds": { "$ref": "#/$defs/idArray" },
+    "unexpectedCaseIds": { "$ref": "#/$defs/idArray" },
+    "orderedResults": { "type": "array", "minItems": 18, "maxItems": 18, "items": { "$ref": "#/$defs/result" } },
+    "commonObservations": { "type": "array", "minItems": 21, "maxItems": 21, "items": { "$ref": "#/$defs/observation" } },
+    "environmentReceiptDigest": { "$ref": "#/$defs/digest" },
+    "executionSealArtifactRef": { "$ref": "gate-minus1-execution-seal.v1.schema.json#/$defs/outerArtifactRef" },
+    "artifactInventory": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/artifact" } },
+    "artifactInventoryDigestProjection": { "const": { "canonicalProfileId": "presenton-canonical-json/v2", "includedJsonPath": "$.artifactInventory", "ordering": "artifactId then versionId", "excludedJsonPaths": [] } },
+    "artifactInventoryDigest": { "$ref": "#/$defs/digest" },
+    "semanticValidation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["orderedCaseIdSetExact", "countEquationExact", "noBlockedFailedOrNotVerifiedDisposition", "observationFieldSetsExact", "observationValuesTypedIntegerOnly", "allEvidenceArtifactRefsResolve", "artifactIdsUnique", "environmentDigestExact", "executionSealArtifactRefExact", "receiptSubjectManifestDigestExact", "receiptSubjectResultCoreDigestExact", "receiptSemanticValidatorContractDigestExact"],
+      "properties": { "orderedCaseIdSetExact": { "type": "boolean" }, "countEquationExact": { "type": "boolean" }, "noBlockedFailedOrNotVerifiedDisposition": { "type": "boolean" }, "observationFieldSetsExact": { "type": "boolean" }, "observationValuesTypedIntegerOnly": { "type": "boolean" }, "allEvidenceArtifactRefsResolve": { "type": "boolean" }, "artifactIdsUnique": { "type": "boolean" }, "environmentDigestExact": { "type": "boolean" }, "executionSealArtifactRefExact": { "type": "boolean" }, "receiptSubjectManifestDigestExact": { "type": "boolean" }, "receiptSubjectResultCoreDigestExact": { "type": "boolean" }, "receiptSemanticValidatorContractDigestExact": { "type": "boolean" } }
+    },
+    "resultCoreDigestProjection": { "const": { "algorithm": "sha256", "canonicalProfileId": "presenton-canonical-json/v2", "includedJsonPath": "$", "excludedJsonPaths": ["$.resultCoreDigest", "$.semanticValidationReceiptRef", "$.resultSetDigest"] } },
+    "resultCoreDigest": { "$ref": "#/$defs/digest" },
+    "semanticValidationReceiptRef": { "$ref": "semantic-validation-receipt-ref.v1.schema.json" },
+    "digestProjection": {
+      "const": { "algorithm": "sha256", "canonicalProfileId": "presenton-canonical-json/v2", "includedJsonPath": "$", "excludedJsonPaths": ["$.resultSetDigest"] }
+    },
+    "resultSetDigest": { "$ref": "#/$defs/digest" }
+  },
+  "allOf": [{ "if": { "properties": { "suiteStatus": { "const": "feasible" } } }, "then": { "properties": { "blockedCaseCount": { "const": 0 }, "failedCaseCount": { "const": 0 }, "notVerifiedCaseCount": { "const": 0 }, "missingCaseIds": { "maxItems": 0 }, "duplicateCaseIds": { "maxItems": 0 }, "unexpectedCaseIds": { "maxItems": 0 }, "semanticValidation": { "properties": { "orderedCaseIdSetExact": { "const": true }, "countEquationExact": { "const": true }, "noBlockedFailedOrNotVerifiedDisposition": { "const": true }, "observationFieldSetsExact": { "const": true }, "observationValuesTypedIntegerOnly": { "const": true }, "allEvidenceArtifactRefsResolve": { "const": true }, "artifactIdsUnique": { "const": true }, "environmentDigestExact": { "const": true }, "executionSealArtifactRefExact": { "const": true }, "receiptSubjectManifestDigestExact": { "const": true }, "receiptSubjectResultCoreDigestExact": { "const": true }, "receiptSemanticValidatorContractDigestExact": { "const": true } } } } } }],
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "idArray": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+    "artifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["artifactId", "versionId", "mediaType", "byteLength", "sha256", "locator", "retentionClass"],
+      "properties": {
+        "artifactId": { "type": "string", "minLength": 1 }, "versionId": { "type": "string", "minLength": 1 }, "mediaType": { "type": "string", "minLength": 1 }, "byteLength": { "type": "integer", "minimum": 1 }, "sha256": { "$ref": "#/$defs/digest" }, "locator": { "type": "string", "minLength": 1 }, "retentionClass": { "type": "string", "minLength": 1 }
+      }
+    },
+    "result": {
+      "type": "object", "additionalProperties": false,
+      "required": ["ordinal", "caseId", "disposition", "assertionState", "observedFieldIds", "missingObservationFieldIds", "observations", "evidenceArtifactIds", "observationDigest"],
+      "properties": {
+        "ordinal": { "type": "integer", "minimum": 1, "maximum": 18 },
+        "caseId": { "type": "string", "pattern": "^[a-z0-9.-]+$" },
+        "disposition": { "enum": ["native-observable", "native-observable-bounded", "raster-required", "not-verified", "blocked", "failed"] },
+        "assertionState": { "enum": ["satisfied", "not-verified", "blocked", "failed"] },
+        "observedFieldIds": { "$ref": "#/$defs/idArray" },
+        "missingObservationFieldIds": { "$ref": "#/$defs/idArray" },
+        "observations": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/observation" } },
+        "evidenceArtifactIds": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "observationDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "observation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["fieldId", "valueType", "unit", "scaleInteger", "value"],
+      "properties": {
+        "fieldId": { "type": "string", "minLength": 1 },
+        "valueType": { "enum": ["integer", "string", "boolean", "digest", "utf16-le-hex", "binary64-hex"] },
+        "unit": { "enum": ["none", "count", "boolean", "milliseconds", "micro-point", "emu", "ppm-microunit", "parts-per-trillion", "utf16-code-unit", "sha256", "raw-com-enum", "hex"] },
+        "scaleInteger": { "type": "integer", "minimum": 1 },
+        "value": { "oneOf": [{ "type": "integer" }, { "type": "string" }, { "type": "boolean" }] }
+      },
+      "allOf": [
+        { "if": { "properties": { "valueType": { "const": "integer" } } }, "then": { "properties": { "value": { "type": "integer" } } } },
+        { "if": { "properties": { "valueType": { "const": "string" } } }, "then": { "properties": { "value": { "type": "string" } } } },
+        { "if": { "properties": { "valueType": { "const": "boolean" } } }, "then": { "properties": { "value": { "type": "boolean" }, "unit": { "const": "boolean" }, "scaleInteger": { "const": 1 } } } },
+        { "if": { "properties": { "valueType": { "const": "digest" } } }, "then": { "properties": { "value": { "$ref": "#/$defs/digest" }, "unit": { "const": "sha256" }, "scaleInteger": { "const": 1 } } } },
+        { "if": { "properties": { "valueType": { "const": "utf16-le-hex" } } }, "then": { "properties": { "value": { "type": "string", "pattern": "^(?:[0-9a-f]{4})*$" }, "unit": { "const": "utf16-code-unit" }, "scaleInteger": { "const": 1 } } } },
+        { "if": { "properties": { "valueType": { "const": "binary64-hex" } } }, "then": { "properties": { "value": { "type": "string", "pattern": "^[0-9a-f]{16}$" }, "unit": { "const": "hex" }, "scaleInteger": { "const": 1 } } } }
+      ]
+    }
+  }
+}

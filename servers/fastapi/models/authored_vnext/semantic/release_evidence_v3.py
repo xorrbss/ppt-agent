@@ -9,6 +9,7 @@ import uuid
 from pydantic import Field, field_validator, model_validator
 
 from models.authored_vnext.master.base import Digest, StrictCamelModel
+from models.authored_vnext.semantic.release_authority_v3 import EvidenceIssuerEnvelopeV3
 
 
 _REQUIRED_PIPELINE_STEPS = (
@@ -65,6 +66,13 @@ class CiEvidenceArtifactPublishRequestV3(StrictCamelModel):
         "authored-ci-evidence-artifact-publish/v3"
     )
     receipt: BitbucketRequiredChecksReceiptV3
+    authority: EvidenceIssuerEnvelopeV3
+
+    @model_validator(mode="after")
+    def actual_ci_authority(self) -> "CiEvidenceArtifactPublishRequestV3":
+        if self.authority.evidence_class != "actual_product_ci":
+            raise ValueError("authored_ci_evidence_authority_class_invalid")
+        return self
 
 
 class CiEvidenceArtifactV3(StrictCamelModel):
@@ -75,6 +83,7 @@ class CiEvidenceArtifactV3(StrictCamelModel):
     artifact_ref: str = Field(pattern=r"^artifact://sha256/[0-9a-f]{64}$")
     artifact_digest: Digest
     receipt_digest: Digest
+    authority_digest: Digest
     byte_length: int = Field(ge=1)
 
 

@@ -1,0 +1,101 @@
+{
+  "schemaVersion": "presenton-canonical-json-profile/v2",
+  "canonicalProfileId": "presenton-canonical-json/v2",
+  "encoding": "UTF-8 without BOM",
+  "stringRules": {
+    "normalization": "NFC for every key and string value",
+    "newlineNormalization": "CRLF and CR become LF before JSON escaping",
+    "normalizedDuplicateKeys": "reject",
+    "nonAsciiEscaping": "emit normalized Unicode as UTF-8; escape only JSON-required characters and control code points"
+  },
+  "objectKeyOrder": "ascending lexicographic order of normalized UTF-8 key bytes",
+  "presenceRules": {
+    "absentDistinctFromNull": true,
+    "implicitDefaultAllowed": false
+  },
+  "numberRules": {
+    "jsonNumbers": "signed 64-bit integers only",
+    "fixedPointRule": "Every measured fractional value is encoded as a signed 64-bit integer whose field name declares the unit and scale; JSON fractional numbers are forbidden in authoritative inputs.",
+    "geometry": "EMU integer",
+    "fontSize": "1/100-point integer",
+    "opacity": "1/100000 integer",
+    "chartNumber": "16 lowercase hex characters containing big-endian IEEE-754 binary64 bits in a string field",
+    "negativeZero": "reject before canonicalization",
+    "nanInfinity": "reject",
+    "localeFormattedNumber": "reject"
+  },
+  "identityRules": {
+    "uuid": "lowercase canonical 8-4-4-4-12 string",
+    "timestamp": "UTC RFC3339 with exactly three fractional digits and trailing Z",
+    "digest": "lowercase sha256:<64 hex>"
+  },
+  "arraySortRegistry": [
+    { "jsonPath": "$.capabilityIds", "sortKey": "scalar-byte-order" },
+    { "jsonPath": "$.receiptDigests", "sortKey": "scalar-byte-order" },
+    { "jsonPath": "$.orderedResults", "sortKey": "ordinal,caseId" },
+    { "jsonPath": "$.cases", "sortKey": "ordinal,caseId" },
+    { "jsonPath": "$.artifacts", "sortKey": "artifactId,sha256" },
+    { "jsonPath": "$.fontFaces", "sortKey": "family,subfamily,weight,italic,ttcCollectionIndex" }
+  ],
+  "unregisteredArrayOrder": "preserve producer order and bind it; a producer that needs semantic sorting must first register a new profile version",
+  "digestProjectionRules": {
+    "projectionDeclarationRequired": true,
+    "excludedJsonPathsMustBeExplicit": true,
+    "excludedPathsMayOnlyNameDigestOrRuntimeResultFields": true,
+    "undeclaredExclusionDisposition": "reject",
+    "rule": "The enclosing gate-specific schema declares includedJsonPath and excludedJsonPaths. Only those exact paths are omitted; all nested or similarly named digest fields remain included."
+  },
+  "positiveVectors": [
+    {
+      "vectorId": "nfc-newline-key-order",
+      "inputDescription": "keys z,a; decomposed e+acute and CRLF/CR values",
+      "expectedCanonicalUtf8": "{\"a\":\"é\\nx\",\"z\":\"é\\nx\"}",
+      "expectedCanonicalUtf8Hex": "7b2261223a22c3a95c6e78222c227a223a22c3a95c6e78227d",
+      "expectedDigest": "sha256:8e1c1cba75fdeb0d50ea783340af8f5dcb47ea6f9a41f8aa4225bc6affe51f4d"
+    },
+    {
+      "vectorId": "absent-vs-null",
+      "inputDescription": "one absent member, presentNull, and presentZero",
+      "expectedCanonicalUtf8": "{\"presentNull\":null,\"presentZero\":0}",
+      "expectedCanonicalUtf8Hex": "7b2270726573656e744e756c6c223a6e756c6c2c2270726573656e745a65726f223a307d",
+      "expectedDigest": "sha256:4904a8f856e7a575817e84dac6dda85d699875a6bae1914627f80414244c03cc"
+    },
+    {
+      "vectorId": "registered-array-order",
+      "inputDescription": "capabilityIds sorted as scalars; orderedResults sorted by ordinal then caseId",
+      "expectedCanonicalUtf8": "{\"capabilityIds\":[\"a\",\"b\"],\"orderedResults\":[{\"caseId\":\"b\",\"ordinal\":1},{\"caseId\":\"a\",\"ordinal\":2}]}",
+      "expectedCanonicalUtf8Hex": "7b226361706162696c697479496473223a5b2261222c2262225d2c226f726465726564526573756c7473223a5b7b22636173654964223a2262222c226f7264696e616c223a317d2c7b22636173654964223a2261222c226f7264696e616c223a327d5d7d",
+      "expectedDigest": "sha256:06679123c870a19aa8e390d2da6e32c40a06425edd6c051f57133ee86e400137"
+    },
+    {
+      "vectorId": "fixed-integer-domains",
+      "inputDescription": "EMU bounds, centipoint font size, fixed opacity",
+      "expectedCanonicalUtf8": "{\"boundsEmu\":{\"height\":6858000,\"left\":0,\"top\":0,\"width\":12192000},\"fontSizeCentipoint\":1600,\"opacityFixed\":100000}",
+      "expectedCanonicalUtf8Hex": "7b22626f756e6473456d75223a7b22686569676874223a363835383030302c226c656674223a302c22746f70223a302c227769647468223a31323139323030307d2c22666f6e7453697a6543656e7469706f696e74223a313630302c226f7061636974794669786564223a3130303030307d",
+      "expectedDigest": "sha256:75d5c3e0203e6dc65dac54edda71905420b9cb706f2d598dee005943397a28a3"
+    },
+    {
+      "vectorId": "chart-binary64",
+      "inputDescription": "finite chart value 1.5 encoded as big-endian binary64",
+      "expectedCanonicalUtf8": "{\"chartBinary64\":\"3ff8000000000000\"}",
+      "expectedCanonicalUtf8Hex": "7b22636861727442696e6172793634223a2233666638303030303030303030303030227d",
+      "expectedDigest": "sha256:926c3d649fa67f545670655307b3222569841c92801b8088a7d696baccda24fc"
+    },
+    {
+      "vectorId": "self-excluding-digest",
+      "inputDescription": "manifestDigest omitted from its own digest input while payload remains",
+      "expectedCanonicalUtf8": "{\"payload\":{\"value\":1}}",
+      "expectedCanonicalUtf8Hex": "7b227061796c6f6164223a7b2276616c7565223a317d7d",
+      "expectedDigest": "sha256:9087af71602c51ab3c4258fb545dd56f94087d8b800661a0641a9d93d5798ddd"
+    }
+  ],
+  "rejectionVectors": [
+    { "vectorId": "reject-nan", "expectedErrorCode": "canonical-number-nan" },
+    { "vectorId": "reject-positive-infinity", "expectedErrorCode": "canonical-number-infinity" },
+    { "vectorId": "reject-negative-zero", "expectedErrorCode": "canonical-number-negative-zero" },
+    { "vectorId": "reject-locale-number", "expectedErrorCode": "canonical-number-locale-formatted" },
+    { "vectorId": "reject-normalized-duplicate-key", "expectedErrorCode": "canonical-key-nfc-collision" },
+    { "vectorId": "reject-unregistered-semantic-array-sort", "expectedErrorCode": "canonical-array-sort-unregistered" },
+    { "vectorId": "reject-implicit-default", "expectedErrorCode": "canonical-implicit-default" }
+  ]
+}

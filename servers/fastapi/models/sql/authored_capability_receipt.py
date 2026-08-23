@@ -15,13 +15,21 @@ from utils.datetime_utils import get_current_utc_datetime
 class AuthoredCapabilityReceiptRecordV2(SQLModel, table=True):
     __tablename__ = "authored_capability_receipts_v2"
     __table_args__ = (
-        UniqueConstraint(
-            "tenant_id", "receipt_digest", name="uq_authored_capability_receipt_v2_digest"
-        ),
+        UniqueConstraint("tenant_id", "receipt_digest", name="uq_authored_capability_receipt_v2_digest"),
         UniqueConstraint(
             "tenant_id",
             "transition_target_digest",
             name="uq_authored_capability_receipt_v2_transition_target",
+        ),
+        UniqueConstraint(
+            "issuer_id",
+            "signer_key_id",
+            "nonce",
+            name="uq_authored_capability_receipt_v2_signer_nonce",
+        ),
+        CheckConstraint(
+            "authority_domain IN ('structural_test', 'actual_product')",
+            name="ck_authored_capability_receipt_v2_authority_domain",
         ),
         CheckConstraint(
             "state IN ('disabled', 'shadow', 'ready', 'blocked')",
@@ -55,12 +63,29 @@ class AuthoredCapabilityReceiptRecordV2(SQLModel, table=True):
     serializer_version: str = Field(sa_column=Column(String(128), nullable=False))
     issuer_principal_id: uuid.UUID = Field(sa_column=Column(Uuid, nullable=False))
     issuer_authority: str = Field(sa_column=Column(String(32), nullable=False))
+    authority_domain: str = Field(
+        default="structural_test",
+        sa_column=Column(String(32), nullable=False, default="structural_test"),
+    )
+    evidence_class: str = Field(
+        default="synthetic_structural_only",
+        sa_column=Column(String(64), nullable=False, default="synthetic_structural_only"),
+    )
+    issuer_id: str | None = Field(default=None, sa_column=Column(String(128), nullable=True))
+    signer_key_id: str | None = Field(default=None, sa_column=Column(String(128), nullable=True))
+    environment_id: str | None = Field(default=None, sa_column=Column(String(128), nullable=True))
+    rotation_epoch: int | None = Field(default=None, nullable=True)
+    nonce: str | None = Field(default=None, sa_column=Column(String(128), nullable=True))
+    signature_algorithm: str | None = Field(default=None, sa_column=Column(String(32), nullable=True))
+    signature_base64: str | None = Field(default=None, sa_column=Column(String(256), nullable=True))
+    authority_digest: str | None = Field(default=None, sa_column=Column(String(71), nullable=True))
+    authority_payload: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON, nullable=True))
+    export_attempt_id: uuid.UUID | None = Field(default=None, sa_column=Column(Uuid, nullable=True))
+    binding_digest: str | None = Field(default=None, sa_column=Column(String(71), nullable=True))
     evaluated_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
     expires_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
     transition_kind: str = Field(sa_column=Column(String(16), nullable=False))
-    transition_target_digest: str | None = Field(
-        default=None, sa_column=Column(String(71), nullable=True)
-    )
+    transition_target_digest: str | None = Field(default=None, sa_column=Column(String(71), nullable=True))
     receipt_digest: str = Field(sa_column=Column(String(71), nullable=False))
     payload: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
     created_at: datetime = Field(
