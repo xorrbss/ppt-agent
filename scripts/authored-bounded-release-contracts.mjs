@@ -290,15 +290,13 @@ export function captureSourceTreeCensus(repoRoot, options = {}) {
     ignoredAllowlistPathDigests: sourceIgnoredPaths.map((relativePath) => pathDigest(root, relativePath)),
     generatedCacheAllowlistPrefixes,
     generatedIgnoredDirectoryNames,
-    generatedCacheObservedPathSet,
-    generatedCacheObservedPathSetDigest: canonicalSha256(generatedCacheObservedPathSet),
     generatedCachePolicyDigest: options.generatedCachePolicyDigest || canonicalSha256({ schemaVersion: "SourceTreeGeneratedCachePolicyV1", prefixes: generatedCacheAllowlistPrefixes, ignoredDirectoryNames: generatedIgnoredDirectoryNames }),
     toolVersion: options.toolVersion || "presenton-source-tree-census/v1",
   };
   assertDigest(core.generatedCachePolicyDigest, "generated-cache-policy");
   const dirtyPaths = [...new Set([...stagedPaths, ...trackedModifiedPaths, ...sourceUntrackedPaths, ...sourceIgnoredPaths, ...generatedCacheObservedPathSet])].sort();
   const censusDigest = canonicalSha256(core);
-  return { ...core, dirtyPaths, captureTime: options.captureTime || new Date().toISOString(), censusDigest };
+  return { ...core, generatedCacheObservedPathSet, generatedCacheObservedPathSetDigest: canonicalSha256(generatedCacheObservedPathSet), dirtyPaths, captureTime: options.captureTime || new Date().toISOString(), censusDigest };
 }
 
 export function assertSourceTreeCensusUnchanged(opening, closing) {
@@ -307,6 +305,9 @@ export function assertSourceTreeCensusUnchanged(opening, closing) {
     const copy = structuredClone(value);
     delete copy.captureTime;
     delete copy.censusDigest;
+    delete copy.generatedCacheObservedPathSet;
+    delete copy.generatedCacheObservedPathSetDigest;
+    delete copy.dirtyPaths;
     return canonicalJson(copy);
   };
   if (stable(opening) !== stable(closing)) throw new TypeError("source-census-changed");

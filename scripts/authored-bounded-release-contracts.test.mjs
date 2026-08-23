@@ -141,7 +141,11 @@ test("SourceTreeCensusV1 separates index, tracked, untracked and reviewed ignore
     assert.equal(opening.generatedCacheObservedPathSetDigest, closing.generatedCacheObservedPathSetDigest);
     assertSourceTreeCensusUnchanged(opening, closing);
     fs.writeFileSync(path.join(root, "cache", "second.bin"), "new cache path\n");
-    assert.throws(() => assertSourceTreeCensusUnchanged(opening, captureSourceTreeCensus(root, censusOptions)), /source-census-changed/);
+    const changedCachePathSet = captureSourceTreeCensus(root, censusOptions);
+    assert.notEqual(opening.generatedCacheObservedPathSetDigest, changedCachePathSet.generatedCacheObservedPathSetDigest);
+    assert.equal(opening.censusDigest, changedCachePathSet.censusDigest);
+    assertSourceTreeCensusUnchanged(opening, changedCachePathSet);
+    assert.throws(() => assertSourceTreeCensusUnchanged(opening, captureSourceTreeCensus(root, { ...censusOptions, generatedCacheAllowlistPrefixes: ["cache/", "other-cache/"] })), /source-census-changed/);
     fs.writeFileSync(path.join(root, "tracked.txt"), "tracked changed\n");
     assert.throws(() => assertSourceTreeCensusUnchanged(opening, captureSourceTreeCensus(root, censusOptions)), /source-census-changed/);
   } finally {

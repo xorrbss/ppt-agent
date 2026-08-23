@@ -5,6 +5,8 @@ from __future__ import annotations
 from copy import deepcopy
 from html.parser import HTMLParser
 import hashlib
+import os
+import re
 import uuid
 from typing import Any, Iterable
 
@@ -16,7 +18,24 @@ from sqlmodel import select
 from models.sql.authored_canonical_revision import AuthoredCanonicalRevision
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
+from models.authored_vnext.semantic.contracts import (
+    ActiveAuthoredEmissionResponseV1,
+    AuthoredEmissionBundleV1,
+    AuthoredSemanticSourceV1,
+    SemanticUnavailableReceiptV1,
+)
+from services.authored_semantic_candidate import (
+    compile_semantic_component_with_bounded_retry,
+)
 from services.presentation_export_attempt_service import sha256_canonical_json
+from services.authored_vnext.semantic.canonical import (
+    SemanticContractError,
+    bytes_digest,
+)
+from services.authored_vnext.semantic.query import get_active_authored_emission
+from services.authored_vnext.semantic.remake import (
+    republish_authored_semantic_bundle_graph_for_remake,
+)
 from utils.authored_dom_quality import ensure_authored_qids
 from utils.authored_patch_engine import (
     AuthoredPatchPlan,
@@ -238,7 +257,7 @@ class AuthoredCanonicalService:
         )
         row = await self._commit_snapshot(
             session,
-            presentation_id=presentation.id,
+            presentation=presentation,
             expected_head=head,
             revision=next_revision,
             snapshot=next_snapshot,
@@ -302,7 +321,7 @@ class AuthoredCanonicalService:
         snapshot = self._restore_snapshot(head.snapshot, target.snapshot)
         row = await self._commit_snapshot(
             session,
-            presentation_id=presentation.id,
+            presentation=presentation,
             expected_head=head,
             revision=head.revision + 1,
             snapshot=snapshot,
@@ -333,7 +352,7 @@ class AuthoredCanonicalService:
         snapshot = self._restore_snapshot(head.snapshot, target.snapshot)
         row = await self._commit_snapshot(
             session,
-            presentation_id=presentation.id,
+            presentation=presentation,
             expected_head=head,
             revision=head.revision + 1,
             snapshot=snapshot,
@@ -398,6 +417,13 @@ class AuthoredCanonicalService:
             "presentationId": str(presentation.id),
             "slides": sealed_slides,
         }
+        semantic_drafts = await self._active_semantic_drafts(
+            session,
+            presentation=presentation,
+            revision=presentation.revision,
+        )
+        if semantic_drafts:
+            snapshot["semanticDraftsBySlide"] = semantic_drafts
         row = AuthoredCanonicalRevision(
             presentation_id=presentation.id,
             revision=presentation.revision,
@@ -499,6 +525,20 @@ class AuthoredCanonicalService:
             )
             current_slide.clear()
             current_slide.update(sealed)
+            semantic_by_slide = result.get("semanticDraftsBySlide")
+            if isinstance(semantic_by_slide, dict) and slide_id in semantic_by_slide:
+                updated_draft = self._apply_semantic_actions(
+                    semantic_by_slide[slide_id],
+                    patch["actions"],
+                )
+                semantic_by_slide[slide_id] = (
+                    updated_draft
+                    if updated_draft is not None
+                    else compile_semantic_component_with_bounded_retry(
+                        current_result.html,
+                        slide_index=int(current_slide["index"]),
+                    )
+                )
         return result, base_changes, current_changes
 
     @staticmethod
@@ -506,6 +546,12 @@ class AuthoredCanonicalService:
         current: dict[str, Any], target: dict[str, Any]
     ) -> dict[str, Any]:
         restored = deepcopy(current)
+        if "semanticDraftsBySlide" in target:
+            restored["semanticDraftsBySlide"] = deepcopy(
+                target["semanticDraftsBySlide"]
+            )
+        else:
+            restored.pop("semanticDraftsBySlide", None)
         target_by_id = {slide["slideId"]: slide for slide in target["slides"]}
         for slide in restored["slides"]:
             prior = target_by_id.get(slide["slideId"])
@@ -529,7 +575,7 @@ class AuthoredCanonicalService:
         self,
         session: AsyncSession,
         *,
-        presentation_id: uuid.UUID,
+        presentation: PresentationModel,
         expected_head: AuthoredCanonicalRevision,
         revision: int,
         snapshot: dict[str, Any],
@@ -537,6 +583,22 @@ class AuthoredCanonicalService:
         history: list[dict[str, Any]],
         history_position: int,
     ) -> AuthoredCanonicalRevision:
+        presentation_id = presentation.id
+        try:
+            await self._republish_active_semantic_graph(
+                session,
+                presentation=presentation,
+                expected_head=expected_head,
+                revision=revision,
+                snapshot=snapshot,
+                operation=operation,
+            )
+        except SemanticContractError as error:
+            await session.rollback()
+            raise AuthoredCanonicalError(
+                "authored_canonical_semantic_republish_failed",
+                error.code,
+            ) from error
         changed = (
             await session.execute(
                 update(PresentationModel)
@@ -579,16 +641,326 @@ class AuthoredCanonicalService:
         session.add(row)
         try:
             await session.commit()
-        except IntegrityError:
+        except IntegrityError as error:
             await session.rollback()
             latest = await self._latest(session, presentation_id)
             if latest is None:
                 raise
             raise self._conflict(
                 "authored_canonical_revision_conflict", expected_head.revision, latest
-            )
+            ) from error
         await session.refresh(row)
         return row
+
+    async def _republish_active_semantic_graph(
+        self,
+        session: AsyncSession,
+        *,
+        presentation: PresentationModel,
+        expected_head: AuthoredCanonicalRevision,
+        revision: int,
+        snapshot: dict[str, Any],
+        operation: str,
+    ) -> None:
+        owner_id = presentation.owner_id
+        if owner_id is None:
+            return
+        tenant_id = os.getenv("AUTHORED_VNEXT_TENANT_ID", "default")
+        active = await get_active_authored_emission(
+            session,
+            presentation_id=presentation.id,
+            owner_id=owner_id,
+            tenant_id=tenant_id,
+        )
+        if active.canonical_mode != "bundleGraph":
+            return
+        if (
+            active.manifest is None
+            or active.presentation_revision != expected_head.revision
+            or revision != expected_head.revision + 1
+        ):
+            raise SemanticContractError("authored_semantic_canonical_active_manifest_mismatch")
+        ordered_slides = list(
+            await session.scalars(
+                select(SlideModel)
+                .where(
+                    SlideModel.presentation == presentation.id,
+                    SlideModel.owner_id == owner_id,
+                )
+                .order_by(SlideModel.index)
+            )
+        )
+        snapshot_slides = list(snapshot["slides"])
+        if [str(slide.id) for slide in ordered_slides] != [
+            str(slide["slideId"]) for slide in snapshot_slides
+        ]:
+            raise SemanticContractError("authored_semantic_canonical_ordered_set_mismatch")
+        htmls = [str(slide["html"]) for slide in snapshot_slides]
+        semantic_by_slide = snapshot.get("semanticDraftsBySlide")
+        if isinstance(semantic_by_slide, dict) and set(semantic_by_slide) == {
+            str(slide["slideId"]) for slide in snapshot_slides
+        }:
+            drafts = [
+                deepcopy(semantic_by_slide[str(slide["slideId"])])
+                for slide in snapshot_slides
+            ]
+        else:
+            drafts = self._semantic_drafts_for_snapshot(active, snapshot_slides)
+        operation_id = uuid.uuid5(
+            uuid.NAMESPACE_URL,
+            "presenton:authored-canonical:"
+            f"{presentation.id}:{operation}:{revision}:{_deck_digest(snapshot_slides)}",
+        )
+        await republish_authored_semantic_bundle_graph_for_remake(
+            session,
+            presentation_id=presentation.id,
+            owner_id=owner_id,
+            expected_presentation_revision=expected_head.revision,
+            operation_id=operation_id,
+            generation_attempt_id=active.manifest.generation_attempt_id,
+            ordered_slides=ordered_slides,
+            htmls=htmls,
+            semantic_drafts=drafts,
+            tenant_id=tenant_id,
+        )
+
+    async def _active_semantic_drafts(
+        self,
+        session: AsyncSession,
+        *,
+        presentation: PresentationModel,
+        revision: int,
+    ) -> dict[str, dict[str, Any]]:
+        if presentation.owner_id is None:
+            return {}
+        active = await get_active_authored_emission(
+            session,
+            presentation_id=presentation.id,
+            owner_id=presentation.owner_id,
+            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+        )
+        if active.canonical_mode != "bundleGraph":
+            return {}
+        if active.presentation_revision != revision:
+            return {}
+        return {
+            str(bundle.slide_id): self._draft_from_component(bundle)
+            for bundle in active.bundles
+            if isinstance(bundle, AuthoredEmissionBundleV1)
+        }
+
+    @staticmethod
+    def _draft_from_component(bundle: AuthoredEmissionBundleV1) -> dict[str, Any]:
+        component = bundle.semantic_component
+        if isinstance(component, AuthoredSemanticSourceV1):
+            return {
+                "semanticSource": {
+                    "elements": [
+                        item.model_dump(mode="json", by_alias=True)
+                        for item in component.elements
+                    ],
+                    "elementIdentityRegistry": component.identity_registry.model_dump(
+                        mode="json", by_alias=True
+                    ),
+                }
+            }
+        return {
+            "semanticUnavailableReceipt": {
+                "htmlDigest": bundle.authored_html.digest,
+                "failureCode": component.failure_code,
+                "boundedAttemptCount": component.bounded_attempt_count,
+            }
+        }
+
+    @staticmethod
+    def _apply_semantic_actions(
+        draft: dict[str, Any],
+        actions: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        source = deepcopy(draft.get("semanticSource"))
+        if not isinstance(source, dict) or not isinstance(source.get("elements"), list):
+            return None
+        by_qid = {
+            str(element.get("elementId")): element
+            for element in source["elements"]
+            if isinstance(element, dict)
+        }
+        for action in actions:
+            element = by_qid.get(str(action.get("qid")))
+            if element is None:
+                return None
+            kind = element.get("kind")
+            payload = element.get("payload")
+            action_kind = action.get("action")
+            if action_kind == "setText" and kind == "text" and isinstance(payload, dict):
+                paragraphs = payload.get("paragraphs")
+                if not isinstance(paragraphs, list) or not paragraphs:
+                    return None
+                first_paragraph = deepcopy(paragraphs[0])
+                runs = first_paragraph.get("runs")
+                if not isinstance(runs, list) or not runs:
+                    return None
+                first_run = deepcopy(runs[0])
+                first_run["text"] = str(action["text"])
+                first_paragraph["runs"] = [first_run]
+                payload["paragraphs"] = [first_paragraph]
+                continue
+            if action_kind == "crop" and kind == "image" and isinstance(payload, dict):
+                payload["objectFit"] = action["fit"]
+                payload["objectPosition"] = action["position"]
+                continue
+            if action_kind in {"move", "resize"}:
+                bounds = element.get("intendedBounds")
+                if not isinstance(bounds, dict):
+                    return None
+                fields = (
+                    (("left", "xPt"), ("top", "yPt"))
+                    if action_kind == "move"
+                    else (("width", "widthPt"), ("height", "heightPt"))
+                )
+                for source_field, target_field in fields:
+                    if action.get(source_field) is None:
+                        continue
+                    points = AuthoredCanonicalService._css_length_points(
+                        str(action[source_field])
+                    )
+                    if points is None or (target_field in {"widthPt", "heightPt"} and points <= 0):
+                        return None
+                    bounds[target_field] = points
+                continue
+            if action_kind == "setStyle" and kind == "text" and isinstance(payload, dict):
+                if not AuthoredCanonicalService._apply_text_styles(payload, action["styles"]):
+                    return None
+                continue
+            # A replacement image has no trusted resolved-byte digest yet, and
+            # unsupported kind/action pairs must fall back instead of retaining
+            # stale native semantics.
+            return None
+        return {"semanticSource": source}
+
+    @staticmethod
+    def _css_length_points(value: str) -> float | None:
+        match = re.fullmatch(r"([+-]?(?:\d+(?:\.\d+)?|\.\d+))(px|pt)", value.strip(), re.I)
+        if match is None:
+            return None
+        number = float(match.group(1))
+        return number * 0.75 if match.group(2).lower() == "px" else number
+
+    @staticmethod
+    def _apply_text_styles(payload: dict[str, Any], styles: dict[str, str]) -> bool:
+        paragraphs = payload.get("paragraphs")
+        if not isinstance(paragraphs, list) or not paragraphs:
+            return False
+        supported = {
+            "color",
+            "font-family",
+            "font-size",
+            "font-style",
+            "font-weight",
+            "text-align",
+            "text-decoration",
+            "white-space",
+        }
+        if set(styles) - supported:
+            return False
+        for paragraph in paragraphs:
+            runs = paragraph.get("runs")
+            if not isinstance(runs, list) or not runs:
+                return False
+            if "text-align" in styles:
+                alignment = styles["text-align"].strip().lower()
+                if alignment not in {"left", "center", "right", "justify"}:
+                    return False
+                paragraph["alignment"] = alignment
+            for run in runs:
+                if "color" in styles:
+                    color = styles["color"].strip()
+                    if re.fullmatch(r"#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?", color) is None:
+                        return False
+                    run["color"] = color
+                if "font-family" in styles:
+                    family = styles["font-family"].strip().strip("'\"")
+                    if not family:
+                        return False
+                    run["fontFamily"] = family
+                if "font-size" in styles:
+                    size = AuthoredCanonicalService._css_length_points(styles["font-size"])
+                    if size is None or not 0 < size <= 400:
+                        return False
+                    run["fontSizePt"] = size
+                if "font-style" in styles:
+                    style = styles["font-style"].strip().lower()
+                    if style not in {"normal", "italic"}:
+                        return False
+                    run["italic"] = style == "italic"
+                if "font-weight" in styles:
+                    weight_value = styles["font-weight"].strip().lower()
+                    weight = 700 if weight_value == "bold" else 400 if weight_value == "normal" else None
+                    if weight is None and weight_value.isdigit():
+                        weight = int(weight_value)
+                    if weight is None or weight < 100 or weight > 1000 or weight % 100:
+                        return False
+                    run["weight"] = weight
+                if "text-decoration" in styles:
+                    decoration = styles["text-decoration"].strip().lower()
+                    if decoration not in {"none", "underline"}:
+                        return False
+                    run["underline"] = decoration == "underline"
+        if "white-space" in styles:
+            whitespace = styles["white-space"].strip().lower()
+            if whitespace not in {"normal", "pre", "pre-wrap", "nowrap"}:
+                return False
+            payload["whitespace"] = whitespace
+        return True
+
+    @staticmethod
+    def _semantic_drafts_for_snapshot(
+        active: ActiveAuthoredEmissionResponseV1,
+        snapshot_slides: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        active_by_slide = {str(bundle.slide_id): bundle for bundle in active.bundles}
+        drafts: list[dict[str, Any]] = []
+        for slide in snapshot_slides:
+            html = str(slide["html"])
+            bundle = active_by_slide.get(str(slide["slideId"]))
+            if (
+                isinstance(bundle, AuthoredEmissionBundleV1)
+                and bundle.authored_html.digest == bytes_digest(html.encode("utf-8"))
+            ):
+                component = bundle.semantic_component
+                if isinstance(component, AuthoredSemanticSourceV1):
+                    drafts.append(
+                        {
+                            "semanticSource": {
+                                "elements": [
+                                    item.model_dump(mode="json", by_alias=True)
+                                    for item in component.elements
+                                ],
+                                "elementIdentityRegistry": component.identity_registry.model_dump(
+                                    mode="json", by_alias=True
+                                ),
+                            }
+                        }
+                    )
+                    continue
+                if isinstance(component, SemanticUnavailableReceiptV1):
+                    drafts.append(
+                        {
+                            "semanticUnavailableReceipt": {
+                                "htmlDigest": bundle.authored_html.digest,
+                                "failureCode": component.failure_code,
+                                "boundedAttemptCount": component.bounded_attempt_count,
+                            }
+                        }
+                    )
+                    continue
+            drafts.append(
+                compile_semantic_component_with_bounded_retry(
+                    html,
+                    slide_index=int(slide["index"]),
+                )
+            )
+        return drafts
 
     async def _latest(
         self, session: AsyncSession, presentation_id: uuid.UUID
