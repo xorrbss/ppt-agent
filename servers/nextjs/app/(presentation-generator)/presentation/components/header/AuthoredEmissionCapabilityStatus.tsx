@@ -3,6 +3,7 @@
 import type {
   AuthoredEmissionCapabilityProjection,
   AuthoredEmissionReadinessStatus,
+  AuthoredReleaseReadinessProjectionV3,
   AuthoredSemanticDecision,
 } from "../../../services/api/authored-emission-capability";
 
@@ -108,6 +109,17 @@ export function authoredHybridUnavailableReason(
   return undefined;
 }
 
+export function authoredV3HybridStatusMessage(projection: AuthoredReleaseReadinessProjectionV3): string {
+  if (
+    projection.releaseProfile.promotionReady &&
+    projection.exportAuthorityClaim?.kind === "promotion" &&
+    projection.exportAuthorityClaim.state === "ready"
+  ) {
+    return "Hybrid (raster fallback) export 가능 · native subset은 지원하지 않으며 server promotion receipt가 ready입니다.";
+  }
+  return "Hybrid (raster fallback) 진단 export 가능 · native subset은 지원하지 않으며 promotion not ready입니다.";
+}
+
 export default function AuthoredEmissionCapabilityStatusView({
   status,
   expectedRevision,
@@ -131,12 +143,14 @@ export default function AuthoredEmissionCapabilityStatusView({
         <p className={hybridReason ? "text-amber-800" : "text-emerald-800"}>
           {hybridReason
             ? `Hybrid 제한: ${hybridReason}`
-            : `Hybrid 진단 export 가능 · immutable ${readiness.version} manifest binding 확인. Promotion은 서버 receipt만 결정합니다.`}
+            : readiness.version === "v3"
+              ? authoredV3HybridStatusMessage(projection)
+              : `Hybrid 진단 export 가능 · immutable ${readiness.version} manifest binding 확인. Promotion은 서버 receipt만 결정합니다.`}
         </p>
         <details className="rounded border border-slate-200 bg-white/70 px-2 py-1" data-testid="authored-release-evidence-details">
           <summary className="cursor-pointer select-none font-medium text-slate-700">
             {readiness.version === "v3"
-              ? `릴리스 증거 상세 · deck ${String(readiness.projection.releaseProfile.deckEvidenceReady)} · serializer ${String(readiness.projection.releaseProfile.serializerProfileReady)} · native ${String(readiness.projection.releaseProfile.nativeSubsetReady)} · commit ${String(readiness.projection.releaseProfile.releaseCommitReady)} · promotion ${String(readiness.projection.releaseProfile.promotionReady)}`
+              ? `릴리스 증거 상세 · deck ${String(readiness.projection.releaseProfile.deckEvidenceReady)} · serializer ${String(readiness.projection.releaseProfile.serializerProfileReady)} · native N/A · commit ${String(readiness.projection.releaseProfile.releaseCommitReady)} · promotion ${String(readiness.projection.releaseProfile.promotionReady)}`
               : `릴리스 증거 상세 · promotion ${String(projection.releaseProfile.promotionReady)} · bounded native ${String(projection.releaseProfile.boundedNativeParityReady)}`}
           </summary>
           <div className="mt-1 space-y-1">
@@ -149,7 +163,7 @@ export default function AuthoredEmissionCapabilityStatusView({
         {readiness.version === "v3" ? (
           <>
             <p className="text-slate-500">
-              deckEvidenceReady: {String(readiness.projection.releaseProfile.deckEvidenceReady)} · serializerProfileReady: {String(readiness.projection.releaseProfile.serializerProfileReady)} · nativeSubsetReady: {String(readiness.projection.releaseProfile.nativeSubsetReady)}
+              deckEvidenceReady: {String(readiness.projection.releaseProfile.deckEvidenceReady)} · serializerProfileReady: {String(readiness.projection.releaseProfile.serializerProfileReady)} · native subset: 지원 안 함 ({readiness.projection.releaseProfile.nativeSubsetStatus})
             </p>
             <p className="text-slate-500">
               releaseCommitReady: {String(readiness.projection.releaseProfile.releaseCommitReady)} · promotionReady: {String(readiness.projection.releaseProfile.promotionReady)} · deploymentAuthorized: {String(readiness.projection.releaseProfile.deploymentAuthorized)}
@@ -171,7 +185,7 @@ export default function AuthoredEmissionCapabilityStatusView({
         </p>
         {readiness.version === "v3" ? (
           <p className="break-all text-slate-500">
-            deck evidence [{readiness.projection.releaseProfile.deckEvidenceCapabilityIds.join(", ")}] · serializer profile [{readiness.projection.releaseProfile.serializerProfileCapabilityIds.join(", ")}] · native subset [{readiness.projection.releaseProfile.nativeSubsetCapabilityIds.join(", ")}] · release commit [{readiness.projection.releaseProfile.releaseCommitCapabilityIds.join(", ")}] · all required [{readiness.projection.releaseProfile.allRequiredCapabilityIds.join(", ")}]
+            deck evidence [{readiness.projection.releaseProfile.deckEvidenceCapabilityIds.join(", ")}] · serializer profile [{readiness.projection.releaseProfile.serializerProfileCapabilityIds.join(", ")}] · native subset [지원 안 함] · unsupported native [{readiness.projection.releaseProfile.unsupportedNativeCapabilityIds.join(", ")}] · release commit [{readiness.projection.releaseProfile.releaseCommitCapabilityIds.join(", ")}] · all required [{readiness.projection.releaseProfile.allRequiredCapabilityIds.join(", ")}]
           </p>
         ) : (
           <p className="break-all text-slate-500">

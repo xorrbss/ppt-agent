@@ -8,6 +8,7 @@ import { transform } from "esbuild";
 
 const directory = path.dirname(fileURLToPath(import.meta.url));
 const sourcePath = path.join(directory, "authored-emission-capability.ts");
+const statusSourcePath = path.resolve(directory, "../../presentation/components/header/AuthoredEmissionCapabilityStatus.tsx");
 
 function dataModule(source) {
   return `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
@@ -23,6 +24,12 @@ async function loadCapabilityClient() {
       .replace('from "@/utils/api";', `from "${api}";`),
     { format: "esm", loader: "ts", target: "esnext" },
   );
+  return import(dataModule(compiled.code));
+}
+
+async function loadCapabilityStatus() {
+  const source = await readFile(statusSourcePath, "utf8");
+  const compiled = await transform(source, { format: "esm", loader: "tsx", target: "esnext" });
   return import(dataModule(compiled.code));
 }
 
@@ -116,7 +123,7 @@ function readinessV2(overrides = {}) {
 function readinessV3(overrides = {}) {
   const v2 = readinessV2();
   const capabilityIds = [
-    "receipt.cjk", "receipt.table", "shape.gradient", "receipt.imageCrop", "ci.requiredChecks",
+    "ci.requiredChecks", "evidence.visual", "receipt.degradation", "renderer.attestation",
   ];
   const capabilityDigests = Object.fromEntries(capabilityIds.map((capabilityId, index) => [capabilityId, digest(String(index + 1))]));
   return {
@@ -136,9 +143,11 @@ function readinessV3(overrides = {}) {
       deploymentAuthorized: false,
       fullNativeParityStatus: "notApplicable",
       independentVnextGenerationStatus: "notApplicable",
-      deckEvidenceCapabilityIds: ["receipt.cjk", "receipt.table"],
-      serializerProfileCapabilityIds: ["shape.gradient", "receipt.imageCrop"],
-      nativeSubsetCapabilityIds: ["shape.gradient"],
+      deckEvidenceCapabilityIds: ["evidence.visual"],
+      serializerProfileCapabilityIds: ["receipt.degradation", "renderer.attestation"],
+      nativeSubsetStatus: "notApplicable",
+      nativeSubsetCapabilityIds: [],
+      unsupportedNativeCapabilityIds: ["receipt.chart", "receipt.cjk", "receipt.imageCrop", "receipt.table", "receipt.zBand"],
       releaseCommitCapabilityIds: ["ci.requiredChecks"],
       allRequiredCapabilityIds: [...capabilityIds].sort(),
       profileDefinitionDigest: digest("6"),
@@ -318,15 +327,15 @@ test("v3 displays only server-issued bounded release readiness and rejects profi
       ...readinessV3().releaseProfile,
       deckEvidenceReady: true,
       serializerProfileReady: true,
-      nativeSubsetReady: true,
+      nativeSubsetReady: false,
       releaseCommitReady: true,
       promotionReady: true,
       deploymentAuthorized: false,
-      deckEvidenceReceiptDigests: [digest("1"), digest("2")],
+      deckEvidenceReceiptDigests: [digest("2")],
       serializerProfileReceiptDigests: [digest("3"), digest("4")],
-      nativeSubsetReceiptDigests: [digest("3")],
-      releaseCommitReceiptDigests: [digest("5")],
-      promotionReceiptDigests: [digest("5"), digest("1"), digest("4"), digest("2"), digest("3")],
+      nativeSubsetReceiptDigests: [],
+      releaseCommitReceiptDigests: [digest("1")],
+      promotionReceiptDigests: [digest("1"), digest("2"), digest("3"), digest("4")],
     },
     rendererAttestation: {
       state: "attested",
@@ -335,9 +344,23 @@ test("v3 displays only server-issued bounded release readiness and rejects profi
       environment: { os: "windows", boundary: "external-worker" },
       expiresAt: "2026-08-24T00:00:00Z",
     },
+    releaseAuthorityReceiptDigests: [digest("1"), digest("2"), digest("3"), digest("4")],
+    releaseProjectionDigest: digest("5"),
+    exportAuthorityClaim: {
+      schemaVersion: "authored-export-authority-claim/v2",
+      kind: "promotion",
+      profileId: "profile:bounded-hybrid",
+      profileDefinitionDigest: digest("6"),
+      projectionDigest: digest("5"),
+      receiptDigests: [digest("1"), digest("2"), digest("3"), digest("4")],
+      state: "ready",
+    },
   });
   const normalized = normalizeAuthoredReleaseReadinessProjectionV3({ data: serverIssued });
   assert.equal(normalized.releaseProfile.promotionReady, true);
+  assert.equal(normalized.releaseProfile.nativeSubsetStatus, "notApplicable");
+  assert.deepEqual(normalized.releaseProfile.nativeSubsetCapabilityIds, []);
+  assert.equal(normalized.exportAuthorityClaim?.kind, "promotion");
   assert.equal(normalized.releaseProfile.deploymentAuthorized, false);
   assert.equal(normalized.releaseProfile.fullNativeParityStatus, "notApplicable");
   assert.throws(
@@ -360,9 +383,17 @@ test("v3 displays only server-issued bounded release readiness and rejects profi
   assert.throws(
     () => normalizeAuthoredReleaseReadinessProjectionV3({
       ...serverIssued,
-      releaseAuthorityReceiptDigests: [digest("1")],
+      exportAuthorityClaim: undefined,
+      releaseProjectionDigest: undefined,
     }),
     /unclaimed release authority pins/,
+  );
+  assert.throws(
+    () => normalizeAuthoredReleaseReadinessProjectionV3({
+      ...serverIssued,
+      releaseProfile: { ...serverIssued.releaseProfile, nativeSubsetReady: true },
+    }),
+    /mismatched release readiness receipt pins/,
   );
 });
 
@@ -375,7 +406,7 @@ test("v3 fails closed for stale release receipts and unattested promotion", asyn
   });
   assert.throws(
     () => normalizeAuthoredReleaseReadinessProjectionV3(stale),
-    /expired capabilities\.receipt\.cjk\.expiresAt/,
+    /expired capabilities\.ci\.requiredChecks\.expiresAt/,
   );
 
   const promotionWithoutAttestation = readinessV3({
@@ -383,18 +414,29 @@ test("v3 fails closed for stale release receipts and unattested promotion", asyn
       ...readinessV3().releaseProfile,
       deckEvidenceReady: true,
       serializerProfileReady: true,
-      nativeSubsetReady: true,
+      nativeSubsetReady: false,
       releaseCommitReady: true,
       promotionReady: true,
-      deckEvidenceReceiptDigests: [digest("1"), digest("2")],
+      deckEvidenceReceiptDigests: [digest("2")],
       serializerProfileReceiptDigests: [digest("3"), digest("4")],
-      nativeSubsetReceiptDigests: [digest("3")],
-      releaseCommitReceiptDigests: [digest("5")],
-      promotionReceiptDigests: [digest("5"), digest("1"), digest("4"), digest("2"), digest("3")],
+      nativeSubsetReceiptDigests: [],
+      releaseCommitReceiptDigests: [digest("1")],
+      promotionReceiptDigests: [digest("1"), digest("2"), digest("3"), digest("4")],
     },
   });
   assert.throws(
     () => normalizeAuthoredReleaseReadinessProjectionV3(promotionWithoutAttestation),
     /mismatched releaseProfile\.promotionReady/,
   );
+});
+
+test("v3 raster-only readiness permits diagnostic Hybrid export before promotion", async () => {
+  const { normalizeAuthoredReleaseReadinessProjectionV3 } = await loadCapabilityClient();
+  const { authoredHybridUnavailableReason, authoredV3HybridStatusMessage } = await loadCapabilityStatus();
+  const projection = normalizeAuthoredReleaseReadinessProjectionV3({ data: readinessV3() });
+  assert.equal(
+    authoredHybridUnavailableReason({ state: "ready", readiness: { version: "v3", projection } }),
+    undefined,
+  );
+  assert.match(authoredV3HybridStatusMessage(projection), /promotion not ready/);
 });

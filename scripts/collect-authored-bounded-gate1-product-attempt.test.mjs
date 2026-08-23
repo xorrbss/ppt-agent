@@ -35,6 +35,7 @@ function fixture() {
       LaunchedProcessId: 41,
       AttachedApplicationHwnd: 4100,
       AttachedApplicationProcessId: 41,
+      ApplicationWindowBindingPhase: "rot-application-hwnd",
       UnexpectedPowerPointProcessCount: 0,
       UnexpectedPowerPointProcessIds: [],
       UnexpectedPowerPointProcesses: [],
@@ -45,7 +46,7 @@ function fixture() {
       ObserverEpoch: { EpochId: epochId, ExpectedProcessId: 41, ActivationMethod: "safe-mode-running-object-table", StartedBeforeActivation: true },
       DiscardedObserverEpochs: [],
       ObservedPowerPointProcesses: [{ EpochId: epochId, ProcessId: 41, ObservationCount: 10 }],
-      AttendedWindowEvents: [{ EpochId: epochId, ProcessId: 41, Hwnd: 4100 }],
+      AttendedWindowEvents: [{ EpochId: epochId, ProcessId: 41, Hwnd: 4100, ClassName: "PPTFrameClass", Visible: true, IsDialog: false }],
       Presentations: presentations,
     },
     repair: { schemaVersion: "authored-powerpoint-attended-repair-observation/v1", authorityDomain: "actual_product", presentationId: pins.presentationId, presentationRevision: pins.presentationRevision, repairDialogObserved: false, windowEvents: [{}], presentations: repairPresentations },
@@ -89,11 +90,13 @@ test("collector rejects missing, hardcoded or cross-PID COM process guarantees",
   for (const [mutate, expected] of [
     [(value) => { delete value.comReport.UnexpectedPowerPointProcessCount; }, /unexpected-process-guarantee-invalid/],
     [(value) => { value.comReport.AttachedApplicationProcessId = 42; }, /application-process-binding-invalid/],
+    [(value) => { delete value.comReport.ApplicationWindowBindingPhase; }, /window-binding-phase-invalid/],
     [(value) => { value.comReport.UnexpectedPowerPointProcessIds = [99]; }, /unexpected-process-guarantee-invalid/],
     [(value) => { value.comReport.PowerPointProcessCensusBefore = [{ ProcessId: 99 }]; }, /opening-final-census-invalid/],
     [(value) => { value.comReport.PowerPointProcessCensusAfter = [{ ProcessId: 41 }]; }, /opening-final-census-invalid/],
     [(value) => { value.comReport.ObservedPowerPointProcesses.push({ ProcessId: 99 }); }, /observed-processes-invalid/],
     [(value) => { value.comReport.AttendedWindowEvents.push({ ProcessId: 99, Hwnd: 9900 }); }, /observed-windows-invalid/],
+    [(value) => { value.comReport.AttachedApplicationHwnd = 9999; }, /attached-frame-invalid/],
     [(value) => { delete value.process.observerEpoch; }, /process-census-observer-epoch-mismatch/],
     [(value) => { value.process.modes[0].launchedPowerPointProcessId = 99; }, /process-census-launched-process-mismatch:fidelity/],
   ]) {
@@ -106,6 +109,7 @@ test("collector accepts a reset fallback epoch and rejects stale epoch history",
   const value = fixture();
   const oldEpochId = "00000000-0000-4000-8000-000000000040";
   value.comReport.ActivationMethod = "com-create-instance";
+  value.comReport.ApplicationWindowBindingPhase = "post-first-open-enumerated-frame-hwnd";
   value.comReport.ObserverEpoch.ActivationMethod = "com-create-instance";
   value.comReport.DiscardedObserverEpochs = [{ EpochId: oldEpochId, Reason: "safe-mode-rot-unavailable", ExpectedProcessId: 40, ObservedProcessIds: [40], UnexpectedPowerPointProcessCount: 0, CleanupConfirmed: true }];
   value.process.observerEpoch = structuredClone(value.comReport.ObserverEpoch);

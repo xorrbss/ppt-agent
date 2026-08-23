@@ -96,10 +96,14 @@ function validateObserverEpochGuarantee(report, launchedProcessId) {
 function validateComProcessGuarantee(report) {
   const launchedProcessId = report?.LaunchedProcessId;
   if (!Number.isInteger(launchedProcessId) || launchedProcessId < 1 || report.AttachedApplicationProcessId !== launchedProcessId || !Number.isInteger(report.AttachedApplicationHwnd) || report.AttachedApplicationHwnd === 0) throw new Error("gate1-collector-com-report-application-process-binding-invalid");
+  const expectedBindingPhase = report.ActivationMethod === "safe-mode-running-object-table" ? "rot-application-hwnd" : report.ActivationMethod === "com-create-instance" ? "post-first-open-enumerated-frame-hwnd" : null;
+  if (report.ApplicationWindowBindingPhase !== expectedBindingPhase) throw new Error("gate1-collector-com-report-window-binding-phase-invalid");
   if (report.UnexpectedPowerPointProcessCount !== 0 || !Array.isArray(report.UnexpectedPowerPointProcessIds) || report.UnexpectedPowerPointProcessIds.length !== 0 || !Array.isArray(report.UnexpectedPowerPointProcesses) || report.UnexpectedPowerPointProcesses.length !== 0 || !Array.isArray(report.UnexpectedPowerPointWindows) || report.UnexpectedPowerPointWindows.length !== 0) throw new Error("gate1-collector-com-report-unexpected-process-guarantee-invalid");
   if (!Array.isArray(report.PowerPointProcessCensusBefore) || report.PowerPointProcessCensusBefore.length !== 0 || !Array.isArray(report.PowerPointProcessCensusAfter) || report.PowerPointProcessCensusAfter.length !== 0) throw new Error("gate1-collector-com-report-opening-final-census-invalid");
   if (!Array.isArray(report.ObservedPowerPointProcesses) || report.ObservedPowerPointProcesses.length !== 1 || report.ObservedPowerPointProcesses[0]?.ProcessId !== launchedProcessId) throw new Error("gate1-collector-com-report-observed-processes-invalid");
   if (!Array.isArray(report.AttendedWindowEvents) || report.AttendedWindowEvents.length === 0 || report.AttendedWindowEvents.some((entry) => entry?.ProcessId !== launchedProcessId)) throw new Error("gate1-collector-com-report-observed-windows-invalid");
+  const attachedFrames = report.AttendedWindowEvents.filter((entry) => entry?.Hwnd === report.AttachedApplicationHwnd && entry?.ProcessId === launchedProcessId && entry?.ClassName === "PPTFrameClass" && entry?.Visible === true && entry?.IsDialog === false);
+  if (attachedFrames.length !== 1 || report.AttendedWindowEvents.filter((entry) => entry?.ClassName === "PPTFrameClass" && entry?.Visible === true && entry?.IsDialog === false).length !== 1) throw new Error("gate1-collector-com-report-attached-frame-invalid");
   validateObserverEpochGuarantee(report, launchedProcessId);
   return launchedProcessId;
 }

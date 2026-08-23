@@ -200,7 +200,7 @@ export interface AuthoredReleaseReadinessProjectionV3 {
     expiresAt: string;
     deckEvidenceReady: boolean;
     serializerProfileReady: boolean;
-    nativeSubsetReady: boolean;
+    nativeSubsetReady: false;
     releaseCommitReady: boolean;
     promotionReady: boolean;
     deploymentAuthorized: boolean;
@@ -208,7 +208,9 @@ export interface AuthoredReleaseReadinessProjectionV3 {
     independentVnextGenerationStatus: "notApplicable";
     deckEvidenceCapabilityIds: AuthoredBoundedReleaseCapabilityId[];
     serializerProfileCapabilityIds: AuthoredBoundedReleaseCapabilityId[];
+    nativeSubsetStatus: "notApplicable";
     nativeSubsetCapabilityIds: AuthoredBoundedReleaseCapabilityId[];
+    unsupportedNativeCapabilityIds: AuthoredBoundedReleaseCapabilityId[];
     releaseCommitCapabilityIds: AuthoredBoundedReleaseCapabilityId[];
     allRequiredCapabilityIds: AuthoredBoundedReleaseCapabilityId[];
     profileDefinitionDigest: string;
@@ -773,10 +775,14 @@ export function normalizeAuthoredReleaseReadinessProjectionV3(value: unknown): A
   };
   const deckEvidenceIds = capabilityIds(profile.deckEvidenceCapabilityIds, "releaseProfile.deckEvidenceCapabilityIds");
   const serializerProfileIds = capabilityIds(profile.serializerProfileCapabilityIds, "releaseProfile.serializerProfileCapabilityIds");
-  const nativeSubsetIds = capabilityIds(profile.nativeSubsetCapabilityIds, "releaseProfile.nativeSubsetCapabilityIds");
+  if (profile.nativeSubsetStatus !== "notApplicable") {
+    throw new Error("Capability projection has invalid releaseProfile.nativeSubsetStatus");
+  }
+  const nativeSubsetIds = capabilityIds(profile.nativeSubsetCapabilityIds, "releaseProfile.nativeSubsetCapabilityIds", false);
+  const unsupportedNativeIds = capabilityIds(profile.unsupportedNativeCapabilityIds, "releaseProfile.unsupportedNativeCapabilityIds");
   const releaseCommitIds = capabilityIds(profile.releaseCommitCapabilityIds, "releaseProfile.releaseCommitCapabilityIds");
   const allRequiredIds = capabilityIds(profile.allRequiredCapabilityIds, "releaseProfile.allRequiredCapabilityIds");
-  if (!nativeSubsetIds.every((id) => serializerProfileIds.includes(id))) {
+  if (nativeSubsetIds.length !== 0 || unsupportedNativeIds.some((id) => nativeSubsetIds.includes(id) || allRequiredIds.includes(id))) {
     throw new Error("Capability projection has invalid releaseProfile.nativeSubsetCapabilityIds");
   }
   const canonicalAllRequiredIds = [...new Set([
@@ -888,7 +894,6 @@ export function normalizeAuthoredReleaseReadinessProjectionV3(value: unknown): A
     ids.length === pins.length && ids.every((id, index) => receiptByCapabilityId.get(id) === pins[index]);
   const exactDeckEvidencePins = exactReceiptPins(deckEvidenceIds, deckEvidenceReceiptDigests);
   const exactSerializerProfilePins = exactReceiptPins(serializerProfileIds, serializerProfileReceiptDigests);
-  const exactNativeSubsetPins = exactReceiptPins(nativeSubsetIds, nativeSubsetReceiptDigests);
   const exactReleaseCommitPins = exactReceiptPins(releaseCommitIds, releaseCommitReceiptDigests);
   const exactPromotionPins = exactReceiptPins(allRequiredIds, promotionReceiptDigests);
   const deckEvidenceReady = booleanField(profile.deckEvidenceReady, "releaseProfile.deckEvidenceReady");
@@ -898,7 +903,8 @@ export function normalizeAuthoredReleaseReadinessProjectionV3(value: unknown): A
   if (
     deckEvidenceReady !== exactDeckEvidencePins ||
     serializerProfileReady !== exactSerializerProfilePins ||
-    nativeSubsetReady !== exactNativeSubsetPins ||
+    nativeSubsetReady ||
+    nativeSubsetReceiptDigests.length !== 0 ||
     releaseCommitReady !== exactReleaseCommitPins
   ) {
     throw new Error("Capability projection has mismatched release readiness receipt pins");
@@ -933,7 +939,6 @@ export function normalizeAuthoredReleaseReadinessProjectionV3(value: unknown): A
   const expectedPromotionReady =
     deckEvidenceReady &&
     serializerProfileReady &&
-    nativeSubsetReady &&
     releaseCommitReady &&
     exactPromotionPins &&
     normalizedCapabilities.every((capability) => capability.state === "ready") &&
@@ -968,7 +973,7 @@ export function normalizeAuthoredReleaseReadinessProjectionV3(value: unknown): A
       expiresAt: requiredFreshDate(profile.expiresAt, "releaseProfile.expiresAt"),
       deckEvidenceReady,
       serializerProfileReady,
-      nativeSubsetReady,
+      nativeSubsetReady: false,
       releaseCommitReady,
       promotionReady: booleanField(profile.promotionReady, "releaseProfile.promotionReady"),
       deploymentAuthorized: booleanField(profile.deploymentAuthorized, "releaseProfile.deploymentAuthorized"),
@@ -976,7 +981,9 @@ export function normalizeAuthoredReleaseReadinessProjectionV3(value: unknown): A
       independentVnextGenerationStatus: "notApplicable",
       deckEvidenceCapabilityIds: deckEvidenceIds,
       serializerProfileCapabilityIds: serializerProfileIds,
+      nativeSubsetStatus: "notApplicable",
       nativeSubsetCapabilityIds: nativeSubsetIds,
+      unsupportedNativeCapabilityIds: unsupportedNativeIds,
       releaseCommitCapabilityIds: releaseCommitIds,
       allRequiredCapabilityIds: allRequiredIds,
       profileDefinitionDigest,

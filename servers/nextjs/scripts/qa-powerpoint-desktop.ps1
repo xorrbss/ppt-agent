@@ -21,15 +21,32 @@ function Get-Sha256Text([string]$Value) {
 
 Add-Type @'
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Text;
 public static class PresentonPowerPointApplicationWindowIdentity {
+  private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
   [DllImport("user32.dll")]
   private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
+  [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+  [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern int GetClassName(IntPtr hwnd, StringBuilder value, int count);
   public static int ProcessId(long hwnd) {
     if (hwnd == 0) return 0;
     uint processId;
     GetWindowThreadProcessId(new IntPtr(hwnd), out processId);
     return (int)processId;
+  }
+  public static long[] VisiblePptFrameHwndsForProcess(int expectedProcessId) {
+    var result = new List<long>();
+    EnumWindows((hwnd, state) => {
+      uint processId; GetWindowThreadProcessId(hwnd, out processId);
+      if ((int)processId != expectedProcessId || !IsWindowVisible(hwnd)) return true;
+      var className = new StringBuilder(512); GetClassName(hwnd, className, className.Capacity);
+      if (String.Equals(className.ToString(), "PPTFrameClass", StringComparison.Ordinal)) result.Add(hwnd.ToInt64());
+      return true;
+    }, IntPtr.Zero);
+    return result.ToArray();
   }
 }
 '@
@@ -44,6 +61,33 @@ function Get-PowerPointApplicationIdentity($Application) {
     Hwnd = $hwnd
     ProcessId = [int]$processId
   }
+}
+
+function Get-PowerPointVisibleFrameIdentity([int]$ExpectedProcessId) {
+  $hwnds = @([PresentonPowerPointApplicationWindowIdentity]::VisiblePptFrameHwndsForProcess($ExpectedProcessId))
+  if ($hwnds.Count -eq 0) { return $null }
+  if ($hwnds.Count -ne 1) {
+    throw "PowerPoint expected process has more than one visible PPTFrameClass window."
+  }
+  $processId = [PresentonPowerPointApplicationWindowIdentity]::ProcessId([int64]$hwnds[0])
+  if ($processId -ne $ExpectedProcessId) {
+    throw "PowerPoint visible PPTFrameClass HWND/PID binding changed during enumeration."
+  }
+  [PSCustomObject]@{ Hwnd = [int64]$hwnds[0]; ProcessId = [int]$processId }
+}
+
+function Complete-PowerPointFallbackWindowBinding($ProvisionalIdentity, $PostOpenIdentity) {
+  if (
+    $null -eq $ProvisionalIdentity -or
+    [int64]$ProvisionalIdentity.Hwnd -ne 0 -or
+    [int]$ProvisionalIdentity.ProcessId -lt 1 -or
+    $null -eq $PostOpenIdentity -or
+    [int64]$PostOpenIdentity.Hwnd -eq 0 -or
+    [int]$PostOpenIdentity.ProcessId -ne [int]$ProvisionalIdentity.ProcessId
+  ) {
+    throw "PowerPoint fallback post-open HWND/PID binding is invalid."
+  }
+  $PostOpenIdentity
 }
 
 function Get-PowerPointProcessCensus {
@@ -301,6 +345,9 @@ $resolvedOutput = [System.IO.Path]::GetFullPath($OutputDirectory)
 $launched = $null
 $application = $null
 $applicationIdentity = $null
+$provisionalApplicationIdentity = $null
+$requiresPostOpenWindowBinding = $false
+$applicationWindowBindingPhase = "rot-application-hwnd"
 $attachedAt = $null
 $activationMethod = "safe-mode-running-object-table"
 $windowObserver = $null
@@ -406,17 +453,28 @@ try {
       throw "COM activation did not create exactly one fresh PowerPoint process."
     }
     $launched = $freshProcesses[0]
+    $provisionalApplicationIdentity = [PSCustomObject]@{
+      Hwnd = [int64]0
+      ProcessId = [int]$launched.Id
+    }
+    $requiresPostOpenWindowBinding = $true
+    $applicationWindowBindingPhase = "post-first-open-enumerated-frame-hwnd"
   }
 
   $application.Visible = -1
-  if ($null -eq $applicationIdentity) {
-    for ($identityAttempt = 0; $identityAttempt -lt 20 -and $null -eq $applicationIdentity; $identityAttempt += 1) {
-      $applicationIdentity = Get-PowerPointApplicationIdentity $application
-      if ($null -eq $applicationIdentity) { Start-Sleep -Milliseconds 250 }
-    }
-  }
-  if ($null -eq $applicationIdentity -or $applicationIdentity.ProcessId -ne [int]$launched.Id) {
+  if (-not $requiresPostOpenWindowBinding -and ($null -eq $applicationIdentity -or $applicationIdentity.Hwnd -eq 0 -or $applicationIdentity.ProcessId -ne [int]$launched.Id)) {
     throw "PowerPoint Application HWND/PID does not match the launched process."
+  }
+  if (-not $requiresPostOpenWindowBinding) {
+    $rotFrameIdentity = $null
+    for ($identityAttempt = 0; $identityAttempt -lt 20 -and $null -eq $rotFrameIdentity; $identityAttempt += 1) {
+      $rotFrameIdentity = Get-PowerPointVisibleFrameIdentity ([int]$launched.Id)
+      if ($null -eq $rotFrameIdentity) { Start-Sleep -Milliseconds 250 }
+    }
+    if ($null -eq $rotFrameIdentity -or $rotFrameIdentity.Hwnd -ne $applicationIdentity.Hwnd -or $rotFrameIdentity.ProcessId -ne $applicationIdentity.ProcessId) {
+      throw "PowerPoint ROT Application HWND does not match the unique visible PPTFrameClass window."
+    }
+    $applicationIdentity = $rotFrameIdentity
   }
   Start-Sleep -Milliseconds 500
   $results = @()
@@ -448,6 +506,17 @@ try {
       $firstOpenCallStartedAt = (Get-Date).ToUniversalTime().ToString("o")
       $sourceDeck = $application.Presentations.Open($resolvedInput, -1, 0, -1)
       $firstOpenCallReturnedAt = (Get-Date).ToUniversalTime().ToString("o")
+      if ($requiresPostOpenWindowBinding) {
+        $postOpenIdentity = $null
+        for ($identityAttempt = 0; $identityAttempt -lt 20 -and $null -eq $postOpenIdentity; $identityAttempt += 1) {
+          $postOpenIdentity = Get-PowerPointVisibleFrameIdentity ([int]$launched.Id)
+          if ($null -eq $postOpenIdentity) { Start-Sleep -Milliseconds 250 }
+        }
+        $applicationIdentity = Complete-PowerPointFallbackWindowBinding `
+          $provisionalApplicationIdentity $postOpenIdentity
+        $requiresPostOpenWindowBinding = $false
+        $attachedAt = Get-Date
+      }
       $fonts = @()
       $sourceFonts = $sourceDeck.Fonts
       try {
@@ -783,6 +852,7 @@ try {
     LaunchedProcessId = [int]$launched.Id
     AttachedApplicationHwnd = [int64]$applicationIdentity.Hwnd
     AttachedApplicationProcessId = [int]$applicationIdentity.ProcessId
+    ApplicationWindowBindingPhase = $applicationWindowBindingPhase
     ObservedPowerPointProcesses = $powerPointProcessEvents
     UnexpectedPowerPointProcessCount = [int]$unexpectedPowerPointObservation.UnexpectedPowerPointProcessCount
     UnexpectedPowerPointProcessIds = $unexpectedPowerPointObservation.UnexpectedPowerPointProcessIds

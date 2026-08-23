@@ -15,6 +15,7 @@ if ($parseErrors.Count -ne 0) {
 foreach ($functionName in @(
   "Get-Sha256Text",
   "Get-PowerPointApplicationIdentity",
+  "Complete-PowerPointFallbackWindowBinding",
   "Get-UnexpectedPowerPointObservation",
   "Get-PowerPointObserverEpochGuarantee",
   "Read-SemanticOwnershipAlternativeText"
@@ -109,6 +110,24 @@ if (-not $combinedRejected) {
   throw "fallback-observer-epoch-history-not-rejected"
 }
 
+$provisionalIdentity = [PSCustomObject]@{ Hwnd = [int64]0; ProcessId = 42 }
+$postOpenIdentity = [PSCustomObject]@{ Hwnd = [int64]4200; ProcessId = 42 }
+$completedIdentity = Complete-PowerPointFallbackWindowBinding `
+  $provisionalIdentity $postOpenIdentity
+if ($completedIdentity.Hwnd -ne 4200 -or $completedIdentity.ProcessId -ne 42) {
+  throw "fallback-post-open-window-binding-not-completed"
+}
+$postOpenMismatchRejected = $false
+try {
+  Complete-PowerPointFallbackWindowBinding $provisionalIdentity `
+    ([PSCustomObject]@{ Hwnd = [int64]9900; ProcessId = 99 }) | Out-Null
+} catch {
+  $postOpenMismatchRejected = $_.Exception.Message -match "post-open HWND/PID"
+}
+if (-not $postOpenMismatchRejected) {
+  throw "fallback-post-open-window-pid-mismatch-not-rejected"
+}
+
 $source = Get-Content -Raw -LiteralPath $scriptPath
 foreach ($required in @(
   "powerpoint-attended-repair-observation.json",
@@ -120,6 +139,10 @@ foreach ($required in @(
   "`$candidateIdentity.ProcessId -ne [int]`$launched.Id",
   "AttachedApplicationHwnd",
   "AttachedApplicationProcessId",
+  "ApplicationWindowBindingPhase",
+  "post-first-open-enumerated-frame-hwnd",
+  "VisiblePptFrameHwndsForProcess",
+  "unique visible PPTFrameClass window",
   "ObservedPowerPointProcesses",
   "DiscardedObserverEpochs",
   "safe-mode-rot-unavailable",
@@ -128,6 +151,12 @@ foreach ($required in @(
   if (-not $source.Contains($required)) {
     throw "qa-powerpoint-desktop-authority-contract-missing:$required"
   }
+}
+
+$firstCanonicalOpen = $source.IndexOf('$sourceDeck = $application.Presentations.Open')
+$finalFallbackBinding = $source.IndexOf('$applicationIdentity = Complete-PowerPointFallbackWindowBinding')
+if ($firstCanonicalOpen -lt 0 -or $finalFallbackBinding -le $firstCanonicalOpen) {
+  throw "fallback-window-binding-must-follow-first-canonical-open"
 }
 
 Write-Output "qa-powerpoint-desktop-contract: PASS"
