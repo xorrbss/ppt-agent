@@ -84,6 +84,22 @@ function Patch-CachedLiteralCharts([string]$PptxPath) {
     } finally { $zip.Dispose() }
   } finally { $stream.Dispose() }
 }
+function Read-ChartSeriesCacheValues($seriesNode,[string[]]$axisNames) {
+  $axisNode=$null
+  foreach($axisName in $axisNames) {
+    $axisNode=$seriesNode.SelectSingleNode("./*[local-name()='$axisName']")
+    if($null -ne $axisNode){break}
+  }
+  if($null -eq $axisNode){return @()}
+  $cacheNode=$axisNode.SelectSingleNode(".//*[local-name()='strCache' or local-name()='numCache' or local-name()='strLit' or local-name()='numLit']")
+  if($null -eq $cacheNode){return @()}
+  @($cacheNode.SelectNodes(".//*[local-name()='pt']") |
+    Sort-Object -Property @{Expression={ [int]$_.GetAttribute('idx') }} |
+    ForEach-Object {
+      $valueNode=$_.SelectSingleNode("./*[local-name()='v']")
+      if($null -ne $valueNode){[string]$valueNode.InnerText}
+    })
+}
 function Read-Ooxml([string]$PptxPath,[string]$ExtractDir) {
   [IO.Compression.ZipFile]::ExtractToDirectory($PptxPath,$ExtractDir)
   $parts=@(Get-ChildItem -LiteralPath $ExtractDir -Recurse -File | ForEach-Object {
@@ -110,9 +126,10 @@ function Read-Ooxml([string]$PptxPath,[string]$ExtractDir) {
   $chartParts=@()
   foreach($chartFile in Get-ChildItem (Join-Path $ExtractDir 'ppt\charts') -File -Filter 'chart*.xml') {
     $xml=Get-Content -Raw -LiteralPath $chartFile.FullName
-    $categories=@([regex]::Matches($xml,'<c:cat>.*?<c:v>(.*?)</c:v>.*?</c:cat>','Singleline') | ForEach-Object {$_.Groups[1].Value})
-    if($categories.Count -eq 0) { $categories=@([regex]::Matches($xml,'<c:strCache>.*?<c:pt idx="\d+"><c:v>(.*?)</c:v></c:pt>.*?</c:strCache>','Singleline') | ForEach-Object {$_.Groups[1].Value}) }
-    $values=@([regex]::Matches($xml,'<c:numCache>.*?<c:pt idx="\d+"><c:v>(.*?)</c:v></c:pt>.*?</c:numCache>','Singleline') | ForEach-Object {$_.Groups[1].Value})
+    [xml]$chartDocument=$xml
+    $seriesNode=$chartDocument.SelectSingleNode("//*[local-name()='ser']")
+    $categories=if($null -ne $seriesNode){@(Read-ChartSeriesCacheValues $seriesNode @('cat','xVal'))}else{@()}
+    $values=if($null -ne $seriesNode){@(Read-ChartSeriesCacheValues $seriesNode @('val','yVal'))}else{@()}
     $chartParts += [ordered]@{partName='ppt/charts/'+$chartFile.Name; hasExternalData=($xml -match '<c:externalData'); categories=$categories; values=$values; xmlSha256=(Sha256 $chartFile.FullName)}
   }
   [ordered]@{

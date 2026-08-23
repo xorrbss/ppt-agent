@@ -294,9 +294,9 @@ function shapeXml(slideXml, shapeName) {
   return (String(slideXml ?? "").match(/<p:sp>[\s\S]*?<\/p:sp>/g) ?? []).find((fragment) => fragment.includes(`name="${shapeName}"`)) ?? "";
 }
 
-function expectedDisposition(caseId) {
+export function expectedDisposition(caseId) {
   const bounded = new Set([
-    "gminus1.text.combining-nfc", "gminus1.text.east-asian-typeface", "gminus1.text.small-overflow",
+    "gminus1.text.combining-nfc", "gminus1.text.empty-repeated-whitespace", "gminus1.text.east-asian-typeface", "gminus1.text.small-overflow",
     "gminus1.font.saved-embedded-parts", "gminus1.paint.p-bg-roundtrip",
     "gminus1.chart.line-style-roundtrip", "gminus1.chart.pie-point-style-roundtrip",
     "gminus1.com.repair-dialog-witness",

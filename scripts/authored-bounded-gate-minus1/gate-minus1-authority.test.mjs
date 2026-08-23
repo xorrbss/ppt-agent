@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import test from "node:test";
 
 import {
@@ -6,6 +7,7 @@ import {
   digestObject,
   evaluateCaseInvariant,
   evaluateGlobalInvariants,
+  expectedDisposition,
   qidCarrier,
   semanticSuiteStatus,
 } from "./gate-minus1-authority.mjs";
@@ -24,6 +26,15 @@ test("QID carriers are uppercase RFC4648 base32 without padding", () => {
   const carrier = qidCarrier("Q", "slide-1:text:owner_01");
   assert.match(carrier, /^Q2_[A-Z2-7]+$/);
   assert.ok(!carrier.includes("="));
+});
+
+test("whitespace observations retain the sealed bounded native disposition", () => {
+  const caseId = "gminus1.text.empty-repeated-whitespace";
+  const disposition = expectedDisposition(caseId);
+  const referenceManifest = JSON.parse(fs.readFileSync(new URL("../../docs/authored-bounded-hybrid-release-v3-contracts/gate-minus1-case-manifest.v1.json", import.meta.url), "utf8"));
+  const caseContract = referenceManifest.cases.find((entry) => entry.caseId === caseId);
+  assert.equal(disposition, "native-observable-bounded");
+  assert.ok(caseContract.allowedDispositions.includes(disposition));
 });
 
 test("issuer rejects a first/reopen self-declaration mutation", () => {
