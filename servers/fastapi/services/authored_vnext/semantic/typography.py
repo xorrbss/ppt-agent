@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from hashlib import sha256
 from io import BytesIO
+from pathlib import Path
 import unicodedata
 
 from fontTools.ttLib import TTFont, TTLibError
@@ -29,6 +30,7 @@ _MICROSOFT_DOCUMENT_FONT_FAMILIES = frozenset(
     {
         "batang",
         "batangche",
+        "consolas",
         "dotum",
         "dotumche",
         "gulim",
@@ -192,8 +194,61 @@ class NativeFontByteRegistry:
         )
 
 
+_WINDOWS_CJK_FONT_DIRECTORY = Path(r"C:\Windows\Fonts")
+
+
+def load_bounded_windows_cjk_registry(
+    font_directory: Path = _WINDOWS_CJK_FONT_DIRECTORY,
+) -> NativeFontByteRegistry:
+    """Rebuild the bounded registry from the exact installed font bytes."""
+
+    try:
+        malgun = (font_directory / "malgun.ttf").read_bytes()
+        batang = (font_directory / "batang.ttc").read_bytes()
+        consolas = (font_directory / "consola.ttf").read_bytes()
+    except OSError as error:
+        raise NativeTypographyRegistryError(
+            "authored_native_cjk_font_bytes_unavailable"
+        ) from error
+    registry = NativeFontByteRegistry()
+    registry.register(malgun)
+    registry.register(batang, collection_index=0)
+    registry.register(batang, collection_index=1)
+    registry.register(consolas)
+    expected = {
+        ("malgun gothic", "regular"),
+        ("batang", "regular"),
+        ("batangche", "regular"),
+        ("consolas", "regular"),
+    }
+    actual = {
+        (item.family.casefold(), item.face.casefold()) for item in registry.receipts
+    }
+    if actual != expected:
+        raise NativeTypographyRegistryError(
+            "authored_native_cjk_font_face_inventory_mismatch"
+        )
+    return registry
+
+
 def _text_digest(text: str) -> str:
     return canonical_digest({"text": text})
+
+
+def native_typography_com_reopen_digest(
+    *,
+    font_registry_digest: str,
+    admission_receipts: list[NativeTypographyAdmissionReceiptV1],
+) -> str:
+    """Digest the exact semantic payload the COM reopen artifact must contain."""
+
+    return canonical_digest(
+        {
+            "schemaVersion": "native-typography-com-reopen-readback/v1",
+            "fontRegistryDigest": font_registry_digest,
+            "admissionReceipts": admission_receipts,
+        }
+    )
 
 
 def _visible_codepoints(text: str) -> set[int]:
@@ -382,4 +437,6 @@ __all__ = [
     "NativeFontByteRegistry",
     "NativeTypographyRegistryError",
     "admit_native_typography",
+    "load_bounded_windows_cjk_registry",
+    "native_typography_com_reopen_digest",
 ]

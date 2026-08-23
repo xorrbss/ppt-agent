@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Collection, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
@@ -270,6 +270,10 @@ async def validate_visual_evidence_authority(
         or report.promotion_ready is not False
         or report.languages != policy.required_languages
         or report.archetypes != policy.required_archetypes
+        or (
+            str(getattr(definition, "schema_version", "")).endswith("/v3")
+            and identity.release_profile_id != target.profile_id
+        )
         or canonical_digest(identity) != report.evidence_digest
         or request.evidence_digest != report.evidence_digest
         or request.evidence_policy_id != policy.policy_id
@@ -405,12 +409,18 @@ async def issue_capability_receipt(
     release_target: ReleaseAuthorityTargetV2 | None = None,
     visual_evidence_validator: VisualEvidenceValidatorV2 = validate_visual_evidence_authority,
     capability_validators: Mapping[str, CapabilityEvidenceValidatorV2] | None = None,
+    allowed_capability_ids: Collection[str] | None = None,
 ) -> CapabilityReceiptV2:
     issuer_id = _require_issuer_authority(
         issuer_principal_id=issuer_principal_id,
         issuer_is_admin=issuer_is_admin,
     )
-    if request.capability_id not in REQUIRED_CAPABILITY_IDS_V2:
+    allowed_ids = (
+        REQUIRED_CAPABILITY_IDS_V2
+        if allowed_capability_ids is None
+        else tuple(allowed_capability_ids)
+    )
+    if request.capability_id not in allowed_ids:
         raise SemanticContractError("authored_capability_receipt_capability_unknown")
     evaluated_at = _utc(now or get_current_utc_datetime())
     expires_at = _utc(request.expires_at)

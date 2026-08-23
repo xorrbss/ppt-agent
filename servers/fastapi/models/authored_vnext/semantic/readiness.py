@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any, Literal
 import uuid
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from models.authored_vnext.master.base import Digest, StrictCamelModel
 from models.authored_vnext.semantic.contracts import (
@@ -84,6 +84,9 @@ class ReleaseProfileDefinitionV2(StrictCamelModel):
 
 class VisualParityGateIdentityV1(StrictCamelModel):
     gate_id: str = Field(min_length=1, max_length=128)
+    release_profile_id: str | None = Field(
+        default=None, pattern=r"^[a-z][a-z0-9._-]{1,127}$"
+    )
     presentation_id: str = Field(min_length=1, max_length=128)
     presentation_revision: int = Field(ge=1)
     operation_id: str = Field(min_length=1, max_length=128)
@@ -125,6 +128,13 @@ class VisualEvidenceBindingV2(StrictCamelModel):
     export_attempt_id: uuid.UUID
     report_artifact_ref: str = Field(pattern=r"^artifact://sha256/[0-9a-f]{64}$")
     report_artifact_digest: Digest
+
+    @field_validator(
+        "presentation_id", "generation_attempt_id", "export_attempt_id", mode="before"
+    )
+    @classmethod
+    def parse_wire_uuid(cls, value: object) -> object:
+        return uuid.UUID(value) if isinstance(value, str) else value
 
 
 class VisualEvidenceAuthorityV2(StrictCamelModel):
@@ -170,6 +180,20 @@ class CapabilityReceiptIssueRequestV2(StrictCamelModel):
     reason_code: str = Field(pattern=r"^[a-z][a-z0-9._-]{1,127}$")
     supersedes_receipt_digest: Digest | None = None
     visual_evidence_authority: VisualEvidenceAuthorityV2 | None = None
+
+    @field_validator("evidence_bundle_id", mode="before")
+    @classmethod
+    def parse_wire_uuid(cls, value: object) -> object:
+        return uuid.UUID(value) if isinstance(value, str) else value
+
+    @field_validator("expires_at", mode="before")
+    @classmethod
+    def parse_wire_datetime(cls, value: object) -> object:
+        return (
+            datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if isinstance(value, str)
+            else value
+        )
 
 
 class CapabilityReceiptRevokeRequestV2(StrictCamelModel):

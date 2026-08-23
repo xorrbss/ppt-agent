@@ -1,0 +1,102 @@
+{
+  "schemaVersion": "authored-bounded-hybrid-release-profile-definition/v3",
+  "profileId": "authored-windows-powerpoint-hybrid-v1",
+  "releaseKind": "boundedHybrid",
+  "platformScope": {
+    "platform": "windows-x64",
+    "renderer": "presentation-export",
+    "serializerProfileId": "authored-hybrid",
+    "serializerVersion": "2",
+    "archetypes": [
+      "boundary",
+      "chart",
+      "diagram",
+      "image-crop",
+      "long-text",
+      "mixed-css",
+      "multi-column",
+      "table"
+    ]
+  },
+  "promotionReadinessFields": [
+    "deckEvidenceReady",
+    "serializerProfileReady",
+    "nativeSubsetReady",
+    "releaseCommitReady"
+  ],
+  "deckEvidenceCapabilityIds": [
+    "evidence.visual"
+  ],
+  "serializerProfileCapabilityIds": [
+    "layout.flex",
+    "layout.grid",
+    "layout.transform",
+    "receipt.chart",
+    "receipt.cjk",
+    "receipt.degradation",
+    "receipt.imageCrop",
+    "receipt.table",
+    "receipt.zBand",
+    "renderer.attestation",
+    "shape.borderRadius",
+    "shape.clip",
+    "shape.gradient",
+    "shape.opacity",
+    "shape.shadow"
+  ],
+  "nativeSubsetCapabilityIds": [
+    "receipt.chart",
+    "receipt.cjk",
+    "receipt.imageCrop",
+    "receipt.table",
+    "receipt.zBand",
+    "renderer.attestation"
+  ],
+  "releaseCommitCapabilityIds": [
+    "ci.requiredChecks"
+  ],
+  "allRequiredCapabilityIds": [
+    "ci.requiredChecks",
+    "evidence.visual",
+    "layout.flex",
+    "layout.grid",
+    "layout.transform",
+    "receipt.chart",
+    "receipt.cjk",
+    "receipt.degradation",
+    "receipt.imageCrop",
+    "receipt.table",
+    "receipt.zBand",
+    "renderer.attestation",
+    "shape.borderRadius",
+    "shape.clip",
+    "shape.gradient",
+    "shape.opacity",
+    "shape.shadow"
+  ],
+  "rendererAttestationCapabilityId": "renderer.attestation",
+  "visualEvidenceCapabilityId": "evidence.visual",
+  "visualEvidencePolicy": {
+    "policyId": "authored-visual-parity-gate/v1",
+    "reportSchemaVersion": "authored-vnext-visual-parity-gate-report/v1",
+    "receiptTtlSeconds": 2592000,
+    "requiredStatus": "passed",
+    "requiredVisualParity": "passed",
+    "requiredLanguages": ["ja", "ko", "zh"],
+    "requiredArchetypes": [
+      "boundary",
+      "chart",
+      "diagram",
+      "image-crop",
+      "long-text",
+      "mixed-css",
+      "multi-column",
+      "table"
+    ]
+  },
+  "blockerPolicy": "requireNone",
+  "killSwitchPolicy": "requireAllInactive",
+  "deploymentAuthorizedAggregation": "excluded",
+  "fullNativeParityStatus": "notApplicable",
+  "independentVnextGenerationStatus": "notApplicable"
+}

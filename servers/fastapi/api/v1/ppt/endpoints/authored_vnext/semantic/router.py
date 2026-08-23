@@ -28,6 +28,13 @@ from models.authored_vnext.semantic.readiness import (
     VisualEvidenceArtifactV2,
     WorkbenchCapabilityProjectionV2,
 )
+from models.authored_vnext.semantic.release_profile_v3 import (
+    WorkbenchCapabilityProjectionV3,
+)
+from models.authored_vnext.semantic.release_evidence_v3 import (
+    CiEvidenceArtifactPublishRequestV3,
+    CiEvidenceArtifactV3,
+)
 from services.authored_vnext.semantic.canonical import SemanticContractError
 from services.authored_vnext.semantic.export_binding import bind_existing_export_attempt
 from services.authored_vnext.semantic.query import (
@@ -44,6 +51,13 @@ from services.authored_vnext.semantic.readiness import (
     issue_capability_receipt,
     publish_visual_evidence_artifact,
     revoke_capability_receipt,
+)
+from services.authored_vnext.semantic.readiness_v3 import (
+    get_workbench_capability_projection_v3,
+    issue_capability_receipt_v3,
+)
+from services.authored_vnext.semantic.release_evidence_v3 import (
+    publish_ci_evidence_artifact_v3,
 )
 from services.database import get_async_session
 from utils.owner_context import get_current_owner_id, get_current_owner_is_admin
@@ -152,6 +166,25 @@ async def read_workbench_capability_projection_v2(
         raise _error(error) from error
 
 
+@AUTHORED_SEMANTIC_ROUTER.get(
+    "/presentation/{presentation_id}/authored-emission/capability-projection-v3",
+    response_model=WorkbenchCapabilityProjectionV3,
+)
+async def read_workbench_capability_projection_v3(
+    presentation_id: uuid.UUID = Path(),
+    session: AsyncSession = Depends(get_async_session),
+) -> WorkbenchCapabilityProjectionV3:
+    try:
+        return await get_workbench_capability_projection_v3(
+            session,
+            presentation_id=presentation_id,
+            owner_id=_owner(),
+            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+        )
+    except SemanticContractError as error:
+        raise _error(error) from error
+
+
 @AUTHORED_SEMANTIC_ROUTER.post(
     "/authored-emission/capability-receipts-v2",
     response_model=CapabilityReceiptV2,
@@ -164,6 +197,31 @@ async def create_capability_receipt_v2(
     issuer_id = _admin_owner()
     try:
         receipt = await issue_capability_receipt(
+            session,
+            request=request,
+            issuer_principal_id=issuer_id,
+            issuer_is_admin=True,
+            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+        )
+        await session.commit()
+        return receipt
+    except SemanticContractError as error:
+        await session.rollback()
+        raise _error(error) from error
+
+
+@AUTHORED_SEMANTIC_ROUTER.post(
+    "/authored-emission/capability-receipts-v3",
+    response_model=CapabilityReceiptV2,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_capability_receipt_v3(
+    request: CapabilityReceiptIssueRequestV2,
+    session: AsyncSession = Depends(get_async_session),
+) -> CapabilityReceiptV2:
+    issuer_id = _admin_owner()
+    try:
+        receipt = await issue_capability_receipt_v3(
             session,
             request=request,
             issuer_principal_id=issuer_id,
@@ -192,6 +250,31 @@ async def create_visual_evidence_artifact_v2(
         artifact = await publish_visual_evidence_artifact(
             session,
             presentation_id=presentation_id,
+            request=request,
+            publisher_principal_id=publisher_id,
+            publisher_is_admin=True,
+            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+        )
+        await session.commit()
+        return artifact
+    except SemanticContractError as error:
+        await session.rollback()
+        raise _error(error) from error
+
+
+@AUTHORED_SEMANTIC_ROUTER.post(
+    "/authored-emission/ci-evidence-artifacts-v3",
+    response_model=CiEvidenceArtifactV3,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_ci_evidence_artifact_v3(
+    request: CiEvidenceArtifactPublishRequestV3,
+    session: AsyncSession = Depends(get_async_session),
+) -> CiEvidenceArtifactV3:
+    publisher_id = _admin_owner()
+    try:
+        artifact = await publish_ci_evidence_artifact_v3(
+            session,
             request=request,
             publisher_principal_id=publisher_id,
             publisher_is_admin=True,

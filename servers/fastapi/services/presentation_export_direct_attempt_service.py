@@ -33,6 +33,9 @@ from models.authored_vnext.semantic.readiness import (
     ReleasePinnedExportAttemptDigestBindingV2,
     WorkbenchCapabilityProjectionV2,
 )
+from models.authored_vnext.semantic.release_profile_v3 import (
+    WorkbenchCapabilityProjectionV3,
+)
 from models.sql.workspace import get_workspace_owner_scope
 from services.presentation_export_attempt_service import (
     begin_export_attempt,
@@ -70,6 +73,10 @@ from services.authored_vnext.semantic.readiness import (
     get_workbench_capability_projection_v2,
     validate_export_authority_claim,
 )
+from services.authored_vnext.semantic.readiness_v3 import (
+    get_workbench_capability_projection_v3,
+    validate_export_authority_claim_v3,
+)
 from utils.owner_context import get_current_owner_id
 
 
@@ -85,15 +92,68 @@ def _visual_parity_status_from_powerpoint_qa(
     return "failed" if qa.status == "failed" else "not-verified"
 
 
+def _expected_native_qids_from_quality(quality: dict[str, Any]) -> frozenset[str]:
+    qids: set[str] = set()
+    slides = quality.get("slides")
+    if not isinstance(slides, list):
+        return frozenset()
+    for slide in slides:
+        if not isinstance(slide, dict):
+            continue
+        coverage = slide.get("qidCoverage")
+        if not isinstance(coverage, list):
+            continue
+        for item in coverage:
+            if (
+                isinstance(item, dict)
+                and item.get("logical") == "native"
+                and item.get("ooxml") == "present"
+                and isinstance(item.get("elementId"), str)
+            ):
+                qids.add(item["elementId"])
+    return frozenset(qids)
+
+
 def _prefixed_digest(value: str) -> str:
     return value if value.startswith("sha256:") else f"sha256:{value}"
 
 
 def _release_authority_pin_from_projection(
-    projection: WorkbenchCapabilityProjectionV2,
+    projection: WorkbenchCapabilityProjectionV2 | WorkbenchCapabilityProjectionV3,
     *,
     export_mode: str,
 ) -> dict[str, Any]:
+    if isinstance(projection, WorkbenchCapabilityProjectionV3):
+        profile = projection.release_profile
+        claim_kind = "boundedNative" if export_mode == "hybrid" else "promotion"
+        claim_ready = (
+            profile.native_subset_ready
+            if claim_kind == "boundedNative"
+            else profile.promotion_ready
+        )
+        pin: dict[str, Any] = {
+            "schemaVersion": "authored-export-release-authority-pin/v3",
+            "state": "ready" if claim_ready else "nonPromotable",
+            "kind": claim_kind,
+            "profileId": profile.profile_id,
+            "profileDefinitionDigest": profile.profile_definition_digest,
+            "projectionDigest": projection.projection_digest,
+            "reasonCode": profile.reason_code,
+        }
+        if claim_ready:
+            receipt_digests = (
+                profile.native_subset_receipt_digests
+                if claim_kind == "boundedNative"
+                else profile.promotion_receipt_digests
+            )
+            pin["claim"] = ExportAuthorityClaimV2(
+                kind=claim_kind,
+                profile_id=profile.profile_id,
+                profile_definition_digest=profile.profile_definition_digest,
+                projection_digest=projection.projection_digest,
+                receipt_digests=receipt_digests,
+            ).model_dump(mode="json", by_alias=True)
+        return pin
     profile = projection.release_profile
     claim_kind = (
         "boundedNative"
@@ -119,6 +179,53 @@ def _release_authority_pin_from_projection(
             projection, kind=claim_kind
         ).model_dump(mode="json", by_alias=True)
     return pin
+
+
+def _validate_v3_release_authority_claim(
+    projection: WorkbenchCapabilityProjectionV3,
+    claim: ExportAuthorityClaimV2,
+    *,
+    export_mode: str,
+) -> None:
+    """Validate the mode-scoped v3 claim without making deployment a gate."""
+
+    expected_pin = _release_authority_pin_from_projection(
+        projection, export_mode=export_mode
+    )
+    expected_payload = expected_pin.get("claim")
+    if expected_payload is None:
+        raise PresentationExportContractError(
+            "presentation_export_release_authority_claim_unavailable"
+        )
+    try:
+        expected_claim = ExportAuthorityClaimV2.model_validate(expected_payload)
+    except ValueError as error:  # defensive: the pin helper is internal
+        raise PresentationExportContractError(
+            "presentation_export_release_authority_pin_invalid"
+        ) from error
+    if claim != expected_claim:
+        raise PresentationExportContractError(
+            "presentation_export_release_authority_claim_invalid"
+        )
+    # A promotion-ready v3 projection normally exposes a promotion claim. A
+    # Hybrid attempt intentionally binds the native-subset compatibility claim,
+    # so validate the exact replacement projection rather than treating
+    # deploymentAuthorized as an export input.
+    try:
+        pinned_projection = WorkbenchCapabilityProjectionV3.model_validate(
+            projection.model_copy(
+                update={
+                    "release_authority_receipt_digests": claim.receipt_digests,
+                    "release_projection_digest": claim.projection_digest,
+                    "export_authority_claim": claim,
+                }
+            ).model_dump(mode="python", by_alias=False)
+        )
+        validate_export_authority_claim_v3(pinned_projection, claim)
+    except ValueError as error:
+        raise PresentationExportContractError(
+            "presentation_export_release_authority_claim_invalid"
+        ) from error
 
 
 def _completed_export_binding(
@@ -255,13 +362,29 @@ async def _bind_completed_semantic_export_attempt(
             raise PresentationExportContractError(
                 "presentation_export_release_authority_pin_invalid"
             ) from error
-        projection = await get_workbench_capability_projection_v2(
-            session,
-            presentation_id=attempt.presentation_id,
-            owner_id=owner_id,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
-        )
-        validate_export_authority_claim(projection, claim)
+        pin_schema = release_pin.get("schemaVersion")
+        if pin_schema == "authored-export-release-authority-pin/v3":
+            projection_v3 = await get_workbench_capability_projection_v3(
+                session,
+                presentation_id=attempt.presentation_id,
+                owner_id=owner_id,
+                tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            )
+            _validate_v3_release_authority_claim(
+                projection_v3, claim, export_mode=mode
+            )
+        elif pin_schema == "authored-export-release-authority-pin/v2":
+            projection_v2 = await get_workbench_capability_projection_v2(
+                session,
+                presentation_id=attempt.presentation_id,
+                owner_id=owner_id,
+                tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            )
+            validate_export_authority_claim(projection_v2, claim)
+        else:
+            raise PresentationExportContractError(
+                "presentation_export_release_authority_pin_schema_invalid"
+            )
     binding = _completed_export_binding(binding_values, claim)
     sealed = await bind_existing_export_attempt(
         session,
@@ -417,7 +540,7 @@ async def _begin_direct_authored_export_attempt(
         owner_id = get_current_owner_id()
         if owner_id is None:
             raise PresentationExportContractError("presentation_owner_required")
-        projection = await get_workbench_capability_projection_v2(
+        projection = await get_workbench_capability_projection_v3(
             session,
             presentation_id=presentation_id,
             owner_id=owner_id,
@@ -531,7 +654,11 @@ async def complete_direct_hybrid_export_attempt(
     if manifest.ooxml_readback is None or manifest.ooxml_readback.status != "passed":
         raise PresentationExportContractError("presentation_export_ooxml_readback_required")
     qa = ExportPowerPointQaEvidence.model_validate(
-        await trusted_powerpoint_qa(artifact, manifest.total_slides)
+        await trusted_powerpoint_qa(
+            artifact,
+            manifest.total_slides,
+            expected_native_qids=_expected_native_qids_from_quality(quality),
+        )
     )
     if qa.status == "passed" and (
         qa.native_text != manifest.ooxml_readback.native_text
@@ -549,6 +676,17 @@ async def complete_direct_hybrid_export_attempt(
     # visual-acceptance receipt has passed those gates.
     visual_parity_status = _visual_parity_status_from_powerpoint_qa(qa)
     finalized_quality = deepcopy(quality)
+    if qa.semantic_payload_binding == "passed":
+        for slide in finalized_quality.get("slides", []):
+            if not isinstance(slide, dict):
+                continue
+            for item in slide.get("qidCoverage", []):
+                if (
+                    isinstance(item, dict)
+                    and item.get("logical") == "native"
+                    and item.get("ooxml") == "present"
+                ):
+                    item["com"] = "present"
     finalized_quality["atomicBinding"] = expected_binding
     finalized_quality["powerPointQa"] = qa.model_dump(mode="json", by_alias=True)
     finalized_coverage = PresentationExportCoverageManifest.model_validate(

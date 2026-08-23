@@ -173,6 +173,14 @@ class ExportAtomicBinding(BaseModel):
         return normalized
 
 
+class ExportPowerPointChartReadback(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid")
+
+    slide_number: int = PydanticField(ge=1, le=100)
+    element_id: str = PydanticField(min_length=1, max_length=128)
+    chart: dict[str, Any]
+
+
 class ExportPowerPointQaEvidence(BaseModel):
     model_config = ConfigDict(
         alias_generator=to_camel,
@@ -226,6 +234,15 @@ class ExportPowerPointQaEvidence(BaseModel):
     native_table: int | None = PydanticField(default=None, ge=0)
     native_chart: int | None = PydanticField(default=None, ge=0)
     native_image_crop: int | None = PydanticField(default=None, ge=0)
+    native_qid_missing: int = PydanticField(default=0, ge=0)
+    native_qid_ghosting: int = PydanticField(default=0, ge=0)
+    backplate_collisions: int = PydanticField(default=0, ge=0)
+    first_open_chart_readback: list[ExportPowerPointChartReadback] = PydanticField(
+        default_factory=list, max_length=1024
+    )
+    reopen_chart_readback: list[ExportPowerPointChartReadback] = PydanticField(
+        default_factory=list, max_length=1024
+    )
 
     @field_validator(
         "rendered_png_sha256",

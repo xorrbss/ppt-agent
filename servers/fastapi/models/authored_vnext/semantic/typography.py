@@ -143,4 +143,74 @@ class NativeTypographyAdmissionReceiptV1(StrictCamelModel):
         return self
 
 
+class NativeTypographyReleaseEvidenceV1(StrictCamelModel):
+    """Immutable bridge from byte admission to a PowerPoint COM reopen."""
+
+    schema_version: Literal["native-typography-release-evidence/v1"] = (
+        "native-typography-release-evidence/v1"
+    )
+    font_registry_digest: Digest
+    font_faces: list[NativeFontFaceReceiptV1] = Field(min_length=1, max_length=32)
+    admission_receipts: list[NativeTypographyAdmissionReceiptV1] = Field(
+        min_length=1, max_length=1024
+    )
+    readback_authority: Literal["PowerPoint.COM-reopen"]
+    powerpoint_qa_digest: Digest
+    first_open_readback_digest: Digest
+    reopen_readback_digest: Digest
+
+    @model_validator(mode="after")
+    def exact_admitted_face_and_reopen_evidence(
+        self,
+    ) -> "NativeTypographyReleaseEvidenceV1":
+        face_keys = [
+            (item.family.casefold(), item.face.casefold()) for item in self.font_faces
+        ]
+        if (
+            face_keys != sorted(face_keys)
+            or len(face_keys) != len(set(face_keys))
+            or any(not item.embedding_eligible for item in self.font_faces)
+        ):
+            raise ValueError("authored_native_typography_release_faces_invalid")
+        if self.first_open_readback_digest != self.reopen_readback_digest:
+            raise ValueError("authored_native_typography_com_reopen_mismatch")
+        element_ids = [item.element_id for item in self.admission_receipts]
+        if element_ids != sorted(element_ids) or len(element_ids) != len(
+            set(element_ids)
+        ):
+            raise ValueError("authored_native_typography_release_element_duplicate")
+        faces = {
+            (item.family.casefold(), item.face.casefold()): item
+            for item in self.font_faces
+        }
+        for admission in self.admission_receipts:
+            if (
+                admission.state != "admitted"
+                or admission.font_registry_digest != self.font_registry_digest
+                or admission.overflow is not False
+                or not admission.receipt_digest
+            ):
+                raise ValueError(
+                    "authored_native_typography_release_admission_invalid"
+                )
+            for run in admission.runs:
+                face = faces.get(
+                    (
+                        (run.resolved_family or "").casefold(),
+                        (run.resolved_face or "").casefold(),
+                    )
+                )
+                if (
+                    run.state != "admitted"
+                    or face is None
+                    or run.east_asian_typeface is None
+                    or run.east_asian_typeface.casefold() != face.family.casefold()
+                    or run.font_byte_digest != face.font_byte_digest
+                ):
+                    raise ValueError(
+                        "authored_native_typography_release_run_face_invalid"
+                    )
+        return self
+
+
 __all__ = [name for name in globals() if name.endswith("V1")]

@@ -11,6 +11,8 @@ import os
 from pathlib import Path
 import shutil
 import tempfile
+import threading
+import time
 from typing import Any
 import uuid
 
@@ -166,25 +168,59 @@ def _chart_snapshot(shape) -> dict[str, Any]:
         )
     axes: dict[str, Any] = {}
     for axis_name, axis_type in (("category", 1), ("value", 2)):
-        axis = chart.Axes(axis_type)
-        axes[axis_name] = {
-            "hasTitle": bool(axis.HasTitle),
-            "title": str(axis.AxisTitle.Text or "") if bool(axis.HasTitle) else "",
-            "tickLabelTypeface": str(axis.TickLabels.Font.Name or ""),
-            "tickLabelSizePt": round(float(axis.TickLabels.Font.Size), 3),
-        }
+        try:
+            axis = chart.Axes(axis_type)
+            axes[axis_name] = {
+                "present": True,
+                "hasTitle": bool(axis.HasTitle),
+                "title": str(axis.AxisTitle.Text or "") if bool(axis.HasTitle) else "",
+                "tickLabelTypeface": str(axis.TickLabels.Font.Name or ""),
+                "tickLabelSizePt": round(float(axis.TickLabels.Font.Size), 3),
+            }
+        except Exception:
+            axes[axis_name] = {
+                "present": False,
+                "hasTitle": False,
+                "title": "",
+                "tickLabelTypeface": "",
+                "tickLabelSizePt": None,
+            }
     has_legend = bool(chart.HasLegend)
-    legend = {"present": has_legend, "typeface": "", "sizePt": None}
+    legend = {"present": has_legend, "position": None, "typeface": "", "sizePt": None}
     if has_legend:
         legend_range = chart.Legend.Format.TextFrame2.TextRange
+        legend["position"] = int(chart.Legend.Position)
         legend["typeface"] = str(legend_range.Font.Name or "")
         legend["sizePt"] = round(float(legend_range.Font.Size), 3)
+    has_title = bool(chart.HasTitle)
+    title = {"present": has_title, "text": "", "typeface": "", "sizePt": None}
+    if has_title:
+        title_range = chart.ChartTitle.Format.TextFrame2.TextRange
+        title["text"] = str(chart.ChartTitle.Text or "")
+        title["typeface"] = str(title_range.Font.Name or "")
+        title["sizePt"] = round(float(title_range.Font.Size), 3)
     return {
         "chartType": int(chart.ChartType),
+        "title": title,
         "series": series,
         "axes": axes,
         "legend": legend,
     }
+
+
+def _chart_readback(snapshot: list[list[dict[str, Any]]]) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    prefix = "Presenton hybrid chart "
+    for slide_number, records in enumerate(snapshot, start=1):
+        for record in records:
+            name = record.get("name")
+            chart = record.get("chart")
+            if not isinstance(name, str) or not name.startswith(prefix) or not isinstance(chart, dict):
+                continue
+            element_id = name.removeprefix(prefix).strip()
+            if element_id:
+                result.append({"slideNumber": slide_number, "elementId": element_id, "chart": chart})
+    return result
 
 
 def _crop_snapshot(shape) -> dict[str, float] | None:
@@ -250,6 +286,74 @@ def _powerpoint_deck_snapshot(deck) -> tuple[list[list[dict[str, Any]]], int]:
     return slides, failures
 
 
+def _contains_presenton_qid(name: str, qid: str) -> bool:
+    marker = f" {qid}"
+    return name.startswith("Presenton hybrid ") and (
+        name.endswith(marker) or f"{marker} " in name
+    )
+
+
+def _native_qid_ghosting(snapshot: list[list[dict[str, Any]]], qids: frozenset[str]) -> int:
+    names = [str(shape.get("name") or "") for slide in snapshot for shape in slide]
+    return sum(
+        max(
+            0,
+            sum(
+                name.startswith("Presenton hybrid ")
+                and (name.endswith(f" {qid}") or name.endswith(f" {qid}-container"))
+                for name in names
+            )
+            - 1,
+        )
+        for qid in qids
+    )
+
+
+def _backplate_collisions(snapshot: list[list[dict[str, Any]]]) -> int:
+    return sum(
+        max(
+            0,
+            sum(str(shape.get("name") or "") == "Presenton hybrid backplate" for shape in slide) - 1,
+        )
+        for slide in snapshot
+    )
+
+
+def _start_powerpoint_dialog_watch(main_hwnd: int):
+    """Observe, but never dismiss, visible PowerPoint dialog windows."""
+
+    import win32gui  # type: ignore[import-not-found]
+    import win32process  # type: ignore[import-not-found]
+
+    _, process_id = win32process.GetWindowThreadProcessId(main_hwnd)
+    stop = threading.Event()
+    observed: set[tuple[int, str]] = set()
+
+    def scan() -> None:
+        while not stop.wait(0.05):
+            def visit(hwnd: int, _context: object) -> bool:
+                try:
+                    _, candidate_pid = win32process.GetWindowThreadProcessId(hwnd)
+                    if (
+                        candidate_pid == process_id
+                        and hwnd != main_hwnd
+                        and win32gui.IsWindowVisible(hwnd)
+                        and win32gui.GetClassName(hwnd) == "#32770"
+                    ):
+                        observed.add((hwnd, str(win32gui.GetWindowText(hwnd) or "")))
+                except Exception:
+                    pass
+                return True
+
+            win32gui.EnumWindows(visit, None)
+
+    thread = threading.Thread(
+        target=scan, name="presenton-powerpoint-dialog-watch", daemon=True
+    )
+    thread.start()
+    return stop, thread, observed
+
+
 def _snapshot_comparison(
     first: list[list[dict[str, Any]]], reopened: list[list[dict[str, Any]]]
 ) -> dict[str, int | bool]:
@@ -259,10 +363,12 @@ def _snapshot_comparison(
     crop_changes = 0
     if len(first) != len(reopened):
         shape_count_changes += abs(len(first) - len(reopened))
-    for first_slide, reopened_slide in zip(first, reopened):
+    for first_slide, reopened_slide in zip(first, reopened, strict=False):
         if len(first_slide) != len(reopened_slide):
             shape_count_changes += abs(len(first_slide) - len(reopened_slide))
-        for first_shape, reopened_shape in zip(first_slide, reopened_slide):
+        for first_shape, reopened_shape in zip(
+            first_slide, reopened_slide, strict=False
+        ):
             if any(
                 first_shape[key] != reopened_shape[key]
                 for key in ("name", "type", "hasText", "hasTable", "hasChart")
@@ -331,15 +437,24 @@ def _run_powerpoint_com_qa(
     path: Path,
     expected_slides: int,
     evidence_directory: Path | None = None,
+    expected_native_qids: frozenset[str] = frozenset(),
+    interactive_observation: bool = False,
 ) -> dict[str, Any]:
     import pythoncom  # type: ignore[import-not-found]
     import win32com.client  # type: ignore[import-not-found]
 
     pythoncom.CoInitialize()
     application = first = reopened = None
+    dialog_watch = None
     try:
         application = win32com.client.DispatchEx("PowerPoint.Application")
         application.DisplayAlerts = 1
+        if interactive_observation:
+            try:
+                application.Visible = True
+                dialog_watch = _start_powerpoint_dialog_watch(int(application.HWND))
+            except Exception:
+                interactive_observation = False
         if evidence_directory is None:
             evidence_context = tempfile.TemporaryDirectory(
                 prefix="presenton-powerpoint-qa-"
@@ -358,7 +473,9 @@ def _run_powerpoint_com_qa(
             copy_path = temp_root / "reopened.pptx"
             first_render.mkdir()
             reopen_render.mkdir()
-            first = application.Presentations.Open(str(path), True, False, False)
+            first = application.Presentations.Open(
+                str(path), True, False, bool(interactive_observation)
+            )
             slide_count = int(first.Slides.Count)
             shape_counts = [
                 int(first.Slides.Item(i).Shapes.Count)
@@ -369,7 +486,9 @@ def _run_powerpoint_com_qa(
             first.SaveCopyAs(str(copy_path), 24)
             first.Close()
             first = None
-            reopened = application.Presentations.Open(str(copy_path), True, False, False)
+            reopened = application.Presentations.Open(
+                str(copy_path), True, False, bool(interactive_observation)
+            )
             reopened_count = int(reopened.Slides.Count)
             reopened_shapes = [
                 int(reopened.Slides.Item(i).Shapes.Count)
@@ -430,6 +549,40 @@ def _run_powerpoint_com_qa(
             reopen_png_hashes = [_sha256_file(png) for png in pngs]
             comparison = _snapshot_comparison(first_snapshot, reopened_snapshot)
             inspection_failures += first_snapshot_failures + reopened_snapshot_failures
+            observed_shape_names = {
+                str(shape.get("name") or "")
+                for slide in reopened_snapshot
+                for shape in slide
+            }
+            missing_qids = sorted(
+                qid
+                for qid in expected_native_qids
+                if not any(
+                    _contains_presenton_qid(name, qid)
+                    for name in observed_shape_names
+                )
+            )
+            semantic_payload_binding = (
+                "passed"
+                if expected_native_qids and not missing_qids
+                else "not-verified"
+            )
+            native_qid_ghosting = _native_qid_ghosting(
+                reopened_snapshot, expected_native_qids
+            )
+            backplate_collisions = _backplate_collisions(reopened_snapshot)
+            if dialog_watch is not None:
+                # Allow delayed Office notifications to become visible before
+                # the observation window is sealed.
+                time.sleep(0.15)
+                dialog_watch[0].set()
+                dialog_watch[1].join(timeout=1)
+            repair_dialogs = len(dialog_watch[2]) if dialog_watch is not None else None
+            repair_observation = (
+                "interactive-observation"
+                if dialog_watch is not None
+                else "not-observable-via-noninteractive-com"
+            )
             if evidence_directory is not None:
                 (temp_root / "first-open-readback.json").write_text(
                     json.dumps(first_snapshot, ensure_ascii=False, indent=2),
@@ -450,6 +603,8 @@ def _run_powerpoint_com_qa(
                 or typography_gt_10pt > 0
                 or inspection_failures > 0
                 or comparison["readback_match"] is not True
+                or bool(missing_qids)
+                or (dialog_watch is not None and repair_dialogs != 0)
             )
             report = {
                 "status": "passed" if passed else "failed",
@@ -460,9 +615,9 @@ def _run_powerpoint_com_qa(
                 "rendered": True,
                 "readback": True,
                 "verification_scope": "powerpoint-first-open-save-reopen-stability",
-                "semantic_payload_binding": "not-verified",
-                "repair_dialogs": None,
-                "repair_observation": "not-observable-via-noninteractive-com",
+                "semantic_payload_binding": semantic_payload_binding,
+                "repair_dialogs": repair_dialogs,
+                "repair_observation": repair_observation,
                 "rendered_png_sha256": reopen_png_hashes,
                 "first_open_rendered_png_sha256": first_png_hashes,
                 "reopen_rendered_png_sha256": reopen_png_hashes,
@@ -488,6 +643,11 @@ def _run_powerpoint_com_qa(
                 "native_table": native_table,
                 "native_chart": native_chart,
                 "native_image_crop": native_image_crop,
+                "native_qid_missing": len(missing_qids),
+                "native_qid_ghosting": native_qid_ghosting,
+                "backplate_collisions": backplate_collisions,
+                "first_open_chart_readback": _chart_readback(first_snapshot),
+                "reopen_chart_readback": _chart_readback(reopened_snapshot),
             }
             if evidence_directory is not None:
                 (temp_root / "powerpoint-qa.json").write_text(
@@ -496,6 +656,9 @@ def _run_powerpoint_com_qa(
                 )
             return report
     finally:
+        if dialog_watch is not None:
+            dialog_watch[0].set()
+            dialog_watch[1].join(timeout=1)
         for deck in (reopened, first):
             if deck is not None:
                 try:
@@ -515,6 +678,7 @@ async def trusted_powerpoint_qa(
     expected_slides: int,
     *,
     evidence_directory: Path | None = None,
+    expected_native_qids: frozenset[str] = frozenset(),
 ) -> dict[str, Any]:
     if os.name != "nt":
         return {"status": "preflight", "platform": "unsupported"}
@@ -526,8 +690,13 @@ async def trusted_powerpoint_qa(
             path,
             expected_slides,
             evidence_directory,
+            expected_native_qids,
+            os.getenv(
+                "AUTHORED_POWERPOINT_QA_INTERACTIVE_OBSERVATION", "false"
+            ).lower()
+            == "true",
         )
-    except Exception as error:
+    except Exception:
         return {
             "status": "failed",
             "platform": "windows",
