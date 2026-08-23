@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from functools import lru_cache
+from hashlib import sha256
 import json
 import os
 from pathlib import Path
@@ -64,7 +65,25 @@ def load_release_profile_definition_v3() -> tuple[BoundedHybridReleaseProfileDef
         definition = BoundedHybridReleaseProfileDefinitionV3.model_validate(payload, strict=False)
     except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as error:
         raise SemanticContractError("authored_release_v3_profile_definition_invalid") from error
-    return definition, canonical_digest(definition)
+    # Release authority binds the sealed JSON artifact, not Pydantic's model
+    # projection.  The Gate 1 runner consumes this same sorted, compact JSON
+    # projection, including every explicitly sealed field in the source file.
+    artifact_json = json.dumps(
+        payload,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    artifact_digest = "sha256:" + sha256(artifact_json.encode("utf-8")).hexdigest()
+    return definition, artifact_digest
+
+
+@lru_cache(maxsize=1)
+def load_release_profile_model_projection_digest_v3() -> str:
+    """Return the non-authoritative Pydantic projection digest for diagnostics."""
+
+    definition, _ = load_release_profile_definition_v3()
+    return canonical_digest(definition)
 
 
 _PROFILE, _PROFILE_DIGEST = load_release_profile_definition_v3()
@@ -547,6 +566,7 @@ __all__ = [
     "get_workbench_capability_projection_v3",
     "issue_capability_receipt_v3",
     "load_release_profile_definition_v3",
+    "load_release_profile_model_projection_digest_v3",
     "release_authority_target_v3_from_environment",
     "validate_export_authority_claim_v3",
 ]

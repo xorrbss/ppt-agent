@@ -44,7 +44,10 @@ from services.authored_vnext.semantic.completion_v3 import (
     create_evidence_bundle_completion_v3,
     seal_evidence_bundle_completion_v3,
 )
-from services.authored_vnext.semantic.readiness_v3 import load_release_profile_definition_v3
+from services.authored_vnext.semantic.readiness_v3 import (
+    load_release_profile_definition_v3,
+    load_release_profile_model_projection_digest_v3,
+)
 from services.authored_vnext.semantic.release_authority_v3 import (
     actual_product_authority_digest,
 )
@@ -109,6 +112,18 @@ def _graph_request_values() -> dict[str, object]:
             signature_base64=base64.b64encode(b"0" * 64).decode("ascii"),
         ),
     }
+
+
+def test_release_profile_authority_digest_matches_gate1_sealed_raw_contract() -> None:
+    _, authority_digest = load_release_profile_definition_v3()
+
+    assert authority_digest == (
+        "sha256:92335e102787f38a5ecd996e790264083a4e65737bdc83a58f09e4e9a799c870"
+    )
+    assert load_release_profile_model_projection_digest_v3() == (
+        "sha256:2e2ead14dc6f72a952323f2625a9f4e539a3295e6f58141753fb2b8d6d82edd9"
+    )
+    assert authority_digest != load_release_profile_model_projection_digest_v3()
 
 
 @pytest.mark.parametrize("mutation", ["missing", "extra", "duplicate"])

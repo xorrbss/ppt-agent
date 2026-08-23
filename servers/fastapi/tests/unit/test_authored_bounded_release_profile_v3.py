@@ -15,6 +15,7 @@ from models.authored_vnext.semantic.release_profile_v3 import (
     WorkbenchCapabilityProjectionV3,
 )
 from services.authored_vnext.semantic.canonical import canonical_digest
+from services.authored_vnext.semantic.readiness_v3 import load_release_profile_definition_v3
 from services.presentation_export_direct_attempt_service import (
     _release_authority_pin_from_projection,
 )
@@ -55,9 +56,7 @@ def _projection(**updates) -> BoundedHybridReleaseReadinessV3:
         "all_required_capability_ids": definition[
             "allRequiredCapabilityIds"
         ],
-        "profile_definition_digest": canonical_digest(
-            json.loads(_V3_PROFILE.read_text(encoding="utf-8"))
-        ),
+        "profile_definition_digest": load_release_profile_definition_v3()[1],
         "evaluated_at": now,
         "expires_at": now + timedelta(days=1),
         "deck_evidence_ready": True,
