@@ -251,6 +251,27 @@ $fastApiEnvironment["MIGRATE_DATABASE_ON_STARTUP"] = "true"
 # body through the browser-facing single-origin proxy.
 $fastApiEnvironment["NEXT_INTERNAL_URL"] = "http://127.0.0.1:$NextPort"
 $fastApiEnvironment["NEXT_PUBLIC_URL"] = $proxyUrl
+# Explicitly forward only release/QA inputs that FastAPI consumes. Values are
+# deliberately neither logged nor copied into the browser-facing environment.
+$fastApiReleaseQaEnvironmentKeys = @(
+    "AUTHORED_POWERPOINT_QA_INTERACTIVE_OBSERVATION",
+    "AUTHORED_RELEASE_DEPLOYMENT_ENVIRONMENT",
+    "AUTHORED_RELEASE_OS_BUILD",
+    "AUTHORED_RELEASE_OFFICE_BUILD",
+    "AUTHORED_RELEASE_RENDERER_IMAGE_DIGEST",
+    "AUTHORED_RELEASE_FONT_INVENTORY_DIGEST",
+    "AUTHORED_RELEASE_BACKEND_BUILD_DIGEST",
+    "AUTHORED_RELEASE_BACKEND_COMMIT_SHA",
+    "AUTHORED_RELEASE_KILL_SWITCHES",
+    "AUTHORED_RELEASE_VISUAL_GATE_HMAC_KEY",
+    "AUTHORED_RELEASE_CI_EVIDENCE_HMAC_KEY"
+)
+foreach ($environmentKey in $fastApiReleaseQaEnvironmentKeys) {
+    $environmentValue = [Environment]::GetEnvironmentVariable($environmentKey)
+    if (-not [string]::IsNullOrWhiteSpace($environmentValue)) {
+        $fastApiEnvironment[$environmentKey] = $environmentValue
+    }
+}
 
 $nextEnvironment = $sharedAuthoredEnvironment.Clone()
 # The verification UI consumes existing deterministic presentations and must

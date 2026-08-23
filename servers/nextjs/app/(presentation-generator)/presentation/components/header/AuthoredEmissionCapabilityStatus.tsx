@@ -131,8 +131,15 @@ export default function AuthoredEmissionCapabilityStatusView({
         <p className={hybridReason ? "text-amber-800" : "text-emerald-800"}>
           {hybridReason
             ? `Hybrid 제한: ${hybridReason}`
-            : `Fidelity와 Hybrid가 같은 immutable ${readiness.version} manifest에 묶여 있습니다. shadow/blocked receipt는 release promotion authority를 부여하지 않으며, non-promotable Hybrid 진단 export admission은 서버가 결정합니다.`}
+            : `Hybrid 진단 export 가능 · immutable ${readiness.version} manifest binding 확인. Promotion은 서버 receipt만 결정합니다.`}
         </p>
+        <details className="rounded border border-slate-200 bg-white/70 px-2 py-1" data-testid="authored-release-evidence-details">
+          <summary className="cursor-pointer select-none font-medium text-slate-700">
+            {readiness.version === "v3"
+              ? `릴리스 증거 상세 · deck ${String(readiness.projection.releaseProfile.deckEvidenceReady)} · serializer ${String(readiness.projection.releaseProfile.serializerProfileReady)} · native ${String(readiness.projection.releaseProfile.nativeSubsetReady)} · commit ${String(readiness.projection.releaseProfile.releaseCommitReady)} · promotion ${String(readiness.projection.releaseProfile.promotionReady)}`
+              : `릴리스 증거 상세 · promotion ${String(projection.releaseProfile.promotionReady)} · bounded native ${String(projection.releaseProfile.boundedNativeParityReady)}`}
+          </summary>
+          <div className="mt-1 space-y-1">
         <p className="break-all text-slate-500">
           profile {projection.releaseProfile.profileId} · {projection.releaseProfile.platformScope.platform}/{projection.releaseProfile.platformScope.renderer} · {projection.releaseProfile.reasonCode}
         </p>
@@ -197,6 +204,8 @@ export default function AuthoredEmissionCapabilityStatusView({
             <p key={item.capabilityId} className="text-rose-800">{item.capabilityId} · active · {item.reasonCode}</p>
           )) : <p className="text-slate-500">서버가 보고한 active kill switch 없음</p>}
         </section>
+          </div>
+        </details>
       </div>
     );
   }
