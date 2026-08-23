@@ -76,6 +76,31 @@ class AuthoredReleaseNonceV3(SQLModel, table=True):
     )
 
 
+class AuthoredCiEvidenceIdentityV3(SQLModel, table=True):
+    __tablename__ = "authored_ci_evidence_identities_v3"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "receipt_digest", name="uq_authored_ci_evidence_v3_receipt"),
+        UniqueConstraint("tenant_id", "source_head_commit", name="uq_authored_ci_evidence_v3_head"),
+        UniqueConstraint("tenant_id", "pipeline_uuid", name="uq_authored_ci_evidence_v3_pipeline"),
+        UniqueConstraint("tenant_id", "attempt_subject_digest", name="uq_authored_ci_evidence_v3_subject"),
+        UniqueConstraint("evidence_bundle_id", name="uq_authored_ci_evidence_v3_bundle"),
+    )
+
+    id: uuid.UUID = Field(primary_key=True, default_factory=uuid.uuid4)
+    tenant_id: str = Field(sa_column=Column(String(128), nullable=False))
+    owner_id: uuid.UUID = Field(sa_column=Column(Uuid, nullable=False))
+    evidence_bundle_id: uuid.UUID = Field(sa_column=Column(Uuid, nullable=False))
+    receipt_digest: str = Field(sa_column=Column(String(71), nullable=False))
+    source_head_commit: str = Field(sa_column=Column(String(64), nullable=False))
+    pipeline_uuid: str = Field(sa_column=Column(String(128), nullable=False))
+    attempt_subject_digest: str = Field(sa_column=Column(String(71), nullable=False))
+    artifact_digest: str = Field(sa_column=Column(String(71), nullable=False))
+    created_at: datetime = Field(
+        default_factory=get_current_utc_datetime,
+        sa_column=Column(DateTime(timezone=True), nullable=False, server_default=func.now()),
+    )
+
+
 class AuthoredComQualificationJobV3(SQLModel, table=True):
     __tablename__ = "authored_com_qualification_jobs_v3"
     __table_args__ = (
@@ -295,6 +320,7 @@ __all__ = [
     "AuthoredComQualificationJobV3",
     "AuthoredReleaseArtifactV3",
     "AuthoredReleaseNonceV3",
+    "AuthoredCiEvidenceIdentityV3",
     "AuthoredEvidenceGraphRootV3",
     "AuthoredEvidenceBundleCompletionV3",
     "AuthoredGate0StructuralTraceV3",

@@ -31,6 +31,7 @@ from api.v1.ppt.endpoints.authored_vnext.semantic.router import (
 )
 from models.sql.authored_capability_receipt import AuthoredCapabilityReceiptRecordV2
 from models.sql.authored_release_evidence_v3 import (
+    AuthoredCiEvidenceIdentityV3,
     AuthoredComQualificationJobV3,
     AuthoredEvidenceBundleCompletionV3,
     AuthoredEvidenceGraphRootV3,
@@ -94,6 +95,7 @@ from services.authored_vnext.semantic.readiness_validators import (
     trusted_capability_feature_set_digest,
 )
 from services.authored_vnext.semantic.release_authority_v3 import (
+    actual_product_canonical_digest_v2,
     actual_product_authority_digest,
     build_bound_capability_subject_v3,
 )
@@ -154,7 +156,17 @@ def evaluate_gate0_projection(payload: dict) -> dict[str, object]:
     missing = [field for field in V3_PROJECTION_FIELDS if field not in release_profile]
     if missing:
         return {"ready": False, "reason": "v3_projection_fields_missing", "missing": missing}
-    if not all(release_profile[field] is True for field in V3_PROJECTION_FIELDS):
+    native_ready = release_profile["nativeSubsetReady"] is True
+    if (
+        release_profile.get("nativeSubsetStatus") == "notApplicable"
+        and release_profile.get("nativeSubsetCapabilityIds") == []
+    ):
+        native_ready = True
+    if not all(
+        release_profile[field] is True
+        for field in V3_PROJECTION_FIELDS
+        if field != "nativeSubsetReady"
+    ) or not native_ready:
         return {"ready": False, "reason": "v3_projection_not_ready", "missing": []}
     return {"ready": True, "reason": "v3_projection_ready", "missing": []}
 
@@ -341,7 +353,7 @@ async def _seal_actual_product_completion_chain(
         digest = unsigned.pop("serverReadbackDigest")
         unsigned.pop("readbackSignerKeyId")
         signature = base64.b64decode(unsigned.pop("readbackSignatureBase64"), validate=True)
-        assert canonical_digest(unsigned) == digest
+        assert actual_product_canonical_digest_v2(unsigned) == digest
         private_key.public_key().verify(signature, digest.encode("ascii"))
 
     async def publish_bound(artifact_id: str, content: bytes) -> dict:
@@ -496,9 +508,9 @@ async def _seal_actual_product_completion_chain(
         "baseArtifactIdsDigest": GATE1_GRAPH_BASE_ARTIFACT_IDS_DIGEST_V3,
         "finalRequiredArtifactIdsDigest": GATE1_REQUIRED_ARTIFACT_IDS_DIGEST_V3,
         "artifactInventory": inventory,
-        "artifactInventoryDigest": canonical_digest(inventory),
+        "artifactInventoryDigest": actual_product_canonical_digest_v2(inventory),
     }
-    graph_payload["rootDigest"] = canonical_digest(graph_payload)
+    graph_payload["rootDigest"] = actual_product_canonical_digest_v2(graph_payload)
     graph_payload["authority"] = _actual_product_authority(
         private_key,
         graph_payload,
@@ -559,7 +571,7 @@ async def _seal_actual_product_completion_chain(
         now=issued_at,
     )
     authority_digest = actual_product_authority_digest(signed_seal, seal_authority)
-    completion_digest = canonical_digest(
+    completion_digest = actual_product_canonical_digest_v2(
         {
             "graphRootDigest": graph["rootDigest"],
             "requiredCapabilityIds": required_capability_ids,
@@ -1233,48 +1245,51 @@ async def _seed_fresh_authoritative_bundle(
                 completed_at=datetime.now(timezone.utc),
             )
             session.add(attempt)
-            if mode == "hybrid":
-                binding = seal_export_binding(
-                    ExportAttemptDigestBindingV1(
-                        export_attempt_id=attempt_id,
-                        presentation_id=presentation_id,
-                        presentation_revision=source_revision,
-                        operation_id=operation_id,
-                        generation_attempt_id=generation_attempt_id,
-                        slide_origin_generation_attempt_ids=[generation_attempt_id] * 8,
-                        canonical_digest=manifest.canonical_digest,
-                        manifest_digest=manifest.canonical_digest,
-                        semantic_digests=[_sha(f"semantic-{index}") for index in range(8)],
-                        master_contract_digest=_sha("master"),
-                        composition_digest=_sha("composition"),
-                        font_manifest_digest=_sha("font"),
-                        asset_manifest_digest=_sha("asset"),
-                        quality_policy_digest=_sha("quality"),
-                        mode="hybrid",
-                        renderer_source_digest=renderer_digest,
-                        serializer_id="authored-hybrid",
-                        serializer_version="2",
-                        receipt_digests=[_sha("receipt")],
-                        pptx_digest=pptx_digest,
-                    )
+            if mode == "authored":
+                await session.flush()
+                continue
+            serializer_id = f"authored-{mode}"
+            binding = seal_export_binding(
+                ExportAttemptDigestBindingV1(
+                    export_attempt_id=attempt_id,
+                    presentation_id=presentation_id,
+                    presentation_revision=source_revision,
+                    operation_id=operation_id,
+                    generation_attempt_id=generation_attempt_id,
+                    slide_origin_generation_attempt_ids=[generation_attempt_id] * 8,
+                    canonical_digest=manifest.canonical_digest,
+                    manifest_digest=manifest.canonical_digest,
+                    semantic_digests=[_sha(f"semantic-{index}") for index in range(8)],
+                    master_contract_digest=_sha("master"),
+                    composition_digest=_sha("composition"),
+                    font_manifest_digest=_sha("font"),
+                    asset_manifest_digest=_sha("asset"),
+                    quality_policy_digest=_sha("quality"),
+                    mode=mode,
+                    renderer_source_digest=renderer_digest,
+                    serializer_id=serializer_id,
+                    serializer_version="2",
+                    receipt_digests=[_sha("receipt")],
+                    pptx_digest=pptx_digest,
                 )
-                session.add(
-                    AuthoredSemanticExportBinding(
-                        owner_id=owner_id,
-                        tenant_id="default",
-                        export_attempt_id=attempt_id,
-                        presentation_id=presentation_id,
-                        presentation_revision=source_revision,
-                        canonical_digest=manifest.canonical_digest,
-                        renderer_source_digest=renderer_digest,
-                        mode="hybrid",
-                        serializer_id="authored-hybrid",
-                        serializer_version="2",
-                        pptx_digest=pptx_digest,
-                        binding_digest=binding.binding_digest,
-                        payload=binding.model_dump(mode="json", by_alias=True),
-                    )
+            )
+            session.add(
+                AuthoredSemanticExportBinding(
+                    owner_id=owner_id,
+                    tenant_id="default",
+                    export_attempt_id=attempt_id,
+                    presentation_id=presentation_id,
+                    presentation_revision=source_revision,
+                    canonical_digest=manifest.canonical_digest,
+                    renderer_source_digest=renderer_digest,
+                    mode=mode,
+                    serializer_id=serializer_id,
+                    serializer_version="2",
+                    pptx_digest=pptx_digest,
+                    binding_digest=binding.binding_digest,
+                    payload=binding.model_dump(mode="json", by_alias=True),
                 )
+            )
             await session.flush()
         await session.commit()
     return {
@@ -1442,6 +1457,7 @@ def test_gate0_v3_http_cjk_release_authority_boundary(tmp_path: Path, monkeypatc
                     AuthoredSemanticExportBinding.__table__,
                     AuthoredCapabilityReceiptRecordV2.__table__,
                     AuthoredReleaseNonceV3.__table__,
+                    AuthoredCiEvidenceIdentityV3.__table__,
                     *_RELEASE_V3_GRAPH_AND_GATE0_TABLES,
                 ],
             )
@@ -1582,19 +1598,46 @@ def test_gate0_v3_http_cjk_release_authority_boundary(tmp_path: Path, monkeypatc
                     "protectedBranches": ["main"],
                     "requiredPipelineSteps": [
                         "Authored release readiness configuration",
+                        "Dashboard component gate",
                         "Run shared Next.js CI Node suite",
+                        "Upstream byte-parity verification",
                         "Workspace chat-first browser E2E",
                     ],
+                    "successfulStepNames": [
+                        "Authored release readiness configuration",
+                        "Dashboard component gate",
+                        "Run shared Next.js CI Node suite",
+                        "Upstream byte-parity verification",
+                        "Workspace chat-first browser E2E",
+                    ],
+                    "paginationComplete": True,
+                    "latestStatePerStepSuccessful": True,
                     "successfulCommitStatusKeys": ["authored-release-readiness", "next-ci", "workspace-chat-e2e"],
+                    "status": "verified",
                     "verifiedAt": ci_verified_at,
+                    "expiresAt": ci_verified_at + timedelta(minutes=15),
+                    "attemptBinding": {
+                        "schemaVersion": "authored-ci-attempt-binding/v3",
+                        "presentationId": str(presentation_id),
+                        "presentationRevision": revision,
+                        "generationAttemptId": str(generation_attempt_id),
+                        "fidelityExportAttemptId": str(attempt_ids[1]),
+                        "hybridExportAttemptId": str(hybrid_attempt_id),
+                        "activeManifestDigest": manifest.canonical_digest,
+                        "sourceTreeCensusDigest": _sha("source-tree-census"),
+                        "sourceHeadCommit": "a" * 64,
+                        "evidencePolicyDigest": _sha("evidence-policy"),
+                        "executionNonce": "gate1_execution_nonce_20260823",
+                    },
                     "receiptDigest": _sha("placeholder"),
                     "authoritySignature": "hmac-sha256:" + "0" * 64,
-                }
+                },
+                strict=False,
             )
             unsigned_ci = ci_base.model_dump(mode="json", by_alias=True)
             unsigned_ci.pop("receiptDigest", None)
             unsigned_ci.pop("authoritySignature", None)
-            ci_digest = canonical_digest(unsigned_ci)
+            ci_digest = actual_product_canonical_digest_v2(unsigned_ci)
             ci_report = ci_base.model_copy(
                 update={
                     "receipt_digest": ci_digest,
@@ -1620,6 +1663,24 @@ def test_gate0_v3_http_cjk_release_authority_boundary(tmp_path: Path, monkeypatc
             )
             assert ci_publish.status_code == 201, ci_publish.text
             ci_artifact = ci_publish.json()
+            ci_readback = await client.get(
+                f"/api/v1/ppt/authored-emission/ci-evidence-artifacts-v3/"
+                f"{ci_artifact['evidenceBundleId']}?executionNonce=gate1_execution_nonce_20260823"
+            )
+            assert ci_readback.status_code == 200, ci_readback.text
+            ci_readback_payload = ci_readback.json()
+            assert ci_readback_payload["artifactDigest"] == ci_artifact["artifactDigest"]
+            assert ci_readback_payload["attemptBinding"] == ci_artifact["attemptBinding"]
+            assert ci_readback_payload["executionNonce"] == "gate1_execution_nonce_20260823"
+            assert ci_readback_payload["serverReadbackDigest"].startswith("sha256:")
+
+            async with maker() as session:
+                fidelity_binding_record = await session.scalar(
+                    select(AuthoredSemanticExportBinding).where(
+                        AuthoredSemanticExportBinding.export_attempt_id == attempt_ids[1]
+                    )
+                )
+                assert fidelity_binding_record is not None
 
             receipt_digests: list[str] = []
             for capability in target.profile_definition.all_required_capability_ids:
@@ -1684,6 +1745,45 @@ def test_gate0_v3_http_cjk_release_authority_boundary(tmp_path: Path, monkeypatc
                         ).decode("ascii")
                     }
                 )
+                if capability == "ci.requiredChecks":
+                    attack_envelope = _actual_product_authority(
+                        signer_private_key,
+                        {},
+                        evidence_class="actual_product_capability",
+                        nonce="gate0_ci_cross_attempt_attack_nonce_01",
+                        now=ci_verified_at,
+                    )
+                    attack_subject = build_bound_capability_subject_v3(
+                        receipt_wire=receipt_wire,
+                        authority=attack_envelope,
+                        binding=fidelity_binding_record,
+                        target=target,
+                        tenant_id="default",
+                    )
+                    attack_digest = actual_product_authority_digest(
+                        attack_subject, attack_envelope
+                    )
+                    attack_envelope = attack_envelope.model_copy(
+                        update={
+                            "signature_base64": base64.b64encode(
+                                signer_private_key.sign(attack_digest.encode("ascii"))
+                            ).decode("ascii")
+                        }
+                    )
+                    cross_attempt = await client.post(
+                        V3_RECEIPT_PATH,
+                        json={
+                            "schemaVersion": "authored-capability-receipt-issue/v3",
+                            "receipt": receipt_wire,
+                            "exportAttemptId": str(attempt_ids[1]),
+                            "bindingDigest": fidelity_binding_record.binding_digest,
+                            "authority": attack_envelope.model_dump(mode="json", by_alias=True),
+                        },
+                    )
+                    assert cross_attempt.status_code == 422, cross_attempt.text
+                    assert cross_attempt.json()["detail"]["code"] == (
+                        "authored_ci_evidence_receipt_claim_invalid"
+                    )
                 receipt_response = await client.post(
                     V3_RECEIPT_PATH,
                     json={
@@ -1730,7 +1830,14 @@ def test_gate0_v3_http_cjk_release_authority_boundary(tmp_path: Path, monkeypatc
             projection = await client.get(V3_PROJECTION_PATH.format(presentation_id=presentation_id))
             assert projection.status_code == 200, projection.text
             result = projection.json()
-            assert evaluate_gate0_projection(result)["ready"] is actual_cjk_evidence, result
+            evaluated = evaluate_gate0_projection(result)
+            release_profile = result.get("releaseProfile", {})
+            assert evaluated["ready"] is actual_cjk_evidence, (
+                evaluated,
+                {field: release_profile.get(field) for field in V3_PROJECTION_FIELDS},
+                release_profile.get("nativeSubsetStatus"),
+                release_profile.get("nativeSubsetCapabilityIds"),
+            )
             assert result["releaseProfile"]["promotionReady"] is actual_cjk_evidence, result
             await engine.dispose()
 

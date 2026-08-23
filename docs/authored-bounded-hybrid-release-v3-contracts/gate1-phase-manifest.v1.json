@@ -187,7 +187,7 @@
     "saveCopyExclusion": "save-copy is an immutable package transition, not a displayed render state; its digest/readback is required, while visual ledger cells cover only first-open and reopen"
   },
   "ciAuthority": {
-    "repository": "must-equal-signed-source-repository-id",
+    "repository": "ibizsoftware/devax-ppt",
     "commit": "must-equal-sourceHeadCommit-and-backend-build-commit",
     "requiredSuccessfulStepNames": [
       "Authored release readiness configuration",
@@ -229,5 +229,5 @@
     "semanticValidatorRules": ["ordered phase IDs exactly equal the sealed 37-ID manifest set", "accepted state requires empty missing duplicate and unexpected arrays and no non-accepted ordered result", "artifactId values are unique and exactly equal the sealed 70-ID set", "every artifact binds immutable versionId sha256 byteLength and mediaType and is re-fetched and re-hashed", "ledger contains exactly the sealed 384 unique slide export-mode COM-phase defect-field cells", "bounded native mode equals sealed raster-only runtime pin and fresh environment evidence", "evidence policy digest equals the sealed manifest and active policy", "corrected Gate -1 feasible result and its signed receipt artifact equal all four runtime pins", "receipt subjectManifestDigest equals manifestDigest", "receipt subjectResultCoreDigest equals resultCoreDigest", "receipt semanticValidatorContractDigest equals the pinned Gate1 validator contract digest", "signed immutable semantic validation receipt binds issuer key nonce freshness artifact inventory ledger and policy"]
   },
   "digestProjection": { "algorithm": "sha256", "canonicalProfileId": "presenton-canonical-json/v2", "includedJsonPath": "$", "excludedJsonPaths": ["$.manifestDigest"] },
-  "manifestDigest": "sha256:3bed91df4cef576c95ca9ff5a194774840c0aca8f80c03f12d60bbd6e1260841"
+  "manifestDigest": "sha256:8e2d4644e21caae04fccd49fa7c284c2cc6d8bc4a2273074e19326e41f00f099"
 }

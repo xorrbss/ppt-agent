@@ -74,6 +74,7 @@ from services.authored_vnext.semantic.readiness_v3 import (
     issue_capability_receipt_v3,
 )
 from services.authored_vnext.semantic.release_evidence_v3 import (
+    get_ci_evidence_artifact_v3,
     publish_ci_evidence_artifact_v3,
 )
 from services.authored_vnext.semantic.release_authority_v3 import (
@@ -122,6 +123,7 @@ def _error(error: SemanticContractError) -> HTTPException:
     if error.code in {
         "authored_semantic_presentation_not_found",
         "authored_semantic_export_attempt_not_found",
+        "authored_ci_evidence_artifact_not_found",
     }:
         return HTTPException(status_code=404, detail={"code": error.code})
     if error.code in {
@@ -144,6 +146,11 @@ def _error(error: SemanticContractError) -> HTTPException:
         "authored_evidence_completion_second_seal_conflict",
         "authored_evidence_completion_stale_cas",
         "authored_gate0_structural_case_replay_conflict",
+        "authored_ci_evidence_receipt_replay",
+        "authored_ci_evidence_same_head_relabel",
+        "authored_ci_evidence_pipeline_relabel",
+        "authored_ci_evidence_attempt_relabel",
+        "authored_ci_evidence_identity_conflict",
     }:
         return HTTPException(status_code=409, detail={"code": error.code})
     if error.code == "authored_capability_receipt_admin_required":
@@ -370,6 +377,34 @@ async def create_ci_evidence_artifact_v3(
         return artifact
     except SemanticContractError as error:
         await session.rollback()
+        raise _error(error) from error
+
+
+@AUTHORED_SEMANTIC_ROUTER.get(
+    "/authored-emission/ci-evidence-artifacts-v3/{evidence_bundle_id}",
+    response_model=CiEvidenceArtifactV3,
+)
+async def read_ci_evidence_artifact_v3(
+    evidence_bundle_id: uuid.UUID = Path(),
+    execution_nonce: str = Query(alias="executionNonce", min_length=16, max_length=128),
+    session: AsyncSession = Depends(get_async_session),
+) -> CiEvidenceArtifactV3:
+    publisher_id = _admin_owner()
+    try:
+        artifact = await get_ci_evidence_artifact_v3(
+            session,
+            evidence_bundle_id=evidence_bundle_id,
+            publisher_principal_id=publisher_id,
+            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+        )
+        return CiEvidenceArtifactV3.model_validate(
+            sign_server_readback_v3(
+                artifact.model_dump(mode="json", by_alias=True),
+                execution_nonce=execution_nonce,
+            ),
+            strict=False,
+        )
+    except SemanticContractError as error:
         raise _error(error) from error
 
 

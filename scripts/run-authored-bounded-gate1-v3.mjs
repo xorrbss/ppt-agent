@@ -6,6 +6,7 @@ import zlib from "node:zlib";
 
 import {
   assertSourceTreeCensusUnchanged,
+  canonicalJson,
   canonicalSha256,
   canonicalSha256Excluding,
   validateCountContract,
@@ -240,20 +241,69 @@ function validateProductTrustBundle(filePath, pins, manifest, environment, trust
   return { ...trust, rotationEpoch: registered[0].rotationEpoch };
 }
 
-function ciAuthorityState(ci, manifest, sourceHead) {
+function verifyCiAdmissionAuthority(payload, authority, publicKeySpkiBase64, trustReadback, expectedClass, expectedPurpose, label, now = Date.now()) {
+  if (!authority || authority.schemaVersion !== "authored-evidence-issuer-envelope/v3" || authority.authorityDomain !== "actual_product" || authority.evidenceClass !== expectedClass || authority.keyPurpose !== expectedPurpose || authority.signatureAlgorithm !== "Ed25519" || !Number.isInteger(authority.rotationEpoch) || authority.rotationEpoch < 1) throw new Error(`gate1-ci-${label}-authority-scope-invalid`);
+  const issuedAt = Date.parse(authority.issuedAt); const expiresAt = Date.parse(authority.expiresAt);
+  if (!Number.isFinite(issuedAt) || !Number.isFinite(expiresAt) || issuedAt > now + 300_000 || expiresAt <= now || expiresAt <= issuedAt || expiresAt - issuedAt > 1_800_000 || typeof authority.nonce !== "string" || !/^[A-Za-z0-9_-]{16,128}$/.test(authority.nonce)) throw new Error(`gate1-ci-${label}-authority-freshness-invalid`);
+  const publicDer = Buffer.from(publicKeySpkiBase64 || "", "base64"); const rawPublic = publicDer.subarray(publicDer.length - 32); const publicKeyDigest = digestBytes(rawPublic);
+  const registered = trustReadback.registeredKeys.filter((entry) => entry.authorityDomain === "actual_product" && entry.issuerId === authority.issuerId && entry.signerKeyId === authority.signerKeyId && entry.environmentId === authority.environmentId && entry.keyPurpose === authority.keyPurpose && entry.rotationEpoch === authority.rotationEpoch && entry.algorithm === "Ed25519" && entry.revoked === false && entry.publicKeyDigest === publicKeyDigest);
+  if (publicDer.length < 32 || registered.length !== 1) throw new Error(`gate1-ci-${label}-authority-not-fastapi-registered`);
+  const authorityCore = structuredClone(authority); delete authorityCore.signatureBase64;
+  const authorityDigest = canonicalSha256({ receipt: payload, authority: authorityCore });
+  const publicKey = crypto.createPublicKey({ key: publicDer, type: "spki", format: "der" });
+  if (!crypto.verify(null, Buffer.from(authorityDigest, "ascii"), publicKey, Buffer.from(authority.signatureBase64 || "", "base64"))) throw new Error(`gate1-ci-${label}-authority-signature-invalid`);
+  return authorityDigest;
+}
+
+export function validateRemoteCiSeal(ci, { manifest, sourceHead, pins, trustReadback, readbackVerifier, releaseProfile, inventory, now = Date.now() }) {
+  if (ci?.status === "not-verified" || ci?.remoteAuthorityVerified === false) return "not-verified";
+  assertExactKeys(ci, ["schemaVersion", "authorityDomain", "status", "remoteAuthorityVerified", "repository", "commit", "pipelineUuid", "paginationComplete", "latestStatePerStepSuccessful", "successfulStepNames", "verifiedAt", "receiptDigest", "admissionProvenance"], "ci-seal");
+  if (ci.schemaVersion !== "authored-remote-ci-seal/v2" || ci.authorityDomain !== "actual_product" || ci.status !== "verified" || ci.remoteAuthorityVerified !== true || ci.commit !== sourceHead || ci.repository !== manifest.ciAuthority.repository || ci.paginationComplete !== true || ci.latestStatePerStepSuccessful !== true || typeof ci.pipelineUuid !== "string" || ci.pipelineUuid.length < 3) throw new Error("gate1-ci-seal-scope-invalid");
+  const expectedSteps = [...manifest.ciAuthority.requiredSuccessfulStepNames].sort();
+  if (JSON.stringify([...new Set(ci.successfulStepNames || [])].sort()) !== JSON.stringify(expectedSteps)) throw new Error("gate1-ci-step-set-mismatch");
+  const provenance = ci.admissionProvenance;
+  assertExactKeys(provenance, ["schemaVersion", "publish", "readback", "capabilityReceipt", "ciAuthorityPublicKeySpkiBase64", "capabilityAuthorityPublicKeySpkiBase64", "signedCapabilitySubject"], "ci-admission-provenance");
+  if (provenance.schemaVersion !== "authored-fastapi-ci-evidence-admission-provenance/v1") throw new Error("gate1-ci-admission-provenance-invalid");
+  const publish = validateHttpExchange(provenance.publish, { method: "POST", endpoint: "/api/v1/ppt/authored-emission/ci-evidence-artifacts-v3", status: 201, label: "ci-evidence-publish" });
+  const publishRequest = publish.request; const report = publishRequest?.receipt; const ciAuthority = publishRequest?.authority; const published = publish.response;
+  assertExactKeys(publishRequest, ["schemaVersion", "receipt", "authority"], "ci-publish-request");
+  if (publishRequest.schemaVersion !== "authored-ci-evidence-artifact-publish/v3" || report?.schemaVersion !== "authored-bitbucket-required-check-receipt/v1" || !/^hmac-sha256:[0-9a-f]{64}$/.test(report.authoritySignature || "")) throw new Error("gate1-ci-publish-request-invalid");
+  assertExactKeys(report, ["schemaVersion", "status", "repository", "commit", "pipelineUuid", "protectedBranches", "requiredPipelineSteps", "successfulCommitStatusKeys", "successfulStepNames", "paginationComplete", "latestStatePerStepSuccessful", "verifiedAt", "expiresAt", "attemptBinding", "receiptDigest", "authoritySignature"], "ci-required-checks-receipt");
+  const unsignedReport = structuredClone(report); delete unsignedReport.receiptDigest; delete unsignedReport.authoritySignature;
+  if (report.receiptDigest !== canonicalSha256(unsignedReport) || ci.receiptDigest !== report.receiptDigest || ci.repository !== report.repository || ci.commit !== report.commit || ci.pipelineUuid !== report.pipelineUuid || ci.verifiedAt !== report.verifiedAt) throw new Error("gate1-ci-report-binding-invalid");
+  const verifiedAt = Date.parse(report.verifiedAt); const reportExpiresAt = Date.parse(report.expiresAt);
+  if (report.status !== "verified" || !Number.isFinite(verifiedAt) || !Number.isFinite(reportExpiresAt) || verifiedAt > now + 30_000 || reportExpiresAt <= now || reportExpiresAt <= verifiedAt || reportExpiresAt - verifiedAt > 900_000) throw new Error("gate1-ci-report-stale");
+  if (JSON.stringify(report.requiredPipelineSteps) !== JSON.stringify(expectedSteps) || JSON.stringify(report.successfulStepNames) !== JSON.stringify(expectedSteps) || JSON.stringify(report.successfulStepNames) !== JSON.stringify(ci.successfulStepNames) || report.paginationComplete !== true || report.paginationComplete !== ci.paginationComplete || report.latestStatePerStepSuccessful !== true || report.latestStatePerStepSuccessful !== ci.latestStatePerStepSuccessful || !Array.isArray(report.successfulCommitStatusKeys) || report.successfulCommitStatusKeys.length < 1 || report.successfulCommitStatusKeys.some((value) => typeof value !== "string" || !value.trim()) || JSON.stringify(report.successfulCommitStatusKeys) !== JSON.stringify([...new Set(report.successfulCommitStatusKeys)].sort())) throw new Error("gate1-ci-signed-step-set-mismatch");
+  const attemptBinding = report.attemptBinding;
+  assertExactKeys(attemptBinding, ["schemaVersion", "presentationId", "presentationRevision", "generationAttemptId", "fidelityExportAttemptId", "hybridExportAttemptId", "activeManifestDigest", "sourceTreeCensusDigest", "sourceHeadCommit", "evidencePolicyDigest", "executionNonce"], "ci-attempt-binding");
+  if (attemptBinding.schemaVersion !== "authored-ci-attempt-binding/v3" || attemptBinding.presentationId !== pins.presentationId || attemptBinding.presentationRevision !== pins.presentationRevision || attemptBinding.generationAttemptId !== pins.generationAttemptId || attemptBinding.fidelityExportAttemptId !== pins.fidelityExportAttemptId || attemptBinding.hybridExportAttemptId !== pins.hybridExportAttemptId || attemptBinding.activeManifestDigest !== pins.activeManifestDigest || attemptBinding.sourceTreeCensusDigest !== pins.sourceTreeCensusDigest || attemptBinding.sourceHeadCommit !== sourceHead || attemptBinding.evidencePolicyDigest !== pins.evidencePolicyDigest || attemptBinding.executionNonce !== pins.executionNonce) throw new Error("gate1-ci-attempt-binding-mismatch");
+  const ciAuthorityDigest = verifyCiAdmissionAuthority(report, ciAuthority, provenance.ciAuthorityPublicKeySpkiBase64, trustReadback, "actual_product_ci", "actual-product-ci", "report", now);
+  if (reportExpiresAt > Date.parse(ciAuthority.expiresAt)) throw new Error("gate1-ci-report-authority-window-mismatch");
+  const content = Buffer.from(canonicalJson(publishRequest), "utf8"); const artifactDigest = digestBytes(content);
+  if (published?.schemaVersion !== "authored-ci-evidence-artifact/v3" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(published.evidenceBundleId || "") || published.artifactDigest !== artifactDigest || published.artifactRef !== `artifact://sha256/${artifactDigest.slice(7)}` || published.receiptDigest !== report.receiptDigest || published.authorityDigest !== ciAuthorityDigest || published.byteLength !== content.length || published.repository !== ci.repository || published.commit !== sourceHead || published.pipelineUuid !== ci.pipelineUuid || published.verifiedAt !== ci.verifiedAt || published.state !== "sealed" || published.resolverVersion !== "authored-ci-evidence/v3" || published.publishRequestDigest !== artifactDigest || canonicalSha256(published.attemptBinding) !== canonicalSha256(attemptBinding)) throw new Error("gate1-ci-durable-artifact-binding-invalid");
+  const readback = validateHttpExchange(provenance.readback, { method: "GET", endpoint: `/api/v1/ppt/authored-emission/ci-evidence-artifacts-v3/${published.evidenceBundleId}?executionNonce=${encodeURIComponent(pins.executionNonce)}`, status: 200, label: "ci-evidence-readback" });
+  if (canonicalSha256(readback.request) !== canonicalSha256({ executionNonce: pins.executionNonce })) throw new Error("gate1-ci-readback-nonce-provenance-invalid");
+  const readbackArtifact = verifyServerReadback(readback.response, readbackVerifier, "ci-evidence");
+  if (canonicalSha256(responseCore(readbackArtifact)) !== canonicalSha256(responseCore(published)) || readbackArtifact.executionNonce !== pins.executionNonce || readbackArtifact.artifactDigest !== artifactDigest || readbackArtifact.receiptDigest !== report.receiptDigest || readbackArtifact.commit !== sourceHead || readbackArtifact.verifiedAt !== report.verifiedAt || readbackArtifact.state !== "sealed" || readbackArtifact.resolverVersion !== "authored-ci-evidence/v3" || canonicalSha256(readbackArtifact.attemptBinding) !== canonicalSha256(attemptBinding)) throw new Error("gate1-ci-readback-binding-invalid");
+  const admitted = validateHttpExchange(provenance.capabilityReceipt, { method: "POST", endpoint: "/api/v1/ppt/authored-emission/capability-receipts-v3", status: 201, label: "ci-capability-receipt" });
+  const issue = admitted.request; const receiptRequest = issue?.receipt; const receipt = admitted.response; const signedSubject = provenance.signedCapabilitySubject;
+  assertExactKeys(issue, ["schemaVersion", "receipt", "exportAttemptId", "bindingDigest", "authority"], "ci-capability-issue-request");
+  if (issue.schemaVersion !== "authored-capability-receipt-issue/v3" || issue.exportAttemptId !== pins.hybridExportAttemptId || !DIGEST.test(issue.bindingDigest || "") || receiptRequest?.schemaVersion !== "authored-capability-receipt-issue/v2" || receiptRequest.capabilityId !== "ci.requiredChecks" || receiptRequest.state !== "ready" || receiptRequest.evidenceBundleId !== published.evidenceBundleId || receiptRequest.evidenceDigest !== report.receiptDigest || receiptRequest.policyDigest !== pins.releaseProfileDigest || receiptRequest.evidencePolicyId !== "authored-trusted-capability/ci-required-checks/v1") throw new Error("gate1-ci-capability-request-binding-invalid");
+  if (!signedSubject || signedSubject.schemaVersion !== "authored-capability-receipt-bound-subject/v3" || signedSubject.receipt === undefined || canonicalSha256(signedSubject.receipt) !== canonicalSha256(receiptRequest) || signedSubject.authorityDomain !== "actual_product" || signedSubject.evidenceClass !== "actual_product_capability" || signedSubject.evidencePolicyId !== receiptRequest.evidencePolicyId || signedSubject.evidencePolicyDigest !== receiptRequest.policyDigest || signedSubject.issuerId !== issue.authority?.issuerId || signedSubject.signerKeyId !== issue.authority?.signerKeyId || signedSubject.issuedAt !== issue.authority?.issuedAt || signedSubject.expiresAt !== issue.authority?.expiresAt || signedSubject.nonce !== issue.authority?.nonce || signedSubject.presentationId !== pins.presentationId || signedSubject.presentationRevision !== pins.presentationRevision || signedSubject.generationAttemptId !== pins.generationAttemptId || signedSubject.manifestDigest !== pins.activeManifestDigest || signedSubject.exportAttemptId !== pins.hybridExportAttemptId || signedSubject.bindingDigest !== issue.bindingDigest || signedSubject.releaseProfileDigest !== pins.releaseProfileDigest || signedSubject.featureSetDigest !== receiptRequest.featureSetDigest || signedSubject.environmentAttestationDigest !== pins.environmentAttestationDigest || signedSubject.workerAttestationDigest !== pins.workerAttestationDigest || JSON.stringify(signedSubject.allRequiredCapabilityIds) !== JSON.stringify(releaseProfile.allRequiredCapabilityIds) || signedSubject.completionSeal !== null) throw new Error("gate1-ci-capability-signed-subject-mismatch");
+  verifyCiAdmissionAuthority(signedSubject, issue.authority, provenance.capabilityAuthorityPublicKeySpkiBase64, trustReadback, "actual_product_capability", "actual-product-capability", "capability", now);
+  const receiptCore = structuredClone(receipt); delete receiptCore.receiptDigest;
+  const inventoryIds = new Set(inventory.map((entry) => entry.artifactId));
+  const evaluatedAt = Date.parse(receipt?.evaluatedAt); const receiptExpiresAt = Date.parse(receipt?.expiresAt);
+  if (!inventoryIds.has("ci-seal-json") || receipt?.schemaVersion !== "authored-capability-receipt/v2" || receipt.capabilityId !== "ci.requiredChecks" || receipt.state !== "ready" || receipt.evidenceBundleId !== published.evidenceBundleId || receipt.evidenceDigest !== report.receiptDigest || receipt.policyDigest !== pins.releaseProfileDigest || receipt.featureSetDigest !== receiptRequest.featureSetDigest || receipt.expiresAt !== receiptRequest.expiresAt || receipt.receiptDigest !== canonicalSha256(receiptCore) || !Number.isFinite(evaluatedAt) || !Number.isFinite(receiptExpiresAt) || evaluatedAt > now + 30_000 || now - evaluatedAt > 900_000 || receiptExpiresAt <= now || receiptExpiresAt - evaluatedAt > 900_000 || receiptExpiresAt > Date.parse(issue.authority.expiresAt)) throw new Error("gate1-ci-current-receipt-invalid");
+  return "accepted";
+}
+
+function ciAuthorityState(ci, manifest, sourceHead, context) {
   const expectedSteps = manifest.ciAuthority.requiredSuccessfulStepNames;
   const steps = Array.isArray(ci.successfulStepNames) ? [...new Set(ci.successfulStepNames)].sort() : [];
   const exactSteps = JSON.stringify(steps) === JSON.stringify([...expectedSteps].sort());
-  const verified = ci.schemaVersion === "authored-remote-ci-seal/v1"
-    && ci.authorityDomain === "actual_product"
-    && ci.remoteAuthorityVerified === true
-    && ci.paginationComplete === true
-    && ci.latestStatePerStepSuccessful === true
-    && ci.commit === sourceHead
-    && exactSteps
-    && typeof ci.pipelineUuid === "string" && ci.pipelineUuid.length > 2
-    && DIGEST.test(ci.receiptDigest);
-  if (verified) return "accepted";
+  const verified = ci?.remoteAuthorityVerified === true && exactSteps;
+  if (verified) return validateRemoteCiSeal(ci, { ...context, manifest, sourceHead });
   if (ci.status === "not-verified" || ci.remoteAuthorityVerified === false) return "not-verified";
   return "blocked";
 }
@@ -476,7 +526,7 @@ export function collectGate1(options) {
   if (byId.size !== observations.phases.length || observations.phases.length !== 37) throw new Error("gate1-phase-observation-cardinality");
   const inventoryIds = new Set(inventory.map((entry) => entry.artifactId));
   const ci = readJson(artifactPath(options.bundleDir, bindings, "ci-seal-json"));
-  const observedCiState = ciAuthorityState(ci, manifest, opening.head);
+  const observedCiState = ciAuthorityState(ci, manifest, opening.head, { pins, trustReadback: releaseTrustReadback, readbackVerifier, releaseProfile, inventory });
   const { cells, ledgerDigest, root: productRootForPhase } = validateProductCrossBindings(options.bundleDir, bindings, inventory, manifest, pins, observedCiState, productTrust, releaseProfile, readbackVerifier);
   const productPhaseResult = readJson(artifactPath(options.bundleDir, bindings, "phase-result-set-json"));
   validateProductArtifactAuthority(productPhaseResult, productTrust, "phase-result-set");
@@ -546,6 +596,23 @@ export function collectGate1(options) {
     serverReadbackPublicKeyDigest: pins.serverReadbackPublicKeyDigest,
     serverReadbackAuthority: manifest.serverReadbackAuthority,
     executionNonce: pins.executionNonce,
+    remoteCiAuthority: observedCiState === "accepted" ? {
+      receiptDigest: ci.receiptDigest,
+      evidenceBundleId: ci.admissionProvenance.publish.response.evidenceBundleId,
+      artifactDigest: ci.admissionProvenance.publish.response.artifactDigest,
+      sourceHeadCommit: ci.commit,
+      verifiedAt: ci.verifiedAt,
+      reportExpiresAt: ci.admissionProvenance.publish.request.receipt.expiresAt,
+      ciAuthorityIssuedAt: ci.admissionProvenance.publish.request.authority.issuedAt,
+      ciAuthorityExpiresAt: ci.admissionProvenance.publish.request.authority.expiresAt,
+      readbackIssuedAt: ci.admissionProvenance.readback.response.issuedAt,
+      readbackExpiresAt: ci.admissionProvenance.readback.response.expiresAt,
+      capabilityReceiptDigest: ci.admissionProvenance.capabilityReceipt.response.receiptDigest,
+      capabilityReceiptEvaluatedAt: ci.admissionProvenance.capabilityReceipt.response.evaluatedAt,
+      capabilityReceiptExpiresAt: ci.admissionProvenance.capabilityReceipt.response.expiresAt,
+      capabilityAuthorityIssuedAt: ci.admissionProvenance.capabilityReceipt.request.authority.issuedAt,
+      capabilityAuthorityExpiresAt: ci.admissionProvenance.capabilityReceipt.request.authority.expiresAt,
+    } : null,
     suiteStatus,
     executedPhaseCount: 37,
     acceptedPhaseCount,
@@ -633,6 +700,7 @@ export function sealGate1(options) {
   const core = readJson(options.resultCorePath);
   if (core.semanticValidationReceiptRef !== null || core.resultSetDigest !== "") throw new Error("gate1-result-core-already-sealed");
   if (core.resultCoreDigest !== canonicalSha256Excluding(core, ["$.resultCoreDigest", "$.semanticValidationReceiptRef", "$.resultSetDigest"])) throw new Error("gate1-result-core-digest-invalid");
+  validateFinalCiFreshness(core);
   const result = structuredClone(core);
   const readbackVerifier = loadServerReadbackVerifier(options.serverReadbackVerifierAttestationPath, core, core);
   const releaseTrustReadback = validateReleaseTrustReadback(options.releaseTrustReadbackPath, core, readbackVerifier);
@@ -641,6 +709,20 @@ export function sealGate1(options) {
   writeFreshJson(options.resultPath, result);
   writeFreshJson(`${options.resultPath}.summary.json`, { suiteStatus: result.suiteStatus, executedPhaseCount: result.executedPhaseCount, artifactCount: result.artifactInventory.length, ledgerCellCount: result.ledgerCellCount, resultSetDigest: result.resultSetDigest, finalResultSealed: true });
   return result;
+}
+
+export function validateFinalCiFreshness(core, now = Date.now()) {
+  const ci = core.remoteCiAuthority;
+  if (core.suiteStatus === "accepted") {
+    const verifiedAt = Date.parse(ci?.verifiedAt); const reportExpiresAt = Date.parse(ci?.reportExpiresAt);
+    const ciAuthorityIssuedAt = Date.parse(ci?.ciAuthorityIssuedAt); const ciAuthorityExpiresAt = Date.parse(ci?.ciAuthorityExpiresAt);
+    const readbackIssuedAt = Date.parse(ci?.readbackIssuedAt); const readbackExpiresAt = Date.parse(ci?.readbackExpiresAt);
+    const receiptEvaluatedAt = Date.parse(ci?.capabilityReceiptEvaluatedAt); const receiptExpiresAt = Date.parse(ci?.capabilityReceiptExpiresAt);
+    const capabilityAuthorityIssuedAt = Date.parse(ci?.capabilityAuthorityIssuedAt); const capabilityAuthorityExpiresAt = Date.parse(ci?.capabilityAuthorityExpiresAt);
+    if (!ci || ci.sourceHeadCommit !== core.sourceHeadCommit || !DIGEST.test(ci.receiptDigest || "") || !DIGEST.test(ci.artifactDigest || "") || !DIGEST.test(ci.capabilityReceiptDigest || "") || ![verifiedAt, reportExpiresAt, ciAuthorityIssuedAt, ciAuthorityExpiresAt, readbackIssuedAt, readbackExpiresAt, receiptEvaluatedAt, receiptExpiresAt, capabilityAuthorityIssuedAt, capabilityAuthorityExpiresAt].every(Number.isFinite) || verifiedAt > now + 30_000 || reportExpiresAt <= now || reportExpiresAt <= verifiedAt || reportExpiresAt - verifiedAt > 900_000 || ciAuthorityIssuedAt > now + 300_000 || ciAuthorityExpiresAt <= now || ciAuthorityExpiresAt <= ciAuthorityIssuedAt || ciAuthorityExpiresAt - ciAuthorityIssuedAt > 1_800_000 || reportExpiresAt > ciAuthorityExpiresAt || readbackIssuedAt > now + 30_000 || readbackExpiresAt <= now || readbackExpiresAt - readbackIssuedAt !== 300_000 || receiptEvaluatedAt > now + 30_000 || now - receiptEvaluatedAt > 900_000 || receiptExpiresAt <= now || receiptExpiresAt <= receiptEvaluatedAt || receiptExpiresAt - receiptEvaluatedAt > 900_000 || capabilityAuthorityIssuedAt > now + 300_000 || capabilityAuthorityExpiresAt <= now || capabilityAuthorityExpiresAt <= capabilityAuthorityIssuedAt || capabilityAuthorityExpiresAt - capabilityAuthorityIssuedAt > 1_800_000 || receiptExpiresAt > capabilityAuthorityExpiresAt) throw new Error("gate1-ci-authority-not-fresh-at-final-seal");
+  }
+  if (core.suiteStatus !== "accepted" && ci !== null) throw new Error("gate1-ci-authority-state-mismatch");
+  return true;
 }
 
 function parseArgs(argv) {

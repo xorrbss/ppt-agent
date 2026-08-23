@@ -427,6 +427,12 @@ def actual_product_canonical_digest_v2(value: Any) -> str:
     return "sha256:" + sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def actual_product_canonical_json_v2(value: Any) -> str:
+    """Serialize an actual-product wire value with the Gate1 JS canonical-v2 contract."""
+
+    return _actual_product_canonical_json_v2(value)
+
+
 def actual_product_authority_digest(receipt_payload: dict[str, Any], authority: EvidenceIssuerEnvelopeV3) -> str:
     return actual_product_canonical_digest_v2(_signed_payload(receipt_payload, authority))
 
@@ -615,6 +621,36 @@ async def issue_actual_product_capability_receipt_v3(
     if binding is None:
         raise SemanticContractError("authored_capability_receipt_export_binding_invalid")
     effective_target = target or release_authority_target_v3_from_environment()
+    effective_validators = capability_validators
+    if request.receipt.capability_id == "ci.requiredChecks":
+        if effective_validators is None:
+            from services.authored_vnext.semantic.readiness_validators import (
+                get_trusted_capability_validators,
+            )
+
+            effective_validators = dict(get_trusted_capability_validators())
+        else:
+            effective_validators = dict(effective_validators)
+        from services.authored_vnext.semantic.release_evidence_v3 import (
+            validate_ci_required_checks_evidence_v3,
+        )
+
+        async def validate_bound_ci_evidence(
+            validator_session,
+            receipt_request,
+            validator_target,
+            validator_tenant_id,
+        ) -> None:
+            await validate_ci_required_checks_evidence_v3(
+                validator_session,
+                receipt_request,
+                validator_target,
+                validator_tenant_id,
+                export_attempt_id=request.export_attempt_id,
+                binding_digest=request.binding_digest,
+            )
+
+        effective_validators["ci.requiredChecks"] = validate_bound_ci_evidence
     signed_subject = build_bound_capability_subject_v3(
         receipt_wire=receipt_wire,
         authority=request.authority,
@@ -664,7 +700,7 @@ async def issue_actual_product_capability_receipt_v3(
         tenant_id=tenant_id,
         now=observed_at,
         target=effective_target,
-        capability_validators=capability_validators,
+        capability_validators=effective_validators,
         authority_metadata=metadata,
     )
     record = await session.scalar(
@@ -686,6 +722,7 @@ __all__ = [
     "READBACK_SIGNER_KEY_ID_V3",
     "actual_product_authority_digest",
     "actual_product_canonical_digest_v2",
+    "actual_product_canonical_json_v2",
     "authority_metadata_v3",
     "build_bound_capability_subject_v3",
     "consume_authority_nonce_v3",
