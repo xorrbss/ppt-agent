@@ -7,9 +7,9 @@
   "properties": {
     "schemaVersion": { "const": "authored-gate0-result-set/v1" },
     "manifestDigest": { "$ref": "#/$defs/digest" },
-    "semanticValidatorContractDigest": { "const": "sha256:60ee7d4cba760a50e0a31d3e2ead11da054d6050393c71de7687ac1044a1ba51" },
+    "semanticValidatorContractDigest": { "const": "sha256:aef4a6c8f8a1f86a0c3ae805b72ec78fc8f7f6fcb5e1d2ae29d99c8a1904889f" },
     "requiredCaseIdsDigest": { "const": "sha256:8d73e6d97d2288aeecede9205562453fd0d6196f12e33c842863dd56b11a9e1a" },
-    "evidencePolicyDigest": { "const": "sha256:81a822b8b51b973492784316c7cec4c04f45d0b54fd3365db7e7f80be7f87d4f" },
+    "evidencePolicyDigest": { "const": "sha256:2fd68afb7e40a6cffe36e9bdf8a099f480b492ddeff110159dbf4d934f1da6c5" },
     "suiteStatus": { "enum": ["structurally-reachable", "blocked", "failed"] },
     "executedCaseCount": { "const": 34 },
     "acceptedCaseCount": { "type": "integer", "minimum": 0, "maximum": 34 }, "blockedCaseCount": { "type": "integer", "minimum": 0, "maximum": 34 }, "failedCaseCount": { "type": "integer", "minimum": 0, "maximum": 34 }, "notVerifiedCaseCount": { "type": "integer", "minimum": 0, "maximum": 34 }, "skippedCaseCount": { "const": 0 },

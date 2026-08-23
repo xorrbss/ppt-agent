@@ -2,8 +2,8 @@
   "schemaVersion": "authored-gate0-semantic-validator-contract/v1",
   "contractId": "authored-gate0-semantic-validator/v1",
   "canonicalProfileId": "presenton-canonical-json/v2",
-  "policyDigest": "sha256:81a822b8b51b973492784316c7cec4c04f45d0b54fd3365db7e7f80be7f87d4f",
+  "policyDigest": "sha256:2fd68afb7e40a6cffe36e9bdf8a099f480b492ddeff110159dbf4d934f1da6c5",
   "invariants": ["34 ordered IDs exactly equal sealed manifest ID set", "successful result has empty anomaly arrays and 34 accepted results", "all 33 mutations persist no sealed completion", "artifact inventory IDs and immutable bindings are unique and digest-valid", "receipt subjectManifestDigest equals manifestDigest", "receipt subjectResultCoreDigest equals resultCoreDigest", "receipt semanticValidatorContractDigest equals this contract digest", "issuer key nonce signature and freshness validate in structural_test trust domain"],
   "digestProjection": { "algorithm": "sha256", "canonicalProfileId": "presenton-canonical-json/v2", "includedJsonPath": "$", "excludedJsonPaths": ["$.contractDigest"] },
-  "contractDigest": "sha256:60ee7d4cba760a50e0a31d3e2ead11da054d6050393c71de7687ac1044a1ba51"
+  "contractDigest": "sha256:aef4a6c8f8a1f86a0c3ae805b72ec78fc8f7f6fcb5e1d2ae29d99c8a1904889f"
 }

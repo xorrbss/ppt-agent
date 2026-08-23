@@ -6,8 +6,8 @@
   "authorityDomain": "structural_test",
   "evidenceClass": "synthetic_structural_only",
   "canonicalProfileId": "presenton-canonical-json/v2",
-  "evidencePolicyId": "authored-evidence-policy/v2-frozen-20260823-build20326",
-  "evidencePolicyDigest": "sha256:81a822b8b51b973492784316c7cec4c04f45d0b54fd3365db7e7f80be7f87d4f",
+  "evidencePolicyId": "authored-evidence-policy/v2-frozen-20260824-attempt09-build20326",
+  "evidencePolicyDigest": "sha256:2fd68afb7e40a6cffe36e9bdf8a099f480b492ddeff110159dbf4d934f1da6c5",
   "expectedCaseCount": 34,
   "expectedPositiveCaseCount": 1,
   "expectedMutationCaseCount": 33,
@@ -73,10 +73,10 @@
   },
   "resultEnvelopeContract": {
     "schemaId": "urn:presenton:authored:gate0-result-set:v1",
-    "semanticValidatorContractDigest": "sha256:60ee7d4cba760a50e0a31d3e2ead11da054d6050393c71de7687ac1044a1ba51",
+    "semanticValidatorContractDigest": "sha256:aef4a6c8f8a1f86a0c3ae805b72ec78fc8f7f6fcb5e1d2ae29d99c8a1904889f",
     "requiredFields": ["schemaVersion", "manifestDigest", "semanticValidatorContractDigest", "requiredCaseIdsDigest", "evidencePolicyDigest", "suiteStatus", "executedCaseCount", "acceptedCaseCount", "blockedCaseCount", "failedCaseCount", "notVerifiedCaseCount", "skippedCaseCount", "missingCaseIds", "duplicateCaseIds", "unexpectedCaseIds", "orderedResults", "artifactInventory", "artifactInventoryDigestProjection", "artifactInventoryDigest", "semanticValidation", "resultCoreDigestProjection", "resultCoreDigest", "semanticValidationReceiptRef", "digestProjection", "resultSetDigest"],
     "semanticValidatorRules": ["ordered case IDs exactly equal the sealed manifest ID set", "successful state requires empty missing duplicate and unexpected arrays", "successful state requires no blocked or failed ordered result", "evidence policy digest equals the sealed manifest and active policy", "receipt subjectManifestDigest equals manifestDigest", "receipt subjectResultCoreDigest equals resultCoreDigest", "receipt semanticValidatorContractDigest equals the pinned Gate0 validator contract digest", "signed immutable semantic validation receipt binds issuer key nonce freshness policy and artifact inventory"]
   },
   "digestProjection": { "algorithm": "sha256", "canonicalProfileId": "presenton-canonical-json/v2", "includedJsonPath": "$", "excludedJsonPaths": ["$.manifestDigest"] },
-  "manifestDigest": "sha256:1e08200155d65fe5fa34d86bc03f5ae1403f744932e367a8190e51688d2d94cc"
+  "manifestDigest": "sha256:c25dbb3a095667e3cc9b3da531d689c5c2357021d32c9ed988f23d3e1ebee0e6"
 }

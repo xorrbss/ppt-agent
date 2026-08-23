@@ -6,8 +6,8 @@
   "authorityDomain": "actual_product",
   "canonicalProfileId": "presenton-canonical-json/v2",
   "releaseProfileId": "release-profile.v3",
-  "evidencePolicyId": "authored-evidence-policy/v2-frozen-20260823-build20326",
-  "evidencePolicyDigest": "sha256:81a822b8b51b973492784316c7cec4c04f45d0b54fd3365db7e7f80be7f87d4f",
+  "evidencePolicyId": "authored-evidence-policy/v2-frozen-20260824-attempt09-build20326",
+  "evidencePolicyDigest": "sha256:2fd68afb7e40a6cffe36e9bdf8a099f480b492ddeff110159dbf4d934f1da6c5",
   "serverReadbackAuthority": {
     "signerKeyId": "authored-release-readback-v3-20260823",
     "publicKeyDigest": "sha256:4e757e6f367fda82dc57b42d952d6d7bd5a75de53b4cff806f7434eb54e75f87",
@@ -222,10 +222,10 @@
   },
   "resultEnvelopeContract": {
     "schemaId": "urn:presenton:authored:gate1-result-set:v1",
-    "semanticValidatorContractDigest": "sha256:650c0fdbd2c78ca6fa0bc71cec6cb67cd3b302231def43ecb613102a63d90c1d",
+    "semanticValidatorContractDigest": "sha256:60194bfd885927ccdd8b999fa0d1ff5e837ff19573beed5bbe6fffe966647ab3",
     "requiredFields": ["schemaVersion", "manifestDigest", "semanticValidatorContractDigest", "requiredPhaseIdsDigest", "requiredArtifactIdsDigest", "evidencePolicyDigest", "gateMinus1ManifestDigest", "gateMinus1ResultSetDigest", "gateMinus1SemanticValidationReceiptArtifactDigest", "gateMinus1SemanticValidatorContractDigest", "suiteStatus", "executedPhaseCount", "acceptedPhaseCount", "blockedPhaseCount", "failedPhaseCount", "notVerifiedPhaseCount", "skippedPhaseCount", "missingPhaseIds", "duplicatePhaseIds", "unexpectedPhaseIds", "orderedResults", "artifactInventory", "artifactInventoryDigestProjection", "artifactInventoryDigest", "ledgerCellCount", "ledgerDigest", "semanticValidation", "resultCoreDigestProjection", "resultCoreDigest", "semanticValidationReceiptRef", "digestProjection", "resultSetDigest"],
     "semanticValidatorRules": ["ordered phase IDs exactly equal the sealed 37-ID manifest set", "accepted state requires empty missing duplicate and unexpected arrays and no non-accepted ordered result", "artifactId values are unique and exactly equal the sealed 70-ID set", "every artifact binds immutable versionId sha256 byteLength and mediaType and is re-fetched and re-hashed", "ledger contains exactly the sealed 384 unique slide export-mode COM-phase defect-field cells", "evidence policy digest equals the sealed manifest and active policy", "corrected Gate -1 feasible result and its signed receipt artifact equal all four runtime pins", "receipt subjectManifestDigest equals manifestDigest", "receipt subjectResultCoreDigest equals resultCoreDigest", "receipt semanticValidatorContractDigest equals the pinned Gate1 validator contract digest", "signed immutable semantic validation receipt binds issuer key nonce freshness artifact inventory ledger and policy"]
   },
   "digestProjection": { "algorithm": "sha256", "canonicalProfileId": "presenton-canonical-json/v2", "includedJsonPath": "$", "excludedJsonPaths": ["$.manifestDigest"] },
-  "manifestDigest": "sha256:1bbef887a7f321794fa6aeed8585236b25da295203378d4f86c14bd058e56c47"
+  "manifestDigest": "sha256:da8c3bd9d70b7b255c4eed5bc75e304fcfd5430514b067ee8ae8e0ed594f78e2"
 }

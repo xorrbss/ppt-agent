@@ -5,8 +5,8 @@
   "gate": "gate-minus1",
   "manifestStatus": "retrospective-reference-only",
   "canonicalProfileId": "presenton-canonical-json/v2",
-  "policyCandidateId": "authored-evidence-policy/v2-frozen-20260823-build20326",
-  "policyCandidateDigest": "sha256:81a822b8b51b973492784316c7cec4c04f45d0b54fd3365db7e7f80be7f87d4f",
+  "policyCandidateId": "authored-evidence-policy/v2-frozen-20260824-attempt09-build20326",
+  "policyCandidateDigest": "sha256:2fd68afb7e40a6cffe36e9bdf8a099f480b492ddeff110159dbf4d934f1da6c5",
   "requiredEnvironmentDigest": "sha256:d6ca3ad1b02fcb10c7421532c7762d8c684f2927574023e9faaf44d6fc9b2260",
   "inputArtifacts": [
     {
@@ -59,7 +59,7 @@
   ],
   "observationContract": {
     "schemaId": "urn:presenton:authored:gate-minus1-result-set:v1",
-    "semanticValidatorContractDigest": "sha256:fe1cbd606accab30def980e874c37578160b1c0a6bba74afab6abc1870e48ab8",
+    "semanticValidatorContractDigest": "sha256:9a0412e8d53acee8d4f605128158c25e29bbafe191d68155103bfc60e141941a",
     "fieldDeclarationRule": "Each ordered result binds the exact expectedObservationFields list, observedFieldIds, missingObservationFieldIds, artifact IDs, and observation digest.",
     "fractionalNumberRule": "forbidden; use integer fields with unit and scale in the field name",
     "missingFieldDisposition": "blocked",
@@ -284,5 +284,5 @@
     "includedJsonPath": "$",
     "excludedJsonPaths": ["$.manifestDigest"]
   },
-  "manifestDigest": "sha256:772e2b5930ef73b2311e40d8675f607b9d32fdb00e3f038552393c07d7f6dd5f"
+  "manifestDigest": "sha256:2ba24df114f66d3e814df0d7fc98ef9340425b68402d77c45076840036ffa7aa"
 }

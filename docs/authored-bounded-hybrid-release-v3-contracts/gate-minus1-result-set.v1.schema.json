@@ -9,7 +9,7 @@
     "schemaVersion": { "const": "authored-gate-minus1-result-set/v1" },
     "manifestDigest": { "$ref": "#/$defs/digest" },
     "requiredCaseIdsDigest": { "const": "sha256:37b5a3dc034e9eab066ffcdd3e6dc2bb143af9123e75b732da10be71cc2c51f1" },
-    "semanticValidatorContractDigest": { "const": "sha256:fe1cbd606accab30def980e874c37578160b1c0a6bba74afab6abc1870e48ab8" },
+    "semanticValidatorContractDigest": { "const": "sha256:9a0412e8d53acee8d4f605128158c25e29bbafe191d68155103bfc60e141941a" },
     "suiteStatus": { "enum": ["feasible", "blocked", "failed"] },
     "requiredCaseCount": { "const": 18 },
     "executedCaseCount": { "const": 18 },

@@ -13,7 +13,7 @@
     "manifestStatus": { "enum": ["retrospective-reference-only", "sealed-for-execution", "draft-unsealed"] },
     "canonicalProfileId": { "const": "presenton-canonical-json/v2" },
     "policyCandidateId": { "type": "string", "minLength": 1 },
-    "policyCandidateDigest": { "const": "sha256:81a822b8b51b973492784316c7cec4c04f45d0b54fd3365db7e7f80be7f87d4f" },
+    "policyCandidateDigest": { "const": "sha256:2fd68afb7e40a6cffe36e9bdf8a099f480b492ddeff110159dbf4d934f1da6c5" },
     "requiredEnvironmentDigest": { "$ref": "#/$defs/digest" },
     "inputArtifacts": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/artifact" } },
     "expectedCaseCount": { "const": 18 },
@@ -31,7 +31,7 @@
       "required": ["schemaId", "semanticValidatorContractDigest", "fieldDeclarationRule", "fractionalNumberRule", "missingFieldDisposition", "comErrorRule"],
       "properties": {
         "schemaId": { "const": "urn:presenton:authored:gate-minus1-result-set:v1" },
-        "semanticValidatorContractDigest": { "const": "sha256:fe1cbd606accab30def980e874c37578160b1c0a6bba74afab6abc1870e48ab8" },
+        "semanticValidatorContractDigest": { "const": "sha256:9a0412e8d53acee8d4f605128158c25e29bbafe191d68155103bfc60e141941a" },
         "fieldDeclarationRule": { "const": "Each ordered result binds the exact expectedObservationFields list, observedFieldIds, missingObservationFieldIds, artifact IDs, and observation digest." },
         "fractionalNumberRule": { "const": "forbidden; use integer fields with unit and scale in the field name" },
         "missingFieldDisposition": { "const": "blocked" },

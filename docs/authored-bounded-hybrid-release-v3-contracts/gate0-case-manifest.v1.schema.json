@@ -9,7 +9,7 @@
     "manifestSchemaId": { "const": "urn:presenton:authored:gate0-case-manifest:v1" },
     "manifestId": { "const": "authored-gate0-structural-reachability.v1" }, "manifestStatus": { "const": "sealed-template-runtime-fixtures-required" },
     "authorityDomain": { "const": "structural_test" }, "evidenceClass": { "const": "synthetic_structural_only" }, "canonicalProfileId": { "const": "presenton-canonical-json/v2" },
-    "evidencePolicyId": { "const": "authored-evidence-policy/v2-frozen-20260823-build20326" }, "evidencePolicyDigest": { "const": "sha256:81a822b8b51b973492784316c7cec4c04f45d0b54fd3365db7e7f80be7f87d4f" },
+    "evidencePolicyId": { "const": "authored-evidence-policy/v2-frozen-20260824-attempt09-build20326" }, "evidencePolicyDigest": { "const": "sha256:2fd68afb7e40a6cffe36e9bdf8a099f480b492ddeff110159dbf4d934f1da6c5" },
     "expectedCaseCount": { "const": 34 }, "expectedPositiveCaseCount": { "const": 1 }, "expectedMutationCaseCount": { "const": 33 },
     "requiredCaseIdsDigest": { "const": "sha256:8d73e6d97d2288aeecede9205562453fd0d6196f12e33c842863dd56b11a9e1a" },
     "aggregateDigestProjections": { "type": "object" }, "mutationPhaseRules": { "type": "object" }, "positiveCase": { "type": "object" },

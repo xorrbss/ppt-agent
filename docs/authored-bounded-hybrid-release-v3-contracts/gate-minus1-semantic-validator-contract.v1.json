@@ -2,7 +2,7 @@
   "schemaVersion": "authored-gate-minus1-semantic-validator-contract/v1",
   "contractId": "authored-gate-minus1-semantic-validator/v1",
   "canonicalProfileId": "presenton-canonical-json/v2",
-  "policyCandidateDigest": "sha256:81a822b8b51b973492784316c7cec4c04f45d0b54fd3365db7e7f80be7f87d4f",
+  "policyCandidateDigest": "sha256:2fd68afb7e40a6cffe36e9bdf8a099f480b492ddeff110159dbf4d934f1da6c5",
   "manifestCaseContractSource": "$.cases[*].{ordinal,caseId,expectedObservationFields,assertions,allowedDispositions}",
   "globalInvariants": [
     "ordered case IDs and ordinals exactly equal the sealed manifest",
@@ -97,5 +97,5 @@
     "gminus1.com.repair-dialog-witness": { "requiredSchemas": ["attended-window-event-witness/v1"], "invariants": ["watcher starts before COM Open", "dialog HWND events are durably recorded without dismissal", "witness and quarantine decision are signed"] }
   },
   "digestProjection": { "algorithm": "sha256", "canonicalProfileId": "presenton-canonical-json/v2", "includedJsonPath": "$", "excludedJsonPaths": ["$.contractDigest"] },
-  "contractDigest": "sha256:fe1cbd606accab30def980e874c37578160b1c0a6bba74afab6abc1870e48ab8"
+  "contractDigest": "sha256:9a0412e8d53acee8d4f605128158c25e29bbafe191d68155103bfc60e141941a"
 }
