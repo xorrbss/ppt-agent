@@ -166,6 +166,10 @@ function validateGateMinus1(options, runtimePins) {
   return true;
 }
 
+export function validateBoundedNativeMode(manifest, pins) {
+  if (manifest.boundedNativeMode !== "raster-only" || pins.boundedNativeMode !== manifest.boundedNativeMode) throw new Error("gate1-bounded-native-mode-pin-mismatch");
+}
+
 function validateRuntimePins(manifest, pins, census) {
   for (const key of manifest.runtimePinsRequiredBeforeExecution) {
     const value = pins[key];
@@ -174,6 +178,7 @@ function validateRuntimePins(manifest, pins, census) {
   if (pins.evidencePolicyDigest !== manifest.evidencePolicyDigest) throw new Error("gate1-runtime-policy-pin-mismatch");
   if (pins.sourceTreeCensusDigest !== census.censusDigest || pins.sourceHeadCommit !== census.head) throw new Error("gate1-source-census-pin-mismatch");
   if (pins.sourceTreeIgnoredAllowlistPolicyDigest !== census.ignoredAllowlistPolicyDigest || pins.sourceTreeGeneratedCachePolicyDigest !== census.generatedCachePolicyDigest) throw new Error("gate1-source-census-policy-pin-mismatch");
+  validateBoundedNativeMode(manifest, pins);
   for (const key of ["releaseProfileDigest", "featureSetDigest", "productAuthorityTrustBundleDigest", "semanticValidatorTrustBundleDigest", "releaseTrustReadbackDigest", "fastApiSignerTrustBundleDigest", "serverReadbackVerifierAttestationDigest", "serverReadbackPublicKeyDigest"]) if (!DIGEST.test(pins[key] || "")) throw new Error(`gate1-runtime-pin-invalid:${key}`);
   for (const key of ["productAuthorityIssuerId", "productAuthoritySignerKeyId", "productAuthorityEnvironmentId", "productAuthorityKeyPurpose", "semanticValidatorIssuerId", "semanticValidatorSignerKeyId", "semanticValidatorEnvironmentId", "semanticValidatorKeyPurpose"]) if (typeof pins[key] !== "string" || pins[key].length < 3) throw new Error(`gate1-runtime-pin-invalid:${key}`);
   if (pins.productAuthorityKeyPurpose !== "actual-product-completion" || pins.semanticValidatorKeyPurpose !== "release-semantic-validator" || typeof pins.serverReadbackSignerKeyId !== "string" || pins.serverReadbackSignerKeyId.length < 3 || !/^[A-Za-z0-9_-]{16,128}$/.test(pins.executionNonce || "")) throw new Error("gate1-runtime-trust-purpose-invalid");
@@ -256,8 +261,18 @@ function ciAuthorityState(ci, manifest, sourceHead) {
 function validateFreshAttestation(filePath, expectedDigest, maxAgeSeconds, label) {
   const bytes = fs.readFileSync(filePath); if (digestBytes(bytes) !== expectedDigest) throw new Error(`gate1-${label}-attestation-digest-mismatch`);
   const value = JSON.parse(bytes.toString("utf8")); const issued = Date.parse(value.issuedAt); const expires = Date.parse(value.expiresAt); const now = Date.now();
-  if (value.authorityDomain !== "actual_product" || value.attested === false || !Number.isFinite(issued) || !Number.isFinite(expires) || issued > now + 30_000 || now - issued > maxAgeSeconds * 1000 || expires <= now) throw new Error(`gate1-${label}-attestation-not-fresh`);
+  if (value.authorityDomain !== "actual_product" || value.attested !== true || !Number.isFinite(issued) || !Number.isFinite(expires) || issued > now + 30_000 || now - issued > maxAgeSeconds * 1000 || expires <= now) throw new Error(`gate1-${label}-attestation-not-fresh`);
   return value;
+}
+
+export function validateRuntimeAttestations(environment, worker, manifest, pins) {
+  assertExactKeys(environment, ["schemaVersion", "authorityDomain", "attested", "environmentId", "presentationId", "presentationRevision", "evidencePolicyDigest", "boundedNativeMode", "productAuthorityIssuerId", "productAuthoritySignerKeyId", "productAuthorityKeyPurpose", "semanticValidatorIssuerId", "semanticValidatorSignerKeyId", "semanticValidatorKeyPurpose", "serverReadbackSignerKeyId", "serverReadbackPublicKeyDigest", "fastApiSignerTrustBundleDigest", "releaseTrustReadbackDigest", "executionNonce", "issuedAt", "expiresAt"], "environment-attestation");
+  assertExactKeys(worker, ["schemaVersion", "authorityDomain", "attested", "environmentId", "presentationId", "presentationRevision", "evidencePolicyDigest", "boundedNativeMode", "activeManifestDigest", "sourceTreeCensusDigest", "sourceHeadCommit", "releaseProfileDigest", "featureSetDigest", "gateMinus1ManifestDigest", "gateMinus1ResultSetDigest", "gateMinus1SemanticValidationReceiptArtifactDigest", "gateMinus1SemanticValidatorContractDigest", "issuedAt", "expiresAt"], "worker-attestation");
+  if (environment.schemaVersion !== "authored-environment-attestation/v1" || worker.schemaVersion !== "authored-worker-attestation/v1" || environment.attested !== true || worker.attested !== true) throw new Error("gate1-attestation-schema-invalid");
+  if (environment.presentationId !== pins.presentationId || environment.presentationRevision !== pins.presentationRevision || worker.presentationId !== pins.presentationId || worker.presentationRevision !== pins.presentationRevision || worker.environmentId !== environment.environmentId) throw new Error("gate1-attestation-attempt-mismatch");
+  if (environment.evidencePolicyDigest !== manifest.evidencePolicyDigest || worker.evidencePolicyDigest !== manifest.evidencePolicyDigest || environment.boundedNativeMode !== manifest.boundedNativeMode || environment.boundedNativeMode !== pins.boundedNativeMode || worker.boundedNativeMode !== pins.boundedNativeMode) throw new Error("gate1-bounded-native-mode-evidence-mismatch");
+  if (environment.productAuthorityIssuerId !== pins.productAuthorityIssuerId || environment.productAuthoritySignerKeyId !== pins.productAuthoritySignerKeyId || environment.productAuthorityKeyPurpose !== pins.productAuthorityKeyPurpose || environment.semanticValidatorIssuerId !== pins.semanticValidatorIssuerId || environment.semanticValidatorSignerKeyId !== pins.semanticValidatorSignerKeyId || environment.semanticValidatorKeyPurpose !== pins.semanticValidatorKeyPurpose || environment.serverReadbackSignerKeyId !== pins.serverReadbackSignerKeyId || environment.serverReadbackPublicKeyDigest !== pins.serverReadbackPublicKeyDigest || environment.fastApiSignerTrustBundleDigest !== pins.fastApiSignerTrustBundleDigest || environment.releaseTrustReadbackDigest !== pins.releaseTrustReadbackDigest || environment.executionNonce !== pins.executionNonce) throw new Error("gate1-environment-readback-trust-mismatch");
+  for (const key of ["activeManifestDigest", "sourceTreeCensusDigest", "sourceHeadCommit", "releaseProfileDigest", "featureSetDigest", "gateMinus1ManifestDigest", "gateMinus1ResultSetDigest", "gateMinus1SemanticValidationReceiptArtifactDigest", "gateMinus1SemanticValidatorContractDigest"]) if (worker[key] !== pins[key]) throw new Error(`gate1-worker-runtime-pin-mismatch:${key}`);
 }
 
 function collectSemanticQids(value, output = new Set()) {
@@ -313,7 +328,7 @@ function validateGate1ArtifactContents(bundleDir, bindings, inventory, manifest,
   }
   const environment = validateFreshAttestation(artifactPath(bundleDir, bindings, "environment-attestation-json"), pins.environmentAttestationDigest, policy.freshness.environmentAttestationMaxAgeSeconds, "environment");
   const worker = validateFreshAttestation(artifactPath(bundleDir, bindings, "worker-attestation-json"), pins.workerAttestationDigest, policy.freshness.workerAttestationMaxAgeSeconds, "worker");
-  if (environment.presentationId !== pins.presentationId || environment.presentationRevision !== pins.presentationRevision || worker.presentationId !== pins.presentationId || worker.presentationRevision !== pins.presentationRevision || worker.environmentId !== environment.environmentId) throw new Error("gate1-attestation-attempt-mismatch");
+  validateRuntimeAttestations(environment, worker, manifest, pins);
   return { qids, decoded, environment, worker };
 }
 
@@ -456,7 +471,6 @@ export function collectGate1(options) {
   const artifactState = validateGate1ArtifactContents(options.bundleDir, bindings, inventory, manifest, policy, pins);
   const observations = readJson(options.phaseObservationsPath);
   if (observations.schemaVersion !== "authored-gate1-phase-observations/v1" || observations.authorityDomain !== "actual_product" || observations.presentationId !== pins.presentationId || observations.presentationRevision !== pins.presentationRevision || observations.generationAttemptId !== pins.generationAttemptId || observations.fidelityExportAttemptId !== pins.fidelityExportAttemptId || observations.hybridExportAttemptId !== pins.hybridExportAttemptId || !Array.isArray(observations.phases)) throw new Error("gate1-phase-observations-invalid");
-  if (artifactState.environment.serverReadbackSignerKeyId !== pins.serverReadbackSignerKeyId || artifactState.environment.serverReadbackPublicKeyDigest !== pins.serverReadbackPublicKeyDigest || artifactState.environment.fastApiSignerTrustBundleDigest !== pins.fastApiSignerTrustBundleDigest || artifactState.environment.releaseTrustReadbackDigest !== pins.releaseTrustReadbackDigest || artifactState.environment.executionNonce !== pins.executionNonce) throw new Error("gate1-environment-readback-trust-mismatch");
   const productTrust = validateProductTrustBundle(options.productAuthorityTrustPath, pins, manifest, artifactState.environment, releaseTrustReadback);
   const byId = new Map(observations.phases.map((entry) => [entry.phaseId, entry]));
   if (byId.size !== observations.phases.length || observations.phases.length !== 37) throw new Error("gate1-phase-observation-cardinality");
@@ -503,6 +517,7 @@ export function collectGate1(options) {
     generationAttemptId: pins.generationAttemptId,
     fidelityExportAttemptId: pins.fidelityExportAttemptId,
     hybridExportAttemptId: pins.hybridExportAttemptId,
+    boundedNativeMode: pins.boundedNativeMode,
     activeManifestDigest: pins.activeManifestDigest,
     sourceTreeCensusDigest: pins.sourceTreeCensusDigest,
     sourceHeadCommit: pins.sourceHeadCommit,
@@ -555,6 +570,7 @@ export function collectGate1(options) {
       immutableArtifactBindingsValid: true,
       ledgerCellSetExact: cells.length === 384,
       policyDigestExact: pins.evidencePolicyDigest === manifest.evidencePolicyDigest,
+      boundedNativeModeExact: pins.boundedNativeMode === manifest.boundedNativeMode,
       gateMinus1FeasiblePinExact: true,
       receiptSubjectManifestDigestExact: true,
       receiptSubjectResultCoreDigestExact: true,

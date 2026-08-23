@@ -276,6 +276,19 @@ export function captureSourceTreeCensus(repoRoot, options = {}) {
   const ignoredAllowlistPolicyDigest = options.ignoredAllowlistPolicyDigest || canonicalSha256(ignorePolicy);
   assertDigest(ignoredAllowlistPolicyDigest, "ignored-allowlist-policy");
   const indexListing = gitBuffer(root, "ls-files", "--stage", "-z");
+  const runtimeExecutionPins = (options.runtimeExecutionPins || []).map((entry) => ({
+    runtimeId: String(entry?.runtimeId || "").trim(),
+    selectionRule: String(entry?.selectionRule || "").trim(),
+    selectedPath: String(entry?.selectedPath || "").replaceAll("\\", "/").replace(/^\.\//, ""),
+  })).sort((left, right) => utf8Compare(left.runtimeId, right.runtimeId));
+  if (runtimeExecutionPins.some((entry) => !entry.runtimeId || !entry.selectionRule || !entry.selectedPath || /^(?:[A-Za-z]:)?\//.test(entry.selectedPath) || entry.selectedPath.split("/").some((segment) => segment === "..")) || new Set(runtimeExecutionPins.map((entry) => entry.runtimeId)).size !== runtimeExecutionPins.length) {
+    throw new TypeError("source-census-runtime-execution-pins-invalid");
+  }
+  const runtimeExecutionPathDigests = runtimeExecutionPins.map((entry) => {
+    const record = pathDigest(root, entry.selectedPath);
+    if (!record.present || !record.sha256) throw new TypeError(`source-census-runtime-execution-path-missing:${entry.selectedPath}`);
+    return { ...entry, byteLength: record.byteLength, sha256: record.sha256 };
+  });
   const core = {
     schemaVersion: "SourceTreeCensusV1",
     repositoryId,
@@ -288,6 +301,7 @@ export function captureSourceTreeCensus(repoRoot, options = {}) {
     untrackedPathDigests: sourceUntrackedPaths.map((relativePath) => pathDigest(root, relativePath)),
     ignoredAllowlistPolicyDigest,
     ignoredAllowlistPathDigests: sourceIgnoredPaths.map((relativePath) => pathDigest(root, relativePath)),
+    runtimeExecutionPathDigests,
     generatedCacheAllowlistPrefixes,
     generatedIgnoredDirectoryNames,
     generatedCachePolicyDigest: options.generatedCachePolicyDigest || canonicalSha256({ schemaVersion: "SourceTreeGeneratedCachePolicyV1", prefixes: generatedCacheAllowlistPrefixes, ignoredDirectoryNames: generatedIgnoredDirectoryNames }),

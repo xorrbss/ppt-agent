@@ -16,7 +16,10 @@ import {
 export const SOURCE_CENSUS_IGNORE_POLICY_V1 = Object.freeze({
   generatedCacheAllowlistPrefixes: [
     "app_data/",
-    "presentation-export/",
+    "presentation-export/.installed-version",
+    "presentation-export/index.cjs",
+    "presentation-export/node_modules/",
+    "presentation-export/py/",
     "servers/fastapi/.venv/",
     "servers/fastapi/presenton_backend.egg-info/",
     "servers/nextjs/.next/",
@@ -25,7 +28,12 @@ export const SOURCE_CENSUS_IGNORE_POLICY_V1 = Object.freeze({
     "servers/nextjs/node_modules/",
   ],
   generatedIgnoredDirectoryNames: ["__pycache__"],
-  ignoredAllowlist: [".pytest_cache", ".ruff_cache", "servers/fastapi/.pytest_cache", "servers/fastapi/.ruff_cache"],
+  ignoredAllowlist: [".pytest_cache", ".ruff_cache", "presentation-export/index.js", "servers/fastapi/.pytest_cache", "servers/fastapi/.ruff_cache"],
+  runtimeExecutionPins: [
+    { runtimeId: "presentation-export-entrypoint", selectionRule: "run-bundled-presentation-export:index.cjs-first", selectedPath: "presentation-export/index.cjs" },
+    { runtimeId: "presentation-export-installed-version", selectionRule: "sync-presentation-export:installed-version-marker", selectedPath: "presentation-export/.installed-version" },
+    { runtimeId: "presentation-export-win32-x64-converter", selectionRule: "presentation-export:platform=win32,arch=x64", selectedPath: "presentation-export/py/convert-win32-x64.exe" },
+  ],
 });
 
 export function captureBoundedSourceCensus(repoRoot) {

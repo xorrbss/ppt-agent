@@ -287,10 +287,10 @@ $nextEnvironment["AUTHORED_VNEXT_RENDERER_ENABLED"] = "true"
 $nextEnvironment["PRESENTON_TEST_NEXT_DIST_DIR"] = $nextDistDirectoryName
 $nextEnvironment["CYPRESS_BASE_URL"] = $proxyUrl
 $nextEnvironment["WORKSPACE_LIVE_BACKEND"] = $fastApiUrl
-$boundedNativeMode = [Environment]::GetEnvironmentVariable("AUTHORED_HYBRID_BOUNDED_NATIVE_MODE")
-if (-not [string]::IsNullOrWhiteSpace($boundedNativeMode)) {
-    $nextEnvironment["AUTHORED_HYBRID_BOUNDED_NATIVE_MODE"] = $boundedNativeMode
-}
+# Bounded Hybrid v3 has no Gate -1-qualified native subset.  Do not inherit
+# this from the parent environment: an absent or misspelled value must remain
+# raster-only and must match the Gate 1 runtime pin.
+$nextEnvironment["AUTHORED_HYBRID_BOUNDED_NATIVE_MODE"] = "raster-only"
 
 $proxyEnvironment = @{
     "FASTAPI_PORT" = [string]$FastApiPort

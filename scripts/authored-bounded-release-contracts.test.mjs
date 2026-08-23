@@ -82,6 +82,12 @@ test("Gate 1 server readback authority and sealed digest cascade are exact", () 
     executionNonceRequired: true,
   });
   assert.deepEqual(manifest.runtimePinsRequiredBeforeExecution, manifestSchema.properties.runtimePinsRequiredBeforeExecution.const);
+  assert.equal(manifest.boundedNativeMode, "raster-only");
+  assert.equal(manifestSchema.properties.boundedNativeMode.const, manifest.boundedNativeMode);
+  assert.ok(manifest.runtimePinsRequiredBeforeExecution.includes("boundedNativeMode"));
+  const schemaWithoutBoundedMode = structuredClone(manifestSchema);
+  schemaWithoutBoundedMode.properties.runtimePinsRequiredBeforeExecution.const = schemaWithoutBoundedMode.properties.runtimePinsRequiredBeforeExecution.const.filter((key) => key !== "boundedNativeMode");
+  assert.notDeepEqual(manifest.runtimePinsRequiredBeforeExecution, schemaWithoutBoundedMode.properties.runtimePinsRequiredBeforeExecution.const);
   assert.ok(manifest.runtimePinsRequiredBeforeExecution.includes("executionNonce"));
   assert.equal(validator.contractDigest, canonicalSha256Excluding(validator, ["$.contractDigest"]));
   assert.equal(manifest.manifestDigest, canonicalSha256Excluding(manifest, ["$.manifestDigest"]));
@@ -103,7 +109,7 @@ test("SourceTreeCensusV1 separates index, tracked, untracked and reviewed ignore
     git("config", "user.email", "test@example.invalid");
     git("config", "user.name", "test");
     fs.writeFileSync(path.join(root, "tracked.txt"), "base\n");
-    fs.writeFileSync(path.join(root, ".gitignore"), "cache/\nignoredpkg/\n");
+    fs.writeFileSync(path.join(root, ".gitignore"), "cache/\nignoredpkg/\nruntime/\n");
     fs.mkdirSync(path.join(root, "tracked", "__pycache__"), { recursive: true });
     fs.writeFileSync(path.join(root, "tracked", "__pycache__", "tracked.pyc"), "tracked runtime\n");
     fs.mkdirSync(path.join(root, "cache"));
@@ -118,12 +124,14 @@ test("SourceTreeCensusV1 separates index, tracked, untracked and reviewed ignore
     git("add", "staged.txt");
     fs.writeFileSync(path.join(root, "untracked.txt"), "untracked\n");
     fs.writeFileSync(path.join(root, "cache", "generated.bin"), "cache\n");
+    fs.mkdirSync(path.join(root, "runtime"));
+    fs.writeFileSync(path.join(root, "runtime", "index.js"), "runtime bytes\n");
     fs.mkdirSync(path.join(root, "ignoredpkg", "nested", "__pycache__"), { recursive: true });
     fs.writeFileSync(path.join(root, "ignoredpkg", "nested", "__pycache__", "compiled.pyc"), "ignored runtime\n");
     fs.mkdirSync(path.join(root, "untracked", "__pycache__"), { recursive: true });
     fs.writeFileSync(path.join(root, "untracked", "__pycache__", "source.py"), "untracked source\n");
     assert.throws(() => captureSourceTreeCensus(root), /ignored-path-not-allowlisted/);
-    const censusOptions = { generatedCacheAllowlistPrefixes: ["cache/"], generatedIgnoredDirectoryNames: ["__pycache__"] };
+    const censusOptions = { generatedCacheAllowlistPrefixes: ["cache/"], generatedIgnoredDirectoryNames: ["__pycache__"], ignoredAllowlist: ["runtime/index.js"] };
     const opening = captureSourceTreeCensus(root, censusOptions);
     fs.writeFileSync(path.join(root, "cache", "generated.bin"), "cache bytes changed\n");
     const closing = captureSourceTreeCensus(root, censusOptions);
@@ -133,6 +141,7 @@ test("SourceTreeCensusV1 separates index, tracked, untracked and reviewed ignore
     assert.equal(opening.trackedModifiedPathDigests.some((entry) => entry.path === "tracked.txt"), true);
     assert.equal(opening.untrackedPathDigests.some((entry) => entry.path === "untracked.txt"), true);
     assert.equal(opening.ignoredAllowlistPathDigests.some((entry) => entry.path === "cache/generated.bin"), false);
+    assert.equal(opening.ignoredAllowlistPathDigests.some((entry) => entry.path === "runtime/index.js"), true);
     assert.deepEqual(opening.generatedCacheObservedPathSet, ["cache/generated.bin", "ignoredpkg/nested/__pycache__/compiled.pyc"]);
     assert.equal(opening.generatedIgnoredDirectoryNames.includes("__pycache__"), true);
     assert.equal(opening.untrackedPathDigests.some((entry) => entry.path === "untracked/__pycache__/source.py"), true);
@@ -145,9 +154,53 @@ test("SourceTreeCensusV1 separates index, tracked, untracked and reviewed ignore
     assert.notEqual(opening.generatedCacheObservedPathSetDigest, changedCachePathSet.generatedCacheObservedPathSetDigest);
     assert.equal(opening.censusDigest, changedCachePathSet.censusDigest);
     assertSourceTreeCensusUnchanged(opening, changedCachePathSet);
+    fs.writeFileSync(path.join(root, "runtime", "index.js"), "changed runtime bytes\n");
+    assert.throws(() => assertSourceTreeCensusUnchanged(opening, captureSourceTreeCensus(root, censusOptions)), /source-census-changed/);
+    fs.writeFileSync(path.join(root, "runtime", "index.js"), "runtime bytes\n");
     assert.throws(() => assertSourceTreeCensusUnchanged(opening, captureSourceTreeCensus(root, { ...censusOptions, generatedCacheAllowlistPrefixes: ["cache/", "other-cache/"] })), /source-census-changed/);
     fs.writeFileSync(path.join(root, "tracked.txt"), "tracked changed\n");
     assert.throws(() => assertSourceTreeCensusUnchanged(opening, captureSourceTreeCensus(root, censusOptions)), /source-census-changed/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("SourceTreeCensusV1 pins selected presentation-export runtime bytes and selection", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "authored-runtime-census-"));
+  try {
+    const git = (...args) => execFileSync("git", ["-C", root, ...args], { stdio: "ignore" });
+    git("init", "-q");
+    git("config", "user.email", "test@example.invalid");
+    git("config", "user.name", "test");
+    fs.writeFileSync(path.join(root, ".gitignore"), "presentation-export/\n");
+    fs.writeFileSync(path.join(root, "source.txt"), "source\n");
+    git("add", ".");
+    git("commit", "-qm", "base");
+    fs.mkdirSync(path.join(root, "presentation-export", "py"), { recursive: true });
+    const runtimeFiles = {
+      "presentation-export/index.cjs": Buffer.from("entrypoint-v1\n"),
+      "presentation-export/.installed-version": Buffer.from("v0.4.8\n"),
+      "presentation-export/py/convert-win32-x64.exe": Buffer.from([0x4d, 0x5a, 0x01, 0x02]),
+    };
+    for (const [relativePath, bytes] of Object.entries(runtimeFiles)) fs.writeFileSync(path.join(root, relativePath), bytes);
+    const runtimeExecutionPins = [
+      { runtimeId: "entrypoint", selectionRule: "index.cjs-first", selectedPath: "presentation-export/index.cjs" },
+      { runtimeId: "installed-version", selectionRule: "installed-version-marker", selectedPath: "presentation-export/.installed-version" },
+      { runtimeId: "win32-x64-converter", selectionRule: "platform=win32,arch=x64", selectedPath: "presentation-export/py/convert-win32-x64.exe" },
+    ];
+    const options = { generatedCacheAllowlistPrefixes: ["presentation-export/"], runtimeExecutionPins };
+    const opening = captureSourceTreeCensus(root, options);
+    assert.equal(opening.runtimeExecutionPathDigests.length, 3);
+    assert.deepEqual(opening.runtimeExecutionPathDigests.map((entry) => entry.selectedPath).sort(), Object.keys(runtimeFiles).sort());
+    for (const [relativePath, originalBytes] of Object.entries(runtimeFiles)) {
+      fs.writeFileSync(path.join(root, relativePath), Buffer.concat([originalBytes, Buffer.from("mutation")]));
+      assert.notEqual(captureSourceTreeCensus(root, options).censusDigest, opening.censusDigest, relativePath);
+      fs.writeFileSync(path.join(root, relativePath), originalBytes);
+    }
+    const changedSelection = structuredClone(runtimeExecutionPins);
+    changedSelection[0].selectionRule = "index.js-fallback";
+    assert.notEqual(captureSourceTreeCensus(root, { ...options, runtimeExecutionPins: changedSelection }).censusDigest, opening.censusDigest);
+    assert.throws(() => captureSourceTreeCensus(root, { ...options, runtimeExecutionPins: [{ runtimeId: "escape", selectionRule: "invalid", selectedPath: "../outside.exe" }] }), /runtime-execution-pins-invalid/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

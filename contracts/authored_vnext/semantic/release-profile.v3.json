@@ -21,7 +21,6 @@
   "promotionReadinessFields": [
     "deckEvidenceReady",
     "serializerProfileReady",
-    "nativeSubsetReady",
     "releaseCommitReady"
   ],
   "deckEvidenceCapabilityIds": [
@@ -31,12 +30,7 @@
     "layout.flex",
     "layout.grid",
     "layout.transform",
-    "receipt.chart",
-    "receipt.cjk",
     "receipt.degradation",
-    "receipt.imageCrop",
-    "receipt.table",
-    "receipt.zBand",
     "renderer.attestation",
     "shape.borderRadius",
     "shape.clip",
@@ -44,13 +38,14 @@
     "shape.opacity",
     "shape.shadow"
   ],
-  "nativeSubsetCapabilityIds": [
+  "nativeSubsetStatus": "notApplicable",
+  "nativeSubsetCapabilityIds": [],
+  "unsupportedNativeCapabilityIds": [
     "receipt.chart",
     "receipt.cjk",
     "receipt.imageCrop",
     "receipt.table",
-    "receipt.zBand",
-    "renderer.attestation"
+    "receipt.zBand"
   ],
   "releaseCommitCapabilityIds": [
     "ci.requiredChecks"
@@ -61,12 +56,7 @@
     "layout.flex",
     "layout.grid",
     "layout.transform",
-    "receipt.chart",
-    "receipt.cjk",
     "receipt.degradation",
-    "receipt.imageCrop",
-    "receipt.table",
-    "receipt.zBand",
     "renderer.attestation",
     "shape.borderRadius",
     "shape.clip",

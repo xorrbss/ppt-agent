@@ -80,6 +80,11 @@ const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
 const HYBRID_DECK_BUDGET_MS = 15 * 60_000;
 const HYBRID_CACHE_VERSION = "authored-hybrid-v16-bounded-release-raster-fallback";
 const HYBRID_RESULT_CACHE_LIMIT = 24;
+// The bounded-release v3 contract has no Gate -1-qualified native subset.
+// Keep this code-path authoritative instead of making it conditional on an
+// operator-provided environment value: a missing or misspelled value must not
+// turn the bounded release into a native export.
+const BOUNDED_RELEASE_NATIVE_MODE = "raster-only";
 const HYBRID_EXPORT_CONCURRENCY = parseBoundedPositiveInt(
   process.env.AUTHORED_HYBRID_CONCURRENCY,
   resolveHybridExportConcurrencyDefault(),
@@ -88,7 +93,7 @@ const HYBRID_EXPORT_CONCURRENCY = parseBoundedPositiveInt(
 );
 
 function boundedReleaseRasterOnly(): boolean {
-  return process.env.AUTHORED_HYBRID_BOUNDED_NATIVE_MODE?.trim().toLowerCase() === "raster-only";
+  return BOUNDED_RELEASE_NATIVE_MODE === "raster-only";
 }
 
 interface CompletedHybridExport {

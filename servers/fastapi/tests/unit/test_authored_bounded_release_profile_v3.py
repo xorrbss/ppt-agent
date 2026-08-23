@@ -62,7 +62,9 @@ def _projection(**updates) -> BoundedHybridReleaseReadinessV3:
         "expires_at": now + timedelta(days=1),
         "deck_evidence_ready": True,
         "serializer_profile_ready": True,
-        "native_subset_ready": True,
+        "native_subset_status": definition["nativeSubsetStatus"],
+        "unsupported_native_capability_ids": definition["unsupportedNativeCapabilityIds"],
+        "native_subset_ready": False,
         "release_commit_ready": True,
         "deck_evidence_receipt_digests": receipt_list(
             "deckEvidenceCapabilityIds"
@@ -70,9 +72,7 @@ def _projection(**updates) -> BoundedHybridReleaseReadinessV3:
         "serializer_profile_receipt_digests": receipt_list(
             "serializerProfileCapabilityIds"
         ),
-        "native_subset_receipt_digests": receipt_list(
-            "nativeSubsetCapabilityIds"
-        ),
+        "native_subset_receipt_digests": [],
         "release_commit_receipt_digests": receipt_list(
             "releaseCommitCapabilityIds"
         ),
@@ -97,7 +97,6 @@ def test_bounded_release_v3_formula_and_v2_side_by_side_compatibility() -> None:
     assert definition.promotion_readiness_fields == [
         "deckEvidenceReady",
         "serializerProfileReady",
-        "nativeSubsetReady",
         "releaseCommitReady",
     ]
     assert definition.platform_scope.archetypes == [
@@ -116,8 +115,10 @@ def test_bounded_release_v3_formula_and_v2_side_by_side_compatibility() -> None:
         definition.visual_evidence_policy.required_archetypes
         == definition.platform_scope.archetypes
     )
-    assert set(definition.native_subset_capability_ids).issubset(
-        definition.serializer_profile_capability_ids
+    assert definition.native_subset_status == "notApplicable"
+    assert definition.native_subset_capability_ids == []
+    assert set(definition.unsupported_native_capability_ids).isdisjoint(
+        definition.all_required_capability_ids
     )
     assert set(definition.all_required_capability_ids) == set().union(
         definition.deck_evidence_capability_ids,
@@ -140,7 +141,6 @@ def test_bounded_release_v3_formula_and_v2_side_by_side_compatibility() -> None:
     for field, receipts_field in (
         ("deck_evidence_ready", "deck_evidence_receipt_digests"),
         ("serializer_profile_ready", "serializer_profile_receipt_digests"),
-        ("native_subset_ready", "native_subset_receipt_digests"),
         ("release_commit_ready", "release_commit_receipt_digests"),
     ):
         with pytest.raises(
@@ -163,14 +163,8 @@ def test_bounded_release_v3_formula_and_v2_side_by_side_compatibility() -> None:
                 )
             ]
         )
-    blocked = _projection(
-        native_subset_ready=False,
-        native_subset_receipt_digests=[],
-        promotion_ready=False,
-        promotion_receipt_digests=[],
-        reason_code="readiness_incomplete",
-    )
-    assert blocked.promotion_ready is False
+    with pytest.raises(ValidationError, match="authored_release_v3_native_subset_not_applicable"):
+        _projection(native_subset_ready=True)
 
     # Compatibility strategy: version dispatch remains explicit and side by
     # side. V2 keeps its own model/wire schema; V3 never consumes or derives
@@ -220,9 +214,9 @@ def test_direct_export_authority_uses_v3_mode_claims_not_deployment() -> None:
     assert projection.release_profile.deployment_authorized is False
     assert hybrid["schemaVersion"] == "authored-export-release-authority-pin/v3"
     assert hybrid["state"] == "ready"
-    assert hybrid["kind"] == "boundedNative"
+    assert hybrid["kind"] == "promotion"
     assert hybrid["claim"]["receiptDigests"] == (
-        projection.release_profile.native_subset_receipt_digests
+        projection.release_profile.promotion_receipt_digests
     )
     assert fidelity["state"] == "ready"
     assert fidelity["kind"] == "promotion"

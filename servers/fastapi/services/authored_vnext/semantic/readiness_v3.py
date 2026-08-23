@@ -338,7 +338,10 @@ async def get_workbench_capability_projection_v3(
     )
     deck_ready, deck_pins = _receipt_pins(definition.deck_evidence_capability_ids, ready_by_capability)
     serializer_ready, serializer_pins = _receipt_pins(definition.serializer_profile_capability_ids, ready_by_capability)
-    native_ready, native_pins = _receipt_pins(definition.native_subset_capability_ids, ready_by_capability)
+    # Bounded release v3 is Fidelity/raster-only until a future profile seals a
+    # native subset.  Empty native capabilities are N/A, never an implicit
+    # native-ready claim.
+    native_ready, native_pins = False, []
     commit_ready, commit_pins = _receipt_pins(definition.release_commit_capability_ids, ready_by_capability)
     deck_ready = deck_ready and not degraded_fidelity_only
     if not deck_ready:
@@ -378,7 +381,6 @@ async def get_workbench_capability_projection_v3(
     promotion_ready = bool(
         deck_ready
         and serializer_ready
-        and native_ready
         and commit_ready
         and not blockers
         and not any(item.active for item in readiness_switches)
@@ -394,7 +396,7 @@ async def get_workbench_capability_projection_v3(
     expires_at = min(expiries) if expiries else evaluated_at + timedelta(minutes=1)
     reason_code = (
         "readiness_incomplete"
-        if not all((deck_ready, serializer_ready, native_ready, commit_ready))
+        if not all((deck_ready, serializer_ready, commit_ready))
         else (
             "release_blocked"
             if blockers
@@ -410,7 +412,9 @@ async def get_workbench_capability_projection_v3(
         platform_scope=definition.platform_scope,
         deck_evidence_capability_ids=definition.deck_evidence_capability_ids,
         serializer_profile_capability_ids=(definition.serializer_profile_capability_ids),
+        native_subset_status=definition.native_subset_status,
         native_subset_capability_ids=definition.native_subset_capability_ids,
+        unsupported_native_capability_ids=definition.unsupported_native_capability_ids,
         release_commit_capability_ids=definition.release_commit_capability_ids,
         all_required_capability_ids=definition.all_required_capability_ids,
         profile_definition_digest=target.profile_definition_digest,

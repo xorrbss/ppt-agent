@@ -8,6 +8,7 @@
   "releaseProfileId": "release-profile.v3",
   "evidencePolicyId": "authored-evidence-policy/v2-frozen-20260824-attempt09-build20326",
   "evidencePolicyDigest": "sha256:2fd68afb7e40a6cffe36e9bdf8a099f480b492ddeff110159dbf4d934f1da6c5",
+  "boundedNativeMode": "raster-only",
   "serverReadbackAuthority": {
     "signerKeyId": "authored-release-readback-v3-20260823",
     "publicKeyDigest": "sha256:4e757e6f367fda82dc57b42d952d6d7bd5a75de53b4cff806f7434eb54e75f87",
@@ -27,6 +28,7 @@
     "sourceHeadCommit",
     "fidelityExportAttemptId",
     "hybridExportAttemptId",
+    "boundedNativeMode",
     "environmentAttestationDigest",
     "workerAttestationDigest",
     "sourceTreeIgnoredAllowlistPolicyDigest",
@@ -222,10 +224,10 @@
   },
   "resultEnvelopeContract": {
     "schemaId": "urn:presenton:authored:gate1-result-set:v1",
-    "semanticValidatorContractDigest": "sha256:60194bfd885927ccdd8b999fa0d1ff5e837ff19573beed5bbe6fffe966647ab3",
-    "requiredFields": ["schemaVersion", "manifestDigest", "semanticValidatorContractDigest", "requiredPhaseIdsDigest", "requiredArtifactIdsDigest", "evidencePolicyDigest", "gateMinus1ManifestDigest", "gateMinus1ResultSetDigest", "gateMinus1SemanticValidationReceiptArtifactDigest", "gateMinus1SemanticValidatorContractDigest", "suiteStatus", "executedPhaseCount", "acceptedPhaseCount", "blockedPhaseCount", "failedPhaseCount", "notVerifiedPhaseCount", "skippedPhaseCount", "missingPhaseIds", "duplicatePhaseIds", "unexpectedPhaseIds", "orderedResults", "artifactInventory", "artifactInventoryDigestProjection", "artifactInventoryDigest", "ledgerCellCount", "ledgerDigest", "semanticValidation", "resultCoreDigestProjection", "resultCoreDigest", "semanticValidationReceiptRef", "digestProjection", "resultSetDigest"],
-    "semanticValidatorRules": ["ordered phase IDs exactly equal the sealed 37-ID manifest set", "accepted state requires empty missing duplicate and unexpected arrays and no non-accepted ordered result", "artifactId values are unique and exactly equal the sealed 70-ID set", "every artifact binds immutable versionId sha256 byteLength and mediaType and is re-fetched and re-hashed", "ledger contains exactly the sealed 384 unique slide export-mode COM-phase defect-field cells", "evidence policy digest equals the sealed manifest and active policy", "corrected Gate -1 feasible result and its signed receipt artifact equal all four runtime pins", "receipt subjectManifestDigest equals manifestDigest", "receipt subjectResultCoreDigest equals resultCoreDigest", "receipt semanticValidatorContractDigest equals the pinned Gate1 validator contract digest", "signed immutable semantic validation receipt binds issuer key nonce freshness artifact inventory ledger and policy"]
+    "semanticValidatorContractDigest": "sha256:cd08b4def1069609696d66653f12eae23e1aaf94f7bca5169275c4c61a22f909",
+    "requiredFields": ["schemaVersion", "manifestDigest", "semanticValidatorContractDigest", "requiredPhaseIdsDigest", "requiredArtifactIdsDigest", "evidencePolicyDigest", "boundedNativeMode", "gateMinus1ManifestDigest", "gateMinus1ResultSetDigest", "gateMinus1SemanticValidationReceiptArtifactDigest", "gateMinus1SemanticValidatorContractDigest", "suiteStatus", "executedPhaseCount", "acceptedPhaseCount", "blockedPhaseCount", "failedPhaseCount", "notVerifiedPhaseCount", "skippedPhaseCount", "missingPhaseIds", "duplicatePhaseIds", "unexpectedPhaseIds", "orderedResults", "artifactInventory", "artifactInventoryDigestProjection", "artifactInventoryDigest", "ledgerCellCount", "ledgerDigest", "semanticValidation", "resultCoreDigestProjection", "resultCoreDigest", "semanticValidationReceiptRef", "digestProjection", "resultSetDigest"],
+    "semanticValidatorRules": ["ordered phase IDs exactly equal the sealed 37-ID manifest set", "accepted state requires empty missing duplicate and unexpected arrays and no non-accepted ordered result", "artifactId values are unique and exactly equal the sealed 70-ID set", "every artifact binds immutable versionId sha256 byteLength and mediaType and is re-fetched and re-hashed", "ledger contains exactly the sealed 384 unique slide export-mode COM-phase defect-field cells", "bounded native mode equals sealed raster-only runtime pin and fresh environment evidence", "evidence policy digest equals the sealed manifest and active policy", "corrected Gate -1 feasible result and its signed receipt artifact equal all four runtime pins", "receipt subjectManifestDigest equals manifestDigest", "receipt subjectResultCoreDigest equals resultCoreDigest", "receipt semanticValidatorContractDigest equals the pinned Gate1 validator contract digest", "signed immutable semantic validation receipt binds issuer key nonce freshness artifact inventory ledger and policy"]
   },
   "digestProjection": { "algorithm": "sha256", "canonicalProfileId": "presenton-canonical-json/v2", "includedJsonPath": "$", "excludedJsonPaths": ["$.manifestDigest"] },
-  "manifestDigest": "sha256:da8c3bd9d70b7b255c4eed5bc75e304fcfd5430514b067ee8ae8e0ed594f78e2"
+  "manifestDigest": "sha256:3bed91df4cef576c95ca9ff5a194774840c0aca8f80c03f12d60bbd6e1260841"
 }

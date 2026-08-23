@@ -19,6 +19,33 @@ function Get-Sha256Text([string]$Value) {
   "sha256:" + (($hash | ForEach-Object { $_.ToString("x2") }) -join "")
 }
 
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public static class PresentonPowerPointApplicationWindowIdentity {
+  [DllImport("user32.dll")]
+  private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
+  public static int ProcessId(long hwnd) {
+    if (hwnd == 0) return 0;
+    uint processId;
+    GetWindowThreadProcessId(new IntPtr(hwnd), out processId);
+    return (int)processId;
+  }
+}
+'@
+
+function Get-PowerPointApplicationIdentity($Application) {
+  $hwnd = [int64]$Application.HWND
+  $processId = [PresentonPowerPointApplicationWindowIdentity]::ProcessId($hwnd)
+  if ($hwnd -eq 0 -or $processId -eq 0) {
+    return $null
+  }
+  [PSCustomObject]@{
+    Hwnd = $hwnd
+    ProcessId = [int]$processId
+  }
+}
+
 function Get-PowerPointProcessCensus {
   @(
     Get-CimInstance Win32_Process -Filter "Name = 'POWERPNT.EXE'" |
@@ -76,9 +103,9 @@ function Read-SemanticOwnershipAlternativeText(
   }
 }
 
-function Start-PowerPointWindowObserver([string]$StopSignalPath) {
-  Start-Job -ArgumentList $StopSignalPath -ScriptBlock {
-    param([string]$StopPath)
+function Start-PowerPointWindowObserver([string]$StopSignalPath, [string]$ReadySignalPath, [string]$EpochId) {
+  Start-Job -ArgumentList $StopSignalPath, $ReadySignalPath, $EpochId -ScriptBlock {
+    param([string]$StopPath, [string]$ReadyPath, [string]$ObserverEpochId)
     Add-Type @'
 using System;
 using System.Collections.Generic;
@@ -118,8 +145,26 @@ public static class PresentonPowerPointWindowCensus {
 }
 '@
     $observed = @{}
+    $observedProcesses = @{}
+    Set-Content -LiteralPath $ReadyPath -Value "ready" -Encoding ascii
     while (-not (Test-Path -LiteralPath $StopPath)) {
       $now = (Get-Date).ToUniversalTime().ToString("o")
+      foreach ($process in [Diagnostics.Process]::GetProcessesByName("POWERPNT")) {
+        $key = [string]$process.Id
+        if ($observedProcesses.ContainsKey($key)) {
+          $observedProcesses[$key].LastSeenAt = $now
+          $observedProcesses[$key].ObservationCount += 1
+        } else {
+          $observedProcesses[$key] = [PSCustomObject]@{
+            EpochId = $ObserverEpochId
+            ProcessId = [int]$process.Id
+            FirstSeenAt = $now
+            LastSeenAt = $now
+            ObservationCount = 1
+          }
+        }
+        $process.Dispose()
+      }
       foreach ($window in [PresentonPowerPointWindowCensus]::Snapshot()) {
         $key = [string]$window.Hwnd
         if ($observed.ContainsKey($key)) {
@@ -128,6 +173,7 @@ public static class PresentonPowerPointWindowCensus {
           $observed[$key].Title = [string]$window.Title
         } else {
           $observed[$key] = [PSCustomObject]@{
+            EpochId = $ObserverEpochId
             Hwnd = [int64]$window.Hwnd
             ProcessId = [int]$window.ProcessId
             OwnerHwnd = [int64]$window.OwnerHwnd
@@ -143,8 +189,81 @@ public static class PresentonPowerPointWindowCensus {
       }
       Start-Sleep -Milliseconds 100
     }
-    @($observed.Values | Sort-Object ProcessId, Hwnd)
+    [PSCustomObject]@{
+      EpochId = $ObserverEpochId
+      Processes = @($observedProcesses.Values | Sort-Object ProcessId)
+      Windows = @($observed.Values | Sort-Object ProcessId, Hwnd)
+    }
   }
+}
+
+function Wait-PowerPointWindowObserverReady([string]$ReadySignalPath) {
+  $deadline = (Get-Date).AddSeconds(10)
+  while (-not (Test-Path -LiteralPath $ReadySignalPath) -and (Get-Date) -lt $deadline) {
+    Start-Sleep -Milliseconds 50
+  }
+  if (-not (Test-Path -LiteralPath $ReadySignalPath)) {
+    throw "PowerPoint attended observer did not become ready before launch."
+  }
+}
+
+function Stop-PowerPointWindowObserverEpoch($Observer, [string]$StopSignalPath, [string]$EpochId) {
+  Set-Content -LiteralPath $StopSignalPath -Value "stop" -Encoding ascii
+  Wait-Job -Job $Observer -Timeout 10 | Out-Null
+  if ($Observer.State -ne "Completed") {
+    throw "PowerPoint attended window observer did not stop normally."
+  }
+  $result = @(Receive-Job -Job $Observer)
+  Remove-Job -Job $Observer
+  if ($result.Count -ne 1 -or [string]$result[0].EpochId -ne $EpochId) {
+    throw "PowerPoint attended observer returned an invalid epoch envelope."
+  }
+  $result[0]
+}
+
+function Get-UnexpectedPowerPointObservation(
+  [int]$ExpectedProcessId,
+  [object[]]$Processes,
+  [object[]]$Windows
+) {
+  $unexpectedProcesses = @($Processes | Where-Object { [int]$_.ProcessId -ne $ExpectedProcessId })
+  $unexpectedWindows = @($Windows | Where-Object { [int]$_.ProcessId -ne $ExpectedProcessId })
+  $unexpectedProcessIds = @(
+    @($unexpectedProcesses | ForEach-Object { $_.ProcessId }) +
+      @($unexpectedWindows | ForEach-Object { $_.ProcessId }) |
+      Where-Object { [int]$_ -gt 0 } |
+      Sort-Object -Unique
+  )
+  [PSCustomObject]@{
+    UnexpectedPowerPointProcessCount = $unexpectedProcessIds.Count
+    UnexpectedPowerPointProcessIds = $unexpectedProcessIds
+    UnexpectedProcesses = $unexpectedProcesses
+    UnexpectedWindows = $unexpectedWindows
+  }
+}
+
+function Get-PowerPointObserverEpochGuarantee(
+  $Observation,
+  [string]$ExpectedEpochId,
+  [int]$ExpectedProcessId,
+  [bool]$RequireWindow
+) {
+  $processes = @($Observation.Processes)
+  $windows = @($Observation.Windows)
+  if (
+    [string]$Observation.EpochId -ne $ExpectedEpochId -or
+    $processes.Count -eq 0 -or
+    @($processes | Where-Object { [string]$_.EpochId -ne $ExpectedEpochId }).Count -ne 0 -or
+    @($windows | Where-Object { [string]$_.EpochId -ne $ExpectedEpochId }).Count -ne 0 -or
+    ($RequireWindow -and $windows.Count -eq 0)
+  ) {
+    throw "PowerPoint observer epoch identity is invalid."
+  }
+  $guarantee = Get-UnexpectedPowerPointObservation $ExpectedProcessId $processes $windows
+  if ($guarantee.UnexpectedPowerPointProcessCount -ne 0) {
+    throw "PowerPoint observer epoch contains an unexpected process or window."
+  }
+  $guarantee
 }
 
 $powerPointPath = "C:\Program Files\Microsoft Office\root\Office16\POWERPNT.EXE"
@@ -179,23 +298,53 @@ if (
 
 $resolvedOutput = [System.IO.Path]::GetFullPath($OutputDirectory)
 [System.IO.Directory]::CreateDirectory($resolvedOutput) | Out-Null
-$launched = Start-Process -FilePath $powerPointPath -ArgumentList "/safe" -WindowStyle Hidden -PassThru
+$launched = $null
 $application = $null
+$applicationIdentity = $null
 $attachedAt = $null
 $activationMethod = "safe-mode-running-object-table"
 $windowObserver = $null
+$observerEpochId = [guid]::NewGuid().ToString("D")
 $windowStopSignal = Join-Path $resolvedOutput (".powerpoint-window-observer-" + [guid]::NewGuid().ToString("N") + ".stop")
+$windowReadySignal = Join-Path $resolvedOutput (".powerpoint-window-observer-" + [guid]::NewGuid().ToString("N") + ".ready")
+$discardedObserverEpochs = @()
 $windowEvents = @()
+$powerPointProcessEvents = @()
+$unexpectedPowerPointObservation = $null
 $report = $null
 try {
+  $windowObserver = Start-PowerPointWindowObserver $windowStopSignal $windowReadySignal $observerEpochId
+  Wait-PowerPointWindowObserverReady $windowReadySignal
+  $launched = Start-Process -FilePath $powerPointPath -ArgumentList "/safe" -WindowStyle Hidden -PassThru
   for ($attempt = 0; $attempt -lt 40 -and $null -eq $application; $attempt += 1) {
     Start-Sleep -Milliseconds 500
+    $candidate = $null
     try {
-      $application = [Runtime.InteropServices.Marshal]::GetActiveObject(
+      $candidate = [Runtime.InteropServices.Marshal]::GetActiveObject(
         "PowerPoint.Application"
       )
+      $candidateIdentity = Get-PowerPointApplicationIdentity $candidate
+      if ($null -eq $candidateIdentity) {
+        [Runtime.InteropServices.Marshal]::FinalReleaseComObject($candidate) | Out-Null
+        $candidate = $null
+        continue
+      }
+      if ($candidateIdentity.ProcessId -ne [int]$launched.Id) {
+        [Runtime.InteropServices.Marshal]::FinalReleaseComObject($candidate) | Out-Null
+        $candidate = $null
+        throw "PowerPoint ROT application HWND belongs to a process other than the launched process."
+      }
+      $application = $candidate
+      $applicationIdentity = $candidateIdentity
       $attachedAt = Get-Date
     } catch {
+      if ($null -ne $candidate) {
+        [Runtime.InteropServices.Marshal]::FinalReleaseComObject($candidate) | Out-Null
+        $candidate = $null
+      }
+      if ($_.Exception.Message -match "ROT application HWND") {
+        throw
+      }
       # PowerPoint registers its automation object after startup completes.
     }
   }
@@ -203,6 +352,7 @@ try {
     # Some Click-to-Run builds start /safe successfully but never publish that
     # process to the Running Object Table. Shut down only our exact process and
     # use COM activation, which still launches a fresh isolated POWERPNT.EXE.
+    $safeModeProcessId = [int]$launched.Id
     if (-not $launched.HasExited) {
       Stop-Process -Id $launched.Id -Force
       Wait-Process -Id $launched.Id -Timeout 10 -ErrorAction SilentlyContinue
@@ -220,6 +370,29 @@ try {
     if ($remainingPowerPoint.Count -ne 0) {
       throw "Safe-mode PowerPoint did not fully exit before COM activation."
     }
+    $discardedObservation = Stop-PowerPointWindowObserverEpoch `
+      $windowObserver $windowStopSignal $observerEpochId
+    $windowObserver = $null
+    $discardedGuarantee = Get-PowerPointObserverEpochGuarantee `
+      $discardedObservation $observerEpochId $safeModeProcessId $false
+    $discardedObserverEpochs += [PSCustomObject]@{
+      EpochId = $observerEpochId
+      Reason = "safe-mode-rot-unavailable"
+      ExpectedProcessId = $safeModeProcessId
+      ObservedProcessIds = @($discardedObservation.Processes.ProcessId | Sort-Object -Unique)
+      UnexpectedPowerPointProcessCount = [int]$discardedGuarantee.UnexpectedPowerPointProcessCount
+      CleanupConfirmed = $remainingPowerPoint.Count -eq 0
+    }
+    foreach ($signalPath in @($windowStopSignal, $windowReadySignal)) {
+      if (Test-Path -LiteralPath $signalPath) {
+        Remove-Item -LiteralPath $signalPath -Force
+      }
+    }
+    $observerEpochId = [guid]::NewGuid().ToString("D")
+    $windowStopSignal = Join-Path $resolvedOutput (".powerpoint-window-observer-" + [guid]::NewGuid().ToString("N") + ".stop")
+    $windowReadySignal = Join-Path $resolvedOutput (".powerpoint-window-observer-" + [guid]::NewGuid().ToString("N") + ".ready")
+    $windowObserver = Start-PowerPointWindowObserver $windowStopSignal $windowReadySignal $observerEpochId
+    Wait-PowerPointWindowObserverReady $windowReadySignal
     # Click-to-Run releases the COM class factory shortly after the process exits.
     Start-Sleep -Seconds 3
     $application = New-Object -ComObject "PowerPoint.Application"
@@ -236,7 +409,15 @@ try {
   }
 
   $application.Visible = -1
-  $windowObserver = Start-PowerPointWindowObserver $windowStopSignal
+  if ($null -eq $applicationIdentity) {
+    for ($identityAttempt = 0; $identityAttempt -lt 20 -and $null -eq $applicationIdentity; $identityAttempt += 1) {
+      $applicationIdentity = Get-PowerPointApplicationIdentity $application
+      if ($null -eq $applicationIdentity) { Start-Sleep -Milliseconds 250 }
+    }
+  }
+  if ($null -eq $applicationIdentity -or $applicationIdentity.ProcessId -ne [int]$launched.Id) {
+    throw "PowerPoint Application HWND/PID does not match the launched process."
+  }
   Start-Sleep -Milliseconds 500
   $results = @()
   for ($presentationOrdinal = 0; $presentationOrdinal -lt $Presentation.Count; $presentationOrdinal += 1) {
@@ -582,17 +763,13 @@ try {
     }
   }
 
-  Set-Content -LiteralPath $windowStopSignal -Value "stop" -Encoding ascii
-  Wait-Job -Job $windowObserver -Timeout 10 | Out-Null
-  if ($windowObserver.State -ne "Completed") {
-    throw "PowerPoint attended window observer did not stop normally."
-  }
-  $windowEvents = @(Receive-Job -Job $windowObserver)
-  Remove-Job -Job $windowObserver
+  $observerResult = Stop-PowerPointWindowObserverEpoch `
+    $windowObserver $windowStopSignal $observerEpochId
   $windowObserver = $null
-  if ($windowEvents.Count -eq 0) {
-    throw "PowerPoint attended window observer captured no actual window."
-  }
+  $windowEvents = @($observerResult.Windows)
+  $powerPointProcessEvents = @($observerResult.Processes)
+  $unexpectedPowerPointObservation = Get-PowerPointObserverEpochGuarantee `
+    $observerResult $observerEpochId $applicationIdentity.ProcessId $true
   $dialogEvents = @($windowEvents | Where-Object { $_.IsDialog -eq $true })
   if ($dialogEvents.Count -ne 0) {
     throw "PowerPoint attended window observer captured an unexpected dialog."
@@ -604,6 +781,20 @@ try {
   $report = [PSCustomObject]@{
     PowerPointVersion = [string]$application.Version
     LaunchedProcessId = [int]$launched.Id
+    AttachedApplicationHwnd = [int64]$applicationIdentity.Hwnd
+    AttachedApplicationProcessId = [int]$applicationIdentity.ProcessId
+    ObservedPowerPointProcesses = $powerPointProcessEvents
+    UnexpectedPowerPointProcessCount = [int]$unexpectedPowerPointObservation.UnexpectedPowerPointProcessCount
+    UnexpectedPowerPointProcessIds = $unexpectedPowerPointObservation.UnexpectedPowerPointProcessIds
+    UnexpectedPowerPointProcesses = $unexpectedPowerPointObservation.UnexpectedProcesses
+    UnexpectedPowerPointWindows = $unexpectedPowerPointObservation.UnexpectedWindows
+    ObserverEpoch = [PSCustomObject]@{
+      EpochId = $observerEpochId
+      ExpectedProcessId = [int]$applicationIdentity.ProcessId
+      ActivationMethod = $activationMethod
+      StartedBeforeActivation = $true
+    }
+    DiscardedObserverEpochs = $discardedObserverEpochs
     ActivationMethod = $activationMethod
     AttachedAt = $attachedAt.ToString("o")
     AttendedWindowEvents = $windowEvents
@@ -617,6 +808,11 @@ try {
       Wait-Job -Job $windowObserver -Timeout 5 | Out-Null
       Remove-Job -Job $windowObserver -Force -ErrorAction SilentlyContinue
     } catch {
+    }
+  }
+  foreach ($signalPath in @($windowStopSignal, $windowReadySignal)) {
+    if (Test-Path -LiteralPath $signalPath) {
+      Remove-Item -LiteralPath $signalPath -Force -ErrorAction SilentlyContinue
     }
   }
   if ($null -ne $application) {
@@ -694,6 +890,15 @@ if ($authorityPinsProvided) {
     presentationRevision = $PresentationRevision
     censusCompletedAt = (Get-Date).ToUniversalTime().ToString("o")
     openingProcesses = $openingProcessCensus
+    observedProcesses = $powerPointProcessEvents
+    observedWindows = $windowEvents
+    expectedApplicationProcessId = [int]$applicationIdentity.ProcessId
+    observerEpoch = $report.ObserverEpoch
+    discardedObserverEpochs = $discardedObserverEpochs
+    unexpectedPowerPointProcessCount = [int]$unexpectedPowerPointObservation.UnexpectedPowerPointProcessCount
+    unexpectedPowerPointProcessIds = $unexpectedPowerPointObservation.UnexpectedPowerPointProcessIds
+    unexpectedProcesses = $unexpectedPowerPointObservation.UnexpectedProcesses
+    unexpectedWindows = $unexpectedPowerPointObservation.UnexpectedWindows
     finalProcesses = $finalProcessCensus
     finalPowerPointProcessCount = $finalProcessCensus.Count
     modes = @(
@@ -702,7 +907,8 @@ if ($authorityPinsProvided) {
           mode = $ExportMode[$index]
           exportAttemptId = $ExportAttemptId[$index]
           launchedPowerPointProcessId = [int]$launched.Id
-          unexpectedPowerPointProcessCount = 0
+          unexpectedPowerPointProcessCount = [int]$unexpectedPowerPointObservation.UnexpectedPowerPointProcessCount
+          unexpectedPowerPointProcessIds = $unexpectedPowerPointObservation.UnexpectedPowerPointProcessIds
           cleanupConfirmed = $true
         }
       }
@@ -714,4 +920,7 @@ if ($authorityPinsProvided) {
 
 if (Test-Path -LiteralPath $windowStopSignal) {
   Remove-Item -LiteralPath $windowStopSignal -Force
+}
+if (Test-Path -LiteralPath $windowReadySignal) {
+  Remove-Item -LiteralPath $windowReadySignal -Force
 }

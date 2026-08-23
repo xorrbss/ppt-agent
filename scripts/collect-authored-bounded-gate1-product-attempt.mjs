@@ -77,10 +77,47 @@ function readbackPptx({ filePath, mode, state, pins, qids, repair }) {
     qids: [...qids].sort(), packagePartCount: names.length, slideFacts,
   };
 }
-function findPresentation(report, filename) {
-  const entries = report.Presentations; if (!Array.isArray(entries)) throw new Error("gate1-collector-com-report-presentations-invalid");
-  const result = entries.find((entry) => typeof entry.Path === "string" && path.basename(entry.Path).toLowerCase() === filename.toLowerCase());
-  if (!result) throw new Error(`gate1-collector-com-report-presentation-missing:${filename}`); return result;
+function expectedAttemptId(pins, mode) { return pins[`${mode}ExportAttemptId`]; }
+function validateObserverEpochGuarantee(report, launchedProcessId) {
+  const epoch = report.ObserverEpoch;
+  if (!epoch || typeof epoch.EpochId !== "string" || !epoch.EpochId || epoch.ExpectedProcessId !== launchedProcessId || epoch.ActivationMethod !== report.ActivationMethod || epoch.StartedBeforeActivation !== true) throw new Error("gate1-collector-com-report-observer-epoch-invalid");
+  if (report.ObservedPowerPointProcesses.some((entry) => entry?.EpochId !== epoch.EpochId) || report.AttendedWindowEvents.some((entry) => entry?.EpochId !== epoch.EpochId)) throw new Error("gate1-collector-com-report-observer-event-epoch-invalid");
+  const discarded = report.DiscardedObserverEpochs;
+  if (!Array.isArray(discarded)) throw new Error("gate1-collector-com-report-discarded-epochs-invalid");
+  if (report.ActivationMethod === "safe-mode-running-object-table") {
+    if (discarded.length !== 0) throw new Error("gate1-collector-com-report-discarded-epochs-invalid");
+  } else if (report.ActivationMethod === "com-create-instance") {
+    if (discarded.length !== 1) throw new Error("gate1-collector-com-report-discarded-epochs-invalid");
+    const old = discarded[0];
+    if (typeof old?.EpochId !== "string" || !old.EpochId || old.EpochId === epoch.EpochId || !Number.isInteger(old.ExpectedProcessId) || old.ExpectedProcessId < 1 || old.ExpectedProcessId === launchedProcessId || old.Reason !== "safe-mode-rot-unavailable" || !Array.isArray(old.ObservedProcessIds) || old.ObservedProcessIds.length !== 1 || old.ObservedProcessIds[0] !== old.ExpectedProcessId || old.UnexpectedPowerPointProcessCount !== 0 || old.CleanupConfirmed !== true) throw new Error("gate1-collector-com-report-discarded-epoch-binding-invalid");
+  } else throw new Error("gate1-collector-com-report-activation-method-invalid");
+  return epoch;
+}
+function validateComProcessGuarantee(report) {
+  const launchedProcessId = report?.LaunchedProcessId;
+  if (!Number.isInteger(launchedProcessId) || launchedProcessId < 1 || report.AttachedApplicationProcessId !== launchedProcessId || !Number.isInteger(report.AttachedApplicationHwnd) || report.AttachedApplicationHwnd === 0) throw new Error("gate1-collector-com-report-application-process-binding-invalid");
+  if (report.UnexpectedPowerPointProcessCount !== 0 || !Array.isArray(report.UnexpectedPowerPointProcessIds) || report.UnexpectedPowerPointProcessIds.length !== 0 || !Array.isArray(report.UnexpectedPowerPointProcesses) || report.UnexpectedPowerPointProcesses.length !== 0 || !Array.isArray(report.UnexpectedPowerPointWindows) || report.UnexpectedPowerPointWindows.length !== 0) throw new Error("gate1-collector-com-report-unexpected-process-guarantee-invalid");
+  if (!Array.isArray(report.PowerPointProcessCensusBefore) || report.PowerPointProcessCensusBefore.length !== 0 || !Array.isArray(report.PowerPointProcessCensusAfter) || report.PowerPointProcessCensusAfter.length !== 0) throw new Error("gate1-collector-com-report-opening-final-census-invalid");
+  if (!Array.isArray(report.ObservedPowerPointProcesses) || report.ObservedPowerPointProcesses.length !== 1 || report.ObservedPowerPointProcesses[0]?.ProcessId !== launchedProcessId) throw new Error("gate1-collector-com-report-observed-processes-invalid");
+  if (!Array.isArray(report.AttendedWindowEvents) || report.AttendedWindowEvents.length === 0 || report.AttendedWindowEvents.some((entry) => entry?.ProcessId !== launchedProcessId)) throw new Error("gate1-collector-com-report-observed-windows-invalid");
+  validateObserverEpochGuarantee(report, launchedProcessId);
+  return launchedProcessId;
+}
+function exactModeEntries(entries, pins, { label, modeKey, attemptKey, pathKey = null }) {
+  if (!Array.isArray(entries) || entries.length !== 2) throw new Error(`gate1-collector-${label}-cardinality-invalid`);
+  const result = {};
+  for (const mode of ["fidelity", "hybrid"]) {
+    const matches = entries.filter((entry) => entry?.[modeKey] === mode);
+    if (matches.length !== 1) throw new Error(`gate1-collector-${label}-mode-invalid:${mode}`);
+    const entry = matches[0];
+    if (entry[attemptKey] !== expectedAttemptId(pins, mode)) throw new Error(`gate1-collector-${label}-export-attempt-mismatch:${mode}`);
+    if (pathKey !== null) {
+      const filename = typeof entry[pathKey] === "string" ? path.basename(entry[pathKey]).toLowerCase() : "";
+      if (filename !== `${mode}-ui.pptx`) throw new Error(`gate1-collector-${label}-canonical-path-mismatch:${mode}`);
+    }
+    result[mode] = entry;
+  }
+  return result;
 }
 function pngs(directory) {
   const absolute = real(directory, "com-render-directory"); const result = new Map();
@@ -94,12 +131,23 @@ function pngs(directory) {
 }
 function repairObservation(value, pins) {
   if (!value || value.schemaVersion !== "authored-powerpoint-attended-repair-observation/v1" || value.authorityDomain !== "actual_product" || value.presentationId !== pins.presentationId || value.presentationRevision !== pins.presentationRevision || value.repairDialogObserved !== false || !Array.isArray(value.windowEvents) || value.windowEvents.length === 0) throw new Error("gate1-collector-attended-repair-observation-required");
+  exactModeEntries(value.presentations, pins, { label: "repair-presentation", modeKey: "mode", attemptKey: "exportAttemptId", pathKey: "path" });
   return value;
 }
 function processCensus(value, pins, mode) {
   if (!value || value.schemaVersion !== "authored-powerpoint-process-census/v1" || value.authorityDomain !== "actual_product" || value.presentationId !== pins.presentationId || value.presentationRevision !== pins.presentationRevision || !Array.isArray(value.modes)) throw new Error("gate1-collector-process-census-required");
-  const item = value.modes.find((entry) => entry.mode === mode && entry.unexpectedPowerPointProcessCount === 0 && entry.cleanupConfirmed === true);
-  if (!item) throw new Error(`gate1-collector-process-census-mode-required:${mode}`); return item;
+  const item = exactModeEntries(value.modes, pins, { label: "process-census", modeKey: "mode", attemptKey: "exportAttemptId" })[mode];
+  if (item.unexpectedPowerPointProcessCount !== 0 || item.cleanupConfirmed !== true) throw new Error(`gate1-collector-process-census-mode-required:${mode}`);
+  return item;
+}
+
+export function validateAttemptEvidenceBindings({ comReport, repair, process, pins }) {
+  const launchedProcessId = validateComProcessGuarantee(comReport);
+  const reportByMode = exactModeEntries(comReport?.Presentations, pins, { label: "com-report-presentation", modeKey: "ExportMode", attemptKey: "ExportAttemptId", pathKey: "Path" });
+  repairObservation(repair, pins);
+  if (!process?.observerEpoch || !Array.isArray(process.discardedObserverEpochs) || canonicalSha256(process.observerEpoch) !== canonicalSha256(comReport.ObserverEpoch) || canonicalSha256(process.discardedObserverEpochs) !== canonicalSha256(comReport.DiscardedObserverEpochs)) throw new Error("gate1-collector-process-census-observer-epoch-mismatch");
+  for (const mode of ["fidelity", "hybrid"]) if (processCensus(process, pins, mode).launchedPowerPointProcessId !== launchedProcessId) throw new Error(`gate1-collector-process-census-launched-process-mismatch:${mode}`);
+  return reportByMode;
 }
 function comparisons() {
   const result = [];
@@ -125,14 +173,14 @@ export function collectProductAttempt(options) {
   const pins = { presentationId: text(options.presentationId, "presentation-id"), presentationRevision: integer(options.presentationRevision, "presentation-revision"), generationAttemptId: text(options.generationAttemptId, "generation-attempt-id"), fidelityExportAttemptId: text(options.fidelityExportAttemptId, "fidelity-export-attempt-id"), hybridExportAttemptId: text(options.hybridExportAttemptId, "hybrid-export-attempt-id") };
   const semantic = readJson(real(options.semanticSourcePath, "semantic-source")); const qids = [...collectQids(semantic)].sort(); if (!qids.length) throw new Error("gate1-collector-semantic-qids-missing");
   const active = readJson(real(options.activeManifestPath, "active-manifest"));
-  const comReport = readJson(path.join(attempt, "powerpoint-com", "powerpoint-desktop-validation.json")); const repair = repairObservation(readJson(real(options.repairObservationPath, "repair-observation")), pins); const process = readJson(real(options.processCensusPath, "process-census"));
+  const comReport = readJson(path.join(attempt, "powerpoint-com", "powerpoint-desktop-validation.json")); const repair = readJson(real(options.repairObservationPath, "repair-observation")); const process = readJson(real(options.processCensusPath, "process-census"));
   const quality = readJson(path.join(attempt, "hybrid-ui.quality.json"));
   if (quality.atomicBinding?.presentationId !== pins.presentationId || quality.atomicBinding?.presentationRevision !== pins.presentationRevision || quality.exportAttemptId !== pins.hybridExportAttemptId) throw new Error("gate1-collector-hybrid-quality-attempt-mismatch");
 
   fs.mkdirSync(output, { recursive: true }); const artifacts = new Map(); const add = (id, filePath, mediaType) => artifacts.set(id, artifact(id, filePath, mediaType));
   add("semantic-source-json", options.semanticSourcePath, "application/json"); add("active-manifest-json", options.activeManifestPath, "application/json");
   const originals = { fidelity: path.join(attempt, "fidelity-ui.pptx"), hybrid: path.join(attempt, "hybrid-ui.pptx") };
-  const reportByMode = { fidelity: findPresentation(comReport, "fidelity-ui.pptx"), hybrid: findPresentation(comReport, "hybrid-ui.pptx") };
+  const reportByMode = validateAttemptEvidenceBindings({ comReport, repair, process, pins });
   const repairs = repair;
   for (const mode of ["fidelity", "hybrid"]) {
     const saved = real(reportByMode[mode].ReopenedPath, `${mode}-reopened-pptx`); add(`${mode}-input-pptx`, originals[mode], PPTX); add(`${mode}-saved-pptx`, saved, PPTX);

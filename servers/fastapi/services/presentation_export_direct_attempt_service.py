@@ -125,7 +125,11 @@ def _release_authority_pin_from_projection(
 ) -> dict[str, Any]:
     if isinstance(projection, WorkbenchCapabilityProjectionV3):
         profile = projection.release_profile
-        claim_kind = "boundedNative" if export_mode == "hybrid" else "promotion"
+        claim_kind = (
+            "boundedNative"
+            if export_mode == "hybrid" and profile.native_subset_status != "notApplicable"
+            else "promotion"
+        )
         claim_ready = (
             profile.native_subset_ready
             if claim_kind == "boundedNative"

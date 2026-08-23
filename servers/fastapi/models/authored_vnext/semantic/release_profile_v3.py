@@ -20,13 +20,11 @@ from models.authored_vnext.semantic.readiness import (
 ReadinessFieldV3 = Literal[
     "deckEvidenceReady",
     "serializerProfileReady",
-    "nativeSubsetReady",
     "releaseCommitReady",
 ]
 _READINESS_FIELDS: tuple[ReadinessFieldV3, ...] = (
     "deckEvidenceReady",
     "serializerProfileReady",
-    "nativeSubsetReady",
     "releaseCommitReady",
 )
 _BOUNDED_ARCHETYPES = (
@@ -44,12 +42,7 @@ _SERIALIZER_PROFILE_CAPABILITIES = (
     "layout.flex",
     "layout.grid",
     "layout.transform",
-    "receipt.chart",
-    "receipt.cjk",
     "receipt.degradation",
-    "receipt.imageCrop",
-    "receipt.table",
-    "receipt.zBand",
     "renderer.attestation",
     "shape.borderRadius",
     "shape.clip",
@@ -57,14 +50,14 @@ _SERIALIZER_PROFILE_CAPABILITIES = (
     "shape.opacity",
     "shape.shadow",
 )
-_NATIVE_SUBSET_CAPABILITIES = (
+_UNSUPPORTED_NATIVE_CAPABILITIES = (
     "receipt.chart",
     "receipt.cjk",
     "receipt.imageCrop",
     "receipt.table",
     "receipt.zBand",
-    "renderer.attestation",
 )
+_NATIVE_SUBSET_CAPABILITIES: tuple[str, ...] = ()
 _RELEASE_COMMIT_CAPABILITIES = ("ci.requiredChecks",)
 _ALL_REQUIRED_CAPABILITIES = tuple(
     sorted(
@@ -98,13 +91,15 @@ class BoundedHybridReleaseProfileDefinitionV3(StrictCamelModel):
     release_kind: Literal["boundedHybrid"]
     platform_scope: BoundedHybridPlatformScopeV3
     promotion_readiness_fields: list[ReadinessFieldV3] = Field(
-        min_length=4, max_length=4
+        min_length=3, max_length=3
     )
     deck_evidence_capability_ids: list[str] = Field(min_length=1, max_length=128)
     serializer_profile_capability_ids: list[str] = Field(
         min_length=1, max_length=128
     )
-    native_subset_capability_ids: list[str] = Field(min_length=1, max_length=128)
+    native_subset_status: Literal["notApplicable"]
+    native_subset_capability_ids: list[str] = Field(default_factory=list, max_length=128)
+    unsupported_native_capability_ids: list[str] = Field(min_length=1, max_length=128)
     release_commit_capability_ids: list[str] = Field(min_length=1, max_length=128)
     all_required_capability_ids: list[str] = Field(min_length=1, max_length=128)
     renderer_attestation_capability_id: Literal["renderer.attestation"]
@@ -135,6 +130,7 @@ class BoundedHybridReleaseProfileDefinitionV3(StrictCamelModel):
                 _SERIALIZER_PROFILE_CAPABILITIES,
             ),
             (self.native_subset_capability_ids, _NATIVE_SUBSET_CAPABILITIES),
+            (self.unsupported_native_capability_ids, _UNSUPPORTED_NATIVE_CAPABILITIES),
             (self.release_commit_capability_ids, _RELEASE_COMMIT_CAPABILITIES),
             (self.all_required_capability_ids, _ALL_REQUIRED_CAPABILITIES),
         )
@@ -154,8 +150,8 @@ class BoundedHybridReleaseProfileDefinitionV3(StrictCamelModel):
             or any(actual != sorted(set(actual)) for actual, _ in capability_sets)
             or self.renderer_attestation_capability_id
             not in self.serializer_profile_capability_ids
-            or self.renderer_attestation_capability_id
-            not in self.native_subset_capability_ids
+            or set(self.unsupported_native_capability_ids)
+            & set(self.all_required_capability_ids)
             or self.visual_evidence_capability_id
             not in self.deck_evidence_capability_ids
             or self.visual_evidence_policy.required_archetypes
@@ -194,7 +190,9 @@ class BoundedHybridReleaseReadinessV3(StrictCamelModel):
     serializer_profile_capability_ids: list[str] = Field(
         min_length=1, max_length=128
     )
-    native_subset_capability_ids: list[str] = Field(min_length=1, max_length=128)
+    native_subset_status: Literal["notApplicable"]
+    native_subset_capability_ids: list[str] = Field(default_factory=list, max_length=128)
+    unsupported_native_capability_ids: list[str] = Field(min_length=1, max_length=128)
     release_commit_capability_ids: list[str] = Field(min_length=1, max_length=128)
     all_required_capability_ids: list[str] = Field(min_length=1, max_length=128)
     profile_definition_digest: Digest
@@ -239,6 +237,7 @@ class BoundedHybridReleaseReadinessV3(StrictCamelModel):
                 _SERIALIZER_PROFILE_CAPABILITIES,
             ),
             (self.native_subset_capability_ids, _NATIVE_SUBSET_CAPABILITIES),
+            (self.unsupported_native_capability_ids, _UNSUPPORTED_NATIVE_CAPABILITIES),
             (self.release_commit_capability_ids, _RELEASE_COMMIT_CAPABILITIES),
             (self.all_required_capability_ids, _ALL_REQUIRED_CAPABILITIES),
         )
@@ -256,7 +255,6 @@ class BoundedHybridReleaseReadinessV3(StrictCamelModel):
             (
                 self.deck_evidence_ready,
                 self.serializer_profile_ready,
-                self.native_subset_ready,
                 self.release_commit_ready,
             )
         )
@@ -273,7 +271,7 @@ class BoundedHybridReleaseReadinessV3(StrictCamelModel):
                 _SERIALIZER_PROFILE_CAPABILITIES,
             ),
             (
-                self.native_subset_ready,
+                False,
                 self.native_subset_receipt_digests,
                 _NATIVE_SUBSET_CAPABILITIES,
             ),
@@ -290,6 +288,8 @@ class BoundedHybridReleaseReadinessV3(StrictCamelModel):
             for ready, receipts, capabilities in readiness_receipts
         ):
             raise ValueError("authored_release_v3_receipt_claim_invalid")
+        if self.native_subset_ready or self.native_subset_receipt_digests:
+            raise ValueError("authored_release_v3_native_subset_not_applicable")
         receipts_by_capability: dict[str, str] = {}
         for ready, receipts, capabilities in readiness_receipts:
             if not ready:

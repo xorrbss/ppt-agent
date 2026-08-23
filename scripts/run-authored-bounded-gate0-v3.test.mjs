@@ -6,17 +6,32 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { executeGate0 } from "./run-authored-bounded-gate0-v3.mjs";
+import { executeGate0, SOURCE_CENSUS_IGNORE_POLICY_V1 } from "./run-authored-bounded-gate0-v3.mjs";
 
 const repoRoot = path.resolve(new URL("..", import.meta.url).pathname.replace(/^\/(?:[A-Za-z]:)/, (match) => match.slice(1)));
 const contracts = path.join(repoRoot, "docs", "authored-bounded-hybrid-release-v3-contracts");
+
+test("bounded gate census includes the presentation-export runtime entrypoint bytes", () => {
+  assert.equal(SOURCE_CENSUS_IGNORE_POLICY_V1.generatedCacheAllowlistPrefixes.includes("presentation-export/"), false);
+  assert.equal(SOURCE_CENSUS_IGNORE_POLICY_V1.ignoredAllowlist.includes("presentation-export/index.js"), true);
+  assert.deepEqual(SOURCE_CENSUS_IGNORE_POLICY_V1.runtimeExecutionPins.map((entry) => entry.selectedPath), [
+    "presentation-export/index.cjs",
+    "presentation-export/.installed-version",
+    "presentation-export/py/convert-win32-x64.exe",
+  ]);
+});
 
 function makeGitRepo(root) {
   fs.mkdirSync(root);
   execFileSync("git", ["init", "-q", root]);
   fs.writeFileSync(path.join(root, "source.txt"), "sealed source\n");
-  execFileSync("git", ["-C", root, "add", "source.txt"]);
+  fs.writeFileSync(path.join(root, ".gitignore"), "presentation-export/\n");
+  execFileSync("git", ["-C", root, "add", "source.txt", ".gitignore"]);
   execFileSync("git", ["-C", root, "-c", "user.name=Gate Test", "-c", "user.email=gate@example.invalid", "commit", "-qm", "fixture"]);
+  fs.mkdirSync(path.join(root, "presentation-export", "py"), { recursive: true });
+  fs.writeFileSync(path.join(root, "presentation-export", "index.cjs"), "fixture entrypoint\n");
+  fs.writeFileSync(path.join(root, "presentation-export", ".installed-version"), "v0.4.8\n");
+  fs.writeFileSync(path.join(root, "presentation-export", "py", "convert-win32-x64.exe"), Buffer.from([0x4d, 0x5a, 0x00, 0x01]));
 }
 
 function writeDriver(filePath, productValidatorAccepted = false) {
