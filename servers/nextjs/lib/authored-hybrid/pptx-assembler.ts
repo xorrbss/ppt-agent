@@ -8,6 +8,7 @@ import {
   type PowerPointTypefaceSerializationOptions,
   type PreparedNativeElement,
 } from "./native-plan.ts";
+import { serializeNativeChartPart } from "./native-chart.ts";
 import {
   decodeXmlAttributeValue,
   opcPartComparisonKey,
@@ -25,15 +26,24 @@ const SLIDE_HEIGHT_EMU = 6_858_000;
 const SLIDE_WIDTH_PX = 1_280;
 const SLIDE_HEIGHT_PX = 720;
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+const IMAGE_RELATIONSHIP_TYPE =
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
+const CHART_RELATIONSHIP_TYPE =
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
+const CHART_CONTENT_TYPE =
+  "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
 export interface AuthoredHybridSlideLayer {
   /** One-based OOXML slide number. */
   slideNumber: number;
   backplatePng: Buffer;
   /** Already filtered in ascending browser paint order. */
   elements: readonly PreparedNativeElement[];
+  /** Ordered semantic QIDs represented by native objects or this slide's raster. */
+  semanticOwnerQids?: readonly string[];
 }
 export interface AuthoredHybridPptxProvenance {
   readonly exportAttemptId?: string; readonly presentationRevision?: number;
+  readonly profileId?: "authored-editable-hybrid-ko-en-basic-v1";
   readonly canonicalSourceDigest?: string; readonly sourceDigest?: string;
 }
 export interface AuthoredHybridAssemblerOptions extends PowerPointTypefaceSerializationOptions {
@@ -100,16 +110,45 @@ export function isCanvasBackgroundShape(item: PreparedNativeElement): boolean {
 function appendRelationship(
   relationshipsXml: string,
   relationshipId: string,
-  target: string
+  target: string,
+  relationshipType = IMAGE_RELATIONSHIP_TYPE,
 ): string {
   if (!/<Relationships\b[^>]*>[\s\S]*<\/Relationships>\s*$/i.test(relationshipsXml)) {
     throw new Error("PPTX slide relationship document is malformed.");
   }
   const relationship =
     `<Relationship Id="${relationshipId}" ` +
-    `Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" ` +
+    `Type="${relationshipType}" ` +
     `Target="${target}"/>`;
   return relationshipsXml.replace(/<\/Relationships>\s*$/i, `${relationship}</Relationships>`);
+}
+
+function nextChartNumber(entries: ReadonlyMap<string, Buffer>): number {
+  let maximum = 0;
+  for (const name of entries.keys()) {
+    const number = /^ppt\/charts\/chart(\d+)\.xml$/i.exec(name)?.[1];
+    if (number) maximum = Math.max(maximum, Number(number));
+  }
+  return maximum + 1;
+}
+
+function addChartContentType(
+  entries: Map<string, Buffer>,
+  chartPath: string,
+): void {
+  const path = "[Content_Types].xml";
+  const original = entries.get(path)?.toString("utf8");
+  if (!original) throw new Error("PPTX content types document is missing.");
+  if (original.includes(`PartName="/${chartPath}"`)) return;
+  if (!/<\/Types>\s*$/i.test(original)) {
+    throw new Error("PPTX content types document is malformed.");
+  }
+  const override =
+    `<Override PartName="/${chartPath}" ContentType="${CHART_CONTENT_TYPE}"/>`;
+  entries.set(
+    path,
+    Buffer.from(original.replace(/<\/Types>\s*$/i, `${override}</Types>`), "utf8"),
+  );
 }
 
 function nextRelationshipNumber(relationshipsXml: string): number {
@@ -173,8 +212,64 @@ function allocateMediaName(
   return candidate;
 }
 
-function backplatePictureXml(relationshipId: string): string {
-  return `<p:pic><p:nvPicPr><p:cNvPr id="2" name="Presenton hybrid backplate"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${relationshipId}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${SLIDE_WIDTH_EMU}" cy="${SLIDE_HEIGHT_EMU}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr></p:pic>`;
+export const SEMANTIC_OWNERSHIP_ALT_TEXT_PREFIX =
+  "presenton-semantic-raster-ownership-v1:";
+
+function semanticOwnerQids(layer: AuthoredHybridSlideLayer): string[] {
+  const qids = [...(layer.semanticOwnerQids ?? [])];
+  if (qids.length > 2048) {
+    throw new Error("Hybrid semantic ownership QID count exceeds the bounded limit.");
+  }
+  const unique = new Set<string>();
+  for (const qid of qids) {
+    if (
+      typeof qid !== "string" ||
+      !/^[A-Za-z][A-Za-z0-9._:-]{0,95}$/.test(qid) ||
+      unique.has(qid)
+    ) {
+      throw new Error("Hybrid semantic ownership QIDs must be unique bounded strings.");
+    }
+    unique.add(qid);
+  }
+  return qids;
+}
+
+function semanticOwnershipAltText(slideNumber: number, qids: readonly string[]): string {
+  const qidSetDigest = `sha256:${createHash("sha256")
+    .update(qids.join("\n"), "utf8")
+    .digest("hex")}`;
+  const payload = Buffer.from(JSON.stringify({
+    schemaVersion: "presenton-semantic-raster-ownership/v1",
+    slideNumber,
+    qids,
+    qidSetDigest,
+  }), "utf8").toString("base64url");
+  return `${SEMANTIC_OWNERSHIP_ALT_TEXT_PREFIX}${payload}`;
+}
+
+function backplatePictureXml(
+  relationshipId: string,
+  slideNumber: number,
+  qids: readonly string[],
+): string {
+  const description = qids.length
+    ? ` descr="${escapeXmlAttribute(semanticOwnershipAltText(slideNumber, qids))}"`
+    : "";
+  return `<p:pic><p:nvPicPr><p:cNvPr id="2" name="Presenton hybrid backplate"${description}/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${relationshipId}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${SLIDE_WIDTH_EMU}" cy="${SLIDE_HEIGHT_EMU}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr></p:pic>`;
+}
+
+function semanticOwnershipShapeXml(
+  nonVisualId: number,
+  slideNumber: number,
+  qid: string,
+): string {
+  const name = escapeXmlAttribute(
+    `Presenton raster visual fragment ${qid} semantic-owner`,
+  );
+  const description = escapeXmlAttribute(
+    semanticOwnershipAltText(slideNumber, [qid]),
+  );
+  return `<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId}" name="${name}" descr="${description}" hidden="1"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1" cy="1"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr></p:sp>`;
 }
 
 function backplateBackgroundXml(relationshipId: string): string {
@@ -345,6 +440,7 @@ function provenanceProperties(provenance?: AuthoredHybridPptxProvenance) {
   return [
     provenance.exportAttemptId === undefined ? null : { name: "Presenton.ExportAttemptId", value: provenance.exportAttemptId },
     provenance.presentationRevision === undefined ? null : { name: "Presenton.PresentationRevision", value: provenance.presentationRevision },
+    provenance.profileId === undefined ? null : { name: "Presenton.EditableHybridProfileId", value: provenance.profileId },
     digest(provenance.canonicalSourceDigest, "canonicalSourceDigest") === undefined ? null : { name: "Presenton.CanonicalSourceDigest", value: digest(provenance.canonicalSourceDigest, "canonicalSourceDigest")! },
     digest(provenance.sourceDigest, "sourceDigest") === undefined ? null : { name: "Presenton.SourceDigest", value: digest(provenance.sourceDigest, "sourceDigest")! },
   ].filter((property): property is { name: string; value: string | number } => property !== null);
@@ -385,20 +481,27 @@ function assembleSlide(
     `../media/${backplateName}`
   );
   const useSlideBackground = isOpaqueRgbPng(layer.backplatePng);
+  const ownershipQids = semanticOwnerQids(layer);
+  const nativeOwnerQids = new Set(layer.elements.map((item) => item.source.id));
+  if (ownershipQids.some((qid) => nativeOwnerQids.has(qid))) {
+    throw new Error("Hybrid native/raster duplicate semantic owner detected.");
+  }
 
   // A full-canvas page-colour rectangle belongs below the residual raster.
   // All other promoted geometry, text-owned container paint, transparent text
   // overlays, and native images sit above it. This preserves raster-only
   // illustrations without baking editable boxes and lines into the background.
   const canvasBackgroundXml: string[] = [];
-  const underlayXml: string[] = [];
-  const overlayXml: string[] = [];
+  const orderedNativeXml: string[] = [];
   const ordered = [...layer.elements].sort(
     (left, right) =>
       left.source.zOrder - right.source.zOrder ||
       left.source.sourceIndex - right.source.sourceIndex
   );
-  let nextNonVisualId = 3;
+  const semanticOwnershipXml = ownershipQids.map((qid, index) =>
+    semanticOwnershipShapeXml(index + 3, layer.slideNumber, qid)
+  );
+  let nextNonVisualId = 3 + semanticOwnershipXml.length;
   ordered.forEach((item, index) => {
     let relationshipId: string | undefined;
     if (item.kind === "image") {
@@ -418,6 +521,23 @@ function assembleSlide(
       );
       entries.set(`ppt/media/${mediaName}`, Buffer.from(item.png));
     }
+    if (item.kind === "chart") {
+      const chartNumber = nextChartNumber(entries);
+      const chartPath = `ppt/charts/chart${chartNumber}.xml`;
+      relationshipId = `rId${relationshipNumber}`;
+      relationshipNumber += 1;
+      relationshipsXml = appendRelationship(
+        relationshipsXml,
+        relationshipId,
+        `../charts/chart${chartNumber}.xml`,
+        CHART_RELATIONSHIP_TYPE,
+      );
+      entries.set(
+        chartPath,
+        Buffer.from(serializeNativeChartPart(item.source), "utf8"),
+      );
+      addChartContentType(entries, chartPath);
+    }
     const underlayCount = preparedNativeElementUnderlayNonVisualIdCount(item);
     const underlay = serializePreparedNativeElementUnderlay(
       item,
@@ -432,19 +552,19 @@ function assembleSlide(
     );
     if (overlay && item.kind === "text") overlay = hardenTextOverlay(overlay, item, options);
     if (underlay) {
-      (isCanvasBackgroundShape(item) ? canvasBackgroundXml : underlayXml).push(
-        underlay
-      );
+      if (isCanvasBackgroundShape(item)) canvasBackgroundXml.push(underlay);
+      else orderedNativeXml.push(underlay);
     }
-    if (overlay) overlayXml.push(overlay);
+    if (overlay) orderedNativeXml.push(overlay);
     nextNonVisualId += preparedNativeElementNonVisualIdCount(item);
   });
 
   entries.set(`ppt/media/${backplateName}`, Buffer.from(layer.backplatePng));
   const replacement =
     `<p:spTree>${GROUP_ROOT_XML}${useSlideBackground ? "" : canvasBackgroundXml.join("")}` +
-    `${useSlideBackground ? "" : backplatePictureXml(backplateRelationshipId)}` +
-    `${underlayXml.join("")}${overlayXml.join("")}</p:spTree>`;
+    `${useSlideBackground ? "" : backplatePictureXml(backplateRelationshipId, layer.slideNumber, ownershipQids)}` +
+    `${semanticOwnershipXml.join("")}` +
+    `${orderedNativeXml.join("")}</p:spTree>`;
   // Pass a replacer function so `$&`, `$'`, `$\`` and `$$` sequences inside the
   // assembled shape XML (e.g. text like "US$'000") are inserted literally instead
   // of being expanded as String.replace special patterns.

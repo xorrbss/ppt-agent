@@ -100,10 +100,13 @@ export function hasEmbeddedTypefaceFace(
   typeface: string,
   face: AuthoredEmbeddedFontFace
 ): boolean {
-  const expected = normalizedFontName(typeface);
+  const expected = equivalentPowerPointTypefaceNames(typeface);
   return evidence.some(
     (entry) =>
-      normalizedFontName(entry.typeface) === expected && entry.face === face
+      entry.face === face &&
+      [...equivalentPowerPointTypefaceNames(entry.typeface)].some((name) =>
+        expected.has(name)
+      )
   );
 }
 
@@ -145,6 +148,24 @@ const FALLBACK_BY_LOGICAL = new Map(
     entry,
   ])
 );
+
+/**
+ * Treat one reviewed logical/local fallback pair as the same packaged face.
+ * Chrome may report the authored name while OOXML evidence reports the actual
+ * Windows SFNT family (for example Noto Sans KR versus Malgun Gothic).
+ */
+function equivalentPowerPointTypefaceNames(value: string): ReadonlySet<string> {
+  const normalized = normalizedFontName(value);
+  const result = new Set([normalized]);
+  const direct = FALLBACK_BY_LOGICAL.get(normalized);
+  if (direct) result.add(normalizedFontName(direct.local));
+  for (const entry of FONT_FALLBACK_REGISTRY) {
+    if (normalizedFontName(entry.local) === normalized) {
+      result.add(normalizedFontName(entry.logical));
+    }
+  }
+  return result;
+}
 
 export function isGenericFontFamily(value: string): boolean {
   return GENERIC_FAMILIES.has(normalizedFontName(value));
@@ -468,6 +489,23 @@ const MONOSPACE_TYPEFACES = new Set([
   "ui-monospace",
 ]);
 
+const CJK_SERIF_TYPEFACES = new Set([
+  "serif",
+  "ui-serif",
+  "noto serif kr",
+  "noto serif cjk kr",
+  "source serif 4",
+  "batang",
+  "batangche",
+  "cambria",
+]);
+
+export function isCjkSerifFontStack(families: readonly string[]): boolean {
+  return families.some((family) =>
+    CJK_SERIF_TYPEFACES.has(normalizedFontName(family))
+  );
+}
+
 export function isMonospaceFontStack(families: readonly string[]): boolean {
   return families.some((family) =>
     MONOSPACE_TYPEFACES.has(normalizedFontName(family))
@@ -491,6 +529,13 @@ export function resolveScriptAwareTypeface(
   families: readonly string[]
 ): AuthoredScriptTypefaceResolution {
   if (script === "cjk") {
+    if (isCjkSerifFontStack(families)) {
+      return {
+        typeface: "Noto Serif KR",
+        fallbackTypeface: "Batang",
+        requiresEmbedding: true,
+      };
+    }
     return {
       typeface: "Noto Sans KR",
       fallbackTypeface: "Malgun Gothic",

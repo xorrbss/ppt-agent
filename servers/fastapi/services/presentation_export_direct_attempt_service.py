@@ -10,17 +10,32 @@ import hmac
 from pathlib import Path
 from typing import Any
 import uuid
+import os
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_export_attempt import (
+    ExportAtomicBinding,
     ExportPowerPointQaEvidence,
     PresentationExportAttempt,
     PresentationExportCoverageManifest,
 )
 from models.sql.slide import SlideModel
+from models.authored_vnext.semantic.contracts import (
+    AuthoredEmissionBundleV1,
+    ExportAttemptDigestBindingV1,
+    SemanticUnavailableReceiptV1,
+)
+from models.authored_vnext.semantic.readiness import (
+    ExportAuthorityClaimV2,
+    ReleasePinnedExportAttemptDigestBindingV2,
+    WorkbenchCapabilityProjectionV2,
+)
+from models.authored_vnext.semantic.release_profile_v3 import (
+    WorkbenchCapabilityProjectionV3,
+)
 from models.sql.workspace import get_workspace_owner_scope
 from services.presentation_export_attempt_service import (
     begin_export_attempt,
@@ -46,11 +61,342 @@ from services.presentation_export_powerpoint_qa import (
     resolve_hybrid_artifact,
     trusted_powerpoint_qa,
 )
+from services.authored_vnext.semantic.canonical import (
+    canonical_digest as semantic_canonical_digest,
+)
+from services.authored_vnext.semantic.export_binding import (
+    bind_existing_export_attempt,
+)
+from services.authored_vnext.semantic.query import get_active_authored_emission
+from services.authored_vnext.semantic.readiness import (
+    build_export_authority_claim,
+    get_workbench_capability_projection_v2,
+    validate_export_authority_claim,
+)
+from services.authored_vnext.semantic.readiness_v3 import (
+    get_workbench_capability_projection_v3,
+    validate_export_authority_claim_v3,
+)
 from utils.owner_context import get_current_owner_id
 
 
 HYBRID_ATTEMPT_RETENTION_DAYS = 180
 HYBRID_EVIDENCE_RETENTION_DAYS = 30
+
+
+def _visual_parity_status_from_powerpoint_qa(
+    qa: ExportPowerPointQaEvidence,
+) -> str:
+    """Return only the visual claim justified by desktop QA alone."""
+
+    return "failed" if qa.status == "failed" else "not-verified"
+
+
+def _expected_native_qids_from_quality(quality: dict[str, Any]) -> frozenset[str]:
+    qids: set[str] = set()
+    slides = quality.get("slides")
+    if not isinstance(slides, list):
+        return frozenset()
+    for slide in slides:
+        if not isinstance(slide, dict):
+            continue
+        coverage = slide.get("qidCoverage")
+        if not isinstance(coverage, list):
+            continue
+        for item in coverage:
+            if (
+                isinstance(item, dict)
+                and item.get("logical") == "native"
+                and item.get("ooxml") == "present"
+                and isinstance(item.get("elementId"), str)
+            ):
+                qids.add(item["elementId"])
+    return frozenset(qids)
+
+
+def _prefixed_digest(value: str) -> str:
+    return value if value.startswith("sha256:") else f"sha256:{value}"
+
+
+def _release_authority_pin_from_projection(
+    projection: WorkbenchCapabilityProjectionV2 | WorkbenchCapabilityProjectionV3,
+    *,
+    export_mode: str,
+) -> dict[str, Any]:
+    if isinstance(projection, WorkbenchCapabilityProjectionV3):
+        profile = projection.release_profile
+        claim_kind = (
+            "boundedNative"
+            if export_mode == "hybrid" and profile.native_subset_status != "notApplicable"
+            else "promotion"
+        )
+        claim_ready = (
+            profile.native_subset_ready
+            if claim_kind == "boundedNative"
+            else profile.promotion_ready
+        )
+        pin: dict[str, Any] = {
+            "schemaVersion": "authored-export-release-authority-pin/v3",
+            "state": "ready" if claim_ready else "nonPromotable",
+            "kind": claim_kind,
+            "profileId": profile.profile_id,
+            "profileDefinitionDigest": profile.profile_definition_digest,
+            "projectionDigest": projection.projection_digest,
+            "reasonCode": profile.reason_code,
+        }
+        if claim_ready:
+            receipt_digests = (
+                profile.native_subset_receipt_digests
+                if claim_kind == "boundedNative"
+                else profile.promotion_receipt_digests
+            )
+            pin["claim"] = ExportAuthorityClaimV2(
+                kind=claim_kind,
+                profile_id=profile.profile_id,
+                profile_definition_digest=profile.profile_definition_digest,
+                projection_digest=projection.projection_digest,
+                receipt_digests=receipt_digests,
+            ).model_dump(mode="json", by_alias=True)
+        return pin
+    profile = projection.release_profile
+    claim_kind = (
+        "boundedNative"
+        if export_mode == "hybrid" and profile.bounded_native_parity_ready
+        else "promotion"
+    )
+    claim_ready = (
+        profile.bounded_native_parity_ready
+        if claim_kind == "boundedNative"
+        else profile.promotion_ready
+    )
+    pin: dict[str, Any] = {
+        "schemaVersion": "authored-export-release-authority-pin/v2",
+        "state": "ready" if claim_ready else "nonPromotable",
+        "kind": claim_kind,
+        "profileId": projection.release_profile.profile_id,
+        "profileDefinitionDigest": projection.release_profile.profile_definition_digest,
+        "projectionDigest": projection.projection_digest,
+        "reasonCode": projection.release_profile.reason_code,
+    }
+    if claim_ready:
+        pin["claim"] = build_export_authority_claim(
+            projection, kind=claim_kind
+        ).model_dump(mode="json", by_alias=True)
+    return pin
+
+
+def _validate_v3_release_authority_claim(
+    projection: WorkbenchCapabilityProjectionV3,
+    claim: ExportAuthorityClaimV2,
+    *,
+    export_mode: str,
+) -> None:
+    """Validate the mode-scoped v3 claim without making deployment a gate."""
+
+    expected_pin = _release_authority_pin_from_projection(
+        projection, export_mode=export_mode
+    )
+    expected_payload = expected_pin.get("claim")
+    if expected_payload is None:
+        raise PresentationExportContractError(
+            "presentation_export_release_authority_claim_unavailable"
+        )
+    try:
+        expected_claim = ExportAuthorityClaimV2.model_validate(expected_payload)
+    except ValueError as error:  # defensive: the pin helper is internal
+        raise PresentationExportContractError(
+            "presentation_export_release_authority_pin_invalid"
+        ) from error
+    if claim != expected_claim:
+        raise PresentationExportContractError(
+            "presentation_export_release_authority_claim_invalid"
+        )
+    # A promotion-ready v3 projection normally exposes a promotion claim. A
+    # Hybrid attempt intentionally binds the native-subset compatibility claim,
+    # so validate the exact replacement projection rather than treating
+    # deploymentAuthorized as an export input.
+    try:
+        pinned_projection = WorkbenchCapabilityProjectionV3.model_validate(
+            projection.model_copy(
+                update={
+                    "release_authority_receipt_digests": claim.receipt_digests,
+                    "release_projection_digest": claim.projection_digest,
+                    "export_authority_claim": claim,
+                }
+            ).model_dump(mode="python", by_alias=False)
+        )
+        validate_export_authority_claim_v3(pinned_projection, claim)
+    except ValueError as error:
+        raise PresentationExportContractError(
+            "presentation_export_release_authority_claim_invalid"
+        ) from error
+
+
+def _completed_export_binding(
+    binding_values: dict[str, Any],
+    claim: ExportAuthorityClaimV2 | None,
+) -> ExportAttemptDigestBindingV1 | ReleasePinnedExportAttemptDigestBindingV2:
+    if claim is None:
+        return ExportAttemptDigestBindingV1(**binding_values)
+    return ReleasePinnedExportAttemptDigestBindingV2(
+        **binding_values,
+        release_authority_receipt_digests=claim.receipt_digests,
+        release_projection_digest=claim.projection_digest,
+        export_authority_claim=claim,
+    )
+
+
+async def _active_semantic_emission(
+    session: AsyncSession,
+    presentation_id: uuid.UUID,
+):
+    owner_id = get_current_owner_id()
+    if owner_id is None:
+        return None
+    return await get_active_authored_emission(
+        session,
+        presentation_id=presentation_id,
+        owner_id=owner_id,
+        tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+    )
+
+
+async def _current_export_canonical_digest(
+    session: AsyncSession,
+    *,
+    presentation: PresentationModel,
+    slides: list[SlideModel],
+) -> str:
+    """Resolve the same canonical source selected by the begin boundary."""
+
+    active = await _active_semantic_emission(session, presentation.id)
+    if active is not None and active.canonical_mode == "bundleGraph":
+        if (
+            active.presentation_revision != presentation.revision
+            or active.canonical_digest is None
+        ):
+            raise PresentationExportFreshnessError(
+                "authored_semantic_export_stale_manifest"
+            )
+        return active.canonical_digest.removeprefix("sha256:")
+    return build_export_source_snapshot_sha256(presentation, slides)
+
+
+async def _bind_completed_semantic_export_attempt(
+    session: AsyncSession,
+    *,
+    attempt: PresentationExportAttempt,
+    mode: str,
+    renderer_source_sha256: str,
+    pptx_sha256: str,
+    receipt_payloads: list[dict[str, Any]],
+) -> str | None:
+    active = await _active_semantic_emission(session, attempt.presentation_id)
+    owner_id = get_current_owner_id()
+    if (
+        active is None
+        or owner_id is None
+        or active.canonical_mode != "bundleGraph"
+        or active.manifest is None
+        or active.manifest.canonical_digest is None
+    ):
+        return None
+    manifest = active.manifest
+    if (
+        active.presentation_revision != attempt.source_revision
+        or active.canonical_digest is None
+        or active.canonical_digest.removeprefix("sha256:")
+        != attempt.source_snapshot_sha256
+    ):
+        raise PresentationExportFreshnessError(
+            "authored_semantic_export_stale_manifest"
+        )
+    semantic_digests: list[str] = []
+    origins: list[uuid.UUID | None] = []
+    for bundle in active.bundles:
+        if not isinstance(bundle, AuthoredEmissionBundleV1):
+            raise PresentationExportContractError(
+                "authored_semantic_export_bundle_kind_unsupported"
+            )
+        if bundle.semantic_component.digest is None:
+            raise PresentationExportContractError(
+                "authored_semantic_export_component_digest_missing"
+            )
+        semantic_digests.append(bundle.semantic_component.digest)
+        origins.append(bundle.origin_generation_attempt_id)
+    binding_values = dict(
+        export_attempt_id=attempt.id,
+        presentation_id=attempt.presentation_id,
+        presentation_revision=attempt.source_revision,
+        operation_id=manifest.operation_id,
+        generation_attempt_id=manifest.generation_attempt_id,
+        slide_origin_generation_attempt_ids=origins,
+        canonical_digest=active.canonical_digest,
+        manifest_digest=manifest.canonical_digest,
+        semantic_digests=semantic_digests,
+        master_contract_digest=manifest.master_contract_digest,
+        composition_digest=manifest.composition_digest,
+        font_manifest_digest=manifest.font_manifest_digest,
+        asset_manifest_digest=manifest.asset_manifest_digest,
+        quality_policy_digest=semantic_canonical_digest(
+            {"qualityPolicyVersion": manifest.quality_policy_version}
+        ),
+        mode=mode,
+        renderer_source_digest=_prefixed_digest(renderer_source_sha256),
+        serializer_id=("authored-hybrid" if mode == "hybrid" else "authored-fidelity"),
+        serializer_version=("2" if mode == "hybrid" else "1"),
+        receipt_digests=[
+            semantic_canonical_digest(payload) for payload in receipt_payloads
+        ],
+        pptx_digest=_prefixed_digest(pptx_sha256),
+    )
+    release_pin = (
+        ((attempt.provenance or {}).get("capability_evidence") or {}).get(
+            "release_authority"
+        )
+        or {}
+    )
+    claim_payload = release_pin.get("claim")
+    if claim_payload is None:
+        claim = None
+    else:
+        try:
+            claim = ExportAuthorityClaimV2.model_validate(claim_payload)
+        except ValueError as error:
+            raise PresentationExportContractError(
+                "presentation_export_release_authority_pin_invalid"
+            ) from error
+        pin_schema = release_pin.get("schemaVersion")
+        if pin_schema == "authored-export-release-authority-pin/v3":
+            projection_v3 = await get_workbench_capability_projection_v3(
+                session,
+                presentation_id=attempt.presentation_id,
+                owner_id=owner_id,
+                tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            )
+            _validate_v3_release_authority_claim(
+                projection_v3, claim, export_mode=mode
+            )
+        elif pin_schema == "authored-export-release-authority-pin/v2":
+            projection_v2 = await get_workbench_capability_projection_v2(
+                session,
+                presentation_id=attempt.presentation_id,
+                owner_id=owner_id,
+                tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            )
+            validate_export_authority_claim(projection_v2, claim)
+        else:
+            raise PresentationExportContractError(
+                "presentation_export_release_authority_pin_schema_invalid"
+            )
+    binding = _completed_export_binding(binding_values, claim)
+    sealed = await bind_existing_export_attempt(
+        session,
+        owner_id=owner_id,
+        binding=binding,
+        tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+    )
+    return sealed.binding_digest
 
 
 def _sha256_file(path: Path) -> str:
@@ -61,13 +407,62 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-async def begin_direct_hybrid_export_attempt(
+def _validate_hybrid_atomic_binding(
+    value: Any,
+    expected: dict[str, Any],
+    *,
+    export_attempt_id: uuid.UUID,
+) -> ExportAtomicBinding:
+    """Reject sidecars whose atomic identity is not exactly this export."""
+
+    try:
+        if not isinstance(value, dict) or set(value) != {
+            "presentationId",
+            "presentationRevision",
+            "canonicalSourceDigest",
+            "rendererSourceDigest",
+            "pptxSha256",
+        }:
+            raise ValueError("hybrid atomic binding keys are invalid")
+        supplied = ExportAtomicBinding.model_validate(
+            {
+                "presentation_id": value["presentationId"],
+                "export_attempt_id": export_attempt_id,
+                "presentation_revision": value["presentationRevision"],
+                "canonical_source_sha256": value["canonicalSourceDigest"],
+                "renderer_source_sha256": value["rendererSourceDigest"],
+                "pptx_sha256": value["pptxSha256"],
+            }
+        )
+        expected_model = ExportAtomicBinding.model_validate(
+            {
+                "presentation_id": expected["presentationId"],
+                "export_attempt_id": export_attempt_id,
+                "presentation_revision": expected["presentationRevision"],
+                "canonical_source_sha256": expected["canonicalSourceDigest"],
+                "renderer_source_sha256": expected["rendererSourceDigest"],
+                "pptx_sha256": expected["pptxSha256"],
+            }
+        )
+    except (TypeError, ValueError) as error:
+        raise PresentationExportContractError(
+            "presentation_export_atomic_binding_mismatch"
+        ) from error
+    if supplied != expected_model:
+        raise PresentationExportContractError(
+            "presentation_export_atomic_binding_mismatch"
+        )
+    return supplied
+
+
+async def _begin_direct_authored_export_attempt(
     session: AsyncSession,
     *,
     presentation_id: uuid.UUID,
     expected_revision: int,
     renderer_source_sha256: str,
     idempotency_key: str,
+    export_mode: str,
 ) -> tuple[PresentationExportAttempt, dict[str, str | int]]:
     presentation = await session.get(PresentationModel, presentation_id)
     if presentation is None:
@@ -92,6 +487,39 @@ async def begin_direct_hybrid_export_attempt(
         ),
     )
     asset_manifest_digest = build_export_asset_manifest_sha256(analysis.asset_digests)
+    active_semantic = await _active_semantic_emission(session, presentation_id)
+    if active_semantic is not None and active_semantic.canonical_mode == "bundleGraph":
+        if (
+            active_semantic.presentation_revision != expected_revision
+            or active_semantic.canonical_digest is None
+        ):
+            raise PresentationExportFreshnessError(
+                "authored_semantic_export_stale_manifest"
+            )
+        canonical_digest = active_semantic.canonical_digest.removeprefix("sha256:")
+        if export_mode == "hybrid" and any(
+            not isinstance(bundle, AuthoredEmissionBundleV1)
+            or isinstance(
+                bundle.semantic_component,
+                SemanticUnavailableReceiptV1,
+            )
+            for bundle in active_semantic.bundles
+        ):
+            raise PresentationExportContractError(
+                "authored_semantic_hybrid_degraded_fidelity_only"
+            )
+        if active_semantic.manifest is not None:
+            composition_digest = (
+                active_semantic.manifest.composition_digest.removeprefix("sha256:")
+            )
+    elif (
+        export_mode == "hybrid"
+        and os.getenv("AUTHORED_SEMANTIC_BUNDLE_WRITES_ENABLED", "false").lower()
+        == "true"
+    ):
+        raise PresentationExportContractError(
+            "authored_semantic_hybrid_manifest_required"
+        )
     await require_export_asset_digests(
         session, expected_asset_digests=analysis.asset_digests
     )
@@ -111,7 +539,22 @@ async def begin_direct_hybrid_export_attempt(
         asset_manifest_sha256=asset_manifest_digest,
         renderer_source_sha256=renderer_source_sha256,
     )
-    provenance["capability_evidence"]["export_mode"] = "hybrid"
+    provenance["capability_evidence"]["export_mode"] = export_mode
+    if active_semantic is not None and active_semantic.canonical_mode == "bundleGraph":
+        owner_id = get_current_owner_id()
+        if owner_id is None:
+            raise PresentationExportContractError("presentation_owner_required")
+        projection = await get_workbench_capability_projection_v3(
+            session,
+            presentation_id=presentation_id,
+            owner_id=owner_id,
+            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+        )
+        provenance["capability_evidence"]["release_authority"] = (
+            _release_authority_pin_from_projection(
+                projection, export_mode=export_mode
+            )
+        )
     attempt = await begin_export_attempt(
         session,
         presentation_id=presentation_id,
@@ -157,6 +600,8 @@ async def complete_direct_hybrid_export_attempt(
         raise PresentationExportContractError("presentation_export_attempt_not_found")
     if attempt.state != "running":
         raise PresentationExportContractError("presentation_export_attempt_not_running")
+    if (attempt.provenance.get("capability_evidence") or {}).get("export_mode") != "hybrid":
+        raise PresentationExportContractError("presentation_export_attempt_mode_mismatch")
     manifest = PresentationExportCoverageManifest.model_validate(coverage)
     del powerpoint_qa  # Caller QA is never trusted.
     atomic = quality.get("atomicBinding")
@@ -167,15 +612,12 @@ async def complete_direct_hybrid_export_attempt(
         "rendererSourceDigest": attempt.provenance["freshness"]["renderer_source_sha256"],
         "pptxSha256": pptx_sha256,
     }
-    if (
-        not isinstance(atomic, dict)
-        or quality.get("exportAttemptId") != str(attempt.id)
-        or any(
-            atomic.get(key) != value
-            for key, value in expected_binding.items()
-            if key != "presentationId"
-        )
-    ):
+    _validate_hybrid_atomic_binding(
+        atomic,
+        expected_binding,
+        export_attempt_id=attempt.id,
+    )
+    if quality.get("exportAttemptId") != str(attempt.id):
         raise PresentationExportContractError("presentation_export_atomic_binding_mismatch")
     source = manifest.source
     if (
@@ -195,7 +637,12 @@ async def complete_direct_hybrid_export_attempt(
     ).scalars().all()
     if presentation is None or presentation.revision != attempt.source_revision:
         raise PresentationExportFreshnessError("stale_presentation_revision")
-    if build_export_source_snapshot_sha256(presentation, slides) != attempt.source_snapshot_sha256:
+    if (
+        await _current_export_canonical_digest(
+            session, presentation=presentation, slides=slides
+        )
+        != attempt.source_snapshot_sha256
+    ):
         raise PresentationExportFreshnessError("presentation_export_source_digest_mismatch")
     artifact = resolve_hybrid_artifact(artifact_path)
     actual_size = artifact.stat().st_size
@@ -211,7 +658,11 @@ async def complete_direct_hybrid_export_attempt(
     if manifest.ooxml_readback is None or manifest.ooxml_readback.status != "passed":
         raise PresentationExportContractError("presentation_export_ooxml_readback_required")
     qa = ExportPowerPointQaEvidence.model_validate(
-        await trusted_powerpoint_qa(artifact, manifest.total_slides)
+        await trusted_powerpoint_qa(
+            artifact,
+            manifest.total_slides,
+            expected_native_qids=_expected_native_qids_from_quality(quality),
+        )
     )
     if qa.status == "passed" and (
         qa.native_text != manifest.ooxml_readback.native_text
@@ -219,10 +670,27 @@ async def complete_direct_hybrid_export_attempt(
         or qa.native_shape != manifest.ooxml_readback.native_shape
         or qa.native_table != manifest.ooxml_readback.native_table
         or qa.native_chart != manifest.ooxml_readback.native_chart
+        or qa.native_image_crop != manifest.ooxml_readback.native_image_crop
     ):
         qa = qa.model_copy(update={"status": "failed"})
-    visual_parity_status = qa.status
+    # PowerPoint COM proves packaging, reopen, render, and native-object
+    # readback.  It does not compare the Authored, browser Fidelity/Hybrid, and
+    # first-open/reopened PowerPoint renders or complete the per-slide manual
+    # issue ledger.  Keep visual parity truthful until a separately bound
+    # visual-acceptance receipt has passed those gates.
+    visual_parity_status = _visual_parity_status_from_powerpoint_qa(qa)
     finalized_quality = deepcopy(quality)
+    if qa.semantic_payload_binding == "passed":
+        for slide in finalized_quality.get("slides", []):
+            if not isinstance(slide, dict):
+                continue
+            for item in slide.get("qidCoverage", []):
+                if (
+                    isinstance(item, dict)
+                    and item.get("logical") == "native"
+                    and item.get("ooxml") == "present"
+                ):
+                    item["com"] = "present"
     finalized_quality["atomicBinding"] = expected_binding
     finalized_quality["powerPointQa"] = qa.model_dump(mode="json", by_alias=True)
     finalized_coverage = PresentationExportCoverageManifest.model_validate(
@@ -287,6 +755,15 @@ async def complete_direct_hybrid_export_attempt(
         artifact_size_bytes=pptx_size_bytes,
         provenance=provenance,
     )
+    await session.refresh(attempt)
+    semantic_binding_digest = await _bind_completed_semantic_export_attempt(
+        session,
+        attempt=attempt,
+        mode="hybrid",
+        renderer_source_sha256=expected_binding["rendererSourceDigest"],
+        pptx_sha256=pptx_sha256,
+        receipt_payloads=[finalized_quality, finalized_coverage_json, qa.model_dump(mode="json")],
+    )
     await session.commit()
     await session.refresh(attempt)
     return attempt, {
@@ -294,12 +771,156 @@ async def complete_direct_hybrid_export_attempt(
         "visualParity": visual_parity_status,
         "quality": finalized_quality,
         "coverage": finalized_coverage_json,
+        "semanticBindingDigest": semantic_binding_digest,
         "qualitySidecarSha256": provenance["visual_parity"][
             "quality_sidecar_sha256"
         ],
         "coverageSidecarSha256": provenance["visual_parity"][
             "coverage_sidecar_sha256"
         ],
+    }
+
+
+async def begin_direct_hybrid_export_attempt(
+    session: AsyncSession,
+    *,
+    presentation_id: uuid.UUID,
+    expected_revision: int,
+    renderer_source_sha256: str,
+    idempotency_key: str,
+) -> tuple[PresentationExportAttempt, dict[str, str | int]]:
+    return await _begin_direct_authored_export_attempt(
+        session,
+        presentation_id=presentation_id,
+        expected_revision=expected_revision,
+        renderer_source_sha256=renderer_source_sha256,
+        idempotency_key=idempotency_key,
+        export_mode="hybrid",
+    )
+
+
+async def begin_direct_fidelity_export_attempt(
+    session: AsyncSession,
+    *,
+    presentation_id: uuid.UUID,
+    expected_revision: int,
+    renderer_source_sha256: str,
+    idempotency_key: str,
+) -> tuple[PresentationExportAttempt, dict[str, str | int]]:
+    return await _begin_direct_authored_export_attempt(
+        session,
+        presentation_id=presentation_id,
+        expected_revision=expected_revision,
+        renderer_source_sha256=renderer_source_sha256,
+        idempotency_key=idempotency_key,
+        export_mode="fidelity",
+    )
+
+
+async def complete_direct_fidelity_export_attempt(
+    session: AsyncSession,
+    *,
+    presentation_id: uuid.UUID,
+    attempt_id: uuid.UUID,
+    pptx_sha256: str,
+    pptx_size_bytes: int,
+    artifact_path: str,
+) -> tuple[PresentationExportAttempt, dict[str, Any]]:
+    attempt = await session.get(PresentationExportAttempt, attempt_id)
+    if (
+        attempt is None
+        or attempt.presentation_id != presentation_id
+        or attempt.owner_id != get_current_owner_id()
+        or attempt.owner_scope != get_workspace_owner_scope()
+    ):
+        raise PresentationExportContractError("presentation_export_attempt_not_found")
+    if attempt.state != "running":
+        raise PresentationExportContractError("presentation_export_attempt_not_running")
+    capability_evidence = attempt.provenance.get("capability_evidence") or {}
+    if capability_evidence.get("export_mode") != "fidelity":
+        raise PresentationExportContractError("presentation_export_attempt_mode_mismatch")
+
+    presentation = await session.get(PresentationModel, presentation_id)
+    slides = (
+        await session.execute(
+            select(SlideModel)
+            .where(SlideModel.presentation == presentation_id)
+            .order_by(SlideModel.index, SlideModel.id)
+        )
+    ).scalars().all()
+    if presentation is None or presentation.revision != attempt.source_revision:
+        raise PresentationExportFreshnessError("stale_presentation_revision")
+    if (
+        await _current_export_canonical_digest(
+            session, presentation=presentation, slides=slides
+        )
+        != attempt.source_snapshot_sha256
+    ):
+        raise PresentationExportFreshnessError("presentation_export_source_digest_mismatch")
+
+    artifact = resolve_hybrid_artifact(artifact_path)
+    actual_size = artifact.stat().st_size
+    actual_sha256 = await asyncio.to_thread(_sha256_file, artifact)
+    if actual_size != pptx_size_bytes or not hmac.compare_digest(actual_sha256, pptx_sha256):
+        raise PresentationExportFreshnessError("presentation_export_artifact_digest_mismatch")
+
+    renderer_source_sha256 = attempt.provenance["freshness"]["renderer_source_sha256"]
+    atomic_binding = {
+        "presentation_id": str(presentation_id),
+        "export_attempt_id": str(attempt.id),
+        "presentation_revision": attempt.source_revision,
+        "canonical_source_sha256": attempt.source_snapshot_sha256,
+        "renderer_source_sha256": renderer_source_sha256,
+        "pptx_sha256": pptx_sha256,
+    }
+    provenance = dict(attempt.provenance)
+    provenance["compiler_runtime"] = {
+        "compiler": "authored-fidelity",
+        "compiler_version": "1",
+        "runtime": "chromium-dom-export",
+        "runtime_version": "presenton.render-artifact/v1",
+    }
+    freshness = dict(provenance["freshness"])
+    freshness["package_sha256"] = pptx_sha256
+    provenance["freshness"] = freshness
+    provenance["atomic_binding"] = atomic_binding
+    await terminalize_export_attempt_succeeded(
+        session,
+        attempt_id=attempt.id,
+        presentation_id=presentation_id,
+        expected_owner_id=attempt.owner_id,
+        expected_owner_scope=attempt.owner_scope,
+        expected_workspace_operation_id=None,
+        source_revision=attempt.source_revision,
+        source_snapshot_sha256=attempt.source_snapshot_sha256,
+        selected_adapter="general",
+        artifact_sha256=pptx_sha256,
+        artifact_size_bytes=pptx_size_bytes,
+        provenance=provenance,
+    )
+    await session.refresh(attempt)
+    semantic_binding_digest = await _bind_completed_semantic_export_attempt(
+        session,
+        attempt=attempt,
+        mode="fidelity",
+        renderer_source_sha256=renderer_source_sha256,
+        pptx_sha256=pptx_sha256,
+        receipt_payloads=[atomic_binding],
+    )
+    await session.commit()
+    await session.refresh(attempt)
+    return attempt, {
+        "visualParity": "not-verified",
+        "promotionReady": False,
+        "semanticBindingDigest": semantic_binding_digest,
+        "atomicBinding": {
+            "presentationId": str(presentation_id),
+            "exportAttemptId": str(attempt.id),
+            "presentationRevision": attempt.source_revision,
+            "canonicalSourceDigest": attempt.source_snapshot_sha256,
+            "rendererSourceDigest": renderer_source_sha256,
+            "pptxSha256": pptx_sha256,
+        },
     }
 
 
@@ -494,6 +1115,36 @@ async def fail_direct_hybrid_export_attempt(
         or attempt.owner_scope != get_workspace_owner_scope()
     ):
         raise PresentationExportContractError("presentation_export_attempt_not_found")
+    if (attempt.provenance.get("capability_evidence") or {}).get("export_mode") != "hybrid":
+        raise PresentationExportContractError("presentation_export_attempt_mode_mismatch")
+    await terminalize_export_attempt_failed(
+        session,
+        attempt_id=attempt.id,
+        expected_owner_id=attempt.owner_id,
+        expected_owner_scope=attempt.owner_scope,
+        expected_workspace_operation_id=None,
+        failure_code=failure_code,
+        failure_path=None,
+    )
+
+
+async def fail_direct_fidelity_export_attempt(
+    session: AsyncSession,
+    *,
+    presentation_id: uuid.UUID,
+    attempt_id: uuid.UUID,
+    failure_code: str,
+) -> None:
+    attempt = await session.get(PresentationExportAttempt, attempt_id)
+    if (
+        attempt is None
+        or attempt.presentation_id != presentation_id
+        or attempt.owner_id != get_current_owner_id()
+        or attempt.owner_scope != get_workspace_owner_scope()
+    ):
+        raise PresentationExportContractError("presentation_export_attempt_not_found")
+    if (attempt.provenance.get("capability_evidence") or {}).get("export_mode") != "fidelity":
+        raise PresentationExportContractError("presentation_export_attempt_mode_mismatch")
     await terminalize_export_attempt_failed(
         session,
         attempt_id=attempt.id,
@@ -507,7 +1158,10 @@ async def fail_direct_hybrid_export_attempt(
 
 __all__ = [
     "begin_direct_hybrid_export_attempt",
+    "begin_direct_fidelity_export_attempt",
     "complete_direct_hybrid_export_attempt",
+    "complete_direct_fidelity_export_attempt",
     "fail_direct_hybrid_export_attempt",
+    "fail_direct_fidelity_export_attempt",
     "list_direct_hybrid_export_attempt_history",
 ]

@@ -23,6 +23,13 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
   var WIDTH = 1280;
   var HEIGHT = 720;
   var config = window.__PRESENTON_AUTHORED_HYBRID_CONFIG__ || {};
+  var captureMode = ["observation", "hybrid-backplate", "fidelity"].includes(
+    config.captureMode
+  ) ? config.captureMode : "observation";
+  var declaredElementIds = Array.isArray(config.declaredElementIds)
+    ? config.declaredElementIds
+    : [];
+  var declaredIdentity = declaredElementIds.length > 0;
   var completionToken = typeof config.completionToken === "string" ? config.completionToken : "";
   var promotedElements = Array.isArray(config.promotedElements)
     ? config.promotedElements
@@ -226,50 +233,18 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     return result;
   }
 
-  function cssFontFamilyStack(families) {
-    var generic = new Set([
-      "serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui"
-    ]);
-    return families.map(function (family) {
-      return generic.has(family.toLowerCase())
-        ? family
-        : '"' + family.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
-    }).join(", ");
-  }
-
-  function applyFontFallbackPolicy() {
-    [document.documentElement, document.body]
-      .concat(Array.from(document.body.querySelectorAll("*")))
-      .forEach(function (element) {
-        if (
-          !element ||
-          ["SCRIPT", "STYLE", "TEXTAREA", "NOSCRIPT", "TEMPLATE"].includes(
-            element.tagName
-          )
-        ) return;
-        var authored = fontFamilies(getComputedStyle(element).fontFamily || "sans-serif");
-        var expanded = expandedFontFamilies(authored);
-        if (
-          expanded.length !== authored.length ||
-          expanded.some(function (family, index) { return family !== authored[index]; })
-        ) {
-          element.style.setProperty(
-            "font-family",
-            cssFontFamilyStack(expanded),
-            "important"
-          );
-        }
-      });
-  }
-
   function cjkFallbacks(text, families) {
     if (!/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u.test(text)) return [];
+    var serifIntent = families.some(function (family) {
+      return /(?:^|\s)(?:serif|batang|batangche|cambria)(?:\s|$)/i.test(family) ||
+        /(?:noto|source)\s+serif/i.test(family);
+    });
     var fallback = [
-      "Malgun Gothic",
-      "Batang",
+      serifIntent ? "Noto Serif KR" : "Malgun Gothic",
+      serifIntent ? "Batang" : "Noto Sans KR",
       "Apple SD Gothic Neo",
       "Arial Unicode MS",
-      "sans-serif",
+      serifIntent ? "serif" : "sans-serif",
     ];
     var knownCjk = new Set(
       fallback.map(function (family) {
@@ -1254,7 +1229,11 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
   function complexKind(element) {
     // SVG DOM tagName values are lowercase in Chromium, unlike HTML tagName.
     var tag = element.tagName.toUpperCase();
-    // HTML tables are decomposed into editable table/cell rectangles and text.
+    // Declared tables are admitted through the authored-native-table contract
+    // as one editable DrawingML table. Keep the whole TABLE as the observed
+    // complex ownership node; declared extraction excludes data-qid-ignore
+    // row/cell descendants so they cannot become duplicate native paint.
+    if (tag === "TABLE") return "complex-table";
     // Canvas and SVG still need a fidelity fallback because their authored
     // primitives are not represented by ordinary DOM boxes.
     if (tag === "SVG") {
@@ -1700,7 +1679,19 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       objectFit = "fill";
     }
     var objectPosition = (style.objectPosition || "50% 50%").trim();
-    if (!/^(?:50%|center)(?:\s+(?:50%|center))?$/i.test(objectPosition)) {
+    var positionTokens = objectPosition.split(/\s+/).filter(Boolean);
+    var positionValue = function (token, horizontal) {
+      token = (token || "center").toLowerCase();
+      if (token === "center") return 0.5;
+      if ((horizontal && token === "left") || (!horizontal && token === "top")) return 0;
+      if ((horizontal && token === "right") || (!horizontal && token === "bottom")) return 1;
+      var match = /^(\d+(?:\.\d+)?)%$/.exec(token);
+      var value = match ? Number(match[1]) / 100 : NaN;
+      return Number.isFinite(value) && value >= 0 && value <= 1 ? value : null;
+    };
+    var positionX = positionTokens.length <= 2 ? positionValue(positionTokens[0], true) : null;
+    var positionY = positionTokens.length <= 2 ? positionValue(positionTokens[1], false) : null;
+    if (positionX === null || positionY === null) {
       reasons.push("unsupported-object-position");
     }
     var crop = { left: 0, top: 0, right: 0, bottom: 0 };
@@ -1709,10 +1700,12 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       var imageRatio = element.naturalWidth / element.naturalHeight;
       if (imageRatio > boxRatio) {
         var visibleWidth = boxRatio / imageRatio;
-        crop.left = crop.right = round((1 - visibleWidth) / 2);
+        crop.left = round((1 - visibleWidth) * positionX);
+        crop.right = round((1 - visibleWidth) * (1 - positionX));
       } else if (imageRatio < boxRatio) {
         var visibleHeight = imageRatio / boxRatio;
-        crop.top = crop.bottom = round((1 - visibleHeight) / 2);
+        crop.top = round((1 - visibleHeight) * positionY);
+        crop.bottom = round((1 - visibleHeight) * (1 - positionY));
       }
     }
     return {
@@ -1724,6 +1717,46 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       objectPosition: objectPosition,
       crop: crop,
     };
+  }
+
+  function tableCellEvidence(element) {
+    if (element.tagName.toUpperCase() !== "TABLE" || !element.rows) return null;
+    var rows = Array.from(element.rows);
+    if (!rows.length || rows.length > 100) return null;
+    var width = rows[0].cells.length;
+    if (!width || width > 20 || rows.some(function (row) { return row.cells.length !== width; })) return null;
+    var result = [];
+    for (var rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+      var row = rows[rowIndex];
+      var cells = [];
+      for (var cellIndex = 0; cellIndex < row.cells.length; cellIndex += 1) {
+        var cell = row.cells[cellIndex];
+        if (cell.rowSpan !== 1 || cell.colSpan !== 1) return null;
+        var style = getComputedStyle(cell);
+        var fill = parseColor(style.backgroundColor);
+        var color = parseColor(style.color);
+        var families = fontFamilies(style.fontFamily || "");
+        var sizePx = number(style.fontSize, Number.NaN);
+        var weight = Number.parseInt(style.fontWeight, 10);
+        if (!Number.isFinite(weight)) weight = style.fontWeight === "bold" ? 700 : 400;
+        if (
+          !color || color.alpha !== 1 || !families.length || !Number.isFinite(sizePx) ||
+          (fill && fill.alpha !== 0 && fill.alpha !== 1) ||
+          style.fontStyle !== "normal" ||
+          (style.textDecorationLine && style.textDecorationLine !== "none")
+        ) return null;
+        cells.push({
+          text: String(cell.innerText || cell.textContent || "").replace(/\r\n?/g, "\n").trim(),
+          ...(fill && fill.alpha === 1 ? { fill: "#" + fill.hex } : {}),
+          textColor: "#" + color.hex,
+          bold: weight >= 600,
+          fontFamily: families[0],
+          fontSizePt: round(sizePx * 0.75),
+        });
+      }
+      result.push(cells);
+    }
+    return { rows: result };
   }
 
   function svgSerializationMarkup(element, bounds) {
@@ -3112,64 +3145,99 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     }
   }
 
-  function waitForStablePage() {
-    var fontReady = document.fonts && document.fonts.ready
-      ? document.fonts.ready.catch(function () {})
-      : Promise.resolve();
-    var imageReady = Promise.allSettled(
-      Array.from(document.images).map(function (image) {
-        if (image.complete) return Promise.resolve();
-        if (typeof image.decode === "function") return image.decode();
-        return new Promise(function (resolve) {
-          image.addEventListener("load", resolve, { once: true });
-          image.addEventListener("error", resolve, { once: true });
-        });
-      })
-    );
-    var ready = Promise.allSettled([fontReady, imageReady]);
-    var timeout = new Promise(function (resolve) { setTimeout(resolve, 4000); });
-    return Promise.race([ready, timeout]).then(waitForTwoPaints);
-  }
-
-  function enforceMinimumEditableFontSize() {
-    var minimumPx = 12; // 12 CSS px = 9 PowerPoint points.
-    var pseudoRules = [];
-    [document.body].concat(Array.from(document.body.querySelectorAll("*"))).forEach(
-      function (element, index) {
-        if (["SCRIPT", "STYLE", "TEXTAREA", "NOSCRIPT", "TEMPLATE"].includes(element.tagName)) {
-          return;
+  async function waitForStablePage() {
+    var readinessStarted = performance.now();
+    var mutationCount = 0;
+    var observer = typeof MutationObserver === "function"
+      ? new MutationObserver(function (entries) { mutationCount += entries.length; })
+      : null;
+    if (observer) {
+      observer.observe(document.documentElement, {
+        attributes: true,
+        childList: true,
+        characterData: true,
+        subtree: true,
+      });
+    }
+    var timeoutToken;
+    var timeout = new Promise(function (_resolve, reject) {
+      timeoutToken = setTimeout(function () {
+        reject(new Error("authored_render_readiness_timeout"));
+      }, 4000);
+    });
+    var images = Array.from(document.images);
+    var decodedImageCount = 0;
+    var unresolvedResources = [];
+    async function decodeImage(image, index) {
+      try {
+        if (!image.complete) {
+          await new Promise(function (resolve, reject) {
+            image.addEventListener("load", resolve, { once: true });
+            image.addEventListener("error", reject, { once: true });
+          });
         }
-        var hasOwnText = Array.from(element.childNodes).some(function (node) {
-          return node.nodeType === Node.TEXT_NODE && Boolean((node.textContent || "").trim());
-        });
-        var style = getComputedStyle(element);
-        if (hasOwnText && number(style.fontSize, minimumPx) < minimumPx) {
-          element.style.setProperty("font-size", minimumPx + "px", "important");
+        if (typeof image.decode === "function") await image.decode();
+        if (image.naturalWidth <= 0 || image.naturalHeight <= 0) {
+          throw new Error("empty-image");
         }
-        ["::before", "::after"].forEach(function (pseudo) {
-          var pseudoStyle = getComputedStyle(element, pseudo);
-          var content = pseudoStyle.content;
-          if (
-            content &&
-            content !== "none" &&
-            content !== "normal" &&
-            number(pseudoStyle.fontSize, minimumPx) < minimumPx
-          ) {
-            var attribute = "data-presenton-min-font-" + index +
-              (pseudo === "::before" ? "-before" : "-after");
-            element.setAttribute(attribute, "true");
-            pseudoRules.push(
-              "[" + attribute + "]" + pseudo + "{font-size:" + minimumPx + "px!important}"
-            );
-          }
-        });
+        decodedImageCount += 1;
+      } catch (_error) {
+        unresolvedResources.push("image:" + index);
       }
-    );
-    if (pseudoRules.length) {
-      var sheet = document.createElement("style");
-      sheet.setAttribute("data-presenton-minimum-font-size", "true");
-      sheet.textContent = pseudoRules.join("\n");
-      document.head.appendChild(sheet);
+    }
+    try {
+      await Promise.race([
+        Promise.all([
+          document.fonts && document.fonts.ready
+            ? document.fonts.ready
+            : Promise.resolve(),
+          Promise.all(images.map(decodeImage)),
+        ]),
+        timeout,
+      ]);
+      if (document.fonts && document.fonts.status !== "loaded") {
+        unresolvedResources.push("fonts:pending");
+      }
+      if (
+        typeof document.getAnimations === "function" &&
+        document.getAnimations().some(function (animation) {
+          return animation.playState === "running" || animation.playState === "pending";
+        })
+      ) unresolvedResources.push("animation:active");
+      if (unresolvedResources.length) {
+        throw new Error(
+          "authored_render_resources_unresolved:" + unresolvedResources.join(",")
+        );
+      }
+
+      var stableSince = performance.now();
+      var previousMutationCount = mutationCount;
+      while (performance.now() - stableSince < 100) {
+        await new Promise(function (resolve) { setTimeout(resolve, 20); });
+        if (mutationCount !== previousMutationCount) {
+          previousMutationCount = mutationCount;
+          stableSince = performance.now();
+        }
+        if (performance.now() - readinessStarted > 3800) {
+          throw new Error("authored_render_mutation_window_unstable");
+        }
+      }
+      await waitForTwoPaints();
+      return {
+        schemaVersion: "browser-render-readiness/v1",
+        status: "ready",
+        fontStatus: document.fonts ? "loaded" : "unsupported",
+        imageCount: images.length,
+        decodedImageCount: decodedImageCount,
+        unresolvedResources: [],
+        mutationFreeWindowMs: 100,
+        continuousPaintEpochs: 2,
+        captureEpoch: Math.round(performance.now() * 1000),
+        captureMode: captureMode,
+      };
+    } finally {
+      clearTimeout(timeoutToken);
+      if (observer) observer.disconnect();
     }
   }
 
@@ -3207,6 +3275,12 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     if (observation.candidateKind === "shape" && observation.shape) {
       return "shape:" + JSON.stringify(observation.shape);
     }
+    if (observation.candidateKind === "complex") {
+      return "complex:" + JSON.stringify({
+        fallbackReasons: observation.fallbackReasons.slice().sort(),
+        tableEvidence: observation.tableEvidence || null,
+      });
+    }
     return "";
   }
 
@@ -3219,12 +3293,19 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     var observation = record.observation;
     var expectedBounds = expected.boundsPx || {};
     var actualBounds = observation.boundsPx;
-    return (
-      (["text", "shape"].includes(expected.candidateKind) || observation.fallbackReasons.length === 0) &&
-      observation.id === expected.id &&
+    var declaredQidMatches =
+      expected.identityAuthority === "declared-qid" &&
+      observation.identityAuthority === "declared-qid" &&
+      record.element.getAttribute("data-qid") === expected.id;
+    var compatibilityIdentityMatches =
+      expected.identityAuthority !== "declared-qid" &&
       observation.domPath === expected.domPath &&
+      observation.sourceIndex === expected.sourceIndex;
+    return (
+      (["text", "shape", "complex"].includes(expected.candidateKind) || observation.fallbackReasons.length === 0) &&
+      observation.id === expected.id &&
+      (declaredQidMatches || compatibilityIdentityMatches) &&
       observation.tagName === expected.tagName &&
-      observation.sourceIndex === expected.sourceIndex &&
       observation.candidateKind === expected.candidateKind &&
       observationContentKey(observation) === expected.contentKey &&
       nearlyEqual(actualBounds.x, expectedBounds.x, 0.25) &&
@@ -3319,6 +3400,11 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
             element.setAttribute("data-presenton-authored-hybrid-suppress-pseudo", "true");
           }
         }
+      } else if (kind === "complex" && expected.suppressWholeElement) {
+        // Only server-admitted declared chart islands enter this branch. Hide
+        // the complete authored chart after identity/content verification so
+        // its semantic data can be represented exactly once by native OOXML.
+        element.style.setProperty("visibility", "hidden", "important");
       }
       if (!record.pseudo && element === document.body) {
         // Chromium propagates the body background to the canvas. Clearing both
@@ -3343,22 +3429,66 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     var marker = document.createElement("script");
     marker.type = "application/json";
     marker.id = MARKER_ID;
+    marker.hidden = true;
+    marker.style.setProperty("display", "none", "important");
     marker.textContent = btoa(binary);
     document.body.appendChild(marker);
     if (completionToken) {
       var completion = document.createElement("meta");
       completion.name = COMPLETION_MARKER_NAME;
       completion.content = completionToken;
+      completion.hidden = true;
       document.body.appendChild(completion);
     }
   }
 
   try {
     await ensureFixedViewport();
-    applyFontFallbackPolicy();
-    await waitForStablePage();
-    enforceMinimumEditableFontSize();
-    await waitForTwoPaints();
+    var renderReadiness = await waitForStablePage();
+    if (captureMode === "fidelity") {
+      writeResult({
+        ok: true,
+        value: {
+          viewport: {
+            widthPx: window.innerWidth,
+            heightPx: window.innerHeight,
+            devicePixelRatio: window.devicePixelRatio,
+          },
+          elements: [],
+          warnings: [],
+          appliedPromotedElementIds: [],
+          rejectedPromotedElementIds: [],
+          renderReadiness: renderReadiness,
+        },
+      });
+      return;
+    }
+
+    var declaredIdSet = new Set(declaredElementIds);
+    if (declaredIdentity) {
+      if (declaredIdSet.size !== declaredElementIds.length) {
+        throw new Error("authored_semantic_qid_duplicate");
+      }
+      declaredElementIds.forEach(function (elementId) {
+        if (
+          typeof elementId !== "string" ||
+          !/^[A-Za-z][A-Za-z0-9._:-]{0,127}$/.test(elementId)
+        ) throw new Error("authored_semantic_qid_invalid");
+      });
+      var observedQids = Array.from(document.querySelectorAll("[data-qid]"))
+        .map(function (element) { return element.getAttribute("data-qid") || ""; });
+      if (
+        observedQids.length !== new Set(observedQids).size ||
+        observedQids.some(function (qid) {
+          return !/^[A-Za-z][A-Za-z0-9._:-]{0,127}$/.test(qid);
+        })
+      ) throw new Error("authored_semantic_qid_invalid");
+      if (
+        observedQids.length !== declaredElementIds.length ||
+        observedQids.some(function (qid) { return !declaredIdSet.has(qid); }) ||
+        declaredElementIds.some(function (qid) { return !observedQids.includes(qid); })
+      ) throw new Error("authored_semantic_qid_mismatch");
+    }
 
     // A direct text node next to a block/flex/grid child is rendered as an
     // anonymous box. querySelectorAll cannot observe that box, so labels next
@@ -3367,7 +3497,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     // host bounds start before the generated item, which makes editable text
     // overlap eyebrow bars and chip bullets. Materialize those direct text
     // nodes as neutral spans so Chromium gives us their true laid-out bounds.
-    Array.from(document.body.querySelectorAll("*")).forEach(function (element) {
+    if (!declaredIdentity) Array.from(document.body.querySelectorAll("*")).forEach(function (element) {
       if (["SCRIPT", "STYLE", "TEXTAREA", "NOSCRIPT", "TEMPLATE", "SVG"].includes(element.tagName)) {
         return;
       }
@@ -3395,7 +3525,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     // the DOM, but are laid out as independent boxes by CSS. Preserve that
     // separation in PowerPoint so right-aligned KPIs and badges do not get
     // appended to the preceding paragraph at its left edge.
-    Array.from(document.body.querySelectorAll("*")).forEach(function (element) {
+    if (!declaredIdentity) Array.from(document.body.querySelectorAll("*")).forEach(function (element) {
       if (
         getComputedStyle(element).cssFloat !== "none" &&
         Boolean((element.innerText || element.textContent || "").trim())
@@ -3407,7 +3537,14 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     // Body owns the full-slide background in many authored templates. Treat it
     // as an editable rectangle so the residual PNG can stay transparent above
     // native cards and connector geometry.
-    var allElements = [document.body].concat(Array.from(document.body.querySelectorAll("*")));
+    // Declared identity may assign the semantic document root to <html>. Keep
+    // it in the observation graph so a data-qid on <body> never points at an
+    // unobserved parent. Compatibility extraction retains its historic body
+    // root and ordinal behavior.
+    var allElements = (declaredIdentity
+      ? [document.documentElement, document.body]
+      : [document.body]
+    ).concat(Array.from(document.body.querySelectorAll("*")));
     var complexSvgImagePayloads = new Map();
     var complexHtmlImagePayloads = new Map();
     for (var svgIndex = 0; svgIndex < allElements.length; svgIndex += 1) {
@@ -3446,6 +3583,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
         return;
       }
       if (
+        !declaredIdentity &&
         !element.hasAttribute(ISOLATED_INLINE_ATTRIBUTE) &&
         coveredRoots.some(function (root) { return root.contains(element); })
       ) return;
@@ -3464,10 +3602,21 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       else if (looksLikeShape(element) && (nestedBlockContent(element) || !textRoot(element))) candidateKind = "shape";
       else if (textRoot(element)) candidateKind = "text";
       else if (looksLikeShape(element)) candidateKind = "shape";
+      // Declared QIDs are identity nodes even when Chromium propagates their
+      // paint (notably the <html> canvas background) and ordinary heuristics
+      // would omit them. Preserve that ownership node as a shape observation;
+      // reconciliation/admission can still demote it truthfully.
+      else if (declaredIdentity && element.hasAttribute("data-qid")) candidateKind = "shape";
       if (!candidateKind) return;
 
-      var id = "h1-" + String(records.length + 1).padStart(4, "0");
-      element.setAttribute(ELEMENT_ATTRIBUTE, id);
+      var declaredQid = element.getAttribute("data-qid");
+      if (declaredIdentity && (!declaredQid || !declaredIdSet.has(declaredQid))) {
+        return;
+      }
+
+      var id = declaredIdentity
+        ? declaredQid
+        : "h1-" + String(records.length + 1).padStart(4, "0");
       var transform = analyzeTransform(element);
       var rotationDeg = effectiveRigidRotation(element, transform);
       var reasons = safetyReasons(element, candidateKind, transform);
@@ -3498,6 +3647,13 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       var zIndex = /^-?\d+$/.test(zIndexText) ? Number.parseInt(zIndexText, 10) : null;
       var observation = {
         id: id,
+        identityAuthority: declaredIdentity ? "declared-qid" : "compatibility-ordinal",
+        parentElementId: declaredIdentity
+          ? (function () {
+              var parent = element.parentElement && element.parentElement.closest("[data-qid]");
+              return parent ? parent.getAttribute("data-qid") : null;
+            })()
+          : null,
         domPath: domPath(element),
         tagName: element.tagName.toLowerCase(),
         sourceIndex: sourceIndex,
@@ -3508,6 +3664,10 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
         candidateKind: candidateKind,
         fallbackReasons: reasons,
       };
+      if (complexReason === "complex-table" && candidateKind === "complex") {
+        var tableEvidence = tableCellEvidence(element);
+        if (tableEvidence) observation.tableEvidence = tableEvidence;
+      }
 
       try {
         if (candidateKind === "text") {
@@ -3594,7 +3754,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     allElements.forEach(function (element, index) {
       elementSourceIndexes.set(element, index);
     });
-    allElements.forEach(function (element) {
+    if (!declaredIdentity) allElements.forEach(function (element) {
       ["::before", "::after"].forEach(function (pseudo) {
         var hostSourceIndex = elementSourceIndexes.get(element) || 0;
         var pseudoSourceIndex = hostSourceIndex;
@@ -3668,6 +3828,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
         warnings: warnings,
         appliedPromotedElementIds: suppression.applied,
         rejectedPromotedElementIds: suppression.rejected,
+        renderReadiness: renderReadiness,
       },
     });
   } catch (error) {

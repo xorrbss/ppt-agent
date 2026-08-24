@@ -29,6 +29,7 @@ export const AUTHORED_HYBRID_TYPOGRAPHY_ISSUE_CODES = [
   "bounds-overflow",
   "backplate-collision",
   "line-break-mismatch",
+  "unqualified-ja-zh-text",
 ] as const;
 
 export type AuthoredHybridTypographyIssueCode =
@@ -75,6 +76,7 @@ export const AUTHORED_HYBRID_FALLBACK_REASONS = [
   "text-shadow",
   "transformed-ancestor",
   "unknown-z-order",
+  "z-band-unsafe",
   "unsupported-background",
   "unsupported-color",
   "unsupported-direction",
@@ -90,6 +92,7 @@ export const AUTHORED_HYBRID_FALLBACK_REASONS = [
   "typography-bounds-overflow",
   "typography-backplate-collision",
   "typography-line-break-mismatch",
+  "typography-unqualified-ja-zh-text",
 ] as const;
 
 export type AuthoredHybridFallbackReason =
@@ -287,8 +290,24 @@ export interface AuthoredHybridShapePayload {
   preserveContents?: boolean;
 }
 
+export interface AuthoredHybridTableCellEvidence {
+  text: string;
+  fill?: string;
+  textColor: string;
+  bold: boolean;
+  fontFamily: string;
+  fontSizePt: number;
+}
+
+export interface AuthoredHybridTableEvidence {
+  rows: AuthoredHybridTableCellEvidence[][];
+}
+
 export interface AuthoredHybridElementBase {
   id: string;
+  /** Authored-declared identity is the exact data-qid; compatibility is ordinal. */
+  identityAuthority?: "declared-qid" | "compatibility-ordinal";
+  parentElementId?: string | null;
   domPath: string;
   tagName: string;
   sourceIndex: number;
@@ -301,6 +320,8 @@ export interface AuthoredHybridElementBase {
   opacity: number;
   /** Native-promotion blockers collected by the typography preflight. */
   typographyIssues?: AuthoredHybridTypographyIssue[];
+  /** Browser-computed table cell evidence retained only for semantic admission/suppression. */
+  tableEvidence?: AuthoredHybridTableEvidence;
 }
 
 export interface AuthoredHybridNativeTextElement
@@ -364,6 +385,9 @@ export interface AuthoredHybridBackplatePlan {
   transparentBackground: true;
   /** H2 may promote native items and extracted editable raster text/shapes. */
   eligibleElementIds: string[];
+  /** Server-admitted semantic charts added after browser observation. */
+  nativeChartElementIds?: string[];
+  nativeTableElementIds?: string[];
   rasterElementIds: string[];
 }
 
@@ -399,4 +423,6 @@ export interface AuthoredHybridBackplateRenderResult {
   appliedPromotedElementIds: string[];
   /** Requested elements left rasterised because their DOM identity drifted. */
   fallbackElementIds: string[];
+  /** Digest of the exact PNG bytes returned by the isolated renderer. */
+  capturePngSha256?: string;
 }

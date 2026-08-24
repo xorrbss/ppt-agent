@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:presenton:authored-editable-hybrid:gate0e-observations:v1",
+  "type": "object",
+  "required": ["schemaVersion", "authorityDomain", "attempt", "cases"],
+  "properties": {
+    "schemaVersion": { "const": "authored-editable-hybrid-gate0e-observations/v1" },
+    "authorityDomain": { "const": "structural_test" },
+    "attempt": { "$ref": "gate1e-artifact-source-map.v1.schema.json#/$defs/attempt" },
+    "cases": { "type": "array", "minItems": 15, "maxItems": 15 }
+  },
+  "additionalProperties": false
+}

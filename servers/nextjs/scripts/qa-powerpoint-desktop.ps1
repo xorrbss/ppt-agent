@@ -2,34 +2,672 @@ param(
   [Parameter(Mandatory = $true)]
   [string[]]$Presentation,
   [Parameter(Mandatory = $true)]
-  [string]$OutputDirectory
+  [string]$OutputDirectory,
+  [string]$PresentationId,
+  [int]$PresentationRevision = -1,
+  [ValidateSet("fidelity", "hybrid")]
+  [string[]]$ExportMode = @(),
+  [string[]]$ExportAttemptId = @()
 )
 
 $ErrorActionPreference = "Stop"
+$semanticOwnershipPrefix = "presenton-semantic-raster-ownership-v1:"
+$authoredNativeOwnershipPrefix = "authored-vnext:"
+$authoredRasterIslandOwnershipPrefix = "authored-raster-island:"
+$nativeDetailMaxTableRows = 64
+$nativeDetailMaxTableColumns = 32
+$nativeDetailMaxTableCells = 512
+$nativeDetailMaxCellTextLength = 16384
+
+function Get-Sha256Text([string]$Value) {
+  $bytes = [Text.Encoding]::UTF8.GetBytes($Value)
+  $hash = [Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
+  "sha256:" + (($hash | ForEach-Object { $_.ToString("x2") }) -join "")
+}
+
+Add-Type @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class PresentonPowerPointApplicationWindowIdentity {
+  private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
+  [DllImport("user32.dll")]
+  private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
+  [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+  [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern int GetClassName(IntPtr hwnd, StringBuilder value, int count);
+  public static int ProcessId(long hwnd) {
+    if (hwnd == 0) return 0;
+    uint processId;
+    GetWindowThreadProcessId(new IntPtr(hwnd), out processId);
+    return (int)processId;
+  }
+  public static long[] VisiblePptFrameHwndsForProcess(int expectedProcessId) {
+    var result = new List<long>();
+    EnumWindows((hwnd, state) => {
+      uint processId; GetWindowThreadProcessId(hwnd, out processId);
+      if ((int)processId != expectedProcessId || !IsWindowVisible(hwnd)) return true;
+      var className = new StringBuilder(512); GetClassName(hwnd, className, className.Capacity);
+      if (String.Equals(className.ToString(), "PPTFrameClass", StringComparison.Ordinal)) result.Add(hwnd.ToInt64());
+      return true;
+    }, IntPtr.Zero);
+    return result.ToArray();
+  }
+}
+'@
+
+function Get-PowerPointApplicationIdentity($Application) {
+  $hwnd = [int64]$Application.HWND
+  $processId = [PresentonPowerPointApplicationWindowIdentity]::ProcessId($hwnd)
+  if ($hwnd -eq 0 -or $processId -eq 0) {
+    return $null
+  }
+  [PSCustomObject]@{
+    Hwnd = $hwnd
+    ProcessId = [int]$processId
+  }
+}
+
+function Get-PowerPointVisibleFrameIdentity([int]$ExpectedProcessId) {
+  $hwnds = @([PresentonPowerPointApplicationWindowIdentity]::VisiblePptFrameHwndsForProcess($ExpectedProcessId))
+  if ($hwnds.Count -eq 0) { return $null }
+  if ($hwnds.Count -ne 1) {
+    throw "PowerPoint expected process has more than one visible PPTFrameClass window."
+  }
+  $processId = [PresentonPowerPointApplicationWindowIdentity]::ProcessId([int64]$hwnds[0])
+  if ($processId -ne $ExpectedProcessId) {
+    throw "PowerPoint visible PPTFrameClass HWND/PID binding changed during enumeration."
+  }
+  [PSCustomObject]@{ Hwnd = [int64]$hwnds[0]; ProcessId = [int]$processId }
+}
+
+function Complete-PowerPointFallbackWindowBinding($ProvisionalIdentity, $PostOpenIdentity) {
+  if (
+    $null -eq $ProvisionalIdentity -or
+    [int64]$ProvisionalIdentity.Hwnd -ne 0 -or
+    [int]$ProvisionalIdentity.ProcessId -lt 1 -or
+    $null -eq $PostOpenIdentity -or
+    [int64]$PostOpenIdentity.Hwnd -eq 0 -or
+    [int]$PostOpenIdentity.ProcessId -ne [int]$ProvisionalIdentity.ProcessId
+  ) {
+    throw "PowerPoint fallback post-open HWND/PID binding is invalid."
+  }
+  $PostOpenIdentity
+}
+
+function Get-PowerPointProcessCensus {
+  @(
+    Get-CimInstance Win32_Process -Filter "Name = 'POWERPNT.EXE'" |
+      Sort-Object ProcessId |
+      ForEach-Object {
+        [PSCustomObject]@{
+          ProcessId = [int]$_.ProcessId
+          ParentProcessId = [int]$_.ParentProcessId
+          ExecutablePath = [string]$_.ExecutablePath
+          CommandLine = [string]$_.CommandLine
+        }
+      }
+  )
+}
+
+function Read-SemanticOwnershipAlternativeText(
+  [string]$AlternativeText,
+  [int]$ExpectedSlideNumber
+) {
+  if (-not $AlternativeText.StartsWith($semanticOwnershipPrefix)) {
+    return $null
+  }
+  $encoded = $AlternativeText.Substring($semanticOwnershipPrefix.Length)
+  $base64 = $encoded.Replace('-', '+').Replace('_', '/')
+  switch ($base64.Length % 4) {
+    2 { $base64 += '==' }
+    3 { $base64 += '=' }
+    1 { throw "Semantic ownership AlternativeText has invalid base64url length." }
+  }
+  try {
+    $json = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($base64))
+    $payload = $json | ConvertFrom-Json
+  } catch {
+    throw "Semantic ownership AlternativeText is not a valid encoded payload."
+  }
+  $qids = @($payload.qids)
+  if (
+    $payload.schemaVersion -ne "presenton-semantic-raster-ownership/v1" -or
+    [int]$payload.slideNumber -ne $ExpectedSlideNumber -or
+    $qids.Count -lt 1 -or
+    @($qids | Where-Object {
+      $_ -isnot [string] -or $_.Length -lt 1 -or $_.Length -gt 512 -or
+      $_ -ne $_.Trim() -or $_ -match '[\x00-\x1f\x7f]'
+    }).Count -ne 0 -or
+    @($qids | Sort-Object -Unique).Count -ne $qids.Count -or
+    $payload.qidSetDigest -ne (Get-Sha256Text ($qids -join "`n"))
+  ) {
+    throw "Semantic ownership AlternativeText payload failed validation."
+  }
+  [PSCustomObject]@{
+    SchemaVersion = [string]$payload.schemaVersion
+    SlideNumber = [int]$payload.slideNumber
+    Qids = @($qids)
+    QidSetDigest = [string]$payload.qidSetDigest
+  }
+}
+
+function Read-AuthoredOwnershipAlternativeText(
+  [string]$AlternativeText,
+  [int]$ExpectedSlideNumber
+) {
+  $semanticOwnership = Read-SemanticOwnershipAlternativeText `
+    $AlternativeText $ExpectedSlideNumber
+  if ($null -ne $semanticOwnership) { return $semanticOwnership }
+
+  $prefix = $null
+  $field = $null
+  if ($AlternativeText.StartsWith($authoredNativeOwnershipPrefix)) {
+    $prefix = $authoredNativeOwnershipPrefix
+    $field = "elementId"
+  } elseif ($AlternativeText.StartsWith($authoredRasterIslandOwnershipPrefix)) {
+    $prefix = $authoredRasterIslandOwnershipPrefix
+    $field = "sourceOwnerIds"
+  } else {
+    return $null
+  }
+  try {
+    $payload = $AlternativeText.Substring($prefix.Length) | ConvertFrom-Json
+  } catch {
+    throw "Authored ownership AlternativeText is not valid JSON."
+  }
+  $qids = if ($field -eq "elementId") {
+    @($payload.elementId)
+  } else {
+    @($payload.sourceOwnerIds)
+  }
+  if (
+    $qids.Count -lt 1 -or
+    @($qids | Where-Object {
+      $_ -isnot [string] -or $_.Length -lt 1 -or $_.Length -gt 512 -or
+      $_ -ne $_.Trim() -or $_ -match '[\x00-\x1f\x7f]'
+    }).Count -ne 0 -or
+    @($qids | Sort-Object -Unique).Count -ne $qids.Count
+  ) {
+    throw "Authored ownership AlternativeText payload failed validation."
+  }
+  [PSCustomObject]@{
+    SchemaVersion = if ($field -eq "elementId") {
+      "authored-vnext-owner/v1"
+    } else {
+      "authored-raster-island-owner/v1"
+    }
+    SlideNumber = $ExpectedSlideNumber
+    Qids = @($qids)
+    QidSetDigest = Get-Sha256Text ($qids -join "`n")
+  }
+}
+
+function Release-PowerPointComObject($Value) {
+  if (
+    $null -ne $Value -and
+    [Runtime.InteropServices.Marshal]::IsComObject($Value)
+  ) {
+    [Runtime.InteropServices.Marshal]::FinalReleaseComObject($Value) | Out-Null
+  }
+}
+
+function Get-BoundedPowerPointCellText([string]$Value) {
+  if ($null -eq $Value) { return "" }
+  if ($Value.Length -gt $nativeDetailMaxCellTextLength) {
+    throw "PowerPoint table cell text exceeds the native readback bound."
+  }
+  $Value
+}
+
+function Read-PowerPointSolidFillPaint($FillFormat) {
+  if ($null -eq $FillFormat) { return $null }
+  $foreColor = $null
+  try {
+    $visible = [int]$FillFormat.Visible
+    $fillType = [int]$FillFormat.Type
+    $isSolid = $visible -eq -1 -and $fillType -eq 1
+    if ($isSolid) { $foreColor = $FillFormat.ForeColor }
+    [PSCustomObject]@{
+      Visible = $visible
+      Type = $fillType
+      IsSolid = $isSolid
+      ForeColorRgb = if ($null -ne $foreColor) {
+        [int]$foreColor.RGB
+      } else { $null }
+      Transparency = if ($visible -eq -1) {
+        [double]$FillFormat.Transparency
+      } else { $null }
+    }
+  } finally {
+    Release-PowerPointComObject $foreColor
+  }
+}
+
+function Read-PowerPointSolidLinePaint($LineFormat) {
+  if ($null -eq $LineFormat) { return $null }
+  $foreColor = $null
+  try {
+    $visible = [int]$LineFormat.Visible
+    $dashStyle = if ($visible -eq -1) {
+      [int]$LineFormat.DashStyle
+    } else { $null }
+    if ($visible -eq -1) { $foreColor = $LineFormat.ForeColor }
+    [PSCustomObject]@{
+      Visible = $visible
+      IsSolid = $visible -eq -1 -and $dashStyle -eq 1
+      DashStyle = $dashStyle
+      ForeColorRgb = if ($null -ne $foreColor) {
+        [int]$foreColor.RGB
+      } else { $null }
+      Transparency = if ($visible -eq -1) {
+        [double]$LineFormat.Transparency
+      } else { $null }
+      WeightPt = if ($visible -eq -1) {
+        [double]$LineFormat.Weight
+      } else { $null }
+    }
+  } finally {
+    Release-PowerPointComObject $foreColor
+  }
+}
+
+function Read-PowerPointTableNativeDetail($Shape) {
+  $table = $null
+  $rows = $null
+  $columns = $null
+  try {
+    $table = $Shape.Table
+    $rows = $table.Rows
+    $columns = $table.Columns
+    $rowCount = [int]$rows.Count
+    $columnCount = [int]$columns.Count
+    if (
+      $rowCount -gt $nativeDetailMaxTableRows -or
+      $columnCount -gt $nativeDetailMaxTableColumns -or
+      ($rowCount * $columnCount) -gt $nativeDetailMaxTableCells
+    ) {
+      throw "PowerPoint table exceeds the native readback bounds."
+    }
+
+    $rowHeightsPt = @(
+      for ($rowIndex = 1; $rowIndex -le $rowCount; $rowIndex += 1) {
+        $row = $null
+        try {
+          $row = $rows.Item($rowIndex)
+          [double]$row.Height
+        } finally {
+          Release-PowerPointComObject $row
+        }
+      }
+    )
+    $columnWidthsPt = @(
+      for ($columnIndex = 1; $columnIndex -le $columnCount; $columnIndex += 1) {
+        $column = $null
+        try {
+          $column = $columns.Item($columnIndex)
+          [double]$column.Width
+        } finally {
+          Release-PowerPointComObject $column
+        }
+      }
+    )
+    $cells = @(
+      for ($rowIndex = 1; $rowIndex -le $rowCount; $rowIndex += 1) {
+        for ($columnIndex = 1; $columnIndex -le $columnCount; $columnIndex += 1) {
+          $cell = $null
+          $cellShape = $null
+          $textFrame = $null
+          $textRange = $null
+          $font = $null
+          $fontFill = $null
+          $paragraphFormat = $null
+          $cellFill = $null
+          try {
+            $cell = $table.Cell($rowIndex, $columnIndex)
+            $cellShape = $cell.Shape
+            $textFrame = $cellShape.TextFrame2
+            $textRange = $textFrame.TextRange
+            $font = $textRange.Font
+            $fontFill = $font.Fill
+            $paragraphFormat = $textRange.ParagraphFormat
+            $cellFill = $cellShape.Fill
+            [PSCustomObject]@{
+              Row = $rowIndex
+              Column = $columnIndex
+              Text = Get-BoundedPowerPointCellText ([string]$textRange.Text)
+              TextAutoSize = [int]$textFrame.AutoSize
+              VerticalAnchor = [int]$textFrame.VerticalAnchor
+              MarginsPt = [PSCustomObject]@{
+                Left = [double]$textFrame.MarginLeft
+                Top = [double]$textFrame.MarginTop
+                Right = [double]$textFrame.MarginRight
+                Bottom = [double]$textFrame.MarginBottom
+              }
+              ParagraphAlignment = [int]$paragraphFormat.Alignment
+              Font = [PSCustomObject]@{
+                Name = [string]$font.Name
+                NameFarEast = [string]$font.NameFarEast
+                SizePt = [double]$font.Size
+                Bold = [int]$font.Bold
+                Italic = [int]$font.Italic
+                UnderlineStyle = [int]$font.UnderlineStyle
+                Fill = Read-PowerPointSolidFillPaint $fontFill
+              }
+              Fill = Read-PowerPointSolidFillPaint $cellFill
+            }
+          } finally {
+            Release-PowerPointComObject $cellFill
+            Release-PowerPointComObject $paragraphFormat
+            Release-PowerPointComObject $fontFill
+            Release-PowerPointComObject $font
+            Release-PowerPointComObject $textRange
+            Release-PowerPointComObject $textFrame
+            Release-PowerPointComObject $cellShape
+            Release-PowerPointComObject $cell
+          }
+        }
+      }
+    )
+    [PSCustomObject]@{
+      RowCount = $rowCount
+      ColumnCount = $columnCount
+      RowHeightsPt = $rowHeightsPt
+      ColumnWidthsPt = $columnWidthsPt
+      Cells = $cells
+    }
+  } finally {
+    Release-PowerPointComObject $columns
+    Release-PowerPointComObject $rows
+    Release-PowerPointComObject $table
+  }
+}
+
+function Read-PowerPointNativeShapeDetail(
+  $Shape,
+  [bool]$HasText,
+  [bool]$HasTable,
+  [int]$ShapeType,
+  $TextAutoSize
+) {
+  $fill = $null
+  $line = $null
+  $pictureFormat = $null
+  try {
+    $fill = try { $Shape.Fill } catch { $null }
+    $line = try { $Shape.Line } catch { $null }
+    if ($ShapeType -in 11, 13) {
+      $pictureFormat = $Shape.PictureFormat
+    }
+    [PSCustomObject]@{
+      TextAutoSize = if ($HasText) { [int]$TextAutoSize } else { $null }
+      SolidFill = Read-PowerPointSolidFillPaint $fill
+      SolidLine = Read-PowerPointSolidLinePaint $line
+      PictureCrop = if ($null -ne $pictureFormat) {
+        [PSCustomObject]@{
+          LeftPt = [double]$pictureFormat.CropLeft
+          TopPt = [double]$pictureFormat.CropTop
+          RightPt = [double]$pictureFormat.CropRight
+          BottomPt = [double]$pictureFormat.CropBottom
+        }
+      } else { $null }
+      Table = if ($HasTable) {
+        Read-PowerPointTableNativeDetail $Shape
+      } else { $null }
+    }
+  } finally {
+    Release-PowerPointComObject $pictureFormat
+    Release-PowerPointComObject $line
+    Release-PowerPointComObject $fill
+  }
+}
+
+function Start-PowerPointWindowObserver([string]$StopSignalPath, [string]$ReadySignalPath, [string]$EpochId) {
+  Start-Job -ArgumentList $StopSignalPath, $ReadySignalPath, $EpochId -ScriptBlock {
+    param([string]$StopPath, [string]$ReadyPath, [string]$ObserverEpochId)
+    Add-Type @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Text;
+public sealed class PresentonPowerPointWindow {
+  public long Hwnd; public int ProcessId; public long OwnerHwnd;
+  public string ClassName; public string Title; public bool Visible;
+}
+public static class PresentonPowerPointWindowCensus {
+  private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
+  [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+  [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
+  [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
+  [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr hwnd, uint command);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern int GetClassName(IntPtr hwnd, StringBuilder value, int count);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern int GetWindowText(IntPtr hwnd, StringBuilder value, int count);
+  public static PresentonPowerPointWindow[] Snapshot() {
+    var result = new List<PresentonPowerPointWindow>();
+    EnumWindows((hwnd, state) => {
+      uint processId; GetWindowThreadProcessId(hwnd, out processId);
+      if (!IsWindowVisible(hwnd)) return true;
+      try {
+        var process = System.Diagnostics.Process.GetProcessById((int)processId);
+        if (!String.Equals(process.ProcessName, "POWERPNT", StringComparison.OrdinalIgnoreCase)) return true;
+      } catch { return true; }
+      var className = new StringBuilder(512); GetClassName(hwnd, className, className.Capacity);
+      var title = new StringBuilder(2048); GetWindowText(hwnd, title, title.Capacity);
+      result.Add(new PresentonPowerPointWindow {
+        Hwnd=hwnd.ToInt64(), ProcessId=(int)processId, OwnerHwnd=GetWindow(hwnd, 4).ToInt64(),
+        ClassName=className.ToString(), Title=title.ToString(), Visible=true
+      });
+      return true;
+    }, IntPtr.Zero);
+    return result.ToArray();
+  }
+}
+'@
+    $observed = @{}
+    $observedProcesses = @{}
+    Set-Content -LiteralPath $ReadyPath -Value "ready" -Encoding ascii
+    while (-not (Test-Path -LiteralPath $StopPath)) {
+      $now = (Get-Date).ToUniversalTime().ToString("o")
+      foreach ($process in [Diagnostics.Process]::GetProcessesByName("POWERPNT")) {
+        $key = [string]$process.Id
+        if ($observedProcesses.ContainsKey($key)) {
+          $observedProcesses[$key].LastSeenAt = $now
+          $observedProcesses[$key].ObservationCount += 1
+        } else {
+          $observedProcesses[$key] = [PSCustomObject]@{
+            EpochId = $ObserverEpochId
+            ProcessId = [int]$process.Id
+            FirstSeenAt = $now
+            LastSeenAt = $now
+            ObservationCount = 1
+          }
+        }
+        $process.Dispose()
+      }
+      foreach ($window in [PresentonPowerPointWindowCensus]::Snapshot()) {
+        $key = [string]$window.Hwnd
+        if ($observed.ContainsKey($key)) {
+          $observed[$key].LastSeenAt = $now
+          $observed[$key].ObservationCount += 1
+          $observed[$key].Title = [string]$window.Title
+        } else {
+          $observed[$key] = [PSCustomObject]@{
+            EpochId = $ObserverEpochId
+            Hwnd = [int64]$window.Hwnd
+            ProcessId = [int]$window.ProcessId
+            OwnerHwnd = [int64]$window.OwnerHwnd
+            ClassName = [string]$window.ClassName
+            Title = [string]$window.Title
+            Visible = [bool]$window.Visible
+            IsDialog = $window.ClassName -eq '#32770' -or $window.OwnerHwnd -ne 0
+            FirstSeenAt = $now
+            LastSeenAt = $now
+            ObservationCount = 1
+          }
+        }
+      }
+      Start-Sleep -Milliseconds 100
+    }
+    [PSCustomObject]@{
+      EpochId = $ObserverEpochId
+      Processes = @($observedProcesses.Values | Sort-Object ProcessId)
+      Windows = @($observed.Values | Sort-Object ProcessId, Hwnd)
+    }
+  }
+}
+
+function Wait-PowerPointWindowObserverReady([string]$ReadySignalPath) {
+  $deadline = (Get-Date).AddSeconds(10)
+  while (-not (Test-Path -LiteralPath $ReadySignalPath) -and (Get-Date) -lt $deadline) {
+    Start-Sleep -Milliseconds 50
+  }
+  if (-not (Test-Path -LiteralPath $ReadySignalPath)) {
+    throw "PowerPoint attended observer did not become ready before launch."
+  }
+}
+
+function Stop-PowerPointWindowObserverEpoch($Observer, [string]$StopSignalPath, [string]$EpochId) {
+  Set-Content -LiteralPath $StopSignalPath -Value "stop" -Encoding ascii
+  Wait-Job -Job $Observer -Timeout 10 | Out-Null
+  if ($Observer.State -ne "Completed") {
+    throw "PowerPoint attended window observer did not stop normally."
+  }
+  $result = @(Receive-Job -Job $Observer)
+  Remove-Job -Job $Observer
+  if ($result.Count -ne 1 -or [string]$result[0].EpochId -ne $EpochId) {
+    throw "PowerPoint attended observer returned an invalid epoch envelope."
+  }
+  $result[0]
+}
+
+function Get-UnexpectedPowerPointObservation(
+  [int]$ExpectedProcessId,
+  [object[]]$Processes,
+  [object[]]$Windows
+) {
+  $unexpectedProcesses = @($Processes | Where-Object { [int]$_.ProcessId -ne $ExpectedProcessId })
+  $unexpectedWindows = @($Windows | Where-Object { [int]$_.ProcessId -ne $ExpectedProcessId })
+  $unexpectedProcessIds = @(
+    @($unexpectedProcesses | ForEach-Object { $_.ProcessId }) +
+      @($unexpectedWindows | ForEach-Object { $_.ProcessId }) |
+      Where-Object { [int]$_ -gt 0 } |
+      Sort-Object -Unique
+  )
+  [PSCustomObject]@{
+    UnexpectedPowerPointProcessCount = $unexpectedProcessIds.Count
+    UnexpectedPowerPointProcessIds = $unexpectedProcessIds
+    UnexpectedProcesses = $unexpectedProcesses
+    UnexpectedWindows = $unexpectedWindows
+  }
+}
+
+function Get-PowerPointObserverEpochGuarantee(
+  $Observation,
+  [string]$ExpectedEpochId,
+  [int]$ExpectedProcessId,
+  [bool]$RequireWindow
+) {
+  $processes = @($Observation.Processes)
+  $windows = @($Observation.Windows)
+  if (
+    [string]$Observation.EpochId -ne $ExpectedEpochId -or
+    $processes.Count -eq 0 -or
+    @($processes | Where-Object { [string]$_.EpochId -ne $ExpectedEpochId }).Count -ne 0 -or
+    @($windows | Where-Object { [string]$_.EpochId -ne $ExpectedEpochId }).Count -ne 0 -or
+    ($RequireWindow -and $windows.Count -eq 0)
+  ) {
+    throw "PowerPoint observer epoch identity is invalid."
+  }
+  $guarantee = Get-UnexpectedPowerPointObservation $ExpectedProcessId $processes $windows
+  if ($guarantee.UnexpectedPowerPointProcessCount -ne 0) {
+    throw "PowerPoint observer epoch contains an unexpected process or window."
+  }
+  $guarantee
+}
+
 $powerPointPath = "C:\Program Files\Microsoft Office\root\Office16\POWERPNT.EXE"
 if (-not (Test-Path -LiteralPath $powerPointPath -PathType Leaf)) {
   throw "PowerPoint Desktop executable was not found: $powerPointPath"
 }
+$openingProcessCensus = @(Get-PowerPointProcessCensus)
 $preexisting = @(Get-Process -Name "POWERPNT" -ErrorAction SilentlyContinue)
 if ($preexisting.Count -gt 0) {
   throw "PowerPoint Desktop must not already be running for isolated COM QA."
 }
 
+$anyAuthorityPinProvided =
+  -not [string]::IsNullOrWhiteSpace($PresentationId) -or
+  $PresentationRevision -ge 0 -or
+  $ExportMode.Count -gt 0 -or
+  $ExportAttemptId.Count -gt 0
+$authorityPinsProvided =
+  -not [string]::IsNullOrWhiteSpace($PresentationId) -and
+  $PresentationRevision -ge 0 -and
+  $ExportMode.Count -eq $Presentation.Count -and
+  $ExportAttemptId.Count -eq $Presentation.Count
+if (
+  $anyAuthorityPinProvided -and (
+    -not $authorityPinsProvided -or
+    @($ExportMode | Sort-Object -Unique).Count -ne $ExportMode.Count -or
+    @($ExportAttemptId | Where-Object { [string]::IsNullOrWhiteSpace($_) }).Count -ne 0
+  )
+) {
+  throw "Actual-product COM authority requires presentation/revision and one mode/attempt ID per PPTX."
+}
+
 $resolvedOutput = [System.IO.Path]::GetFullPath($OutputDirectory)
 [System.IO.Directory]::CreateDirectory($resolvedOutput) | Out-Null
-$launched = Start-Process -FilePath $powerPointPath -ArgumentList "/safe" -WindowStyle Hidden -PassThru
+$launched = $null
 $application = $null
+$applicationIdentity = $null
+$provisionalApplicationIdentity = $null
+$requiresPostOpenWindowBinding = $false
+$applicationWindowBindingPhase = "rot-application-hwnd"
 $attachedAt = $null
 $activationMethod = "safe-mode-running-object-table"
+$windowObserver = $null
+$observerEpochId = [guid]::NewGuid().ToString("D")
+$windowStopSignal = Join-Path $resolvedOutput (".powerpoint-window-observer-" + [guid]::NewGuid().ToString("N") + ".stop")
+$windowReadySignal = Join-Path $resolvedOutput (".powerpoint-window-observer-" + [guid]::NewGuid().ToString("N") + ".ready")
+$discardedObserverEpochs = @()
+$windowEvents = @()
+$powerPointProcessEvents = @()
+$unexpectedPowerPointObservation = $null
+$report = $null
 try {
+  $windowObserver = Start-PowerPointWindowObserver $windowStopSignal $windowReadySignal $observerEpochId
+  Wait-PowerPointWindowObserverReady $windowReadySignal
+  $launched = Start-Process -FilePath $powerPointPath -ArgumentList "/safe" -WindowStyle Hidden -PassThru
   for ($attempt = 0; $attempt -lt 40 -and $null -eq $application; $attempt += 1) {
     Start-Sleep -Milliseconds 500
+    $candidate = $null
     try {
-      $application = [Runtime.InteropServices.Marshal]::GetActiveObject(
+      $candidate = [Runtime.InteropServices.Marshal]::GetActiveObject(
         "PowerPoint.Application"
       )
+      $candidateIdentity = Get-PowerPointApplicationIdentity $candidate
+      if ($null -eq $candidateIdentity) {
+        [Runtime.InteropServices.Marshal]::FinalReleaseComObject($candidate) | Out-Null
+        $candidate = $null
+        continue
+      }
+      if ($candidateIdentity.ProcessId -ne [int]$launched.Id) {
+        [Runtime.InteropServices.Marshal]::FinalReleaseComObject($candidate) | Out-Null
+        $candidate = $null
+        throw "PowerPoint ROT application HWND belongs to a process other than the launched process."
+      }
+      $application = $candidate
+      $applicationIdentity = $candidateIdentity
       $attachedAt = Get-Date
     } catch {
+      if ($null -ne $candidate) {
+        [Runtime.InteropServices.Marshal]::FinalReleaseComObject($candidate) | Out-Null
+        $candidate = $null
+      }
+      if ($_.Exception.Message -match "ROT application HWND") {
+        throw
+      }
       # PowerPoint registers its automation object after startup completes.
     }
   }
@@ -37,6 +675,7 @@ try {
     # Some Click-to-Run builds start /safe successfully but never publish that
     # process to the Running Object Table. Shut down only our exact process and
     # use COM activation, which still launches a fresh isolated POWERPNT.EXE.
+    $safeModeProcessId = [int]$launched.Id
     if (-not $launched.HasExited) {
       Stop-Process -Id $launched.Id -Force
       Wait-Process -Id $launched.Id -Timeout 10 -ErrorAction SilentlyContinue
@@ -54,6 +693,29 @@ try {
     if ($remainingPowerPoint.Count -ne 0) {
       throw "Safe-mode PowerPoint did not fully exit before COM activation."
     }
+    $discardedObservation = Stop-PowerPointWindowObserverEpoch `
+      $windowObserver $windowStopSignal $observerEpochId
+    $windowObserver = $null
+    $discardedGuarantee = Get-PowerPointObserverEpochGuarantee `
+      $discardedObservation $observerEpochId $safeModeProcessId $false
+    $discardedObserverEpochs += [PSCustomObject]@{
+      EpochId = $observerEpochId
+      Reason = "safe-mode-rot-unavailable"
+      ExpectedProcessId = $safeModeProcessId
+      ObservedProcessIds = @($discardedObservation.Processes.ProcessId | Sort-Object -Unique)
+      UnexpectedPowerPointProcessCount = [int]$discardedGuarantee.UnexpectedPowerPointProcessCount
+      CleanupConfirmed = $remainingPowerPoint.Count -eq 0
+    }
+    foreach ($signalPath in @($windowStopSignal, $windowReadySignal)) {
+      if (Test-Path -LiteralPath $signalPath) {
+        Remove-Item -LiteralPath $signalPath -Force
+      }
+    }
+    $observerEpochId = [guid]::NewGuid().ToString("D")
+    $windowStopSignal = Join-Path $resolvedOutput (".powerpoint-window-observer-" + [guid]::NewGuid().ToString("N") + ".stop")
+    $windowReadySignal = Join-Path $resolvedOutput (".powerpoint-window-observer-" + [guid]::NewGuid().ToString("N") + ".ready")
+    $windowObserver = Start-PowerPointWindowObserver $windowStopSignal $windowReadySignal $observerEpochId
+    Wait-PowerPointWindowObserverReady $windowReadySignal
     # Click-to-Run releases the COM class factory shortly after the process exits.
     Start-Sleep -Seconds 3
     $application = New-Object -ComObject "PowerPoint.Application"
@@ -67,62 +729,490 @@ try {
       throw "COM activation did not create exactly one fresh PowerPoint process."
     }
     $launched = $freshProcesses[0]
+    $provisionalApplicationIdentity = [PSCustomObject]@{
+      Hwnd = [int64]0
+      ProcessId = [int]$launched.Id
+    }
+    $requiresPostOpenWindowBinding = $true
+    $applicationWindowBindingPhase = "post-first-open-enumerated-frame-hwnd"
   }
 
+  $application.Visible = -1
+  if (-not $requiresPostOpenWindowBinding -and ($null -eq $applicationIdentity -or $applicationIdentity.Hwnd -eq 0 -or $applicationIdentity.ProcessId -ne [int]$launched.Id)) {
+    throw "PowerPoint Application HWND/PID does not match the launched process."
+  }
+  if (-not $requiresPostOpenWindowBinding) {
+    $rotFrameIdentity = $null
+    for ($identityAttempt = 0; $identityAttempt -lt 20 -and $null -eq $rotFrameIdentity; $identityAttempt += 1) {
+      $rotFrameIdentity = Get-PowerPointVisibleFrameIdentity ([int]$launched.Id)
+      if ($null -eq $rotFrameIdentity) { Start-Sleep -Milliseconds 250 }
+    }
+    if ($null -eq $rotFrameIdentity -or $rotFrameIdentity.Hwnd -ne $applicationIdentity.Hwnd -or $rotFrameIdentity.ProcessId -ne $applicationIdentity.ProcessId) {
+      throw "PowerPoint ROT Application HWND does not match the unique visible PPTFrameClass window."
+    }
+    $applicationIdentity = $rotFrameIdentity
+  }
+  Start-Sleep -Milliseconds 500
   $results = @()
-  foreach ($inputPath in $Presentation) {
+  for ($presentationOrdinal = 0; $presentationOrdinal -lt $Presentation.Count; $presentationOrdinal += 1) {
+    $inputPath = $Presentation[$presentationOrdinal]
+    $currentMode = if ($authorityPinsProvided) { $ExportMode[$presentationOrdinal] } else { $null }
+    $currentExportAttemptId = if ($authorityPinsProvided) { $ExportAttemptId[$presentationOrdinal] } else { $null }
     $resolvedInput = (Resolve-Path -LiteralPath $inputPath).Path
-    $name = [System.IO.Path]::GetFileNameWithoutExtension($resolvedInput)
+    $originalName = [System.IO.Path]::GetFileNameWithoutExtension($resolvedInput)
+    # Keep the two nested render directories and reopened copy below the
+    # Office COM 255-character filename boundary on Windows worktrees.
+    $shortStem = if ($originalName.Length -gt 24) {
+      $originalName.Substring(0, 24)
+    } else {
+      $originalName
+    }
+    $inputDigestPrefix = (
+      Get-FileHash -Algorithm SHA256 -LiteralPath $resolvedInput
+    ).Hash.Substring(0, 12).ToLowerInvariant()
+    $name = "$shortStem-$inputDigestPrefix"
     $renderDirectory = Join-Path $resolvedOutput $name
     [System.IO.Directory]::CreateDirectory($renderDirectory) | Out-Null
+    $reopenedPath = Join-Path $renderDirectory "$name-reopened.pptx"
+    $sourceDeck = $null
     $deck = $null
     try {
-      # ReadOnly=-1, Untitled=0, WithWindow=0.
-      $deck = $application.Presentations.Open($resolvedInput, -1, 0, 0)
-      $fonts = @()
-      for ($index = 1; $index -le $deck.Fonts.Count; $index += 1) {
-        $font = $deck.Fonts.Item($index)
-        $embedded = $null
-        try {
-          $embedded = [bool]$font.Embedded
-        } catch {
-          $embedded = $null
+      # ReadOnly=-1, Untitled=0, WithWindow=-1.  The attended window is required
+      # so the dialog observer can prove that no repair UI appeared.
+      $firstOpenCallStartedAt = (Get-Date).ToUniversalTime().ToString("o")
+      $sourceDeck = $application.Presentations.Open($resolvedInput, -1, 0, -1)
+      $firstOpenCallReturnedAt = (Get-Date).ToUniversalTime().ToString("o")
+      if ($requiresPostOpenWindowBinding) {
+        $postOpenIdentity = $null
+        for ($identityAttempt = 0; $identityAttempt -lt 20 -and $null -eq $postOpenIdentity; $identityAttempt += 1) {
+          $postOpenIdentity = Get-PowerPointVisibleFrameIdentity ([int]$launched.Id)
+          if ($null -eq $postOpenIdentity) { Start-Sleep -Milliseconds 250 }
         }
-        $fonts += [PSCustomObject]@{
-          Name = [string]$font.Name
-          Embedded = $embedded
-        }
+        $applicationIdentity = Complete-PowerPointFallbackWindowBinding `
+          $provisionalApplicationIdentity $postOpenIdentity
+        $requiresPostOpenWindowBinding = $false
+        $attachedAt = Get-Date
       }
-      $deck.Export($renderDirectory, "PNG", 1280, 720)
+      $fonts = @()
+      $sourceFonts = $sourceDeck.Fonts
+      try {
+        for ($index = 1; $index -le $sourceFonts.Count; $index += 1) {
+          $font = $sourceFonts.Item($index)
+          try {
+            $embedded = $null
+            try {
+              $embedded = [bool]$font.Embedded
+            } catch {
+              $embedded = $null
+            }
+            $fonts += [PSCustomObject]@{
+              Name = [string]$font.Name
+              Embedded = $embedded
+            }
+          } finally {
+            [Runtime.InteropServices.Marshal]::FinalReleaseComObject($font) | Out-Null
+            $font = $null
+          }
+        }
+      } finally {
+        [Runtime.InteropServices.Marshal]::FinalReleaseComObject($sourceFonts) | Out-Null
+        $sourceFonts = $null
+      }
+      $sourceShapeCounts = @(
+        for ($slideIndex = 1; $slideIndex -le $sourceDeck.Slides.Count; $slideIndex += 1) {
+          [int]$sourceDeck.Slides.Item($slideIndex).Shapes.Count
+        }
+      )
+      $sourceShapeReadback = @()
+      for ($slideIndex = 1; $slideIndex -le $sourceDeck.Slides.Count; $slideIndex += 1) {
+        $sourceShapes = $sourceDeck.Slides.Item($slideIndex).Shapes
+        for ($shapeIndex = 1; $shapeIndex -le $sourceShapes.Count; $shapeIndex += 1) {
+          $sourceShape = $sourceShapes.Item($shapeIndex)
+          $sourceTextFrame = $null
+          $sourceTextRange = $null
+          $sourceTextFont = $null
+          try {
+            $sourceHasTextFrame = [bool]$sourceShape.HasTextFrame
+            if ($sourceHasTextFrame) {
+              $sourceTextFrame = $sourceShape.TextFrame2
+            }
+            $sourceHasText = $sourceHasTextFrame -and [bool]$sourceTextFrame.HasText
+            $sourceHasTable = [bool]$sourceShape.HasTable
+            $sourceShapeType = [int]$sourceShape.Type
+            if ($sourceHasText) {
+              $sourceTextRange = $sourceTextFrame.TextRange
+              $sourceTextFont = $sourceTextRange.Font
+            }
+            $sourceTextAutoSize = if ($sourceHasText) {
+              [int]$sourceTextFrame.AutoSize
+            } else { $null }
+            $sourceText = if ($sourceHasText) { [string]$sourceTextRange.Text } else { $null }
+            $sourceAlternativeText = try {
+              [string]$sourceShape.AlternativeText
+            } catch { "" }
+            $sourceSemanticOwnership = Read-AuthoredOwnershipAlternativeText `
+              $sourceAlternativeText $slideIndex
+            $sourceShapeReadback += [PSCustomObject]@{
+              SlideNumber = $slideIndex
+              Name = [string]$sourceShape.Name
+              AlternativeText = $sourceAlternativeText
+              Qids = if ($null -ne $sourceSemanticOwnership) {
+                @($sourceSemanticOwnership.Qids)
+              } else { @() }
+              SemanticOwnershipQidSetDigest = if ($null -ne $sourceSemanticOwnership) {
+                [string]$sourceSemanticOwnership.QidSetDigest
+              } else { $null }
+              Type = $sourceShapeType
+              ZOrderPosition = [int]$sourceShape.ZOrderPosition
+              HasText = $sourceHasText
+              Text = $sourceText
+              TextLineBreakCount = if ($null -ne $sourceText) {
+                [regex]::Matches($sourceText, "[`r`n`v]").Count
+              } else { 0 }
+              Typeface = if ($sourceHasText) {
+                [string]$sourceTextFont.Name
+              } else { $null }
+              EastAsianTypeface = if ($sourceHasText) {
+                [string]$sourceTextFont.NameFarEast
+              } else { $null }
+              LeftPt = [double]$sourceShape.Left
+              TopPt = [double]$sourceShape.Top
+              WidthPt = [double]$sourceShape.Width
+              HeightPt = [double]$sourceShape.Height
+              NativeDetail = Read-PowerPointNativeShapeDetail `
+                $sourceShape $sourceHasText $sourceHasTable `
+                $sourceShapeType $sourceTextAutoSize
+            }
+          } finally {
+            Release-PowerPointComObject $sourceTextFont
+            if ($null -ne $sourceTextRange) {
+              [Runtime.InteropServices.Marshal]::FinalReleaseComObject($sourceTextRange) | Out-Null
+              $sourceTextRange = $null
+            }
+            Release-PowerPointComObject $sourceTextFrame
+            [Runtime.InteropServices.Marshal]::FinalReleaseComObject($sourceShape) | Out-Null
+          }
+        }
+        [Runtime.InteropServices.Marshal]::FinalReleaseComObject($sourceShapes) | Out-Null
+      }
+      $firstOpenRenderDirectory = Join-Path $renderDirectory "first-open"
+      [System.IO.Directory]::CreateDirectory($firstOpenRenderDirectory) | Out-Null
+      $sourceDeck.Export($firstOpenRenderDirectory, "PNG", 1280, 720)
+      $firstOpenPngs = @(
+        Get-ChildItem -LiteralPath $firstOpenRenderDirectory -Filter "*.PNG" -File |
+          Sort-Object @{ Expression = {
+            if ($_.BaseName -match "(\d+)$") { return [int]$Matches[1] }
+            return [int]::MaxValue
+          } }, Name
+      )
+      $firstOpenRenderedPngSha256 = @($firstOpenPngs | ForEach-Object {
+        (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant()
+      })
+      # ppSaveAsOpenXMLPresentation=24.  Save a copy, close the source, and
+      # inspect only the reopened copy so render/readback evidence cannot be
+      # satisfied by the initial in-memory representation.
+      $sourceDeck.SaveCopyAs($reopenedPath, 24)
+      $sourceDeck.Close()
+      [Runtime.InteropServices.Marshal]::FinalReleaseComObject($sourceDeck) | Out-Null
+      $sourceDeck = $null
+      $reopenCallStartedAt = (Get-Date).ToUniversalTime().ToString("o")
+      $deck = $application.Presentations.Open($reopenedPath, -1, 0, -1)
+      $reopenCallReturnedAt = (Get-Date).ToUniversalTime().ToString("o")
+      $reopenedShapeCounts = @(
+        for ($slideIndex = 1; $slideIndex -le $deck.Slides.Count; $slideIndex += 1) {
+          [int]$deck.Slides.Item($slideIndex).Shapes.Count
+        }
+      )
+      $nativeText = 0
+      $nativeImage = 0
+      $nativeShape = 0
+      $nativeTable = 0
+      $nativeChart = 0
+      $typographyIssuesGt5Pt = 0
+      $typographyIssuesGt10Pt = 0
+      $typographyIssueObservations = @()
+      $inspectionFailures = 0
+      $shapeReadback = @()
+      $backplateZOrderPositions = @()
+      $nativeZOrderPositions = @()
+      for ($slideIndex = 1; $slideIndex -le $deck.Slides.Count; $slideIndex += 1) {
+        $shapes = $deck.Slides.Item($slideIndex).Shapes
+        for ($shapeIndex = 1; $shapeIndex -le $shapes.Count; $shapeIndex += 1) {
+          $shape = $shapes.Item($shapeIndex)
+          $textFrame = $null
+          $textRange = $null
+          $textFont = $null
+          try {
+            $hasTextFrame = [bool]$shape.HasTextFrame
+            if ($hasTextFrame) { $textFrame = $shape.TextFrame2 }
+            $hasText = $hasTextFrame -and [bool]$textFrame.HasText
+            $hasTable = [bool]$shape.HasTable
+            $hasChart = [bool]$shape.HasChart
+            $shapeName = ([string]$shape.Name).ToLowerInvariant()
+            $isBackplate = $shapeName.Contains("presenton hybrid backplate")
+            $isSemanticOwnershipCarrier =
+              $shapeName.StartsWith("presenton raster visual fragment ") -and
+              $shapeName.EndsWith(" semantic-owner")
+            $shapeType = [int]$shape.Type
+            $zOrderPosition = [int]$shape.ZOrderPosition
+            $isCanvasBackground =
+              -not $isBackplate -and
+              -not $hasText -and
+              -not $hasTable -and
+              -not $hasChart -and
+              $shapeType -notin 11, 13 -and
+              [Math]::Abs([double]$shape.Left) -lt 0.01 -and
+              [Math]::Abs([double]$shape.Top) -lt 0.01 -and
+              [Math]::Abs([double]$shape.Width - 960.0) -lt 0.01 -and
+              [Math]::Abs([double]$shape.Height - 540.0) -lt 0.01
+            if ($isBackplate) {
+              $backplateZOrderPositions += $zOrderPosition
+            } elseif (-not $isCanvasBackground -and -not $isSemanticOwnershipCarrier) {
+              $nativeZOrderPositions += $zOrderPosition
+            }
+            if ($hasText) { $nativeText += 1 }
+            if ($hasTable) { $nativeTable += 1 }
+            if ($hasChart) { $nativeChart += 1 }
+            if (-not $isBackplate -and $shapeType -in 11, 13) {
+              $nativeImage += 1
+            } elseif (-not $isBackplate -and -not $isSemanticOwnershipCarrier -and -not $hasText -and -not $hasTable -and -not $hasChart -and $shapeType -notin 11, 13) {
+              $nativeShape += 1
+            }
+            if ($hasText) {
+              $textRange = $textFrame.TextRange
+              $textFont = $textRange.Font
+              $boundHeight = [double]$textRange.BoundHeight
+              $boundWidth = [double]$textRange.BoundWidth
+              $heightOverflow = $boundHeight - [double]$shape.Height
+              $widthOverflow = $boundWidth - [double]$shape.Width
+              $overflow = [Math]::Max($heightOverflow, $widthOverflow)
+              if ($overflow -gt 5) { $typographyIssuesGt5Pt += 1 }
+              if ($overflow -gt 10) { $typographyIssuesGt10Pt += 1 }
+              if ($overflow -gt 5) {
+                $typographyIssueObservations += [PSCustomObject]@{
+                  SlideNumber = $slideIndex
+                  Name = [string]$shape.Name
+                  Text = [string]$textRange.Text
+                  ShapeWidthPt = [double]$shape.Width
+                  ShapeHeightPt = [double]$shape.Height
+                  BoundWidthPt = $boundWidth
+                  BoundHeightPt = $boundHeight
+                  WidthOverflowPt = $widthOverflow
+                  HeightOverflowPt = $heightOverflow
+                  MaximumOverflowPt = $overflow
+                }
+              }
+            }
+            $textAutoSize = if ($hasText) {
+              [int]$textFrame.AutoSize
+            } else { $null }
+            $textValue = if ($hasText) { [string]$textRange.Text } else { $null }
+            $alternativeText = try {
+              [string]$shape.AlternativeText
+            } catch { "" }
+            $semanticOwnership = Read-AuthoredOwnershipAlternativeText `
+              $alternativeText $slideIndex
+            $shapeReadback += [PSCustomObject]@{
+              SlideNumber = $slideIndex
+              Name = [string]$shape.Name
+              AlternativeText = $alternativeText
+              Qids = if ($null -ne $semanticOwnership) {
+                @($semanticOwnership.Qids)
+              } else { @() }
+              SemanticOwnershipQidSetDigest = if ($null -ne $semanticOwnership) {
+                [string]$semanticOwnership.QidSetDigest
+              } else { $null }
+              Type = $shapeType
+              ZOrderPosition = $zOrderPosition
+              IsBackplate = $isBackplate
+              IsSemanticOwnershipCarrier = $isSemanticOwnershipCarrier
+              IsCanvasBackground = $isCanvasBackground
+              HasText = $hasText
+              Text = $textValue
+              TextLineBreakCount = if ($null -ne $textValue) {
+                [regex]::Matches($textValue, "[`r`n`v]").Count
+              } else { 0 }
+              Typeface = if ($hasText) { [string]$textFont.Name } else { $null }
+              EastAsianTypeface = if ($hasText) { [string]$textFont.NameFarEast } else { $null }
+              LeftPt = [double]$shape.Left
+              TopPt = [double]$shape.Top
+              WidthPt = [double]$shape.Width
+              HeightPt = [double]$shape.Height
+              NativeDetail = Read-PowerPointNativeShapeDetail `
+                $shape $hasText $hasTable $shapeType $textAutoSize
+            }
+          } catch {
+            $inspectionFailures += 1
+          } finally {
+            Release-PowerPointComObject $textFont
+            if ($null -ne $textRange) {
+              [Runtime.InteropServices.Marshal]::FinalReleaseComObject($textRange) | Out-Null
+              $textRange = $null
+            }
+            Release-PowerPointComObject $textFrame
+            [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shape) | Out-Null
+          }
+        }
+        [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shapes) | Out-Null
+      }
+      $reopenedRenderDirectory = Join-Path $renderDirectory "reopened-render"
+      [System.IO.Directory]::CreateDirectory($reopenedRenderDirectory) | Out-Null
+      $deck.Export($reopenedRenderDirectory, "PNG", 1280, 720)
+      $pngs = @(
+        Get-ChildItem -LiteralPath $reopenedRenderDirectory -Filter "*.PNG" -File |
+          Sort-Object @{ Expression = {
+            if ($_.BaseName -match "(\d+)$") {
+              return [int]$Matches[1]
+            }
+            return [int]::MaxValue
+          } }, Name
+      )
+      $reopenedShapeReadback = @($shapeReadback | Select-Object `
+        SlideNumber, Name, AlternativeText, Qids, SemanticOwnershipQidSetDigest, `
+        Type, ZOrderPosition, HasText, Text, `
+        TextLineBreakCount, Typeface, EastAsianTypeface, `
+        LeftPt, TopPt, WidthPt, HeightPt, NativeDetail)
+      $shapeReadbackPreserved =
+        ($sourceShapeReadback | ConvertTo-Json -Depth 12 -Compress) -eq
+        ($reopenedShapeReadback | ConvertTo-Json -Depth 12 -Compress)
+      $sourceSemanticQids = @(
+        $sourceShapeReadback | ForEach-Object { @($_.Qids) } | Sort-Object -Unique
+      )
+      $reopenedSemanticQids = @(
+        $shapeReadback | ForEach-Object { @($_.Qids) } | Sort-Object -Unique
+      )
+      $semanticOwnershipPreserved =
+        ($sourceSemanticQids.Count -gt 0 -or -not $authorityPinsProvided) -and
+        ($sourceSemanticQids | ConvertTo-Json -Compress) -eq
+        ($reopenedSemanticQids | ConvertTo-Json -Compress)
+      $renderHashesPreserved =
+        $firstOpenRenderedPngSha256.Count -eq $pngs.Count -and
+        (@(Compare-Object $firstOpenRenderedPngSha256 @($pngs | ForEach-Object {
+          (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant()
+        }) -SyncWindow 0).Count -eq 0)
+      $readbackPassed =
+        $sourceShapeCounts.Count -eq $reopenedShapeCounts.Count -and
+        (@(Compare-Object $sourceShapeCounts $reopenedShapeCounts -SyncWindow 0).Count -eq 0) -and
+        $pngs.Count -eq [int]$deck.Slides.Count -and
+        $firstOpenPngs.Count -eq [int]$deck.Slides.Count -and
+        $shapeReadbackPreserved -and
+        $semanticOwnershipPreserved -and
+        $renderHashesPreserved -and
+        $typographyIssuesGt5Pt -eq 0 -and
+        $typographyIssuesGt10Pt -eq 0 -and
+        $inspectionFailures -eq 0
       $results += [PSCustomObject]@{
         Path = $resolvedInput
+        ExportMode = $currentMode
+        ExportAttemptId = $currentExportAttemptId
+        FirstOpenCallStartedAt = $firstOpenCallStartedAt
+        FirstOpenCallReturnedAt = $firstOpenCallReturnedAt
+        ReopenCallStartedAt = $reopenCallStartedAt
+        ReopenCallReturnedAt = $reopenCallReturnedAt
+        ReopenedPath = $reopenedPath
         OpenedReadOnly = [bool]$deck.ReadOnly
         SlideCount = [int]$deck.Slides.Count
         FontCount = [int]$deck.Fonts.Count
         Fonts = $fonts
-        ExportedPngs = @(
-          Get-ChildItem -LiteralPath $renderDirectory -Filter "*.PNG" -File
+        SourceShapeCounts = $sourceShapeCounts
+        ReopenedShapeCounts = $reopenedShapeCounts
+        Reopened = $true
+        ReadbackPassed = $readbackPassed
+        ExportedPngs = $pngs.Count
+        RenderedPngSha256 = @($pngs | ForEach-Object {
+          (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant()
+        })
+        FirstOpenRenderedPngSha256 = $firstOpenRenderedPngSha256
+        FirstOpenReopenedRenderHashesMatch = $renderHashesPreserved
+        ShapeReadbackPreserved = $shapeReadbackPreserved
+        SemanticOwnershipPreserved = $semanticOwnershipPreserved
+        SourceSemanticQids = $sourceSemanticQids
+        ReopenedSemanticQids = $reopenedSemanticQids
+        SourceShapeReadback = $sourceShapeReadback
+        NativeText = $nativeText
+        NativeImage = $nativeImage
+        NativeShape = $nativeShape
+        NativeTable = $nativeTable
+        NativeChart = $nativeChart
+        TypographyIssuesGt5Pt = $typographyIssuesGt5Pt
+        TypographyIssuesGt10Pt = $typographyIssuesGt10Pt
+        TypographyIssueObservations = $typographyIssueObservations
+        InspectionFailures = $inspectionFailures
+        ShapeReadback = $shapeReadback
+        BackplateCount = $backplateZOrderPositions.Count
+        NativeBackplateZOrderViolations = @(
+          $nativeZOrderPositions | Where-Object {
+            $backplateZOrderPositions.Count -gt 0 -and
+            $_ -le ($backplateZOrderPositions | Measure-Object -Maximum).Maximum
+          }
         ).Count
-        RepairWarningObserved = $false
+        RepairWarningObserved = $null
       }
     } finally {
       if ($null -ne $deck) {
         $deck.Close()
         [Runtime.InteropServices.Marshal]::FinalReleaseComObject($deck) | Out-Null
       }
+      if ($null -ne $sourceDeck) {
+        $sourceDeck.Close()
+        [Runtime.InteropServices.Marshal]::FinalReleaseComObject($sourceDeck) | Out-Null
+      }
     }
   }
 
-  [PSCustomObject]@{
+  $observerResult = Stop-PowerPointWindowObserverEpoch `
+    $windowObserver $windowStopSignal $observerEpochId
+  $windowObserver = $null
+  $windowEvents = @($observerResult.Windows)
+  $powerPointProcessEvents = @($observerResult.Processes)
+  $unexpectedPowerPointObservation = Get-PowerPointObserverEpochGuarantee `
+    $observerResult $observerEpochId $applicationIdentity.ProcessId $true
+  $dialogEvents = @($windowEvents | Where-Object { $_.IsDialog -eq $true })
+  if ($dialogEvents.Count -ne 0) {
+    throw "PowerPoint attended window observer captured an unexpected dialog."
+  }
+  foreach ($result in $results) {
+    $result.RepairWarningObserved = $false
+  }
+
+  $report = [PSCustomObject]@{
     PowerPointVersion = [string]$application.Version
     LaunchedProcessId = [int]$launched.Id
+    AttachedApplicationHwnd = [int64]$applicationIdentity.Hwnd
+    AttachedApplicationProcessId = [int]$applicationIdentity.ProcessId
+    ApplicationWindowBindingPhase = $applicationWindowBindingPhase
+    ObservedPowerPointProcesses = $powerPointProcessEvents
+    UnexpectedPowerPointProcessCount = [int]$unexpectedPowerPointObservation.UnexpectedPowerPointProcessCount
+    UnexpectedPowerPointProcessIds = $unexpectedPowerPointObservation.UnexpectedPowerPointProcessIds
+    UnexpectedPowerPointProcesses = $unexpectedPowerPointObservation.UnexpectedProcesses
+    UnexpectedPowerPointWindows = $unexpectedPowerPointObservation.UnexpectedWindows
+    ObserverEpoch = [PSCustomObject]@{
+      EpochId = $observerEpochId
+      ExpectedProcessId = [int]$applicationIdentity.ProcessId
+      ActivationMethod = $activationMethod
+      StartedBeforeActivation = $true
+    }
+    DiscardedObserverEpochs = $discardedObserverEpochs
     ActivationMethod = $activationMethod
     AttachedAt = $attachedAt.ToString("o")
+    AttendedWindowEvents = $windowEvents
+    RepairDialogObserved = $false
     Presentations = $results
-  } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (
-    Join-Path $resolvedOutput "powerpoint-desktop-validation.json"
-  ) -Encoding utf8
+  }
 } finally {
+  if ($null -ne $windowObserver) {
+    try {
+      Set-Content -LiteralPath $windowStopSignal -Value "stop" -Encoding ascii
+      Wait-Job -Job $windowObserver -Timeout 5 | Out-Null
+      Remove-Job -Job $windowObserver -Force -ErrorAction SilentlyContinue
+    } catch {
+    }
+  }
+  foreach ($signalPath in @($windowStopSignal, $windowReadySignal)) {
+    if (Test-Path -LiteralPath $signalPath) {
+      Remove-Item -LiteralPath $signalPath -Force -ErrorAction SilentlyContinue
+    }
+  }
   if ($null -ne $application) {
     try {
       $application.Quit()
@@ -130,6 +1220,14 @@ try {
     }
     [Runtime.InteropServices.Marshal]::FinalReleaseComObject($application) |
       Out-Null
+    # PowerPoint can remain alive until transient RCWs created by collection
+    # property access (Presentations/Slides/Shapes) are finalized.  Drain both
+    # finalizer generations before the authoritative process census so a
+    # script-host lifetime artifact is not reported as a desktop survivor.
+    [GC]::Collect()
+    [GC]::WaitForPendingFinalizers()
+    [GC]::Collect()
+    [GC]::WaitForPendingFinalizers()
   }
   if ($null -ne $launched) {
     try {
@@ -137,4 +1235,90 @@ try {
     } catch {
     }
   }
+}
+
+$shutdownDeadline = (Get-Date).AddSeconds(15)
+do {
+  $finalProcessCensus = @(Get-PowerPointProcessCensus)
+  if ($finalProcessCensus.Count -eq 0) { break }
+  Start-Sleep -Milliseconds 250
+} while ((Get-Date) -lt $shutdownDeadline)
+if ($finalProcessCensus.Count -ne 0) {
+  throw "PowerPoint Desktop process census found a survivor after COM QA."
+}
+
+$report | Add-Member -NotePropertyName PowerPointProcessCensusBefore `
+  -NotePropertyValue $openingProcessCensus
+$report | Add-Member -NotePropertyName PowerPointProcessCensusAfter `
+  -NotePropertyValue $finalProcessCensus
+$report | ConvertTo-Json -Depth 14 | Set-Content -LiteralPath (
+  Join-Path $resolvedOutput "powerpoint-desktop-validation.json"
+) -Encoding utf8
+
+if ($authorityPinsProvided) {
+  [PSCustomObject]@{
+    schemaVersion = "authored-powerpoint-attended-repair-observation/v1"
+    authorityDomain = "actual_product"
+    presentationId = $PresentationId
+    presentationRevision = $PresentationRevision
+    repairDialogObserved = $false
+    observedAt = (Get-Date).ToUniversalTime().ToString("o")
+    windowEvents = $windowEvents
+    presentations = @(
+      for ($index = 0; $index -lt $Presentation.Count; $index += 1) {
+        [PSCustomObject]@{
+          mode = $ExportMode[$index]
+          exportAttemptId = $ExportAttemptId[$index]
+          path = (Resolve-Path -LiteralPath $Presentation[$index]).Path
+          firstOpenCallStartedAt = $results[$index].FirstOpenCallStartedAt
+          firstOpenCallReturnedAt = $results[$index].FirstOpenCallReturnedAt
+          reopenCallStartedAt = $results[$index].ReopenCallStartedAt
+          reopenCallReturnedAt = $results[$index].ReopenCallReturnedAt
+        }
+      }
+    )
+  } | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (
+    Join-Path $resolvedOutput "powerpoint-attended-repair-observation.json"
+  ) -Encoding utf8
+
+  [PSCustomObject]@{
+    schemaVersion = "authored-powerpoint-process-census/v1"
+    authorityDomain = "actual_product"
+    presentationId = $PresentationId
+    presentationRevision = $PresentationRevision
+    censusCompletedAt = (Get-Date).ToUniversalTime().ToString("o")
+    openingProcesses = $openingProcessCensus
+    observedProcesses = $powerPointProcessEvents
+    observedWindows = $windowEvents
+    expectedApplicationProcessId = [int]$applicationIdentity.ProcessId
+    observerEpoch = $report.ObserverEpoch
+    discardedObserverEpochs = $discardedObserverEpochs
+    unexpectedPowerPointProcessCount = [int]$unexpectedPowerPointObservation.UnexpectedPowerPointProcessCount
+    unexpectedPowerPointProcessIds = $unexpectedPowerPointObservation.UnexpectedPowerPointProcessIds
+    unexpectedProcesses = $unexpectedPowerPointObservation.UnexpectedProcesses
+    unexpectedWindows = $unexpectedPowerPointObservation.UnexpectedWindows
+    finalProcesses = $finalProcessCensus
+    finalPowerPointProcessCount = $finalProcessCensus.Count
+    modes = @(
+      for ($index = 0; $index -lt $Presentation.Count; $index += 1) {
+        [PSCustomObject]@{
+          mode = $ExportMode[$index]
+          exportAttemptId = $ExportAttemptId[$index]
+          launchedPowerPointProcessId = [int]$launched.Id
+          unexpectedPowerPointProcessCount = [int]$unexpectedPowerPointObservation.UnexpectedPowerPointProcessCount
+          unexpectedPowerPointProcessIds = $unexpectedPowerPointObservation.UnexpectedPowerPointProcessIds
+          cleanupConfirmed = $true
+        }
+      }
+    )
+  } | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (
+    Join-Path $resolvedOutput "powerpoint-process-census.json"
+  ) -Encoding utf8
+}
+
+if (Test-Path -LiteralPath $windowStopSignal) {
+  Remove-Item -LiteralPath $windowStopSignal -Force
+}
+if (Test-Path -LiteralPath $windowReadySignal) {
+  Remove-Item -LiteralPath $windowReadySignal -Force
 }

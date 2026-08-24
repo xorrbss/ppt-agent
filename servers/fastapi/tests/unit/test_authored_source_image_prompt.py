@@ -295,6 +295,83 @@ def test_author_slide_html_offers_candidates_without_any_style_reference(
     assert 'asset id "asset-a"' in user_content[0].text
 
 
+def test_author_slide_html_binds_one_ordinary_img_to_the_only_offered_asset(
+    monkeypatch, tmp_path
+):
+    ordinary = (
+        "<!DOCTYPE html><html lang='ko'><head><meta charset='utf-8'></head>"
+        "<body><img data-qid='slide.image' src='features.png' "
+        "style='width:640px;height:480px'></body></html>"
+    )
+    _capture_author_requests(monkeypatch, [ordinary])
+
+    authored = _run(
+        author_slide_mod.author_slide_html(
+            "content",
+            "DESIGN",
+            _brand(),
+            "CONTENT",
+            1,
+            2,
+            source_images=[_candidate(tmp_path, "asset-a")],
+        )
+    )
+
+    assert 'data-asset-id="asset-a"' in authored
+    assert "features.png" not in authored
+    assert "data-qid='slide.image'" in authored
+
+
+def test_author_slide_html_drops_untrusted_img_when_no_asset_was_offered(monkeypatch):
+    ordinary = (
+        "<!DOCTYPE html><html lang='ko'><head><meta charset='utf-8'></head>"
+        "<body><h1 data-qid='slide.title'>제목</h1>"
+        "<img data-qid='slide.untrusted' src='invented.png' "
+        "style='width:640px;height:480px'></body></html>"
+    )
+    _capture_author_requests(monkeypatch, [ordinary])
+
+    authored = _run(
+        author_slide_mod.author_slide_html(
+            "content", "DESIGN", _brand(), "CONTENT", 1, 2
+        )
+    )
+
+    assert "<img" not in authored
+    assert "invented.png" not in authored
+    assert "slide.title" in authored
+
+
+def test_author_slide_html_keeps_one_source_order_img_and_drops_duplicates(
+    monkeypatch, tmp_path
+):
+    ordinary = (
+        "<!DOCTYPE html><html lang='ko'><head><meta charset='utf-8'></head>"
+        "<body><img data-qid='slide.image' src='features.png' "
+        "style='width:640px;height:480px'>"
+        "<img data-qid='slide.duplicate' src='invented.png' "
+        "style='width:100px;height:100px'></body></html>"
+    )
+    _capture_author_requests(monkeypatch, [ordinary])
+
+    authored = _run(
+        author_slide_mod.author_slide_html(
+            "content",
+            "DESIGN",
+            _brand(),
+            "CONTENT",
+            1,
+            2,
+            source_images=[_candidate(tmp_path, "asset-a")],
+        )
+    )
+
+    assert authored.count("<img") == 1
+    assert 'data-asset-id="asset-a"' in authored
+    assert "features.png" not in authored
+    assert "invented.png" not in authored
+
+
 def test_author_slide_html_lists_only_the_candidates_it_could_attach(
     monkeypatch, tmp_path
 ):

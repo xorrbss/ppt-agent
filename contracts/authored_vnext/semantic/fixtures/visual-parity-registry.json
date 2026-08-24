@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "authored-vnext-visual-parity-registry/v1",
+  "registryId": "visual-parity-required-archetypes-20260823",
+  "languages": ["ko", "zh", "ja"],
+  "archetypes": ["card", "process", "timeline", "comparison", "metric", "infographic", "table", "chart", "image", "architecture", "roadmap"],
+  "slides": [
+    {"slideId":"registry-slide-01","language":"ko","archetypes":["card","metric"]},
+    {"slideId":"registry-slide-02","language":"ko","archetypes":["process","architecture"]},
+    {"slideId":"registry-slide-03","language":"zh","archetypes":["timeline","roadmap"]},
+    {"slideId":"registry-slide-04","language":"zh","archetypes":["comparison"]},
+    {"slideId":"registry-slide-05","language":"ja","archetypes":["infographic"]},
+    {"slideId":"registry-slide-06","language":"ko","archetypes":["table"]},
+    {"slideId":"registry-slide-07","language":"ko","archetypes":["chart"]},
+    {"slideId":"registry-slide-08","language":"zh","archetypes":["image"]}
+  ]
+}

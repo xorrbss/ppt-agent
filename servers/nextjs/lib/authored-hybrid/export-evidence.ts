@@ -11,6 +11,7 @@ import {
 
 export interface AuthoredHybridEvidenceSource {
   exportAttemptId: string;
+  presentationId: string;
   presentationRevision: number;
   canonicalSourceDigest: string;
   sourceDigest: string;
@@ -31,6 +32,7 @@ export async function attachAuthoredHybridEvidence(
     ...quality,
     exportAttemptId: source.exportAttemptId,
     atomicBinding: {
+      presentationId: source.presentationId,
       presentationRevision: source.presentationRevision,
       canonicalSourceDigest: source.canonicalSourceDigest,
       rendererSourceDigest: source.sourceDigest,

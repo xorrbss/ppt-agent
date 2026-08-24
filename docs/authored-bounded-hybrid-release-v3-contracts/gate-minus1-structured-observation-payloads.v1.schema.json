@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:presenton:authored:gate-minus1-structured-observation-payloads:v1",
+  "title": "Authored Gate -1 structured observation payload registry v1",
+  "description": "Versioned payload schemas referenced by the Gate -1 semantic validator. Payloads omit their own SHA-256; the immutable outer artifact inventory binds version, media type, byte length, and digest.",
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "artifactBindingWithoutSelfDigest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["artifactId", "versionId", "mediaType", "byteLength"],
+      "properties": {
+        "artifactId": { "type": "string", "minLength": 1 },
+        "versionId": { "type": "string", "minLength": 1 },
+        "mediaType": { "const": "application/json" },
+        "byteLength": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "observation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["fieldId", "valueType", "unit", "scaleInteger", "value"],
+      "properties": {
+        "fieldId": { "type": "string", "minLength": 1 },
+        "valueType": { "enum": ["integer", "string", "boolean", "digest", "utf16-le-hex", "binary64-hex"] },
+        "unit": { "enum": ["none", "count", "boolean", "milliseconds", "micro-point", "emu", "ppm-microunit", "parts-per-trillion", "utf16-code-unit", "sha256", "raw-com-enum", "hex"] },
+        "scaleInteger": { "type": "integer", "minimum": 1 },
+        "value": { "oneOf": [{ "type": "integer" }, { "type": "string" }, { "type": "boolean" }] }
+      }
+    },
+    "payloadBase": {
+      "type": "object",
+      "required": ["schemaVersion", "caseId", "collectorId", "collectorSourceDigest", "environmentReceiptDigest", "collectedAt", "artifactBinding", "sourceArtifactDigests", "fieldIds", "observations"],
+      "properties": {
+        "schemaVersion": { "type": "string", "minLength": 1 },
+        "caseId": { "type": "string", "pattern": "^gminus1\\.[a-z0-9.-]+$" },
+        "collectorId": { "type": "string", "minLength": 1 },
+        "collectorSourceDigest": { "$ref": "#/$defs/digest" },
+        "environmentReceiptDigest": { "$ref": "#/$defs/digest" },
+        "collectedAt": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$" },
+        "artifactBinding": { "$ref": "#/$defs/artifactBindingWithoutSelfDigest" },
+        "sourceArtifactDigests": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/digest" } },
+        "fieldIds": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "observations": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/observation" } }
+      }
+    },
+    "utf16SpanObservationV1": { "$ref": "#/$defs/payloadBase", "properties": { "schemaVersion": { "const": "utf16-span-observation/v1" }, "caseId": { "const": "gminus1.text.utf16-surrogate" }, "fieldIds": { "const": ["sourceUtf16LeHex", "emittedUtf16LeHex", "comTextUtf16LeHex", "comLength", "charactersStartLengthText", "firstReopenEquality"] } }, "unevaluatedProperties": false },
+    "unicodeNormalizationObservationV1": { "$ref": "#/$defs/payloadBase", "properties": { "schemaVersion": { "const": "unicode-normalization-observation/v1" }, "caseId": { "const": "gminus1.text.combining-nfc" }, "fieldIds": { "const": ["sourceUtf16LeHex", "normalizedNfcUtf16LeHex", "comTextUtf16LeHex", "charactersStartLengthText", "firstReopenEquality"] } }, "unevaluatedProperties": false },
+    "newlineParagraphMappingObservationV1": { "$ref": "#/$defs/payloadBase", "properties": { "schemaVersion": { "const": "newline-paragraph-mapping-observation/v1" }, "caseId": { "const": "gminus1.text.newline-crlf" }, "fieldIds": { "const": ["sourceNewlineTokens", "ooxmlParagraphTokens", "comTextUtf16LeHex", "paragraphTerminatorRanges", "firstReopenEquality"] } }, "unevaluatedProperties": false },
+    "softBreakMappingObservationV1": { "$ref": "#/$defs/payloadBase", "properties": { "schemaVersion": { "const": "soft-break-mapping-observation/v1" }, "caseId": { "const": "gminus1.text.soft-break" }, "fieldIds": { "const": ["ooxmlBreakTokens", "comTextUtf16LeHex", "softBreakRanges", "firstReopenEquality"] } }, "unevaluatedProperties": false },
+    "whitespaceRunObservationV1": { "$ref": "#/$defs/payloadBase", "properties": { "schemaVersion": { "const": "whitespace-run-observation/v1" }, "caseId": { "const": "gminus1.text.empty-repeated-whitespace" }, "fieldIds": { "const": ["ooxmlOrderedTextTokens", "comTextUtf16LeHex", "whitespaceRanges", "emptyParagraphCount", "firstReopenEquality"] } }, "unevaluatedProperties": false },
+    "runStyleObservationV1": { "$ref": "#/$defs/payloadBase", "properties": { "schemaVersion": { "const": "run-style-observation/v1" }, "caseId": { "const": "gminus1.text.mixed-bold-italic" }, "fieldIds": { "const": ["wholeRangeTriStateRaw", "runStartLength", "runBoldRaw", "runItalicRaw", "runFontName", "runFontNameFarEast", "runSizeMicroPoint", "firstReopenEquality"] } }, "unevaluatedProperties": false },
+    "exactFaceConjunctionObservationV1": { "$ref": "#/$defs/payloadBase", "properties": { "schemaVersion": { "const": "exact-face-conjunction-observation/v1" }, "caseId": { "const": "gminus1.text.east-asian-typeface" }, "fieldIds": { "const": ["runStartLength", "latinFamily", "eastAsianFamily", "ooxmlLatinTypeface", "ooxmlEastAsianTypeface", "sourceFaceDigest", "embeddedPartDigest", "firstReopenEquality"] } }, "unevaluatedProperties": false },
+    "autofitLineObservationV1": { "$ref": "#/$defs/payloadBase", "properties": { "schemaVersion": { "const": "autofit-line-observation/v1" }, "caseId": { "const": "gminus1.text.autofit-none" }, "fieldIds": { "const": ["ooxmlBodyPrAutofit", "comAutoSizeRaw", "fontSizeMicroPoint", "lineSpans", "lineBoundsMicroPoint", "firstReopenEquality"] } }, "unevaluatedProperties": false },
+    "autofitShrinkObservationV1": { "$ref": "#/$defs/payloadBase", "properties": { "schemaVersion": { "const": "autofit-shrink-observation/v1" }, "caseId": { "const": "gminus1.text.autofit-shrink" }, "fieldIds": { "const": ["ooxmlBodyPrAutofit", "comAutoSizeRaw", "requestedFontSizeMicroPoint", "effectiveFontSizeMicroPoint", "lineSpans", "firstReopenEquality"] } }, "unevaluatedProperties": false },
+    "lineBoundsRenderObservationV1": { "$ref": "#/$defs/payloadBase", "properties": { "schemaVersion": { "const": "line-bounds-render-observation/v1" }, "caseId": { "const": "gminus1.text.line-bounds-long-ko" }, "fieldIds": { "const": ["lineCount", "lineStartLengthTextDigest", "lineBoundsMicroPoint", "lineBoundsRoundedEmu", "firstReopenDeltaEmu", "renderMetricsFixedInteger"] } }, "unevaluatedProperties": false },
+    "overflowRenderObservationV1": { "$ref": "#/$defs/payloadBase", "properties": { "schemaVersion": { "const": "overflow-render-observation/v1" }, "caseId": { "const": "gminus1.text.small-overflow" }, "fieldIds": { "const": ["shapeRectEmu", "marginEmu", "textBoundsMicroPoint", "interiorRectEmu", "overflowXEmu", "overflowYEmu", "lineSpans", "renderMetricsFixedInteger"] } }, "unevaluatedProperties": false },
+    "ooxmlTagRelationshipGraphV1": { "$ref": "#/$defs/payloadBase", "oneOf": [
+      { "properties": { "schemaVersion": { "const": "ooxml-tag-relationship-graph/v1" }, "caseId": { "const": "gminus1.qid.shape-tags-roundtrip" }, "fieldIds": { "const": ["displayName", "comTagMap", "ooxmlTagRelationshipGraph", "decodedSemanticTagMap", "duplicateOrOrphanCount", "firstReopenEquality"] } }, "required": ["schemaVersion", "caseId", "fieldIds"] },
+      { "properties": { "schemaVersion": { "const": "ooxml-tag-relationship-graph/v1" }, "caseId": { "const": "gminus1.package.presentation-tags-roundtrip" }, "fieldIds": { "const": ["comTagMap", "ooxmlTagRelationshipGraph", "decodedMarkerMap", "duplicateOrOrphanCount", "firstReopenEquality"] } }, "required": ["schemaVersion", "caseId", "fieldIds"] }
+    ], "unevaluatedProperties": false },
+    "decodedQidCarrierMapV1": { "$ref": "#/$defs/payloadBase", "properties": { "schemaVersion": { "const": "decoded-qid-carrier-map/v1" }, "caseId": { "const": "gminus1.qid.shape-tags-roundtrip" }, "fieldIds": { "const": ["displayName", "comTagMap", "ooxmlTagRelationshipGraph", "decodedSemanticTagMap", "duplicateOrOrphanCount", "firstReopenEquality"] } }, "unevaluatedProperties": false },
+    "decodedPackageMarkerMapV1": { "$ref": "#/$defs/payloadBase", "properties": { "schemaVersion": { "const": "decoded-package-marker-map/v1" }, "caseId": { "const": "gminus1.package.presentation-tags-roundtrip" }, "fieldIds": { "const": ["comTagMap", "ooxmlTagRelationshipGraph", "decodedMarkerMap", "duplicateOrOrphanCount", "firstReopenEquality"] } }, "unevaluatedProperties": false },
+    "fontInventoryEmbeddingObservationV1": { "$ref": "#/$defs/payloadBase", "properties": { "schemaVersion": { "const": "font-inventory-embedding-observation/v1" }, "caseId": { "const": "gminus1.font.saved-embedded-parts" }, "fieldIds": { "const": ["sourceContainerDigest", "ttcIndex", "extractedSfntDigest", "cmapDigest", "fsType", "embeddedFontRelationship", "inputEmbeddedPartDigest", "savedEmbeddedPartDigest"] } }, "unevaluatedProperties": false },
+    "pBgPlaneEffectReadbackV1": { "$ref": "#/$defs/payloadBase", "properties": { "schemaVersion": { "const": "p-bg-plane-effect-readback/v1" }, "caseId": { "const": "gminus1.paint.p-bg-roundtrip" }, "fieldIds": { "const": ["followMasterBackground", "comFillType", "comFillRgb", "slideXmlPBgCount", "slideXmlSrgb", "picturePlaneCount", "effectsCount", "firstReopenRenderMetricsFixedInteger"] } }, "unevaluatedProperties": false },
+    "cachedLiteralChartReadbackV1": { "$ref": "#/$defs/payloadBase", "oneOf": [
+      { "properties": { "schemaVersion": { "const": "cached-literal-chart-readback/v1" }, "caseId": { "const": "gminus1.chart.line-style-roundtrip" }, "fieldIds": { "const": ["chartType", "seriesCount", "seriesName", "categories", "finiteValuesBinary64", "seriesLineRgb", "titleText", "firstReopenEquality", "renderMetricsFixedInteger"] } }, "required": ["schemaVersion", "caseId", "fieldIds"] },
+      { "properties": { "schemaVersion": { "const": "cached-literal-chart-readback/v1" }, "caseId": { "const": "gminus1.chart.pie-point-style-roundtrip" }, "fieldIds": { "const": ["chartType", "seriesCount", "categoryCount", "finiteValuesBinary64", "pointIndexCategoryValueFillRgb", "titleText", "firstReopenEquality", "renderMetricsFixedInteger"] } }, "required": ["schemaVersion", "caseId", "fieldIds"] }
+    ], "unevaluatedProperties": false },
+    "attendedWindowEventWitnessV1": { "$ref": "#/$defs/payloadBase", "properties": { "schemaVersion": { "const": "attended-window-event-witness/v1" }, "caseId": { "const": "gminus1.com.repair-dialog-witness" }, "fieldIds": { "const": ["visibleDesktopIdentity", "powerPointHwnd", "dialogWatcherStartedAt", "openCallStartedAt", "openCallReturnedAt", "observedDialogEvents", "attendedWitnessDigest", "quarantineDecision"] } }, "unevaluatedProperties": false }
+  }
+}

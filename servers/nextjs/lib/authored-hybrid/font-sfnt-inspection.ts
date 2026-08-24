@@ -18,6 +18,8 @@ export interface SfntFontInspection {
   familyNames: readonly string[];
   fullNames: readonly string[];
   postscriptNames: readonly string[];
+  licenseDescriptions: readonly string[];
+  licenseUrls: readonly string[];
   tableTags: readonly string[];
   weightClass: number;
   fsType: number;
@@ -70,6 +72,7 @@ function readNameTable(
 ): Pick<
   SfntFontInspection,
   "familyNames" | "fullNames" | "postscriptNames"
+  | "licenseDescriptions" | "licenseUrls"
 > {
   if (tableLength < 6 || tableOffset + tableLength > buffer.length) {
     throw new Error("invalid name table bounds");
@@ -87,6 +90,8 @@ function readNameTable(
     [4, new Set()],
     [6, new Set()],
     [16, new Set()],
+    [13, new Set()],
+    [14, new Set()],
   ]);
   for (let index = 0; index < count; index += 1) {
     const recordOffset = tableOffset + 6 + index * 12;
@@ -113,13 +118,15 @@ function readNameTable(
     familyNames: [...familyNames].sort(),
     fullNames: [...(names.get(4) ?? [])].sort(),
     postscriptNames: [...(names.get(6) ?? [])].sort(),
+    licenseDescriptions: [...(names.get(13) ?? [])].sort(),
+    licenseUrls: [...(names.get(14) ?? [])].sort(),
   };
 }
 
-export function inspectSfntFont(buffer: Buffer): SfntFontInspection {
-  if (buffer.length < 12) throw new Error("font source is too small");
-  const signature = buffer.toString("ascii", 0, 4);
-  const scalarType = u32(buffer, 0);
+function inspectSfntFace(buffer: Buffer, faceOffset: number): SfntFontInspection {
+  if (faceOffset < 0 || faceOffset + 12 > buffer.length) throw new Error("font source is too small");
+  const signature = buffer.toString("ascii", faceOffset, faceOffset + 4);
+  const scalarType = u32(buffer, faceOffset);
   const format =
     scalarType === 0x00010000 || signature === "true"
       ? "ttf"
@@ -128,13 +135,13 @@ export function inspectSfntFont(buffer: Buffer): SfntFontInspection {
         : undefined;
   if (!format) throw new Error("unsupported SFNT signature");
 
-  const numTables = u16(buffer, 4);
-  if (numTables < 1 || 12 + numTables * 16 > buffer.length) {
+  const numTables = u16(buffer, faceOffset + 4);
+  if (numTables < 1 || faceOffset + 12 + numTables * 16 > buffer.length) {
     throw new Error("invalid SFNT table directory");
   }
   const tables = new Map<string, { offset: number; length: number }>();
   for (let index = 0; index < numTables; index += 1) {
-    const recordOffset = 12 + index * 16;
+    const recordOffset = faceOffset + 12 + index * 16;
     const tag = buffer.toString("ascii", recordOffset, recordOffset + 4);
     const offset = u32(buffer, recordOffset + 8);
     const length = u32(buffer, recordOffset + 12);
@@ -156,6 +163,122 @@ export function inspectSfntFont(buffer: Buffer): SfntFontInspection {
     fsType: u16(buffer, os2.offset + 8),
     variable: tables.has("fvar") || tables.has("gvar"),
   };
+}
+
+export function inspectSfntFont(buffer: Buffer): SfntFontInspection {
+  if (buffer.toString("ascii", 0, 4) === "ttcf") throw new Error("sfnt_collection_requires_face_selection");
+  return inspectSfntFace(buffer, 0);
+}
+
+export interface SfntCollectionInspection {
+  readonly format: "ttc";
+  readonly version: number;
+  readonly faces: readonly (SfntFontInspection & { readonly faceIndex: number })[];
+}
+
+interface SfntTableRecord {
+  readonly tag: string;
+  readonly checksum: number;
+  readonly offset: number;
+  readonly length: number;
+}
+
+function collectionFaceOffsets(buffer: Buffer): number[] {
+  if (buffer.length < 12 || buffer.toString("ascii", 0, 4) !== "ttcf") throw new Error("unsupported TTC signature");
+  const count = u32(buffer, 8);
+  if (count < 1 || count > 256 || 12 + count * 4 > buffer.length) throw new Error("invalid TTC face directory");
+  const offsets = Array.from({ length: count }, (_, index) => u32(buffer, 12 + index * 4));
+  if (new Set(offsets).size !== offsets.length) throw new Error("invalid TTC duplicate face offset");
+  return offsets;
+}
+
+function tableDirectory(buffer: Buffer, faceOffset: number): SfntTableRecord[] {
+  if (faceOffset < 0 || faceOffset + 12 > buffer.length) throw new Error("invalid TTC face offset");
+  const count = u16(buffer, faceOffset + 4);
+  if (count < 1 || count > 4096 || faceOffset + 12 + count * 16 > buffer.length) throw new Error("invalid SFNT table directory");
+  const seen = new Set<string>();
+  return Array.from({ length: count }, (_, index) => {
+    const at = faceOffset + 12 + index * 16;
+    const tag = buffer.toString("ascii", at, at + 4);
+    if (!/^[\x20-\x7e]{4}$/.test(tag) || seen.has(tag)) throw new Error("invalid SFNT duplicate or non-ASCII table tag");
+    seen.add(tag);
+    const offset = u32(buffer, at + 8); const length = u32(buffer, at + 12);
+    if (offset > buffer.length || length > buffer.length - offset) throw new Error(`invalid SFNT table bounds: ${tag}`);
+    return { tag, checksum: u32(buffer, at + 4), offset, length };
+  });
+}
+
+function checksum(buffer: Buffer, offset = 0, length = buffer.length, zeroAdjustmentAt?: number): number {
+  let sum = 0;
+  const paddedLength = Math.ceil(length / 4) * 4;
+  for (let relative = 0; relative < paddedLength; relative += 4) {
+    let word = 0;
+    for (let byte = 0; byte < 4; byte += 1) {
+      const absolute = offset + relative + byte;
+      const value = relative + byte < length && absolute < buffer.length &&
+          !(zeroAdjustmentAt !== undefined && absolute >= zeroAdjustmentAt && absolute < zeroAdjustmentAt + 4)
+        ? buffer[absolute]
+        : 0;
+      word = (word * 256 + value) >>> 0;
+    }
+    sum = (sum + word) >>> 0;
+  }
+  return sum >>> 0;
+}
+
+export interface ExtractedSfntCollectionFace {
+  readonly data: Buffer;
+  readonly faceIndex: number;
+  readonly inspection: SfntFontInspection;
+}
+
+/** Copy one TTC face into a self-contained SFNT without mutating collection bytes. */
+export function extractSfntCollectionFace(buffer: Buffer, faceIndex: number): ExtractedSfntCollectionFace {
+  const offsets = collectionFaceOffsets(buffer);
+  if (!Number.isSafeInteger(faceIndex) || faceIndex < 0 || faceIndex >= offsets.length) throw new Error("sfnt_collection_face_not_found");
+  const directories = offsets.map((offset) => tableDirectory(buffer, offset));
+  const ranges = directories.flatMap((tables) => tables.map((table) => table));
+  for (let left = 0; left < ranges.length; left += 1) {
+    for (let right = left + 1; right < ranges.length; right += 1) {
+      const a = ranges[left]; const b = ranges[right];
+      const overlap = a.offset < b.offset + b.length && b.offset < a.offset + a.length;
+      const exactSafeShare = a.offset === b.offset && a.length === b.length && a.tag === b.tag && a.checksum === b.checksum;
+      if (overlap && !exactSafeShare) throw new Error("sfnt_collection_unsafe_shared_table");
+    }
+  }
+  const sourceTables = directories[faceIndex];
+  if (sourceTables.some((table) => table.tag === "fvar" || table.tag === "gvar")) throw new Error("sfnt_collection_variable_face_unsupported");
+  const head = sourceTables.find((table) => table.tag === "head");
+  if (!head || head.length < 12) throw new Error("sfnt_collection_invalid_head_table");
+  for (const table of sourceTables) {
+    const actual = checksum(buffer, table.offset, table.length, table.tag === "head" ? table.offset + 8 : undefined);
+    if (actual !== table.checksum) throw new Error(`sfnt_collection_table_checksum_mismatch:${table.tag}`);
+  }
+  const tables = [...sourceTables].sort((a, b) => a.tag.localeCompare(b.tag, "en-US"));
+  const directoryBytes = 12 + tables.length * 16;
+  let outputLength = directoryBytes;
+  const destinations = tables.map((table) => { const offset = outputLength; outputLength += Math.ceil(table.length / 4) * 4; return offset; });
+  const output = Buffer.alloc(outputLength);
+  buffer.copy(output, 0, offsets[faceIndex], offsets[faceIndex] + 4);
+  output.writeUInt16BE(tables.length, 4);
+  const maxPower = 2 ** Math.floor(Math.log2(tables.length));
+  output.writeUInt16BE(maxPower * 16, 6);
+  output.writeUInt16BE(Math.log2(maxPower), 8);
+  output.writeUInt16BE(tables.length * 16 - maxPower * 16, 10);
+  tables.forEach((table, index) => {
+    const at = 12 + index * 16; output.write(table.tag, at, 4, "ascii"); output.writeUInt32BE(table.checksum, at + 4); output.writeUInt32BE(destinations[index], at + 8); output.writeUInt32BE(table.length, at + 12);
+    buffer.copy(output, destinations[index], table.offset, table.offset + table.length);
+  });
+  const outputHead = destinations[tables.findIndex((table) => table.tag === "head")];
+  output.writeUInt32BE(0, outputHead + 8);
+  output.writeUInt32BE((0xb1b0afba - checksum(output)) >>> 0, outputHead + 8);
+  if (checksum(output) !== 0xb1b0afba) throw new Error("sfnt_collection_output_checksum_invalid");
+  return { data: output, faceIndex, inspection: inspectSfntFont(output) };
+}
+
+export function inspectSfntCollection(buffer: Buffer): SfntCollectionInspection {
+  const offsets = collectionFaceOffsets(buffer);
+  return { format: "ttc", version: u32(buffer, 4), faces: offsets.map((offset, faceIndex) => ({ faceIndex, ...inspectSfntFace(buffer, offset) })) };
 }
 
 export function assessEmbeddingLicense(

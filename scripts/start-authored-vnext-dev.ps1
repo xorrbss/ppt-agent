@@ -11,7 +11,11 @@ param(
 
     [string]$DatabasePath,
 
-    [switch]$IsolatedDatabase
+    [string]$ProviderConfigPath,
+
+    [switch]$IsolatedDatabase,
+
+    [switch]$AllowProviderSettings
 )
 
 $ErrorActionPreference = "Stop"
@@ -37,7 +41,15 @@ else {
     $selectedDatabasePath = $persistentDatabasePath
 }
 $devDatabasePath = $selectedDatabasePath.Replace("\", "/")
-$userConfigPath = Join-Path $appDataRoot "userConfig.json"
+$userConfigPath = if ([string]::IsNullOrWhiteSpace($ProviderConfigPath)) {
+    Join-Path $appDataRoot "userConfig.json"
+}
+else {
+    [System.IO.Path]::GetFullPath($ProviderConfigPath, $repoRoot)
+}
+if ($ProviderConfigPath -and -not (Test-Path -LiteralPath $userConfigPath -PathType Leaf)) {
+    throw "Provider config file does not exist: $userConfigPath"
+}
 $logRoot = Join-Path $devSessionRoot "logs"
 $nextDistDirectoryName = ".next-authored-vnext-dev-$PID"
 $nextEnvPath = Join-Path $nextRoot "next-env.d.ts"
@@ -221,8 +233,14 @@ $fastApiUrl = "http://127.0.0.1:$FastApiPort"
 $sharedAuthoredEnvironment = @{
     "APP_DATA_DIRECTORY" = $appDataRoot
     "USER_CONFIG_PATH" = $userConfigPath
+    "CAN_CHANGE_KEYS" = if ($AllowProviderSettings) { "true" } else { "false" }
     "ENVIRONMENT" = "local"
     "DISABLE_AUTH" = "true"
+    # A fresh clean worktree has no legacy credential sidecar. Seed a local-only
+    # bootstrap principal so DISABLE_AUTH can still establish request ownership.
+    # The random value is process-scoped and only its hash is persisted.
+    "AUTH_USERNAME" = "authored-vnext-local"
+    "AUTH_PASSWORD" = $workerToken
     "DISABLE_ANONYMOUS_TRACKING" = "true"
     "DISABLE_IMAGE_GENERATION" = "true"
     "AUTHORED_SOURCE_IMAGES_ENABLED" = "true"
@@ -233,6 +251,8 @@ $sharedAuthoredEnvironment = @{
     "AUTHORED_VNEXT_REPOSITORY_MODE" = "sql"
     "AUTHORED_VNEXT_LOCAL_SLIDE_COUNT" = "3"
     "AUTHORED_ONLY_NEW_PRESENTATION_ADMISSION" = "true"
+    "AUTHORED_SEMANTIC_DUAL_OUTPUT_MODE" = "declared"
+    "AUTHORED_SEMANTIC_BUNDLE_WRITES_ENABLED" = "true"
     "AUTHORED_VNEXT_OOXML_WORKER_TOKEN" = $workerToken
 }
 
@@ -244,8 +264,33 @@ $fastApiEnvironment["MIGRATE_DATABASE_ON_STARTUP"] = "true"
 # body through the browser-facing single-origin proxy.
 $fastApiEnvironment["NEXT_INTERNAL_URL"] = "http://127.0.0.1:$NextPort"
 $fastApiEnvironment["NEXT_PUBLIC_URL"] = $proxyUrl
+# Explicitly forward only release/QA inputs that FastAPI consumes. Values are
+# deliberately neither logged nor copied into the browser-facing environment.
+$fastApiReleaseQaEnvironmentKeys = @(
+    "AUTHORED_POWERPOINT_QA_INTERACTIVE_OBSERVATION",
+    "AUTHORED_RELEASE_DEPLOYMENT_ENVIRONMENT",
+    "AUTHORED_RELEASE_OS_BUILD",
+    "AUTHORED_RELEASE_OFFICE_BUILD",
+    "AUTHORED_RELEASE_RENDERER_IMAGE_DIGEST",
+    "AUTHORED_RELEASE_FONT_INVENTORY_DIGEST",
+    "AUTHORED_RELEASE_BACKEND_BUILD_DIGEST",
+    "AUTHORED_RELEASE_BACKEND_COMMIT_SHA",
+    "AUTHORED_RELEASE_KILL_SWITCHES",
+    "AUTHORED_RELEASE_VISUAL_GATE_HMAC_KEY",
+    "AUTHORED_RELEASE_CI_EVIDENCE_HMAC_KEY",
+    "AUTHORED_EDITABLE_MVP_TRUST_SHA256"
+)
+foreach ($environmentKey in $fastApiReleaseQaEnvironmentKeys) {
+    $environmentValue = [Environment]::GetEnvironmentVariable($environmentKey)
+    if (-not [string]::IsNullOrWhiteSpace($environmentValue)) {
+        $fastApiEnvironment[$environmentKey] = $environmentValue
+    }
+}
 
 $nextEnvironment = $sharedAuthoredEnvironment.Clone()
+# Keep the deterministic verification UI locked by default. Interactive local
+# generation must opt in explicitly so an administrator can configure a text
+# provider without weakening the release-verification launch contract.
 $nextEnvironment["FAST_API_INTERNAL_URL"] = $fastApiUrl
 $nextEnvironment["NEXT_INTERNAL_URL"] = $proxyUrl
 $nextEnvironment["NEXT_PUBLIC_URL"] = $proxyUrl
@@ -255,6 +300,10 @@ $nextEnvironment["AUTHORED_VNEXT_RENDERER_ENABLED"] = "true"
 $nextEnvironment["PRESENTON_TEST_NEXT_DIST_DIR"] = $nextDistDirectoryName
 $nextEnvironment["CYPRESS_BASE_URL"] = $proxyUrl
 $nextEnvironment["WORKSPACE_LIVE_BACKEND"] = $fastApiUrl
+# Bounded Hybrid v3 has no Gate -1-qualified native subset.  Do not inherit
+# this from the parent environment: an absent or misspelled value must remain
+# raster-only and must match the Gate 1 runtime pin.
+$nextEnvironment["AUTHORED_HYBRID_BOUNDED_NATIVE_MODE"] = "raster-only"
 
 $proxyEnvironment = @{
     "FASTAPI_PORT" = [string]$FastApiPort
@@ -274,6 +323,30 @@ try {
         -StderrPath (Join-Path $logRoot "fastapi.stderr.log")
     $processes.Add($fastApi)
     Wait-HttpReady -Name "FastAPI" -Uri "$fastApiUrl/metrics/workspace" -Process $fastApi
+
+    if ($ProviderConfigPath) {
+        # An existing local provider file can be newer than this worktree's
+        # already-created provider_settings row. Import it explicitly through
+        # the same CAS bridge used by synchronous OAuth writers; no credential
+        # value is passed on the command line or written to the launcher logs.
+        $providerConfigSync = Start-LoggedProcess `
+            -Name "existing provider settings sync" `
+            -FilePath "uv.exe" `
+            -ArgumentList @(
+                "run",
+                "python",
+                "scripts\sync_existing_provider_settings.py"
+            ) `
+            -WorkingDirectory $fastApiRoot `
+            -Environment $fastApiEnvironment `
+            -StdoutPath (Join-Path $logRoot "provider-settings-sync.stdout.log") `
+            -StderrPath (Join-Path $logRoot "provider-settings-sync.stderr.log")
+        $providerConfigSync.WaitForExit()
+        $providerConfigSync.Refresh()
+        if ($providerConfigSync.ExitCode -ne 0) {
+            throw "Existing provider settings sync failed (exit code $($providerConfigSync.ExitCode)). See $logRoot."
+        }
+    }
 
     $catalogSeed = Start-LoggedProcess `
         -Name "PPT Master catalog seed" `
@@ -312,6 +385,14 @@ try {
         -StderrPath (Join-Path $logRoot "next.stderr.log")
     $processes.Add($next)
     Wait-HttpReady -Name "Next.js" -Uri "http://127.0.0.1:$NextPort/upload" -Process $next -TimeoutSeconds 240
+    # Next dev rewrites these tracked project files when it registers the
+    # per-session dist directory. Restore only those exact generated edits as
+    # soon as startup is ready so release source censuses remain stable while
+    # the official local stack is running.
+    Restore-NextGeneratedProjectFiles `
+        -NextEnvOriginal $nextEnvOriginalBytes `
+        -TsConfigOriginal $nextTsConfigOriginalBytes `
+        -DistDirectoryName $nextDistDirectoryName
 
     $proxy = Start-LoggedProcess `
         -Name "single-origin proxy" `

@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "authored-editable-hybrid-capability-profile/v1",
+  "profileId": "authored-editable-hybrid-ko-en-basic-v1",
+  "manifestDigest": "sha256:498fee109aa0c0b2b6920c0f01dd5d16f86bc2bb089e83ab14d473416077df54",
+  "expectedSlideCount": 5,
+  "supportedCapabilities": [
+    "native.ko-en-text.v1",
+    "native.solid-shape.v1",
+    "native.image-rect-crop.v1",
+    "native.basic-table.v1"
+  ],
+  "requiredRasterIslands": [
+    "raster.chart.v1",
+    "raster.complex-css.v1"
+  ],
+  "acceptance": {
+    "editableSlides": 5,
+    "imageFallbackSlides": 0,
+    "minimumNativeTextElementsPerSlide": 1,
+    "minimumNativeShapeElements": 1,
+    "minimumNativeImageElements": 1,
+    "minimumNativeTableElements": 1,
+    "rasterFallbackElements": 2,
+    "unexpectedRasterFallbacks": 0,
+    "nativeRasterDuplicateOwners": 0,
+    "missingOrGhostQids": 0,
+    "nativeEditableReady": true
+  }
+}

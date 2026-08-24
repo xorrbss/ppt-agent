@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:presenton:authored:gate0-case-manifest:v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "manifestSchemaId", "manifestId", "manifestStatus", "authorityDomain", "evidenceClass", "canonicalProfileId", "evidencePolicyId", "evidencePolicyDigest", "expectedCaseCount", "expectedPositiveCaseCount", "expectedMutationCaseCount", "requiredCaseIdsDigest", "aggregateDigestProjections", "mutationPhaseRules", "positiveCase", "mutationRegistry", "resultEnvelopeContract", "resultSetRules", "digestProjection", "manifestDigest"],
+  "properties": {
+    "schemaVersion": { "const": "authored-gate0-case-manifest/v1" },
+    "manifestSchemaId": { "const": "urn:presenton:authored:gate0-case-manifest:v1" },
+    "manifestId": { "const": "authored-gate0-structural-reachability.v1" }, "manifestStatus": { "const": "sealed-template-runtime-fixtures-required" },
+    "authorityDomain": { "const": "structural_test" }, "evidenceClass": { "const": "synthetic_structural_only" }, "canonicalProfileId": { "const": "presenton-canonical-json/v2" },
+    "evidencePolicyId": { "const": "authored-evidence-policy/v2-frozen-20260824-attempt09-build20326" }, "evidencePolicyDigest": { "const": "sha256:2fd68afb7e40a6cffe36e9bdf8a099f480b492ddeff110159dbf4d934f1da6c5" },
+    "expectedCaseCount": { "const": 34 }, "expectedPositiveCaseCount": { "const": 1 }, "expectedMutationCaseCount": { "const": 33 },
+    "requiredCaseIdsDigest": { "const": "sha256:8d73e6d97d2288aeecede9205562453fd0d6196f12e33c842863dd56b11a9e1a" },
+    "aggregateDigestProjections": { "type": "object" }, "mutationPhaseRules": { "type": "object" }, "positiveCase": { "type": "object" },
+    "mutationRegistry": { "type": "array", "minItems": 33, "maxItems": 33, "items": { "$ref": "#/$defs/mutation" } },
+    "resultSetRules": { "type": "object" }, "resultEnvelopeContract": { "type": "object" },
+    "digestProjection": { "const": { "algorithm": "sha256", "canonicalProfileId": "presenton-canonical-json/v2", "includedJsonPath": "$", "excludedJsonPaths": ["$.manifestDigest"] } },
+    "manifestDigest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "mutation": { "type": "object", "additionalProperties": false, "required": ["ordinal", "caseId", "jsonPaths", "operator", "expectedErrorCode", "expectedHttpStatus", "sealedCompletionMustBeAbsent"], "properties": { "ordinal": { "type": "integer", "minimum": 2, "maximum": 34 }, "caseId": { "type": "string", "pattern": "^g0\\.[a-z0-9.-]+$" }, "jsonPaths": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "pattern": "^\\$\\." } }, "operator": { "type": "string", "minLength": 1 }, "mutationPhase": { "type": "string", "minLength": 1 }, "requiresReceiptIssued": { "type": "boolean" }, "activeStateBefore": { "type": "string", "minLength": 1 }, "expectedErrorCode": { "type": "string", "minLength": 1 }, "expectedHttpStatus": { "type": "integer", "minimum": 400, "maximum": 499 }, "sealedCompletionMustBeAbsent": { "const": true } } }
+  }
+}

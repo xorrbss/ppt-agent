@@ -135,7 +135,8 @@ _SOURCE_IMAGE_RULES = (
     "what that work looks like, which is what a proposal shows it for.\n"
     "Place one when it does either: an `<img data-asset-id=\"THE_ID\">` whose "
     "area is reserved with explicit width/height (or absolute inset) styles, the "
-    "way the illustration slot is. It is this slide's one image slot, in place "
+    "way the illustration slot is. Do not add a src attribute: the trusted "
+    "source-image stage supplies the verified base64 data URL. It is this slide's one image slot, in place "
     "of a data-illust-prompt placeholder.\n"
     "Leave the slide without a picture when no candidate shows anything it talks "
     "about. These are candidates, not a quota."
@@ -334,11 +335,20 @@ def visual_story_marker(visual_intent: AuthoredSlideVisualIntent | None) -> str:
         f"story={visual_intent.story_kind}; silhouette={visual_intent.silhouette}. "
         f"{_STORY_RULES[visual_intent.story_kind]} Do not reuse a neighbouring slide's "
         "silhouette. Keep narrative text and candidate objects in separate semantic DOM "
-        "elements so deterministic data-qid migration can address them. "
+        "elements. Give every visible semantic DOM element one explicit, unique data-qid "
+        "using a stable token (letters/numbers plus . _ : - only). The server rejects missing, "
+        "invalid, or duplicate declared QIDs and never silently rewrites them. "
         "EDITABILITY TRUTH: Hybrid native candidates are only "
         f"[{native_candidates}]; they are not a promise of complete editability. "
         f"Raster fallback remains declared for [{raster_reasons}]. Never duplicate native-candidate "
-        "text, images, shapes, tables, or charts inside a decorative image or backplate."
+        "text, images, shapes, tables, or charts inside a decorative image or backplate. "
+        "Only when CONTENT explicitly requests an unsupported chart or complex-CSS region, "
+        "mark exactly its topmost semantic owner with data-raster-fallback=\"chart\" or "
+        "data-raster-fallback=\"complex-css\"; never repeat that marker on descendants. "
+        "Do not invent such a marker for an ordinary story panel, card, backplate, divider, "
+        "or decoration, even when you style it with CSS. "
+        "The phrase native-candidate is descriptive only: do not emit a "
+        "data-native-candidate attribute; data-qid is the sole edit-identity marker."
     )
 
 
@@ -466,7 +476,9 @@ def author_prompt(
         f"{page_marker}\n\n{structure_block}{chapter_block}{requirement_block}"
         f"{illustration_block}{visual_story_block}{direction_block}{design_system}\n\n"
         "Design THIS slide bespoke and premium within the shared system, vary the layout to "
-        "suit the role, output ONLY the complete self-contained HTML document."
+        "suit the role. Every visible text, image, simple shape, chart/table container, and "
+        "meaningful grouping element must carry a unique stable data-qid. Output ONLY the "
+        "complete self-contained HTML document."
     )
 
 

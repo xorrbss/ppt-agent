@@ -141,6 +141,27 @@ def scene_asset_references(deck: ExportableDeck) -> dict[str, dict[str, Any]]:
             if previous is not None and previous["digest"] != digest:
                 raise ValueError("authored_vnext_scene_asset_digest_mismatch")
             referenced[asset_id] = declaration
+        hybrid_export = slide.get("hybridExport")
+        if hybrid_export is None:
+            continue
+        if not isinstance(hybrid_export, dict) or not isinstance(
+            hybrid_export.get("rasterIslands"), list
+        ):
+            raise ValueError("authored_vnext_hybrid_export_plan_invalid")
+        for island in hybrid_export["rasterIslands"]:
+            if not isinstance(island, dict):
+                raise ValueError("authored_vnext_hybrid_raster_island_invalid")
+            asset_id = island.get("assetId")
+            digest = island.get("assetDigest")
+            if not isinstance(asset_id, str) or not isinstance(digest, str):
+                raise ValueError("authored_vnext_hybrid_raster_island_invalid")
+            declaration = declared.get(asset_id)
+            if declaration is None or declaration["digest"] != digest:
+                raise ValueError("authored_vnext_hybrid_raster_island_asset_mismatch")
+            previous = referenced.get(asset_id)
+            if previous is not None and previous["digest"] != digest:
+                raise ValueError("authored_vnext_scene_asset_digest_mismatch")
+            referenced[asset_id] = declaration
     return referenced
 
 

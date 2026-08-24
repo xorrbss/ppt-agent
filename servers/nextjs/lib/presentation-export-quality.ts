@@ -40,6 +40,8 @@ export interface PresentationExportSlideQuality {
   imageFallback: boolean;
   nativeTextElements: number;
   nativeShapeElements: number;
+  nativeChartElements?: number;
+  nativeTableElements?: number;
   nativeGroupElements?: number;
   nativeImageElements: number;
   rasterFallbackElements: number;
@@ -56,12 +58,87 @@ export interface PresentationExportSlideQuality {
    * `rasterFallbackElements`.
    */
   fallbackElements?: PresentationExportFallbackElement[];
+  /** Digest-only semantic receipts; bounded and safe for attempt binding. */
+  semanticReceipts?: {
+    observationReceiptDigest?: string;
+    nativeAdmissionReceiptDigest?: string;
+    hybridPlanDigest?: string;
+    rasterDegradationReceiptDigest?: string;
+  };
+  /** Single declared-QID authority across logical admission, OOXML, and optional COM reopen. */
+  qidCoverage?: PresentationExportQidCoverage[];
+  /** Immutable detailed OOXML projection, keyed by the declared QID. */
+  nativeElementReadback?: PresentationExportNativeElementReadback[];
+  /** Fixed-point paint closure that produced this native/backplate layering. */
+  paintPlan?: PresentationExportPaintPlanReadback;
+}
+
+export interface PresentationExportNativeElementReadback {
+  readonly slideNumber: number;
+  readonly elementId: string;
+  readonly kind: "text" | "shape" | "image" | "table" | "chart";
+  readonly latinTypefaces: readonly string[];
+  readonly eastAsianTypefaces: readonly string[];
+  readonly lineBreakCount: number;
+  readonly chart?: {
+    readonly chartType: "bar" | "column" | "line" | "area" | "pie" | "donut";
+    readonly title: string | null;
+    readonly titleLatinTypefaces: readonly string[];
+    readonly titleEastAsianTypefaces: readonly string[];
+    readonly categories: readonly string[];
+    readonly series: readonly { readonly name: string; readonly values: readonly number[] }[];
+    readonly categoryAxis: PresentationExportChartTextReadback;
+    readonly valueAxis: PresentationExportChartTextReadback;
+    readonly legend: PresentationExportChartLegendReadback;
+  };
+}
+
+export interface PresentationExportChartTextReadback {
+  readonly present: boolean;
+  readonly title: string | null;
+  readonly latinTypefaces: readonly string[];
+  readonly eastAsianTypefaces: readonly string[];
+}
+
+export interface PresentationExportChartLegendReadback extends PresentationExportChartTextReadback {
+  readonly position: "bottom" | "top" | "right" | "left" | null;
+}
+
+export interface PresentationExportPaintPlanReadback {
+  readonly schemaVersion: "hybrid-paint-plan/browser-v1";
+  readonly strategy: "single-backplate-fixed-point";
+  readonly fixedPointReached: true;
+  readonly closureIterations: number;
+  readonly closureDigest: string;
+  readonly hybridPlanDigest: string;
+  readonly slideDemotedToRaster: boolean;
+  readonly downgradeReceipt: {
+    readonly schemaVersion: "hybrid-layer-downgrade-receipt/browser-v1";
+    readonly state: "closed" | "slideRaster";
+    readonly reason: "no-closed-native-z-band" | "backplate-identity-mismatch" | "opaque-backplate-collision" | null;
+    readonly demotedElementIds: readonly string[];
+    readonly receiptDigest: string;
+  };
+  readonly demotions: readonly {
+    readonly elementId: string;
+    readonly fallbackReason: "z-band-unsafe";
+    readonly blockedByElementIds: readonly string[];
+  }[];
+}
+
+export interface PresentationExportQidCoverage {
+  readonly elementId: string;
+  readonly kind: "text" | "image" | "shape" | "table" | "chart";
+  readonly logical: "native" | "raster";
+  readonly ooxml: "not-run" | "present" | "missing";
+  readonly com: "not-run" | "present" | "missing";
 }
 
 export interface PresentationExportCoverageCounts {
   nativeText: number;
   nativeImage: number;
   nativeShape: number;
+  nativeChart?: number;
   nativeGroup: number;
   rasterRemaining: number;
 }
@@ -95,6 +172,7 @@ export interface PresentationExportQualityReport {
   imageFallbackSlides: number;
   nativeTextElements: number;
   nativeShapeElements: number;
+  nativeChartElements?: number;
   nativeGroupElements?: number;
   nativeImageElements: number;
   rasterFallbackElements: number;
@@ -117,7 +195,7 @@ export interface PresentationExportQualityReport {
   rendererIsolation?: PresentationExportRendererIsolation;
   exportAttemptId?: string;
   atomicBinding?: {
-    presentationId?: string;
+    presentationId: string;
     presentationRevision: number;
     canonicalSourceDigest: string;
     rendererSourceDigest: string;
@@ -164,11 +242,15 @@ function coverageCounts(
   value: Partial<PresentationExportCoverageCounts> | undefined,
   fallback: PresentationExportCoverageCounts
 ): PresentationExportCoverageCounts {
+  const nativeChart = value?.nativeChart ?? fallback.nativeChart;
   return {
     nativeText: nonNegativeInteger(value?.nativeText ?? fallback.nativeText),
     nativeImage: nonNegativeInteger(value?.nativeImage ?? fallback.nativeImage),
     nativeShape: nonNegativeInteger(value?.nativeShape ?? fallback.nativeShape),
     nativeGroup: nonNegativeInteger(value?.nativeGroup ?? fallback.nativeGroup),
+    ...(nativeChart === undefined
+      ? {}
+      : { nativeChart: nonNegativeInteger(nativeChart) }),
     rasterRemaining: nonNegativeInteger(
       value?.rasterRemaining ?? fallback.rasterRemaining
     ),
@@ -229,6 +311,14 @@ export function createPresentationExportQuality(
         slideNumber: Math.max(1, Math.trunc(slide.slideNumber)),
         nativeTextElements: nonNegativeInteger(slide.nativeTextElements),
         nativeShapeElements: nonNegativeInteger(slide.nativeShapeElements),
+        ...(slide.nativeChartElements === undefined
+          ? {}
+          : {
+              nativeChartElements: nonNegativeInteger(
+                slide.nativeChartElements,
+              ),
+            }),
+        ...(slide.nativeTableElements === undefined ? {} : { nativeTableElements: nonNegativeInteger(slide.nativeTableElements) }),
         nativeGroupElements,
         nativeImageElements: nonNegativeInteger(slide.nativeImageElements),
         rasterFallbackElements: nonNegativeInteger(
@@ -393,6 +483,9 @@ export function createPresentationExportQuality(
       : {}),
   };
 
+  const hasNativeChartCounts = slides.some(
+    (slide) => slide.nativeChartElements !== undefined,
+  );
   return {
     schemaVersion: PRESENTATION_EXPORT_QUALITY_SCHEMA_VERSION,
     mode,
@@ -408,6 +501,14 @@ export function createPresentationExportQuality(
       (sum, slide) => sum + slide.nativeShapeElements,
       0
     ),
+    ...(hasNativeChartCounts
+      ? {
+          nativeChartElements: slides.reduce(
+            (sum, slide) => sum + (slide.nativeChartElements ?? 0),
+            0,
+          ),
+        }
+      : {}),
     nativeGroupElements: slides.reduce(
       (sum, slide) => sum + slide.nativeGroupElements,
       0
@@ -421,6 +522,14 @@ export function createPresentationExportQuality(
       nativeText: slides.reduce((sum, slide) => sum + slide.logicalCoverage.nativeText, 0),
       nativeImage: slides.reduce((sum, slide) => sum + slide.logicalCoverage.nativeImage, 0),
       nativeShape: slides.reduce((sum, slide) => sum + slide.logicalCoverage.nativeShape, 0),
+      ...(slides.some((slide) => slide.logicalCoverage.nativeChart !== undefined)
+        ? {
+            nativeChart: slides.reduce(
+              (sum, slide) => sum + (slide.logicalCoverage.nativeChart ?? 0),
+              0,
+            ),
+          }
+        : {}),
       nativeGroup: slides.reduce((sum, slide) => sum + slide.logicalCoverage.nativeGroup, 0),
       rasterRemaining: slides.reduce((sum, slide) => sum + slide.logicalCoverage.rasterRemaining, 0),
     },
@@ -433,6 +542,14 @@ export function createPresentationExportQuality(
       nativeText: slides.reduce((sum, slide) => sum + slide.ooxmlReadback.nativeText, 0),
       nativeImage: slides.reduce((sum, slide) => sum + slide.ooxmlReadback.nativeImage, 0),
       nativeShape: slides.reduce((sum, slide) => sum + slide.ooxmlReadback.nativeShape, 0),
+      ...(slides.some((slide) => slide.ooxmlReadback.nativeChart !== undefined)
+        ? {
+            nativeChart: slides.reduce(
+              (sum, slide) => sum + (slide.ooxmlReadback.nativeChart ?? 0),
+              0,
+            ),
+          }
+        : {}),
       nativeGroup: slides.reduce((sum, slide) => sum + slide.ooxmlReadback.nativeGroup, 0),
       rasterRemaining: slides.reduce((sum, slide) => sum + slide.ooxmlReadback.rasterRemaining, 0),
     },
@@ -500,11 +617,13 @@ export function attachPresentationExportOoxmlReadback(
     logical.mode,
     logical.slides.map((slide) => {
       const observed = readbackBySlide.get(slide.slideNumber)!;
+      const observedQids = new Set((observed.qidCoverage ?? []).filter((entry) => entry.ooxml === "present").map((entry) => `${entry.kind}:${entry.elementId}`));
       return {
         ...slide,
         logicalCoverage: slide.logicalCoverage,
         ooxmlReadback: observed.ooxmlReadback,
         backplateCount: observed.backplateCount,
+        ...(slide.qidCoverage ? { qidCoverage: slide.qidCoverage.map((entry) => ({ ...entry, ooxml: observedQids.has(`${entry.kind}:${entry.elementId}`) ? "present" as const : "missing" as const })) } : {}),
         typographyIssues: [
           ...slide.typographyIssues,
           ...observed.typographyIssues,

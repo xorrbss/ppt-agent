@@ -9,6 +9,7 @@ import {
   selectLayerSafeNativeElements,
   serializePreparedNativeElement,
   serializePreparedNativeElementUnderlay,
+  serializePreparedNativeElementOverlay,
 } from "./native-plan.ts";
 
 const bounds = (x, y, width, height) => ({
@@ -876,6 +877,46 @@ test("raster fallback propagates through overlapping native layers", async () =>
   assert.deepEqual(selectLayerSafeNativeElements(elements, prepared), []);
 });
 
+test("semantic illustration falls back when an omitted child label is not promoted", () => {
+  const illustration = {
+    ...base("semantic-illustration", 0, 0, bounds(600, 80, 520, 520)),
+    domPath: "body > section:nth-of-type(1)",
+    tagName: "section",
+    classification: { mode: "native", kind: "image", confidence: "safe" },
+    image: {
+      src: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lM1nWQAAAABJRU5ErkJggg==",
+      alt: "Semantic illustration",
+      naturalWidth: 1,
+      naturalHeight: 1,
+      objectFit: "fill",
+      objectPosition: "50% 50%",
+      crop: { left: 0, top: 0, right: 0, bottom: 0 },
+    },
+  };
+  const omittedLabel = {
+    ...base("omitted-label", 1, 1, bounds(720, 160, 180, 40)),
+    domPath: "body > section:nth-of-type(1) > span:nth-of-type(1)",
+    classification: {
+      mode: "raster",
+      candidateKind: "text",
+      reasons: ["typography-backplate-collision"],
+    },
+    text: {
+      role: "label",
+      plainText: "Must remain visible",
+      paragraphs: ["Must remain visible"],
+      style: style(),
+      runs: [],
+    },
+  };
+  const prepared = [{ kind: "image", source: illustration, png: Buffer.from("png") }];
+
+  assert.deepEqual(
+    selectLayerSafeNativeElements([illustration, omittedLabel], prepared),
+    []
+  );
+});
+
 test("a simple line remains an editable OOXML line instead of a rectangle", async () => {
   const element = {
     ...base("line-one", 0, 0, bounds(120, 360, 420, 2)),
@@ -1225,6 +1266,7 @@ test("outlined circular text containers retain editable outline, border, and num
   assert.equal(preparedNativeElementNonVisualIdCount(prepared[0]), 3);
 
   const underlay = serializePreparedNativeElementUnderlay(prepared[0], 3);
+  const overlay = serializePreparedNativeElementOverlay(prepared[0], 5);
   assert.equal((underlay.match(/<p:sp>/g) ?? []).length, 2);
   assert.match(underlay, /Presenton hybrid shape step-node-container outline/);
   assert.match(underlay, /<a:off x="942975" y="942975"\/><a:ext cx="428625" cy="428625"\/>/);
@@ -1232,6 +1274,16 @@ test("outlined circular text containers retain editable outline, border, and num
   assert.match(underlay, /<a:off x="952500" y="952500"\/><a:ext cx="409575" cy="409575"\/>/);
   assert.match(underlay, /<a:srgbClr val="182235">/);
   assert.match(underlay, /<a:srgbClr val="F4F7F4">/);
+  assert.match(overlay, /Presenton raster visual fragment 5/);
+  assert.doesNotMatch(overlay, /Presenton hybrid raster step-node/);
+
+  const qidOwners = [...`${underlay}${overlay}`.matchAll(/name="([^"]+)"/g)]
+    .map((match) => match[1])
+    .filter((name) =>
+      name.startsWith("Presenton hybrid ") &&
+      (name.endsWith(" step-node") || name.endsWith(" step-node-container"))
+    );
+  assert.deepEqual(qidOwners, ["Presenton hybrid shape step-node-container"]);
 });
 
 test("backplate decoration keeps a transparent outer box for multiline fit", async () => {

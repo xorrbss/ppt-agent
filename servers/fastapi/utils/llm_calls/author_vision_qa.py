@@ -21,6 +21,7 @@ from utils.authored_dom_quality import (
     ensure_authored_qids,
     has_dom_quality_regression,
     inspect_authored_dom,
+    validate_declared_authored_qids,
 )
 from utils.authored_patch_engine import apply_authored_patch
 from utils.authored_illustrations import (
@@ -34,6 +35,7 @@ from utils.llm_calls.author_slide import (
     AuthoredStyleLike,
     Brand,
     author_slide_html,
+    authored_semantic_dual_output_mode,
     is_valid_slide_html,
     normalize_reference_mode,
     validate_authored_slide_html,
@@ -622,8 +624,10 @@ async def revise_authored_deck(
             new_html = finalized_html
         # Fallback may replace structure, but every resulting edit target still gets
         # a deterministic id. The normal local-patch path preserves every existing id.
-        if return_details:
+        if return_details and authored_semantic_dual_output_mode() != "declared":
             new_html = ensure_authored_qids(new_html)
+        elif return_details:
+            validate_declared_authored_qids(new_html)
         return new_html, await _render_correction_html(new_html)
 
     async def review_and_fix(
@@ -634,7 +638,12 @@ async def revise_authored_deck(
         This intentionally avoids the former deck-wide review barrier: a fast review can
         begin its expensive correction while slower reviews are still in flight.
         """
-        current_html = ensure_authored_qids(htmls[i]) if return_details else htmls[i]
+        current_html = htmls[i]
+        if return_details:
+            if authored_semantic_dual_output_mode() == "declared":
+                validate_declared_authored_qids(current_html)
+            else:
+                current_html = ensure_authored_qids(current_html)
         current_png = pngs[i]
         changed = False
         slide_critique_work = 0.0

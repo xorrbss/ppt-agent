@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 import uuid
@@ -13,6 +14,9 @@ from sqlmodel import SQLModel
 from models.presentation_and_path import PresentationAndPath
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_export_attempt import (
+    ExportPowerPointQaEvidence,
+    ExportVisualParityEvidence,
+    PresentationExportCoverageManifest,
     PresentationExportAttempt,
     validate_export_attempt_provenance,
 )
@@ -31,8 +35,13 @@ from services.presentation_export_attempt_service import (
     terminalize_export_attempt_succeeded,
 )
 from services.presentation_export_direct_attempt_service import (
+    _visual_parity_status_from_powerpoint_qa,
+    begin_direct_fidelity_export_attempt,
+    complete_direct_hybrid_export_attempt,
+    _validate_hybrid_atomic_binding,
     list_direct_hybrid_export_attempt_history,
 )
+import services.presentation_export_direct_attempt_service as direct_attempt_service
 from services.presentation_export_adapters import PresentationExportAdapterResult
 from services.presentation_export_capabilities import (
     PresentationExportContractError,
@@ -46,6 +55,237 @@ from services.presentation_export_router import (
 )
 
 
+def test_powerpoint_qa_does_not_self_promote_visual_parity() -> None:
+    passed = ExportPowerPointQaEvidence.model_validate(
+        {
+            "status": "passed",
+            "platform": "windows",
+            "supported": True,
+            "automation": "PowerPoint.COM",
+            "reopened": True,
+            "rendered": True,
+            "readback": True,
+            "repairDialogs": 0,
+            "renderedPngSha256": ["a" * 64],
+            "slideCount": 1,
+        }
+    )
+    failed = passed.model_copy(update={"status": "failed"})
+
+    assert _visual_parity_status_from_powerpoint_qa(passed) == "not-verified"
+    assert _visual_parity_status_from_powerpoint_qa(failed) == "failed"
+
+
+def test_passed_powerpoint_qa_allows_truthful_unverified_visual_parity() -> None:
+    digest = "a" * 64
+    binding = {
+        "presentation_id": str(uuid.uuid4()),
+        "export_attempt_id": str(uuid.uuid4()),
+        "presentation_revision": 1,
+        "canonical_source_sha256": digest,
+        "renderer_source_sha256": digest,
+        "pptx_sha256": digest,
+    }
+    qa = {
+        "status": "passed",
+        "platform": "windows",
+        "supported": True,
+        "automation": "PowerPoint.COM",
+        "reopened": True,
+        "rendered": True,
+        "readback": True,
+        "repairDialogs": 0,
+        "renderedPngSha256": [digest],
+        "slideCount": 1,
+        "typographyIssuesGt5Pt": 0,
+        "typographyIssuesGt10Pt": 0,
+        "nativeText": 1,
+        "nativeImage": 0,
+        "nativeShape": 0,
+        "nativeTable": 0,
+        "nativeChart": 0,
+        "nativeImageCrop": 0,
+    }
+    evidence = ExportVisualParityEvidence.model_validate(
+        {
+            "status": "not-verified",
+            "binding": binding,
+            "qualitySidecarSha256": digest,
+            "coverageSidecarSha256": digest,
+            "powerpointQa": qa,
+        }
+    )
+
+    assert evidence.status == "not-verified"
+
+
+def test_hybrid_coverage_accepts_strict_semantic_receipt_digests() -> None:
+    digest = "sha256:" + ("a" * 64)
+    manifest = PresentationExportCoverageManifest.model_validate(
+        {
+            "schemaVersion": "presenton.authored-hybrid-coverage/v2",
+            "mode": "hybrid",
+            "cjkCoverageProfileId": "ja-ko-zh-bounded-fixture-v1",
+            "nativeTextPolicy": {
+                "koreanLatin": "bounded-native",
+                "japanese": "raster-required",
+                "chinese": "raster-required",
+            },
+            "source": {
+                "exportAttemptId": str(uuid.uuid4()),
+                "presentationRevision": 1,
+                "canonicalSourceDigest": "b" * 64,
+                "sourceDigest": "c" * 64,
+            },
+            "totalSlides": 1,
+            "nativeText": 0,
+            "nativeImage": 0,
+            "nativeShape": 0,
+            "nativeTable": 0,
+            "nativeChart": 0,
+            "logicalCoverage": {
+                "nativeText": 0,
+                "nativeImage": 0,
+                "nativeShape": 0,
+                "nativeTable": 0,
+                "nativeChart": 0,
+                "rasterRemaining": 1,
+            },
+            "ooxmlReadback": {
+                "status": "passed",
+                "nativeText": 0,
+                "nativeImage": 0,
+                "nativeShape": 0,
+                "nativeTable": 0,
+                "nativeChart": 0,
+                "rasterRemaining": 1,
+            },
+            "backplateCount": 1,
+            "typographyIssues": [],
+            "rasterRemaining": 1,
+            "fullyEditable": False,
+            "visualParity": "not-verified",
+            "slides": [
+                {
+                    "slideNumber": 1,
+                    "nativeText": 0,
+                    "nativeImage": 0,
+                    "nativeShape": 0,
+                    "nativeTable": 0,
+                    "nativeChart": 0,
+                    "logicalCoverage": {
+                        "nativeText": 0,
+                        "nativeImage": 0,
+                        "nativeShape": 0,
+                        "nativeTable": 0,
+                        "nativeChart": 0,
+                        "rasterRemaining": 1,
+                    },
+                    "ooxmlReadback": {
+                        "status": "passed",
+                        "nativeText": 0,
+                        "nativeImage": 0,
+                        "nativeShape": 0,
+                        "nativeTable": 0,
+                        "nativeChart": 0,
+                        "rasterRemaining": 1,
+                    },
+                    "backplateCount": 1,
+                    "typographyIssues": [],
+                    "rasterRemaining": 1,
+                    "fallbackReasons": ["complex-chart"],
+                    "visualParity": "not-verified",
+                    "nativeBackplateDeDuplication": "not-applicable",
+                    "semanticReceipts": {
+                        "rasterDegradationReceiptDigest": digest
+                    },
+                }
+            ],
+        }
+    )
+    assert manifest.slides[0].semantic_receipts is not None
+    assert (
+        manifest.slides[0].semantic_receipts.raster_degradation_receipt_digest
+        == digest
+    )
+
+
+def test_hybrid_coverage_accepts_table_chart_and_crop_only_with_matching_readback() -> None:
+    slide = {
+        "slideNumber": 1,
+        "nativeText": 0,
+        "nativeImage": 1,
+        "nativeShape": 0,
+        "nativeTable": 1,
+        "nativeChart": 1,
+        "nativeImageCrop": 1,
+        "logicalCoverage": {
+            "nativeText": 0,
+            "nativeImage": 1,
+            "nativeShape": 0,
+            "nativeTable": 1,
+            "nativeChart": 1,
+            "nativeImageCrop": 1,
+            "rasterRemaining": 1,
+        },
+        "ooxmlReadback": {
+            "status": "passed",
+            "nativeText": 0,
+            "nativeImage": 1,
+            "nativeShape": 0,
+            "nativeTable": 1,
+            "nativeChart": 1,
+            "nativeImageCrop": 1,
+            "rasterRemaining": 1,
+        },
+        "backplateCount": 0,
+        "typographyIssues": [],
+        "rasterRemaining": 1,
+        "fallbackReasons": ["raster-residual"],
+        "visualParity": "not-verified",
+        "nativeBackplateDeDuplication": "applied",
+    }
+    document = {
+        "schemaVersion": "presenton.authored-hybrid-coverage/v2",
+        "mode": "hybrid",
+        "cjkCoverageProfileId": "ja-ko-zh-bounded-fixture-v1",
+        "nativeTextPolicy": {
+            "koreanLatin": "bounded-native",
+            "japanese": "raster-required",
+            "chinese": "raster-required",
+        },
+        "source": {
+            "exportAttemptId": str(uuid.uuid4()),
+            "presentationRevision": 1,
+            "canonicalSourceDigest": "b" * 64,
+            "sourceDigest": "c" * 64,
+        },
+        "totalSlides": 1,
+        "nativeText": 0,
+        "nativeImage": 1,
+        "nativeShape": 0,
+        "nativeTable": 1,
+        "nativeChart": 1,
+        "nativeImageCrop": 1,
+        "logicalCoverage": slide["logicalCoverage"],
+        "ooxmlReadback": slide["ooxmlReadback"],
+        "backplateCount": 0,
+        "typographyIssues": [],
+        "rasterRemaining": 1,
+        "fullyEditable": False,
+        "visualParity": "not-verified",
+        "slides": [slide],
+    }
+    manifest = PresentationExportCoverageManifest.model_validate(document)
+    assert manifest.native_table == 1
+    assert manifest.native_chart == 1
+    assert manifest.native_image_crop == 1
+    document["slides"] = [{**slide, "nativeChart": 2}]
+    document["nativeChart"] = 2
+    with pytest.raises(ValueError, match="matching semantic and OOXML readback"):
+        PresentationExportCoverageManifest.model_validate(document)
+
+
 TABLES = [
     User.__table__,
     PresentationModel.__table__,
@@ -53,6 +293,7 @@ TABLES = [
     WorkspaceOperation.__table__,
     WorkspaceAsset.__table__,
     PresentationExportAttempt.__table__,
+    SlideModel.__table__,
 ]
 
 
@@ -201,6 +442,12 @@ def test_hybrid_v2_binds_attempt_and_separates_logical_readback_backplate() -> N
     coverage = {
         "schemaVersion": "presenton.authored-hybrid-coverage/v2",
         "mode": "hybrid",
+        "cjkCoverageProfileId": "ja-ko-zh-bounded-fixture-v1",
+        "nativeTextPolicy": {
+            "koreanLatin": "bounded-native",
+            "japanese": "raster-required",
+            "chinese": "raster-required",
+        },
         "source": {
             "exportAttemptId": str(attempt_id),
             "presentationRevision": 4,
@@ -266,6 +513,7 @@ def test_hybrid_v2_binds_attempt_and_separates_logical_readback_backplate() -> N
         "native_shape": 0,
         "native_table": 0,
         "native_chart": 0,
+        "native_image_crop": 0,
     }
     coverage["visualParity"] = "passed"
     coverage["slides"][0]["visualParity"] = "passed"
@@ -299,6 +547,7 @@ def test_hybrid_v2_binds_attempt_and_separates_logical_readback_backplate() -> N
             "nativeShape": 0,
             "nativeTable": 0,
             "nativeChart": 0,
+            "nativeImageCrop": 0,
         },
     }
     provenance["coverage_manifest"] = coverage
@@ -322,6 +571,247 @@ def test_hybrid_v2_binds_attempt_and_separates_logical_readback_backplate() -> N
     )
     with pytest.raises(ValueError, match="quality sidecar visual parity binding"):
         validate_export_attempt_provenance(provenance)
+
+
+def test_complete_direct_hybrid_accepts_exact_bounded_cjk_coverage_contract(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def scenario() -> None:
+        engine, maker = await _database(tmp_path / "hybrid-complete-cjk.db")
+        try:
+            presentation_id = await _seed_attempt_presentation(maker)
+            async with maker() as session:
+                presentation = await session.get(PresentationModel, presentation_id)
+                slides = list(
+                    await session.scalars(
+                        select(SlideModel)
+                        .where(SlideModel.presentation == presentation_id)
+                        .order_by(SlideModel.index, SlideModel.id)
+                    )
+                )
+                assert presentation is not None
+                canonical = build_export_source_snapshot_sha256(presentation, slides)
+                attempt_id = uuid.uuid4()
+                renderer = "b" * 64
+                provenance = _provenance(source_snapshot_sha256=canonical)
+                provenance["capability_evidence"] = {
+                    "selected_adapter": "general",
+                    "export_mode": "hybrid",
+                }
+                provenance["freshness"]["renderer_source_sha256"] = renderer
+                session.add(
+                    PresentationExportAttempt(
+                        id=attempt_id,
+                        owner_id=None,
+                        owner_scope="anonymous",
+                        presentation_id=presentation_id,
+                        format="pptx",
+                        state="running",
+                        source_revision=4,
+                        source_snapshot_sha256=canonical,
+                        request_hash="d" * 64,
+                        idempotency_key_hash="e" * 64,
+                        requested_adapter="general",
+                        provenance_schema_version=1,
+                        provenance=provenance,
+                        started_at=datetime.now(timezone.utc),
+                    )
+                )
+                await session.commit()
+
+            artifact = tmp_path / "bounded-cjk.pptx"
+            artifact.write_bytes(b"PK\x03\x04bounded-cjk")
+            pptx_sha256 = sha256(artifact.read_bytes()).hexdigest()
+            counts = {
+                "nativeText": 1,
+                "nativeImage": 0,
+                "nativeShape": 0,
+                "nativeTable": 0,
+                "nativeChart": 0,
+                "nativeImageCrop": 0,
+                "rasterRemaining": 0,
+            }
+            coverage = {
+                "schemaVersion": "presenton.authored-hybrid-coverage/v2",
+                "mode": "hybrid",
+                "cjkCoverageProfileId": "ja-ko-zh-bounded-fixture-v1",
+                "nativeTextPolicy": {
+                    "koreanLatin": "bounded-native",
+                    "japanese": "raster-required",
+                    "chinese": "raster-required",
+                },
+                "source": {
+                    "exportAttemptId": str(attempt_id),
+                    "presentationRevision": 4,
+                    "canonicalSourceDigest": canonical,
+                    "sourceDigest": renderer,
+                },
+                "totalSlides": 1,
+                **counts,
+                "logicalCoverage": counts,
+                "ooxmlReadback": {"status": "passed", **counts},
+                "backplateCount": 1,
+                "typographyIssues": [],
+                "fullyEditable": True,
+                "visualParity": "not-verified",
+                "slides": [
+                    {
+                        "slideNumber": 1,
+                        **counts,
+                        "logicalCoverage": counts,
+                        "ooxmlReadback": {"status": "passed", **counts},
+                        "backplateCount": 1,
+                        "typographyIssues": [],
+                        "fallbackReasons": [],
+                        "visualParity": "not-verified",
+                        "nativeBackplateDeDuplication": "applied",
+                    }
+                ],
+            }
+            quality = {
+                "schemaVersion": "presenton.export-quality/v1",
+                "status": "fully-editable",
+                "exportAttemptId": str(attempt_id),
+                "atomicBinding": {
+                    "presentationId": str(presentation_id),
+                    "presentationRevision": 4,
+                    "canonicalSourceDigest": canonical,
+                    "rendererSourceDigest": renderer,
+                    "pptxSha256": pptx_sha256,
+                },
+                "slides": [{"slideNumber": 1, "qidCoverage": []}],
+            }
+
+            invalid_profile = {**coverage, "cjkCoverageProfileId": "unbounded"}
+            with pytest.raises(ValueError, match="cjkCoverageProfileId"):
+                PresentationExportCoverageManifest.model_validate(invalid_profile)
+            invalid_policy = {
+                **coverage,
+                "nativeTextPolicy": {
+                    **coverage["nativeTextPolicy"],
+                    "japanese": "bounded-native",
+                },
+            }
+            with pytest.raises(ValueError, match="nativeTextPolicy.japanese"):
+                PresentationExportCoverageManifest.model_validate(invalid_policy)
+
+            async def trusted_qa(*_args, **_kwargs):
+                return {
+                    "status": "passed",
+                    "platform": "windows",
+                    "supported": True,
+                    "automation": "PowerPoint.COM",
+                    "reopened": True,
+                    "rendered": True,
+                    "readback": True,
+                    "repairDialogs": 0,
+                    "renderedPngSha256": ["f" * 64],
+                    "slideCount": 1,
+                    "typographyIssuesGt5Pt": 0,
+                    "typographyIssuesGt10Pt": 0,
+                    "nativeText": 1,
+                    "nativeImage": 0,
+                    "nativeShape": 0,
+                    "nativeTable": 0,
+                    "nativeChart": 0,
+                    "nativeImageCrop": 0,
+                }
+
+            monkeypatch.setattr(
+                direct_attempt_service,
+                "resolve_hybrid_artifact",
+                lambda _path: artifact,
+            )
+            monkeypatch.setattr(
+                direct_attempt_service,
+                "require_matching_hybrid_sidecars",
+                lambda *_args, **_kwargs: None,
+            )
+            monkeypatch.setattr(
+                direct_attempt_service,
+                "publish_finalized_hybrid_sidecars",
+                lambda *_args, **_kwargs: None,
+            )
+            monkeypatch.setattr(
+                direct_attempt_service,
+                "trusted_powerpoint_qa",
+                trusted_qa,
+            )
+            async with maker() as session:
+                completed, finalized = await complete_direct_hybrid_export_attempt(
+                    session,
+                    presentation_id=presentation_id,
+                    attempt_id=attempt_id,
+                    pptx_sha256=pptx_sha256,
+                    pptx_size_bytes=artifact.stat().st_size,
+                    artifact_path=str(artifact),
+                    quality=quality,
+                    coverage=coverage,
+                    powerpoint_qa=None,
+                )
+                assert completed.state == "succeeded"
+                assert finalized["coverage"]["cjkCoverageProfileId"] == (
+                    "ja-ko-zh-bounded-fixture-v1"
+                )
+                assert finalized["coverage"]["nativeTextPolicy"] == coverage[
+                    "nativeTextPolicy"
+                ]
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_hybrid_atomic_binding_rejects_cross_presentation_sidecar() -> None:
+    expected = {
+        "presentationId": str(uuid.uuid4()),
+        "presentationRevision": 4,
+        "canonicalSourceDigest": "a" * 64,
+        "rendererSourceDigest": "b" * 64,
+        "pptxSha256": "c" * 64,
+    }
+    export_attempt_id = uuid.uuid4()
+    assert _validate_hybrid_atomic_binding(
+        expected,
+        expected,
+        export_attempt_id=export_attempt_id,
+    ).export_attempt_id == export_attempt_id
+    wrong_presentation = {**expected, "presentationId": str(uuid.uuid4())}
+
+    with pytest.raises(
+        PresentationExportContractError,
+        match="presentation_export_atomic_binding_mismatch",
+    ):
+        _validate_hybrid_atomic_binding(
+            wrong_presentation,
+            expected,
+            export_attempt_id=export_attempt_id,
+        )
+
+
+def test_fidelity_begin_persists_renderer_binding_without_hybrid_evidence(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        engine, maker = await _database(tmp_path / "fidelity-attempt.db")
+        try:
+            presentation_id = await _seed_attempt_presentation(maker)
+            async with maker() as session:
+                attempt, evidence = await begin_direct_fidelity_export_attempt(
+                    session,
+                    presentation_id=presentation_id,
+                    expected_revision=4,
+                    renderer_source_sha256="b" * 64,
+                    idempotency_key="fidelity-test",
+                )
+            assert attempt.provenance["capability_evidence"]["export_mode"] == "fidelity"
+            assert attempt.provenance["freshness"]["renderer_source_sha256"] == "b" * 64
+            assert evidence["canonical_source_digest"] == attempt.source_snapshot_sha256
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
 
 
 async def _seed_attempt_presentation(maker) -> uuid.UUID:

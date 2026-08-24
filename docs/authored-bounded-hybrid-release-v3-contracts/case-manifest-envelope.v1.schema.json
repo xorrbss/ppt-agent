@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:presenton:authored:gate-minus1-case-manifest:v1",
+  "title": "Authored Gate -1 case manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "manifestSchemaId", "manifestId", "gate", "manifestStatus", "canonicalProfileId", "policyCandidateId", "policyCandidateDigest", "requiredEnvironmentDigest", "inputArtifacts", "expectedCaseCount", "requiredCaseIdsDigest", "aggregateDigestProjections", "executionSealPolicy", "requiredCommonObservationFields", "observationContract", "cases", "resultSetRules", "digestProjection", "manifestDigest"],
+  "properties": {
+    "schemaVersion": { "const": "authored-case-manifest/v1" },
+    "manifestSchemaId": { "const": "urn:presenton:authored:gate-minus1-case-manifest:v1" },
+    "manifestId": { "type": "string", "minLength": 1 },
+    "gate": { "const": "gate-minus1" },
+    "manifestStatus": { "enum": ["retrospective-reference-only", "sealed-for-execution", "draft-unsealed"] },
+    "canonicalProfileId": { "const": "presenton-canonical-json/v2" },
+    "policyCandidateId": { "type": "string", "minLength": 1 },
+    "policyCandidateDigest": { "const": "sha256:2fd68afb7e40a6cffe36e9bdf8a099f480b492ddeff110159dbf4d934f1da6c5" },
+    "requiredEnvironmentDigest": { "$ref": "#/$defs/digest" },
+    "inputArtifacts": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/artifact" } },
+    "expectedCaseCount": { "const": 18 },
+    "requiredCaseIdsDigest": { "const": "sha256:37b5a3dc034e9eab066ffcdd3e6dc2bb143af9123e75b732da10be71cc2c51f1" },
+    "aggregateDigestProjections": {
+      "const": { "requiredCaseIdsDigest": { "canonicalProfileId": "presenton-canonical-json/v2", "includedJsonPath": "$.cases[*].caseId", "ordering": "case ordinal ascending", "excludedJsonPaths": [] } }
+    },
+    "executionSealPolicy": {
+      "const": { "sealedExecutionRequiresFreshPins": true, "requiredPinnedArtifactRoles": ["input-pptx", "probe-script", "dialog-watcher-script", "cleanup-census-script", "environment-receipt", "source-tree-census"], "inputAndEnvironmentDigestEqualityRequired": true, "executionArtifactRoleSetDigest": "sha256:c952db10303f25aea35ebed316e1a866be2924135964884c6103a0c66ae90190", "executionSealSigned": true, "executionSealSchemaId": "urn:presenton:authored:gate-minus1-execution-seal:v1", "executionSealOuterArtifactRefRequiredInResult": true, "manifestCoreDigestProjection": { "algorithm": "sha256", "canonicalProfileId": "presenton-canonical-json/v2", "includedJsonPath": "$", "excludedJsonPaths": ["$.executionPins", "$.manifestDigest"] } }
+    },
+    "executionPins": { "$ref": "gate-minus1-execution-seal.v1.schema.json#/$defs/outerArtifactRef" },
+    "requiredCommonObservationFields": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+    "observationContract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schemaId", "semanticValidatorContractDigest", "fieldDeclarationRule", "fractionalNumberRule", "missingFieldDisposition", "comErrorRule"],
+      "properties": {
+        "schemaId": { "const": "urn:presenton:authored:gate-minus1-result-set:v1" },
+        "semanticValidatorContractDigest": { "const": "sha256:9a0412e8d53acee8d4f605128158c25e29bbafe191d68155103bfc60e141941a" },
+        "fieldDeclarationRule": { "const": "Each ordered result binds the exact expectedObservationFields list, observedFieldIds, missingObservationFieldIds, artifact IDs, and observation digest." },
+        "fractionalNumberRule": { "const": "forbidden; use integer fields with unit and scale in the field name" },
+        "missingFieldDisposition": { "const": "blocked" },
+        "comErrorRule": { "const": "Every COM getter records hresult and valueState=exact|mixed|inaccessible|error; Boolean coercion is forbidden." }
+      }
+    },
+    "cases": { "type": "array", "minItems": 18, "maxItems": 18, "items": { "$ref": "#/$defs/case" } },
+    "resultSetRules": {
+      "type": "object", "additionalProperties": false,
+      "required": ["ordering", "skipStateAllowed", "requiredIdSetEquality", "missingExecutionDisposition", "caseToSuiteAggregation", "resultSetDigestProjection"],
+      "properties": {
+        "ordering": { "const": "manifest-ordinal-ascending" },
+        "skipStateAllowed": { "const": false },
+        "requiredIdSetEquality": { "const": true },
+        "missingExecutionDisposition": { "const": "blocked" },
+        "caseToSuiteAggregation": { "const": "failed if any case failed; else blocked if any case is blocked or not-verified or any required observation is missing; else feasible" },
+        "resultSetDigestProjection": {
+          "type": "object", "additionalProperties": false,
+          "required": ["includedJsonPath", "excludedJsonPaths", "digestCoversAllPresentFieldsExceptResultSetDigest", "requiredFields"],
+          "properties": {
+            "includedJsonPath": { "const": "$" },
+            "excludedJsonPaths": { "const": ["$.resultSetDigest"] },
+            "digestCoversAllPresentFieldsExceptResultSetDigest": { "const": true },
+            "requiredFields": { "const": ["schemaVersion", "manifestDigest", "requiredCaseIdsDigest", "semanticValidatorContractDigest", "suiteStatus", "requiredCaseCount", "executedCaseCount", "blockedCaseCount", "failedCaseCount", "notVerifiedCaseCount", "skippedCaseCount", "missingCaseIds", "duplicateCaseIds", "unexpectedCaseIds", "orderedResults", "commonObservations", "environmentReceiptDigest", "executionSealArtifactRef", "artifactInventory", "artifactInventoryDigestProjection", "artifactInventoryDigest", "semanticValidation", "resultCoreDigestProjection", "resultCoreDigest", "semanticValidationReceiptRef", "digestProjection", "resultSetDigest"] }
+          }
+        }
+      }
+    },
+    "digestProjection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["algorithm", "canonicalProfileId", "includedJsonPath", "excludedJsonPaths"],
+      "properties": {
+        "algorithm": { "const": "sha256" },
+        "canonicalProfileId": { "const": "presenton-canonical-json/v2" },
+        "includedJsonPath": { "const": "$" },
+        "excludedJsonPaths": { "const": ["$.manifestDigest"] }
+      }
+    },
+    "manifestDigest": { "$ref": "#/$defs/digest" }
+  },
+  "allOf": [{ "if": { "properties": { "manifestStatus": { "const": "sealed-for-execution" } } }, "then": { "required": ["executionPins"] } }],
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "artifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["artifactId", "role", "versionId", "mediaType", "byteLength", "sha256", "locator"],
+      "properties": {
+        "artifactId": { "type": "string", "minLength": 1 }, "role": { "enum": ["input-pptx", "probe-script", "dialog-watcher-script", "cleanup-census-script", "environment-receipt", "source-tree-census"] }, "versionId": { "type": "string", "minLength": 1 }, "mediaType": { "type": "string", "minLength": 1 }, "byteLength": { "type": "integer", "minimum": 1 }, "sha256": { "$ref": "#/$defs/digest" }, "locator": { "type": "string", "minLength": 1 }
+      }
+    },
+    "case": {
+      "type": "object", "additionalProperties": false,
+      "required": ["ordinal", "caseId", "caseKind", "inputArtifactIds", "inputArtifactDigest", "locator", "expectedObservationFields", "assertions", "allowedDispositions"],
+      "properties": {
+        "ordinal": { "type": "integer", "minimum": 1, "maximum": 18 },
+        "caseId": { "type": "string", "pattern": "^[a-z0-9.-]+$" },
+        "caseKind": { "const": "feasibility" },
+        "inputArtifactIds": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } },
+        "inputArtifactDigest": { "$ref": "#/$defs/digest" },
+        "locator": { "type": "object" },
+        "expectedObservationFields": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "observationValueRules": { "type": "object", "minProperties": 1, "additionalProperties": { "type": "string", "minLength": 1 } },
+        "assertions": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "allowedDispositions": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["native-observable", "native-observable-bounded", "raster-required", "not-verified", "blocked", "failed"] } }
+      }
+    }
+  }
+}

@@ -420,7 +420,8 @@ test("actual API route renders Template V2 through /pdf-maker and presentation-e
       return;
     }
     const prefix = "/api/v1/ppt/presentation/";
-    if (!url.pathname.startsWith(prefix)) {
+    const suffix = "/export-projection";
+    if (!url.pathname.startsWith(prefix) || !url.pathname.endsWith(suffix)) {
       response.writeHead(404).end("unknown fake FastAPI route");
       return;
     }
@@ -428,13 +429,18 @@ test("actual API route renders Template V2 through /pdf-maker and presentation-e
       response.writeHead(401).end("session required");
       return;
     }
-    const id = decodeURIComponent(url.pathname.slice(prefix.length));
+    const id = decodeURIComponent(
+      url.pathname.slice(prefix.length, -suffix.length)
+    );
     const presentation = presentations.get(id);
     if (!presentation) {
       response.writeHead(404).end("unknown Template V2 fidelity fixture");
       return;
     }
-    response.writeHead(200, { "content-type": "application/json; charset=utf-8" })
+    response.writeHead(200, {
+      "content-type": "application/json; charset=utf-8",
+      "x-presenton-presentation-projection": "authored-composition-dedup-v1",
+    })
       .end(JSON.stringify(presentation));
   });
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "template-v2-fidelity-"));

@@ -12,6 +12,7 @@ import {
   runBundledPresentationExport,
   type BundledPresentationExportResult,
 } from "@/lib/run-bundled-presentation-export";
+import { fetchPersistedPresentationProjectionForExport } from "@/lib/export-presentation-route";
 
 import { resolveAuthoredHybridChromeExecutable } from "./index.ts";
 import {
@@ -21,7 +22,6 @@ import {
 } from "./pptx-assembler.ts";
 import { isAuthoredPresentation } from "./presentation-mode.ts";
 import { authoredRendererIsolationPolicy } from "./renderer-isolation.ts";
-import { readBoundedResponseText } from "./security.ts";
 import {
   beginExportProgress,
   recordExportProgress,
@@ -29,7 +29,14 @@ import {
 import {
   prepareFidelitySlideLayer,
   prepareSlideLayer,
+  semanticRasterDegradationDigest,
 } from "./slide-layer.ts";
+import { AuthoredSemanticPublicationError } from "./semantic-reconciliation.ts";
+import {
+  bindActiveAuthoredEmissionForExport,
+  fetchActiveAuthoredEmission,
+  type ActiveEmissionExportBinding,
+} from "./active-emission.ts";
 import {
   mapWithConcurrency,
   parseBoundedPositiveInt,
@@ -55,7 +62,7 @@ import {
   type PresentationExportFontEmbeddingStatus,
   type PresentationExportRendererIsolation,
 } from "../presentation-export-quality.ts";
-import { inspectPptxEditability } from "./pptx-quality-inspection.ts";
+import { attachAuthoredHybridStage2ReadbackMetadata, inspectPptxEditability } from "./pptx-quality-inspection.ts";
 import {
   imageFallbackSlide,
   noFontRenderingTelemetry,
@@ -71,14 +78,24 @@ const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
 // spent the remaining slides receive a separately isolated fidelity capture below. Never
 // retain the bundled export's shared-DOM raster: authored slide styles can collide there.
 const HYBRID_DECK_BUDGET_MS = 15 * 60_000;
-const HYBRID_CACHE_VERSION = "authored-hybrid-v15-isolated-raster-fallback";
+const HYBRID_CACHE_VERSION = "authored-hybrid-v17-editable-shadow-profile";
 const HYBRID_RESULT_CACHE_LIMIT = 24;
+// The bounded-release v3 contract has no Gate -1-qualified native subset.
+// Keep this code-path authoritative instead of making it conditional on an
+// operator-provided environment value: a missing or misspelled value must not
+// turn the bounded release into a native export.
+export const EDITABLE_HYBRID_SHADOW_PROFILE_ID =
+  "authored-editable-hybrid-ko-en-basic-v1";
 const HYBRID_EXPORT_CONCURRENCY = parseBoundedPositiveInt(
   process.env.AUTHORED_HYBRID_CONCURRENCY,
   resolveHybridExportConcurrencyDefault(),
   1,
   12,
 );
+
+export function boundedReleaseRasterOnly(profileId?: string): boolean {
+  return profileId !== EDITABLE_HYBRID_SHADOW_PROFILE_ID;
+}
 
 interface CompletedHybridExport {
   result: BundledPresentationExportResult;
@@ -93,6 +110,7 @@ const inFlightHybridExports = new Map<
 >();
 
 interface StoredSlide {
+  id?: unknown;
   index?: unknown;
   layout_group?: unknown;
   html_content?: unknown;
@@ -117,6 +135,10 @@ export interface AuthoredHybridExportParams {
   /** Durable FastAPI attempt identity; optional only at the shared type boundary. */
   exportAttemptId?: string;
   canonicalSourceDigest?: string;
+  /** Internal route fact: distinguishes an explicit Fidelity selection from the legacy default. */
+  explicitPptxMode?: boolean;
+  /** Exact shadow-only profile that may exercise the bounded native subset. */
+  editableHybridProfileId?: typeof EDITABLE_HYBRID_SHADOW_PROFILE_ID;
 }
 
 interface FetchedPresentation {
@@ -156,43 +178,43 @@ async function fetchPresentation(
   presentationId: string,
   cookieHeader: string,
 ): Promise<FetchedPresentation> {
-  const controller = new AbortController();
-  const timer = setTimeout(
-    () => controller.abort(),
-    PRESENTATION_FETCH_TIMEOUT_MS,
+  const fetched = await fetchPersistedPresentationProjectionForExport(
+    presentationId,
+    {
+      baseUrl: getFastApiBaseUrl(),
+      authHeaders: getFastApiAuthHeaders(),
+      cookieHeader,
+      timeoutMs: PRESENTATION_FETCH_TIMEOUT_MS,
+      maxResponseBytes: MAX_PRESENTATION_RESPONSE_BYTES,
+    },
   );
-  try {
-    const headers: Record<string, string> = {
-      Accept: "application/json",
-      ...getFastApiAuthHeaders(),
-    };
-    if (cookieHeader.trim()) headers.Cookie = cookieHeader;
-    const response = await fetch(
-      `${getFastApiBaseUrl()}/api/v1/ppt/presentation/${encodeURIComponent(presentationId)}`,
-      {
-        method: "GET",
-        headers,
-        cache: "no-store",
-        signal: controller.signal,
-      },
-    );
-    if (!response.ok) {
-      throw new Error(`presentation fetch returned HTTP ${response.status}`);
-    }
-    const body = await readBoundedResponseText(
-      response,
-      MAX_PRESENTATION_RESPONSE_BYTES,
-    );
-    const parsed: unknown = JSON.parse(body);
-    if (!isRecord(parsed))
-      throw new Error("presentation response is not an object");
-    return {
-      presentation: parsed as StoredPresentation,
-      sourceSha256: createHash("sha256").update(body).digest("hex"),
-    };
-  } finally {
-    clearTimeout(timer);
-  }
+  return {
+    presentation: fetched.presentation as StoredPresentation,
+    sourceSha256: fetched.sourceSha256,
+  };
+}
+
+async function resolveActiveEmissionBinding(
+  params: AuthoredHybridExportParams,
+  presentation: StoredPresentation,
+  mode: "fidelity" | "hybrid",
+): Promise<ActiveEmissionExportBinding> {
+  const revision = Number(presentation.revision);
+  const active = await fetchActiveAuthoredEmission(
+    params.presentationId,
+    params.cookieHeader ?? "",
+  );
+  const slides = Array.isArray(presentation.slides) ? presentation.slides : [];
+  const slideIds = slides.map((slide) =>
+    isRecord(slide) && typeof slide.id === "string" ? slide.id : "");
+  return bindActiveAuthoredEmissionForExport(active, {
+    mode,
+    explicitMode: mode === "hybrid" || params.explicitPptxMode === true,
+    presentationId: params.presentationId,
+    presentationRevision: revision,
+    canonicalSourceDigest: params.canonicalSourceDigest,
+    slideIds,
+  });
 }
 
 async function resolveSafeFidelityPptx(outPath: string): Promise<string> {
@@ -314,7 +336,7 @@ function powerPointFontInputs(
     Partial<
       Record<
         "regular" | "bold" | "italic" | "boldItalic",
-        { data: Buffer; subset: boolean; source: string }
+        { data: Buffer; subset: boolean; source: string; collectionFaceIndex?: number }
       >
     >
   >();
@@ -326,6 +348,7 @@ function powerPointFontInputs(
       data: file.data,
       subset: plan.strategy === "subset",
       source: file.sourceId,
+      ...(file.collectionFaceIndex === undefined ? {} : { collectionFaceIndex: file.collectionFaceIndex }),
     };
     byFamily.set(face.family, faces);
   }
@@ -445,7 +468,10 @@ async function prepareFontEmbedding(
     ) {
       throw error;
     }
-    throw new Error("authored_hybrid_font_embedding_failed", { cause: error });
+    const stableCollectionReason = error instanceof Error
+      ? error.message.match(/^(pptx_font_collection_[a-z_]+)/)?.[1]
+      : undefined;
+    throw new Error(stableCollectionReason ?? "authored_hybrid_font_embedding_failed", { cause: error });
   }
 }
 
@@ -512,6 +538,11 @@ export async function runAuthoredFidelityPresentationExport(
   ) {
     throw new Error("authored_fidelity_source_invalid");
   }
+  const activeBinding = await resolveActiveEmissionBinding(
+    params,
+    presentation,
+    "fidelity",
+  );
 
   const fidelity = await runBundledPresentationExport({
     format: "pptx",
@@ -537,7 +568,12 @@ export async function runAuthoredFidelityPresentationExport(
         chromeExecutable,
       );
       if (!prepared.layer) throw new Error("authored_fidelity_slide_capture_failed");
-      return prepared.layer;
+      return {
+        ...prepared.layer,
+        semanticOwnerQids: [
+          ...activeBinding.slides[arrayIndex].declaredElementIds,
+        ],
+      };
     },
   );
   const resultPath = await writeHybridPptx(
@@ -546,6 +582,16 @@ export async function runAuthoredFidelityPresentationExport(
     undefined,
     [],
     "authored-fidelity",
+    {
+      ...(params.exportAttemptId ? { exportAttemptId: params.exportAttemptId } : {}),
+      presentationRevision: Number(presentation.revision),
+      ...(activeBinding.canonicalDigest
+        ? { canonicalSourceDigest: activeBinding.canonicalDigest }
+        : params.canonicalSourceDigest
+          ? { canonicalSourceDigest: params.canonicalSourceDigest }
+          : {}),
+      sourceDigest: fetched.sourceSha256,
+    },
   );
   return { path: resultPath };
 }
@@ -554,6 +600,7 @@ async function runUncachedAuthoredHybridExport(
   params: AuthoredHybridExportParams,
   presentation: StoredPresentation,
   sourceSha256: string,
+  activeBinding: ActiveEmissionExportBinding,
   fontEmbeddingPlan: FontEmbeddingPlan,
   cacheKey: string,
   requestStartedAt: number,
@@ -588,13 +635,14 @@ async function runUncachedAuthoredHybridExport(
     }
 
     const slideInputs = slides.map((rawSlide, arrayIndex) => {
+      const semantic = activeBinding.slides[arrayIndex];
       if (!isRecord(rawSlide)) {
-        return { html: "", slideNumber: arrayIndex + 1 };
+        return { html: "", slideNumber: arrayIndex + 1, semantic };
       }
       const slide = rawSlide as StoredSlide;
       const html =
         typeof slide.html_content === "string" ? slide.html_content : "";
-      return { html, slideNumber: arrayIndex + 1 };
+      return { html, slideNumber: arrayIndex + 1, semantic };
     });
 
     const deckStart = Date.now();
@@ -622,8 +670,28 @@ async function runUncachedAuthoredHybridExport(
     const preparedSlides = await mapWithConcurrency(
       slideInputs,
       HYBRID_EXPORT_CONCURRENCY,
-      async ({ html, slideNumber }) => {
+      async ({ html, slideNumber, semantic }) => {
         try {
+          if (boundedReleaseRasterOnly(params.editableHybridProfileId)) {
+            const reason = "bounded-release-visual-parity-raster-required";
+            return {
+              layer: null,
+              quality: {
+                ...imageFallbackSlide(slideNumber, reason),
+                semanticReceipts: {
+                  rasterDegradationReceiptDigest: semanticRasterDegradationDigest(
+                    {
+                      inputBundleDigest: semantic.bundleDigest,
+                      rendererSourceDigest: sourceSha256,
+                    },
+                    slideNumber,
+                    reason,
+                  ),
+                },
+              },
+              fontRendering: noFontRenderingTelemetry(),
+            };
+          }
           if (Date.now() - deckStart > HYBRID_DECK_BUDGET_MS) {
             if (!budgetWarningWritten) {
               budgetWarningWritten = true;
@@ -634,10 +702,19 @@ async function runUncachedAuthoredHybridExport(
             }
             return {
               layer: null,
-              quality: imageFallbackSlide(
-                slideNumber,
-                "deck-time-budget-exhausted",
-              ),
+              quality: {
+                ...imageFallbackSlide(slideNumber, "deck-time-budget-exhausted"),
+                semanticReceipts: {
+                  rasterDegradationReceiptDigest: semanticRasterDegradationDigest(
+                    {
+                      inputBundleDigest: semantic.bundleDigest,
+                      rendererSourceDigest: sourceSha256,
+                    },
+                    slideNumber,
+                    "deck-time-budget-exhausted",
+                  ),
+                },
+              },
               fontRendering: noFontRenderingTelemetry(),
             };
           }
@@ -648,18 +725,38 @@ async function runUncachedAuthoredHybridExport(
               chromeExecutable,
               fontEmbedding.embeddedTypefaceFamilies,
               fontEmbedding.embeddedTypefaceFaces,
+              {
+                exportAttemptId: params.exportAttemptId!,
+                inputBundleDigest: semantic.bundleDigest,
+                rendererSourceDigest: sourceSha256,
+                fontSetDigest: semantic.fontManifestDigest,
+                declaredElementIds: semantic.declaredElementIds,
+                declaredElements: semantic.declaredElements,
+              },
             );
           } catch (error) {
+            if (error instanceof AuthoredSemanticPublicationError) {
+              throw error;
+            }
             console.warn(
               `[authored-hybrid:slide-${slideNumber}] fidelity fallback after slide processing failure`,
               error,
             );
             return {
               layer: null,
-              quality: imageFallbackSlide(
-                slideNumber,
-                "slide-processing-failed",
-              ),
+              quality: {
+                ...imageFallbackSlide(slideNumber, "slide-processing-failed"),
+                semanticReceipts: {
+                  rasterDegradationReceiptDigest: semanticRasterDegradationDigest(
+                    {
+                      inputBundleDigest: semantic.bundleDigest,
+                      rendererSourceDigest: sourceSha256,
+                    },
+                    slideNumber,
+                    "slide-processing-failed",
+                  ),
+                },
+              },
               fontRendering: noFontRenderingTelemetry(),
             };
           }
@@ -680,7 +777,7 @@ async function runUncachedAuthoredHybridExport(
     const isolatedRasterLayers = await mapWithConcurrency(
       rasterFallbackInputs,
       HYBRID_EXPORT_CONCURRENCY,
-      async ({ html, slideNumber }) => {
+      async ({ html, slideNumber, semantic }) => {
         const isolated = await prepareFidelitySlideLayer(
           html,
           slideNumber,
@@ -689,7 +786,10 @@ async function runUncachedAuthoredHybridExport(
         if (!isolated.layer) {
           throw new Error("authored_hybrid_isolated_raster_fallback_failed");
         }
-        return isolated.layer;
+        return {
+          ...isolated.layer,
+          semanticOwnerQids: [...semantic.declaredElementIds],
+        };
       },
     );
     const isolatedRasterBySlide = new Map(
@@ -703,8 +803,8 @@ async function runUncachedAuthoredHybridExport(
       }
       return layer;
     });
-    const qualitySlides = preparedSlides.map((prepared) =>
-      prepared.layer
+    const qualitySlides = preparedSlides.map((prepared) => {
+      const quality = prepared.layer
         ? prepared.quality
         : {
             ...prepared.quality,
@@ -713,8 +813,20 @@ async function runUncachedAuthoredHybridExport(
               ...prepared.quality.fallbackReasons,
               "isolated-fidelity-raster-fallback",
             ],
-          },
-    );
+          };
+      return {
+        ...quality,
+        ...(prepared.paintPlan && prepared.quality.semanticReceipts?.hybridPlanDigest
+          ? {
+              paintPlan: {
+                ...prepared.paintPlan,
+                hybridPlanDigest:
+                  prepared.quality.semanticReceipts.hybridPlanDigest,
+              },
+            }
+          : {}),
+      };
+    });
     const logicalQuality = createPresentationExportQuality(
       "hybrid",
       qualitySlides,
@@ -753,18 +865,20 @@ async function runUncachedAuthoredHybridExport(
       {
         exportAttemptId: params.exportAttemptId,
         presentationRevision: Number(presentation.revision),
+        profileId: params.editableHybridProfileId,
         canonicalSourceDigest: params.canonicalSourceDigest,
         sourceDigest: sourceSha256,
       },
     );
     const assemblyMs = elapsedMs(assemblyStartedAt);
     const hybridBytes = await fs.readFile(hybridPath);
-    const quality = attachPresentationExportOoxmlReadback(
-      logicalQuality,
-      inspectPptxEditability(hybridBytes),
+    const quality = attachAuthoredHybridStage2ReadbackMetadata(
+      attachPresentationExportOoxmlReadback(logicalQuality, inspectPptxEditability(hybridBytes)),
+      hybridBytes,
     );
     const result = await attachAuthoredHybridEvidence({ path: hybridPath }, quality, {
       exportAttemptId: params.exportAttemptId,
+      presentationId: params.presentationId,
       presentationRevision: Number(presentation.revision),
       canonicalSourceDigest: params.canonicalSourceDigest,
       sourceDigest: sourceSha256,
@@ -793,6 +907,9 @@ export async function runAuthoredHybridPresentationExport(
   params: AuthoredHybridExportParams,
 ): Promise<BundledPresentationExportResult> {
   const requestStartedAt = performance.now();
+  if (!params.exportAttemptId || !params.canonicalSourceDigest) {
+    throw new Error("authored_hybrid_export_attempt_binding_required");
+  }
   let fetched: FetchedPresentation;
   try {
     fetched = await fetchPresentation(
@@ -830,10 +947,17 @@ export async function runAuthoredHybridPresentationExport(
   ) {
     throw new Error("authored_hybrid_slide_count_unsupported");
   }
+  const activeBinding = await resolveActiveEmissionBinding(
+    params,
+    presentation,
+    "hybrid",
+  );
 
   const fontEmbeddingPlan = await resolveFontEmbeddingPlan({
     requested: params.fontEmbedding !== false,
-    families: ["Noto Sans KR"],
+    families: [
+      ...new Set(activeBinding.slides.flatMap((slide) => slide.fontFamilies)),
+    ],
     // Full-font embedding keeps newly typed Hangul editable. The opt-in API can
     // add subset selection later without changing this safe default.
     strategy: "full",
@@ -848,6 +972,7 @@ export async function runAuthoredHybridPresentationExport(
     fontEmbeddingPlan.cacheDiscriminator,
     params.exportAttemptId,
     params.canonicalSourceDigest,
+    params.editableHybridProfileId,
   );
   const cached = await readCompletedHybridExport(cacheKey);
   if (cached) {
@@ -872,6 +997,7 @@ export async function runAuthoredHybridPresentationExport(
     params,
     presentation,
     fetched.sourceSha256,
+    activeBinding,
     fontEmbeddingPlan,
     cacheKey,
     requestStartedAt,
@@ -902,6 +1028,7 @@ function createHybridCacheKey(
   fontEmbeddingDiscriminator: string,
   exportAttemptId: string | undefined,
   canonicalSourceDigest: string | undefined,
+  editableHybridProfileId: string | undefined,
 ): string {
   return createHash("sha256")
     .update(HYBRID_CACHE_VERSION)
@@ -917,6 +1044,8 @@ function createHybridCacheKey(
     .update(exportAttemptId ?? "unbound")
     .update("\0")
     .update(canonicalSourceDigest ?? "unbound")
+    .update("\0")
+    .update(editableHybridProfileId ?? "raster-only")
     .digest("hex");
 }
 

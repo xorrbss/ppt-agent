@@ -1,7 +1,8 @@
 export type DeckId = `deck:${string}`;
 export type MasterId = `master:${string}`;
 export type SlideId = `slide:${string}`;
-export type ElementId = `element:${string}`;
+/** Stable authored QID. Canonical Scenes retain the HTML `data-qid` token. */
+export type ElementId = string;
 export type AssetId = `asset:${string}`;
 export type OperationId = `op:${string}`;
 export type Digest = `sha256:${string}`;
@@ -25,6 +26,7 @@ export interface ElementEditability {
   readonly geometry: boolean;
   readonly asset: boolean;
   readonly data: boolean;
+  readonly style: boolean;
 }
 
 export interface CasPin {
@@ -51,6 +53,13 @@ export interface TextBodyNode extends BodyNodeBase {
   /** Canonical Scene roles are extensible (`card-body`, `metric-label`, …). */
   readonly role: string;
   readonly text: string;
+  readonly style?: {
+    readonly color?: string;
+    readonly fontFamily?: string;
+    readonly fontSize?: number;
+    readonly fontWeight?: number;
+    readonly textAlign?: "left" | "center" | "right" | "justify";
+  };
 }
 
 export interface ImageBodyNode extends BodyNodeBase {
@@ -65,6 +74,7 @@ export interface ImageBodyNode extends BodyNodeBase {
   readonly mediaType?: "image/png" | "image/jpeg" | "image/svg+xml" | "image/webp";
   readonly storageReference?: string;
   readonly sizeBytes?: number;
+  readonly cropGeometry?: { readonly left: number; readonly top: number; readonly right: number; readonly bottom: number };
 }
 
 /** @deprecated Use ImageBodyNode. */
@@ -76,6 +86,7 @@ export interface ShapeBodyNode extends BodyNodeBase {
   /** Canonical Scene paint is retained for preview/export fidelity. */
   readonly fill?: string;
   readonly stroke?: string;
+  readonly strokeWidth?: number;
 }
 
 export interface ConnectorBodyNode extends BodyNodeBase {
@@ -102,6 +113,33 @@ export interface ChartBodyNode extends BodyNodeBase {
   readonly dataPayload?: SceneDataPayload;
 }
 
+/**
+ * The semantic compiler seals this decision for every authored QID.  The
+ * Workbench only displays it; it must not infer native ownership from local
+ * preview support or editability flags.
+ */
+export interface HybridOwnerDecision {
+  readonly ownerId: ElementId;
+  readonly decision: "nativeEditable" | "rasterIsland" | "publicationBlocked";
+  readonly capabilityId: string;
+  readonly reasonCode?: string;
+}
+
+export interface HybridRasterIsland {
+  readonly islandId: `island:${string}`;
+  readonly sourceOwnerIds: readonly ElementId[];
+  readonly assetId: AssetId;
+  readonly assetDigest: Digest;
+  readonly zBand: { readonly minZ: number; readonly maxZ: number };
+  readonly rasterPlaneDigest: Digest;
+}
+
+export interface SlideHybridExportPlan {
+  readonly schemaVersion: "slide-hybrid-export-plan/v1";
+  readonly ownerDecisions: readonly HybridOwnerDecision[];
+  readonly rasterIslands: readonly HybridRasterIsland[];
+}
+
 export interface GroupBodyNode extends BodyNodeBase {
   readonly kind: "group";
   readonly childElementIds: readonly ElementId[];
@@ -122,6 +160,8 @@ export interface SlideDocument {
   readonly digest: Digest;
   readonly layoutId: string;
   readonly nodes: readonly BodyNode[];
+  /** Present only when the server sealed the bounded Hybrid ownership plan. */
+  readonly hybridExport?: SlideHybridExportPlan;
 }
 
 export interface DeckDocument {

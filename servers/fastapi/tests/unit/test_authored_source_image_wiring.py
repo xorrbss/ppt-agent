@@ -365,6 +365,18 @@ def test_plan_offers_at_most_one_picture_per_slide():
     assert len(per_slide[0]) == 1
 
 
+def test_plan_gives_explicit_image_slide_first_refusal_for_direct_upload():
+    contents = (
+        "표지\n편집 가능한 덱",
+        "기능 화면\n첨부한 features.png를 img 요소로 배치",
+    )
+    direct = _candidate("direct", None)
+
+    per_slide = seam.plan_slide_source_images(contents, [direct])
+
+    assert per_slide == [{}, {"direct": direct}]
+
+
 def test_plan_swallows_a_failing_ranking(monkeypatch):
     def boom(*_args, **_kwargs):
         raise RuntimeError("ranking exploded")

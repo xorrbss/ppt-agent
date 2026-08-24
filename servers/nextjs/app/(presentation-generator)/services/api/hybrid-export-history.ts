@@ -132,6 +132,18 @@ function safeEnum<T extends string>(
   throw new Error(`Hybrid export history has invalid ${field}`);
 }
 
+function isPast(value: string | undefined): boolean {
+  return value !== undefined && Date.parse(value) <= Date.now();
+}
+
+function optionalDate(value: unknown, field: string): string | undefined {
+  const result = text(value);
+  if (result !== undefined && !Number.isFinite(Date.parse(result))) {
+    throw new Error(`Hybrid export history has invalid ${field}`);
+  }
+  return result;
+}
+
 function normalizeEvidence(value: unknown): HybridExportEvidenceProjection {
   const raw = record(value);
   const status = safeEnum(raw.status, ["complete", "incomplete", "expired"], "evidence.status");
@@ -173,7 +185,7 @@ function normalizeEvidence(value: unknown): HybridExportEvidenceProjection {
     bundleManifestSha256: optionalDigest(raw.bundleManifestSha256),
     slidePngSha256: digestList(first(raw, "slidePngSha256", "renderedPngSha256")),
     visualParity,
-    expiresAt: text(raw.expiresAt),
+    expiresAt: optionalDate(raw.expiresAt, "evidence.expiresAt"),
     nativeText: values("nativeText"),
     nativeImage: values("nativeImage"),
     nativeShape: values("nativeShape"),
@@ -213,17 +225,29 @@ export function normalizeHybridExportHistory(value: unknown): HybridExportHistor
     },
     attempts: raw.attempts.map((item) => {
       const attempt = record(item);
+      const exportAttemptId = requiredText(attempt.exportAttemptId, "attempt.exportAttemptId");
+      const presentationRevision = requiredInteger(attempt.presentationRevision, "attempt.presentationRevision");
+      const evidence = normalizeEvidence(attempt.evidence);
+      if (evidence.attemptId !== exportAttemptId) {
+        throw new Error("Hybrid export history has mismatched evidence.attemptId");
+      }
+      if (evidence.presentationRevision !== presentationRevision) {
+        throw new Error("Hybrid export history has mismatched evidence.presentationRevision");
+      }
+      if (evidence.status === "complete" && isPast(evidence.expiresAt)) {
+        throw new Error("Hybrid export history has stale complete evidence");
+      }
       return {
-        exportAttemptId: requiredText(attempt.exportAttemptId, "attempt.exportAttemptId"),
+        exportAttemptId,
         state: safeEnum(attempt.state, ["succeeded", "failed"], "attempt.state"),
         resolution: safeEnum(attempt.resolution, ["active", "resolved", "superseded"], "attempt.resolution"),
         supersededByAttemptId: text(attempt.supersededByAttemptId),
-        presentationRevision: requiredInteger(attempt.presentationRevision, "attempt.presentationRevision"),
+        presentationRevision,
         format: safeEnum(attempt.format, ["pptx"], "attempt.format"),
         createdAt: text(attempt.createdAt),
         completedAt: text(attempt.completedAt),
         failureCode: text(attempt.failureCode),
-        evidence: normalizeEvidence(attempt.evidence),
+        evidence,
       };
     }),
   };

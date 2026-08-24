@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from sqlalchemy import select
 
 from models.sql.presentation import PresentationModel
+from models.sql.slide import SlideModel
 from services.authored_page_remake_service import (
     AuthoredPageRemakeError,
     publish_authored_page_remake,
@@ -17,6 +18,11 @@ from services.authored_vnext.generation.legacy_bridge import (
 )
 from services.authored_vnext.generation.legacy_pin import (
     canonical_legacy_master_pin_identity,
+)
+from services.authored_semantic_candidate import compile_semantic_components
+from services.authored_vnext.semantic.query import get_active_authored_emission
+from services.authored_vnext.semantic.remake import (
+    republish_authored_semantic_bundle_graph_for_remake,
 )
 from services.database import async_session_maker
 from services.presentation_publication_service import (
@@ -167,6 +173,31 @@ class WorkspacePageRemakeOperationHandler:
                     slide_index=slide_index,
                     preview_task_id=preview_task_id,
                 )
+                active_semantic = await get_active_authored_emission(
+                    session,
+                    presentation_id=claim.presentation_id,
+                    owner_id=claim.owner_id,
+                )
+                if active_semantic.canonical_mode == "bundleGraph":
+                    slide_rows = await session.execute(
+                        select(SlideModel)
+                        .where(SlideModel.presentation == claim.presentation_id)
+                        .order_by(SlideModel.index)
+                        .execution_options(populate_existing=True)
+                    )
+                    ordered_slides = list(slide_rows.scalars().all())
+                    htmls = [str(item.html_content or "") for item in ordered_slides]
+                    await republish_authored_semantic_bundle_graph_for_remake(
+                        session,
+                        presentation_id=claim.presentation_id,
+                        owner_id=claim.owner_id,
+                        expected_presentation_revision=int(revision),
+                        operation_id=claim.operation_id,
+                        generation_attempt_id=None,
+                        ordered_slides=ordered_slides,
+                        htmls=htmls,
+                        semantic_drafts=compile_semantic_components(htmls),
+                    )
                 await context.raise_if_cancelled()
                 safe_result = sanitize_workspace_event_payload(
                     {

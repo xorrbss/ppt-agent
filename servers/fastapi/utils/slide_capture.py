@@ -828,13 +828,37 @@ async def ensure_browser_metrics(
     task = _browser_metrics_inflight.get(key)
     if task is None:
         async def recollect() -> Mapping[str, Any] | None:
-            await _render_html_to_png_uncached(html, timeout=timeout)
+            if renderer_requires_external_worker():
+                # Production keeps the renderer isolation boundary: the
+                # external worker owns both pixels and browser telemetry.
+                await _render_html_to_png_uncached(html, timeout=timeout)
+            else:
+                # A retry after process recovery has no in-memory metrics even
+                # when its authored PNG checkpoint survived.  Do not route this
+                # bounded recollection through the shared CDP runtime: a page
+                # waiting on fonts can poison that process and strand every
+                # gathered slide.  The one-shot headless-shell path has its own
+                # profile, process-tree timeout, virtual-time budget, and the
+                # same instrumented DOM payload used by the primary renderer.
+                admitted = _admit_render_source(html)
+                await _render_html_to_png_subprocess(
+                    admitted.html,
+                    timeout=timeout,
+                    admitted_source=True,
+                    cache_html=html,
+                    script_nonce=admitted.nonce,
+                )
             return _peek_cached_browser_metrics(html)
 
         task = asyncio.create_task(recollect())
         _browser_metrics_inflight[key] = task
     try:
-        return await asyncio.shield(task)
+        # The renderer owns its own timeout, but a wedged browser semaphore or
+        # detached Windows Chrome child can otherwise leave this shared task
+        # pending forever and block the entire FastAPI event loop during
+        # canonical Scene publication.  Bound the outer wait as well and cancel
+        # the poisoned in-flight entry so a later retry can recollect cleanly.
+        return await asyncio.wait_for(task, timeout=max(1, timeout) + 15)
     except Exception as error:
         # Rendering an already-cached PNG remains useful even if a best-effort
         # telemetry recollection cannot start.  Consumers receive ``None`` and
@@ -1170,6 +1194,7 @@ async def _render_html_to_png_subprocess(
     *,
     admitted_source: bool = False,
     cache_html: str | None = None,
+    script_nonce: str | None = None,
 ) -> bytes:
     """Render a self-contained HTML document to an exact 1280x720 PNG via headless
     chrome. Used by the authored-mode pipeline (the HTML is authored in-memory, not
@@ -1196,7 +1221,9 @@ async def _render_html_to_png_subprocess(
             html_path = os.path.join(td, "slide.html")
             out = os.path.join(td, "slide.png")
             instrumented_html, _ = _instrument_authored_html(
-                html, issue_capability=False
+                html,
+                script_nonce=script_nonce,
+                issue_capability=False,
             )
             with open(html_path, "w", encoding="utf-8") as f:
                 f.write(instrumented_html)
@@ -1351,6 +1378,7 @@ async def _render_html_to_png_uncached(html: str, timeout: int = 60) -> bytes:
         timeout=timeout,
         admitted_source=True,
         cache_html=html,
+        script_nonce=admitted.nonce,
     )
 
 

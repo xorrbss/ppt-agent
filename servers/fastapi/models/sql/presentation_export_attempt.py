@@ -173,6 +173,14 @@ class ExportAtomicBinding(BaseModel):
         return normalized
 
 
+class ExportPowerPointChartReadback(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid")
+
+    slide_number: int = PydanticField(ge=1, le=100)
+    element_id: str = PydanticField(min_length=1, max_length=128)
+    chart: dict[str, Any]
+
+
 class ExportPowerPointQaEvidence(BaseModel):
     model_config = ConfigDict(
         alias_generator=to_camel,
@@ -187,8 +195,35 @@ class ExportPowerPointQaEvidence(BaseModel):
     reopened: bool = False
     rendered: bool = False
     readback: bool = False
+    verification_scope: Literal["powerpoint-first-open-save-reopen-stability"] | None = None
+    semantic_payload_binding: Literal["not-verified", "passed", "failed"] = "not-verified"
     repair_dialogs: int | None = PydanticField(default=None, ge=0)
+    repair_observation: Literal[
+        "not-observable-via-noninteractive-com", "interactive-observation"
+    ] | None = None
     rendered_png_sha256: list[str] = PydanticField(default_factory=list, max_length=100)
+    first_open_rendered_png_sha256: list[str] = PydanticField(
+        default_factory=list, max_length=100
+    )
+    reopen_rendered_png_sha256: list[str] = PydanticField(
+        default_factory=list, max_length=100
+    )
+    render_hashes_match: bool | None = None
+    first_open_readback_sha256: str | None = None
+    reopen_readback_sha256: str | None = None
+    first_open_readback_artifact: str | None = PydanticField(default=None, max_length=128)
+    reopen_readback_artifact: str | None = PydanticField(default=None, max_length=128)
+    shape_count_changes: int = PydanticField(default=0, ge=0)
+    object_identity_changes: int = PydanticField(default=0, ge=0)
+    geometry_changes_gt_5pt: int = PydanticField(default=0, ge=0)
+    geometry_changes_gt_10pt: int = PydanticField(default=0, ge=0)
+    text_changes: int = PydanticField(default=0, ge=0)
+    line_break_changes: int = PydanticField(default=0, ge=0)
+    typeface_changes: int = PydanticField(default=0, ge=0)
+    table_content_changes: int = PydanticField(default=0, ge=0)
+    chart_content_changes: int = PydanticField(default=0, ge=0)
+    crop_changes: int = PydanticField(default=0, ge=0)
+    readback_match: bool | None = None
     powerpoint_version: str | None = PydanticField(default=None, max_length=64)
     slide_count: int | None = PydanticField(default=None, ge=1, le=100)
     typography_issues_gt_5pt: int = PydanticField(default=0, ge=0)
@@ -198,8 +233,22 @@ class ExportPowerPointQaEvidence(BaseModel):
     native_shape: int | None = PydanticField(default=None, ge=0)
     native_table: int | None = PydanticField(default=None, ge=0)
     native_chart: int | None = PydanticField(default=None, ge=0)
+    native_image_crop: int | None = PydanticField(default=None, ge=0)
+    native_qid_missing: int = PydanticField(default=0, ge=0)
+    native_qid_ghosting: int = PydanticField(default=0, ge=0)
+    backplate_collisions: int = PydanticField(default=0, ge=0)
+    first_open_chart_readback: list[ExportPowerPointChartReadback] = PydanticField(
+        default_factory=list, max_length=1024
+    )
+    reopen_chart_readback: list[ExportPowerPointChartReadback] = PydanticField(
+        default_factory=list, max_length=1024
+    )
 
-    @field_validator("rendered_png_sha256")
+    @field_validator(
+        "rendered_png_sha256",
+        "first_open_rendered_png_sha256",
+        "reopen_rendered_png_sha256",
+    )
     @classmethod
     def validate_rendered_digests(cls, value: list[str]) -> list[str]:
         normalized = [digest.lower() for digest in value]
@@ -208,6 +257,13 @@ class ExportPowerPointQaEvidence(BaseModel):
         ):
             raise ValueError("PowerPoint rendered PNG digests are invalid")
         return normalized
+
+    @field_validator("first_open_readback_sha256", "reopen_readback_sha256")
+    @classmethod
+    def validate_readback_digests(cls, value: str | None) -> str | None:
+        if value is not None and not _is_sha256(value):
+            raise ValueError("PowerPoint readback digest is invalid")
+        return value.lower() if value is not None else None
 
     @model_validator(mode="after")
     def validate_passed_gate(self) -> "ExportPowerPointQaEvidence":
@@ -218,8 +274,17 @@ class ExportPowerPointQaEvidence(BaseModel):
             and self.reopened
             and self.rendered
             and self.readback
-            and self.repair_dialogs == 0
+            and (
+                self.repair_dialogs == 0
+                or (
+                    self.repair_dialogs is None
+                    and self.repair_observation
+                    == "not-observable-via-noninteractive-com"
+                )
+            )
             and self.rendered_png_sha256
+            and self.render_hashes_match is not False
+            and self.readback_match is not False
             and self.typography_issues_gt_5pt == 0
             and self.typography_issues_gt_10pt == 0
         ):
@@ -263,6 +328,7 @@ class ExportCoverageCounts(BaseModel):
     native_shape: int = PydanticField(ge=0)
     native_table: int = PydanticField(ge=0)
     native_chart: int = PydanticField(ge=0)
+    native_image_crop: int = PydanticField(default=0, ge=0)
     raster_remaining: int = PydanticField(ge=0)
 
 
@@ -270,11 +336,66 @@ class ExportOoxmlReadback(ExportCoverageCounts):
     status: Literal["not-run", "passed", "failed"]
 
 
+class ExportNativeTextPolicy(BaseModel):
+    """Exact bounded CJK native-text policy emitted by the Hybrid serializer."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra="forbid",
+    )
+
+    korean_latin: Literal["bounded-native"]
+    japanese: Literal["raster-required"]
+    chinese: Literal["raster-required"]
+
+
 class ExportTypographyIssue(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid")
 
     code: str = PydanticField(min_length=1, max_length=128)
     element_id: str | None = PydanticField(default=None, max_length=512)
+
+
+class ExportSemanticReceipts(BaseModel):
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra="forbid",
+    )
+
+    observation_receipt_digest: str | None = None
+    native_admission_receipt_digest: str | None = None
+    hybrid_plan_digest: str | None = None
+    raster_degradation_receipt_digest: str | None = None
+
+    @field_validator(
+        "observation_receipt_digest",
+        "native_admission_receipt_digest",
+        "hybrid_plan_digest",
+        "raster_degradation_receipt_digest",
+    )
+    @classmethod
+    def validate_receipt_digest(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.lower()
+        if not normalized.startswith("sha256:") or not _is_sha256(normalized[7:]):
+            raise ValueError("semantic receipt digest must be prefixed SHA-256")
+        return normalized
+
+    @model_validator(mode="after")
+    def require_one_receipt(self) -> "ExportSemanticReceipts":
+        if not any(
+            (
+                self.observation_receipt_digest,
+                self.native_admission_receipt_digest,
+                self.hybrid_plan_digest,
+                self.raster_degradation_receipt_digest,
+            )
+        ):
+            raise ValueError("semantic receipt set must not be empty")
+        return self
 
 
 class ExportSlideCoverage(BaseModel):
@@ -290,11 +411,16 @@ class ExportSlideCoverage(BaseModel):
     native_shape: int = PydanticField(ge=0)
     native_table: int = PydanticField(ge=0)
     native_chart: int = PydanticField(ge=0)
+    native_image_crop: int = PydanticField(default=0, ge=0)
     logical_coverage: ExportCoverageCounts | None = None
     ooxml_readback: ExportOoxmlReadback | None = None
     backplate_count: int = PydanticField(default=0, ge=0)
     typography_issues: list[ExportTypographyIssue] = PydanticField(
         default_factory=list, max_length=1024
+    )
+    semantic_receipts: ExportSemanticReceipts | None = PydanticField(
+        default=None,
+        exclude_if=lambda value: value is None,
     )
     raster_remaining: int = PydanticField(ge=0)
     fallback_reasons: list[str] = PydanticField(max_length=256)
@@ -317,12 +443,41 @@ class ExportSlideCoverage(BaseModel):
 
     @model_validator(mode="after")
     def validate_declared_support(self) -> "ExportSlideCoverage":
-        # The current authored Hybrid serializer has no native table/chart
-        # implementation. Refuse optimistic counts until that implementation
-        # and readback evidence are added together.
-        if self.native_table != 0 or self.native_chart != 0:
-            raise ValueError("native table/chart coverage is not implemented")
-        native_count = self.native_text + self.native_image + self.native_shape
+        # Native table/chart claims are accepted only when the semantic plan
+        # and exact OOXML package readback agree.  A serializer declaration
+        # alone never creates release authority.
+        for field, label in (("native_table", "table"), ("native_chart", "chart")):
+            value = getattr(self, field)
+            if not value:
+                continue
+            if (
+                self.logical_coverage is None
+                or self.ooxml_readback is None
+                or self.ooxml_readback.status != "passed"
+                or getattr(self.logical_coverage, field) != value
+                or getattr(self.ooxml_readback, field) != value
+            ):
+                raise ValueError(
+                    f"native {label} coverage requires matching semantic and OOXML readback"
+                )
+        if self.native_image_crop and (
+            self.native_image_crop > self.native_image
+            or self.logical_coverage is None
+            or self.ooxml_readback is None
+            or self.ooxml_readback.status != "passed"
+            or self.logical_coverage.native_image_crop != self.native_image_crop
+            or self.ooxml_readback.native_image_crop != self.native_image_crop
+        ):
+            raise ValueError(
+                "native image crop coverage requires matching semantic and OOXML readback"
+            )
+        native_count = (
+            self.native_text
+            + self.native_image
+            + self.native_shape
+            + self.native_table
+            + self.native_chart
+        )
         expected = "applied" if native_count > 0 else "not-applicable"
         if self.native_backplate_de_duplication != expected:
             raise ValueError("native/backplate de-duplication evidence is inconsistent")
@@ -341,6 +496,13 @@ class PresentationExportCoverageManifest(BaseModel):
         "presenton.authored-hybrid-coverage/v2",
     ]
     mode: Literal["hybrid"]
+    cjk_coverage_profile_id: Literal["ja-ko-zh-bounded-fixture-v1"] | None = (
+        PydanticField(default=None, exclude_if=lambda value: value is None)
+    )
+    native_text_policy: ExportNativeTextPolicy | None = PydanticField(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
     source: ExportCoverageSource
     total_slides: int = PydanticField(ge=1)
     native_text: int = PydanticField(ge=0)
@@ -348,6 +510,7 @@ class PresentationExportCoverageManifest(BaseModel):
     native_shape: int = PydanticField(ge=0)
     native_table: int = PydanticField(ge=0)
     native_chart: int = PydanticField(ge=0)
+    native_image_crop: int = PydanticField(default=0, ge=0)
     logical_coverage: ExportCoverageCounts | None = None
     ooxml_readback: ExportOoxmlReadback | None = None
     backplate_count: int = PydanticField(default=0, ge=0)
@@ -375,6 +538,9 @@ class PresentationExportCoverageManifest(BaseModel):
             "native_shape": sum(slide.native_shape for slide in self.slides),
             "native_table": sum(slide.native_table for slide in self.slides),
             "native_chart": sum(slide.native_chart for slide in self.slides),
+            "native_image_crop": sum(
+                slide.native_image_crop for slide in self.slides
+            ),
             "raster_remaining": sum(
                 slide.raster_remaining for slide in self.slides
             ),
@@ -385,7 +551,9 @@ class PresentationExportCoverageManifest(BaseModel):
             raise ValueError("export coverage editability claim is inconsistent")
         if self.schema_version.endswith("/v2"):
             if (
-                self.source.export_attempt_id is None
+                self.cjk_coverage_profile_id is None
+                or self.native_text_policy is None
+                or self.source.export_attempt_id is None
                 or self.source.canonical_source_digest is None
                 or self.logical_coverage is None
                 or self.ooxml_readback is None
@@ -422,6 +590,20 @@ def _canonical_sidecar_sha256(value: dict[str, Any]) -> str:
     ).hexdigest()
 
 
+def _without_default_native_crop(value: Any) -> Any:
+    """Canonical legacy-v2 view from before nativeImageCrop was first-class."""
+
+    if isinstance(value, dict):
+        return {
+            key: _without_default_native_crop(item)
+            for key, item in value.items()
+            if not (key == "nativeImageCrop" and item == 0)
+        }
+    if isinstance(value, list):
+        return [_without_default_native_crop(item) for item in value]
+    return value
+
+
 class ExportVisualParityEvidence(BaseModel):
     """One immutable identity shared by both sidecars and trusted desktop QA."""
 
@@ -447,8 +629,14 @@ class ExportVisualParityEvidence(BaseModel):
 
     @model_validator(mode="after")
     def validate_qa_status(self) -> "ExportVisualParityEvidence":
-        if self.status != self.powerpoint_qa.status:
-            raise ValueError("visual parity status does not match PowerPoint QA")
+        # COM package/readback QA is necessary but is not itself visual-parity
+        # evidence.  A passed visual claim requires passed COM QA, while a
+        # passed COM observation may truthfully remain not-verified until a
+        # separate bound visual comparison is supplied.
+        if self.status == "passed" and self.powerpoint_qa.status != "passed":
+            raise ValueError("passed visual parity requires passed PowerPoint QA")
+        if self.status == "not-verified" and self.powerpoint_qa.status == "failed":
+            raise ValueError("failed PowerPoint QA cannot be visually not-verified")
         if self.status == "passed" and (
             self.binding.presentation_id is None
             or self.powerpoint_qa.native_text is None
@@ -456,6 +644,7 @@ class ExportVisualParityEvidence(BaseModel):
             or self.powerpoint_qa.native_shape is None
             or self.powerpoint_qa.native_table is None
             or self.powerpoint_qa.native_chart is None
+            or self.powerpoint_qa.native_image_crop is None
         ):
             raise ValueError("passed visual parity requires complete native readback")
         return self
@@ -576,6 +765,12 @@ class PresentationExportAttemptProvenance(BaseModel):
             ):
                 raise ValueError("visual parity freshness binding is inconsistent")
             quality_binding = quality.get("atomicBinding")
+            try:
+                quality_powerpoint_qa = ExportPowerPointQaEvidence.model_validate(
+                    quality.get("powerPointQa")
+                )
+            except ValueError:
+                quality_powerpoint_qa = None
             if not isinstance(quality_binding, dict) or (
                 quality.get("exportAttemptId") != str(binding.export_attempt_id)
                 or quality_binding.get("presentationId") != str(binding.presentation_id)
@@ -586,8 +781,7 @@ class PresentationExportAttemptProvenance(BaseModel):
                 or quality_binding.get("rendererSourceDigest")
                 != binding.renderer_source_sha256
                 or quality_binding.get("pptxSha256") != binding.pptx_sha256
-                or quality.get("powerPointQa")
-                != self.powerpoint_qa.model_dump(mode="json", by_alias=True)
+                or quality_powerpoint_qa != self.powerpoint_qa
             ):
                 raise ValueError("quality sidecar visual parity binding is inconsistent")
             if (
@@ -601,11 +795,14 @@ class PresentationExportAttemptProvenance(BaseModel):
                 raise ValueError("coverage sidecar visual parity binding is inconsistent")
             quality_json = dict(quality)
             coverage_json = coverage.model_dump(mode="json", by_alias=True)
+            coverage_digests = {
+                _canonical_sidecar_sha256(coverage_json),
+                _canonical_sidecar_sha256(_without_default_native_crop(coverage_json)),
+            }
             if (
                 _canonical_sidecar_sha256(quality_json)
                 != evidence.quality_sidecar_sha256
-                or _canonical_sidecar_sha256(coverage_json)
-                != evidence.coverage_sidecar_sha256
+                or evidence.coverage_sidecar_sha256 not in coverage_digests
             ):
                 raise ValueError("visual parity sidecar digest is inconsistent")
         return self

@@ -142,6 +142,79 @@ test("face-complete mixed text promotes with Noto CJK and IBM Plex Mono Latin ru
   assert.doesNotMatch(xml, /<a:normAutofit\/>/);
 });
 
+test("reviewed Windows fallback faces admit logical CJK and mono CSS names", async () => {
+  const mixed = mixedTextElement();
+  const serif = structuredClone(mixedTextElement());
+  serif.id = "serif-1";
+  serif.text.plainText = "전략과 실행";
+  serif.text.paragraphs = ["전략과 실행"];
+  serif.text.style.fontFamily = "Noto Serif KR";
+  serif.text.style.fontFamilies = ["Noto Serif KR", "Batang", "serif"];
+  serif.text.runs = [{
+    ...serif.text.runs[0],
+    text: "전략과 실행",
+    style: serif.text.style,
+  }];
+  const faces = [
+    { typeface: "Consolas", face: "bold" },
+    { typeface: "Malgun Gothic", face: "bold" },
+    { typeface: "Batang", face: "bold" },
+  ];
+
+  const result = preflightNativeTypography([mixed, serif], {
+    embeddedTypefaceFaces: faces,
+  });
+  assert.deepEqual(result.rejectedElementIds, []);
+  assert.deepEqual(result.typographyIssues, []);
+
+  const prepared = await prepareNativeElements(result.elements);
+  const xml = prepared.map((element, index) =>
+    serializePreparedNativeElement(element, index + 3, undefined, {
+      embeddedTypefaceFaces: faces,
+    })
+  ).join("");
+  assert.match(xml, /typeface="Consolas"/);
+  assert.match(xml, /typeface="Malgun Gothic"/);
+  assert.match(xml, /typeface="Batang"/);
+  assert.doesNotMatch(xml, /typeface="(?:IBM Plex Mono|Noto Sans KR|Noto Serif KR)"/);
+});
+
+test("Japanese and Chinese text stays on the Fidelity raster layer until separately qualified", () => {
+  const candidate = mixedTextElement();
+  candidate.id = "ja-zh-bounded-fixture";
+  candidate.text = {
+    ...candidate.text,
+    plainText: "한국어와 中文説明 및 日本語データ",
+    runs: [
+      {
+        ...candidate.text.runs[0],
+        text: "한국어와 中文説明 및 日本語データ",
+      },
+    ],
+  };
+
+  const result = preflightNativeTypography([candidate], {
+    embeddedTypefaceFaces: [
+      { typeface: "IBM Plex Mono", face: "bold" },
+      { typeface: "Noto Sans KR", face: "bold" },
+    ],
+  });
+
+  assert.deepEqual(result.promotableElementIds, []);
+  assert.deepEqual(result.rejectedElementIds, ["ja-zh-bounded-fixture"]);
+  assert.ok(
+    result.typographyIssues.some(
+      (issue) => issue.code === "unqualified-ja-zh-text",
+    ),
+  );
+  assert.equal(result.elements[0].classification.mode, "raster");
+  assert.ok(
+    result.elements[0].classification.reasons.includes(
+      "typography-unqualified-ja-zh-text",
+    ),
+  );
+});
+
 test("ancestor backplate paint does not reject an otherwise stable native title", () => {
   const title = mixedTextElement();
   const ancestor = {
@@ -162,6 +235,34 @@ test("ancestor backplate paint does not reject an otherwise stable native title"
       { typeface: "Noto Sans KR", face: "bold" },
     ],
     backplateElements: [ancestor],
+  });
+
+  assert.deepEqual(result.promotableElementIds, ["mixed-1"]);
+  assert.deepEqual(result.typographyIssues, []);
+});
+
+test("upper raster paint in a standalone text box's transparent margin stays promotable", () => {
+  const title = mixedTextElement();
+  const marginPaint = {
+    ...title,
+    id: "upper-margin-paint",
+    domPath: "body > div:nth-of-type(2)",
+    sourceIndex: title.sourceIndex + 1,
+    bounds: bounds(300, 72, 32, 24),
+    classification: {
+      mode: "raster",
+      candidateKind: "shape",
+      reasons: ["external-paint"],
+    },
+  };
+  delete marginPaint.text;
+
+  const result = preflightNativeTypography([title], {
+    embeddedTypefaceFaces: [
+      { typeface: "IBM Plex Mono", face: "bold" },
+      { typeface: "Noto Sans KR", face: "bold" },
+    ],
+    backplateElements: [marginPaint],
   });
 
   assert.deepEqual(result.promotableElementIds, ["mixed-1"]);

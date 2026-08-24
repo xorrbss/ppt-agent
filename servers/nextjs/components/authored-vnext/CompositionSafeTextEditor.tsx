@@ -62,7 +62,8 @@ export function CompositionSafeTextEditor({
       setDraft(value);
       return;
     }
-    if (!multiline && event.key === "Enter" && !composingRef.current) {
+    const explicitCommit = multiline && (event.ctrlKey || event.metaKey) && event.key === "Enter";
+    if ((!multiline && event.key === "Enter" || explicitCommit) && !composingRef.current) {
       event.preventDefault();
       commit(event.currentTarget.value);
       event.currentTarget.blur();
@@ -80,6 +81,7 @@ export function CompositionSafeTextEditor({
       onCompositionStart={handleCompositionStart}
       onKeyDown={handleKeyDown}
       rows={multiline ? 3 : 1}
+      title={multiline ? "Ctrl+Enter to apply" : undefined}
       spellCheck
       style={style}
       value={draft}

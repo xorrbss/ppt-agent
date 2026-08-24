@@ -4,6 +4,11 @@ definitions:
   caches:
     uv: ~/.cache/uv
   steps:
+    - step: &authored-release-readiness-config
+        name: Authored release readiness configuration
+        max-time: 5
+        script:
+          - node scripts/verify-authored-release-required-checks.mjs
     - step: &nextjs-ci-node-contracts
         name: Run shared Next.js CI Node suite
         size: 2x
@@ -81,16 +86,24 @@ definitions:
 pipelines:
   pull-requests:
     "**":
+      - step: *authored-release-readiness-config
       - step: *nextjs-ci-node-contracts
       - step: *dashboard-component-gate
       - step: *upstream-byte-parity-check
       - step: *workspace-chat-first-e2e
   branches:
     main:
+      - step: *authored-release-readiness-config
       - step: *nextjs-ci-node-contracts
       - step: *dashboard-component-gate
       - step: *upstream-byte-parity-check
       - step: *workspace-chat-first-e2e
   custom:
+    Authored release required-check verification:
+      - step:
+          name: Verify Bitbucket required merge checks
+          max-time: 5
+          script:
+            - node scripts/verify-authored-release-required-checks.mjs --live
     Upstream compatibility check:
       - step: *upstream-intake-monitor

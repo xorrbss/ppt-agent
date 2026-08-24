@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:presenton:authored-editable-hybrid:gate-result-set:v1",
+  "type": "object",
+  "required": ["schemaVersion", "manifestDigest", "suiteStatus", "executedCount", "skippedCount", "orderedResults", "artifactInventory", "artifactInventoryDigest", "resultCoreDigest", "resultSetDigest"],
+  "properties": {
+    "suiteStatus": { "enum": ["feasible", "structurally-reachable", "accepted", "blocked", "failed", "not-verified"] },
+    "executedCount": { "type": "integer", "minimum": 1 },
+    "skippedCount": { "const": 0 },
+    "artifactInventoryDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "resultCoreDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "resultSetDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  },
+  "additionalProperties": true
+}

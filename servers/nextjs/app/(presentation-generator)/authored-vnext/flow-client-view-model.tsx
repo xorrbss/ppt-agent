@@ -14,7 +14,17 @@ export function inspectorView(
     expectedRevision: activeSlide.revision,
   };
   if (selectedNode.kind === "text" && selectedNode.editability.text) {
-    return { kind: "text", context, text: selectedNode.text };
+    return { kind: "text", context, text: selectedNode.text, style: selectedNode.style, styleEditable: selectedNode.editability.style };
+  }
+  if (selectedNode.kind === "shape" && selectedNode.editability.style) {
+    return {
+      kind: "shape",
+      context,
+      fill: selectedNode.fill,
+      stroke: selectedNode.stroke,
+      strokeWidth: selectedNode.strokeWidth,
+      geometry: selectedNode.editability.geometry ? selectedNode.bounds : undefined,
+    };
   }
   if (
     (selectedNode.kind === "image" || selectedNode.kind === "asset") &&
@@ -30,6 +40,7 @@ export function inspectorView(
       mediaType: selectedNode.mediaType,
       storageReference: selectedNode.storageReference,
       sizeBytes: selectedNode.sizeBytes,
+      cropGeometry: selectedNode.cropGeometry,
     };
   }
   if (
@@ -58,16 +69,17 @@ export function inspectorView(
   if (selectedNode.editability.geometry) {
     return { kind: "geometry", context, bounds: selectedNode.bounds };
   }
-  if (["connector", "group"].includes(selectedNode.kind)) {
-    return {
-      kind: "capability",
-      nodeKind: selectedNode.kind as "connector" | "group",
-      label: selectedNode.semanticRole,
-      message: `authored_vnext_scene_edit_capability_read_only:${selectedNode.kind}`,
-      editability: selectedNode.editability,
-    };
-  }
-  return { kind: "none" };
+  // A server-declared false capability is an explicit read-only boundary. Do
+  // not leave a raster island or an unadmitted native owner looking like an
+  // empty inspector: users need the capability reason before they can choose
+  // another owner to edit.
+  return {
+    kind: "capability",
+    nodeKind: selectedNode.kind === "image" ? "asset" : selectedNode.kind,
+    label: selectedNode.semanticRole,
+    message: "이 객체는 현재 Scene revision에서 읽기 전용입니다. 지원되지 않는 표현은 raster island로 유지됩니다.",
+    editability: selectedNode.editability,
+  };
 }
 
 export function roleHintForLayout(

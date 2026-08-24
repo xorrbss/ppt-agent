@@ -301,6 +301,52 @@ def test_author_deck_retries_then_succeeds(monkeypatch):
     assert calls["n"] == 2
 
 
+def test_author_deck_retries_semantic_failure_with_bounded_correction(monkeypatch):
+    hints = []
+
+    async def flaky(content, ds, brand, role, index, n, **kwargs):
+        hints.append(kwargs.get("correction_hint"))
+        if len(hints) == 1:
+            raise ValueError("authored_semantic_qid_missing")
+        return _VALID
+
+    monkeypatch.setattr(author_deck_mod, "author_slide_html", flaky)
+    htmls = _run(author_deck(_outline(1), _brand())).htmls
+
+    assert htmls == [_VALID]
+    assert hints[0] is None
+    assert "Every rendered HTML element" in hints[1]
+    assert "data-qid" in hints[1]
+
+
+def test_author_deck_allows_third_bounded_semantic_attempt(monkeypatch):
+    hints = []
+
+    async def flaky(content, ds, brand, role, index, n, **kwargs):
+        hints.append(kwargs.get("correction_hint"))
+        if len(hints) < 3:
+            raise ValueError("authored_semantic_qid_missing:section")
+        return _VALID
+
+    monkeypatch.setattr(author_deck_mod, "author_slide_html", flaky)
+    htmls = _run(author_deck(_outline(1), _brand())).htmls
+
+    assert htmls == [_VALID]
+    assert len(hints) == 3
+    assert hints[0] is None
+    assert all("first rejected element was <section>" in hint for hint in hints[1:])
+
+
+def test_author_image_retry_names_the_exact_offered_asset_id():
+    hint = author_deck_mod._author_retry_correction(
+        ValueError("images must be base64 raster data URLs"),
+        source_image_ids=("asset-exact-123",),
+    )
+
+    assert 'data-asset-id="asset-exact-123"' in hint
+    assert "THE_OFFERED_ID" not in hint
+
+
 def test_author_deck_backs_off_and_retries_transient_provider_failures(monkeypatch):
     calls = {"n": 0}
     delays = []
@@ -2081,6 +2127,7 @@ def test_visual_story_plan_varies_silhouettes_and_keeps_hybrid_claims_partial():
     assert "story=dataChart" in prompt
     assert "not a promise of complete editability" in prompt
     assert "Never duplicate native-candidate" in prompt
+    assert "do not emit a data-native-candidate attribute" in prompt
 
 
 def test_resolve_brand_language_fonts():

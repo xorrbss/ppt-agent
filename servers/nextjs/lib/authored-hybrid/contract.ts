@@ -392,6 +392,8 @@ function convertElement(
   });
   const base: AuthoredHybridElementBase = {
     id: observation.id,
+    identityAuthority: observation.identityAuthority,
+    parentElementId: observation.parentElementId,
     domPath: observation.domPath,
     tagName: observation.tagName,
     sourceIndex: observation.sourceIndex,
@@ -400,6 +402,7 @@ function convertElement(
     bounds: rectPxToBounds(observation.boundsPx),
     rotationDeg: observation.rotationDeg,
     opacity: observation.opacity,
+    ...(observation.tableEvidence ? { tableEvidence: observation.tableEvidence } : {}),
   };
 
   if (classification.mode === "raster") {
@@ -507,6 +510,8 @@ export function buildAuthoredHybridSlide(
       widthPx: AUTHORED_SLIDE_WIDTH_PX,
       heightPx: AUTHORED_SLIDE_HEIGHT_PX,
       transparentBackground: true,
+      nativeChartElementIds: [],
+      nativeTableElementIds: [],
       eligibleElementIds: elements
         .filter(
           (element) =>
@@ -586,6 +591,12 @@ export function assertAuthoredHybridSlide(
     invariant(typeof element.id === "string" && element.id.length > 0, `elements[${index}].id is invalid`);
     invariant(!ids.has(element.id), `duplicate element id ${element.id}`);
     ids.add(element.id);
+    if (element.identityAuthority !== undefined) {
+      oneOf(element.identityAuthority, ["declared-qid", "compatibility-ordinal"], `element ${element.id}.identityAuthority`);
+    }
+    if (element.parentElementId !== undefined && element.parentElementId !== null) {
+      invariant(typeof element.parentElementId === "string" && element.parentElementId.length > 0, `element ${element.id}.parentElementId is invalid`);
+    }
     invariant(typeof element.domPath === "string" && element.domPath.length > 0, `element ${element.id} has invalid domPath`);
     invariant(typeof element.tagName === "string" && element.tagName.length > 0, `element ${element.id} has invalid tagName`);
     invariant(element.zOrder === index, `element ${element.id} has non-contiguous zOrder`);
@@ -710,6 +721,18 @@ export function assertAuthoredHybridSlide(
       }
     }
   });
+  slide.elements.forEach((element) => {
+    if (element.parentElementId) {
+      invariant(ids.has(element.parentElementId), `element ${element.id} has unknown parentElementId`);
+      invariant(element.parentElementId !== element.id, `element ${element.id} cannot parent itself`);
+    }
+    if (element.identityAuthority === "declared-qid") {
+      invariant(
+        /^[A-Za-z][A-Za-z0-9._:-]{0,127}$/.test(element.id),
+        `element ${element.id} has invalid declared data-qid identity`
+      );
+    }
+  });
 
   invariant(slide.backplate?.strategy === "hide-native-leaves", "backplate.strategy is invalid");
   invariant(slide.backplate.mediaType === "image/png", "backplate.mediaType is invalid");
@@ -719,8 +742,31 @@ export function assertAuthoredHybridSlide(
       slide.backplate.transparentBackground === true,
     "backplate dimensions/transparency are invalid"
   );
+  const nativeChartElementIds = slide.backplate.nativeChartElementIds ?? [];
+  const nativeTableElementIds = slide.backplate.nativeTableElementIds ?? [];
   invariant(
-    JSON.stringify(slide.backplate.eligibleElementIds) === JSON.stringify(eligibleIds),
+    Array.isArray(nativeChartElementIds) &&
+      new Set(nativeChartElementIds).size === nativeChartElementIds.length &&
+      nativeChartElementIds.every((id) => {
+        const element = slide.elements.find((candidate) => candidate.id === id);
+        return element?.classification.mode === "raster" &&
+          element.classification.candidateKind === "complex";
+      }),
+    "backplate native chart IDs are invalid"
+  );
+  invariant(
+    Array.isArray(nativeTableElementIds) &&
+      new Set(nativeTableElementIds).size === nativeTableElementIds.length &&
+      nativeTableElementIds.every((id) => {
+        const element = slide.elements.find((candidate) => candidate.id === id);
+        return element?.classification.mode === "raster" && element.classification.candidateKind === "complex";
+      }),
+    "backplate native table IDs are invalid"
+  );
+  invariant(
+    JSON.stringify(slide.backplate.eligibleElementIds) === JSON.stringify([
+      ...new Set([...eligibleIds, ...nativeChartElementIds, ...nativeTableElementIds]),
+    ]),
     "backplate eligible IDs do not match promotable elements"
   );
   invariant(

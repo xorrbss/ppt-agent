@@ -23,7 +23,7 @@ const scene: NonNullable<AuthoredWorkbenchProps["scene"]> = {
       id: "body-title",
       kind: "text",
       label: "본문 제목",
-      editability: { text: true, geometry: true, asset: false, data: false },
+      editability: { text: true, geometry: true, asset: false, data: false, style: true },
       style: { color: "#172554", fontFamily: "Noto Sans KR", fontSize: 26, fontWeight: 700 },
       text: "초기 제목",
     },
@@ -83,6 +83,8 @@ function createProps(callbacks: Partial<AuthoredWorkbenchCallbacks> = {}): Autho
       context: { elementId: "body-title", expectedRevision: 3, slideId: "slide-1" },
       kind: "text",
       text: "초기 제목",
+      style: { color: "#172554", fontFamily: "Noto Sans KR", fontSize: 26, fontWeight: 700, textAlign: "left" },
+      styleEditable: true,
     },
     onPanelChange: noop,
     panels: {
@@ -256,5 +258,56 @@ describe("AuthoredWorkbench", () => {
     mountWorkbench(<AuthoredWorkbench {...createProps()} fallback={<p>기존 편집기</p>} featureEnabled={false} />);
     cy.contains("기존 편집기").should("exist");
     cy.get('[data-testid="authored-workbench"]').should("not.exist");
+  });
+
+  it("commits multiline native text explicitly with Ctrl+Enter", () => {
+    const onCommand = cy.stub().as("command");
+    mountWorkbench(<AuthoredWorkbench {...createProps({ onCommand })} />);
+
+    cy.get('textarea[aria-label="본문 제목 텍스트 편집"]')
+      .clear()
+      .type("명시적으로 저장한 제목{ctrl}{enter}");
+
+    cy.get("@command").should("have.been.calledOnce");
+    cy.get("@command").its("firstCall.args.0").should("deep.include", {
+      clientOperationId: "operation-1",
+      elementId: "body-title",
+      expectedRevision: 3,
+      kind: "text.patch",
+      patch: { text: "명시적으로 저장한 제목" },
+      slideId: "slide-1",
+    });
+  });
+
+  it("emits a separate strict native text-style command without replacing text", () => {
+    const onCommand = cy.stub().as("text-style-command");
+    mountWorkbench(<AuthoredWorkbench {...createProps({ onCommand })} />);
+    cy.get('input[aria-label="Text color"]').clear().type("#2563eb");
+    cy.contains("button", "Apply native text style").click();
+    cy.get("@text-style-command").should("have.been.calledWithMatch", {
+      kind: "text.style.patch",
+      elementId: "body-title",
+      patch: { color: "#2563eb" },
+    });
+  });
+
+  it("displays the server-issued v4 editable-Hybrid state without promoting it locally", () => {
+    mountWorkbench(
+      <AuthoredWorkbench
+        {...createProps()}
+        editableHybridMvpReadiness={{
+          profileId: "authored-editable-hybrid-ko-en-basic-v1",
+          releaseScope: "ko-en-text-solid-shape-image-crop-basic-table",
+          status: "blocked",
+          editableHybridMvpReady: false,
+          nativeEditableReady: false,
+          reasonCode: "editable_hybrid_mvp_not_evaluated",
+        }}
+      />,
+    );
+    cy.get('[data-testid="editable-hybrid-mvp-readiness"]')
+      .should("contain.text", "편집 가능한 Hybrid MVP · 차단됨")
+      .and("have.attr", "title")
+      .and("include", "editable_hybrid_mvp_not_evaluated");
   });
 });

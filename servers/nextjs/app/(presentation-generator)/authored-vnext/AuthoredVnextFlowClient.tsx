@@ -4,6 +4,8 @@ import { useTranslations } from "next-intl";
 import {
   AuthoredWorkbench,
   type AuthoredWorkbenchCallbacks,
+  type EditableHybridMvpReadiness,
+  type NativeCapabilityProjectionV1,
   type WorkbenchPanelData,
   type WorkbenchPanelKind,
   type WorkbenchTypedCommand,
@@ -101,6 +103,10 @@ export default function AuthoredVnextFlowClient() {
     revision: number;
     digest: MasterDigest;
   } | null>(null);
+  const [editableHybridMvpReadiness, setEditableHybridMvpReadiness] =
+    useState<EditableHybridMvpReadiness | null>(null);
+  const [nativeCapabilityProjection, setNativeCapabilityProjection] =
+    useState<NativeCapabilityProjectionV1 | null>(null);
   const operationSequence = useRef(0);
   const restoreAttempted = useRef(false);
   const contract = published?.contract;
@@ -109,6 +115,28 @@ export default function AuthoredVnextFlowClient() {
   const selectedNode = selectedElementId
     ? selectInspectorNode(workbench, selectedElementId)
     : null;
+  useEffect(() => {
+    if (!canonicalDeck) {
+      setEditableHybridMvpReadiness(null);
+      setNativeCapabilityProjection(null);
+      return;
+    }
+    const controller = new AbortController();
+    void generationClient.editableHybridReadinessV4(canonicalDeck.deckId)
+      .then((projection) => {
+        if (!controller.signal.aborted) {
+          setEditableHybridMvpReadiness(projection.editableHybridMvp);
+          setNativeCapabilityProjection(projection.nativeCapabilities);
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setEditableHybridMvpReadiness(null);
+          setNativeCapabilityProjection(null);
+        }
+      });
+    return () => controller.abort();
+  }, [canonicalDeck?.deckId, canonicalDeck?.digest]);
   const scene =
     deck && contract
       ? sceneForMaster(deck, workbench.activeSlideId, contract, {
@@ -419,6 +447,29 @@ export default function AuthoredVnextFlowClient() {
       elementId: command.elementId as ElementId,
       base: publicationPin(deck, command.slideId as SlideId),
     };
+    const mvpMutation = command.kind === "text.style.patch"
+      ? targetNode.kind === "text" ? { kind: "text.style.update", payload: command.patch } : null
+      : command.kind === "shape.style.patch"
+      ? targetNode.kind === "shape" ? { kind: "shape.style.update", payload: command.patch } : null
+      : command.kind === "image.crop.patch"
+        ? (targetNode.kind === "image" || targetNode.kind === "asset") ? { kind: "image.crop.update", payload: command.patch } : null
+        : command.kind === "table.cell.patch"
+          ? targetNode.kind === "table" ? { kind: "table.cell.update", payload: command.patch } : null
+          : command.kind === "table.column-widths.patch"
+            ? targetNode.kind === "table" ? { kind: "table.column-widths.update", payload: command.patch } : null
+            : undefined;
+    if (mvpMutation !== undefined) {
+      if (!mvpMutation || !canonicalDeck) { setNotice(t("errors.unsupportedEdit")); return; }
+      const operationId = serverOperationId(command.clientOperationId, "-editable-hybrid");
+      void generationClient.mutateScene(canonicalDeck.deckId, {
+        schemaVersion: "scene-mutation-command/v1", operationId, deckId: canonicalDeck.deckId,
+        slideId: command.slideId, elementId: command.elementId, kind: mvpMutation.kind,
+        payload: mvpMutation.payload, expectedSlideRevision: common.base.slideRevision,
+        expectedSlideDigest: common.base.slideDigest, expectedSceneDigest: common.base.sceneDigest,
+        publicationFence: { expectedDeckRevision: common.base.deckRevision, expectedActiveRevisionDigest: common.base.deckDigest },
+      }, `${operationId}:${common.base.sceneDigest}`).then((result) => loadCanonicalDeck(result.deck)).catch((error) => setNotice(t("errors.operation", { code: error instanceof Error ? error.message : "authored_vnext_scene_mutation_failed" })));
+      return;
+    }
     let operation: WorkbenchOperation;
     if (command.kind === "text.patch" && targetNode.kind === "text") {
       operation = { ...common, kind: "text.replace", text: command.patch.text };
@@ -518,6 +569,9 @@ export default function AuthoredVnextFlowClient() {
       // otherwise submit the pre-save revision or return early after restore.
       const current = await generationClient.getDeck(deckId);
       setCanonicalDeck(current.deck);
+      const readiness = await generationClient.editableHybridReadinessV4(deckId);
+      setEditableHybridMvpReadiness(readiness.editableHybridMvp);
+      setNativeCapabilityProjection(readiness.nativeCapabilities);
       await exportDeckAction({
         deck: current.deck,
         contract,
@@ -534,6 +588,7 @@ export default function AuthoredVnextFlowClient() {
           }),
         setArtifact,
         notice: (key, values) => setNotice(t(key, values)),
+        editableHybridMvpReadiness: readiness.editableHybridMvp,
       });
     } catch (error) {
       setNotice(t("errors.export", {
@@ -547,6 +602,6 @@ export default function AuthoredVnextFlowClient() {
   const activeBodyNode = activeSlide?.nodes.find((node) => node.kind === "text" && node.role === "body");
   const candidateView = regenerationCandidateView(candidate, activeSlide, activeBodyNode?.kind === "text" ? activeBodyNode.text : "", t("regeneration.candidateLabel"), t("regeneration.candidateSummary"));
   const conflict = conflictView(workbench.conflict, canonicalDeck?.revision, deck?.revision, t("conflict.message"));
-  const workbenchView = deck ? <AuthoredWorkbench activePanel={panel} activeSlideId={workbench.activeSlideId} callbacks={callbacks} canRedo={workbench.redoStack.length > 0} canUndo={workbench.undoStack.length > 0 || Boolean(canonicalDeck?.parentRevisionDigest)} conflict={conflict} createOperationId={createOperationId} featureEnabled inspector={inspector} onPanelChange={setPanel} onRailWindowChange={setRailStart} panels={panels} railWindow={{ startIndex: railStart, visibleCount: 8, rowHeight: 88, overscan: 2 }} regenerationCandidate={candidateView} scene={scene} selectedElementId={selectedElementId} slides={deck.slides.map((slide, index) => ({ id: slide.id, title: slideLabel(slide), position: index, revision: slide.revision, status: "ready" }))} state={workbench.deck.status === "stale" ? { state: "stale", title: t("conflict.staleTitle"), message: workbench.deck.reason } : { state: "ready" }} /> : null;
+  const workbenchView = deck ? <AuthoredWorkbench activePanel={panel} activeSlideId={workbench.activeSlideId} callbacks={callbacks} canRedo={workbench.redoStack.length > 0} canUndo={workbench.undoStack.length > 0 || Boolean(canonicalDeck?.parentRevisionDigest)} conflict={conflict} createOperationId={createOperationId} editableHybridMvpReadiness={editableHybridMvpReadiness} featureEnabled inspector={inspector} nativeCapabilityProjection={nativeCapabilityProjection} onPanelChange={setPanel} onRailWindowChange={setRailStart} panels={panels} railWindow={{ startIndex: railStart, visibleCount: 8, rowHeight: 88, overscan: 2 }} regenerationCandidate={candidateView} scene={scene} selectedElementId={selectedElementId} slides={deck.slides.map((slide, index) => ({ id: slide.id, title: slideLabel(slide), position: index, revision: slide.revision, status: "ready" }))} state={workbench.deck.status === "stale" ? { state: "stale", title: t("conflict.staleTitle"), message: workbench.deck.reason } : { state: "ready" }} /> : null;
   return <><AuthoredVnextFlowStage flow={flow} prompt={prompt} notice={notice} direction={direction} regenerationBody={regenerationBody} workbench={workbenchView} onPromptChange={setPrompt} onFlowEvent={dispatchFlow} onPublished={onPublished} onConfirmDirection={confirmDirection} onGenerate={() => void generate()} onRegenerationBodyChange={setRegenerationBody} onPrepareRegeneration={() => void prepareRegeneration()} />{contract && <AuthoredPackageLifecycle masterContract={contract as unknown as Record<string, unknown>} />}</>;
 }

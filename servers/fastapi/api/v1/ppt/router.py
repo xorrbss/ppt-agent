@@ -41,6 +41,9 @@ from api.v1.ppt.endpoints.authored_vnext.generation import (
 from api.v1.ppt.endpoints.authored_vnext.package import (
     AUTHORED_VNEXT_PACKAGE_ROUTER,
 )
+from api.v1.ppt.endpoints.authored_vnext.semantic import (
+    AUTHORED_SEMANTIC_ROUTER,
+)
 from api.v1.ppt.endpoints.workspace import WORKSPACE_ROUTER
 from api.v1.ppt.endpoints.conversations import CONVERSATION_ROUTER
 from api.v1.ppt.endpoints.structured_templates import (
@@ -108,6 +111,11 @@ PPT_FEATURE_MODULES = (
     FeatureModule(
         "authored-vnext-package",
         AUTHORED_VNEXT_PACKAGE_ROUTER,
+        frozenset({"ppt-api", "presentation", "export"}),
+    ),
+    FeatureModule(
+        "authored-semantic-emission",
+        AUTHORED_SEMANTIC_ROUTER,
         frozenset({"ppt-api", "presentation", "export"}),
     ),
     FeatureModule("workspace", WORKSPACE_ROUTER, frozenset({"ppt-api", "workspace"})),

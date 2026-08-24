@@ -20,6 +20,9 @@ class CreateExportJobRequest(StrictCamelModel):
     expected_source_package_digest: Digest | None = None
     expected_asset_digests: list[Digest] = Field(default_factory=list, max_length=128)
     expected_font_digest: Digest
+    editable_hybrid_profile_id: Literal[
+        "authored-editable-hybrid-ko-en-basic-v1"
+    ] | None = None
     idempotency_key: str = Field(min_length=1, max_length=200)
     operation_fence: int = Field(default=1, ge=1)
     timeout_ms: int = Field(default=120_000, ge=1_000, le=600_000)

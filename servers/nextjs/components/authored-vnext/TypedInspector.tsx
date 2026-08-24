@@ -104,7 +104,7 @@ function NumberField({
   value: string;
   disabled: boolean;
   onChange: (value: string) => void;
-  onCommit: () => void;
+  onCommit: (value: string) => void;
 }) {
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
@@ -119,7 +119,7 @@ function NumberField({
         className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-sm tabular-nums outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
         disabled={disabled}
         inputMode="decimal"
-        onBlur={onCommit}
+        onBlur={(event) => onCommit(event.currentTarget.value)}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={handleKeyDown}
         step="0.01"
@@ -139,9 +139,16 @@ function GeometryInspector({
   const t = useTranslations("authoredVnext.workbench.inspector");
   const [draft, setDraft] = useState(() => boundsDraft(model.bounds));
   useEffect(() => setDraft(boundsDraft(model.bounds)), [model]);
+  const parsedBounds = {
+    x: Number(draft.x),
+    y: Number(draft.y),
+    width: Number(draft.width),
+    height: Number(draft.height),
+  };
+  const validBounds = Object.values(parsedBounds).every(Number.isFinite) && parsedBounds.width > 0 && parsedBounds.height > 0;
 
-  const commit = (field: keyof ElementBounds) => {
-    const value = Number(draft[field]);
+  const commit = (field: keyof ElementBounds, rawValue: string) => {
+    const value = Number(rawValue);
     if (!Number.isFinite(value) || value === model.bounds[field]) return;
     onCommand({
       ...model.context,
@@ -153,16 +160,24 @@ function GeometryInspector({
 
   return (
     <div className="grid grid-cols-2 gap-2">
-      {(["x", "y"] as const).map((field) => (
+      {(["x", "y", "width", "height"] as const).map((field) => (
         <NumberField
           disabled={disabled ?? false}
           key={field}
           label={`${field.toUpperCase()} (px)`}
           onChange={(value) => setDraft((current) => ({ ...current, [field]: value }))}
-          onCommit={() => commit(field)}
+          onCommit={(value) => commit(field, value)}
           value={draft[field]}
         />
       ))}
+      <button
+        className="col-span-2 rounded-md border border-blue-600 px-3 py-2 text-sm font-semibold text-blue-700 disabled:opacity-40"
+        disabled={disabled || !validBounds}
+        onClick={() => onCommand({ ...model.context, clientOperationId: createOperationId(), kind: "geometry.patch", patch: parsedBounds })}
+        type="button"
+      >
+        Apply position and size
+      </button>
     </div>
   );
 }
@@ -181,6 +196,7 @@ function AssetInspector({
   const [mediaType, setMediaType] = useState(model.mediaType ?? "");
   const [storageReference, setStorageReference] = useState(model.storageReference ?? "");
   const [sizeBytes, setSizeBytes] = useState(model.sizeBytes?.toString() ?? "");
+  const [cropGeometry, setCropGeometry] = useState(model.cropGeometry ?? { left: 0, top: 0, right: 0, bottom: 0 });
   useEffect(() => {
     setAssetId(model.assetId);
     setAssetDigest(model.assetDigest);
@@ -189,6 +205,7 @@ function AssetInspector({
     setMediaType(model.mediaType ?? "");
     setStorageReference(model.storageReference ?? "");
     setSizeBytes(model.sizeBytes?.toString() ?? "");
+    setCropGeometry(model.cropGeometry ?? { left: 0, top: 0, right: 0, bottom: 0 });
   }, [model]);
   return (
     <div className="space-y-3">
@@ -231,8 +248,37 @@ function AssetInspector({
       >
         {t("replaceAsset")}
       </button>
+      <fieldset className="grid grid-cols-2 gap-2"><legend className="col-span-2 text-xs font-semibold text-slate-700">Rectangular crop fractions</legend>{(["left", "top", "right", "bottom"] as const).map((side) => <NumberField disabled={disabled ?? false} key={side} label={side} onChange={(value) => setCropGeometry((current) => ({ ...current, [side]: Number(value) }))} onCommit={() => undefined} value={String(cropGeometry[side])} />)}</fieldset>
+      <button className="w-full rounded-md border border-blue-600 px-3 py-2 text-sm font-semibold text-blue-700 disabled:opacity-40" disabled={disabled || Object.values(cropGeometry).some((value) => !Number.isFinite(value) || value < 0 || value >= 1) || cropGeometry.left + cropGeometry.right >= 1 || cropGeometry.top + cropGeometry.bottom >= 1} onClick={() => onCommand({ ...model.context, clientOperationId: createOperationId(), kind: "image.crop.patch", patch: { cropGeometry } })} type="button">Apply rectangular crop</button>
     </div>
   );
+}
+
+function ShapeInspector({ model, disabled, createOperationId, onCommand }: TypedInspectorProps & { model: Extract<InspectorModel, { kind: "shape" }> }) {
+  const [fill, setFill] = useState(model.fill ?? "");
+  const [stroke, setStroke] = useState(model.stroke ?? "");
+  useEffect(() => { setFill(model.fill ?? ""); setStroke(model.stroke ?? ""); }, [model]);
+  const valid = (value: string) => !value || /^#[0-9a-f]{6}$/iu.test(value);
+  return <div className="space-y-3"><label className="block text-xs font-medium text-slate-600">Solid fill<input aria-label="Shape solid fill" className="mt-1 w-full rounded-md border border-slate-300 px-2.5 py-2 font-mono text-sm" disabled={disabled} onChange={(event) => setFill(event.target.value)} value={fill} /></label><label className="block text-xs font-medium text-slate-600">Solid stroke<input aria-label="Shape solid stroke" className="mt-1 w-full rounded-md border border-slate-300 px-2.5 py-2 font-mono text-sm" disabled={disabled} onChange={(event) => setStroke(event.target.value)} value={stroke} /></label><button className="w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-40" disabled={disabled || !valid(fill) || !valid(stroke)} onClick={() => onCommand({ ...model.context, clientOperationId: createOperationId(), kind: "shape.style.patch", patch: { fill: fill || null, stroke: stroke || null } })} type="button">Apply solid shape style</button>{model.geometry && <><p className="pt-2 text-xs font-semibold text-slate-700">Position and size</p><GeometryInspector createOperationId={createOperationId} disabled={disabled} model={{ kind: "geometry", context: model.context, bounds: model.geometry }} onCommand={onCommand} /></>}</div>;
+}
+
+function TextStyleInspector({ model, disabled, createOperationId, onCommand }: TypedInspectorProps & { model: Extract<InspectorModel, { kind: "text" }> }) {
+  const [color, setColor] = useState(model.style?.color ?? "");
+  const [fontFamily, setFontFamily] = useState(model.style?.fontFamily ?? "");
+  const [fontSize, setFontSize] = useState(model.style?.fontSize?.toString() ?? "");
+  const [fontWeight, setFontWeight] = useState(model.style?.fontWeight?.toString() ?? "");
+  const [textAlign, setTextAlign] = useState<"left" | "center" | "right" | "justify">((model.style?.textAlign as "left" | "center" | "right" | "justify" | undefined) ?? "left");
+  useEffect(() => { setColor(model.style?.color ?? ""); setFontFamily(model.style?.fontFamily ?? ""); setFontSize(model.style?.fontSize?.toString() ?? ""); setFontWeight(model.style?.fontWeight?.toString() ?? ""); setTextAlign((model.style?.textAlign as "left" | "center" | "right" | "justify" | undefined) ?? "left"); }, [model]);
+  const validColor = /^#[0-9a-f]{6}$/iu.test(color);
+  const size = Number(fontSize); const weight = Number(fontWeight);
+  return <div className="mt-3 space-y-2 border-t border-slate-200 pt-3"><p className="text-xs font-semibold text-slate-700">Native text style</p><label className="block text-xs font-medium text-slate-600">Color<input aria-label="Text color" className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 font-mono text-sm" disabled={disabled} onChange={(event) => setColor(event.target.value)} value={color} /></label><label className="block text-xs font-medium text-slate-600">Font family<input aria-label="Text font family" className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" disabled={disabled} onChange={(event) => setFontFamily(event.target.value)} value={fontFamily} /></label><div className="grid grid-cols-2 gap-2"><NumberField disabled={disabled ?? false} label="Font size" onChange={setFontSize} onCommit={() => undefined} value={fontSize} /><NumberField disabled={disabled ?? false} label="Font weight" onChange={setFontWeight} onCommit={() => undefined} value={fontWeight} /></div><label className="block text-xs font-medium text-slate-600">Alignment<select aria-label="Text alignment" className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" disabled={disabled} onChange={(event) => setTextAlign(event.target.value as "left" | "center" | "right" | "justify")} value={textAlign}><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option><option value="justify">Justify</option></select></label><button className="w-full rounded-md border border-blue-600 px-3 py-2 text-sm font-semibold text-blue-700 disabled:opacity-40" disabled={disabled || !validColor || (fontSize !== "" && (!Number.isFinite(size) || size < 1 || size > 400)) || (fontWeight !== "" && (!Number.isInteger(weight) || weight < 100 || weight > 900))} onClick={() => onCommand({ ...model.context, clientOperationId: createOperationId(), kind: "text.style.patch", patch: { color, ...(fontFamily.trim() ? { fontFamily: fontFamily.trim() } : {}), ...(fontSize !== "" ? { fontSize: size } : {}), ...(fontWeight !== "" ? { fontWeight: weight } : {}), textAlign } })} type="button">Apply native text style</button></div>;
+}
+
+function TableMvpControls({ model, disabled, createOperationId, onCommand }: TypedInspectorProps & { model: Extract<InspectorModel, { kind: "data" }> }) {
+  const [row, setRow] = useState("0"); const [column, setColumn] = useState("0"); const [text, setText] = useState(""); const [widths, setWidths] = useState("");
+  if (model.nodeKind !== "table") return null;
+  const parsedWidths = widths.split(",").map((value) => Number(value.trim())).filter((value) => value > 0 && Number.isFinite(value));
+  return <div className="space-y-2 border-t border-slate-200 pt-3"><p className="text-xs font-semibold text-slate-700">Basic table editing</p><div className="grid grid-cols-2 gap-2"><NumberField disabled={disabled ?? false} label="Row" onChange={setRow} onCommit={() => undefined} value={row} /><NumberField disabled={disabled ?? false} label="Column" onChange={setColumn} onCommit={() => undefined} value={column} /></div><input aria-label="Table cell text" className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" disabled={disabled} onChange={(event) => setText(event.target.value)} value={text} /><button className="w-full rounded-md border border-blue-600 px-3 py-2 text-sm font-semibold text-blue-700 disabled:opacity-40" disabled={disabled || !Number.isInteger(Number(row)) || !Number.isInteger(Number(column))} onClick={() => onCommand({ ...model.context, clientOperationId: createOperationId(), kind: "table.cell.patch", patch: { row: Number(row), column: Number(column), text } })} type="button">Apply cell</button><input aria-label="Table column widths in points" className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" disabled={disabled} onChange={(event) => setWidths(event.target.value)} placeholder="120, 180" value={widths} /><button className="w-full rounded-md border border-blue-600 px-3 py-2 text-sm font-semibold text-blue-700 disabled:opacity-40" disabled={disabled || parsedWidths.length !== (model.columns ?? 0)} onClick={() => onCommand({ ...model.context, clientOperationId: createOperationId(), kind: "table.column-widths.patch", patch: { columnWidthsPt: parsedWidths } })} type="button">Apply column widths</button></div>;
 }
 
 function DataInspector({ model, disabled, createOperationId, onCommand }: TypedInspectorProps & { model: Extract<InspectorModel, { kind: "data" }> }) {
@@ -294,9 +340,12 @@ export function TypedInspector({
           value={model.text}
         />
       )}
+      {model.kind === "text" && model.styleEditable && <TextStyleInspector createOperationId={createOperationId} disabled={disabled} model={model} onCommand={onCommand} />}
       {model.kind === "geometry" && <GeometryInspector createOperationId={createOperationId} disabled={disabled} model={model} onCommand={onCommand} />}
+      {model.kind === "shape" && <ShapeInspector createOperationId={createOperationId} disabled={disabled} model={model} onCommand={onCommand} />}
       {model.kind === "asset" && <AssetInspector createOperationId={createOperationId} disabled={disabled} model={model} onCommand={onCommand} />}
       {model.kind === "data" && <DataInspector createOperationId={createOperationId} disabled={disabled} model={model} onCommand={onCommand} />}
+      {model.kind === "data" && <TableMvpControls createOperationId={createOperationId} disabled={disabled} model={model} onCommand={onCommand} />}
       {model.kind === "capability" && <CapabilityInspector model={model} />}
       {model.kind === "layout" && (
         <div className="space-y-2">

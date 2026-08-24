@@ -49,6 +49,14 @@ from services.authored_header_contract_service import (
     page_number_mode_for,
 )
 from services.authored_review_asset_store import publish_reviewed_png
+from services.authored_semantic_candidate import (
+    compile_authored_semantic_source,
+    compile_semantic_components,
+)
+from services.authored_vnext.semantic.query import get_active_authored_emission
+from services.authored_vnext.semantic.remake import (
+    republish_authored_semantic_bundle_graph_for_remake,
+)
 from services.image_generation_service import ImageGenerationService
 from services.database import async_session_maker
 from services.slidespec_artifact_store import ACTIVE_POINTER_KEY
@@ -63,6 +71,7 @@ from utils.llm_calls.author_deck import prepare_authored_deck
 from utils.llm_calls.author_slide import (
     EXACT_RECONSTRUCTION,
     STYLE_REFERENCE,
+    authored_semantic_dual_output_mode,
     normalize_reference_mode,
 )
 from utils.llm_calls.author_vision_qa import revise_authored_deck
@@ -435,6 +444,19 @@ async def run_authored_page_remake_preview(
         )
     candidate_html = str(htmls[0])
     candidate_png = bytes(pngs[0])
+    semantic_source = None
+    if authored_semantic_dual_output_mode() == "declared":
+        try:
+            semantic_source = compile_authored_semantic_source(
+                candidate_html,
+                slide_index=slide_index,
+            )
+        except (TypeError, ValueError) as error:
+            raise AuthoredPageRemakeError(
+                "authored_page_remake_semantic_validation_failed",
+                stage="semantic_validation",
+                retryable=True,
+            ) from error
     # An identical re-author is a legitimate outcome, not a defect: it happens
     # naturally when the page was already remade.  Report it so the user can
     # decide whether to keep it or retry, rather than hiding the result.
@@ -474,7 +496,7 @@ async def run_authored_page_remake_preview(
         presentation_id, slide_index, verified_png or candidate_png
     )
     candidate_digest = _canonical_digest(
-        {"html": candidate_html, "image": image_reference}
+        {"html": candidate_html, "image": image_reference, "semanticSource": semantic_source}
     )
     await _set_task(
         session,
@@ -491,6 +513,7 @@ async def run_authored_page_remake_preview(
             "candidate_digest": candidate_digest,
             "candidate_html": candidate_html,
             "candidate_image": image_reference,
+            **({"semantic_source": semantic_source} if semantic_source is not None else {}),
             "baseline_issues": _issue_summary(baseline_report),
             "candidate_issues": _issue_summary(candidate_report),
             "validation": {
@@ -645,6 +668,28 @@ def _validated_preview_data(
         raise AuthoredPageRemakeError(
             "authored_page_remake_candidate_invalid", stage="publish_validation"
         )
+    if authored_semantic_dual_output_mode() == "declared":
+        semantic_source = data.get("semantic_source")
+        if not isinstance(semantic_source, dict):
+            raise AuthoredPageRemakeError(
+                "authored_page_remake_semantic_missing",
+                stage="publish_validation",
+            )
+        try:
+            rebuilt = compile_authored_semantic_source(
+                str(data["candidate_html"]),
+                slide_index=slide_index,
+            )
+        except (TypeError, ValueError) as error:
+            raise AuthoredPageRemakeError(
+                "authored_page_remake_semantic_validation_failed",
+                stage="publish_validation",
+            ) from error
+        if rebuilt != semantic_source:
+            raise AuthoredPageRemakeError(
+                "authored_page_remake_semantic_mismatch",
+                stage="publish_validation",
+            )
     return data
 
 
@@ -881,6 +926,53 @@ async def publish_authored_page_remake_legacy(
                 slide_index=slide_index,
                 preview_task_id=preview_task_id,
             )
+            presentation, slides = await _load_deck(
+                session, presentation_id, slide_index
+            )
+            for item in slides:
+                await session.refresh(item)
+            if presentation.owner_id is not None:
+                active_semantic = await get_active_authored_emission(
+                    session,
+                    presentation_id=presentation_id,
+                    owner_id=presentation.owner_id,
+                )
+                if active_semantic.canonical_mode == "bundleGraph":
+                    expected_revision = presentation.revision
+                    operation_id = uuid.uuid5(
+                        uuid.NAMESPACE_URL,
+                        "presenton:authored-remake:"
+                        f"{presentation_id}:{preview_task_id}:{expected_revision + 1}",
+                    )
+                    htmls = [str(item.html_content or "") for item in slides]
+                    await republish_authored_semantic_bundle_graph_for_remake(
+                        session,
+                        presentation_id=presentation_id,
+                        owner_id=presentation.owner_id,
+                        expected_presentation_revision=expected_revision,
+                        operation_id=operation_id,
+                        generation_attempt_id=None,
+                        ordered_slides=slides,
+                        htmls=htmls,
+                        semantic_drafts=compile_semantic_components(htmls),
+                    )
+                    revision_result = await session.execute(
+                        update(PresentationModel)
+                        .where(
+                            PresentationModel.id == presentation_id,
+                            PresentationModel.revision == expected_revision,
+                        )
+                        .values(
+                            revision=PresentationModel.revision + 1,
+                            updated_at=get_current_utc_datetime(),
+                        )
+                    )
+                    if revision_result.rowcount != 1:
+                        raise AuthoredPageRemakeError(
+                            "authored_page_remake_publish_cas_conflict",
+                            stage="publish",
+                        )
+                    result["presentation_revision"] = expected_revision + 1
             await session.commit()
             return result
         except Exception:

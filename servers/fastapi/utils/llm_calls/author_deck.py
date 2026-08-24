@@ -43,6 +43,7 @@ from utils.authored_styles import reference_images_for_role
 logger = logging.getLogger(__name__)
 
 _DEFAULT_AUTHOR_ATTEMPTS = 2
+_SEMANTIC_AUTHOR_ATTEMPTS = 3
 _TRANSIENT_AUTHOR_ATTEMPTS = 4
 _TRANSIENT_RETRY_BASE_SECONDS = 1.5
 _TRANSIENT_RETRY_MAX_SECONDS = 8.0
@@ -416,6 +417,65 @@ def _chapter_breadcrumb(contract: AuthoredHeaderContract | None) -> bool:
     return contract is not None and contract.eyebrow.form == "chapterBreadcrumb"
 
 
+def _author_retry_correction(
+    error: object,
+    *,
+    source_image_ids: Sequence[str] = (),
+) -> str:
+    """Return bounded corrective guidance for a known local validation failure."""
+
+    message = str(error)
+    if "authored_semantic_qid_missing" in message:
+        missing_tag = message.partition(":")[2].strip()
+        missing_detail = (
+            f" The first rejected element was <{missing_tag}>."
+            if missing_tag
+            else ""
+        )
+        return (
+            "The previous candidate omitted edit identities. Rebuild the whole HTML document. "
+            "Every rendered HTML element except html/head/body/meta/title/style and SVG primitive "
+            "internals must have one explicit unique data-qid. This includes section, main, div, "
+            "header, footer, h1-h6, p, span, ul, ol, li, table, thead, tbody, tr, th and td. "
+            "An img intended for native crop editing must also have a unique data-qid."
+            + missing_detail
+        )
+    if "authored_semantic_qid_invalid" in message:
+        return (
+            "Replace every invalid data-qid with a unique stable token containing only letters, "
+            "numbers, dot, underscore, colon or hyphen, starting with a letter or number."
+        )
+    if "authored_semantic_qid_duplicate" in message:
+        return "Rebuild the document so no two elements reuse the same data-qid."
+    if "images must be base64 raster data URLs" in message:
+        offered_id = (
+            " ".join(str(source_image_ids[0]).split()).replace('"', "'")
+            if len(source_image_ids) == 1
+            else ""
+        )
+        source_rule = (
+            f"Use exactly one offered canonical source asset as <img data-asset-id=\"{offered_id}\" "
+            "data-qid=\"unique.image.qid\" ...> with no src attribute."
+            if offered_id
+            else "Remove every img element because no canonical source image was offered."
+        )
+        return (
+            "The previous candidate emitted an untrusted ordinary image src. "
+            + source_rule
+            + " Never emit a filename, URL, relative path or invented data URL in src; the trusted "
+            "source-image stage supplies verified bytes after authoring."
+        )
+    if "HTML attribute is not allowed: data-native-candidate" in message:
+        return (
+            "Remove every data-native-candidate attribute. Native-candidate is descriptive text; "
+            "data-qid is the only edit identity attribute."
+        )
+    return (
+        "The previous candidate failed local admission. Return a complete self-contained HTML "
+        "document that follows every renderer, image-slot and data-qid rule exactly."
+    )
+
+
 def derive_role(index: int, n: int, content: str) -> str:
     """Per-slide ROLE for the authoring prompt, from position + content keywords."""
     if index == 0:
@@ -616,6 +676,7 @@ async def _author_one_resilient(
     attempt_limit = _DEFAULT_AUTHOR_ATTEMPTS
     attempts_made = 0
     header_reject: str | None = None
+    correction_hint: str | None = None
     for attempt in range(_TRANSIENT_AUTHOR_ATTEMPTS):
         attempts_made = attempt + 1
         try:
@@ -625,6 +686,8 @@ async def _author_one_resilient(
                     kwargs["reference_mode"] = reference_mode
                 if source_images:
                     kwargs["source_images"] = source_images
+                if correction_hint:
+                    kwargs["correction_hint"] = correction_hint
                 html = await author_slide_html(
                     content,
                     design_system,
@@ -648,6 +711,8 @@ async def _author_one_resilient(
                     kwargs["reference_mode"] = reference_mode
                 if source_images:
                     kwargs["source_images"] = source_images
+                if correction_hint:
+                    kwargs["correction_hint"] = correction_hint
                 html = await author_slide_html(
                     content,
                     design_system,
@@ -681,6 +746,12 @@ async def _author_one_resilient(
                     return constrained
                 header_reject = constrained
                 last_error = "header contract violated: " + ", ".join(violations)
+                correction_hint = _author_retry_correction(
+                    last_error,
+                    source_image_ids=tuple(
+                        candidate.asset_id for candidate in source_images
+                    ),
+                )
                 logger.warning(
                     "[authored] slide %d/%d %s (attempt %d)",
                     index + 1,
@@ -690,6 +761,19 @@ async def _author_one_resilient(
                 )
         except Exception as e:  # noqa: BLE001 — resilience boundary, recorded below
             last_error = e
+            correction_hint = _author_retry_correction(
+                e,
+                source_image_ids=tuple(candidate.asset_id for candidate in source_images),
+            )
+            if any(
+                code in str(e)
+                for code in (
+                    "authored_semantic_qid_",
+                    "images must be base64 raster data URLs",
+                    "HTML attribute is not allowed: data-native-candidate",
+                )
+            ):
+                attempt_limit = max(attempt_limit, _SEMANTIC_AUTHOR_ATTEMPTS)
             if reference_mode == EXACT_RECONSTRUCTION and isinstance(e, ValueError):
                 raise
             if _is_transient_author_error(e):

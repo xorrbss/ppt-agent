@@ -4,7 +4,10 @@ import test from "node:test";
 import sharp from "sharp";
 
 import { prepareNativeElements } from "./native-plan.ts";
-import { assembleAuthoredHybridPptx } from "./pptx-assembler.ts";
+import {
+  assembleAuthoredHybridPptx,
+  SEMANTIC_OWNERSHIP_ALT_TEXT_PREFIX,
+} from "./pptx-assembler.ts";
 import { readPptxArchive, writePptxArchive } from "./pptx-archive.ts";
 
 const CONTENT_TYPES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -240,6 +243,52 @@ test("assembler stores an opaque full-slide residual as the slide background", a
   assert.match(slideXml, /<p:bg><p:bgPr><a:blipFill[^>]*><a:blip r:embed="rId3"\/>/);
   assert.doesNotMatch(slideXml, /Presenton hybrid backplate/);
   assert.doesNotMatch(slideXml, /Presenton hybrid shape editable-canvas/);
+});
+
+test("assembler preserves the exact raster semantic QID set in PowerPoint-readable ownership shapes", async () => {
+  const backplate = await sharp({
+    create: { width: 1280, height: 720, channels: 3, background: "#F7FAFC" },
+  }).png().toBuffer();
+  const qids = ["s01-title-main", "s01-chart-revenue", "s01-note-cjk"];
+  const output = assembleAuthoredHybridPptx(skeleton(), [{
+    slideNumber: 1,
+    backplatePng: backplate,
+    elements: [],
+    semanticOwnerQids: qids,
+  }]);
+  const slideXml = readPptxArchive(output)
+    .get("ppt/slides/slide1.xml")
+    .toString("utf8");
+
+  assert.match(slideXml, /<p:bg>/);
+  for (const qid of qids) {
+    assert.match(
+      slideXml,
+      new RegExp(`name="Presenton raster visual fragment ${qid} semantic-owner"`),
+    );
+  }
+  const descriptions = [...slideXml.matchAll(/\bdescr="([^"]+)"/g)]
+    .map((match) => match[1])
+    .filter((value) => value.startsWith(SEMANTIC_OWNERSHIP_ALT_TEXT_PREFIX));
+  assert.equal(descriptions.length, qids.length);
+  const observedQids = descriptions.flatMap((description) => {
+    const encoded = description.slice(SEMANTIC_OWNERSHIP_ALT_TEXT_PREFIX.length);
+    const payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
+    assert.equal(payload.schemaVersion, "presenton-semantic-raster-ownership/v1");
+    assert.equal(payload.slideNumber, 1);
+    assert.match(payload.qidSetDigest, /^sha256:[a-f0-9]{64}$/);
+    return payload.qids;
+  });
+  assert.deepEqual(observedQids, qids);
+  assert.throws(
+    () => assembleAuthoredHybridPptx(skeleton(), [{
+      slideNumber: 1,
+      backplatePng: backplate,
+      elements: [],
+      semanticOwnerQids: [qids[0], qids[0]],
+    }]),
+    /semantic ownership QIDs must be unique/,
+  );
 });
 
 test("assembler keeps media that an untouched slide still references", async () => {

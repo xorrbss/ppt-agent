@@ -185,10 +185,17 @@ def _assert_worker_readback(
     actual_scene = receipt.get("scene")
     capabilities = receipt.get("capabilities")
     native_counts = receipt.get("nativeObjectCounts")
+    hybrid_ownership = receipt.get("hybridOwnership")
     if not isinstance(scene, dict) or not isinstance(actual_scene, dict):
         raise ExportServiceError("authored_vnext_scene_read_back_invalid")
     expected_scene_slides: list[dict[str, Any]] = []
     expected_counts = {"chart": 0, "image": 0, "shape": 0, "table": 0, "text": 0}
+    hybrid_profile_id = scene.get("hybridProfileId")
+    hybrid_mode = hybrid_profile_id == "authored-editable-hybrid-ko-en-basic-v1"
+    if hybrid_profile_id is not None and not hybrid_mode:
+        raise ExportServiceError("authored_vnext_hybrid_profile_mismatch")
+    expected_raster_island_count = 0
+    expected_raster_owner_count = 0
     data_manifest = {
         item.get("dataId"): item
         for item in scene.get("dataManifest", [])
@@ -204,7 +211,35 @@ def _assert_worker_readback(
             slide["elements"],
             key=lambda item: (item.get("zOrder", -1), item.get("elementId", "")),
         )
+        hybrid_export = slide.get("hybridExport")
+        if hybrid_mode:
+            if not isinstance(hybrid_export, dict) or not isinstance(
+                hybrid_export.get("ownerDecisions"), list
+            ) or not isinstance(hybrid_export.get("rasterIslands"), list):
+                raise ExportServiceError("authored_vnext_hybrid_export_plan_invalid")
+            decision_by_id = {
+                item.get("ownerId"): item
+                for item in hybrid_export["ownerDecisions"]
+                if isinstance(item, dict) and isinstance(item.get("ownerId"), str)
+            }
+            if len(decision_by_id) != len(elements) or set(decision_by_id) != {
+                item.get("elementId") for item in elements
+            }:
+                raise ExportServiceError(
+                    "authored_vnext_hybrid_owner_inventory_mismatch"
+                )
+            native_ids = {
+                owner_id
+                for owner_id, decision in decision_by_id.items()
+                if decision.get("decision") == "nativeEditable"
+            }
+        else:
+            if hybrid_export is not None:
+                raise ExportServiceError("authored_vnext_hybrid_profile_mismatch")
+            decision_by_id = {}
+            native_ids = {item.get("elementId") for item in elements}
         identities = []
+        body_stacking: list[tuple[int, str, str]] = []
         for element in elements:
             if element.get("semanticRole") == "canvasBackground":
                 raise ExportServiceError(
@@ -212,9 +247,15 @@ def _assert_worker_readback(
                 )
             kind = element.get("kind") or element.get("type")
             element_id = element.get("elementId") or element.get("id")
+            if element_id not in native_ids:
+                continue
             if kind not in expected_counts or not isinstance(element_id, str):
                 raise ExportServiceError("authored_vnext_scene_read_back_invalid")
+            z_order = element.get("zOrder")
+            if isinstance(z_order, bool) or not isinstance(z_order, int):
+                raise ExportServiceError("authored_vnext_scene_read_back_invalid")
             expected_counts[kind] += 1
+            body_stacking.append((z_order, element_id, "scene"))
             identity: dict[str, Any] = {"elementId": element_id, "kind": kind}
             if kind == "text":
                 text = element.get("text")
@@ -241,6 +282,39 @@ def _assert_worker_readback(
             else:
                 identity["nativeKind"] = "shape"
             identities.append(identity)
+        raster_identities: list[dict[str, Any]] = []
+        if hybrid_mode:
+            for island in sorted(
+                hybrid_export["rasterIslands"],
+                key=lambda item: (item.get("zBand", {}).get("minZ", -1), item.get("islandId", "")),
+            ):
+                if not isinstance(island, dict):
+                    raise ExportServiceError(
+                        "authored_vnext_hybrid_raster_island_invalid"
+                    )
+                raster_identities.append(
+                    {
+                        "islandId": island.get("islandId"),
+                        "sourceOwnerIds": island.get("sourceOwnerIds"),
+                        "assetDigest": island.get("assetDigest"),
+                        "rasterPlaneDigest": island.get("rasterPlaneDigest"),
+                        "zBand": island.get("zBand"),
+                    }
+                )
+                min_z = island.get("zBand", {}).get("minZ")
+                island_id = island.get("islandId")
+                if isinstance(min_z, bool) or not isinstance(min_z, int) or not isinstance(island_id, str):
+                    raise ExportServiceError(
+                        "authored_vnext_hybrid_raster_island_invalid"
+                    )
+                body_stacking.append((min_z, island_id, "rasterIsland"))
+                expected_raster_island_count += 1
+                source_owner_ids = island.get("sourceOwnerIds")
+                if not isinstance(source_owner_ids, list):
+                    raise ExportServiceError(
+                        "authored_vnext_hybrid_raster_island_invalid"
+                    )
+                expected_raster_owner_count += len(source_owner_ids)
         furniture_items: list[dict[str, Any]] = [background_furniture]
         for item in furniture:
             visibility = item.get("visibility", "always")
@@ -276,13 +350,24 @@ def _assert_worker_readback(
                 "slideId": slide.get("slideId"),
                 "slideDigest": slide.get("slideDigest") or slide.get("digest"),
                 "elements": identities,
+                **(
+                    {
+                        "ownerDecisions": sorted(
+                            hybrid_export["ownerDecisions"],
+                            key=lambda item: item["ownerId"],
+                        ),
+                        "rasterIslands": raster_identities,
+                    }
+                    if hybrid_mode
+                    else {}
+                ),
                 "furniture": furniture_items,
                 "stackingOrder": [
                     {"layer": "furniture", "id": _BACKGROUND_FURNITURE_ID}
                 ]
                 + [
-                    {"layer": "scene", "id": item["elementId"]}
-                    for item in identities
+                    {"layer": layer, "id": owner_id}
+                    for _z_order, owner_id, layer in sorted(body_stacking)
                 ]
                 + [
                     {"layer": "furniture", "id": item["furnitureId"]}
@@ -294,18 +379,50 @@ def _assert_worker_readback(
         "sceneDigest": scene.get("sceneDigest") or scene.get("digest"),
         "compositionDigest": scene.get("compositionDigest"),
         "compositionPin": scene.get("compositionPin"),
+        **({"hybridProfileId": hybrid_profile_id} if hybrid_mode else {}),
         "slides": expected_scene_slides,
     }
-    if capabilities != {
-        "supported": ["chart", "image", "shape", "table", "text"],
-        "unsupported": ["connector", "group"],
-    } or native_counts != expected_counts:
+    expected_capabilities = (
+        {
+            "profileId": "authored-editable-hybrid-ko-en-basic-v1",
+            "nativeEditable": ["image", "shape", "table", "text"],
+            "rasterIsland": [
+                "chart",
+                "connector",
+                "group",
+                "image",
+                "shape",
+                "table",
+                "text",
+            ],
+        }
+        if hybrid_mode
+        else {
+            "supported": ["chart", "image", "shape", "table", "text"],
+            "unsupported": ["connector", "group"],
+        }
+    )
+    expected_hybrid_ownership = {
+        "profileId": hybrid_profile_id if hybrid_mode else None,
+        "nativeOwnerCount": sum(expected_counts.values()),
+        "rasterIslandCount": expected_raster_island_count,
+        "rasterOwnerCount": expected_raster_owner_count,
+        "nativeRasterDuplicateOwners": 0,
+        "missingOrGhostQids": 0,
+    }
+    if (
+        capabilities != expected_capabilities
+        or native_counts != expected_counts
+        or hybrid_ownership != expected_hybrid_ownership
+    ):
         raise ExportServiceError("authored_vnext_scene_capability_read_back_mismatch")
     if (
         actual_scene.get("sceneDigest") != expected_scene["sceneDigest"]
         or actual_scene.get("compositionDigest")
         != expected_scene["compositionDigest"]
         or actual_scene.get("compositionPin") != expected_scene["compositionPin"]
+        or actual_scene.get("hybridProfileId")
+        != expected_scene.get("hybridProfileId")
         or not isinstance(actual_scene.get("slides"), list)
         or len(actual_scene["slides"]) != len(expected_scene_slides)
     ):
@@ -318,8 +435,13 @@ def _assert_worker_readback(
             or reopened_slide.get("slideDigest") != expected_slide["slideDigest"]
             or reopened_slide.get("furniture") != expected_slide["furniture"]
             or reopened_slide.get("stackingOrder") != expected_slide["stackingOrder"]
+            or reopened_slide.get("ownerDecisions")
+            != expected_slide.get("ownerDecisions")
             or not isinstance(reopened_slide.get("elements"), list)
             or len(reopened_slide["elements"]) != len(expected_slide["elements"])
+            or not isinstance(reopened_slide.get("rasterIslands", []), list)
+            or len(reopened_slide.get("rasterIslands", []))
+            != len(expected_slide.get("rasterIslands", []))
         ):
             raise ExportServiceError("authored_vnext_scene_read_back_mismatch")
         for expected_element, reopened_element in zip(
@@ -367,6 +489,33 @@ def _assert_worker_readback(
                     raise ExportServiceError(
                         "authored_vnext_scene_image_crop_read_back_mismatch"
                     )
+        for expected_island, reopened_island in zip(
+            expected_slide.get("rasterIslands", []),
+            reopened_slide.get("rasterIslands", []),
+            strict=True,
+        ):
+            bounds = reopened_island.get("renderedBounds")
+            comparable = {
+                key: value
+                for key, value in reopened_island.items()
+                if key != "renderedBounds"
+            }
+            if (
+                comparable != expected_island
+                or not isinstance(bounds, dict)
+                or any(
+                    isinstance(bounds.get(key), bool)
+                    or not isinstance(bounds.get(key), (int, float))
+                    for key in ("x", "y", "width", "height")
+                )
+                or bounds["x"] < 0
+                or bounds["y"] < 0
+                or bounds["width"] <= 0
+                or bounds["height"] <= 0
+            ):
+                raise ExportServiceError(
+                    "authored_vnext_hybrid_raster_island_read_back_mismatch"
+                )
     for expected_slide, actual_slide in zip(
         expected_scene_slides, receipt["slides"], strict=True
     ):
@@ -375,6 +524,17 @@ def _assert_worker_readback(
             or actual_slide.get("slideDigest") != expected_slide["slideDigest"]
             or actual_slide.get("elementIds")
             != [item["elementId"] for item in expected_slide["elements"]]
+            or actual_slide.get("rasterIslandIds", [])
+            != [
+                item["islandId"]
+                for item in expected_slide.get("rasterIslands", [])
+            ]
+            or actual_slide.get("rasterOwnerIds", [])
+            != sorted(
+                owner_id
+                for item in expected_slide.get("rasterIslands", [])
+                for owner_id in item["sourceOwnerIds"]
+            )
         ):
             raise ExportServiceError("authored_vnext_scene_slide_read_back_mismatch")
     for page_number, (expected_slide, actual_slide) in enumerate(
@@ -618,6 +778,13 @@ class AuthoredVNextExportService:
             command.expected_deck_digest,
         ):
             raise ExportServiceError("authored_vnext_deck_digest_mismatch")
+        scene = getattr(deck, "scene", None)
+        scene_profile = getattr(scene, "hybrid_profile_id", None)
+        requested_profile = command.request_payload.get("editableHybridProfileId")
+        if scene_profile != requested_profile:
+            raise ExportServiceError(
+                "authored_vnext_editable_hybrid_profile_mismatch"
+            )
         master_pin = getattr(deck, "master", None)
         deck_master_revision = (
             master_pin.master_revision

@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import sharp from "sharp";
 
 import {
@@ -25,6 +27,10 @@ import type {
   AuthoredHybridTypographyIssue,
 } from "./schema.ts";
 import { validateHybridDataImageUrl } from "./security.ts";
+import type { AuthoredHybridNativeChartSource } from "./native-chart.ts";
+import type { AuthoredHybridNativeTableSource } from "./native-table.ts";
+import { serializeNativeTableFrame } from "./native-table.ts";
+import { nativeCropSourceRectXml } from "./native-image-crop.ts";
 
 export const EMU_PER_CSS_PX = 9_525;
 export const MIN_EDITABLE_FONT_SIZE_PT = 9;
@@ -43,7 +49,9 @@ export type PreparedNativeElement =
       kind: "image";
       source: AuthoredHybridNativeImageElement;
       png: Buffer;
-    };
+    }
+  | { kind: "chart"; source: AuthoredHybridNativeChartSource }
+  | { kind: "table"; source: AuthoredHybridNativeTableSource };
 
 type AuthoredHybridNativeElement =
   | AuthoredHybridNativeTextElement
@@ -74,6 +82,54 @@ export interface LayerSelectionOptions {
   promoteTextAboveRaster?: boolean;
   promoteShapesAboveRaster?: boolean;
   retainedChildPaint?: "all" | "slide-root" | "none";
+}
+
+export interface LayerSafetyDemotion {
+  readonly elementId: string;
+  readonly reason: "z-band-unsafe";
+  readonly blockedByElementIds: readonly string[];
+}
+
+export interface LayerSafetyPlan {
+  readonly strategy: "single-backplate-fixed-point";
+  readonly fixedPointReached: true;
+  readonly closureIterations: number;
+  readonly closureDigest: string;
+  readonly selected: readonly PreparedNativeElement[];
+  readonly demotions: readonly LayerSafetyDemotion[];
+  readonly slideDemotedToRaster: boolean;
+  readonly paintGraph: readonly {
+    readonly elementId: string;
+    readonly parentElementId: string | null;
+    readonly paintOwner: "native" | "rasterIsland";
+    readonly zBand: number;
+    readonly opacity: number;
+    readonly blockedByElementIds: readonly string[];
+  }[];
+  readonly downgradeReceipt: {
+    readonly schemaVersion: "hybrid-layer-downgrade-receipt/browser-v1";
+    readonly state: "closed" | "slideRaster";
+    readonly reason: "no-closed-native-z-band" | null;
+    readonly demotedElementIds: readonly string[];
+    readonly receiptDigest: string;
+  };
+}
+
+function canonicalLayerValue(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalLayerValue).join(",")}]`;
+  }
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record).sort().map((key) =>
+    `${JSON.stringify(key)}:${canonicalLayerValue(record[key])}`
+  ).join(",")}}`;
+}
+
+function layerDigest(value: unknown): string {
+  return `sha256:${createHash("sha256")
+    .update(canonicalLayerValue(value), "utf8")
+    .digest("hex")}`;
 }
 
 /**
@@ -437,10 +493,10 @@ async function renderImageToBox(
   if (element.image.objectFit === "fill") {
     pipeline = input.resize(width, height, { fit: "fill" });
   } else if (element.image.objectFit === "cover") {
-    pipeline = input.resize(width, height, {
-      fit: "cover",
-      position: "centre",
-    });
+    // Keep the complete source bitmap. DrawingML's a:srcRect below carries
+    // the authored crop, so PowerPoint can edit object-position without a
+    // second lossy raster crop.
+    pipeline = input;
   } else if (element.image.objectFit === "contain") {
     pipeline = input.resize(width, height, {
       fit: "contain",
@@ -582,6 +638,36 @@ function rectsIntersectPx(a: AuthoredHybridRect, b: AuthoredHybridRect): boolean
     a.y < b.y + b.height && a.y + a.height > b.y;
 }
 
+function textPaintBoundsForCollision(
+  element: AuthoredHybridEditableTextElement,
+  correctedBounds: AuthoredHybridRect,
+  tolerance: number
+): AuthoredHybridRect {
+  // A standalone PowerPoint text box has transparent geometry outside its
+  // glyphs. An upper raster object may safely occupy that empty area because
+  // reordering the invisible box cannot change the slide paint. Prefer the
+  // browser-observed glyph union only when it is finite and still belongs to
+  // the corrected text box. Decorated/container text keeps its complete shape
+  // bounds because its fill or border is visible.
+  if (element.text.containerShape) return correctedBounds;
+  const painted = element.text.layout?.paintedTextBounds?.px;
+  if (
+    !painted ||
+    ![painted.x, painted.y, painted.width, painted.height].every(Number.isFinite) ||
+    painted.width <= 0 ||
+    painted.height <= 0 ||
+    !rectContains(correctedBounds, painted, tolerance)
+  ) {
+    return correctedBounds;
+  }
+  return {
+    x: painted.x - tolerance,
+    y: painted.y - tolerance,
+    width: painted.width + tolerance * 2,
+    height: painted.height + tolerance * 2,
+  };
+}
+
 function isStrictlyAbove(
   other: AuthoredHybridElement,
   element: AuthoredHybridElement
@@ -617,7 +703,13 @@ const ISSUE_FALLBACK_REASON = {
   "bounds-overflow": "typography-bounds-overflow",
   "backplate-collision": "typography-backplate-collision",
   "line-break-mismatch": "typography-line-break-mismatch",
+  "unqualified-ja-zh-text": "typography-unqualified-ja-zh-text",
 } as const;
+
+// Corrected Gate -1 qualifies the bounded Korean/Latin fixture only. Japanese
+// kana and CJK unified ideographs remain Fidelity/raster until a separately
+// sealed ja/zh font, cmap, embedding, COM and visual evidence profile exists.
+const UNQUALIFIED_JA_ZH_TEXT = /[\u3040-\u30ff\u3400-\u9fff]/u;
 
 /**
  * Fail-closed native typography gate. It rewrites mixed text into script-safe
@@ -645,6 +737,14 @@ export function preflightNativeTypography(
     runs.forEach((run, runIndex) => {
       if (run.text === "\n" || !run.text) return;
       const script = scriptForRun(run);
+      if (UNQUALIFIED_JA_ZH_TEXT.test(run.text)) {
+        issues.push({
+          code: "unqualified-ja-zh-text",
+          elementId: element.id,
+          runIndex,
+          script: "cjk",
+        });
+      }
       if (script === "common") return;
       const resolution = resolveScriptAwareTypeface(script, run.style.fontFamilies);
       const face = embeddedFaceForStyle(run.style);
@@ -705,6 +805,11 @@ export function preflightNativeTypography(
     if (!rectContains({ x: 0, y: 0, width: 1280, height: 720 }, correctedBounds, tolerance)) {
       issues.push({ code: "bounds-overflow", elementId: element.id });
     }
+    const collisionBounds = textPaintBoundsForCollision(
+      candidate,
+      correctedBounds,
+      tolerance
+    );
     if (
       options.backplateElements?.some(
         (other) =>
@@ -712,7 +817,7 @@ export function preflightNativeTypography(
           other.classification.mode === "raster" &&
           isStrictlyAbove(other, element) &&
           !isAncestorPaint(other, element) &&
-          rectsIntersectPx(correctedBounds, other.bounds.px)
+          rectsIntersectPx(collisionBounds, other.bounds.px)
       )
     ) {
       issues.push({ code: "backplate-collision", elementId: element.id });
@@ -809,7 +914,10 @@ export async function prepareNativeElements(
   return prepared;
 }
 
-function intersects(a: AuthoredHybridElement, b: AuthoredHybridElement): boolean {
+function intersects(
+  a: Pick<AuthoredHybridElement, "bounds"> | AuthoredHybridNativeChartSource | AuthoredHybridNativeTableSource,
+  b: Pick<AuthoredHybridElement, "bounds">,
+): boolean {
   const ar = a.bounds.px;
   const br = b.bounds.px;
   return (
@@ -847,14 +955,15 @@ function isRetainedChildPaint(
  * A single backplate is below every native object. Do not promote an object if
  * a higher raster object overlaps it, because that would invert their z-order.
  */
-export function selectLayerSafeNativeElements(
+export function planLayerSafeNativeElements(
   allElements: readonly AuthoredHybridElement[],
   prepared: readonly PreparedNativeElement[],
   allowedIds: ReadonlySet<string> = new Set(prepared.map((item) => item.source.id)),
   options: LayerSelectionOptions = {}
-): PreparedNativeElement[] {
+): LayerSafetyPlan {
   const eligible = prepared.filter((item) => allowedIds.has(item.source.id));
   const promotedIds = new Set(eligible.map((item) => item.source.id));
+  const demotionBlockers = new Map<string, Set<string>>();
   const isAbove = (other: AuthoredHybridElement, item: PreparedNativeElement) =>
     other.zOrder > item.source.zOrder ||
     (other.zOrder === item.source.zOrder &&
@@ -864,19 +973,16 @@ export function selectLayerSafeNativeElements(
   // rasterised element can in turn occlude a lower candidate, so converge to a
   // fixed point instead of making a single pass over the initial raster set.
   let changed = true;
+  let closureIterations = 0;
   while (changed) {
+    closureIterations += 1;
     changed = false;
     for (const item of eligible) {
       if (!promotedIds.has(item.source.id)) continue;
       if (options.promoteTextAboveRaster === true && item.kind === "text") continue;
       if (options.promoteShapesAboveRaster === true && item.kind === "shape") continue;
-      // A semantic HTML illustration is intentionally captured as one picture.
-      // Its child nodes still appear in the extraction list, so treating those
-      // children as raster occluders would incorrectly discard the picture.
-      if (isCompositeHtmlIllustration(item)) continue;
-      if (
-        allElements.some(
-          (other) =>
+      const blockers = allElements.filter(
+        (other) =>
             !promotedIds.has(other.id) &&
             isAbove(other, item) &&
             !isRetainedChildPaint(
@@ -884,22 +990,95 @@ export function selectLayerSafeNativeElements(
               other,
               options.retainedChildPaint ?? "all"
             ) &&
+            !isCapturedCompositeChildPaint(item, other) &&
             intersects(item.source, other)
-        )
-      ) {
+      );
+      if (blockers.length) {
         promotedIds.delete(item.source.id);
+        demotionBlockers.set(
+          item.source.id,
+          new Set(blockers.map((element) => element.id))
+        );
         changed = true;
       }
     }
   }
 
-  return eligible
+  const selected = eligible
     .filter((item) => promotedIds.has(item.source.id))
     .sort(
       (left, right) =>
         left.source.zOrder - right.source.zOrder ||
         left.source.sourceIndex - right.source.sourceIndex
     );
+  const demotions = eligible
+    .filter((item) => !promotedIds.has(item.source.id))
+    .map((item) => ({
+      elementId: item.source.id,
+      reason: "z-band-unsafe" as const,
+      blockedByElementIds: [...(demotionBlockers.get(item.source.id) ?? [])].sort(),
+    }));
+  const selectedBand = new Map(
+    selected.map((item, index) => [item.source.id, index + 1]),
+  );
+  const demotionById = new Map(
+    demotions.map((item) => [item.elementId, item.blockedByElementIds]),
+  );
+  const paintGraph = allElements
+    .map((element) => ({
+      elementId: element.id,
+      parentElementId: element.parentElementId ?? null,
+      paintOwner: selectedBand.has(element.id)
+        ? "native" as const
+        : "rasterIsland" as const,
+      zBand: selectedBand.get(element.id) ?? 0,
+      opacity: element.opacity,
+      blockedByElementIds: demotionById.get(element.id) ?? [],
+    }))
+    .sort((left, right) =>
+      left.zBand - right.zBand || left.elementId.localeCompare(right.elementId)
+    );
+  const closureUnsigned = {
+    schemaVersion: "hybrid-paint-graph-closure/browser-v1",
+    strategy: "single-backplate-fixed-point",
+    closureIterations,
+    paintGraph,
+  };
+  const slideDemotedToRaster = selected.length === 0;
+  const downgradeUnsigned = {
+    schemaVersion: "hybrid-layer-downgrade-receipt/browser-v1" as const,
+    state: slideDemotedToRaster ? "slideRaster" as const : "closed" as const,
+    reason: slideDemotedToRaster ? "no-closed-native-z-band" as const : null,
+    demotedElementIds: demotions.map((item) => item.elementId).sort(),
+  };
+  return {
+    strategy: "single-backplate-fixed-point",
+    fixedPointReached: true,
+    closureIterations,
+    closureDigest: layerDigest(closureUnsigned),
+    selected,
+    demotions,
+    slideDemotedToRaster,
+    paintGraph,
+    downgradeReceipt: {
+      ...downgradeUnsigned,
+      receiptDigest: layerDigest(downgradeUnsigned),
+    },
+  };
+}
+
+export function selectLayerSafeNativeElements(
+  allElements: readonly AuthoredHybridElement[],
+  prepared: readonly PreparedNativeElement[],
+  allowedIds: ReadonlySet<string> = new Set(prepared.map((item) => item.source.id)),
+  options: LayerSelectionOptions = {}
+): PreparedNativeElement[] {
+  return [...planLayerSafeNativeElements(
+    allElements,
+    prepared,
+    allowedIds,
+    options
+  ).selected];
 }
 
 function escapeXml(value: string): string {
@@ -946,6 +1125,23 @@ function isCompositeHtmlIllustration(item: PreparedNativeElement): boolean {
   if (item.kind !== "image") return false;
   const tagName = item.source.tagName.trim().toLowerCase();
   return tagName !== "img" && tagName !== "svg" && item.source.image.alt.trim().length > 0;
+}
+
+function isCapturedCompositeChildPaint(
+  item: PreparedNativeElement,
+  other: AuthoredHybridElement
+): boolean {
+  if (!isCompositeHtmlIllustration(item)) return false;
+  const ownerPath = item.source.domPath.trim();
+  const otherPath = other.domPath.trim();
+  if (!ownerPath || !otherPath || !otherPath.startsWith(`${ownerPath} > `)) {
+    return false;
+  }
+  // Semantic illustration snapshots intentionally omit descendant glyphs so
+  // those labels can remain editable. If a label fails native preflight, it is
+  // not represented by the picture and must keep the composite on the raster
+  // backplate. Non-text child paint is already captured in the picture PNG.
+  return other.classification.candidateKind !== "text" && !("text" in other);
 }
 
 function transformXml(element: AuthoredHybridElement): string {
@@ -1897,7 +2093,9 @@ function powerPointAutofitXml(): string {
   return "<a:noAutofit/>";
 }
 
-function nonVisualName(element: AuthoredHybridElement): string {
+function nonVisualName(
+  element: AuthoredHybridElement | AuthoredHybridNativeChartSource | AuthoredHybridNativeTableSource,
+): string {
   return `Presenton hybrid ${element.classification.mode === "native" ? element.classification.kind : "raster"} ${element.id}`;
 }
 
@@ -1909,7 +2107,11 @@ export function serializePreparedNativeElement(
 ): string {
   if (item.kind === "text") {
     const element = item.source;
-    const name = escapeXml(nonVisualName(element));
+    const name = escapeXml(
+      element.classification.mode === "raster" && element.text.containerShape
+        ? `Presenton raster visual fragment ${nonVisualId}`
+        : nonVisualName(element)
+    );
     const anchor = { top: "t", middle: "ctr", bottom: "b" }[
       element.text.style.verticalAlignment
     ];
@@ -1991,11 +2193,21 @@ export function serializePreparedNativeElement(
     });
     return shapes.join("");
   }
+  if (item.kind === "chart") {
+    if (!relationshipId) throw new Error("Native chart relationship is missing.");
+    const element = item.source;
+    const name = escapeXml(nonVisualName(element));
+    return `<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="${nonVisualId}" name="${name}" descr="presenton-authored-native-chart"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="${coordinateEmu(element.bounds.px.x)}" y="${coordinateEmu(element.bounds.px.y)}"/><a:ext cx="${Math.max(1, coordinateEmu(element.bounds.px.width))}" cy="${Math.max(1, coordinateEmu(element.bounds.px.height))}"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="${relationshipId}"/></a:graphicData></a:graphic></p:graphicFrame>`;
+  }
+  if (item.kind === "table") return serializeNativeTableFrame(item.source, nonVisualId);
   if (!relationshipId) throw new Error("Native image relationship is missing.");
   const element = item.source;
   const name = escapeXml(nonVisualName(element));
   const imageAlpha = Math.max(0, Math.min(100_000, Math.round(element.opacity * 100_000)));
-  return `<p:pic><p:nvPicPr><p:cNvPr id="${nonVisualId}" name="${name}" descr="${escapeXml(element.image.alt)}"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${relationshipId}">${imageAlpha < 100_000 ? `<a:alphaModFix amt="${imageAlpha}"/>` : ""}</a:blip><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr>${transformXml(element)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr></p:pic>`;
+  const sourceRect = element.image.objectFit === "cover"
+    ? nativeCropSourceRectXml(element.image.crop)
+    : "";
+  return `<p:pic><p:nvPicPr><p:cNvPr id="${nonVisualId}" name="${name}" descr="${escapeXml(element.image.alt)}"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${relationshipId}">${imageAlpha < 100_000 ? `<a:alphaModFix amt="${imageAlpha}"/>` : ""}</a:blip>${sourceRect}<a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr>${transformXml(element)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr></p:pic>`;
 }
 
 export function serializePreparedNativeElementUnderlay(

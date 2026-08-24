@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import math
 import os
 import re
 from dataclasses import dataclass
@@ -25,6 +26,7 @@ from models.authored_vnext.deck.scene import (
     SceneGroupElement,
     SceneImageElement,
     SceneShapeElement,
+    SceneTableCellStyle,
     SceneTableElement,
     SceneTextElement,
     SceneTextStyle,
@@ -50,7 +52,15 @@ from services.authored_vnext.master.digests import canonical_digest
 
 
 SceneMutationKind = Literal[
-    "text.replace", "geometry.update", "asset.set", "data.update"
+    "text.replace",
+    "text.style.update",
+    "geometry.update",
+    "shape.style.update",
+    "asset.set",
+    "image.crop.update",
+    "data.update",
+    "table.cell.update",
+    "table.column-widths.update",
 ]
 
 _SCENE_ELEMENT_ADAPTER = TypeAdapter(SceneElement)
@@ -948,7 +958,10 @@ def _shape(
         bounds=bounds,
         rotation=0,
         semantic_role=semantic_role,
-        editability=SceneEditability(geometry=geometry_editable),
+        editability=SceneEditability(
+            geometry=geometry_editable,
+            style=geometry_editable,
+        ),
         shape=shape,
         fill=fill,
         stroke=stroke,
@@ -2608,7 +2621,7 @@ def compile_slide_scene(
             element = SceneShapeElement(
                 kind="shape",
                 **common,
-                editability=SceneEditability(geometry=True),
+                editability=SceneEditability(geometry=True, style=True),
                 shape=body.shape,
                 fill=_color_token(contract, body.color_token),
             )
@@ -2730,6 +2743,7 @@ def apply_scene_element_mutation(
     element_id: str,
     mutation: SceneMutationKind,
     payload: dict[str, Any],
+    expected_scene_digest: str,
     expected_slide_revision: int,
     expected_slide_digest: str,
 ) -> DeckSceneIR:
@@ -2742,6 +2756,8 @@ def apply_scene_element_mutation(
     if slide_index is None:
         raise ValueError("scene mutation slide not found")
     slide = scene.slides[slide_index]
+    if scene.scene_digest != expected_scene_digest:
+        raise ValueError("scene mutation deck Scene CAS failed")
     if (
         slide.revision != expected_slide_revision
         or slide.slide_digest != expected_slide_digest
@@ -2762,13 +2778,51 @@ def apply_scene_element_mutation(
     asset_manifest = list(scene.asset_manifest)
     data_manifest = list(scene.data_manifest)
     if mutation == "text.replace":
-        _only(payload, {"text"}, mutation=mutation)
+        _only(payload, {"text", "runs"}, mutation=mutation)
         if not isinstance(element, SceneTextElement) or not element.editability.text:
             raise ValueError("scene element does not permit text editing")
         text = payload.get("text")
         if not isinstance(text, str) or not text.strip():
             raise ValueError("text.replace requires non-empty text")
         values["text"] = text
+        # Replacing plain text must not retain a stale run map.  Advanced
+        # callers may atomically provide the complete versioned run set.
+        values["runs"] = payload.get("runs")
+    elif mutation == "text.style.update":
+        _only(
+            payload,
+            {
+                "autoFit",
+                "color",
+                "fontFamily",
+                "fontSize",
+                "fontWeight",
+                "textAlign",
+            },
+            mutation=mutation,
+        )
+        if not isinstance(element, SceneTextElement) or not element.editability.style:
+            raise ValueError("scene element does not permit text style editing")
+        if not payload:
+            raise ValueError("text.style.update requires a style field")
+        style = (
+            element.style.model_dump(mode="json", by_alias=False)
+            if element.style is not None
+            else {}
+        )
+        for wire, field in (
+            ("color", "color"),
+            ("fontFamily", "font_family"),
+            ("fontSize", "font_size"),
+            ("fontWeight", "font_weight"),
+            ("textAlign", "text_align"),
+            ("autoFit", "auto_fit"),
+        ):
+            if wire in payload:
+                style[field] = payload[wire]
+        values["style"] = SceneTextStyle.model_validate(style).model_dump(
+            mode="json", by_alias=False, exclude_none=True
+        )
     elif mutation == "geometry.update":
         _only(payload, {"bounds", "rotation"}, mutation=mutation)
         if not element.editability.geometry:
@@ -2782,6 +2836,19 @@ def apply_scene_element_mutation(
             if not isinstance(rotation, (int, float)) or isinstance(rotation, bool):
                 raise ValueError("geometry.update rotation must be numeric")
             values["rotation"] = rotation
+    elif mutation == "shape.style.update":
+        _only(payload, {"fill", "stroke", "strokeWidth"}, mutation=mutation)
+        if not isinstance(element, SceneShapeElement) or not element.editability.style:
+            raise ValueError("scene element does not permit shape style editing")
+        if not payload:
+            raise ValueError("shape.style.update requires a style field")
+        for wire, field in (
+            ("fill", "fill"),
+            ("stroke", "stroke"),
+            ("strokeWidth", "stroke_width"),
+        ):
+            if wire in payload:
+                values[field] = payload[wire]
     elif mutation == "asset.set":
         _only(
             payload,
@@ -2823,6 +2890,14 @@ def apply_scene_element_mutation(
             asset_manifest = [
                 item for item in asset_manifest if item.asset_id != replacement.asset_id
             ] + [replacement]
+    elif mutation == "image.crop.update":
+        _only(payload, {"cropGeometry"}, mutation=mutation)
+        if not isinstance(element, SceneImageElement) or not element.editability.asset:
+            raise ValueError("scene element does not permit image crop editing")
+        crop_geometry = payload.get("cropGeometry")
+        if not isinstance(crop_geometry, dict):
+            raise ValueError("image.crop.update requires cropGeometry")
+        values["crop_geometry"] = crop_geometry
     elif mutation == "data.update":
         _only(
             payload,
@@ -2866,6 +2941,106 @@ def apply_scene_element_mutation(
             data_manifest = [
                 item for item in data_manifest if item.data_id != replacement.data_id
             ] + [replacement]
+    elif mutation in {"table.cell.update", "table.column-widths.update"}:
+        if not isinstance(element, SceneTableElement) or not element.editability.data:
+            raise ValueError("scene element does not permit table editing")
+        existing_index = next(
+            (
+                index
+                for index, item in enumerate(data_manifest)
+                if item.data_id == element.data_id
+                and item.data_digest == element.data_digest
+                and item.kind == "table"
+            ),
+            None,
+        )
+        if existing_index is None:
+            raise ValueError("scene table data manifest binding is missing")
+        data_payload = dict(data_manifest[existing_index].payload)
+        cells = [list(row) for row in data_payload["cells"]]
+        if mutation == "table.cell.update":
+            _only(
+                payload,
+                {
+                    "row",
+                    "column",
+                    "text",
+                    "fill",
+                    "borders",
+                    "horizontalAlign",
+                    "verticalAlign",
+                },
+                mutation=mutation,
+            )
+            row = payload.get("row")
+            column = payload.get("column")
+            if (
+                isinstance(row, bool)
+                or not isinstance(row, int)
+                or isinstance(column, bool)
+                or not isinstance(column, int)
+                or row < 0
+                or column < 0
+                or row >= len(cells)
+                or column >= len(cells[0])
+            ):
+                raise ValueError("table.cell.update row or column is out of range")
+            if set(payload) == {"row", "column"}:
+                raise ValueError("table.cell.update requires a cell mutation")
+            if "text" in payload:
+                text = payload["text"]
+                if not isinstance(text, str) or len(text) > 5000:
+                    raise ValueError("table.cell.update text is invalid")
+                cells[row][column] = text
+            style_fields = {
+                key: payload[key]
+                for key in ("fill", "borders", "horizontalAlign", "verticalAlign")
+                if key in payload
+            }
+            if style_fields:
+                styles = data_payload.get("cellStyles")
+                if styles is None:
+                    styles = [
+                        [{} for _ in range(len(cells[0]))]
+                        for _ in range(len(cells))
+                    ]
+                else:
+                    styles = [list(style_row) for style_row in styles]
+                current_style = dict(styles[row][column])
+                current_style.update(style_fields)
+                styles[row][column] = SceneTableCellStyle.model_validate(
+                    current_style
+                ).model_dump(mode="json", by_alias=True, exclude_none=True)
+                data_payload["cellStyles"] = styles
+        else:
+            _only(payload, {"columnWidthsPt"}, mutation=mutation)
+            widths = payload.get("columnWidthsPt")
+            if (
+                not isinstance(widths, list)
+                or len(widths) != len(cells[0])
+                or any(
+                    isinstance(width, bool)
+                    or not isinstance(width, (int, float))
+                    or not math.isfinite(float(width))
+                    or float(width) <= 0
+                    for width in widths
+                )
+                or abs(sum(float(width) for width in widths) - element.bounds.width * 0.75) > 0.25
+            ):
+                raise ValueError(
+                    "table.column-widths.update must provide every column width in points and match the table width"
+                )
+            data_payload["columnWidthsPt"] = widths
+        data_payload["cells"] = cells
+        data_digest = scene_digest(data_payload)
+        replacement = SceneDataManifestEntry(
+            data_id=element.data_id,
+            data_digest=data_digest,
+            kind="table",
+            payload=data_payload,
+        )
+        data_manifest[existing_index] = replacement
+        values["data_digest"] = data_digest
     else:  # pragma: no cover - Literal plus request validation closes this
         raise ValueError(f"unsupported scene mutation: {mutation}")
     updated_element = _SCENE_ELEMENT_ADAPTER.validate_python(values)
@@ -2875,6 +3050,7 @@ def apply_scene_element_mutation(
         slide_id=slide.slide_id,
         revision=slide.revision + 1,
         elements=updated_elements,
+        hybrid_export=slide.hybrid_export,
     )
     slides = list(scene.slides)
     slides[slide_index] = updated_slide
@@ -2883,6 +3059,7 @@ def apply_scene_element_mutation(
         revision=scene.revision + 1,
         composition_digest=scene.composition_digest,
         source_digest=scene.source_digest,
+        hybrid_profile_id=scene.hybrid_profile_id,
         slides=slides,
         asset_manifest=sorted(asset_manifest, key=lambda item: item.asset_id),
         data_manifest=sorted(data_manifest, key=lambda item: item.data_id),

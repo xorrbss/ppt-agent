@@ -367,6 +367,41 @@ def ensure_authored_qids(html: str) -> str:
     return "".join(parts)
 
 
+def validate_declared_authored_qids(html: str) -> tuple[str, ...]:
+    """Validate a model-declared QID namespace without repairing the source.
+
+    New semantic dual-output candidates use ``data-qid`` as their element identity.
+    Unlike the legacy compatibility migration above, this boundary must never invent,
+    replace, or de-duplicate an identifier: a retry is safer than publishing a source
+    whose semantic identity differs from what Authored declared.
+    """
+
+    if not isinstance(html, str):
+        raise TypeError("authored HTML must be a string")
+    parser = _StartTagCollector()
+    parser.feed(html)
+    parser.close()
+    qids: list[str] = []
+    used: set[str] = set()
+    for tag, raw_attrs, _raw_tag in parser.tags:
+        attrs = _attrs_dict(raw_attrs)
+        raw_qid = attrs.get("data-qid")
+        needs_qid = _is_edit_target(tag, attrs)
+        if needs_qid and raw_qid is None:
+            raise ValueError(f"authored_semantic_qid_missing:{tag}")
+        if raw_qid is None:
+            continue
+        if not is_valid_authored_qid(raw_qid):
+            raise ValueError("authored_semantic_qid_invalid")
+        if raw_qid in used:
+            raise ValueError("authored_semantic_qid_duplicate")
+        used.add(raw_qid)
+        qids.append(raw_qid)
+    if not qids:
+        raise ValueError("authored_semantic_qid_missing")
+    return tuple(qids)
+
+
 def _coerce_number(value: object, default: float = 0.0) -> float:
     try:
         number = float(value)
@@ -446,6 +481,14 @@ def build_compact_dom_map(
                     "overflowX",
                     "overflowY",
                     "textAlign",
+                    "display",
+                    "flexDirection",
+                    "alignItems",
+                    "justifyContent",
+                    "paddingTop",
+                    "paddingRight",
+                    "paddingBottom",
+                    "paddingLeft",
                 }
             }
             if isinstance(style_raw, Mapping)

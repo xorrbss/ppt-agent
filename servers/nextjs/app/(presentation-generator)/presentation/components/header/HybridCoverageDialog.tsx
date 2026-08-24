@@ -14,6 +14,12 @@ import type { PresentationExportQualityReport } from "@/lib/presentation-export-
 export type HybridCoverageManifest = {
   schemaVersion: string;
   mode: "hybrid";
+  cjkCoverageProfileId?: string;
+  nativeTextPolicy?: {
+    koreanLatin: "bounded-native";
+    japanese: "raster-required";
+    chinese: "raster-required";
+  };
   source: {
     presentationRevision: number;
     sourceDigest: string;
@@ -81,6 +87,10 @@ const HybridCoverageDialog = ({
           </div>
           <div className="rounded-lg border border-slate-200 p-3 text-xs text-slate-700">
             <p>export attempt: {manifest.source.exportAttemptId ?? "미기록"}</p>
+            <p className="mt-1">CJK coverage: {manifest.cjkCoverageProfileId ?? "미기록"}</p>
+            <p className="mt-1 text-amber-800">
+              한국어/Latin은 bounded native 후보이며, 일본어·중국어는 별도 봉인 전까지 unsupported native · Fidelity/raster 유지
+            </p>
             <p className="mt-1">visualParity: {manifest.visualParity ?? "not-verified"}</p>
             <p className="mt-1 break-all">renderer digest: {manifest.source.sourceDigest}</p>
             <p className="mt-1 break-all">canonical digest: {manifest.source.canonicalSourceDigest ?? "미기록"}</p>

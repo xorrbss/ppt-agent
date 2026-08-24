@@ -467,6 +467,11 @@ async def _extract_uploaded_document(
     ) from last_error
 
 
+_UPLOADED_IMAGE_SUFFIXES = frozenset(
+    {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff", ".svg"}
+)
+
+
 @dataclass(frozen=True, slots=True)
 class UploadedDocumentProvider:
     provider_id: str = "uploaded_document"
@@ -506,7 +511,21 @@ class UploadedDocumentProvider:
             )
             if asset.expires_at is not None:
                 expiry_candidates.append(asset.expires_at)
-            if private_path.suffix.lower() in {".txt", ".md", ".markdown", ".csv", ".tsv"}:
+            suffix = private_path.suffix.lower()
+            if suffix in _UPLOADED_IMAGE_SUFFIXES or (
+                asset.media_type or ""
+            ).lower().startswith("image/"):
+                # Image uploads are semantic generation assets, not text
+                # documents.  Keep them in the same immutable reference
+                # snapshot so authored generation can resolve the binding and
+                # register a source-image candidate, while giving outline
+                # generation a small non-empty descriptor instead of sending
+                # the bytes through the document extractor.
+                document = (
+                    "Uploaded image available for authored slide placement: "
+                    f"{asset.original_name}"
+                )
+            elif suffix in {".txt", ".md", ".markdown", ".csv", ".tsv"}:
                 raw = await asyncio.to_thread(private_path.read_bytes)
                 try:
                     document = raw.decode("utf-8-sig")

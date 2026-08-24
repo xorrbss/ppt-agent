@@ -53,7 +53,7 @@ const HybridExportHistoryDialog = ({
       <DialogHeader>
         <DialogTitle>Hybrid 내보내기 이력 및 증거</DialogTitle>
         <DialogDescription>
-          같은 revision·형식의 후속 성공은 이전 실패를 삭제하지 않고 해결됨으로 표시합니다.
+          같은 revision·형식의 후속 성공은 이전 실패를 삭제하지 않고 해결됨으로 표시합니다. 이력·다운로드·구조 검사만으로 promotion 또는 배포 승인이 되지 않습니다.
         </DialogDescription>
       </DialogHeader>
       {loading ? <p className="text-sm text-slate-600">이력을 불러오는 중…</p> : null}
@@ -83,7 +83,7 @@ const HybridExportHistoryDialog = ({
                 <p className="mt-1 text-xs text-slate-500">후속 attempt: {attempt.supersededByAttemptId}</p>
               ) : null}
               <div className="mt-3 rounded-md bg-slate-50 p-2 text-xs">
-                <p>증거 상태: {attempt.evidence.status} · visualParity: {visualParityLabel(attempt.evidence.visualParity)}</p>
+                <p>증거 상태: {attempt.evidence.status} · visualParity: {visualParityLabel(attempt.evidence.visualParity)} · promotion 근거 아님</p>
                 <p className="mt-1 break-all">canonical: {displayDigest(attempt.evidence.canonicalSourceDigest)}</p>
                 <p className="mt-1 break-all">renderer: {displayDigest(attempt.evidence.rendererSourceDigest)}</p>
                 <p className="mt-1 break-all">PPTX: {displayDigest(attempt.evidence.pptxSha256)}</p>
@@ -91,6 +91,13 @@ const HybridExportHistoryDialog = ({
                 <p className="mt-1">render PNG digest {attempt.evidence.slidePngSha256.length}개 · coverage manifest {displayDigest(attempt.evidence.coverageManifestSha256)}</p>
                 {attempt.evidence.expiresAt ? <p className="mt-1 text-amber-800">증거 만료: {attempt.evidence.expiresAt}</p> : null}
               </div>
+              {attempt.evidence.visualParity !== "passed" ? (
+                <p className="mt-2 text-xs text-amber-800">
+                  {attempt.evidence.visualParity === "failed"
+                    ? "이 attempt는 PowerPoint 시각 검증 실패로 release promotion에 사용할 수 없습니다."
+                    : "PowerPoint 시각 검증이 완료되지 않았으므로 이 attempt는 release promotion에 사용할 수 없습니다."}
+                </p>
+              ) : null}
               <p className="mt-2 text-xs">
                 실제 native: 텍스트 {attempt.evidence.nativeText ?? "미기록"} · 이미지 {attempt.evidence.nativeImage ?? "미기록"} · 도형 {attempt.evidence.nativeShape ?? "미기록"} · 표 {attempt.evidence.nativeTable ?? "미기록"} · 차트 {attempt.evidence.nativeChart ?? "미기록"} · raster {attempt.evidence.rasterRemaining ?? "미기록"}
               </p>

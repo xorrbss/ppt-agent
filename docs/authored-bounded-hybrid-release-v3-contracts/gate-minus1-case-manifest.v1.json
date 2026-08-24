@@ -1,0 +1,288 @@
+{
+  "schemaVersion": "authored-case-manifest/v1",
+  "manifestSchemaId": "urn:presenton:authored:gate-minus1-case-manifest:v1",
+  "manifestId": "authored-gate-minus1-com-feasibility.attempt03-reference.v1",
+  "gate": "gate-minus1",
+  "manifestStatus": "retrospective-reference-only",
+  "canonicalProfileId": "presenton-canonical-json/v2",
+  "policyCandidateId": "authored-evidence-policy/v2-frozen-20260824-attempt09-build20326",
+  "policyCandidateDigest": "sha256:2fd68afb7e40a6cffe36e9bdf8a099f480b492ddeff110159dbf4d934f1da6c5",
+  "requiredEnvironmentDigest": "sha256:d6ca3ad1b02fcb10c7421532c7762d8c684f2927574023e9faaf44d6fc9b2260",
+  "inputArtifacts": [
+    {
+      "artifactId": "gate-minus1-input-pptx",
+      "role": "input-pptx",
+      "versionId": "sha256-50ffe66fb1288107bc0a338c19d47c9344ae347e42de732713fe05a7a4ea0823",
+      "mediaType": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "byteLength": 13295163,
+      "sha256": "sha256:50ffe66fb1288107bc0a338c19d47c9344ae347e42de732713fe05a7a4ea0823",
+      "locator": "evidence://authored-bounded-gate-minus1-20260823T173740KST/attempt-03/gate-minus1-input.pptx"
+    }
+  ],
+  "expectedCaseCount": 18,
+  "requiredCaseIdsDigest": "sha256:37b5a3dc034e9eab066ffcdd3e6dc2bb143af9123e75b732da10be71cc2c51f1",
+  "aggregateDigestProjections": {
+    "requiredCaseIdsDigest": { "canonicalProfileId": "presenton-canonical-json/v2", "includedJsonPath": "$.cases[*].caseId", "ordering": "case ordinal ascending", "excludedJsonPaths": [] }
+  },
+  "executionSealPolicy": {
+    "sealedExecutionRequiresFreshPins": true,
+    "requiredPinnedArtifactRoles": ["input-pptx", "probe-script", "dialog-watcher-script", "cleanup-census-script", "environment-receipt", "source-tree-census"],
+    "inputAndEnvironmentDigestEqualityRequired": true,
+    "executionArtifactRoleSetDigest": "sha256:c952db10303f25aea35ebed316e1a866be2924135964884c6103a0c66ae90190",
+    "executionSealSigned": true,
+    "executionSealSchemaId": "urn:presenton:authored:gate-minus1-execution-seal:v1",
+    "executionSealOuterArtifactRefRequiredInResult": true,
+    "manifestCoreDigestProjection": { "algorithm": "sha256", "canonicalProfileId": "presenton-canonical-json/v2", "includedJsonPath": "$", "excludedJsonPaths": ["$.executionPins", "$.manifestDigest"] }
+  },
+  "requiredCommonObservationFields": [
+    "environmentReceiptDigest",
+    "fontInventoryDigest",
+    "officeVersionBuildBitness",
+    "inputPptxDigest",
+    "inputOoxmlReadbackDigest",
+    "firstOpenComObservationDigest",
+    "firstOpenRenderArtifactDigests",
+    "savedCopyPptxDigest",
+    "savedOoxmlReadbackDigest",
+    "reopenInputPptxDigest",
+    "reopenComObservationDigest",
+    "reopenRenderArtifactDigests",
+    "originalInputDigestAfterRun",
+    "elapsedMs",
+    "rawArtifactRefs"
+    ,"powerPointProcessCensusBeforeOpen"
+    ,"powerPointProcessCensusAfterCleanupGrace"
+    ,"powerPointProcessCensusAfterCleanupTimeout"
+    ,"unexpectedPowerPointPidCountAfterGrace"
+    ,"unexpectedPowerPointPidCountAfterTimeout"
+    ,"cleanupState"
+  ],
+  "observationContract": {
+    "schemaId": "urn:presenton:authored:gate-minus1-result-set:v1",
+    "semanticValidatorContractDigest": "sha256:9a0412e8d53acee8d4f605128158c25e29bbafe191d68155103bfc60e141941a",
+    "fieldDeclarationRule": "Each ordered result binds the exact expectedObservationFields list, observedFieldIds, missingObservationFieldIds, artifact IDs, and observation digest.",
+    "fractionalNumberRule": "forbidden; use integer fields with unit and scale in the field name",
+    "missingFieldDisposition": "blocked",
+    "comErrorRule": "Every COM getter records hresult and valueState=exact|mixed|inaccessible|error; Boolean coercion is forbidden."
+  },
+  "cases": [
+    {
+      "ordinal": 1,
+      "caseId": "gminus1.text.utf16-surrogate",
+      "caseKind": "feasibility",
+      "inputArtifactIds": ["gate-minus1-input-pptx"],
+      "inputArtifactDigest": "sha256:50ffe66fb1288107bc0a338c19d47c9344ae347e42de732713fe05a7a4ea0823",
+      "locator": { "slideNumber": 1, "shapeName": "case-utf16-surrogate" },
+      "expectedObservationFields": ["sourceUtf16LeHex", "emittedUtf16LeHex", "comTextUtf16LeHex", "comLength", "charactersStartLengthText", "firstReopenEquality"],
+      "assertions": ["A+U+1F680+B is four UTF-16 code units", "Characters positions inside the surrogate collapse by identical Start/Length", "first-open and reopen maps are equal"],
+      "allowedDispositions": ["native-observable", "raster-required", "blocked", "failed"]
+    },
+    {
+      "ordinal": 2,
+      "caseId": "gminus1.text.combining-nfc",
+      "caseKind": "feasibility",
+      "inputArtifactIds": ["gate-minus1-input-pptx"],
+      "inputArtifactDigest": "sha256:50ffe66fb1288107bc0a338c19d47c9344ae347e42de732713fe05a7a4ea0823",
+      "locator": { "slideNumber": 1, "shapeName": "case-combining-nfc" },
+      "expectedObservationFields": ["sourceUtf16LeHex", "normalizedNfcUtf16LeHex", "comTextUtf16LeHex", "charactersStartLengthText", "firstReopenEquality"],
+      "assertions": ["serializer NFC normalization occurs before span mapping", "PowerPoint does not supply normalization authority", "first-open and reopen emitted streams are equal"],
+      "allowedDispositions": ["native-observable-bounded", "raster-required", "blocked", "failed"]
+    },
+    {
+      "ordinal": 3,
+      "caseId": "gminus1.text.newline-crlf",
+      "caseKind": "feasibility",
+      "inputArtifactIds": ["gate-minus1-input-pptx"],
+      "inputArtifactDigest": "sha256:50ffe66fb1288107bc0a338c19d47c9344ae347e42de732713fe05a7a4ea0823",
+      "locator": { "slideNumber": 1, "shapeName": "case-newline-crlf" },
+      "expectedObservationFields": ["sourceNewlineTokens", "ooxmlParagraphTokens", "comTextUtf16LeHex", "paragraphTerminatorRanges", "firstReopenEquality"],
+      "assertions": ["CRLF source maps to OOXML paragraph boundary and one COM CR", "CR and VT are not conflated"],
+      "allowedDispositions": ["native-observable", "raster-required", "blocked", "failed"]
+    },
+    {
+      "ordinal": 4,
+      "caseId": "gminus1.text.soft-break",
+      "caseKind": "feasibility",
+      "inputArtifactIds": ["gate-minus1-input-pptx"],
+      "inputArtifactDigest": "sha256:50ffe66fb1288107bc0a338c19d47c9344ae347e42de732713fe05a7a4ea0823",
+      "locator": { "slideNumber": 1, "shapeName": "case-soft-break" },
+      "expectedObservationFields": ["ooxmlBreakTokens", "comTextUtf16LeHex", "softBreakRanges", "firstReopenEquality"],
+      "assertions": ["OOXML a:br maps to COM VT U+000B", "soft break remains distinct from paragraph CR"],
+      "allowedDispositions": ["native-observable", "raster-required", "blocked", "failed"]
+    },
+    {
+      "ordinal": 5,
+      "caseId": "gminus1.text.empty-repeated-whitespace",
+      "caseKind": "feasibility",
+      "inputArtifactIds": ["gate-minus1-input-pptx"],
+      "inputArtifactDigest": "sha256:50ffe66fb1288107bc0a338c19d47c9344ae347e42de732713fe05a7a4ea0823",
+      "locator": { "slideNumber": 1, "shapeName": "case-empty-repeated-whitespace" },
+      "expectedObservationFields": ["ooxmlOrderedTextTokens", "comTextUtf16LeHex", "whitespaceRanges", "emptyParagraphCount", "firstReopenEquality"],
+      "assertions": ["repeated text is mapped by position", "zero-length runs are not semantic carriers", "whitespace-only text remains exact"],
+      "allowedDispositions": ["native-observable-bounded", "raster-required", "blocked", "failed"]
+    },
+    {
+      "ordinal": 6,
+      "caseId": "gminus1.text.mixed-bold-italic",
+      "caseKind": "feasibility",
+      "inputArtifactIds": ["gate-minus1-input-pptx"],
+      "inputArtifactDigest": "sha256:50ffe66fb1288107bc0a338c19d47c9344ae347e42de732713fe05a7a4ea0823",
+      "locator": { "slideNumber": 1, "shapeName": "case-mixed-bold-italic" },
+      "expectedObservationFields": ["wholeRangeTriStateRaw", "runStartLength", "runBoldRaw", "runItalicRaw", "runFontName", "runFontNameFarEast", "runSizeMicroPoint", "firstReopenEquality"],
+      "assertions": ["whole-range mixed equals raw -2 and is never Boolean-coerced", "bold italic and plain runs remain exact"],
+      "allowedDispositions": ["native-observable", "raster-required", "blocked", "failed"]
+    },
+    {
+      "ordinal": 7,
+      "caseId": "gminus1.text.east-asian-typeface",
+      "caseKind": "feasibility",
+      "inputArtifactIds": ["gate-minus1-input-pptx"],
+      "inputArtifactDigest": "sha256:50ffe66fb1288107bc0a338c19d47c9344ae347e42de732713fe05a7a4ea0823",
+      "locator": { "slideNumber": 1, "shapeName": "case-east-asian-typeface" },
+      "expectedObservationFields": ["runStartLength", "latinFamily", "eastAsianFamily", "ooxmlLatinTypeface", "ooxmlEastAsianTypeface", "sourceFaceDigest", "embeddedPartDigest", "firstReopenEquality"],
+      "assertions": ["COM family labels are observation only", "exact face requires registry plus OOXML plus COM conjunction"],
+      "allowedDispositions": ["native-observable-bounded", "raster-required", "blocked", "failed"]
+    },
+    {
+      "ordinal": 8,
+      "caseId": "gminus1.text.autofit-none",
+      "caseKind": "feasibility",
+      "inputArtifactIds": ["gate-minus1-input-pptx"],
+      "inputArtifactDigest": "sha256:50ffe66fb1288107bc0a338c19d47c9344ae347e42de732713fe05a7a4ea0823",
+      "locator": { "slideNumber": 1, "shapeName": "case-autofit-none" },
+      "expectedObservationFields": ["ooxmlBodyPrAutofit", "comAutoSizeRaw", "fontSizeMicroPoint", "lineSpans", "lineBoundsMicroPoint", "firstReopenEquality"],
+      "assertions": ["OOXML noAutofit and COM AutoSize=0 agree", "line membership and size remain exact"],
+      "allowedDispositions": ["native-observable", "raster-required", "blocked", "failed"]
+    },
+    {
+      "ordinal": 9,
+      "caseId": "gminus1.text.autofit-shrink",
+      "caseKind": "feasibility",
+      "inputArtifactIds": ["gate-minus1-input-pptx"],
+      "inputArtifactDigest": "sha256:50ffe66fb1288107bc0a338c19d47c9344ae347e42de732713fe05a7a4ea0823",
+      "locator": { "slideNumber": 1, "shapeName": "case-autofit-shrink" },
+      "expectedObservationFields": ["ooxmlBodyPrAutofit", "comAutoSizeRaw", "requestedFontSizeMicroPoint", "effectiveFontSizeMicroPoint", "lineSpans", "firstReopenEquality"],
+      "assertions": ["shrink behavior is measured but excluded from bounded native admission", "pre-admission outcome is raster-required"],
+      "allowedDispositions": ["raster-required", "blocked", "failed"]
+    },
+    {
+      "ordinal": 10,
+      "caseId": "gminus1.text.line-bounds-long-ko",
+      "caseKind": "feasibility",
+      "inputArtifactIds": ["gate-minus1-input-pptx"],
+      "inputArtifactDigest": "sha256:50ffe66fb1288107bc0a338c19d47c9344ae347e42de732713fe05a7a4ea0823",
+      "locator": { "slideNumber": 1, "shapeName": "case-line-bounds-long-ko" },
+      "expectedObservationFields": ["lineCount", "lineStartLengthTextDigest", "lineBoundsMicroPoint", "lineBoundsRoundedEmu", "firstReopenDeltaEmu", "renderMetricsFixedInteger"],
+      "assertions": ["line membership drift is zero-tolerance", "maximum rounded bound drift does not exceed 254 EMU"],
+      "allowedDispositions": ["native-observable", "raster-required", "blocked", "failed"]
+    },
+    {
+      "ordinal": 11,
+      "caseId": "gminus1.text.small-overflow",
+      "caseKind": "feasibility",
+      "inputArtifactIds": ["gate-minus1-input-pptx"],
+      "inputArtifactDigest": "sha256:50ffe66fb1288107bc0a338c19d47c9344ae347e42de732713fe05a7a4ea0823",
+      "locator": { "slideNumber": 1, "shapeName": "case-small-overflow" },
+      "expectedObservationFields": ["shapeRectEmu", "marginEmu", "textBoundsMicroPoint", "interiorRectEmu", "overflowXEmu", "overflowYEmu", "lineSpans", "renderMetricsFixedInteger"],
+      "assertions": ["overflow is measured against the interior rectangle", "residual not above 3175 EMU with no line or visual clipping drift"],
+      "allowedDispositions": ["native-observable-bounded", "raster-required", "blocked", "failed"]
+    },
+    {
+      "ordinal": 12,
+      "caseId": "gminus1.qid.shape-tags-roundtrip",
+      "caseKind": "feasibility",
+      "inputArtifactIds": ["gate-minus1-input-pptx"],
+      "inputArtifactDigest": "sha256:50ffe66fb1288107bc0a338c19d47c9344ae347e42de732713fe05a7a4ea0823",
+      "locator": { "slideNumbers": [1, 3], "shapeNames": ["case-small-overflow", "case-chart-line", "case-chart-pie"] },
+      "expectedObservationFields": ["displayName", "comTagMap", "ooxmlTagRelationshipGraph", "decodedSemanticTagMap", "duplicateOrOrphanCount", "firstReopenEquality"],
+      "assertions": ["tag keys are unique", "values use uppercase-safe encoded carrier form in production design", "raw part path and rId are not authority"],
+      "allowedDispositions": ["native-observable", "blocked", "failed"]
+    },
+    {
+      "ordinal": 13,
+      "caseId": "gminus1.package.presentation-tags-roundtrip",
+      "caseKind": "feasibility",
+      "inputArtifactIds": ["gate-minus1-input-pptx"],
+      "inputArtifactDigest": "sha256:50ffe66fb1288107bc0a338c19d47c9344ae347e42de732713fe05a7a4ea0823",
+      "locator": { "presentation": true },
+      "expectedObservationFields": ["comTagMap", "ooxmlTagRelationshipGraph", "decodedMarkerMap", "duplicateOrOrphanCount", "firstReopenEquality"],
+      "assertions": ["three required marker keys are present exactly once", "production carrier values use uppercase-safe encoding", "semantic decoded values equal canonical plan attempt and policy identities"],
+      "allowedDispositions": ["native-observable", "blocked", "failed"]
+    },
+    {
+      "ordinal": 14,
+      "caseId": "gminus1.font.saved-embedded-parts",
+      "caseKind": "feasibility",
+      "inputArtifactIds": ["gate-minus1-input-pptx"],
+      "inputArtifactDigest": "sha256:50ffe66fb1288107bc0a338c19d47c9344ae347e42de732713fe05a7a4ea0823",
+      "locator": { "packageParts": ["ppt/fonts/*", "ppt/presentation.xml", "ppt/_rels/presentation.xml.rels"] },
+      "expectedObservationFields": ["sourceContainerDigest", "ttcIndex", "extractedSfntDigest", "cmapDigest", "fsType", "embeddedFontRelationship", "inputEmbeddedPartDigest", "savedEmbeddedPartDigest"],
+      "assertions": ["six required face definitions are inventory-eligible", "six embedded part digest and length pairs persist", "multi-host equality is deferred to Gate 1 and cannot be inferred here"],
+      "allowedDispositions": ["native-observable-bounded", "raster-required", "blocked", "failed"]
+    },
+    {
+      "ordinal": 15,
+      "caseId": "gminus1.paint.p-bg-roundtrip",
+      "caseKind": "feasibility",
+      "inputArtifactIds": ["gate-minus1-input-pptx"],
+      "inputArtifactDigest": "sha256:50ffe66fb1288107bc0a338c19d47c9344ae347e42de732713fe05a7a4ea0823",
+      "locator": { "slideNumber": 2 },
+      "expectedObservationFields": ["followMasterBackground", "comFillType", "comFillRgb", "slideXmlPBgCount", "slideXmlSrgb", "picturePlaneCount", "effectsCount", "firstReopenRenderMetricsFixedInteger"],
+      "assertions": ["only opaque solid p:bg is admitted", "image raster plane remains one picture underlay", "p:bg and picture raster planes never coexist"],
+      "allowedDispositions": ["native-observable-bounded", "raster-required", "blocked", "failed"]
+    },
+    {
+      "ordinal": 16,
+      "caseId": "gminus1.chart.line-style-roundtrip",
+      "caseKind": "feasibility",
+      "inputArtifactIds": ["gate-minus1-input-pptx"],
+      "inputArtifactDigest": "sha256:50ffe66fb1288107bc0a338c19d47c9344ae347e42de732713fe05a7a4ea0823",
+      "locator": { "slideNumber": 3, "shapeName": "case-chart-line" },
+      "expectedObservationFields": ["chartType", "seriesCount", "seriesName", "categories", "finiteValuesBinary64", "seriesLineRgb", "titleText", "firstReopenEquality", "renderMetricsFixedInteger"],
+      "assertions": ["only non-stacked non-smoothed line with explicit solid RGB and default text style is bounded-native", "any unsupported chart typography or marker rule rasterizes"],
+      "allowedDispositions": ["native-observable-bounded", "raster-required", "blocked", "failed"]
+    },
+    {
+      "ordinal": 17,
+      "caseId": "gminus1.chart.pie-point-style-roundtrip",
+      "caseKind": "feasibility",
+      "inputArtifactIds": ["gate-minus1-input-pptx"],
+      "inputArtifactDigest": "sha256:50ffe66fb1288107bc0a338c19d47c9344ae347e42de732713fe05a7a4ea0823",
+      "locator": { "slideNumber": 3, "shapeName": "case-chart-pie" },
+      "expectedObservationFields": ["chartType", "seriesCount", "categoryCount", "finiteValuesBinary64", "pointIndexCategoryValueFillRgb", "titleText", "firstReopenEquality", "renderMetricsFixedInteger"],
+      "assertions": ["only one-series non-3D pie with one explicit solid RGB per point and default text style is bounded-native", "donut and non-pie families rasterize under this policy"],
+      "allowedDispositions": ["native-observable-bounded", "raster-required", "blocked", "failed"]
+    },
+    {
+      "ordinal": 18,
+      "caseId": "gminus1.com.repair-dialog-witness",
+      "caseKind": "feasibility",
+      "inputArtifactIds": ["gate-minus1-input-pptx"],
+      "inputArtifactDigest": "sha256:50ffe66fb1288107bc0a338c19d47c9344ae347e42de732713fe05a7a4ea0823",
+      "locator": { "presentation": true, "visibleWindow": true },
+      "expectedObservationFields": ["visibleDesktopIdentity", "powerPointHwnd", "dialogWatcherStartedAt", "openCallStartedAt", "openCallReturnedAt", "observedDialogEvents", "attendedWitnessDigest", "quarantineDecision"],
+      "assertions": ["COM Open success is not negative repair-dialog evidence", "missing watcher or attended witness is blocked", "repair dialog is never auto-dismissed or retried into success"],
+      "allowedDispositions": ["native-observable-bounded", "blocked", "failed"]
+    }
+  ],
+  "resultSetRules": {
+    "ordering": "manifest-ordinal-ascending",
+    "skipStateAllowed": false,
+    "requiredIdSetEquality": true,
+    "missingExecutionDisposition": "blocked",
+    "caseToSuiteAggregation": "failed if any case failed; else blocked if any case is blocked or not-verified or any required observation is missing; else feasible",
+    "resultSetDigestProjection": {
+      "includedJsonPath": "$",
+      "excludedJsonPaths": ["$.resultSetDigest"],
+      "digestCoversAllPresentFieldsExceptResultSetDigest": true,
+      "requiredFields": ["schemaVersion", "manifestDigest", "requiredCaseIdsDigest", "semanticValidatorContractDigest", "suiteStatus", "requiredCaseCount", "executedCaseCount", "blockedCaseCount", "failedCaseCount", "notVerifiedCaseCount", "skippedCaseCount", "missingCaseIds", "duplicateCaseIds", "unexpectedCaseIds", "orderedResults", "commonObservations", "environmentReceiptDigest", "executionSealArtifactRef", "artifactInventory", "artifactInventoryDigestProjection", "artifactInventoryDigest", "semanticValidation", "resultCoreDigestProjection", "resultCoreDigest", "semanticValidationReceiptRef", "digestProjection", "resultSetDigest"]
+    }
+  },
+  "digestProjection": {
+    "algorithm": "sha256",
+    "canonicalProfileId": "presenton-canonical-json/v2",
+    "includedJsonPath": "$",
+    "excludedJsonPaths": ["$.manifestDigest"]
+  },
+  "manifestDigest": "sha256:2ba24df114f66d3e814df0d7fc98ef9340425b68402d77c45076840036ffa7aa"
+}

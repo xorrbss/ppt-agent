@@ -7,7 +7,7 @@ import os
 from typing import Annotated, Callable, TypeVar
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import BaseModel
 
 from models.authored_vnext.deck import (
@@ -19,6 +19,10 @@ from models.authored_vnext.deck import (
     SceneMutationResult,
 )
 from models.authored_vnext.deck.quality import require_published_deck_size
+from models.authored_vnext.semantic.editable_mvp_completion import (
+    EditableMvpCompletionSealImportRequestV1,
+    EditableMvpCompletionSealImportResponseV1,
+)
 from services.authored_vnext.generation.core_bridge import DurableExportPlanBridge
 from services.authored_vnext.generation.errors import GenerationPipelineError
 from services.authored_vnext.generation.pipeline import AuthoredVNextGenerationPipeline
@@ -29,11 +33,29 @@ from services.authored_vnext.generation.mutations import (
 from services.authored_vnext.generation.sql_repository import SqlGenerationRepository
 from services.authored_vnext.integration.sql_repository import AuthoredVNextSqlRepository
 from services.authored_vnext.master.digests import canonical_digest
+from services.authored_vnext.semantic.editable_mvp_completion import (
+    EditableMvpCompletionError,
+    match_current_editable_mvp_completion,
+    seal_import_editable_mvp_completion,
+)
+from services.authored_vnext.semantic.native_capabilities import (
+    EDITABLE_MVP_CAPABILITY_IDS_V1,
+    build_native_capability_projection_v1,
+)
+from services.authored_vnext.generation.gate0e_probes import (
+    Gate0eProbeError,
+    run_gate0e_structural_probes,
+)
 from utils.owner_context import get_current_owner_id
 
 from .models import (
     CandidateResponse,
     DeckResponse,
+    DeploymentStateV4,
+    EditableHybridMvpStateV4,
+    EditableHybridGate0eProbesV1,
+    EditableHybridReadinessProjectionV4,
+    ExternalPromotionStateV4,
     GenerateOperationRequest,
     OperationAccepted,
     PublishCandidateRequest,
@@ -42,6 +64,7 @@ from .models import (
     ResumeOperationRequest,
     RollbackOperationRequest,
     SceneMutationOperationRequest,
+    LocalRasterQualificationStateV4,
 )
 
 
@@ -405,6 +428,163 @@ def get_deck(
         return DeckResponse(deck=repository.get_deck(deck_id))
     except Exception as error:
         raise _error(error) from error
+
+
+@AUTHORED_VNEXT_GENERATION_ROUTER.get(
+    "/decks/{deck_id}/editable-hybrid-readiness-v4",
+    response_model=EditableHybridReadinessProjectionV4,
+)
+def get_editable_hybrid_readiness_v4(
+    repository: Repository,
+    deck_id: str = Path(pattern=r"^deck:[a-z0-9][a-z0-9._-]*$"),
+) -> EditableHybridReadinessProjectionV4:
+    """Return the fail-closed editable MVP display projection.
+
+    Scene/admission presence can advance this projection only to ``shadow``.
+    The isolated sealed Gate 1E completion matcher owns the sole transition to
+    ``ready``; this endpoint never infers it from element counts or export.
+    """
+
+    try:
+        deck = repository.get_deck(deck_id)
+    except Exception as error:
+        raise _error(error) from error
+    scene = deck.scene
+    completion = None
+    if scene is None or scene.hybrid_profile_id is None:
+        editable = EditableHybridMvpStateV4(
+            status="not-evaluated",
+            editable_hybrid_mvp_ready=False,
+            native_editable_ready=False,
+            reason_code="editable_hybrid_mvp_not_evaluated",
+        )
+    elif any(
+        decision.decision == "publicationBlocked"
+        for slide in scene.slides
+        for decision in slide.hybrid_export.owner_decisions  # type: ignore[union-attr]
+    ):
+        editable = EditableHybridMvpStateV4(
+            status="blocked",
+            editable_hybrid_mvp_ready=False,
+            native_editable_ready=False,
+            reason_code="editable_hybrid_mvp_publication_blocked",
+        )
+    else:
+        completion, completion_reason = match_current_editable_mvp_completion(
+            repository,
+            deck=deck,
+        )
+        if completion is not None:
+            editable = EditableHybridMvpStateV4(
+                status="ready",
+                editable_hybrid_mvp_ready=True,
+                native_editable_ready=True,
+                reason_code="editable_hybrid_mvp_completion_current",
+            )
+        else:
+            status = (
+                "expired"
+                if completion_reason == "editable_hybrid_mvp_completion_expired"
+                else (
+                    "blocked"
+                    if completion_reason
+                    in {
+                        "editable_hybrid_mvp_kill_switch_active",
+                        "editable_hybrid_mvp_trust_pin_changed",
+                        "editable_hybrid_mvp_completion_binding_stale",
+                        "editable_hybrid_mvp_export_attempt_not_current",
+                    }
+                    else "shadow"
+                )
+            )
+            editable = EditableHybridMvpStateV4(
+                status=status,
+                editable_hybrid_mvp_ready=False,
+                native_editable_ready=False,
+                reason_code=completion_reason,
+            )
+    return EditableHybridReadinessProjectionV4(
+        editable_hybrid_mvp=editable,
+        native_capabilities=build_native_capability_projection_v1(
+            scene,
+            ready_receipts=(
+                {
+                    capability_id: completion.receipt_digest
+                    for capability_id in EDITABLE_MVP_CAPABILITY_IDS_V1
+                }
+                if completion is not None
+                else {}
+            ),
+        ),
+        local_raster_qualification=LocalRasterQualificationStateV4(
+            status="not-evaluated",
+            local_raster_release_ready=False,
+        ),
+        external_promotion=ExternalPromotionStateV4(
+            status="not-evaluated",
+            promotion_ready=False,
+        ),
+        deployment=DeploymentStateV4(deployment_authorized=False),
+    )
+
+
+@AUTHORED_VNEXT_GENERATION_ROUTER.get(
+    "/decks/{deck_id}/editable-hybrid-gate0e-probes-v1",
+    response_model=EditableHybridGate0eProbesV1,
+)
+def get_editable_hybrid_gate0e_probes_v1(
+    repository: Repository,
+    deck_id: str = Path(pattern=r"^deck:[a-z0-9][a-z0-9._-]*$"),
+    gate_minus1e_result_set_digest: str | None = Query(
+        default=None,
+        alias="gateMinus1eResultSetDigest",
+        pattern=r"^sha256:[0-9a-f]{64}$",
+    ),
+    source_head_commit: str | None = Query(
+        default=None,
+        alias="sourceHeadCommit",
+        pattern=r"^[0-9a-f]{40}$",
+    ),
+) -> EditableHybridGate0eProbesV1:
+    """Evaluate all structural mutations against immutable current baselines."""
+
+    try:
+        result = run_gate0e_structural_probes(
+            repository,
+            deck_id=deck_id,
+            gate_minus1e_result_set_digest=gate_minus1e_result_set_digest,
+            source_head_commit=source_head_commit,
+        )
+        return EditableHybridGate0eProbesV1.model_validate(result.payload())
+    except Gate0eProbeError as error:
+        raise HTTPException(
+            status_code=error.status_code,
+            detail={"code": error.code},
+        ) from error
+
+
+@AUTHORED_VNEXT_GENERATION_ROUTER.post(
+    "/decks/{deck_id}/editable-hybrid-completions-v1/seal-import",
+    response_model=EditableMvpCompletionSealImportResponseV1,
+)
+def seal_import_editable_hybrid_completion_v1(
+    request: EditableMvpCompletionSealImportRequestV1,
+    repository: Repository,
+    deck_id: str = Path(pattern=r"^deck:[a-z0-9][a-z0-9._-]*$"),
+) -> EditableMvpCompletionSealImportResponseV1:
+    """Verify and append one externally sealed Gate 1E result by strict CAS."""
+
+    try:
+        return seal_import_editable_mvp_completion(
+            repository,
+            deck_id=deck_id,
+            request=request,
+        )
+    except EditableMvpCompletionError as error:
+        raise HTTPException(
+            status_code=error.status_code,
+            detail={"code": error.code},
+        ) from error
 
 
 @AUTHORED_VNEXT_GENERATION_ROUTER.get(

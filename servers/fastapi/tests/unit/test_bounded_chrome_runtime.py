@@ -78,3 +78,43 @@ def test_identical_concurrent_render_reuses_one_inflight_browser_work(monkeypatc
 
     assert asyncio.run(scenario()) == (b"rendered",) * 6
     assert calls == 1
+
+
+def test_metrics_recovery_uses_bounded_one_shot_outside_external_worker(
+    monkeypatch,
+) -> None:
+    source = '<html><body><div data-qid="metric-owner">Text</div></body></html>'
+    expected = {"width": 1280, "height": 720, "elements": []}
+    calls: list[tuple[bool, str | None, str | None]] = []
+
+    async def fake_one_shot(
+        _html: str,
+        timeout: int = 60,
+        *,
+        admitted_source: bool = False,
+        cache_html: str | None = None,
+        script_nonce: str | None = None,
+    ) -> bytes:
+        assert timeout == 2
+        calls.append((admitted_source, cache_html, script_nonce))
+        slide_capture._cache_browser_metrics(cache_html or _html, expected)
+        return b"png"
+
+    async def fail_shared_runtime(_html: str, timeout: int = 60) -> bytes:
+        raise AssertionError("metrics recovery must not enter the shared CDP runtime")
+
+    slide_capture.reset_render_runtime(clear_caches=True, retire_session=False)
+    monkeypatch.setattr(
+        slide_capture, "renderer_requires_external_worker", lambda: False
+    )
+    monkeypatch.setattr(
+        slide_capture, "_render_html_to_png_subprocess", fake_one_shot
+    )
+    monkeypatch.setattr(
+        slide_capture, "_render_html_to_png_uncached", fail_shared_runtime
+    )
+
+    assert asyncio.run(slide_capture.ensure_browser_metrics(source, timeout=2)) == expected
+    assert len(calls) == 1
+    assert calls[0][:2] == (True, source)
+    assert calls[0][2]

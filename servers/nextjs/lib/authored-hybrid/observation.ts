@@ -9,6 +9,7 @@ import type {
   AuthoredHybridTextRole,
   AuthoredHybridTextScript,
   AuthoredHybridTextStyle,
+  AuthoredHybridTableEvidence,
 } from "./schema.ts";
 
 export interface BrowserTextRunObservation {
@@ -69,6 +70,10 @@ export interface BrowserShapeObservation
 
 export interface BrowserElementObservation {
   id: string;
+  /** Declared slides use the authored data-qid byte-for-byte as identity. */
+  identityAuthority?: "declared-qid" | "compatibility-ordinal";
+  /** Nearest declared data-qid ancestor; DOM paths remain diagnostic only. */
+  parentElementId?: string | null;
   domPath: string;
   tagName: string;
   sourceIndex: number;
@@ -81,15 +86,18 @@ export interface BrowserElementObservation {
   text?: BrowserTextObservation;
   image?: BrowserImageObservation;
   shape?: BrowserShapeObservation;
+  /** Computed, normalized evidence for bounded declared-table admission. */
+  tableEvidence?: AuthoredHybridTableEvidence;
 }
 
 /** Serializable identity token carried from extraction into backplate capture. */
 export interface AuthoredHybridExpectedPromotedElement {
   id: string;
+  identityAuthority?: "declared-qid" | "compatibility-ordinal";
   domPath: string;
   tagName: string;
   sourceIndex: number;
-  candidateKind: AuthoredHybridNativeKind;
+  candidateKind: AuthoredHybridNativeKind | "complex";
   boundsPx: AuthoredHybridRect;
   rotationDeg: number;
   opacity: number;
@@ -97,6 +105,19 @@ export interface AuthoredHybridExpectedPromotedElement {
   suppressWholeElement?: boolean;
   /** The text root's simple fill/border is emitted as a separate native underlay. */
   suppressContainerPaint?: boolean;
+}
+
+export interface BrowserRenderReadinessObservation {
+  schemaVersion: "browser-render-readiness/v1";
+  status: "ready";
+  fontStatus: "loaded" | "unsupported";
+  imageCount: number;
+  decodedImageCount: number;
+  unresolvedResources: string[];
+  mutationFreeWindowMs: number;
+  continuousPaintEpochs: number;
+  captureEpoch: number;
+  captureMode: "observation" | "hybrid-backplate" | "fidelity";
 }
 
 export interface BrowserAuthoredHybridObservation {
@@ -109,4 +130,5 @@ export interface BrowserAuthoredHybridObservation {
   warnings: string[];
   appliedPromotedElementIds: string[];
   rejectedPromotedElementIds: string[];
+  renderReadiness?: BrowserRenderReadinessObservation;
 }

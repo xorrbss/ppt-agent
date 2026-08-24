@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:presenton:authored:gate1-result-set:v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "manifestDigest", "semanticValidatorContractDigest", "requiredPhaseIdsDigest", "requiredArtifactIdsDigest", "evidencePolicyDigest", "boundedNativeMode", "gateMinus1ManifestDigest", "gateMinus1ResultSetDigest", "gateMinus1SemanticValidationReceiptArtifactDigest", "gateMinus1SemanticValidatorContractDigest", "suiteStatus", "executedPhaseCount", "acceptedPhaseCount", "blockedPhaseCount", "failedPhaseCount", "notVerifiedPhaseCount", "skippedPhaseCount", "missingPhaseIds", "duplicatePhaseIds", "unexpectedPhaseIds", "orderedResults", "artifactInventory", "artifactInventoryDigestProjection", "artifactInventoryDigest", "ledgerCellCount", "ledgerDigest", "semanticValidation", "resultCoreDigestProjection", "resultCoreDigest", "semanticValidationReceiptRef", "digestProjection", "resultSetDigest"],
+  "properties": {
+    "schemaVersion": { "const": "authored-gate1-result-set/v1" },
+    "manifestDigest": { "$ref": "#/$defs/digest" },
+    "semanticValidatorContractDigest": { "const": "sha256:cd08b4def1069609696d66653f12eae23e1aaf94f7bca5169275c4c61a22f909" },
+    "requiredPhaseIdsDigest": { "const": "sha256:a0862767236b7e7ee368a089979e6ca21b91c24521a9403656588576398a39c9" },
+    "requiredArtifactIdsDigest": { "const": "sha256:36326d7447a867e06cbc00730ad51e0172dfb3c6d5e363db098bb704d71bbb5f" },
+    "evidencePolicyDigest": { "const": "sha256:2fd68afb7e40a6cffe36e9bdf8a099f480b492ddeff110159dbf4d934f1da6c5" }, "boundedNativeMode": { "const": "raster-only" },
+    "gateMinus1ManifestDigest": { "$ref": "#/$defs/digest" }, "gateMinus1ResultSetDigest": { "$ref": "#/$defs/digest" }, "gateMinus1SemanticValidationReceiptArtifactDigest": { "$ref": "#/$defs/digest" }, "gateMinus1SemanticValidatorContractDigest": { "const": "sha256:9a0412e8d53acee8d4f605128158c25e29bbafe191d68155103bfc60e141941a" },
+    "suiteStatus": { "enum": ["accepted", "not-verified", "blocked", "failed"] },
+    "executedPhaseCount": { "const": 37 },
+    "acceptedPhaseCount": { "type": "integer", "minimum": 0, "maximum": 37 }, "blockedPhaseCount": { "type": "integer", "minimum": 0, "maximum": 37 }, "failedPhaseCount": { "type": "integer", "minimum": 0, "maximum": 37 }, "notVerifiedPhaseCount": { "type": "integer", "minimum": 0, "maximum": 37 }, "skippedPhaseCount": { "const": 0 },
+    "missingPhaseIds": { "$ref": "#/$defs/idArray" }, "duplicatePhaseIds": { "$ref": "#/$defs/idArray" }, "unexpectedPhaseIds": { "$ref": "#/$defs/idArray" },
+    "orderedResults": { "type": "array", "minItems": 37, "maxItems": 37, "items": { "$ref": "#/$defs/result" } },
+    "artifactInventory": { "type": "array", "minItems": 70, "maxItems": 70, "uniqueItems": true, "items": { "$ref": "#/$defs/artifact" } },
+    "artifactInventoryDigestProjection": { "const": { "canonicalProfileId": "presenton-canonical-json/v2", "includedJsonPath": "$.artifactInventory", "ordering": "artifactId then versionId", "excludedJsonPaths": [] } },
+    "artifactInventoryDigest": { "$ref": "#/$defs/digest" },
+    "ledgerCellCount": { "const": 384 },
+    "ledgerDigest": { "$ref": "#/$defs/digest" },
+    "semanticValidation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["orderedPhaseIdSetExact", "successfulStateAllAccepted", "artifactIdSetExact", "artifactIdUnique", "immutableArtifactBindingsValid", "ledgerCellSetExact", "policyDigestExact", "boundedNativeModeExact", "gateMinus1FeasiblePinExact", "receiptSubjectManifestDigestExact", "receiptSubjectResultCoreDigestExact", "receiptSemanticValidatorContractDigestExact"],
+      "properties": { "orderedPhaseIdSetExact": { "type": "boolean" }, "successfulStateAllAccepted": { "type": "boolean" }, "artifactIdSetExact": { "type": "boolean" }, "artifactIdUnique": { "type": "boolean" }, "immutableArtifactBindingsValid": { "type": "boolean" }, "ledgerCellSetExact": { "type": "boolean" }, "policyDigestExact": { "type": "boolean" }, "boundedNativeModeExact": { "type": "boolean" }, "gateMinus1FeasiblePinExact": { "type": "boolean" }, "receiptSubjectManifestDigestExact": { "type": "boolean" }, "receiptSubjectResultCoreDigestExact": { "type": "boolean" }, "receiptSemanticValidatorContractDigestExact": { "type": "boolean" } }
+    },
+    "resultCoreDigestProjection": { "const": { "algorithm": "sha256", "canonicalProfileId": "presenton-canonical-json/v2", "includedJsonPath": "$", "excludedJsonPaths": ["$.resultCoreDigest", "$.semanticValidationReceiptRef", "$.resultSetDigest"] } },
+    "resultCoreDigest": { "$ref": "#/$defs/digest" },
+    "semanticValidationReceiptRef": { "$ref": "semantic-validation-receipt-ref.v1.schema.json" },
+    "digestProjection": { "const": { "algorithm": "sha256", "canonicalProfileId": "presenton-canonical-json/v2", "includedJsonPath": "$", "excludedJsonPaths": ["$.resultSetDigest"] } },
+    "resultSetDigest": { "$ref": "#/$defs/digest" }
+  },
+  "allOf": [{ "if": { "properties": { "suiteStatus": { "const": "accepted" } } }, "then": { "properties": { "acceptedPhaseCount": { "const": 37 }, "blockedPhaseCount": { "const": 0 }, "failedPhaseCount": { "const": 0 }, "notVerifiedPhaseCount": { "const": 0 }, "missingPhaseIds": { "maxItems": 0 }, "duplicatePhaseIds": { "maxItems": 0 }, "unexpectedPhaseIds": { "maxItems": 0 }, "semanticValidation": { "properties": { "orderedPhaseIdSetExact": { "const": true }, "successfulStateAllAccepted": { "const": true }, "artifactIdSetExact": { "const": true }, "artifactIdUnique": { "const": true }, "immutableArtifactBindingsValid": { "const": true }, "ledgerCellSetExact": { "const": true }, "policyDigestExact": { "const": true }, "boundedNativeModeExact": { "const": true }, "gateMinus1FeasiblePinExact": { "const": true }, "receiptSubjectManifestDigestExact": { "const": true }, "receiptSubjectResultCoreDigestExact": { "const": true }, "receiptSemanticValidatorContractDigestExact": { "const": true } } } } } }],
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "idArray": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+    "artifact": { "type": "object", "additionalProperties": false, "required": ["artifactId", "versionId", "sha256", "byteLength", "mediaType"], "properties": { "artifactId": { "type": "string", "minLength": 1 }, "versionId": { "type": "string", "minLength": 1 }, "sha256": { "$ref": "#/$defs/digest" }, "byteLength": { "type": "integer", "minimum": 1 }, "mediaType": { "type": "string", "minLength": 1 } } },
+    "result": { "type": "object", "additionalProperties": false, "required": ["ordinal", "phaseId", "state", "resultDigest"], "properties": { "ordinal": { "type": "integer", "minimum": 1, "maximum": 37 }, "phaseId": { "type": "string", "pattern": "^g1\\.[a-z0-9.-]+$" }, "state": { "enum": ["accepted", "not-verified", "blocked", "failed"] }, "resultDigest": { "$ref": "#/$defs/digest" } } }
+  }
+}

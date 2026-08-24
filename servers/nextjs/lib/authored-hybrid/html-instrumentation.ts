@@ -34,6 +34,10 @@ interface InstrumentAuthoredHtmlOptions {
    * will be serialized to OOXML.
    */
   fontLayoutMode?: AuthoredHybridFontLayoutMode;
+  /** Fidelity is an exact source capture and must not run layout instrumentation. */
+  captureMode?: "observation" | "hybrid-backplate" | "fidelity";
+  /** Exact authored data-qid registry for declared semantic observations. */
+  declaredElementIds?: readonly string[];
 }
 
 const POWERPOINT_FONT_LAYOUT_SCRIPT_ID =
@@ -105,6 +109,9 @@ export function instrumentAuthoredHtml(
   const config = JSON.stringify({
     promotedElements,
     fontFallbackPolicy: AUTHORED_FONT_FALLBACK_POLICY,
+    captureMode: options.captureMode ??
+      (promotedElements.length ? "hybrid-backplate" : "observation"),
+    declaredElementIds: [...(options.declaredElementIds ?? [])],
     ...(options.fontLayoutMode
       ? { fontLayoutMode: options.fontLayoutMode }
       : {}),
@@ -119,7 +126,7 @@ export function instrumentAuthoredHtml(
     options.fontLayoutMode === "powerpoint"
       ? powerPointFontLayoutScript()
       : "";
-  const bodyInjection = `<script>window.__PRESENTON_AUTHORED_HYBRID_CONFIG__=${config};</script>${layoutInjection}<script>${AUTHORED_HYBRID_BROWSER_SOURCE}</script>`;
+  const bodyInjection = `<script style="display:none!important">window.__PRESENTON_AUTHORED_HYBRID_CONFIG__=${config};</script>${layoutInjection}<script style="display:none!important">${AUTHORED_HYBRID_BROWSER_SOURCE}</script>`;
 
   // The input is copied to a temporary file. Neutralising a CSP meta tag in
   // that copy is necessary for the first-party inline analyser to execute;
@@ -141,17 +148,23 @@ export function instrumentAuthoredHtml(
       headOpeningPattern,
       (opening) => `${opening}${baseInjection}`
     );
+    const stabilityStyle = options.captureMode === "fidelity"
+      ? ""
+      : INSTRUMENTATION_STYLE;
     result = /<\/head\s*>/i.test(result)
-      ? insertBeforeClosingTag(result, "</head>", INSTRUMENTATION_STYLE)
-      : `${result}${INSTRUMENTATION_STYLE}`;
+      ? insertBeforeClosingTag(result, "</head>", stabilityStyle)
+      : `${result}${stabilityStyle}`;
   } else if (/<html(?:\s[^>]*)?>/i.test(result)) {
+    const stabilityStyle = options.captureMode === "fidelity"
+      ? ""
+      : INSTRUMENTATION_STYLE;
     result = result.replace(
       /<html(?:\s[^>]*)?>/i,
       (opening) =>
-        `${opening}<head>${baseInjection}${INSTRUMENTATION_STYLE}</head>`
+        `${opening}<head>${baseInjection}${stabilityStyle}</head>`
     );
   } else {
-    result = `<head>${baseInjection}${INSTRUMENTATION_STYLE}</head>${result}`;
+    result = `<head>${baseInjection}${options.captureMode === "fidelity" ? "" : INSTRUMENTATION_STYLE}</head>${result}`;
   }
 
   if (/<\/body\s*>/i.test(result)) {

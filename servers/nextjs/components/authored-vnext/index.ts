@@ -9,6 +9,7 @@ export {
   type LayeredSlideCanvasProps,
 } from "./LayeredSlideCanvas";
 export { TypedInspector, type TypedInspectorProps } from "./TypedInspector";
+export { HybridCapabilityAdmissions } from "./HybridCapabilityAdmissions";
 export { VirtualSlideRail, type VirtualSlideRailProps } from "./VirtualSlideRail";
 export {
   PatchHistoryControls,
@@ -37,8 +38,12 @@ export type {
   CommandContext,
   ElementBounds,
   DataSetCommand,
+  EditableHybridMvpReadiness,
   GeometryPatchCommand,
   HistoryPanelItem,
+  HybridRenderOwnership,
+  NativeCapabilityProjectionV1,
+  NativeCapabilityReadinessV1,
   InspectorModel,
   LayoutApplyCommand,
   LayoutBodyElement,
@@ -56,6 +61,7 @@ export type {
   ShapeBodyElement,
   TextBodyElement,
   TextPatchCommand,
+  TextStylePatchCommand,
   VirtualRailWindow,
   WorkbenchEntityId,
   WorkbenchLoadState,
