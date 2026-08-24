@@ -11,6 +11,8 @@ param(
 
     [string]$DatabasePath,
 
+    [string]$ProviderConfigPath,
+
     [switch]$IsolatedDatabase,
 
     [switch]$AllowProviderSettings
@@ -39,7 +41,15 @@ else {
     $selectedDatabasePath = $persistentDatabasePath
 }
 $devDatabasePath = $selectedDatabasePath.Replace("\", "/")
-$userConfigPath = Join-Path $appDataRoot "userConfig.json"
+$userConfigPath = if ([string]::IsNullOrWhiteSpace($ProviderConfigPath)) {
+    Join-Path $appDataRoot "userConfig.json"
+}
+else {
+    [System.IO.Path]::GetFullPath($ProviderConfigPath, $repoRoot)
+}
+if ($ProviderConfigPath -and -not (Test-Path -LiteralPath $userConfigPath -PathType Leaf)) {
+    throw "Provider config file does not exist: $userConfigPath"
+}
 $logRoot = Join-Path $devSessionRoot "logs"
 $nextDistDirectoryName = ".next-authored-vnext-dev-$PID"
 $nextEnvPath = Join-Path $nextRoot "next-env.d.ts"
@@ -223,6 +233,7 @@ $fastApiUrl = "http://127.0.0.1:$FastApiPort"
 $sharedAuthoredEnvironment = @{
     "APP_DATA_DIRECTORY" = $appDataRoot
     "USER_CONFIG_PATH" = $userConfigPath
+    "CAN_CHANGE_KEYS" = if ($AllowProviderSettings) { "true" } else { "false" }
     "ENVIRONMENT" = "local"
     "DISABLE_AUTH" = "true"
     # A fresh clean worktree has no legacy credential sidecar. Seed a local-only
@@ -279,7 +290,6 @@ $nextEnvironment = $sharedAuthoredEnvironment.Clone()
 # Keep the deterministic verification UI locked by default. Interactive local
 # generation must opt in explicitly so an administrator can configure a text
 # provider without weakening the release-verification launch contract.
-$nextEnvironment["CAN_CHANGE_KEYS"] = if ($AllowProviderSettings) { "true" } else { "false" }
 $nextEnvironment["FAST_API_INTERNAL_URL"] = $fastApiUrl
 $nextEnvironment["NEXT_INTERNAL_URL"] = $proxyUrl
 $nextEnvironment["NEXT_PUBLIC_URL"] = $proxyUrl
@@ -312,6 +322,30 @@ try {
         -StderrPath (Join-Path $logRoot "fastapi.stderr.log")
     $processes.Add($fastApi)
     Wait-HttpReady -Name "FastAPI" -Uri "$fastApiUrl/metrics/workspace" -Process $fastApi
+
+    if ($ProviderConfigPath) {
+        # An existing local provider file can be newer than this worktree's
+        # already-created provider_settings row. Import it explicitly through
+        # the same CAS bridge used by synchronous OAuth writers; no credential
+        # value is passed on the command line or written to the launcher logs.
+        $providerConfigSync = Start-LoggedProcess `
+            -Name "existing provider settings sync" `
+            -FilePath "uv.exe" `
+            -ArgumentList @(
+                "run",
+                "python",
+                "scripts\sync_existing_provider_settings.py"
+            ) `
+            -WorkingDirectory $fastApiRoot `
+            -Environment $fastApiEnvironment `
+            -StdoutPath (Join-Path $logRoot "provider-settings-sync.stdout.log") `
+            -StderrPath (Join-Path $logRoot "provider-settings-sync.stderr.log")
+        $providerConfigSync.WaitForExit()
+        $providerConfigSync.Refresh()
+        if ($providerConfigSync.ExitCode -ne 0) {
+            throw "Existing provider settings sync failed (exit code $($providerConfigSync.ExitCode)). See $logRoot."
+        }
+    }
 
     $catalogSeed = Start-LoggedProcess `
         -Name "PPT Master catalog seed" `
