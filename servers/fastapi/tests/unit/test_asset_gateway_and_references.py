@@ -562,6 +562,51 @@ def test_uploaded_provider_retries_transient_document_extraction(
     _run(scenario())
 
 
+def test_uploaded_provider_preserves_image_as_generation_asset_without_text_extraction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    class UnexpectedLoader:
+        def __init__(self, *_args, **_kwargs):
+            raise AssertionError("image upload must not enter document extraction")
+
+    monkeypatch.setattr("services.references.providers.DocumentsLoader", UnexpectedLoader)
+
+    async def scenario():
+        engine, maker = await _database(tmp_path / "uploaded-image.db")
+        owner_id = uuid.uuid4()
+        root = tmp_path / "uploaded-image-assets"
+        try:
+            await _seed_owner(maker, owner_id)
+            asset = await _seed_asset(
+                maker,
+                root=root,
+                owner_id=owner_id,
+                content=b"\x89PNG\r\n\x1a\nsource-image",
+                media_type="image/png",
+                extension=".png",
+            )
+            with _owner(owner_id):
+                async with maker() as session:
+                    normalized = await UploadedDocumentProvider().normalize(
+                        session,
+                        request={"asset_ids": [str(asset.id)]},
+                        asset_gateway=AssetGateway(storage_root=root),
+                        conversation_id=None,
+                    )
+            document = normalized.normalized_payload["documents"][0]
+            assert document["assetId"] == str(asset.id)
+            assert document["name"] == "reference.png"
+            assert document["text"] == (
+                "Uploaded image available for authored slide placement: reference.png"
+            )
+            assert normalized.asset_bindings[0].asset_id == asset.id
+        finally:
+            await engine.dispose()
+
+    _run(scenario())
+
+
 def test_uploaded_provider_reports_filename_after_extraction_retry_exhausted(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -107,6 +107,9 @@ from services.generation_provider_admission import generation_provider_admitted
 from services.compatibility_migration.authored_vnext_contract import (
     require_authored_vnext_creation_admission,
 )
+from services.compatibility_migration.admission import (
+    stamp_new_authored_presentation,
+)
 from services.generation_pipeline import build_template_structure
 from services.image_generation_service import ImageGenerationService
 from services.mem0_presentation_memory_service import (
@@ -319,29 +322,25 @@ def _validate_authored_exact_admission(request: GeneratePresentationRequest) -> 
 async def _validate_authored_master_pin_admission(
     request: GeneratePresentationRequest,
 ) -> None:
-    """Resolve the existing-flow pin only for explicit authored generation."""
+    """Resolve a company-standard pin only when authored generation requests one."""
 
     if request.template != AUTHORED_TEMPLATE:
         if request.master_pin is not None:
             raise HTTPException(status_code=400, detail="generation_strategy_conflict")
         return
-    master_enabled = (
-        os.getenv("AUTHORED_VNEXT_MASTER_ENABLED", "true").strip().lower()
-        == "true"
-    )
     if (
         request.master_pin is None
         and request._authored_master_pin is None
         and request._authored_composition_pin is None
     ):
-        # New image/HTML-only Authored creation is frozen as compatibility.
-        # Canonical authored-vNext creation requires an immutable master pin so
-        # Scene, furniture, Workbench CAS, publication, and export share one
-        # authority instead of silently taking the legacy full-canvas branch.
-        raise HTTPException(
-            status_code=422,
-            detail="authored_vnext_master_pin_required",
-        )
+        # "No company standard" is an explicit product choice. Keep the request
+        # unpinned so the Authored style owns the full canvas; publication seals
+        # the resulting unpinned style/composition digests independently.
+        return
+    master_enabled = (
+        os.getenv("AUTHORED_VNEXT_MASTER_ENABLED", "true").strip().lower()
+        == "true"
+    )
     if not master_enabled:
         raise HTTPException(status_code=404, detail="authored_vnext_master_disabled")
     owner_id = get_current_owner_id()
@@ -2015,6 +2014,11 @@ async def _bootstrap_generation_workspace(
         web_search=request.web_search,
         lifecycle_status=PRESENTATION_LIFECYCLE_STAGING,
     )
+    # Match POST /presentation/create: an API-only generate must bootstrap the
+    # same canonical Authored identity before workspace capability derivation.
+    # Leaving the profile unset makes the documented one-call API fail with
+    # ``unsupported_presentation_driver`` before it can enqueue its operation.
+    stamp_new_authored_presentation(presentation)
     sql_session.add(presentation)
     await sql_session.flush()
 

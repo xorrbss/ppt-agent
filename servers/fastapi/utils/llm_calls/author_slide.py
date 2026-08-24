@@ -433,6 +433,20 @@ def _remove_start_tag_attribute(raw: str, target: str) -> str:
     return _apply_source_replacements(raw, spans)
 
 
+def _append_start_tag_attribute(raw: str, name: str, value: str) -> str:
+    """Append one quoted attribute to a parsed start tag without reserializing it."""
+
+    closing = raw.rfind("/>")
+    if closing < 0:
+        closing = raw.rfind(">")
+    if closing < 0:
+        return raw
+    prefix = raw[:closing]
+    separator = "" if prefix.endswith((" ", "\t", "\r", "\n")) else " "
+    escaped = _html.escape(value, quote=True)
+    return f'{prefix}{separator}{name}="{escaped}"{raw[closing:]}'
+
+
 def _is_safe_charset_meta(tag: _SourceStartTag) -> bool:
     return len(tag.attrs) == 1 and tag.attrs[0][0] == "charset"
 
@@ -497,9 +511,100 @@ def _without_authoring_only_image_attributes(source: str) -> str:
     return _apply_source_replacements(
         source,
         [
-            (tag.start, tag.end, _without_authoring_only_attributes(tag.raw))
+            (
+                tag.start,
+                tag.end,
+                _remove_start_tag_attribute(
+                    _without_authoring_only_attributes(tag.raw),
+                    "src",
+                ),
+            )
             for tag in _source_start_tags(source)
             if tag.name == "img" and _has_authoring_only_attribute(tag)
+        ],
+    )
+
+
+def _bind_single_offered_source_image_slot(
+    source: str,
+    candidates: Sequence[SourceImageCandidate],
+) -> str:
+    """Canonicalize ordinary ``img`` tags around the sole verified source asset.
+
+    A slide is offered at most one source asset, and authored source images have
+    one-slot semantics.  Models sometimes emit the attached image as one or more
+    ordinary ``img src=...`` tags instead of the canonical marker.  With exactly
+    one verified candidate, source order decides the sole slot owner; later
+    ordinary image tags are unauthorized duplicates and are removed before Scene
+    admission.  An unknown/existing asset marker is never rebound.
+    """
+
+    if len(candidates) > 1:
+        return source
+    images = tuple(tag for tag in _source_start_tags(source) if tag.name == "img")
+    if not images:
+        return source
+    if not candidates:
+        ordinary = tuple(
+            tag for tag in images if not _has_authoring_only_attribute(tag)
+        )
+        if not ordinary:
+            return source
+        logger.info(
+            "[authored] removed %d untrusted ordinary image(s) from a slide with no offered asset",
+            len(ordinary),
+        )
+        return _apply_source_replacements(
+            source,
+            [(tag.start, tag.end, "") for tag in ordinary],
+        )
+    offered_id = candidates[0].asset_id
+    asset_marked = tuple(
+        tag
+        for tag in images
+        if any(name == "data-asset-id" for name, _value in tag.attrs)
+    )
+    if asset_marked:
+        if any(
+            value != offered_id
+            for tag in asset_marked
+            for name, value in tag.attrs
+            if name == "data-asset-id"
+        ):
+            return source
+        ordinary = tuple(
+            tag for tag in images if not _has_authoring_only_attribute(tag)
+        )
+        if not ordinary:
+            return source
+        logger.info(
+            "[authored] removed %d ordinary image duplicate(s) beside the canonical source slot",
+            len(ordinary),
+        )
+        return _apply_source_replacements(
+            source,
+            [(tag.start, tag.end, "") for tag in ordinary],
+        )
+    ordinary = tuple(tag for tag in images if not _has_authoring_only_attribute(tag))
+    if not ordinary:
+        return source
+    owner = ordinary[0]
+    replacement = _remove_start_tag_attribute(owner.raw, "src")
+    replacement = _append_start_tag_attribute(
+        replacement,
+        "data-asset-id",
+        offered_id,
+    )
+    duplicates = ordinary[1:]
+    logger.info(
+        "[authored] bound one ordinary image slot to its sole offered asset; duplicates_removed=%d",
+        len(duplicates),
+    )
+    return _apply_source_replacements(
+        source,
+        [
+            (owner.start, owner.end, replacement),
+            *((tag.start, tag.end, "") for tag in duplicates),
         ],
     )
 
@@ -515,7 +620,10 @@ def validate_authored_slide_html(
     The illustration prompt and the source-image asset id are both authoring-only.
     Author-stage validation removes only those attributes from a temporary
     projection, so the placeholder's remaining attributes are still checked while
-    the returned source keeps the markers the illustrate stage still needs.
+    the returned source keeps the markers the illustrate stage still needs. Any
+    model-supplied ``src`` on such an unresolved slot is excluded from that
+    projection too: the illustration/source-image stage either replaces it with
+    a verified data URL or drops the whole tag before final admission.
     """
     canonical = canonicalize_authored_slide_html(html, finalized=finalized)
     validation_source = (
@@ -681,6 +789,7 @@ async def author_slide_html(
     instructions: Optional[str] = None,
     illustration_allowed: Optional[bool] = None,
     visual_intent: Optional[AuthoredSlideVisualIntent] = None,
+    correction_hint: Optional[str] = None,
 ) -> str:
     """Author one bespoke, self-contained 1280x720 HTML slide. Single text-generation
     call against the configured provider; returns the cleaned HTML document.
@@ -709,6 +818,11 @@ async def author_slide_html(
         illustration_allowed=illustration_allowed,
         visual_intent=visual_intent,
     )
+    if correction_hint:
+        prompt += (
+            "\n\nSERVER VALIDATION CORRECTION FOR THIS RETRY (authoritative):\n"
+            + correction_hint
+        )
     reference_image_parts = reference_parts(requested_images)
     if mode == EXACT_RECONSTRUCTION and not (
         len(requested_images) == len(reference_image_parts) == 1
@@ -821,6 +935,10 @@ async def author_slide_html(
     authored_html = _strip_nonvisual_pointer_events(authored_html)
     if mode != EXACT_RECONSTRUCTION:
         authored_html = enforce_authored_font_floor(authored_html)
+        authored_html = _bind_single_offered_source_image_slot(
+            authored_html,
+            source_candidates,
+        )
     authored_html = validate_authored_slide_html(
         authored_html,
         allow_illustration_slots=True,

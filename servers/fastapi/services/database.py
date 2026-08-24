@@ -18,6 +18,9 @@ from models.sql.async_presentation_generation_status import (
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from models.sql.authored_exact_provenance import AuthoredExactProvenance
 from models.sql.authored_canonical_revision import AuthoredCanonicalRevision
+from models.sql.authored_editable_hybrid_mvp_completion import (
+    AuthoredEditableHybridMvpCompletion,
+)
 from models.sql.chat_history_message import ChatHistoryMessageModel
 from models.sql.image_asset import ImageAsset
 from models.sql.key_value import KeyValueSqlModel

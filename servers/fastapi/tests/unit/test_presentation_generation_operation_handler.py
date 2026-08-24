@@ -101,6 +101,7 @@ async def _seed_linked_generation(maker, *, owner_id: uuid.UUID | None):
                 n_slides=1,
                 language="en",
                 layout={"name": "test"},
+                theme={"mode": "authored"},
                 revision=0,
             )
             session.add(presentation)
@@ -652,6 +653,24 @@ class _PipelineContext:
 
     async def raise_if_cancelled(self) -> None:
         return None
+
+
+def test_authored_master_admission_allows_unpinned_full_canvas():
+    from api.v1.ppt.endpoints import presentation_generate as endpoint
+
+    request = GeneratePresentationRequest(
+        content="Masterless authored deck",
+        strategy="authored",
+        template="authored",
+        authored_style="default",
+    )
+
+    asyncio.run(endpoint._validate_authored_master_pin_admission(request))
+
+    assert request.master_pin is None
+    assert request._authored_master_pin is None
+    assert request._authored_master_resolution is None
+    assert request._authored_composition_pin is None
 
 
 def test_default_pipeline_merges_published_artifact_metadata(

@@ -610,7 +610,14 @@ export async function prepareSlideLayer(
       backplatePng: backplate.backplatePng,
       elements: selected,
       ...(semanticContext
-        ? { semanticOwnerQids: [...semanticContext.declaredElementIds] }
+        ? {
+            // The residual raster owns only demoted semantic owners. Admitted
+            // native QIDs are carried by their native object and must never be
+            // repeated on the raster plane as a second logical owner.
+            semanticOwnerQids: fallbackElements
+              .map((element) => element.elementId)
+              .sort(),
+          }
         : {}),
     },
     quality: {

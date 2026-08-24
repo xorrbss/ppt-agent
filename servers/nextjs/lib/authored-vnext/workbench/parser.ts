@@ -18,6 +18,7 @@ import type {
   SceneAssetReference,
   SceneDataReference,
   SceneDataPayload,
+  SlideHybridExportPlan,
   TextBodyNode,
   WorkbenchOperation,
 } from "./model.ts";
@@ -79,6 +80,14 @@ function prefixed<T extends string>(value: unknown, prefix: string, path: string
   return parsed as T;
 }
 
+function elementIdentifier(value: unknown, path: string): ElementId {
+  const parsed = nonEmptyString(value, path);
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(parsed)) {
+    throw new WorkbenchParseError(path, "stable authored QID required");
+  }
+  return parsed;
+}
+
 function digest(value: unknown, path: string): Digest {
   const parsed = string(value, path);
   if (!/^sha256:[0-9a-f]{64}$/.test(parsed)) {
@@ -126,6 +135,9 @@ function editability(value: unknown, path: string): ElementEditability {
     geometry: capability("geometry"),
     asset: capability("asset"),
     data: capability("data"),
+    // Legacy sealed snapshots predate style admission; they remain explicitly
+    // read-only instead of becoming invalid or locally style-editable.
+    style: source.style === undefined ? false : capability("style"),
   };
 }
 
@@ -188,7 +200,7 @@ function canonicalBodyNode(
   const source = record(value, path);
   const kind = string(source.kind, `${path}.kind`);
   const common = {
-    id: prefixed<ElementId>(source.elementId, "element:", `${path}.elementId`),
+    id: elementIdentifier(source.elementId, `${path}.elementId`),
     // DeckSceneIR owns authored body objects only; company furniture remains
     // in the separately pinned master contract. Older in-memory documents may
     // include `layer`, but canonical Scene payloads intentionally do not.
@@ -207,7 +219,10 @@ function canonicalBodyNode(
   }
   if (kind === "text") {
     const role = common.semanticRole;
-    return { ...common, kind, layer: "body", role, text: string(source.text, `${path}.text`) } satisfies TextBodyNode;
+    const rawStyle = source.style === undefined ? undefined : record(source.style, `${path}.style`);
+    const textAlign = rawStyle?.textAlign;
+    if (textAlign !== undefined && textAlign !== "left" && textAlign !== "center" && textAlign !== "right" && textAlign !== "justify") throw new WorkbenchParseError(`${path}.style.textAlign`, "supported text alignment required");
+    return { ...common, kind, layer: "body", role, text: string(source.text, `${path}.text`), ...(rawStyle ? { style: { ...(typeof rawStyle.color === "string" ? { color: rawStyle.color } : {}), ...(typeof rawStyle.fontFamily === "string" ? { fontFamily: rawStyle.fontFamily } : {}), ...(typeof rawStyle.fontSize === "number" ? { fontSize: finite(rawStyle.fontSize, `${path}.style.fontSize`) } : {}), ...(typeof rawStyle.fontWeight === "number" ? { fontWeight: finite(rawStyle.fontWeight, `${path}.style.fontWeight`) } : {}), ...(textAlign ? { textAlign } : {}) } } : {}) } satisfies TextBodyNode;
   }
   if (kind === "image") {
     const assetId = prefixed<AssetId>(source.assetId, "asset:", `${path}.assetId`);
@@ -227,6 +242,7 @@ function canonicalBodyNode(
       crop,
       fit: crop,
       ...(manifest ? { mediaType: manifest.mediaType, storageReference: manifest.storageReference, sizeBytes: manifest.sizeBytes } : {}),
+      ...(source.cropGeometry === undefined ? {} : { cropGeometry: record(source.cropGeometry, `${path}.cropGeometry`) as ImageBodyNode["cropGeometry"] }),
     } satisfies ImageBodyNode;
   }
   if (kind === "shape") {
@@ -237,6 +253,7 @@ function canonicalBodyNode(
       shape: nonEmptyString(source.shape, `${path}.shape`),
       ...(source.fill == null ? {} : { fill: nonEmptyString(source.fill, `${path}.fill`) }),
       ...(source.stroke == null ? {} : { stroke: nonEmptyString(source.stroke, `${path}.stroke`) }),
+      ...(source.strokeWidth == null ? {} : { strokeWidth: finite(source.strokeWidth, `${path}.strokeWidth`) }),
     };
   }
   if (kind === "connector") {
@@ -244,8 +261,8 @@ function canonicalBodyNode(
       ...common,
       kind,
       layer: "body",
-      fromElementId: prefixed<ElementId>(source.fromElementId, "element:", `${path}.fromElementId`),
-      toElementId: prefixed<ElementId>(source.toElementId, "element:", `${path}.toElementId`),
+      fromElementId: elementIdentifier(source.fromElementId, `${path}.fromElementId`),
+      toElementId: elementIdentifier(source.toElementId, `${path}.toElementId`),
     };
   }
   if (kind === "table") {
@@ -284,13 +301,80 @@ function canonicalBodyNode(
     if (!Array.isArray(source.childElementIds) || source.childElementIds.length === 0) {
       throw new WorkbenchParseError(`${path}.childElementIds`, "non-empty array required");
     }
-    const childElementIds = source.childElementIds.map((item, index) => prefixed<ElementId>(item, "element:", `${path}.childElementIds[${index}]`));
+    const childElementIds = source.childElementIds.map((item, index) => elementIdentifier(item, `${path}.childElementIds[${index}]`));
     if (new Set(childElementIds).size !== childElementIds.length) {
       throw new WorkbenchParseError(`${path}.childElementIds`, "duplicate stable element id");
     }
     return { ...common, kind, layer: "body", childElementIds };
   }
   throw new WorkbenchParseError(`${path}.kind`, "unsupported Scene IR element kind");
+}
+
+/**
+ * Hybrid ownership is a server-sealed receipt.  Keep validation alongside the
+ * canonical Scene parser so a malformed payload can never make a raster
+ * island and a native object appear to own the same QID in the Workbench.
+ */
+function hybridExportPlan(
+  value: unknown,
+  path: string,
+  elementIds: ReadonlySet<ElementId>,
+): SlideHybridExportPlan {
+  const source = record(value, path);
+  if (source.schemaVersion !== "slide-hybrid-export-plan/v1") {
+    throw new WorkbenchParseError(`${path}.schemaVersion`, "slide-hybrid-export-plan/v1 required");
+  }
+  if (!Array.isArray(source.ownerDecisions) || source.ownerDecisions.length === 0) {
+    throw new WorkbenchParseError(`${path}.ownerDecisions`, "non-empty array required");
+  }
+  const ownerDecisions = source.ownerDecisions.map((item, index) => {
+    const entry = record(item, `${path}.ownerDecisions[${index}]`);
+    const decision = entry.decision;
+    if (decision !== "nativeEditable" && decision !== "rasterIsland" && decision !== "publicationBlocked") {
+      throw new WorkbenchParseError(`${path}.ownerDecisions[${index}].decision`, "sealed hybrid owner decision required");
+    }
+    const reasonCode = entry.reasonCode === undefined
+      ? undefined
+      : nonEmptyString(entry.reasonCode, `${path}.ownerDecisions[${index}].reasonCode`);
+    if (decision !== "nativeEditable" && !reasonCode) {
+      throw new WorkbenchParseError(`${path}.ownerDecisions[${index}].reasonCode`, "non-native owner requires reason");
+    }
+    return {
+      ownerId: elementIdentifier(entry.ownerId, `${path}.ownerDecisions[${index}].ownerId`),
+      decision,
+      capabilityId: nonEmptyString(entry.capabilityId, `${path}.ownerDecisions[${index}].capabilityId`),
+      ...(reasonCode ? { reasonCode } : {}),
+    } as const;
+  });
+  const ownerIds = new Set(ownerDecisions.map((entry) => entry.ownerId));
+  if (ownerIds.size !== ownerDecisions.length || ownerIds.size !== elementIds.size || [...ownerIds].some((id) => !elementIds.has(id))) {
+    throw new WorkbenchParseError(`${path}.ownerDecisions`, "must seal every Scene QID exactly once");
+  }
+  if (!Array.isArray(source.rasterIslands)) throw new WorkbenchParseError(`${path}.rasterIslands`, "array required");
+  const rasterIslands = source.rasterIslands.map((item, index) => {
+    const entry = record(item, `${path}.rasterIslands[${index}]`);
+    if (!Array.isArray(entry.sourceOwnerIds) || entry.sourceOwnerIds.length === 0) {
+      throw new WorkbenchParseError(`${path}.rasterIslands[${index}].sourceOwnerIds`, "non-empty array required");
+    }
+    const zBand = record(entry.zBand, `${path}.rasterIslands[${index}].zBand`);
+    const minZ = signedInteger(zBand.minZ, `${path}.rasterIslands[${index}].zBand.minZ`);
+    const maxZ = signedInteger(zBand.maxZ, `${path}.rasterIslands[${index}].zBand.maxZ`);
+    if (minZ > maxZ) throw new WorkbenchParseError(`${path}.rasterIslands[${index}].zBand`, "ordered z band required");
+    return {
+      islandId: prefixed<`island:${string}`>(entry.islandId, "island:", `${path}.rasterIslands[${index}].islandId`),
+      sourceOwnerIds: entry.sourceOwnerIds.map((owner, ownerIndex) => elementIdentifier(owner, `${path}.rasterIslands[${index}].sourceOwnerIds[${ownerIndex}]`)),
+      assetId: prefixed<AssetId>(entry.assetId, "asset:", `${path}.rasterIslands[${index}].assetId`),
+      assetDigest: digest(entry.assetDigest, `${path}.rasterIslands[${index}].assetDigest`),
+      zBand: { minZ, maxZ },
+      rasterPlaneDigest: digest(entry.rasterPlaneDigest, `${path}.rasterIslands[${index}].rasterPlaneDigest`),
+    } as const;
+  });
+  const rasterOwners = rasterIslands.flatMap((island) => island.sourceOwnerIds);
+  const expectedRasterOwners = ownerDecisions.filter((entry) => entry.decision === "rasterIsland").map((entry) => entry.ownerId);
+  if (new Set(rasterIslands.map((island) => island.islandId)).size !== rasterIslands.length || new Set(rasterOwners).size !== rasterOwners.length || rasterOwners.length !== expectedRasterOwners.length || rasterOwners.some((id) => !expectedRasterOwners.includes(id))) {
+    throw new WorkbenchParseError(path, "raster islands must be disjoint and match raster owner decisions exactly");
+  }
+  return { schemaVersion: "slide-hybrid-export-plan/v1", ownerDecisions, rasterIslands };
 }
 
 function canonicalSlide(
@@ -310,6 +394,7 @@ function canonicalSlide(
     digest: digest(source.slideDigest ?? source.digest, `${path}.slideDigest`),
     layoutId: typeof source.layoutId === "string" && source.layoutId.trim() ? source.layoutId : "layout:scene",
     nodes,
+    ...(source.hybridExport === undefined ? {} : { hybridExport: hybridExportPlan(source.hybridExport, `${path}.hybridExport`, ids) }),
   };
 }
 
@@ -378,7 +463,7 @@ function adaptedTextNode(
     bounds: nodeBounds,
     rotation: 0,
     semanticRole: role,
-    editability: { text: true, geometry: true, asset: false, data: false },
+    editability: { text: true, geometry: true, asset: false, data: false, style: true },
   };
 }
 
@@ -513,7 +598,7 @@ export function parseWorkbenchOperation(value: unknown): WorkbenchOperation {
   if (kind === "layout.apply") {
     return { kind, operationId, slideId, base, layoutId: nonEmptyString(source.layoutId, "operation.layoutId") } satisfies LayoutApplyOperation;
   }
-  const elementId = prefixed<ElementId>(source.elementId, "element:", "operation.elementId");
+  const elementId = elementIdentifier(source.elementId, "operation.elementId");
   if (kind === "text.replace") {
     return { kind, operationId, slideId, base, elementId, text: string(source.text, "operation.text") };
   }

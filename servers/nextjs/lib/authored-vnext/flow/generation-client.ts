@@ -1,4 +1,5 @@
 import { getApiUrl } from "@/utils/api";
+import type { EditableHybridMvpReadiness, NativeCapabilityProjectionV1 } from "@/components/authored-vnext";
 
 import type { MasterDigest, SlideSpecV2 } from "../master/contracts.ts";
 
@@ -40,6 +41,9 @@ export interface GenerationDeckSnapshot {
       revision: number;
       slideDigest: MasterDigest;
       elements: Array<Record<string, unknown>>;
+      hybridExport?: {
+        rasterIslands?: Array<Record<string, unknown>>;
+      };
     }>;
     assetManifest: Array<Record<string, unknown>>;
     dataManifest: Array<Record<string, unknown>>;
@@ -81,9 +85,9 @@ export interface RegenerationResult {
 export interface SceneMutationResult {
   schemaVersion: "scene-mutation-result/v1";
   operationId: `operation:${string}`;
-  mutation: "text.replace" | "geometry.update" | "asset.set" | "data.update";
+  mutation: "text.replace" | "text.style.update" | "geometry.update" | "shape.style.update" | "asset.set" | "image.crop.update" | "data.update" | "table.cell.update" | "table.column-widths.update";
   slideId: `slide:${string}`;
-  elementId: `element:${string}`;
+  elementId: string;
   slideDigest: MasterDigest;
   sceneDigest: MasterDigest;
   deck: GenerationDeckSnapshot;
@@ -99,6 +103,14 @@ export interface ExportJob {
   operationFence: number;
   errorCode?: string | null;
   artifact?: { publicationRevision: number; digest: MasterDigest } | null;
+}
+
+export interface EditableHybridReadinessV4 {
+  editableHybridMvp: EditableHybridMvpReadiness;
+  nativeCapabilities: NativeCapabilityProjectionV1;
+  localRasterQualification: { status: string; localRasterReleaseReady: boolean };
+  externalPromotion: { status: string; promotionReady: boolean };
+  deployment: { deploymentAuthorized: boolean };
 }
 
 type FetchLike = typeof fetch;
@@ -168,6 +180,12 @@ export class AuthoredVnextGenerationClient {
     return this.request(
       `/api/v1/ppt/authored-vnext/generation/decks/${encodeURIComponent(deckId)}`,
     ) as Promise<{ deck: GenerationDeckSnapshot }>;
+  }
+
+  editableHybridReadinessV4(deckId: string): Promise<EditableHybridReadinessV4> {
+    return this.request(
+      `/api/v1/ppt/authored-vnext/generation/decks/${encodeURIComponent(deckId)}/editable-hybrid-readiness-v4`,
+    ) as Promise<EditableHybridReadinessV4>;
   }
 
   prepareRegeneration(

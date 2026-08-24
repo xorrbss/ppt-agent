@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
 import { LayeredSlideCanvas } from "./LayeredSlideCanvas";
+import { EditableHybridReadiness } from "./EditableHybridReadiness";
+import { HybridCapabilityAdmissions } from "./HybridCapabilityAdmissions";
 import { TypedInspector } from "./TypedInspector";
 import { VirtualSlideRail } from "./VirtualSlideRail";
 import { PatchHistoryControls, WorkbenchPanels } from "./WorkbenchPanels";
@@ -16,6 +18,8 @@ import type {
   ActiveSlideScene,
   AuthoredWorkbenchCallbacks,
   CasConflict,
+  EditableHybridMvpReadiness,
+  NativeCapabilityProjectionV1,
   InspectorModel,
   RegenerationCandidate,
   SlideRailItem,
@@ -42,6 +46,8 @@ export interface AuthoredWorkbenchProps {
   conflict?: CasConflict | null;
   canUndo: boolean;
   canRedo: boolean;
+  editableHybridMvpReadiness?: EditableHybridMvpReadiness | null;
+  nativeCapabilityProjection?: NativeCapabilityProjectionV1 | null;
   readOnly?: boolean;
   createOperationId: () => WorkbenchEntityId;
   callbacks: AuthoredWorkbenchCallbacks;
@@ -65,6 +71,8 @@ export function AuthoredWorkbench({
   conflict,
   canUndo,
   canRedo,
+  editableHybridMvpReadiness,
+  nativeCapabilityProjection,
   readOnly = false,
   createOperationId,
   callbacks,
@@ -96,6 +104,7 @@ export function AuthoredWorkbench({
           <h1 className="truncate text-sm font-semibold">{t("title")}</h1>
         </div>
         <span className="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-800">{t("patchOnly")}</span>
+        <EditableHybridReadiness readiness={editableHybridMvpReadiness} />
         <PatchHistoryControls canRedo={canRedo && !mutationDisabled} canUndo={canUndo && !mutationDisabled} onRedo={callbacks.onRedo} onUndo={callbacks.onUndo} pendingOperationCount={pendingOperationCount} />
         {callbacks.onRequestExport && (
           <button className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800" data-testid="authored-export" onClick={callbacks.onRequestExport} type="button">{t("export")}</button>
@@ -107,6 +116,7 @@ export function AuthoredWorkbench({
           <div className="grid min-h-0 flex-1 grid-cols-[15rem_minmax(0,1fr)_20rem]">
             <VirtualSlideRail activeSlideId={activeSlideId} disabled={false} onReorder={callbacks.onReorderSlide} onSelect={callbacks.onSelectSlide} onWindowChange={onRailWindowChange} slides={slides} window={railWindow} />
             <div className="flex min-h-0 flex-col border-r border-slate-200">
+              <HybridCapabilityAdmissions projection={nativeCapabilityProjection} scene={scene} />
               <LayeredSlideCanvas createOperationId={createOperationId} disabled={mutationDisabled} onCommand={callbacks.onCommand} onSelectElement={callbacks.onSelectElement} scene={scene} selectedElementId={selectedElementId} />
               {regenerationCandidate && <RegenerationReview candidate={regenerationCandidate} disabled={mutationDisabled} onAccept={callbacks.onAcceptRegeneration} onReject={callbacks.onRejectRegeneration} />}
             </div>

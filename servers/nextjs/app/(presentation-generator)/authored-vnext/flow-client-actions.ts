@@ -6,6 +6,7 @@ import type {
   GenerationDeckSnapshot,
   RegenerationCandidate,
 } from "@/lib/authored-vnext/flow";
+import type { EditableHybridMvpReadiness } from "@/components/authored-vnext";
 import { generationClient, serverOperationId } from "@/lib/authored-vnext/flow";
 
 import { downloadArtifact, masterAssetDigests } from "./flow-client-view-model";
@@ -209,6 +210,7 @@ export async function exportDeck({
   failed,
   setArtifact,
   notice,
+  editableHybridMvpReadiness,
 }: {
   deck: GenerationDeckSnapshot;
   contract: DeckMasterContractV1 | undefined;
@@ -219,6 +221,7 @@ export async function exportDeck({
   failed: (id: string, code: string) => void;
   setArtifact: (artifact: { revision: number; digest: MasterDigest }) => void;
   notice: Notice;
+  editableHybridMvpReadiness?: EditableHybridMvpReadiness | null;
 }) {
   const operationId = serverOperationId(createOperationId());
   requested(operationId);
@@ -233,9 +236,12 @@ export async function exportDeck({
       expectedActiveArtifactDigest: artifact?.digest ?? null,
       expectedAssetDigests: [...new Set([
         ...masterAssetDigests(contract),
-        ...(deck.scene?.assetManifest ?? []).map((asset) => asset.assetDigest),
+        ...referencedSceneAssetDigests(deck),
       ])],
       expectedFontDigest: deck.master.fontManifestDigest,
+      // Only the exact current v4 product projection can request native MVP
+      // export. The exporter independently rechecks it against active Scene.
+      ...editableHybridProfileExportBinding(editableHybridMvpReadiness),
       idempotencyKey: `${operationId}:export`,
       operationFence: 1,
     });
@@ -254,4 +260,40 @@ export async function exportDeck({
     notice("errors.export", { code });
     failed(operationId, code);
   }
+}
+
+export function referencedSceneAssetDigests(deck: GenerationDeckSnapshot): string[] {
+  if (!deck.scene) return [];
+  const referencedIds = new Set<string>();
+  for (const slide of deck.scene.slides) {
+    for (const element of slide.elements) {
+      if (element.kind === "image" && typeof element.assetId === "string") {
+        referencedIds.add(element.assetId);
+      }
+    }
+    for (const island of slide.hybridExport?.rasterIslands ?? []) {
+      if (typeof island.assetId === "string") referencedIds.add(island.assetId);
+    }
+  }
+  return deck.scene.assetManifest.flatMap((asset) =>
+    typeof asset.assetId === "string" &&
+    referencedIds.has(asset.assetId) &&
+    typeof asset.assetDigest === "string"
+      ? [asset.assetDigest]
+      : [],
+  );
+}
+
+export function editableHybridProfileExportBinding(
+  readiness: EditableHybridMvpReadiness | null | undefined,
+): { editableHybridProfileId?: EditableHybridMvpReadiness["profileId"] } {
+  if (
+    readiness?.profileId === "authored-editable-hybrid-ko-en-basic-v1" &&
+    readiness.releaseScope === "ko-en-text-solid-shape-image-crop-basic-table" &&
+    (readiness.status === "shadow" ||
+      (readiness.status === "ready" &&
+        readiness.editableHybridMvpReady &&
+        readiness.nativeEditableReady))
+  ) return { editableHybridProfileId: readiness.profileId };
+  return {};
 }

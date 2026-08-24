@@ -110,10 +110,21 @@ class SceneMutationCommand(StrictCamelModel):
     deck_id: DeckId
     slide_id: SlideId
     element_id: ElementId
-    kind: Literal["text.replace", "geometry.update", "asset.set", "data.update"]
+    kind: Literal[
+        "text.replace",
+        "text.style.update",
+        "geometry.update",
+        "shape.style.update",
+        "asset.set",
+        "image.crop.update",
+        "data.update",
+        "table.cell.update",
+        "table.column-widths.update",
+    ]
     payload: dict[str, Any]
     expected_slide_revision: int = Field(ge=1)
     expected_slide_digest: Digest
+    expected_scene_digest: Digest
     publication_fence: PublicationFence
 
     @model_validator(mode="after")
@@ -124,9 +135,14 @@ class SceneMutationCommand(StrictCamelModel):
             raise ValueError("scene mutation payload is too large")
         required = {
             "text.replace": {"text"},
+            "text.style.update": set(),
             "geometry.update": set(),
+            "shape.style.update": set(),
             "asset.set": {"assetId", "assetDigest", "altText", "sizeBytes"},
+            "image.crop.update": {"cropGeometry"},
             "data.update": {"dataId", "dataDigest", "dataPayload"},
+            "table.cell.update": {"row", "column"},
+            "table.column-widths.update": {"columnWidthsPt"},
         }[self.kind]
         if not required.issubset(self.payload):
             raise ValueError(f"{self.kind} payload is missing required fields")
@@ -346,7 +362,17 @@ class SceneMutationResult(StrictCamelModel):
         "scene-mutation-result/v1"
     )
     operation_id: OperationId
-    mutation: Literal["text.replace", "geometry.update", "asset.set", "data.update"]
+    mutation: Literal[
+        "text.replace",
+        "text.style.update",
+        "geometry.update",
+        "shape.style.update",
+        "asset.set",
+        "image.crop.update",
+        "data.update",
+        "table.cell.update",
+        "table.column-widths.update",
+    ]
     slide_id: SlideId
     element_id: ElementId
     slide_digest: Digest

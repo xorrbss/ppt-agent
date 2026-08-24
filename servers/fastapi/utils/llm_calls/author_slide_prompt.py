@@ -135,7 +135,8 @@ _SOURCE_IMAGE_RULES = (
     "what that work looks like, which is what a proposal shows it for.\n"
     "Place one when it does either: an `<img data-asset-id=\"THE_ID\">` whose "
     "area is reserved with explicit width/height (or absolute inset) styles, the "
-    "way the illustration slot is. It is this slide's one image slot, in place "
+    "way the illustration slot is. Do not add a src attribute: the trusted "
+    "source-image stage supplies the verified base64 data URL. It is this slide's one image slot, in place "
     "of a data-illust-prompt placeholder.\n"
     "Leave the slide without a picture when no candidate shows anything it talks "
     "about. These are candidates, not a quota."
@@ -340,7 +341,14 @@ def visual_story_marker(visual_intent: AuthoredSlideVisualIntent | None) -> str:
         "EDITABILITY TRUTH: Hybrid native candidates are only "
         f"[{native_candidates}]; they are not a promise of complete editability. "
         f"Raster fallback remains declared for [{raster_reasons}]. Never duplicate native-candidate "
-        "text, images, shapes, tables, or charts inside a decorative image or backplate."
+        "text, images, shapes, tables, or charts inside a decorative image or backplate. "
+        "Only when CONTENT explicitly requests an unsupported chart or complex-CSS region, "
+        "mark exactly its topmost semantic owner with data-raster-fallback=\"chart\" or "
+        "data-raster-fallback=\"complex-css\"; never repeat that marker on descendants. "
+        "Do not invent such a marker for an ordinary story panel, card, backplate, divider, "
+        "or decoration, even when you style it with CSS. "
+        "The phrase native-candidate is descriptive only: do not emit a "
+        "data-native-candidate attribute; data-qid is the sole edit-identity marker."
     )
 
 

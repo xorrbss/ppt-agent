@@ -36,6 +36,7 @@ import AuthoredEmissionCapabilityStatusView, {
 import MasterLayoutBadge from "./header/MasterLayoutBadge";
 import {
   masterPinCommandContext,
+  presentationEditableHybridWorkbench,
   presentationMasterPin,
 } from "../utils/masterPresentation";
 import type {
@@ -113,6 +114,9 @@ const PresentationHeader = ({
   );
   const appliedMasterPin = isAuthoredDeck
     ? presentationMasterPin(presentationData)
+    : null;
+  const editableHybridWorkbench = isAuthoredDeck
+    ? presentationEditableHybridWorkbench(presentationData)
     : null;
   const expectedRevision =
     typeof presentationData?.revision === "number"
@@ -520,6 +524,13 @@ const PresentationHeader = ({
       </div>
       {isAuthoredDeck ? (
         <div className="border-t border-slate-100 px-4 py-2 sm:px-6">
+          {editableHybridWorkbench && (
+            <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-950" data-testid="editable-hybrid-workbench-bridge">
+              <span className="font-semibold">편집 가능한 Hybrid MVP</span>
+              <span>{editableHybridWorkbench.status === "ready" ? "준비됨" : editableHybridWorkbench.status === "shadow" ? "Shadow" : "차단됨"}</span>
+              {editableHybridWorkbench.status === "blocked" ? <span>{editableHybridWorkbench.reasonCode ?? "editable_hybrid_mvp_blocked"}</span> : <a className="font-semibold underline underline-offset-2" data-testid="editable-hybrid-workbench-link" href={`/authored-vnext/workbench?authoredDeckId=${encodeURIComponent(editableHybridWorkbench.deckId)}`}>Workbench에서 편집</a>}
+            </div>
+          )}
           <AuthoredEmissionCapabilityStatusView
             status={authoredCapabilityStatus}
             expectedRevision={expectedRevision}

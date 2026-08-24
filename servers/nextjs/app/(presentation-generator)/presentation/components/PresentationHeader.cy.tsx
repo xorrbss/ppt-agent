@@ -29,6 +29,7 @@ const mountHeader = (
     qualityReview?: WorkspaceQualityReviewRequester;
     pageRemake?: WorkspacePageRemakeRequester;
   },
+  editableHybridProjection?: Record<string, unknown>,
 ) => {
   store.dispatch(
     setPresentationData({
@@ -38,7 +39,7 @@ const mountHeader = (
       n_slides: 1,
       title: "deck",
       slides: [{ id: "slide-1", layout: "template-v2" }],
-      theme: null,
+      theme: editableHybridProjection ? { authored_vnext: editableHybridProjection } : null,
       mode: isAuthoredDeck ? "authored" : "template",
       version: "v2-standard",
     } as any)
@@ -85,6 +86,17 @@ describe("PresentationHeader workspace controls", () => {
     cy.stub(PresentationGenerationApi, "updatePresentationContent")
       .as("updatePresentationContent")
       .resolves({});
+  });
+
+  it("links only an exact non-blocked editable-Hybrid Scene bridge", () => {
+    mountHeader(true, true, undefined, {
+      schemaVersion: "authored-editable-hybrid-scene-projection/v1",
+      profileId: "authored-editable-hybrid-ko-en-basic-v1",
+      deckId: "deck:normal-ai-publication",
+      status: "shadow",
+    });
+    cy.get('[data-testid="editable-hybrid-workbench-bridge"]').should("contain.text", "편집 가능한 Hybrid MVP");
+    cy.get('[data-testid="editable-hybrid-workbench-link"]').should("have.attr", "href", "/authored-vnext/workbench?authoredDeckId=deck%3Anormal-ai-publication");
   });
 
   it("routes page remake and quality into chat-first UI without a legacy dialog", () => {

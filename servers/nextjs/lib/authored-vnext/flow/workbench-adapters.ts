@@ -18,8 +18,7 @@ export interface SceneLabels {
  * The Workbench's local `data.set` name deliberately describes a typed patch.
  * This adapter is the only place it crosses into the canonical Scene API,
  * where the persisted mutation is named `data.update` and must carry the
- * complete deck/slide CAS fence. `sceneDigest` stays in the idempotency fence,
- * not the strict request body.
+ * complete deck/slide CAS fence, including the active Scene digest.
  */
 export interface SceneMutationRequest {
   readonly command: {
@@ -28,10 +27,11 @@ export interface SceneMutationRequest {
     readonly deckId: DeckDocument["id"];
     readonly slideId: SlideId;
     readonly elementId: Exclude<WorkbenchOperation, { kind: "layout.apply" }>["elementId"];
-    readonly kind: "text.replace" | "geometry.update" | "asset.set" | "data.update";
+    readonly kind: "text.replace" | "text.style.update" | "geometry.update" | "asset.set" | "data.update" | "shape.style.update" | "image.crop.update" | "table.cell.update" | "table.column-widths.update";
     readonly payload: Record<string, unknown>;
     readonly expectedSlideRevision: number;
     readonly expectedSlideDigest: DeckDocument["slides"][number]["digest"];
+    readonly expectedSceneDigest: DeckDocument["sceneDigest"];
     readonly publicationFence: {
       readonly expectedDeckRevision: number;
       readonly expectedActiveRevisionDigest: DeckDocument["digest"];
@@ -91,6 +91,7 @@ export function sceneMutationRequestForOperation(
       payload,
       expectedSlideRevision: operation.base.slideRevision,
       expectedSlideDigest: operation.base.slideDigest,
+      expectedSceneDigest: operation.base.sceneDigest,
       publicationFence: {
         expectedDeckRevision: operation.base.deckRevision,
         expectedActiveRevisionDigest: operation.base.deckDigest,
@@ -225,10 +226,15 @@ function normalize(bounds: Bounds, contract: DeckMasterContractV1) {
   };
 }
 
-/** Storage references are server-sealed, but the browser only receives same-origin paths.
- * A filesystem/blob/external reference is deliberately not rendered as a successful image preview. */
-function browserSafeAssetPreview(storageReference: string | undefined): string | undefined {
-  if (!storageReference || !storageReference.startsWith("/") || storageReference.startsWith("//")) return undefined;
+/** Storage references are server-sealed, but the browser only receives same-origin
+ * paths or inert raster data URLs. Filesystem/blob/external references and SVG are
+ * deliberately not rendered as successful image previews. */
+export function browserSafeAssetPreview(storageReference: string | undefined): string | undefined {
+  if (!storageReference) return undefined;
+  if (/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]*={0,2}$/i.test(storageReference)) {
+    return storageReference;
+  }
+  if (!storageReference.startsWith("/") || storageReference.startsWith("//")) return undefined;
   const path = storageReference.split("?")[0] ?? "";
   return path.split("/").some((segment) => segment === "..") ? undefined : storageReference;
 }
@@ -273,9 +279,27 @@ export function sceneForMaster(
       if (item.kind === "line") return { ...common, kind: "line" as const };
       if (item.kind === "rect") return { ...common, kind: "shape" as const };
       return { ...common, kind: "text" as const, text: item.text ?? "" };
-    });
+  });
   const slideTitle = slide.nodes.find((node) => node.kind === "text" && node.role === "title");
+  const ownershipByQid = new Map(slide.hybridExport?.ownerDecisions.map((entry) => [entry.ownerId, entry]));
+  const rasterIslandByQid = new Map(
+    slide.hybridExport?.rasterIslands.flatMap((island) =>
+      island.sourceOwnerIds.map((ownerId) => [ownerId, island.islandId] as const),
+    ),
+  );
+  const renderOwnershipFor = (elementId: string) => {
+    const decision = ownershipByQid.get(elementId);
+    if (!decision) return undefined;
+    const rasterIslandId = rasterIslandByQid.get(elementId);
+    return {
+      decision: decision.decision,
+      capabilityId: decision.capabilityId,
+      ...(decision.reasonCode ? { reasonCode: decision.reasonCode } : {}),
+      ...(rasterIslandId ? { rasterIslandId } : {}),
+    };
+  };
   const bodyElements = [...slide.nodes].sort((left, right) => left.zOrder - right.zOrder).map((node) => {
+    const renderOwnership = renderOwnershipFor(node.id);
     if (node.kind === "text") {
       return {
         id: node.id,
@@ -283,14 +307,17 @@ export function sceneForMaster(
         label: node.semanticRole === "title" ? labels.title : node.semanticRole,
         semanticRole: node.semanticRole,
         editability: node.editability,
+        ...(renderOwnership ? { renderOwnership } : {}),
         text: node.text,
         bounds: { ...normalize(node.bounds, contract), rotation: node.rotation },
         style: {
-          color: contract.tokens.colors.textPrimary,
-          fontFamily: contract.fontManifest.primary,
-          fontSize: node.role === "title"
+          color: node.style?.color ?? contract.tokens.colors.textPrimary,
+          fontFamily: node.style?.fontFamily ?? contract.fontManifest.primary,
+          fontSize: node.style?.fontSize ?? (node.role === "title"
             ? contract.semanticStyles.title.fontPt
-            : contract.semanticStyles.body.fontPt,
+            : contract.semanticStyles.body.fontPt),
+          fontWeight: node.style?.fontWeight,
+          textAlign: node.style?.textAlign,
         },
       };
     }
@@ -302,6 +329,7 @@ export function sceneForMaster(
         label: node.altText,
         semanticRole: node.semanticRole,
         editability: node.editability,
+        ...(renderOwnership ? { renderOwnership } : {}),
         assetId: node.assetId,
         assetDigest: node.digest,
         alt: node.altText,
@@ -322,6 +350,7 @@ export function sceneForMaster(
         semanticRole: node.semanticRole,
         shape: node.shape,
         editability: node.editability,
+        ...(renderOwnership ? { renderOwnership } : {}),
         bounds: { ...normalize(node.bounds, contract), rotation: node.rotation },
         style: {
           backgroundColor: node.fill ?? contract.tokens.colors.accent,
@@ -336,6 +365,7 @@ export function sceneForMaster(
         label: node.semanticRole,
         semanticRole: node.semanticRole,
         editability: node.editability,
+        ...(renderOwnership ? { renderOwnership } : {}),
         bounds: { ...normalize(node.bounds, contract), rotation: node.rotation },
         dataId: node.dataId,
         dataDigest: node.dataDigest,
@@ -350,6 +380,7 @@ export function sceneForMaster(
       label: node.semanticRole,
       semanticRole: node.semanticRole,
       editability: node.editability,
+      ...(renderOwnership ? { renderOwnership } : {}),
       bounds: { ...normalize(node.bounds, contract), rotation: node.rotation },
       capabilityMessage: `Scene ${node.kind} editing is limited to the sealed capabilities for this object.`,
     };

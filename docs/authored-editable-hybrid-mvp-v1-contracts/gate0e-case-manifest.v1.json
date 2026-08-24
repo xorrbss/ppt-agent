@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "authored-editable-hybrid-gate0e-case-manifest/v1",
+  "profileId": "authored-editable-hybrid-ko-en-basic-v1",
+  "authorityDomain": "structural_test",
+  "manifestDigest": "sha256:07c236cc2e54ba3a80f31087b63613e601e32f81b5334f64b803abb5ddd180db",
+  "requiredCaseCount": 15,
+  "noSkip": true,
+  "cases": [
+    { "ordinal": 1, "caseId": "g0e.cas.stale-scene", "expectedHttpStatus": 409, "expectedErrorCode": "editable_mvp_stale_scene_cas" },
+    { "ordinal": 2, "caseId": "g0e.cas.stale-slide", "expectedHttpStatus": 409, "expectedErrorCode": "editable_mvp_stale_slide_cas" },
+    { "ordinal": 3, "caseId": "g0e.authority.cross-owner", "expectedHttpStatus": 403, "expectedErrorCode": "editable_mvp_cross_owner" },
+    { "ordinal": 4, "caseId": "g0e.authority.cross-tenant", "expectedHttpStatus": 403, "expectedErrorCode": "editable_mvp_cross_tenant" },
+    { "ordinal": 5, "caseId": "g0e.qid.missing", "expectedHttpStatus": 422, "expectedErrorCode": "editable_mvp_qid_missing" },
+    { "ordinal": 6, "caseId": "g0e.qid.duplicate", "expectedHttpStatus": 422, "expectedErrorCode": "editable_mvp_qid_duplicate" },
+    { "ordinal": 7, "caseId": "g0e.qid.ghost", "expectedHttpStatus": 422, "expectedErrorCode": "editable_mvp_qid_ghost" },
+    { "ordinal": 8, "caseId": "g0e.admission.unsupported-native", "expectedHttpStatus": 422, "expectedErrorCode": "editable_mvp_unsupported_native" },
+    { "ordinal": 9, "caseId": "g0e.ownership.native-raster-duplicate", "expectedHttpStatus": 422, "expectedErrorCode": "editable_mvp_duplicate_owner" },
+    { "ordinal": 10, "caseId": "g0e.seal.active-manifest-drift", "expectedHttpStatus": 409, "expectedErrorCode": "editable_mvp_active_manifest_drift" },
+    { "ordinal": 11, "caseId": "g0e.seal.artifact-byte-drift", "expectedHttpStatus": 409, "expectedErrorCode": "editable_mvp_artifact_byte_drift" },
+    { "ordinal": 12, "caseId": "g0e.seal.signer-nonce-replay", "expectedHttpStatus": 409, "expectedErrorCode": "editable_mvp_signer_nonce_replay" },
+    { "ordinal": 13, "caseId": "g0e.seal.stale-completion-cas", "expectedHttpStatus": 409, "expectedErrorCode": "editable_mvp_stale_completion_cas" },
+    { "ordinal": 14, "caseId": "g0e.seal.different-second-seal", "expectedHttpStatus": 409, "expectedErrorCode": "editable_mvp_completion_already_sealed" },
+    { "ordinal": 15, "caseId": "g0e.authority.local-receipt-external-validator", "expectedHttpStatus": 403, "expectedErrorCode": "editable_mvp_receipt_not_external_authority" }
+  ]
+}

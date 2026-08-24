@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:presenton:authored-editable-hybrid:gate1e-artifact-source-map:v1",
+  "$defs": {
+    "attempt": {
+      "type": "object",
+      "required": ["presentationId", "presentationRevision", "generationAttemptId", "hybridExportAttemptId", "sceneDigest", "activeManifestDigest", "gateMinus1eResultSetDigest", "gate0eResultSetDigest", "sourceHeadCommit", "expectedQids"],
+      "properties": {
+        "presentationId": { "type": "string", "minLength": 8 },
+        "presentationRevision": { "type": "integer", "minimum": 1 },
+        "generationAttemptId": { "type": "string", "minLength": 8 },
+        "hybridExportAttemptId": { "type": "string", "minLength": 8 },
+        "sceneDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "activeManifestDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "gateMinus1eResultSetDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "gate0eResultSetDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "sourceHeadCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "expectedQids": { "type": "array", "minItems": 5, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+      },
+      "additionalProperties": true
+    }
+  },
+  "type": "object",
+  "required": ["schemaVersion", "authorityDomain", "attempt", "artifacts"],
+  "properties": {
+    "schemaVersion": { "const": "authored-editable-hybrid-gate1e-artifact-source-map/v1" },
+    "authorityDomain": { "const": "actual_product" },
+    "attempt": { "$ref": "#/$defs/attempt" },
+    "artifacts": {
+      "type": "array",
+      "minItems": 35,
+      "maxItems": 35,
+      "items": {
+        "type": "object",
+        "required": ["artifactId", "path", "sha256", "byteLength", "mediaType"],
+        "properties": {
+          "artifactId": { "type": "string", "minLength": 1 },
+          "path": { "type": "string", "minLength": 1 },
+          "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+          "byteLength": { "type": "integer", "minimum": 1 },
+          "mediaType": { "type": "string", "minLength": 1 },
+          "versionId": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

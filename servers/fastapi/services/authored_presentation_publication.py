@@ -46,6 +46,10 @@ from services.authored_vnext.semantic.canonical import SemanticContractError
 from services.authored_vnext.semantic.publication import (
     publish_authored_semantic_bundle_graph,
 )
+from services.authored_vnext.semantic.editable_scene import (
+    PROFILE_ID as EDITABLE_HYBRID_PROFILE_ID,
+)
+from models.authored_vnext.deck import DeckSceneIR
 from utils.llm_calls.author_slide import Brand
 
 
@@ -190,6 +194,7 @@ async def publish_authored_presentation(
     out_path: str,
     attempt_token: str | None,
     master_generation=None,
+    canonical_scene: DeckSceneIR | None = None,
     native_export_evidence: dict[str, object] | None = None,
     header_contract: AuthoredHeaderContract | None = None,
     chapter_plan: AuthoredChapterPlan | None = None,
@@ -464,8 +469,24 @@ async def publish_authored_presentation(
                 }
             )
         )
+        scene_blocker = None
+        if canonical_scene is None:
+            # Unpinned/legacy callers do not own a durable generation deck.
+            # Keep them explicitly blocked instead of projecting an in-memory
+            # Scene that Workbench and export cannot subsequently restore.
+            scene_blocker = "editable_hybrid_generation_deck_unavailable"
+        elif (
+            canonical_scene.revision != expected_revision + 1
+            or canonical_scene.deck_id != f"deck:semantic-{presentation_id.hex}"
+        ):
+            raise AuthoredStageError(
+                slide_index=0,
+                stage="persist",
+                code="authored_semantic_scene_identity_mismatch",
+                retryable=False,
+            )
         try:
-            await publish_authored_semantic_bundle_graph(
+            semantic_manifest = await publish_authored_semantic_bundle_graph(
                 sql_session,
                 presentation_id=presentation_id,
                 owner_id=presentation.owner_id,
@@ -479,6 +500,7 @@ async def publish_authored_presentation(
                 semantic_drafts=semantic_components,
                 master_contract_digest=master_contract_digest,
                 composition_digest=composition_digest,
+                canonical_scene=canonical_scene,
             )
         except SemanticContractError as error:
             raise AuthoredStageError(
@@ -488,6 +510,50 @@ async def publish_authored_presentation(
                 retryable=False,
                 cause=error,
             ) from error
+        projection = {
+            "schemaVersion": "authored-editable-hybrid-scene-projection/v1",
+            "profileId": EDITABLE_HYBRID_PROFILE_ID,
+            "deckId": (
+                canonical_scene.deck_id
+                if canonical_scene is not None
+                else f"deck:semantic-{presentation_id.hex}"
+            ),
+            "deckRevision": expected_revision + 1,
+            "deckDigest": semantic_manifest.canonical_digest,
+            "sourceDigest": (
+                canonical_scene.source_digest if canonical_scene is not None else None
+            ),
+            "sceneDigest": (
+                canonical_scene.scene_digest if canonical_scene is not None else None
+            ),
+            "scene": (
+                canonical_scene.model_dump(mode="json", by_alias=True)
+                if canonical_scene is not None
+                else None
+            ),
+            "status": "shadow" if canonical_scene is not None else "blocked",
+            "reasonCode": (
+                "editable_hybrid_mvp_completion_not_sealed"
+                if canonical_scene is not None
+                else "editable_hybrid_scene_unavailable"
+            ),
+            "blockerDetail": scene_blocker,
+            "promotionReady": False,
+            "deploymentAuthorized": False,
+        }
+        presentation.theme = {
+            **dict(presentation.theme or {}),
+            "authored_vnext": projection,
+        }
+        if canonical_scene is not None:
+            for slide, scene_slide in zip(
+                slides, canonical_scene.slides, strict=True
+            ):
+                slide.content = {
+                    **dict(slide.content or {}),
+                    "sceneSlideDigest": scene_slide.slide_digest,
+                    "sceneSlide": scene_slide.model_dump(mode="json", by_alias=True),
+                }
         if exact_provenance is not None:
             sql_session.add(
                 AuthoredExactProvenance(

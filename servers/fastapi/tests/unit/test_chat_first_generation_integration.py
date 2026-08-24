@@ -692,7 +692,7 @@ def test_bare_generate_bootstrap_persists_and_claims_reference_snapshots(
             content="Build from the canonical uploaded reference",
             n_slides=4,
             language="en",
-            strategy="adaptive",
+            strategy="authored",
             reference_snapshot_ids=[snapshot_id],
         )
         try:
@@ -731,6 +731,11 @@ def test_bare_generate_bootstrap_persists_and_claims_reference_snapshots(
                     await session.execute(select(WorkspaceOperation))
                 ).scalar_one()
                 assert presentation.reference_snapshot_ids == [str(snapshot_id)]
+                assert presentation.profile_driver_id == "authored"
+                assert presentation.profile_schema_version == 1
+                assert presentation.mode == "authored"
+                assert presentation.version == "v1-standard"
+                assert presentation.theme == {"mode": "authored"}
                 assert operation.request_payload["asset_ids"] == [str(asset_id)]
                 assert operation.request_payload["generation_settings"][
                     "reference_snapshot_ids"

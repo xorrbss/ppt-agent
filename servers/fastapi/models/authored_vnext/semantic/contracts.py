@@ -15,6 +15,7 @@ import uuid
 from pydantic import Field, field_validator, model_validator
 
 from models.authored_vnext.master.base import Digest, StrictCamelModel
+from models.authored_vnext.deck.scene import DeckSceneIR
 
 
 QID_PATTERN = r"^[A-Za-z][A-Za-z0-9._:-]{0,127}$"
@@ -455,11 +456,20 @@ class AuthoredDeckEmissionManifestV1(StrictCamelModel):
     asset_manifest_digest: Digest
     font_manifest_digest: Digest
     quality_policy_version: PolicyVersion
+    scene_digest: Digest | None = None
+    scene: DeckSceneIR | None = None
     canonical_digest: Digest | None = None
 
     @model_validator(mode="after")
     def complete_ordered_deck(self) -> "AuthoredDeckEmissionManifestV1":
         _require_unique((item.slide_id for item in self.ordered_slides), "authored_manifest_slide_duplicate")
+        if (self.scene is None) != (self.scene_digest is None):
+            raise ValueError("authored_manifest_scene_binding_incomplete")
+        if self.scene is not None and (
+            self.scene.scene_digest != self.scene_digest
+            or self.scene.revision != self.presentation_revision
+        ):
+            raise ValueError("authored_manifest_scene_binding_mismatch")
         return self
 
 

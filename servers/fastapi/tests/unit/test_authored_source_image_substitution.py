@@ -461,6 +461,32 @@ def test_asset_id_survives_author_admission_and_is_gone_once_finalized(
     assert _PNG_DATA_URI in finalized
 
 
+def test_model_supplied_src_on_source_slot_is_inert_until_verified_substitution(
+    tmp_path: Path,
+):
+    authored = _ADMISSIBLE_SHELL.format(
+        body=(
+            '<img data-asset-id="src-1" src="features.png" '
+            'style="width:640px;height:480px">'
+        )
+    )
+
+    kept = validate_authored_slide_html(authored, allow_illustration_slots=True)
+    assert 'src="features.png"' in kept
+
+    substituted = _run(
+        apply_authored_illustration(
+            kept,
+            _style(),
+            _Service(SimpleNamespace(path=str(_candidate(tmp_path).path))),
+            source_images={"src-1": _candidate(tmp_path)},
+        )
+    )
+    assert 'src="features.png"' not in substituted
+    assert _PNG_DATA_URI in substituted
+    validate_authored_slide_html(substituted, finalized=True)
+
+
 def test_an_unresolved_asset_slot_still_finalizes(tmp_path: Path):
     """A dropped slot leaves no marker behind for admission to trip over."""
     authored = _ADMISSIBLE_SHELL.format(body=_asset_html("never-offered"))

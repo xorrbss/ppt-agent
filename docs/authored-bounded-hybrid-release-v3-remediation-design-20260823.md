@@ -9,6 +9,24 @@ process evidence must all be corrected in a fresh 18-case rerun. This document d
 not authorize implementation, schema migration, product export, deployment, merge,
 promotion, or schema freeze.
 
+Local-only qualification is now specified separately by
+`authored-bounded-hybrid-local-release-v1-design-20260824.md`. That overlay adds
+`localReleaseReady` without changing this document's external Gate 1,
+`promotionReady`, or `deploymentAuthorized` semantics. A local completion must use a
+new profile, authority domain, attempt, evidence graph, and completion record; it may
+not seal or reinterpret an existing pending external completion.
+
+The immediate product priority is instead governed by
+`authored-editable-hybrid-mvp-v1-design-20260824.md`. It restricts native admission to
+Korean/English text, basic solid shapes, ordinary images/rectangular crop, and basic
+tables; completes the actual Scene -> Workbench edit -> native PPTX -> PowerPoint
+round trip before Gate sealing; and leaves unsupported content as bounded raster
+islands. For the MVP shadow path, that document supersedes this document's section
+14/15 implementation sequencing: the product path may be built and corrected in
+non-authoritative shadow mode before Gate -1E, but no native-ready receipt may issue
+until Gate -1E is `feasible`. This does not weaken this document's broader full Gate -1,
+external Gate 1, promotion, or deployment requirements.
+
 Normative companion contracts are under
 `docs/authored-bounded-hybrid-release-v3-contracts/`:
 

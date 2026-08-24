@@ -3,6 +3,7 @@ from __future__ import annotations
 # The publication admission path performs one local existence check.
 # ruff: noqa: ASYNC240
 
+import asyncio
 import logging
 import os
 import time
@@ -49,6 +50,13 @@ from services.authored_header_contract_service import (
 from services.authored_presentation_pipeline import _author_illustrate_render_pipeline
 from services.authored_presentation_publication import publish_authored_presentation
 from services.authored_semantic_candidate import compile_semantic_components
+from models.authored_vnext.deck import ValidatedSlideSpecV2
+from services.authored_vnext.generation.ai_text_zones import AITextZoneContext
+from services.authored_vnext.generation.legacy_bridge import _generate_snapshot
+from services.authored_vnext.generation.legacy_pin import generation_repository_for_owner
+from services.authored_vnext.generation.pipeline import _seal_deck
+from services.authored_vnext.master.digests import canonical_digest
+from services.authored_vnext.semantic.editable_scene import build_editable_hybrid_scene
 from services.image_generation_service import ImageGenerationService
 from services.authored_source_images import collect_source_image_candidates
 from services.provider_usage_instrumentation import provider_usage_scope, record_local_stage
@@ -67,10 +75,109 @@ from utils.llm_calls.author_slide import (
     authored_semantic_dual_output_mode,
 )
 from utils.llm_calls.author_vision_qa import revise_authored_deck
-from utils.slide_capture import _placeholder_png, find_chrome
+from utils.slide_capture import _placeholder_png, ensure_browser_metrics, find_chrome
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+async def _persist_master_pinned_editable_scene_deck(
+    *,
+    request: GeneratePresentationRequest,
+    presentation_id: uuid.UUID,
+    outline: PresentationOutlineModel,
+    owner_id: uuid.UUID,
+    style,
+    htmls: list[str],
+    pngs: list[bytes],
+    semantic_components: list[dict[str, object]],
+    revision: int,
+):
+    """Bridge normal Authored output into the vNext durable CAS deck log.
+
+    The pinned-master planner contributes only its sealed master/composition and
+    compatibility slide container. Authored HTML plus browser telemetry remains
+    the sole visual/semantic authority for the canonical Scene.
+    """
+
+    resolved = request._authored_master_resolution
+    if resolved is None:
+        return None
+    source_semantic_snapshot = request._authored_source_semantic_snapshot
+    result, _master, composition = await asyncio.to_thread(
+        _generate_snapshot,
+        owner_id=owner_id,
+        presentation_id=presentation_id,
+        outline=outline,
+        resolved=resolved,
+        authored_style=style,
+        composition_pin=request._authored_composition_pin,
+        ai_text_context=AITextZoneContext(
+            materials=tuple(slide.content for slide in outline.slides)
+        ),
+        source_semantic_snapshot=(
+            source_semantic_snapshot
+            if isinstance(source_semantic_snapshot, dict)
+            else None
+        ),
+    )
+    base = result.deck
+    if revision != 1:
+        raise ValueError("normal Authored semantic deck must start at revision 1")
+    # Author/render checkpoints survive process restarts, while the DOM metrics
+    # cache is intentionally process-local.  Recollect the exact instrumented
+    # HTML before Scene compilation so a retry cannot publish every owner as
+    # geometry-unavailable merely because its PNG outlived the worker process.
+    telemetry = await asyncio.gather(
+        *(ensure_browser_metrics(html) for html in htmls)
+    )
+    if any(metrics is None for metrics in telemetry):
+        raise ValueError("editable Hybrid Scene browser telemetry is unavailable")
+    deck_id = f"deck:semantic-{presentation_id.hex}"
+    scene = build_editable_hybrid_scene(
+        presentation_id=str(presentation_id),
+        revision=revision,
+        slides=None,
+        slide_ids=[item.slide.slide_id for item in base.slides],
+        deck_id=deck_id,
+        htmls=htmls,
+        pngs=pngs,
+        semantic_drafts=semantic_components,
+        composition_digest=composition.digest,
+    )
+    sealed_slides: list[ValidatedSlideSpecV2] = []
+    for item, scene_slide in zip(base.slides, scene.slides, strict=True):
+        slide_values = item.slide.model_dump(mode="json", by_alias=False)
+        slide_values["revision"] = revision
+        slide_values.pop("spec_digest", None)
+        digest_payload = item.slide.model_dump(mode="json", by_alias=True)
+        digest_payload["revision"] = revision
+        digest_payload.pop("specDigest", None)
+        slide_values["spec_digest"] = canonical_digest(digest_payload)
+        sealed_slides.append(
+            ValidatedSlideSpecV2(
+                slide=type(item.slide).model_validate(slide_values),
+                checkpoint=item.checkpoint.model_copy(
+                    update={
+                        "source_digest": scene.source_digest,
+                        "scene_digest": scene_slide.slide_digest,
+                    }
+                ),
+                scene=scene_slide,
+            )
+        )
+    deck = _seal_deck(
+        deck_id=deck_id,
+        revision=revision,
+        parent=None,
+        pin=base.master,
+        composition=composition,
+        source_digest=scene.source_digest,
+        slides=sealed_slides,
+        canonical_scene=scene,
+    )
+    generation_repository_for_owner(owner_id).append_imported_deck(deck)
+    return scene
 
 
 async def _generate_authored_presentation(
@@ -368,6 +475,20 @@ async def _generate_authored_presentation(
         raise error from exc
     export_elapsed = time.monotonic() - export_started
     semantic_components = compile_semantic_components(htmls)
+    editable_scene = None
+    publication_owner_id = existing.owner_id if existing is not None else None
+    if publication_owner_id is not None:
+        editable_scene = await _persist_master_pinned_editable_scene_deck(
+            request=request,
+            presentation_id=presentation_id,
+            outline=outline,
+            owner_id=publication_owner_id,
+            style=style,
+            htmls=htmls,
+            pngs=pngs,
+            semantic_components=semantic_components,
+            revision=(existing.revision if existing is not None else 0) + 1,
+        )
     published_path, persist_elapsed = await publish_authored_presentation(
         request=request,
         presentation_id=presentation_id,
@@ -389,6 +510,7 @@ async def _generate_authored_presentation(
         out_path=out_path,
         attempt_token=attempt_token,
         master_generation=None,
+        canonical_scene=editable_scene,
         native_export_evidence=native_export_evidence,
         header_contract=header_contract,
     )

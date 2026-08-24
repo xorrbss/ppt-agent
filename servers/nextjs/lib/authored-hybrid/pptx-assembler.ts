@@ -43,6 +43,7 @@ export interface AuthoredHybridSlideLayer {
 }
 export interface AuthoredHybridPptxProvenance {
   readonly exportAttemptId?: string; readonly presentationRevision?: number;
+  readonly profileId?: "authored-editable-hybrid-ko-en-basic-v1";
   readonly canonicalSourceDigest?: string; readonly sourceDigest?: string;
 }
 export interface AuthoredHybridAssemblerOptions extends PowerPointTypefaceSerializationOptions {
@@ -223,10 +224,7 @@ function semanticOwnerQids(layer: AuthoredHybridSlideLayer): string[] {
   for (const qid of qids) {
     if (
       typeof qid !== "string" ||
-      qid.length < 1 ||
-      qid.length > 512 ||
-      qid !== qid.trim() ||
-      /[\u0000-\u001f\u007f]/u.test(qid) ||
+      !/^[A-Za-z][A-Za-z0-9._:-]{0,95}$/.test(qid) ||
       unique.has(qid)
     ) {
       throw new Error("Hybrid semantic ownership QIDs must be unique bounded strings.");
@@ -442,6 +440,7 @@ function provenanceProperties(provenance?: AuthoredHybridPptxProvenance) {
   return [
     provenance.exportAttemptId === undefined ? null : { name: "Presenton.ExportAttemptId", value: provenance.exportAttemptId },
     provenance.presentationRevision === undefined ? null : { name: "Presenton.PresentationRevision", value: provenance.presentationRevision },
+    provenance.profileId === undefined ? null : { name: "Presenton.EditableHybridProfileId", value: provenance.profileId },
     digest(provenance.canonicalSourceDigest, "canonicalSourceDigest") === undefined ? null : { name: "Presenton.CanonicalSourceDigest", value: digest(provenance.canonicalSourceDigest, "canonicalSourceDigest")! },
     digest(provenance.sourceDigest, "sourceDigest") === undefined ? null : { name: "Presenton.SourceDigest", value: digest(provenance.sourceDigest, "sourceDigest")! },
   ].filter((property): property is { name: string; value: string | number } => property !== null);
@@ -483,6 +482,10 @@ function assembleSlide(
   );
   const useSlideBackground = isOpaqueRgbPng(layer.backplatePng);
   const ownershipQids = semanticOwnerQids(layer);
+  const nativeOwnerQids = new Set(layer.elements.map((item) => item.source.id));
+  if (ownershipQids.some((qid) => nativeOwnerQids.has(qid))) {
+    throw new Error("Hybrid native/raster duplicate semantic owner detected.");
+  }
 
   // A full-canvas page-colour rectangle belongs below the residual raster.
   // All other promoted geometry, text-owned container paint, transparent text

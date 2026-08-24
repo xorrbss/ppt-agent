@@ -157,6 +157,7 @@ def mutate_scene_element(
             element_id=command.element_id,
             mutation=command.kind,
             payload=command.payload,
+            expected_scene_digest=command.expected_scene_digest,
             expected_slide_revision=command.expected_slide_revision,
             expected_slide_digest=command.expected_slide_digest,
         )
@@ -182,10 +183,6 @@ def mutate_scene_element(
             for element in current.scene.slides[slide_index].elements
             if element.element_id == command.element_id
         )
-        if old_element.semantic_role == "title":
-            raise GenerationConflictError(
-                "title scene mutation requires title-fit recomputation"
-            )
         if old_element.semantic_role == "body":
             slide_values["body"] = command.payload["text"]
     content_payload = {

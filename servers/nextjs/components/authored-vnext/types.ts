@@ -2,6 +2,42 @@ import type { CSSProperties, ReactNode } from "react";
 
 export type WorkbenchEntityId = string;
 
+/** Server-issued v4 state. It must never be derived from local canvas support. */
+export interface EditableHybridMvpReadiness {
+  profileId: "authored-editable-hybrid-ko-en-basic-v1";
+  releaseScope: "ko-en-text-solid-shape-image-crop-basic-table";
+  status: "not-evaluated" | "shadow" | "ready" | "blocked" | "expired";
+  editableHybridMvpReady: boolean;
+  nativeEditableReady: boolean;
+  reasonCode: string;
+}
+
+export interface NativeCapabilityReadinessV1 {
+  capabilityId: string;
+  version: `v${number}`;
+  status: "notEvaluated" | "notVerified" | "ready" | "fidelityFallback" | "blocked";
+  ready: boolean;
+  reasonCode: string;
+  nativeOwnerCount: number;
+  rasterOwnerCount: number;
+  blockedOwnerCount: number;
+  receiptDigest?: string | null;
+}
+
+export interface NativeCapabilityProjectionV1 {
+  schemaVersion: "authored-native-capability-projection/v1";
+  capabilitySetVersion: "v1";
+  admissionVersion: "v1";
+  readinessVersion: "v1";
+  sceneDigest?: string | null;
+  capabilities: NativeCapabilityReadinessV1[];
+  duplicateOwnerCount: 0;
+  missingOwnerCount: 0;
+  fullNativeParityReady: false;
+  promotionReady: false;
+  deploymentAuthorized: false;
+}
+
 export type WorkbenchLoadState =
   | "ready"
   | "loading"
@@ -67,6 +103,14 @@ export interface FurnitureTextColorEvidence {
   source: "backend" | "computed";
 }
 
+/** Server-sealed Hybrid ownership for one authored QID; never browser-inferred. */
+export interface HybridRenderOwnership {
+  decision: "nativeEditable" | "rasterIsland" | "publicationBlocked";
+  capabilityId: string;
+  reasonCode?: string;
+  rasterIslandId?: string;
+}
+
 interface MasterElementBase {
   id: WorkbenchEntityId;
   bounds: ElementBounds;
@@ -90,7 +134,10 @@ interface BodyElementBase {
     geometry: boolean;
     asset: boolean;
     data: boolean;
+    style?: boolean;
   };
+  /** Omitted only for older Scenes that did not emit a Hybrid ownership plan. */
+  renderOwnership?: HybridRenderOwnership;
 }
 
 export interface TextBodyElement extends BodyElementBase {
@@ -186,6 +233,26 @@ export interface GeometryPatchCommand extends CommandBase {
   kind: "geometry.patch";
   patch: Partial<ElementBounds>;
 }
+export interface TextStylePatchCommand extends CommandBase {
+  kind: "text.style.patch";
+  patch: { color?: string; fontFamily?: string; fontSize?: number; fontWeight?: number; textAlign?: "left" | "center" | "right" | "justify" };
+}
+export interface ShapeStylePatchCommand extends CommandBase {
+  kind: "shape.style.patch";
+  patch: { fill?: string | null; stroke?: string | null; strokeWidth?: number | null };
+}
+export interface ImageCropPatchCommand extends CommandBase {
+  kind: "image.crop.patch";
+  patch: { cropGeometry: { left: number; top: number; right: number; bottom: number } };
+}
+export interface TableCellPatchCommand extends CommandBase {
+  kind: "table.cell.patch";
+  patch: { row: number; column: number; text?: string; fill?: string | null; borders?: Record<string, unknown>; horizontalAlign?: string; verticalAlign?: string };
+}
+export interface TableColumnWidthsPatchCommand extends CommandBase {
+  kind: "table.column-widths.patch";
+  patch: { columnWidthsPt: number[] };
+}
 
 export interface AssetReplaceCommand extends CommandBase {
   kind: "asset.replace";
@@ -220,7 +287,12 @@ export interface LayoutApplyCommand extends CommandBase {
 
 export type WorkbenchTypedCommand =
   | TextPatchCommand
+  | TextStylePatchCommand
   | GeometryPatchCommand
+  | ShapeStylePatchCommand
+  | ImageCropPatchCommand
+  | TableCellPatchCommand
+  | TableColumnWidthsPatchCommand
   | AssetReplaceCommand
   | DataSetCommand
   | LayoutApplyCommand;
@@ -246,12 +318,14 @@ export type InspectorModel =
       context: CommandContext;
       text: string;
       style?: CanvasElementStyle;
+      styleEditable?: boolean;
     }
   | {
       kind: "geometry";
       context: CommandContext;
       bounds: ElementBounds;
     }
+  | { kind: "shape"; context: CommandContext; fill?: string; stroke?: string; strokeWidth?: number; geometry?: ElementBounds }
   | {
       kind: "asset";
       context: CommandContext;
@@ -262,6 +336,7 @@ export type InspectorModel =
       mediaType?: AssetBodyElement["mediaType"];
       storageReference?: string;
       sizeBytes?: number;
+      cropGeometry?: { left: number; top: number; right: number; bottom: number };
     }
   | {
       kind: "data";
@@ -286,7 +361,7 @@ export type InspectorModel =
     }
   | {
       kind: "capability";
-      nodeKind: CapabilityBodyElement["kind"];
+      nodeKind: BodyLayerElement["kind"];
       label: string;
       message: string;
       editability: BodyElementBase["editability"];

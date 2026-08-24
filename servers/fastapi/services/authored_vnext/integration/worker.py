@@ -105,6 +105,21 @@ class NativeSceneOoxmlWorkerTransport:
                     "elementIds": [
                         element["elementId"] for element in native_slide["elements"]
                     ],
+                    **(
+                        {
+                            "rasterIslandIds": [
+                                island["islandId"]
+                                for island in native_slide.get("rasterIslands", [])
+                            ],
+                            "rasterOwnerIds": sorted(
+                                owner_id
+                                for island in native_slide.get("rasterIslands", [])
+                                for owner_id in island["sourceOwnerIds"]
+                            ),
+                        }
+                        if "ownerDecisions" in native_slide
+                        else {}
+                    ),
                 }
             )
         return {
@@ -121,7 +136,7 @@ class NativeSceneOoxmlWorkerTransport:
                 "contentBase64": base64.b64encode(content).decode("ascii"),
             },
             "receipt": {
-                "adapterRevision": 3,
+                "adapterRevision": 4,
                 "validation": "candidate-reopened",
                 "candidateDigestVerified": True,
                 "package": {
@@ -153,6 +168,7 @@ class NativeSceneOoxmlWorkerTransport:
                 "scene": native["scene"],
                 "capabilities": native["capabilities"],
                 "nativeObjectCounts": native["nativeObjectCounts"],
+                "hybridOwnership": native["hybridOwnership"],
             },
         }
 

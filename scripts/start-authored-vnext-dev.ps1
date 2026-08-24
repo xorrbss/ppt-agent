@@ -277,7 +277,8 @@ $fastApiReleaseQaEnvironmentKeys = @(
     "AUTHORED_RELEASE_BACKEND_COMMIT_SHA",
     "AUTHORED_RELEASE_KILL_SWITCHES",
     "AUTHORED_RELEASE_VISUAL_GATE_HMAC_KEY",
-    "AUTHORED_RELEASE_CI_EVIDENCE_HMAC_KEY"
+    "AUTHORED_RELEASE_CI_EVIDENCE_HMAC_KEY",
+    "AUTHORED_EDITABLE_MVP_TRUST_SHA256"
 )
 foreach ($environmentKey in $fastApiReleaseQaEnvironmentKeys) {
     $environmentValue = [Environment]::GetEnvironmentVariable($environmentKey)

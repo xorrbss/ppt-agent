@@ -9,6 +9,12 @@ export interface PresentationMasterPin {
   fontManifestDigest?: string;
 }
 
+export interface EditableHybridWorkbenchProjection {
+  deckId: string;
+  status: "shadow" | "ready" | "blocked";
+  reasonCode?: string;
+}
+
 function record(value: unknown): UnknownRecord | null {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as UnknownRecord)
@@ -77,6 +83,29 @@ export function presentationMasterPin(
       "font_manifest_digest",
     ]),
   };
+}
+
+/**
+ * Accept only the exact normal-publication bridge. A loose theme object must
+ * never manufacture a Workbench route or imply editable-Hybrid readiness.
+ */
+export function presentationEditableHybridWorkbench(
+  presentation: unknown,
+): EditableHybridWorkbenchProjection | null {
+  const source = record(presentation);
+  const bridge = record(record(source?.theme)?.authored_vnext);
+  if (
+    !bridge ||
+    bridge.schemaVersion !== "authored-editable-hybrid-scene-projection/v1" ||
+    bridge.profileId !== "authored-editable-hybrid-ko-en-basic-v1" ||
+    typeof bridge.deckId !== "string" ||
+    !/^deck:[a-z0-9][a-z0-9._-]*$/u.test(bridge.deckId) ||
+    (bridge.status !== "shadow" && bridge.status !== "ready" && bridge.status !== "blocked")
+  ) return null;
+  const reasonCode = typeof bridge.reasonCode === "string" && bridge.reasonCode.trim()
+    ? bridge.reasonCode.trim()
+    : undefined;
+  return { deckId: bridge.deckId, status: bridge.status, ...(reasonCode ? { reasonCode } : {}) };
 }
 
 export function presentationSlideLayoutId(

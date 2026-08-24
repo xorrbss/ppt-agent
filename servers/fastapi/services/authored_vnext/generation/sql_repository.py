@@ -47,6 +47,7 @@ from services.authored_vnext.integration.sql_repository import (
     AuthoredVNextSqlRepository,
 )
 from services.authored_vnext.master.digests import canonical_json
+from services.authored_vnext.master.errors import DeckAlreadyExistsError
 from .composition import remember_composition_pin
 from .sql_publication import append_generation_deck
 
@@ -227,6 +228,28 @@ class SqlGenerationRepository:
             deck = DeckGenerationSnapshot.model_validate(row.payload)
             remember_composition_pin(deck.composition)
             return deck
+
+    @_retry_sqlite_write
+    def append_imported_deck(self, deck: DeckGenerationSnapshot) -> None:
+        """Persist a sealed product-path deck that was authored outside the planner.
+
+        The normal Authored generator owns its semantic Scene, while this
+        repository owns the durable deck CAS log used by Workbench and export.
+        Imported publication is intentionally creation-only: a retry may read
+        the byte-identical revision, but it can never overwrite an existing
+        revision or advance a head without the normal mutation operation fence.
+        """
+
+        try:
+            self._base.append_deck(
+                deck,
+                expected_revision=None,
+                expected_digest=None,
+            )
+        except DeckAlreadyExistsError:
+            current = self.get_deck(deck.deck_id, deck.revision)
+            if current != deck:
+                raise
 
     @_retry_sqlite_write
     def begin_operation(

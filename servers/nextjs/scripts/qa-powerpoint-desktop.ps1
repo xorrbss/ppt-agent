@@ -12,6 +12,12 @@ param(
 
 $ErrorActionPreference = "Stop"
 $semanticOwnershipPrefix = "presenton-semantic-raster-ownership-v1:"
+$authoredNativeOwnershipPrefix = "authored-vnext:"
+$authoredRasterIslandOwnershipPrefix = "authored-raster-island:"
+$nativeDetailMaxTableRows = 64
+$nativeDetailMaxTableColumns = 32
+$nativeDetailMaxTableCells = 512
+$nativeDetailMaxCellTextLength = 16384
 
 function Get-Sha256Text([string]$Value) {
   $bytes = [Text.Encoding]::UTF8.GetBytes($Value)
@@ -144,6 +150,276 @@ function Read-SemanticOwnershipAlternativeText(
     SlideNumber = [int]$payload.slideNumber
     Qids = @($qids)
     QidSetDigest = [string]$payload.qidSetDigest
+  }
+}
+
+function Read-AuthoredOwnershipAlternativeText(
+  [string]$AlternativeText,
+  [int]$ExpectedSlideNumber
+) {
+  $semanticOwnership = Read-SemanticOwnershipAlternativeText `
+    $AlternativeText $ExpectedSlideNumber
+  if ($null -ne $semanticOwnership) { return $semanticOwnership }
+
+  $prefix = $null
+  $field = $null
+  if ($AlternativeText.StartsWith($authoredNativeOwnershipPrefix)) {
+    $prefix = $authoredNativeOwnershipPrefix
+    $field = "elementId"
+  } elseif ($AlternativeText.StartsWith($authoredRasterIslandOwnershipPrefix)) {
+    $prefix = $authoredRasterIslandOwnershipPrefix
+    $field = "sourceOwnerIds"
+  } else {
+    return $null
+  }
+  try {
+    $payload = $AlternativeText.Substring($prefix.Length) | ConvertFrom-Json
+  } catch {
+    throw "Authored ownership AlternativeText is not valid JSON."
+  }
+  $qids = if ($field -eq "elementId") {
+    @($payload.elementId)
+  } else {
+    @($payload.sourceOwnerIds)
+  }
+  if (
+    $qids.Count -lt 1 -or
+    @($qids | Where-Object {
+      $_ -isnot [string] -or $_.Length -lt 1 -or $_.Length -gt 512 -or
+      $_ -ne $_.Trim() -or $_ -match '[\x00-\x1f\x7f]'
+    }).Count -ne 0 -or
+    @($qids | Sort-Object -Unique).Count -ne $qids.Count
+  ) {
+    throw "Authored ownership AlternativeText payload failed validation."
+  }
+  [PSCustomObject]@{
+    SchemaVersion = if ($field -eq "elementId") {
+      "authored-vnext-owner/v1"
+    } else {
+      "authored-raster-island-owner/v1"
+    }
+    SlideNumber = $ExpectedSlideNumber
+    Qids = @($qids)
+    QidSetDigest = Get-Sha256Text ($qids -join "`n")
+  }
+}
+
+function Release-PowerPointComObject($Value) {
+  if (
+    $null -ne $Value -and
+    [Runtime.InteropServices.Marshal]::IsComObject($Value)
+  ) {
+    [Runtime.InteropServices.Marshal]::FinalReleaseComObject($Value) | Out-Null
+  }
+}
+
+function Get-BoundedPowerPointCellText([string]$Value) {
+  if ($null -eq $Value) { return "" }
+  if ($Value.Length -gt $nativeDetailMaxCellTextLength) {
+    throw "PowerPoint table cell text exceeds the native readback bound."
+  }
+  $Value
+}
+
+function Read-PowerPointSolidFillPaint($FillFormat) {
+  if ($null -eq $FillFormat) { return $null }
+  $foreColor = $null
+  try {
+    $visible = [int]$FillFormat.Visible
+    $fillType = [int]$FillFormat.Type
+    $isSolid = $visible -eq -1 -and $fillType -eq 1
+    if ($isSolid) { $foreColor = $FillFormat.ForeColor }
+    [PSCustomObject]@{
+      Visible = $visible
+      Type = $fillType
+      IsSolid = $isSolid
+      ForeColorRgb = if ($null -ne $foreColor) {
+        [int]$foreColor.RGB
+      } else { $null }
+      Transparency = if ($visible -eq -1) {
+        [double]$FillFormat.Transparency
+      } else { $null }
+    }
+  } finally {
+    Release-PowerPointComObject $foreColor
+  }
+}
+
+function Read-PowerPointSolidLinePaint($LineFormat) {
+  if ($null -eq $LineFormat) { return $null }
+  $foreColor = $null
+  try {
+    $visible = [int]$LineFormat.Visible
+    $dashStyle = if ($visible -eq -1) {
+      [int]$LineFormat.DashStyle
+    } else { $null }
+    if ($visible -eq -1) { $foreColor = $LineFormat.ForeColor }
+    [PSCustomObject]@{
+      Visible = $visible
+      IsSolid = $visible -eq -1 -and $dashStyle -eq 1
+      DashStyle = $dashStyle
+      ForeColorRgb = if ($null -ne $foreColor) {
+        [int]$foreColor.RGB
+      } else { $null }
+      Transparency = if ($visible -eq -1) {
+        [double]$LineFormat.Transparency
+      } else { $null }
+      WeightPt = if ($visible -eq -1) {
+        [double]$LineFormat.Weight
+      } else { $null }
+    }
+  } finally {
+    Release-PowerPointComObject $foreColor
+  }
+}
+
+function Read-PowerPointTableNativeDetail($Shape) {
+  $table = $null
+  $rows = $null
+  $columns = $null
+  try {
+    $table = $Shape.Table
+    $rows = $table.Rows
+    $columns = $table.Columns
+    $rowCount = [int]$rows.Count
+    $columnCount = [int]$columns.Count
+    if (
+      $rowCount -gt $nativeDetailMaxTableRows -or
+      $columnCount -gt $nativeDetailMaxTableColumns -or
+      ($rowCount * $columnCount) -gt $nativeDetailMaxTableCells
+    ) {
+      throw "PowerPoint table exceeds the native readback bounds."
+    }
+
+    $rowHeightsPt = @(
+      for ($rowIndex = 1; $rowIndex -le $rowCount; $rowIndex += 1) {
+        $row = $null
+        try {
+          $row = $rows.Item($rowIndex)
+          [double]$row.Height
+        } finally {
+          Release-PowerPointComObject $row
+        }
+      }
+    )
+    $columnWidthsPt = @(
+      for ($columnIndex = 1; $columnIndex -le $columnCount; $columnIndex += 1) {
+        $column = $null
+        try {
+          $column = $columns.Item($columnIndex)
+          [double]$column.Width
+        } finally {
+          Release-PowerPointComObject $column
+        }
+      }
+    )
+    $cells = @(
+      for ($rowIndex = 1; $rowIndex -le $rowCount; $rowIndex += 1) {
+        for ($columnIndex = 1; $columnIndex -le $columnCount; $columnIndex += 1) {
+          $cell = $null
+          $cellShape = $null
+          $textFrame = $null
+          $textRange = $null
+          $font = $null
+          $fontFill = $null
+          $paragraphFormat = $null
+          $cellFill = $null
+          try {
+            $cell = $table.Cell($rowIndex, $columnIndex)
+            $cellShape = $cell.Shape
+            $textFrame = $cellShape.TextFrame2
+            $textRange = $textFrame.TextRange
+            $font = $textRange.Font
+            $fontFill = $font.Fill
+            $paragraphFormat = $textRange.ParagraphFormat
+            $cellFill = $cellShape.Fill
+            [PSCustomObject]@{
+              Row = $rowIndex
+              Column = $columnIndex
+              Text = Get-BoundedPowerPointCellText ([string]$textRange.Text)
+              TextAutoSize = [int]$textFrame.AutoSize
+              VerticalAnchor = [int]$textFrame.VerticalAnchor
+              MarginsPt = [PSCustomObject]@{
+                Left = [double]$textFrame.MarginLeft
+                Top = [double]$textFrame.MarginTop
+                Right = [double]$textFrame.MarginRight
+                Bottom = [double]$textFrame.MarginBottom
+              }
+              ParagraphAlignment = [int]$paragraphFormat.Alignment
+              Font = [PSCustomObject]@{
+                Name = [string]$font.Name
+                NameFarEast = [string]$font.NameFarEast
+                SizePt = [double]$font.Size
+                Bold = [int]$font.Bold
+                Italic = [int]$font.Italic
+                UnderlineStyle = [int]$font.UnderlineStyle
+                Fill = Read-PowerPointSolidFillPaint $fontFill
+              }
+              Fill = Read-PowerPointSolidFillPaint $cellFill
+            }
+          } finally {
+            Release-PowerPointComObject $cellFill
+            Release-PowerPointComObject $paragraphFormat
+            Release-PowerPointComObject $fontFill
+            Release-PowerPointComObject $font
+            Release-PowerPointComObject $textRange
+            Release-PowerPointComObject $textFrame
+            Release-PowerPointComObject $cellShape
+            Release-PowerPointComObject $cell
+          }
+        }
+      }
+    )
+    [PSCustomObject]@{
+      RowCount = $rowCount
+      ColumnCount = $columnCount
+      RowHeightsPt = $rowHeightsPt
+      ColumnWidthsPt = $columnWidthsPt
+      Cells = $cells
+    }
+  } finally {
+    Release-PowerPointComObject $columns
+    Release-PowerPointComObject $rows
+    Release-PowerPointComObject $table
+  }
+}
+
+function Read-PowerPointNativeShapeDetail(
+  $Shape,
+  [bool]$HasText,
+  [bool]$HasTable,
+  [int]$ShapeType,
+  $TextAutoSize
+) {
+  $fill = $null
+  $line = $null
+  $pictureFormat = $null
+  try {
+    $fill = try { $Shape.Fill } catch { $null }
+    $line = try { $Shape.Line } catch { $null }
+    if ($ShapeType -in 11, 13) {
+      $pictureFormat = $Shape.PictureFormat
+    }
+    [PSCustomObject]@{
+      TextAutoSize = if ($HasText) { [int]$TextAutoSize } else { $null }
+      SolidFill = Read-PowerPointSolidFillPaint $fill
+      SolidLine = Read-PowerPointSolidLinePaint $line
+      PictureCrop = if ($null -ne $pictureFormat) {
+        [PSCustomObject]@{
+          LeftPt = [double]$pictureFormat.CropLeft
+          TopPt = [double]$pictureFormat.CropTop
+          RightPt = [double]$pictureFormat.CropRight
+          BottomPt = [double]$pictureFormat.CropBottom
+        }
+      } else { $null }
+      Table = if ($HasTable) {
+        Read-PowerPointTableNativeDetail $Shape
+      } else { $null }
+    }
+  } finally {
+    Release-PowerPointComObject $pictureFormat
+    Release-PowerPointComObject $line
+    Release-PowerPointComObject $fill
   }
 }
 
@@ -552,15 +828,29 @@ try {
         $sourceShapes = $sourceDeck.Slides.Item($slideIndex).Shapes
         for ($shapeIndex = 1; $shapeIndex -le $sourceShapes.Count; $shapeIndex += 1) {
           $sourceShape = $sourceShapes.Item($shapeIndex)
+          $sourceTextFrame = $null
+          $sourceTextRange = $null
+          $sourceTextFont = $null
           try {
-            $sourceHasText = [bool]$sourceShape.HasTextFrame -and [bool]$sourceShape.TextFrame2.HasText
-            $sourceText = if ($sourceHasText) {
-              [string]$sourceShape.TextFrame2.TextRange.Text
+            $sourceHasTextFrame = [bool]$sourceShape.HasTextFrame
+            if ($sourceHasTextFrame) {
+              $sourceTextFrame = $sourceShape.TextFrame2
+            }
+            $sourceHasText = $sourceHasTextFrame -and [bool]$sourceTextFrame.HasText
+            $sourceHasTable = [bool]$sourceShape.HasTable
+            $sourceShapeType = [int]$sourceShape.Type
+            if ($sourceHasText) {
+              $sourceTextRange = $sourceTextFrame.TextRange
+              $sourceTextFont = $sourceTextRange.Font
+            }
+            $sourceTextAutoSize = if ($sourceHasText) {
+              [int]$sourceTextFrame.AutoSize
             } else { $null }
+            $sourceText = if ($sourceHasText) { [string]$sourceTextRange.Text } else { $null }
             $sourceAlternativeText = try {
               [string]$sourceShape.AlternativeText
             } catch { "" }
-            $sourceSemanticOwnership = Read-SemanticOwnershipAlternativeText `
+            $sourceSemanticOwnership = Read-AuthoredOwnershipAlternativeText `
               $sourceAlternativeText $slideIndex
             $sourceShapeReadback += [PSCustomObject]@{
               SlideNumber = $slideIndex
@@ -572,7 +862,7 @@ try {
               SemanticOwnershipQidSetDigest = if ($null -ne $sourceSemanticOwnership) {
                 [string]$sourceSemanticOwnership.QidSetDigest
               } else { $null }
-              Type = [int]$sourceShape.Type
+              Type = $sourceShapeType
               ZOrderPosition = [int]$sourceShape.ZOrderPosition
               HasText = $sourceHasText
               Text = $sourceText
@@ -580,17 +870,26 @@ try {
                 [regex]::Matches($sourceText, "[`r`n`v]").Count
               } else { 0 }
               Typeface = if ($sourceHasText) {
-                [string]$sourceShape.TextFrame2.TextRange.Font.Name
+                [string]$sourceTextFont.Name
               } else { $null }
               EastAsianTypeface = if ($sourceHasText) {
-                [string]$sourceShape.TextFrame2.TextRange.Font.NameFarEast
+                [string]$sourceTextFont.NameFarEast
               } else { $null }
               LeftPt = [double]$sourceShape.Left
               TopPt = [double]$sourceShape.Top
               WidthPt = [double]$sourceShape.Width
               HeightPt = [double]$sourceShape.Height
+              NativeDetail = Read-PowerPointNativeShapeDetail `
+                $sourceShape $sourceHasText $sourceHasTable `
+                $sourceShapeType $sourceTextAutoSize
             }
           } finally {
+            Release-PowerPointComObject $sourceTextFont
+            if ($null -ne $sourceTextRange) {
+              [Runtime.InteropServices.Marshal]::FinalReleaseComObject($sourceTextRange) | Out-Null
+              $sourceTextRange = $null
+            }
+            Release-PowerPointComObject $sourceTextFrame
             [Runtime.InteropServices.Marshal]::FinalReleaseComObject($sourceShape) | Out-Null
           }
         }
@@ -631,6 +930,7 @@ try {
       $nativeChart = 0
       $typographyIssuesGt5Pt = 0
       $typographyIssuesGt10Pt = 0
+      $typographyIssueObservations = @()
       $inspectionFailures = 0
       $shapeReadback = @()
       $backplateZOrderPositions = @()
@@ -639,9 +939,13 @@ try {
         $shapes = $deck.Slides.Item($slideIndex).Shapes
         for ($shapeIndex = 1; $shapeIndex -le $shapes.Count; $shapeIndex += 1) {
           $shape = $shapes.Item($shapeIndex)
+          $textFrame = $null
           $textRange = $null
+          $textFont = $null
           try {
-            $hasText = [bool]$shape.HasTextFrame -and [bool]$shape.TextFrame2.HasText
+            $hasTextFrame = [bool]$shape.HasTextFrame
+            if ($hasTextFrame) { $textFrame = $shape.TextFrame2 }
+            $hasText = $hasTextFrame -and [bool]$textFrame.HasText
             $hasTable = [bool]$shape.HasTable
             $hasChart = [bool]$shape.HasChart
             $shapeName = ([string]$shape.Name).ToLowerInvariant()
@@ -675,19 +979,38 @@ try {
               $nativeShape += 1
             }
             if ($hasText) {
-              $textRange = $shape.TextFrame2.TextRange
-              $overflow = [Math]::Max(
-                [double]$textRange.BoundHeight - [double]$shape.Height,
-                [double]$textRange.BoundWidth - [double]$shape.Width
-              )
+              $textRange = $textFrame.TextRange
+              $textFont = $textRange.Font
+              $boundHeight = [double]$textRange.BoundHeight
+              $boundWidth = [double]$textRange.BoundWidth
+              $heightOverflow = $boundHeight - [double]$shape.Height
+              $widthOverflow = $boundWidth - [double]$shape.Width
+              $overflow = [Math]::Max($heightOverflow, $widthOverflow)
               if ($overflow -gt 5) { $typographyIssuesGt5Pt += 1 }
               if ($overflow -gt 10) { $typographyIssuesGt10Pt += 1 }
+              if ($overflow -gt 5) {
+                $typographyIssueObservations += [PSCustomObject]@{
+                  SlideNumber = $slideIndex
+                  Name = [string]$shape.Name
+                  Text = [string]$textRange.Text
+                  ShapeWidthPt = [double]$shape.Width
+                  ShapeHeightPt = [double]$shape.Height
+                  BoundWidthPt = $boundWidth
+                  BoundHeightPt = $boundHeight
+                  WidthOverflowPt = $widthOverflow
+                  HeightOverflowPt = $heightOverflow
+                  MaximumOverflowPt = $overflow
+                }
+              }
             }
-            $textValue = if ($hasText) { [string]$shape.TextFrame2.TextRange.Text } else { $null }
+            $textAutoSize = if ($hasText) {
+              [int]$textFrame.AutoSize
+            } else { $null }
+            $textValue = if ($hasText) { [string]$textRange.Text } else { $null }
             $alternativeText = try {
               [string]$shape.AlternativeText
             } catch { "" }
-            $semanticOwnership = Read-SemanticOwnershipAlternativeText `
+            $semanticOwnership = Read-AuthoredOwnershipAlternativeText `
               $alternativeText $slideIndex
             $shapeReadback += [PSCustomObject]@{
               SlideNumber = $slideIndex
@@ -709,20 +1032,24 @@ try {
               TextLineBreakCount = if ($null -ne $textValue) {
                 [regex]::Matches($textValue, "[`r`n`v]").Count
               } else { 0 }
-              Typeface = if ($hasText) { [string]$shape.TextFrame2.TextRange.Font.Name } else { $null }
-              EastAsianTypeface = if ($hasText) { [string]$shape.TextFrame2.TextRange.Font.NameFarEast } else { $null }
+              Typeface = if ($hasText) { [string]$textFont.Name } else { $null }
+              EastAsianTypeface = if ($hasText) { [string]$textFont.NameFarEast } else { $null }
               LeftPt = [double]$shape.Left
               TopPt = [double]$shape.Top
               WidthPt = [double]$shape.Width
               HeightPt = [double]$shape.Height
+              NativeDetail = Read-PowerPointNativeShapeDetail `
+                $shape $hasText $hasTable $shapeType $textAutoSize
             }
           } catch {
             $inspectionFailures += 1
           } finally {
+            Release-PowerPointComObject $textFont
             if ($null -ne $textRange) {
               [Runtime.InteropServices.Marshal]::FinalReleaseComObject($textRange) | Out-Null
               $textRange = $null
             }
+            Release-PowerPointComObject $textFrame
             [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shape) | Out-Null
           }
         }
@@ -744,10 +1071,10 @@ try {
         SlideNumber, Name, AlternativeText, Qids, SemanticOwnershipQidSetDigest, `
         Type, ZOrderPosition, HasText, Text, `
         TextLineBreakCount, Typeface, EastAsianTypeface, `
-        LeftPt, TopPt, WidthPt, HeightPt)
+        LeftPt, TopPt, WidthPt, HeightPt, NativeDetail)
       $shapeReadbackPreserved =
-        ($sourceShapeReadback | ConvertTo-Json -Depth 4 -Compress) -eq
-        ($reopenedShapeReadback | ConvertTo-Json -Depth 4 -Compress)
+        ($sourceShapeReadback | ConvertTo-Json -Depth 12 -Compress) -eq
+        ($reopenedShapeReadback | ConvertTo-Json -Depth 12 -Compress)
       $sourceSemanticQids = @(
         $sourceShapeReadback | ForEach-Object { @($_.Qids) } | Sort-Object -Unique
       )
@@ -809,6 +1136,7 @@ try {
         NativeChart = $nativeChart
         TypographyIssuesGt5Pt = $typographyIssuesGt5Pt
         TypographyIssuesGt10Pt = $typographyIssuesGt10Pt
+        TypographyIssueObservations = $typographyIssueObservations
         InspectionFailures = $inspectionFailures
         ShapeReadback = $shapeReadback
         BackplateCount = $backplateZOrderPositions.Count
@@ -923,7 +1251,7 @@ $report | Add-Member -NotePropertyName PowerPointProcessCensusBefore `
   -NotePropertyValue $openingProcessCensus
 $report | Add-Member -NotePropertyName PowerPointProcessCensusAfter `
   -NotePropertyValue $finalProcessCensus
-$report | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (
+$report | ConvertTo-Json -Depth 14 | Set-Content -LiteralPath (
   Join-Path $resolvedOutput "powerpoint-desktop-validation.json"
 ) -Encoding utf8
 

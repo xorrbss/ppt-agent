@@ -78,13 +78,14 @@ const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
 // spent the remaining slides receive a separately isolated fidelity capture below. Never
 // retain the bundled export's shared-DOM raster: authored slide styles can collide there.
 const HYBRID_DECK_BUDGET_MS = 15 * 60_000;
-const HYBRID_CACHE_VERSION = "authored-hybrid-v16-bounded-release-raster-fallback";
+const HYBRID_CACHE_VERSION = "authored-hybrid-v17-editable-shadow-profile";
 const HYBRID_RESULT_CACHE_LIMIT = 24;
 // The bounded-release v3 contract has no Gate -1-qualified native subset.
 // Keep this code-path authoritative instead of making it conditional on an
 // operator-provided environment value: a missing or misspelled value must not
 // turn the bounded release into a native export.
-const BOUNDED_RELEASE_NATIVE_MODE = "raster-only";
+export const EDITABLE_HYBRID_SHADOW_PROFILE_ID =
+  "authored-editable-hybrid-ko-en-basic-v1";
 const HYBRID_EXPORT_CONCURRENCY = parseBoundedPositiveInt(
   process.env.AUTHORED_HYBRID_CONCURRENCY,
   resolveHybridExportConcurrencyDefault(),
@@ -92,8 +93,8 @@ const HYBRID_EXPORT_CONCURRENCY = parseBoundedPositiveInt(
   12,
 );
 
-function boundedReleaseRasterOnly(): boolean {
-  return BOUNDED_RELEASE_NATIVE_MODE === "raster-only";
+export function boundedReleaseRasterOnly(profileId?: string): boolean {
+  return profileId !== EDITABLE_HYBRID_SHADOW_PROFILE_ID;
 }
 
 interface CompletedHybridExport {
@@ -136,6 +137,8 @@ export interface AuthoredHybridExportParams {
   canonicalSourceDigest?: string;
   /** Internal route fact: distinguishes an explicit Fidelity selection from the legacy default. */
   explicitPptxMode?: boolean;
+  /** Exact shadow-only profile that may exercise the bounded native subset. */
+  editableHybridProfileId?: typeof EDITABLE_HYBRID_SHADOW_PROFILE_ID;
 }
 
 interface FetchedPresentation {
@@ -669,7 +672,7 @@ async function runUncachedAuthoredHybridExport(
       HYBRID_EXPORT_CONCURRENCY,
       async ({ html, slideNumber, semantic }) => {
         try {
-          if (boundedReleaseRasterOnly()) {
+          if (boundedReleaseRasterOnly(params.editableHybridProfileId)) {
             const reason = "bounded-release-visual-parity-raster-required";
             return {
               layer: null,
@@ -862,6 +865,7 @@ async function runUncachedAuthoredHybridExport(
       {
         exportAttemptId: params.exportAttemptId,
         presentationRevision: Number(presentation.revision),
+        profileId: params.editableHybridProfileId,
         canonicalSourceDigest: params.canonicalSourceDigest,
         sourceDigest: sourceSha256,
       },
@@ -968,6 +972,7 @@ export async function runAuthoredHybridPresentationExport(
     fontEmbeddingPlan.cacheDiscriminator,
     params.exportAttemptId,
     params.canonicalSourceDigest,
+    params.editableHybridProfileId,
   );
   const cached = await readCompletedHybridExport(cacheKey);
   if (cached) {
@@ -1023,6 +1028,7 @@ function createHybridCacheKey(
   fontEmbeddingDiscriminator: string,
   exportAttemptId: string | undefined,
   canonicalSourceDigest: string | undefined,
+  editableHybridProfileId: string | undefined,
 ): string {
   return createHash("sha256")
     .update(HYBRID_CACHE_VERSION)
@@ -1038,6 +1044,8 @@ function createHybridCacheKey(
     .update(exportAttemptId ?? "unbound")
     .update("\0")
     .update(canonicalSourceDigest ?? "unbound")
+    .update("\0")
+    .update(editableHybridProfileId ?? "raster-only")
     .digest("hex");
 }
 

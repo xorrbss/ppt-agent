@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "authored-editable-hybrid-gate-minus1e-case-manifest/v1",
+  "profileId": "authored-editable-hybrid-ko-en-basic-v1",
+  "authorityDomain": "actual_product_capability_probe",
+  "manifestDigest": "sha256:4e23491af56be9c6ab0f29d9c3dd6d95aafb3520383a45cd56380de7010dd4c2",
+  "requiredCaseCount": 15,
+  "noSkip": true,
+  "cases": [
+    { "ordinal": 1, "caseId": "gminus1e.text.ko-en-utf16-runs", "expected": { "koEnRoundTrip": true, "comOneBasedCoordinates": true } },
+    { "ordinal": 2, "caseId": "gminus1e.text.breaks", "expected": { "lfPreserved": true, "softBreakPreserved": true } },
+    { "ordinal": 3, "caseId": "gminus1e.text.font-effective-size", "expected": { "fontFaceReviewed": true, "effectiveSizeWithinTolerance": true } },
+    { "ordinal": 4, "caseId": "gminus1e.text.line-bounds-overflow", "expected": { "autoSize": "none", "lineBoundsWithinTolerance": true, "overflowWithinTolerance": true } },
+    { "ordinal": 5, "caseId": "gminus1e.qid.text-tags-roundtrip", "expected": { "inputSavedReopenExact": true, "duplicateOrGhostCount": 0 } },
+    { "ordinal": 6, "caseId": "gminus1e.qid.shape-tags-roundtrip", "expected": { "inputSavedReopenExact": true, "duplicateOrGhostCount": 0 } },
+    { "ordinal": 7, "caseId": "gminus1e.shape.solid-geometry-paint", "expected": { "geometryWithinTolerance": true, "paintExact": true } },
+    { "ordinal": 8, "caseId": "gminus1e.image.decoded-digest-rect-crop", "expected": { "decodedDigestExact": true, "rectangularCropExact": true } },
+    { "ordinal": 9, "caseId": "gminus1e.table.matrix-style-geometry", "expected": { "cellMatrixExact": true, "styleExact": true, "geometryWithinTolerance": true } },
+    { "ordinal": 10, "caseId": "gminus1e.com.first-open", "expected": { "firstOpenPassed": true } },
+    { "ordinal": 11, "caseId": "gminus1e.com.save-copy", "expected": { "saveCopyPassed": true, "inputDigestPreserved": true } },
+    { "ordinal": 12, "caseId": "gminus1e.com.reopen-readback", "expected": { "reopenPassed": true, "nativeEditsPreserved": true } },
+    { "ordinal": 13, "caseId": "gminus1e.com.render", "expected": { "renderCount": 5, "renderHashStabilityPassed": true } },
+    { "ordinal": 14, "caseId": "gminus1e.com.repair-dialog-witness", "expected": { "repairDialogObserved": false, "attendedWindowWitness": true } },
+    { "ordinal": 15, "caseId": "gminus1e.com.owned-process-census", "expected": { "unexpectedPowerPointSurvivorCount": 0, "ownedPowerPointSurvivorCount": 0, "unrelatedBaselinePreserved": true } }
+  ]
+}

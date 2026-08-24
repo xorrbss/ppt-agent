@@ -52,7 +52,7 @@ function deck(overrides: Partial<Pick<DeckDocument, "revision" | "digest" | "sce
             zOrder: 1,
             rotation: 0,
             semanticRole: "title",
-            editability: { text: true, geometry: true, asset: false, data: false },
+            editability: { text: true, geometry: true, asset: false, data: false, style: true },
             role: "title",
             text: "원본 제목",
             bounds: { x: 40, y: 40, width: 800, height: 80 },
@@ -64,7 +64,7 @@ function deck(overrides: Partial<Pick<DeckDocument, "revision" | "digest" | "sce
             zOrder: 2,
             rotation: 0,
             semanticRole: "hero-image",
-            editability: { text: false, geometry: true, asset: true, data: false },
+            editability: { text: false, geometry: true, asset: true, data: false, style: false },
             assetId: "asset:old",
             digest: digestB,
             altText: "기존 이미지",
@@ -79,7 +79,7 @@ function deck(overrides: Partial<Pick<DeckDocument, "revision" | "digest" | "sce
             zOrder: 3,
             rotation: 0,
             semanticRole: "kpiTable",
-            editability: { text: false, geometry: true, asset: false, data: true },
+            editability: { text: false, geometry: true, asset: false, data: true, style: false },
             dataId: "data:kpis",
             dataDigest: digestC,
             rows: 1,
@@ -142,7 +142,7 @@ test("unknown parsers enforce locked master, stable ids, body nodes, and typed o
         bounds: { x: 40, y: 40, width: 800, height: 80 },
         rotation: 0,
         semanticRole: "title",
-        editability: { text: true, geometry: true, asset: false, data: false },
+        editability: { text: true, geometry: true, asset: false, data: false, style: true },
         text: "원본 제목",
       }, {
         elementId: "element:canvas-background",
@@ -152,7 +152,7 @@ test("unknown parsers enforce locked master, stable ids, body nodes, and typed o
         bounds: { x: 0, y: 0, width: 1280, height: 720 },
         rotation: 0,
         semanticRole: "canvasBackground",
-        editability: { text: false, geometry: false, asset: false, data: false },
+        editability: { text: false, geometry: false, asset: false, data: false, style: false },
         shape: "rect",
         fill: "#111827",
       }],
@@ -210,6 +210,63 @@ test("FastAPI DeckSnapshot adapter derives deterministic title/body ids and fixe
   assert.equal(adapted.slides[0].nodes[0].bounds.height, 150);
   assert.equal(adapted.slides[0].nodes[1].bounds.y, 230);
   assert.equal("html" in adapted, false);
+});
+
+test("actual Hybrid Scene receipt keeps Korean/English Unicode fixtures and enforces one native-or-raster owner per QID", () => {
+  const snapshot: unknown = {
+    schemaVersion: "deck-generation-snapshot/v1",
+    deckId: "deck:actual-hybrid-fixture",
+    revision: 7,
+    digest: digestA,
+    sourceDigest: digestB,
+    master: { masterId: "master:published", masterRevision: 4, masterDigest: digestD, layoutRegistryDigest: digestA, fontManifestDigest: digestB },
+    scene: {
+      schemaVersion: "deck-scene-ir/v1",
+      deckId: "deck:actual-hybrid-fixture",
+      revision: 7,
+      sceneDigest: digestC,
+      compositionDigest: digestD,
+      assetManifest: [
+        { assetId: "asset:hero", assetDigest: digestA, mediaType: "image/png", storageReference: "/api/assets/hero.png?rev=7", sizeBytes: 128 },
+        { assetId: "asset:raster-complex", assetDigest: digestB, mediaType: "image/png", storageReference: "/api/assets/raster-complex.png?rev=7", sizeBytes: 256 },
+      ],
+      dataManifest: [{ dataId: "data:edge-table", dataDigest: digestD, kind: "table", payload: { cells: [["한국어 장문", "English long-form text 😀\ud83d\ude80"], ["", "extreme-width"]], columnWidthsPt: [24, 420] } }],
+      capabilities: [],
+      slides: [{
+        schemaVersion: "slide-scene-ir/v1",
+        slideId: "slide:actual-hybrid-fixture",
+        revision: 7,
+        slideDigest: digestB,
+        elements: [
+          { elementId: "qid:title-ko-en", kind: "text", zOrder: 1, bounds: { x: 20, y: 20, width: 920, height: 96 }, rotation: 0, semanticRole: "title", editability: { text: true, geometry: true, asset: false, data: false, style: true }, text: "한글/English long title 😀\ud83d\ude80" },
+          { elementId: "qid:hero-crop", kind: "image", zOrder: 2, bounds: { x: 20, y: 130, width: 420, height: 300 }, rotation: 0, semanticRole: "hero-image", editability: { text: false, geometry: true, asset: true, data: false, style: false }, assetId: "asset:hero", assetDigest: digestA, altText: "crop boundary", crop: "cover", cropGeometry: { left: 0.12, top: 0, right: 0.08, bottom: 0 } },
+          { elementId: "qid:overflow-table", kind: "table", zOrder: 3, bounds: { x: 460, y: 130, width: 480, height: 300 }, rotation: 0, semanticRole: "overflow-table", editability: { text: false, geometry: true, asset: false, data: true, style: false }, dataId: "data:edge-table", dataDigest: digestD, rows: 2, columns: 2 },
+          { elementId: "qid:complex-clip-shadow", kind: "shape", zOrder: 4, bounds: { x: 30, y: 450, width: 900, height: 80 }, rotation: 0, semanticRole: "complex-clip-shadow", editability: { text: false, geometry: false, asset: false, data: false, style: false }, shape: "rect" },
+        ],
+        hybridExport: {
+          schemaVersion: "slide-hybrid-export-plan/v1",
+          ownerDecisions: [
+            { ownerId: "qid:title-ko-en", decision: "nativeEditable", capabilityId: "editable.text.ko-en.v1" },
+            { ownerId: "qid:hero-crop", decision: "nativeEditable", capabilityId: "editable.image.rect-crop.v1" },
+            { ownerId: "qid:overflow-table", decision: "nativeEditable", capabilityId: "editable.table.basic.v1" },
+            { ownerId: "qid:complex-clip-shadow", decision: "rasterIsland", capabilityId: "editable.raster-island-integrity.v1", reasonCode: "unsupported_complex_css" },
+          ],
+          rasterIslands: [{ islandId: "island:actual-hybrid-fixture.4", sourceOwnerIds: ["qid:complex-clip-shadow"], assetId: "asset:raster-complex", assetDigest: digestB, bounds: { x: 30, y: 450, width: 900, height: 80 }, zBand: { minZ: 4, maxZ: 4 }, rasterPlaneDigest: digestB }],
+        },
+      }],
+    },
+    slides: [],
+    createdAt: "2026-08-25T00:00:00Z",
+  };
+  const adapted = adaptDeckSnapshotToWorkbenchDocument(snapshot);
+  const plan = adapted.slides[0].hybridExport;
+  assert.equal(plan?.ownerDecisions.length, 4);
+  assert.equal(plan?.ownerDecisions.filter((entry) => entry.decision === "nativeEditable").length, 3);
+  assert.deepEqual(plan?.rasterIslands[0].sourceOwnerIds, ["qid:complex-clip-shadow"]);
+
+  const duplicateRasterOwner = structuredClone(snapshot) as { scene: { slides: Array<{ hybridExport: { rasterIslands: Array<{ sourceOwnerIds: string[] }> } }> } };
+  duplicateRasterOwner.scene.slides[0].hybridExport.rasterIslands[0].sourceOwnerIds.push("qid:title-ko-en");
+  assert.throws(() => adaptDeckSnapshotToWorkbenchDocument(duplicateRasterOwner), WorkbenchParseError);
 });
 
 test("text, geometry, asset, and layout commands preserve stable ids and queue only typed effects", () => {

@@ -388,7 +388,7 @@ def validate_declared_authored_qids(html: str) -> tuple[str, ...]:
         raw_qid = attrs.get("data-qid")
         needs_qid = _is_edit_target(tag, attrs)
         if needs_qid and raw_qid is None:
-            raise ValueError("authored_semantic_qid_missing")
+            raise ValueError(f"authored_semantic_qid_missing:{tag}")
         if raw_qid is None:
             continue
         if not is_valid_authored_qid(raw_qid):
@@ -481,6 +481,14 @@ def build_compact_dom_map(
                     "overflowX",
                     "overflowY",
                     "textAlign",
+                    "display",
+                    "flexDirection",
+                    "alignItems",
+                    "justifyContent",
+                    "paddingTop",
+                    "paddingRight",
+                    "paddingBottom",
+                    "paddingLeft",
                 }
             }
             if isinstance(style_raw, Mapping)

@@ -34,6 +34,10 @@ from utils.llm_calls.author_slide import (
 
 LOGGER = logging.getLogger(__name__)
 _DIGEST_CHUNK_BYTES = 1024 * 1024
+_SOURCE_IMAGE_INTENT_TERMS = (
+    "<img", " img ", "image", "photo", "picture", "screenshot",
+    "이미지", "사진", "스크린샷", ".png", ".jpg", ".jpeg", ".webp",
+)
 
 
 def _candidate_bytes_match_digest(candidate: SourceImageCandidate) -> bool:
@@ -165,9 +169,28 @@ def plan_slide_source_images(
             "[authored] source image bytes missing or changed; continuing without source images"
         )
         return None
-    per_slide: list[dict[str, SourceImageCandidate]] = []
+    per_slide: list[dict[str, SourceImageCandidate]] = [
+        {} for _content in contents
+    ]
     try:
-        for index, content in enumerate(contents):
+        # A directly uploaded picture has no source heading or position, so its
+        # relevance score is intentionally identical on every slide.  Give
+        # explicit image-request slides first refusal; otherwise a cover would
+        # spend the picture before the slide that names ``img``/``features.png``
+        # can receive it.  Stable source order is retained inside both groups.
+        image_intent_indexes = [
+            index
+            for index, content in enumerate(contents)
+            if any(
+                term in f" {(content or '').casefold()} "
+                for term in _SOURCE_IMAGE_INTENT_TERMS
+            )
+        ]
+        remaining_indexes = [
+            index for index in range(len(contents)) if index not in image_intent_indexes
+        ]
+        for index in (*image_intent_indexes, *remaining_indexes):
+            content = contents[index]
             heading, _, body = (content or "").partition("\n")
             chosen = select_source_images(
                 remaining,
@@ -179,7 +202,7 @@ def plan_slide_source_images(
                 limit=1,
             )
             offered = {candidate.asset_id: candidate for candidate in chosen}
-            per_slide.append(offered)
+            per_slide[index] = offered
             if offered:
                 remaining = [
                     candidate
