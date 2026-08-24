@@ -11,7 +11,9 @@ param(
 
     [string]$DatabasePath,
 
-    [switch]$IsolatedDatabase
+    [switch]$IsolatedDatabase,
+
+    [switch]$AllowProviderSettings
 )
 
 $ErrorActionPreference = "Stop"
@@ -274,10 +276,10 @@ foreach ($environmentKey in $fastApiReleaseQaEnvironmentKeys) {
 }
 
 $nextEnvironment = $sharedAuthoredEnvironment.Clone()
-# The verification UI consumes existing deterministic presentations and must
-# not be redirected into provider onboarding. Keep FastAPI locally mutable so
-# provider availability is not asserted during startup.
-$nextEnvironment["CAN_CHANGE_KEYS"] = "false"
+# Keep the deterministic verification UI locked by default. Interactive local
+# generation must opt in explicitly so an administrator can configure a text
+# provider without weakening the release-verification launch contract.
+$nextEnvironment["CAN_CHANGE_KEYS"] = if ($AllowProviderSettings) { "true" } else { "false" }
 $nextEnvironment["FAST_API_INTERNAL_URL"] = $fastApiUrl
 $nextEnvironment["NEXT_INTERNAL_URL"] = $proxyUrl
 $nextEnvironment["NEXT_PUBLIC_URL"] = $proxyUrl
