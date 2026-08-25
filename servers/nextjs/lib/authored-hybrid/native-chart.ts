@@ -271,6 +271,11 @@ export function prepareDeclaredNativeCharts(
   >();
   for (const declared of declaredElements) {
     if (declared.kind !== "chart") continue;
+    // Actual-product PowerPoint qualification currently fails in chart.dll.
+    // Keep the chart on the fidelity backplate and emit no native chart OOXML
+    // until this admission path has a fresh first-open/save/reopen seal.
+    rejections.set(declared.elementId, "unsupported-native-chart");
+    continue;
     const observedEntry = observed.get(declared.elementId);
     const actual = observedEntry?.element;
     const payload = parseAuthoredNativeChartPayload(declared.payload);
