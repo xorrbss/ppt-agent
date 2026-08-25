@@ -69,3 +69,65 @@ test("source-locked payload digest is stable for the same source identity", asyn
   assert.equal(await sourceLockedPayloadDigest([file]), await sourceLockedPayloadDigest([file]));
   assert.match(await sourceLockedPayloadDigest([file]), /^sha256:[0-9a-f]{64}$/);
 });
+
+const generatedResponse = (stages = [
+  { stage: "source_analysis", status: "completed" },
+  { stage: "slide_image_restoration", status: "completed" },
+  { stage: "missing_content_validation", status: "completed" },
+]) => ({
+  admission_contract: {}, source_snapshot: {}, manifest: { missing_content_count: 0 }, analysis_seal: {},
+  progress_stages: stages, fallback_allowed: false, generation_record_id: "record-1",
+  idempotent_replay: false,
+  summary: {
+    source_type: "pptx", page_count: 2, slide_count: 2,
+    media_asset_count: 1, image_occurrence_count: 2, inherited_occurrence_count: 0,
+  },
+  restoration_verification: {
+    contract_version: "source-locked-restoration-verification/v1",
+    output_package_sha256: `sha256:${"a".repeat(64)}`, slide_count: 2,
+    rendered_page_count: 2, missing_content_count: 0, byte_exact_source_package: true, fallback_allowed: false,
+  },
+  artifact: {
+    contract_version: "source-locked-artifact/v1", artifact_id: `sla_${"b".repeat(64)}`,
+    filename: "source-locked-0123456789abcdef.pptx", media_type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    byte_length: 1234, sha256: `sha256:${"a".repeat(64)}`,
+    download_url: `/api/v1/ppt/source-locked/v1/artifacts/sla_${"b".repeat(64)}`,
+    created_at: "2026-08-25T00:00:00Z", source_type: "pptx", slide_count: 2,
+  },
+});
+
+test("source-locked generate posts the v1 route and exposes terminal artifact only after all stages", async () => {
+  const { SourceLockedGenerationApiV1, sourceLockedGenerationFromResponse } = await loadContract();
+  const originalFetch = globalThis.fetch;
+  let request;
+  globalThis.fetch = async (url, init) => {
+    request = { url, init };
+    return { ok: true, json: async () => generatedResponse() };
+  };
+  try {
+    const file = new File(["PPTX"], "original.pptx", { type: "application/octet-stream" });
+    const response = await SourceLockedGenerationApiV1.generate([file], "source-locked-generate:v1:test");
+    assert.equal(request.url, "/api/v1/ppt/source-locked/v1/generate");
+    assert.equal(request.init.headers["Idempotency-Key"], "source-locked-generate:v1:test");
+    assert.match(request.init.headers["X-Idempotency-Payload-Digest"], /^sha256:[0-9a-f]{64}$/);
+    assert.equal(request.init.body.get("generation_mode"), "source_locked");
+    assert.match(sourceLockedGenerationFromResponse(response).artifact.artifact_id, /^sla_/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("source-locked refuses download state when restoration or validation is incomplete", async () => {
+  const { sourceLockedGenerationFromResponse } = await loadContract();
+  assert.equal(sourceLockedGenerationFromResponse(generatedResponse([
+    { stage: "source_analysis", status: "completed" },
+    { stage: "slide_image_restoration", status: "failed" },
+    { stage: "missing_content_validation", status: "pending" },
+  ])), null);
+  const missing = generatedResponse();
+  missing.restoration_verification.missing_content_count = 1;
+  assert.equal(sourceLockedGenerationFromResponse(missing), null);
+  const pptxNotByteExact = generatedResponse();
+  pptxNotByteExact.restoration_verification.byte_exact_source_package = false;
+  assert.equal(sourceLockedGenerationFromResponse(pptxNotByteExact), null);
+});

@@ -11,9 +11,10 @@ import {
 } from "../../../services/api/presentation-generation";
 import {
   SourceLockedGenerationApiV1,
+  sourceLockedGenerationFromResponse,
   sourceLockedSelectionErrorMessage,
-  sourceLockedSummaryFromResponse,
   type SourceLockedAnalysisSummary,
+  type SourceLockedArtifactV1,
   validateSourceLockedFiles,
 } from "../../../services/api/source-locked/contract";
 import { getApiErrorDisplayMessage } from "../../../services/api/api-error-handler";
@@ -86,6 +87,8 @@ export const useUploadPageState = ({
   const sourceLocked = sourceLockedGenerationMode === "source_locked";
   const [sourceLockedSummary, setSourceLockedSummary] =
     useState<SourceLockedAnalysisSummary | null>(null);
+  const [sourceLockedArtifact, setSourceLockedArtifact] =
+    useState<SourceLockedArtifactV1 | null>(null);
   const [sourceLockedAnalysisId, setSourceLockedAnalysisId] = useState(
     () => crypto.randomUUID(),
   );
@@ -131,6 +134,7 @@ export const useUploadPageState = ({
   // analysis after replacement or after the user clears attachments to unlock.
   useEffect(() => {
     setSourceLockedSummary(null);
+    setSourceLockedArtifact(null);
     setSourceLockedAnalysisId(crypto.randomUUID());
   }, [sourceLockedFileIdentity, sourceLockedGenerationMode]);
 
@@ -351,7 +355,7 @@ export const useUploadPageState = ({
     startInFlightRef.current = true;
     if (sourceLocked) {
       try {
-        await handleSourceLockedAnalysis();
+        await handleSourceLockedGeneration();
       } catch (error) {
         handleGenerationError(error);
       } finally {
@@ -393,28 +397,28 @@ export const useUploadPageState = ({
   const handleReviewOutline = () => startPresentation(false);
 
   /**
-   * Source-locked is an admission/analysis path, not an outline-generation
-   * path.  It deliberately never calls the legacy create endpoint or routes
-   * the user into outline/template selection.
+   * This is a terminal source-locked job: the backend must complete analysis,
+   * restoration, and missing-content validation before an artifact is shown.
    */
-  const handleSourceLockedAnalysis = async () => {
+  const handleSourceLockedGeneration = async () => {
     setSourceLockedSummary(null);
+    setSourceLockedArtifact(null);
     setLoadingState({
       isLoading: true,
-      message: "원본 문서를 분석하는 중…",
+      message: "원본 문서 그대로 PPT를 생성하는 중…",
       showProgress: true,
-      duration: 90,
-      progress: 10,
-      progressLabel: "원본 분석",
-      extra_info: "슬라이드와 이미지 occurrence를 원본 기준으로 확인합니다.",
+      duration: 180,
+      progress: 5,
+      progressLabel: "원본 분석 → 슬라이드·이미지 복원 → 누락 검증",
+      extra_info: "세 단계가 모두 완료될 때만 다운로드를 제공합니다.",
     });
-    const response = await SourceLockedGenerationApiV1.analyze(
+    const response = await SourceLockedGenerationApiV1.generate(
       files,
-      `source-locked-analyze:v1:${sourceLockedAnalysisId}`,
+      `source-locked-generate:v1:${sourceLockedAnalysisId}`,
     );
-    const summary = sourceLockedSummaryFromResponse(response);
-    if (!summary) {
-      throw new Error("원본 페이지와 출력 슬라이드 수가 일치하지 않아 생성할 수 없습니다.");
+    const result = sourceLockedGenerationFromResponse(response);
+    if (!result) {
+      throw new Error("원본 복원 또는 누락 검증이 완료되지 않아 PPT를 제공할 수 없습니다.");
     }
     setLoadingState({
       isLoading: false,
@@ -422,10 +426,11 @@ export const useUploadPageState = ({
       showProgress: false,
       duration: 0,
       progress: 100,
-      progressLabel: "원본 분석 완료",
+      progressLabel: "원본 분석 · 슬라이드·이미지 복원 · 누락 검증 완료",
       extra_info: "",
     });
-    setSourceLockedSummary(summary);
+    setSourceLockedSummary(result.summary);
+    setSourceLockedArtifact(result.artifact);
   };
 
   /**
@@ -652,5 +657,6 @@ export const useUploadPageState = ({
     masterAdmissionError,
     isMasterResolving,
     sourceLockedSummary,
+    sourceLockedArtifact,
   };
 };
