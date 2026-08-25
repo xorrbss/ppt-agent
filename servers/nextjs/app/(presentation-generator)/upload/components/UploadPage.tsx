@@ -359,6 +359,7 @@ const UploadPage = ({
               <div className="mt-4 rounded-xl border border-[#E4E6E9] bg-[#FAFAFB] px-3 py-3 text-sm text-[#33363A]" data-testid="source-locked-analysis-summary">
                 <p className="font-semibold">{sourceLockedSummary.source_format.toUpperCase()} {sourceLockedSummary.source_page_count}장 → {sourceLockedSummary.output_slide_count}슬라이드</p>
                 <p className="mt-1 text-[#5E626A]">미디어 {sourceLockedSummary.media_asset_count}개 · 이미지 occurrence {sourceLockedSummary.image_occurrence_count}개 · inherited occurrence {sourceLockedSummary.inherited_image_occurrence_count}개</p>
+                <p className="mt-1 text-xs text-[#737780]">원본 분석 완료 · 슬라이드·이미지 복원 대기 · 누락 검증 대기</p>
               </div>
             ) : null}
 
