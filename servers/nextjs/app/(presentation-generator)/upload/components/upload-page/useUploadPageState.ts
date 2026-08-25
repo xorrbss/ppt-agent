@@ -9,6 +9,13 @@ import {
   isAbortError,
   PresentationGenerationApi,
 } from "../../../services/api/presentation-generation";
+import {
+  SourceLockedGenerationApiV1,
+  sourceLockedSelectionErrorMessage,
+  sourceLockedSummaryFromResponse,
+  type SourceLockedAnalysisSummary,
+  validateSourceLockedFiles,
+} from "../../../services/api/source-locked/contract";
 import { getApiErrorDisplayMessage } from "../../../services/api/api-error-handler";
 import {
   setPptGenUploadState,
@@ -73,6 +80,18 @@ export const useUploadPageState = ({
   const authoredVisionQa = useSelector(
     (state: RootState) => state.pptGenUpload.authoredVisionQa,
   );
+  const sourceLockedGenerationMode = useSelector(
+    (state: RootState) => state.pptGenUpload.sourceLockedGenerationMode,
+  );
+  const sourceLocked = sourceLockedGenerationMode === "source_locked";
+  const [sourceLockedSummary, setSourceLockedSummary] =
+    useState<SourceLockedAnalysisSummary | null>(null);
+  const [sourceLockedAnalysisId, setSourceLockedAnalysisId] = useState(
+    () => crypto.randomUUID(),
+  );
+  const sourceLockedFileIdentity = files
+    .map((file) => `${file.name}:${file.size}:${file.lastModified}`)
+    .join("|");
   const [masterAdmissionError, setMasterAdmissionError] =
     useState<UploadMasterAdmissionError | null>(null);
   const [isMasterResolving, setIsMasterResolving] = useState(false);
@@ -107,6 +126,13 @@ export const useUploadPageState = ({
   useEffect(() => {
     return () => abortDocumentProcessing(decomposeAbortControllerRef.current);
   }, []);
+
+  // A seal/summary belongs to the exact selected source. Never show a prior
+  // analysis after replacement or after the user clears attachments to unlock.
+  useEffect(() => {
+    setSourceLockedSummary(null);
+    setSourceLockedAnalysisId(crypto.randomUUID());
+  }, [sourceLockedFileIdentity, sourceLockedGenerationMode]);
 
   useEffect(() => {
     setMasterAdmissionError(null);
@@ -284,6 +310,18 @@ export const useUploadPageState = ({
    * @returns boolean indicating if the configuration is valid
    */
   const validateConfiguration = (): boolean => {
+    if (sourceLocked) {
+      const sourceLockedError = validateSourceLockedFiles(files);
+      if (sourceLockedError) {
+        trackUploadValidationFailure(sourceLockedError);
+        notify.warning(
+          "원본 문서 그대로 생성 파일 제한",
+          sourceLockedSelectionErrorMessage(sourceLockedError),
+        );
+        return false;
+      }
+      return true;
+    }
     if (!config.language) {
       trackUploadValidationFailure("language_missing");
       notify.warning("언어를 선택해 주세요", "언어를 선택해 주세요.");
@@ -311,6 +349,16 @@ export const useUploadPageState = ({
     if (startInFlightRef.current) return;
     if (!validateConfiguration()) return;
     startInFlightRef.current = true;
+    if (sourceLocked) {
+      try {
+        await handleSourceLockedAnalysis();
+      } catch (error) {
+        handleGenerationError(error);
+      } finally {
+        startInFlightRef.current = false;
+      }
+      return;
+    }
     const resolvedMaster = await resolveMasterForGeneration();
     if (resolvedMaster === null) {
       startInFlightRef.current = false;
@@ -343,6 +391,42 @@ export const useUploadPageState = ({
 
   const handleGeneratePresentation = () => startPresentation(true);
   const handleReviewOutline = () => startPresentation(false);
+
+  /**
+   * Source-locked is an admission/analysis path, not an outline-generation
+   * path.  It deliberately never calls the legacy create endpoint or routes
+   * the user into outline/template selection.
+   */
+  const handleSourceLockedAnalysis = async () => {
+    setSourceLockedSummary(null);
+    setLoadingState({
+      isLoading: true,
+      message: "원본 문서를 분석하는 중…",
+      showProgress: true,
+      duration: 90,
+      progress: 10,
+      progressLabel: "원본 분석",
+      extra_info: "슬라이드와 이미지 occurrence를 원본 기준으로 확인합니다.",
+    });
+    const response = await SourceLockedGenerationApiV1.analyze(
+      files,
+      `source-locked-analyze:v1:${sourceLockedAnalysisId}`,
+    );
+    const summary = sourceLockedSummaryFromResponse(response);
+    if (!summary) {
+      throw new Error("원본 페이지와 출력 슬라이드 수가 일치하지 않아 생성할 수 없습니다.");
+    }
+    setLoadingState({
+      isLoading: false,
+      message: "",
+      showProgress: false,
+      duration: 0,
+      progress: 100,
+      progressLabel: "원본 분석 완료",
+      extra_info: "",
+    });
+    setSourceLockedSummary(summary);
+  };
 
   /**
    * Handles document processing
@@ -567,5 +651,6 @@ export const useUploadPageState = ({
     handleReviewOutline,
     masterAdmissionError,
     isMasterResolving,
+    sourceLockedSummary,
   };
 };

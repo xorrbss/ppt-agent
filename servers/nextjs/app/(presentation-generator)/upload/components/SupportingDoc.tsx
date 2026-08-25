@@ -4,6 +4,10 @@ import React, { ChangeEvent, useEffect, useMemo, useState } from 'react'
 import { File, Paperclip, Plus, X } from 'lucide-react'
 import { notify } from '@/components/ui/sonner'
 import { useUploadLimits } from '@/lib/use-upload-limits'
+import {
+    sourceLockedSelectionErrorMessage,
+    validateSourceLockedFiles,
+} from '../../services/api/source-locked/contract'
 
 interface SupportingDocProps {
     files: File[]
@@ -12,6 +16,7 @@ interface SupportingDocProps {
     multiple?: boolean
     /** Compact variant for the compose card: a paperclip button + file chips instead of the full dropzone. */
     compact?: boolean
+    sourceLocked?: boolean
 }
 
 export const MAX_SUPPORTED_FILES = 20
@@ -71,6 +76,7 @@ const SupportingDoc = ({
     accept = ACCEPT_DEFAULT,
     multiple = true,
     compact = false,
+    sourceLocked = false,
 }: SupportingDocProps) => {
     const uploadLimits = useUploadLimits()
     const [isDragging, setIsDragging] = useState(false)
@@ -122,6 +128,12 @@ const SupportingDoc = ({
         if (selectedFiles.length === 0) return
 
         const nextFiles = multiple ? [...files, ...selectedFiles] : [selectedFiles[0]]
+        const sourceLockedError = sourceLocked ? validateSourceLockedFiles(nextFiles) : null
+        if (sourceLockedError) {
+            notify.error('원본 문서 그대로 생성 파일 제한', sourceLockedSelectionErrorMessage(sourceLockedError))
+            e.currentTarget.value = ''
+            return
+        }
         const allowedFiles = applyFileLimit(
             nextFiles.filter((file) => isAllowedFile(file) && file.size <= uploadLimits.document.bytes)
         )
@@ -142,6 +154,11 @@ const SupportingDoc = ({
         if (droppedFiles.length === 0) return
 
         const nextFiles = multiple ? [...files, ...droppedFiles] : [droppedFiles[0]]
+        const sourceLockedError = sourceLocked ? validateSourceLockedFiles(nextFiles) : null
+        if (sourceLockedError) {
+            notify.error('원본 문서 그대로 생성 파일 제한', sourceLockedSelectionErrorMessage(sourceLockedError))
+            return
+        }
         const allowedFiles = applyFileLimit(
             nextFiles.filter((file) => isAllowedFile(file) && file.size <= uploadLimits.document.bytes)
         )

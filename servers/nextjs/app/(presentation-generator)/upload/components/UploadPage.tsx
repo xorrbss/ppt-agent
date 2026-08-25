@@ -17,7 +17,11 @@ import { OverlayLoader } from "@/components/ui/overlay-loader";
 import { notify } from "@/components/ui/sonner";
 import { useUploadLimits } from "@/lib/use-upload-limits";
 import { cn } from "@/lib/utils";
-import { setPptGenUploadState } from "@/store/slices/presentationGenUpload";
+import {
+  setPptGenUploadState,
+  setSourceLockedGenerationMode,
+  syncSourceLockedAttachmentLatch,
+} from "@/store/slices/presentationGenUpload";
 import type { RootState } from "@/store/store";
 import { isAuthoredVnextMasterEnabled } from "@/lib/authored-vnext/master/contracts";
 import type { MasterRevisionEnvelope } from "@/lib/authored-vnext/master/contracts";
@@ -60,6 +64,13 @@ const UploadPage = ({
   const companyStandard = useSelector(
     (state: RootState) => state.pptGenUpload.companyStandard
   );
+  const sourceLockedGenerationMode = useSelector(
+    (state: RootState) => state.pptGenUpload.sourceLockedGenerationMode,
+  );
+  const sourceLockedGenerationModeLatched = useSelector(
+    (state: RootState) => state.pptGenUpload.sourceLockedGenerationModeLatched,
+  );
+  const sourceLocked = sourceLockedGenerationMode === "source_locked";
   const [masterCatalogOpen, setMasterCatalogOpen] = useState(false);
   const [masterCatalogEntryMode, setMasterCatalogEntryMode] =
     useState<MasterCatalogEntryMode>("catalog");
@@ -111,12 +122,16 @@ const UploadPage = ({
 
   const {
     files,
-    setFiles,
+    replaceFiles,
     isDragOver,
     handleCardDragOver,
     handleCardDragLeave,
     handleCardDrop,
-  } = useSupportingFiles();
+  } = useSupportingFiles({
+    sourceLocked,
+    onFilesChange: (nextFiles) =>
+      dispatch(syncSourceLockedAttachmentLatch(nextFiles.length)),
+  });
   const analysisSourceFile = useMemo(
     () => files.find((file) => /\.(?:ppt|pptx)$/i.test(file.name)) ?? null,
     [files],
@@ -139,6 +154,7 @@ const UploadPage = ({
     handleReviewOutline,
     isMasterResolving,
     masterAdmissionError,
+    sourceLockedSummary,
   } = useUploadPageState({
     files,
     selectedThemeId,
@@ -170,14 +186,14 @@ const UploadPage = ({
       );
       return;
     }
-    setFiles((current) => {
-      const sourceIndex = current.findIndex((item) => /\.(?:ppt|pptx)$/i.test(item.name));
-      if (sourceIndex < 0) return [...current, file];
-      const next = [...current];
+    const sourceIndex = files.findIndex((item) => /\.(?:ppt|pptx)$/i.test(item.name));
+    if (sourceIndex < 0) replaceFiles([...files, file]);
+    else {
+      const next = [...files];
       next[sourceIndex] = file;
-      return next;
-    });
-  }, [analysisSourceFile, files.length, setFiles, uploadLimits.document.bytes, uploadLimits.document.mb]);
+      replaceFiles(next);
+    }
+  }, [analysisSourceFile, files, replaceFiles, uploadLimits.document.bytes, uploadLimits.document.mb]);
 
   const rememberAnalysis = useCallback((analysisId: string | null) => {
     setLastAnalysisId(analysisId);
@@ -291,31 +307,76 @@ const UploadPage = ({
             onDrop={handleCardDrop}
             data-testid="compose-card"
           >
-            <PromptInput
-              value={config.prompt}
-              onChange={(value) => handleConfigChange("prompt", value)}
-              onSubmit={handlePrimaryGenerate}
-            />
+            {!sourceLocked ? (
+              <PromptInput
+                value={config.prompt}
+                onChange={(value) => handleConfigChange("prompt", value)}
+                onSubmit={handlePrimaryGenerate}
+              />
+            ) : (
+              <p className="px-1 py-2 text-sm text-[#5E626A]" data-testid="source-locked-mode-notice">
+                원본 페이지 수와 이미지 배치를 유지하여 PPT를 생성합니다.
+              </p>
+            )}
 
-            <div className="mt-2">
+            {!sourceLockedSummary ? <div className="mt-2">
               <SupportingDoc
                 files={[...files]}
-                onFilesChange={setFiles}
+                onFilesChange={replaceFiles}
                 compact
+                sourceLocked={sourceLocked}
               />
-            </div>
-
-            <div className="mt-4 flex flex-col gap-3 border-t border-[#F0F1F3] pt-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
-                <ConfigurationSelects
-                  config={config}
-                  onConfigChange={handleConfigChange}
+              <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm font-medium text-[#242629]">
+                <input
+                  type="checkbox"
+                  checked={sourceLocked}
+                  disabled={sourceLockedGenerationModeLatched}
+                  onChange={(event) =>
+                    dispatch(
+                      setSourceLockedGenerationMode(
+                        event.target.checked ? "source_locked" : "adaptive",
+                      ),
+                    )
+                  }
+                  data-testid="source-locked-generation-checkbox"
                 />
-                <div className="min-w-0 max-w-full overflow-hidden">
-                  <CurrentConfig />
-                </div>
+                원본 문서 그대로 생성
+              </label>
+            </div> : (
+              <div className="mt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => replaceFiles([])}
+                  data-testid="source-locked-reset-button"
+                >
+                  다른 원본 선택
+                </Button>
               </div>
-              <Button
+            )}
+
+            {sourceLockedSummary ? (
+              <div className="mt-4 rounded-xl border border-[#E4E6E9] bg-[#FAFAFB] px-3 py-3 text-sm text-[#33363A]" data-testid="source-locked-analysis-summary">
+                <p className="font-semibold">{sourceLockedSummary.source_format.toUpperCase()} {sourceLockedSummary.source_page_count}장 → {sourceLockedSummary.output_slide_count}슬라이드</p>
+                <p className="mt-1 text-[#5E626A]">미디어 {sourceLockedSummary.media_asset_count}개 · 이미지 occurrence {sourceLockedSummary.image_occurrence_count}개 · inherited occurrence {sourceLockedSummary.inherited_image_occurrence_count}개</p>
+              </div>
+            ) : null}
+
+            {!sourceLockedSummary ? <div className="mt-4 flex flex-col gap-3 border-t border-[#F0F1F3] pt-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+                <>
+                  <ConfigurationSelects
+                    config={config}
+                    onConfigChange={handleConfigChange}
+                    sourceLocked={sourceLocked}
+                  />
+                  {!sourceLocked ?
+                  <div className="min-w-0 max-w-full overflow-hidden">
+                    <CurrentConfig />
+                  </div> : null}
+                </>
+              </div>
+              {!sourceLocked ? <Button
                 type="button"
                 variant="outline"
                 onClick={handleReviewThenGenerate}
@@ -324,7 +385,7 @@ const UploadPage = ({
                 className="h-11 shrink-0 rounded-full px-5 font-syne text-sm font-semibold"
               >
                 {t("reviewOutline")}
-              </Button>
+              </Button> : null}
               <Button
                 type="button"
                 onClick={handlePrimaryGenerate}
@@ -333,11 +394,11 @@ const UploadPage = ({
                 className="h-11 shrink-0 rounded-full bg-[#242629] px-5 font-syne text-sm font-semibold text-white shadow-[0_6px_16px_rgba(36,38,41,0.18)] transition hover:bg-[#111214] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <span>
-                  {loadingState.isLoading ? t("generating") : t("generate")}
+                  {loadingState.isLoading ? t("generating") : sourceLocked ? "원본대로 PPT 생성" : t("generate")}
                 </span>
                 <ArrowUp className="ml-2 h-4 w-4" aria-hidden="true" />
               </Button>
-            </div>
+            </div> : null}
 
             {masterAdmissionError ? (
               <div
@@ -360,7 +421,7 @@ const UploadPage = ({
           </div>
         </section>
 
-        {masterFeatureEnabled ? (
+        {masterFeatureEnabled && !sourceLocked ? (
           <section
             className="mx-auto mt-6 max-w-[760px]"
             aria-labelledby="upload-master-title"
@@ -404,9 +465,9 @@ const UploadPage = ({
           </section>
         ) : null}
 
-        <section className="mx-auto mt-10 max-w-[1180px]">
+        {!sourceLocked ? <section className="mx-auto mt-10 max-w-[1180px]">
           <TemplateSelection />
-        </section>
+        </section> : null}
         {masterFeatureEnabled ? (
           <MasterCatalogDialog
             analysisSourceFile={analysisSourceFile}

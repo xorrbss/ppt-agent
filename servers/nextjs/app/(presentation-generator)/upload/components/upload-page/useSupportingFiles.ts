@@ -7,15 +7,41 @@ import {
   MAX_SUPPORTED_FILES,
   SUPPORTED_FILE_FORMATS_DESCRIPTION,
 } from "../SupportingDoc";
+import {
+  sourceLockedSelectionErrorMessage,
+  validateSourceLockedFiles,
+} from "../../../services/api/source-locked/contract";
 
 /**
  * Owns the supporting-document list and the compose-card drag & drop surface.
  */
-export const useSupportingFiles = () => {
+export const useSupportingFiles = ({
+  sourceLocked = false,
+  onFilesChange,
+}: {
+  sourceLocked?: boolean;
+  onFilesChange?: (files: File[]) => void;
+} = {}) => {
   const uploadLimits = useUploadLimits();
 
   const [files, setFiles] = useState<File[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
+
+  const replaceFiles = (nextFiles: File[]) => {
+    const sourceLockedError = sourceLocked && nextFiles.length > 0
+      ? validateSourceLockedFiles(nextFiles)
+      : null;
+    if (sourceLockedError) {
+      notify.error(
+        "원본 문서 그대로 생성 파일 제한",
+        sourceLockedSelectionErrorMessage(sourceLockedError),
+      );
+      return false;
+    }
+    setFiles(nextFiles);
+    onFilesChange?.(nextFiles);
+    return true;
+  };
 
   // Compose-card drag & drop. The compact SupportingDoc has no dropzone, so drops
   // are handled here at the card level (mirrors SupportingDoc's file validation).
@@ -44,7 +70,7 @@ export const useSupportingFiles = () => {
         isAllowedFile(file) && file.size <= uploadLimits.document.bytes
     );
     const limited = allowed.slice(0, MAX_SUPPORTED_FILES);
-    setFiles(limited);
+    if (!replaceFiles(limited)) return;
 
     if (allowed.length !== nextFiles.length) {
       notify.error(
@@ -74,7 +100,7 @@ export const useSupportingFiles = () => {
 
   return {
     files,
-    setFiles,
+    replaceFiles,
     isDragOver,
     handleCardDragOver,
     handleCardDragLeave,
