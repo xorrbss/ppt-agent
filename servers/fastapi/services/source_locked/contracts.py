@@ -233,6 +233,93 @@ class SourceLockedAnalysisResponseV1(StrictFrozenModel):
     fallback_allowed: Literal[False] = False
 
 
+class SourceLockedRestorationVerificationV1(StrictFrozenModel):
+    contract_version: Literal["source-locked-restoration-verification/v1"] = (
+        "source-locked-restoration-verification/v1"
+    )
+    source_type: Literal["pptx", "pdf"]
+    source_snapshot_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    output_package_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    page_count: int = Field(gt=0)
+    slide_count: int = Field(gt=0)
+    direct_occurrence_count: int = Field(ge=0)
+    rendered_page_count: int = Field(ge=0)
+    authoritative_image_digests: tuple[
+        Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")], ...
+    ]
+    missing_content_count: Literal[0] = 0
+    byte_exact_source_package: bool
+    fallback_allowed: Literal[False] = False
+
+
+class SourceLockedArtifactV1(StrictFrozenModel):
+    contract_version: Literal["source-locked-artifact/v1"] = "source-locked-artifact/v1"
+    artifact_id: str = Field(pattern=r"^sla_[0-9a-f]{64}$")
+    filename: str = Field(pattern=r"^source-locked-[0-9a-f]{16}\.pptx$")
+    media_type: Literal[
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    ] = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    byte_length: int = Field(gt=0)
+    sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    download_url: str = Field(pattern=r"^/api/v1/ppt/source-locked/v1/artifacts/sla_[0-9a-f]{64}$")
+    created_at: datetime
+    source_type: Literal["pptx", "pdf"]
+    slide_count: int = Field(gt=0)
+
+
+class SourceLockedGenerationResponseV1(StrictFrozenModel):
+    contract_version: Literal["source-locked-generation-response/v1"] = (
+        "source-locked-generation-response/v1"
+    )
+    generation_record_id: str = Field(pattern=r"^slgen_[0-9a-f]{64}$")
+    admission_contract: AdmissionContractV1
+    source_snapshot: SourceSnapshotV1
+    manifest: SourceManifestV1
+    summary: SourceAnalysisSummaryV1
+    analysis_seal: SourceAnalysisSealV1
+    restoration_verification: SourceLockedRestorationVerificationV1
+    artifact: SourceLockedArtifactV1
+    progress_stages: tuple[ProgressStageV1, ...]
+    idempotent_replay: bool = False
+    fallback_allowed: Literal[False] = False
+
+    @model_validator(mode="after")
+    def require_completed_generation(self) -> "SourceLockedGenerationResponseV1":
+        expected = [
+            AnalysisStage.SOURCE_ANALYSIS,
+            AnalysisStage.SLIDE_IMAGE_RESTORATION,
+            AnalysisStage.MISSING_CONTENT_VALIDATION,
+        ]
+        if [item.stage for item in self.progress_stages] != expected:
+            raise ValueError("generation progress stages must be complete and ordered")
+        if any(item.status != StageStatus.COMPLETED for item in self.progress_stages):
+            raise ValueError("generation response requires all stages completed")
+        if self.artifact.sha256 != self.restoration_verification.output_package_sha256:
+            raise ValueError("artifact digest does not match restoration verification")
+        if self.artifact.slide_count != self.restoration_verification.slide_count:
+            raise ValueError("artifact slide count does not match restoration verification")
+        verification = self.restoration_verification
+        if verification.source_snapshot_sha256 != self.source_snapshot.sha256:
+            raise ValueError("restoration verification does not match the source snapshot")
+        if (
+            self.summary.source_type != verification.source_type
+            or self.summary.page_count != verification.page_count
+            or self.summary.slide_count != verification.slide_count
+            or self.artifact.source_type != verification.source_type
+        ):
+            raise ValueError("summary and artifact metadata do not match restoration readback")
+        if verification.page_count != verification.slide_count:
+            raise ValueError("source-locked output requires one slide per source page")
+        if verification.source_type == "pptx":
+            if not verification.byte_exact_source_package:
+                raise ValueError("PPTX source-locked generation must preserve the source package bytes")
+            if verification.output_package_sha256 != self.source_snapshot.sha256:
+                raise ValueError("PPTX source-locked artifact must be byte-exact")
+        elif verification.rendered_page_count != verification.page_count:
+            raise ValueError("PDF source-locked generation must render every page")
+        return self
+
+
 class SourceLockedErrorV1(StrictFrozenModel):
     contract_version: Literal["source-locked-error/v1"] = "source-locked-error/v1"
     code: str
