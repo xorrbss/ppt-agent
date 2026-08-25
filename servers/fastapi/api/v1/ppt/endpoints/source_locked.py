@@ -1,8 +1,17 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
-from fastapi import APIRouter, File, Form, Header, HTTPException, UploadFile
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Query,
+    Response,
+    UploadFile,
+    status,
+)
 from fastapi.responses import FileResponse
 from starlette.concurrency import run_in_threadpool
 
@@ -12,19 +21,20 @@ from services.source_locked.contracts import (
     AnalysisStage,
     GenerationMode,
     PageCountPolicy,
-    ProgressStageV1,
-    SourceLockedArtifactV1,
     SourceLockedAnalysisResponseV1,
+    SourceLockedGenerationJobV1,
     SourceLockedGenerationResponseV1,
-    SourceLockedRestorationVerificationV1,
-    StageStatus,
+    SourceLockedJobStatus,
 )
 from services.source_locked.digests import idempotency_payload_digest, sha256_digest
 from services.source_locked.errors import SourceLockedError
-from services.source_locked.generation_store import (
-    DurableSourceLockedGenerationStore,
-    generation_identity,
+from services.source_locked.generation_store import DurableSourceLockedGenerationStore
+from services.source_locked.job_runner import (
+    generate_source_locked_result,
+    run_source_locked_job,
 )
+from services.source_locked.job_store import DurableSourceLockedJobStore
+from utils.owner_context import get_current_owner_id
 from utils.upload_limits import get_single_upload_limit_bytes, reject_if_declared_too_large
 
 
@@ -50,6 +60,17 @@ def _generation_store() -> DurableSourceLockedGenerationStore:
     return DurableSourceLockedGenerationStore.from_app_data()
 
 
+def _job_store() -> DurableSourceLockedJobStore:
+    return DurableSourceLockedJobStore.from_app_data()
+
+
+def _owner_id() -> str:
+    owner_id = get_current_owner_id()
+    if owner_id is None:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return str(owner_id)
+
+
 def _run_restoration(*, admission_contract, source_snapshot, manifest, source_bytes):
     # Kept as a narrow adapter so the restoration worker remains independently
     # testable and this endpoint owns only admission/persistence concerns.
@@ -66,7 +87,11 @@ def _run_restoration(*, admission_contract, source_snapshot, manifest, source_by
 def _http_status(error: SourceLockedError) -> int:
     if error.detail.code == "SOURCE_TOO_LARGE":
         return 413
-    if error.detail.code in {"ARTIFACT_NOT_FOUND", "ARTIFACT_ID_INVALID"}:
+    if error.detail.code in {
+        "ARTIFACT_NOT_FOUND",
+        "ARTIFACT_ID_INVALID",
+        "GENERATION_JOB_NOT_FOUND",
+    }:
         return 404
     if error.detail.code.startswith("IDEMPOTENCY_"):
         return 409
@@ -151,125 +176,30 @@ async def generate_source_locked_v1(
     ),
 ) -> SourceLockedGenerationResponseV1:
     try:
+        owner_id = _owner_id()
         contract, payload = await _admit_and_read(
             files=files,
             generation_mode=generation_mode,
             page_count_policy=page_count_policy,
             preserve_all_image_occurrences=preserve_all_image_occurrences,
         )
-        source_digest = sha256_digest(payload)
-        calculated_payload_digest = idempotency_payload_digest(contract, source_digest)
-        if calculated_payload_digest != expected_payload_digest:
-            raise SourceLockedError(
-                "IDEMPOTENCY_PAYLOAD_DIGEST_MISMATCH",
-                AnalysisStage.SOURCE_ANALYSIS,
-                "The idempotency payload digest does not match the admitted source snapshot",
-            )
-
         store = await run_in_threadpool(_generation_store)
-        existing = await run_in_threadpool(
-            store.lookup,
-            idempotency_key=idempotency_key,
-            idempotency_payload_digest=calculated_payload_digest,
-        )
-        if existing is not None:
-            return existing
-
-        analysis = analyze_source(
+        result = await run_in_threadpool(
+            generate_source_locked_result,
+            owner_id=owner_id,
             admission_contract=contract,
-            data=payload,
+            source_bytes=payload,
             idempotency_key=idempotency_key,
-            expected_idempotency_payload_digest=expected_payload_digest,
+            expected_payload_digest=expected_payload_digest,
+            generation_store=store,
+            restoration=_run_restoration,
         )
-        try:
-            restoration = await run_in_threadpool(
-                _run_restoration,
-                admission_contract=contract,
-                source_snapshot=analysis.source_snapshot,
-                manifest=analysis.manifest,
-                source_bytes=payload,
-            )
-        except SourceLockedError:
-            raise
-        except Exception as exc:
-            raise SourceLockedError(
-                "SOURCE_RESTORATION_FAILED",
-                AnalysisStage.SLIDE_IMAGE_RESTORATION,
-                "Source-locked slide and image restoration failed",
-            ) from exc
-
-        artifact_bytes = restoration.artifact_bytes
-        verification_in = restoration.verification
-        verification = SourceLockedRestorationVerificationV1(
-            source_type=verification_in.source_type,
-            source_snapshot_sha256=verification_in.source_snapshot_sha256,
-            output_package_sha256=verification_in.output_package_sha256,
-            page_count=verification_in.page_count,
-            slide_count=verification_in.slide_count,
-            direct_occurrence_count=verification_in.direct_occurrence_count,
-            rendered_page_count=verification_in.rendered_page_count,
-            authoritative_image_digests=tuple(verification_in.authoritative_image_digests),
-            missing_content_count=verification_in.missing_content_count,
-            byte_exact_source_package=verification_in.byte_exact_source_package,
-            fallback_allowed=verification_in.fallback_allowed,
-        )
-        if restoration.artifact_media_type != SourceLockedArtifactV1.model_fields["media_type"].default:
-            raise SourceLockedError(
-                "ARTIFACT_MEDIA_TYPE_INVALID",
-                AnalysisStage.MISSING_CONTENT_VALIDATION,
-                "The restoration worker did not produce a PPTX artifact",
-            )
-
-        generation_record_id, artifact_id = generation_identity(
-            idempotency_key,
-            calculated_payload_digest,
-        )
-        artifact_digest = sha256_digest(artifact_bytes)
-        artifact = SourceLockedArtifactV1(
-            artifact_id=artifact_id,
-            filename=f"source-locked-{artifact_id.removeprefix('sla_')[:16]}.pptx",
-            byte_length=len(artifact_bytes),
-            sha256=artifact_digest,
-            download_url=f"/api/v1/ppt/source-locked/v1/artifacts/{artifact_id}",
-            created_at=datetime.now(timezone.utc),
-            source_type=analysis.summary.source_type,
-            slide_count=analysis.summary.slide_count,
-        )
-        response = SourceLockedGenerationResponseV1(
-            generation_record_id=generation_record_id,
-            admission_contract=analysis.admission_contract,
-            source_snapshot=analysis.source_snapshot,
-            manifest=analysis.manifest,
-            summary=analysis.summary,
-            analysis_seal=analysis.analysis_seal,
-            restoration_verification=verification,
-            artifact=artifact,
-            progress_stages=(
-                ProgressStageV1(stage=AnalysisStage.SOURCE_ANALYSIS, status=StageStatus.COMPLETED),
-                ProgressStageV1(
-                    stage=AnalysisStage.SLIDE_IMAGE_RESTORATION,
-                    status=StageStatus.COMPLETED,
-                ),
-                ProgressStageV1(
-                    stage=AnalysisStage.MISSING_CONTENT_VALIDATION,
-                    status=StageStatus.COMPLETED,
-                ),
-            ),
-        )
-        return await run_in_threadpool(
-            store.persist,
-            response=response,
-            artifact_bytes=artifact_bytes,
-        )
+        assert result is not None
+        return result
     except SourceLockedError as exc:
         raise _as_http_error(exc) from exc
-    except ValueError as exc:
-        error = SourceLockedError(
-            "RESTORATION_READBACK_INVALID",
-            AnalysisStage.MISSING_CONTENT_VALIDATION,
-            "Restoration readback did not satisfy the source-locked contract",
-        )
-        raise _as_http_error(error) from exc
+    except HTTPException:
+        raise
     except Exception as exc:
         error = SourceLockedError(
             "SOURCE_LOCKED_PERSISTENCE_FAILED",
@@ -279,11 +209,190 @@ async def generate_source_locked_v1(
         raise _as_http_error(error) from exc
 
 
+@SOURCE_LOCKED_ROUTER.post(
+    "/jobs",
+    response_model=SourceLockedGenerationJobV1,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def create_source_locked_job_v1(
+    background_tasks: BackgroundTasks,
+    files: list[UploadFile] | None = File(default=None),
+    generation_mode: GenerationMode = Form(...),
+    page_count_policy: PageCountPolicy = Form(...),
+    preserve_all_image_occurrences: bool = Form(...),
+    idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=1, max_length=200),
+    expected_payload_digest: str = Header(
+        ...,
+        alias="X-Idempotency-Payload-Digest",
+        pattern=r"^sha256:[0-9a-f]{64}$",
+    ),
+) -> SourceLockedGenerationJobV1:
+    try:
+        owner_id = _owner_id()
+        contract, payload = await _admit_and_read(
+            files=files,
+            generation_mode=generation_mode,
+            page_count_policy=page_count_policy,
+            preserve_all_image_occurrences=preserve_all_image_occurrences,
+        )
+        calculated_payload_digest = idempotency_payload_digest(
+            contract,
+            sha256_digest(payload),
+        )
+        if calculated_payload_digest != expected_payload_digest:
+            raise SourceLockedError(
+                "IDEMPOTENCY_PAYLOAD_DIGEST_MISMATCH",
+                AnalysisStage.SOURCE_ANALYSIS,
+                "The idempotency payload digest does not match the admitted source snapshot",
+            )
+        job_store = await run_in_threadpool(_job_store)
+        generation_store = await run_in_threadpool(_generation_store)
+        snapshot, created = await run_in_threadpool(
+            job_store.create,
+            owner_id=owner_id,
+            idempotency_key=idempotency_key,
+            idempotency_payload_digest=calculated_payload_digest,
+            admission_contract=contract,
+            source_bytes=payload,
+        )
+        if snapshot.status == SourceLockedJobStatus.RUNNING:
+            replay = snapshot.idempotent_replay
+            snapshot, _ = await run_in_threadpool(
+                job_store.recover_stale,
+                owner_id=owner_id,
+                job_id=snapshot.job_id,
+            )
+            assert snapshot is not None
+            if replay:
+                snapshot = snapshot.model_copy(update={"idempotent_replay": True})
+        if created or snapshot.status == SourceLockedJobStatus.QUEUED:
+            background_tasks.add_task(
+                run_source_locked_job,
+                owner_id=owner_id,
+                job_id=snapshot.job_id,
+                job_store=job_store,
+                generation_store=generation_store,
+            )
+        return snapshot
+    except SourceLockedError as exc:
+        raise _as_http_error(exc) from exc
+
+
+@SOURCE_LOCKED_ROUTER.get(
+    "/jobs",
+    response_model=list[SourceLockedGenerationJobV1],
+)
+async def list_source_locked_jobs_v1(
+    background_tasks: BackgroundTasks,
+    limit: int = Query(default=50, ge=1, le=200),
+) -> list[SourceLockedGenerationJobV1]:
+    owner_id = _owner_id()
+    job_store = await run_in_threadpool(_job_store)
+    snapshots = await run_in_threadpool(
+        job_store.list_for_owner,
+        owner_id=owner_id,
+        limit=limit,
+    )
+    result: list[SourceLockedGenerationJobV1] = []
+    generation_store = None
+    for snapshot in snapshots:
+        recovered, _ = await run_in_threadpool(
+            job_store.recover_stale,
+            owner_id=owner_id,
+            job_id=snapshot.job_id,
+        )
+        assert recovered is not None
+        result.append(recovered)
+        if recovered.status == SourceLockedJobStatus.QUEUED:
+            if generation_store is None:
+                generation_store = await run_in_threadpool(_generation_store)
+            background_tasks.add_task(
+                run_source_locked_job,
+                owner_id=owner_id,
+                job_id=recovered.job_id,
+                job_store=job_store,
+                generation_store=generation_store,
+            )
+    return result
+
+
+@SOURCE_LOCKED_ROUTER.get(
+    "/jobs/{job_id}",
+    response_model=SourceLockedGenerationJobV1,
+)
+async def get_source_locked_job_v1(
+    job_id: str,
+    background_tasks: BackgroundTasks,
+) -> SourceLockedGenerationJobV1:
+    try:
+        owner_id = _owner_id()
+        job_store = await run_in_threadpool(_job_store)
+        snapshot = await run_in_threadpool(job_store.get, owner_id=owner_id, job_id=job_id)
+        if snapshot is None:
+            raise SourceLockedError(
+                "GENERATION_JOB_NOT_FOUND",
+                AnalysisStage.SOURCE_ANALYSIS,
+                "Source-locked generation job not found",
+            )
+        snapshot, _ = await run_in_threadpool(
+            job_store.recover_stale,
+            owner_id=owner_id,
+            job_id=job_id,
+        )
+        assert snapshot is not None
+        if snapshot.status == SourceLockedJobStatus.QUEUED:
+            generation_store = await run_in_threadpool(_generation_store)
+            background_tasks.add_task(
+                run_source_locked_job,
+                owner_id=owner_id,
+                job_id=job_id,
+                job_store=job_store,
+                generation_store=generation_store,
+            )
+        return snapshot
+    except SourceLockedError as exc:
+        raise _as_http_error(exc) from exc
+
+
+@SOURCE_LOCKED_ROUTER.post(
+    "/jobs/{job_id}/cancel",
+    response_model=SourceLockedGenerationJobV1,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def cancel_source_locked_job_v1(
+    job_id: str,
+    response: Response,
+) -> SourceLockedGenerationJobV1:
+    owner_id = _owner_id()
+    job_store = await run_in_threadpool(_job_store)
+    snapshot, accepted = await run_in_threadpool(
+        job_store.cancel,
+        owner_id=owner_id,
+        job_id=job_id,
+    )
+    if snapshot is None:
+        raise _as_http_error(
+            SourceLockedError(
+                "GENERATION_JOB_NOT_FOUND",
+                AnalysisStage.SOURCE_ANALYSIS,
+                "Source-locked generation job not found",
+            )
+        )
+    if not accepted:
+        response.status_code = status.HTTP_200_OK
+    return snapshot
+
+
 @SOURCE_LOCKED_ROUTER.get("/artifacts/{artifact_id}", response_class=FileResponse)
 async def download_source_locked_artifact_v1(artifact_id: str) -> FileResponse:
     try:
+        owner_id = _owner_id()
         store = await run_in_threadpool(_generation_store)
-        path, response = await run_in_threadpool(store.artifact_path, artifact_id)
+        path, response = await run_in_threadpool(
+            store.artifact_path,
+            artifact_id,
+            owner_id=owner_id,
+        )
         return FileResponse(
             path,
             media_type=response.artifact.media_type,
@@ -296,6 +405,8 @@ async def download_source_locked_artifact_v1(artifact_id: str) -> FileResponse:
         )
     except SourceLockedError as exc:
         raise _as_http_error(exc) from exc
+    except HTTPException:
+        raise
     except Exception as exc:
         error = SourceLockedError(
             "SOURCE_LOCKED_STORAGE_FAILED",

@@ -80,6 +80,52 @@ export type SourceLockedGenerationResult = {
   artifact: SourceLockedArtifactV1;
 };
 
+/**
+ * A dedicated job protocol.  It deliberately does not share the historic
+ * Presentation persistence codec: source-locked jobs are immutable artifacts,
+ * not editable `standard` presentations.
+ */
+export type SourceLockedJobStatusV1 =
+  | "queued"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "cancelled";
+
+export type SourceLockedJobErrorV1 = {
+  code?: string;
+  message?: string;
+  stage?: string;
+};
+
+export type SourceLockedJobResponseV1 = {
+  contract_version: "source-locked-job/v1";
+  job_id: string;
+  status: SourceLockedJobStatusV1;
+  source_filename: string;
+  progress_stages: Array<{ stage: string; status: string }>;
+  cancel_requested: boolean;
+  idempotent_replay: boolean;
+  /** Present only after a successful, immutable worker commit. */
+  result: SourceLockedGenerationResponseV1 | null;
+  error?: SourceLockedJobErrorV1 | null;
+  fallback_allowed: false;
+  created_at: string;
+  updated_at: string;
+};
+
+export function sourceLockedJobIsTerminal(job: SourceLockedJobResponseV1): boolean {
+  return ["succeeded", "failed", "cancelled"].includes(job.status);
+}
+
+/** Success is usable only when the same fail-closed restoration receipt passes. */
+export function sourceLockedGenerationFromJob(
+  job: SourceLockedJobResponseV1,
+): SourceLockedGenerationResult | null {
+  if (job.status !== "succeeded" || !job.result) return null;
+  return sourceLockedGenerationFromResponse(job.result);
+}
+
 const sourceLockedExtension = (file: File) =>
   file.name.trim().toLowerCase().split(".").pop() ?? "";
 
@@ -151,7 +197,6 @@ export function sourceLockedGenerationFromResponse(
   ];
   if (
     !summary ||
-    summary.source_format === "ppt" ||
     response.fallback_allowed !== false ||
     Number((response.manifest as Record<string, unknown>).missing_content_count) !== 0 ||
     requiredStages.some((stage) => stages.get(stage) !== "completed")
@@ -164,6 +209,10 @@ export function sourceLockedGenerationFromResponse(
     verification.fallback_allowed !== false ||
     verification.slide_count !== summary.output_slide_count ||
     (summary.source_format === "pdf" && verification.rendered_page_count !== summary.source_page_count) ||
+    // A converted legacy .ppt has no byte-exact package guarantee. It is
+    // admitted only when the backend's isolated conversion readback proves the
+    // same page/slide invariant; otherwise it remains conversion-required.
+    (summary.source_format === "ppt" && verification.rendered_page_count !== summary.source_page_count) ||
     (summary.source_format === "pptx" && verification.byte_exact_source_package !== true) ||
     artifact?.contract_version !== "source-locked-artifact/v1" ||
     !/^sla_[0-9a-f]{64}$/.test(artifact.artifact_id) ||
@@ -254,6 +303,59 @@ export class SourceLockedGenerationApiV1 {
     return this.submit<SourceLockedGenerationResponseV1>(
       "/api/v1/ppt/source-locked/v1/generate", files, idempotencyKey,
       "Failed to generate source-locked presentation",
+    );
+  }
+
+  /**
+   * The asynchronous route is the large-document path.  The legacy generate
+   * method above remains intentionally available for existing callers.
+   */
+  static async createJob(
+    files: readonly File[],
+    idempotencyKey: string,
+  ): Promise<SourceLockedJobResponseV1> {
+    return this.submit<SourceLockedJobResponseV1>(
+      "/api/v1/ppt/source-locked/v1/jobs", files, idempotencyKey,
+      "Failed to start source-locked generation",
+    );
+  }
+
+  private static async jobCommand<T>(
+    path: string,
+    method: "GET" | "POST",
+    errorMessage: string,
+  ): Promise<T> {
+    const response = await fetchWithNetworkRetry(getApiUrl(path), {
+      method,
+      headers: method === "POST" ? getHeaderForFormData() : undefined,
+      cache: "no-cache",
+    });
+    return (await ApiResponseHandler.handleResponse(response, errorMessage)) as T;
+  }
+
+  static async getJob(jobId: string): Promise<SourceLockedJobResponseV1> {
+    return this.jobCommand<SourceLockedJobResponseV1>(
+      `/api/v1/ppt/source-locked/v1/jobs/${encodeURIComponent(jobId)}`,
+      "GET",
+      "Failed to refresh source-locked generation",
+    );
+  }
+
+  /** Owner-scoped dashboard projection; the server filters before returning metadata. */
+  static async listJobs(limit = 50): Promise<SourceLockedJobResponseV1[]> {
+    const boundedLimit = Math.min(200, Math.max(1, Math.trunc(limit) || 50));
+    return this.jobCommand<SourceLockedJobResponseV1[]>(
+      `/api/v1/ppt/source-locked/v1/jobs?limit=${boundedLimit}`,
+      "GET",
+      "Failed to load source-locked generation history",
+    );
+  }
+
+  static async cancelJob(jobId: string): Promise<SourceLockedJobResponseV1> {
+    return this.jobCommand<SourceLockedJobResponseV1>(
+      `/api/v1/ppt/source-locked/v1/jobs/${encodeURIComponent(jobId)}/cancel`,
+      "POST",
+      "Failed to cancel source-locked generation",
     );
   }
 }

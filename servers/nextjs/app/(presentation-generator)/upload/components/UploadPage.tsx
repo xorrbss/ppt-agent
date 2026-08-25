@@ -40,6 +40,7 @@ import { ConfigurationSelects } from "./ConfigurationSelects";
 import CurrentConfig from "./CurrentConfig";
 import { PromptInput } from "./PromptInput";
 import SupportingDoc, { MAX_SUPPORTED_FILES } from "./SupportingDoc";
+import { SourceLockedHistory } from "./source-locked/SourceLockedHistory";
 import { abortDocumentProcessing } from "./upload-page/abortDocumentProcessing";
 import { useSupportingFiles } from "./upload-page/useSupportingFiles";
 import { useUploadPageState } from "./upload-page/useUploadPageState";
@@ -156,6 +157,10 @@ const UploadPage = ({
     masterAdmissionError,
     sourceLockedSummary,
     sourceLockedArtifact,
+    sourceLockedHistory,
+    canCancelSourceLockedJob,
+    handleCancelSourceLockedJob,
+    cancelSourceLockedJob,
   } = useUploadPageState({
     files,
     selectedThemeId,
@@ -263,7 +268,9 @@ const UploadPage = ({
         onCancel={
           canCancelDocumentProcessing
             ? () => abortDocumentProcessing(decomposeAbortControllerRef.current)
-            : undefined
+            : canCancelSourceLockedJob
+              ? () => { void handleCancelSourceLockedJob(); }
+              : undefined
         }
       />
 
@@ -373,6 +380,11 @@ const UploadPage = ({
                 </> : null}
               </div>
             ) : null}
+
+            <SourceLockedHistory
+              entries={sourceLockedHistory}
+              onCancel={(jobId) => { void cancelSourceLockedJob(jobId); }}
+            />
 
             {!sourceLockedSummary ? <div className="mt-4 flex flex-col gap-3 border-t border-[#F0F1F3] pt-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">

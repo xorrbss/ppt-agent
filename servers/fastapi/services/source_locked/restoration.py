@@ -14,10 +14,15 @@ from services.source_locked.contracts import (
     GenerationMode,
     ImageOccurrenceScope,
     PdfSourceManifestV1,
+    PptSourceManifestV1,
     PptxSourceManifestV1,
     SourceManifestV1,
     SourceMediaType,
     SourceSnapshotV1,
+)
+from services.source_locked.conversion import (
+    convert_legacy_ppt_v1,
+    ppt_conversion_readback_projection,
 )
 from services.source_locked.digests import sha256_digest
 from services.source_locked.errors import SourceLockedError
@@ -30,7 +35,7 @@ _PDF_RENDER_SCALE = 2
 
 @dataclass(frozen=True, slots=True)
 class SourceLockedRestorationVerificationV1:
-    source_type: Literal["pptx", "pdf"]
+    source_type: Literal["ppt", "pptx", "pdf"]
     source_snapshot_sha256: str
     output_package_sha256: str
     page_count: int
@@ -106,14 +111,17 @@ def _validate_inputs(
             "The source manifest is not bound to the admitted source package",
         )
 
-    expected_type = (
-        "pptx" if admission_contract.source_media_type == SourceMediaType.PPTX else "pdf"
-    )
-    if admission_contract.source_media_type not in (SourceMediaType.PPTX, SourceMediaType.PDF):
+    expected_types = {
+        SourceMediaType.PPT: "ppt",
+        SourceMediaType.PPTX: "pptx",
+        SourceMediaType.PDF: "pdf",
+    }
+    expected_type = expected_types.get(admission_contract.source_media_type)
+    if expected_type is None:
         _raise(
             "RESTORATION_SOURCE_TYPE_UNSUPPORTED",
             AnalysisStage.SLIDE_IMAGE_RESTORATION,
-            "Source restoration v1 supports admitted .pptx and .pdf sources only",
+            "Source restoration v1 supports admitted .ppt, .pptx, and .pdf sources only",
         )
     if manifest.source_type != expected_type:
         _raise(
@@ -126,6 +134,65 @@ def _validate_inputs(
 
 def _manifest_payload(manifest: SourceManifestV1) -> dict[str, object]:
     return manifest.model_dump(mode="json")
+
+
+def _sealed_ppt_readback_projection(manifest: PptSourceManifestV1) -> dict[str, object]:
+    converted_manifest = manifest.converted_manifest.model_dump(mode="json")
+    converted_manifest.pop("package_sha256", None)
+    return {
+        "contract_version": "source-locked-ppt-conversion-readback/v1",
+        "original_ppt_sha256": manifest.original_package_sha256,
+        "converted_manifest": converted_manifest,
+        "source_page_count": manifest.source_page_count,
+        "converted_page_count": manifest.converted_page_count,
+        "source_visual_page_digests": manifest.source_visual_page_digests,
+        "converted_visual_page_digests": manifest.converted_visual_page_digests,
+        "missing_content_count": manifest.missing_content_count,
+        "visual_readback_exact": manifest.visual_readback_exact,
+        "isolated_libreoffice_profile": manifest.isolated_libreoffice_profile,
+        "power_point_com_used": manifest.power_point_com_used,
+        "byte_exact_source_package": False,
+        "fallback_allowed": False,
+    }
+
+
+def _restore_ppt(
+    *,
+    source_digest: str,
+    manifest: PptSourceManifestV1,
+    source_bytes: bytes,
+) -> SourceLockedRestorationResultV1:
+    conversion = convert_legacy_ppt_v1(source_bytes)
+    if conversion.original_ppt_sha256 != source_digest:
+        _raise(
+            "PPT_CONVERSION_SOURCE_MISMATCH",
+            AnalysisStage.MISSING_CONTENT_VALIDATION,
+            "The legacy PPT conversion is not bound to the admitted source snapshot",
+        )
+    if ppt_conversion_readback_projection(conversion) != _sealed_ppt_readback_projection(manifest):
+        _raise(
+            "PPT_CONVERSION_READBACK_MISMATCH",
+            AnalysisStage.MISSING_CONTENT_VALIDATION,
+            "The legacy PPT conversion does not match its sealed structural and visual readback",
+        )
+
+    converted = conversion.converted_manifest
+    occurrence_digests = tuple(item.asset_digest for item in converted.image_occurrences)
+    return SourceLockedRestorationResultV1(
+        artifact_bytes=conversion.converted_pptx_bytes,
+        verification=SourceLockedRestorationVerificationV1(
+            source_type="ppt",
+            source_snapshot_sha256=source_digest,
+            output_package_sha256=conversion.converted_pptx_sha256,
+            page_count=conversion.source_page_count,
+            slide_count=conversion.converted_page_count,
+            direct_occurrence_count=converted.direct_occurrence_count,
+            rendered_page_count=0,
+            authoritative_image_digests=occurrence_digests,
+            missing_content_count=0,
+            byte_exact_source_package=False,
+        ),
+    )
 
 
 def _restore_pptx(
@@ -339,6 +406,12 @@ def restore_source_locked_v1(
         manifest=manifest,
         source_bytes=source_bytes,
     )
+    if isinstance(manifest, PptSourceManifestV1):
+        return _restore_ppt(
+            source_digest=source_digest,
+            manifest=manifest,
+            source_bytes=source_bytes,
+        )
     if isinstance(manifest, PptxSourceManifestV1):
         return _restore_pptx(
             source_digest=source_digest,

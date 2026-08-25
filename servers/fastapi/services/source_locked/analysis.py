@@ -4,6 +4,7 @@ from services.source_locked.contracts import (
     AdmissionContractV1,
     AnalysisStage,
     PdfSourceManifestV1,
+    PptSourceManifestV1,
     PptxSourceManifestV1,
     ProgressStageV1,
     SourceAnalysisSummaryV1,
@@ -12,6 +13,7 @@ from services.source_locked.contracts import (
     SourceSnapshotV1,
     StageStatus,
 )
+from services.source_locked.conversion import convert_legacy_ppt_v1
 from services.source_locked.digests import idempotency_payload_digest, sha256_digest
 from services.source_locked.errors import SourceLockedError
 from services.source_locked.pdf import analyze_pdf
@@ -50,12 +52,22 @@ def analyze_source(
         )
 
     if admission_contract.source_media_type == SourceMediaType.PPT:
-        raise SourceLockedError(
-            "SOURCE_CONVERSION_REQUIRED",
-            AnalysisStage.SOURCE_ANALYSIS,
-            "Legacy .ppt was admitted, but source analysis requires a reviewed lossless conversion adapter",
+        conversion = convert_legacy_ppt_v1(data)
+        manifest = PptSourceManifestV1(
+            package_sha256=source_digest,
+            original_package_sha256=conversion.original_ppt_sha256,
+            converted_package_sha256=conversion.converted_pptx_sha256,
+            converted_manifest=conversion.converted_manifest,
+            source_page_count=conversion.source_page_count,
+            converted_page_count=conversion.converted_page_count,
+            source_visual_page_digests=conversion.source_visual_page_digests,
+            converted_visual_page_digests=conversion.converted_visual_page_digests,
+            missing_content_count=conversion.missing_content_count,
+            visual_readback_exact=conversion.visual_readback_exact,
+            isolated_libreoffice_profile=conversion.isolated_libreoffice_profile,
+            power_point_com_used=conversion.power_point_com_used,
         )
-    if admission_contract.source_media_type == SourceMediaType.PPTX:
+    elif admission_contract.source_media_type == SourceMediaType.PPTX:
         manifest = analyze_pptx(data)
     elif admission_contract.source_media_type == SourceMediaType.PDF:
         manifest = analyze_pdf(data)
@@ -66,7 +78,17 @@ def analyze_source(
             "Unsupported source type",
         )
 
-    if isinstance(manifest, PptxSourceManifestV1):
+    if isinstance(manifest, PptSourceManifestV1):
+        converted = manifest.converted_manifest
+        summary = SourceAnalysisSummaryV1(
+            source_type="ppt",
+            page_count=manifest.source_page_count,
+            slide_count=manifest.converted_page_count,
+            media_asset_count=converted.media_asset_count,
+            image_occurrence_count=converted.image_occurrence_count,
+            inherited_occurrence_count=converted.inherited_occurrence_count,
+        )
+    elif isinstance(manifest, PptxSourceManifestV1):
         summary = SourceAnalysisSummaryV1(
             source_type="pptx",
             page_count=manifest.page_count,

@@ -117,6 +117,68 @@ test("source-locked generate posts the v1 route and exposes terminal artifact on
   }
 });
 
+test("source-locked async jobs use dedicated create, status, and cancel routes", async () => {
+  const { SourceLockedGenerationApiV1 } = await loadContract();
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  const job = {
+    contract_version: "source-locked-job/v1",
+    job_id: "slj_test",
+    status: "running",
+    source_filename: "original.pptx",
+    cancel_requested: false,
+    idempotent_replay: false,
+    result: null,
+    error: null,
+    fallback_allowed: false,
+    progress_stages: [{ stage: "source_analysis", status: "running" }],
+    created_at: "2026-08-25T00:00:00Z",
+    updated_at: "2026-08-25T00:00:01Z",
+  };
+  globalThis.fetch = async (url, init = {}) => {
+    requests.push({ url, init });
+    return { ok: true, json: async () => job };
+  };
+  try {
+    const file = new File(["PPTX"], "original.pptx", { type: "application/octet-stream" });
+    await SourceLockedGenerationApiV1.createJob([file], "source-locked-job:v1:test");
+    await SourceLockedGenerationApiV1.listJobs(500);
+    await SourceLockedGenerationApiV1.getJob("slj_test/a");
+    await SourceLockedGenerationApiV1.cancelJob("slj_test/a");
+    assert.equal(requests[0].url, "/api/v1/ppt/source-locked/v1/jobs");
+    assert.equal(requests[0].init.headers["Idempotency-Key"], "source-locked-job:v1:test");
+    assert.equal(requests[1].url, "/api/v1/ppt/source-locked/v1/jobs?limit=200");
+    assert.equal(requests[1].init.method, "GET");
+    assert.equal(requests[2].url, "/api/v1/ppt/source-locked/v1/jobs/slj_test%2Fa");
+    assert.equal(requests[2].init.method, "GET");
+    assert.equal(requests[3].url, "/api/v1/ppt/source-locked/v1/jobs/slj_test%2Fa/cancel");
+    assert.equal(requests[3].init.method, "POST");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("source-locked async jobs expose a download only from a sealed nested result", async () => {
+  const { sourceLockedGenerationFromJob } = await loadContract();
+  const job = {
+    contract_version: "source-locked-job/v1",
+    job_id: "sljob_" + "c".repeat(64),
+    status: "succeeded",
+    source_filename: "original.pptx",
+    progress_stages: generatedResponse().progress_stages,
+    cancel_requested: false,
+    idempotent_replay: false,
+    fallback_allowed: false,
+    result: generatedResponse(),
+    error: null,
+    created_at: "2026-08-25T00:00:00Z",
+    updated_at: "2026-08-25T00:01:00Z",
+  };
+  assert.match(sourceLockedGenerationFromJob(job).artifact.artifact_id, /^sla_/);
+  job.result.restoration_verification.missing_content_count = 1;
+  assert.equal(sourceLockedGenerationFromJob(job), null);
+});
+
 test("source-locked refuses download state when restoration or validation is incomplete", async () => {
   const { sourceLockedGenerationFromResponse } = await loadContract();
   assert.equal(sourceLockedGenerationFromResponse(generatedResponse([
@@ -130,4 +192,9 @@ test("source-locked refuses download state when restoration or validation is inc
   const pptxNotByteExact = generatedResponse();
   pptxNotByteExact.restoration_verification.byte_exact_source_package = false;
   assert.equal(sourceLockedGenerationFromResponse(pptxNotByteExact), null);
+  const pptReadbackIncomplete = generatedResponse();
+  pptReadbackIncomplete.summary.source_type = "ppt";
+  pptReadbackIncomplete.restoration_verification.byte_exact_source_package = false;
+  pptReadbackIncomplete.restoration_verification.rendered_page_count = 1;
+  assert.equal(sourceLockedGenerationFromResponse(pptReadbackIncomplete), null);
 });

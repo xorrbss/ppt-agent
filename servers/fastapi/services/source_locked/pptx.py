@@ -21,6 +21,16 @@ _REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
 _DOC_REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 _PML_NS = "http://schemas.openxmlformats.org/presentationml/2006/main"
 _DML_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
+_CONTENT_RELATIONSHIP_SUFFIXES = (
+    "/audio",
+    "/externalLink",
+    "/image",
+    "/linkedMedia",
+    "/media",
+    "/oleObject",
+    "/package",
+    "/video",
+)
 
 
 def _rels_name(part: str) -> str:
@@ -52,10 +62,55 @@ def _relationships(zf: zipfile.ZipFile, source_part: str) -> dict[str, tuple[str
         target = rel.attrib.get("Target")
         rel_type = rel.attrib.get("Type", "")
         if rel_id and target:
+            if rel_id in result:
+                raise SourceLockedError(
+                    "PPTX_RELATIONSHIP_ID_DUPLICATE",
+                    AnalysisStage.MISSING_CONTENT_VALIDATION,
+                    f"The PPTX package contains duplicate relationship IDs for {source_part}",
+                )
             external = rel.attrib.get("TargetMode") == "External"
             resolved = target if external else _resolve_target(source_part, target)
             result[rel_id] = (rel_type, resolved, external)
     return result
+
+
+def _source_part_for_relationships(rels_part: str) -> str | None:
+    if rels_part == "_rels/.rels":
+        return ""
+    marker = "/_rels/"
+    if marker not in rels_part or not rels_part.endswith(".rels"):
+        return None
+    prefix, filename = rels_part.rsplit(marker, 1)
+    return posixpath.join(prefix, filename.removesuffix(".rels"))
+
+
+def _validate_package_relationships(zf: zipfile.ZipFile, names: set[str]) -> None:
+    """Fail closed for dangling internal parts and unverifiable linked content."""
+
+    for rels_part in sorted(name for name in names if name.endswith(".rels")):
+        source_part = _source_part_for_relationships(rels_part)
+        if source_part is None:
+            continue
+        if source_part and source_part not in names:
+            raise SourceLockedError(
+                "PPTX_RELATIONSHIP_SOURCE_MISSING",
+                AnalysisStage.MISSING_CONTENT_VALIDATION,
+                f"A relationships part has no source package part: {source_part}",
+            )
+        for rel_type, target, external in _relationships(zf, source_part).values():
+            content_bearing = rel_type.endswith(_CONTENT_RELATIONSHIP_SUFFIXES)
+            if external and content_bearing:
+                raise SourceLockedError(
+                    "PPTX_EXTERNAL_CONTENT_UNVERIFIABLE",
+                    AnalysisStage.MISSING_CONTENT_VALIDATION,
+                    "Linked image, media, audio, video, package, or OLE content cannot be sealed",
+                )
+            if not external and target not in names:
+                raise SourceLockedError(
+                    "PPTX_RELATIONSHIP_TARGET_MISSING",
+                    AnalysisStage.MISSING_CONTENT_VALIDATION,
+                    f"The PPTX package is missing a related part: {target}",
+                )
 
 
 def _ordered_slide_parts(zf: zipfile.ZipFile) -> list[str]:
@@ -163,6 +218,7 @@ def analyze_pptx(data: bytes) -> PptxSourceManifestV1:
 
     with zf:
         names = set(zf.namelist())
+        _validate_package_relationships(zf, names)
         media_parts = sorted(name for name in names if name.startswith("ppt/media/") and not name.endswith("/"))
         parts_by_digest: dict[str, list[str]] = defaultdict(list)
         asset_digest_by_part: dict[str, str] = {}

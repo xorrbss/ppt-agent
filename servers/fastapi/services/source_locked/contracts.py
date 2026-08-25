@@ -35,8 +35,18 @@ class AnalysisStage(str, Enum):
 
 class StageStatus(str, Enum):
     PENDING = "pending"
+    RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class SourceLockedJobStatus(str, Enum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class AdmissionContractV1(StrictFrozenModel):
@@ -151,6 +161,52 @@ class PptxSourceManifestV1(StrictFrozenModel):
         return self
 
 
+class PptSourceManifestV1(StrictFrozenModel):
+    contract_version: Literal["source-locked-ppt-manifest/v1"] = (
+        "source-locked-ppt-manifest/v1"
+    )
+    projection_version: Literal["source-locked-deck-projection/v1"] = (
+        "source-locked-deck-projection/v1"
+    )
+    source_type: Literal["ppt"] = "ppt"
+    package_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    original_package_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    converted_package_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    converted_manifest: PptxSourceManifestV1
+    source_page_count: int = Field(gt=0)
+    converted_page_count: int = Field(gt=0)
+    source_visual_page_digests: tuple[
+        Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")], ...
+    ]
+    converted_visual_page_digests: tuple[
+        Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")], ...
+    ]
+    missing_content_count: Literal[0] = 0
+    visual_readback_exact: Literal[True] = True
+    isolated_libreoffice_profile: Literal[True] = True
+    power_point_com_used: Literal[False] = False
+
+    @model_validator(mode="after")
+    def validate_conversion_provenance(self) -> "PptSourceManifestV1":
+        if self.package_sha256 != self.original_package_sha256:
+            raise ValueError("PPT manifest must remain bound to the original package")
+        if self.converted_package_sha256 != self.converted_manifest.package_sha256:
+            raise ValueError("converted PPTX digest does not match its structural manifest")
+        if not (
+            self.source_page_count
+            == self.converted_page_count
+            == self.converted_manifest.page_count
+            == self.converted_manifest.slide_count
+        ):
+            raise ValueError("PPT conversion page and slide counts must remain invariant")
+        if (
+            len(self.source_visual_page_digests) != self.source_page_count
+            or self.source_visual_page_digests != self.converted_visual_page_digests
+        ):
+            raise ValueError("PPT conversion visual page readback must be exact and complete")
+        return self
+
+
 class PdfPageRenderV1(StrictFrozenModel):
     page_number: int = Field(ge=1)
     target_filename: str
@@ -190,13 +246,13 @@ class PdfSourceManifestV1(StrictFrozenModel):
 
 
 SourceManifestV1 = Annotated[
-    Union[PptxSourceManifestV1, PdfSourceManifestV1],
+    Union[PptSourceManifestV1, PptxSourceManifestV1, PdfSourceManifestV1],
     Field(discriminator="source_type"),
 ]
 
 
 class SourceAnalysisSummaryV1(StrictFrozenModel):
-    source_type: Literal["pptx", "pdf"]
+    source_type: Literal["ppt", "pptx", "pdf"]
     page_count: int = Field(gt=0)
     slide_count: int = Field(gt=0)
     media_asset_count: int = Field(ge=0)
@@ -237,7 +293,7 @@ class SourceLockedRestorationVerificationV1(StrictFrozenModel):
     contract_version: Literal["source-locked-restoration-verification/v1"] = (
         "source-locked-restoration-verification/v1"
     )
-    source_type: Literal["pptx", "pdf"]
+    source_type: Literal["ppt", "pptx", "pdf"]
     source_snapshot_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     output_package_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     page_count: int = Field(gt=0)
@@ -263,7 +319,7 @@ class SourceLockedArtifactV1(StrictFrozenModel):
     sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     download_url: str = Field(pattern=r"^/api/v1/ppt/source-locked/v1/artifacts/sla_[0-9a-f]{64}$")
     created_at: datetime
-    source_type: Literal["pptx", "pdf"]
+    source_type: Literal["ppt", "pptx", "pdf"]
     slide_count: int = Field(gt=0)
 
 
@@ -315,6 +371,27 @@ class SourceLockedGenerationResponseV1(StrictFrozenModel):
                 raise ValueError("PPTX source-locked generation must preserve the source package bytes")
             if verification.output_package_sha256 != self.source_snapshot.sha256:
                 raise ValueError("PPTX source-locked artifact must be byte-exact")
+        elif verification.source_type == "ppt":
+            if not isinstance(self.manifest, PptSourceManifestV1):
+                raise ValueError("PPT generation requires sealed conversion provenance")
+            if self.source_snapshot.source_media_type != SourceMediaType.PPT:
+                raise ValueError("PPT generation must remain bound to the original media type")
+            if self.manifest.package_sha256 != self.source_snapshot.sha256:
+                raise ValueError("PPT conversion manifest does not match the original snapshot")
+            if verification.byte_exact_source_package:
+                raise ValueError("legacy PPT conversion cannot claim byte-exact source packaging")
+            if verification.rendered_page_count != 0:
+                raise ValueError("PPT conversion verification does not use PDF raster restoration")
+            if (
+                verification.direct_occurrence_count
+                != self.manifest.converted_manifest.direct_occurrence_count
+                or verification.authoritative_image_digests
+                != tuple(
+                    item.asset_digest
+                    for item in self.manifest.converted_manifest.image_occurrences
+                )
+            ):
+                raise ValueError("PPT converted image occurrence readback is incomplete")
         elif verification.rendered_page_count != verification.page_count:
             raise ValueError("PDF source-locked generation must render every page")
         return self
@@ -326,3 +403,44 @@ class SourceLockedErrorV1(StrictFrozenModel):
     stage: AnalysisStage
     message: str
     fallback_allowed: Literal[False] = False
+
+
+class SourceLockedGenerationJobV1(StrictFrozenModel):
+    contract_version: Literal["source-locked-job/v1"] = "source-locked-job/v1"
+    job_id: str = Field(pattern=r"^sljob_[0-9a-f]{64}$")
+    status: SourceLockedJobStatus
+    source_filename: str = Field(min_length=1)
+    created_at: datetime
+    updated_at: datetime
+    progress_stages: tuple[ProgressStageV1, ...]
+    cancel_requested: bool = False
+    idempotent_replay: bool = False
+    result: SourceLockedGenerationResponseV1 | None = None
+    error: SourceLockedErrorV1 | None = None
+    fallback_allowed: Literal[False] = False
+
+    @model_validator(mode="after")
+    def validate_job_state(self) -> "SourceLockedGenerationJobV1":
+        expected = [
+            AnalysisStage.SOURCE_ANALYSIS,
+            AnalysisStage.SLIDE_IMAGE_RESTORATION,
+            AnalysisStage.MISSING_CONTENT_VALIDATION,
+        ]
+        if [item.stage for item in self.progress_stages] != expected:
+            raise ValueError("job progress stages must be ordered and complete")
+        if self.status == SourceLockedJobStatus.SUCCEEDED:
+            if self.result is None or self.error is not None or self.cancel_requested:
+                raise ValueError("successful jobs require an immutable result")
+            if any(item.status != StageStatus.COMPLETED for item in self.progress_stages):
+                raise ValueError("successful jobs require all stages completed")
+        elif self.status == SourceLockedJobStatus.FAILED:
+            if self.error is None or self.result is not None:
+                raise ValueError("failed jobs require one terminal error")
+        elif self.status == SourceLockedJobStatus.CANCELLED:
+            if self.result is not None:
+                raise ValueError("cancelled jobs cannot expose a generation result")
+            if not self.cancel_requested:
+                raise ValueError("cancelled jobs require an accepted cancel request")
+        elif self.result is not None or self.error is not None:
+            raise ValueError("non-terminal jobs cannot expose terminal state")
+        return self
