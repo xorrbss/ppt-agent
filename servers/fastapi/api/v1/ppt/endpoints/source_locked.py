@@ -146,6 +146,7 @@ async def analyze_source_locked_v1(
     ),
 ) -> SourceLockedAnalysisResponseV1:
     try:
+        owner_id = _owner_id()
         contract, payload = await _admit_and_read(
             files=files,
             generation_mode=generation_mode,
@@ -157,6 +158,7 @@ async def analyze_source_locked_v1(
             data=payload,
             idempotency_key=idempotency_key,
             expected_idempotency_payload_digest=expected_payload_digest,
+            seal_namespace=owner_id,
         )
     except SourceLockedError as exc:
         raise _as_http_error(exc) from exc

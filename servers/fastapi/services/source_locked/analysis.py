@@ -28,7 +28,14 @@ def analyze_source(
     idempotency_key: str,
     expected_idempotency_payload_digest: str,
     seal_store: WriteOnceSourceAnalysisSealStore = SOURCE_ANALYSIS_SEAL_STORE,
+    seal_namespace: str | None = None,
 ) -> SourceLockedAnalysisResponseV1:
+    if seal_store is SOURCE_ANALYSIS_SEAL_STORE and not (seal_namespace or "").strip():
+        raise SourceLockedError(
+            "SOURCE_LOCKED_OWNER_REQUIRED",
+            AnalysisStage.SOURCE_ANALYSIS,
+            "Owner authority is required for the shared source analysis seal store",
+        )
     if not data:
         raise SourceLockedError(
             "SOURCE_EMPTY",
@@ -112,6 +119,7 @@ def analyze_source(
         idempotency_payload_digest=calculated_payload_digest,
         source_snapshot_sha256=source_digest,
         manifest=manifest,
+        namespace=seal_namespace,
     )
     return SourceLockedAnalysisResponseV1(
         admission_contract=admission_contract,

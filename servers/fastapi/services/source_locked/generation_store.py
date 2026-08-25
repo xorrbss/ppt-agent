@@ -97,6 +97,15 @@ class DurableSourceLockedGenerationStore:
                 ON generation_records_v2(expires_at)
                 """
             )
+            connection.execute(
+                """
+                CREATE TRIGGER IF NOT EXISTS trg_source_locked_generation_immutable
+                BEFORE UPDATE ON generation_records_v2
+                BEGIN
+                    SELECT RAISE(ABORT, 'source_locked_generation_record_immutable');
+                END
+                """
+            )
 
     @staticmethod
     def _owner(owner_id: str) -> str:

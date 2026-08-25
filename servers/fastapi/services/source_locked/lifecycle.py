@@ -148,6 +148,22 @@ class SourceLockedArtifactLifecycle:
                 "SELECT artifact_relative_path FROM generation_records_v2"
             ).fetchall()
         }
+        legacy_table = connection.execute(
+            """
+            SELECT 1 FROM sqlite_master
+            WHERE type = 'table' AND name = 'generation_records_v1'
+            """
+        ).fetchone()
+        if legacy_table is not None:
+            # Phase A records have no owner authority and remain unreadable by
+            # the v2 API. Maintenance may only protect their recorded paths; it
+            # must neither expose the records nor infer an owner for them.
+            referenced.update(
+                self._validated_artifact_path(row["artifact_relative_path"])
+                for row in connection.execute(
+                    "SELECT artifact_relative_path FROM generation_records_v1"
+                ).fetchall()
+            )
         cutoff = now.timestamp() - self.policy.orphan_grace_seconds
         orphan_artifacts_removed = 0
         orphan_temp_files_removed = 0

@@ -17,7 +17,7 @@ class WriteOnceSourceAnalysisSealStore:
     """
 
     def __init__(self) -> None:
-        self._records: dict[str, SourceAnalysisSealV1] = {}
+        self._records: dict[tuple[str, str], SourceAnalysisSealV1] = {}
         self._lock = Lock()
 
     def issue_or_get(
@@ -27,10 +27,12 @@ class WriteOnceSourceAnalysisSealStore:
         idempotency_payload_digest: str,
         source_snapshot_sha256: str,
         manifest: SourceManifestV1,
+        namespace: str | None = None,
     ) -> SourceAnalysisSealV1:
         manifest_digest = sha256_digest(canonical_json_bytes(manifest))
+        record_key = ((namespace or "").strip(), idempotency_key)
         with self._lock:
-            existing = self._records.get(idempotency_key)
+            existing = self._records.get(record_key)
             if existing is not None:
                 if (
                     existing.idempotency_payload_digest != idempotency_payload_digest
@@ -60,7 +62,7 @@ class WriteOnceSourceAnalysisSealStore:
                 manifest_digest=manifest_digest,
                 issued_at=datetime.now(timezone.utc),
             )
-            self._records[idempotency_key] = seal
+            self._records[record_key] = seal
             return seal
 
 

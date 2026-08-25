@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
@@ -39,6 +41,14 @@ def _initial_progress() -> tuple[ProgressStageV1, ...]:
         ProgressStageV1(stage=stage, status=StageStatus.PENDING)
         for stage in AnalysisStage
     )
+
+
+@dataclass(frozen=True, slots=True)
+class RecoverableSourceLockedJob:
+    """Stored execution authority used only by the source-locked dispatcher."""
+
+    owner_id: str
+    job_id: str
 
 
 class DurableSourceLockedJobStore:
@@ -108,6 +118,24 @@ class DurableSourceLockedJobStore:
                 connection.execute(
                     "ALTER TABLE generation_jobs_v1 ADD COLUMN lease_expires_at TEXT"
                 )
+            connection.execute(
+                """
+                CREATE TRIGGER IF NOT EXISTS trg_source_locked_job_authority_immutable
+                BEFORE UPDATE ON generation_jobs_v1
+                WHEN NEW.owner_id IS NOT OLD.owner_id
+                  OR NEW.idempotency_key IS NOT OLD.idempotency_key
+                  OR NEW.idempotency_payload_digest IS NOT OLD.idempotency_payload_digest
+                  OR NEW.source_filename IS NOT OLD.source_filename
+                  OR NEW.source_relative_path IS NOT OLD.source_relative_path
+                  OR NEW.source_sha256 IS NOT OLD.source_sha256
+                  OR NEW.source_byte_length IS NOT OLD.source_byte_length
+                  OR NEW.admission_json IS NOT OLD.admission_json
+                  OR NEW.created_at IS NOT OLD.created_at
+                BEGIN
+                    SELECT RAISE(ABORT, 'source_locked_job_authority_immutable');
+                END
+                """
+            )
 
     @staticmethod
     def _identity(owner_id: str, idempotency_key: str, payload_digest: str) -> str:
@@ -345,7 +373,7 @@ class DurableSourceLockedJobStore:
             connection.execute(
                 """
                 UPDATE generation_jobs_v1
-                SET status = ?, progress_json = ?, commit_started = 0,
+                SET status = ?, progress_json = ?,
                     runner_token = NULL, lease_expires_at = NULL, updated_at = ?
                 WHERE job_id = ? AND owner_id = ?
                 """,
@@ -361,6 +389,79 @@ class DurableSourceLockedJobStore:
             updated = self._row_for_owner(connection, job_id, owner_id)
             assert updated is not None
             return self._snapshot(updated), True
+
+    def recover_startup_jobs(
+        self,
+        *,
+        now: datetime | None = None,
+        limit: int = 100,
+    ) -> tuple[RecoverableSourceLockedJob, ...]:
+        """Fence stale runners and return stored, owner-bound work for dispatch.
+
+        The owner is read from the immutable job row. Empty/ownerless legacy rows
+        are deliberately excluded; startup recovery never guesses an owner.
+        ``commit_started`` is preserved so a stale recovery cannot reopen the
+        accepted-cancel window after artifact publication has begun.
+        """
+
+        current = now or _now()
+        bounded_limit = min(max(limit, 1), 1000)
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            candidates = connection.execute(
+                """
+                SELECT * FROM generation_jobs_v1
+                WHERE length(trim(owner_id)) > 0
+                  AND (
+                    status = ?
+                    OR (
+                      status = ?
+                      AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
+                    )
+                  )
+                ORDER BY created_at ASC
+                LIMIT ?
+                """,
+                (
+                    SourceLockedJobStatus.QUEUED.value,
+                    SourceLockedJobStatus.RUNNING.value,
+                    current.isoformat(),
+                    bounded_limit,
+                ),
+            ).fetchall()
+            recoverable: list[RecoverableSourceLockedJob] = []
+            for row in candidates:
+                if row["status"] == SourceLockedJobStatus.RUNNING.value:
+                    cursor = connection.execute(
+                        """
+                        UPDATE generation_jobs_v1
+                        SET status = ?, progress_json = ?, runner_token = NULL,
+                            lease_expires_at = NULL, updated_at = ?
+                        WHERE job_id = ? AND owner_id = ? AND status = ?
+                          AND runner_token IS ?
+                          AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
+                        """,
+                        (
+                            SourceLockedJobStatus.QUEUED.value,
+                            self._progress_json(_initial_progress()),
+                            current.isoformat(),
+                            row["job_id"],
+                            row["owner_id"],
+                            SourceLockedJobStatus.RUNNING.value,
+                            row["runner_token"],
+                            current.isoformat(),
+                        ),
+                    )
+                    if cursor.rowcount != 1:
+                        continue
+                recoverable.append(
+                    RecoverableSourceLockedJob(
+                        owner_id=row["owner_id"],
+                        job_id=row["job_id"],
+                    )
+                )
+            connection.commit()
+        return tuple(recoverable)
 
     def read_input(
         self, *, owner_id: str, job_id: str
@@ -536,6 +637,76 @@ class DurableSourceLockedJobStore:
             )
             connection.commit()
             return True
+
+    def publish_and_succeed(
+        self,
+        *,
+        owner_id: str,
+        job_id: str,
+        runner_token: str,
+        publisher: Callable[[], SourceLockedGenerationResponseV1],
+    ) -> SourceLockedGenerationResponseV1 | None:
+        """Publish under the current runner fence and seal success atomically.
+
+        ``BEGIN IMMEDIATE`` prevents stale recovery or cancellation from
+        replacing the runner token while the dedicated generation store is
+        committing. If recovery won before this transaction, the publisher is
+        never called. A crash after generation persistence but before this job
+        commit remains replayable through the owner-scoped idempotency record.
+        """
+
+        input_path: str | None = None
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = self._row_for_owner(connection, job_id, owner_id)
+            if (
+                row is None
+                or row["status"] != SourceLockedJobStatus.RUNNING.value
+                or row["runner_token"] != runner_token
+                or not row["commit_started"]
+                or row["cancel_requested"]
+            ):
+                connection.rollback()
+                return None
+            try:
+                result = publisher()
+                progress = tuple(
+                    item.model_copy(update={"status": StageStatus.COMPLETED})
+                    for item in self._progress_from_row(row)
+                )
+                cursor = connection.execute(
+                    """
+                    UPDATE generation_jobs_v1
+                    SET status = ?, progress_json = ?, result_json = ?,
+                        runner_token = NULL, lease_expires_at = NULL, updated_at = ?
+                    WHERE job_id = ? AND owner_id = ? AND runner_token = ?
+                      AND status = ? AND commit_started = 1 AND cancel_requested = 0
+                    """,
+                    (
+                        SourceLockedJobStatus.SUCCEEDED.value,
+                        self._progress_json(progress),
+                        canonical_json_bytes(result).decode("utf-8"),
+                        _now().isoformat(),
+                        job_id,
+                        owner_id,
+                        runner_token,
+                        SourceLockedJobStatus.RUNNING.value,
+                    ),
+                )
+                if cursor.rowcount != 1:  # pragma: no cover - transaction owns the write lock.
+                    raise SourceLockedError(
+                        "GENERATION_JOB_STATE_CONFLICT",
+                        AnalysisStage.MISSING_CONTENT_VALIDATION,
+                        "The generation job lost its publication fence",
+                    )
+                input_path = row["source_relative_path"]
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
+        if input_path is not None:
+            self._delete_input(input_path)
+        return result
 
     def succeed(
         self,

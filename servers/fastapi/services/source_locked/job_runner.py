@@ -27,6 +27,10 @@ from services.source_locked.seal import WriteOnceSourceAnalysisSealStore
 
 
 PhaseCallback = Callable[[AnalysisStage], bool]
+CommitCallback = Callable[
+    [SourceLockedGenerationResponseV1, bytes | None],
+    SourceLockedGenerationResponseV1 | None,
+]
 
 
 def _restore(*, admission_contract, source_snapshot, manifest, source_bytes):
@@ -50,6 +54,7 @@ def generate_source_locked_result(
     generation_store: DurableSourceLockedGenerationStore,
     phase_completed: PhaseCallback | None = None,
     prepare_commit: Callable[[], bool] | None = None,
+    commit_result: CommitCallback | None = None,
     restoration: Callable = _restore,
 ) -> SourceLockedGenerationResponseV1 | None:
     """Generate one result, returning ``None`` when an accepted cancel wins."""
@@ -75,6 +80,8 @@ def generate_source_locked_result(
                     return None
         if prepare_commit is not None and not prepare_commit():
             return None
+        if commit_result is not None:
+            return commit_result(existing, None)
         return existing
 
     analysis = analyze_source(
@@ -173,6 +180,8 @@ def generate_source_locked_result(
         return None
     if prepare_commit is not None and not prepare_commit():
         return None
+    if commit_result is not None:
+        return commit_result(response, artifact_bytes)
     return generation_store.persist(
         owner_id=owner_id,
         response=response,
@@ -208,7 +217,27 @@ def run_source_locked_job(
             owner_id=owner_id,
             job_id=job_id,
         )
-        result = generate_source_locked_result(
+
+        def _commit_result(
+            response: SourceLockedGenerationResponseV1,
+            artifact_bytes: bytes | None,
+        ) -> SourceLockedGenerationResponseV1 | None:
+            return job_store.publish_and_succeed(
+                owner_id=owner_id,
+                job_id=job_id,
+                runner_token=runner_token,
+                publisher=(
+                    (lambda: response)
+                    if artifact_bytes is None
+                    else lambda: generation_store.persist(
+                        owner_id=owner_id,
+                        response=response,
+                        artifact_bytes=artifact_bytes,
+                    )
+                ),
+            )
+
+        generate_source_locked_result(
             owner_id=owner_id,
             admission_contract=contract,
             source_bytes=source_bytes,
@@ -226,14 +255,8 @@ def run_source_locked_job(
                 job_id=job_id,
                 runner_token=runner_token,
             ),
+            commit_result=_commit_result,
         )
-        if result is not None:
-            job_store.succeed(
-                owner_id=owner_id,
-                job_id=job_id,
-                runner_token=runner_token,
-                result=result,
-            )
     except SourceLockedError as exc:
         job_store.fail(
             owner_id=owner_id,

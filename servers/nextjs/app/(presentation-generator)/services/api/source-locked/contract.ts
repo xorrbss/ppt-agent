@@ -209,10 +209,9 @@ export function sourceLockedGenerationFromResponse(
     verification.fallback_allowed !== false ||
     verification.slide_count !== summary.output_slide_count ||
     (summary.source_format === "pdf" && verification.rendered_page_count !== summary.source_page_count) ||
-    // A converted legacy .ppt has no byte-exact package guarantee. It is
-    // admitted only when the backend's isolated conversion readback proves the
-    // same page/slide invariant; otherwise it remains conversion-required.
-    (summary.source_format === "ppt" && verification.rendered_page_count !== summary.source_page_count) ||
+    // Legacy .ppt conversion is package-only: the backend intentionally does
+    // not expose rendered pages for it, so its fail-closed receipt is exactly 0.
+    (summary.source_format === "ppt" && verification.rendered_page_count !== 0) ||
     (summary.source_format === "pptx" && verification.byte_exact_source_package !== true) ||
     artifact?.contract_version !== "source-locked-artifact/v1" ||
     !/^sla_[0-9a-f]{64}$/.test(artifact.artifact_id) ||

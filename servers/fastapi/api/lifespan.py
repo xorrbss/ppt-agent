@@ -22,6 +22,10 @@ from services.runtime_settings_coordinator import (
     start_runtime_settings_coordinator,
     stop_runtime_settings_coordinator,
 )
+from services.source_locked.maintenance import (
+    start_source_locked_maintenance,
+    stop_source_locked_maintenance,
+)
 from services.presentation_deletion_operation_handler import (
     register_presentation_deletion_operation_handler,
 )
@@ -137,6 +141,7 @@ async def app_lifespan(_: FastAPI):
     template_v2_dispatcher_started = False
     template_v2_cleanup_started = False
     export_retention_started = False
+    source_locked_maintenance_started = False
     presentation_generation_dispatcher_started = False
     workspace_operation_runner_started = False
     workspace_outbox_dispatcher_started = False
@@ -152,6 +157,8 @@ async def app_lifespan(_: FastAPI):
         template_v2_cleanup_started = True
         await start_export_retention_sweeper()
         export_retention_started = True
+        await start_source_locked_maintenance()
+        source_locked_maintenance_started = True
         await start_presentation_generation_dispatcher()
         presentation_generation_dispatcher_started = True
         await start_workspace_cleanup_maintenance()
@@ -220,8 +227,12 @@ async def app_lifespan(_: FastAPI):
                                                 await stop_export_retention_sweeper()
                                         finally:
                                             try:
-                                                if template_v2_cleanup_started:
-                                                    await stop_template_v2_private_source_cleanup()
+                                                if source_locked_maintenance_started:
+                                                    await stop_source_locked_maintenance()
                                             finally:
-                                                # Release all database connections to prevent stale/leaked pools.
-                                                await dispose_engines()
+                                                try:
+                                                    if template_v2_cleanup_started:
+                                                        await stop_template_v2_private_source_cleanup()
+                                                finally:
+                                                    # Release all database connections to prevent stale/leaked pools.
+                                                    await dispose_engines()
