@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import { clearOutlines, setPresentationId } from "@/store/slices/presentationGeneration";
@@ -9,6 +9,20 @@ import {
   isAbortError,
   PresentationGenerationApi,
 } from "../../../services/api/presentation-generation";
+import {
+  SourceLockedGenerationApiV1,
+  sourceLockedGenerationFromJob,
+  sourceLockedSelectionErrorMessage,
+  type SourceLockedAnalysisSummary,
+  type SourceLockedArtifactV1,
+  type SourceLockedJobResponseV1,
+  validateSourceLockedFiles,
+} from "../../../services/api/source-locked/contract";
+import {
+  sourceLockedHistoryEntryFromJob,
+  upsertSourceLockedHistory,
+  type SourceLockedHistoryEntryV1,
+} from "../../../services/api/source-locked/history";
 import { getApiErrorDisplayMessage } from "../../../services/api/api-error-handler";
 import {
   setPptGenUploadState,
@@ -73,6 +87,24 @@ export const useUploadPageState = ({
   const authoredVisionQa = useSelector(
     (state: RootState) => state.pptGenUpload.authoredVisionQa,
   );
+  const sourceLockedGenerationMode = useSelector(
+    (state: RootState) => state.pptGenUpload.sourceLockedGenerationMode,
+  );
+  const sourceLocked = sourceLockedGenerationMode === "source_locked";
+  const [sourceLockedSummary, setSourceLockedSummary] =
+    useState<SourceLockedAnalysisSummary | null>(null);
+  const [sourceLockedArtifact, setSourceLockedArtifact] =
+    useState<SourceLockedArtifactV1 | null>(null);
+  const [sourceLockedAnalysisId, setSourceLockedAnalysisId] = useState(
+    () => crypto.randomUUID(),
+  );
+  const [sourceLockedHistory, setSourceLockedHistory] = useState<
+    SourceLockedHistoryEntryV1[]
+  >([]);
+  const [activeSourceLockedJobId, setActiveSourceLockedJobId] = useState<string | null>(null);
+  const sourceLockedFileIdentity = files
+    .map((file) => `${file.name}:${file.size}:${file.lastModified}`)
+    .join("|");
   const [masterAdmissionError, setMasterAdmissionError] =
     useState<UploadMasterAdmissionError | null>(null);
   const [isMasterResolving, setIsMasterResolving] = useState(false);
@@ -102,11 +134,122 @@ export const useUploadPageState = ({
   const [canCancelDocumentProcessing, setCanCancelDocumentProcessing] =
     useState(false);
 
+  const sourceLockedProgress = (job: SourceLockedJobResponseV1) => {
+    const completed = job.progress_stages.filter(
+      (stage) => stage.status.toLowerCase() === "completed",
+    ).length;
+    const total = 3;
+    return {
+      progress: Math.min(100, Math.round((completed / total) * 100)),
+      progressLabel: `원본 분석 → 슬라이드·이미지 복원 → 누락 검증 (${completed}/${total})`,
+    };
+  };
+
+  const recordSourceLockedJob = useCallback((
+    job: SourceLockedJobResponseV1,
+    sourceFilename: string,
+  ) => {
+    const result = sourceLockedGenerationFromJob(job);
+    const progress = sourceLockedProgress(job);
+    setSourceLockedHistory((previous) => {
+      const existing = previous.find((entry) => entry.job_id === job.job_id);
+      return upsertSourceLockedHistory(previous, sourceLockedHistoryEntryFromJob(
+        job,
+        existing?.source_filename ?? sourceFilename,
+      ));
+    });
+    if (job.status === "succeeded") {
+      setActiveSourceLockedJobId(null);
+      setLoadingState((previous) => ({
+        ...previous,
+        isLoading: false,
+        message: "",
+        showProgress: false,
+        duration: 0,
+        progress: 100,
+        progressLabel: "원본 분석 · 슬라이드·이미지 복원 · 누락 검증 완료",
+        extra_info: "",
+      }));
+      setSourceLockedSummary(result?.summary ?? null);
+      setSourceLockedArtifact(result?.artifact ?? null);
+      return result;
+    }
+    if (job.status === "failed" || job.status === "cancelled") {
+      setActiveSourceLockedJobId(null);
+      setLoadingState((previous) => ({
+        ...previous,
+        isLoading: false,
+        message: "",
+        showProgress: false,
+        duration: 0,
+      }));
+      return null;
+    }
+    setLoadingState((previous) => ({
+      ...previous,
+      isLoading: true,
+      message: "원본 문서 그대로 PPT를 생성하는 중…",
+      showProgress: true,
+      duration: 180,
+      ...progress,
+      extra_info: "세 단계가 모두 완료될 때만 다운로드를 제공합니다.",
+    }));
+    return null;
+  }, []);
+
+  const refreshSourceLockedJob = useCallback(async (
+    jobId: string,
+    sourceFilename: string,
+  ) => {
+    const job = await SourceLockedGenerationApiV1.getJob(jobId);
+    return recordSourceLockedJob(job, sourceFilename);
+  }, [recordSourceLockedJob]);
+
   // A queued decomposition keeps running on FastAPI until it is explicitly
   // cancelled. Abort it when this upload screen unmounts (navigation/close).
   useEffect(() => {
     return () => abortDocumentProcessing(decomposeAbortControllerRef.current);
   }, []);
+
+  // Reload recovery uses a server-side owner filter. Do not restore source
+  // metadata from browser storage, which could survive an account switch.
+  useEffect(() => {
+    let mounted = true;
+    void SourceLockedGenerationApiV1.listJobs().then((jobs) => {
+      if (!mounted) return;
+      setSourceLockedHistory(jobs.map((job) => sourceLockedHistoryEntryFromJob(job)));
+    }).catch(() => {
+      // The composer stays available if the optional dashboard projection
+      // cannot be loaded; no prior owner's metadata is retained locally.
+    });
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    const active = sourceLockedHistory.filter(
+      (entry) => entry.status === "queued" || entry.status === "running",
+    );
+    if (active.length === 0) return;
+    const refresh = () => {
+      for (const entry of active) {
+        void refreshSourceLockedJob(entry.job_id, entry.source_filename).catch(() => {
+          // Preserve the durable entry for a later retry; a transient refresh
+          // failure must not turn a still-running job into a successful one.
+        });
+      }
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 1500);
+    return () => window.clearInterval(timer);
+  }, [refreshSourceLockedJob, sourceLockedHistory]);
+
+  // A seal/summary belongs to the exact selected source. Never show a prior
+  // analysis after replacement or after the user clears attachments to unlock.
+  useEffect(() => {
+    setSourceLockedSummary(null);
+    setSourceLockedArtifact(null);
+    setSourceLockedAnalysisId(crypto.randomUUID());
+  }, [sourceLockedFileIdentity, sourceLockedGenerationMode]);
 
   useEffect(() => {
     setMasterAdmissionError(null);
@@ -284,6 +427,18 @@ export const useUploadPageState = ({
    * @returns boolean indicating if the configuration is valid
    */
   const validateConfiguration = (): boolean => {
+    if (sourceLocked) {
+      const sourceLockedError = validateSourceLockedFiles(files);
+      if (sourceLockedError) {
+        trackUploadValidationFailure(sourceLockedError);
+        notify.warning(
+          "원본 문서 그대로 생성 파일 제한",
+          sourceLockedSelectionErrorMessage(sourceLockedError),
+        );
+        return false;
+      }
+      return true;
+    }
     if (!config.language) {
       trackUploadValidationFailure("language_missing");
       notify.warning("언어를 선택해 주세요", "언어를 선택해 주세요.");
@@ -311,6 +466,16 @@ export const useUploadPageState = ({
     if (startInFlightRef.current) return;
     if (!validateConfiguration()) return;
     startInFlightRef.current = true;
+    if (sourceLocked) {
+      try {
+        await handleSourceLockedGeneration();
+      } catch (error) {
+        handleGenerationError(error);
+      } finally {
+        startInFlightRef.current = false;
+      }
+      return;
+    }
     const resolvedMaster = await resolveMasterForGeneration();
     if (resolvedMaster === null) {
       startInFlightRef.current = false;
@@ -343,6 +508,47 @@ export const useUploadPageState = ({
 
   const handleGeneratePresentation = () => startPresentation(true);
   const handleReviewOutline = () => startPresentation(false);
+
+  /** Starts the durable source-locked job; terminal artifacts are fail-closed. */
+  const handleSourceLockedGeneration = async () => {
+    setSourceLockedSummary(null);
+    setSourceLockedArtifact(null);
+    setLoadingState({
+      isLoading: true,
+      message: "원본 문서 그대로 PPT를 생성하는 중…",
+      showProgress: true,
+      duration: 180,
+      progress: 5,
+      progressLabel: "원본 분석 → 슬라이드·이미지 복원 → 누락 검증",
+      extra_info: "세 단계가 모두 완료될 때만 다운로드를 제공합니다.",
+    });
+    const job = await SourceLockedGenerationApiV1.createJob(
+      files,
+      `source-locked-job:v1:${sourceLockedAnalysisId}`,
+    );
+    setActiveSourceLockedJobId(job.job_id);
+    const result = recordSourceLockedJob(job, files[0]?.name ?? "원본 문서");
+    if (job.status === "failed") {
+      throw new Error(job.error?.message || "원본 문서 생성에 실패했습니다.");
+    }
+    if (job.status === "cancelled") return;
+    if (job.status === "succeeded" && !result) {
+      throw new Error("원본 복원 또는 누락 검증이 완료되지 않아 PPT를 제공할 수 없습니다.");
+    }
+  };
+
+  const cancelSourceLockedJob = async (jobId: string) => {
+    if (!jobId) return;
+    const sourceFilename = sourceLockedHistory.find(
+      (entry) => entry.job_id === jobId,
+    )?.source_filename ?? files[0]?.name ?? "원본 문서";
+    const job = await SourceLockedGenerationApiV1.cancelJob(jobId);
+    recordSourceLockedJob(job, sourceFilename);
+  };
+
+  const handleCancelSourceLockedJob = () => activeSourceLockedJobId
+    ? cancelSourceLockedJob(activeSourceLockedJobId)
+    : Promise.resolve();
 
   /**
    * Handles document processing
@@ -567,5 +773,12 @@ export const useUploadPageState = ({
     handleReviewOutline,
     masterAdmissionError,
     isMasterResolving,
+    sourceLockedSummary,
+    sourceLockedArtifact,
+    sourceLockedHistory,
+    activeSourceLockedJobId,
+    canCancelSourceLockedJob: Boolean(activeSourceLockedJobId),
+    handleCancelSourceLockedJob,
+    cancelSourceLockedJob,
   };
 };

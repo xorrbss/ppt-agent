@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "active": true,
+  "projectName": "ppt-agent-source-locked-phase-a-20260825",
+  "activeTask": null,
+  "maxContextChars": 2400,
+  "maxActiveDecisions": 8,
+  "activeDecisionKeys": [
+    "source-locked.owner-scoped-durable-generation"
+  ],
+  "activeDecisionIndex": {
+    "source-locked.owner-scoped-durable-generation": "decisions/source-locked.owner-scoped-durable-generation.1.json"
+  },
+  "decisionIndex": {
+    "source-locked.owner-scoped-durable-generation": "decisions/source-locked.owner-scoped-durable-generation.1.json"
+  },
+  "readFirst": [],
+  "updatedAt": "2026-08-26T08:16:31.0634271+00:00"
+}

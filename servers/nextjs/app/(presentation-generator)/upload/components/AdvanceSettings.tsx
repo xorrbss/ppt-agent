@@ -6,7 +6,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Pencil, SlidersHorizontal, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import React, { useEffect, useState } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 import { PresentationConfig, ToneType, VerbosityType } from '../type';
+import type { RootState } from '@/store/store';
+import { setSourceLockedGenerationMode } from '@/store/slices/presentationGenUpload';
 
 interface ConfigurationSelectsProps {
     config: PresentationConfig;
@@ -36,6 +39,14 @@ const AdvanceSettings = ({
     onConfigChange,
 }: ConfigurationSelectsProps) => {
     const t = useTranslations('upload.advancedSettings');
+    const dispatch = useDispatch();
+    const sourceLockedGenerationMode = useSelector(
+        (state: RootState) => state.pptGenUpload.sourceLockedGenerationMode,
+    );
+    const sourceLockedGenerationModeLatched = useSelector(
+        (state: RootState) => state.pptGenUpload.sourceLockedGenerationModeLatched,
+    );
+    const sourceLocked = sourceLockedGenerationMode === 'source_locked';
     const [openAdvanced, setOpenAdvanced] = useState(false);
 
     const [advancedDraft, setAdvancedDraft] = useState({
@@ -145,9 +156,21 @@ const AdvanceSettings = ({
                                         {t('title')}
                                     </h2>
                                     <p className="mt-1 text-sm text-[#808080]">{t('description')}</p>
+                                    <label className="mt-3 flex items-center gap-2 text-sm font-semibold text-[#1F1D2A]">
+                                        <input
+                                            type="checkbox"
+                                            checked={sourceLocked}
+                                            disabled={sourceLockedGenerationModeLatched}
+                                            onChange={(event) => dispatch(setSourceLockedGenerationMode(
+                                                event.target.checked ? 'source_locked' : 'adaptive',
+                                            ))}
+                                            data-testid="source-locked-generation-checkbox-advanced"
+                                        />
+                                        원본 문서 그대로 생성
+                                    </label>
                                 </div>
 
-                                <Button
+                                {!sourceLocked ? <Button
                                     type="button"
                                     onClick={handleSaveAdvanced}
                                     style={{
@@ -157,9 +180,14 @@ const AdvanceSettings = ({
                                     className=" rounded-full px-[28px]  py-[10px] font-syne text-xs font-semibold text-[#1E1D2B] shadow-none hover:opacity-95"
                                 >
                                     {t('save')}
-                                </Button>
+                                </Button> : null}
                             </div>
 
+                            {sourceLocked ? (
+                                <p className="px-6 py-5 text-sm text-[#5E626A]" data-testid="source-locked-advanced-notice">
+                                    원본 문서 그대로 생성에서는 스타일, 표지, 목차, 웹 검색과 추가 지시를 적용하지 않습니다.
+                                </p>
+                            ) : <>
                             <div className="bg-[#ECE8F6] px-6  py-5">
                                 <div className="flex items-start gap-2">
                                     <Pencil className="mt-[3px] h-3.5 w-3.5 text-[#1C1B24]" />
@@ -184,8 +212,9 @@ const AdvanceSettings = ({
                                     </div>
                                 </div>
                             </div>
+                            </>}
 
-                            <div className="space-y-4 px-6 pb-5 pt-3.5 ">
+                            {!sourceLocked ? <div className="space-y-4 px-6 pb-5 pt-3.5 ">
                                 <div className="flex items-center justify-between gap-3">
                                     <label className="font-syne text-sm font-semibold leading-none text-[#1F1D2A]">{t('toneLabel')}</label>
                                     <Select
@@ -266,7 +295,7 @@ const AdvanceSettings = ({
                                         className={toggleClassName}
                                     />
                                 </div>
-                            </div>
+                            </div> : null}
                         </div>
                     </div>
                 </div>

@@ -24,6 +24,7 @@ import AdvanceSettings from "./AdvanceSettings";
 interface ConfigurationSelectsProps {
     config: PresentationConfig;
     onConfigChange: (key: keyof PresentationConfig, value: any) => void;
+    sourceLocked?: boolean;
 }
 
 // Constants
@@ -159,17 +160,18 @@ const SlideCountSelect: React.FC<{
 export function ConfigurationSelects({
     config,
     onConfigChange,
+    sourceLocked = false,
 }: ConfigurationSelectsProps) {
     const [openSlides, setOpenSlides] = useState(false);
 
     return (
         <div className="flex flex-wrap order-1 gap-4 items-center">
-            <SlideCountSelect
+            {!sourceLocked ? <SlideCountSelect
                 value={config.slides}
                 onValueChange={(value) => onConfigChange("slides", value)}
                 open={openSlides}
                 onOpenChange={setOpenSlides}
-            />
+            /> : null}
             <AdvanceSettings config={config} onConfigChange={onConfigChange} />
         </div>
     );

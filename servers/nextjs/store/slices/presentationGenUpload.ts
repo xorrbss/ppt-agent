@@ -12,6 +12,9 @@ export interface CompanyStandardSelection {
   layoutCount: number;
 }
 
+/** UI selection only.  This is not the legacy Presentation.generation_mode codec. */
+export type SourceLockedUiGenerationMode = "adaptive" | "source_locked";
+
 interface PresentationGenUploadState {
   config: PresentationConfig | null;
 
@@ -33,6 +36,11 @@ interface PresentationGenUploadState {
    * before it admits the generation job.
    */
   companyStandard: CompanyStandardSelection | null;
+
+  /** Phase A source-locked admission choice, scoped to the upload composer. */
+  sourceLockedGenerationMode: SourceLockedUiGenerationMode;
+  /** The mode becomes immutable at the first accepted attachment and only unlocks when all are removed. */
+  sourceLockedGenerationModeLatched: boolean;
 }
 
 const initialState: PresentationGenUploadState = {
@@ -42,6 +50,8 @@ const initialState: PresentationGenUploadState = {
   authoredVisionQa: false,
   authoredStyle: "default",
   companyStandard: null,
+  sourceLockedGenerationMode: "adaptive",
+  sourceLockedGenerationModeLatched: false,
 };
 
 export const presentationGenUploadSlice = createSlice({
@@ -61,6 +71,7 @@ export const presentationGenUploadSlice = createSlice({
         authoredVisionQa,
         authoredStyle,
         companyStandard,
+        sourceLockedGenerationMode,
       } = action.payload;
       if (config !== undefined) state.config = config;
       if (files !== undefined) state.files = files;
@@ -70,11 +81,34 @@ export const presentationGenUploadSlice = createSlice({
       if (companyStandard !== undefined) {
         state.companyStandard = companyStandard;
       }
+      if (
+        sourceLockedGenerationMode !== undefined &&
+        !state.sourceLockedGenerationModeLatched
+      ) {
+        state.sourceLockedGenerationMode = sourceLockedGenerationMode;
+      }
+    },
+
+    setSourceLockedGenerationMode: (
+      state,
+      action: PayloadAction<SourceLockedUiGenerationMode>,
+    ) => {
+      if (!state.sourceLockedGenerationModeLatched) {
+        state.sourceLockedGenerationMode = action.payload;
+      }
+    },
+
+    syncSourceLockedAttachmentLatch: (state, action: PayloadAction<number>) => {
+      state.sourceLockedGenerationModeLatched = action.payload > 0;
     },
 
   },
 });
 
-export const { setPptGenUploadState, } =
+export const {
+  setPptGenUploadState,
+  setSourceLockedGenerationMode,
+  syncSourceLockedAttachmentLatch,
+} =
   presentationGenUploadSlice.actions;
 export default presentationGenUploadSlice.reducer;
