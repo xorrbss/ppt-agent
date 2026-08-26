@@ -706,13 +706,28 @@ export class PresentationGenerationApi {
     body: GenerationPreferences & {
       presentation_id: string;
       content: string;
-      slides_markdown: string[];
+      slides_markdown?: string[];
       vision_qa?: boolean;
       authored_style?: string;
       masterPin?: {
         masterId: string;
         revision: number;
         digest: `sha256:${string}`;
+      };
+      sourceMode?: "source_content_restyle";
+      sourceContentManifestPin?: {
+        manifestId: string;
+        digest: `sha256:${string}`;
+      };
+      contentPolicy?: {
+        text: "verbatim";
+        preserveAllTableCells: true;
+        preserveAllChartValues: true;
+        preserveAllImageOccurrences: true;
+        preserveSourceOrder: true;
+        allowSlideExpansion: true;
+        allowSummarization: false;
+        overflowPolicy: "add_slides";
       };
       idempotency_key?: string;
     },
@@ -731,7 +746,7 @@ export class PresentationGenerationApi {
           body: JSON.stringify({
             presentation_id: body.presentation_id,
             content: body.content,
-            slides_markdown: body.slides_markdown,
+            ...(body.sourceMode ? {} : { slides_markdown: body.slides_markdown ?? [] }),
             ...generationPreferencesPayload(body),
             template: "authored",
             strategy: "authored",
@@ -743,6 +758,11 @@ export class PresentationGenerationApi {
             vision_qa: body.vision_qa ?? false,
             authored_style: body.authored_style ?? "default",
             ...(body.masterPin ? { masterPin: body.masterPin } : {}),
+            ...(body.sourceMode ? { sourceMode: body.sourceMode } : {}),
+            ...(body.sourceContentManifestPin
+              ? { sourceContentManifestPin: body.sourceContentManifestPin }
+              : {}),
+            ...(body.contentPolicy ? { contentPolicy: body.contentPolicy } : {}),
           }),
           cache: "no-cache",
         },

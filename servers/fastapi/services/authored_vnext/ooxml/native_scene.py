@@ -861,6 +861,85 @@ def _run_map_from_shape(shape: Any) -> list[dict[str, Any]]:
     return result
 
 
+def _intended_text_style_projection(element: dict[str, Any]) -> list[dict[str, Any]]:
+    """Seal the run styles that are supposed to reach native DrawingML."""
+
+    text, runs = _text_payload(element)
+    style_value = element.get("textStyle") or element.get("style") or {}
+    style = dict(style_value) if isinstance(style_value, Mapping) else {}
+    source = runs if runs is not None else [{"text": text}]
+    projection: list[dict[str, Any]] = []
+    for item in source:
+        font_size = (
+            item.get("fontSize")
+            or item.get("fontPt")
+            or style.get("fontSize")
+            or style.get("fontPt")
+        )
+        font_weight = item.get("fontWeight", style.get("fontWeight"))
+        projection.append(
+            {
+                "fontFamily": str(
+                    item.get("fontFamily") or style.get("fontFamily") or "Aptos"
+                ),
+                "fontSizePt": (
+                    None
+                    if font_size is None
+                    else round(
+                        _number(
+                            font_size,
+                            "authored_vnext_scene_text_style_invalid",
+                        ),
+                        6,
+                    )
+                ),
+                "bold": bool(
+                    item.get("bold", style.get("bold", False))
+                    or isinstance(font_weight, (int, float))
+                    and not isinstance(font_weight, bool)
+                    and font_weight >= 600
+                ),
+                "italic": bool(item.get("italic", style.get("italic", False))),
+                "underline": bool(
+                    item.get("underline", style.get("underline", False))
+                ),
+                "color": _hex_color(
+                    item.get("color") or style.get("color"), "111827"
+                ),
+            }
+        )
+    return projection
+
+
+def _native_text_style_projection(shape: Any) -> list[dict[str, Any]]:
+    """Read the persisted native run styles from the candidate PPTX."""
+
+    projection: list[dict[str, Any]] = []
+    for paragraph in shape.text_frame.paragraphs:
+        for run in paragraph.runs:
+            color = run.font.color.rgb
+            family = run.font.name
+            if color is None or not isinstance(family, str) or not family:
+                raise NativeSceneError(
+                    "authored_vnext_scene_text_style_readback_failed"
+                )
+            projection.append(
+                {
+                    "fontFamily": family,
+                    "fontSizePt": (
+                        None
+                        if run.font.size is None
+                        else round(float(run.font.size.pt), 6)
+                    ),
+                    "bold": bool(run.font.bold),
+                    "italic": bool(run.font.italic),
+                    "underline": bool(run.font.underline),
+                    "color": f"#{str(color).upper()}",
+                }
+            )
+    return projection
+
+
 def _text_frame_margin(style: Mapping[str, Any], key: str) -> float:
     value = style.get(key)
     if value is None:
@@ -2374,6 +2453,10 @@ def materialize_scene_pptx(
                     else {}
                 )
                 native_metadata["autoFit"] = text_style.get("autoFit", "none")
+                if text_runs is not None:
+                    native_metadata["textStyleDigest"] = canonical_digest(
+                        _intended_text_style_projection(element)
+                    )
                 if element.get("semanticRole") == "title":
                     # Canonical body colors must remain byte-identical across
                     # company standards.  Give titles the same neutral
@@ -2522,6 +2605,8 @@ def materialize_scene_pptx(
                 if text_runs is not None:
                     identity["textRunMap"] = _text_run_map(text, text_runs)
                 identity["autoFit"] = native_metadata["autoFit"]
+                if "textStyleDigest" in native_metadata:
+                    identity["styleDigest"] = native_metadata["textStyleDigest"]
             elif kind == "image":
                 identity["assetDigest"] = digest
                 identity["cropGeometry"] = _picture_crop(shape)
@@ -2858,6 +2943,16 @@ def readback_scene_pptx(content: bytes) -> dict[str, Any]:
                         "authored_vnext_scene_text_autofit_readback_failed"
                     )
                 actual_element["autoFit"] = actual_auto_fit
+                expected_style_digest = metadata.get("textStyleDigest")
+                if expected_style_digest is not None:
+                    actual_style_digest = canonical_digest(
+                        _native_text_style_projection(shape)
+                    )
+                    if actual_style_digest != expected_style_digest:
+                        raise NativeSceneError(
+                            "authored_vnext_scene_text_style_readback_failed"
+                        )
+                    actual_element["styleDigest"] = actual_style_digest
             elif kind == "image":
                 if shape.shape_type != MSO_SHAPE_TYPE.PICTURE:
                     raise NativeSceneError("authored_vnext_scene_element_native_kind_mismatch")

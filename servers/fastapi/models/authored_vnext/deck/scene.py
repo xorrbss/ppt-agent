@@ -16,7 +16,7 @@ import re
 import unicodedata
 from typing import Annotated, Any, Literal, Union
 
-from pydantic import Field, model_validator
+from pydantic import Field, StringConstraints, model_validator
 
 from ..master.base import DeckId, Digest, SlideId, StrictCamelModel
 from ..master.contract import Rect
@@ -133,7 +133,10 @@ class SceneTextRun(StrictCamelModel):
     """Stable UTF-16 run identity, including intentionally empty runs."""
 
     run_id: str = Field(pattern=r"^run:[A-Za-z0-9][A-Za-z0-9._:-]{0,123}$")
-    text: str = Field(max_length=50000)
+    # Source-content restyling seals verbatim run boundaries. The shared strict
+    # model trims strings by default, which would silently delete significant
+    # leading/trailing spaces inside OOXML runs.
+    text: Annotated[str, StringConstraints(strip_whitespace=False, max_length=50000)]
     font_family: str | None = Field(default=None, min_length=1, max_length=200)
     font_size: float | None = Field(default=None, ge=1, le=400)
     font_weight: int | None = Field(default=None, ge=100, le=900)
@@ -172,7 +175,10 @@ class _SceneElementBase(StrictCamelModel):
 
 class SceneTextElement(_SceneElementBase):
     kind: Literal["text"]
-    text: str = Field(min_length=1, max_length=50000)
+    text: Annotated[
+        str,
+        StringConstraints(strip_whitespace=False, min_length=1, max_length=50000),
+    ]
     style: SceneTextStyle | None = None
     runs: list[SceneTextRun] | None = Field(default=None, min_length=1, max_length=1000)
 

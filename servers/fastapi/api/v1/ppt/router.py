@@ -59,6 +59,7 @@ from api.v1.ppt.endpoints.compatibility_migration import (
     COMPATIBILITY_MIGRATION_ROUTER,
 )
 from api.v1.ppt.endpoints.source_locked import SOURCE_LOCKED_ROUTER
+from api.v1.ppt.endpoints.source_content import SOURCE_CONTENT_ROUTER
 
 
 # This tuple is intentionally static.  Feature discovery through settings or
@@ -137,6 +138,11 @@ PPT_FEATURE_MODULES = (
     ),
     FeatureModule("community", COMMUNITY_ROUTER, frozenset({"ppt-api", "community"})),
     FeatureModule("source-locked", SOURCE_LOCKED_ROUTER, frozenset({"ppt-api", "presentation"})),
+    FeatureModule(
+        "source-content",
+        SOURCE_CONTENT_ROUTER,
+        frozenset({"ppt-api", "assets", "presentation"}),
+    ),
 )
 
 API_V1_PPT_ROUTER = compose_static_feature_modules(
