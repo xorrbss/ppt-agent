@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "key": "source-locked.owner-scoped-durable-generation",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Source-locked jobs and artifacts are owner-scoped, durable across restart, fenced against stale success, and preserve ownerless legacy as unreadable.",
+  "scope": [
+    "source-locked",
+    "jobs",
+    "artifacts",
+    "security"
+  ],
+  "invariants": [
+    "Startup and periodic maintenance recover queued or stale jobs using only immutable stored owner authority.",
+    "An accepted running cancellation cannot later transition to succeeded.",
+    "Artifact publication and job success share a fenced job transaction boundary.",
+    "Ownerless legacy generation records remain unreadable and are never assigned an inferred owner."
+  ],
+  "forbidden": [
+    "Inferring owners for legacy source-locked records.",
+    "Publishing success from a fenced stale runner.",
+    "Returning another owner's job or artifact."
+  ],
+  "evidence": [
+    "servers/fastapi/services/source_locked/maintenance.py",
+    "servers/fastapi/services/source_locked/job_store.py",
+    "servers/fastapi/services/source_locked/job_runner.py",
+    "servers/fastapi/tests/unit/test_source_locked_security.py",
+    "servers/fastapi/tests/unit/test_source_locked_maintenance.py"
+  ],
+  "supersedes": [],
+  "recordedAt": "2026-08-26T08:16:31.0121305+00:00"
+}
