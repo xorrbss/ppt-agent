@@ -39,50 +39,55 @@ async function loadSlice() {
   return import(dataModule(compiled.code));
 }
 
-test("source-locked mode latches on attachment and unlocks only after all files are removed", async () => {
+test("source-content mode remains independent from attachment order", async () => {
   const {
     default: reducer,
-    setSourceLockedGenerationMode,
-    syncSourceLockedAttachmentLatch,
+    setSourceContentMode,
+    setPptGenUploadState,
   } = await loadSlice();
   let state = reducer(undefined, { type: "init" });
-  state = reducer(state, setSourceLockedGenerationMode("source_locked"));
-  state = reducer(state, syncSourceLockedAttachmentLatch(1));
-  state = reducer(state, setSourceLockedGenerationMode("adaptive"));
-  assert.equal(state.sourceLockedGenerationMode, "source_locked");
-  assert.equal(state.sourceLockedGenerationModeLatched, true);
-  state = reducer(state, syncSourceLockedAttachmentLatch(0));
-  state = reducer(state, setSourceLockedGenerationMode("adaptive"));
-  assert.equal(state.sourceLockedGenerationMode, "adaptive");
-  assert.equal(state.sourceLockedGenerationModeLatched, false);
+  state = reducer(state, setSourceContentMode(true));
+  state = reducer(state, setPptGenUploadState({ files: [{ name: "source.pptx" }] }));
+  state = reducer(state, setSourceContentMode(false));
+  assert.equal(state.sourceContentMode, false);
 });
 
-test("partial upload-state updates cannot bypass a latched source-locked mode", async () => {
+test("partial upload-state updates preserve independently selected source-content mode", async () => {
   const {
     default: reducer,
     setPptGenUploadState,
-    setSourceLockedGenerationMode,
-    syncSourceLockedAttachmentLatch,
+    setSourceContentMode,
   } = await loadSlice();
   let state = reducer(undefined, { type: "init" });
-  state = reducer(state, setSourceLockedGenerationMode("source_locked"));
-  state = reducer(state, syncSourceLockedAttachmentLatch(1));
-  state = reducer(state, setPptGenUploadState({ sourceLockedGenerationMode: "adaptive" }));
-  assert.equal(state.sourceLockedGenerationMode, "source_locked");
+  state = reducer(state, setSourceContentMode(true));
+  state = reducer(state, setPptGenUploadState({ authoredStyle: "osb-smart-banking" }));
+  assert.equal(state.sourceContentMode, true);
+  assert.equal(state.authoredStyle, "osb-smart-banking");
 });
 
-test("primary and advanced source-locked checkboxes bind to the same Redux action/state", async () => {
+test("source-content analyze-confirm flow preserves the admitted pin into the authored request", async () => {
   const nextjsRoot = path.resolve(testDirectory, "..", "..");
-  const [uploadPage, advancedSettings] = await Promise.all([
+  const [uploadPage, uploadState, sourceContentClient, outlineGeneration] = await Promise.all([
     readFile(path.join(nextjsRoot, "app", "(presentation-generator)", "upload", "components", "UploadPage.tsx"), "utf8"),
-    readFile(path.join(nextjsRoot, "app", "(presentation-generator)", "upload", "components", "AdvanceSettings.tsx"), "utf8"),
+    readFile(path.join(nextjsRoot, "app", "(presentation-generator)", "upload", "components", "upload-page", "useUploadPageState.ts"), "utf8"),
+    readFile(path.join(nextjsRoot, "app", "(presentation-generator)", "services", "api", "source-content", "contract.ts"), "utf8"),
+    readFile(path.join(nextjsRoot, "app", "(presentation-generator)", "outline", "hooks", "usePresentationGeneration.ts"), "utf8"),
   ]);
-  for (const [source, testId] of [
-    [uploadPage, "source-locked-generation-checkbox"],
-    [advancedSettings, "source-locked-generation-checkbox-advanced"],
-  ]) {
-    assert.match(source, new RegExp(`data-testid=\\"${testId}\\"`));
-    assert.match(source, /state\.pptGenUpload\.sourceLockedGenerationMode/);
-    assert.match(source, /setSourceLockedGenerationMode/);
-  }
+  assert.match(uploadPage, /data-testid="source-content-mode-checkbox"/);
+  assert.match(uploadPage, /sourceContentMode/);
+  assert.match(uploadPage, /<TemplateSelection\s*\/>/);
+  assert.match(uploadPage, /data-testid="upload-master-selection"/);
+  assert.match(uploadPage, /label=\{sourceContentMode \? "추가 디자인 지시" : undefined\}/);
+  assert.match(uploadState, /const analyzeSourceContent/);
+  assert.match(uploadState, /cleanupDocumentAdmission/);
+  assert.match(uploadState, /sourceContentMode \? sourceContentAdmission : null/);
+  assert.match(uploadState, /content: sourceContentMode \? ""/);
+  assert.match(uploadState, /instructions: sourceContentMode/);
+  assert.match(sourceContentClient, /formData\.append\("referenceSnapshotId", referenceSnapshotId\)/);
+  assert.doesNotMatch(sourceContentClient, /formData\.append\("files"/);
+  assert.match(sourceContentClient, /referenceSnapshotBinding/);
+  assert.match(sourceContentClient, /objectInventory/);
+  assert.match(outlineGeneration, /sourceContentAdmission/);
+  assert.match(outlineGeneration, /sourceContentManifestPin/);
+  assert.match(outlineGeneration, /slides_markdown: isSourceContentGeneration \? undefined/);
 });

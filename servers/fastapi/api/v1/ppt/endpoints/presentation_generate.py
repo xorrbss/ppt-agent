@@ -101,6 +101,12 @@ from services.authored_vnext.generation.legacy_pin import (
 )
 from services.authored_vnext.master.digests import canonical_digest
 from services.concurrent_service import CONCURRENT_SERVICE
+from services.source_content.errors import SourceContentError
+from services.source_content.pipeline import (
+    SOURCE_MODE as SOURCE_CONTENT_RESTYLE_MODE,
+    admit_source_content_request,
+    generate_source_content_restyle_presentation,
+)
 from services.database import async_session_maker, get_async_session, sql_engine
 from services.documents_loader import DocumentsLoader
 from services.generation_provider_admission import generation_provider_admitted
@@ -453,6 +459,35 @@ def _template_v2_http_exception(error: TemplateV2GenerationError) -> HTTPExcepti
     )
 
 
+def _source_content_http_exception(error: SourceContentError) -> HTTPException:
+    exception = HTTPException(status_code=error.status_code, detail=error.code)
+    exception.code = error.code
+    exception.retryable = False
+    return exception
+
+
+async def _admit_source_content_generation(
+    request: GeneratePresentationRequest,
+    sql_session: AsyncSession,
+) -> None:
+    if request.source_mode != SOURCE_CONTENT_RESTYLE_MODE:
+        return
+    if request._authored_style_snapshot is None:
+        request._authored_style_snapshot = resolve_authored_style(request.authored_style)
+    if request._authored_style_snapshot.id != (request.authored_style or "").strip():
+        raise _source_content_http_exception(
+            SourceContentError("source_content_template_required", status_code=422)
+        )
+    try:
+        await admit_source_content_request(
+            request,
+            sql_session=sql_session,
+            owner_id=get_current_owner_id(),
+        )
+    except SourceContentError as error:
+        raise _source_content_http_exception(error) from error
+
+
 async def check_if_api_request_is_valid(
     request: GeneratePresentationRequest,
     sql_session: AsyncSession = Depends(get_async_session),
@@ -470,6 +505,7 @@ async def check_if_api_request_is_valid(
         or request.slides_markdown
         or request.files
         or request.reference_snapshot_ids
+        or request.source_content_manifest_pin
     ):
         raise HTTPException(
             status_code=400,
@@ -566,6 +602,7 @@ async def check_if_api_request_is_valid(
     request.template = AUTHORED_TEMPLATE
     _validate_authored_exact_admission(request)
     await _validate_authored_master_pin_admission(request)
+    await _admit_source_content_generation(request, sql_session)
 
     return (presentation_id,)
 
@@ -1349,6 +1386,11 @@ async def generate_presentation_handler(
     # state and digest admission before generation.
     if request.reference_snapshot_ids and not request._reference_snapshots:
         await _admit_generation_references(request, sql_session)
+    if request.source_mode == SOURCE_CONTENT_RESTYLE_MODE:
+        # A retry must never trust a manifest object cached by another process.
+        # Re-resolve owner scope and the immutable pin before any authoring work.
+        await _validate_authored_master_pin_admission(request)
+        await _admit_source_content_generation(request, sql_session)
     # Bootstrap admission failures have a linked failed job so a terminal
     # operation retry can safely rebind it. Re-check validation, template
     # policy and immutable document readability before doing any generation
@@ -1378,6 +1420,23 @@ async def generate_presentation_handler(
     promoted_images = PromotedWorkspaceChatArtifacts(artifacts=(), replacements={})
     generated_assets: list[ImageAsset] = []
     try:
+        if request.source_mode == SOURCE_CONTENT_RESTYLE_MODE:
+            if async_status:
+                async_status.message = "Restyling immutable source content"
+                async_status.updated_at = datetime.now(timezone.utc)
+                sql_session.add(async_status)
+                await sql_session.commit()
+            # The source-content branch is intentionally before briefs,
+            # outlines, MEM0, HTML authoring and vision re-authoring.
+            return await generate_source_content_restyle_presentation(
+                request=request,
+                presentation_id=presentation_id,
+                async_status=async_status,
+                export_cookie_header=export_cookie_header,
+                generation_job=generation_job,
+                progress_reporter=progress_reporter,
+                sql_session=sql_session,
+            )
         using_slides_markdown = False
         language_to_use = (request.language or "").strip() or None
         additional_context = _immutable_reference_context(
@@ -1687,6 +1746,11 @@ async def generate_presentation_handler(
             safe_exception = HTTPException(status_code=500, detail=safe_error)
         elif isinstance(e, WorkspaceArtifactPublicationError):
             safe_exception = HTTPException(status_code=409, detail=e.code)
+            api_error_payload = APIErrorModel.from_exception(
+                safe_exception, request_id=request._request_id
+            ).model_dump(mode="json")
+        elif isinstance(e, SourceContentError):
+            safe_exception = _source_content_http_exception(e)
             api_error_payload = APIErrorModel.from_exception(
                 safe_exception, request_id=request._request_id
             ).model_dump(mode="json")
@@ -2094,8 +2158,13 @@ async def queue_presentation_generation(
     # Freeze the effective company standard, hidden rule snapshot, authored
     # template and style digest before the idempotency signature is computed.
     # This is read-only admission and mints no deck/operation identity.
-    if request.template.lower() == AUTHORED_TEMPLATE and request.master_pin is not None:
+    if request.template.lower() == AUTHORED_TEMPLATE and (
+        request.master_pin is not None
+        or request.source_mode == SOURCE_CONTENT_RESTYLE_MODE
+    ):
         await _validate_authored_master_pin_admission(request)
+    if request.source_mode == SOURCE_CONTENT_RESTYLE_MODE:
+        await _admit_source_content_generation(request, sql_session)
     # The fingerprint is taken before any deck is minted, so a replay under the
     # same idempotency key matches the stored job instead of bootstrapping a
     # second deck. It now includes the resolved pins/rule/style snapshots.

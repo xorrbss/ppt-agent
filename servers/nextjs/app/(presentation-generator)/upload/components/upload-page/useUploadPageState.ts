@@ -8,21 +8,16 @@ import { notify } from "@/components/ui/sonner";
 import {
   isAbortError,
   PresentationGenerationApi,
+  type DocumentUploadAdmission,
 } from "../../../services/api/presentation-generation";
 import {
-  SourceLockedGenerationApiV1,
-  sourceLockedGenerationFromJob,
-  sourceLockedSelectionErrorMessage,
-  type SourceLockedAnalysisSummary,
-  type SourceLockedArtifactV1,
-  type SourceLockedJobResponseV1,
-  validateSourceLockedFiles,
-} from "../../../services/api/source-locked/contract";
-import {
-  sourceLockedHistoryEntryFromJob,
-  upsertSourceLockedHistory,
-  type SourceLockedHistoryEntryV1,
-} from "../../../services/api/source-locked/history";
+  SOURCE_CONTENT_POLICY,
+  SourceContentApiV1,
+  sourceContentSelectionErrorMessage,
+  type SourceContentAnalysisResponseV1,
+  type SourceContentAnalysisSummary,
+  validateSourceContentFiles,
+} from "../../../services/api/source-content/contract";
 import { getApiErrorDisplayMessage } from "../../../services/api/api-error-handler";
 import {
   setPptGenUploadState,
@@ -31,6 +26,7 @@ import {
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { RootState } from "@/store/store";
 import { ImagesApi } from "../../../services/api/images";
+import AuthoredStylesApi from "../../../services/api/authored";
 import { resolveDeckTheme } from "../applyDeckTheme";
 import { abortDocumentProcessing } from "./abortDocumentProcessing";
 import { getFileCategory } from "./fileCategory";
@@ -51,6 +47,12 @@ const STOCK_IMAGE_PROVIDERS = new Set(["pexels", "pixabay"]);
 const masterClient = new AuthoredVnextMasterClient();
 
 export type UploadMasterAdmissionError = "required" | "unavailable";
+
+type SourceContentAdmission = {
+  analysis: SourceContentAnalysisResponseV1;
+  documentAdmission: DocumentUploadAdmission;
+  fileIdentity: string;
+};
 
 interface UseUploadPageStateArgs {
   files: File[];
@@ -87,22 +89,15 @@ export const useUploadPageState = ({
   const authoredVisionQa = useSelector(
     (state: RootState) => state.pptGenUpload.authoredVisionQa,
   );
-  const sourceLockedGenerationMode = useSelector(
-    (state: RootState) => state.pptGenUpload.sourceLockedGenerationMode,
+  const sourceContentMode = useSelector(
+    (state: RootState) => state.pptGenUpload.sourceContentMode,
   );
-  const sourceLocked = sourceLockedGenerationMode === "source_locked";
-  const [sourceLockedSummary, setSourceLockedSummary] =
-    useState<SourceLockedAnalysisSummary | null>(null);
-  const [sourceLockedArtifact, setSourceLockedArtifact] =
-    useState<SourceLockedArtifactV1 | null>(null);
-  const [sourceLockedAnalysisId, setSourceLockedAnalysisId] = useState(
-    () => crypto.randomUUID(),
-  );
-  const [sourceLockedHistory, setSourceLockedHistory] = useState<
-    SourceLockedHistoryEntryV1[]
-  >([]);
-  const [activeSourceLockedJobId, setActiveSourceLockedJobId] = useState<string | null>(null);
-  const sourceLockedFileIdentity = files
+  const [sourceContentSummary, setSourceContentSummary] =
+    useState<SourceContentAnalysisSummary | null>(null);
+  const [isSourceContentAnalyzing, setIsSourceContentAnalyzing] = useState(false);
+  const [sourceContentAdmission, setSourceContentAdmission] =
+    useState<SourceContentAdmission | null>(null);
+  const sourceContentFileIdentity = files
     .map((file) => `${file.name}:${file.size}:${file.lastModified}`)
     .join("|");
   const [masterAdmissionError, setMasterAdmissionError] =
@@ -134,122 +129,17 @@ export const useUploadPageState = ({
   const [canCancelDocumentProcessing, setCanCancelDocumentProcessing] =
     useState(false);
 
-  const sourceLockedProgress = (job: SourceLockedJobResponseV1) => {
-    const completed = job.progress_stages.filter(
-      (stage) => stage.status.toLowerCase() === "completed",
-    ).length;
-    const total = 3;
-    return {
-      progress: Math.min(100, Math.round((completed / total) * 100)),
-      progressLabel: `원본 분석 → 슬라이드·이미지 복원 → 누락 검증 (${completed}/${total})`,
-    };
-  };
-
-  const recordSourceLockedJob = useCallback((
-    job: SourceLockedJobResponseV1,
-    sourceFilename: string,
-  ) => {
-    const result = sourceLockedGenerationFromJob(job);
-    const progress = sourceLockedProgress(job);
-    setSourceLockedHistory((previous) => {
-      const existing = previous.find((entry) => entry.job_id === job.job_id);
-      return upsertSourceLockedHistory(previous, sourceLockedHistoryEntryFromJob(
-        job,
-        existing?.source_filename ?? sourceFilename,
-      ));
-    });
-    if (job.status === "succeeded") {
-      setActiveSourceLockedJobId(null);
-      setLoadingState((previous) => ({
-        ...previous,
-        isLoading: false,
-        message: "",
-        showProgress: false,
-        duration: 0,
-        progress: 100,
-        progressLabel: "원본 분석 · 슬라이드·이미지 복원 · 누락 검증 완료",
-        extra_info: "",
-      }));
-      setSourceLockedSummary(result?.summary ?? null);
-      setSourceLockedArtifact(result?.artifact ?? null);
-      return result;
-    }
-    if (job.status === "failed" || job.status === "cancelled") {
-      setActiveSourceLockedJobId(null);
-      setLoadingState((previous) => ({
-        ...previous,
-        isLoading: false,
-        message: "",
-        showProgress: false,
-        duration: 0,
-      }));
-      return null;
-    }
-    setLoadingState((previous) => ({
-      ...previous,
-      isLoading: true,
-      message: "원본 문서 그대로 PPT를 생성하는 중…",
-      showProgress: true,
-      duration: 180,
-      ...progress,
-      extra_info: "세 단계가 모두 완료될 때만 다운로드를 제공합니다.",
-    }));
-    return null;
-  }, []);
-
-  const refreshSourceLockedJob = useCallback(async (
-    jobId: string,
-    sourceFilename: string,
-  ) => {
-    const job = await SourceLockedGenerationApiV1.getJob(jobId);
-    return recordSourceLockedJob(job, sourceFilename);
-  }, [recordSourceLockedJob]);
-
   // A queued decomposition keeps running on FastAPI until it is explicitly
   // cancelled. Abort it when this upload screen unmounts (navigation/close).
   useEffect(() => {
     return () => abortDocumentProcessing(decomposeAbortControllerRef.current);
   }, []);
 
-  // Reload recovery uses a server-side owner filter. Do not restore source
-  // metadata from browser storage, which could survive an account switch.
   useEffect(() => {
-    let mounted = true;
-    void SourceLockedGenerationApiV1.listJobs().then((jobs) => {
-      if (!mounted) return;
-      setSourceLockedHistory(jobs.map((job) => sourceLockedHistoryEntryFromJob(job)));
-    }).catch(() => {
-      // The composer stays available if the optional dashboard projection
-      // cannot be loaded; no prior owner's metadata is retained locally.
-    });
-    return () => { mounted = false; };
-  }, []);
-
-  useEffect(() => {
-    const active = sourceLockedHistory.filter(
-      (entry) => entry.status === "queued" || entry.status === "running",
-    );
-    if (active.length === 0) return;
-    const refresh = () => {
-      for (const entry of active) {
-        void refreshSourceLockedJob(entry.job_id, entry.source_filename).catch(() => {
-          // Preserve the durable entry for a later retry; a transient refresh
-          // failure must not turn a still-running job into a successful one.
-        });
-      }
-    };
-    refresh();
-    const timer = window.setInterval(refresh, 1500);
-    return () => window.clearInterval(timer);
-  }, [refreshSourceLockedJob, sourceLockedHistory]);
-
-  // A seal/summary belongs to the exact selected source. Never show a prior
-  // analysis after replacement or after the user clears attachments to unlock.
-  useEffect(() => {
-    setSourceLockedSummary(null);
-    setSourceLockedArtifact(null);
-    setSourceLockedAnalysisId(crypto.randomUUID());
-  }, [sourceLockedFileIdentity, sourceLockedGenerationMode]);
+    setSourceContentSummary(null);
+    setSourceContentAdmission(null);
+    dispatch(setPptGenUploadState({ sourceContentAdmission: null }));
+  }, [dispatch, sourceContentFileIdentity, sourceContentMode]);
 
   useEffect(() => {
     setMasterAdmissionError(null);
@@ -311,7 +201,21 @@ export const useUploadPageState = ({
   const stageAutoAuthoredGeneration = (
     presentationId: string,
     master: CompanyStandardSelection | undefined,
+    sourceContent: SourceContentAnalysisResponseV1 | null = null,
   ) => {
+    const sourceContentInstructions = [config?.prompt, config?.instructions]
+      .map((value) => value?.trim())
+      .filter((value): value is string => Boolean(value))
+      .join("\n");
+    if (sourceContent) {
+      dispatch(setPptGenUploadState({
+        sourceContentMode: true,
+        sourceContentAdmission: {
+          manifestPin: sourceContent.manifestPin,
+          referenceSnapshotId: sourceContent.referenceSnapshotBinding.referenceSnapshotId,
+        },
+      }));
+    }
     const requestedSlides = config.slides ? Number.parseInt(config.slides, 10) : 8;
     const estimatedSlides = Number.isFinite(requestedSlides) ? requestedSlides : 8;
     const baseSeconds = Math.max(120, estimatedSlides * 25);
@@ -330,8 +234,16 @@ export const useUploadPageState = ({
           config.language && config.language !== LanguageType.Auto
             ? config.language
             : null,
-        visionQa: authoredVisionQa,
+        ...(sourceContent ? { instructions: sourceContentInstructions || null } : {}),
+        visionQa: sourceContent ? false : authoredVisionQa,
         authoredStyle,
+        ...(sourceContent
+          ? {
+              sourceMode: "source_content_restyle" as const,
+              sourceContentManifestPin: sourceContent.manifestPin,
+              contentPolicy: SOURCE_CONTENT_POLICY,
+            }
+          : {}),
         ...(master
           ? {
               masterPin: {
@@ -427,13 +339,13 @@ export const useUploadPageState = ({
    * @returns boolean indicating if the configuration is valid
    */
   const validateConfiguration = (): boolean => {
-    if (sourceLocked) {
-      const sourceLockedError = validateSourceLockedFiles(files);
-      if (sourceLockedError) {
-        trackUploadValidationFailure(sourceLockedError);
+    if (sourceContentMode) {
+      const sourceContentError = validateSourceContentFiles(files);
+      if (sourceContentError) {
+        trackUploadValidationFailure(sourceContentError);
         notify.warning(
-          "원본 문서 그대로 생성 파일 제한",
-          sourceLockedSelectionErrorMessage(sourceLockedError),
+          "원본 콘텐츠 유지 파일 제한",
+          sourceContentSelectionErrorMessage(sourceContentError),
         );
         return false;
       }
@@ -459,6 +371,70 @@ export const useUploadPageState = ({
     return true;
   };
 
+  const analyzeSourceContent = async (): Promise<SourceContentAdmission | null> => {
+    const validation = validateSourceContentFiles(files);
+    if (validation) {
+      trackUploadValidationFailure(validation);
+      notify.warning("원본 콘텐츠 유지 파일 제한", sourceContentSelectionErrorMessage(validation));
+      return null;
+    }
+    setLoadingState({
+      isLoading: true,
+      message: "원본 콘텐츠를 분석하는 중…",
+      showProgress: true,
+      duration: 90,
+      progress: 10,
+      progressLabel: "PPTX 안전 분석 및 콘텐츠 inventory",
+      extra_info: "분석이 끝난 뒤 선택한 템플릿으로 재디자인할 수 있습니다.",
+    });
+    setIsSourceContentAnalyzing(true);
+    let documentAdmission: DocumentUploadAdmission | null = null;
+    try {
+      documentAdmission = await PresentationGenerationApi.uploadDoc(files, pendingPresentationId);
+      const analysis = await SourceContentApiV1.analyze({
+        referenceSnapshotId: documentAdmission.referenceSnapshotId,
+        idempotencyKey: `source-content-analyze:${pendingPresentationId}:${documentAdmission.referenceSnapshotId}`,
+      });
+      if (
+        analysis.status !== "ready" ||
+        !analysis.capabilities.pptx ||
+        analysis.capabilities.pdf || analysis.capabilities.docx || analysis.capabilities.ppt ||
+        analysis.referenceSnapshotBinding.referenceSnapshotId !== documentAdmission.referenceSnapshotId
+      ) {
+        throw new Error("source_content_manifest_invalid");
+      }
+      const admitted = { analysis, documentAdmission, fileIdentity: sourceContentFileIdentity };
+      setSourceContentAdmission(admitted);
+      setSourceContentSummary(analysis.summary);
+      setLoadingState({ isLoading: false, message: "", duration: 0, showProgress: false, progress: 100 });
+      return admitted;
+    } catch (error) {
+      if (documentAdmission) {
+        await PresentationGenerationApi.cleanupDocumentAdmission({
+          referenceSnapshotId: documentAdmission.referenceSnapshotId,
+          assetIds: documentAdmission.assetIds,
+        });
+      }
+      throw error;
+    } finally {
+      setIsSourceContentAnalyzing(false);
+    }
+  };
+
+  const ensureSourceContentAuthoredStyle = async (): Promise<boolean> => {
+    try {
+      const styles = await AuthoredStylesApi.getStyles();
+      if (styles.some((style) => style.id === authoredStyle)) return true;
+    } catch {
+      // A source-content run cannot silently substitute another template.
+    }
+    notify.warning(
+      "AI 저작 스타일을 다시 선택해 주세요",
+      "선택한 스타일을 현재 카탈로그에서 확인할 수 없습니다.",
+    );
+    return false;
+  };
+
   /**
    * Handles the presentation generation process
    */
@@ -466,14 +442,21 @@ export const useUploadPageState = ({
     if (startInFlightRef.current) return;
     if (!validateConfiguration()) return;
     startInFlightRef.current = true;
-    if (sourceLocked) {
+    if (sourceContentMode && (
+      !sourceContentAdmission ||
+      sourceContentAdmission.fileIdentity !== sourceContentFileIdentity
+    )) {
       try {
-        await handleSourceLockedGeneration();
+        await analyzeSourceContent();
       } catch (error) {
         handleGenerationError(error);
       } finally {
         startInFlightRef.current = false;
       }
+      return;
+    }
+    if (sourceContentMode && !(await ensureSourceContentAuthoredStyle())) {
+      startInFlightRef.current = false;
       return;
     }
     const resolvedMaster = await resolveMasterForGeneration();
@@ -484,7 +467,7 @@ export const useUploadPageState = ({
     trackEvent(MixpanelEvent.Upload_Generation_Started, getUploadSnapshotProps());
 
 
-    const isStockProviderReady = await ensureStockImageProviderReady();
+    const isStockProviderReady = sourceContentMode || await ensureStockImageProviderReady();
     if (!isStockProviderReady) {
       trackUploadValidationFailure("stock_image_provider_unreachable");
       startInFlightRef.current = false;
@@ -495,7 +478,11 @@ export const useUploadPageState = ({
       const hasUploadedAssets = files.length > 0;
 
       if (hasUploadedAssets) {
-        await handleDocumentProcessing(auto, resolvedMaster);
+        await handleDocumentProcessing(
+          auto,
+          resolvedMaster,
+          sourceContentMode ? sourceContentAdmission : null,
+        );
       } else {
         await handleDirectPresentationGeneration(auto, resolvedMaster);
       }
@@ -509,53 +496,13 @@ export const useUploadPageState = ({
   const handleGeneratePresentation = () => startPresentation(true);
   const handleReviewOutline = () => startPresentation(false);
 
-  /** Starts the durable source-locked job; terminal artifacts are fail-closed. */
-  const handleSourceLockedGeneration = async () => {
-    setSourceLockedSummary(null);
-    setSourceLockedArtifact(null);
-    setLoadingState({
-      isLoading: true,
-      message: "원본 문서 그대로 PPT를 생성하는 중…",
-      showProgress: true,
-      duration: 180,
-      progress: 5,
-      progressLabel: "원본 분석 → 슬라이드·이미지 복원 → 누락 검증",
-      extra_info: "세 단계가 모두 완료될 때만 다운로드를 제공합니다.",
-    });
-    const job = await SourceLockedGenerationApiV1.createJob(
-      files,
-      `source-locked-job:v1:${sourceLockedAnalysisId}`,
-    );
-    setActiveSourceLockedJobId(job.job_id);
-    const result = recordSourceLockedJob(job, files[0]?.name ?? "원본 문서");
-    if (job.status === "failed") {
-      throw new Error(job.error?.message || "원본 문서 생성에 실패했습니다.");
-    }
-    if (job.status === "cancelled") return;
-    if (job.status === "succeeded" && !result) {
-      throw new Error("원본 복원 또는 누락 검증이 완료되지 않아 PPT를 제공할 수 없습니다.");
-    }
-  };
-
-  const cancelSourceLockedJob = async (jobId: string) => {
-    if (!jobId) return;
-    const sourceFilename = sourceLockedHistory.find(
-      (entry) => entry.job_id === jobId,
-    )?.source_filename ?? files[0]?.name ?? "원본 문서";
-    const job = await SourceLockedGenerationApiV1.cancelJob(jobId);
-    recordSourceLockedJob(job, sourceFilename);
-  };
-
-  const handleCancelSourceLockedJob = () => activeSourceLockedJobId
-    ? cancelSourceLockedJob(activeSourceLockedJobId)
-    : Promise.resolve();
-
   /**
    * Handles document processing
    */
   const handleDocumentProcessing = async (
     auto: boolean,
     resolvedMaster: CompanyStandardSelection | undefined,
+    admittedSourceContent: SourceContentAdmission | null = null,
   ) => {
     setLoadingState({
       isLoading: true,
@@ -567,22 +514,25 @@ export const useUploadPageState = ({
       extra_info: files.length > 0 ? "용량이 큰 문서는 몇 분 정도 걸릴 수 있습니다." : "",
     });
 
-    let documentAdmission: Awaited<
-      ReturnType<typeof PresentationGenerationApi.uploadDoc>
-    > | null = null;
+    let documentAdmission: DocumentUploadAdmission | null = admittedSourceContent?.documentAdmission ?? null;
 
-    if (files.length > 0) {
+    if (files.length > 0 && !documentAdmission) {
       documentAdmission = await PresentationGenerationApi.uploadDoc(
         files,
         pendingPresentationId,
       );
     }
 
+    const sourceContentAnalysis = admittedSourceContent?.analysis ?? null;
+    if (sourceContentMode && !sourceContentAnalysis) {
+      throw new Error("source_content_manifest_invalid");
+    }
+
     const selectedLanguage = config?.language ?? "";
 
     const promises: Promise<any>[] = [];
 
-    if (documentAdmission) {
+    if (documentAdmission && !sourceContentMode) {
       const decomposeController = new AbortController();
       decomposeAbortControllerRef.current = decomposeController;
       setCanCancelDocumentProcessing(true);
@@ -630,26 +580,32 @@ export const useUploadPageState = ({
 
     const presentationId = pendingPresentationId;
     const selectedTheme = await resolveDeckTheme(selectedThemeId);
+    const sourceContentInstructions = [config?.prompt, config?.instructions]
+      .map((value) => value?.trim())
+      .filter((value): value is string => Boolean(value))
+      .join("\n");
     const createResponse = await PresentationGenerationApi.createPresentation({
       presentation_id: presentationId,
       idempotency_key: `presentation-create:${presentationId}`,
-      content: config?.prompt ?? "",
-      n_slides: config?.slides ? parseInt(config.slides, 10) : null,
+      content: sourceContentMode ? "" : (config?.prompt ?? ""),
+      n_slides: sourceContentMode ? null : (config?.slides ? parseInt(config.slides, 10) : null),
       reference_snapshot_ids: documentAdmission
         ? [documentAdmission.referenceSnapshotId]
         : [],
-      language: selectedLanguage,
-      tone: config?.tone,
-      verbosity: config?.verbosity,
-      instructions: config?.instructions || null,
-      include_table_of_contents: !!config?.includeTableOfContents,
-      include_title_slide: !!config?.includeTitleSlide,
-      web_search: !!config?.webSearch,
+      language: sourceContentMode ? null : selectedLanguage,
+      tone: sourceContentMode ? undefined : config?.tone,
+      verbosity: sourceContentMode ? undefined : config?.verbosity,
+      instructions: sourceContentMode
+        ? (sourceContentInstructions || null)
+        : (config?.instructions || null),
+      include_table_of_contents: sourceContentMode ? false : !!config?.includeTableOfContents,
+      include_title_slide: sourceContentMode ? false : !!config?.includeTitleSlide,
+      web_search: sourceContentMode ? false : !!config?.webSearch,
       theme: selectedTheme,
     });
 
     dispatch(setPresentationId(createResponse.id));
-    if (auto) stageAutoAuthoredGeneration(createResponse.id, resolvedMaster);
+    if (auto) stageAutoAuthoredGeneration(createResponse.id, resolvedMaster, sourceContentAnalysis);
     const outlineDestination = auto
       ? `/outline?auto=1&id=${encodeURIComponent(createResponse.id)}`
       : `/outline?id=${encodeURIComponent(createResponse.id)}`;
@@ -773,12 +729,10 @@ export const useUploadPageState = ({
     handleReviewOutline,
     masterAdmissionError,
     isMasterResolving,
-    sourceLockedSummary,
-    sourceLockedArtifact,
-    sourceLockedHistory,
-    activeSourceLockedJobId,
-    canCancelSourceLockedJob: Boolean(activeSourceLockedJobId),
-    handleCancelSourceLockedJob,
-    cancelSourceLockedJob,
+    sourceContentSummary,
+    isSourceContentAnalyzing,
+    sourceContentReady: Boolean(
+      sourceContentAdmission &&
+      sourceContentAdmission.fileIdentity === sourceContentFileIdentity,
+    ),
   };
-};

@@ -122,6 +122,12 @@ from models.sql.provider_runtime_reservation import (  # noqa: F401, E402
     ProviderRuntimeCircuit,
     ProviderRuntimeReservation,
 )
+from models.sql.source_content import (  # noqa: F401, E402
+    SourceContentCoverageReceipt,
+    SourceContentGenerationBinding,
+    SourceContentManifestAsset,
+    SourceContentManifestRecord,
+)
 
 alembic_config = context.config
 

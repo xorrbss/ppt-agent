@@ -48,6 +48,9 @@ from services.authored_vnext.integration.sql_repository import (
 )
 from services.authored_vnext.master.digests import canonical_json
 from services.authored_vnext.master.errors import DeckAlreadyExistsError
+from services.source_content.edit_lifecycle import (
+    mark_workbench_edit_modified_in_transaction,
+)
 from .composition import remember_composition_pin
 from .sql_publication import append_generation_deck
 
@@ -510,6 +513,18 @@ class SqlGenerationRepository:
                     expected_revision=expected_revision,
                     expected_digest=expected_digest,
                 )
+                if isinstance(result, (SceneMutationResult, DeckMutationResult)):
+                    mark_workbench_edit_modified_in_transaction(
+                        session,
+                        owner_id=self._base.owner_id,
+                        deck_id=deck.deck_id,
+                        prior_revision=(
+                            expected_revision
+                            if expected_revision is not None
+                            else max(0, deck.revision - 1)
+                        ),
+                        new_revision=deck.revision,
+                    )
                 changed = session.execute(
                     update(AuthoredVNextGenerationOperation)
                     .where(

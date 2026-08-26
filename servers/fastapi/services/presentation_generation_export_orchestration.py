@@ -133,6 +133,7 @@ async def publish_staged_presentation(
     image_artifacts: tuple[PreparedWorkspaceArtifact, ...] = (),
     export_execution: PresentationExportExecution | None = None,
     *,
+    published_edit_path: str | None = None,
     prepare_artifact=prepare_workspace_generation_artifact,
     publish_artifact=publish_workspace_generation_artifact,
     compensate_artifact=compensate_workspace_artifact,
@@ -188,7 +189,10 @@ async def publish_staged_presentation(
                 async_status.data = PresentationPathAndEditPath(
                     presentation_id=presentation.id,
                     path=artifact.public_path,
-                    edit_path=f"/presentation?id={presentation.id}",
+                    edit_path=(
+                        published_edit_path
+                        or f"/presentation?id={presentation.id}"
+                    ),
                 ).model_dump(mode="json")
                 async_status.error = None
                 async_status.updated_at = datetime.now(timezone.utc)
@@ -241,7 +245,7 @@ async def publish_staged_presentation(
         async_status.data = PresentationPathAndEditPath(
             presentation_id=presentation.id,
             path=export_path,
-            edit_path=f"/presentation?id={presentation.id}",
+            edit_path=(published_edit_path or f"/presentation?id={presentation.id}"),
         ).model_dump(mode="json")
         async_status.error = None
         async_status.updated_at = datetime.now(timezone.utc)

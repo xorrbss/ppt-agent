@@ -91,6 +91,12 @@ export const usePresentationGeneration = (
   const generationConfig = useSelector(
     (s: RootState) => s.pptGenUpload.config
   );
+  const sourceContentMode = useSelector(
+    (s: RootState) => s.pptGenUpload.sourceContentMode,
+  );
+  const sourceContentAdmission = useSelector(
+    (s: RootState) => s.pptGenUpload.sourceContentAdmission,
+  );
   const language = generationConfig?.language ?? null;
   const [loadingState, setLoadingState] = useState<LoadingState>(
     DEFAULT_LOADING_STATE
@@ -225,7 +231,6 @@ export const usePresentationGeneration = (
   }, [presentationId]);
 
   const handleSubmit = useCallback(async () => {
-    if (!validateInputs()) return;
     if (!presentationId) {
       notify.error(
         t("presentationUnavailableTitle"),
@@ -233,6 +238,14 @@ export const usePresentationGeneration = (
       );
       return;
     }
+    let durableTask =
+      startingDurableTaskRef.current?.sourcePresentationId === presentationId
+        ? startingDurableTaskRef.current
+        : findDurableGenerationTask(presentationId);
+    const isSourceContentGeneration =
+      durableTask?.authoredRequest?.sourceMode === "source_content_restyle" ||
+      (sourceContentMode && Boolean(sourceContentAdmission));
+    if (!isSourceContentGeneration && !validateInputs()) return;
     const runId = ++generationRunRef.current;
     const isActiveRun = () => generationRunRef.current === runId;
     const generationPreferences = {
@@ -251,14 +264,26 @@ export const usePresentationGeneration = (
     };
     // The complete generation settings are persisted in the first workspace
     // message, so the admission request carries all of them.
-    const asyncGenerationPreferences = generationPreferences;
+    const sourceContentInstructions = [generationConfig?.prompt, generationConfig?.instructions]
+      .map((value) => value?.trim())
+      .filter((value): value is string => Boolean(value))
+      .join("\n");
+    const asyncGenerationPreferences = isSourceContentGeneration
+      ? {
+          language: null,
+          instructions: sourceContentInstructions || null,
+          include_table_of_contents: false,
+          include_title_slide: false,
+          web_search: false,
+        }
+      : generationPreferences;
 
     // Persist the idempotency key before POSTing so a lost response can be retried
     // without creating a second authored deck.
     const slides_markdown = (outlines || [])
       .map((o) => o.content)
       .filter((c) => c && c.trim().length > 0);
-    if (slides_markdown.length === 0) {
+    if (!isSourceContentGeneration && slides_markdown.length === 0) {
       notify.warning(t("outlineEmptyTitle"), t("outlineEmptyDescription"));
       return;
     }
@@ -269,17 +294,38 @@ export const usePresentationGeneration = (
     // "Auto" is a sentinel, not a real language: send null so the backend applies
     // its language-aware fallback instead of authoring with a literal "Auto".
     const reduxAuthoredRequest = {
-      language: language && language !== LanguageType.Auto ? language : null,
-      visionQa: authoredVisionQa,
+      language: isSourceContentGeneration
+        ? null
+        : language && language !== LanguageType.Auto
+          ? language
+          : null,
+      ...(isSourceContentGeneration
+        ? { instructions: sourceContentInstructions || null }
+        : {}),
+      // The immutable source-content path must never enter vision re-authoring,
+      // including outline reload/resume paths reconstructed from Redux.
+      visionQa: isSourceContentGeneration ? false : authoredVisionQa,
       authoredStyle,
       ...(companyStandard
         ? { masterPin: generationMasterPin(companyStandard) }
         : {}),
+      ...(sourceContentMode && sourceContentAdmission
+        ? {
+            sourceMode: "source_content_restyle" as const,
+            sourceContentManifestPin: sourceContentAdmission.manifestPin,
+            contentPolicy: {
+              text: "verbatim" as const,
+              preserveAllTableCells: true as const,
+              preserveAllChartValues: true as const,
+              preserveAllImageOccurrences: true as const,
+              preserveSourceOrder: true as const,
+              allowSlideExpansion: true as const,
+              allowSummarization: false as const,
+              overflowPolicy: "add_slides" as const,
+            },
+          }
+        : {}),
     };
-    let durableTask =
-      startingDurableTaskRef.current?.sourcePresentationId === presentationId
-        ? startingDurableTaskRef.current
-        : findDurableGenerationTask(presentationId);
     if (durableTask?.taskId && durableTask.status !== "retryable-error") {
       openWorkspace(durableTask.idempotencyKey);
       return;
@@ -305,13 +351,21 @@ export const usePresentationGeneration = (
     try {
       const started = await PresentationGenerationApi.generateAuthoredAsync({
         presentation_id: presentationId,
-        content: slides_markdown[0].slice(0, 200),
-        slides_markdown,
+        // Source-content generation obtains every display payload from its
+        // immutable manifest.  Never leak an outline surrogate into this path.
+        content: isSourceContentGeneration ? "" : slides_markdown[0].slice(0, 200),
+        slides_markdown: isSourceContentGeneration ? undefined : slides_markdown,
         ...asyncGenerationPreferences,
+        ...(isSourceContentGeneration
+          ? { instructions: authoredRequest.instructions ?? null }
+          : {}),
         language: authoredRequest.language,
         vision_qa: authoredRequest.visionQa,
         authored_style: authoredRequest.authoredStyle,
         masterPin: authoredRequest.masterPin,
+        sourceMode: authoredRequest.sourceMode,
+        sourceContentManifestPin: authoredRequest.sourceContentManifestPin,
+        contentPolicy: authoredRequest.contentPolicy,
         idempotency_key: durableTask.idempotencyKey,
       });
       const taskId = started?.id;
@@ -355,6 +409,8 @@ export const usePresentationGeneration = (
     authoredVisionQa,
     language,
     generationConfig,
+    sourceContentMode,
+    sourceContentAdmission,
     authoredStyle,
     companyStandard,
     onMasterRequired,

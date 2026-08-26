@@ -30,12 +30,28 @@ export interface DurableGenerationTask {
   // (idempotency_key_payload_conflict), so a resume must resend these exactly.
   authoredRequest?: {
     language: string | null;
+    instructions?: string | null;
     visionQa: boolean;
     authoredStyle: string;
     masterPin?: {
       masterId: string;
       revision: number;
       digest: `sha256:${string}`;
+    };
+    sourceMode?: "source_content_restyle";
+    sourceContentManifestPin?: {
+      manifestId: string;
+      digest: `sha256:${string}`;
+    };
+    contentPolicy?: {
+      text: "verbatim";
+      preserveAllTableCells: true;
+      preserveAllChartValues: true;
+      preserveAllImageOccurrences: true;
+      preserveSourceOrder: true;
+      allowSlideExpansion: true;
+      allowSummarization: false;
+      overflowPolicy: "add_slides";
     };
   };
 }

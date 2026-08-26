@@ -1,7 +1,14 @@
 import uuid
 from typing import Any, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PrivateAttr,
+    field_validator,
+    model_validator,
+)
 
 from enums.tone import Tone
 from enums.verbosity import Verbosity
@@ -18,6 +25,24 @@ class AuthoredMasterPinInput(StrictCamelModel):
 
     master_id: MasterId
     revision: int = Field(ge=1)
+    digest: Digest
+
+
+class SourceContentPolicy(StrictCamelModel):
+    """Closed preservation policy for source-content restyling."""
+
+    text: Literal["verbatim"] = "verbatim"
+    preserve_all_table_cells: Literal[True] = True
+    preserve_all_chart_values: Literal[True] = True
+    preserve_all_image_occurrences: Literal[True] = True
+    preserve_source_order: Literal[True] = True
+    allow_slide_expansion: Literal[True] = True
+    allow_summarization: Literal[False] = False
+    overflow_policy: Literal["add_slides"] = "add_slides"
+
+
+class SourceContentManifestPinInput(StrictCamelModel):
+    manifest_id: str = Field(min_length=5, max_length=200)
     digest: Digest
 
 
@@ -39,6 +64,7 @@ class GeneratePresentationRequest(BaseModel):
     _authored_source_semantic_snapshot: Any = PrivateAttr(default=None)
     _authored_design_replay: bool = PrivateAttr(default=False)
     _reference_snapshots: tuple[Any, ...] = PrivateAttr(default=())
+    _source_content_manifest: Any = PrivateAttr(default=None)
 
     # Chat-first async generation reuses the durable presentation shell and
     # awaiting-approval operation created by /presentation/create.  Legacy
@@ -75,6 +101,22 @@ class GeneratePresentationRequest(BaseModel):
         description=(
             "Explicit generation strategy. Omit to use the authored source."
         ),
+    )
+    source_mode: Optional[Literal["source_content_restyle"]] = Field(
+        default=None,
+        alias="sourceMode",
+        description=(
+            "Preserve an admitted immutable source manifest while applying the "
+            "selected authored style and optional company standard."
+        ),
+    )
+    source_content_manifest_pin: Optional[SourceContentManifestPinInput] = Field(
+        default=None,
+        alias="sourceContentManifestPin",
+    )
+    content_policy: Optional[SourceContentPolicy] = Field(
+        default=None,
+        alias="contentPolicy",
     )
     template_v2_id: Optional[str] = Field(
         default=None,
@@ -154,3 +196,28 @@ class GeneratePresentationRequest(BaseModel):
             "resolves layout/font manifest digests after validating the published head."
         ),
     )
+
+    @model_validator(mode="after")
+    def validate_source_content_mode(self) -> "GeneratePresentationRequest":
+        if self.source_mode is None:
+            if self.source_content_manifest_pin is not None or self.content_policy is not None:
+                raise ValueError("source_content_mode_required")
+            return self
+        if self.source_content_manifest_pin is None:
+            raise ValueError("source_content_manifest_pin_required")
+        if self.content_policy is None:
+            raise ValueError("source_content_policy_required")
+        if self.template.strip().lower() != "authored" or self.strategy not in {
+            None,
+            "authored",
+        }:
+            raise ValueError("generation_strategy_conflict")
+        if not (self.authored_style or "").strip():
+            raise ValueError("source_content_template_required")
+        if self.export_as != "pptx":
+            raise ValueError("source_content_format_not_supported")
+        if self.web_search or self.vision_qa:
+            raise ValueError("source_content_generation_option_conflict")
+        if self.slides_markdown is not None:
+            raise ValueError("source_content_generation_option_conflict")
+        return self
