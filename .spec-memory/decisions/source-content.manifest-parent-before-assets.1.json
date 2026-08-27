@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "key": "source-content.manifest-parent-before-assets",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Flush the source-content manifest parent before inserting asset children while preserving one atomic transaction.",
+  "scope": [
+    "source-content",
+    "manifest-persistence"
+  ],
+  "invariants": [
+    "The manifest row is flushed before source_content_manifest_assets inserts.",
+    "Parent and assets commit atomically in one transaction."
+  ],
+  "forbidden": [
+    "Do not insert manifest assets before their parent manifest is database-visible."
+  ],
+  "evidence": [
+    "servers/fastapi/services/source_content/manifest_store.py",
+    "servers/fastapi/tests/unit/test_source_content_admission.py"
+  ],
+  "supersedes": [],
+  "recordedAt": "2026-08-26T14:27:05.7331191+00:00"
+}

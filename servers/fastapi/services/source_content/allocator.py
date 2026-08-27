@@ -16,7 +16,10 @@ from pydantic import Field, model_validator
 
 from models.authored_vnext.master.base import Digest, StrictCamelModel
 from models.authored_vnext.master.contract import Rect
-from services.source_content.contracts import SourceContentManifestPin
+from services.source_content.contracts import (
+    RESTYLE_CONTENT_KINDS,
+    SourceContentManifestPin,
+)
 
 
 PLAN_VERSION = "source-content-placement-plan/v1"
@@ -74,8 +77,6 @@ class WritableSlot(StrictCamelModel):
         "table",
         "chart",
         "image",
-        "shape",
-        "source_note",
     )
     semantic_roles: tuple[str, ...] = ()
     capacity_units: int = Field(default=1, ge=1, le=1000)
@@ -116,14 +117,19 @@ class SourceContentPlacementSlide(StrictCamelModel):
     source_part: int = Field(ge=1)
     layout_role: str = Field(min_length=1, max_length=100)
     layout_id: str = Field(min_length=1, max_length=200)
-    placements: tuple[SourceContentPlacement, ...] = Field(min_length=1, max_length=64)
+    # A source page is locked to one output slide.  A template may therefore
+    # need more placements than its initial slot count; the materializer
+    # deterministically re-composes repeated slots within the same page.
+    placements: tuple[SourceContentPlacement, ...] = Field(max_length=4096)
 
 
 class SourceContentPlacementPlan(StrictCamelModel):
     contract_version: Literal["source-content-placement-plan/v1"] = PLAN_VERSION
     manifest_pin: SourceContentManifestPin
     composition_pin: PlacementCompositionPin
-    slides: tuple[SourceContentPlacementSlide, ...] = Field(min_length=1, max_length=500)
+    # Do not impose an arbitrary 500-slide ceiling: cardinality is governed by
+    # the admitted source manifest (one output slide per source unit).
+    slides: tuple[SourceContentPlacementSlide, ...] = Field(min_length=1)
     plan_digest: Digest
 
     @model_validator(mode="after")
@@ -132,6 +138,15 @@ class SourceContentPlacementPlan(StrictCamelModel):
         if indexes != list(range(len(indexes))):
             raise ValueError("source_content_output_order_invalid")
         placements = [item for slide in self.slides for item in slide.placements]
+        slide_units = [slide.source_unit_id for slide in self.slides]
+        if len(set(slide_units)) != len(slide_units):
+            raise ValueError("source_content_source_unit_duplicate")
+        if any(
+            placement.source_unit_id != slide.source_unit_id
+            for slide in self.slides
+            for placement in slide.placements
+        ):
+            raise ValueError("source_content_plan_manifest_mismatch")
         if [item.source_order for item in placements] != sorted(
             item.source_order for item in placements
         ):
@@ -188,6 +203,7 @@ class ContentAllocator:
         manifest_pin: SourceContentManifestPin,
         composition_pin: PlacementCompositionPin,
         layouts: Sequence[WritableLayout],
+        outline: Any | None = None,
     ) -> SourceContentPlacementPlan:
         manifest_value = _mapping(manifest)
         manifest_digest = _field(manifest_value, "manifestDigest", "manifest_digest")
@@ -207,6 +223,39 @@ class ContentAllocator:
                 str(_field(unit, "sourceUnitId", "source_unit_id") or ""),
             ),
         )
+        if outline is not None:
+            outline_value = _mapping(outline)
+            outline_units = _field(outline_value, "slides")
+            if not isinstance(outline_units, list):
+                raise ValueError("source_content_outline_invalid")
+            outline_ids = [
+                str(_field(_mapping(item), "sourceUnitId", "source_unit_id") or "")
+                for item in outline_units
+            ]
+            manifest_ids = [
+                str(_field(unit, "sourceUnitId", "source_unit_id") or "")
+                for unit in ordered_units
+            ]
+            if outline_ids != manifest_ids:
+                raise ValueError("source_content_source_unit_cardinality_mismatch")
+            for unit, outline_slide in zip(ordered_units, outline_units):
+                block_ids = [
+                    str(_field(_mapping(block), "sourceBlockId", "source_block_id") or "")
+                    for block in sorted(
+                        (_mapping(block) for block in (_field(unit, "blocks") or [])),
+                        key=lambda block: (
+                            int(_field(block, "order") or 0),
+                            str(_field(block, "sourceBlockId", "source_block_id") or ""),
+                        ),
+                    )
+                    if str(_field(block, "kind") or "") in RESTYLE_CONTENT_KINDS
+                ]
+                reading_order = [
+                    str(item)
+                    for item in (_field(_mapping(outline_slide), "readingOrder", "reading_order") or [])
+                ]
+                if reading_order != block_ids:
+                    raise ValueError("source_content_outline_invalid")
         slides: list[SourceContentPlacementSlide] = []
         seen_block_ids: set[str] = set()
         source_order = 0
@@ -215,7 +264,7 @@ class ContentAllocator:
         for unit in ordered_units:
             source_unit_id = str(_field(unit, "sourceUnitId", "source_unit_id") or "")
             blocks = _field(unit, "blocks")
-            if not source_unit_id or not isinstance(blocks, list) or not blocks:
+            if not source_unit_id or not isinstance(blocks, list):
                 raise ValueError("source_content_manifest_invalid")
             ordered_blocks = sorted(
                 (_mapping(block) for block in blocks),
@@ -229,28 +278,13 @@ class ContentAllocator:
             used_slots: set[str] = set()
             source_part = 1
 
-            def flush() -> None:
-                nonlocal current, used_slots, source_part, output_index
-                if not current:
-                    return
-                slides.append(
-                    SourceContentPlacementSlide(
-                        output_index=output_index,
-                        source_unit_id=source_unit_id,
-                        source_part=source_part,
-                        layout_role=layout.layout_role,
-                        layout_id=layout.layout_id,
-                        placements=tuple(current),
-                    )
-                )
-                output_index += 1
-                source_part += 1
-                current = []
-                used_slots = set()
-
             for block in ordered_blocks:
                 block_id = str(_field(block, "sourceBlockId", "source_block_id") or "")
                 kind = str(_field(block, "kind") or "")
+                if kind not in RESTYLE_CONTENT_KINDS:
+                    # Shapes and speaker notes are template-owned design or
+                    # metadata, not source substance to place in the output.
+                    continue
                 semantic_role = str(
                     _field(block, "semanticRole", "semantic_role") or "body"
                 )
@@ -268,7 +302,10 @@ class ContentAllocator:
                         and (not slot.semantic_roles or semantic_role in slot.semantic_roles)
                     ]
                     if not candidates:
-                        flush()
+                        # Page-locked composition: once every compatible slot
+                        # has been used, reuse the compatible slot on this same
+                        # source page.  Materialization performs deterministic
+                        # in-page re-composition for repeated slots.
                         candidates = [
                             slot
                             for slot in layout.slots
@@ -276,7 +313,7 @@ class ContentAllocator:
                             and (not slot.semantic_roles or semantic_role in slot.semantic_roles)
                         ]
                     if not candidates:
-                        raise ValueError("source_content_unplaceable")
+                        raise ValueError("source_content_template_overflow")
                     slot = candidates[0]
                     end = min(unit_count, start + slot.capacity_units)
                     current.append(
@@ -296,7 +333,23 @@ class ContentAllocator:
                     used_slots.add(slot.slot_id)
                     source_order += 1
                     start = end
-            flush()
+
+            if len(current) > 4096:
+                raise ValueError("source_content_template_overflow")
+            # Exactly one output slide for every source unit, including an
+            # empty source page.  Empty pages are preserved rather than
+            # silently omitted.
+            slides.append(
+                SourceContentPlacementSlide(
+                    output_index=output_index,
+                    source_unit_id=source_unit_id,
+                    source_part=source_part,
+                    layout_role=layout.layout_role,
+                    layout_id=layout.layout_id,
+                    placements=tuple(current),
+                )
+            )
+            output_index += 1
 
         if not slides:
             raise ValueError("source_content_unplaceable")
@@ -314,8 +367,22 @@ class ContentAllocator:
         )
 
 
+class PageLockedTemplateCompositionPlanner(ContentAllocator):
+    """Named planner façade for the page-locked source-content contract.
+
+    Keeping the allocator implementation as the single deterministic path
+    avoids a second planner that could accidentally reintroduce slide
+    expansion.  ``plan`` is provided as the terminology used by the design
+    contract; ``allocate`` remains backwards compatible.
+    """
+
+    def plan(self, **kwargs: Any) -> SourceContentPlacementPlan:
+        return self.allocate(**kwargs)
+
+
 __all__ = [
     "ContentAllocator",
+    "PageLockedTemplateCompositionPlanner",
     "MERGE_POLICY_VERSION",
     "PlacementCompositionPin",
     "SourceContentManifestPin",

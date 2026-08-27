@@ -319,9 +319,10 @@ export const usePresentationGeneration = (
               preserveAllChartValues: true as const,
               preserveAllImageOccurrences: true as const,
               preserveSourceOrder: true as const,
-              allowSlideExpansion: true as const,
+              preserveSourceSlideCount: true as const,
+              allowSlideExpansion: false as const,
               allowSummarization: false as const,
-              overflowPolicy: "add_slides" as const,
+              overflowPolicy: "same_page_recompose_or_fail" as const,
             },
           }
         : {}),

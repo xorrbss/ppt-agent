@@ -190,6 +190,7 @@ async def analyze_reference_snapshot(
             counts_json=manifest.counts.model_dump(mode="json", by_alias=True),
         )
         session.add(row)
+        await session.flush()
         for sealed in extracted.assets:
             session.add(
                 SourceContentManifestAsset(

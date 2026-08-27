@@ -460,7 +460,10 @@ def _template_v2_http_exception(error: TemplateV2GenerationError) -> HTTPExcepti
 
 
 def _source_content_http_exception(error: SourceContentError) -> HTTPException:
-    exception = HTTPException(status_code=error.status_code, detail=error.code)
+    exception = HTTPException(
+        status_code=error.status_code,
+        detail={"code": error.code, **error.detail},
+    )
     exception.code = error.code
     exception.retryable = False
     return exception

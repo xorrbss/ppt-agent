@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "key": "source-content.pptx-standard-metadata",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Treat PPTX handout master and revision info parts and relationships as supported non-content metadata during source-content admission.",
+  "scope": [
+    "source-content",
+    "pptx-admission"
+  ],
+  "invariants": [
+    "Handout master and revision info do not count as slide content.",
+    "Other unclassified PPTX objects continue to fail closed."
+  ],
+  "forbidden": [],
+  "evidence": [
+    "servers/fastapi/services/source_content/pptx.py",
+    "servers/fastapi/tests/unit/test_source_content_admission.py"
+  ],
+  "supersedes": [],
+  "recordedAt": "2026-08-26T14:10:18.3598943+00:00"
+}

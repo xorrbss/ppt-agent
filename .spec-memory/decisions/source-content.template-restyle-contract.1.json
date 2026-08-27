@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "key": "source-content.template-restyle-contract",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Keep source page count exactly; reuse source text, images, table cells and chart data while applying only the selected template design.",
+  "scope": [
+    "source-content",
+    "authored-generation"
+  ],
+  "invariants": [
+    "output slide count equals source slide count",
+    "no content summarization or deletion",
+    "template controls visual design"
+  ],
+  "forbidden": [
+    "whole-source-slide raster backplate",
+    "block-driven slide expansion",
+    "copying original table or chart styling"
+  ],
+  "evidence": [],
+  "supersedes": [],
+  "recordedAt": "2026-08-26T14:54:34.6194381+00:00"
+}

@@ -725,9 +725,10 @@ export class PresentationGenerationApi {
         preserveAllChartValues: true;
         preserveAllImageOccurrences: true;
         preserveSourceOrder: true;
-        allowSlideExpansion: true;
+        preserveSourceSlideCount: true;
+        allowSlideExpansion: false;
         allowSummarization: false;
-        overflowPolicy: "add_slides";
+        overflowPolicy: "same_page_recompose_or_fail";
       };
       idempotency_key?: string;
     },

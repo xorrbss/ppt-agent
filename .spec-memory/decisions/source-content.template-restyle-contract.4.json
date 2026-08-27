@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "key": "source-content.template-restyle-contract",
+  "revision": 4,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Use AuthoredSourceImagePlan with multi-slot server binding; remove authored source-image one-per-slide cap.",
+  "scope": [
+    "authored",
+    "source-content",
+    "image-reuse",
+    "template-restyle"
+  ],
+  "invariants": [
+    "general authored source images are planned as 0..N source slots per slide",
+    "LLM references sourceSlotId only and server binds verified owner-scoped assets",
+    "same asset may be reused across slides; generated illustration slots remain separate",
+    "source-content preserves every image occurrence and 1:1 source-page cardinality"
+  ],
+  "forbidden": [
+    "keep a semantic one-image-per-slide rule for authored source images",
+    "let LLM create asset ids, paths, or data URIs",
+    "silently drop planned source slots on preview budget overflow"
+  ],
+  "evidence": [
+    "docs/source-content-template-restyle-design-20260826.md",
+    "servers/fastapi/services/authored_source_images.py",
+    "servers/fastapi/utils/authored_image_slots.py",
+    "servers/fastapi/utils/llm_calls/author_slide.py"
+  ],
+  "supersedes": [
+    "source-content.template-restyle-contract@3"
+  ],
+  "recordedAt": "2026-08-26T19:13:53.5210233+00:00"
+}

@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from services.authored_vnext.master.digests import canonical_digest
+from services.source_content.contracts import RESTYLE_CONTENT_KINDS
 
 
 class SourceContentCoverageError(ValueError):
@@ -88,7 +89,13 @@ def _blocks(manifest: Mapping[str, Any]) -> list[Mapping[str, Any]]:
         raise SourceContentCoverageError(
             "source_content_coverage_failed", detail="manifest block IDs must be non-empty and unique"
         )
-    return result
+    # Shapes and speaker notes are inventoried for security/audit, but are
+    # template-owned design/metadata rather than preserved source substance.
+    return [
+        item
+        for item in result
+        if _value(item, "kind", default="") in RESTYLE_CONTENT_KINDS
+    ]
 
 
 def _placements(plan: Mapping[str, Any]) -> list[tuple[int, int, Mapping[str, Any]]]:
@@ -558,18 +565,9 @@ def verify_scene_coverage(
     plan_digest = str(_value(plan_map, "planDigest", "plan_digest", ""))
     scene_digest_value = str(_value(scene, "sceneDigest", "scene_digest", ""))
     counts = _mapping(_value(manifest_map, "counts", default={}), label="manifest counts")
-    expected_text = int(
-        _value(
-            counts,
-            "textBlocks",
-            "text_blocks",
-            sum(
-                1
-                for block in blocks
-                if _value(block, "kind") in {"text", "source_note"}
-            ),
-        )
-    )
+    # Older manifests counted speaker-note blocks as text. Derive the visible
+    # preservation denominator from filtered blocks for backward compatibility.
+    expected_text = sum(1 for block in blocks if _value(block, "kind") == "text")
     expected_table = int(_value(counts, "tableCells", "table_cells", sum(_payload_count(b, "table") for b in blocks if _value(b, "kind") == "table")))
     expected_chart = int(_value(counts, "chartValues", "chart_values", sum(_payload_count(b, "chart") for b in blocks if _value(b, "kind") == "chart")))
     expected_images = int(_value(counts, "imageOccurrences", "image_occurrences", sum(1 for b in blocks if _value(b, "kind") == "image")))
@@ -577,7 +575,7 @@ def verify_scene_coverage(
         {
             str(_value(block, "sourceBlockId", "source_block_id"))
             for block in blocks
-            if _value(block, "kind") in {"text", "source_note"}
+            if _value(block, "kind") == "text"
             and str(_value(block, "sourceBlockId", "source_block_id")) in by_block
         }
     )

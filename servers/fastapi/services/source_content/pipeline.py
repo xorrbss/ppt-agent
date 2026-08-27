@@ -6,7 +6,7 @@ import inspect
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable
+from typing import Any, Awaitable, Callable, Sequence
 
 from models.authored_vnext.deck.checkpoint import (
     MasterDigestPin,
@@ -33,11 +33,13 @@ from services.source_content.allocator import (
     ContentAllocator,
     PlacementCompositionPin,
     SourceContentPlacementPlan,
+    SourceContentPlacementSlide,
     WritableLayout,
     WritableSlot,
     canonical_digest,
 )
 from services.source_content.contracts import (
+    RESTYLE_CONTENT_KINDS,
     SourceContentManifest,
     SourceContentManifestPin,
 )
@@ -47,6 +49,7 @@ from services.source_content.materializer import (
     SourceContentSceneMaterializer,
     SourceContentStyleTokens,
 )
+from services.source_content.outline import SourceDocumentOutlineBuilder
 
 
 SOURCE_MODE = "source_content_restyle"
@@ -111,6 +114,21 @@ async def admit_source_content_request(
     if snapshots and manifest.reference_snapshot_id not in snapshots:
         raise _source_error("source_content_manifest_invalid", status_code=409)
     request._source_content_manifest = manifest
+    # Freeze a lossless page outline at admission.  It is an identity/read
+    # order projection; payloads remain sourced from the immutable manifest.
+    try:
+        request._source_document_outline = SourceDocumentOutlineBuilder().build(
+            manifest=manifest,
+            manifest_pin=SourceContentManifestPin(
+                manifest_id=pin.manifest_id,
+                digest=pin.digest,
+            ),
+        )
+    except ValueError as error:
+        code = str(error)
+        if not code.startswith("source_content_"):
+            code = "source_content_manifest_invalid"
+        raise _source_error(code, status_code=409) from error
     return manifest
 
 
@@ -220,7 +238,14 @@ def _compatibility_text_for_slide(
     )
     if unit is None:
         raise _source_error("source_content_plan_manifest_mismatch")
+    if not unit.blocks:
+        # SlideSpecV2 requires non-empty compatibility strings, while the
+        # canonical Scene must remain genuinely empty for a blank source page.
+        # This marker is confined to the legacy snapshot projection.
+        return f"[source-content-empty:{source_unit_id}]"
     for block in unit.blocks:
+        if block.kind not in RESTYLE_CONTENT_KINDS:
+            continue
         payload = block.payload
         candidates: list[Any] = [
             payload.get("text"),
@@ -242,6 +267,33 @@ def _compatibility_text_for_slide(
     raise _source_error("source_content_unplaceable")
 
 
+def _compatibility_body_slot_id(
+    planned: SourceContentPlacementSlide,
+    layouts: Sequence[WritableLayout] | None = None,
+) -> str:
+    """Return a valid checkpoint slot without inventing Scene content."""
+
+    if planned.placements:
+        return next(
+            (
+                item.slot_id
+                for item in planned.placements
+                if not item.slot_id.endswith("title")
+            ),
+            planned.placements[0].slot_id,
+        )
+    if layouts:
+        return next(
+            (
+                slot.slot_id
+                for slot in layouts[0].slots
+                if not slot.slot_id.endswith("title")
+            ),
+            layouts[0].slots[0].slot_id,
+        )
+    return "slot:source-content-empty"
+
+
 def _deck_snapshot(
     *,
     manifest: SourceContentManifest,
@@ -250,6 +302,7 @@ def _deck_snapshot(
     master_contract: DeckMasterContract,
     master_pin: MasterDigestPin,
     composition: Any | None,
+    layouts: Sequence[WritableLayout] | None = None,
 ) -> DeckGenerationSnapshot:
     validated: list[ValidatedSlideSpecV2] = []
     scene_by_id = {slide.slide_id: slide for slide in materialized.scene.slides}
@@ -294,14 +347,7 @@ def _deck_snapshot(
             **slide_payload,
             specDigest=authored_canonical_digest(slide_payload),
         )
-        body_slot = next(
-            (
-                item.slot_id
-                for item in planned.placements
-                if not item.slot_id.endswith("title")
-            ),
-            planned.placements[0].slot_id,
-        )
+        body_slot = _compatibility_body_slot_id(planned, layouts)
         checkpoint = SlideValidationCheckpoint(
             master_digest=master_pin.master_digest,
             layout_registry_digest=master_pin.layout_registry_digest,
@@ -394,8 +440,6 @@ def _layouts_and_canvas(master_contract: Any | None) -> tuple[list[WritableLayou
                     "table",
                     "chart",
                     "image",
-                    "shape",
-                    "source_note",
                 ),
                 semantic_roles=("title", "heading", "section") if role == "title" else (),
                 capacity_units=2 if role == "title" else 12,
@@ -493,7 +537,19 @@ async def build_source_content_staging(
             ),
             composition_pin=composition_pin,
             layouts=layouts,
+            outline=getattr(request, "_source_document_outline", None),
         )
+        expected_units = len(manifest.units)
+        if len(plan.slides) != expected_units or [
+            slide.source_unit_id for slide in plan.slides
+        ] != [
+            unit.source_unit_id
+            for unit in sorted(
+                manifest.units,
+                key=lambda item: (item.source_index, item.source_unit_id),
+            )
+        ]:
+            raise _source_error("source_content_source_unit_cardinality_mismatch")
         materialized = SourceContentSceneMaterializer().materialize(
             manifest=manifest,
             plan=plan,
@@ -519,6 +575,7 @@ async def build_source_content_staging(
             master_contract=master_contract,
             master_pin=master_pin,
             composition=composition,
+            layouts=layouts,
         )
         from services.source_content.manifest_store import (
             bind_source_content_generation,

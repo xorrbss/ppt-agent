@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "key": "source-content.template-restyle-contract",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Build a lossless per-source-page outline first; apply selected template design to exact source text, images, table cells and chart data with 1:1 page count.",
+  "scope": [
+    "source-content",
+    "authored-generation"
+  ],
+  "invariants": [
+    "outline slide count equals source slide count",
+    "output slide count equals source slide count",
+    "template owns visual design",
+    "no content summarization or deletion"
+  ],
+  "forbidden": [
+    "block-driven slide expansion",
+    "whole-source-slide raster backplate",
+    "copying original table or chart styling"
+  ],
+  "evidence": [
+    "docs/source-content-template-restyle-design-20260826.md"
+  ],
+  "supersedes": [
+    "source-content.template-restyle-contract@1"
+  ],
+  "recordedAt": "2026-08-26T18:16:06.7058507+00:00"
+}
