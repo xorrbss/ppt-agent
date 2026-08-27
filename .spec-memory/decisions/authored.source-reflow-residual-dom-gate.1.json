@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.source-reflow-residual-dom-gate",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Source reflow blocks residual image and geometry defects, including painted panels off-canvas, but not contrast or font-only findings.",
+  "scope": [
+    "authored",
+    "source-reflow",
+    "visual-quality"
+  ],
+  "invariants": [
+    "Incomplete DOM telemetry blocks source-reflow publication.",
+    "Normal Authored keeps best-effort structural geometry behavior."
+  ],
+  "forbidden": [
+    "Fail source-reflow publication for contrast-only or font-only DOM findings."
+  ],
+  "evidence": [
+    "servers/fastapi/utils/llm_calls/author_vision_qa.py",
+    "servers/fastapi/utils/authored_dom_quality.py",
+    "servers/fastapi/tests/unit/test_authored_pipeline.py",
+    "servers/fastapi/tests/unit/test_authored_dom_quality.py"
+  ],
+  "supersedes": [],
+  "recordedAt": "2026-08-27T12:58:01.3929231+00:00"
+}

@@ -147,6 +147,42 @@ def _relationship_map(package: ZipFile, source_part: str) -> dict[str, tuple[str
     return result
 
 
+def _ordered_slide_parts(
+    package: ZipFile, report: PackageSecurityReport
+) -> list[str]:
+    presentation_part = "ppt/presentation.xml"
+    if presentation_part not in report.entries:
+        raise SourceContentError(
+            MANIFEST_INVALID,
+            detail={"reason": "presentation_part_missing"},
+        )
+    root = secure_xml(package.read(presentation_part), part_name=presentation_part)
+    relationships = _relationship_map(package, presentation_part)
+    slide_entries = {
+        name for name in report.entries if _SLIDE_RE.match(name)
+    }
+    ordered: list[str] = []
+    for slide_id in root.findall(".//p:sldId", namespaces=NS):
+        rel_id = slide_id.get(f"{{{R_NS}}}id")
+        relation = relationships.get(rel_id or "")
+        if (
+            relation is None
+            or not relation[1].endswith("/slide")
+            or relation[0] not in slide_entries
+        ):
+            raise SourceContentError(
+                MANIFEST_INVALID,
+                detail={"reason": "slide_relationship_invalid"},
+            )
+        ordered.append(relation[0])
+    if len(ordered) != len(slide_entries) or set(ordered) != slide_entries:
+        raise SourceContentError(
+            MANIFEST_INVALID,
+            detail={"reason": "slide_order_invalid"},
+        )
+    return ordered
+
+
 def _part_classification(name: str) -> tuple[str, bool]:
     lowered = name.lower()
     if _SLIDE_RE.match(name) or _NOTES_RE.match(name):
@@ -688,10 +724,7 @@ def extract_pptx_source_content(
         image_occurrences: Counter[str] = Counter()
         units: list[SourceContentUnit] = []
         totals = {"table_cells": 0, "chart_values": 0, "tables": 0, "charts": 0}
-        slide_parts = sorted(
-            (name for name in report.entries if _SLIDE_RE.match(name)),
-            key=lambda name: int(_SLIDE_RE.match(name).group(1)),  # type: ignore[union-attr]
-        )
+        slide_parts = _ordered_slide_parts(package, report)
         for index, part_name in enumerate(slide_parts):
             source_unit_id = f"source-slide:{index + 1}"
             unit, objects, stats = _extract_unit(

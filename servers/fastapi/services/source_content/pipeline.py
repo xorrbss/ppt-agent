@@ -49,7 +49,10 @@ from services.source_content.materializer import (
     SourceContentSceneMaterializer,
     SourceContentStyleTokens,
 )
-from services.source_content.outline import SourceDocumentOutlineBuilder
+from services.source_content.outline import (
+    SourceDocumentOutlineBuilder,
+    build_authored_text_image_slides,
+)
 
 
 SOURCE_MODE = "source_content_restyle"
@@ -130,6 +133,58 @@ async def admit_source_content_request(
             code = "source_content_manifest_invalid"
         raise _source_error(code, status_code=409) from error
     return manifest
+
+
+def prepare_source_content_authored_reflow(request: Any) -> str:
+    """Convert the admitted source into the existing authored input contract.
+
+    This is a runtime projection. The durable request keeps its immutable
+    manifest pin, and every retry rebuilds the same page-locked outline before
+    entering ordinary authored generation.
+    """
+
+    manifest = getattr(request, "_source_content_manifest", None)
+    outline = getattr(request, "_source_document_outline", None)
+    if manifest is None or outline is None:
+        raise _source_error("source_content_manifest_invalid", status_code=409)
+    try:
+        slides = build_authored_text_image_slides(
+            manifest=manifest,
+            outline=outline,
+        )
+    except ValueError as error:
+        code = str(error)
+        if not code.startswith("source_content_"):
+            code = "source_content_outline_invalid"
+        raise _source_error(code, status_code=409) from error
+    contract_instruction = (
+        "Treat each page's extracted source text and source images as a page-locked "
+        "content outline, then re-author it with the selected template and the "
+        "ordinary authored composition logic. Keep the substantive meaning and key "
+        "facts, but condense or rephrase text when needed for a clean fit. Place every "
+        "source image offered for that slide exactly once. Do not create or reproduce "
+        "tables, charts, or the source slide layout. Do not generate replacement "
+        "illustrations."
+    )
+    existing_instruction = str(getattr(request, "instructions", None) or "").strip()
+    request.instructions = (
+        f"{existing_instruction}\n\n{contract_instruction}"
+        if existing_instruction
+        else contract_instruction
+    )
+    request.slides_markdown = slides
+    request.n_slides = len(slides)
+    request.include_title_slide = False
+    request.include_table_of_contents = False
+    # Source reflow is a visual rewrite, so the first authored render must go
+    # through the bounded visual review.  Admission still rejects a caller-
+    # supplied visionQa flag above; this internal flag is enabled only after
+    # the immutable text/image projection has been admitted.
+    request.vision_qa = True
+    request._source_content_authored_reflow = True
+    # Fall through to the ordinary authored outline/author/render pipeline.
+    request.source_mode = None
+    return str(manifest.reference_snapshot_id)
 
 
 def _style_tokens(style: Any) -> SourceContentStyleTokens:
@@ -662,4 +717,5 @@ __all__ = [
     "admit_source_content_request",
     "build_source_content_staging",
     "generate_source_content_restyle_presentation",
+    "prepare_source_content_authored_reflow",
 ]

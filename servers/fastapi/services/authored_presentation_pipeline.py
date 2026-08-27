@@ -31,6 +31,11 @@ from services.authored_source_images import plan_slide_source_images
 from services.provider_usage_instrumentation import provider_usage_scope, record_local_stage
 from services.source_images.models import SourceImageCandidate
 from utils.asset_directory_utils import get_images_directory
+from utils.authored_illustrations import (
+    enforce_strict_source_image_size_floor,
+    validate_bound_source_images,
+    validate_visible_source_images,
+)
 from utils.llm_calls.author_deck import (
     AuthoredDeckResult,
     author_planned_slide,
@@ -47,7 +52,11 @@ from utils.llm_calls.author_slide import (
     validate_authored_slide_html,
 )
 from utils.renderer_isolation import RendererPolicyError
-from utils.slide_capture import _placeholder_png, render_html_to_png
+from utils.slide_capture import (
+    _placeholder_png,
+    ensure_browser_metrics,
+    render_html_to_png,
+)
 
 
 _AUTHORED_SLIDE_WORKERS = max(
@@ -70,6 +79,9 @@ async def _author_illustrate_render_pipeline(
     # Pictures the caller already owns, offered to the author instead of an
     # invented illustration. Empty means the feature is off for this deck.
     source_images: Sequence[SourceImageCandidate] = (),
+    source_images_locked_to_source_slide: bool = False,
+    require_all_source_images: bool = False,
+    disable_generated_illustrations: bool = False,
     # The deck's already-decided illustration slots. None means no plan ran, and
     # the deck keeps the pre-plan behaviour in which any slide may author one.
     illustration_plan: AuthoredIllustrationPlan | None = None,
@@ -103,10 +115,15 @@ async def _author_illustrate_render_pipeline(
         # Reproducing a source slide-for-slide may not gain a picture the
         # source does not have, whatever the caller uploaded.
         source_images = ()
-    slide_source_images = plan_slide_source_images(plan.contents, source_images)
+    slide_source_images = plan_slide_source_images(
+        plan.contents,
+        source_images,
+        source_slide_locked=source_images_locked_to_source_slide,
+    )
     image_service = (
         ImageGenerationService(get_images_directory())
-        if plan_reference_mode != EXACT_RECONSTRUCTION
+        if not disable_generated_illustrations
+        and plan_reference_mode != EXACT_RECONSTRUCTION
         and getattr(style, "illustration_prompt", None)
         else None
     )
@@ -173,6 +190,9 @@ async def _author_illustrate_render_pipeline(
                         author_kwargs["raise_on_failure"] = True
                     if offered:
                         author_kwargs["source_images"] = tuple(offered.values())
+                        author_kwargs["require_all_source_images"] = (
+                            require_all_source_images
+                        )
                     try:
                         html = await author_planned_slide(
                             plan, index, **author_kwargs
@@ -261,11 +281,31 @@ async def _author_illustrate_render_pipeline(
                 # A deck without a plan lets every slide keep the slot it wrote,
                 # which is exactly how this pipeline behaved before plans existed.
                 illustration_allowed=(
-                    illustration_slots[index] if illustration_slots else True
+                    False
+                    if disable_generated_illustrations
+                    else (illustration_slots[index] if illustration_slots else True)
                 ),
                 generation_job=generation_job,
                 attempt_token=attempt_token,
             )
+            if require_all_source_images:
+                try:
+                    illustrated_html = validate_bound_source_images(
+                        illustrated_html,
+                        offered or {},
+                    )
+                    illustrated_html = enforce_strict_source_image_size_floor(
+                        illustrated_html,
+                        offered or {},
+                    )
+                except ValueError as exc:
+                    raise AuthoredStageError(
+                        slide_index=index,
+                        stage="illustrate",
+                        code="authored_slide_illustrate_failed",
+                        cause=exc,
+                        retryable=False,
+                    ) from exc
 
             png = read_valid_render(checkpoint) if checkpoint else None
             if png is None or checkpoint.render_status != "completed":
@@ -315,6 +355,27 @@ async def _author_illustrate_render_pipeline(
                         attempt_token=attempt_token,
                         png=png,
                     )
+
+            if require_all_source_images:
+                try:
+                    browser_metrics = await ensure_browser_metrics(illustrated_html)
+                    illustrated_html = validate_visible_source_images(
+                        illustrated_html,
+                        offered or {},
+                        browser_metrics,
+                    )
+                except ValueError as exc:
+                    # Re-open authoring on a durable retry. Marking the author
+                    # stage failed makes start_stage invalidate the old
+                    # illustrate/render checkpoints instead of replaying the
+                    # same hidden-image HTML forever.
+                    raise AuthoredStageError(
+                        slide_index=index,
+                        stage="author",
+                        code="authored_slide_author_failed",
+                        cause=exc,
+                        retryable=True,
+                    ) from exc
 
             if generation_job is not None and checkpoint.persist_status != "completed":
                 persist_stage_started = time.monotonic()

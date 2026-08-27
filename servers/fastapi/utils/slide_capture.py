@@ -636,9 +636,25 @@ def _instrument_authored_html(
       const complexEffect = Object.entries(effectValues).some(([name, value]) =>
         value && value !== 'none' && !(name === 'mixBlendMode' && value === 'normal'));
       const explicitZ = Number.parseInt(style.zIndex, 10);
+      let effectiveOpacity = 1;
+      let cssVisible = true;
+      for (let ancestor = node; ancestor; ancestor = ancestor.parentElement) {{
+        const ancestorStyle = getComputedStyle(ancestor);
+        const opacity = Number.parseFloat(ancestorStyle.opacity || '1');
+        if (Number.isFinite(opacity)) effectiveOpacity *= opacity;
+        if (ancestorStyle.display === 'none' ||
+            ancestorStyle.visibility === 'hidden' ||
+            ancestorStyle.visibility === 'collapse') cssVisible = false;
+      }}
+      const intersectionWidth = Math.max(0, Math.min(rect.right, innerWidth) - Math.max(rect.left, 0));
+      const intersectionHeight = Math.max(0, Math.min(rect.bottom, innerHeight) - Math.max(rect.top, 0));
+      const viewportIntersectionRatio = rect.width > 0 && rect.height > 0
+        ? (intersectionWidth * intersectionHeight) / (rect.width * rect.height)
+        : 0;
       const image = node.tagName === 'IMG' ? {{
         src: node.currentSrc || node.getAttribute('src') || '', complete: Boolean(node.complete),
-        naturalWidth: Number(node.naturalWidth || 0), naturalHeight: Number(node.naturalHeight || 0)
+        naturalWidth: Number(node.naturalWidth || 0), naturalHeight: Number(node.naturalHeight || 0),
+        cssVisible, effectiveOpacity, viewportIntersectionRatio
       }} : undefined;
       let fontLoaded = true;
       try {{ fontLoaded = !document.fonts || document.fonts.check(style.font); }} catch (_) {{}}
@@ -1450,7 +1466,7 @@ _render_cache: "OrderedDict[str, bytes]" = OrderedDict()
 _render_inflight: Dict[str, "asyncio.Task[bytes]"] = {}
 OCCLUSION_PROBE_CONTRACT_VERSION = "owned-paint-v3"
 OCCLUSION_SENSOR_VERSION = "owned-paint-v5-inset-retry"
-DOM_METRICS_VERSION = "authored-dom-metrics-v13-inset-retry"
+DOM_METRICS_VERSION = "authored-dom-metrics-v14-source-visibility"
 DOM_METRICS_CACHE_SIZE = max(1, RENDER_CACHE_SIZE)
 _browser_metrics_cache: "OrderedDict[str, Mapping[str, Any]]" = OrderedDict()
 _browser_metrics_inflight: Dict[str, "asyncio.Task[Mapping[str, Any] | None]"] = {}

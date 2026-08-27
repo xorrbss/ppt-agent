@@ -25,10 +25,8 @@ import MasterDesignerDialog from "../../authored-vnext/master-setup/MasterDesign
 import { isAuthoredVnextMasterEnabled } from "@/lib/authored-vnext/master/contracts";
 import type { MasterRevisionEnvelope } from "@/lib/authored-vnext/master/contracts";
 import {
-  loadLastUsedMasterId,
   generationMasterPin,
   masterSelectionFromPublished,
-  saveLastUsedMasterId,
 } from "@/lib/authored-vnext/master/selection-storage";
 import { AuthoredVnextMasterClient } from "@/lib/authored-vnext/master/client";
 import { DashboardApi } from "../../services/api/dashboard";
@@ -120,9 +118,8 @@ const OutlinePage: React.FC<{
 
   useEffect(() => {
     // Upload resolves the current published revision immediately before an
-    // auto-generation click. Preserve that exact pin through outline streaming.
-    // A direct reload has no Redux pin, so recover the preferred identity once
-    // before allowing auto-submit instead of stranding the progress-only route.
+    // auto-generation click. Preserve only that exact document-scoped pin
+    // through outline streaming; never recover a browser-wide prior choice.
     if (!masterEnabled || !resolvedPresentationId) {
       setMasterDefaultResolved(true);
       return;
@@ -168,35 +165,7 @@ const OutlinePage: React.FC<{
         });
       return;
     }
-    if (companyStandard) {
-      setMasterDefaultResolved(true);
-      return;
-    }
-    const lastUsedMasterId = loadLastUsedMasterId();
-    const epoch = ++masterSelectionEpochRef.current;
-    if (!lastUsedMasterId) {
-      setMasterDefaultResolved(true);
-      return;
-    }
-    void masterClient
-      .getPublished(lastUsedMasterId)
-      .then((published) => {
-        if (!published || masterSelectionEpochRef.current !== epoch) return;
-        dispatch(
-          setPptGenUploadState({
-            companyStandard: masterSelectionFromPublished(published),
-          })
-        );
-      })
-      .catch(() => {
-        // A deleted, unpublished, or cross-owner id is not a valid default.
-        // Keep the selection empty and let the catalog explain the next action.
-      })
-      .finally(() => {
-        if (masterSelectionEpochRef.current === epoch) {
-          setMasterDefaultResolved(true);
-        }
-      });
+    setMasterDefaultResolved(true);
   }, [auto, companyStandard, dispatch, masterEnabled, resolvedPresentationId]);
 
   const applyPublishedMaster = useCallback(
@@ -240,7 +209,6 @@ const OutlinePage: React.FC<{
         if (refreshed) dispatch(setPresentationData(refreshed));
       }
       dispatch(setPptGenUploadState({ companyStandard: selection }));
-      saveLastUsedMasterId(selection.masterId);
     },
     [dispatch, initialMasterSettingsOpen, resolvedPresentationId]
   );

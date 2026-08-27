@@ -58,9 +58,13 @@ from services.authored_vnext.generation.pipeline import _seal_deck
 from services.authored_vnext.master.digests import canonical_digest
 from services.authored_vnext.semantic.editable_scene import build_editable_hybrid_scene
 from services.image_generation_service import ImageGenerationService
-from services.authored_source_images import collect_source_image_candidates
+from services.authored_source_images import (
+    collect_source_image_candidates,
+    plan_slide_source_images,
+)
 from services.provider_usage_instrumentation import provider_usage_scope, record_local_stage
 from utils.authored_dom_quality import ensure_authored_qids
+from utils.authored_illustrations import validate_visible_source_images
 from utils.asset_directory_utils import get_images_directory
 from utils.authored_styles import resolve_authored_style, validate_exact_reconstruction_style
 from utils.llm_calls.author_deck import (
@@ -74,11 +78,39 @@ from utils.llm_calls.author_slide import (
     normalize_reference_mode,
     authored_semantic_dual_output_mode,
 )
-from utils.llm_calls.author_vision_qa import revise_authored_deck
+from utils.llm_calls.author_vision_qa import (
+    AuthoredVqaResidualDomIssuesError,
+    revise_authored_deck,
+)
 from utils.slide_capture import _placeholder_png, ensure_browser_metrics, find_chrome
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+async def _checkpoint_source_reflow_vqa_repairs(
+    generation_job: PresentationGenerationJob | None,
+    error: AuthoredVqaResidualDomIssuesError,
+) -> None:
+    """Persist successful local VQA patches before source-reflow fails closed."""
+
+    if generation_job is None or not generation_job.attempt_token:
+        return
+    for index in error.fixed:
+        await _complete_stage_after_external_success(
+            job_id=generation_job.id,
+            slide_index=index,
+            stage="illustrate",
+            attempt_token=generation_job.attempt_token,
+            html=error.htmls[index],
+        )
+        await _complete_stage_after_external_success(
+            job_id=generation_job.id,
+            slide_index=index,
+            stage="render",
+            attempt_token=generation_job.attempt_token,
+            png=error.pngs[index],
+        )
 
 
 async def _persist_master_pinned_editable_scene_deck(
@@ -336,6 +368,12 @@ async def _generate_authored_presentation(
     )
     if source_images:
         job_kwargs["source_images"] = source_images
+    if request._source_content_authored_reflow:
+        job_kwargs.update(
+            source_images_locked_to_source_slide=True,
+            require_all_source_images=True,
+            disable_generated_illustrations=True,
+        )
     pipeline = await _author_illustrate_render_pipeline(
         outline,
         brand,
@@ -359,6 +397,8 @@ async def _generate_authored_presentation(
 
     fixed_count = 0
     vision_elapsed = 0.0
+    contents = [s.content for s in outline.slides]
+    source_reflow = bool(request._source_content_authored_reflow)
     # A replay now produces authored slides, so the caller's own vision-QA choice
     # governs it like any other authored deck.
     if getattr(request, "vision_qa", False):
@@ -370,7 +410,6 @@ async def _generate_authored_presentation(
             attempt_number=(generation_job.attempt_number if generation_job else 0),
         ):
             try:
-                contents = [s.content for s in outline.slides]
                 vision_qa_kwargs = {}
                 if normalize_reference_mode(
                     getattr(style, "reference_mode", STYLE_REFERENCE)
@@ -409,17 +448,22 @@ async def _generate_authored_presentation(
                         vision_qa_kwargs["image_service"] = ImageGenerationService(
                             get_images_directory()
                         )
-                htmls, pngs, fixed = await revise_authored_deck(
+                if source_reflow:
+                    vision_qa_kwargs["fail_on_residual_dom_issues"] = True
+                revised = await revise_authored_deck(
                     htmls,
                     pngs,
                     contents,
                     roles,
                     brand,
                     authored_deck.design_system,
-                    max_cycles=1,
+                    max_cycles=(2 if source_reflow else 1),
                     style=style,
+                    return_details=source_reflow,
+                    local_patch_only=source_reflow,
                     **vision_qa_kwargs,
                 )
+                htmls, pngs, fixed = revised[:3]
                 fixed_count = len(fixed)
                 if generation_job is not None and generation_job.attempt_token:
                     for index in fixed:
@@ -430,11 +474,58 @@ async def _generate_authored_presentation(
                             attempt_token=generation_job.attempt_token,
                             png=pngs[index],
                         )
-            except Exception:
+            except Exception as error:
                 traceback.print_exc()
+                if bool(request._source_content_authored_reflow):
+                    if isinstance(error, AuthoredVqaResidualDomIssuesError):
+                        await _checkpoint_source_reflow_vqa_repairs(
+                            generation_job,
+                            error,
+                        )
+                    raise AuthoredStageError(
+                        slide_index=0,
+                        stage="render",
+                        code="authored_vqa_residual_dom_issues",
+                        cause=error,
+                        retryable=True,
+                    ) from error
             finally:
                 vision_elapsed = time.monotonic() - vision_started
                 await record_local_stage(latency_ms=vision_elapsed * 1000)
+
+    # VQA is allowed to rewrite CSS after the pipeline's first source-image
+    # visibility seal. Re-run the strict occurrence visibility contract over
+    # every final HTML immediately before export so a repair cannot shrink,
+    # hide, clip, or move an admitted source image out of the viewport.
+    if source_reflow:
+        try:
+            final_source_images = plan_slide_source_images(
+                contents,
+                source_images,
+                source_slide_locked=True,
+            )
+            if final_source_images is None:
+                raise ValueError("authored_source_image_plan_unavailable")
+            final_metrics = await asyncio.gather(
+                *(ensure_browser_metrics(html) for html in htmls)
+            )
+            for index, (html, offered, metrics) in enumerate(
+                zip(htmls, final_source_images, final_metrics, strict=True)
+            ):
+                try:
+                    validate_visible_source_images(html, offered, metrics)
+                except ValueError as error:
+                    raise ValueError(
+                        f"source_slide_{index + 1}:{error}"
+                    ) from error
+        except Exception as error:
+            raise AuthoredStageError(
+                slide_index=0,
+                stage="render",
+                code="authored_source_image_visibility_mismatch",
+                cause=error,
+                retryable=True,
+            ) from error
 
     # Observability: one structured summary (counts/timing/model only ??no secrets).
     placeholder = _placeholder_png()

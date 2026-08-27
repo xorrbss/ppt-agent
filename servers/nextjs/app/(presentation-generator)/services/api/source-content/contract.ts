@@ -49,26 +49,26 @@ export type SourceContentAnalysisResponseV1 = {
 };
 
 export type SourceContentPolicy = {
-  text: "verbatim";
-  preserveAllTableCells: true;
-  preserveAllChartValues: true;
+  text: "outline";
+  preserveAllTableCells: false;
+  preserveAllChartValues: false;
   preserveAllImageOccurrences: true;
   preserveSourceOrder: true;
   preserveSourceSlideCount: true;
   allowSlideExpansion: false;
-  allowSummarization: false;
+  allowSummarization: true;
   overflowPolicy: "same_page_recompose_or_fail";
 };
 
 export const SOURCE_CONTENT_POLICY: SourceContentPolicy = {
-  text: "verbatim",
-  preserveAllTableCells: true,
-  preserveAllChartValues: true,
+  text: "outline",
+  preserveAllTableCells: false,
+  preserveAllChartValues: false,
   preserveAllImageOccurrences: true,
   preserveSourceOrder: true,
   preserveSourceSlideCount: true,
   allowSlideExpansion: false,
-  allowSummarization: false,
+  allowSummarization: true,
   overflowPolicy: "same_page_recompose_or_fail",
 };
 

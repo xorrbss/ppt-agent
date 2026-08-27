@@ -181,6 +181,89 @@ def test_present_empty_collector_payload_is_available_for_a_truly_empty_slide():
     assert not report.needs_attention
 
 
+def test_hidden_tiny_and_parent_clipped_images_are_deterministic_defects():
+    html = """<html><body>
+    <div data-qid="clip-parent">
+      <img data-qid="hidden-img"><img data-qid="tiny-img">
+      <img data-qid="faded-img"><img data-qid="outside-img">
+    </div></body></html>"""
+    common_image = {
+        "tag": "img",
+        "clientWidth": 100,
+        "clientHeight": 100,
+        "scrollWidth": 100,
+        "scrollHeight": 100,
+        "image": {
+            "src": "data:image/png;base64,AA==",
+            "complete": True,
+            "naturalWidth": 100,
+            "naturalHeight": 100,
+            "cssVisible": True,
+            "effectiveOpacity": 1,
+            "viewportIntersectionRatio": 1,
+        },
+        "computed_style": {
+            "display": "block",
+            "visibility": "visible",
+            "opacity": "1",
+            "position": "absolute",
+        },
+    }
+    metrics = {
+        "width": 1280,
+        "height": 720,
+        "elements": [
+            {
+                "qid": "clip-parent",
+                "tag": "div",
+                "bbox": {"x": 0, "y": 0, "width": 1280, "height": 720},
+                "clientWidth": 1280,
+                "clientHeight": 720,
+                "scrollWidth": 1280,
+                "scrollHeight": 720,
+                "computed_style": {"overflow": "hidden"},
+            },
+            common_image
+            | {
+                "qid": "hidden-img",
+                "bbox": {"x": 0, "y": 0, "width": 0, "height": 0},
+                "image": common_image["image"]
+                | {"cssVisible": False, "viewportIntersectionRatio": 0},
+                "computed_style": common_image["computed_style"]
+                | {"display": "none"},
+            },
+            common_image
+            | {
+                "qid": "tiny-img",
+                "bbox": {"x": 0, "y": 0, "width": 1, "height": 1},
+            },
+            common_image
+            | {
+                "qid": "faded-img",
+                "bbox": {"x": 20, "y": 20, "width": 100, "height": 100},
+                "image": common_image["image"] | {"effectiveOpacity": 0.001},
+                "computed_style": common_image["computed_style"]
+                | {"opacity": "0.001"},
+            },
+            common_image
+            | {
+                "qid": "outside-img",
+                "parent_qid": "clip-parent",
+                "bbox": {"x": -9999, "y": 20, "width": 100, "height": 100},
+                "image": common_image["image"] | {"viewportIntersectionRatio": 0},
+            },
+        ],
+    }
+
+    report = inspect_authored_dom(html, metrics)
+    issue_keys = {(issue.category, issue.qids) for issue in report.issues}
+
+    assert ("image", ("hidden-img",)) in issue_keys
+    assert ("image", ("tiny-img",)) in issue_keys
+    assert ("image", ("faded-img",)) in issue_keys
+    assert ("off_canvas", ("outside-img",)) in issue_keys
+
+
 def test_non_editable_qid_telemetry_does_not_hide_complete_editable_coverage():
     html = (
         '<html><body><p data-qid="body">Covered</p>'
@@ -289,7 +372,176 @@ def test_visible_static_text_scroll_overhang_is_not_treated_as_clipping():
     )
 
     assert not any(issue.category == "overflow" for issue in visible_flow.issues)
-    assert any(issue.category == "overflow" for issue in positioned_box.issues)
+    assert not any(issue.category == "overflow" for issue in positioned_box.issues)
+
+
+def test_source_reflow_structural_fp_filter_keeps_real_layout_failures():
+    html = """<html><body>
+      <div data-qid="clip-parent"><div data-qid="decorative-bleed"></div></div>
+      <h1 data-qid="header">Title</h1>
+      <p data-qid="s3-lead">Lead</p><div data-qid="s3-cover">Cover</div>
+      <p data-qid="s12-detail">Detail</p><div data-qid="s12-band"></div>
+      <div data-qid="s16-kicker">Kicker</div><div data-qid="s16-panel"></div>
+      <img data-qid="caption-image"><div data-qid="caption-label">Caption</div>
+      <div data-qid="s20-ribbon">Ribbon</div>
+      <div data-qid="s25-panel"></div>
+      <strong data-qid="s40-copy">Owner</strong><div data-qid="s40-cover"></div>
+    </body></html>"""
+
+    def metric(qid, x, y, width, height, **extra):
+        return {
+            "qid": qid,
+            "tag": extra.pop("tag", "div"),
+            "bbox": {"x": x, "y": y, "width": width, "height": height},
+            "clientWidth": extra.pop("clientWidth", width),
+            "clientHeight": extra.pop("clientHeight", height),
+            "scrollWidth": extra.pop("scrollWidth", width),
+            "scrollHeight": extra.pop("scrollHeight", height),
+            **extra,
+        }
+
+    probe = {
+        "has_owned_paint": True,
+        "occlusion_probe_version": "owned-paint-v3",
+        "occlusion_unbound_count": 0,
+    }
+    metrics = {
+        "width": 1280,
+        "height": 720,
+        "elements": [
+            metric(
+                "clip-parent",
+                838,
+                0,
+                442,
+                720,
+                computed_style={"position": "absolute", "overflow": "hidden"},
+            ),
+            metric(
+                "decorative-bleed",
+                928,
+                -126,
+                470,
+                470,
+                parent_qid="clip-parent",
+                has_owned_text=False,
+                has_owned_paint=True,
+                computed_style={"position": "absolute"},
+            ),
+            metric(
+                "header",
+                64,
+                64,
+                745,
+                43,
+                tag="h1",
+                rendered_text="Title",
+                has_owned_text=True,
+                text_fragments=[{"x": 64, "y": 61, "width": 200, "height": 46}],
+                clientHeight=43,
+                scrollHeight=46,
+                computed_style={"position": "absolute", "overflow": "visible"},
+            ),
+            metric(
+                "s3-lead",
+                72,
+                87,
+                680,
+                60,
+                tag="p",
+                rendered_text="Lead",
+                has_owned_text=True,
+                text_fragments=[{"x": 72, "y": 86, "width": 638, "height": 32}],
+                occluded_fraction=0.286,
+                continuous_occluded_fraction=0.278,
+                occlusion_occluder_qids=["s3-cover"],
+                **probe,
+            ),
+            metric("s3-cover", 72, 61, 680, 40, rendered_text="Cover", has_owned_text=True, text_fragments=[{"x": 72, "y": 56, "width": 590, "height": 49}], **probe),
+            metric(
+                "s12-detail",
+                143,
+                530,
+                153,
+                42,
+                tag="p",
+                rendered_text="Detail",
+                has_owned_text=True,
+                text_fragments=[{"x": 143, "y": 530, "width": 142, "height": 21}, {"x": 143, "y": 551, "width": 150, "height": 21}],
+                occluded_fraction=0.648,
+                continuous_occluded_fraction=0.62,
+                occlusion_occluder_qids=["s12-band"],
+                **probe,
+            ),
+            metric("s12-band", 72, 547, 492, 96, has_owned_text=False, **probe),
+            metric(
+                "s16-kicker",
+                916,
+                153,
+                300,
+                76,
+                rendered_text="Kicker",
+                has_owned_text=True,
+                text_fragments=[{"x": 936, "y": 166, "width": 131, "height": 25}, {"x": 936, "y": 191, "width": 155, "height": 25}],
+                occluded_fraction=0.196,
+                continuous_occluded_fraction=0.192,
+                occlusion_occluder_qids=["s16-panel"],
+                **probe,
+            ),
+            metric("s16-panel", 940, 212, 300, 150, has_owned_text=False, **probe),
+            metric(
+                "caption-image",
+                917,
+                594,
+                298,
+                115,
+                tag="img",
+                has_owned_text=False,
+                occluded_fraction=0.163,
+                continuous_occluded_fraction=0.162,
+                occlusion_occluder_qids=["caption-label"],
+                **probe,
+            ),
+            metric("caption-label", 927, 673, 199, 27, rendered_text="Caption", has_owned_text=True, intentional=True, **probe),
+            metric("s20-ribbon", 64, 700, 1152, 42, rendered_text="Ribbon", has_owned_text=True, has_owned_paint=True),
+            metric("s25-panel", 752, 653.67, 464, 141, has_owned_text=False, has_owned_paint=True),
+            metric(
+                "s40-copy",
+                83,
+                605,
+                360,
+                24,
+                tag="strong",
+                rendered_text="Owner",
+                has_owned_text=True,
+                text_fragments=[{"x": 83, "y": 605, "width": 360, "height": 24}],
+                occluded_fraction=0.88,
+                continuous_occluded_fraction=0.84,
+                occlusion_occluder_qids=["s40-cover"],
+                **probe,
+            ),
+            metric("s40-cover", 64, 550, 330, 89, has_owned_text=False, **probe),
+        ],
+    }
+
+    report = inspect_authored_dom(
+        html,
+        metrics,
+        reference_mode=STYLE_REFERENCE,
+        strict_structural_off_canvas=True,
+    )
+    issues = {(issue.category, issue.qids) for issue in report.issues}
+
+    assert ("off_canvas", ("decorative-bleed",)) not in issues
+    assert ("overflow", ("header",)) not in issues
+    assert ("overlap", ("s16-kicker",)) not in issues
+    assert ("overlap", ("s16-kicker", "s16-panel")) not in issues
+    assert ("overlap", ("caption-image",)) not in issues
+    assert ("overlap", ("s3-lead",)) in issues
+    assert ("overlap", ("s12-detail",)) in issues
+    assert ("off_canvas", ("s20-ribbon",)) in issues
+    assert ("off_canvas", ("s25-panel",)) in issues
+    assert ("overlap", ("s40-copy",)) in issues
 
 
 def test_reference_mode_keeps_explicitly_intentional_geometry_out_of_local_defects():
@@ -585,6 +837,37 @@ def test_off_canvas_text_is_attributed_to_the_escaped_layout_container():
     assert not any(
         issue.category == "off_canvas" and issue.qids == ("copy",)
         for issue in report.issues
+    )
+
+
+def test_structural_paint_off_canvas_is_source_reflow_opt_in_only():
+    html = '<html><body><div data-qid="panel"></div></body></html>'
+    metrics = {
+        "width": 1280,
+        "height": 720,
+        "elements": [
+            {
+                "qid": "panel",
+                "tag": "div",
+                "bbox": {"x": 72, "y": 650, "width": 1136, "height": 76},
+                "has_owned_text": False,
+                "has_owned_paint": True,
+            }
+        ],
+    }
+
+    normal = inspect_authored_dom(html, metrics, reference_mode=STYLE_REFERENCE)
+    strict = inspect_authored_dom(
+        html,
+        metrics,
+        reference_mode=STYLE_REFERENCE,
+        strict_structural_off_canvas=True,
+    )
+
+    assert not any(issue.category == "off_canvas" for issue in normal.issues)
+    assert any(
+        issue.category == "off_canvas" and issue.qids == ("panel",)
+        for issue in strict.issues
     )
 
 

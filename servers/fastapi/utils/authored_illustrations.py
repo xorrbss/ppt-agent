@@ -24,9 +24,12 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import io
 import logging
 import os
+import re
+from collections import Counter
 from collections.abc import Mapping as MappingABC
 from pathlib import Path
 from typing import (
@@ -61,6 +64,33 @@ from utils.authored_image_slots import (
 from utils.renderer_isolation import MAX_ASSET_BYTES, MAX_HTML_BYTES
 
 LOGGER = logging.getLogger(__name__)
+
+_FINAL_IMG_TAG = re.compile(r"<img\b[^>]*>", re.IGNORECASE)
+_FINAL_IMG_SRC = re.compile(r"\bsrc\s*=\s*(['\"])(.*?)\1", re.IGNORECASE)
+_FINAL_IMG_QID = re.compile(
+    r"\bdata-qid\s*=\s*(['\"])([A-Za-z0-9][A-Za-z0-9._:-]*)\1",
+    re.IGNORECASE,
+)
+_FINAL_DATA_IMAGE = re.compile(
+    r"^data:(image/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$",
+    re.IGNORECASE,
+)
+_STRICT_SOURCE_MIN_EDGE_PX = 24.0
+_STRICT_SOURCE_MIN_AREA_PX = 24.0 * 24.0
+_STRICT_SOURCE_EVIDENCE_INTRINSIC_EDGE_PX = 640.0
+_STRICT_SOURCE_EVIDENCE_RENDERED_MIN_EDGE_PX = 64.0
+_STRICT_SOURCE_EVIDENCE_RENDERED_MAX_EDGE_PX = 144.0
+_STRICT_SOURCE_MIN_VIEWPORT_RATIO = 0.75
+_STRICT_SOURCE_MIN_EFFECTIVE_OPACITY = 0.2
+_STRICT_SOURCE_MAX_OCCLUDED_FRACTION = 0.8
+_STRICT_SOURCE_MAX_ASPECT_DISTORTION = 4.0
+_STRICT_SOURCE_MULTI_IMAGE_MIN_COUNT = 5
+_STRICT_SOURCE_MULTI_IMAGE_MAX_COUNT = 8
+_STRICT_SOURCE_FLOOR_STYLE_ID = "authored-source-visibility-floor"
+_STRICT_SOURCE_FLOOR_STYLE = re.compile(
+    rf'<style\b[^>]*\bid=["\']{_STRICT_SOURCE_FLOOR_STYLE_ID}["\'][^>]*>.*?</style\s*>',
+    re.IGNORECASE | re.DOTALL,
+)
 
 # The label policy moved to a sibling module, but this one stays the pipeline's
 # entry point: the names its tests import are bound here to that one definition.
@@ -315,6 +345,253 @@ def reserve_source_images_for_slide(
             continue
         offered[slot_id] = candidate
     return offered
+
+
+def validate_bound_source_images(
+    html: str,
+    candidates: Mapping[str, SourceImageCandidate],
+) -> str:
+    """Fail unless finalized HTML contains every expected source occurrence once."""
+
+    expected = Counter(
+        candidate.digest.removeprefix("sha256:").lower()
+        for candidate in candidates.values()
+    )
+    actual: Counter[str] = Counter()
+    for tag_match in _FINAL_IMG_TAG.finditer(html or ""):
+        src_match = _FINAL_IMG_SRC.search(tag_match.group(0))
+        if src_match is None:
+            continue
+        data_match = _FINAL_DATA_IMAGE.fullmatch(src_match.group(2).strip())
+        if data_match is None:
+            continue
+        try:
+            payload = base64.b64decode(data_match.group(2), validate=True)
+        except (ValueError, TypeError) as error:
+            raise ValueError("authored_source_image_binding_invalid") from error
+        actual[hashlib.sha256(payload).hexdigest()] += 1
+    if actual != expected:
+        raise ValueError(
+            "authored_source_image_binding_mismatch:"
+            f"expected={sum(expected.values())};actual={sum(actual.values())}"
+        )
+    return html
+
+
+def enforce_strict_source_image_size_floor(
+    html: str,
+    candidates: Mapping[str, SourceImageCandidate],
+) -> str:
+    """Give large evidence a deterministic CSS floor in dense source galleries.
+
+    The authored model still owns the layout. This only closes the small numeric
+    gap that repeatedly occurred on 5-8 image source-reflow slides (for example,
+    113x71 or 201x58 screenshot boxes despite a 144x64 prompt requirement).
+    Ordinary authored decks never call this helper, and icons keep their authored
+    size because the 24px icon floor is already enforced by the final DOM seal.
+    """
+
+    if not (
+        _STRICT_SOURCE_MULTI_IMAGE_MIN_COUNT
+        <= len(candidates)
+        <= _STRICT_SOURCE_MULTI_IMAGE_MAX_COUNT
+    ):
+        return html
+    validate_bound_source_images(html, candidates)
+    dimensions = {
+        candidate.digest.removeprefix("sha256:").lower(): (
+            float(candidate.width),
+            float(candidate.height),
+        )
+        for candidate in candidates.values()
+    }
+    rules: list[str] = []
+    for tag_match in _FINAL_IMG_TAG.finditer(html or ""):
+        tag = tag_match.group(0)
+        src_match = _FINAL_IMG_SRC.search(tag)
+        qid_match = _FINAL_IMG_QID.search(tag)
+        if src_match is None or qid_match is None:
+            continue
+        digest = _data_image_digest(src_match.group(2))
+        if digest is None or digest not in dimensions:
+            continue
+        source_width, source_height = dimensions[digest]
+        if (
+            max(source_width, source_height)
+            < _STRICT_SOURCE_EVIDENCE_INTRINSIC_EDGE_PX
+        ):
+            continue
+        if source_width >= source_height:
+            min_width = _STRICT_SOURCE_EVIDENCE_RENDERED_MAX_EDGE_PX
+            min_height = _STRICT_SOURCE_EVIDENCE_RENDERED_MIN_EDGE_PX
+        else:
+            min_width = _STRICT_SOURCE_EVIDENCE_RENDERED_MIN_EDGE_PX
+            min_height = _STRICT_SOURCE_EVIDENCE_RENDERED_MAX_EDGE_PX
+        qid = qid_match.group(2)
+        rules.append(
+            f'img[data-qid="{qid}"]'
+            f'{{min-width:{min_width:g}px;min-height:{min_height:g}px;'
+            "object-fit:contain;}"
+        )
+    if not rules:
+        return html
+    # Replace our own prior seal before reinserting it so render/checkpoint
+    # retries are idempotent and provider-authored CSS cannot spoof the floor.
+    source = _STRICT_SOURCE_FLOOR_STYLE.sub("", html)
+    style = (
+        f'<style id="{_STRICT_SOURCE_FLOOR_STYLE_ID}">'
+        + "".join(rules)
+        + "</style>"
+    )
+    sealed, count = re.subn(
+        r"</head\s*>",
+        lambda match: style + match.group(0),
+        source,
+        count=1,
+        flags=re.IGNORECASE,
+    )
+    if count != 1:
+        raise ValueError("authored_source_image_visibility_style_injection_failed")
+    return sealed
+
+
+def _data_image_digest(value: object) -> str | None:
+    data_match = _FINAL_DATA_IMAGE.fullmatch(str(value or "").strip())
+    if data_match is None:
+        return None
+    try:
+        payload = base64.b64decode(data_match.group(2), validate=True)
+    except (ValueError, TypeError):
+        return None
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _metric_number(value: object, default: float = 0.0) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    return number if number == number else default
+
+
+def validate_visible_source_images(
+    html: str,
+    candidates: Mapping[str, SourceImageCandidate],
+    browser_metrics: Mapping[str, object] | None,
+) -> str:
+    """Seal that every strict source occurrence is materially visible on-slide."""
+
+    validate_bound_source_images(html, candidates)
+    if not isinstance(browser_metrics, Mapping):
+        raise ValueError("authored_source_image_visibility_telemetry_missing")
+    raw_elements = browser_metrics.get("elements")
+    if not isinstance(raw_elements, Sequence) or isinstance(raw_elements, (str, bytes)):
+        raise ValueError("authored_source_image_visibility_telemetry_missing")
+    viewport_width = _metric_number(
+        browser_metrics.get("width", browser_metrics.get("viewportWidth")),
+        1280.0,
+    )
+    viewport_height = _metric_number(
+        browser_metrics.get("height", browser_metrics.get("viewportHeight")),
+        720.0,
+    )
+    expected = Counter(
+        candidate.digest.removeprefix("sha256:").lower()
+        for candidate in candidates.values()
+    )
+    dimensions = {
+        candidate.digest.removeprefix("sha256:").lower(): (
+            float(candidate.width),
+            float(candidate.height),
+        )
+        for candidate in candidates.values()
+    }
+    visible: Counter[str] = Counter()
+    for raw in raw_elements:
+        if not isinstance(raw, Mapping) or str(raw.get("tag", "")).lower() != "img":
+            continue
+        image = raw.get("image")
+        if not isinstance(image, Mapping):
+            continue
+        digest = _data_image_digest(image.get("src"))
+        if digest is None or digest not in expected:
+            continue
+        style = raw.get("computed_style", raw.get("computedStyle", {}))
+        style = style if isinstance(style, Mapping) else {}
+        bbox = raw.get("bbox", raw.get("rect", {}))
+        bbox = bbox if isinstance(bbox, Mapping) else {}
+        x = _metric_number(bbox.get("x"))
+        y = _metric_number(bbox.get("y"))
+        width = _metric_number(bbox.get("width"))
+        height = _metric_number(bbox.get("height"))
+        intersection_width = max(
+            0.0,
+            min(x + width, viewport_width) - max(x, 0.0),
+        )
+        intersection_height = max(
+            0.0,
+            min(y + height, viewport_height) - max(y, 0.0),
+        )
+        computed_intersection = (
+            intersection_width * intersection_height / (width * height)
+            if width > 0 and height > 0
+            else 0.0
+        )
+        intersection_ratio = _metric_number(
+            image.get("viewportIntersectionRatio"),
+            computed_intersection,
+        )
+        effective_opacity = _metric_number(
+            image.get("effectiveOpacity"),
+            _metric_number(style.get("opacity"), 1.0),
+        )
+        display = str(style.get("display", "")).strip().lower()
+        visibility = str(style.get("visibility", "visible")).strip().lower()
+        css_visible = image.get("cssVisible") is not False
+        loaded = (
+            image.get("complete") is not False
+            and _metric_number(image.get("naturalWidth")) > 0
+            and _metric_number(image.get("naturalHeight")) > 0
+        )
+        occluded = _metric_number(raw.get("occluded_fraction"), 0.0)
+        source_width, source_height = dimensions[digest]
+        source_ratio = source_width / source_height if source_height > 0 else 0.0
+        rendered_ratio = width / height if height > 0 else 0.0
+        aspect_distortion = (
+            max(rendered_ratio / source_ratio, source_ratio / rendered_ratio)
+            if source_ratio > 0 and rendered_ratio > 0
+            else float("inf")
+        )
+        large_evidence = (
+            max(source_width, source_height)
+            >= _STRICT_SOURCE_EVIDENCE_INTRINSIC_EDGE_PX
+        )
+        materially_sized = (
+            min(width, height) >= _STRICT_SOURCE_EVIDENCE_RENDERED_MIN_EDGE_PX
+            and max(width, height) >= _STRICT_SOURCE_EVIDENCE_RENDERED_MAX_EDGE_PX
+            if large_evidence
+            else min(width, height) >= _STRICT_SOURCE_MIN_EDGE_PX
+        )
+        materially_visible = (
+            css_visible
+            and display != "none"
+            and visibility not in {"hidden", "collapse"}
+            and effective_opacity >= _STRICT_SOURCE_MIN_EFFECTIVE_OPACITY
+            and materially_sized
+            and width * height >= _STRICT_SOURCE_MIN_AREA_PX
+            and intersection_ratio >= _STRICT_SOURCE_MIN_VIEWPORT_RATIO
+            and occluded <= _STRICT_SOURCE_MAX_OCCLUDED_FRACTION
+            and aspect_distortion <= _STRICT_SOURCE_MAX_ASPECT_DISTORTION
+            and loaded
+        )
+        if materially_visible:
+            visible[digest] += 1
+    if visible != expected:
+        raise ValueError(
+            "authored_source_image_visibility_mismatch:"
+            f"expected={sum(expected.values())};visible={sum(visible.values())}"
+        )
+    return html
 
 
 def _place_source_image(

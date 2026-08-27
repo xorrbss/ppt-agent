@@ -39,12 +39,19 @@ from utils.llm_calls.author_slide import (
     validate_page_number_mode,
 )
 from utils.authored_styles import reference_images_for_role
+from utils.renderer_worker_policy import RendererPolicyError
 
 logger = logging.getLogger(__name__)
 
 _DEFAULT_AUTHOR_ATTEMPTS = 2
-_SEMANTIC_AUTHOR_ATTEMPTS = 3
+_LOCAL_VALIDATION_AUTHOR_ATTEMPTS = 3
 _TRANSIENT_AUTHOR_ATTEMPTS = 4
+_MAX_MIXED_AUTHOR_ATTEMPTS = (
+    (_DEFAULT_AUTHOR_ATTEMPTS - 1)
+    + (_LOCAL_VALIDATION_AUTHOR_ATTEMPTS - 1)
+    + (_TRANSIENT_AUTHOR_ATTEMPTS - 1)
+    + 1
+)
 _TRANSIENT_RETRY_BASE_SECONDS = 1.5
 _TRANSIENT_RETRY_MAX_SECONDS = 8.0
 _TRANSIENT_ERROR_HINTS = (
@@ -417,36 +424,68 @@ def _chapter_breadcrumb(contract: AuthoredHeaderContract | None) -> bool:
     return contract is not None and contract.eyebrow.form == "chapterBreadcrumb"
 
 
-def _author_retry_correction(
+@dataclass(frozen=True)
+class _AuthorValidationCorrection:
+    category: str
+    hint: str
+
+
+def _classify_author_validation_error(
     error: object,
     *,
     source_image_ids: Sequence[str] = (),
-) -> str:
-    """Return bounded corrective guidance for a known local validation failure."""
+) -> _AuthorValidationCorrection | None:
+    """Classify fail-closed local rejections without weakening their policies."""
 
     message = str(error)
-    if "authored_semantic_qid_missing" in message:
-        missing_tag = message.partition(":")[2].strip()
+    if "authored_source_image_slots_missing" in message:
+        return _AuthorValidationCorrection(
+            "source_image_slots_missing",
+            "The previous candidate omitted mandatory source images. Repair the "
+            "slide and place every offered source slot exactly once using "
+            "<img data-source-slot-id=\"SLOT_ID\" data-qid=\"unique.image.qid\">. "
+            "Do not replace a source slot with a generated illustration.",
+        )
+    qid_match = re.search(r"\bauthored_semantic_qid_([a-z0-9_]+)(?::([^\s]+))?", message)
+    if qid_match is not None and qid_match.group(1) == "missing":
+        missing_tag = (qid_match.group(2) or "").strip()
         missing_detail = (
             f" The first rejected element was <{missing_tag}>."
             if missing_tag
             else ""
         )
-        return (
-            "The previous candidate omitted edit identities. Rebuild the whole HTML document. "
+        return _AuthorValidationCorrection(
+            "semantic_qid_missing",
+            "The previous candidate omitted edit identities. Repair the supplied document. "
             "Every rendered HTML element except html/head/body/meta/title/style and SVG primitive "
             "internals must have one explicit unique data-qid. This includes section, main, div, "
             "header, footer, h1-h6, p, span, ul, ol, li, table, thead, tbody, tr, th and td. "
-            "An img intended for native crop editing must also have a unique data-qid."
-            + missing_detail
+            "An img intended for native crop editing must also have a unique data-qid. Preserve "
+            "the existing structure and content; do not omit elements to avoid declaring QIDs."
+            + missing_detail,
         )
-    if "authored_semantic_qid_invalid" in message:
-        return (
-            "Replace every invalid data-qid with a unique stable token containing only letters, "
-            "numbers, dot, underscore, colon or hyphen, starting with a letter or number."
+    if qid_match is not None and qid_match.group(1) == "invalid":
+        return _AuthorValidationCorrection(
+            "semantic_qid_invalid",
+            "Replace only invalid data-qid declarations with explicit unique stable tokens "
+            "containing letters, numbers, dot, underscore, colon or hyphen and starting with a "
+            "letter or number. Preserve all valid QIDs, elements, text and layout.",
         )
-    if "authored_semantic_qid_duplicate" in message:
-        return "Rebuild the document so no two elements reuse the same data-qid."
+    if qid_match is not None and qid_match.group(1) == "duplicate":
+        return _AuthorValidationCorrection(
+            "semantic_qid_duplicate",
+            "Repair duplicate data-qid declarations so every rendered element has its own "
+            "explicit unique stable QID. Preserve the first valid owner and change only duplicate "
+            "declarations; do not remove elements or rely on the server to invent QIDs.",
+        )
+    if qid_match is not None:
+        return _AuthorValidationCorrection(
+            "semantic_qid_contract",
+            f"Repair the explicit data-qid declarations to satisfy {qid_match.group(0)}. Preserve "
+            "the supplied document's content, structure and valid identities; every edit target "
+            "must declare a valid unique stable QID and the server will not generate one.",
+        )
+
     if "images must be base64 raster data URLs" in message:
         offered_id = (
             " ".join(str(source_image_ids[0]).split()).replace('"', "'")
@@ -459,17 +498,97 @@ def _author_retry_correction(
             if offered_id
             else "Remove every img element because no canonical source image was offered."
         )
-        return (
+        return _AuthorValidationCorrection(
+            "renderer_image_source",
             "The previous candidate emitted an untrusted ordinary image src. "
             + source_rule
             + " Never emit a filename, URL, relative path or invented data URL in src; the trusted "
-            "source-image stage supplies verified bytes after authoring."
+            "source-image stage supplies verified bytes after authoring.",
         )
     if "HTML attribute is not allowed: data-native-candidate" in message:
-        return (
+        return _AuthorValidationCorrection(
+            "renderer_native_candidate_attribute",
             "Remove every data-native-candidate attribute. Native-candidate is descriptive text; "
-            "data-qid is the only edit identity attribute."
+            "data-qid is the only edit identity attribute.",
         )
+
+    if isinstance(error, RendererPolicyError):
+        property_match = re.fullmatch(
+            r"CSS property is not allowed:\s*([a-z0-9_-]+)\s*:\s*(.*)",
+            message,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if property_match is not None:
+            property_name = property_match.group(1).lower()
+            rejected_value = " ".join(property_match.group(2).split())
+            declaration = f"{property_name}: {rejected_value}".rstrip()
+            visible_content_rule = (
+                " The CSS content property and pseudo-element-generated content are forbidden; "
+                "represent visible text or decoration with a real span or div carrying its own "
+                "data-qid."
+                if property_name == "content"
+                else " If that declaration or a ::before/::after rule creates visible content or "
+                "decoration, represent it with a real span or div carrying its own data-qid."
+            )
+            return _AuthorValidationCorrection(
+                "renderer_css_property",
+                f"Remove the disallowed CSS declaration `{declaration}` wherever it occurs. "
+                "Preserve the visual intent using only properties already accepted by the renderer; "
+                "do not request or assume an allowlist change."
+                + visible_content_rule,
+            )
+        if re.fullmatch(
+            r"CSS declaration (?:is )?malformed", message, flags=re.IGNORECASE
+        ):
+            return _AuthorValidationCorrection(
+                "renderer_css_declaration",
+                "Repair malformed CSS declarations in every style block and inline style. Each "
+                "declaration must have exactly one property/value separator, a non-empty allowed "
+                "property name and a valid value; remove stray declaration fragments and keep rule "
+                "braces balanced. Preserve all unrelated valid CSS and HTML.",
+            )
+        element_match = re.fullmatch(
+            r"HTML element is not allowed:\s*([a-z0-9:_-]+)",
+            message,
+            flags=re.IGNORECASE,
+        )
+        if element_match is not None:
+            tag = element_match.group(1).lower()
+            replacement = (
+                "Replace each <code> element with a styled <span> for inline code or a <div> for "
+                "a block, preserving its text and giving the replacement its own data-qid."
+                if tag == "code"
+                else f"Replace each <{tag}> with an allowed semantic equivalent: span for inline "
+                "content or div for a block. Preserve its visible content and give the replacement "
+                "its own data-qid."
+            )
+            return _AuthorValidationCorrection(
+                "renderer_html_element",
+                replacement + " Do not relax or bypass the renderer element allowlist.",
+            )
+        return _AuthorValidationCorrection(
+            "renderer_policy",
+            "Repair the supplied HTML so it satisfies the reported renderer policy rejection. "
+            "Preserve compliant content and layout, use only the existing HTML/CSS allowlists and "
+            "do not encode the rejected construct another way.",
+        )
+
+    return None
+
+
+def _author_retry_correction(
+    error: object,
+    *,
+    source_image_ids: Sequence[str] = (),
+) -> str:
+    """Return corrective guidance while preserving the legacy string interface."""
+
+    classified = _classify_author_validation_error(
+        error,
+        source_image_ids=source_image_ids,
+    )
+    if classified is not None:
+        return classified.hint
     return (
         "The previous candidate failed local admission. Return a complete self-contained HTML "
         "document that follows every renderer, image-slot and data-qid rule exactly."
@@ -655,13 +774,14 @@ async def _author_one_resilient(
     # Pictures the user already owns that this slide may place. Empty is the
     # pre-feature request, byte for byte.
     source_images: Sequence[SourceImageCandidate] = (),
+    require_all_source_images: bool = False,
 ) -> str:
     """Author one slide with bounded retries and a style-mode branded fallback.
 
     Ordinary invalid/permanent failures retain the original two-attempt behavior.
-    Provider overloads and broken streamed responses get two additional attempts with
-    exponential backoff so a brief upstream incident does not invalidate the whole deck.
-    Exact reconstruction instead fails closed rather than replacing the source slide.
+    Local admission/semantic failures get at most three correction attempts, independently
+    from the provider's four-attempt transient budget. Mixed failure classes have an explicit
+    seven-call ceiling. Exact reconstruction fails closed rather than replacing the source slide.
 
     A slide that renders but breaks the deck's header contract is retried like any
     other failure. If the retries run out, the best rendered attempt is still
@@ -672,13 +792,19 @@ async def _author_one_resilient(
         raise ValueError(
             "Exact reconstruction requires exactly one reference image per slide"
         )
+    source_image_ids = tuple(candidate.asset_id for candidate in source_images)
     last_error: object = "invalid HTML"
-    attempt_limit = _DEFAULT_AUTHOR_ATTEMPTS
     attempts_made = 0
+    local_rejections = 0
+    transient_failures = 0
+    permanent_failures = 0
     header_reject: str | None = None
     correction_hint: str | None = None
-    for attempt in range(_TRANSIENT_AUTHOR_ATTEMPTS):
-        attempts_made = attempt + 1
+    rejected_html: str | None = None
+    while attempts_made < _MAX_MIXED_AUTHOR_ATTEMPTS:
+        attempts_made += 1
+        failure_kind = "permanent"
+        local_correction: _AuthorValidationCorrection | None = None
         try:
             if reference_images:
                 kwargs = {"reference_images": reference_images}
@@ -686,8 +812,11 @@ async def _author_one_resilient(
                     kwargs["reference_mode"] = reference_mode
                 if source_images:
                     kwargs["source_images"] = source_images
+                    kwargs["require_all_source_images"] = require_all_source_images
                 if correction_hint:
                     kwargs["correction_hint"] = correction_hint
+                    if rejected_html is not None:
+                        kwargs["rejected_html"] = rejected_html
                 html = await author_slide_html(
                     content,
                     design_system,
@@ -711,8 +840,11 @@ async def _author_one_resilient(
                     kwargs["reference_mode"] = reference_mode
                 if source_images:
                     kwargs["source_images"] = source_images
+                    kwargs["require_all_source_images"] = require_all_source_images
                 if correction_hint:
                     kwargs["correction_hint"] = correction_hint
+                    if rejected_html is not None:
+                        kwargs["rejected_html"] = rejected_html
                 html = await author_slide_html(
                     content,
                     design_system,
@@ -748,10 +880,9 @@ async def _author_one_resilient(
                 last_error = "header contract violated: " + ", ".join(violations)
                 correction_hint = _author_retry_correction(
                     last_error,
-                    source_image_ids=tuple(
-                        candidate.asset_id for candidate in source_images
-                    ),
+                    source_image_ids=source_image_ids,
                 )
+                rejected_html = None
                 logger.warning(
                     "[authored] slide %d/%d %s (attempt %d)",
                     index + 1,
@@ -759,32 +890,54 @@ async def _author_one_resilient(
                     last_error,
                     attempts_made,
                 )
+            else:
+                last_error = "invalid HTML"
+                correction_hint = _author_retry_correction(last_error)
+                rejected_html = None
         except Exception as e:  # noqa: BLE001 — resilience boundary, recorded below
             last_error = e
-            correction_hint = _author_retry_correction(
+            local_correction = _classify_author_validation_error(
                 e,
-                source_image_ids=tuple(candidate.asset_id for candidate in source_images),
+                source_image_ids=source_image_ids,
             )
-            if any(
-                code in str(e)
-                for code in (
-                    "authored_semantic_qid_",
-                    "images must be base64 raster data URLs",
-                    "HTML attribute is not allowed: data-native-candidate",
+            if local_correction is not None:
+                # Local policy wins even when rejected CSS/text happens to contain
+                # a provider-transient keyword such as "timeout".
+                failure_kind = "local"
+                correction_hint = local_correction.hint
+                candidate = getattr(e, "rejected_html", None)
+                rejected_html = candidate if isinstance(candidate, str) else None
+            elif _is_transient_author_error(e):
+                failure_kind = "transient"
+            else:
+                correction_hint = _author_retry_correction(
+                    e,
+                    source_image_ids=source_image_ids,
                 )
-            ):
-                attempt_limit = max(attempt_limit, _SEMANTIC_AUTHOR_ATTEMPTS)
-            if reference_mode == EXACT_RECONSTRUCTION and isinstance(e, ValueError):
-                raise
-            if _is_transient_author_error(e):
-                attempt_limit = _TRANSIENT_AUTHOR_ATTEMPTS
+                rejected_html = None
+                if reference_mode == EXACT_RECONSTRUCTION and isinstance(e, ValueError):
+                    raise
 
-        if attempts_made >= attempt_limit:
-            break
+        if failure_kind == "local":
+            local_rejections += 1
+            if local_rejections >= _LOCAL_VALIDATION_AUTHOR_ATTEMPTS:
+                break
+            logger.warning(
+                "[authored] slide %d/%d local validation %s; retrying correction %d/%d",
+                index + 1,
+                n,
+                local_correction.category if local_correction is not None else "unknown",
+                local_rejections + 1,
+                _LOCAL_VALIDATION_AUTHOR_ATTEMPTS,
+            )
+            continue
 
-        if attempt_limit == _TRANSIENT_AUTHOR_ATTEMPTS:
+        if failure_kind == "transient":
+            transient_failures += 1
+            if transient_failures >= _TRANSIENT_AUTHOR_ATTEMPTS:
+                break
             delay = min(
-                _TRANSIENT_RETRY_BASE_SECONDS * (2**attempt),
+                _TRANSIENT_RETRY_BASE_SECONDS * (2 ** (transient_failures - 1)),
                 _TRANSIENT_RETRY_MAX_SECONDS,
             )
             logger.warning(
@@ -792,12 +945,17 @@ async def _author_one_resilient(
                 "retrying attempt %d/%d in %.1fs (last error: %s)",
                 index + 1,
                 n,
-                attempts_made + 1,
-                attempt_limit,
+                transient_failures + 1,
+                _TRANSIENT_AUTHOR_ATTEMPTS,
                 delay,
                 last_error,
             )
             await asyncio.sleep(delay)
+            continue
+
+        permanent_failures += 1
+        if permanent_failures >= _DEFAULT_AUTHOR_ATTEMPTS:
+            break
 
     if header_reject is not None:
         logger.warning(
@@ -981,6 +1139,7 @@ async def author_planned_slide(
     *,
     raise_on_failure: bool = False,
     source_images: Sequence[SourceImageCandidate] = (),
+    require_all_source_images: bool = False,
 ) -> str:
     """Author one planned slide; safe to compose with illustration/render stages.
 
@@ -1014,6 +1173,7 @@ async def author_planned_slide(
         ),
         visual_intent=(visual_plan.at(index) if visual_plan is not None else None),
         source_images=source_images,
+        require_all_source_images=require_all_source_images,
     )
 
 

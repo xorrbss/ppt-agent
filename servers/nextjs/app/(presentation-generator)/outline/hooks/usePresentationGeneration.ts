@@ -314,14 +314,14 @@ export const usePresentationGeneration = (
             sourceMode: "source_content_restyle" as const,
             sourceContentManifestPin: sourceContentAdmission.manifestPin,
             contentPolicy: {
-              text: "verbatim" as const,
-              preserveAllTableCells: true as const,
-              preserveAllChartValues: true as const,
+              text: "outline" as const,
+              preserveAllTableCells: false as const,
+              preserveAllChartValues: false as const,
               preserveAllImageOccurrences: true as const,
               preserveSourceOrder: true as const,
               preserveSourceSlideCount: true as const,
               allowSlideExpansion: false as const,
-              allowSummarization: false as const,
+              allowSummarization: true as const,
               overflowPolicy: "same_page_recompose_or_fail" as const,
             },
           }

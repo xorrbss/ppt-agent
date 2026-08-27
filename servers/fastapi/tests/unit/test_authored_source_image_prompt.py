@@ -9,6 +9,8 @@ import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from services.source_images.models import SourceImageCandidate
 from utils.llm_calls import author_slide as author_slide_mod
 from utils.llm_calls import author_slide_prompt
@@ -236,6 +238,32 @@ def test_author_slide_html_without_candidates_keeps_the_request_unchanged(monkey
     assert isinstance(_user_content(calls[0]), str)
     assert _user_content(calls[1]) == _user_content(calls[0])
     assert "SOURCE IMAGES" not in _user_content(calls[0])
+
+
+def test_required_source_slot_must_appear_exactly_once(monkeypatch, tmp_path):
+    candidate = _candidate(tmp_path, "asset-required")
+    slot_id = source_slot_id_for_asset(candidate.asset_id)
+    duplicate = (
+        "<!DOCTYPE html><html><head><meta charset='utf-8'></head><body>"
+        f'<img data-source-slot-id="{slot_id}">'
+        f'<img data-source-slot-id="{slot_id}">'
+        "</body></html>"
+    )
+    _capture_author_requests(monkeypatch, [duplicate])
+
+    with pytest.raises(ValueError, match="duplicate"):
+        _run(
+            author_slide_mod.author_slide_html(
+                "content",
+                "DESIGN",
+                _brand(),
+                "COVER",
+                0,
+                1,
+                source_images=[candidate],
+                require_all_source_images=True,
+            )
+        )
 
 
 def test_author_slide_html_attaches_candidates_after_style_references(

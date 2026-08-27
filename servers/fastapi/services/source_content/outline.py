@@ -1,7 +1,8 @@
-"""Lossless, page-locked outline for source-content restyling.
+"""Page-locked text/image outline for authored source-content reflow.
 
-The outline contains identities and reading order only.  Text, table/chart
-values and image bytes remain authoritative in the admitted manifest.
+The selected authored template owns the new design.  Only source text and
+source-image occurrences survive into the outline; source tables, charts,
+shapes, and layout geometry are deliberately not authoring inputs.
 """
 
 from __future__ import annotations
@@ -13,7 +14,6 @@ from pydantic import Field, model_validator
 from services.source_content.allocator import canonical_digest
 from services.source_content.contracts import (
     ContractModel,
-    RESTYLE_CONTENT_KINDS,
     SourceContentManifestPin,
 )
 
@@ -132,9 +132,10 @@ class SourceDocumentOutlineBuilder:
                 if not block_id or block_id in all_manifest_blocks:
                     raise ValueError("source_content_manifest_invalid")
                 all_manifest_blocks.add(block_id)
-                if kind not in RESTYLE_CONTENT_KINDS:
-                    # Source shapes and notes are deliberately omitted from
-                    # the restyle outline; the selected template owns them.
+                if kind not in {"text", "image"}:
+                    # The selected authored template owns the new visual
+                    # composition. Tables, charts, shapes, and notes from the
+                    # source are not part of the re-authoring outline.
                     continue
                 ids.append(block_id)
                 if role in {"title", "heading", "section"} and kind == "text":
@@ -145,10 +146,6 @@ class SourceDocumentOutlineBuilder:
                     # Each source image block is an occurrence, even when its
                     # asset bytes are deduplicated in the manifest store.
                     images.append(block_id)
-                elif kind == "table":
-                    tables.append(block_id)
-                elif kind == "chart":
-                    charts.append(block_id)
             slides.append(
                 SourceDocumentOutlineSlide(
                     source_unit_id=unit_id,
@@ -175,6 +172,57 @@ class SourceDocumentOutlineBuilder:
         )
 
 
+def build_authored_text_image_slides(
+    *, manifest: Any, outline: SourceDocumentOutline
+) -> list[str]:
+    """Project the admitted source into ordinary authored slide markdown.
+
+    Text remains page-locked and verbatim. Image bytes stay in the immutable
+    reference snapshot and are offered to the existing authored source-image
+    pipeline by their original slide index.
+    """
+
+    value = _mapping(manifest)
+    if (
+        _field(value, "manifestId", "manifest_id")
+        != outline.manifest_pin.manifest_id
+        or _field(value, "manifestDigest", "manifest_digest")
+        != outline.manifest_pin.digest
+    ):
+        raise ValueError("source_content_manifest_invalid")
+    blocks: dict[str, Mapping[str, Any]] = {}
+    for raw_unit in _field(value, "units") or ():
+        unit = _mapping(raw_unit)
+        for raw_block in _field(unit, "blocks") or ():
+            block = _mapping(raw_block)
+            block_id = str(_field(block, "sourceBlockId", "source_block_id") or "")
+            if block_id:
+                blocks[block_id] = block
+
+    slides: list[str] = []
+    for slide in outline.slides:
+        text_ids = set(slide.text_block_ids)
+        title_ids = set(slide.title_block_ids)
+        parts: list[str] = []
+        for block_id in slide.reading_order:
+            if block_id not in text_ids:
+                continue
+            block = blocks.get(block_id)
+            if block is None or str(_field(block, "kind") or "") != "text":
+                raise ValueError("source_content_outline_invalid")
+            payload = _mapping(_field(block, "payload"))
+            text = str(_field(payload, "text") or "").strip()
+            if not text:
+                continue
+            parts.append(f"# {text}" if block_id in title_ids else text)
+        # Image-only pages still need one non-visible authoring marker so the
+        # ordinary outline contract retains the source page cardinality.
+        slides.append("\n\n".join(parts) or "<!-- source-image-only slide -->")
+    if len(slides) != outline.source_slide_count:
+        raise ValueError("source_content_source_unit_cardinality_mismatch")
+    return slides
+
+
 def build_source_document_outline(
     *, manifest: Any, manifest_pin: SourceContentManifestPin
 ) -> SourceDocumentOutline:
@@ -191,5 +239,6 @@ __all__ = [
     "SourceDocumentOutline",
     "SourceDocumentOutlineBuilder",
     "SourceDocumentOutlineSlide",
+    "build_authored_text_image_slides",
     "build_source_document_outline",
 ]

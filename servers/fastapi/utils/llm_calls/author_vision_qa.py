@@ -13,7 +13,7 @@ import os
 import time
 from collections import OrderedDict
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Protocol, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Protocol, Sequence, Tuple
 
 from models.image_prompt import ImagePrompt
 from utils.authored_dom_quality import (
@@ -47,6 +47,7 @@ from utils.llm_calls.critique_slide import (
     CRITIQUE_PROMPT_VERSION,
     STYLE_COMPARISON_PROMPT_VERSION,
     STYLE_COMPARISON_REGRESSION_PREFIX as _STYLE_COMPARISON_REGRESSION_PREFIX,
+    CritiqueIssue,
     SlideCritique,
     StyleComparisonCritique,
     critique_slide_image,
@@ -54,6 +55,7 @@ from utils.llm_calls.critique_slide import (
 )
 from utils.llm_provider import get_model
 from utils.slide_capture import (
+    ensure_browser_metrics,
     get_cached_browser_metrics,
     render_html_to_png,
     render_html_to_png_with_metrics,
@@ -66,6 +68,31 @@ _ORIGINAL_RENDER_HTML_TO_PNG = render_html_to_png
 
 class _ImageServiceLike(Protocol):
     async def generate_image(self, prompt: ImagePrompt) -> object: ...
+
+
+class AuthoredVqaResidualDomIssuesError(ValueError):
+    """Fail-closed source-reflow result that still exposes durable repairs.
+
+    Local patches are provider work that may have succeeded even when another
+    slide still has a blocking DOM issue.  Carry the successful HTML/PNG pairs
+    to the checkpoint owner so a retry resumes from those repairs instead of
+    presenting the same original deck to VQA again.
+    """
+
+    def __init__(
+        self,
+        summary: str,
+        *,
+        htmls: Sequence[str],
+        pngs: Sequence[bytes],
+        fixed: Sequence[int],
+        repair_details: Sequence[Mapping[str, Any]],
+    ) -> None:
+        super().__init__(f"authored_vqa_residual_dom_issues:{summary}")
+        self.htmls = list(htmls)
+        self.pngs = list(pngs)
+        self.fixed = list(fixed)
+        self.repair_details = [dict(item) for item in repair_details]
 
 
 async def _render_correction_html(html: str) -> bytes:
@@ -450,6 +477,8 @@ async def revise_authored_deck(
     chapter_prefixes: Optional[Sequence[Optional[str]]] = None,
     image_service: Optional[_ImageServiceLike] = None,
     illustration_slots: Optional[Sequence[bool]] = None,
+    local_patch_only: bool = False,
+    fail_on_residual_dom_issues: bool = False,
 ) -> Any:
     """Bounded critique -> re-author -> re-render loop over an authored deck. Returns
     the (possibly revised) htmls + pngs and the local indices that changed.
@@ -530,11 +559,66 @@ async def revise_authored_deck(
     correction_work = 0.0
     repair_details: list[dict[str, Any]] = []
 
-    def local_report(html: str):
+    # A 43-slide deck is larger than the default in-memory metrics LRU.  Source
+    # reflow publication needs telemetry for every slide, so retain the concrete
+    # mappings locally instead of consulting the cache later and mistaking an
+    # eviction for a clean deterministic pass.
+    retained_metrics: list[Mapping[str, Any] | None] = (
+        list(
+            await asyncio.gather(
+                *(ensure_browser_metrics(html) for html in htmls)
+            )
+        )
+        if fail_on_residual_dom_issues
+        else [get_cached_browser_metrics(html) for html in htmls]
+    )
+
+    def local_report(html: str, metrics: Mapping[str, Any] | None):
         return inspect_authored_dom(
             html,
-            get_cached_browser_metrics(html),
+            metrics,
             reference_mode=reference_mode,
+            strict_structural_off_canvas=fail_on_residual_dom_issues,
+        )
+
+    async def metrics_for(html: str) -> Mapping[str, Any] | None:
+        if fail_on_residual_dom_issues:
+            return await ensure_browser_metrics(html)
+        return get_cached_browser_metrics(html)
+
+    def deterministic_critique(
+        html: str, metrics: Mapping[str, Any] | None
+    ) -> SlideCritique | None:
+        report = local_report(html, metrics)
+        if report.telemetry_status != "available" or not report.issues:
+            return None
+        issue_type = {
+            "overflow": "overflow",
+            "clipping": "overflow",
+            "off_canvas": "overflow",
+            "overlap": "overlap",
+            "contrast": "low-contrast",
+            "font": "overflow",
+            "image": "other",
+            "content": "other",
+        }
+        ranked = sorted(
+            report.issues,
+            key=lambda item: {"high": 0, "medium": 1, "low": 2}[item.severity],
+        )[:8]
+        return SlideCritique(
+            needs_fix=True,
+            issues=[
+                CritiqueIssue(
+                    type=issue_type[item.category],
+                    severity=item.severity,
+                    detail=(
+                        f"DOM {item.category}: {item.detail}; targets: "
+                        f"{', '.join(item.qids) or 'slide'}"
+                    )[:200],
+                )
+                for item in ranked
+            ],
         )
 
     async def full_reauthor(
@@ -632,13 +716,23 @@ async def revise_authored_deck(
 
     async def review_and_fix(
         i: int,
-    ) -> Tuple[int, str, bytes, bool, float, float, dict[str, Any] | None]:
+    ) -> Tuple[
+        int,
+        str,
+        bytes,
+        bool,
+        float,
+        float,
+        dict[str, Any] | None,
+        object,
+    ]:
         """Pipeline one slide through review -> correction -> render immediately.
 
         This intentionally avoids the former deck-wide review barrier: a fast review can
         begin its expensive correction while slower reviews are still in flight.
         """
         current_html = htmls[i]
+        current_metrics = retained_metrics[i]
         if return_details:
             if authored_semantic_dual_output_mode() == "declared":
                 validate_declared_authored_qids(current_html)
@@ -668,7 +762,10 @@ async def revise_authored_deck(
 
         for cycle in range(max(1, max_cycles)):
             patch_ms = 0.0
-            if cycle == 0 and initial_critiques is not None:
+            critique = deterministic_critique(current_html, current_metrics)
+            if critique is not None:
+                pass
+            elif cycle == 0 and initial_critiques is not None:
                 critique = initial_critiques[i]
             else:
                 review_started = time.monotonic()
@@ -714,7 +811,11 @@ async def revise_authored_deck(
                         node.to_dict()
                         for node in build_compact_dom_map(
                             current_html,
-                            get_cached_browser_metrics(current_html),
+                            (
+                                current_metrics
+                                if fail_on_residual_dom_issues
+                                else get_cached_browser_metrics(current_html)
+                            ),
                         )
                     ]
                     patch_started = time.monotonic()
@@ -724,6 +825,7 @@ async def revise_authored_deck(
                             compact_dom,
                             critique,
                             reference_mode=reference_mode,
+                            retry_invalid_model_patch=fail_on_residual_dom_issues,
                         )
                     except Exception as error:
                         log_failure("patch_proposal", error)
@@ -744,6 +846,9 @@ async def revise_authored_deck(
                                 current_html,
                                 proposal.plan,
                                 reference_mode=reference_mode,
+                                allow_source_reflow_safe_styles=(
+                                    fail_on_residual_dom_issues
+                                ),
                             )
                         except Exception as error:
                             log_failure("patch_application", error)
@@ -762,7 +867,11 @@ async def revise_authored_deck(
                                 fallback_reason = patch_failure["code"]
                             else:
                                 if not has_dom_quality_regression(
-                                    local_report(current_html), local_report(applied.html)
+                                    local_report(current_html, current_metrics),
+                                    local_report(
+                                        applied.html,
+                                        await metrics_for(applied.html),
+                                    ),
                                 ):
                                     new_html, new_png = applied.html, candidate_png
                                     patch_succeeded = True
@@ -800,7 +909,7 @@ async def revise_authored_deck(
                             "code": fallback_reason,
                             "error_type": "PatchProposalFailure",
                         }
-                if new_html is None or new_png is None:
+                if (new_html is None or new_png is None) and not local_patch_only:
                     fallback_started = time.monotonic()
                     fallback_attempted = True
                     try:
@@ -845,7 +954,7 @@ async def revise_authored_deck(
                             else []
                         ),
                     }
-                else:
+                elif new_html is not None and new_png is not None:
                     repair_detail = {
                         "local_index": i,
                         "slide_index": absolute_indices[i],
@@ -870,9 +979,38 @@ async def revise_authored_deck(
                         },
                         "element_changes": element_changes,
                     }
+                else:
+                    # A source-content reflow has already bound the admitted
+                    # source images into this HTML.  A structural re-author
+                    # does not receive those immutable image candidates and
+                    # could silently drop them.  Keep the original slide when
+                    # a bounded local CSS/text patch cannot be admitted.
+                    repair_detail = {
+                        "local_index": i,
+                        "slide_index": absolute_indices[i],
+                        "path": "local_patch",
+                        "fallback_reason": fallback_reason,
+                        "patch_ms": round(patch_ms, 3),
+                        "fallback_ms": 0.0,
+                        "attempted": patch_attempted,
+                        "succeeded": False,
+                        "failure_detail": patch_failure,
+                        "patch": {
+                            "attempted": patch_attempted,
+                            "succeeded": False,
+                            "failure_detail": patch_failure,
+                        },
+                        "fallback": {
+                            "attempted": False,
+                            "succeeded": False,
+                            "failure_detail": None,
+                        },
+                        "element_changes": [],
+                    }
                 if new_html is not None and new_png is not None:
                     current_html = new_html
                     current_png = new_png
+                    current_metrics = await metrics_for(current_html)
                     changed = True
             except Exception as error:
                 log_failure("correction", error)
@@ -912,11 +1050,22 @@ async def revise_authored_deck(
             slide_critique_work,
             slide_correction_work,
             repair_detail,
+            local_report(current_html, current_metrics),
         )
 
     # gather starts every per-slide pipeline concurrently while preserving input order.
     results = await asyncio.gather(*(review_and_fix(i) for i in range(n)))
-    for i, new_html, new_png, changed, review_time, correction_time, detail in results:
+    final_reports = []
+    for (
+        i,
+        new_html,
+        new_png,
+        changed,
+        review_time,
+        correction_time,
+        detail,
+        final_report,
+    ) in results:
         critique_work += review_time
         correction_work += correction_time
         if changed:
@@ -925,6 +1074,40 @@ async def revise_authored_deck(
             fixed.append(i)
         if detail is not None:
             repair_details.append(detail)
+        final_reports.append(final_report)
+
+    if fail_on_residual_dom_issues:
+        blocking_categories = {
+            "image",
+            "off_canvas",
+            "clipping",
+            "overflow",
+            "overlap",
+        }
+        residual = [
+            (index, report)
+            for index, report in enumerate(final_reports)
+            if report.telemetry_status != "available"
+            or any(
+                issue.category in blocking_categories
+                and issue.severity in {"medium", "high"}
+                for issue in report.issues
+            )
+        ]
+        if residual:
+            summary = ",".join(
+                f"{absolute_indices[index] + 1}:"
+                f"{report.telemetry_status}:"
+                f"{sum(issue.category in blocking_categories and issue.severity in {'medium', 'high'} for issue in report.issues)}"
+                for index, report in residual[:12]
+            )
+            raise AuthoredVqaResidualDomIssuesError(
+                summary,
+                htmls=htmls,
+                pngs=pngs,
+                fixed=fixed,
+                repair_details=repair_details,
+            )
 
     LOGGER.info(
         "[authored-vqa] slides=%d fixed=%d total=%.1fs critique_work=%.1fs "

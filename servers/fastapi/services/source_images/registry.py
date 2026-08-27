@@ -16,6 +16,7 @@ import uuid
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
 from typing import Optional
 
@@ -70,6 +71,22 @@ class _RawImage:
     slide_coverage: Optional[float] = None
     source_heading: Optional[str] = None
     source_text: Optional[str] = None
+    # Present only for strict source-content reflow.  Two drawing occurrences
+    # may intentionally point at the same bytes and still need distinct slots.
+    occurrence_id: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class ManifestImageOccurrence:
+    """One immutable image occurrence projected from a source manifest."""
+
+    occurrence_id: str
+    payload: bytes
+    mime_type: str
+    content_digest: str
+    source_slide_index: int
+    source_heading: Optional[str] = None
+    source_text: Optional[str] = None
 
 
 async def register_source_images(
@@ -105,6 +122,75 @@ async def register_source_images(
         for raw in kept
     ]
     # One flush for the whole set: the caller owns the surrounding transaction.
+    await session.flush()
+    return registered
+
+
+async def register_manifest_image_occurrences(
+    session: AsyncSession,
+    *,
+    presentation_id: uuid.UUID,
+    occurrences: Sequence[ManifestImageOccurrence],
+) -> list[SourceImageCandidate]:
+    """Persist every admitted manifest occurrence without relevance filtering.
+
+    This path is intentionally separate from ordinary authored source-image
+    reuse.  A source-content reflow already made the preservation decision in
+    its immutable manifest, so minimum-size, furniture and digest dedup filters
+    would violate that decision.
+    """
+
+    raw_images: list[_RawImage] = []
+    seen_occurrence_ids: set[str] = set()
+    for occurrence in occurrences:
+        if not occurrence.occurrence_id or occurrence.occurrence_id in seen_occurrence_ids:
+            raise ValueError("source_content_image_occurrence_invalid")
+        seen_occurrence_ids.add(occurrence.occurrence_id)
+        mime_type = occurrence.mime_type.strip().lower()
+        if mime_type not in SUPPORTED_SOURCE_IMAGE_MIME_TYPES:
+            raise ValueError("source_content_image_format_not_supported")
+        payload = bytes(occurrence.payload)
+        expected = occurrence.content_digest.removeprefix("sha256:").lower()
+        actual = hashlib.sha256(payload).hexdigest()
+        if len(expected) != 64 or actual != expected:
+            raise ValueError("source_content_image_digest_mismatch")
+        try:
+            with Image.open(BytesIO(payload)) as image:
+                image.load()
+                width, height = image.size
+                measured_mime = Image.MIME.get((image.format or "").upper(), "")
+        except (OSError, ValueError) as error:
+            raise ValueError("source_content_image_invalid") from error
+        if measured_mime != mime_type or width <= 0 or height <= 0:
+            raise ValueError("source_content_image_invalid")
+        raw_images.append(
+            _RawImage(
+                mime_type=mime_type,
+                width=width,
+                height=height,
+                digest=actual,
+                payload=payload,
+                source_slide_index=occurrence.source_slide_index,
+                source_heading=occurrence.source_heading,
+                source_text=occurrence.source_text,
+                occurrence_id=occurrence.occurrence_id,
+            )
+        )
+
+    storage_dir = Path(
+        await asyncio.to_thread(
+            get_writable_path, f"{_STORAGE_ROOT}/{presentation_id}"
+        )
+    )
+    registered = [
+        await _persist_raw_image(
+            session,
+            storage_dir=storage_dir,
+            presentation_id=presentation_id,
+            raw=raw,
+        )
+        for raw in raw_images
+    ]
     await session.flush()
     return registered
 
@@ -225,6 +311,19 @@ def source_image_asset_id(presentation_id: uuid.UUID, digest: str) -> uuid.UUID:
     return uuid.uuid5(_SOURCE_IMAGE_NAMESPACE, f"{presentation_id}:{digest}")
 
 
+def source_image_occurrence_asset_id(
+    presentation_id: uuid.UUID,
+    occurrence_id: str,
+    digest: str,
+) -> uuid.UUID:
+    """Stable per-occurrence identity for strict source-content reflow."""
+
+    return uuid.uuid5(
+        _SOURCE_IMAGE_NAMESPACE,
+        f"{presentation_id}:occurrence:{occurrence_id}:{digest}",
+    )
+
+
 async def _persist_raw_image(
     session: AsyncSession,
     *,
@@ -241,7 +340,15 @@ async def _persist_raw_image(
     if not await asyncio.to_thread(stored_path.exists):
         await asyncio.to_thread(_write_stored_bytes, raw, stored_path)
 
-    asset_id = source_image_asset_id(presentation_id, raw.digest)
+    asset_id = (
+        source_image_occurrence_asset_id(
+            presentation_id,
+            raw.occurrence_id,
+            raw.digest,
+        )
+        if raw.occurrence_id is not None
+        else source_image_asset_id(presentation_id, raw.digest)
+    )
     # A generation attempt is durable and resumable: the pipeline replays
     # checkpointed slide HTML that already names an asset id, while this
     # function runs again from the top. A fresh random id per attempt would
@@ -262,6 +369,7 @@ async def _persist_raw_image(
                 "source_slide_index": raw.source_slide_index,
                 "source_heading": raw.source_heading,
                 "source_text": raw.source_text,
+                "source_occurrence_id": raw.occurrence_id,
             },
         )
         session.add(asset)

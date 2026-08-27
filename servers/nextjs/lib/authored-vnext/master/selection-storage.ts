@@ -1,20 +1,14 @@
 import type { MasterRevisionEnvelope } from "./contracts";
 import type { CompanyStandardSelection } from "@/store/slices/presentationGenUpload";
 
-// Store only the user's preferred master identity. A new outline must resolve
-// the owner's current published pointer before constructing its immutable pin.
+// Legacy browser-scoped preference keys. Company-standard selection is now
+// document-scoped, so new upload flows only clear these stale values.
 const LAST_USED_MASTER_ID_KEY = "presenton:authored-master:last-used-id:v1";
 const EXPLICITLY_CLEARED_MASTER_KEY = "presenton:authored-master:explicitly-cleared:v1";
 
-// Temporary client-side workspace default until the workspace preference API is
-// available. The id is resolved to a published head every time and a 404 leaves
-// the selection empty, so this never invents a pin or revives a deleted master.
+// Compatibility display alias for the seeded IBIZ catalog entry. It is not a
+// selection default and must never be applied automatically.
 export const DEFAULT_WORKSPACE_COMPANY_STANDARD_ID = "master:ibiz-proposal-blue";
-
-export type StoredCompanyStandardPreference =
-  | { kind: "explicit-clear" }
-  | { kind: "last-used"; masterId: string }
-  | { kind: "none" };
 
 export function companyStandardDisplayName(
   name: string,
@@ -47,36 +41,6 @@ export const masterSelectionFromPublished = (
       : 0,
   };
 };
-
-export function readStoredCompanyStandardPreference(): StoredCompanyStandardPreference {
-  if (typeof window === "undefined") return { kind: "none" };
-  try {
-    if (window.localStorage.getItem(EXPLICITLY_CLEARED_MASTER_KEY) === "1") {
-      return { kind: "explicit-clear" };
-    }
-    const value = window.localStorage.getItem(LAST_USED_MASTER_ID_KEY)?.trim();
-    return value?.startsWith("master:")
-      ? { kind: "last-used", masterId: value }
-      : { kind: "none" };
-  } catch {
-    return { kind: "none" };
-  }
-}
-
-export function loadLastUsedMasterId(): string | null {
-  const preference = readStoredCompanyStandardPreference();
-  return preference.kind === "last-used" ? preference.masterId : null;
-}
-
-export function saveLastUsedMasterId(masterId: string): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(LAST_USED_MASTER_ID_KEY, masterId);
-    window.localStorage.removeItem(EXPLICITLY_CLEARED_MASTER_KEY);
-  } catch (error) {
-    console.warn("Unable to persist the last used PPT master.", error);
-  }
-}
 
 export function clearLastUsedMasterId(): void {
   if (typeof window === "undefined") return;

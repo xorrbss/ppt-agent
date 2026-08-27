@@ -105,7 +105,7 @@ from services.source_content.errors import SourceContentError
 from services.source_content.pipeline import (
     SOURCE_MODE as SOURCE_CONTENT_RESTYLE_MODE,
     admit_source_content_request,
-    generate_source_content_restyle_presentation,
+    prepare_source_content_authored_reflow,
 )
 from services.database import async_session_maker, get_async_session, sql_engine
 from services.documents_loader import DocumentsLoader
@@ -491,6 +491,36 @@ async def _admit_source_content_generation(
         raise _source_content_http_exception(error) from error
 
 
+async def _admit_source_content_reference_snapshot(
+    request: GeneratePresentationRequest,
+    sql_session: AsyncSession,
+) -> None:
+    """Bind the manifest's own source PPTX for ordinary authored image reuse."""
+
+    manifest = request._source_content_manifest
+    if manifest is None:
+        raise _source_content_http_exception(
+            SourceContentError("source_content_manifest_invalid", status_code=409)
+        )
+    try:
+        snapshot_id = uuid.UUID(str(manifest.reference_snapshot_id))
+        snapshots = await admit_reference_snapshots(
+            sql_session,
+            snapshot_ids=[snapshot_id],
+        )
+    except (TypeError, ValueError, ReferenceProviderError) as error:
+        status_code = getattr(error, "status_code", 409)
+        code = getattr(error, "code", "source_content_manifest_invalid")
+        raise _source_content_http_exception(
+            SourceContentError(code, status_code=status_code)
+        ) from error
+    if len(snapshots) != 1 or snapshots[0].snapshot_id != snapshot_id:
+        raise _source_content_http_exception(
+            SourceContentError("source_content_manifest_invalid", status_code=409)
+        )
+    request._reference_snapshots = snapshots
+
+
 async def check_if_api_request_is_valid(
     request: GeneratePresentationRequest,
     sql_session: AsyncSession = Depends(get_async_session),
@@ -535,7 +565,8 @@ async def check_if_api_request_is_valid(
             snapshot.snapshot_id,
         ]
 
-    await _admit_generation_references(request, sql_session)
+    if request.source_mode != SOURCE_CONTENT_RESTYLE_MODE:
+        await _admit_generation_references(request, sql_session)
 
     if request.n_slides is not None and request.n_slides <= 0:
         raise HTTPException(
@@ -606,6 +637,8 @@ async def check_if_api_request_is_valid(
     _validate_authored_exact_admission(request)
     await _validate_authored_master_pin_admission(request)
     await _admit_source_content_generation(request, sql_session)
+    if request.source_mode == SOURCE_CONTENT_RESTYLE_MODE:
+        await _admit_source_content_reference_snapshot(request, sql_session)
 
     return (presentation_id,)
 
@@ -1387,13 +1420,15 @@ async def generate_presentation_handler(
 ):
     # Internal callers can bypass validation, so re-run owner, expiry, asset
     # state and digest admission before generation.
-    if request.reference_snapshot_ids and not request._reference_snapshots:
-        await _admit_generation_references(request, sql_session)
     if request.source_mode == SOURCE_CONTENT_RESTYLE_MODE:
         # A retry must never trust a manifest object cached by another process.
         # Re-resolve owner scope and the immutable pin before any authoring work.
         await _validate_authored_master_pin_admission(request)
         await _admit_source_content_generation(request, sql_session)
+        await _admit_source_content_reference_snapshot(request, sql_session)
+        prepare_source_content_authored_reflow(request)
+    elif request.reference_snapshot_ids and not request._reference_snapshots:
+        await _admit_generation_references(request, sql_session)
     # Bootstrap admission failures have a linked failed job so a terminal
     # operation retry can safely rebind it. Re-check validation, template
     # policy and immutable document readability before doing any generation
@@ -1423,23 +1458,6 @@ async def generate_presentation_handler(
     promoted_images = PromotedWorkspaceChatArtifacts(artifacts=(), replacements={})
     generated_assets: list[ImageAsset] = []
     try:
-        if request.source_mode == SOURCE_CONTENT_RESTYLE_MODE:
-            if async_status:
-                async_status.message = "Restyling immutable source content"
-                async_status.updated_at = datetime.now(timezone.utc)
-                sql_session.add(async_status)
-                await sql_session.commit()
-            # The source-content branch is intentionally before briefs,
-            # outlines, MEM0, HTML authoring and vision re-authoring.
-            return await generate_source_content_restyle_presentation(
-                request=request,
-                presentation_id=presentation_id,
-                async_status=async_status,
-                export_cookie_header=export_cookie_header,
-                generation_job=generation_job,
-                progress_reporter=progress_reporter,
-                sql_session=sql_session,
-            )
         using_slides_markdown = False
         language_to_use = (request.language or "").strip() or None
         additional_context = _immutable_reference_context(
@@ -1872,7 +1890,8 @@ async def run_generation_job(
                 raise RuntimeError("presentation_generation_job_missing")
             request = _request_from_durable_payload(job.request_payload)
             request._request_id = job.request_id
-            await _admit_generation_references(request, session)
+            if request.source_mode != SOURCE_CONTENT_RESTYLE_MODE:
+                await _admit_generation_references(request, session)
             # Recheck rollout and source validity on the worker too. A private
             # exact preset may have changed after admission; it must become a
             # safe, explicit task error instead of falling back during authoring.
@@ -2168,6 +2187,7 @@ async def queue_presentation_generation(
         await _validate_authored_master_pin_admission(request)
     if request.source_mode == SOURCE_CONTENT_RESTYLE_MODE:
         await _admit_source_content_generation(request, sql_session)
+        await _admit_source_content_reference_snapshot(request, sql_session)
     # The fingerprint is taken before any deck is minted, so a replay under the
     # same idempotency key matches the stored job instead of bootstrapping a
     # second deck. It now includes the resolved pins/rule/style snapshots.
