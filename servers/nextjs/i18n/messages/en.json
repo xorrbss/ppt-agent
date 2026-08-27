@@ -3238,7 +3238,7 @@
         "logoOff": "No logo",
         "layouts": "{count} layouts",
         "templateLabel": "Selected template",
-        "prompt": "The workspace company standard applies automatically. Change it only when needed.",
+        "prompt": "If you do not select a company standard, only the default template is applied. Select one only when needed.",
         "button": "Change company standard"
       },
       "stepsAria": "Generation steps",

@@ -814,13 +814,16 @@ def inspect_authored_dom(
     browser_metrics: Mapping[str, Any] | None,
     *,
     reference_mode: str = STYLE_REFERENCE,
+    strict_structural_off_canvas: bool = False,
 ) -> DomQualityReport:
     """Classify cheap, deterministic defects from browser-collected metrics.
 
     The browser collector should include one item per qid with ``bbox``, dimensions,
     computed styles, font/image state and rendered text.  Missing telemetry never
     becomes a synthetic defect: the VQA stage remains responsible for ambiguous
-    visual truth.
+    visual truth. ``strict_structural_off_canvas`` is reserved for source-reflow
+    publication: it lets painted layout panels prove viewport escape without
+    changing ordinary Authored best-effort review behavior.
     """
     mode = _mode(reference_mode)
     normalized = normalize_browser_metrics(browser_metrics)
@@ -874,6 +877,107 @@ def inspect_authored_dom(
             "video",
         }
 
+    occluded_fraction_threshold = 0.2
+    continuous_occluded_fraction_threshold = 0.12
+
+    def _rect_union_area(rects: Sequence[BoundingBox]) -> float:
+        """Return exact union area for a small set of axis-aligned probe boxes."""
+
+        xs = sorted({edge for rect in rects for edge in (rect.x, rect.right)})
+        area = 0.0
+        for left, right in zip(xs, xs[1:]):
+            if right <= left:
+                continue
+            intervals = sorted(
+                (rect.y, rect.bottom)
+                for rect in rects
+                if rect.x < right and rect.right > left and rect.bottom > rect.y
+            )
+            covered = 0.0
+            cursor_start: float | None = None
+            cursor_end: float | None = None
+            for start, end in intervals:
+                if cursor_start is None:
+                    cursor_start, cursor_end = start, end
+                elif start <= cursor_end:
+                    cursor_end = max(cursor_end, end)
+                else:
+                    covered += cursor_end - cursor_start
+                    cursor_start, cursor_end = start, end
+            if cursor_start is not None and cursor_end is not None:
+                covered += cursor_end - cursor_start
+            area += (right - left) * covered
+        return area
+
+    def _intersection(first: BoundingBox, second: BoundingBox) -> BoundingBox | None:
+        left = max(first.x, second.x)
+        top = max(first.y, second.y)
+        right = min(first.right, second.right)
+        bottom = min(first.bottom, second.bottom)
+        if right <= left or bottom <= top:
+            return None
+        return BoundingBox(left, top, right - left, bottom - top)
+
+    def owned_text_occlusion_fraction(
+        item: Mapping[str, Any],
+        *,
+        occluder_filter=None,
+    ) -> float | None:
+        """Measure how much owned text geometry, rather than its box, is covered.
+
+        Chrome's v3 paint probe intentionally samples both glyphs and an element's
+        own background/border. That is useful evidence, but a card laid over a
+        decorative panel must not become a blocking text collision when all glyphs
+        remain readable. Range rectangles let the detector retain the same 12%
+        continuous-paint threshold on the content that users actually read.
+        """
+
+        raw_fragments = item.get("text_fragments")
+        if not isinstance(raw_fragments, Sequence) or isinstance(
+            raw_fragments, (str, bytes)
+        ):
+            return None
+        fragments = [
+            box
+            for value in raw_fragments
+            if isinstance(value, Mapping)
+            and (box := _coerce_bbox(value)) is not None
+            and box.width > 0
+            and box.height > 0
+        ]
+        if not fragments:
+            return 0.0
+        raw_occluders = item.get("occlusion_occluder_qids", ())
+        if not isinstance(raw_occluders, Sequence) or isinstance(
+            raw_occluders, (str, bytes)
+        ):
+            return None
+        occluder_boxes: list[BoundingBox] = []
+        for raw_qid in raw_occluders:
+            occluder_qid = str(raw_qid)
+            if occluder_filter is not None and not occluder_filter(occluder_qid):
+                continue
+            occluder = item_by_qid.get(occluder_qid)
+            if occluder is None or bool(
+                occluder.get("intentional", occluder.get("allow_overlap", False))
+            ):
+                continue
+            box = _coerce_bbox(occluder.get("bbox"))
+            if box is not None and box.width > 0 and box.height > 0:
+                occluder_boxes.append(box)
+        if not occluder_boxes:
+            return 0.0
+        total = sum(fragment.width * fragment.height for fragment in fragments)
+        covered = 0.0
+        for fragment in fragments:
+            intersections = [
+                overlap
+                for occluder in occluder_boxes
+                if (overlap := _intersection(fragment, occluder)) is not None
+            ]
+            covered += _rect_union_area(intersections)
+        return min(1.0, covered / total) if total > 0 else 0.0
+
     def pixel_occlusion_is_proven(item: Mapping[str, Any]) -> bool:
         probe_version = item.get("occlusion_probe_version")
         if probe_version not in {"owned-content-v2", "owned-paint-v3"}:
@@ -904,14 +1008,36 @@ def inspect_authored_dom(
                 occluder.get("has_owned_paint", False)
             ):
                 continue
-            return True
+            tag = str(item.get("tag", "")).lower()
+            if tag in {"img", "picture", "svg", "video"}:
+                return True
+            if bool(item.get("has_owned_text")):
+                content_fraction = owned_text_occlusion_fraction(item)
+                # Older/external telemetry has no Range rectangles. Preserve its
+                # conservative behaviour instead of interpreting missing proof as
+                # a clean slide.
+                return (
+                    True
+                    if content_fraction is None
+                    else content_fraction > continuous_occluded_fraction_threshold
+                )
+            return False
         return _coerce_number(item.get("occlusion_unbound_count")) > 0
 
     def clipped_by_authored_parent(item: Mapping[str, Any]) -> bool:
-        """Recognize intentionally cropped absolute artwork without hiding flow bugs."""
+        """Recognize viewport-safe clipping of absolute decorative bleed only."""
 
         if str(item.get("computed_style", {}).get("position", "")) != "absolute":
             return False
+        if browser_proves_owned_content(item):
+            return False
+        box = _coerce_bbox(item.get("bbox"))
+        if box is None:
+            return False
+        escaped_x = box.x < -1 or box.right > width + 1
+        escaped_y = box.y < -1 or box.bottom > height + 1
+        clipped_x = not escaped_x
+        clipped_y = not escaped_y
         current = parent_by_qid.get(str(item.get("qid")), "")
         seen: set[str] = set()
         while current and current not in seen:
@@ -920,11 +1046,30 @@ def inspect_authored_dom(
             if parent is None:
                 break
             style = parent.get("computed_style", parent.get("style", {}))
-            if isinstance(style, Mapping) and str(style.get("overflow", "")).lower() in {
-                "hidden",
-                "clip",
-            }:
-                return True
+            parent_box = _coerce_bbox(parent.get("bbox"))
+            if isinstance(style, Mapping) and parent_box is not None:
+                overflow_x = str(
+                    style.get("overflowX", style.get("overflow", ""))
+                ).lower()
+                overflow_y = str(
+                    style.get("overflowY", style.get("overflow", ""))
+                ).lower()
+                if (
+                    escaped_x
+                    and overflow_x in {"hidden", "clip"}
+                    and parent_box.x >= -1
+                    and parent_box.right <= width + 1
+                ):
+                    clipped_x = True
+                if (
+                    escaped_y
+                    and overflow_y in {"hidden", "clip"}
+                    and parent_box.y >= -1
+                    and parent_box.bottom <= height + 1
+                ):
+                    clipped_y = True
+                if clipped_x and clipped_y:
+                    return True
             current = parent_by_qid.get(current, "")
         return False
 
@@ -1002,6 +1147,61 @@ def inspect_authored_dom(
         )
         style = item.get("computed_style", item.get("style", {}))
         style = style if isinstance(style, Mapping) else {}
+        display = str(style.get("display", "")).strip().lower()
+        visibility = str(style.get("visibility", "visible")).strip().lower()
+        opacity = _coerce_number(style.get("opacity"), 1.0)
+        image = item.get("image") if isinstance(item.get("image"), Mapping) else {}
+        css_visible = image.get("cssVisible", image.get("css_visible", True)) is not False
+        effective_opacity = _coerce_number(
+            image.get("effectiveOpacity", image.get("effective_opacity", opacity)),
+            opacity,
+        )
+        materially_hidden = (
+            display == "none"
+            or visibility in {"hidden", "collapse"}
+            or not css_visible
+            or effective_opacity < 0.01
+        )
+        tag = str(item.get("tag", "")).lower()
+        required_content = expected.get(qid, "")
+        if materially_hidden and (tag == "img" or required_content):
+            issues.append(
+                DomQualityIssue(
+                    "image" if tag == "img" else "content",
+                    "high",
+                    "required visual content is hidden by computed CSS",
+                    (qid,),
+                    mode,
+                )
+            )
+        if tag == "img" and not intentional:
+            viewport_intersection = _coerce_number(
+                image.get(
+                    "viewportIntersectionRatio",
+                    image.get("viewport_intersection_ratio", -1),
+                ),
+                -1,
+            )
+            if min(box.width, box.height) < 4 or box.width * box.height < 16:
+                issues.append(
+                    DomQualityIssue(
+                        "image",
+                        "high",
+                        "image is too small to be materially visible",
+                        (qid,),
+                        mode,
+                    )
+                )
+            if viewport_intersection >= 0 and viewport_intersection < 0.75:
+                issues.append(
+                    DomQualityIssue(
+                        "off_canvas",
+                        "high",
+                        "most of the image lies outside the slide viewport",
+                        (qid,),
+                        mode,
+                    )
+                )
 
         def overflow_axis_is_actionable(axis: str) -> bool:
             """Do not confuse visible text ink/line-box variance with clipping.
@@ -1019,8 +1219,7 @@ def inspect_authored_dom(
                 return True
             if str(mode_value).strip().lower() != "visible":
                 return True
-            position = str(style.get("position", "static")).strip().lower()
-            return position in {"absolute", "fixed", "sticky"}
+            return False
 
         horizontal_overflow = horizontal_scroll_excess and overflow_axis_is_actionable("x")
         vertical_overflow = vertical_scroll_excess and overflow_axis_is_actionable("y")
@@ -1048,8 +1247,13 @@ def inspect_authored_dom(
                     mode,
                 )
             )
+        structural_off_canvas_is_actionable = (
+            strict_structural_off_canvas
+            and geometry_is_actionable
+            and bool(item.get("has_owned_paint", False))
+        )
         if (
-            owned_geometry_is_actionable
+            (owned_geometry_is_actionable or structural_off_canvas_is_actionable)
             and (
                 box.x < -1
                 or box.y < -1
@@ -1089,10 +1293,14 @@ def inspect_authored_dom(
             and not intentional
             and pixel_occlusion_is_proven(item)
             and (
-                (occluded_fraction is not None and occluded_fraction > 0.2)
+                (
+                    occluded_fraction is not None
+                    and occluded_fraction > occluded_fraction_threshold
+                )
                 or (
                     continuous_occluded_fraction is not None
-                    and continuous_occluded_fraction > 0.12
+                    and continuous_occluded_fraction
+                    > continuous_occluded_fraction_threshold
                 )
             )
         ):
@@ -1263,7 +1471,10 @@ def inspect_authored_dom(
             fraction = target.get("occluded_fraction")
             continuous = target.get("continuous_occluded_fraction")
             if not (
-                (fraction is not None and fraction > 0.2)
+                (
+                    fraction is not None
+                    and fraction > occluded_fraction_threshold
+                )
                 or (continuous is not None and continuous > 0.12)
             ):
                 continue
@@ -1271,7 +1482,22 @@ def inspect_authored_dom(
             if not isinstance(raw, Sequence) or isinstance(raw, (str, bytes)):
                 continue
             if any(qid_in_branch(str(value), other_qid) for value in raw):
-                return True
+                tag = str(target.get("tag", "")).lower()
+                if tag in {"img", "picture", "svg", "video"}:
+                    return True
+                if bool(target.get("has_owned_text")):
+                    content_fraction = owned_text_occlusion_fraction(
+                        target,
+                        occluder_filter=lambda value: qid_in_branch(
+                            value, other_qid
+                        ),
+                    )
+                    return (
+                        True
+                        if content_fraction is None
+                        else content_fraction
+                        > continuous_occluded_fraction_threshold
+                    )
         return False
 
     for index, (qid, box, item) in enumerate(boxes):

@@ -29,16 +29,21 @@ class AuthoredMasterPinInput(StrictCamelModel):
 
 
 class SourceContentPolicy(StrictCamelModel):
-    """Closed preservation policy for source-content restyling."""
+    """Page-locked text/image policy for authored source-content reflow."""
 
-    text: Literal["verbatim"] = "verbatim"
-    preserve_all_table_cells: Literal[True] = True
-    preserve_all_chart_values: Literal[True] = True
+    # Older durable requests may still say ``verbatim``. New source reflow
+    # treats extracted text as the authored outline so normal composition can
+    # condense it to fit cleanly.
+    text: Literal["verbatim", "outline"] = "outline"
+    # Kept as booleans so already-queued v1 requests remain readable. The
+    # authored reflow contract does not project source tables or charts.
+    preserve_all_table_cells: bool = False
+    preserve_all_chart_values: bool = False
     preserve_all_image_occurrences: Literal[True] = True
     preserve_source_order: Literal[True] = True
     preserve_source_slide_count: Literal[True] = True
     allow_slide_expansion: Literal[False] = False
-    allow_summarization: Literal[False] = False
+    allow_summarization: bool = True
     overflow_policy: Literal["same_page_recompose_or_fail"] = "same_page_recompose_or_fail"
 
 
@@ -66,6 +71,8 @@ class GeneratePresentationRequest(BaseModel):
     _authored_design_replay: bool = PrivateAttr(default=False)
     _reference_snapshots: tuple[Any, ...] = PrivateAttr(default=())
     _source_content_manifest: Any = PrivateAttr(default=None)
+    _source_document_outline: Any = PrivateAttr(default=None)
+    _source_content_authored_reflow: bool = PrivateAttr(default=False)
 
     # Chat-first async generation reuses the durable presentation shell and
     # awaiting-approval operation created by /presentation/create.  Legacy

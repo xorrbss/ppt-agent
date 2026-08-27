@@ -58,6 +58,25 @@ def _install_fake_model(monkeypatch, response=None, error=None):
     return calls
 
 
+def _install_fake_model_sequence(monkeypatch, responses):
+    calls = []
+    pending = iter(responses)
+
+    async def fake_generate(client, model, **kwargs):
+        calls.append((client, model, kwargs))
+        return next(pending)
+
+    monkeypatch.setattr(patch_mod, "get_llm_config", lambda: "config")
+    monkeypatch.setattr(patch_mod, "get_client", lambda *, config: object())
+    monkeypatch.setattr(patch_mod, "get_model", lambda: "patch-model")
+    monkeypatch.setattr(
+        patch_mod,
+        "generate_structured_with_schema_retries",
+        fake_generate,
+    )
+    return calls
+
+
 def test_compact_dom_map_strips_raw_html_unknown_metrics_and_unsafe_styles():
     normalized, qids = patch_mod.compact_dom_map_for_prompt(DOM)
 
@@ -162,6 +181,91 @@ def test_invalid_model_css_fails_closed(monkeypatch):
     assert result.ok is False
     assert result.plan is None
     assert result.fallback_reason == "invalid_model_patch"
+
+
+def test_source_reflow_reproposes_invalid_patch_once_with_validator_feedback(
+    monkeypatch,
+):
+    calls = _install_fake_model_sequence(
+        monkeypatch,
+        [
+            {
+                "strategy": "patch",
+                "actions": [
+                    {
+                        "action": "setStyle",
+                        "qid": "title",
+                        "styles": {
+                            "display": "none",
+                            "borderTopColor": "rgb(23 58 99 / 20%)",
+                        },
+                    }
+                ],
+            },
+            {
+                "strategy": "patch",
+                "actions": [
+                    {
+                        "action": "setStyle",
+                        "qid": "title",
+                        "styles": {
+                            "display": "grid",
+                            "borderTopColor": "#173A63",
+                        },
+                    }
+                ],
+            },
+        ],
+    )
+
+    result = _run(
+        patch_mod.propose_authored_slide_patch(
+            PNG,
+            DOM,
+            "repair border collision",
+            retry_invalid_model_patch=True,
+        )
+    )
+
+    assert result.ok is True
+    assert result.plan.actions[0].styles == {
+        "display": "grid",
+        "border-top-color": "#173A63",
+    }
+    assert len(calls) == 2
+    retry_messages = calls[1][2]["messages"]
+    feedback = retry_messages[-1].content[0].text
+    assert "rejectedProposal" in feedback
+    assert "unsupported CSS value 'none' for display" in feedback
+    assert '"border-top-color"' in feedback
+    assert '"validDisplayValues":["grid","flex"]' in feedback
+    assert "display is permitted only as exact grid or flex" in feedback
+    assert "integer channels 0..255" in feedback
+
+
+def test_ordinary_patch_neither_retries_nor_allows_side_border_color(monkeypatch):
+    calls = _install_fake_model(
+        monkeypatch,
+        response={
+            "strategy": "patch",
+            "actions": [
+                {
+                    "action": "setStyle",
+                    "qid": "title",
+                    "styles": {
+                        "display": "flex",
+                        "borderTopColor": "#173A63",
+                    },
+                }
+            ],
+        },
+    )
+
+    result = _run(patch_mod.propose_authored_slide_patch(PNG, DOM, "fix"))
+
+    assert result.ok is False
+    assert result.fallback_reason == "invalid_model_patch"
+    assert len(calls) == 1
 
 
 def test_unknown_model_target_fails_closed(monkeypatch):

@@ -720,14 +720,14 @@ export class PresentationGenerationApi {
         digest: `sha256:${string}`;
       };
       contentPolicy?: {
-        text: "verbatim";
-        preserveAllTableCells: true;
-        preserveAllChartValues: true;
+        text: "outline";
+        preserveAllTableCells: false;
+        preserveAllChartValues: false;
         preserveAllImageOccurrences: true;
         preserveSourceOrder: true;
         preserveSourceSlideCount: true;
         allowSlideExpansion: false;
-        allowSummarization: false;
+        allowSummarization: true;
         overflowPolicy: "same_page_recompose_or_fail";
       };
       idempotency_key?: string;

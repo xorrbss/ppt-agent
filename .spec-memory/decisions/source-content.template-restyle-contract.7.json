@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "key": "source-content.template-restyle-contract",
+  "revision": 7,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "원본 43쪽의 텍스트와 이미지 96개 출현만 페이지별로 보존하고 표·차트·기존 레이아웃은 제외한 뒤 선택한 authored 템플릿으로 새로 구성한다.",
+  "scope": [
+    "source-content",
+    "presentation-generation",
+    "authored-template"
+  ],
+  "invariants": [
+    "원본 43페이지의 수와 순서를 정확히 유지한다.",
+    "원본 텍스트는 해당 페이지에서 누락이나 대체 없이 보존한다.",
+    "원본 이미지 96개 출현은 해당 페이지에서 숨김·축소·오프캔버스 없이 가시적으로 보존한다.",
+    "회사 표준이 미선택이면 선택한 authored 템플릿 디자인만 적용한다."
+  ],
+  "forbidden": [
+    "원본 표 또는 차트를 네이티브 객체나 값으로 보존하지 않는다.",
+    "원본 도형과 기존 슬라이드 레이아웃을 디자인 기반으로 재사용하지 않는다.",
+    "이미지 누락·임의 중복제거·숨김·미세 배치·오프캔버스를 허용하지 않는다.",
+    "색상과 테두리만 바꾸는 단순 재스타일을 템플릿 적용으로 간주하지 않는다."
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_presentation_pipeline.py",
+    "servers/fastapi/services/authored_presentation_generation.py",
+    "servers/fastapi/utils/authored_illustrations.py",
+    "servers/fastapi/utils/authored_dom_quality.py",
+    "servers/fastapi/tests/unit/test_authored_dom_quality.py"
+  ],
+  "supersedes": [
+    "source-content.template-restyle-contract@6"
+  ],
+  "recordedAt": "2026-08-27T16:10:03.8172741+00:00"
+}

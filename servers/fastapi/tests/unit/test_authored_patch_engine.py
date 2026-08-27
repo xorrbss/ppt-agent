@@ -92,6 +92,62 @@ def test_unsafe_or_non_allowlisted_css_fails_closed(styles):
     assert result.path == "full_fallback"
 
 
+def test_source_reflow_only_allows_bounded_display_and_side_border_colors():
+    border_plan = _plan(
+        {
+            "action": "setStyle",
+            "qid": "title",
+            "styles": {"display": "grid", "borderTopColor": "#173A63"},
+        }
+    )
+
+    ordinary = apply_authored_patch(HTML, border_plan)
+    source_reflow = apply_authored_patch(
+        HTML,
+        border_plan,
+        allow_source_reflow_safe_styles=True,
+    )
+    flex = apply_authored_patch(
+        HTML,
+        _plan(
+            {
+                "action": "setStyle",
+                "qid": "title",
+                "styles": {"display": "flex"},
+            }
+        ),
+        allow_source_reflow_safe_styles=True,
+    )
+    rejected_displays = [
+        apply_authored_patch(
+            HTML,
+            _plan(
+                {
+                    "action": "setStyle",
+                    "qid": "title",
+                    "styles": {"display": value},
+                }
+            ),
+            allow_source_reflow_safe_styles=True,
+        )
+        for value in ("none", "hidden", "block")
+    ]
+
+    assert ordinary.ok is False
+    assert ordinary.fallback_reason == "invalid_patch_schema"
+    assert source_reflow.ok is True
+    assert "display: grid" in source_reflow.html
+    assert "border-top-color: #173A63" in source_reflow.html
+    assert flex.ok is True
+    assert "display: flex" in flex.html
+    assert all(result.ok is False for result in rejected_displays)
+    assert all(result.html == HTML for result in rejected_displays)
+    assert all(
+        result.fallback_reason == "invalid_patch_schema"
+        for result in rejected_displays
+    )
+
+
 def test_target_must_be_an_exact_qid_not_a_selector():
     with pytest.raises(ValidationError):
         AuthoredPatchPlan.model_validate(

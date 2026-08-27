@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.source-reflow-vqa-checkpoint-accumulation",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Source-reflow VQA retains deck-wide metrics and checkpoints successful local HTML/PNG repairs before residual fail-close retries.",
+  "scope": [
+    "authored",
+    "source-reflow",
+    "vision-qa",
+    "checkpointing"
+  ],
+  "invariants": [
+    "Residual thresholds remain unchanged",
+    "Ordinary authored VQA keeps cache-based best-effort behavior"
+  ],
+  "forbidden": [
+    "Discarding successful source-reflow local patches before retry",
+    "Re-reading compact-patch metrics only from the process LRU"
+  ],
+  "evidence": [
+    "servers/fastapi/utils/llm_calls/author_vision_qa.py",
+    "servers/fastapi/services/authored_presentation_generation.py",
+    "servers/fastapi/tests/unit/test_authored_pipeline.py"
+  ],
+  "supersedes": [],
+  "recordedAt": "2026-08-27T14:40:16.8463775+00:00"
+}

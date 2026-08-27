@@ -9,20 +9,32 @@
     "source-locked.owner-scoped-durable-generation",
     "source-content.pptx-standard-metadata",
     "source-content.manifest-parent-before-assets",
-    "source-content.template-restyle-contract"
+    "source-content.template-restyle-contract",
+    "presentation.company-standard-optional",
+    "authored.source-reflow-residual-dom-gate",
+    "authored.source-reflow-vqa-checkpoint-accumulation",
+    "authored.source-reflow-patch-validation-retry"
   ],
   "activeDecisionIndex": {
     "source-locked.owner-scoped-durable-generation": "decisions/source-locked.owner-scoped-durable-generation.1.json",
     "source-content.pptx-standard-metadata": "decisions/source-content.pptx-standard-metadata.1.json",
     "source-content.manifest-parent-before-assets": "decisions/source-content.manifest-parent-before-assets.1.json",
-    "source-content.template-restyle-contract": "decisions/source-content.template-restyle-contract.5.json"
+    "source-content.template-restyle-contract": "decisions/source-content.template-restyle-contract.7.json",
+    "presentation.company-standard-optional": "decisions/presentation.company-standard-optional.2.json",
+    "authored.source-reflow-residual-dom-gate": "decisions/authored.source-reflow-residual-dom-gate.1.json",
+    "authored.source-reflow-vqa-checkpoint-accumulation": "decisions/authored.source-reflow-vqa-checkpoint-accumulation.1.json",
+    "authored.source-reflow-patch-validation-retry": "decisions/authored.source-reflow-patch-validation-retry.1.json"
   },
   "decisionIndex": {
     "source-locked.owner-scoped-durable-generation": "decisions/source-locked.owner-scoped-durable-generation.1.json",
     "source-content.pptx-standard-metadata": "decisions/source-content.pptx-standard-metadata.1.json",
     "source-content.manifest-parent-before-assets": "decisions/source-content.manifest-parent-before-assets.1.json",
-    "source-content.template-restyle-contract": "decisions/source-content.template-restyle-contract.5.json"
+    "source-content.template-restyle-contract": "decisions/source-content.template-restyle-contract.7.json",
+    "presentation.company-standard-optional": "decisions/presentation.company-standard-optional.2.json",
+    "authored.source-reflow-residual-dom-gate": "decisions/authored.source-reflow-residual-dom-gate.1.json",
+    "authored.source-reflow-vqa-checkpoint-accumulation": "decisions/authored.source-reflow-vqa-checkpoint-accumulation.1.json",
+    "authored.source-reflow-patch-validation-retry": "decisions/authored.source-reflow-patch-validation-retry.1.json"
   },
   "readFirst": [],
-  "updatedAt": "2026-08-26T21:31:36.0665853+00:00"
+  "updatedAt": "2026-08-27T16:10:03.8172741+00:00"
 }

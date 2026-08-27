@@ -152,6 +152,8 @@ def _condensed(text: str, limit: int) -> str:
 
 def source_image_brief(
     candidates: Mapping[str, SourceImageCandidate] | Sequence[SourceImageCandidate],
+    *,
+    required: bool = False,
 ) -> str:
     """Describe the attached source images and how this slide may use them.
 
@@ -178,9 +180,16 @@ def source_image_brief(
             f"{candidate.width}x{candidate.height}px{suffix}"
         )
     listing = "\n".join(lines)
+    placement_rule = (
+        "Every listed source slot is mandatory for this slide. Place each one "
+        "exactly once with its own `<img data-source-slot-id=\"SLOT_ID\">`; do "
+        "not omit, replace, merge, or invent source images."
+        if required
+        else _SOURCE_IMAGE_RULES
+    )
     return (
         "\n\nSOURCE IMAGES: pictures the user already owns, attached after any "
-        f"style reference, in this order:\n{listing}\n{_SOURCE_IMAGE_RULES}"
+        f"style reference, in this order:\n{listing}\n{placement_rule}"
     )
 
 

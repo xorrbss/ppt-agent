@@ -127,6 +127,24 @@ _STYLE_PROPERTIES = frozenset(
         "z-index",
     }
 )
+_SOURCE_REFLOW_SAFE_STYLE_PROPERTIES = frozenset(
+    {
+        "border-bottom-color",
+        "border-left-color",
+        "border-right-color",
+        "border-top-color",
+        "display",
+    }
+)
+
+
+def allowed_patch_style_properties(*, source_reflow: bool = False) -> tuple[str, ...]:
+    """Return the exact style-key contract exposed to a repair proposer."""
+
+    properties = _STYLE_PROPERTIES
+    if source_reflow:
+        properties = properties | _SOURCE_REFLOW_SAFE_STYLE_PROPERTIES
+    return tuple(sorted(properties))
 
 
 class _ActionBase(BaseModel):
@@ -707,10 +725,18 @@ def _length_list(value: str, *, positive: bool = False, maximum: int = 4) -> boo
     )
 
 
-def _validate_css_value(property_name: str, value: str) -> str:
+def _validate_css_value(
+    property_name: str,
+    value: str,
+    *,
+    allow_source_reflow_safe_styles: bool = False,
+) -> str:
     prop = property_name.strip().lower()
     value = value.strip()
-    if prop not in _STYLE_PROPERTIES:
+    allowed_properties = _STYLE_PROPERTIES
+    if allow_source_reflow_safe_styles:
+        allowed_properties = allowed_properties | _SOURCE_REFLOW_SAFE_STYLE_PROPERTIES
+    if prop not in allowed_properties:
         raise ValueError(f"CSS property {prop!r} is not allowlisted")
     if not value or len(value) > 200 or any(ord(char) < 32 for char in value):
         raise ValueError(f"invalid CSS value for {prop}")
@@ -718,7 +744,9 @@ def _validate_css_value(property_name: str, value: str) -> str:
         raise ValueError(f"unsafe CSS value for {prop}")
 
     valid = False
-    if prop in {"color", "background-color", "border-color"}:
+    if prop in {"color", "background-color", "border-color"} or prop in (
+        _SOURCE_REFLOW_SAFE_STYLE_PROPERTIES - {"display"}
+    ):
         valid = _is_css_color(value)
     elif prop in {
         "font-size",
@@ -802,6 +830,8 @@ def _validate_css_value(property_name: str, value: str) -> str:
         valid = bool(_NUMBER.fullmatch(value)) and 0 <= float(value) <= 1
     elif prop == "border-style":
         valid = value in {"none", "solid", "dashed", "dotted", "double"}
+    elif prop == "display":
+        valid = allow_source_reflow_safe_styles and value in {"grid", "flex"}
     elif prop == "z-index":
         valid = bool(re.fullmatch(r"[+-]?\d+", value)) and -100 <= int(value) <= 1000
     elif prop == "align-items":
@@ -860,6 +890,7 @@ def validate_patch_plan(
     plan: AuthoredPatchPlan | Mapping[str, Any],
     *,
     reference_mode: ReferenceMode = STYLE_REFERENCE,
+    allow_source_reflow_safe_styles: bool = False,
 ) -> AuthoredPatchPlan:
     """Validate schema and every CSS value without requiring the source document."""
     if reference_mode not in {STYLE_REFERENCE, EXACT_RECONSTRUCTION}:
@@ -880,7 +911,13 @@ def validate_patch_plan(
                 canonical = _canonical_style_property_name(name)
                 if canonical in normalized:
                     raise ValueError(f"duplicate CSS property {canonical!r}")
-                normalized[canonical] = _validate_css_value(canonical, value)
+                normalized[canonical] = _validate_css_value(
+                    canonical,
+                    value,
+                    allow_source_reflow_safe_styles=(
+                        allow_source_reflow_safe_styles
+                    ),
+                )
             action.styles = normalized
         elif isinstance(action, MoveAction):
             for value in (action.left, action.top):
@@ -1034,6 +1071,7 @@ def apply_authored_patch(
     plan: AuthoredPatchPlan | Mapping[str, Any],
     *,
     reference_mode: ReferenceMode = STYLE_REFERENCE,
+    allow_source_reflow_safe_styles: bool = False,
 ) -> PatchApplicationResult:
     """Apply a fully validated plan atomically, or return the unchanged document.
 
@@ -1045,7 +1083,11 @@ def apply_authored_patch(
             html if isinstance(html, str) else "", "empty HTML", "invalid_html"
         )
     try:
-        parsed_plan = validate_patch_plan(plan, reference_mode=reference_mode)
+        parsed_plan = validate_patch_plan(
+            plan,
+            reference_mode=reference_mode,
+            allow_source_reflow_safe_styles=allow_source_reflow_safe_styles,
+        )
     except (ValidationError, TypeError, ValueError) as error:
         return _failure(html, str(error), "invalid_patch_schema")
 
@@ -1215,6 +1257,7 @@ __all__ = [
     "ReplaceImageAction",
     "SetStyleAction",
     "SetTextAction",
+    "allowed_patch_style_properties",
     "apply_authored_patch",
     "inspect_authored_edit_capabilities",
     "validate_patch_plan",

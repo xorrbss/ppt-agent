@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.source-reflow-patch-validation-retry",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Source-reflow local patch validation failures get one error-informed reproposal; display hiding stays forbidden and side border colors are scoped opt-in.",
+  "scope": [
+    "authored",
+    "source-reflow",
+    "vision-qa",
+    "local-patch"
+  ],
+  "invariants": [
+    "Ordinary authored patch proposals do not receive the extra retry",
+    "display and visibility cannot hide content",
+    "Only one error-informed reproposal is allowed"
+  ],
+  "forbidden": [
+    "Retrying provider failures",
+    "Allowing display none",
+    "Broadening ordinary authored style properties"
+  ],
+  "evidence": [
+    "servers/fastapi/utils/llm_calls/author_slide_patch.py",
+    "servers/fastapi/utils/authored_patch_engine.py",
+    "servers/fastapi/utils/llm_calls/author_vision_qa.py",
+    "servers/fastapi/tests/unit/test_author_slide_patch.py",
+    "servers/fastapi/tests/unit/test_authored_patch_engine.py"
+  ],
+  "supersedes": [],
+  "recordedAt": "2026-08-27T15:25:49.3403094+00:00"
+}

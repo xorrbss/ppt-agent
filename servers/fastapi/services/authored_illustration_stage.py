@@ -149,9 +149,9 @@ async def illustrate_slide(
             # reaches substitution byte-identically to before it.
             if source_images is not None:
                 illustration_kwargs["source_images"] = source_images
-            if image_generation_disabled:
+            if not generating:
                 # Source-image substitution remains available, but a missing
-                # or invalid source cannot fall through to the disabled
+                # or invalid source cannot fall through to a disabled/absent
                 # provider and turn an otherwise valid deck into retries.
                 illustration_kwargs["generate_fallback"] = False
             try:

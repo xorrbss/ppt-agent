@@ -28,8 +28,6 @@ import { AuthoredVnextMasterClient } from "@/lib/authored-vnext/master/client";
 import {
   clearLastUsedMasterId,
   masterSelectionFromPublished,
-  readStoredCompanyStandardPreference,
-  saveLastUsedMasterId,
 } from "@/lib/authored-vnext/master/selection-storage";
 
 import TemplateSelection from "../../outline/components/TemplateSelection";
@@ -86,36 +84,11 @@ const UploadPage = ({
 
   useEffect(() => {
     if (!masterFeatureEnabled) return;
-
-    let active = true;
-    const epoch = ++masterSelectionEpochRef.current;
-    const preference = readStoredCompanyStandardPreference();
-    // A preference only identifies a master. Resolve the current published
-    // pointer for each fresh upload entry instead of retaining a stale pin.
+    // Company-standard selection is document-scoped. A fresh upload must never
+    // inherit browser state created by another user, automation, or document.
+    ++masterSelectionEpochRef.current;
     dispatch(setPptGenUploadState({ companyStandard: null }));
-    const applyPublished = (published: MasterRevisionEnvelope) => {
-      if (!active || masterSelectionEpochRef.current !== epoch) return;
-      dispatch(
-        setPptGenUploadState({
-          companyStandard: masterSelectionFromPublished(published),
-        })
-      );
-    };
-    const resolvePublished = (masterId: string) =>
-      masterClient.getPublished(masterId).then(applyPublished);
-
-    if (preference.kind !== "last-used") {
-      return () => {
-        active = false;
-      };
-    }
-    void resolvePublished(preference.masterId).catch(() => {
-      // Deleted, unpublished, or inaccessible choices stay unselected.
-    });
-
-    return () => {
-      active = false;
-    };
+    clearLastUsedMasterId();
   }, [dispatch, masterFeatureEnabled]);
 
   const {
@@ -234,7 +207,6 @@ const UploadPage = ({
           companyStandard: masterSelectionFromPublished(published),
         })
       );
-      saveLastUsedMasterId(published.masterId);
     },
     [dispatch]
   );
