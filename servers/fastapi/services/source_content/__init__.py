@@ -9,6 +9,13 @@ from services.source_content.manifest_store import (
     admit_source_content_manifest_pin,
     analyze_reference_snapshot,
 )
+from services.source_content.outline import (
+    SourceDocumentOutline,
+    SourceDocumentOutlineBuilder,
+    SourceDocumentOutlineSlide,
+    build_source_document_outline,
+)
+from services.source_content.allocator import PageLockedTemplateCompositionPlanner
 
 __all__ = [
     "SourceContentAnalysisReceipt",
@@ -16,4 +23,9 @@ __all__ = [
     "SourceContentManifestPin",
     "admit_source_content_manifest_pin",
     "analyze_reference_snapshot",
+    "SourceDocumentOutline",
+    "SourceDocumentOutlineBuilder",
+    "SourceDocumentOutlineSlide",
+    "build_source_document_outline",
+    "PageLockedTemplateCompositionPlanner",
 ]

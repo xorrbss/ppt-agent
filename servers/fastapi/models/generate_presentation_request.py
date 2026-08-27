@@ -36,9 +36,10 @@ class SourceContentPolicy(StrictCamelModel):
     preserve_all_chart_values: Literal[True] = True
     preserve_all_image_occurrences: Literal[True] = True
     preserve_source_order: Literal[True] = True
-    allow_slide_expansion: Literal[True] = True
+    preserve_source_slide_count: Literal[True] = True
+    allow_slide_expansion: Literal[False] = False
     allow_summarization: Literal[False] = False
-    overflow_policy: Literal["add_slides"] = "add_slides"
+    overflow_policy: Literal["same_page_recompose_or_fail"] = "same_page_recompose_or_fail"
 
 
 class SourceContentManifestPinInput(StrictCamelModel):

@@ -672,6 +672,7 @@ def _run_powerpoint_com_qa(
                 "slide_count": reopened_count,
                 "typography_issues_gt_5pt": typography_gt_5pt,
                 "typography_issues_gt_10pt": typography_gt_10pt,
+                "inspection_failures": inspection_failures,
                 "native_text": native_text,
                 "native_image": native_image,
                 "native_shape": native_shape,

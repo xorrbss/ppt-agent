@@ -1,10 +1,12 @@
 """Fill authored-slide image slots with source pictures or generated images.
 
-Illustration-enabled authored styles let the model place ONE
+Illustration-enabled authored styles let the model place one or more source
+image slots and (separately) a generated illustration
 ``<img data-illust-prompt="...">`` slot per slide (see ``ILLUSTRATION_SLOT_RULES``
 in ``author_slide_rules.py``). When source images are offered to a slide, the
-model may instead reference one of them by ``<img data-asset-id="...">`` (the
-source-image variant of those rules lives in ``author_slide_images.py``); a real
+model may instead reference one or more by ``<img data-source-slot-id="...">``
+(legacy ``data-asset-id`` is accepted for compatibility; the source-image variant
+of those rules lives in ``author_slide_images.py``); a real
 picture the user owns beats invented pixels, so a resolved source image wins over
 the illustration slot.
 
@@ -12,8 +14,8 @@ Both kinds are inlined as data URIs so the slide stays fully self-contained for
 render, export and the hybrid-PPTX preflight. Every failure degrades to simply
 removing the slot — the deck always renders.
 
-This module is also the security boundary for source images: ``data-asset-id``
-is model output, so it is only ever resolved by lookup in the candidate mapping
+This module is also the security boundary for source images: source-slot ids are
+model output, so they are only ever resolved by lookup in the candidate mapping
 that was offered to that slide. An identifier the model invents is dropped and
 never reaches the filesystem.
 """
@@ -50,7 +52,12 @@ from utils.authored_illustration_prompt import (
     clean_scene_prompt,
     clean_slide_content,
 )
-from utils.authored_image_slots import Slot, rewrite_slots, scan_slots
+from utils.authored_image_slots import (
+    Slot,
+    rewrite_slots,
+    scan_slots,
+    source_slot_id_for_asset,
+)
 from utils.renderer_isolation import MAX_ASSET_BYTES, MAX_HTML_BYTES
 
 LOGGER = logging.getLogger(__name__)
@@ -285,49 +292,58 @@ def strip_illustration_slots(html: str) -> str:
 def reserve_source_images_for_slide(
     html: str,
     candidates: Mapping[str, SourceImageCandidate],
-    placed_asset_ids: Set[str],
+    placed_asset_ids: Optional[Set[str]] = None,
 ) -> Dict[str, SourceImageCandidate]:
-    """Narrow a slide's offer to the single picture it is still allowed to place.
+    """Return every verified source slot authored on this slide.
 
-    A picture belongs on one slide of the deck, so ids already taken by an
-    earlier slide are skipped here and the later slide falls back to its
-    illustration slot (or to nothing). ``placed_asset_ids`` is updated in place.
+    ``placed_asset_ids`` remains accepted for callers from the old API but is no
+    longer used: the same asset is explicitly allowed to be reused across slides.
     """
     if not candidates:
         return {}
+    offered: Dict[str, SourceImageCandidate] = {}
     for slot in scan_slots(html, want_assets=True, want_illust=False):
-        asset_id = slot.asset_id
-        if not asset_id or asset_id in placed_asset_ids:
+        slot_id = slot.source_slot_id or (
+            source_slot_id_for_asset(slot.asset_id) if slot.asset_id else None
+        )
+        if not slot_id:
             continue
-        candidate = candidates.get(asset_id)
+        candidate = candidates.get(slot_id)
+        if candidate is None and slot.asset_id:
+            candidate = candidates.get(slot.asset_id)
         if candidate is None:
             continue
-        placed_asset_ids.add(asset_id)
-        return {asset_id: candidate}
-    return {}
+        offered[slot_id] = candidate
+    return offered
 
 
 def _place_source_image(
     slots: Sequence[Slot],
     source_images: Mapping[str, SourceImageCandidate],
     slide_index: int,
-) -> _Placement:
-    """Resolve the first slot whose id was actually offered to this slide."""
+) -> dict[int, str]:
+    """Resolve every source slot whose id was offered to this slide."""
+    resolved: dict[int, str] = {}
     for position, slot in enumerate(slots):
-        if not slot.asset_id:
+        slot_id = slot.source_slot_id or (
+            source_slot_id_for_asset(slot.asset_id) if slot.asset_id else None
+        )
+        if not slot_id:
             continue
-        candidate = source_images.get(slot.asset_id)
+        candidate = source_images.get(slot_id)
+        if candidate is None and slot.asset_id:
+            candidate = source_images.get(slot.asset_id)
         if candidate is None:
             # Hallucinated, stale or crafted id: drop the slot, touch no file.
             LOGGER.warning(
-                "[authored] unknown source image id on slide %d, dropping slot",
+                "[authored] unknown source image slot on slide %d, dropping slot",
                 slide_index + 1,
             )
             continue
         data_uri = _data_uri_from_source_image(candidate)
         if data_uri is not None:
-            return _Placement(position, data_uri)
-    return _Placement(None, None)
+            resolved[position] = data_uri
+    return resolved
 
 
 async def _generate_slot_image(
@@ -380,7 +396,8 @@ async def apply_authored_illustration(
     """Fill one slide's image slot, without ever raising.
 
     ``source_images`` is the exact candidate set offered to THIS slide, keyed by
-    asset id; a resolved source picture wins over the illustration slot. ``None``
+    opaque source-slot id (legacy asset-id keys are also accepted); every
+    resolved source picture wins over the illustration slot. ``None``
     means source images are not in play, so ``data-asset-id`` stays inert and
     behaviour is exactly what it was before that feature.
 
@@ -401,17 +418,15 @@ async def apply_authored_illustration(
     if not slots:
         return html
 
-    keep_index: Optional[int] = None
-    data_uri: Optional[str] = None
+    resolved_by_index: dict[int, str] = {}
     if source_images:
-        keep_index, data_uri = _place_source_image(slots, source_images, slide_index)
-    if data_uri is None and style_prompt and generate_fallback:
+        resolved_by_index = _place_source_image(slots, source_images, slide_index)
+    if not resolved_by_index and style_prompt and generate_fallback:
         # No user picture landed — the generated illustration is the fallback.
         illust_index = next(
             (i for i, slot in enumerate(slots) if slot.scene is not None), None
         )
         if illust_index is not None:
-            keep_index = illust_index
             data_uri = await _generate_slot_image(
                 slots[illust_index].scene or "",
                 style_prompt,
@@ -420,7 +435,9 @@ async def apply_authored_illustration(
                 raise_on_failure,
                 slide_content,
             )
-    if data_uri is None:
+            if data_uri is not None:
+                resolved_by_index[illust_index] = data_uri
+    if not resolved_by_index:
         LOGGER.warning(
             "[authored] dropping image slot on slide %d (style=%s)",
             slide_index + 1,
@@ -430,7 +447,13 @@ async def apply_authored_illustration(
             # rest of the function exists to avoid.
             getattr(style, "id", None),
         )
-    return rewrite_slots(html, slots, keep_index, data_uri)
+    return rewrite_slots(
+        html,
+        slots,
+        None,
+        None,
+        resolved_by_index=resolved_by_index,
+    )
 
 
 def _content_at(slide_contents: Optional[Sequence[str]], index: int) -> str:
@@ -442,17 +465,16 @@ def _content_at(slide_contents: Optional[Sequence[str]], index: int) -> str:
 def _per_slide_source_images(
     htmls: Sequence[str], source_images: DeckSourceImages
 ) -> List[SlideSourceImages]:
-    """Split a deck-wide offer into per-slide offers; the first slide wins a tie."""
+    """Split a deck-wide offer into per-slide offers without consuming assets."""
     if source_images is None:
         return [None] * len(htmls)
-    placed: Set[str] = set()
     per_slide: List[SlideSourceImages] = []
     for index, html in enumerate(htmls):
         if isinstance(source_images, MappingABC):
             candidates: Mapping[str, SourceImageCandidate] = source_images
         else:
             candidates = source_images[index] if index < len(source_images) else {}
-        per_slide.append(reserve_source_images_for_slide(html, candidates, placed))
+        per_slide.append(reserve_source_images_for_slide(html, candidates))
     return per_slide
 
 
@@ -464,11 +486,11 @@ async def apply_authored_illustrations(
     *,
     source_images: DeckSourceImages = None,
 ) -> List[str]:
-    """Fill each slide's image slot (at most one per slide).
+    """Fill each slide's source slots, with generated illustration as fallback.
 
-    ``source_images`` is either one deck-wide mapping of asset id -> candidate or
-    one mapping per slide; either way a given picture is placed on at most one
-    slide of the deck. ``slide_contents`` is the per-slide outline markdown,
+    ``source_images`` is either one deck-wide mapping of source-slot/legacy asset
+    id -> candidate or one mapping per slide; candidates may be reused across
+    slides. ``slide_contents`` is the per-slide outline markdown,
     positionally aligned with ``htmls``; a slide without content simply gets the
     no-text prompt. Extra slots beyond the placed one are removed, as is the slot
     of a slide whose generation failed, returned a provider placeholder, gave

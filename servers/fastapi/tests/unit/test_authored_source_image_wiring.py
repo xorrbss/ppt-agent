@@ -20,6 +20,7 @@ from services import authored_presentation_pipeline as pipeline
 from services import authored_source_images as seam
 from services.source_images.models import SourceImageCandidate
 from utils.get_env import is_authored_source_images_enabled
+from utils.authored_image_slots import source_slot_id_for_asset
 from utils.llm_calls.author_slide import Brand
 from models.presentation_outline_model import (
     PresentationOutlineModel,
@@ -346,26 +347,27 @@ def test_plan_returns_none_when_the_deck_has_no_candidates():
     assert seam.plan_slide_source_images(("a", "b"), ()) is None
 
 
-def test_plan_spends_each_candidate_on_at_most_one_slide():
+def test_plan_reuses_all_relevant_candidates_on_each_slide():
     contents = ("매출 현황\n분기별 매출 추이", "매출 현황\n같은 주제 반복")
     candidates = [_candidate("first", "매출 현황"), _candidate("second", "매출 현황")]
 
     per_slide = seam.plan_slide_source_images(contents, candidates)
 
-    assert [sorted(offer) for offer in per_slide] == [["first"], ["second"]]
+    expected = sorted([source_slot_id_for_asset("first"), source_slot_id_for_asset("second")])
+    assert [sorted(offer) for offer in per_slide] == [expected, expected]
 
 
-def test_plan_offers_at_most_one_picture_per_slide():
+def test_plan_offers_multiple_pictures_per_slide():
     contents = ("매출 현황\n분기별 매출 추이",)
     candidates = [_candidate("first", "매출 현황"), _candidate("second", "매출 현황")]
 
     per_slide = seam.plan_slide_source_images(contents, candidates)
 
     assert len(per_slide) == 1
-    assert len(per_slide[0]) == 1
+    assert len(per_slide[0]) == 2
 
 
-def test_plan_gives_explicit_image_slide_first_refusal_for_direct_upload():
+def test_plan_allows_direct_upload_reuse_across_slides():
     contents = (
         "표지\n편집 가능한 덱",
         "기능 화면\n첨부한 features.png를 img 요소로 배치",
@@ -374,7 +376,10 @@ def test_plan_gives_explicit_image_slide_first_refusal_for_direct_upload():
 
     per_slide = seam.plan_slide_source_images(contents, [direct])
 
-    assert per_slide == [{}, {"direct": direct}]
+    assert per_slide == [
+        {source_slot_id_for_asset("direct"): direct},
+        {source_slot_id_for_asset("direct"): direct},
+    ]
 
 
 def test_plan_swallows_a_failing_ranking(monkeypatch):
@@ -486,7 +491,10 @@ def test_gate_on_hands_both_consumers_the_identical_set(monkeypatch):
         index: set(kwargs["source_images"]) for index, kwargs in illustrate_calls
     }
     assert authored == {0: {"sales"}, 1: {"safety"}}
-    assert substituted == authored
+    assert substituted == {
+        0: {source_slot_id_for_asset("sales")},
+        1: {source_slot_id_for_asset("safety")},
+    }
 
 
 def test_a_slide_without_an_offer_still_gets_an_inert_empty_mapping(monkeypatch):
@@ -555,7 +563,9 @@ def test_source_images_run_the_illustrate_stage_without_an_image_provider(
     )
 
     assert len(illustrate_calls) == 1
-    assert set(illustrate_calls[0][1]["source_images"]) == {"sales"}
+    assert set(illustrate_calls[0][1]["source_images"]) == {
+        source_slot_id_for_asset("sales")
+    }
 
 
 def test_a_slide_the_deck_denied_a_drawing_still_places_the_users_picture(
@@ -590,7 +600,9 @@ def test_a_slide_the_deck_denied_a_drawing_still_places_the_users_picture(
         )
     )
 
-    assert set(illustrate_calls[0][1]["source_images"]) == {"sales"}
+    assert set(illustrate_calls[0][1]["source_images"]) == {
+        source_slot_id_for_asset("sales")
+    }
 
 
 def test_failing_selection_degrades_instead_of_failing_the_deck(monkeypatch):

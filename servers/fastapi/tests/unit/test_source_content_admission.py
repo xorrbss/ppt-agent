@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 from pathlib import Path
+from types import SimpleNamespace
+import uuid
 from zipfile import ZIP_DEFLATED, ZipFile
 
 import pytest
@@ -14,8 +17,10 @@ from api.v1.ppt.endpoints.source_content import SOURCE_CONTENT_ROUTER
 from models.sql.source_content import (
     SourceContentCoverageReceipt,
     SourceContentGenerationBinding,
+    SourceContentManifestAsset,
     SourceContentManifestRecord,
 )
+from services.source_content import manifest_store
 from services.source_content.errors import SECURITY_REJECTED, SourceContentError
 from services.source_content.pptx import extract_pptx_source_content
 
@@ -69,6 +74,43 @@ def _with_external_relationship(source: Path, target: Path) -> None:
                     b"</Relationships>",
                 )
             output.writestr(info, payload)
+
+
+def _with_standard_presentation_metadata(source: Path, target: Path) -> None:
+    rel_name = "ppt/_rels/presentation.xml.rels"
+    content_types_name = "[Content_Types].xml"
+    with ZipFile(source, "r") as package, ZipFile(target, "w", ZIP_DEFLATED) as output:
+        for info in package.infolist():
+            payload = package.read(info.filename)
+            if info.filename == rel_name:
+                payload = payload.replace(
+                    b"</Relationships>",
+                    b'<Relationship Id="rIdHandoutMetadata" '
+                    b'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/handoutMaster" '
+                    b'Target="handoutMasters/handoutMaster1.xml"/>'
+                    b'<Relationship Id="rIdRevisionMetadata" '
+                    b'Type="http://schemas.microsoft.com/office/2011/relationships/revisionInfo" '
+                    b'Target="revisionInfo.xml"/>'
+                    b"</Relationships>",
+                )
+            elif info.filename == content_types_name:
+                payload = payload.replace(
+                    b"</Types>",
+                    b'<Override PartName="/ppt/handoutMasters/handoutMaster1.xml" '
+                    b'ContentType="application/vnd.openxmlformats-officedocument.presentationml.handoutMaster+xml"/>'
+                    b'<Override PartName="/ppt/revisionInfo.xml" '
+                    b'ContentType="application/vnd.ms-powerpoint.revisioninfo+xml"/>'
+                    b"</Types>",
+                )
+            output.writestr(info, payload)
+        output.writestr(
+            "ppt/handoutMasters/handoutMaster1.xml",
+            b'<p:handoutMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"/>',
+        )
+        output.writestr(
+            "ppt/revisionInfo.xml",
+            b'<p1912:revisionInfo xmlns:p1912="http://schemas.microsoft.com/office/powerpoint/2011/main"/>',
+        )
 
 
 def test_pptx_manifest_is_deterministic_and_external_relationship_fails_closed(
@@ -141,3 +183,110 @@ def test_pptx_manifest_is_deterministic_and_external_relationship_fails_closed(
         )
     assert rejected.value.code == SECURITY_REJECTED
     assert rejected.value.detail["reason"] == "external_relationship"
+
+
+def test_pptx_manifest_accepts_standard_non_slide_metadata(tmp_path: Path) -> None:
+    source = tmp_path / "source.pptx"
+    _fixture_pptx(source)
+    metadata = tmp_path / "metadata.pptx"
+    _with_standard_presentation_metadata(source, metadata)
+
+    extracted = extract_pptx_source_content(
+        metadata,
+        owner_id="owner-a",
+        reference_snapshot_id="11111111-1111-1111-1111-111111111111",
+    )
+
+    inventory = extracted.manifest.object_inventory
+    assert inventory.unclassified_object_ids == ()
+    assert inventory.discovered_object_count == inventory.classified_object_count
+    classifications = {
+        item.object_id: item.classification
+        for item in extracted.manifest.inventory_objects
+    }
+    assert classifications["part:ppt/handoutMasters/handoutMaster1.xml"] == "package_metadata"
+    assert classifications["part:ppt/revisionInfo.xml"] == "package_metadata"
+    assert (
+        classifications[
+            "rel:ppt/_rels/presentation.xml.rels:rIdHandoutMetadata"
+        ]
+        == "supported_relationship"
+    )
+    assert (
+        classifications[
+            "rel:ppt/_rels/presentation.xml.rels:rIdRevisionMetadata"
+        ]
+        == "supported_relationship"
+    )
+
+
+def test_manifest_parent_is_flushed_before_assets(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source.pptx"
+    _fixture_pptx(source)
+    snapshot_id = uuid.uuid4()
+    owner_id = uuid.uuid4()
+    binding = SimpleNamespace(
+        asset_id=uuid.uuid4(),
+        sha256="sha256:source",
+        version=1,
+    )
+    snapshot = SimpleNamespace(
+        provider_id="uploaded_document",
+        asset_bindings=(binding,),
+        snapshot_id=snapshot_id,
+        source_revision="1",
+    )
+    asset = SimpleNamespace(
+        sha256=binding.sha256,
+        version=binding.version,
+        original_name="source.pptx",
+    )
+
+    async def admit_snapshot(_session, *, snapshot_id):
+        assert snapshot_id == snapshot.snapshot_id
+        return snapshot
+
+    async def resolve_asset(_session, *, asset_id):
+        assert asset_id == binding.asset_id
+        return asset, source
+
+    monkeypatch.setattr(manifest_store, "admit_reference_snapshot", admit_snapshot)
+    monkeypatch.setattr(
+        manifest_store,
+        "resolve_workspace_asset_download",
+        resolve_asset,
+    )
+
+    class RecordingSession:
+        def __init__(self) -> None:
+            self.events: list[tuple[str, type | None]] = []
+
+        async def scalar(self, _query):
+            return None
+
+        def add(self, value) -> None:
+            self.events.append(("add", type(value)))
+
+        async def flush(self) -> None:
+            self.events.append(("flush", None))
+
+        async def commit(self) -> None:
+            self.events.append(("commit", None))
+
+    session = RecordingSession()
+    asyncio.run(
+        manifest_store.analyze_reference_snapshot(
+            session,
+            reference_snapshot_id=snapshot_id,
+            owner_id=owner_id,
+        )
+    )
+
+    parent_add = session.events.index(("add", SourceContentManifestRecord))
+    parent_flush = session.events.index(("flush", None))
+    asset_add = session.events.index(("add", SourceContentManifestAsset))
+    commit = session.events.index(("commit", None))
+    assert parent_add < parent_flush < asset_add < commit

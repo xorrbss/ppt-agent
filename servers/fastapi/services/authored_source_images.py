@@ -25,6 +25,7 @@ from services.assets import AssetGateway
 from services.source_images.models import SourceImageCandidate
 from services.source_images.registry import register_source_images
 from services.source_images.selection import select_source_images
+from utils.authored_image_slots import source_slot_id_for_asset
 from utils.get_env import is_authored_source_images_enabled
 from utils.llm_calls.author_slide import (
     EXACT_RECONSTRUCTION,
@@ -149,9 +150,9 @@ def plan_slide_source_images(
 
     The pipeline authors slides concurrently, so a selection made inside a
     worker would depend on completion order and the same deck would not
-    reproduce. Deciding here also lets a candidate be spent: a slide places at
-    most one image, so leaving an offered picture in the pool would only let a
-    later slide repeat it while starving that slide of a picture of its own.
+    reproduce. Deciding here gives every slide deterministic opaque source-slot
+    ids. Candidates may be offered to multiple slides and may fill multiple
+    slots on one slide.
 
     ``None`` -- not an empty list -- means source images are not in play for
     this deck, which is the value the substitution step reads as
@@ -161,10 +162,10 @@ def plan_slide_source_images(
     """
     if not candidates:
         return None
-    remaining = [
+    eligible = [
         candidate for candidate in candidates if _candidate_bytes_match_digest(candidate)
     ]
-    if not remaining:
+    if not eligible:
         LOGGER.warning(
             "[authored] source image bytes missing or changed; continuing without source images"
         )
@@ -173,42 +174,21 @@ def plan_slide_source_images(
         {} for _content in contents
     ]
     try:
-        # A directly uploaded picture has no source heading or position, so its
-        # relevance score is intentionally identical on every slide.  Give
-        # explicit image-request slides first refusal; otherwise a cover would
-        # spend the picture before the slide that names ``img``/``features.png``
-        # can receive it.  Stable source order is retained inside both groups.
-        image_intent_indexes = [
-            index
-            for index, content in enumerate(contents)
-            if any(
-                term in f" {(content or '').casefold()} "
-                for term in _SOURCE_IMAGE_INTENT_TERMS
-            )
-        ]
-        remaining_indexes = [
-            index for index in range(len(contents)) if index not in image_intent_indexes
-        ]
-        for index in (*image_intent_indexes, *remaining_indexes):
+        for index, content in enumerate(contents):
             content = contents[index]
             heading, _, body = (content or "").partition("\n")
             chosen = select_source_images(
-                remaining,
+                eligible,
                 slide_heading=heading.strip().lstrip("#*- ").strip(),
                 slide_content=body,
                 slide_index=index,
-                # One slot per slide, so a second offer could only be withheld
-                # from a later slide that would have been able to show it.
-                limit=1,
+                limit=None,
             )
-            offered = {candidate.asset_id: candidate for candidate in chosen}
+            offered = {
+                source_slot_id_for_asset(candidate.asset_id): candidate
+                for candidate in chosen
+            }
             per_slide[index] = offered
-            if offered:
-                remaining = [
-                    candidate
-                    for candidate in remaining
-                    if candidate.asset_id not in offered
-                ]
     except Exception:
         LOGGER.warning(
             "[authored] source image selection failed; "

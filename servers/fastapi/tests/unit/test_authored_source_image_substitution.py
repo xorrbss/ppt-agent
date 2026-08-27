@@ -1,6 +1,6 @@
 """Source-image substitution in ordinary authored generation.
 
-The model only ever writes an asset id; this module is where that id becomes a
+The model writes an opaque source-slot id; this module is where that id becomes a
 picture, so these tests pin both halves: a known id is inlined, and anything
 else is dropped without the filesystem being touched.
 """
@@ -20,6 +20,7 @@ from utils.authored_illustrations import (
     reserve_source_images_for_slide,
 )
 from utils.llm_calls.author_slide import validate_authored_slide_html
+from utils.authored_image_slots import source_slot_id_for_asset
 
 _PNG_BYTES = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgYAAAAAMAASsJTYQAAAAASUVORK5CYII="
@@ -250,7 +251,7 @@ def test_source_image_works_for_a_style_without_an_illustration_prompt(tmp_path:
     assert service.prompts == []
 
 
-def test_a_picture_is_placed_on_only_one_slide_of_the_deck(tmp_path: Path):
+def test_a_picture_is_reused_on_multiple_slides_of_the_deck(tmp_path: Path):
     candidate = _candidate(tmp_path)
     generated = tmp_path / "generated.png"
     generated.write_bytes(_PNG_BYTES)
@@ -272,10 +273,10 @@ def test_a_picture_is_placed_on_only_one_slide_of_the_deck(tmp_path: Path):
     )
 
     assert _PNG_DATA_URI in out[0]
-    assert "<img" not in out[1]  # duplicate use, and no illustration slot to fall back to
+    assert _PNG_DATA_URI in out[1]
     assert out[2].count("<img") == 1
-    assert "data-illust-prompt" in out[2]  # fell back to generation
-    assert len(service.prompts) == 1
+    assert "data-illust-prompt" not in out[2]
+    assert len(service.prompts) == 0
 
 
 def test_per_slide_offers_are_honoured(tmp_path: Path):
@@ -397,7 +398,7 @@ def test_raise_on_failure_only_covers_the_generated_fallback(tmp_path: Path):
         )
 
 
-def test_reserve_source_images_for_slide_claims_one_id_per_deck(tmp_path: Path):
+def test_reserve_source_images_for_slide_returns_all_slots_and_reuses_ids(tmp_path: Path):
     first = _candidate(tmp_path, asset_id="src-a")
     second = _candidate(tmp_path, asset_id="src-b")
     candidates = {"src-a": first, "src-b": second}
@@ -413,10 +414,13 @@ def test_reserve_source_images_for_slide_claims_one_id_per_deck(tmp_path: Path):
         '<img data-asset-id="src-b">', candidates, placed
     )
 
-    assert slide_one == {"src-a": first}  # one picture per slide
-    assert slide_two == {}  # already placed
-    assert slide_three == {"src-b": second}
-    assert placed == {"src-a", "src-b"}
+    assert slide_one == {
+        source_slot_id_for_asset("src-a"): first,
+        source_slot_id_for_asset("src-b"): second,
+    }
+    assert slide_two == {source_slot_id_for_asset("src-a"): first}
+    assert slide_three == {source_slot_id_for_asset("src-b"): second}
+    assert placed == set()
 
 
 # --------------------------------------------------------------------------

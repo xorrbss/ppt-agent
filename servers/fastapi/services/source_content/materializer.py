@@ -7,6 +7,7 @@ cell, chart value and image reference is re-read from the immutable manifest.
 from __future__ import annotations
 
 import base64
+import math
 import re
 from typing import Any, Literal, Mapping, Sequence
 
@@ -294,19 +295,24 @@ class SourceContentSceneMaterializer:
             if layout is None:
                 raise ValueError("source_content_composition_not_applied")
             slot_by_id = {slot.slot_id: slot for slot in layout.slots}
+            slot_use_counts: dict[str, int] = {}
+            for placement in planned_slide.placements:
+                slot_use_counts[placement.slot_id] = slot_use_counts.get(placement.slot_id, 0) + 1
+            # A source page may contain many small text owners while the
+            # selected template exposes one body slot. Recompose repeated
+            # owners as a deterministic reading-order grid instead of
+            # squeezing them into a single vertical pixel strip.
+            slot_flow: dict[str, tuple[int, int]] = {}
+            for slot_id, total in slot_use_counts.items():
+                columns = min(4, total) if total > 1 else 1
+                rows = math.ceil(total / columns)
+                slot_flow[slot_id] = (columns, rows)
+            slot_use_ordinals: dict[str, int] = {}
             slide_id = f"slide:source-{planned_slide.output_index + 1}"
-            elements: list[Any] = [
-                SceneShapeElement(
-                    kind="shape",
-                    element_id=f"element:source-{planned_slide.output_index + 1}.background",
-                    z_order=-100_000,
-                    bounds=canvas_bounds,
-                    semantic_role="canvasBackground",
-                    editability=SceneEditability(),
-                    shape="rect",
-                    fill=style_tokens.background,
-                )
-            ]
+            # The selected template master owns the slide background.  Do not
+            # emit a duplicate canvasBackground Scene element: the OOXML
+            # materializer deliberately rejects body-level background shapes.
+            elements: list[Any] = []
             for placement in planned_slide.placements:
                 source = blocks.get(placement.source_block_id)
                 slot = slot_by_id.get(placement.slot_id)
@@ -327,13 +333,43 @@ class SourceContentSceneMaterializer:
                 semantic_role = str(
                     _field(block, "semanticRole", "semantic_role") or "body"
                 )
+                # Repeated template slots are a same-page recompose, not a new
+                # output slide.  Split the slot's rectangle deterministically
+                # along its major axis so every occurrence remains visible and
+                # independently bound to its source block/range.
+                base_bounds = slot.bounds
+                total_uses = slot_use_counts.get(placement.slot_id, 1)
+                ordinal = slot_use_ordinals.get(placement.slot_id, 0)
+                slot_use_ordinals[placement.slot_id] = ordinal + 1
+                if total_uses > 1:
+                    columns, rows = slot_flow[placement.slot_id]
+                    cell_width = base_bounds.width / columns
+                    cell_height = base_bounds.height / rows
+                    column = ordinal % columns
+                    row = ordinal // columns
+                    bounds = Rect(
+                        x=base_bounds.x + cell_width * column,
+                        y=base_bounds.y + cell_height * row,
+                        width=(
+                            base_bounds.width - cell_width * column
+                            if column == columns - 1
+                            else cell_width
+                        ),
+                        height=(
+                            base_bounds.height - cell_height * row
+                            if row == rows - 1
+                            else cell_height
+                        ),
+                    )
+                else:
+                    bounds = base_bounds
                 data_id: str | None = None
                 asset_id: str | None = None
                 if (
-                    slot.bounds.x < canvas_bounds.x
-                    or slot.bounds.y < canvas_bounds.y
-                    or slot.bounds.right > canvas_bounds.right
-                    or slot.bounds.bottom > canvas_bounds.bottom
+                    bounds.x < canvas_bounds.x
+                    or bounds.y < canvas_bounds.y
+                    or bounds.right > canvas_bounds.right
+                    or bounds.bottom > canvas_bounds.bottom
                 ):
                     clipping_count += 1
 
@@ -345,7 +381,7 @@ class SourceContentSceneMaterializer:
                         kind="image",
                         element_id=element_id,
                         z_order=10 + placement.source_order,
-                        bounds=slot.bounds,
+                        bounds=bounds,
                         semantic_role=semantic_role,
                         editability=SceneEditability(geometry=True, style=True, asset=True),
                         asset_id=asset.asset_id,
@@ -363,6 +399,49 @@ class SourceContentSceneMaterializer:
                         else style_tokens.body_font
                     )
                     size = 30.0 if semantic_role in {"title", "heading", "section"} else 18.0
+                    # PowerPoint COM auto-fit is not deterministic in readback.
+                    # Seal a size based on the estimated wrapped line count so
+                    # dense source content remains on the source page without
+                    # collapsing every repeated block to the same tiny font.
+                    # Scene geometry is expressed in CSS pixels while native
+                    # PowerPoint text is measured in points (0.75pt/px on the
+                    # 96dpi canvas).  CJK glyphs are approximately one em wide;
+                    # using the pixel width directly substantially
+                    # under-counts wrapping and produces false 17pt fits in a
+                    # 24pt-high box.
+                    available_width_pt = bounds.width * 0.75
+                    estimated_chars_per_line = max(
+                        1, int(available_width_pt / max(size * 0.9, 1.0))
+                    )
+                    estimated_lines = sum(
+                        max(1, math.ceil(len(line) / estimated_chars_per_line))
+                        for line in text.split("\n")
+                    )
+                    # Native PowerPoint stores point sizes on a twips grid and
+                    # can read a two-decimal value back one hundredth lower
+                    # (for example 2.55 -> 2.54).  A fractional value would
+                    # therefore make the sealed Scene style digest differ from
+                    # the COM readback.  Integer points are stable across the
+                    # native exporter/readback boundary while the 4-column
+                    # recompose grid keeps repeated source blocks legible.
+                    fitted_size = (
+                        max(
+                            1.0,
+                            math.floor(
+                                max(
+                                    1.0,
+                                    min(
+                                        size,
+                                        bounds.height
+                                        * 0.6
+                                        / max(estimated_lines, 1),
+                                    ),
+                                )
+                            ),
+                        )
+                        if total_uses > 1
+                        else size
+                    )
                     runs = [
                         SceneTextRun(
                             run_id=f"run:{_stable_suffix(element_id + ':' + str(index))}",
@@ -372,7 +451,7 @@ class SourceContentSceneMaterializer:
                                 else str(item)
                             ),
                             font_family=font,
-                            font_size=size,
+                            font_size=fitted_size,
                             color=style_tokens.text_primary,
                         )
                         for index, item in enumerate(raw_runs)
@@ -384,16 +463,21 @@ class SourceContentSceneMaterializer:
                         kind="text",
                         element_id=element_id,
                         z_order=10 + placement.source_order,
-                        bounds=slot.bounds,
+                        bounds=bounds,
                         semantic_role=semantic_role,
                         editability=SceneEditability(text=True, geometry=True, style=True),
                         text=scene_text,
                         runs=runs,
                         style=SceneTextStyle(
                             font_family=font,
-                            font_size=size,
+                            font_size=fitted_size,
                             color=style_tokens.text_primary,
-                            auto_fit="none",
+                            # Page-locked recomposition may place many source
+                            # text blocks into the same template slot. Let
+                            # PowerPoint shrink those repeated boxes to their
+                            # sealed bounds instead of overflowing or adding a
+                            # new slide.
+                            auto_fit="shrink" if total_uses > 1 else "none",
                         ),
                     )
                 elif kind == "table":
@@ -410,7 +494,7 @@ class SourceContentSceneMaterializer:
                         kind="table",
                         element_id=element_id,
                         z_order=10 + placement.source_order,
-                        bounds=slot.bounds,
+                        bounds=bounds,
                         semantic_role=semantic_role,
                         editability=SceneEditability(geometry=True, style=True, data=True),
                         data_id=data_id,
@@ -446,7 +530,7 @@ class SourceContentSceneMaterializer:
                         kind="chart",
                         element_id=element_id,
                         z_order=10 + placement.source_order,
-                        bounds=slot.bounds,
+                        bounds=bounds,
                         semantic_role=semantic_role,
                         editability=SceneEditability(geometry=True, style=True, data=True),
                         data_id=data_id,
@@ -482,7 +566,7 @@ class SourceContentSceneMaterializer:
                         kind="shape",
                         element_id=element_id,
                         z_order=10 + placement.source_order,
-                        bounds=slot.bounds,
+                        bounds=bounds,
                         semantic_role=semantic_role,
                         editability=SceneEditability(geometry=True, style=True),
                         shape=shape,

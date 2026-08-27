@@ -323,7 +323,19 @@ async def render_candidate_powerpoint_evidence(
     ):
         raise SourceContentCoverageError(
             "source_content_export_readback_failed",
-            detail="PowerPoint render/readback did not pass for the candidate artifact",
+            detail=(
+                "PowerPoint render/readback did not pass for the candidate artifact: "
+                f"status={report.get('status')!r}, "
+                f"slideCount={report.get('slide_count')!r}, "
+                f"rendered={report.get('rendered')!r}, "
+                f"readback={report.get('readback')!r}, "
+                f"reopened={report.get('reopened')!r}, "
+                f"renderHashesMatch={report.get('render_hashes_match')!r}, "
+                f"typographyGt5pt={report.get('typography_issues_gt_5pt')!r}, "
+                f"typographyGt10pt={report.get('typography_issues_gt_10pt')!r}, "
+                f"nativeQidMissing={report.get('native_qid_missing')!r}, "
+                f"inspectionFailures={report.get('inspection_failures')!r}"
+            ),
         )
     render_projection = {
         "artifactDigest": artifact_digest,

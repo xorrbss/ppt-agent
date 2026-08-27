@@ -6,14 +6,23 @@
   "maxContextChars": 2400,
   "maxActiveDecisions": 8,
   "activeDecisionKeys": [
-    "source-locked.owner-scoped-durable-generation"
+    "source-locked.owner-scoped-durable-generation",
+    "source-content.pptx-standard-metadata",
+    "source-content.manifest-parent-before-assets",
+    "source-content.template-restyle-contract"
   ],
   "activeDecisionIndex": {
-    "source-locked.owner-scoped-durable-generation": "decisions/source-locked.owner-scoped-durable-generation.1.json"
+    "source-locked.owner-scoped-durable-generation": "decisions/source-locked.owner-scoped-durable-generation.1.json",
+    "source-content.pptx-standard-metadata": "decisions/source-content.pptx-standard-metadata.1.json",
+    "source-content.manifest-parent-before-assets": "decisions/source-content.manifest-parent-before-assets.1.json",
+    "source-content.template-restyle-contract": "decisions/source-content.template-restyle-contract.5.json"
   },
   "decisionIndex": {
-    "source-locked.owner-scoped-durable-generation": "decisions/source-locked.owner-scoped-durable-generation.1.json"
+    "source-locked.owner-scoped-durable-generation": "decisions/source-locked.owner-scoped-durable-generation.1.json",
+    "source-content.pptx-standard-metadata": "decisions/source-content.pptx-standard-metadata.1.json",
+    "source-content.manifest-parent-before-assets": "decisions/source-content.manifest-parent-before-assets.1.json",
+    "source-content.template-restyle-contract": "decisions/source-content.template-restyle-contract.5.json"
   },
   "readFirst": [],
-  "updatedAt": "2026-08-26T08:16:31.0634271+00:00"
+  "updatedAt": "2026-08-26T21:31:36.0665853+00:00"
 }

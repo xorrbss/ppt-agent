@@ -600,13 +600,30 @@ async def publish_source_content_generation(
         }
         master_value = worker_master_contract(master_contract, raw_asset_digests)
         candidate_bytes, _native_receipt = materialize_scene_pptx(
-            materialized_scene.scene,
+            # The OOXML worker consumes the sealed transport mapping. Passing
+            # the Pydantic Scene object directly is rejected before schema
+            # validation because the worker intentionally has no model-layer
+            # dependency.
+            materialized_scene.scene.model_dump(mode="json", by_alias=True),
             assets,
             master_value,
         )
         artifact_digest = f"sha256:{hashlib.sha256(candidate_bytes).hexdigest()}"
+        # Workspace artifact publication intentionally accepts only sources
+        # inside APP_DATA_DIRECTORY.  Keep the short-lived render candidate
+        # there as well; the PowerPoint QA helper may use the process temp
+        # directory internally, but the file handed to the durable publisher
+        # must remain within the owned application-data root.
+        staging_root = (
+            Path(get_exports_directory())
+            / "source-content"
+            / ".staging"
+            / str(presentation_id)
+        )
+        staging_root.mkdir(parents=True, exist_ok=True)
         candidate_context = tempfile.TemporaryDirectory(
-            prefix="source-content-candidate-"
+            prefix="source-content-candidate-",
+            dir=str(staging_root),
         )
         candidate_path = Path(candidate_context.name) / "candidate.pptx"
         atomic_write(candidate_path, candidate_bytes)
@@ -715,6 +732,13 @@ async def publish_source_content_generation(
         workspace_operation_id = getattr(
             generation_job, "workspace_operation_id", None
         )
+        if workspace_operation_id is not None:
+            # The shared workspace publisher reserves its artifact intent in a
+            # short-lived independent DB session.  Close the source-content
+            # staging transaction first so SQLite does not hold a write lock
+            # across that hand-off (the final publication commit remains in
+            # publish_staged_presentation).
+            await sql_session.commit()
         if workspace_operation_id is None:
             publication_source = (
                 Path(get_exports_directory())

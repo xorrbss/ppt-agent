@@ -1,7 +1,7 @@
 # 원본 콘텐츠 기반 템플릿 재디자인 설계
 
 - 상태: 설계 초안, 제품 코드 구현 전
-- 작성일: 2026-08-26
+- 작성일: 2026-08-27
 - 대상: Upload → Authored 생성 → Workbench → PPTX export
 - 사용자 확정 계약: 원본 콘텐츠는 그대로 유지하고, 선택한 AI 저작 템플릿과 회사 표준으로 다시 디자인한다.
 
@@ -25,7 +25,7 @@
 1. 원본의 모든 텍스트, 수치, 표 셀, 이미지 occurrence, 출처와 순서를 보존한다.
 2. 선택한 AI 저작 스타일을 색상, 타이포그래피, 패널, 차트, 이미지 방향에 적용한다.
 3. 선택한 회사 표준이 있으면 geometry, 안전영역, writable slot, 로고, 헤더와 푸터에 적용한다.
-4. 공간이 부족하면 슬라이드를 추가하고, 콘텐츠 삭제·요약·임의 축소로 맞추지 않는다.
+4. 원본 페이지 수와 결과 페이지 수를 반드시 동일하게 유지한다. 공간이 부족해도 슬라이드를 추가·분할하지 않으며, 콘텐츠 삭제·요약도 허용하지 않는다.
 5. 생성형 HTML authoring을 거치지 않고 봉인된 원본 payload를 결정적으로 Authored Scene/Workbench/PPTX에 materialize해 편집 가능하게 한다.
 6. 원본 package inventory부터 최종 PPTX readback까지 콘텐츠 포함률을 기계적으로 검증하고 100%가 아니면 성공으로 게시하지 않는다.
 
@@ -73,10 +73,11 @@
 생성 버튼 위에 다음 값을 항상 표시한다.
 
 ```text
-콘텐츠 · 원본 유지
+콘텐츠 · 원본 텍스트·이미지·표 값·차트 값 유지
+페이지 수 · 원본과 동일
 AI 저작 스타일 · OSB 스마트뱅킹
 회사 표준 · IBIZ 제안서 v2 또는 사용 안 함
-overflow · 내용 삭제 없이 슬라이드 추가
+overflow · 같은 페이지 안에서 템플릿 레이아웃 재조정, 불가 시 실패
 ```
 
 AI 저작 스타일을 해석할 수 없거나 선택 revision이 유효하지 않으면 생성 버튼을 비활성화하고 카탈로그를 연다. 회사 표준은 선택 사항이지만, 선택된 경우 published head 검증에 실패하면 조용히 제거하지 않고 다시 선택하도록 한다.
@@ -86,7 +87,7 @@ AI 저작 스타일을 해석할 수 없거나 선택 revision이 유효하지 �
 원본 콘텐츠 모드에서는 일반 생성 옵션을 다음처럼 바꾼다.
 
 - 프롬프트: `추가 디자인 지시`로 명칭을 바꾸고 레이아웃·강조·밀도 지시만 허용
-- 슬라이드 수: `원본 기준 + 필요 시 자동 추가`로 고정
+- 슬라이드 수: `원본 페이지 수와 동일`로 고정
 - 언어: 원본에서 자동 감지하며 번역하지 않음
 - tone/verbosity: 원문을 바꿀 수 있으므로 비활성화
 - web search: 새 사실을 추가할 수 있으므로 비활성화
@@ -102,7 +103,7 @@ AI 저작 스타일을 해석할 수 없거나 선택 revision이 유효하지 �
 - 텍스트 블록 수
 - 표와 차트 수
 - 고유 이미지 수와 이미지 occurrence 수
-- 추출 신뢰도가 낮아 raster fallback이 필요한 블록 수
+- 텍스트·이미지·표·차트 데이터로 추출하지 못한 개체 수
 
 원본 SHA-256, 내부 asset id, 전체 경로와 같은 구현 세부정보는 기본 UI에 노출하지 않는다.
 
@@ -127,7 +128,7 @@ admission 성공 조건은 다음과 같다.
 
 - `discoveredObjectCount == classifiedObjectCount`
 - `unclassifiedObjectIds`가 비어 있음
-- content-bearing unsupported object는 지원되는 block-level raster fallback으로 봉인됐거나 명시적으로 실패함
+- content-bearing object는 허용된 텍스트·이미지·표 데이터·차트 데이터로 표현되거나 명시적으로 실패함
 - decorative master/layout object와 실제 원본 콘텐츠 object가 분리됨
 - extractor가 이해하지 못한 개체를 누락한 채 `100%`로 계산하지 않음
 
@@ -142,7 +143,7 @@ admission 성공 조건은 다음과 같다.
 | 표 | 셀, 병합, 행·열 순서 | 모든 셀 값과 병합 의미 유지 |
 | 차트 | 시리즈, category, 값, label | 데이터 추출 가능 시 네이티브 차트로 재표현 |
 | 이미지 | occurrence | 같은 이미지가 여러 번 나오면 매 occurrence 배치 |
-| 도형·다이어그램 | 의미 블록 또는 raster fallback | 텍스트와 관계를 보존하고 누락 금지 |
+| 도형·다이어그램 | 사용하지 않음 | 도형의 시각적 표현은 폐기하고, 내부에 있는 텍스트만 text block으로 추출 |
 | 출처·주석 | source note | 본문과 분리하되 결과에 반드시 포함 |
 
 ### 4.3 텍스트 정책
@@ -156,13 +157,13 @@ admission 성공 조건은 다음과 같다.
 
 ### 4.4 페이지와 슬라이드 정책
 
-- PPTX의 원본 슬라이드 grouping은 우선 보존한다.
+- PPTX의 원본 슬라이드 grouping은 결과 페이지 cardinality의 권위값으로 보존한다.
 - PDF의 페이지 grouping, DOCX의 heading/section grouping을 우선 보존한다.
-- 하나의 원본 단위가 선택 layout의 안전 용량을 넘으면 `part 1`, `part 2` 결과 슬라이드로 분할한다.
-- 분할 시 `sourceBlockId`와 source range 순서를 유지한다. 각 fragment의 range 합집합은 원본 block 전체와 같고 gap과 overlap이 없어야 한다.
+- 하나의 원본 단위가 선택 layout의 안전 용량을 넘으면 같은 페이지 안에서 템플릿의 대체 layout, 영역 재배치, 표·차트 내부 재조판을 적용한다.
+- source unit 하나는 결과 slide 하나에만 대응하며, `sourceBlockId`와 source range는 그 페이지 안에서만 배치한다.
+- 페이지 내부에 안전하게 배치할 수 없으면 `source_content_template_overflow`로 실패한다. 결과 페이지를 추가하거나 원본 콘텐츠를 삭제·요약하지 않는다.
 - 표 반복 헤더처럼 결과 가독성을 위해 생성한 복제 요소는 `derivedDuplicate=true`로 표시하고 원본 커버리지 분모·분자에서 제외한다.
-- 빈 공간을 줄이기 위한 병합은 가능하지만 서로 다른 원본 단위의 상대 순서를 바꾸지 않는다.
-- 기본 정책은 `preserve_content`, `allow_slide_expansion=true`다.
+- 기본 정책은 `preserve_content`, `preserve_source_slide_count=true`, `allow_slide_expansion=false`다.
 
 ## 5. 포맷별 처리
 
@@ -171,8 +172,8 @@ admission 성공 조건은 다음과 같다.
 - OOXML에서 슬라이드별 text run, table, chart data, media relationship, group 관계를 추출한다.
 - master/layout의 장식 이미지는 원본 콘텐츠 occurrence와 구분한다.
 - 원본 master furniture는 결과로 복사하지 않는다. 선택 회사 표준의 furniture가 소유한다.
-- 편집 가능한 text/table/chart/simple shape는 native candidate로 유지한다.
-- SmartArt, OLE, 복잡한 group은 bounding crop과 접근성 텍스트를 함께 보존하는 raster fallback을 허용한다.
+- text/table/chart는 선택 템플릿의 native component로 다시 만든다.
+- 원본 shape·SmartArt·OLE·group의 시각적 표현은 복사하지 않는다. 내부 텍스트가 있으면 text block으로 추출하고, 템플릿의 컴포넌트로 재조판한다.
 
 ### 5.2 PDF
 
@@ -200,7 +201,7 @@ admission 성공 조건은 다음과 같다.
 
 - PPTX/DOCX external relationship과 linked media를 네트워크로 가져오지 않는다.
 - 매크로, 실행 가능 attachment, PDF JavaScript는 실행하지 않는다.
-- OLE/SmartArt 등 active 또는 unsupported object는 inert block-level raster fallback이 가능할 때만 수락하고 그렇지 않으면 실패한다.
+- OLE/SmartArt 등 active 또는 unsupported object는 내부 텍스트·이미지·표·차트 데이터가 추출될 때만 수락하고, 추출할 수 없으면 실패한다.
 - 압축 해제 크기와 비율, 파일·페이지·슬라이드·개체 수, 이미지 pixel 수, OCR 시간과 메모리 상한을 admission에서 제한한다.
 - legacy 변환, PDF render와 OCR은 네트워크가 없는 격리 작업 공간에서 실행한다.
 - 추출 텍스트와 추가 디자인 지시는 LLM에게 명령이 아닌 untrusted data로 구획하고, 모델 출력은 허용된 ID와 enum만 받는다.
@@ -214,7 +215,9 @@ Asset Gateway / reference snapshot
   → SourceSecurityAdmission + SourceObjectInventory
   → SourceContentExtractor
   → immutable SourceContentManifest/v1
-  → ContentAllocator
+  → SourceDocumentOutlineBuilder
+  → SourceDocumentOutline/v1
+  → PageLockedTemplateCompositionPlanner
        + selected authored style pin
        + optional company-standard master pin
   → SourceContentPlacementPlan/v1
@@ -234,6 +237,7 @@ Asset Gateway / reference snapshot
 - 문서 분해 job의 취소·진행률·idempotency 패턴
 - `authoredStyle` 선택 상태
 - published company standard의 `masterPin`
+- 기존 authored source-image의 바이트 검증, digest 계산, owner-scoped asset 저장·경로 해석 primitive
 - deterministic materializer 이후의 Authored Scene schema, Workbench CAS, semantic dual output, PPTX export
 - 기존 `source_locked`의 image occurrence 및 source provenance 계산 방식
 
@@ -244,22 +248,52 @@ Asset Gateway / reference snapshot
 - 별도 immutable download artifact를 생성 성공으로 보는 경로
 - plain `additional_context`만으로 콘텐츠 보존을 주장하는 경로
 - 기존 `author_planned_slide` → `author_slide_html` 생성형 HTML authoring 경로
+- 기존 authored source-image 후보 필터(최소 pixel, full-slide coverage, 반복 furniture 제외, digest dedup)
+- 기존 authored source-image 관련도 선택과 슬라이드당 1장 제한(`plan_slide_source_images`)
+- 모델에 이미지를 첨부하고 `data-asset-id` HTML 슬롯을 선택하게 하는 경로(`source_image_parts`, `_bind_single_offered_source_image_slot`)
 - content payload를 바꿀 수 있는 vision re-author와 생성형 fallback
+
+#### 6.2.1 기존 authored 업로드 이미지 로직의 재사용 원칙
+
+기존 authored 이미지 로직은 자산 수명주기와 출력 계층만 재사용한다. source-content의 원본 manifest가 콘텐츠와 occurrence의 권위 모델이며, authored 후보 목록을 다시 만들어 원본을 추정하지 않는다.
+
+```text
+공통 자산 계층
+  업로드/PPTX media bytes → digest·mime·크기 검증 → owner-scoped asset 저장
+  → 안정적인 asset id와 publication 경로
+
+source-content 이미지 계층
+  manifest의 asset id + shape별 occurrence id/순서/geometry
+  → SourceDocumentOutline/v1
+  → occurrence별 템플릿 슬롯 배치
+  → 기존 SceneImageElement / export / readback
+```
+
+- 동일한 bytes는 저장 asset을 하나로 dedup할 수 있지만, 동일 asset이 한 페이지 또는 여러 페이지에 반복된 경우 occurrence는 각각 보존한다.
+- source-content에서는 일반 authored의 `MIN_SOURCE_IMAGE_EDGE_PX`, `FULL_SLIDE_COVERAGE_THRESHOLD`, `FURNITURE_REPEAT_THRESHOLD`를 콘텐츠 누락 근거로 적용하지 않는다. 보안·자원 상한을 넘는 경우에만 admission에서 명시적으로 실패한다.
+- 이미지 슬롯이 여러 개 필요한 페이지에서 후보 하나만 소비하지 않는다. 모든 원본 occurrence가 템플릿 슬롯에 배치되거나, 같은 페이지 안의 재조합으로도 수용할 수 없을 때 `source_content_template_overflow`로 실패한다.
+- `author_slide_html`은 source-content에서 호출하지 않는다. 따라서 모델이 이미지를 고르거나 생략하는 의미론은 재사용하지 않고, outline의 occurrence 참조를 deterministic materializer가 직접 해석한다.
 
 ### 6.3 모델 책임
 
 ```text
-SourceContentExtractor
+    SourceContentExtractor
   원본 값을 추출하고 봉인한다. 생성·요약하지 않는다.
 
-ContentAllocator
-  sourceBlockId를 template writable slot에 매핑한다.
-  LLM을 쓰더라도 원본은 untrusted data로만 취급하고 출력은 sourceBlockId, layoutRole, slotId, sourceRange enum/값으로 제한한다.
-  모델 출력에 원본 문구나 데이터 값이 포함돼도 사용하지 않는다.
+SourceDocumentOutlineBuilder
+  원본 manifest의 block을 source unit별로 묶어 손실 없는 페이지 아웃라인을 만든다.
+  원문과 데이터 값을 다시 쓰지 않으며 source unit 순서와 page cardinality를 고정한다.
+
+PageLockedTemplateCompositionPlanner
+  아웃라인의 콘텐츠 signature를 기준으로 템플릿 page archetype과 component를 선택한다.
+  source unit 하나를 결과 slide 하나에만 매핑하고, block-driven slide expansion을 허용하지 않는다.
+  source-content 모드에서는 결정적 classifier를 우선 사용하고, LLM을 보조로 쓰더라도 원본은 untrusted data로만 취급한다.
+  출력은 sourceBlockId, layoutRole, slotId, sourceRange enum/값으로 제한하며 모델이 생성한 원문·수치·데이터 값은 사용하지 않는다.
 
 SourceContentSceneMaterializer
   선택 style/master composition과 placement plan으로 Scene을 결정적으로 만든다.
-  원본 문자열, 표 셀, 차트 값과 이미지 asset은 manifest에서만 읽는다.
+  원본 문자열, 표 셀, 차트 값, 이미지 asset과 이미지 occurrence는 manifest에서만 읽는다.
+  저장 asset은 dedup할 수 있지만 placement occurrence는 dedup하지 않는다.
   author_deck, author_slide_html, vision re-author를 호출하지 않는다.
 
 SceneContentCoverageVerifier
@@ -269,6 +303,71 @@ ExportOOXMLAndRenderReadbackVerifier
   후보 PPTX의 OOXML 값·관계와 render geometry를 검증한다.
   두 verifier 중 하나라도 실패하면 staged 결과를 폐기하고 publication을 막는다.
 ```
+
+### 6.4 기존 일반 생성 파이프라인의 재사용 경계
+
+기존 일반 생성의 `outlines.py`와 `generate_ppt_outline`은 문서 context와 content brief를 LLM에 전달해 요약·재구성된 `PresentationOutlineModel`을 만든다. 이 경로는 요청 슬라이드 수에 맞춰 원문을 바꿀 수 있으므로 source-content 모드의 아웃라인 생성기로 그대로 재사용하지 않는다.
+
+대신 다음 계층은 재사용한다.
+
+- authored style/master pin 해석과 템플릿 design token
+- page archetype·layout registry와 geometry/capacity 계산
+- Authored Scene/PPTX export 및 readback 검증 계층
+- 기존 outline 기반 deck planning의 역할·섹션 분류 로직 중 원문을 쓰지 않는 부분
+
+source-content 모드에는 `SourceDocumentOutlineBuilder`를 기존 outline persistence/계획 계층 앞에 둔다. 이 adapter가 `source unit 1개 = outline item 1개`를 만들고, `sourceBlockId`·표·차트·이미지 occurrence 참조를 추가한다. 기존 `PresentationOutlineModel.content` 문자열만으로는 이 참조를 표현할 수 없으므로 richer `SourceDocumentOutline/v1`을 권위 모델로 삼고, 필요한 경우 일반 outline 형식에는 제목/역할 projection만 제공한다. 이미지에는 asset id와 별도로 shape occurrence id를 유지해 같은 이미지가 반복되어도 각 배치가 사라지지 않게 한다.
+
+결과적으로 재사용 경계는 다음과 같다.
+
+```text
+기존 일반 생성: LLM outline → template planning → authoring/export
+source-content: manifest(+image assets/occurrences) → lossless source outline adapter
+              → deterministic occurrence placement + template planning
+              → deterministic Scene/export
+```
+
+source-content에서는 generic LLM outline, content brief, HTML re-authoring, vision re-authoring을 호출하지 않는다. 기존 authored source-image 후보 선택도 호출하지 않으며, 공통으로 남긴 자산 저장·publication과 native image renderer만 사용한다.
+
+### 6.5 기존 authored 일반 생성의 다중 이미지 설계
+
+기존 일반 authored 생성에서는 `슬라이드당 이미지 1장`을 의미론적 규칙으로 두지 않는다. 다만 source-content의 `모든 원본 occurrence 보존` 계약과는 목적이 다르므로, 두 경로의 이미지 계약을 분리한다.
+
+```text
+기존 authored 일반 생성
+  업로드 이미지 등록·검증
+  → AuthoredSourceImagePlan/v1 (슬라이드별 0..N개 source slot)
+  → LLM authoring (텍스트·레이아웃만 작성, sourceSlotId만 참조)
+  → AuthoredMultiImageSlotBinder (서버가 sourceSlotId → assetId를 검증·치환)
+  → 기존 renderer / export / readback
+
+source-content
+  manifest image asset + occurrence
+  → SourceDocumentOutline/v1
+  → occurrence별 deterministic placement
+  → 기존 SceneImageElement / export / readback
+```
+
+#### 6.5.1 이미지 계획과 LLM의 책임 분리
+
+- `AuthoredSourceImagePlan/v1`은 outline과 검증된 후보 metadata로 서버가 결정적으로 만든다. 같은 asset을 여러 슬라이드에서 재사용할 수 있으며, `reusePolicy`는 `allow_cross_slide_reuse`를 기본값으로 한다.
+- 일반 authored의 관련도 점수는 후보를 정렬하고 템플릿 capacity·aggregate byte budget 안에서 `0..N`개를 계획하는 데만 사용한다. `limit=1`과 후보를 한 번 쓰고 소진하는 전역 정책은 사용하지 않는다.
+- LLM은 실제 `assetId`, 파일 경로, data URI를 만들지 않는다. 계획된 `sourceSlotId`와 슬롯별 시각적 요구(순서·예상 비율·역할)만 HTML에 기록한다.
+- 서버는 LLM 결과의 `sourceSlotId`가 해당 슬라이드 계획에 존재하는지 검증한 뒤에만 asset을 바인딩한다. 알 수 없는 슬롯·외부 URL·임의 `src`는 제거한다.
+- LLM이 계획된 슬롯을 일부 선택하지 않는 것은 일반 authored의 디자인 선택으로 허용한다. 원본 이미지 occurrence를 하나도 빠뜨릴 수 없는 경우에는 source-content 경로를 사용한다.
+
+#### 6.5.2 다중 이미지 치환과 생성 이미지 분리
+
+- 기존 `rewrite_slots`의 단일 `keep_index` 계약을 `sourceSlotId → resolved data URI` 다중 매핑으로 바꾼다.
+- source image 슬롯은 모두 검증·치환하며, 같은 asset의 반복 사용도 허용한다. 중복 제거는 보안 검증이 아니라 스타일·레이아웃 선택의 문제로만 남긴다.
+- `data-illust-prompt` 기반 AI 생성 illustration은 source image 슬롯과 별도 namespace·별도 정책으로 처리한다. 업로드 이미지 다중화가 생성 이미지 다중화를 자동으로 의미하지 않는다.
+- source image preview를 LLM에 첨부하는 경우에도 provider aggregate byte budget을 admission에서 먼저 계산한다. 원본 asset bytes는 서버의 owner-scoped 저장소에서 최종 렌더링에 사용하고, budget 초과를 조용한 이미지 삭제로 처리하지 않는다.
+
+#### 6.5.3 기존 경로와의 호환성
+
+- 업로드 이미지가 없으면 기존 authored 요청과 동일한 prompt·HTML·renderer 동작을 유지한다.
+- `EXACT_RECONSTRUCTION`은 기존처럼 source image를 임의로 추가하지 않는다.
+- source-content는 이 다중 후보 계획기를 호출하지 않고 manifest occurrence 계획기를 사용한다.
+- 기존 템플릿에 이미지 영역이 하나뿐이면 엔진이 이미지를 삭제하지 않는다. multi-image archetype으로 재구성하거나, 일반 authored에서 선택된 슬롯이 수용 불가하면 명시적 layout overflow로 처리한다.
 
 ## 7. 데이터 계약
 
@@ -321,7 +420,49 @@ ExportOOXMLAndRenderReadbackVerifier
 
 `ownerId`는 서버 내부 권한 필드이며 브라우저가 제출하거나 수정하지 않는다.
 
-### 7.2 `SourceContentPlacementPlan/v1`
+### 7.2 `SourceDocumentOutline/v1`
+
+manifest의 원본 block을 페이지 단위의 손실 없는 콘텐츠 구조로 묶는다. 이 아웃라인은 원문을 요약하지 않으며, 템플릿 디자인이나 원본 좌표를 포함하지 않는다.
+
+```json
+{
+  "contractVersion": "source-document-outline/v1",
+  "manifestPin": {
+    "manifestId": "scm_<sha256>",
+    "digest": "sha256:..."
+  },
+  "sourceSlideCount": 36,
+  "slides": [
+    {
+      "sourceUnitId": "source-slide:1",
+      "sourceIndex": 1,
+      "titleBlockIds": ["source-slide:1:text:1"],
+      "textBlockIds": ["source-slide:1:text:1", "source-slide:1:text:3"],
+      "imageOccurrenceIds": ["source-slide:1:image:7"],
+      "tableBlockIds": [],
+      "chartBlockIds": [],
+      "readingOrder": [
+        "source-slide:1:text:1",
+        "source-slide:1:text:3",
+        "source-slide:1:image:7"
+      ]
+    }
+  ],
+  "outlineDigest": "sha256:..."
+}
+```
+
+불변식은 다음과 같다.
+
+- `slides.length == sourceSlideCount`
+- 각 `sourceUnitId`는 정확히 한 번만 존재한다.
+- 아웃라인의 block ID는 manifest에 존재해야 한다.
+- `imageOccurrenceIds`는 고유 asset 목록이 아니라 원본 shape occurrence 목록이다. 같은 `assetId`가 반복되어도 occurrence ID를 합치지 않는다.
+- 각 이미지 occurrence는 원본 페이지의 reading order와 source geometry를 유지한 채 정확히 한 번 placement plan에 나타나야 한다. 반복 헤더·장식처럼 검증을 위해 만든 복제 요소만 `derivedDuplicate=true`로 표시한다.
+- 텍스트 문자열·표 셀·차트 값은 아웃라인에 복사하지 않고 manifest를 참조한다.
+- 아웃라인 생성기는 요약·번역·문장 재작성·원본 디자인 복사를 하지 않는다.
+
+### 7.3 `SourceContentPlacementPlan/v1`
 
 ```json
 {
@@ -358,6 +499,16 @@ ExportOOXMLAndRenderReadbackVerifier
             "endExclusive": 1
           },
           "derivedDuplicate": false
+        },
+        {
+          "sourceBlockId": "source-slide:1:image:7",
+          "sourceOccurrenceId": "source-slide:1:image:7",
+          "slotId": "body.image.primary",
+          "renderMode": "native",
+          "sourceRange": {
+            "kind": "image-occurrence"
+          },
+          "derivedDuplicate": false
         }
       ]
     }
@@ -368,7 +519,52 @@ ExportOOXMLAndRenderReadbackVerifier
 
 placement plan은 원본 텍스트를 복사해 갖지 않고 `sourceBlockId`와 source range만 참조한다. atomic block은 정확히 한 placement를 가지며, 분할 가능한 block은 gap·overlap 없는 fragment partition을 가진다. Scene materializer는 manifest에서 봉인된 payload를 읽는다.
 
-### 7.3 생성 요청 확장
+이미지 placement는 `sourceOccurrenceId`와 manifest의 `assetId`를 함께 검증한다. 한 asset이 여러 occurrence에서 사용될 수 있으나 occurrence별 placement를 생략하거나 하나로 합치지 않는다. 템플릿의 이미지 슬롯 수가 부족하면 같은 output slide 안에서 grid·stack·contain 재조합을 시도하고, 그래도 수용할 수 없으면 `source_content_template_overflow`로 중단한다.
+
+### 7.4 `AuthoredSourceImagePlan/v1`
+
+일반 authored 생성 내부에서만 사용하는 서버 생성 계획이다. 브라우저가 asset id나 파일 경로를 제출하지 않으며, 계획의 digest만 generation idempotency와 checkpoint에 포함한다.
+
+```json
+{
+  "contractVersion": "authored-source-image-plan/v1",
+  "sourceMode": "authored",
+  "reusePolicy": "allow_cross_slide_reuse",
+  "slides": [
+    {
+      "slideIndex": 2,
+      "imageSlots": [
+        {
+          "sourceSlotId": "slide-2-img-1",
+          "assetId": "asset:uploaded-a",
+          "order": 1,
+          "role": "evidence",
+          "aspectRatio": 1.78
+        },
+        {
+          "sourceSlotId": "slide-2-img-2",
+          "assetId": "asset:uploaded-b",
+          "order": 2,
+          "role": "example",
+          "aspectRatio": 1.33
+        }
+      ]
+    }
+  ],
+  "aggregatePreviewBytes": 524288,
+  "planDigest": "sha256:..."
+}
+```
+
+불변식은 다음과 같다.
+
+- `sourceSlotId`는 계획 안에서 유일하며, LLM이 발명할 수 없다.
+- 하나의 슬라이드에는 `imageSlots`가 0개 이상일 수 있다. `1`은 유효성 규칙이 아니다.
+- 동일 `assetId`의 cross-slide 재사용은 허용하되, 각 source slot은 독립적으로 검증·기록한다.
+- `assetId`는 owner-scoped registry에 존재하고 digest·mime·크기 검증을 통과해야 한다.
+- `aggregatePreviewBytes`가 provider admission budget을 넘으면 계획을 재구성하거나 명시적으로 실패하며, 임의의 source slot을 조용히 제거하지 않는다.
+
+### 7.5 생성 요청 확장
 
 기존 `GeneratePresentationRequest`의 `template="authored"`, `strategy="authored"`, `authored_style`, `masterPin`, `reference_snapshot_ids`를 유지하고 다음 필드를 추가한다.
 
@@ -385,9 +581,10 @@ placement plan은 원본 텍스트를 복사해 갖지 않고 `sourceBlockId`와
     "preserveAllChartValues": true,
     "preserveAllImageOccurrences": true,
     "preserveSourceOrder": true,
-    "allowSlideExpansion": true,
+    "preserveSourceSlideCount": true,
+    "allowSlideExpansion": false,
     "allowSummarization": false,
-    "overflowPolicy": "add_slides"
+    "overflowPolicy": "same_page_recompose_or_fail"
   },
   "authored_style": "osb-smart-banking",
   "masterPin": {
@@ -400,7 +597,7 @@ placement plan은 원본 텍스트를 복사해 갖지 않고 `sourceBlockId`와
 
 `sourceMode`는 `Presentation.generation_mode`에 저장하지 않는다. 서버 admission 이후 immutable generation payload와 presentation metadata의 별도 `sourceContent` projection에 기록한다.
 
-### 7.4 idempotency
+### 7.6 idempotency
 
 다음 digest를 생성 idempotency identity에 포함한다.
 
@@ -474,14 +671,14 @@ placement plan은 원본 텍스트를 복사해 갖지 않고 `sourceBlockId`와
 - 사용자가 보존 재검증을 요청하면 현재 revision으로 새 receipt를 만들고, 의도적 삭제가 있으면 `modified_by_user` 상태를 유지한다.
 - receipt에는 presentation revision과 artifact digest를 함께 봉인해 다른 revision에 재사용하지 못하게 한다.
 
-## 9. overflow와 fallback
+## 9. overflow와 템플릿 재조합
 
 우선순위는 다음과 같다.
 
-1. 같은 템플릿 내에서 더 큰 capacity layout 선택
-2. 하나의 원본 단위를 여러 슬라이드로 분할
-3. 이미지 크롭과 text reflow 조정
-4. 복잡한 단일 개체만 raster fallback
+1. 같은 템플릿 내에서 적합한 page archetype 선택
+2. 템플릿 규칙 안에서 텍스트·이미지·표·차트 영역 재조합
+3. 이미지 contain/크기와 text reflow 조정(원본 occurrence 삭제 금지)
+4. 표·차트의 내부 크기·축·범례·열 구성을 템플릿 규칙 안에서 재조정
 5. 그래도 배치할 수 없으면 실패
 
 금지한다.
@@ -490,8 +687,8 @@ placement plan은 원본 텍스트를 복사해 갖지 않고 `sourceBlockId`와
 - 자동 요약
 - 숫자와 단위 생략
 - 읽을 수 없는 최소 폰트로 축소
-- 전체 페이지 screenshot으로 템플릿을 가리는 처리
-- fallback 발생을 성공 로그에서 숨기는 처리
+- 원본 occurrence를 후보 선택 결과에 따라 생략하거나 한 페이지당 한 장으로 제한
+- 원본 페이지 이미지를 통째로 붙여 원본 디자인을 남기는 처리
 
 ## 10. 기존 `source_locked` 처리
 
@@ -518,7 +715,7 @@ placement plan은 원본 텍스트를 복사해 갖지 않고 `sourceBlockId`와
 | `source_content_coverage_failed` | 결과 readback에서 콘텐츠 누락 발견 | 생성 실패 처리, 누락 목록 확인 |
 | `source_content_export_readback_failed` | 후보 PPTX에서 값·relationship·geometry 불일치 발견 | 생성 실패 처리 |
 | `source_content_composition_not_applied` | pin은 같지만 style/master가 결과에 적용되지 않음 | 생성 실패 처리 |
-| `source_content_overflow` | 슬라이드 추가 후에도 clipping 발생 | 생성 실패 처리 |
+| `source_content_template_overflow` | 원본 페이지 하나를 템플릿 규칙 안에 콘텐츠 손실 없이 배치할 수 없음 | 생성 실패 처리 |
 
 오류 발생 시 adaptive 생성이나 byte-copy 복원으로 조용히 fallback하지 않는다.
 
@@ -546,6 +743,16 @@ placement plan은 원본 텍스트를 복사해 갖지 않고 `sourceBlockId`와
 - `servers/fastapi/services/source_content/`
   - security admission, object inventory, extractor, manifest store, allocator, deterministic Scene materializer 신규
   - Scene coverage와 export OOXML/render readback verifier 신규
+- `servers/fastapi/services/source_images/` 및 `servers/fastapi/services/authored_source_images.py`
+  - digest·bytes 검증과 owner-scoped asset 저장 primitive는 공통 adapter로 재사용
+  - 일반 authored는 `AuthoredSourceImagePlan/v1`을 생성하고 `limit=1`·후보 소진 정책을 제거
+  - source-content는 authored 후보 필터·관련도 선택·`limit=1` 정책을 연결하지 않음
+- `servers/fastapi/utils/llm_calls/author_slide.py`
+  - `source_image_parts`는 preview attachment로만 사용하고, `_bind_single_offered_source_image_slot`을 다중 `sourceSlotId` binder로 교체
+  - source-content에서는 authored binder를 호출하지 않고 manifest occurrence를 deterministic image element로 materialize
+- `servers/fastapi/utils/authored_image_slots.py` 및 `servers/fastapi/utils/authored_illustrations.py`
+  - 단일 `keep_index`·슬라이드당 1장·덱 전체 asset 소진 정책을 source-slot별 다중 치환으로 교체
+  - source image와 generated illustration namespace·fallback 정책을 분리
 - `servers/fastapi/models/generate_presentation_request.py`
   - source-content request contract 추가
 - `servers/fastapi/api/v1/ppt/endpoints/presentation_generate.py`
@@ -568,25 +775,40 @@ placement plan은 원본 텍스트를 복사해 갖지 않고 `sourceBlockId`와
 - source security admission과 package object inventory
 - `SourceContentManifest/v1` 모델과 digest
 - PPTX extractor
+- `SourceDocumentOutline/v1` builder와 source unit cardinality 검증
+- 이미지 asset/occurrence 분리와 반복 occurrence 보존 검증
 - manifest owner scope와 idempotent analyze
 
 완료 기준: 실파일에서 discovered/classified object와 text/table/chart/image occurrence count 및 digest가 반복 실행 시 동일하고 unclassified object가 0이다.
 
-### 단계 2 — 템플릿 composition과 배치
+### 단계 2 — 템플릿 composition과 페이지 잠금형 배치
 
 - authored style와 company standard pin 결합
-- capacity-aware layout 선택
-- source block → slot placement plan
-- source range 기반 fragment partition
-- overflow slide expansion
+- outline의 콘텐츠 signature 계산
+- source unit → 동일 번호의 결과 slide 1:1 placement plan
+- 콘텐츠 유형 기반 page archetype 선택
+- source block → 템플릿 component placement
+- image occurrence → image slot deterministic placement(동일 asset 반복 허용, occurrence 생략 금지)
+- 페이지 내부 재조합과 overflow fail-closed
 
-완료 기준: 같은 manifest와 composition pin이 같은 placement plan digest를 만든다.
+완료 기준: 같은 manifest와 composition pin이 같은 placement plan digest를 만들고, placement plan의 slide 수가 manifest unit 수와 정확히 같다.
+
+### 단계 2A — 기존 authored 일반 생성의 다중 이미지
+
+- `AuthoredSourceImagePlan/v1`과 source-slot별 digest/owner 검증
+- `plan_slide_source_images`의 `limit=1` 및 후보 소진 정책 제거
+- LLM prompt를 asset id 직접 선택이 아닌 `sourceSlotId` 참조로 변경
+- 다중 source-slot binder와 다중 `rewrite_slots` 치환
+- source image와 generated illustration의 namespace·fallback 분리
+- provider aggregate preview byte budget과 multi-image layout capacity admission
+
+완료 기준: 일반 authored에서 한 슬라이드의 두 source image가 모두 실제 asset으로 치환되고, 같은 asset을 여러 슬라이드에서 재사용할 수 있으며, 알 수 없는 slot·외부 URL은 제거된다. 업로드 이미지가 없는 기존 요청과 `EXACT_RECONSTRUCTION` 결과는 변경되지 않는다.
 
 ### 단계 3 — Scene/PPTX 생성
 
 - 생성형 HTML/vision re-author를 호출하지 않는 deterministic Scene materializer
 - placement plan을 manifest exact payload로 Authored Scene에 materialize
-- native candidate와 block-level raster fallback
+  - 텍스트·표·차트·이미지를 선택 템플릿의 native component로 재구성
 - staged Workbench document와 격리 후보 PPTX export 연결
 
 완료 기준: 결과 deck이 선택한 템플릿 토큰과 master geometry를 실제 사용하며 원본 콘텐츠가 편집 가능한 범위에서 native 객체다.
@@ -617,12 +839,15 @@ placement plan은 원본 텍스트를 복사해 갖지 않고 `sourceBlockId`와
 1. UI 경계: component test에서 원본 콘텐츠 모드 활성화 후 템플릿·회사 표준 UI가 계속 보이고 요청에 pin이 포함되는지 확인
 2. security/inventory 경계: external relationship 또는 unsupported content object fixture가 네트워크 접근 없이 fail closed 하는지 확인
 3. manifest 경계: extractor fixture 한 개로 discovered/classified count와 block/value/occurrence digest 결정성 확인
-4. allocator 경계: overflow fixture가 내용 삭제 없이 추가 슬라이드를 만들고 fragment gap·overlap이 0인지 확인
-5. materializer 경계: source-content 모드에서 `author_slide_html`과 vision re-author가 호출되지 않고 manifest 문자열이 그대로 Scene에 들어가는지 확인
-6. Scene verifier 경계: block 누락 fixture가 `source_content_coverage_failed`인지 확인
-7. export verifier 경계: 후보 PPTX의 text 또는 media relationship을 하나 제거한 fixture가 publication 전에 실패하는지 확인
-8. edit lifecycle 경계: Workbench 편집 후 기존 receipt가 `stale`, 상태가 `modified_by_user`로 바뀌는지 확인
-9. 제품 경로: 실제 PPTX 한 개와 선택 템플릿 한 개로 Upload → deterministic Scene → candidate export → atomic publication을 실행하고 콘텐츠 coverage 100%, 실제 style token/master geometry 적용, 최종 artifact readback을 확인
+   - 동일 asset이 한 페이지에 두 번, 여러 페이지에 반복되는 fixture에서 asset 수와 occurrence 수가 분리되어 유지되는지 확인
+4. allocator 경계: 36개 source unit fixture가 정확히 36개 placement slide를 만들고, 블록 수 증가가 slide 수 증가로 이어지지 않는지 확인
+5. 기존 authored 다중 이미지 경계: 한 슬라이드의 두 source image가 모두 계획·치환되고, 같은 asset의 cross-slide 재사용과 unknown slot 제거를 확인
+6. materializer 경계: source-content 모드에서 `author_slide_html`과 vision re-author가 호출되지 않고 manifest 문자열이 그대로 Scene에 들어가는지 확인
+   - 기존 authored `plan_slide_source_images`가 호출되지 않고 모든 image occurrence가 `SceneImageElement`로 materialize되는지 확인
+7. Scene verifier 경계: block 누락 fixture가 `source_content_coverage_failed`인지 확인
+8. export verifier 경계: 후보 PPTX의 text 또는 media relationship을 하나 제거한 fixture가 publication 전에 실패하는지 확인
+9. edit lifecycle 경계: Workbench 편집 후 기존 receipt가 `stale`, 상태가 `modified_by_user`로 바뀌는지 확인
+10. 제품 경로: 실제 PPTX 한 개와 선택 템플릿 한 개로 Upload → deterministic Scene → candidate export → atomic publication을 실행하고 콘텐츠 coverage 100%, 실제 style token/master geometry 적용, 최종 artifact readback을 확인
 
 PDF와 DOCX의 실파일 검증은 포맷 extractor 단계가 완성된 뒤 각각 별도 경계로 수행한다. fixture PASS만으로 전체 제품 경로 성공을 주장하지 않는다.
 
@@ -634,7 +859,13 @@ PDF와 DOCX의 실파일 검증은 포맷 extractor 단계가 완성된 뒤 각�
 - manifest 분모는 extractor가 추출한 항목이 아니라 원본 object inventory가 소유한다.
 - AI 저작 스타일과 회사 표준은 immutable composition pin으로 함께 적용한다.
 - LLM은 원문을 다시 쓰지 않고 ID 기반 분류와 layout 선택만 수행하며 결과 payload는 deterministic materializer가 manifest에서 읽는다.
-- overflow는 슬라이드 추가로 해결한다.
+- 기존 authored 이미지 로직은 digest·bytes 검증, owner-scoped asset 저장·publication, native image renderer만 재사용한다.
+- 기존 authored 일반 생성은 `AuthoredSourceImagePlan/v1`과 source-slot 다중 바인딩을 사용하며, 업로드 source image의 슬라이드당 1장 의미론적 제한을 두지 않는다.
+- LLM은 source asset 선택·파일 경로·data URI를 만들지 않고, 서버가 검증한 source slot만 참조한다. AI generated illustration은 별도 정책으로 유지한다.
+- authored 전용 이미지 필터, 관련도 선택, 슬라이드당 1장 제한, LLM HTML 이미지 삽입은 source-content에서 사용하지 않는다.
+- 동일 asset의 저장 dedup과 원본 image occurrence 보존은 분리하며, 모든 occurrence를 deterministic하게 배치한다.
+- overflow는 같은 페이지 안의 템플릿 레이아웃 재조합으로 해결하며, 불가하면 fail-closed 한다.
+- source unit 1개와 결과 slide 1개의 cardinality를 항상 유지한다.
 - Scene coverage와 최종 PPTX readback coverage가 모두 100%가 아니면 결과를 게시하지 않는다.
 - 최초 receipt는 생성 revision에만 유효하고 사용자 편집 후 `modified_by_user`로 전환한다.
 - 1차 지원 포맷은 PPTX이며 PDF, DOCX, legacy PPT는 포맷별 검증 뒤 활성화한다.
@@ -649,5 +880,6 @@ PDF와 DOCX의 실파일 검증은 포맷 extractor 단계가 완성된 뒤 각�
 - Authored Scene native table/chart 후보가 source payload digest readback을 제공하는지
 - PDF region 단위 raster fallback을 위한 안정적인 crop 좌표계가 있는지
 - 대용량 manifest 저장과 generation job payload 크기 상한
+- 다중 source image preview의 provider aggregate byte budget과 템플릿 multi-image capacity
 
 이 확인 결과가 기능 의미를 바꾸지는 않는다. 지원할 수 없는 포맷이나 개체는 명시적으로 실패하거나 block-level fallback을 사용하며, 내용 누락이나 byte-copy로 조용히 대체하지 않는다.

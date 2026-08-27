@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "key": "source-content.template-restyle-contract",
+  "revision": 3,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Reuse authored image asset storage and renderer; source-content bypasses candidate filters and LLM selection, preserving every image occurrence 1:1.",
+  "scope": [
+    "source-content",
+    "image-reuse",
+    "template-restyle"
+  ],
+  "invariants": [
+    "source-content manifest remains authoritative for image assets and occurrence references",
+    "same asset bytes may be deduplicated in storage but each source occurrence is placed exactly once",
+    "source unit count equals output slide count",
+    "unplaceable content fails with source_content_template_overflow"
+  ],
+  "forbidden": [
+    "apply ordinary authored source-image filters as content-loss policy",
+    "use relevance ranking or one-image-per-slide limit",
+    "let an LLM choose or omit source image slots",
+    "add slides or silently drop image occurrences"
+  ],
+  "evidence": [
+    "docs/source-content-template-restyle-design-20260826.md",
+    "servers/fastapi/services/authored_source_images.py",
+    "servers/fastapi/services/source_images/registry.py",
+    "servers/fastapi/services/source_content/pptx.py",
+    "servers/fastapi/services/source_content/materializer.py"
+  ],
+  "supersedes": [
+    "source-content.template-restyle-contract@2"
+  ],
+  "recordedAt": "2026-08-26T18:42:20.8395825+00:00"
+}

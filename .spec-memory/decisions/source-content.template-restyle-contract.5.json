@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "key": "source-content.template-restyle-contract",
+  "revision": 5,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "원본 텍스트·이미지·표·차트 값과 순서를 보존하고 원본 페이지 수와 동일하게 템플릿 디자인만 적용한다.",
+  "scope": [
+    "source-content",
+    "ppt-generation"
+  ],
+  "invariants": [
+    "preserveSourceSlideCount=true",
+    "allowSlideExpansion=false",
+    "allowSummarization=false",
+    "overflowPolicy=same_page_recompose_or_fail"
+  ],
+  "forbidden": [
+    "source text or image substitution",
+    "page-count expansion"
+  ],
+  "evidence": [
+    "servers/fastapi/services/source_content/outline.py",
+    "servers/fastapi/services/source_content/allocator.py",
+    "servers/fastapi/services/source_content/materializer.py",
+    "app_data/source-content-final-qa-v9/powerpoint-qa.json"
+  ],
+  "supersedes": [
+    "source-content.template-restyle-contract@4"
+  ],
+  "recordedAt": "2026-08-26T21:31:36.0413103+00:00"
+}

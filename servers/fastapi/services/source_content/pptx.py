@@ -50,6 +50,7 @@ _SUPPORTED_REL_SUFFIXES = {
     "/slide",
     "/slideMaster",
     "/slideLayout",
+    "/handoutMaster",
     "/theme",
     "/themeOverride",
     "/image",
@@ -69,6 +70,7 @@ _SUPPORTED_REL_SUFFIXES = {
     "/customXml",
     "/customXmlProps",
     "/printerSettings",
+    "/revisionInfo",
     "/font",
     "/tags",
     "/audio",
@@ -163,7 +165,9 @@ def _part_classification(name: str) -> tuple[str, bool]:
         (
             "docprops/",
             "ppt/notesmasters/",
+            "ppt/handoutmasters/",
             "ppt/presprops.xml",
+            "ppt/revisioninfo.xml",
             "ppt/viewprops.xml",
             "ppt/tablestyles.xml",
             "ppt/commentauthors.xml",
@@ -758,7 +762,9 @@ def extract_pptx_source_content(
     blocks = [block for unit in units for block in unit.blocks]
     counts = SourceContentCounts(
         source_units=len(units),
-        text_blocks=sum(block.kind in {"text", "source_note"} for block in blocks),
+        # Speaker notes are metadata, not visible source substance to carry
+        # into a template-restyled slide.
+        text_blocks=sum(block.kind == "text" for block in blocks),
         table_cells=totals["table_cells"],
         chart_values=totals["chart_values"],
         unique_images=len(media_assets),
