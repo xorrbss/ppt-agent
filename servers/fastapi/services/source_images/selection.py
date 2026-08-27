@@ -118,15 +118,19 @@ def select_source_images(
     slide_heading: str,
     slide_content: str,
     slide_index: int,
-    limit: int = 2,
+    limit: int | None = 2,
 ) -> list[SourceImageCandidate]:
-    """Return at most ``limit`` candidates for this slide, best first.
+    """Return candidates for this slide, best first.
+
+    ``limit=None`` means no semantic count limit. Callers may still use a finite
+    limit for provider/resource budgets, but the authored source-image path uses
+    the unbounded mode so a slide can place every relevant source slot.
 
     Returns an empty list when nothing clears the relevance floor. The caller is
     expected to fall back to a generated illustration in that case rather than
     place a picture about something else.
     """
-    if limit <= 0 or not candidates:
+    if (limit is not None and limit <= 0) or not candidates:
         return []
 
     heading_grams = _grams(slide_heading)
@@ -153,7 +157,7 @@ def select_source_images(
     # Ties break on asset_id so the offer does not depend on whatever order the
     # extractor happened to walk the source deck in.
     scored.sort(key=lambda item: (-item[0], item[1]))
-    return [candidate for _, _, candidate in scored[:limit]]
+    return [candidate for _, _, candidate in (scored if limit is None else scored[:limit])]
 
 
 def _relevance(

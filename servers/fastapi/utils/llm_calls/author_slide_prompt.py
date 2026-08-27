@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 import json
 from typing import Any
@@ -133,11 +133,10 @@ _SOURCE_IMAGE_RULES = (
     "slide claims, or as an example of the tool, artifact or way of working the "
     "slide describes. A screenshot captured on a different project still shows "
     "what that work looks like, which is what a proposal shows it for.\n"
-    "Place one when it does either: an `<img data-asset-id=\"THE_ID\">` whose "
-    "area is reserved with explicit width/height (or absolute inset) styles, the "
-    "way the illustration slot is. Do not add a src attribute: the trusted "
-    "source-image stage supplies the verified base64 data URL. It is this slide's one image slot, in place "
-    "of a data-illust-prompt placeholder.\n"
+    "Place any relevant candidates with `<img data-source-slot-id=\"SLOT_ID\">` "
+    "whose areas are reserved with explicit width/height (or absolute inset) styles, "
+    "the way the illustration slot is. Do not add a src attribute, asset id, URL or "
+    "data URI: the trusted source-image stage supplies the verified data URL.\n"
     "Leave the slide without a picture when no candidate shows anything it talks "
     "about. These are candidates, not a quota."
 )
@@ -151,7 +150,9 @@ def _condensed(text: str, limit: int) -> str:
     return flattened
 
 
-def source_image_brief(candidates: Sequence[SourceImageCandidate]) -> str:
+def source_image_brief(
+    candidates: Mapping[str, SourceImageCandidate] | Sequence[SourceImageCandidate],
+) -> str:
     """Describe the attached source images and how this slide may use them.
 
     Returns an empty string for an empty sequence, so a call that attaches no
@@ -160,7 +161,11 @@ def source_image_brief(candidates: Sequence[SourceImageCandidate]) -> str:
     if not candidates:
         return ""
     lines = []
-    for candidate in candidates:
+    items = candidates.items() if isinstance(candidates, Mapping) else (
+        (f"source-slot-{index + 1}", candidate)
+        for index, candidate in enumerate(candidates)
+    )
+    for slot_id, candidate in items:
         origin = []
         if candidate.source_slide_index is not None:
             origin.append(f"from source slide {candidate.source_slide_index + 1}")
@@ -169,7 +174,7 @@ def source_image_brief(candidates: Sequence[SourceImageCandidate]) -> str:
             origin.append(f'headed "{heading}"')
         suffix = f" ({', '.join(origin)})" if origin else ""
         lines.append(
-            f'- asset id "{_condensed(candidate.asset_id, 64)}" — '
+            f'- source slot "{_condensed(slot_id, 64)}" — '
             f"{candidate.width}x{candidate.height}px{suffix}"
         )
     listing = "\n".join(lines)

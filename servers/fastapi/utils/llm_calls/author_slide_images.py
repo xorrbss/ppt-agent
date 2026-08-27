@@ -11,7 +11,7 @@ lives together, where the difference is visible.
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from llmai.shared import ImageContentPart
@@ -27,6 +27,9 @@ logger = logging.getLogger(__name__)
 #: An attachment larger than this is dropped rather than sent: the provider
 #: rejects oversized parts, and one unreadable picture must not fail a slide.
 REFERENCE_IMAGE_MAX_BYTES = 8 * 1024 * 1024
+# Aggregate provider preview budget. This is a byte/resource guard, not a
+# semantic image-count limit; any number of smaller source slots may be attached.
+SOURCE_IMAGE_PREVIEW_TOTAL_MAX_BYTES = 32 * 1024 * 1024
 
 
 # The slot rules themselves live in ``author_slide_rules`` with the rest of the
@@ -35,11 +38,11 @@ REFERENCE_IMAGE_MAX_BYTES = 8 * 1024 * 1024
 ILLUSTRATION_SLOT_RULES = author_slide_rules.ILLUSTRATION_SLOT_RULES
 
 #: The one sentence the source-image feature has to widen: with the feature on a
-#: slide may also place a picture the user uploaded, named by asset id.
+#: slide may also place pictures the user uploaded, named by opaque source slots.
 _NO_OTHER_IMAGE = "Do not reference any other image (no external URLs, no data URIs)."
 _LISTED_ASSETS_ALLOWED = (
-    "The images available to a slide are this slot and the source-image asset ids\n"
-    "  listed for that slide: no external URLs, no data URIs, no other image source."
+    "The images available to a slide are this slot and the opaque source-slot ids\n"
+    "  listed for that slide: no asset ids, external URLs, data URIs, or other image source."
 )
 
 # Derived from the rule above rather than copied, because a second copy of this
@@ -81,17 +84,18 @@ def reference_parts(reference_images: Sequence[Path]) -> list[ImageContentPart]:
 
 
 def source_image_parts(
-    candidates: Sequence[SourceImageCandidate],
+    candidates: Mapping[str, SourceImageCandidate] | Sequence[SourceImageCandidate],
 ) -> tuple[tuple[SourceImageCandidate, ...], list[ImageContentPart]]:
     """Attach user-owned candidates, returning only the ones actually attached.
 
-    The prompt lists these candidates by asset id, so a picture that could not be
-    read must not be described to the model: it would offer an id whose image is
-    not in the request.
+    A picture that could not be read must not be described to the model: it would
+    offer a source slot whose image is not in the request.
     """
     attached: list[SourceImageCandidate] = []
     parts: list[ImageContentPart] = []
-    for candidate in candidates:
+    total_bytes = 0
+    iterable = candidates.values() if isinstance(candidates, Mapping) else candidates
+    for candidate in iterable:
         if candidate.mime_type not in SUPPORTED_SOURCE_IMAGE_MIME_TYPES:
             logger.warning("Skipping source image with unsupported media type")
             continue
@@ -103,8 +107,12 @@ def source_image_parts(
         except OSError:
             logger.warning("Unable to read authored source image")
             continue
+        if total_bytes + len(data) > SOURCE_IMAGE_PREVIEW_TOTAL_MAX_BYTES:
+            logger.warning("Skipping authored source image over aggregate preview budget")
+            continue
         attached.append(candidate)
         parts.append(ImageContentPart(data=data, mime_type=candidate.mime_type))
+        total_bytes += len(data)
     return tuple(attached), parts
 
 
@@ -113,7 +121,7 @@ def source_image_parts(
 def illustration_slot_rules(*, source_images_enabled: bool) -> str:
     """Pick the slot rule that matches what this deck can actually resolve.
 
-    A model told about asset ids the run never offers would author a reference
+    A model told about source slots the run never offers would author a reference
     no stage can resolve, so the wider rule appears only with the feature on.
     """
     return (

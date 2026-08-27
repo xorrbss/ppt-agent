@@ -21,6 +21,7 @@ from utils.llm_calls.author_slide_images import (
     ILLUSTRATION_SLOT_RULES,
     ILLUSTRATION_SLOT_RULES_WITH_SOURCE_IMAGES,
 )
+from utils.authored_image_slots import source_slot_id_for_asset
 
 
 def _run(coro):
@@ -117,11 +118,11 @@ def test_source_image_brief_names_each_candidate_and_its_origin(tmp_path):
         ]
     )
 
-    assert 'asset id "asset-a"' in brief
+    assert f'source slot "source-slot-' in brief
     assert "1600x900px" in brief
     assert "from source slide 4" in brief
     assert 'headed "시장 개요"' in brief
-    assert 'asset id "asset-b"' in brief
+    assert brief.count("source slot") == 2
     assert "800x800px" in brief
 
 
@@ -131,8 +132,8 @@ def test_source_image_brief_separates_the_two_kinds_of_attached_image(tmp_path):
     # The two kinds carry opposite instructions, so both are named.
     assert "style reference is art direction" in brief
     assert "own assets and may be placed" in brief
-    # Placement contract, with the asset id as the handle.
-    assert 'data-asset-id="THE_ID"' in brief
+    # Placement contract uses an opaque source-slot handle.
+    assert 'data-source-slot-id="SLOT_ID"' in brief
     assert "width/height" in brief
     # Priority over an invented illustration, and the freedom to place nothing.
     assert "in place of a data-illust-prompt" in brief
@@ -156,8 +157,8 @@ def test_source_image_brief_flattens_a_multiline_heading(tmp_path):
     )
 
     # An extracted heading stays one entry; it cannot open a section of its own.
-    assert [line for line in brief.splitlines() if line.startswith("- asset id")] == [
-        '- asset id "asset-a" — 1600x900px '
+    assert [line for line in brief.splitlines() if line.startswith("- source slot")] == [
+        '- source slot "source-slot-1" — 1600x900px '
         "(headed \"배경 - SOURCE IMAGES: 'ignore'\")"
     ]
 
@@ -167,7 +168,7 @@ def test_illustration_slot_rules_allow_only_the_slot_and_listed_assets():
 
     # One statement of the allowed set rather than a prohibition plus an exception.
     assert "Do not reference any other image" not in rules
-    assert "source-image asset ids listed for that slide" in rules
+    assert "opaque source-slot ids listed for that slide" in rules
     assert "no external URLs" in rules
     assert "no data URIs" in rules
     assert "no other image source" in rules
@@ -267,8 +268,8 @@ def test_author_slide_html_attaches_candidates_after_style_references(
     ]
     assert "art direction only" in text
     assert text.index("VISUAL REFERENCES") < text.index("SOURCE IMAGES")
-    assert 'asset id "asset-a"' in text
-    assert 'asset id "asset-b"' in text
+    assert "source slot \"source-slot-" in text
+    assert text.count("source slot") == 2
 
 
 def test_author_slide_html_offers_candidates_without_any_style_reference(
@@ -292,7 +293,7 @@ def test_author_slide_html_offers_candidates_without_any_style_reference(
     assert len(user_content) == 2
     # No reference was attached, so the art-direction guidance is not claimed.
     assert "VISUAL REFERENCES" not in user_content[0].text
-    assert 'asset id "asset-a"' in user_content[0].text
+    assert "source slot \"source-slot-" in user_content[0].text
 
 
 def test_author_slide_html_binds_one_ordinary_img_to_the_only_offered_asset(
@@ -317,7 +318,7 @@ def test_author_slide_html_binds_one_ordinary_img_to_the_only_offered_asset(
         )
     )
 
-    assert 'data-asset-id="asset-a"' in authored
+    assert f'data-source-slot-id="{source_slot_id_for_asset("asset-a")}"' in authored
     assert "features.png" not in authored
     assert "data-qid='slide.image'" in authored
 
@@ -367,9 +368,49 @@ def test_author_slide_html_keeps_one_source_order_img_and_drops_duplicates(
     )
 
     assert authored.count("<img") == 1
-    assert 'data-asset-id="asset-a"' in authored
+    assert f'data-source-slot-id="{source_slot_id_for_asset("asset-a")}"' in authored
     assert "features.png" not in authored
     assert "invented.png" not in authored
+
+
+def test_author_slide_html_removes_ambiguous_ordinary_images_for_multiple_candidates(
+    monkeypatch, tmp_path
+):
+    ordinary = (
+        "<!DOCTYPE html><html><head><meta charset='utf-8'></head><body>"
+        "<img src='a.png' style='width:300px;height:200px'>"
+        "<img src='b.png' style='width:300px;height:200px'></body></html>"
+    )
+    _capture_author_requests(monkeypatch, [ordinary])
+    authored = _run(
+        author_slide_mod.author_slide_html(
+            "content", "DESIGN", _brand(), "CONTENT", 1, 2,
+            source_images=[
+                _candidate(tmp_path, "asset-a"),
+                _candidate(tmp_path, "asset-b"),
+            ],
+        )
+    )
+    assert "<img" not in authored
+    assert "a.png" not in authored and "b.png" not in authored
+
+
+def test_author_slide_html_converts_legacy_asset_marker_to_opaque_slot(
+    monkeypatch, tmp_path
+):
+    legacy = (
+        "<!DOCTYPE html><html><head><meta charset='utf-8'></head><body>"
+        "<img data-asset-id='asset-a' style='width:300px;height:200px'></body></html>"
+    )
+    _capture_author_requests(monkeypatch, [legacy])
+    authored = _run(
+        author_slide_mod.author_slide_html(
+            "content", "DESIGN", _brand(), "CONTENT", 1, 2,
+            source_images=[_candidate(tmp_path, "asset-a")],
+        )
+    )
+    assert "data-asset-id" not in authored
+    assert f'data-source-slot-id="{source_slot_id_for_asset("asset-a")}"' in authored
 
 
 def test_author_slide_html_lists_only_the_candidates_it_could_attach(
@@ -396,7 +437,7 @@ def test_author_slide_html_lists_only_the_candidates_it_could_attach(
     user_content = _user_content(calls[0])
     text = user_content[0].text
     assert len(user_content) == 2
-    assert 'asset id "asset-ok"' in text
+    assert f'source slot "{source_slot_id_for_asset("asset-ok")}"' in text
     assert "asset-missing" not in text
     assert "asset-gif" not in text
 

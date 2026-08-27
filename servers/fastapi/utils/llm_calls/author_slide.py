@@ -42,6 +42,7 @@ from utils.llm_calls.author_slide_images import (
     reference_parts,
     source_image_parts,
 )
+from utils.authored_image_slots import source_slot_id_for_asset
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_config import enforce_llm_egress_policy, get_llm_config
 from utils.llm_provider import get_llm_provider, get_model, is_codex_selected
@@ -466,7 +467,11 @@ def _is_benign_named_meta(tag: _SourceStartTag) -> bool:
 #: are hidden from admission while the slot is still unresolved and removed for
 #: good once the provider (illustration) or the substitution step (source image)
 #: has consumed them.
-_AUTHORING_ONLY_IMG_ATTRIBUTES = ("data-illust-prompt", "data-asset-id")
+_AUTHORING_ONLY_IMG_ATTRIBUTES = (
+    "data-illust-prompt",
+    "data-asset-id",
+    "data-source-slot-id",
+)
 
 
 def _without_authoring_only_attributes(raw: str) -> str:
@@ -525,22 +530,23 @@ def _without_authoring_only_image_attributes(source: str) -> str:
     )
 
 
-def _bind_single_offered_source_image_slot(
+def _bind_offered_source_image_slots(
     source: str,
-    candidates: Sequence[SourceImageCandidate],
+    candidates: Mapping[str, SourceImageCandidate] | Sequence[SourceImageCandidate],
 ) -> str:
-    """Canonicalize ordinary ``img`` tags around the sole verified source asset.
+    """Canonicalize source slots against the server-offered candidate mapping.
 
-    A slide is offered at most one source asset, and authored source images have
-    one-slot semantics.  Models sometimes emit the attached image as one or more
-    ordinary ``img src=...`` tags instead of the canonical marker.  With exactly
-    one verified candidate, source order decides the sole slot owner; later
-    ordinary image tags are unauthorized duplicates and are removed before Scene
-    admission.  An unknown/existing asset marker is never rebound.
+    Models sometimes emit legacy ``data-asset-id`` markers or ordinary ``img``
+    tags. Legacy markers are translated to opaque source-slot ids. Ordinary tags
+    are only auto-bound when exactly one candidate is offered; with multiple
+    candidates they are removed as unauthorized because their ownership is
+    ambiguous.
     """
-
-    if len(candidates) > 1:
-        return source
+    if not isinstance(candidates, Mapping):
+        candidates = {
+            source_slot_id_for_asset(candidate.asset_id): candidate
+            for candidate in candidates
+        }
     images = tuple(tag for tag in _source_start_tags(source) if tag.name == "img")
     if not images:
         return source
@@ -558,55 +564,47 @@ def _bind_single_offered_source_image_slot(
             source,
             [(tag.start, tag.end, "") for tag in ordinary],
         )
-    offered_id = candidates[0].asset_id
-    asset_marked = tuple(
-        tag
-        for tag in images
-        if any(name == "data-asset-id" for name, _value in tag.attrs)
-    )
-    if asset_marked:
-        if any(
-            value != offered_id
-            for tag in asset_marked
-            for name, value in tag.attrs
-            if name == "data-asset-id"
-        ):
-            return source
-        ordinary = tuple(
-            tag for tag in images if not _has_authoring_only_attribute(tag)
+    replacements: list[tuple[int, int, str]] = []
+    for tag in images:
+        legacy_id = next(
+            (value for name, value in tag.attrs if name == "data-asset-id"), None
         )
-        if not ordinary:
-            return source
-        logger.info(
-            "[authored] removed %d ordinary image duplicate(s) beside the canonical source slot",
-            len(ordinary),
+        if legacy_id is None:
+            continue
+        slot_id = source_slot_id_for_asset(legacy_id)
+        if slot_id not in candidates:
+            continue
+        replacement = _remove_start_tag_attribute(tag.raw, "data-asset-id")
+        replacement = _append_start_tag_attribute(
+            replacement, "data-source-slot-id", slot_id
         )
-        return _apply_source_replacements(
-            source,
-            [(tag.start, tag.end, "") for tag in ordinary],
-        )
+        replacements.append((tag.start, tag.end, replacement))
+    if replacements:
+        source = _apply_source_replacements(source, replacements)
+        images = tuple(tag for tag in _source_start_tags(source) if tag.name == "img")
     ordinary = tuple(tag for tag in images if not _has_authoring_only_attribute(tag))
     if not ordinary:
         return source
+    if len(candidates) != 1:
+        return _apply_source_replacements(
+            source, [(tag.start, tag.end, "") for tag in ordinary]
+        )
+    offered_id = next(iter(candidates))
     owner = ordinary[0]
     replacement = _remove_start_tag_attribute(owner.raw, "src")
     replacement = _append_start_tag_attribute(
-        replacement,
-        "data-asset-id",
-        offered_id,
-    )
-    duplicates = ordinary[1:]
-    logger.info(
-        "[authored] bound one ordinary image slot to its sole offered asset; duplicates_removed=%d",
-        len(duplicates),
+        replacement, "data-source-slot-id", offered_id
     )
     return _apply_source_replacements(
         source,
         [
             (owner.start, owner.end, replacement),
-            *((tag.start, tag.end, "") for tag in duplicates),
+            *((tag.start, tag.end, "") for tag in ordinary[1:]),
         ],
     )
+
+
+_bind_single_offered_source_image_slot = _bind_offered_source_image_slots
 
 
 def validate_authored_slide_html(
@@ -783,7 +781,7 @@ async def author_slide_html(
     chapter_breadcrumb: bool = False,
     chapter_prefix: Optional[str] = None,
     *,
-    source_images: Sequence[SourceImageCandidate] = (),
+    source_images: Mapping[str, SourceImageCandidate] | Sequence[SourceImageCandidate] = (),
     # The user's request text and this slide's deck-scoped illustration decision;
     # both default to absent, reproducing the prompt for callers that have neither.
     instructions: Optional[str] = None,
@@ -847,7 +845,18 @@ async def author_slide_html(
         reference_guidance = (
             author_slide_rules.STYLE_REFERENCE_GUIDANCE if reference_image_parts else ""
         )
-    source_guidance = author_slide_prompt.source_image_brief(source_candidates)
+    if isinstance(source_images, Mapping):
+        source_slot_candidates = {
+            (key if key.startswith("source-slot-") else source_slot_id_for_asset(key)): candidate
+            for key, candidate in source_images.items()
+            if candidate in source_candidates
+        }
+    else:
+        source_slot_candidates = {
+            source_slot_id_for_asset(candidate.asset_id): candidate
+            for candidate in source_candidates
+        }
+    source_guidance = author_slide_prompt.source_image_brief(source_slot_candidates)
     user_content = (
         [
             TextContentPart(text=prompt + reference_guidance + source_guidance),
@@ -935,9 +944,9 @@ async def author_slide_html(
     authored_html = _strip_nonvisual_pointer_events(authored_html)
     if mode != EXACT_RECONSTRUCTION:
         authored_html = enforce_authored_font_floor(authored_html)
-        authored_html = _bind_single_offered_source_image_slot(
+        authored_html = _bind_offered_source_image_slots(
             authored_html,
-            source_candidates,
+            source_slot_candidates,
         )
     authored_html = validate_authored_slide_html(
         authored_html,
