@@ -6,6 +6,7 @@ from services.source_content.browser_readback import (
     BrowserSourceReadbackError,
     deterministic_source_block_id,
     deterministic_source_image_block_id,
+    deterministic_source_qid,
     source_block_data_attribute,
     stamp_source_block_ids,
     stamp_source_image_block_ids,
@@ -34,7 +35,7 @@ def _metrics(*, ids=("b1", "b2"), text=("원문 제목", "중요한 본문"), vi
     for index, block_id in enumerate(ids):
         elements.append({
             "sourceBlockId": block_id,
-            "qid": f"q-{block_id}",
+            "qid": deterministic_source_qid(block_id),
             "semanticRole": "title" if index == 0 else "body",
             "renderedText": text[index] if index < len(text) else "",
             "bbox": {"x": 20, "y": 20 + index * 40, "width": 200, "height": 24},
@@ -112,7 +113,7 @@ def test_image_occurrence_readback_requires_intrinsic_natural_size() -> None:
     metrics = [{
         "width": 1280, "height": 720, "fontsReady": True,
         "elements": [{
-            "sourceBlockId": "img-1", "qid": "q-img-1", "tag": "img",
+            "sourceBlockId": "img-1", "qid": deterministic_source_qid("img-1"), "tag": "img",
             "semanticRole": "image",
             "renderedText": "", "bbox": {"x": 10, "y": 10, "width": 320, "height": 180},
             "cssVisible": True, "effectiveOpacity": 1, "fontLoaded": True,
@@ -160,3 +161,17 @@ def test_source_text_readback_requires_semantic_role_and_measured_occlusion() ->
     metrics["elements"][0].pop("occlusionMeasurementEvidence")
     with pytest.raises(BrowserSourceReadbackError):
         verify_browser_source_readback(manifest=_manifest(), outline=_outline("b1", "b2"), browser_metrics=[metrics])
+
+
+def test_source_occurrence_readback_rejects_noncanonical_qid() -> None:
+    metrics = _metrics()
+    metrics["elements"][0]["qid"] = "arbitrary-qid"
+
+    with pytest.raises(BrowserSourceReadbackError) as error:
+        verify_browser_source_readback(
+            manifest=_manifest(),
+            outline=_outline("b1", "b2"),
+            browser_metrics=[metrics],
+        )
+
+    assert error.value.block_ids == ("b1",)

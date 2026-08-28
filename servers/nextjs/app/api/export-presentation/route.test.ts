@@ -442,6 +442,35 @@ test("route request forwards a complete supplied Hybrid attempt binding", async 
   assert.equal(received?.fontEmbedding, true);
 });
 
+test("route request keeps progress operation separate from the Fidelity attempt", async () => {
+  let received: PresentationExportExecutionParams | undefined;
+  const { dependencies } = boundarySpies({
+    version: "v1-standard",
+    mode: "authored",
+    slides: [{ ui: null, html_content: "<section>editable</section>" }],
+  });
+  dependencies.registry.authoredFidelity = async (params) => {
+    received = params;
+    return { path: "fidelity.pptx" };
+  };
+
+  await executeExportPresentationRouteRequest(
+    {
+      format: "pptx",
+      id: "persisted-id",
+      pptxMode: "fidelity",
+      exportAttemptId: "attempt-1",
+      canonicalSourceDigest: "c".repeat(64),
+      operationId: "workspace-operation-1",
+    },
+    "session=test",
+    dependencies,
+  );
+
+  assert.equal(received?.exportAttemptId, "attempt-1");
+  assert.equal(received?.operationId, "workspace-operation-1");
+});
+
 test("route request rejects incomplete or malformed Hybrid attempt bindings", async () => {
   const { dependencies } = boundarySpies({
     version: "v1-standard",

@@ -1,0 +1,37 @@
+{
+  "contractVersion": "source-content-analysis/v1",
+  "status": "ready",
+  "capabilities": {
+    "pptx": true,
+    "pdf": false,
+    "docx": false,
+    "ppt": false
+  },
+  "manifestPin": {
+    "manifestId": "scm_b0719be1e598e49ef0718a9c394c1c1f9bc00dc53ac7c504660c47d298ff748f",
+    "digest": "sha256:d6eb17f4c8ba5eb42bebe7ff837f0cd8aad4d137e8b2b300b2f09a9628a7fa3b"
+  },
+  "referenceSnapshotBinding": {
+    "referenceSnapshotId": "c7a7107d-6e88-44f8-876a-ff49e8382d84",
+    "providerId": "uploaded_document",
+    "sourceRevision": "ce4a539ea8f80a56272cea9beb51d27e724bd1df786d1e2899c4434ed7124b5b"
+  },
+  "summary": {
+    "sourceType": "pptx",
+    "sourceUnits": 1,
+    "textBlocks": 2,
+    "tables": 0,
+    "charts": 0,
+    "uniqueImages": 1,
+    "imageOccurrences": 1,
+    "rasterFallbackBlocks": 0
+  },
+  "objectInventory": {
+    "discoveredObjectCount": 78,
+    "classifiedObjectCount": 78,
+    "contentBearingObjectCount": 6,
+    "unsupportedContentObjectIds": [],
+    "unclassifiedObjectIds": [],
+    "externalRelationshipCount": 0
+  }
+}

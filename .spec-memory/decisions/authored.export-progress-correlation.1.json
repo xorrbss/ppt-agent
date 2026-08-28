@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.export-progress-correlation",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Workspace progress operation IDs remain distinct from durable export attempt IDs and reach the selected authored runner.",
+  "scope": [
+    "authored",
+    "export",
+    "progress"
+  ],
+  "invariants": [
+    "Forward the workspace progress operation ID independently of the durable export attempt ID."
+  ],
+  "forbidden": [
+    "Do not substitute an export attempt ID for workspace progress correlation."
+  ],
+  "evidence": [
+    "servers/nextjs/app/api/export-presentation/route.ts",
+    "servers/nextjs/lib/authored-hybrid/export.ts",
+    "servers/nextjs/app/api/export-presentation/route.test.ts"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-28T06:14:03.7922648+00:00"
+}

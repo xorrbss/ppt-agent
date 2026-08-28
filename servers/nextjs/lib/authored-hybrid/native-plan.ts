@@ -34,6 +34,7 @@ import { nativeCropSourceRectXml } from "./native-image-crop.ts";
 
 export const EMU_PER_CSS_PX = 9_525;
 export const MIN_EDITABLE_FONT_SIZE_PT = 9;
+export const AUTHORED_NATIVE_OWNER_ALTERNATIVE_TEXT_PREFIX = "authored-vnext:";
 const EMU_PER_POINT = 12_700;
 const MAX_NATIVE_ELEMENTS_PER_SLIDE = 1_000;
 const MAX_IMAGE_PIXELS = 40_000_000;
@@ -115,6 +116,36 @@ export interface LayerSafetyPlan {
   };
 }
 
+export interface AuthoredNativeOwnerAlternativeText {
+  readonly schemaVersion: "authored-vnext-owner/v1";
+  readonly slideNumber: number;
+  readonly slideId: string;
+  readonly elementId: string;
+  readonly kind: "text" | "shape" | "image" | "table" | "chart";
+  readonly capabilityId: string;
+  readonly textRunMap?: readonly {
+    readonly runIndex: number;
+    readonly runId: string;
+    readonly utf16Start: number;
+    readonly utf16Length: number;
+    readonly textDigest: string;
+  }[];
+  readonly textRunStyles?: readonly {
+    readonly runIndex: number;
+    readonly runId: string;
+    readonly fontFamily: string;
+    readonly eastAsianTypeface: string;
+    readonly fontSizePt: number;
+    readonly bold: boolean;
+    readonly italic: boolean;
+    readonly underline: boolean;
+    readonly color: string;
+  }[];
+  readonly autoFit?: "none" | "shrink";
+  readonly advancedTextDigest?: string;
+  readonly ownerDigest: string;
+}
+
 function canonicalLayerValue(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) {
@@ -130,6 +161,102 @@ function layerDigest(value: unknown): string {
   return `sha256:${createHash("sha256")
     .update(canonicalLayerValue(value), "utf8")
     .digest("hex")}`;
+}
+
+function exactObjectKeys(
+  value: Record<string, unknown>,
+  expected: readonly string[],
+): boolean {
+  const actual = Object.keys(value).sort();
+  const sortedExpected = [...expected].sort();
+  return actual.length === sortedExpected.length &&
+    actual.every((key, index) => key === sortedExpected[index]);
+}
+
+function boundedOwnerToken(value: unknown, pattern: RegExp): value is string {
+  return typeof value === "string" && pattern.test(value);
+}
+
+/**
+ * Parse the bounded native-owner receipt carried in PowerPoint AlternativeText.
+ * Invalid receipts return null so readback can fail closed without trusting a
+ * partial or non-canonical ownership declaration.
+ */
+export function parseAuthoredNativeOwnerAlternativeText(
+  alternativeText: string,
+): AuthoredNativeOwnerAlternativeText | null {
+  if (!alternativeText.startsWith(AUTHORED_NATIVE_OWNER_ALTERNATIVE_TEXT_PREFIX) ||
+      alternativeText.length > 16_384) return null;
+  const raw = alternativeText.slice(AUTHORED_NATIVE_OWNER_ALTERNATIVE_TEXT_PREFIX.length);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  const value = parsed as Record<string, unknown>;
+  const advanced = value.capabilityId === "editable.text.advanced.v1";
+  const baseKeys = [
+    "schemaVersion", "slideNumber", "slideId", "elementId", "kind",
+    "capabilityId", "ownerDigest",
+  ] as const;
+  const advancedKeys = [
+    ...baseKeys.slice(0, -1), "textRunMap", "textRunStyles", "autoFit",
+    "advancedTextDigest", "ownerDigest",
+  ] as const;
+  if (!exactObjectKeys(value, advanced ? advancedKeys : baseKeys) ||
+      value.schemaVersion !== "authored-vnext-owner/v1" ||
+      !Number.isSafeInteger(value.slideNumber) || Number(value.slideNumber) < 1 ||
+      !boundedOwnerToken(value.slideId, /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/) ||
+      !boundedOwnerToken(value.elementId, /^s\d{2}-[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/) ||
+      !["text", "shape", "image", "table", "chart"].includes(String(value.kind)) ||
+      !boundedOwnerToken(value.capabilityId, /^[A-Za-z][A-Za-z0-9._:-]{0,127}$/) ||
+      !boundedOwnerToken(value.ownerDigest, /^sha256:[0-9a-f]{64}$/)) return null;
+
+  if (advanced) {
+    if (value.kind !== "text" ||
+        !Array.isArray(value.textRunMap) || !Array.isArray(value.textRunStyles) ||
+        value.textRunMap.length < 1 || value.textRunMap.length > 512 ||
+        value.textRunStyles.length !== value.textRunMap.length ||
+        !["none", "shrink"].includes(String(value.autoFit)) ||
+        !boundedOwnerToken(value.advancedTextDigest, /^sha256:[0-9a-f]{64}$/)) return null;
+    let utf16Start = 0;
+    const runIds = new Set<string>();
+    for (let index = 0; index < value.textRunMap.length; index += 1) {
+      const identity = value.textRunMap[index];
+      const style = value.textRunStyles[index];
+      if (!identity || typeof identity !== "object" || Array.isArray(identity) ||
+          !style || typeof style !== "object" || Array.isArray(style)) return null;
+      const run = identity as Record<string, unknown>;
+      const runStyle = style as Record<string, unknown>;
+      if (!exactObjectKeys(run, ["runIndex", "runId", "utf16Start", "utf16Length", "textDigest"]) ||
+          !exactObjectKeys(runStyle, ["runIndex", "runId", "fontFamily", "eastAsianTypeface", "fontSizePt", "bold", "italic", "underline", "color"]) ||
+          run.runIndex !== index || runStyle.runIndex !== index ||
+          run.utf16Start !== utf16Start || !Number.isSafeInteger(run.utf16Length) || Number(run.utf16Length) < 0 ||
+          !boundedOwnerToken(run.runId, /^[A-Za-z][A-Za-z0-9._:-]{0,127}$/) ||
+          runIds.has(run.runId) || runStyle.runId !== run.runId ||
+          !boundedOwnerToken(run.textDigest, /^sha256:[0-9a-f]{64}$/) ||
+          typeof runStyle.fontFamily !== "string" || !runStyle.fontFamily.trim() ||
+          runStyle.eastAsianTypeface !== runStyle.fontFamily ||
+          typeof runStyle.fontSizePt !== "number" || runStyle.fontSizePt <= 0 || runStyle.fontSizePt > 400 ||
+          typeof runStyle.bold !== "boolean" || typeof runStyle.italic !== "boolean" ||
+          typeof runStyle.underline !== "boolean" ||
+          !boundedOwnerToken(runStyle.color, /^#[0-9A-F]{6}$/)) return null;
+      runIds.add(run.runId);
+      utf16Start += Number(run.utf16Length);
+    }
+    const advancedCore = {
+      autoFit: value.autoFit,
+      textRunMap: value.textRunMap,
+      textRunStyles: value.textRunStyles,
+    };
+    if (layerDigest(advancedCore) !== value.advancedTextDigest) return null;
+  }
+
+  const { ownerDigest, ...ownerCore } = value;
+  if (layerDigest(ownerCore) !== ownerDigest || JSON.stringify(value) !== raw) return null;
+  return value as unknown as AuthoredNativeOwnerAlternativeText;
 }
 
 /**

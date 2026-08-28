@@ -519,7 +519,7 @@ async function writeHybridPptx(
  * revision-sealed browser source used by Hybrid. No native element is emitted.
  */
 export async function runAuthoredFidelityPresentationExport(
-  params: Omit<AuthoredHybridExportParams, "fontEmbedding" | "operationId">,
+  params: Omit<AuthoredHybridExportParams, "fontEmbedding">,
 ): Promise<BundledPresentationExportResult> {
   const fetched = await fetchPresentation(
     params.presentationId,
@@ -543,57 +543,74 @@ export async function runAuthoredFidelityPresentationExport(
     presentation,
     "fidelity",
   );
+  const progressKey = `fidelity:${params.exportAttemptId ?? `${params.presentationId}:${presentation.revision}:${fetched.sourceSha256}`}`;
+  beginExportProgress(progressKey, params.operationId, Date.now());
+  recordExportProgress(progressKey, { phase: "fidelity" });
+  try {
+    const fidelity = await runBundledPresentationExport({
+      format: "pptx",
+      presentationId: params.presentationId,
+      title: params.title,
+      cookieHeader: params.cookieHeader,
+      expectedPresentationSha256: fetched.sourceSha256,
+      expectedPresentationRevision: params.expectedPresentationRevision,
+    });
+    const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
+    if (!chromeExecutable) throw new Error("authored_fidelity_chrome_unavailable");
 
-  const fidelity = await runBundledPresentationExport({
-    format: "pptx",
-    presentationId: params.presentationId,
-    title: params.title,
-    cookieHeader: params.cookieHeader,
-    expectedPresentationSha256: fetched.sourceSha256,
-    expectedPresentationRevision: params.expectedPresentationRevision,
-  });
-  const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
-  if (!chromeExecutable) throw new Error("authored_fidelity_chrome_unavailable");
-
-  const layers = await mapWithConcurrency(
-    presentation.slides,
-    HYBRID_EXPORT_CONCURRENCY,
-    async (rawSlide, arrayIndex) => {
-      if (!isRecord(rawSlide) || typeof rawSlide.html_content !== "string") {
-        throw new Error("authored_fidelity_slide_html_required");
-      }
-      const prepared = await prepareFidelitySlideLayer(
-        rawSlide.html_content,
-        arrayIndex + 1,
-        chromeExecutable,
-      );
-      if (!prepared.layer) throw new Error("authored_fidelity_slide_capture_failed");
-      return {
-        ...prepared.layer,
-        semanticOwnerQids: [
-          ...activeBinding.slides[arrayIndex].declaredElementIds,
-        ],
-      };
-    },
-  );
-  const resultPath = await writeHybridPptx(
-    fidelity.path,
-    layers,
-    undefined,
-    [],
-    "authored-fidelity",
-    {
-      ...(params.exportAttemptId ? { exportAttemptId: params.exportAttemptId } : {}),
-      presentationRevision: Number(presentation.revision),
-      ...(activeBinding.canonicalDigest
-        ? { canonicalSourceDigest: activeBinding.canonicalDigest }
-        : params.canonicalSourceDigest
-          ? { canonicalSourceDigest: params.canonicalSourceDigest }
-          : {}),
-      sourceDigest: fetched.sourceSha256,
-    },
-  );
-  return { path: resultPath };
+    recordExportProgress(progressKey, {
+      phase: "slides",
+      completedSlides: 0,
+      totalSlides: presentation.slides.length,
+    });
+    let completedSlides = 0;
+    const layers = await mapWithConcurrency(
+      presentation.slides,
+      HYBRID_EXPORT_CONCURRENCY,
+      async (rawSlide, arrayIndex) => {
+        if (!isRecord(rawSlide) || typeof rawSlide.html_content !== "string") {
+          throw new Error("authored_fidelity_slide_html_required");
+        }
+        const prepared = await prepareFidelitySlideLayer(
+          rawSlide.html_content,
+          arrayIndex + 1,
+          chromeExecutable,
+        );
+        if (!prepared.layer) throw new Error("authored_fidelity_slide_capture_failed");
+        completedSlides += 1;
+        recordExportProgress(progressKey, { completedSlides });
+        return {
+          ...prepared.layer,
+          semanticOwnerQids: activeBinding.canonicalMode === "legacyHtml"
+            ? []
+            : [...activeBinding.slides[arrayIndex].declaredElementIds],
+        };
+      },
+    );
+    recordExportProgress(progressKey, { phase: "assembly" });
+    const resultPath = await writeHybridPptx(
+      fidelity.path,
+      layers,
+      undefined,
+      [],
+      "authored-fidelity",
+      {
+        ...(params.exportAttemptId ? { exportAttemptId: params.exportAttemptId } : {}),
+        presentationRevision: Number(presentation.revision),
+        ...(activeBinding.canonicalDigest
+          ? { canonicalSourceDigest: activeBinding.canonicalDigest }
+          : params.canonicalSourceDigest
+            ? { canonicalSourceDigest: params.canonicalSourceDigest }
+            : {}),
+        sourceDigest: fetched.sourceSha256,
+      },
+    );
+    recordExportProgress(progressKey, { phase: "completed" });
+    return { path: resultPath };
+  } catch (error) {
+    recordExportProgress(progressKey, { phase: "failed" });
+    throw error;
+  }
 }
 
 async function runUncachedAuthoredHybridExport(

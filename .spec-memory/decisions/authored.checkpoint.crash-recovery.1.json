@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.checkpoint.crash-recovery",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Recover missing DB render pointers only from validated immutable bundles and clear stale render-stage failure state.",
+  "scope": [
+    "authored",
+    "checkpoint",
+    "durability"
+  ],
+  "invariants": [
+    "Recovery validates the immutable bundle before replacing a missing DB render pointer."
+  ],
+  "forbidden": [
+    "Do not clear render-stage failure state when bundle validation fails."
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_checkpoint_state.py",
+    "servers/fastapi/tests/unit/test_authored_checkpoint_service.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-28T06:14:02.1286484+00:00"
+}

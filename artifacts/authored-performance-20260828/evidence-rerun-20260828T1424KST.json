@@ -1,0 +1,299 @@
+{
+  "schema": "authored-render-checkpoint-benchmark/v1",
+  "generatedAt": "2026-08-28T05:22:46.596216+00:00",
+  "measurementScope": {
+    "classification": "exploratory_parallel_loaded_not_stable_baseline",
+    "reason": "Other bounded product-path agents were active during this run; retain the raw measurement but do not use it as the single-host stable performance baseline."
+  },
+  "repository": {
+    "root": "C:\\project\\PPT-agent\\ppt-agent",
+    "gitHead": "e6bf665e4a1443f38a7d11a7866d6bfb08ec96c7"
+  },
+  "environment": {
+    "platform": "Windows-10-10.0.22631-SP0",
+    "python": "3.11.15",
+    "chromePath": "C:\\Users\\ibiz\\AppData\\Local\\ms-playwright\\chromium_headless_shell-1234\\chrome-headless-shell-win64\\chrome-headless-shell.exe",
+    "chromeSha256": "ce4635cd0e5dc0e21494542a701f347e91c1f1d821970578d97ed8df4ced50ef",
+    "renderMode": "isolated-development-in-process-reusable-chromium",
+    "renderConcurrency": 4,
+    "renderCacheSize": 32,
+    "providerCalls": 0,
+    "providerCallEvidenceClass": "instrumentation_only_no_provider_layer_imported"
+  },
+  "claims": {
+    "actualMeasured": [
+      "33-slide atomic render + checkpoint persist/recover",
+      "80-slide atomic render + checkpoint persist/recover",
+      "two concurrent 8-slide decks",
+      "OS-sampled process-tree RSS and Chromium-family process count",
+      "pre-seal preservation and post-seal/budget sweeper behavior using isolated storage"
+    ],
+    "instrumentationOnly": [
+      "provider calls are zero by harness construction; network egress was not traced",
+      "seven-day TTL retention uses a synthetic one-hour mtime and does not represent a seven-day wall-clock soak"
+    ],
+    "notVerified": [
+      "running FastAPI public API to production worker path",
+      "OS-level non-root/read-only/tmpfs/network-none external worker isolation",
+      "historical operation/job recovery",
+      "product PPTX export I/O",
+      "product PDF export I/O",
+      "seven-day wall-clock TTL soak"
+    ]
+  },
+  "decks": {
+    "33": {
+      "evidenceClass": "actual_measured",
+      "name": "deck-33",
+      "slideCount": 33,
+      "elapsedSeconds": 7.252118,
+      "slidesPerSecond": 4.550395,
+      "renderElapsedSeconds": 5.015286,
+      "renderSlidesPerSecond": 6.579884,
+      "checkpointElapsedSeconds": 2.236828,
+      "checkpointSlidesPerSecond": 14.753034,
+      "pngBytes": 556841,
+      "checkpointBundleBytes": 5231707,
+      "checkpointBundleFiles": 132,
+      "browserMetricsCapturedCount": 33,
+      "checkpointPersistedCount": 33,
+      "checkpointRecoveredCount": 33,
+      "metricRecollectionCount": 0,
+      "chromiumProcessLaunchCount": 1,
+      "runtimeCounterDelta": {
+        "capture_cache_bytes_current": 138173,
+        "capture_cache_entries": 8,
+        "capture_cache_hits": 0,
+        "capture_metric_results": 33,
+        "capture_png_bytes": 556841,
+        "capture_results": 33,
+        "chrome_process_launches": 1,
+        "metrics_cache_bytes": 3658316,
+        "metrics_cache_bytes_current": 1773732,
+        "metrics_cache_entries": 32,
+        "metrics_cache_hits": 0,
+        "metrics_recollection_requests": 0,
+        "page_sessions_closed": 33,
+        "page_sessions_opened": 33,
+        "render_cache_bytes": 556841,
+        "render_cache_bytes_current": 540254,
+        "render_cache_entries": 32,
+        "render_cache_hits": 0,
+        "requests": 33,
+        "session_restarts": 0,
+        "session_reuse_hits": 32
+      },
+      "processTree": {
+        "source": "actual_os_process_tree_sampling",
+        "rootPid": 4312,
+        "sampleIntervalMs": 50.0,
+        "sampleCount": 62,
+        "baselineProcessTreeRssBytes": 43425792,
+        "peakProcessTreeRssBytes": 660828160,
+        "peakProcessTreeRssDeltaBytes": 617402368,
+        "peakChromiumProcessCount": 8,
+        "chromiumExecutables": [
+          "chrome-headless-shell.exe"
+        ]
+      }
+    },
+    "80": {
+      "evidenceClass": "actual_measured",
+      "name": "deck-80",
+      "slideCount": 80,
+      "elapsedSeconds": 15.830993,
+      "slidesPerSecond": 5.053378,
+      "renderElapsedSeconds": 11.078425,
+      "renderSlidesPerSecond": 7.221243,
+      "checkpointElapsedSeconds": 4.752564,
+      "checkpointSlidesPerSecond": 16.833018,
+      "pngBytes": 1368258,
+      "checkpointBundleBytes": 12732084,
+      "checkpointBundleFiles": 320,
+      "browserMetricsCapturedCount": 80,
+      "checkpointPersistedCount": 80,
+      "checkpointRecoveredCount": 80,
+      "metricRecollectionCount": 0,
+      "chromiumProcessLaunchCount": 1,
+      "runtimeCounterDelta": {
+        "capture_cache_bytes_current": 137069,
+        "capture_cache_entries": 8,
+        "capture_cache_hits": 0,
+        "capture_metric_results": 80,
+        "capture_png_bytes": 1368258,
+        "capture_results": 80,
+        "chrome_process_launches": 1,
+        "metrics_cache_bytes": 8868766,
+        "metrics_cache_bytes_current": 1773771,
+        "metrics_cache_entries": 32,
+        "metrics_cache_hits": 0,
+        "metrics_recollection_requests": 0,
+        "page_sessions_closed": 80,
+        "page_sessions_opened": 80,
+        "render_cache_bytes": 1368258,
+        "render_cache_bytes_current": 554093,
+        "render_cache_entries": 32,
+        "render_cache_hits": 0,
+        "requests": 80,
+        "session_restarts": 0,
+        "session_reuse_hits": 79
+      },
+      "processTree": {
+        "source": "actual_os_process_tree_sampling",
+        "rootPid": 4312,
+        "sampleIntervalMs": 50.0,
+        "sampleCount": 131,
+        "baselineProcessTreeRssBytes": 54591488,
+        "peakProcessTreeRssBytes": 672063488,
+        "peakProcessTreeRssDeltaBytes": 617472000,
+        "peakChromiumProcessCount": 8,
+        "chromiumExecutables": [
+          "chrome-headless-shell.exe"
+        ]
+      }
+    }
+  },
+  "concurrentLoad": {
+    "evidenceClass": "actual_measured",
+    "deckCount": 2,
+    "slidesPerDeck": [
+      8,
+      8
+    ],
+    "totalSlides": 16,
+    "elapsedSeconds": 2.870239,
+    "slidesPerSecond": 5.574448,
+    "checkpointRecoveredCount": 16,
+    "metricRecollectionCount": 0,
+    "chromiumProcessLaunchCount": 1,
+    "runtimeCounterDelta": {
+      "capture_cache_bytes_current": 139906,
+      "capture_cache_entries": 8,
+      "capture_cache_hits": 0,
+      "capture_metric_results": 16,
+      "capture_png_bytes": 284375,
+      "capture_results": 16,
+      "chrome_process_launches": 1,
+      "metrics_cache_bytes": 1773972,
+      "metrics_cache_bytes_current": 886986,
+      "metrics_cache_entries": 16,
+      "metrics_cache_hits": 0,
+      "metrics_recollection_requests": 0,
+      "page_sessions_closed": 16,
+      "page_sessions_opened": 16,
+      "render_cache_bytes": 284375,
+      "render_cache_bytes_current": 284375,
+      "render_cache_entries": 16,
+      "render_cache_hits": 0,
+      "requests": 16,
+      "session_restarts": 0,
+      "session_reuse_hits": 15
+    },
+    "processTree": {
+      "source": "actual_os_process_tree_sampling",
+      "rootPid": 4312,
+      "sampleIntervalMs": 50.0,
+      "sampleCount": 28,
+      "baselineProcessTreeRssBytes": 64868352,
+      "peakProcessTreeRssBytes": 664338432,
+      "peakProcessTreeRssDeltaBytes": 599470080,
+      "peakChromiumProcessCount": 8,
+      "chromiumExecutables": [
+        "chrome-headless-shell.exe"
+      ]
+    }
+  },
+  "durability": {
+    "preSealPreservation": {
+      "evidenceClass": "actual_measured_with_synthetic_age",
+      "syntheticAgeSeconds": 3600,
+      "ttlSeconds": 60,
+      "preserved": true,
+      "sweep": {
+        "scanned_terminal": 0,
+        "deleted_terminal": 0,
+        "scanned_orphan": 1,
+        "deleted_orphan": 0,
+        "deleted_bytes": 0,
+        "deleted_files": 0,
+        "skipped_budget": 0,
+        "skipped_unsealed": 1,
+        "errors": 0
+      }
+    },
+    "postSealTtlReclamation": {
+      "evidenceClass": "actual_measured_with_synthetic_age",
+      "syntheticAgeSeconds": 3600,
+      "ttlSeconds": 60,
+      "reclaimed": true,
+      "sweep": {
+        "scanned_terminal": 0,
+        "deleted_terminal": 0,
+        "scanned_orphan": 1,
+        "deleted_orphan": 1,
+        "deleted_bytes": 698,
+        "deleted_files": 4,
+        "skipped_budget": 0,
+        "skipped_unsealed": 0,
+        "errors": 0
+      }
+    },
+    "byteBudgetReclamation": {
+      "evidenceClass": "actual_measured_with_synthetic_age",
+      "candidateDirectories": 2,
+      "perDirectoryBytes": 4126,
+      "byteBudget": 4126,
+      "deletedDirectories": 1,
+      "retainedDirectories": 1,
+      "sweep": {
+        "scanned_terminal": 0,
+        "deleted_terminal": 0,
+        "scanned_orphan": 2,
+        "deleted_orphan": 1,
+        "deleted_bytes": 4126,
+        "deleted_files": 2,
+        "skipped_budget": 1,
+        "skipped_unsealed": 0,
+        "errors": 0
+      }
+    },
+    "longTtlRetention": {
+      "evidenceClass": "instrumentation_only_time_shifted",
+      "syntheticAgeSeconds": 3600,
+      "ttlSeconds": 604800,
+      "retained": true,
+      "actualSevenDayWaitObserved": false,
+      "sweep": {
+        "scanned_terminal": 0,
+        "deleted_terminal": 0,
+        "scanned_orphan": 2,
+        "deleted_orphan": 0,
+        "deleted_bytes": 0,
+        "deleted_files": 0,
+        "skipped_budget": 0,
+        "skipped_unsealed": 0,
+        "errors": 0
+      }
+    }
+  },
+  "beforeAfter": {
+    "before": {
+      "status": "not_comparable",
+      "reason": "No prior benchmark used this exact 33/80 atomic render-plus-checkpoint harness on this checkout and host."
+    },
+    "after": {
+      "deck33SlidesPerSecond": 4.550395,
+      "deck80SlidesPerSecond": 5.053378,
+      "deck33PeakProcessTreeRssBytes": 660828160,
+      "deck80PeakProcessTreeRssBytes": 672063488,
+      "deck33MetricRecollectionCount": 0,
+      "deck80MetricRecollectionCount": 0
+    },
+    "durabilityStateTransition": {
+      "beforeSealPreserved": true,
+      "afterSealTtlReclaimed": true,
+      "budgetDeletedDirectories": 1,
+      "budgetRetainedDirectories": 1
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.capacity.terminal-residual",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "A deterministic capacity violation remaining after the single bounded repair is terminal and non-retryable.",
+  "scope": [
+    "authored",
+    "capacity",
+    "composition"
+  ],
+  "invariants": [
+    "Only one bounded repair precedes terminal deterministic capacity failure."
+  ],
+  "forbidden": [
+    "Do not retry a deterministic residual capacity violation."
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_presentation_generation.py",
+    "servers/fastapi/tests/unit/test_authored_composition_policy.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-28T06:14:02.9111840+00:00"
+}

@@ -620,7 +620,8 @@ def verify_browser_source_readback(*, manifest: Any, outline: Any, browser_metri
             image_failure = False
             semantic_role = str(_field(metric, "semantic_role", "semanticRole", "role", default="") or "").strip()
             declared_qid = str(_field(block, "qid", "sourceQid", "source_qid", default="") or "").strip()
-            qid_failure = bool(declared_qid and qid != declared_qid)
+            expected_qid = declared_qid or deterministic_source_qid(block_id)
+            qid_failure = qid != expected_qid
             if block_kind == "image":
                 complete = _field(image_payload or {}, "complete", default=None) if isinstance(image_payload, Mapping) else None
                 image_visible = _field(image_payload or {}, "cssVisible", "css_visible", default=None) if isinstance(image_payload, Mapping) else None

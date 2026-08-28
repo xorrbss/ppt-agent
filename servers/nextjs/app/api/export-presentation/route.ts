@@ -242,7 +242,12 @@ export async function POST(req: NextRequest) {
           ...body,
           exportAttemptId: routeOwnedAttempt.exportAttemptId,
           canonicalSourceDigest: routeOwnedAttempt.canonicalSourceDigest,
-          operationId: routeOwnedAttempt.exportAttemptId,
+          // Keep workspace progress correlation independent from the durable
+          // export-attempt identity. FastAPI polls with its operation UUID.
+          operationId:
+            typeof body.operationId === "string" && body.operationId.trim()
+              ? body.operationId.trim()
+              : routeOwnedAttempt.exportAttemptId,
         };
       }
     }
@@ -279,6 +284,7 @@ export async function POST(req: NextRequest) {
             canonicalSourceDigest,
             expectedPresentationRevision,
             explicitPptxMode,
+            operationId,
           }) =>
             runAuthoredFidelityPresentationExport({
               presentationId,
@@ -288,6 +294,7 @@ export async function POST(req: NextRequest) {
               canonicalSourceDigest,
               expectedPresentationRevision,
               explicitPptxMode,
+              operationId,
             }),
           hybrid: ({
             presentationId,

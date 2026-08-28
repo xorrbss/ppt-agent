@@ -1,8 +1,16 @@
+import asyncio
+
+import pytest
+
+from services.authored_checkpoint_errors import AuthoredStageError
 from services.authored_composition_policy import (
+    AuthoredCapacityPlan,
+    CompositionProfile,
     SlideCapacity,
     capacity_violations,
     ensure_authored_semantic_roles,
 )
+from services.authored_presentation_generation import _final_authored_quality_gate
 
 
 def test_capacity_violations_enforce_qids_images_text_and_font_floor():
@@ -23,8 +31,22 @@ def test_capacity_violations_enforce_qids_images_text_and_font_floor():
     metrics = {
         "viewport": {"width": 1280, "height": 720},
         "elements": [
-            {"qid": "a", "tag": "div", "rendered_text": "12345678901", "font_size": 12},
-            {"qid": "b", "tag": "div", "rendered_text": "x", "font_size": 20},
+            {
+                "qid": "a",
+                "tag": "div",
+                "semantic_role": "body",
+                "rendered_text": "12345678901",
+                "font_size": 12,
+                "font_loaded": True,
+            },
+            {
+                "qid": "b",
+                "tag": "div",
+                "semantic_role": "body",
+                "rendered_text": "x",
+                "font_size": 20,
+                "font_loaded": True,
+            },
         ],
     }
 
@@ -32,7 +54,7 @@ def test_capacity_violations_enforce_qids_images_text_and_font_floor():
 
     assert "qids:2>1" in violations
     assert "images:2>1" in violations
-    assert "visible_text:13>10" in violations
+    assert "visible_text:12>10" in violations
     assert "font:12<16" in violations
 
 
@@ -187,3 +209,53 @@ def test_semantic_roles_are_stamped_before_owned_text_browser_capacity_gate():
     ]
     capacity = SlideCapacity(0, "COVER", 10, 10, 20, 1, 3, min_font_px=16)
     assert capacity_violations(stamped, {"elements": elements}, capacity) == ()
+
+
+def test_final_capacity_violation_is_terminal_after_bounded_repair():
+    html = (
+        '<h1 data-qid="title" data-semantic-role="title">Title</h1>'
+        '<p data-qid="body" data-semantic-role="body">Body</p>'
+    )
+
+    def metric(qid, role, text):
+        return {
+            "qid": qid,
+            "tag": "h1" if role == "title" else "p",
+            "semantic_role": role,
+            "rendered_text": text,
+            "has_owned_text": True,
+            "font_size": 18,
+            "font_loaded": True,
+            "css_visible": True,
+            "bbox": {"x": 10, "y": 10, "width": 100, "height": 24},
+            "clipped": False,
+            "glyph_clipped": False,
+            "line_box_clipped": False,
+        }
+
+    profile = CompositionProfile("ordinary", "authored", True, True, 1)
+    plan = AuthoredCapacityPlan(
+        profile=profile,
+        slides=(SlideCapacity(0, "PROBLEM", 20, 3, 20, 0, 2),),
+    )
+
+    with pytest.raises(AuthoredStageError) as caught:
+        asyncio.run(
+            _final_authored_quality_gate(
+                htmls=[html],
+                capacity_plan=plan,
+                profile=profile,
+                reference_mode="style-reference",
+                browser_metrics_by_slide=[
+                    {
+                        "elements": [
+                            metric("title", "title", "Title"),
+                            metric("body", "body", "Body"),
+                        ]
+                    }
+                ],
+            )
+        )
+
+    assert caught.value.code == "authored_slide_capacity_exceeded"
+    assert caught.value.retryable is False

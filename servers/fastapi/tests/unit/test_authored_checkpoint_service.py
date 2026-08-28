@@ -1,8 +1,11 @@
 import asyncio
+import hashlib
+import json
 import uuid
 from types import SimpleNamespace
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
@@ -355,6 +358,109 @@ def test_checkpoint_transitions_preserve_outputs_and_report_actual_progress(
             assert progress["completed_slides"] == 2
             assert progress["percent"] == 100
             assert progress["finalizing"] is False
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_filesystem_evidence_recovers_db_pointer_and_clears_render_failure(
+    tmp_path, monkeypatch
+):
+    async def scenario():
+        engine, maker = await _checkpoint_database(tmp_path, monkeypatch)
+        try:
+            _, job = await _running_authored_job(maker)
+            await checkpoints.initialize_checkpoints(
+                job_id=job.id,
+                attempt_token="attempt-a",
+                roles=["content"],
+            )
+            await checkpoints.start_stage(
+                job_id=job.id,
+                slide_index=0,
+                stage="render",
+                attempt_token="attempt-a",
+            )
+            async with maker() as session:
+                stored = (
+                    await session.execute(
+                        select(AuthoredSlideCheckpoint).where(
+                            AuthoredSlideCheckpoint.job_id == job.id,
+                            AuthoredSlideCheckpoint.slide_index == 0,
+                        )
+                    )
+                ).scalar_one()
+                stored.render_status = "failed"
+                stored.failed_stage = "render"
+                stored.error = {"code": "render_pointer_commit_interrupted"}
+                session.add(stored)
+                await session.commit()
+
+            attempt_id = checkpoints.evidence_attempt_id("attempt-a")
+            base_path = checkpoints.render_artifact_path(job.id, 0, "attempt-a")
+            render_path = base_path.with_name(
+                f"{base_path.stem}-r0-crash-window.png"
+            )
+            html = "<section>durable html</section>"
+            png = b"durable-png"
+            metrics = {"revision": 0, "visible": True}
+            checkpoints.atomic_write(render_path, png)
+            checkpoints.write_valid_evidence(
+                render_path,
+                attempt_id=attempt_id,
+                slide_index=0,
+                revision=0,
+                html=html,
+                png=png,
+                metrics=metrics,
+            )
+
+            recovered = await checkpoints.get_checkpoint(job.id, 0)
+            assert recovered.render_status == "completed"
+            assert recovered.render_completed_at is not None
+            assert recovered.failed_stage is None
+            assert recovered.error is None
+            bundle = checkpoints.read_valid_evidence(recovered)
+            assert (bundle.html, bundle.png, bundle.metrics, bundle.revision) == (
+                html,
+                png,
+                metrics,
+                0,
+            )
+
+            # DB -> filesystem mismatch blocks the recovered pointer.
+            recovered.render_sha256 = "0" * 64
+            with pytest.raises(checkpoints.SlideCheckpointCorrupt):
+                checkpoints.read_valid_evidence(recovered)
+            recovered.render_sha256 = hashlib.sha256(png).hexdigest()
+
+            # Filesystem current -> immutable revision mismatch also blocks.
+            sidecar = render_path.with_name(f".{render_path.name}.evidence.json")
+            current_payload = json.loads(sidecar.read_text("utf-8"))
+            current_payload["metrics"]["visible"] = False
+            current_payload["digest"] = checkpoints.SlideCheckpointBundle._digest_for_payload(
+                current_payload["html"],
+                png,
+                current_payload["metrics"],
+            )
+            sidecar.write_text(
+                json.dumps(current_payload, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            with pytest.raises(checkpoints.SlideCheckpointCorrupt):
+                checkpoints.read_valid_evidence(recovered)
+
+            store = checkpoints.AtomicSlideCheckpointStore(tmp_path / "bundle-store")
+            orphan_dir = tmp_path / "bundle-store" / "attempt-a" / "slide-0"
+            orphan_dir.mkdir(parents=True)
+            orphan = orphan_dir / ".prepared-r1-deadbeef.json"
+            orphan.write_text(
+                '{"revision":1,"digest":"deadbeef"}',
+                encoding="utf-8",
+            )
+            assert store.sweep_orphans(max_age_seconds=0, max_files=1) == 1
+            assert not orphan.exists()
         finally:
             await engine.dispose()
 

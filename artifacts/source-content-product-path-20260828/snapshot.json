@@ -1,0 +1,13 @@
+{
+  "snapshot_id": "c7a7107d-6e88-44f8-876a-ff49e8382d84",
+  "provider_id": "uploaded_document",
+  "source_revision": "ce4a539ea8f80a56272cea9beb51d27e724bd1df786d1e2899c4434ed7124b5b",
+  "source_fingerprint": "27879794a34607af8023505075c5ca42a6d1790bcbf9cff74dd34daeef2b84f2",
+  "content_sha256": "b2e44bb1b8988ad470914b0ebab973d847b4b15a3e9c87e440f6bce0acc50d2c",
+  "asset_ids": [
+    "be39fa6b-a468-4f61-9f79-6a705fb599e2"
+  ],
+  "conversation_id": null,
+  "created_at": "2026-08-28T05:22:14.378176Z",
+  "expires_at": "2026-08-29T05:22:00.827947"
+}

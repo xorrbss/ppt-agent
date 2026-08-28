@@ -79,11 +79,16 @@ async def get_checkpoint(
         recovered = recover_unreferenced_evidence(checkpoint)
         if recovered is not None:
             path, sha256, bundle = recovered
+            now = get_current_utc_datetime()
             checkpoint.render_path = path
             checkpoint.render_sha256 = sha256
             checkpoint.illustrated_html = bundle.html
             checkpoint.render_status = "completed"
-            checkpoint.updated_at = get_current_utc_datetime()
+            checkpoint.render_completed_at = checkpoint.render_completed_at or now
+            if checkpoint.failed_stage == "render":
+                checkpoint.failed_stage = None
+                checkpoint.error = None
+            checkpoint.updated_at = now
             session.add(checkpoint)
             await session.commit()
         return checkpoint

@@ -1,0 +1,25 @@
+{
+  "content": "실제 source-content Chromium readback fixture",
+  "template": "authored",
+  "sourceMode": "source_content_restyle",
+  "sourceContentManifestPin": {
+    "manifestId": "scm_b0719be1e598e49ef0718a9c394c1c1f9bc00dc53ac7c504660c47d298ff748f",
+    "digest": "sha256:d6eb17f4c8ba5eb42bebe7ff837f0cd8aad4d137e8b2b300b2f09a9628a7fa3b"
+  },
+  "contentPolicy": {
+    "preserveAllImageOccurrences": true,
+    "preserveSourceSlideCount": true,
+    "text": "verbatim",
+    "allowSlideExpansion": false,
+    "overflowPolicy": "same_page_recompose_or_fail",
+    "preserveSourceOrder": true
+  },
+  "authored_style": "tech-blueprint",
+  "export_as": "pptx",
+  "language": "Korean",
+  "include_title_slide": false,
+  "include_table_of_contents": false,
+  "reference_snapshot_ids": [
+    "c7a7107d-6e88-44f8-876a-ff49e8382d84"
+  ]
+}

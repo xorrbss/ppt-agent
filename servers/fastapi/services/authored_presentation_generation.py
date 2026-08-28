@@ -287,7 +287,10 @@ async def _final_authored_quality_gate(
                     slide_index=index,
                     stage="render",
                     code="authored_slide_capacity_exceeded",
-                    retryable=True,
+                    # The first-pass gate already sent this slide through the
+                    # one bounded repair cycle. Replaying the same completed
+                    # checkpoint cannot change a residual deterministic limit.
+                    retryable=False,
                     message=(
                         f"Slide {index + 1} exceeded its frozen capacity envelope: "
                         + ", ".join(violations)
