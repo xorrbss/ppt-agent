@@ -365,6 +365,22 @@ def test_cleanup_never_follows_a_checkpoint_symlink(tmp_path, monkeypatch):
     assert marker.read_text(encoding="utf-8") == "keep"
 
 
+def test_orphan_evidence_is_retained_until_explicit_seal(tmp_path, monkeypatch):
+    monkeypatch.setenv(
+        "AUTHORED_CHECKPOINT_DIRECTORY", str(tmp_path / "checkpoints")
+    )
+    root = checkpoints.checkpoint_root()
+    orphan = root / str(uuid.uuid4())
+    orphan.mkdir()
+    (orphan / "slide-0.png").write_bytes(b"png")
+    (orphan / ".slide-0.png.evidence.json").write_text("{}", encoding="utf-8")
+
+    assert checkpoints._artifacts._has_unsealed_evidence(orphan)
+    checkpoints.mark_checkpoint_artifacts_sealed(uuid.UUID(orphan.name))
+    assert (orphan / ".sealed").read_text(encoding="utf-8").startswith("authored-checkpoint-sealed")
+    assert not checkpoints._artifacts._has_unsealed_evidence(orphan)
+
+
 def test_dispatch_continues_when_artifact_sweep_fails(tmp_path, monkeypatch):
     async def scenario():
         engine, maker = await _sweeper_database(tmp_path, monkeypatch)

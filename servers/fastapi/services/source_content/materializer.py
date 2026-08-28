@@ -7,10 +7,12 @@ cell, chart value and image reference is re-read from the immutable manifest.
 from __future__ import annotations
 
 import base64
+import binascii
 import math
 import re
 from typing import Any, Literal, Mapping, Sequence
 
+from pptx.parts.image import Image as PptxImage
 from pydantic import Field, model_validator
 
 from models.authored_vnext.deck.scene import (
@@ -123,7 +125,7 @@ class MaterializedSourceContentScene(StrictCamelModel):
             (slide.slide_id, element.element_id)
             for slide in self.scene.slides
             for element in slide.elements
-            if element.semantic_role != "canvasBackground"
+            if element.semantic_role not in {"canvasBackground", "templateChrome"}
         }
         binding_ids = {(item.slide_id, item.element_id) for item in self.source_bindings}
         if element_ids != binding_ids:
@@ -252,6 +254,198 @@ def _asset_entry(
         raise ValueError("source_content_manifest_invalid") from error
 
 
+def _contained_image_bounds(
+    bounds: Rect, asset: SceneAssetManifestEntry
+) -> Rect:
+    """Seal the actual native picture geometry into Scene before OOXML output."""
+
+    prefix = f"data:{asset.media_type};base64,"
+    if not asset.storage_reference.startswith(prefix):
+        raise ValueError("source_content_manifest_invalid")
+    try:
+        content = base64.b64decode(
+            asset.storage_reference.removeprefix(prefix), validate=True
+        )
+        image_width, image_height = PptxImage.from_blob(content).size
+    except (binascii.Error, ValueError, TypeError) as error:
+        raise ValueError("source_content_manifest_invalid") from error
+    if image_width <= 0 or image_height <= 0:
+        raise ValueError("source_content_manifest_invalid")
+    image_ratio = image_width / image_height
+    frame_ratio = bounds.width / bounds.height
+    if image_ratio >= frame_ratio:
+        rendered_width = bounds.width
+        rendered_height = bounds.width / image_ratio
+    else:
+        rendered_height = bounds.height
+        rendered_width = bounds.height * image_ratio
+    return Rect(
+        x=bounds.x + (bounds.width - rendered_width) / 2,
+        y=bounds.y + (bounds.height - rendered_height) / 2,
+        width=rendered_width,
+        height=rendered_height,
+    )
+
+
+_EMU_PER_PX = 9525.0
+
+
+def _payload_geometry_rect(payload: Mapping[str, Any]) -> Rect | None:
+    raw = _field(payload, "geometry")
+    if raw is None:
+        return None
+    value = _mapping(raw)
+    try:
+        x = float(_field(value, "x")) / _EMU_PER_PX
+        y = float(_field(value, "y")) / _EMU_PER_PX
+        width = float(_field(value, "cx", "width")) / _EMU_PER_PX
+        height = float(_field(value, "cy", "height")) / _EMU_PER_PX
+    except (TypeError, ValueError) as error:
+        raise ValueError("source_content_manifest_invalid") from error
+    if width < 0 or height < 0 or (width == 0 and height == 0):
+        raise ValueError("source_content_manifest_invalid")
+    return Rect(x=x, y=y, width=max(1.0, width), height=max(1.0, height))
+
+
+def _source_geometry_bounds(
+    payload: Mapping[str, Any],
+    *,
+    target: Rect,
+    canvas: Rect,
+) -> tuple[Rect, Rect]:
+    source = _payload_geometry_rect(payload)
+    if source is None:
+        raise ValueError("source_content_manifest_invalid")
+    source_canvas_width = 1280.0
+    source_canvas_height = 720.0
+    x = target.x + (source.x / source_canvas_width) * target.width
+    y = target.y + (source.y / source_canvas_height) * target.height
+    width = (source.width / source_canvas_width) * target.width
+    height = (source.height / source_canvas_height) * target.height
+    left = max(canvas.x, min(x, canvas.right - 1.0))
+    top = max(canvas.y, min(y, canvas.bottom - 1.0))
+    right = max(left + 1.0, min(x + width, canvas.right))
+    bottom = max(top + 1.0, min(y + height, canvas.bottom))
+    return Rect(x=left, y=top, width=right - left, height=bottom - top), source
+
+
+def _nearly_same_rect(left: Rect, right: Rect) -> bool:
+    tolerance = 2.0
+    return (
+        abs(left.x - right.x) <= tolerance
+        and abs(left.y - right.y) <= tolerance
+        and abs(left.width - right.width) <= tolerance
+        and abs(left.height - right.height) <= tolerance
+    )
+
+
+def _template_scene_elements(
+    *,
+    slide_id: str,
+    layout_role: str,
+    canvas: Rect,
+    tokens: SourceContentStyleTokens,
+) -> list[SceneShapeElement]:
+    dark = layout_role in {"cover", "section", "closing"}
+    background = tokens.text_primary if dark else tokens.background
+    elements = [
+        SceneShapeElement(
+            kind="shape",
+            element_id=f"element:{slide_id.removeprefix('slide:')}.template-background",
+            z_order=-100_000,
+            bounds=canvas,
+            semantic_role="templateChrome",
+            editability=SceneEditability(),
+            shape="rect",
+            fill=background,
+            stroke=None,
+        )
+    ]
+    if dark:
+        elements.extend(
+            [
+                SceneShapeElement(
+                    kind="shape",
+                    element_id=f"element:{slide_id.removeprefix('slide:')}.template-accent-left",
+                    z_order=-99_900,
+                    bounds=Rect(x=canvas.x, y=canvas.y, width=18.0, height=canvas.height),
+                    semantic_role="templateChrome",
+                    editability=SceneEditability(),
+                    shape="rect",
+                    fill=tokens.accent,
+                    stroke=None,
+                ),
+                SceneShapeElement(
+                    kind="shape",
+                    element_id=f"element:{slide_id.removeprefix('slide:')}.template-accent-right",
+                    z_order=-99_899,
+                    bounds=Rect(
+                        x=canvas.right - 246.0,
+                        y=canvas.y,
+                        width=246.0,
+                        height=canvas.height,
+                    ),
+                    semantic_role="templateChrome",
+                    editability=SceneEditability(),
+                    shape="rect",
+                    fill=tokens.accent,
+                    stroke=None,
+                ),
+            ]
+        )
+    else:
+        elements.extend(
+            [
+                SceneShapeElement(
+                    kind="shape",
+                    element_id=f"element:{slide_id.removeprefix('slide:')}.template-header",
+                    z_order=-99_900,
+                    bounds=Rect(x=canvas.x, y=canvas.y, width=canvas.width, height=42.0),
+                    semantic_role="templateChrome",
+                    editability=SceneEditability(),
+                    shape="rect",
+                    fill=tokens.text_primary,
+                    stroke=None,
+                ),
+                SceneShapeElement(
+                    kind="shape",
+                    element_id=f"element:{slide_id.removeprefix('slide:')}.template-header-accent",
+                    z_order=-99_899,
+                    bounds=Rect(x=canvas.x, y=42.0, width=canvas.width, height=5.0),
+                    semantic_role="templateChrome",
+                    editability=SceneEditability(),
+                    shape="rect",
+                    fill=tokens.accent,
+                    stroke=None,
+                ),
+                SceneShapeElement(
+                    kind="shape",
+                    element_id=f"element:{slide_id.removeprefix('slide:')}.template-section-tab",
+                    z_order=-99_898,
+                    bounds=Rect(x=48.0, y=42.0, width=180.0, height=18.0),
+                    semantic_role="templateChrome",
+                    editability=SceneEditability(),
+                    shape="rect",
+                    fill=tokens.accent,
+                    stroke=None,
+                ),
+                SceneShapeElement(
+                    kind="shape",
+                    element_id=f"element:{slide_id.removeprefix('slide:')}.template-footer-line",
+                    z_order=-99_897,
+                    bounds=Rect(x=48.0, y=681.0, width=1184.0, height=1.0),
+                    semantic_role="templateChrome",
+                    editability=SceneEditability(),
+                    shape="line",
+                    fill=None,
+                    stroke=tokens.accent,
+                    stroke_width=1.0,
+                ),
+            ]
+        )
+    return elements
+
+
 class SourceContentSceneMaterializer:
     """Build the canonical Scene and provenance envelope without generation."""
 
@@ -298,21 +492,36 @@ class SourceContentSceneMaterializer:
             slot_use_counts: dict[str, int] = {}
             for placement in planned_slide.placements:
                 slot_use_counts[placement.slot_id] = slot_use_counts.get(placement.slot_id, 0) + 1
+            source_geometry_layout = layout.placement_strategy == "sourceGeometry"
             # A source page may contain many small text owners while the
             # selected template exposes one body slot. Recompose repeated
             # owners as a deterministic reading-order grid instead of
             # squeezing them into a single vertical pixel strip.
             slot_flow: dict[str, tuple[int, int]] = {}
-            for slot_id, total in slot_use_counts.items():
-                columns = min(4, total) if total > 1 else 1
-                rows = math.ceil(total / columns)
-                slot_flow[slot_id] = (columns, rows)
+            if not source_geometry_layout:
+                for slot_id, total in slot_use_counts.items():
+                    columns = min(4, total) if total > 1 else 1
+                    rows = math.ceil(total / columns)
+                    slot_flow[slot_id] = (columns, rows)
             slot_use_ordinals: dict[str, int] = {}
             slide_id = f"slide:source-{planned_slide.output_index + 1}"
-            # The selected template master owns the slide background.  Do not
-            # emit a duplicate canvasBackground Scene element: the OOXML
-            # materializer deliberately rejects body-level background shapes.
-            elements: list[Any] = []
+            elements: list[Any] = _template_scene_elements(
+                slide_id=slide_id,
+                layout_role=planned_slide.layout_role,
+                canvas=canvas_bounds,
+                tokens=style_tokens,
+            )
+            image_source_rects = []
+            if source_geometry_layout:
+                for image_placement in planned_slide.placements:
+                    image_source = blocks.get(image_placement.source_block_id)
+                    if image_source is None:
+                        continue
+                    image_payload = _mapping(_field(image_source[1], "payload") or {})
+                    if str(_field(image_source[1], "kind") or "") == "image":
+                        source_rect = _payload_geometry_rect(image_payload)
+                        if source_rect is not None:
+                            image_source_rects.append(source_rect)
             for placement in planned_slide.placements:
                 source = blocks.get(placement.source_block_id)
                 slot = slot_by_id.get(placement.slot_id)
@@ -341,7 +550,14 @@ class SourceContentSceneMaterializer:
                 total_uses = slot_use_counts.get(placement.slot_id, 1)
                 ordinal = slot_use_ordinals.get(placement.slot_id, 0)
                 slot_use_ordinals[placement.slot_id] = ordinal + 1
-                if total_uses > 1:
+                source_rect: Rect | None = None
+                if source_geometry_layout:
+                    bounds, source_rect = _source_geometry_bounds(
+                        payload,
+                        target=base_bounds,
+                        canvas=canvas_bounds,
+                    )
+                elif total_uses > 1:
                     columns, rows = slot_flow[placement.slot_id]
                     cell_width = base_bounds.width / columns
                     cell_height = base_bounds.height / rows
@@ -363,6 +579,20 @@ class SourceContentSceneMaterializer:
                     )
                 else:
                     bounds = base_bounds
+                if source_geometry_layout and source_rect is not None and kind in {
+                    "text",
+                    "source_note",
+                }:
+                    if source_rect.y >= 620.0:
+                        semantic_role = "footer"
+                    elif source_rect.y < 60.0:
+                        semantic_role = "sectionLabel"
+                    elif source_rect.y < 150.0 and source_rect.height >= 30.0:
+                        semantic_role = "title"
+                    elif source_rect.y < 170.0:
+                        semantic_role = "subtitle"
+                    else:
+                        semantic_role = "body"
                 data_id: str | None = None
                 asset_id: str | None = None
                 if (
@@ -377,6 +607,10 @@ class SourceContentSceneMaterializer:
                     asset = _asset_entry(block, payload, sealed_assets or {})
                     assets.setdefault(asset.asset_id, asset)
                     asset_id = asset.asset_id
+                    # Native ``contain`` emission creates a picture shape at the
+                    # aspect-fitted rectangle, not at the allocator frame. The
+                    # canonical Scene must seal that same rendered rectangle.
+                    bounds = _contained_image_bounds(bounds, asset)
                     element = SceneImageElement(
                         kind="image",
                         element_id=element_id,
@@ -398,7 +632,19 @@ class SourceContentSceneMaterializer:
                         if semantic_role in {"title", "heading", "section"}
                         else style_tokens.body_font
                     )
-                    size = 30.0 if semantic_role in {"title", "heading", "section"} else 18.0
+                    if source_geometry_layout and source_rect is not None:
+                        if semantic_role == "sectionLabel":
+                            size = 12.0
+                        elif semantic_role == "title":
+                            size = 30.0
+                        elif semantic_role == "subtitle":
+                            size = 15.0
+                        elif semantic_role == "footer":
+                            size = 10.0
+                        else:
+                            size = min(18.0, max(10.0, bounds.height * 0.58))
+                    else:
+                        size = 30.0 if semantic_role in {"title", "heading", "section"} else 18.0
                     # PowerPoint COM auto-fit is not deterministic in readback.
                     # Seal a size based on the estimated wrapped line count so
                     # dense source content remains on the source page without
@@ -424,6 +670,7 @@ class SourceContentSceneMaterializer:
                     # the COM readback.  Integer points are stable across the
                     # native exporter/readback boundary while the 4-column
                     # recompose grid keeps repeated source blocks legible.
+                    fit_repeated = total_uses > 1 and not source_geometry_layout
                     fitted_size = (
                         max(
                             1.0,
@@ -439,9 +686,24 @@ class SourceContentSceneMaterializer:
                                 )
                             ),
                         )
-                        if total_uses > 1
+                        if fit_repeated or source_geometry_layout
                         else size
                     )
+                    dark_slide = planned_slide.layout_role in {"cover", "section", "closing"}
+                    text_color = (
+                        "#FFFFFF"
+                        if dark_slide
+                        else (
+                            style_tokens.accent
+                            if semantic_role == "sectionLabel"
+                            else (
+                                style_tokens.text_secondary
+                                if semantic_role in {"subtitle", "footer"}
+                                else style_tokens.text_primary
+                            )
+                        )
+                    )
+                    font_weight = 700 if semantic_role in {"title", "sectionLabel"} else 400
                     runs = [
                         SceneTextRun(
                             run_id=f"run:{_stable_suffix(element_id + ':' + str(index))}",
@@ -452,32 +714,43 @@ class SourceContentSceneMaterializer:
                             ),
                             font_family=font,
                             font_size=fitted_size,
-                            color=style_tokens.text_primary,
+                            font_weight=font_weight,
+                            color=text_color,
                         )
                         for index, item in enumerate(raw_runs)
                     ]
                     scene_text = "".join(run.text for run in runs)
                     if scene_text != text:
                         raise ValueError("source_content_manifest_invalid")
+                    emitted_semantic_role = (
+                        "displayTitle"
+                        if dark_slide and semantic_role == "title"
+                        else semantic_role
+                    )
                     element = SceneTextElement(
                         kind="text",
                         element_id=element_id,
                         z_order=10 + placement.source_order,
                         bounds=bounds,
-                        semantic_role=semantic_role,
+                        semantic_role=emitted_semantic_role,
                         editability=SceneEditability(text=True, geometry=True, style=True),
                         text=scene_text,
                         runs=runs,
                         style=SceneTextStyle(
                             font_family=font,
                             font_size=fitted_size,
-                            color=style_tokens.text_primary,
+                            font_weight=font_weight,
+                            color=text_color,
                             # Page-locked recomposition may place many source
                             # text blocks into the same template slot. Let
                             # PowerPoint shrink those repeated boxes to their
                             # sealed bounds instead of overflowing or adding a
                             # new slide.
-                            auto_fit="shrink" if total_uses > 1 else "none",
+                            auto_fit=(
+                                "shrink"
+                                if fit_repeated or source_geometry_layout
+                                else "none"
+                            ),
                         ),
                     )
                 elif kind == "table":
@@ -557,11 +830,38 @@ class SourceContentSceneMaterializer:
                         "triangle": "triangle",
                         "diamond": "diamond",
                         "chevron": "chevron",
+                        "rightArrow": "chevron",
                         "line": "line",
                     }
                     shape = supported_presets.get(str(source_preset))
                     if shape is None:
                         raise ValueError("source_content_unsupported_object")
+                    image_frame = (
+                        source_rect is not None
+                        and any(
+                            _nearly_same_rect(source_rect, image_rect)
+                            for image_rect in image_source_rects
+                        )
+                    )
+                    large_plane = (
+                        source_rect is not None
+                        and source_rect.width * source_rect.height
+                        >= 1280.0 * 720.0 * 0.55
+                    )
+                    dark_slide = planned_slide.layout_role in {
+                        "cover",
+                        "section",
+                        "closing",
+                    }
+                    if shape == "line" or image_frame or large_plane:
+                        fill = None
+                    else:
+                        fill = style_tokens.accent if dark_slide else style_tokens.surface
+                    stroke = (
+                        "#FFFFFF"
+                        if dark_slide and shape != "line"
+                        else style_tokens.accent
+                    )
                     element = SceneShapeElement(
                         kind="shape",
                         element_id=element_id,
@@ -570,8 +870,9 @@ class SourceContentSceneMaterializer:
                         semantic_role=semantic_role,
                         editability=SceneEditability(geometry=True, style=True),
                         shape=shape,
-                        fill=str(_field(payload, "fill") or style_tokens.surface),
-                        stroke=str(_field(payload, "stroke") or style_tokens.accent),
+                        fill=fill,
+                        stroke=stroke,
+                        stroke_width=1.0,
                     )
                 else:
                     raise ValueError("source_content_unsupported_object")

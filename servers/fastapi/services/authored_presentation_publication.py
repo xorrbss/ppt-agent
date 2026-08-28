@@ -199,6 +199,7 @@ async def publish_authored_presentation(
     header_contract: AuthoredHeaderContract | None = None,
     chapter_plan: AuthoredChapterPlan | None = None,
     illustration_plan: AuthoredIllustrationPlan | None = None,
+    quality_gate_receipt: dict[str, object] | None = None,
 ) -> tuple[str, float]:
     persist_started = time.monotonic()
     images_ready = False
@@ -235,6 +236,24 @@ async def publish_authored_presentation(
             code="authored_semantic_component_count_mismatch",
             retryable=False,
         )
+    if quality_gate_receipt is not None:
+        # A receipt is part of the publication contract, not an advisory log.
+        # Reject stale receipts so a retry cannot publish quality evidence for a
+        # different HTML revision.
+        receipt_slide_count = quality_gate_receipt.get("slideCount")
+        receipt_html_digest = quality_gate_receipt.get("htmlDigest")
+        expected_html_digest = "sha256:" + sha256_canonical_json(htmls)
+        if (
+            receipt_slide_count != len(htmls)
+            or receipt_html_digest != expected_html_digest
+        ):
+            raise AuthoredStageError(
+                slide_index=0,
+                stage="persist",
+                code="authored_quality_gate_receipt_mismatch",
+                retryable=False,
+                message="품질 게이트 영수증이 최종 슬라이드 산출물과 일치하지 않습니다.",
+            )
     try:
         _require_immutable_composition_publication(
             request=request,
@@ -305,6 +324,11 @@ async def publish_authored_presentation(
             "fonts": brand.fonts,
             "language": brand.language,
         }
+        if quality_gate_receipt is not None:
+            # Keep quality admission evidence separate from residual issue state:
+            # the receipt describes the gate run, while ``status`` says whether
+            # any known issues remain after bounded repair.
+            presentation.theme["authoredQualityGate"] = dict(quality_gate_receipt)
         company_standard = _authored_company_standard_projection(request, htmls)
         if company_standard is not None:
             presentation.theme["authoredCompanyStandard"] = company_standard
@@ -600,8 +624,23 @@ async def publish_authored_presentation(
             if async_status is None:
                 raise RuntimeError("presentation_generation_task_missing")
             async_status.status = "completed"
-            async_status.message = "Presentation generation completed"
-            async_status.data = response.model_dump(mode="json")
+            quality_status = (
+                str(quality_gate_receipt.get("status"))
+                if quality_gate_receipt is not None
+                else "not_checked"
+            )
+            async_status.message = (
+                "Presentation generation completed with residual quality issues"
+                if quality_status == "residual_issues"
+                else "Presentation generation completed"
+            )
+            async_status.data = {
+                **response.model_dump(mode="json"),
+                # Keep task completion (the orchestration state) independent
+                # from quality admission (the product result state).
+                "quality_gate_status": quality_status,
+                "quality_gate_receipt": quality_gate_receipt,
+            }
             async_status.error = None
             async_status.updated_at = datetime.now(timezone.utc)
             sql_session.add(async_status)

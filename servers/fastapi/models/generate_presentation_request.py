@@ -31,10 +31,10 @@ class AuthoredMasterPinInput(StrictCamelModel):
 class SourceContentPolicy(StrictCamelModel):
     """Page-locked text/image policy for authored source-content reflow."""
 
-    # Older durable requests may still say ``verbatim``. New source reflow
-    # treats extracted text as the authored outline so normal composition can
-    # condense it to fit cleanly.
-    text: Literal["verbatim", "outline"] = "outline"
+    # The caller must choose the source text contract. ``verbatim`` preserves
+    # source wording and fails closed when a page cannot fit; ``outline`` is the
+    # explicit opt-in that permits concise rephrasing inside the same page.
+    text: Literal["verbatim", "outline"] = "verbatim"
     # Kept as booleans so already-queued v1 requests remain readable. The
     # authored reflow contract does not project source tables or charts.
     preserve_all_table_cells: bool = False
@@ -43,7 +43,7 @@ class SourceContentPolicy(StrictCamelModel):
     preserve_source_order: Literal[True] = True
     preserve_source_slide_count: Literal[True] = True
     allow_slide_expansion: Literal[False] = False
-    allow_summarization: bool = True
+    allow_summarization: bool = False
     overflow_policy: Literal["same_page_recompose_or_fail"] = "same_page_recompose_or_fail"
 
 
@@ -73,6 +73,11 @@ class GeneratePresentationRequest(BaseModel):
     _source_content_manifest: Any = PrivateAttr(default=None)
     _source_document_outline: Any = PrivateAttr(default=None)
     _source_content_authored_reflow: bool = PrivateAttr(default=False)
+    _authored_source_readback_receipt: Any = PrivateAttr(default=None)
+    # Resolved once at generation admission and reused by authoring, repair and
+    # publication.  It is intentionally private: callers select source policy
+    # through ``contentPolicy``; the server owns the effective profile.
+    _authored_composition_profile: Any = PrivateAttr(default=None)
 
     # Chat-first async generation reuses the durable presentation shell and
     # awaiting-approval operation created by /presentation/create.  Legacy

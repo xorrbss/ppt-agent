@@ -221,7 +221,7 @@ function canonicalBodyNode(
     const role = common.semanticRole;
     const rawStyle = source.style === undefined ? undefined : record(source.style, `${path}.style`);
     const textAlign = rawStyle?.textAlign;
-    if (textAlign !== undefined && textAlign !== "left" && textAlign !== "center" && textAlign !== "right" && textAlign !== "justify") throw new WorkbenchParseError(`${path}.style.textAlign`, "supported text alignment required");
+    if (textAlign != null && textAlign !== "left" && textAlign !== "center" && textAlign !== "right" && textAlign !== "justify") throw new WorkbenchParseError(`${path}.style.textAlign`, "supported text alignment required");
     return { ...common, kind, layer: "body", role, text: string(source.text, `${path}.text`), ...(rawStyle ? { style: { ...(typeof rawStyle.color === "string" ? { color: rawStyle.color } : {}), ...(typeof rawStyle.fontFamily === "string" ? { fontFamily: rawStyle.fontFamily } : {}), ...(typeof rawStyle.fontSize === "number" ? { fontSize: finite(rawStyle.fontSize, `${path}.style.fontSize`) } : {}), ...(typeof rawStyle.fontWeight === "number" ? { fontWeight: finite(rawStyle.fontWeight, `${path}.style.fontWeight`) } : {}), ...(textAlign ? { textAlign } : {}) } } : {}) } satisfies TextBodyNode;
   }
   if (kind === "image") {
@@ -242,7 +242,7 @@ function canonicalBodyNode(
       crop,
       fit: crop,
       ...(manifest ? { mediaType: manifest.mediaType, storageReference: manifest.storageReference, sizeBytes: manifest.sizeBytes } : {}),
-      ...(source.cropGeometry === undefined ? {} : { cropGeometry: record(source.cropGeometry, `${path}.cropGeometry`) as ImageBodyNode["cropGeometry"] }),
+      ...(source.cropGeometry == null ? {} : { cropGeometry: record(source.cropGeometry, `${path}.cropGeometry`) as ImageBodyNode["cropGeometry"] }),
     } satisfies ImageBodyNode;
   }
   if (kind === "shape") {

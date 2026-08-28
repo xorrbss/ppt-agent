@@ -1,6 +1,6 @@
 import pytest
 
-from utils.llm_config import get_llm_config
+from utils.llm_config import get_extra_body, get_llm_config
 from utils.llm_provider import get_model
 from utils.runtime_settings import RuntimeSettings
 
@@ -62,3 +62,20 @@ def test_provider_configs_resolve_from_explicit_snapshot(
 
     assert config.provider == expected_provider
     assert get_model(settings)
+
+
+def test_codex_reasoning_defaults_low_but_preserves_explicit_override():
+    default = RuntimeSettings.from_sources(
+        environ={}, user_config={"LLM": "codex", "CODEX_ACCESS_TOKEN": "token"}
+    )
+    explicit = RuntimeSettings.from_sources(
+        environ={},
+        user_config={
+            "LLM": "codex",
+            "CODEX_ACCESS_TOKEN": "token",
+            "CODEX_REASONING_EFFORT": "high",
+        },
+    )
+
+    assert get_extra_body(default) == {"reasoning": {"effort": "low"}}
+    assert get_extra_body(explicit) == {"reasoning": {"effort": "high"}}

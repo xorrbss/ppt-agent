@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import shutil as _shutil
 import time
-from typing import Any
+from typing import Any, Mapping
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,7 +22,12 @@ from services.authored_checkpoint_artifacts import (
     atomic_write,
     checkpoint_root,
     cleanup_checkpoint_artifacts,
+    mark_checkpoint_artifacts_sealed,
     read_valid_render,
+    read_valid_evidence,
+    recover_unreferenced_evidence,
+    write_valid_evidence,
+    evidence_attempt_id,
     render_artifact_path,
 )
 from services.authored_checkpoint_errors import (
@@ -35,6 +40,12 @@ from services.authored_checkpoint_errors import (
 from services.authored_checkpoint_state import (
     STAGES,
     should_inject_failure,
+)
+from services.authored_slide_checkpoint_bundle import (
+    AtomicSlideCheckpointStore,
+    SlideCheckpointBundle,
+    SlideCheckpointConflict,
+    SlideCheckpointCorrupt,
 )
 from services.authored_generation_observability import log_authored_generation_observation
 from services.database import async_session_maker
@@ -143,6 +154,8 @@ async def complete_stage(
     attempt_token: str,
     html: str | None = None,
     png: bytes | None = None,
+    browser_metrics: Mapping[str, object] | None = None,
+    checkpoint_revision: int | None = None,
     skipped: bool = False,
 ) -> AuthoredSlideCheckpoint:
     _sync_session_maker()
@@ -153,6 +166,8 @@ async def complete_stage(
         attempt_token=attempt_token,
         html=html,
         png=png,
+        browser_metrics=browser_metrics,
+        checkpoint_revision=checkpoint_revision,
         skipped=skipped,
     )
 
@@ -193,11 +208,16 @@ __all__ = [
     "_failed_artifact_ttl_seconds",
     "_published_artifact_ttl_seconds",
     "AuthoredStageError",
+    "AtomicSlideCheckpointStore",
+    "SlideCheckpointBundle",
+    "SlideCheckpointConflict",
+    "SlideCheckpointCorrupt",
     "STAGES",
     "atomic_write",
     "begin_publish",
     "checkpoint_root",
     "cleanup_checkpoint_artifacts",
+    "mark_checkpoint_artifacts_sealed",
     "clear_checkpoint_html",
     "complete_publish",
     "complete_stage",
@@ -209,6 +229,10 @@ __all__ = [
     "maybe_sweep_expired_checkpoint_artifacts",
     "progress_for_task",
     "read_valid_render",
+    "read_valid_evidence",
+    "recover_unreferenced_evidence",
+    "write_valid_evidence",
+    "evidence_attempt_id",
     "render_artifact_path",
     "sanitize_exception_message",
     "should_inject_failure",

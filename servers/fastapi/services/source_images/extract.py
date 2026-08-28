@@ -110,7 +110,6 @@ def extract_pptx_images(pptx_path: Path) -> list[ExtractedSourceImage]:
         heading = _slide_heading(root)
         slide_text = _slide_text(root)
         relationships = _relationships(package, slide_part)
-        seen_on_slide: set[str] = set()
         for media_part, coverage in _referenced_media_parts(
             root, relationships, package, slide_area
         ):
@@ -120,10 +119,6 @@ def extract_pptx_images(pptx_path: Path) -> list[ExtractedSourceImage]:
             if details is None:
                 continue
             mime_type, width, height, digest = details
-            if digest in seen_on_slide:
-                # A picture placed twice on one slide is still one occurrence.
-                continue
-            seen_on_slide.add(digest)
             extracted.append(
                 ExtractedSourceImage(
                     payload=package[media_part],
@@ -235,12 +230,13 @@ def _referenced_media_parts(
 
     coverage_by_blip = _picture_coverage(root, slide_area)
     parts: list[tuple[str, Optional[float]]] = []
-    seen: set[str] = set()
     for blip in root.iter(f"{{{NS['a']}}}blip"):
         relation = relationships.get(blip.attrib.get(f"{{{NS['r']}}}embed") or "")
-        if not relation or relation[1] not in package or relation[1] in seen:
+        if not relation or relation[1] not in package:
             continue
-        seen.add(relation[1])
+        # Keep one entry per drawing occurrence.  The ordinary authored registry
+        # still deduplicates by digest, while source-content reflow needs two
+        # shapes that reference the same media part to remain two placements.
         parts.append((relation[1], coverage_by_blip.get(id(blip))))
     return parts
 

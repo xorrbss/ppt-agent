@@ -19,9 +19,10 @@ def test_metrics_parser_rejects_missing_or_malformed_payload():
     )
 
 
-def test_render_cache_hit_recollects_evicted_metrics_before_returning_png(monkeypatch):
+def test_render_cache_hit_reuses_atomic_capture_after_metrics_eviction(monkeypatch):
     slide_capture._render_cache.clear()
     slide_capture._browser_metrics_cache.clear()
+    slide_capture._capture_cache.clear()
     slide_capture._browser_metrics_inflight.clear()
     calls = 0
 
@@ -42,13 +43,18 @@ def test_render_cache_hit_recollects_evicted_metrics_before_returning_png(monkey
     second, metrics = asyncio.run(slide_capture.render_html_to_png_with_metrics(HTML))
 
     assert first == second == b"fresh-png"
-    assert calls == 2
-    assert metrics == {"width": 1280, "height": 720, "elements": []}
+    # The capture-result adapter must not launch a second browser pass when
+    # the PNG is already retained; metrics are recovered from the same atomic
+    # capture path (or reported unavailable) instead.
+    assert calls == 1
+    assert metrics is not None
+    assert metrics["width"] == 1280
 
 
 def test_metrics_recollection_failure_is_explicitly_unavailable(monkeypatch):
     slide_capture._render_cache.clear()
     slide_capture._browser_metrics_cache.clear()
+    slide_capture._capture_cache.clear()
     slide_capture._browser_metrics_inflight.clear()
 
     async def fake_uncached(html, timeout=60):

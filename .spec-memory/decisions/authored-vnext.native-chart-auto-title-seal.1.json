@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "key": "authored-vnext.native-chart-auto-title-seal",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Native charts without authored titles must explicitly seal has_title false so PowerPoint save-copy/reopen cannot materialize a series name as a title.",
+  "scope": [
+    "authored-vnext",
+    "native-chart",
+    "source-content",
+    "powerpoint-readback"
+  ],
+  "invariants": [
+    "A no-title native chart emits c:autoTitleDeleted val=1 before PowerPoint COM save/reopen.",
+    "PowerPoint first-open and reopen chart snapshots remain identical."
+  ],
+  "forbidden": [
+    "Do not rely on python-pptx has_title False without explicitly writing the no-title OOXML state."
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_vnext/ooxml/native_scene.py",
+    "servers/fastapi/tests/unit/test_authored_vnext_native_scene_quality.py"
+  ],
+  "supersedes": [],
+  "recordedAt": "2026-08-27T07:40:10.5508745+00:00"
+}

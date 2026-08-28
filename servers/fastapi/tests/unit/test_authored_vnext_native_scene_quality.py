@@ -156,7 +156,10 @@ def test_browser_text_metrics_are_projected_once_into_native_ooxml() -> None:
 def test_scene_materializes_digest_verified_image_table_and_chart_as_native_objects() -> None:
     image_digest = f"sha256:{sha256(_PNG_BYTES).hexdigest()}"
     table_payload = {
-        "cells": [["구분", "2025", "2026"], ["매출", "120", "165"]]
+        "cells": [
+            ["구분", "2025", "2026", "2027"],
+            ["매출", "120", "165", "190"],
+        ]
     }
     chart_payload = {
         "categories": ["1분기", "2분기", "3분기"],
@@ -211,13 +214,16 @@ def test_scene_materializes_digest_verified_image_table_and_chart_as_native_obje
                 kind="table",
                 element_id="element:native-quality.table",
                 z_order=20,
-                bounds=Rect(x=280, y=24, width=640, height=180),
+                # Use the source-content table width whose default four-column split leaves a
+                # one-EMU remainder. The native table must seal that remainder
+                # before save/readback instead of changing its style digest.
+                bounds=Rect(x=280, y=24, width=273, height=180),
                 semantic_role="bodyTable",
                 editability=SceneEditability(geometry=True, data=True),
                 data_id=f"data:{table_digest.removeprefix('sha256:')[:48]}",
                 data_digest=table_digest,
                 rows=2,
-                columns=3,
+                columns=4,
             ),
             SceneChartElement(
                 kind="chart",
@@ -317,6 +323,11 @@ def test_scene_materializes_digest_verified_image_table_and_chart_as_native_obje
     assert header_run.font.bold is True
     assert native_table.columns[0].width > native_table.columns[1].width
     native_chart = next(shape.chart for shape in native_shapes if shape.shape_type == MSO_SHAPE_TYPE.CHART)
+    auto_title_deleted = native_chart._element.find(
+        ".//{http://schemas.openxmlformats.org/drawingml/2006/chart}autoTitleDeleted"
+    )
+    assert auto_title_deleted is not None
+    assert auto_title_deleted.get("val") == "1"
     assert native_chart.category_axis.tick_labels.font.name == "Malgun Gothic"
     assert str(native_chart.series[0].format.fill.fore_color.rgb) == "1463FF"
     elements = {item["elementId"]: item for item in receipt["scene"]["slides"][0]["elements"]}

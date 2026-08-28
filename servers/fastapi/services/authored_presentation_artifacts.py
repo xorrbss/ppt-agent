@@ -17,7 +17,6 @@ from models.generate_presentation_request import GeneratePresentationRequest
 from models.presentation_outline_model import PresentationOutlineModel
 from services.authored_checkpoint_service import (
     atomic_write,
-    cleanup_checkpoint_artifacts,
     clear_checkpoint_html,
     complete_stage,
 )
@@ -220,18 +219,14 @@ def _authored_export_path(
 
 
 async def _cleanup_published_checkpoints(job_id: uuid.UUID) -> None:
-    """Best-effort post-publish cleanup: render artifacts and stored slide HTML.
+    """Seal-aware post-publish cleanup of stored slide HTML.
 
-    Failures never unwind an already-published deck; leftovers remain for the
-    TTL sweeper (files) or job CASCADE delete (rows)."""
-    try:
-        cleanup_checkpoint_artifacts(job_id)
-    except OSError:
-        LOGGER.warning(
-            "Unable to clean authored checkpoint artifacts for job %s",
-            job_id,
-            exc_info=True,
-        )
+    Render artifacts are deliberately left in place after the receipt seal so
+    the bounded TTL/byte-budget sweeper can reclaim them.  Immediate recursive
+    deletion made post-crash evidence unavailable and bypassed the retention
+    policy.  The caller writes the durable ``.sealed`` marker before entering
+    this function; failed or in-flight attempts therefore remain protected.
+    """
     try:
         await clear_checkpoint_html(job_id)
     except SQLAlchemyError:

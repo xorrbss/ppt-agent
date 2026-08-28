@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.quality-composition-first",
+  "revision": 3,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Chromium semantic roles and owned text drive hard capacity gates; durable receipt v2 seals revision and digests before publication.",
+  "scope": [
+    "authored",
+    "quality-gate",
+    "receipt"
+  ],
+  "invariants": [
+    "All browser QIDs remain unique and nonempty.",
+    "Title/body font floor is 16px and supporting text floor is 12px.",
+    "Visual and performance assessment remain release-profile requirements, not implicit passes."
+  ],
+  "forbidden": [
+    "Do not satisfy capacity gates from HTML substring presence alone.",
+    "Do not expose raw lease or attempt tokens in public artifacts."
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_composition_policy.py",
+    "servers/fastapi/services/authored_quality_receipt_v2.py",
+    "servers/fastapi/tests/unit/test_authored_composition_policy.py",
+    "servers/fastapi/tests/unit/test_authored_quality_receipt_v2.py"
+  ],
+  "supersedes": [
+    "authored.quality-composition-first@2"
+  ],
+  "recordedAt": "2026-08-28T01:26:48.1672127+00:00"
+}

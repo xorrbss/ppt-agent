@@ -318,6 +318,7 @@ def _author_prompt(
     instructions: Optional[str] = None,
     illustration_allowed: Optional[bool] = None,
     visual_intent: Optional[AuthoredSlideVisualIntent] = None,
+    capacity_brief: Optional[str] = None,
 ) -> str:
     return author_slide_prompt.author_prompt(
         content,
@@ -334,6 +335,7 @@ def _author_prompt(
         instructions=instructions,
         illustration_allowed=illustration_allowed,
         visual_intent=visual_intent,
+        capacity_brief=capacity_brief,
     )
 
 
@@ -826,6 +828,7 @@ async def author_slide_html(
     instructions: Optional[str] = None,
     illustration_allowed: Optional[bool] = None,
     visual_intent: Optional[AuthoredSlideVisualIntent] = None,
+    capacity_brief: Optional[str] = None,
     correction_hint: Optional[str] = None,
     rejected_html: Optional[str] = None,
 ) -> str:
@@ -855,6 +858,7 @@ async def author_slide_html(
         instructions=instructions,
         illustration_allowed=illustration_allowed,
         visual_intent=visual_intent,
+        capacity_brief=capacity_brief,
     )
     if correction_hint:
         prompt += (

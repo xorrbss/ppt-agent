@@ -23,7 +23,7 @@ from services.source_content.contracts import (
 
 
 PLAN_VERSION = "source-content-placement-plan/v1"
-MERGE_POLICY_VERSION = "master-slots-authored-body/v3"
+MERGE_POLICY_VERSION = "master-slots-authored-body/v4"
 
 
 def canonical_digest(value: Any) -> str:
@@ -86,6 +86,7 @@ class WritableLayout(StrictCamelModel):
     layout_role: str = Field(min_length=1, max_length=100)
     layout_id: str = Field(min_length=1, max_length=200)
     slots: tuple[WritableSlot, ...] = Field(min_length=1, max_length=64)
+    placement_strategy: Literal["slotFlow", "sourceGeometry"] = "slotFlow"
 
 
 class PlacementCompositionPin(StrictCamelModel):
@@ -96,7 +97,7 @@ class PlacementCompositionPin(StrictCamelModel):
     company_standard_revision: int | None = Field(default=None, ge=1)
     master_digest: Digest | None = None
     master_geometry_digest: Digest
-    merge_policy_version: Literal["master-slots-authored-body/v3"] = (
+    merge_policy_version: Literal["master-slots-authored-body/v4"] = (
         MERGE_POLICY_VERSION
     )
 
@@ -193,6 +194,34 @@ def _render_mode(block: Mapping[str, Any]) -> Literal["native", "rasterFallback"
     return "native"
 
 
+def _select_layout(
+    *,
+    unit: Mapping[str, Any],
+    source_position: int,
+    source_count: int,
+    layouts: Sequence[WritableLayout],
+) -> WritableLayout:
+    by_role = {layout.layout_role: layout for layout in layouts}
+    if source_position == 0 and "cover" in by_role:
+        return by_role["cover"]
+    if source_position == source_count - 1 and "closing" in by_role:
+        return by_role["closing"]
+    blocks = [
+        _mapping(block) for block in (_field(unit, "blocks") or [])
+    ]
+    kinds = [str(_field(block, "kind") or "") for block in blocks]
+    visible_kinds = [kind for kind in kinds if kind in RESTYLE_CONTENT_KINDS]
+    if (
+        "section" in by_role
+        and len(visible_kinds) <= 16
+        and not any(kind in {"shape", "image", "table", "chart"} for kind in visible_kinds)
+    ):
+        return by_role["section"]
+    if "data" in by_role and any(kind in {"table", "chart"} for kind in visible_kinds):
+        return by_role["data"]
+    return by_role.get("content", layouts[0])
+
+
 class ContentAllocator:
     """Allocate every manifest block into a deterministic ordered plan."""
 
@@ -261,7 +290,7 @@ class ContentAllocator:
         source_order = 0
         output_index = 0
 
-        for unit in ordered_units:
+        for unit_position, unit in enumerate(ordered_units):
             source_unit_id = str(_field(unit, "sourceUnitId", "source_unit_id") or "")
             blocks = _field(unit, "blocks")
             if not source_unit_id or not isinstance(blocks, list):
@@ -273,7 +302,12 @@ class ContentAllocator:
                     str(_field(block, "sourceBlockId", "source_block_id") or ""),
                 ),
             )
-            layout = layouts[0]
+            layout = _select_layout(
+                unit=unit,
+                source_position=unit_position,
+                source_count=len(ordered_units),
+                layouts=layouts,
+            )
             current: list[SourceContentPlacement] = []
             used_slots: set[str] = set()
             source_part = 1

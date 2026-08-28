@@ -278,6 +278,16 @@ export const useOutlineStreaming = (
             break;
           case "error":
             if (
+              /codex oauth access token is not set/i.test(data.detail || "")
+            ) {
+              stopStreaming();
+              notify.error(
+                t("codexAuthenticationRequiredTitle"),
+                t("codexAuthenticationRequiredDescription"),
+              );
+              break;
+            }
+            if (
               !codexRefreshAttempted &&
               /(?:authentication|access) token (?:is |has )?expired/i.test(
                 data.detail || "",

@@ -411,6 +411,7 @@ def author_prompt(
     instructions: str | None = None,
     illustration_allowed: bool | None = None,
     visual_intent: AuthoredSlideVisualIntent | None = None,
+    capacity_brief: str | None = None,
 ) -> str:
     if page_number_mode == "companyStandard":
         page_marker = (
@@ -484,11 +485,13 @@ def author_prompt(
     visual_story_block = f"{visual_story}\n\n" if visual_story else ""
     direction = user_direction_brief(instructions)
     direction_block = f"{direction}\n\n" if direction else ""
+    capacity_block = f"{capacity_brief}\n\n" if capacity_brief else ""
     return (
         f"Author slide {index + 1} of {n}. Deck topic: {brand.topic}. This slide's ROLE: "
         f"{role}. CONTENT: {content}.{wordmark}{structured_contract}\n\n"
         f"{page_marker}\n\n{structure_block}{chapter_block}{requirement_block}"
         f"{illustration_block}{visual_story_block}{direction_block}{design_system}\n\n"
+        f"{capacity_block}"
         "Design THIS slide bespoke and premium within the shared system, vary the layout to "
         "suit the role. Every visible text, image, simple shape, chart/table container, and "
         "meaningful grouping element must carry a unique stable data-qid. Output ONLY the "

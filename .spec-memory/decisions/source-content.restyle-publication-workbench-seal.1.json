@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "key": "source-content.restyle-publication-workbench-seal",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Source-content restyle seals contained image geometry, avoids SQLite writes during PowerPoint QA, and restores nullable optional Scene fields.",
+  "scope": [
+    "source-content-restyle",
+    "powerpoint-readback",
+    "workbench-restore"
+  ],
+  "invariants": [
+    "Contain image bounds in canonical Scene equal the native PPTX picture bounds before Scene sealing.",
+    "Source-content generation does not acquire a SQLite writer lock before the long PowerPoint render and reopen QA finishes.",
+    "Workbench treats null optional text alignment and crop geometry as absent values."
+  ],
+  "forbidden": [
+    "Compare an allocator image frame directly with the aspect-fitted native contain picture bounds.",
+    "Persist the generation binding before long-running PowerPoint QA."
+  ],
+  "evidence": [
+    "servers/fastapi/services/source_content/materializer.py",
+    "servers/fastapi/services/source_content/pipeline.py",
+    "servers/fastapi/services/source_content/publication.py",
+    "servers/nextjs/lib/authored-vnext/workbench/parser.ts"
+  ],
+  "supersedes": [],
+  "recordedAt": "2026-08-27T08:21:52.6101303+00:00"
+}

@@ -37,6 +37,10 @@ DROP_TAGS = {
 GLOBAL_ATTRIBUTES = {
     "id", "class", "role", "aria-label", "aria-hidden", "lang", "dir", "style",
     "title", "data-qid", "data-qid-ignore", "data-allow-overlap",
+    # Inert browser-readback classification. Capacity and receipt gates validate
+    # the value; admitting the attribute keeps model-declared and deterministic
+    # post-processed semantic roles on the same renderer-safe path.
+    "data-semantic-role",
     # Inert export-planning hint occasionally emitted by Authored.  It carries
     # no URL or executable value; Hybrid still derives authoritative coverage
     # from the admitted DOM instead of trusting this hint.

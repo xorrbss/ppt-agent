@@ -58,6 +58,14 @@ def test_safe_fixture_is_admitted_with_nonce_csp() -> None:
     assert "img-src data:" in admitted.html
 
 
+def test_semantic_role_attribute_is_admitted_as_inert_readback_metadata() -> None:
+    admitted = renderer_isolation.admit_authored_html(
+        '<h1 data-qid="header.title" data-semantic-role="title">Title</h1>'
+    )
+
+    assert 'data-semantic-role="title"' in admitted.html
+
+
 def test_tabular_numerals_are_admitted() -> None:
     """Authored slides line digits up in tables and chips; the property is inert."""
     source = (

@@ -479,6 +479,7 @@ async def revise_authored_deck(
     illustration_slots: Optional[Sequence[bool]] = None,
     local_patch_only: bool = False,
     fail_on_residual_dom_issues: bool = False,
+    capacity_briefs: Optional[Sequence[str]] = None,
 ) -> Any:
     """Bounded critique -> re-author -> re-render loop over an authored deck. Returns
     the (possibly revised) htmls + pngs and the local indices that changed.
@@ -513,6 +514,8 @@ async def revise_authored_deck(
         raise ValueError("chapter_prefixes must match the reviewed slide count")
     if illustration_slots is not None and len(illustration_slots) != n:
         raise ValueError("illustration_slots must match the reviewed slide count")
+    if capacity_briefs is not None and len(capacity_briefs) != n:
+        raise ValueError("capacity_briefs must match the reviewed slide count")
     forced_full_reauthor = set(force_full_reauthor_indices or ())
     if any(type(index) is not int or index < 0 or index >= n for index in forced_full_reauthor):
         raise ValueError("force_full_reauthor_indices contains an invalid local index")
@@ -652,6 +655,8 @@ async def revise_authored_deck(
             reference_kwargs["illustration_allowed"] = illustration_allowed
         if visual_plan is not None:
             reference_kwargs["visual_intent"] = visual_plan.at(i)
+        if capacity_briefs is not None:
+            reference_kwargs["capacity_brief"] = capacity_briefs[i]
         new_html = await author_slide_html(
             content,
             design_system,

@@ -1024,6 +1024,69 @@ def inspect_authored_dom(
             return False
         return _coerce_number(item.get("occlusion_unbound_count")) > 0
 
+    def title_edge_occlusion_is_proven(item: Mapping[str, Any]) -> bool:
+        """Reject narrow paint collisions at the leading edge of title text.
+
+        A vertical accent rail can cover only a tiny fraction of a large title's
+        total range area while still running through the first glyph.  The normal
+        percentage threshold intentionally filters harmless box overlap, so title
+        edges need a small geometry-specific guard based on browser-attributed
+        occluders and the actual line fragment rectangles.
+        """
+
+        role = str(
+            item.get("semantic_role", item.get("semanticRole", "")) or ""
+        ).strip().lower()
+        if role != "title" or not bool(item.get("has_owned_text")):
+            return False
+        raw_fragments = item.get("text_fragments")
+        raw_occluders = item.get("occlusion_occluder_qids", ())
+        if (
+            not isinstance(raw_fragments, Sequence)
+            or isinstance(raw_fragments, (str, bytes))
+            or not isinstance(raw_occluders, Sequence)
+            or isinstance(raw_occluders, (str, bytes))
+        ):
+            return False
+        qid = str(item.get("qid", ""))
+        fragments = [
+            box
+            for value in raw_fragments
+            if isinstance(value, Mapping)
+            and (box := _coerce_bbox(value)) is not None
+            and box.width > 0
+            and box.height > 0
+        ]
+        for raw_qid in raw_occluders:
+            occluder_qid = str(raw_qid)
+            if (
+                not occluder_qid
+                or occluder_qid == qid
+                or related_by_ancestry(qid, occluder_qid)
+            ):
+                continue
+            occluder = item_by_qid.get(occluder_qid)
+            if occluder is None or bool(
+                occluder.get("intentional", occluder.get("allow_overlap", False))
+            ):
+                continue
+            if not bool(occluder.get("has_owned_paint", False)):
+                continue
+            occluder_box = _coerce_bbox(occluder.get("bbox"))
+            if occluder_box is None:
+                continue
+            for fragment in fragments:
+                overlap = _intersection(fragment, occluder_box)
+                if overlap is None:
+                    continue
+                touches_leading_edge = overlap.x <= fragment.x + 2
+                meaningful_intrusion = overlap.width >= 2 and overlap.height >= min(
+                    12, fragment.height * 0.2
+                )
+                if touches_leading_edge and meaningful_intrusion:
+                    return True
+        return False
+
     def clipped_by_authored_parent(item: Mapping[str, Any]) -> bool:
         """Recognize viewport-safe clipping of absolute decorative bleed only."""
 
@@ -1288,11 +1351,14 @@ def inspect_authored_dom(
             )
         occluded_fraction = item.get("occluded_fraction")
         continuous_occluded_fraction = item.get("continuous_occluded_fraction")
+        title_edge_occluded = title_edge_occlusion_is_proven(item)
         if (
             owned_geometry_is_actionable
             and not intentional
-            and pixel_occlusion_is_proven(item)
+            and (pixel_occlusion_is_proven(item) or title_edge_occluded)
             and (
+                title_edge_occluded
+                or
                 (
                     occluded_fraction is not None
                     and occluded_fraction > occluded_fraction_threshold
@@ -1308,7 +1374,11 @@ def inspect_authored_dom(
                 DomQualityIssue(
                     "overlap",
                     "high" if (occluded_fraction or 0) > 0.5 else "medium",
-                    "browser pixel-area probe reports a continuous occluding layer",
+                    (
+                        "painted decoration intersects the leading edge of title text"
+                        if title_edge_occluded
+                        else "browser pixel-area probe reports a continuous occluding layer"
+                    ),
                     (qid,),
                     mode,
                 )

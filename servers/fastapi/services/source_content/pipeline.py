@@ -21,6 +21,9 @@ from models.authored_vnext.master.slide import (
     TitleFitResult,
 )
 from services.authored_vnext.generation.pipeline import _seal_deck
+from services.authored_vnext.generation.effective_style import (
+    resolve_authored_composition,
+)
 from services.authored_vnext.generation.scene_compiler import (
     compatibility_composition_digest,
 )
@@ -53,6 +56,7 @@ from services.source_content.outline import (
     SourceDocumentOutlineBuilder,
     build_authored_text_image_slides,
 )
+from services.authored_composition_policy import resolve_composition_profile
 
 
 SOURCE_MODE = "source_content_restyle"
@@ -157,15 +161,29 @@ def prepare_source_content_authored_reflow(request: Any) -> str:
         if not code.startswith("source_content_"):
             code = "source_content_outline_invalid"
         raise _source_error(code, status_code=409) from error
-    contract_instruction = (
-        "Treat each page's extracted source text and source images as a page-locked "
-        "content outline, then re-author it with the selected template and the "
-        "ordinary authored composition logic. Keep the substantive meaning and key "
-        "facts, but condense or rephrase text when needed for a clean fit. Place every "
-        "source image offered for that slide exactly once. Do not create or reproduce "
-        "tables, charts, or the source slide layout. Do not generate replacement "
-        "illustrations."
-    )
+    text_mode = str(
+        getattr(getattr(request, "content_policy", None), "text", "verbatim")
+        or "verbatim"
+    ).strip().lower()
+    if text_mode == "verbatim":
+        contract_instruction = (
+            "Treat each page's extracted source text and source images as page-locked "
+            "verbatim authority. Recompose within the selected template, but copy every "
+            "source text run exactly: do not summarize, paraphrase, translate, omit, "
+            "or invent content. If a page cannot fit on one slide, fail closed instead "
+            "of changing the source. Place every source image offered for that slide "
+            "exactly once. Do not create or reproduce tables, charts, or the source "
+            "slide layout. Do not generate replacement illustrations."
+        )
+    else:
+        contract_instruction = (
+            "Treat each page's extracted source text and source images as a page-locked "
+            "content outline, then re-author it with the selected template and the "
+            "ordinary authored composition logic. Keep every key fact and source order, "
+            "but concise rephrasing is allowed for a clean fit. Place every source image "
+            "offered for that slide exactly once. Do not create or reproduce tables, "
+            "charts, or the source slide layout. Do not generate replacement illustrations."
+        )
     existing_instruction = str(getattr(request, "instructions", None) or "").strip()
     request.instructions = (
         f"{existing_instruction}\n\n{contract_instruction}"
@@ -182,16 +200,23 @@ def prepare_source_content_authored_reflow(request: Any) -> str:
     # the immutable text/image projection has been admitted.
     request.vision_qa = True
     request._source_content_authored_reflow = True
+    request._authored_composition_profile = resolve_composition_profile(request)
     # Fall through to the ordinary authored outline/author/render pipeline.
     request.source_mode = None
     return str(manifest.reference_snapshot_id)
 
 
 def _style_tokens(style: Any) -> SourceContentStyleTokens:
+    palette = list(getattr(style, "preview_palette", None) or [])
+    palette_navy = (
+        palette[1]
+        if len(palette) > 1 and re.fullmatch(r"#[0-9A-Fa-f]{6}", str(palette[1]))
+        else "#0F172A"
+    )
     return SourceContentStyleTokens(
         background=(getattr(style, "background_color", None) or style.preview_bg),
         surface="#FFFFFF",
-        text_primary="#0F172A",
+        text_primary=palette_navy,
         text_secondary="#334155",
         accent=(getattr(style, "primary_color", None) or style.preview_accent),
         heading_font=(getattr(style, "heading_font", None) or "Noto Sans KR"),
@@ -232,7 +257,10 @@ def _synthetic_style_master(
     )
     contract = base.model_copy(
         update={
-            "master_id": f"master:source-content-{style.id}",
+            # Synthetic masters are immutable once published. Bump the ID with
+            # the placement/composition contract so a corrected template path
+            # never conflicts with an older revision-one record.
+            "master_id": f"master:source-content-{style.id}-v4",
             "name": f"Source content · {style.id}",
             "tokens": base.tokens.model_copy(update={"colors": colors, "fonts": fonts}),
             "furniture": furniture,
@@ -264,19 +292,31 @@ def _master_context(
     pin = getattr(request, "_authored_master_pin", None)
     composition = getattr(request, "_authored_composition_pin", None)
     if contract is None or pin is None:
-        contract = _synthetic_style_master(style=style, style_tokens=style_tokens)
-        if contract.digest is None or contract.font_manifest.digest is None:
-            raise _source_error("source_content_composition_not_applied")
-        pin = MasterDigestPin(
-            master_id=contract.master_id,
-            master_revision=1,
-            master_digest=contract.digest,
-            layout_registry_digest=authored_canonical_digest(
-                contract.layouts.model_dump(mode="json", by_alias=True)
-            ),
-            font_manifest_digest=contract.font_manifest.digest,
+        source_contract = _synthetic_style_master(
+            style=style,
+            style_tokens=style_tokens,
         )
-        composition = None
+        composition, effective_contract = resolve_authored_composition(
+            source_contract,
+            style=style,
+            metadata=getattr(request, "_authored_deck_metadata", None),
+        )
+        if (
+            source_contract.digest is None
+            or source_contract.font_manifest.digest is None
+            or effective_contract.digest is None
+        ):
+            raise _source_error("source_content_composition_not_applied")
+        contract = source_contract
+        pin = MasterDigestPin(
+            master_id=source_contract.master_id,
+            master_revision=1,
+            master_digest=source_contract.digest,
+            layout_registry_digest=authored_canonical_digest(
+                source_contract.layouts.model_dump(mode="json", by_alias=True)
+            ),
+            font_manifest_digest=source_contract.font_manifest.digest,
+        )
     return contract, pin, composition
 
 
@@ -468,7 +508,10 @@ def _fallback_layout(canvas: Rect) -> WritableLayout:
     )
 
 
-def _layouts_and_canvas(master_contract: Any | None) -> tuple[list[WritableLayout], Rect]:
+def _layouts_and_canvas(
+    master_contract: Any | None,
+    composition: Any | None = None,
+) -> tuple[list[WritableLayout], Rect]:
     if master_contract is None:
         canvas = Rect(x=0, y=0, width=1280, height=720)
         safe = Rect(x=60, y=60, width=1160, height=600)
@@ -480,6 +523,41 @@ def _layouts_and_canvas(master_contract: Any | None) -> tuple[list[WritableLayou
         width=float(canvas_contract.width_px),
         height=float(canvas_contract.height_px),
     )
+    template = getattr(composition, "authored_template", None)
+    resolved = getattr(template, "resolved_reference_layout", None)
+    if resolved is not None:
+        layouts: list[WritableLayout] = []
+        for record in resolved.layouts:
+            archetype = str(record.get("archetype") or "content")
+            retained_layout_id = str(record.get("id") or archetype)
+            if not retained_layout_id.startswith("layout:"):
+                retained_layout_id = f"layout:{retained_layout_id}"
+            if archetype in {"cover", "section", "closing"}:
+                source_bounds = canvas
+            else:
+                source_bounds = Rect(
+                    x=max(24.0, canvas.width * 0.025),
+                    y=max(48.0, canvas.height * 0.075),
+                    width=canvas.width - max(48.0, canvas.width * 0.05),
+                    height=canvas.height - max(102.0, canvas.height * 0.15),
+                )
+            layouts.append(
+                WritableLayout(
+                    layout_role=archetype,
+                    layout_id=retained_layout_id,
+                    slots=(
+                        WritableSlot(
+                            slot_id=f"slot:template-{archetype}-source",
+                            bounds=source_bounds,
+                            accepted_kinds=("text", "table", "chart", "image", "shape"),
+                            capacity_units=1000,
+                        ),
+                    ),
+                    placement_strategy="sourceGeometry",
+                )
+            )
+        if layouts:
+            return layouts, canvas
     standard = master_contract.layouts.standard
     if not standard.slots:
         return [_fallback_layout(canvas_contract.safe_area)], canvas
@@ -576,7 +654,7 @@ async def build_source_content_staging(
         style=style,
         style_tokens=tokens,
     )
-    layouts, canvas = _layouts_and_canvas(master_contract)
+    layouts, canvas = _layouts_and_canvas(master_contract, composition)
     composition_pin = _composition_pin(
         request=request,
         style=style,
@@ -631,23 +709,6 @@ async def build_source_content_staging(
             master_pin=master_pin,
             composition=composition,
             layouts=layouts,
-        )
-        from services.source_content.manifest_store import (
-            bind_source_content_generation,
-        )
-
-        await bind_source_content_generation(
-            sql_session,
-            owner_id=owner_id,
-            manifest=manifest,
-            composition_pin=plan.composition_pin.model_dump(
-                mode="json", by_alias=True
-            ),
-            content_policy=request.content_policy.model_dump(
-                mode="json", by_alias=True
-            ),
-            generation_engine_version="source-content-deterministic-scene/v1",
-            presentation_id=presentation_id,
         )
     except SourceContentError:
         raise

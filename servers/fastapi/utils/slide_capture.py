@@ -23,6 +23,7 @@ import threading
 import time
 import urllib.parse
 from collections import OrderedDict
+from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional
 
 import aiohttp
@@ -660,6 +661,10 @@ def _instrument_authored_html(
       try {{ fontLoaded = !document.fonts || document.fonts.check(style.font); }} catch (_) {{}}
       return {{
         qid: node.getAttribute('data-qid'), tag: node.tagName.toLowerCase(),
+        semantic_role: node.getAttribute('data-semantic-role') || node.getAttribute('data-role') || node.getAttribute('role') || null,
+        source_block_id: node.getAttribute('data-source-block-id'),
+        css_visible: cssVisible, effective_opacity: effectiveOpacity,
+        viewport_intersection_ratio: viewportIntersectionRatio,
         bbox: {{x: rect.x, y: rect.y, width: rect.width, height: rect.height}},
         clientWidth: node.clientWidth, clientHeight: node.clientHeight,
         scrollWidth: node.scrollWidth, scrollHeight: node.scrollHeight,
@@ -821,6 +826,11 @@ def _cache_browser_metrics(html: str, metrics: Mapping[str, Any]) -> None:
     key = _metrics_cache_key(html)
     _browser_metrics_cache[key] = metrics
     _browser_metrics_cache.move_to_end(key)
+    try:
+        metric_bytes = len(json.dumps(metrics, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str).encode("utf-8"))
+    except Exception:
+        metric_bytes = 0
+    _count_runtime("metrics_cache_bytes", metric_bytes)
     while len(_browser_metrics_cache) > DOM_METRICS_CACHE_SIZE:
         _browser_metrics_cache.popitem(last=False)
 
@@ -839,6 +849,10 @@ async def ensure_browser_metrics(
     cached = get_cached_browser_metrics(html)
     if cached is not None:
         return cached
+
+    # A cache miss means the PNG outlived its DOM telemetry and requires a
+    # second browser pass; expose that duplicate work in benchmark evidence.
+    _count_runtime("metrics_recollection_requests")
 
     key = _metrics_cache_key(html)
     task = _browser_metrics_inflight.get(key)
@@ -888,21 +902,147 @@ async def ensure_browser_metrics(
 
 async def render_html_to_png_with_metrics(
     html: str, timeout: int = 60
-) -> tuple[bytes, Mapping[str, Any] | None]:
+) -> "RenderCapture":
     """Render one slide and return telemetry tied to the same HTML cache identity.
 
     This is the preferred API for quality-review callers.  It preserves the legacy
     bytes-only renderer while making cache divergence explicit and recoverable.
     """
+    # Preserve renderer admission semantics even when the atomic result cache
+    # contains a prior successful capture.
+    ensure_renderer_enabled()
+    html_digest = "sha256:" + hashlib.sha256(html.encode("utf-8")).hexdigest()
+    cached_capture = _peek_cached_capture(html, timeout)
+    if cached_capture is not None:
+        _count_runtime("requests")
+        _count_runtime("capture_cache_hits")
+        _count_runtime("capture_results")
+        if cached_capture.browser_metrics is not None:
+            _count_runtime("capture_metric_results")
+        return RenderCapture.from_payload(
+            html_digest=cached_capture.html_digest,
+            png=cached_capture.png,
+            browser_metrics=cached_capture.browser_metrics,
+            runtime_counters=get_render_runtime_counters(),
+        )
     cached_metrics = _peek_cached_browser_metrics(html)
     png = await render_html_to_png(html, timeout=timeout)
     if cached_metrics is not None:
         _count_runtime("metrics_cache_hits")
-        return png, cached_metrics
-    captured_metrics = _peek_cached_browser_metrics(html)
-    if captured_metrics is not None:
-        return png, captured_metrics
-    return png, await ensure_browser_metrics(html, timeout=timeout)
+        metrics = cached_metrics
+    else:
+        captured_metrics = _peek_cached_browser_metrics(html)
+        if captured_metrics is not None:
+            metrics = captured_metrics
+        else:
+            metrics = await ensure_browser_metrics(html, timeout=timeout)
+    _count_runtime("capture_results")
+    _count_runtime("capture_png_bytes", len(png))
+    if metrics is not None:
+        _count_runtime("capture_metric_results")
+    capture = RenderCapture.from_payload(
+        html_digest=html_digest, png=png, browser_metrics=metrics,
+        runtime_counters=get_render_runtime_counters(),
+    )
+    _cache_capture(html, timeout, capture)
+    return capture
+
+
+@dataclass(frozen=True, slots=True)
+class RenderCapture:
+    """Atomic result for one HTML render.
+
+    ``html_digest``, PNG bytes and browser metrics are produced/selected as one
+    value so callers cannot accidentally pair telemetry from a different HTML
+    revision.  ``__iter__`` retains the historical ``png, metrics = ...`` API.
+    ``runtime_counters`` is a snapshot for measuring duplicate browser/I/O work
+    across large decks without retaining process objects in the result.
+    """
+
+    html_digest: str
+    png: bytes
+    browser_metrics: Mapping[str, Any] | None
+    png_digest: str
+    metrics_digest: str | None
+    runtime_counters: Mapping[str, int]
+
+    @classmethod
+    def from_payload(
+        cls,
+        *,
+        html_digest: str,
+        png: bytes,
+        browser_metrics: Mapping[str, Any] | None,
+        runtime_counters: Mapping[str, int],
+    ) -> "RenderCapture":
+        canonical = json.dumps(
+            browser_metrics, sort_keys=True, separators=(",", ":"),
+            ensure_ascii=False, default=str,
+        ).encode("utf-8") if browser_metrics is not None else None
+        return cls(
+            html_digest=html_digest,
+            png=png,
+            browser_metrics=browser_metrics,
+            png_digest="sha256:" + hashlib.sha256(png).hexdigest(),
+            metrics_digest=("sha256:" + hashlib.sha256(canonical).hexdigest()) if canonical is not None else None,
+            runtime_counters=dict(runtime_counters),
+        )
+
+    def __iter__(self):
+        # Backward compatible with all existing callers.
+        yield self.png
+        yield self.browser_metrics
+
+    @property
+    def metrics(self) -> Mapping[str, Any] | None:
+        """Short alias for callers that refer to browser telemetry as metrics."""
+        return self.browser_metrics
+
+    def as_dict(self, *, include_payload: bool = False) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "htmlDigest": self.html_digest,
+            "pngDigest": self.png_digest,
+            "metricsDigest": self.metrics_digest,
+            "browserMetricsCaptured": self.browser_metrics is not None,
+            "runtimeCounters": dict(self.runtime_counters),
+        }
+        if include_payload:
+            result["pngBase64"] = base64.b64encode(self.png).decode("ascii")
+            result["browserMetrics"] = self.browser_metrics
+        return result
+
+
+def _capture_cache_key(html: str, timeout: int) -> str:
+    # Timeout only bounds work; it does not alter a successful deterministic
+    # render.  Excluding it lets retries with a larger budget reuse the same
+    # atomic capture instead of relaunching Chromium.
+    return hashlib.sha256(
+        f"{RENDER_CACHE_VERSION}\0{DOM_METRICS_VERSION}\0{OCCLUSION_SENSOR_VERSION}\0{html}".encode("utf-8")
+    ).hexdigest()
+
+
+def _peek_cached_capture(html: str, timeout: int) -> RenderCapture | None:
+    key = _capture_cache_key(html, timeout)
+    capture = _capture_cache.get(key)
+    if capture is not None:
+        _capture_cache.move_to_end(key)
+    return capture
+
+
+def _cache_capture(html: str, timeout: int, capture: RenderCapture) -> None:
+    # Keep only a small atomic-result tail.  PNG bytes are shared with the render
+    # LRU by reference, while this tail protects the corresponding metrics from
+    # DOM-cache eviction without retaining an unbounded second image cache.
+    # A missing metrics payload is an explicit unknown and must remain
+    # retryable; caching that state would permanently suppress a later
+    # recollection after a transient browser probe failure.
+    if CAPTURE_CACHE_SIZE <= 0 or capture.browser_metrics is None:
+        return
+    key = _capture_cache_key(html, timeout)
+    _capture_cache[key] = capture
+    _capture_cache.move_to_end(key)
+    while len(_capture_cache) > CAPTURE_CACHE_SIZE:
+        _capture_cache.popitem(last=False)
 
 
 async def _wait_for_output(out: str, timeout: float = 15.0) -> bool:
@@ -928,11 +1068,20 @@ _runtime_counters: dict[str, int] = {
     "requests": 0,
     "render_cache_hits": 0,
     "metrics_cache_hits": 0,
+    "capture_cache_hits": 0,
+    "metrics_recollection_requests": 0,
     "chrome_process_launches": 0,
     "session_reuse_hits": 0,
     "session_restarts": 0,
     "page_sessions_opened": 0,
     "page_sessions_closed": 0,
+    # Capture-level counters make duplicate browser collection and payload I/O
+    # measurable for 32/80+ slide decks without exposing mutable cache state.
+    "capture_results": 0,
+    "capture_metric_results": 0,
+    "capture_png_bytes": 0,
+    "render_cache_bytes": 0,
+    "metrics_cache_bytes": 0,
 }
 _chrome_identity_cache: tuple[str, int, int, str] | None = None
 
@@ -946,7 +1095,22 @@ def get_render_runtime_counters() -> dict[str, int]:
     """Return a read-only snapshot of cache/process/session activity."""
 
     with _runtime_counter_lock:
-        return dict(_runtime_counters)
+        snapshot = dict(_runtime_counters)
+    # Current resident payload size is intentionally derived outside the counter
+    # lock; cache mutation is event-loop serialized and these values are only
+    # benchmark evidence, never admission decisions.
+    snapshot["render_cache_entries"] = len(_render_cache)
+    snapshot["render_cache_bytes_current"] = sum(len(value) for value in _render_cache.values())
+    snapshot["metrics_cache_entries"] = len(_browser_metrics_cache)
+    snapshot["metrics_cache_bytes_current"] = sum(
+        len(json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str).encode("utf-8"))
+        for value in _browser_metrics_cache.values()
+    )
+    snapshot["capture_cache_entries"] = len(_capture_cache)
+    snapshot["capture_cache_bytes_current"] = sum(
+        len(value.png) for value in _capture_cache.values()
+    )
+    return snapshot
 
 
 def chrome_runtime_digest() -> str:
@@ -1368,7 +1532,12 @@ async def _render_html_to_png_uncached(html: str, timeout: int = 60) -> bytes:
         "AUTHORED_RENDERER_LEGACY_ENABLED"
     ):
         async with _get_render_sem():
-            rendered, _metrics = await _render_html_in_isolated_worker(html, timeout)
+            rendered, metrics = await _render_html_in_isolated_worker(html, timeout)
+        if metrics is not None:
+            # Keep the worker's atomic PNG/metrics pair. Otherwise callers of
+            # render_html_to_png_with_metrics recollect DOM telemetry in a
+            # second browser invocation after the PNG render.
+            _cache_browser_metrics(html, metrics)
         return rendered
 
     # Development uses one isolated Chrome process with disposable page sessions.
@@ -1431,6 +1600,19 @@ async def render_html_to_png(html: str, timeout: int = 60) -> bytes:
 
     _render_cache[key] = rendered
     _render_cache.move_to_end(key)
+    _count_runtime("render_cache_bytes", len(rendered))
+    metrics = _peek_cached_browser_metrics(html)
+    if metrics is not None:
+        _cache_capture(
+            html,
+            timeout,
+            RenderCapture.from_payload(
+                html_digest="sha256:" + hashlib.sha256(html.encode("utf-8")).hexdigest(),
+                png=rendered,
+                browser_metrics=metrics,
+                runtime_counters=get_render_runtime_counters(),
+            ),
+        )
     while len(_render_cache) > RENDER_CACHE_SIZE:
         _render_cache.popitem(last=False)
     return rendered
@@ -1464,9 +1646,11 @@ RENDER_CACHE_SIZE = _env_nonnegative_int("AUTHORED_RENDER_CACHE_SIZE", 32)
 RENDER_CACHE_VERSION = "authored-render-v8-owned-paint-cdp"
 _render_cache: "OrderedDict[str, bytes]" = OrderedDict()
 _render_inflight: Dict[str, "asyncio.Task[bytes]"] = {}
+CAPTURE_CACHE_SIZE = max(0, min(RENDER_CACHE_SIZE, 8))
+_capture_cache: "OrderedDict[str, RenderCapture]" = OrderedDict()
 OCCLUSION_PROBE_CONTRACT_VERSION = "owned-paint-v3"
 OCCLUSION_SENSOR_VERSION = "owned-paint-v5-inset-retry"
-DOM_METRICS_VERSION = "authored-dom-metrics-v14-source-visibility"
+DOM_METRICS_VERSION = "authored-dom-metrics-v15-source-block-visibility"
 DOM_METRICS_CACHE_SIZE = max(1, RENDER_CACHE_SIZE)
 _browser_metrics_cache: "OrderedDict[str, Mapping[str, Any]]" = OrderedDict()
 _browser_metrics_inflight: Dict[str, "asyncio.Task[Mapping[str, Any] | None]"] = {}
@@ -1500,6 +1684,7 @@ def reset_render_runtime(
     if clear_caches:
         _render_cache.clear()
         _browser_metrics_cache.clear()
+        _capture_cache.clear()
         with _internal_capability_lock:
             _internal_capabilities.clear()
 

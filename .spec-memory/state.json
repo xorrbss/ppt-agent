@@ -4,16 +4,20 @@
   "projectName": "ppt-agent-source-locked-phase-a-20260825",
   "activeTask": null,
   "maxContextChars": 2400,
-  "maxActiveDecisions": 8,
+  "maxActiveDecisions": 12,
   "activeDecisionKeys": [
     "source-locked.owner-scoped-durable-generation",
     "source-content.pptx-standard-metadata",
     "source-content.manifest-parent-before-assets",
     "source-content.template-restyle-contract",
     "presentation.company-standard-optional",
+    "authored-vnext.native-table-width-seal",
+    "authored-vnext.native-chart-auto-title-seal",
+    "source-content.restyle-publication-workbench-seal",
     "authored.source-reflow-residual-dom-gate",
     "authored.source-reflow-vqa-checkpoint-accumulation",
-    "authored.source-reflow-patch-validation-retry"
+    "authored.source-reflow-patch-validation-retry",
+    "authored.quality-composition-first"
   ],
   "activeDecisionIndex": {
     "source-locked.owner-scoped-durable-generation": "decisions/source-locked.owner-scoped-durable-generation.1.json",
@@ -21,9 +25,13 @@
     "source-content.manifest-parent-before-assets": "decisions/source-content.manifest-parent-before-assets.1.json",
     "source-content.template-restyle-contract": "decisions/source-content.template-restyle-contract.7.json",
     "presentation.company-standard-optional": "decisions/presentation.company-standard-optional.2.json",
+    "authored-vnext.native-table-width-seal": "decisions/authored-vnext.native-table-width-seal.1.json",
+    "authored-vnext.native-chart-auto-title-seal": "decisions/authored-vnext.native-chart-auto-title-seal.1.json",
+    "source-content.restyle-publication-workbench-seal": "decisions/source-content.restyle-publication-workbench-seal.1.json",
     "authored.source-reflow-residual-dom-gate": "decisions/authored.source-reflow-residual-dom-gate.1.json",
     "authored.source-reflow-vqa-checkpoint-accumulation": "decisions/authored.source-reflow-vqa-checkpoint-accumulation.1.json",
-    "authored.source-reflow-patch-validation-retry": "decisions/authored.source-reflow-patch-validation-retry.1.json"
+    "authored.source-reflow-patch-validation-retry": "decisions/authored.source-reflow-patch-validation-retry.1.json",
+    "authored.quality-composition-first": "decisions/authored.quality-composition-first.3.json"
   },
   "decisionIndex": {
     "source-locked.owner-scoped-durable-generation": "decisions/source-locked.owner-scoped-durable-generation.1.json",
@@ -31,10 +39,14 @@
     "source-content.manifest-parent-before-assets": "decisions/source-content.manifest-parent-before-assets.1.json",
     "source-content.template-restyle-contract": "decisions/source-content.template-restyle-contract.7.json",
     "presentation.company-standard-optional": "decisions/presentation.company-standard-optional.2.json",
+    "authored-vnext.native-table-width-seal": "decisions/authored-vnext.native-table-width-seal.1.json",
+    "authored-vnext.native-chart-auto-title-seal": "decisions/authored-vnext.native-chart-auto-title-seal.1.json",
+    "source-content.restyle-publication-workbench-seal": "decisions/source-content.restyle-publication-workbench-seal.1.json",
     "authored.source-reflow-residual-dom-gate": "decisions/authored.source-reflow-residual-dom-gate.1.json",
     "authored.source-reflow-vqa-checkpoint-accumulation": "decisions/authored.source-reflow-vqa-checkpoint-accumulation.1.json",
-    "authored.source-reflow-patch-validation-retry": "decisions/authored.source-reflow-patch-validation-retry.1.json"
+    "authored.source-reflow-patch-validation-retry": "decisions/authored.source-reflow-patch-validation-retry.1.json",
+    "authored.quality-composition-first": "decisions/authored.quality-composition-first.3.json"
   },
   "readFirst": [],
-  "updatedAt": "2026-08-27T16:10:03.8172741+00:00"
+  "updatedAt": "2026-08-28T01:26:48.2108769+00:00"
 }

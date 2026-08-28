@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
-from typing import Any
+from typing import Any, Mapping
 import uuid
 
 from sqlalchemy import func, select, update
@@ -15,8 +15,13 @@ from services.authored_checkpoint_artifacts import (
     atomic_write,
     checkpoint_root,
     render_artifact_path,
+    read_valid_evidence,
+    recover_unreferenced_evidence,
+    evidence_attempt_id,
+    write_valid_evidence,
 )
 from services.authored_checkpoint_errors import AuthoredStageError
+from services.authored_slide_checkpoint_bundle import SlideCheckpointConflict
 from services.authored_generation_observability import log_authored_slide_failure_observation
 from services.database import async_session_maker
 from utils.datetime_utils import get_current_utc_datetime
@@ -71,6 +76,16 @@ async def get_checkpoint(
                 )
             )
         ).scalar_one()
+        recovered = recover_unreferenced_evidence(checkpoint)
+        if recovered is not None:
+            path, sha256, bundle = recovered
+            checkpoint.render_path = path
+            checkpoint.render_sha256 = sha256
+            checkpoint.illustrated_html = bundle.html
+            checkpoint.render_status = "completed"
+            checkpoint.updated_at = get_current_utc_datetime()
+            session.add(checkpoint)
+            await session.commit()
         return checkpoint
 
 
@@ -105,24 +120,57 @@ async def complete_stage(
     attempt_token: str,
     html: str | None = None,
     png: bytes | None = None,
+    browser_metrics: Mapping[str, object] | None = None,
+    checkpoint_revision: int | None = None,
     skipped: bool = False,
 ) -> AuthoredSlideCheckpoint:
     _require_stage(stage)
     render_path: str | None = None
     render_sha256: str | None = None
+    expected_render_path: str | None = None
+    has_evidence = stage == "render" and html is not None and browser_metrics is not None
+    if has_evidence and png is None:
+        raise ValueError("checkpoint_evidence_requires_png")
     if png is not None:
         path = render_artifact_path(job_id, slide_index, attempt_token)
+        prior = None
+        if has_evidence:
+            previous = await get_checkpoint(job_id, slide_index)
+            expected_render_path = previous.render_path
+            prior = read_valid_evidence(previous)
+            if checkpoint_revision is None:
+                checkpoint_revision = (prior.revision + 1) if prior else 0
+            elif prior is not None and checkpoint_revision <= prior.revision:
+                raise SlideCheckpointConflict("checkpoint_revision_regressed")
+            # Never mutate bytes reachable from the previous DB checkpoint.
+            path = path.with_name(
+                f"{path.stem}-r{checkpoint_revision}-{uuid.uuid4().hex}.png"
+            )
         atomic_write(path, png)
         render_path = str(path.relative_to(checkpoint_root())).replace(os.sep, "/")
         render_sha256 = hashlib.sha256(png).hexdigest()
+        if has_evidence:
+            write_valid_evidence(
+                path,
+                attempt_id=evidence_attempt_id(attempt_token),
+                slide_index=slide_index,
+                revision=checkpoint_revision,
+                html=html,
+                png=png,
+                metrics=dict(browser_metrics),
+            )
     async with async_session_maker() as session:
         job = await _owned_job(session, job_id, attempt_token)
         checkpoint = await _checkpoint(session, job_id, slide_index)
+        if has_evidence and checkpoint.render_path != expected_render_path:
+            raise SlideCheckpointConflict("checkpoint_render_pointer_conflict")
         setattr(checkpoint, _STATUS_FIELD[stage], "skipped" if skipped else "completed")
         setattr(checkpoint, f"{stage}_completed_at", get_current_utc_datetime())
         if stage == "author" and html is not None:
             checkpoint.author_html = html
         if stage == "illustrate" and html is not None:
+            checkpoint.illustrated_html = html
+        if stage == "render" and html is not None:
             checkpoint.illustrated_html = html
         if render_path is not None:
             checkpoint.render_path = render_path

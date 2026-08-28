@@ -512,6 +512,8 @@ function parseManifest(value: unknown): ParsedManifestV1 {
     "assetManifestDigest",
     "fontManifestDigest",
     "qualityPolicyVersion",
+    "sceneDigest",
+    "scene",
     "canonicalDigest",
   ]);
   if (
@@ -544,9 +546,22 @@ function parseManifest(value: unknown): ParsedManifestV1 {
   digestValue(value.assetManifestDigest);
   digestValue(value.fontManifestDigest);
   stringValue(value.qualityPolicyVersion);
+  const presentationRevision = revisionValue(value.presentationRevision);
+  const sceneDigest = nullableDigestValue(value.sceneDigest);
+  if ((value.scene === null) !== (sceneDigest === null)) invalid();
+  if (value.scene !== null) {
+    if (!isRecord(value.scene)) invalid();
+    if (
+      value.scene.schemaVersion !== "deck-scene-ir/v1" ||
+      revisionValue(value.scene.revision) !== presentationRevision ||
+      digestValue(value.scene.sceneDigest) !== sceneDigest
+    ) {
+      invalid();
+    }
+  }
   return Object.freeze({
     presentationId: stringValue(value.presentationId),
-    presentationRevision: revisionValue(value.presentationRevision),
+    presentationRevision,
     canonicalDigest: digestValue(value.canonicalDigest),
     orderedSlides,
   });

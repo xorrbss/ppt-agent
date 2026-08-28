@@ -1099,14 +1099,24 @@ function patchOperation(
     (a, b) => a.sequence - b.sequence,
   );
   if (!eventCanProject) return { ...operation, events };
+  const clearsTransientFailure =
+    event.error === undefined &&
+    (event.type === "operation.progress" ||
+      event.status === "queued" ||
+      event.status === "running");
   return {
     ...operation,
     status: event.status ?? operation.status,
     // The event version is the operation row's post-transition CAS version.
     version: event.operationVersion ?? operation.version,
     progress: event.progress ?? operation.progress,
-    error: event.error ?? operation.error,
-    retryable: event.retryable ?? operation.retryable,
+    // A retryable error is historical once a newer event proves that the
+    // operation resumed. Keeping it here makes an active progress card look
+    // terminal even though the authoritative snapshot has no current error.
+    error: event.error ?? (clearsTransientFailure ? undefined : operation.error),
+    retryable:
+      event.retryable ??
+      (clearsTransientFailure ? undefined : operation.retryable),
     capacityWaiting: event.capacityWaiting ?? operation.capacityWaiting,
     queuePosition: event.queuePosition ?? operation.queuePosition,
     result: event.result ?? operation.result,

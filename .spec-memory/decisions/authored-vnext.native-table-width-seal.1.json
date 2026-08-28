@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "key": "authored-vnext.native-table-width-seal",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Default native table columns must absorb any integer-EMU split remainder so the saved grid exactly matches the sealed Scene width.",
+  "scope": [
+    "authored-vnext",
+    "native-table",
+    "source-content"
+  ],
+  "invariants": [
+    "The sum of default native table column widths equals the sealed table width exactly before save/readback."
+  ],
+  "forbidden": [
+    "Do not leave integer-EMU division remainders unassigned when generating default table columns."
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_vnext/ooxml/native_scene.py",
+    "servers/fastapi/tests/unit/test_authored_vnext_native_scene_quality.py"
+  ],
+  "supersedes": [],
+  "recordedAt": "2026-08-27T07:18:44.8057114+00:00"
+}

@@ -2872,6 +2872,8 @@
     "templateRevision": "R{revision}",
     "genericEditableTemplate": "편집 가능한 범용 프레젠테이션 템플릿",
     "layoutCount": "{count}개 레이아웃",
+    "codexAuthenticationRequiredTitle": "ChatGPT 연결이 필요합니다",
+    "codexAuthenticationRequiredDescription": "설정에서 ChatGPT를 연결한 뒤 개요 생성을 다시 시도해 주세요.",
     "codexSessionExpiredTitle": "ChatGPT 연결이 만료되었습니다",
     "codexSessionExpiredDescription": "세션을 자동으로 갱신하지 못했습니다. 설정에서 ChatGPT 연결을 갱신한 뒤 다시 시도해 주세요."
   },

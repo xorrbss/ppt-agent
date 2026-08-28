@@ -181,6 +181,63 @@ def test_present_empty_collector_payload_is_available_for_a_truly_empty_slide():
     assert not report.needs_attention
 
 
+def test_title_leading_edge_rejects_narrow_decorative_rail_occlusion():
+    html = (
+        '<main data-qid="slide"><div data-qid="rail"></div>'
+        '<h1 data-qid="title">신뢰할 수 있는 프레젠테이션</h1></main>'
+    )
+    report = inspect_authored_dom(
+        html,
+        {
+            "fonts_ready": True,
+            "elements": [
+                {
+                    "qid": "slide",
+                    "tag": "main",
+                    "bbox": {"x": 0, "y": 0, "width": 1280, "height": 720},
+                    "css_visible": True,
+                    "has_owned_text": False,
+                    "has_owned_paint": False,
+                },
+                {
+                    "qid": "rail",
+                    "tag": "div",
+                    "bbox": {"x": 72, "y": 64, "width": 8, "height": 112},
+                    "css_visible": True,
+                    "has_owned_text": False,
+                    "has_owned_paint": True,
+                    "occlusion_probe_version": "owned-paint-v3",
+                },
+                {
+                    "qid": "title",
+                    "tag": "h1",
+                    "semantic_role": "title",
+                    "bbox": {"x": 72, "y": 130, "width": 600, "height": 117},
+                    "css_visible": True,
+                    "has_owned_text": True,
+                    "has_owned_paint": True,
+                    "rendered_text": "신뢰할 수 있는 프레젠테이션",
+                    "text_fragments": [
+                        {"x": 72, "y": 124, "width": 591, "height": 70},
+                    ],
+                    "font_size": 48,
+                    "font_loaded": True,
+                    "occluded_fraction": 0.0118,
+                    "continuous_occluded_fraction": 0.0118,
+                    "occlusion_probe_version": "owned-paint-v3",
+                    "occlusion_occluder_qids": ["rail"],
+                    "occlusion_unbound_count": 0,
+                },
+            ],
+        },
+    )
+
+    assert any(
+        issue.category == "overlap" and issue.qids == ("title",)
+        for issue in report.issues
+    )
+
+
 def test_hidden_tiny_and_parent_clipped_images_are_deterministic_defects():
     html = """<html><body>
     <div data-qid="clip-parent">

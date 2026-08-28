@@ -506,6 +506,67 @@ test("normalizes non-retryable errors from safe, nested, and event wire shapes",
   }
 });
 
+test("new progress clears a prior retryable failure from the live operation card", () => {
+  const initial = mergeTimelinePage(
+    createWorkspaceProjection(),
+    normalizeTimelinePage({
+      schema_version: 1,
+      items: [
+        {
+          anchor_type: "operation",
+          operation_id: "op-recovered-progress",
+          position: 1,
+          status: "running",
+        },
+      ],
+    }),
+  );
+  const updated = applyOperationEvents(
+    initial,
+    normalizeEventPage({
+      schema_version: 1,
+      events: [
+        {
+          schema_version: 1,
+          id: "event-retryable-failure",
+          cursor: "1",
+          operation_id: "op-recovered-progress",
+          operation_version: 1,
+          operation_anchor_position: 1,
+          sequence: 1,
+          type: "operation.error",
+          error: "workspace_request_failed",
+          safe_message: "The workspace request could not be completed.",
+          retryable: true,
+        },
+        {
+          schema_version: 1,
+          id: "event-recovered-progress",
+          cursor: "2",
+          operation_id: "op-recovered-progress",
+          operation_version: 2,
+          operation_anchor_position: 1,
+          sequence: 2,
+          type: "operation.progress",
+          progress: 70,
+          error: null,
+          retryable: null,
+        },
+      ],
+      event_high_watermark: "2",
+    }),
+  );
+  const operation = updated.items[0];
+
+  assert.equal(operation.anchorType, "operation");
+  if (operation.anchorType === "operation") {
+    assert.equal(operation.status, "running");
+    assert.equal(operation.progress, 70);
+    assert.equal(operation.error, undefined);
+    assert.equal(operation.retryable, undefined);
+  }
+});
+
 test("preserves actionable operation states and only normalizes wire aliases", () => {
   const states = [
     "queued",

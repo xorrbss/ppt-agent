@@ -24,6 +24,11 @@ from models.authored_visual_plan import (
 from models.presentation_outline_model import PresentationOutlineModel
 from utils.authored_header_validation import validate_header_contract
 from services.source_images.models import SourceImageCandidate
+from services.authored_composition_policy import (
+    AuthoredCapacityPlan,
+    CompositionProfile,
+    build_authored_capacity_plan,
+)
 from utils.llm_calls.author_slide import (
     EXACT_RECONSTRUCTION,
     STYLE_REFERENCE,
@@ -122,6 +127,9 @@ class AuthoredDeckPlan:
     # None is intentional for exact reconstruction and structured/template-owned
     # geometry: those modes must not be recomposed by this prompt-only plan.
     visual_plan: AuthoredVisualPlan | None = None
+    # Server-frozen text/image envelope.  ``None`` keeps stand-in plans used by
+    # older remake/checkpoint callers source-compatible.
+    capacity_plan: AuthoredCapacityPlan | None = None
 
 
 # Concurrency is bounded PROCESS-WIDE inside author_slide_html (the AUTHOR_CONCURRENCY-sized
@@ -775,6 +783,7 @@ async def _author_one_resilient(
     # pre-feature request, byte for byte.
     source_images: Sequence[SourceImageCandidate] = (),
     require_all_source_images: bool = False,
+    capacity_brief: str | None = None,
 ) -> str:
     """Author one slide with bounded retries and a style-mode branded fallback.
 
@@ -832,6 +841,7 @@ async def _author_one_resilient(
                     instructions=instructions,
                     illustration_allowed=illustration_allowed,
                     visual_intent=visual_intent,
+                    capacity_brief=capacity_brief,
                     **kwargs,
                 )
             else:
@@ -860,6 +870,7 @@ async def _author_one_resilient(
                     instructions=instructions,
                     illustration_allowed=illustration_allowed,
                     visual_intent=visual_intent,
+                    capacity_brief=capacity_brief,
                     **kwargs,
                 )
             if is_valid_slide_html(html):
@@ -1012,6 +1023,7 @@ def prepare_authored_deck(
     chapter_plan: AuthoredChapterPlan | None = None,
     illustration_plan: AuthoredIllustrationPlan | None = None,
     instructions: Optional[str] = None,
+    composition_profile: CompositionProfile | None = None,
 ) -> AuthoredDeckPlan:
     """Prepare the shared prompt inputs once, before slide-level pipelining starts.
 
@@ -1076,6 +1088,10 @@ def prepare_authored_deck(
             tuple(reference_images_for_role(style, role)) for role in roles
         )
     contents = tuple(slide.content for slide in slides)
+    profile = composition_profile or CompositionProfile(
+        "ordinary", "authored", True, True, 1
+    )
+    capacity_plan = build_authored_capacity_plan(contents, roles, profile)
     # Exact reconstruction reproduces a source slide verbatim, so imposing a
     # header design on it would contradict the mode.
     #
@@ -1130,6 +1146,7 @@ def prepare_authored_deck(
         illustration_slots=illustration_slots,
         instructions=instructions,
         visual_plan=visual_plan,
+        capacity_plan=capacity_plan,
     )
 
 
@@ -1151,6 +1168,11 @@ async def author_planned_slide(
     # a well-defined meaning — no plan, so the model decides as it did before.
     illustration_slots = getattr(plan, "illustration_slots", ())
     visual_plan = getattr(plan, "visual_plan", None)
+    capacity_plan = getattr(plan, "capacity_plan", None)
+    capacity_brief = None
+    if capacity_plan is not None:
+        capacity = capacity_plan.at(index).with_source_images(len(source_images))
+        capacity_brief = capacity.prompt_brief(capacity_plan.profile)
     return await _author_one_resilient(
         plan.contents[index],
         plan.design_system,
@@ -1174,6 +1196,7 @@ async def author_planned_slide(
         visual_intent=(visual_plan.at(index) if visual_plan is not None else None),
         source_images=source_images,
         require_all_source_images=require_all_source_images,
+        capacity_brief=capacity_brief,
     )
 
 

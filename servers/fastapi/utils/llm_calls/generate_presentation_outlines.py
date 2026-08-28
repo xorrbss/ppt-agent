@@ -15,7 +15,7 @@ from models.presentation_outline_model import PresentationOutlineModel
 from utils.get_dynamic_models import get_presentation_outline_model_with_n_slides
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_config import enable_web_grounding, get_llm_config
-from utils.llm_provider import get_model
+from utils.llm_provider import get_model, is_codex_selected
 from utils.llm_utils import (
     DisconnectChecker,
     get_generate_kwargs,
@@ -236,27 +236,33 @@ async def generate_ppt_outline(
             strict=True,
         )
         emitted_content = False
+        generate_kwargs = get_generate_kwargs(
+            model=model,
+            messages=get_messages(
+                content,
+                n_slides,
+                language,
+                additional_context,
+                tone,
+                verbosity,
+                instructions,
+                include_title_slide,
+                include_table_of_contents,
+            ),
+            response_format=response_format,
+            tools=([WebSearchTool()] if use_search_tool else None),
+            stream=True,
+        )
+        # A configured CODEX_REASONING_EFFORT remains authoritative. When it is
+        # absent, outline JSON is a bounded extraction task and should not inherit
+        # the provider's potentially long default reasoning mode.
+        if is_codex_selected() and "extra_body" not in generate_kwargs:
+            generate_kwargs["extra_body"] = {"reasoning": {"effort": "low"}}
         async for event in stream_generate_events(
             client,
             disconnect_checker=disconnect_checker,
             inactivity_timeout_seconds=120,
-            **get_generate_kwargs(
-                model=model,
-                messages=get_messages(
-                    content,
-                    n_slides,
-                    language,
-                    additional_context,
-                    tone,
-                    verbosity,
-                    instructions,
-                    include_title_slide,
-                    include_table_of_contents,
-                ),
-                response_format=response_format,
-                tools=([WebSearchTool()] if use_search_tool else None),
-                stream=True,
-            ),
+            **generate_kwargs,
         ):
             if getattr(event, "type", None) == "content":
                 chunk = getattr(event, "chunk", None)

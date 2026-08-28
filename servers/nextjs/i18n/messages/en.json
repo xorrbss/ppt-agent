@@ -2872,6 +2872,8 @@
     "templateRevision": "R{revision}",
     "genericEditableTemplate": "Editable general-purpose presentation template",
     "layoutCount": "{count} layouts",
+    "codexAuthenticationRequiredTitle": "ChatGPT connection required",
+    "codexAuthenticationRequiredDescription": "Connect ChatGPT in Settings, then try generating the outline again.",
     "codexSessionExpiredTitle": "ChatGPT connection expired",
     "codexSessionExpiredDescription": "The session could not be refreshed automatically. Refresh the ChatGPT connection in Settings and try again."
   },

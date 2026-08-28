@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "key": "presentation.company-standard-optional",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "회사 표준은 선택 사항이며, 없으면 masterPin 없이 선택한 AI 템플릿의 전체 캔버스 생성 경로를 사용한다.",
+  "scope": [
+    "presentation-generation",
+    "company-standard",
+    "authored-template"
+  ],
+  "invariants": [
+    "companyStandard=null이면 생성 요청에 masterPin을 포함하지 않는다.",
+    "회사 표준이 없거나 선택되지 않아도 Authored 템플릿 생성은 허용한다."
+  ],
+  "forbidden": [
+    "회사 표준 미선택만을 이유로 생성을 차단하거나 master pin을 요구하지 않는다."
+  ],
+  "evidence": [
+    "servers/nextjs/app/(presentation-generator)/outline/hooks/usePresentationGeneration.ts",
+    "servers/nextjs/app/(presentation-generator)/upload/components/upload-page/useUploadPageState.ts",
+    "servers/fastapi/api/v1/ppt/endpoints/presentation_generate.py",
+    "servers/fastapi/tests/unit/test_presentation_generation_operation_handler.py::test_authored_master_admission_allows_unpinned_full_canvas"
+  ],
+  "supersedes": [],
+  "recordedAt": "2026-08-27T04:50:36.9630322+00:00"
+}

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import time
+import uuid
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -18,6 +19,7 @@ from services.authored_checkpoint_service import (
     initialize_checkpoints,
     is_retryable_exception,
     read_valid_render,
+    read_valid_evidence,
     should_inject_failure,
     start_stage,
 )
@@ -26,16 +28,28 @@ from services.authored_presentation_artifacts import (
 )
 from services.authored_illustration_stage import illustrate_slide
 from services.authored_presentation_contracts import AuthoredGenerationPipelineResult
+from services.authored_evidence_ledger import DeckEvidenceLedger
 from services.image_generation_service import ImageGenerationService
 from services.authored_source_images import plan_slide_source_images
+from services.authored_composition_policy import (
+    AuthoredCapacityPlan,
+    CompositionProfile,
+    blocking_safety_issues,
+    capacity_violations,
+    capacity_overflow,
+    ensure_authored_semantic_roles,
+)
+from services.authored_quality_receipt_v2 import public_attempt_id
 from services.provider_usage_instrumentation import provider_usage_scope, record_local_stage
 from services.source_images.models import SourceImageCandidate
+from services.source_content.browser_readback import stamp_source_block_ids, BrowserSourceReadbackError
 from utils.asset_directory_utils import get_images_directory
 from utils.authored_illustrations import (
     enforce_strict_source_image_size_floor,
     validate_bound_source_images,
     validate_visible_source_images,
 )
+from utils.authored_dom_quality import ensure_authored_qids, inspect_authored_dom
 from utils.llm_calls.author_deck import (
     AuthoredDeckResult,
     author_planned_slide,
@@ -55,6 +69,7 @@ from utils.renderer_isolation import RendererPolicyError
 from utils.slide_capture import (
     _placeholder_png,
     ensure_browser_metrics,
+    get_cached_browser_metrics,
     render_html_to_png,
 )
 
@@ -82,13 +97,25 @@ async def _author_illustrate_render_pipeline(
     source_images_locked_to_source_slide: bool = False,
     require_all_source_images: bool = False,
     disable_generated_illustrations: bool = False,
+    composition_profile: CompositionProfile | None = None,
     # The deck's already-decided illustration slots. None means no plan ran, and
     # the deck keeps the pre-plan behaviour in which any slide may author one.
     illustration_plan: AuthoredIllustrationPlan | None = None,
     instructions: str | None = None,
+    source_block_bindings: Sequence[Sequence[tuple[str, str]]] | None = None,
+    source_image_block_bindings: Sequence[Sequence[str]] | None = None,
 ) -> AuthoredGenerationPipelineResult:
     """Pipeline slides through durable, fenced checkpoints with bounded workers."""
     started = time.monotonic()
+    # Keep one evidence ledger for the entire attempt.  Unlike the renderer's
+    # bounded LRUs this retains every slide's HTML/PNG/metrics tuple, including
+    # decks larger than 32 slides and retry/repair revisions.
+    evidence_attempt_id = public_attempt_id(
+        generation_job.attempt_token
+        if generation_job is not None and generation_job.attempt_token
+        else str(uuid.uuid4())
+    )
+    evidence_ledger = DeckEvidenceLedger(attempt_id=evidence_attempt_id)
     plan = prepare_authored_deck(
         outline,
         brand,
@@ -99,7 +126,38 @@ async def _author_illustrate_render_pipeline(
         chapter_plan=chapter_plan,
         illustration_plan=illustration_plan,
         instructions=instructions,
+        composition_profile=composition_profile,
     )
+    capacity_plan: AuthoredCapacityPlan | None = getattr(plan, "capacity_plan", None)
+    slide_source_images = plan_slide_source_images(
+        plan.contents,
+        source_images,
+        source_slide_locked=source_images_locked_to_source_slide,
+    )
+    if capacity_plan is not None:
+        if slide_source_images is not None:
+            capacity_plan = AuthoredCapacityPlan(
+                profile=capacity_plan.profile,
+                slides=tuple(
+                    capacity_plan.at(index).with_source_images(
+                        len(slide_source_images[index])
+                    )
+                    for index in range(len(capacity_plan.slides))
+                ),
+            )
+        impossible = capacity_overflow(plan.contents, capacity_plan)
+        if impossible:
+            index, actual, limit = impossible[0]
+            raise AuthoredStageError(
+                slide_index=index,
+                stage="author",
+                code="authored_source_verbatim_capacity_exceeded",
+                retryable=False,
+                message=(
+                    "Source-verbatim content cannot fit the locked slide envelope "
+                    f"({actual} > {limit} visible characters)"
+                ),
+            )
     # Read defensively: the checkpoint regression tests drive this pipeline with
     # stand-in plan objects that carry only the fields they exercise.
     illustration_slots = getattr(plan, "illustration_slots", ())
@@ -115,11 +173,6 @@ async def _author_illustrate_render_pipeline(
         # Reproducing a source slide-for-slide may not gain a picture the
         # source does not have, whatever the caller uploaded.
         source_images = ()
-    slide_source_images = plan_slide_source_images(
-        plan.contents,
-        source_images,
-        source_slide_locked=source_images_locked_to_source_slide,
-    )
     image_service = (
         ImageGenerationService(get_images_directory())
         if not disable_generated_illustrations
@@ -147,6 +200,7 @@ async def _author_illustrate_render_pipeline(
         author_work = 0.0
         illustration_work = 0.0
         render_work = 0.0
+        browser_metrics = None
         # The authoring call and the substitution step must see the identical
         # set: substitution resolves a placed id against this mapping, so an id
         # the author was never offered has nowhere to resolve.
@@ -158,6 +212,29 @@ async def _author_illustrate_render_pipeline(
             if generation_job is not None
             else None
         )
+        durable_evidence = None
+        if checkpoint is not None and checkpoint.render_status == "completed":
+            try:
+                durable_evidence = read_valid_evidence(checkpoint)
+            except Exception as exc:
+                raise AuthoredStageError(
+                    slide_index=index,
+                    stage="render",
+                    code="authored_checkpoint_evidence_corrupt",
+                    cause=exc,
+                    retryable=True,
+                ) from exc
+            if durable_evidence is not None:
+                browser_metrics = durable_evidence.metrics
+                if durable_evidence.html == getattr(checkpoint, "illustrated_html", None):
+                    evidence_ledger.hydrate_slide(
+                        attempt_id=evidence_attempt_id,
+                        slide_index=index,
+                        html=durable_evidence.html,
+                        png=durable_evidence.png,
+                        browser_metrics=durable_evidence.metrics,
+                        checkpoint_revision=durable_evidence.revision,
+                    )
 
         try:
             html = checkpoint.author_html if checkpoint else None
@@ -307,8 +384,55 @@ async def _author_illustrate_render_pipeline(
                         retryable=False,
                     ) from exc
 
+            if source_block_bindings is not None and index < len(source_block_bindings):
+                try:
+                    illustrated_html = stamp_source_block_ids(
+                        illustrated_html, source_block_bindings[index]
+                    )
+                except BrowserSourceReadbackError as exc:
+                    raise AuthoredStageError(
+                        slide_index=index,
+                        stage="author",
+                        code=exc.code,
+                        cause=exc,
+                        retryable=False,
+                        message=exc.detail,
+                    ) from exc
+            if source_image_block_bindings is not None and index < len(source_image_block_bindings):
+                try:
+                    from services.source_content.browser_readback import stamp_source_image_block_ids
+                    illustrated_html = stamp_source_image_block_ids(
+                        illustrated_html, source_image_block_bindings[index]
+                    )
+                except BrowserSourceReadbackError as exc:
+                    raise AuthoredStageError(
+                        slide_index=index,
+                        stage="author",
+                        code=exc.code,
+                        cause=exc,
+                        retryable=False,
+                        message=exc.detail,
+                    ) from exc
+
+            # Canonicalize semantic ids before the first render.  The renderer
+            # instruments the same ids internally, so doing this here keeps the
+            # source and render digests identical for the subsequent DOM gate;
+            # the gate can then reuse the metrics captured with this PNG instead
+            # of launching a second browser probe in shadow semantic mode.
+            if plan_reference_mode != EXACT_RECONSTRUCTION:
+                illustrated_html = ensure_authored_semantic_roles(
+                    ensure_authored_qids(illustrated_html)
+                )
+
             png = read_valid_render(checkpoint) if checkpoint else None
-            if png is None or checkpoint.render_status != "completed":
+            html_changed = bool(
+                checkpoint is not None
+                and checkpoint.illustrated_html
+                and checkpoint.illustrated_html != illustrated_html
+            )
+            if png is None or checkpoint.render_status != "completed" or html_changed:
+                if html_changed:
+                    browser_metrics = None
                 if checkpoint and should_inject_failure(
                     checkpoint, slide_index=index, stage="render"
                 ):
@@ -336,6 +460,10 @@ async def _author_illustrate_render_pipeline(
                         png = await render_html_to_png(illustrated_html)
                         if png == _placeholder_png():
                             raise RuntimeError("renderer returned a placeholder")
+                        # Snapshot metrics immediately with this render.  The
+                        # process-wide metric LRU may evict an earlier slide
+                        # while another worker is persisting its checkpoint.
+                        browser_metrics = get_cached_browser_metrics(illustrated_html)
                     except Exception as exc:
                         raise AuthoredStageError(
                             slide_index=index,
@@ -353,12 +481,15 @@ async def _author_illustrate_render_pipeline(
                         slide_index=index,
                         stage="render",
                         attempt_token=attempt_token,
+                        html=illustrated_html,
                         png=png,
+                        browser_metrics=browser_metrics,
                     )
 
             if require_all_source_images:
                 try:
-                    browser_metrics = await ensure_browser_metrics(illustrated_html)
+                    if browser_metrics is None:
+                        browser_metrics = await ensure_browser_metrics(illustrated_html)
                     illustrated_html = validate_visible_source_images(
                         illustrated_html,
                         offered or {},
@@ -404,6 +535,30 @@ async def _author_illustrate_render_pipeline(
                             latency_ms=(time.monotonic() - persist_stage_started)
                             * 1000
                         )
+            # RenderCapture already collected browser telemetry in the same
+            # browser invocation.  Read only the cache here: a cache miss is
+            # retained as unavailable evidence and must fail closed downstream,
+            # rather than launching a second browser for an unchanged slide.
+            if browser_metrics is None:
+                browser_metrics = get_cached_browser_metrics(illustrated_html)
+            if durable_evidence is not None and durable_evidence.html == illustrated_html:
+                evidence = evidence_ledger.hydrate_slide(
+                    attempt_id=evidence_attempt_id,
+                    slide_index=index,
+                    html=illustrated_html,
+                    png=png,
+                    browser_metrics=browser_metrics,
+                    checkpoint_revision=durable_evidence.revision,
+                )
+            else:
+                evidence = evidence_ledger.record_slide(
+                    attempt_id=evidence_attempt_id,
+                    slide_index=index,
+                    html=illustrated_html,
+                    png=png,
+                    browser_metrics=browser_metrics,
+                    checkpoint_revision=int(getattr(checkpoint, "revision", 0) or 0),
+                )
             return (
                 index,
                 illustrated_html,
@@ -479,6 +634,96 @@ async def _author_illustrate_render_pipeline(
         raise RuntimeError("authored slide worker exited before completion")
     htmls = [html for _, html, _, _, _, _ in completed_results]
     pngs = [png for _, _, png, _, _, _ in completed_results]
+    quality_gate_reports: list[Any] = []
+    quality_gate_failed_indices: list[int] = []
+    quality_gate_failures: list[dict[str, Any]] = []
+    if (
+        composition_profile is not None
+        and composition_profile.strict_dom_gate
+        and plan_reference_mode != EXACT_RECONSTRUCTION
+    ):
+        # This is a local, deterministic admission gate.  It runs after the
+        # slide render and before deck publication, so an ordinary Authored deck
+        # cannot ship clipping/overflow/overlap merely because VQA was disabled.
+        # Shadow semantic rollout decks may not yet contain model-declared QIDs;
+        # inject the same deterministic ids used by the publication bridge for
+        # telemetry only.  This does not change visible pixels.
+        gate_htmls = [
+            ensure_authored_semantic_roles(ensure_authored_qids(html))
+            for html in htmls
+        ]
+        # The ledger is the sole source for the final gate.  Never recollect
+        # browser metrics for an unchanged slide after the renderer cache has
+        # evicted it; unavailable evidence is a deliberate fail-closed result.
+        metrics = tuple(
+            (evidence_ledger.latest(evidence_attempt_id, index).browser_metrics
+             if evidence_ledger.latest(evidence_attempt_id, index) is not None
+             else None)
+            for index in range(len(gate_htmls))
+        )
+        for index, (html, browser_metrics) in enumerate(
+            zip(gate_htmls, metrics, strict=True)
+        ):
+            slide_gate_issues: list[dict[str, Any]] = []
+            if capacity_plan is not None:
+                violations = capacity_violations(
+                    html,
+                    browser_metrics,
+                    capacity_plan.at(index),
+                )
+                if violations:
+                    # Capacity failures are slide-local and repairable. Returning
+                    # them through the existing bounded repair path prevents a
+                    # workspace retry from replaying the same completed render
+                    # checkpoint until dead-letter.
+                    slide_gate_issues.extend(
+                        {
+                            "category": "capacity",
+                            "severity": "error",
+                            "message": violation,
+                        }
+                        for violation in violations
+                    )
+            report = inspect_authored_dom(
+                html,
+                browser_metrics,
+                reference_mode=plan_reference_mode,
+                strict_structural_off_canvas=(
+                    composition_profile.profile_id != "ordinary"
+                ),
+            )
+            quality_gate_reports.append(report)
+            defects = blocking_safety_issues(report)
+            if report.telemetry_status != "available":
+                detail = (
+                    ", ".join(
+                        f"{issue.category}:{issue.severity}" for issue in defects[:6]
+                    )
+                    or f"telemetry:{report.telemetry_status}"
+                )
+                raise AuthoredStageError(
+                    slide_index=index,
+                    stage="render",
+                    code="authored_composition_safety_gate_failed",
+                    retryable=True,
+                    message=f"Slide {index + 1} failed the composition safety gate ({detail})",
+                )
+            if defects:
+                slide_gate_issues.extend(
+                    issue.to_dict() if hasattr(issue, "to_dict") else {"message": str(issue)}
+                    for issue in defects
+                )
+            if slide_gate_issues:
+                # Keep the first-pass deck intact and return the exact failing
+                # indices to the caller. Generation performs one bounded
+                # slide-only repair and re-runs both capacity and safety gates.
+                quality_gate_failed_indices.append(index)
+                quality_gate_failures.append(
+                    {
+                        "slide_index": index,
+                        "issues": slide_gate_issues,
+                    }
+                )
     return AuthoredGenerationPipelineResult(
         deck=AuthoredDeckResult(htmls=htmls, design_system=plan.design_system),
         pngs=pngs,
@@ -486,4 +731,9 @@ async def _author_illustrate_render_pipeline(
         author_work=sum(result[3] for result in completed_results),
         illustration_work=sum(result[4] for result in completed_results),
         render_work=sum(result[5] for result in completed_results),
+        quality_gate_reports=tuple(quality_gate_reports),
+        quality_gate_failed_indices=tuple(quality_gate_failed_indices),
+        quality_gate_failures=tuple(quality_gate_failures),
+        evidence_ledger=evidence_ledger,
+        evidence_attempt_id=evidence_attempt_id,
     )

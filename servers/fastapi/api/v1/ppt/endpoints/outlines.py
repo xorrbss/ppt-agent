@@ -181,8 +181,12 @@ async def stream_outlines(
                 else brief_context
             )
         except HTTPException as error:
-            if error.status_code == 429:
-                yield SSEErrorResponse(detail=str(error.detail)).to_string()
+            detail = str(error.detail)
+            if error.status_code == 429 or (
+                "codex oauth access token" in detail.lower()
+                and "not set" in detail.lower()
+            ):
+                yield SSEErrorResponse(detail=detail).to_string()
                 return
             traceback.print_exc()
         except asyncio.TimeoutError:

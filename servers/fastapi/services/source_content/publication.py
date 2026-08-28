@@ -576,7 +576,10 @@ async def publish_source_content_generation(
     from services.authored_vnext.ooxml.native_scene import materialize_scene_pptx
     from services.presentation_generation_export_orchestration import publish_staged_presentation
     from services.source_content.errors import SourceContentError
-    from services.source_content.manifest_store import append_source_content_coverage_receipt
+    from services.source_content.manifest_store import (
+        append_source_content_coverage_receipt,
+        bind_source_content_generation,
+    )
     from utils.asset_directory_utils import get_exports_directory
     from utils.owner_context import get_current_owner_id
 
@@ -598,7 +601,16 @@ async def publish_source_content_generation(
         raw_asset_digests = {
             item["assetId"]: item["sha256"] for item in assets
         }
-        master_value = worker_master_contract(master_contract, raw_asset_digests)
+        authored_template = getattr(
+            getattr(deck_snapshot, "composition", None),
+            "authored_template",
+            None,
+        )
+        master_value = worker_master_contract(
+            master_contract,
+            raw_asset_digests,
+            authored_template=authored_template,
+        )
         candidate_bytes, _native_receipt = materialize_scene_pptx(
             # The OOXML worker consumes the sealed transport mapping. Passing
             # the Pydantic Scene object directly is rejected before schema
@@ -630,6 +642,22 @@ async def publish_source_content_generation(
         render_evidence = await render_candidate_powerpoint_evidence(
             candidate_pptx=candidate_path,
             materialized_scene=materialized_scene,
+        )
+        # Do not hold SQLite's single writer lock across the multi-minute
+        # PowerPoint render/reopen QA. Bind only after the external evidence is
+        # available, then continue with the short atomic publication write.
+        await bind_source_content_generation(
+            sql_session,
+            owner_id=owner_id,
+            manifest=manifest,
+            composition_pin=placement_plan.composition_pin.model_dump(
+                mode="json", by_alias=True
+            ),
+            content_policy=request.content_policy.model_dump(
+                mode="json", by_alias=True
+            ),
+            generation_engine_version="source-content-deterministic-scene/v1",
+            presentation_id=presentation_id,
         )
         presentation = await sql_session.get(PresentationModel, presentation_id)
         if presentation is None:

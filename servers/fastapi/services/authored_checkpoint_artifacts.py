@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import os
+import re
 from pathlib import Path
 import shutil
 import tempfile
@@ -16,6 +18,10 @@ from models.sql.presentation_generation_job import PresentationGenerationJob
 from services.database import async_session_maker
 from utils.datetime_utils import get_current_utc_datetime
 from utils.get_env import get_app_data_directory_env
+from services.authored_slide_checkpoint_bundle import (
+    SlideCheckpointBundle,
+    SlideCheckpointCorrupt,
+)
 
 
 _DEFAULT_ARTIFACT_TTL_SECONDS = 7 * 24 * 60 * 60
@@ -26,6 +32,38 @@ _DEFAULT_SWEEP_MAX_BYTES = 1024 * 1024 * 1024
 _DEFAULT_SWEEP_MAX_FILES = 10_000
 _MAX_SWEEP_MAX_FILES = 100_000
 logger = logging.getLogger(__name__)
+
+
+def _has_unsealed_evidence(directory: Path) -> bool:
+    """Return true when an orphan directory contains evidence without a seal.
+
+    A missing generation row is not proof that a worker stopped before its
+    receipt was sealed.  Keep evidence sidecars until an explicit seal marker
+    is present; this closes the crash window without changing terminal-row
+    retention semantics.
+    """
+
+    sealed = any((directory / marker).is_file() for marker in (
+        ".sealed", ".receipt-sealed", "receipt.sealed.json",
+    ))
+    if sealed:
+        return False
+    try:
+        return any(
+            not entry.is_symlink()
+            and entry.is_file()
+            and (
+                ".evidence" in entry.name
+                or entry.name.endswith(".html")
+                # Render revisions have an ``-rN-<nonce>`` suffix.  A bare
+                # legacy ``slide-0.png`` is not enough evidence to infer an
+                # in-flight receipt and remains eligible for orphan cleanup.
+                or (entry.name.endswith(".png") and re.search(r"-r\d+-", entry.name) is not None)
+            )
+            for entry in directory.rglob("*")
+        )
+    except OSError:
+        return True
 
 
 def checkpoint_root() -> Path:
@@ -86,6 +124,20 @@ def cleanup_checkpoint_artifacts(job_id: uuid.UUID) -> None:
     directory = _safe_job_directory(job_id)
     if directory.is_dir():
         shutil.rmtree(directory)
+
+
+def mark_checkpoint_artifacts_sealed(job_id: uuid.UUID) -> None:
+    """Durably mark an attempt safe for post-receipt TTL cleanup.
+
+    The marker is intentionally tiny and written with the same atomic fsync
+    path as render bytes.  Sweeping an orphan directory without this marker is
+    unsafe because a worker may have crashed before sealing its receipt.
+    """
+
+    directory = _safe_job_directory(job_id)
+    if not directory.is_dir():
+        return
+    atomic_write(directory / ".sealed", b"authored-checkpoint-sealed/v1\n")
 
 
 async def clear_checkpoint_html(job_id: uuid.UUID) -> None:
@@ -252,6 +304,7 @@ async def sweep_expired_checkpoint_artifacts(
         "deleted_bytes": 0,
         "deleted_files": 0,
         "skipped_budget": 0,
+        "skipped_unsealed": 0,
         "errors": 0,
     }
 
@@ -312,6 +365,10 @@ async def sweep_expired_checkpoint_artifacts(
                     continue
                 directory = _safe_job_directory(job_id)
                 if directory.is_dir():
+                    if _has_unsealed_evidence(directory):
+                        result["skipped_unsealed"] += 1
+                        await session.rollback()
+                        continue
                     usage = _directory_usage_within_budget(
                         directory,
                         max_bytes=byte_budget - result["deleted_bytes"],
@@ -389,6 +446,12 @@ async def sweep_expired_checkpoint_artifacts(
             resolved = directory.resolve()
             if resolved.parent != root or not resolved.is_dir():
                 continue
+            if _has_unsealed_evidence(resolved):
+                # The database row may have disappeared during a crash while
+                # the receipt seal was still pending.  Never delete evidence
+                # merely because its job UUID is currently orphaned.
+                result["skipped_unsealed"] += 1
+                continue
             usage = _directory_usage_within_budget(
                 resolved,
                 max_bytes=byte_budget - result["deleted_bytes"],
@@ -414,11 +477,197 @@ def read_valid_render(checkpoint: AuthoredSlideCheckpoint) -> bytes | None:
     if not checkpoint.render_path or not checkpoint.render_sha256:
         return None
     root = checkpoint_root()
-    path = (root / checkpoint.render_path).resolve()
+    unresolved = root / checkpoint.render_path
+    if unresolved.is_symlink():
+        return None
+    path = unresolved.resolve()
     if root not in path.parents or not path.is_file():
         return None
     content = path.read_bytes()
     if hashlib.sha256(content).hexdigest() != checkpoint.render_sha256:
         return None
     return content
+
+
+def _evidence_sidecar_path(render_path: Path) -> Path:
+    """Return deterministic metadata path adjacent to an existing render."""
+
+    return render_path.with_name(f".{render_path.name}.evidence.json")
+
+
+def evidence_attempt_id(attempt_token: str) -> str:
+    """Derive a stable opaque ID without persisting the worker lease token."""
+
+    return hashlib.sha256(attempt_token.encode("utf-8")).hexdigest()[:32]
+
+
+def write_valid_evidence(
+    render_path: Path,
+    *,
+    attempt_id: str,
+    slide_index: int,
+    revision: int,
+    html: str,
+    png: bytes,
+    metrics: dict[str, object],
+) -> SlideCheckpointBundle:
+    """Atomically persist HTML/PNG/metrics evidence beside its PNG pointer.
+
+    Revision snapshots are retained as ``.<png>.evidence.rN.json``; the
+    adjacent ``.evidence.json`` file is the sole current pointer. This keeps
+    the existing SQL model/API unchanged while making repair recovery durable.
+    """
+
+    # Build through the shared contract so sidecars and the standalone store
+    # use exactly the same digest and JSON rules. The render path is immutable,
+    # so DB fencing (rather than a shared mutable pointer) selects the winner.
+    digest = SlideCheckpointBundle._digest_for_payload(html, png, metrics)
+    bundle = SlideCheckpointBundle(
+        attempt_id, slide_index, revision, html, bytes(png), dict(metrics), digest
+    )
+    payload = json.dumps(
+        bundle.to_payload(), ensure_ascii=False, sort_keys=True,
+        separators=(",", ":"), allow_nan=False,
+    ).encode("utf-8")
+    sidecar = _evidence_sidecar_path(render_path)
+    atomic_write(sidecar, payload)
+    atomic_write(
+        sidecar.with_name(f"{sidecar.stem}.r{revision}{sidecar.suffix}"),
+        payload,
+    )
+    return bundle
+
+
+def read_valid_evidence(
+    checkpoint: AuthoredSlideCheckpoint,
+) -> SlideCheckpointBundle | None:
+    """Recover browser evidence using the checkpoint's render pointer.
+
+    Missing sidecars return ``None`` for legacy rows. A present but malformed
+    sidecar raises a corruption error instead of silently falling back to the
+    defect source.
+    """
+
+    if not checkpoint.render_path:
+        return None
+    root = checkpoint_root()
+    unresolved = root / checkpoint.render_path
+    if unresolved.is_symlink():
+        raise SlideCheckpointCorrupt("checkpoint_evidence_invalid_path")
+    path = unresolved.resolve()
+    if root not in path.parents or not path.is_file():
+        return None
+    sidecar = _evidence_sidecar_path(path)
+    if sidecar.is_symlink():
+        raise SlideCheckpointCorrupt("checkpoint_evidence_invalid_path")
+    try:
+        payload = json.loads(sidecar.read_text("utf-8"))
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        raise SlideCheckpointCorrupt("checkpoint_evidence_unreadable") from exc
+    try:
+        bundle = SlideCheckpointBundle.from_payload(payload)
+    except SlideCheckpointCorrupt:
+        raise
+    render_bytes = path.read_bytes()
+    # The revision snapshot is immutable and must agree with the mutable
+    # current sidecar. This gives a bidirectional DB pointer/filesystem check:
+    # DB -> PNG digest and sidecar -> revision bundle digest.
+    revision_sidecar = sidecar.with_name(
+        f"{sidecar.stem}.r{bundle.revision}{sidecar.suffix}"
+    )
+    if revision_sidecar.is_symlink():
+        raise SlideCheckpointCorrupt("checkpoint_evidence_invalid_path")
+    try:
+        revision_payload = json.loads(revision_sidecar.read_text("utf-8"))
+        revision_bundle = SlideCheckpointBundle.from_payload(revision_payload)
+    except FileNotFoundError:
+        raise SlideCheckpointCorrupt("checkpoint_evidence_revision_missing")
+    except (OSError, ValueError, json.JSONDecodeError, SlideCheckpointCorrupt) as exc:
+        if isinstance(exc, SlideCheckpointCorrupt):
+            raise
+        raise SlideCheckpointCorrupt("checkpoint_evidence_revision_unreadable") from exc
+    path_binding = (
+        f"-{bundle.attempt_id[:12]}-r{bundle.revision}-" in path.name
+        or path.name.endswith(f"-{bundle.attempt_id[:12]}.png")
+    )
+    if (
+        revision_bundle != bundle
+        or bundle.slide_index != checkpoint.slide_index
+        or not path_binding
+        or bundle.png != render_bytes
+        or (
+            checkpoint.render_sha256 is not None
+            and hashlib.sha256(render_bytes).hexdigest() != checkpoint.render_sha256
+        )
+        or (
+            checkpoint.illustrated_html is not None
+            and checkpoint.illustrated_html != bundle.html
+        )
+    ):
+        raise SlideCheckpointCorrupt("checkpoint_evidence_pointer_mismatch")
+    return bundle
+
+
+def recover_unreferenced_evidence(
+    checkpoint: AuthoredSlideCheckpoint,
+) -> tuple[str, str, SlideCheckpointBundle] | None:
+    """Find the newest complete filesystem bundle not yet in the DB pointer.
+
+    This closes the crash window where PNG/HTML/metrics were fsynced but the
+    SQL pointer update did not commit. Candidates are accepted only when their
+    sidecar, immutable revision sidecar, attempt digest, and PNG digest agree.
+    """
+    if not checkpoint.attempt_token:
+        return None
+    root = checkpoint_root()
+    prefix = evidence_attempt_id(checkpoint.attempt_token)[:12]
+    directory = root / str(checkpoint.job_id)
+    if not directory.is_dir() or directory.is_symlink():
+        return None
+    current_revision = -1
+    if checkpoint.render_path:
+        try:
+            current = read_valid_evidence(checkpoint)
+            if current is not None:
+                current_revision = current.revision
+        except SlideCheckpointCorrupt:
+            return None
+    best: tuple[str, str, SlideCheckpointBundle] | None = None
+    for path in directory.glob(f"slide-{checkpoint.slide_index}-{prefix}-r*-*.png"):
+        if path.is_symlink() or not path.is_file():
+            continue
+        sidecar = _evidence_sidecar_path(path)
+        try:
+            bundle = SlideCheckpointBundle.from_payload(
+                json.loads(sidecar.read_text("utf-8"))
+            )
+            revision_sidecar = sidecar.with_name(
+                f"{sidecar.stem}.r{bundle.revision}{sidecar.suffix}"
+            )
+            immutable = SlideCheckpointBundle.from_payload(
+                json.loads(revision_sidecar.read_text("utf-8"))
+            )
+            content = path.read_bytes()
+            if (
+                immutable != bundle
+                or bundle.attempt_id != evidence_attempt_id(checkpoint.attempt_token)
+                or bundle.slide_index != checkpoint.slide_index
+                or bundle.png != content
+                or bundle.revision <= current_revision
+                or hashlib.sha256(content).hexdigest()
+                != hashlib.sha256(bundle.png).hexdigest()
+            ):
+                continue
+            candidate = (
+                str(path.relative_to(root)).replace(os.sep, "/"),
+                hashlib.sha256(content).hexdigest(),
+                bundle,
+            )
+            if best is None or bundle.revision > best[2].revision:
+                best = candidate
+        except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError, SlideCheckpointCorrupt):
+            continue
+    return best
 

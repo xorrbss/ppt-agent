@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.quality-composition-first",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Use bounded composition first: explicit source modes, capacity planning, binary safety/fidelity gates, bounded repair, and atomic publication.",
+  "scope": [
+    "authored",
+    "source-content",
+    "visual-quality",
+    "publication"
+  ],
+  "invariants": [
+    "SlidePlan selects layout family and capacity before authoring.",
+    "source-verbatim preserves source text/images/order and fails when same-page fit is impossible.",
+    "source-outline is separate and requires explicit user selection for summarization.",
+    "Safety/Fidelity are binary; residual failure stays withheld and receipt binds digests before active publication."
+  ],
+  "forbidden": [
+    "Do not rely on post-render review as primary composition.",
+    "Do not silently summarize verbatim source content.",
+    "Do not activate revisions with residual safety or fidelity defects."
+  ],
+  "evidence": [
+    "servers/fastapi/services/source_content/pipeline.py",
+    "servers/fastapi/services/authored_presentation_pipeline.py",
+    "servers/fastapi/utils/authored_dom_quality.py",
+    "servers/fastapi/services/authored_quality_review_finalize.py",
+    "servers/fastapi/services/authored_vnext/semantic/publication.py"
+  ],
+  "supersedes": [],
+  "recordedAt": "2026-08-27T16:53:02.0482542+00:00"
+}

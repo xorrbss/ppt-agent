@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "key": "source-content.template-restyle-contract",
+  "revision": 6,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "원본 43쪽의 텍스트와 이미지만 보존하고 표·차트·기존 레이아웃은 재사용하지 않으며 선택한 authored 템플릿 디자인으로 새로 구성한다.",
+  "scope": [
+    "source-content",
+    "presentation-generation",
+    "authored-template"
+  ],
+  "invariants": [
+    "원본 페이지 수와 페이지 순서를 유지한다.",
+    "원본 텍스트는 해당 페이지에서 누락이나 대체 없이 보존한다.",
+    "원본 이미지 출현은 해당 페이지에서 누락이나 대체 없이 보존한다.",
+    "선택한 authored 템플릿의 실제 디자인 문법과 레이아웃으로 새로 구성한다."
+  ],
+  "forbidden": [
+    "원본 표 또는 차트를 네이티브 객체나 값으로 보존하지 않는다.",
+    "원본 도형과 기존 슬라이드 레이아웃을 디자인 기반으로 재사용하지 않는다.",
+    "색상과 테두리만 바꾸는 단순 재스타일을 템플릿 적용으로 간주하지 않는다."
+  ],
+  "evidence": [],
+  "supersedes": [
+    "source-content.template-restyle-contract@5"
+  ],
+  "recordedAt": "2026-08-27T10:02:30.0590996+00:00"
+}

@@ -208,9 +208,15 @@ async def finalize_legacy_review(ctx):
         ctx.session,
         ctx.task,
         status="completed",
-        message=f"검수가 완료되었습니다. {len(ctx.fixed_positions)}개 슬라이드를 수정했습니다."
+        message=(
+            f"검수가 완료되었습니다. {len(ctx.fixed_positions)}개 슬라이드를 수정했습니다."
+            + (" 잔여 이슈가 있습니다." if ctx.remaining_issues else "")
+        )
         if ctx.fixed_positions
-        else "검수는 완료되었지만 자동 수정할 수 있는 변경은 생성되지 않았습니다.",
+        else (
+            "검수는 완료되었지만 자동 수정할 수 있는 변경은 생성되지 않았습니다."
+            + (" 잔여 이슈가 있습니다." if ctx.remaining_issues else "")
+        ),
         data={
             "presentation_id": str(ctx.presentation_id),
             "mode": ctx.request.mode,
@@ -228,6 +234,13 @@ async def finalize_legacy_review(ctx):
             "remaining_issue_count": len(ctx.remaining_issues),
             "remaining_slide_indices": [issue["slide_index"] for issue in ctx.remaining_issues],
             "remaining_issues": ctx.remaining_issues,
+            # ``status=completed`` is the workflow/task state. Quality outcome
+            # is deliberately separate so residual findings cannot masquerade
+            # as a clean quality pass while keeping existing task consumers
+            # backwards compatible.
+            "quality_gate_status": (
+                "residual_issues" if ctx.remaining_issues else "passed"
+            ),
             "version_saved": bool(ctx.fixed_positions),
             "slide_results": _service._build_slide_results(
                 positions=ctx.positions,

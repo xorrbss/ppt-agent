@@ -1687,6 +1687,13 @@ def _add_scene_table(
                 table.columns[column_index].width = round(
                     remaining / (columns_value - 1)
                 )
+            # Keep the saved native grid exactly equal to the sealed Scene
+            # width. Evenly splitting an integer EMU width can leave a one-EMU
+            # remainder, which otherwise changes the table style digest after
+            # PowerPoint save/readback.
+            table.columns[columns_value - 1].width += available_width - sum(
+                column.width for column in table.columns
+            )
     sealed_heights = _table_row_heights(payload, rows=rows_value)
     if sealed_heights is not None:
         for row_index, height in enumerate(sealed_heights):
@@ -1815,6 +1822,11 @@ def _add_scene_chart(
         data.add_series(name, values)
     shape = slide.shapes.add_chart(native_type, *geometry, data)
     chart = shape.chart
+    # python-pptx creates ``c:autoTitleDeleted`` with val="0" even though
+    # ``has_title`` reads False. PowerPoint then materializes the lone series
+    # name as an automatic title when a single-series chart is saved/reopened.
+    # Seal the intended no-title state explicitly so COM readback is stable.
+    chart.has_title = False
     chart.font.name = theme["fontFamily"]
     chart.font.color.rgb = RGBColor.from_string(theme["text"].removeprefix("#"))
     style = _chart_style_projection(payload, series_count=len(series), theme=theme)
@@ -2467,9 +2479,12 @@ def materialize_scene_pptx(
                     shape.line.fill.background()
             elif kind == "shape":
                 shape = slide.shapes.add_shape(_shape_type(element), *geometry)
-                fill_value = element.get("fill") or element.get("style", {})
-                shape.fill.solid()
-                shape.fill.fore_color.rgb = _color(fill_value, "E5E7EB")
+                fill_value = element.get("fill")
+                if fill_value is None:
+                    shape.fill.background()
+                else:
+                    shape.fill.solid()
+                    shape.fill.fore_color.rgb = _color(fill_value, "E5E7EB")
                 stroke = element.get("stroke")
                 if stroke is None:
                     shape.line.fill.background()

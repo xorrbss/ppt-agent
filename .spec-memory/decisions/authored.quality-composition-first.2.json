@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.quality-composition-first",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "One Authored composer uses frozen slide capacity; source defaults to verbatim, outline is explicit, and safety defects block publication.",
+  "scope": [
+    "authored-generation",
+    "source-content",
+    "quality-gate"
+  ],
+  "invariants": [
+    "ordinary and source modes share one author/repair path",
+    "verbatim never silently summarizes or expands slides",
+    "overflow clipping off_canvas overlap block publication"
+  ],
+  "forbidden": [
+    "silent source summarization by default",
+    "publishing a deck with deterministic safety defects"
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_composition_policy.py",
+    "servers/fastapi/services/authored_presentation_pipeline.py",
+    "servers/fastapi/models/generate_presentation_request.py",
+    "servers/nextjs/app/(presentation-generator)/services/api/source-content/contract.ts"
+  ],
+  "supersedes": [
+    "authored.quality-composition-first@1"
+  ],
+  "recordedAt": "2026-08-27T17:15:53.1963023+00:00"
+}

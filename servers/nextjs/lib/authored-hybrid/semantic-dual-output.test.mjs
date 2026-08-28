@@ -407,6 +407,8 @@ test("active bundle graph binds ordered slide QIDs and fails closed for Hybrid d
       assetManifestDigest: digest("assets"),
       fontManifestDigest: digest("fonts"),
       qualityPolicyVersion: "quality/v1",
+      sceneDigest: null,
+      scene: null,
       canonicalDigest,
     },
     bundles: [bundle],
@@ -469,6 +471,13 @@ test("active bundle graph binds ordered slide QIDs and fails closed for Hybrid d
     () => parseActiveAuthoredEmissionResponseV1({
       ...response,
       bundles: [{ ...bundle, compatibilityComponent: semantic }],
+    }),
+    /authored_active_manifest_response_invalid/,
+  );
+  assert.throws(
+    () => parseActiveAuthoredEmissionResponseV1({
+      ...response,
+      manifest: { ...response.manifest, sceneDigest: digest("scene") },
     }),
     /authored_active_manifest_response_invalid/,
   );

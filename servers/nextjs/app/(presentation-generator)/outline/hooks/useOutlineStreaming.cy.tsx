@@ -2,6 +2,7 @@ import React from "react";
 import { mount } from "cypress/react";
 import { Provider } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
+import { NextIntlClientProvider } from "next-intl";
 
 import presentationGenerationReducer from "@/store/slices/presentationGeneration";
 import userConfigReducer, { setLLMConfig } from "@/store/slices/userConfig";
@@ -14,6 +15,31 @@ import {
 } from "./useOutlineStreaming";
 import { DashboardApi } from "../../services/api/dashboard";
 import { CodexAuthApi } from "../../services/api/codex-auth";
+
+const messages = {
+  generation: {
+    codexAuthenticationRequiredTitle: "ChatGPT 연결이 필요합니다",
+    codexAuthenticationRequiredDescription:
+      "설정에서 ChatGPT를 연결한 뒤 개요 생성을 다시 시도해 주세요.",
+    codexSessionExpiredTitle: "ChatGPT 연결이 만료되었습니다",
+    codexSessionExpiredDescription:
+      "설정에서 ChatGPT 연결을 갱신한 뒤 다시 시도해 주세요.",
+  },
+};
+
+function TestProviders({
+  store,
+  children,
+}: {
+  store: ReturnType<typeof configureStore>;
+  children: React.ReactNode;
+}) {
+  return (
+    <NextIntlClientProvider locale="ko" messages={messages}>
+      <Provider store={store}>{children}</Provider>
+    </NextIntlClientProvider>
+  );
+}
 
 function Harness({
   presentationId,
@@ -60,9 +86,9 @@ describe("useOutlineStreaming", () => {
     );
 
     mount(
-      <Provider store={testStore}>
+      <TestProviders store={testStore}>
         <Harness presentationId="p1" />
-      </Provider>
+      </TestProviders>
     );
 
     cy.get('[data-cy="streaming"]').should("have.text", "false");
@@ -104,12 +130,12 @@ describe("useOutlineStreaming", () => {
       new FakeEventSource(url) as unknown as EventSource;
 
     mount(
-      <Provider store={testStore}>
+      <TestProviders store={testStore}>
         <Harness
           presentationId="p-stream"
           createEventSource={createEventSource}
         />
-      </Provider>
+      </TestProviders>
     );
 
     cy.wrap(null).should(() => {
@@ -158,12 +184,12 @@ describe("useOutlineStreaming", () => {
     };
 
     mount(
-      <Provider store={testStore}>
+      <TestProviders store={testStore}>
         <Harness
           presentationId="p-expired-codex"
           createEventSource={createEventSource}
         />
-      </Provider>,
+      </TestProviders>,
     );
 
     cy.get("@refreshCodex").should("have.been.calledOnce");
@@ -171,6 +197,70 @@ describe("useOutlineStreaming", () => {
       expect(eventSourceUrls).to.deep.equal([
         "/api/outline-stream/p-expired-codex",
       ]);
+    });
+  });
+
+  it("stops without retrying when Codex has never been authenticated", () => {
+    const testStore = createTestStore("codex");
+    type ResponseListener = (event: MessageEvent<string>) => void;
+
+    class FakeEventSource {
+      static instances: FakeEventSource[] = [];
+      listeners: ResponseListener[] = [];
+      onerror: (() => void) | null = null;
+      closed = false;
+
+      constructor(_url: string | URL) {
+        FakeEventSource.instances.push(this);
+      }
+
+      addEventListener(type: string, listener: EventListener) {
+        if (type === "response") {
+          this.listeners.push(listener as ResponseListener);
+        }
+      }
+
+      close() {
+        this.closed = true;
+      }
+
+      emit(data: unknown) {
+        const event = { data: JSON.stringify(data) } as MessageEvent<string>;
+        this.listeners.forEach((listener) => listener(event));
+      }
+    }
+
+    cy.stub(DashboardApi, "getPresentation").resolves({ outlines: null } as any);
+    cy.stub(CodexAuthApi, "refreshIfExpired").resolves(false);
+
+    const createEventSource: OutlineEventSourceFactory = (url) =>
+      new FakeEventSource(url) as unknown as EventSource;
+
+    mount(
+      <TestProviders store={testStore}>
+        <Harness
+          presentationId="p-codex-not-authenticated"
+          createEventSource={createEventSource}
+        />
+      </TestProviders>,
+    );
+
+    cy.wrap(null).should(() => {
+      expect(FakeEventSource.instances).to.have.length(1);
+    });
+    cy.then(() => {
+      FakeEventSource.instances[0].emit({
+        type: "error",
+        detail:
+          "Codex OAuth access token is not set. Please authenticate via /api/v1/ppt/codex/auth/initiate",
+      });
+    });
+
+    cy.get('[data-cy="streaming"]').should("have.text", "false");
+    cy.get('[data-cy="loading"]').should("have.text", "false");
+    cy.then(() => {
+      expect(FakeEventSource.instances).to.have.length(1);
+      expect(FakeEventSource.instances[0].closed).to.equal(true);
     });
   });
 });

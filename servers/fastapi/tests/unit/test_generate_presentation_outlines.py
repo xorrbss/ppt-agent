@@ -53,6 +53,8 @@ def test_generate_ppt_outline_streams_json_chunks_and_keeps_schema_shape():
     with patch.object(outline_module, "get_model", return_value="fake-model"), patch.object(
         outline_module, "get_client", return_value=object()
     ), patch.object(outline_module, "get_llm_config", return_value={}), patch.object(
+        outline_module, "is_codex_selected", return_value=True
+    ), patch.object(
         outline_module,
         "get_generate_kwargs",
         side_effect=lambda **kwargs: kwargs,
@@ -74,6 +76,7 @@ def test_generate_ppt_outline_streams_json_chunks_and_keeps_schema_shape():
     assert validated.slides[0].content.startswith("## Intro")
     assert captured_kwargs["disconnect_checker"] is is_disconnected
     assert captured_kwargs["inactivity_timeout_seconds"] == 120
+    assert captured_kwargs["extra_body"] == {"reasoning": {"effort": "low"}}
 
 
 def test_generate_ppt_outline_returns_http_exception_chunk_on_failure():

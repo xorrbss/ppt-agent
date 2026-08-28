@@ -497,6 +497,9 @@ def verify_scene_coverage(
             expected_shape = _value(
                 payload, "preset", default=_value(payload, "shape")
             )
+            expected_scene_shape = {
+                "rightArrow": "chevron",
+            }.get(expected_shape, expected_shape)
             if (
                 expected_shape
                 not in {
@@ -506,9 +509,10 @@ def verify_scene_coverage(
                     "triangle",
                     "diamond",
                     "chevron",
+                    "rightArrow",
                     "line",
                 }
-                or _value(element, "shape") != expected_shape
+                or _value(element, "shape") != expected_scene_shape
             ):
                 raise SourceContentCoverageError(
                     "source_content_coverage_failed",
