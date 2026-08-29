@@ -72,7 +72,7 @@ test("structural inspection distinguishes groups, connectors, small images, and 
   ]);
   const report = inspectPptxEditability(writePptxArchive(entries));
   assert.equal(report.slides[0].nativeTextElements, 1);
-  assert.equal(report.slides[0].nativeShapeElements, 2);
+  assert.equal(report.slides[0].nativeShapeElements, 3);
   assert.equal(report.slides[0].nativeGroupElements, 1);
   assert.equal(report.slides[0].nativeImageElements, 1);
   assert.equal(report.slides[0].rasterFallbackElements, 0);

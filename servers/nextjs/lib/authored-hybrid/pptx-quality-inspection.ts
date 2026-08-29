@@ -170,6 +170,7 @@ function serializedNativeKind(block: string):
   | "chart"
   | null {
   if (block.startsWith("<p:pic")) return "image";
+  if (block.startsWith("<p:grpSp")) return "shape";
   if (block.startsWith("<p:graphicFrame")) {
     if (/<c:chart\b/.test(block)) return "chart";
     if (/<a:tbl\b/.test(block)) return "table";
@@ -179,6 +180,15 @@ function serializedNativeKind(block: string):
     return /<p:txBody\b/.test(block) ? "text" : "shape";
   }
   return null;
+}
+
+function groupHeaderBlocks(xml: string): string[] {
+  // Match each group header independently instead of consuming through the
+  // closing tag. This keeps nested groups visible as separate QID owners while
+  // still exposing the exact group transform needed for geometry readback.
+  return [...xml.matchAll(
+    /<p:grpSp\b[^>]*>\s*<p:nvGrpSpPr>[\s\S]*?<\/p:nvGrpSpPr>\s*<p:grpSpPr>[\s\S]*?<\/p:grpSpPr>/g,
+  )].map((match) => match[0]);
 }
 
 function hybridIdentity(name: string, serializedKind: ReturnType<typeof serializedNativeKind>): {
@@ -622,10 +632,11 @@ export function inspectPptxNativeElementReadback(
     const slideNumber = Number(slideMatch[1]);
     const xml = bytes.toString("utf8");
     for (const block of [
-      ...xml.matchAll(/<p:sp\b[\s\S]*?<\/p:sp>/g),
-      ...xml.matchAll(/<p:pic\b[\s\S]*?<\/p:pic>/g),
-      ...xml.matchAll(/<p:graphicFrame\b[\s\S]*?<\/p:graphicFrame>/g),
-    ].map((match) => match[0])) {
+      ...groupHeaderBlocks(xml),
+      ...[...xml.matchAll(/<p:sp\b[\s\S]*?<\/p:sp>/g)].map((match) => match[0]),
+      ...[...xml.matchAll(/<p:pic\b[\s\S]*?<\/p:pic>/g)].map((match) => match[0]),
+      ...[...xml.matchAll(/<p:graphicFrame\b[\s\S]*?<\/p:graphicFrame>/g)].map((match) => match[0]),
+    ]) {
       const rawName = block.match(/<p:cNvPr\b[^>]*\bname="([^"]*)"/)?.[1];
       if (!rawName) continue;
       const tagOwner = /<c:chart\b/.test(block)
@@ -731,12 +742,12 @@ export function inspectPptxEditability(
         /<p:cNvPr\b[^>]*\bname="Presenton raster visual fragment [^"]+ semantic-owner"/g,
       );
       const connectorElements = occurrences(xml, /<p:cxnSp\b/g);
+      const nativeGroupElements = occurrences(xml, /<p:grpSp\b/g);
       const nativeShapeElements =
         Math.max(
           0,
           allShapes - nativeTextElements - semanticOwnershipCarrierElements,
-        ) + connectorElements;
-      const nativeGroupElements = occurrences(xml, /<p:grpSp\b/g);
+        ) + connectorElements + nativeGroupElements;
       const nativeChartElements = occurrences(
         xml,
         /<p:graphicFrame\b[\s\S]*?<c:chart\b/g,

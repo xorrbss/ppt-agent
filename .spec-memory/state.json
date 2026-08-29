@@ -45,10 +45,11 @@
     "authored.quality-outline-timing-boundary": "decisions/authored.quality-outline-timing-boundary.1.json",
     "authored.quality-preexport-native-coverage-boundary": "decisions/authored.quality-preexport-native-coverage-boundary.1.json",
     "authored.performance-matrix-control": "decisions/authored.performance-matrix-control.2.json",
-    "authored.hybrid-qid-ooxml-ownership": "decisions/authored.hybrid-qid-ooxml-ownership.1.json"
+    "authored.hybrid-qid-ooxml-ownership": "decisions/authored.hybrid-qid-ooxml-ownership.1.json",
+    "workflow.implementation-before-validation": "decisions/workflow.implementation-before-validation.1.json"
   },
   "readFirst": [
     "AGENTS.md"
   ],
-  "updatedAt": "2026-08-29T09:18:01.4659846+00:00"
+  "updatedAt": "2026-08-29T10:57:55.3137478+00:00"
 }

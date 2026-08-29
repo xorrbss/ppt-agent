@@ -63,6 +63,7 @@ import {
   resolvePowerPointTypeface,
   type AuthoredEmbeddedTypefaceFaceEvidence,
 } from "./font-policy.ts";
+import { flattenPreparedNativeElements } from "./native-plan.ts";
 import {
   attachPresentationExportOoxmlReadback,
   createPresentationExportQuality,
@@ -83,6 +84,7 @@ import { materializeCanonicalSceneAssetsForSlide } from "./scene-html-assets.ts"
 const MAX_PRESENTATION_RESPONSE_BYTES = 50 * 1024 * 1024;
 const MAX_HYBRID_SLIDES = 100;
 const MAX_FIDELITY_PPTX_BYTES = 512 * 1024 * 1024;
+const KOREAN_NATIVE_EMBEDDING_FAMILY = "Noto Sans KR";
 const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
 // Total wall-clock budget for the bounded-concurrency per-slide hybrid pass. Each slide can
 // take ~90s worst case (extract + font-layout + backplate relaunches); without a ceiling a
@@ -90,7 +92,8 @@ const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
 // spent the remaining slides receive a separately isolated fidelity capture below. Never
 // retain the bundled export's shared-DOM raster: authored slide styles can collide there.
 const HYBRID_DECK_BUDGET_MS = 15 * 60_000;
-const HYBRID_CACHE_VERSION = "authored-hybrid-v17-editable-shadow-profile";
+const HYBRID_CACHE_VERSION =
+  "authored-hybrid-v22-raster-kind-reconciliation";
 const HYBRID_RESULT_CACHE_LIMIT = 24;
 // Standard explicit Hybrid uses the element-level semantic/QID admission
 // gates. A persisted authored-vNext Scene projection, when present, is a
@@ -276,7 +279,9 @@ function nativeFontUsage(
   | "nativeTypefaceFamilies"
 > {
   const textElements = layers.flatMap((layer) =>
-    layer.elements.filter((element) => element.kind === "text"),
+    flattenPreparedNativeElements(layer.elements).filter(
+      (element) => element.kind === "text"
+    ),
   );
   const usedFamilies = new Set<string>();
   let usingEmbedded = 0;
@@ -1127,9 +1132,7 @@ export async function runAuthoredHybridPresentationExport(
 
   const fontEmbeddingPlan = await resolveFontEmbeddingPlan({
     requested: params.fontEmbedding !== false,
-    families: [
-      ...new Set(activeBinding.slides.flatMap((slide) => slide.fontFamilies)),
-    ],
+    families: nativeEmbeddingFamilies(activeBinding, editableHybridProfileId),
     // Full-font embedding keeps newly typed Hangul editable. The opt-in API can
     // add subset selection later without changing this safe default.
     strategy: "full",
@@ -1277,4 +1280,23 @@ async function readCompletedHybridExport(
 
 function elapsedMs(startedAt: number): number {
   return Math.round(performance.now() - startedAt);
+}
+function nativeEmbeddingFamilies(
+  binding: ActiveEmissionExportBinding,
+  profileId: string | undefined,
+): string[] {
+  const authored = binding.slides.flatMap((slide) => slide.fontFamilies);
+  const requiresKoreanFace =
+    profileId === EDITABLE_HYBRID_SHADOW_PROFILE_ID ||
+    authored.some((family) =>
+      /(?:noto\s+sans\s+(?:kr|cjk)|pretendard|malgun|맑은\s*고딕)/iu.test(family)
+    );
+  // Browser CSS may name only the Latin face even when Hangul is resolved by
+  // a fallback. The sealed ko/en profile's script-aware serializer always
+  // emits Noto Sans KR for Hangul, so include that exact package family in the
+  // plan instead of discovering the requirement after packaging.
+  return [...new Set([
+    ...(requiresKoreanFace ? [KOREAN_NATIVE_EMBEDDING_FAMILY] : []),
+    ...authored,
+  ])];
 }

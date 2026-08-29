@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "key": "workflow.implementation-before-validation",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Complete the scoped implementation batch first, then run one narrow source gate and actual product validation without repeated intermediate suites.",
+  "scope": [
+    "workflow",
+    "validation"
+  ],
+  "invariants": [
+    "Development precedes validation for scoped product changes.",
+    "Use the narrowest source gate after implementation."
+  ],
+  "forbidden": [
+    "Repeated intermediate full suites that consume the implementation budget."
+  ],
+  "evidence": [],
+  "supersedes": null,
+  "recordedAt": "2026-08-29T10:57:55.2748712+00:00"
+}

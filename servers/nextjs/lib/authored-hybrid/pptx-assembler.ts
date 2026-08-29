@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import {
+  flattenPreparedNativeElements,
   preparedNativeElementNonVisualIdCount,
   preparedNativeElementUnderlayNonVisualIdCount,
   powerPointTextBoundsForPreflight,
@@ -367,7 +368,9 @@ export function preparedNativeElementExpectedReadbackBounds(
   item: PreparedNativeElement,
 ): { x: number; y: number; width: number; height: number } {
   const sourceBounds = item.kind === "text"
-    ? powerPointTextBoundsForPreflight(item.source) ?? item.source.bounds.px
+    ? item.source.text.containerShape?.bounds.px ??
+      powerPointTextBoundsForPreflight(item.source) ??
+      item.source.bounds.px
     : item.source.bounds.px;
   const toEmu = (value: number) => Math.round(value * 9_525);
   const toPx = (value: number) =>
@@ -548,7 +551,8 @@ function assembleSlide(
   );
   const useSlideBackground = isOpaqueRgbPng(layer.backplatePng);
   const ownershipQids = semanticOwnerQids(layer);
-  const nativeOwnerQids = new Set(layer.elements.map((item) => item.source.id));
+  const flatNativeElements = flattenPreparedNativeElements(layer.elements);
+  const nativeOwnerQids = new Set(flatNativeElements.map((item) => item.source.id));
   if (ownershipQids.some((qid) => nativeOwnerQids.has(qid))) {
     throw new Error("Hybrid native/raster duplicate semantic owner detected.");
   }
@@ -568,14 +572,40 @@ function assembleSlide(
     semanticOwnershipShapeXml(index + 3, layer.slideNumber, qid)
   );
   let nextNonVisualId = 3 + semanticOwnershipXml.length;
-  ordered.forEach((item, index) => {
+  let mediaIndex = 0;
+  const serializeTreeItem = (
+    item: PreparedNativeElement,
+    insideGroup = false,
+  ): string => {
+    if (item.kind === "group") {
+      const groupId = nextNonVisualId;
+      nextNonVisualId += 1;
+      const bounds = item.source.bounds.px;
+      const x = Math.round(bounds.x * 9_525);
+      const y = Math.round(bounds.y * 9_525);
+      const width = Math.max(1, Math.round(bounds.width * 9_525));
+      const height = Math.max(1, Math.round(bounds.height * 9_525));
+      const children = [...item.children]
+        .sort((left, right) =>
+          left.source.zOrder - right.source.zOrder ||
+          left.source.sourceIndex - right.source.sourceIndex
+        )
+        .map((child) => serializeTreeItem(child, true))
+        .join("");
+      if (!children) {
+        throw new Error(`Hybrid group ${item.source.id} has no native children.`);
+      }
+      const name = escapeXmlAttribute(`Presenton hybrid shape ${item.source.id}`);
+      return `<p:grpSp><p:nvGrpSpPr><p:cNvPr id="${groupId}" name="${name}"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${width}" cy="${height}"/><a:chOff x="${x}" y="${y}"/><a:chExt cx="${width}" cy="${height}"/></a:xfrm></p:grpSpPr>${children}</p:grpSp>`;
+    }
     let relationshipId: string | undefined;
     if (item.kind === "image") {
+      mediaIndex += 1;
       const imageRelationshipId = `rId${relationshipNumber}`;
       const mediaName = allocateMediaName(
         entries,
         layer.slideNumber,
-        `image-${index + 1}`,
+        `image-${mediaIndex}`,
         item.png
       );
       relationshipId = imageRelationshipId;
@@ -618,11 +648,19 @@ function assembleSlide(
     );
     if (overlay && item.kind === "text") overlay = hardenTextOverlay(overlay, item, options);
     if (underlay) {
-      if (isCanvasBackgroundShape(item)) canvasBackgroundXml.push(underlay);
-      else orderedNativeXml.push(underlay);
+      if (isCanvasBackgroundShape(item)) {
+        if (insideGroup) {
+          throw new Error("Hybrid canvas background cannot be nested in a native group.");
+        }
+        canvasBackgroundXml.push(underlay);
+      }
     }
-    if (overlay) orderedNativeXml.push(overlay);
     nextNonVisualId += preparedNativeElementNonVisualIdCount(item);
+    return `${isCanvasBackgroundShape(item) ? "" : underlay}${overlay}`;
+  };
+  ordered.forEach((item) => {
+    const xml = serializeTreeItem(item);
+    if (xml) orderedNativeXml.push(xml);
   });
 
   entries.set(`ppt/media/${backplateName}`, Buffer.from(layer.backplatePng));

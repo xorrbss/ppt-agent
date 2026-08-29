@@ -22,6 +22,7 @@ import tempfile
 import threading
 import time
 import urllib.parse
+import urllib.request
 from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional
@@ -58,6 +59,152 @@ _BLOCKED_RENDERER_URL_PATTERNS = [
     "ws://*",
     "wss://*",
 ]
+
+# A successful PNG is only reusable when every renderer input that can alter its
+# pixels (or the accompanying geometry measurements) is identical.  HTML alone
+# is insufficient: local font/image/CSS files and the resolved Chromium binary
+# may change without changing the authored Scene payload.
+CACHE_IDENTITY_VERSION = "authored-render-cache-identity/v1"
+MEASUREMENT_CACHE_VERSION = "authored-measurement/v1"
+_SCENE_DIGEST_PATTERN = re.compile(
+    r'(?:data-scene-digest|data-scene-hash|name\s*=\s*["\']scene-digest["\'])'
+    r'\s*=\s*["\']([^"\']+)["\']',
+    re.IGNORECASE,
+)
+_ASSET_REFERENCE_PATTERN = re.compile(
+    r'''(?:\b(?:src|srcset|poster|href|data)\s*=\s*["\']([^"\']+)["\'])|'''
+    r'''(?:url\(\s*["\']?([^\s)"\']+)["\']?\s*\))''',
+    re.IGNORECASE,
+)
+_asset_digest_lock = threading.Lock()
+_asset_digest_cache: dict[tuple[str, int, int], str] = {}
+
+
+@dataclass(frozen=True, slots=True)
+class _RenderCacheIdentity:
+    """Opaque cache identity for one authored Scene/HTML projection."""
+
+    source_digest: str
+    scene_digest: str
+    chrome_runtime_digest: str
+    asset_fingerprint: str
+    measurement_version: str
+    digest: str
+
+
+def _asset_references(source: str) -> list[str]:
+    references: list[str] = []
+    for match in _ASSET_REFERENCE_PATTERN.finditer(source):
+        value = match.group(1) or match.group(2)
+        if value:
+            references.append(html_lib.unescape(value).strip())
+    return references
+
+
+def _local_asset_path(reference: str, *, base: pathlib.Path | None = None) -> pathlib.Path | None:
+    """Resolve only explicit local assets; network URLs remain renderer-blocked."""
+
+    direct = pathlib.Path(urllib.parse.unquote(reference))
+    if direct.is_absolute():
+        return direct.resolve()
+    parsed = urllib.parse.urlparse(reference)
+    if parsed.scheme == "file":
+        local_path = urllib.request.url2pathname(parsed.path)
+        if parsed.netloc:
+            local_path = f"//{parsed.netloc}{local_path}"
+        return pathlib.Path(local_path).resolve()
+    if parsed.scheme or reference.startswith(("#", "//", "/")):
+        return None
+    candidate = pathlib.Path(reference)
+    if candidate.is_absolute():
+        return candidate.resolve()
+    if base is not None:
+        return (base / candidate).resolve()
+    return None
+
+
+def _fingerprint_local_asset(path: pathlib.Path, seen: set[pathlib.Path]) -> str:
+    """Hash a local asset and CSS dependencies without retaining its contents."""
+
+    resolved: pathlib.Path | None = None
+    try:
+        resolved = path.resolve()
+        if resolved in seen:
+            return f"cycle:{resolved.as_posix()}"
+        seen.add(resolved)
+        stat = resolved.stat()
+        key = (str(resolved), int(stat.st_size), int(stat.st_mtime_ns))
+        is_stylesheet = resolved.suffix.lower() in {".css", ".scss", ".sass", ".less"}
+        with _asset_digest_lock:
+            cached = None if is_stylesheet else _asset_digest_cache.get(key)
+        if cached is None:
+            content = resolved.read_bytes()
+            digest = hashlib.sha256(content).hexdigest()
+            if is_stylesheet:
+                children = [
+                    _fingerprint_local_asset(child, seen)
+                    for ref in _asset_references(content.decode("utf-8", errors="replace"))
+                    if (child := _local_asset_path(ref, base=resolved.parent)) is not None
+                ]
+                digest = hashlib.sha256(
+                    (digest + "\0" + "\0".join(sorted(children))).encode("utf-8")
+                ).hexdigest()
+            cached = f"sha256:{digest}"
+            if not is_stylesheet:
+                with _asset_digest_lock:
+                    _asset_digest_cache[key] = cached
+        return cached
+    except OSError as error:
+        # The sentinel itself is identity-bearing, so a later readable asset
+        # creates a different key rather than reusing an uncertain render.
+        return "unreadable:" + hashlib.sha256(
+            f"{path}\0{type(error).__name__}".encode("utf-8")
+        ).hexdigest()
+    finally:
+        if resolved is not None:
+            seen.discard(resolved)
+
+
+def _asset_fingerprint(html: str) -> str:
+    """Fingerprint referenced local font/image/CSS assets plus inline asset URLs."""
+
+    components: list[str] = []
+    for reference in _asset_references(html):
+        if reference.lower().startswith("data:"):
+            components.append("data:" + hashlib.sha256(reference.encode("utf-8")).hexdigest())
+            continue
+        path = _local_asset_path(reference)
+        if path is not None:
+            components.append(_fingerprint_local_asset(path, set()))
+        else:
+            # This covers relative/blocked remote references deterministically;
+            # their literal URL is already part of HTML, but retaining it makes
+            # the asset boundary explicit in identity receipts.
+            components.append("reference:" + hashlib.sha256(reference.encode("utf-8")).hexdigest())
+    return "sha256:" + hashlib.sha256("\0".join(sorted(components)).encode("utf-8")).hexdigest()
+
+
+def _scene_digest(html: str, source_digest: str) -> str:
+    match = _SCENE_DIGEST_PATTERN.search(html)
+    return match.group(1) if match else source_digest
+
+
+def _render_cache_identity(html: str) -> _RenderCacheIdentity:
+    source_digest = "sha256:" + hashlib.sha256(html.encode("utf-8")).hexdigest()
+    scene_digest = _scene_digest(html, source_digest)
+    chrome_digest = chrome_runtime_digest()
+    asset_digest = _asset_fingerprint(html)
+    payload = "\0".join(
+        (CACHE_IDENTITY_VERSION, source_digest, scene_digest, chrome_digest, asset_digest, MEASUREMENT_CACHE_VERSION)
+    )
+    return _RenderCacheIdentity(
+        source_digest=source_digest,
+        scene_digest=scene_digest,
+        chrome_runtime_digest=chrome_digest,
+        asset_fingerprint=asset_digest,
+        measurement_version=MEASUREMENT_CACHE_VERSION,
+        digest="sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest(),
+    )
 
 def _kill_process_tree(proc: "subprocess.Popen") -> None:
     """Kill a chrome process AND its renderer/gpu children. `subprocess` timeout only
@@ -154,7 +301,11 @@ def _metric_evidence_cache_key(
 
     source_digest, render_digest = _source_render_digests(html)
     return _metric_evidence_cache_key_from_digests(
-        source_digest, render_digest, qid=qid, metric=metric
+        source_digest,
+        render_digest,
+        cache_identity=_render_cache_identity(html).digest,
+        qid=qid,
+        metric=metric,
     )
 
 
@@ -162,13 +313,20 @@ def _metric_evidence_cache_key_from_digests(
     source_digest: str,
     render_digest: str,
     *,
+    cache_identity: str = "identity-not-supplied",
     qid: str = "*",
     metric: str = "*",
 ) -> str:
+    # Evidence atoms are renderer-context specific.  A QID measurement from a
+    # different Chrome/asset/measurement revision must not be treated as the
+    # same observation merely because the HTML digest matches.
     payload = "\0".join(
         (
+            CACHE_IDENTITY_VERSION,
+            MEASUREMENT_CACHE_VERSION,
             DOM_METRICS_VERSION,
             OCCLUSION_SENSOR_VERSION,
+            cache_identity,
             qid,
             metric,
             source_digest,
@@ -178,8 +336,8 @@ def _metric_evidence_cache_key_from_digests(
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _metrics_cache_key(html: str) -> str:
-    return _metric_evidence_cache_key(html)
+def _metrics_cache_key(html: str) -> tuple[str, str, str]:
+    return _cache_key_for("metrics", html)
 
 
 def _instrument_authored_html(
@@ -192,7 +350,11 @@ def _instrument_authored_html(
     enriched = ensure_authored_qids(html)
     source_digest = "sha256:" + hashlib.sha256(html.encode("utf-8")).hexdigest()
     render_digest = "sha256:" + hashlib.sha256(enriched.encode("utf-8")).hexdigest()
-    key = _metric_evidence_cache_key_from_digests(source_digest, render_digest)
+    key = _metric_evidence_cache_key_from_digests(
+        source_digest,
+        render_digest,
+        cache_identity=_render_cache_identity(html).digest,
+    )
     if _METRICS_ELEMENT_ID in enriched:
         if issue_capability:
             _register_internal_render_source(enriched)
@@ -1023,13 +1185,11 @@ class RenderCapture:
         return result
 
 
-def _capture_cache_key(html: str, timeout: int) -> str:
+def _capture_cache_key(html: str, timeout: int) -> tuple[str, str, str]:
     # Timeout only bounds work; it does not alter a successful deterministic
     # render.  Excluding it lets retries with a larger budget reuse the same
     # atomic capture instead of relaunching Chromium.
-    return hashlib.sha256(
-        f"{RENDER_CACHE_VERSION}\0{DOM_METRICS_VERSION}\0{OCCLUSION_SENSOR_VERSION}\0{html}".encode("utf-8")
-    ).hexdigest()
+    return _cache_key_for("capture", html)
 
 
 def _peek_cached_capture(html: str, timeout: int) -> RenderCapture | None:
@@ -1091,6 +1251,11 @@ _runtime_counters: dict[str, int] = {
     "capture_cache_evictions": 0,
     "cache_resets": 0,
     "cache_invalidated_entries": 0,
+    "cache_identity_invalidations": 0,
+    "cache_invalidations_chrome_runtime": 0,
+    "cache_invalidations_assets": 0,
+    "cache_invalidations_measurement": 0,
+    "cache_invalidations_scene": 0,
     "chrome_process_launches": 0,
     "session_reuse_hits": 0,
     "session_restarts": 0,
@@ -1144,10 +1309,12 @@ def get_render_runtime_snapshot() -> dict[str, Any]:
     """
 
     return {
-        "schemaVersion": "authored-render-runtime/v1",
+        "schemaVersion": "authored-render-runtime/v2",
         "chromeRuntimeDigest": chrome_runtime_digest(),
         "cacheIdentity": {
             "render": RENDER_CACHE_VERSION,
+            "identity": CACHE_IDENTITY_VERSION,
+            "measurement": MEASUREMENT_CACHE_VERSION,
             "domMetrics": DOM_METRICS_VERSION,
             "occlusionSensor": OCCLUSION_SENSOR_VERSION,
             "chromeReuseEnabled": CHROME_REUSE_ENABLED,
@@ -1623,9 +1790,9 @@ async def render_html_to_png(html: str, timeout: int = 60) -> bytes:
         _count_runtime("render_cache_misses")
         return await _render_html_to_png_uncached(html, timeout=timeout)
 
-    key = hashlib.sha256(
-        f"{RENDER_CACHE_VERSION}\0{timeout}\0{html}".encode("utf-8")
-    ).hexdigest()
+    # Timeout bounds work only; the digest-safe identity deliberately excludes
+    # it so a later retry can reuse pixels and measurements from the same Scene.
+    key = _cache_key_for("render", html)
     cached = _render_cache.get(key)
     if cached is not None:
         _count_runtime("render_cache_hits")
@@ -1692,16 +1859,18 @@ RENDER_CACHE_SIZE = _env_nonnegative_int("AUTHORED_RENDER_CACHE_SIZE", 32)
 # This changes whenever rendering semantics change. In particular, v3 prevents
 # Reuse of PNGs created under the former minimum-font rendering policy is unsafe.
 RENDER_CACHE_VERSION = "authored-render-v8-owned-paint-cdp"
-_render_cache: "OrderedDict[str, bytes]" = OrderedDict()
-_render_inflight: Dict[str, "asyncio.Task[bytes]"] = {}
+_render_cache: "OrderedDict[tuple[str, str, str], bytes]" = OrderedDict()
+_render_inflight: Dict[tuple[str, str, str], "asyncio.Task[bytes]"] = {}
 CAPTURE_CACHE_SIZE = max(0, min(RENDER_CACHE_SIZE, 8))
-_capture_cache: "OrderedDict[str, RenderCapture]" = OrderedDict()
+_capture_cache: "OrderedDict[tuple[str, str, str], RenderCapture]" = OrderedDict()
 OCCLUSION_PROBE_CONTRACT_VERSION = "owned-paint-v3"
 OCCLUSION_SENSOR_VERSION = "owned-paint-v5-inset-retry"
 DOM_METRICS_VERSION = "authored-dom-metrics-v15-source-block-visibility"
 DOM_METRICS_CACHE_SIZE = max(1, RENDER_CACHE_SIZE)
-_browser_metrics_cache: "OrderedDict[str, Mapping[str, Any]]" = OrderedDict()
-_browser_metrics_inflight: Dict[str, "asyncio.Task[Mapping[str, Any] | None]"] = {}
+_browser_metrics_cache: "OrderedDict[tuple[str, str, str], Mapping[str, Any]]" = OrderedDict()
+_browser_metrics_inflight: Dict[tuple[str, str, str], "asyncio.Task[Mapping[str, Any] | None]"] = {}
+_observed_cache_identities: "OrderedDict[str, _RenderCacheIdentity]" = OrderedDict()
+_CACHE_IDENTITY_OBSERVATION_LIMIT = 256
 RENDER_CONCURRENCY = _env_int("AUTHORED_RENDER_CONCURRENCY", 4)
 CHROME_REUSE_ENABLED = os.getenv("AUTHORED_CHROME_REUSE", "1").strip().lower() not in {
     "0",
@@ -1710,6 +1879,47 @@ CHROME_REUSE_ENABLED = os.getenv("AUTHORED_CHROME_REUSE", "1").strip().lower() n
     "no",
 }
 _render_sem: Optional[asyncio.Semaphore] = None
+
+
+def _invalidate_stale_source_entries(source_digest: str, current_digest: str) -> int:
+    """Remove resident payloads for one HTML source after dependency drift."""
+
+    removed = 0
+    for cache in (_render_cache, _browser_metrics_cache, _capture_cache):
+        stale = [
+            key for key in cache
+            if key[0] == source_digest and key[1] != current_digest
+        ]
+        for key in stale:
+            cache.pop(key, None)
+            removed += 1
+    return removed
+
+
+def _observe_cache_identity(identity: _RenderCacheIdentity) -> None:
+    previous = _observed_cache_identities.get(identity.source_digest)
+    if previous is not None and previous.digest != identity.digest:
+        removed = _invalidate_stale_source_entries(identity.source_digest, identity.digest)
+        _count_runtime("cache_identity_invalidations")
+        _count_runtime("cache_invalidated_entries", removed)
+        if previous.chrome_runtime_digest != identity.chrome_runtime_digest:
+            _count_runtime("cache_invalidations_chrome_runtime")
+        if previous.asset_fingerprint != identity.asset_fingerprint:
+            _count_runtime("cache_invalidations_assets")
+        if previous.measurement_version != identity.measurement_version:
+            _count_runtime("cache_invalidations_measurement")
+        if previous.scene_digest != identity.scene_digest:
+            _count_runtime("cache_invalidations_scene")
+    _observed_cache_identities[identity.source_digest] = identity
+    _observed_cache_identities.move_to_end(identity.source_digest)
+    while len(_observed_cache_identities) > _CACHE_IDENTITY_OBSERVATION_LIMIT:
+        _observed_cache_identities.popitem(last=False)
+
+
+def _cache_key_for(kind: str, html: str) -> tuple[str, str, str]:
+    identity = _render_cache_identity(html)
+    _observe_cache_identity(identity)
+    return identity.source_digest, identity.digest, kind
 
 
 def reset_render_runtime(
@@ -1738,6 +1948,7 @@ def reset_render_runtime(
         _render_cache.clear()
         _browser_metrics_cache.clear()
         _capture_cache.clear()
+        _observed_cache_identities.clear()
         _count_runtime("cache_resets")
         _count_runtime("cache_invalidated_entries", invalidated_entries)
         with _internal_capability_lock:

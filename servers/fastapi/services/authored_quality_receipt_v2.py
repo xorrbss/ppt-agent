@@ -113,6 +113,8 @@ def _domain(evidence: object, key: str) -> object:
         "sourceReadback": ("sourceReadback", "source_readback", "sourceVerbatim", "source_verbatim", "sourceReadbackStatus", "source_readback_status"),
         "visualReview": ("visualReview", "visual_review", "visualReviewStatus", "visual_review_status"),
         "nativeCoverage": ("nativeCoverage", "native_coverage", "nativeCoverageStatus", "native_coverage_status"),
+        "fontPreflight": ("fontPreflight", "font_preflight", "fontPreflightStatus", "font_preflight_status"),
+        "powerpointQa": ("powerpointQa", "powerpointQA", "powerpoint_qa"),
     }.get(key, (key, f"{key}Status", f"{key}_status"))
     return _read(evidence, *aliases, default=None)
 
@@ -146,6 +148,7 @@ class ReleaseQualityPolicy:
     require_visual_review: bool = False
     require_performance: bool = False
     require_native_coverage: bool = False
+    require_font_preflight: bool = False
     minimum_native_coverage_ratio: float = 0.0
 
 
@@ -183,6 +186,10 @@ def release_quality_policy(profile: object = None) -> ReleaseQualityPolicy:
         "requirePerformance", "require_performance"
     )
     require_native = release_named or flag("requireNativeCoverage", "require_native_coverage")
+    # The generation receipt is sealed before OOXML exists. Keep package/font
+    # embedding evidence in the export QA boundary; callers may still opt in a
+    # pre-export browser/glyph domain explicitly.
+    require_font = flag("requireFontPreflight", "require_font_preflight")
     raw_ratio = values.get(
         "minimumNativeCoverageRatio",
         values.get("minimum_native_coverage_ratio", 0.70 if require_native else 0.0),
@@ -200,6 +207,7 @@ def release_quality_policy(profile: object = None) -> ReleaseQualityPolicy:
         require_visual_review=require_visual,
         require_performance=require_performance,
         require_native_coverage=require_native,
+        require_font_preflight=require_font,
         minimum_native_coverage_ratio=minimum_ratio,
     )
 
@@ -244,6 +252,7 @@ class UnifiedGateEvaluation:
     visual_review_status: str = "pending"
     performance_status: str = "pending"
     native_coverage_status: str = "pending"
+    font_preflight_status: str = "pending"
     native_coverage_ratio: float | None = None
     native_coverage_denominator: int = 0
     native_element_count: int = 0
@@ -261,6 +270,7 @@ class UnifiedGateEvaluation:
             "visualReviewStatus": self.visual_review_status,
             "performanceStatus": self.performance_status,
             "nativeCoverageStatus": self.native_coverage_status,
+            "fontPreflightStatus": self.font_preflight_status,
             "nativeCoverageRatio": self.native_coverage_ratio,
             "nativeCoverageDenominator": self.native_coverage_denominator,
             "nativeElementCount": self.native_element_count,
@@ -378,6 +388,61 @@ def _evaluate_native_coverage(
     return status, ratio, int(denominator), int(native_count), tuple(fallbacks), tuple(blockers)
 
 
+def _evaluate_font_preflight(
+    evidence: object,
+    *,
+    required: bool,
+) -> tuple[str, tuple[str, ...]]:
+    payload = _mapping(_domain(evidence, "fontPreflight"))
+    if payload is None:
+        powerpoint = _mapping(_domain(evidence, "powerpointQa"))
+        if powerpoint is not None:
+            payload = _mapping(_read(powerpoint, "fontPreflight", "font_preflight", default=None))
+    if payload is None:
+        return (
+            "blocked" if required else "not_assessed",
+            ("fontPreflight.evidence_missing",) if required else (),
+        )
+    status = _status(_read(payload, "status", default=None))
+    if not required and status in {"pending", "unknown", "not_assessed", "not_applicable"}:
+        return "not_assessed", ()
+    blockers: list[str] = []
+    cjk_runs = _read(payload, "cjkTextRuns", "cjk_text_runs", default=None)
+    digest = str(
+        _read(payload, "ooxmlReadbackSha256", "ooxml_readback_sha256", default="") or ""
+    ).lower()
+    if isinstance(cjk_runs, bool) or not isinstance(cjk_runs, int) or cjk_runs < 0:
+        _append(blockers, "fontPreflight.cjk_run_count_invalid")
+        cjk_runs = 0
+    if len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest):
+        _append(blockers, "fontPreflight.ooxml_digest_invalid")
+    if cjk_runs > 0:
+        typefaces = _read(
+            payload,
+            "declaredEastAsianTypefaces",
+            "declared_east_asian_typefaces",
+            default=None,
+        )
+        if not isinstance(typefaces, Sequence) or isinstance(typefaces, (str, bytes)) or not typefaces:
+            _append(blockers, "fontPreflight.east_asian_typeface_missing")
+        for camel, snake, blocker in (
+            ("missingEastAsianTypefaceRuns", "missing_east_asian_typeface_runs", "fontPreflight.east_asian_typeface_missing"),
+            ("replacementGlyphs", "replacement_glyphs", "fontPreflight.glyph_readback_failed"),
+        ):
+            value = _read(payload, camel, snake, default=None)
+            if isinstance(value, bool) or not isinstance(value, int) or value != 0:
+                _append(blockers, blocker)
+        embedded = _read(payload, "embeddedFontFiles", "embedded_font_files", default=None)
+        verified = _read(payload, "embeddingVerified", "embedding_verified", default=None)
+        if isinstance(embedded, bool) or not isinstance(embedded, int) or embedded <= 0 or verified is not True:
+            _append(blockers, "fontPreflight.embedding_failed")
+    if status in {"failed", "blocked"}:
+        _append(blockers, "fontPreflight.failed")
+    elif required and status not in {"passed", "not_applicable", "not_required"}:
+        _append(blockers, "fontPreflight.unverified")
+    return ("blocked" if blockers else ("not_applicable" if cjk_runs == 0 else "passed"), tuple(blockers))
+
+
 def evaluate_unified_gate(
     evidence: object,
     *,
@@ -470,6 +535,12 @@ def evaluate_unified_gate(
     )
     for blocker in native_blockers:
         _append(blockers, blocker)
+    font_status, font_blockers = _evaluate_font_preflight(
+        evidence,
+        required=policy.require_font_preflight,
+    )
+    for blocker in font_blockers:
+        _append(blockers, blocker)
 
     publication_value = _domain(evidence, "publication")
     raw_publication = _read(
@@ -493,6 +564,7 @@ def evaluate_unified_gate(
         visual_review_status=statuses["visualReview"],
         performance_status=statuses["performance"],
         native_coverage_status=native_status,
+        font_preflight_status=font_status,
         native_coverage_ratio=native_ratio,
         native_coverage_denominator=native_denominator,
         native_element_count=native_count,
@@ -634,6 +706,7 @@ class QualityReceiptV2:
     publication_status: str
     quality_status: str = "blocked"
     native_coverage_status: str = "not_assessed"
+    font_preflight_status: str = "not_assessed"
     native_coverage_ratio: float | None = None
     native_coverage_denominator: int = 0
     native_element_count: int = 0
@@ -646,6 +719,7 @@ class QualityReceiptV2:
     require_performance: bool = False
     require_source_readback: bool = False
     require_native_coverage: bool = False
+    require_font_preflight: bool = False
     minimum_native_coverage_ratio: float = 0.0
 
     @property
@@ -657,6 +731,7 @@ class QualityReceiptV2:
             "visualReview": self.visual_review_status,
             "performance": self.performance_status,
             "nativeCoverage": self.native_coverage_status,
+            "fontPreflight": self.font_preflight_status,
             "quality": self.quality_status,
             "publication": self.publication_status,
         }
@@ -674,6 +749,7 @@ class QualityReceiptV2:
             "visualReviewStatus": self.visual_review_status,
             "performanceStatus": self.performance_status,
             "nativeCoverageStatus": self.native_coverage_status,
+            "fontPreflightStatus": self.font_preflight_status,
             "nativeCoverageRatio": self.native_coverage_ratio,
             "nativeCoverageDenominator": self.native_coverage_denominator,
             "nativeElementCount": self.native_element_count,
@@ -691,6 +767,7 @@ class QualityReceiptV2:
             "requireVisualReview": self.require_visual_review,
             "requirePerformance": self.require_performance,
             "requireNativeCoverage": self.require_native_coverage,
+            "requireFontPreflight": self.require_font_preflight,
             "minimumNativeCoverageRatio": self.minimum_native_coverage_ratio,
         }
 
@@ -702,6 +779,48 @@ class QualityReceiptV2:
 
 def _receipt_digest(receipt: QualityReceiptV2) -> str:
     """Recompute the canonical digest used when a receipt was sealed."""
+
+    payload = {
+        "schemaVersion": receipt.schema_version,
+        "attemptId": receipt.attempt_id,
+        "revision": receipt.revision,
+        "ledgerDigest": receipt.ledger_digest,
+        "deckHtmlDigest": receipt.deck_html_digest,
+        "passed": receipt.gate_passed,
+        "blockers": list(receipt.blockers),
+        "safetyStatus": receipt.safety_status,
+        "capacityStatus": receipt.capacity_status,
+        "sourceReadbackStatus": receipt.source_readback_status,
+        "visualReviewStatus": receipt.visual_review_status,
+        "performanceStatus": receipt.performance_status,
+        "nativeCoverageStatus": receipt.native_coverage_status,
+        "fontPreflightStatus": receipt.font_preflight_status,
+        "nativeCoverageRatio": receipt.native_coverage_ratio,
+        "nativeCoverageDenominator": receipt.native_coverage_denominator,
+        "nativeElementCount": receipt.native_element_count,
+        "rasterFallbacks": [list(item) for item in receipt.raster_fallbacks],
+        "qualityStatus": receipt.quality_status,
+        "publicationStatus": receipt.publication_status,
+        "releaseProfile": receipt.release_profile,
+        "requireSourceReadback": receipt.require_source_readback,
+        "requireVisualReview": receipt.require_visual_review,
+        "requirePerformance": receipt.require_performance,
+        "requireNativeCoverage": receipt.require_native_coverage,
+        "requireFontPreflight": receipt.require_font_preflight,
+        "minimumNativeCoverageRatio": receipt.minimum_native_coverage_ratio,
+    }
+    return "sha256:" + hashlib.sha256(
+        json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def _receipt_digest_pre_font(receipt: QualityReceiptV2) -> str:
+    """Digest used before CJK/OOXML font preflight became a release domain."""
 
     payload = {
         "schemaVersion": receipt.schema_version,
@@ -974,6 +1093,7 @@ class QualityReceiptLedger:
                     publication_status=str(item.get("publicationStatus", "pending")),
                     quality_status=str(item.get("qualityStatus", "passed" if item.get("gatePassed") is True else "blocked")),
                     native_coverage_status=str(item.get("nativeCoverageStatus", "not_assessed")),
+                    font_preflight_status=str(item.get("fontPreflightStatus", "not_assessed")),
                     native_coverage_ratio=(
                         float(item["nativeCoverageRatio"])
                         if isinstance(item.get("nativeCoverageRatio"), (int, float))
@@ -991,12 +1111,14 @@ class QualityReceiptLedger:
                     require_visual_review=_coerce_bool(profile_visual, "requireVisualReview"),
                     require_performance=_coerce_bool(profile_performance, "requirePerformance"),
                     require_native_coverage=_coerce_bool(item.get("requireNativeCoverage", False), "requireNativeCoverage"),
+                    require_font_preflight=_coerce_bool(item.get("requireFontPreflight", False), "requireFontPreflight"),
                     minimum_native_coverage_ratio=float(item.get("minimumNativeCoverageRatio", 0.0)),
                 )
                 expected_digest = _receipt_digest(receipt)
                 legacy_digest = False
                 if receipt.receipt_digest != expected_digest:
                     if receipt.receipt_digest not in {
+                        _receipt_digest_pre_font(receipt),
                         _receipt_digest_policy_v1(receipt),
                         _receipt_digest_legacy(receipt),
                     }:
@@ -1103,6 +1225,7 @@ class QualityReceiptLedger:
                     or existing.require_visual_review != effective_visual
                     or existing.require_performance != effective_performance
                     or existing.require_native_coverage != policy.require_native_coverage
+                    or existing.require_font_preflight != policy.require_font_preflight
                     or existing.minimum_native_coverage_ratio
                     != policy.minimum_native_coverage_ratio
                 ):
@@ -1126,6 +1249,7 @@ class QualityReceiptLedger:
                 visual_review_status=evaluation.visual_review_status,
                 performance_status=evaluation.performance_status,
                 native_coverage_status=evaluation.native_coverage_status,
+                font_preflight_status=evaluation.font_preflight_status,
                 native_coverage_ratio=evaluation.native_coverage_ratio,
                 native_coverage_denominator=evaluation.native_coverage_denominator,
                 native_element_count=evaluation.native_element_count,
@@ -1139,6 +1263,7 @@ class QualityReceiptLedger:
                 require_visual_review=effective_visual,
                 require_performance=effective_performance,
                 require_native_coverage=policy.require_native_coverage,
+                require_font_preflight=policy.require_font_preflight,
                 minimum_native_coverage_ratio=policy.minimum_native_coverage_ratio,
             )
             receipt = replace(receipt, receipt_digest=_receipt_digest(receipt))

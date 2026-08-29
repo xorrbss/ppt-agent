@@ -8,9 +8,12 @@ import {
 } from "./index.ts";
 import {
   preflightNativeTypography,
+  flattenPreparedNativeElements,
+  nestPreparedNativeGroups,
   planLayerSafeNativeElements,
   preparedNativeElementNonVisualIdCount,
   prepareNativeElements,
+  prepareStructuralNativeGroups,
   serializePreparedNativeElement,
   type LayerSafetyPlan,
   type PowerPointTypefaceSerializationOptions,
@@ -178,6 +181,29 @@ function sameIds(
     elements.length === ids.length &&
     elements.every((element, index) => element.source.id === ids[index])
   );
+}
+
+function backplatePromotedElementIds(
+  elements: readonly PreparedNativeElement[],
+): string[] {
+  // Structural groups are paintless semantic owners. Their native children are
+  // suppressed from the residual raster, while the group itself has no pixels
+  // to remove and is intentionally absent from the extractor's promotable set.
+  return elements
+    .filter((element) => element.kind !== "group")
+    .map((element) => element.source.id);
+}
+
+function withAppliedStructuralGroups(
+  elements: readonly PreparedNativeElement[],
+  appliedElementIds: readonly string[],
+): Set<string> {
+  return new Set([
+    ...appliedElementIds,
+    ...elements
+      .filter((element) => element.kind === "group")
+      .map((element) => element.source.id),
+  ]);
 }
 
 function withAdmittedSemanticChartEligibility(
@@ -361,7 +387,7 @@ export async function prepareSlideLayer(
   const declaredTablePreparation = semanticContext && declaredCapture
     ? prepareDeclaredNativeTables(semanticContext.declaredElements, declaredCapture.observation.elements)
     : { tables: [], rejections: new Map<string, "unsupported-native-table" | "unsupported-table-css" | "table-observation-mismatch">() };
-  const prepared = preSerializePreparedElements(
+  const preparedLeaves = preSerializePreparedElements(
     (
       await prepareNativeElements(nativeLayoutElements, {
         includeRasterText: true,
@@ -375,6 +401,25 @@ export async function prepareSlideLayer(
     ),
     { embeddedTypefaceFamilies, embeddedTypefaceFaces }
   );
+  const prepared = preparedLeaves.concat(
+    prepareStructuralNativeGroups(
+      nativeLayoutElements,
+      preparedLeaves,
+      new Set(
+        semanticContext?.declaredElements
+          .filter(
+            (element) =>
+              element.kind === "group" ||
+              (element.kind === "shape" && (element.childIds?.length ?? 0) > 0),
+          )
+          .map((element) => element.elementId) ?? [],
+      ),
+    )
+  );
+  const closeStructuralGroups = (
+    candidates: readonly PreparedNativeElement[]
+  ): PreparedNativeElement[] =>
+    flattenPreparedNativeElements(nestPreparedNativeGroups(candidates));
   let layerSafetyPlan = planLayerSafeNativeElements(
     nativeLayoutElements,
     prepared,
@@ -389,7 +434,7 @@ export async function prepareSlideLayer(
       retainedChildPaint: "slide-root",
     }
   );
-  let selected = [...layerSafetyPlan.selected];
+  let selected = closeStructuralGroups(layerSafetyPlan.selected);
   if (!selected.length) {
     return {
       layer: null,
@@ -418,10 +463,13 @@ export async function prepareSlideLayer(
   let backplate = await renderAuthoredBackplate(
     collectedHtml,
     withAdmittedSemanticChartEligibility(contract, selected, semanticContext),
-    selected.map((element) => element.source.id),
+    backplatePromotedElementIds(selected),
     extractionOptions
   );
-  const applied = new Set(backplate.appliedPromotedElementIds);
+  const applied = withAppliedStructuralGroups(
+    selected,
+    backplate.appliedPromotedElementIds,
+  );
   const finalLayerSafetyPlan = planLayerSafeNativeElements(
     nativeLayoutElements,
     prepared,
@@ -432,7 +480,7 @@ export async function prepareSlideLayer(
       retainedChildPaint: "slide-root",
     }
   );
-  const finalSelected = [...finalLayerSafetyPlan.selected];
+  const finalSelected = closeStructuralGroups(finalLayerSafetyPlan.selected);
   layerSafetyPlan = finalLayerSafetyPlan;
   if (!finalSelected.length) {
     return {
@@ -461,15 +509,21 @@ export async function prepareSlideLayer(
     };
   }
 
-  if (!sameIds(finalSelected, backplate.appliedPromotedElementIds)) {
+  if (!sameIds(
+    finalSelected.filter((element) => element.kind !== "group"),
+    backplate.appliedPromotedElementIds,
+  )) {
     selected = finalSelected;
     backplate = await renderAuthoredBackplate(
       collectedHtml,
       withAdmittedSemanticChartEligibility(contract, selected, semanticContext),
-      selected.map((element) => element.source.id),
+      backplatePromotedElementIds(selected),
       extractionOptions
     );
-    if (!sameIds(selected, backplate.appliedPromotedElementIds)) {
+    if (!sameIds(
+      selected.filter((element) => element.kind !== "group"),
+      backplate.appliedPromotedElementIds,
+    )) {
       return {
         layer: null,
         quality: imageFallbackSlide(slideNumber, "backplate-identity-mismatch"),
@@ -494,7 +548,7 @@ export async function prepareSlideLayer(
       (element) => !isCanvasBackgroundShape(element)
     );
     if (withoutCanvasBackground.length !== selected.length) {
-      selected = withoutCanvasBackground;
+      selected = closeStructuralGroups(withoutCanvasBackground);
       if (!selected.length) {
         return {
           layer: null,
@@ -509,10 +563,13 @@ export async function prepareSlideLayer(
       backplate = await renderAuthoredBackplate(
         collectedHtml,
         withAdmittedSemanticChartEligibility(contract, selected, semanticContext),
-        selected.map((element) => element.source.id),
+        backplatePromotedElementIds(selected),
         extractionOptions
       );
-      if (!sameIds(selected, backplate.appliedPromotedElementIds)) {
+      if (!sameIds(
+        selected.filter((element) => element.kind !== "group"),
+        backplate.appliedPromotedElementIds,
+      )) {
         return {
           layer: null,
           quality: imageFallbackSlide(slideNumber, "backplate-identity-mismatch"),
@@ -529,23 +586,20 @@ export async function prepareSlideLayer(
     selected.map((element) => element.source.id)
   );
   const selectedKindById = new Map(
-    selected.map((element) => [element.source.id, element.kind] as const),
+    selected.map((element) => [
+      element.source.id,
+      element.kind === "group" ? "shape" as const : element.kind,
+    ] as const),
   );
-  const selectedSemanticIslandIds = new Set(selected.filter((element) => element.kind === "chart" || element.kind === "table").map((element) => element.source.id));
   const zBandDemotions = new Set(
     layerSafetyPlan.demotions.map((demotion) => demotion.elementId)
   );
   const fallbackElements = nativeLayoutElements
-    .filter(
-      (element) =>
-        !selectedIds.has(element.id) ||
-        (element.classification.mode === "raster" &&
-          !selectedSemanticIslandIds.has(element.id)) ||
-        ("shape" in element &&
-          Boolean(
-            element.shape.gradient || element.shape.shadowLayers?.length
-          ))
-    )
+    // Fallback evidence is semantic-owner scoped. An admitted element may
+    // retain audited paint fragments on the residual backplate, but it cannot
+    // also be counted as a raster owner without inflating the denominator and
+    // contradicting its native QID disposition.
+    .filter((element) => !selectedIds.has(element.id))
     .map((element) =>
       fallbackElementForContractElement(
         element,
@@ -560,6 +614,9 @@ export async function prepareSlideLayer(
         ]
       )
     );
+  const fallbackKindById = new Map(
+    fallbackElements.map((element) => [element.elementId, element.candidateKind] as const),
+  );
   const semanticReceipts = semanticContext && observationReceipt
     ? (() => {
         const fallbackById = new Map(
@@ -631,7 +688,7 @@ export async function prepareSlideLayer(
     layer: {
       slideNumber,
       backplatePng: backplate.backplatePng,
-      elements: selected,
+      elements: nestPreparedNativeGroups(selected),
       ...(semanticContext
         ? {
             // The residual raster owns only demoted semantic owners. Admitted
@@ -653,21 +710,25 @@ export async function prepareSlideLayer(
       imageFallback: selected.length === 0,
       nativeTextElements: selected.filter((element) => element.kind === "text")
         .length,
-      nativeShapeElements: selected.filter((element) => element.kind === "shape")
-        .length,
+      nativeShapeElements: selected.filter(
+        (element) => element.kind === "shape" || element.kind === "group",
+      ).length,
       nativeChartElements: selected.filter((element) => element.kind === "chart")
         .length,
       nativeTableElements: selected.filter((element) => element.kind === "table").length,
-      nativeGroupElements: 0,
+      nativeGroupElements: selected.filter((element) => element.kind === "group")
+        .length,
       nativeImageElements: selected.filter((element) => element.kind === "image")
         .length,
       rasterFallbackElements: fallbackElements.length,
       logicalCoverage: {
         nativeText: selected.filter((element) => element.kind === "text").length,
         nativeImage: selected.filter((element) => element.kind === "image").length,
-        nativeShape: selected.filter((element) => element.kind === "shape").length,
+        nativeShape: selected.filter(
+          (element) => element.kind === "shape" || element.kind === "group",
+        ).length,
         nativeChart: selected.filter((element) => element.kind === "chart").length,
-        nativeGroup: 0,
+        nativeGroup: selected.filter((element) => element.kind === "group").length,
         rasterRemaining: fallbackElements.length,
       },
       ooxmlReadback: {
@@ -693,13 +754,20 @@ export async function prepareSlideLayer(
         // text/image/shape object; OOXML ownership must record that emitted
         // kind rather than coercing every complex island to shape. Raster
         // carriers remain non-visual shapes by contract.
+        const fallbackKind = fallbackKindById.get(element.elementId);
         const kind = native
           ? selectedKindById.get(element.elementId)!
-          : element.kind === "connector" ||
-              element.kind === "group" ||
-              element.kind === "complexIsland"
-            ? "shape" as const
-            : element.kind;
+          : fallbackKind === "text" ||
+              fallbackKind === "image" ||
+              fallbackKind === "shape" ||
+              fallbackKind === "table" ||
+              fallbackKind === "chart"
+            ? fallbackKind
+            : element.kind === "connector" ||
+                element.kind === "group" ||
+                element.kind === "complexIsland"
+              ? "shape" as const
+              : element.kind;
         return { elementId: element.elementId, kind, logical: native ? "native" as const : "raster" as const, ooxml: "not-run" as const, com: "not-run" as const };
       }),
       geometryContract: (() => {
@@ -710,7 +778,7 @@ export async function prepareSlideLayer(
           const bounds = preparedNativeElementExpectedReadbackBounds(element);
           return {
             elementId: element.source.id,
-            kind: element.kind,
+            kind: element.kind === "group" ? "shape" as const : element.kind,
             x: bounds.x,
             y: bounds.y,
             width: bounds.width,

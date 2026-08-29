@@ -1295,16 +1295,12 @@ test("outlined circular text containers retain editable outline, border, and num
   assert.match(underlay, /<a:off x="952500" y="952500"\/><a:ext cx="409575" cy="409575"\/>/);
   assert.match(underlay, /<a:srgbClr val="182235">/);
   assert.match(underlay, /<a:srgbClr val="F4F7F4">/);
-  assert.match(overlay, /Presenton raster visual fragment 5/);
-  assert.doesNotMatch(overlay, /Presenton hybrid raster step-node/);
+  assert.match(overlay, /Presenton hybrid raster step-node/);
 
   const qidOwners = [...`${underlay}${overlay}`.matchAll(/name="([^"]+)"/g)]
     .map((match) => match[1])
-    .filter((name) =>
-      name.startsWith("Presenton hybrid ") &&
-      (name.endsWith(" step-node") || name.endsWith(" step-node-container"))
-    );
-  assert.deepEqual(qidOwners, ["Presenton hybrid shape step-node-container"]);
+    .filter((name) => name.endsWith(" step-node"));
+  assert.deepEqual(qidOwners, ["Presenton hybrid raster step-node"]);
 });
 
 test("backplate decoration keeps a transparent outer box for multiline fit", async () => {

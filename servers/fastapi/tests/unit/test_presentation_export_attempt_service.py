@@ -790,6 +790,17 @@ def test_complete_direct_hybrid_accepts_exact_bounded_cjk_coverage_contract(
                     "nativeTable": 0,
                     "nativeChart": 0,
                     "nativeImageCrop": 0,
+                    "fontPreflight": {
+                        "status": "passed",
+                        "cjkTextRuns": 1,
+                        "declaredEastAsianTypefaces": ["Noto Sans KR"],
+                        "missingEastAsianTypefaceRuns": 0,
+                        "replacementGlyphs": 0,
+                        "embeddedFontFiles": 1,
+                        "embeddingRequired": True,
+                        "embeddingVerified": True,
+                        "ooxmlReadbackSha256": "a" * 64,
+                    },
                 }
 
             monkeypatch.setattr(

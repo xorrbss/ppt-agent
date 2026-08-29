@@ -15,6 +15,8 @@ import threading
 import time
 from typing import Any
 import uuid
+import xml.etree.ElementTree as ET
+import zipfile
 
 from services.presentation_export_capabilities import PresentationExportContractError
 from utils.get_env import get_app_data_directory_env
@@ -153,6 +155,14 @@ def _variant_values(value: object) -> list[Any]:
     ]
 
 
+def _font_name(font: object, *, east_asian: bool = False) -> str:
+    try:
+        value = font.NameFarEast if east_asian else font.Name
+        return str(value or "")
+    except Exception:
+        return ""
+
+
 def _chart_snapshot(shape) -> dict[str, Any]:
     chart = shape.Chart
     series_collection = chart.SeriesCollection()
@@ -170,11 +180,25 @@ def _chart_snapshot(shape) -> dict[str, Any]:
     for axis_name, axis_type in (("category", 1), ("value", 2)):
         try:
             axis = chart.Axes(axis_type)
+            has_axis_title = bool(axis.HasTitle)
+            title_range = (
+                axis.AxisTitle.Format.TextFrame2.TextRange
+                if has_axis_title
+                else None
+            )
             axes[axis_name] = {
                 "present": True,
-                "hasTitle": bool(axis.HasTitle),
-                "title": str(axis.AxisTitle.Text or "") if bool(axis.HasTitle) else "",
-                "tickLabelTypeface": str(axis.TickLabels.Font.Name or ""),
+                "hasTitle": has_axis_title,
+                "title": str(axis.AxisTitle.Text or "") if has_axis_title else "",
+                "titleEastAsianTypeface": (
+                    _font_name(title_range.Font, east_asian=True)
+                    if title_range is not None
+                    else ""
+                ),
+                "tickLabelTypeface": _font_name(axis.TickLabels.Font),
+                "tickLabelEastAsianTypeface": _font_name(
+                    axis.TickLabels.Font, east_asian=True
+                ),
                 "tickLabelSizePt": round(float(axis.TickLabels.Font.Size), 3),
             }
         except Exception:
@@ -182,22 +206,42 @@ def _chart_snapshot(shape) -> dict[str, Any]:
                 "present": False,
                 "hasTitle": False,
                 "title": "",
+                "titleEastAsianTypeface": "",
                 "tickLabelTypeface": "",
+                "tickLabelEastAsianTypeface": "",
                 "tickLabelSizePt": None,
             }
     has_legend = bool(chart.HasLegend)
-    legend = {"present": has_legend, "position": None, "typeface": "", "sizePt": None}
+    legend = {
+        "present": has_legend,
+        "position": None,
+        "typeface": "",
+        "eastAsianTypeface": "",
+        "sizePt": None,
+    }
     if has_legend:
         legend_range = chart.Legend.Format.TextFrame2.TextRange
         legend["position"] = int(chart.Legend.Position)
-        legend["typeface"] = str(legend_range.Font.Name or "")
+        legend["typeface"] = _font_name(legend_range.Font)
+        legend["eastAsianTypeface"] = _font_name(
+            legend_range.Font, east_asian=True
+        )
         legend["sizePt"] = round(float(legend_range.Font.Size), 3)
     has_title = bool(chart.HasTitle)
-    title = {"present": has_title, "text": "", "typeface": "", "sizePt": None}
+    title = {
+        "present": has_title,
+        "text": "",
+        "typeface": "",
+        "eastAsianTypeface": "",
+        "sizePt": None,
+    }
     if has_title:
         title_range = chart.ChartTitle.Format.TextFrame2.TextRange
         title["text"] = str(chart.ChartTitle.Text or "")
-        title["typeface"] = str(title_range.Font.Name or "")
+        title["typeface"] = _font_name(title_range.Font)
+        title["eastAsianTypeface"] = _font_name(
+            title_range.Font, east_asian=True
+        )
         title["sizePt"] = round(float(title_range.Font.Size), 3)
     return {
         "chartType": int(chart.ChartType),
@@ -521,6 +565,174 @@ def _snapshot_sha256(value: list[list[dict[str, Any]]]) -> str:
     return sha256(payload).hexdigest()
 
 
+def _contains_cjk(value: str) -> bool:
+    return any(
+        "\u3040" <= char <= "\u30ff"
+        or "\u3400" <= char <= "\u9fff"
+        or "\uac00" <= char <= "\ud7af"
+        or "\uf900" <= char <= "\ufaff"
+        for char in value
+    )
+
+
+def _ooxml_font_preflight(path: Path) -> dict[str, Any]:
+    """Read the sealed package directly; never infer CJK coverage from HTML."""
+
+    drawing_ns = "http://schemas.openxmlformats.org/drawingml/2006/main"
+    cjk_runs = 0
+    east_asian_typefaces: set[str] = set()
+    digest = sha256()
+    with zipfile.ZipFile(path, "r") as package:
+        names = sorted(
+            name
+            for name in package.namelist()
+            if name.startswith(("ppt/slides/", "ppt/theme/", "ppt/presentation"))
+            and name.endswith(".xml")
+        )
+        for name in names:
+            payload = package.read(name)
+            digest.update(name.encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(payload)
+            root = ET.fromstring(payload)
+            cjk_runs += sum(
+                1
+                for node in root.iter(f"{{{drawing_ns}}}t")
+                if _contains_cjk(str(node.text or ""))
+            )
+            east_asian_typefaces.update(
+                str(node.attrib.get("typeface") or "").strip()
+                for node in root.iter(f"{{{drawing_ns}}}ea")
+                if str(node.attrib.get("typeface") or "").strip()
+            )
+        embedded_font_files = sum(
+            name.startswith("ppt/fonts/") and not name.endswith("/")
+            for name in package.namelist()
+        )
+    return {
+        "cjk_text_runs": cjk_runs,
+        "declared_east_asian_typefaces": east_asian_typefaces,
+        "embedded_font_files": embedded_font_files,
+        "ooxml_readback_sha256": digest.hexdigest(),
+    }
+
+
+def _font_preflight_report(
+    package_evidence: dict[str, Any],
+    first_snapshot: list[list[dict[str, Any]]],
+    reopened_snapshot: list[list[dict[str, Any]]],
+    *,
+    embedding_required: bool,
+) -> dict[str, Any]:
+    def cjk_readback_runs(snapshot: list[list[dict[str, Any]]]) -> list[tuple[str, str]]:
+        runs: list[tuple[str, str]] = []
+        for slide in snapshot:
+            for shape in slide:
+                text = str(shape.get("text") or "")
+                if _contains_cjk(text):
+                    runs.append((text, str(shape.get("eastAsianTypeface") or "").strip()))
+                table = shape.get("table")
+                if isinstance(table, dict):
+                    for row in table.get("cells", ()):
+                        for cell in row:
+                            cell_text = str(cell.get("text") or "")
+                            font = cell.get("font") if isinstance(cell.get("font"), dict) else {}
+                            if _contains_cjk(cell_text):
+                                runs.append(
+                                    (cell_text, str(font.get("eastAsianTypeface") or "").strip())
+                                )
+                chart = shape.get("chart")
+                if isinstance(chart, dict):
+                    title = chart.get("title") if isinstance(chart.get("title"), dict) else {}
+                    title_text = str(title.get("text") or "")
+                    if _contains_cjk(title_text):
+                        runs.append(
+                            (
+                                title_text,
+                                str(title.get("eastAsianTypeface") or "").strip(),
+                            )
+                        )
+                    axes = chart.get("axes") if isinstance(chart.get("axes"), dict) else {}
+                    for axis in axes.values():
+                        if not isinstance(axis, dict):
+                            continue
+                        axis_title = str(axis.get("title") or "")
+                        if _contains_cjk(axis_title):
+                            runs.append(
+                                (
+                                    axis_title,
+                                    str(
+                                        axis.get("titleEastAsianTypeface") or ""
+                                    ).strip(),
+                                )
+                            )
+                    legend = (
+                        chart.get("legend")
+                        if isinstance(chart.get("legend"), dict)
+                        else {}
+                    )
+                    legend_face = str(
+                        legend.get("eastAsianTypeface") or ""
+                    ).strip()
+                    category_axis = (
+                        axes.get("category")
+                        if isinstance(axes.get("category"), dict)
+                        else {}
+                    )
+                    category_face = str(
+                        category_axis.get("tickLabelEastAsianTypeface") or ""
+                    ).strip()
+                    for series in chart.get("series", ()):
+                        if not isinstance(series, dict):
+                            continue
+                        series_name = str(series.get("name") or "")
+                        if _contains_cjk(series_name):
+                            runs.append((series_name, legend_face))
+                        for category in series.get("categories", ()):
+                            category_text = str(category or "")
+                            if _contains_cjk(category_text):
+                                runs.append((category_text, category_face))
+        return runs
+
+    first_cjk_runs = cjk_readback_runs(first_snapshot)
+    reopened_cjk_runs = cjk_readback_runs(reopened_snapshot)
+    declared = set(package_evidence["declared_east_asian_typefaces"])
+    declared.update(
+        typeface for _, typeface in reopened_cjk_runs if typeface
+    )
+    missing_typeface_runs = sum(
+        not typeface for _, typeface in reopened_cjk_runs
+    )
+    replacement_glyphs = sum(
+        text.count("\ufffd") + text.count("\u25a1")
+        for text, _ in reopened_cjk_runs
+    )
+    embedded_font_files = int(package_evidence["embedded_font_files"])
+    stable_text = first_cjk_runs == reopened_cjk_runs
+    cjk_runs = int(package_evidence["cjk_text_runs"])
+    passed = (
+        cjk_runs == 0
+        or (
+            bool(reopened_cjk_runs)
+            and missing_typeface_runs == 0
+            and replacement_glyphs == 0
+            and stable_text
+            and (not embedding_required or embedded_font_files > 0)
+        )
+    )
+    return {
+        "status": "not-required" if cjk_runs == 0 else ("passed" if passed else "blocked"),
+        "cjk_text_runs": cjk_runs,
+        "declared_east_asian_typefaces": sorted(declared),
+        "missing_east_asian_typeface_runs": missing_typeface_runs,
+        "replacement_glyphs": replacement_glyphs,
+        "embedded_font_files": embedded_font_files,
+        "embedding_required": embedding_required,
+        "embedding_verified": embedded_font_files > 0,
+        "ooxml_readback_sha256": package_evidence["ooxml_readback_sha256"],
+    }
+
+
 def _run_powerpoint_com_qa(
     path: Path,
     expected_slides: int,
@@ -530,6 +742,7 @@ def _run_powerpoint_com_qa(
     expected_geometry: dict[tuple[int, str], tuple[float, float, float, float]] | None = None,
     geometry_contract_digest: str | None = None,
     interactive_observation: bool = False,
+    require_font_embedding: bool = True,
 ) -> dict[str, Any]:
     import pythoncom  # type: ignore[import-not-found]
     import win32com.client  # type: ignore[import-not-found]
@@ -539,6 +752,7 @@ def _run_powerpoint_com_qa(
     owned_application = False
     dialog_watch = None
     try:
+        package_font_evidence = _ooxml_font_preflight(path)
         preexisting_pids = _powerpoint_window_pids()
         application = win32com.client.DispatchEx("PowerPoint.Application")
         main_hwnd = _powerpoint_main_hwnd(application)
@@ -597,6 +811,12 @@ def _run_powerpoint_com_qa(
             ]
             reopened_snapshot, reopened_snapshot_failures = _powerpoint_deck_snapshot(
                 reopened
+            )
+            font_preflight = _font_preflight_report(
+                package_font_evidence,
+                first_snapshot,
+                reopened_snapshot,
+                embedding_required=require_font_embedding,
             )
             typography_gt_5pt = typography_gt_10pt = inspection_failures = 0
             native_text = native_image = native_shape = native_table = native_chart = 0
@@ -723,6 +943,7 @@ def _run_powerpoint_com_qa(
                 or owner_census["qid_owner_mismatches"] > 0
                 or native_qid_ghosting > 0
                 or geometry_mismatches > 0
+                or font_preflight["status"] == "blocked"
                 or (dialog_watch is not None and repair_dialogs != 0)
             )
             report = {
@@ -769,6 +990,7 @@ def _run_powerpoint_com_qa(
                 "geometry_contract_digest": geometry_contract_digest,
                 "geometry_contract_mismatches": geometry_mismatches,
                 "backplate_collisions": backplate_collisions,
+                "font_preflight": font_preflight,
                 "first_open_chart_readback": _chart_readback(first_snapshot),
                 "reopen_chart_readback": _chart_readback(reopened_snapshot),
             }
@@ -805,6 +1027,7 @@ async def trusted_powerpoint_qa(
     expected_qid_owners: frozenset[tuple[int, str, str]] = frozenset(),
     expected_geometry: dict[tuple[int, str], tuple[float, float, float, float]] | None = None,
     geometry_contract_digest: str | None = None,
+    require_font_embedding: bool = True,
 ) -> dict[str, Any]:
     if os.name != "nt":
         return {"status": "preflight", "platform": "unsupported"}
@@ -824,6 +1047,7 @@ async def trusted_powerpoint_qa(
                 "AUTHORED_POWERPOINT_QA_INTERACTIVE_OBSERVATION", "false"
             ).lower()
             == "true",
+            require_font_embedding,
         )
     except Exception:
         return {

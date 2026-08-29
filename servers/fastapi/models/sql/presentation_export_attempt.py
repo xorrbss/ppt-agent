@@ -295,6 +295,47 @@ class ExportPowerPointChartReadback(BaseModel):
     chart: dict[str, Any]
 
 
+class ExportFontPreflightEvidence(BaseModel):
+    """Fail-closed OOXML/PowerPoint font evidence for native CJK text."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid")
+
+    status: Literal["not-required", "passed", "blocked"]
+    cjk_text_runs: int = PydanticField(ge=0)
+    declared_east_asian_typefaces: list[str] = PydanticField(
+        default_factory=list, max_length=256
+    )
+    missing_east_asian_typeface_runs: int = PydanticField(default=0, ge=0)
+    replacement_glyphs: int = PydanticField(default=0, ge=0)
+    embedded_font_files: int = PydanticField(default=0, ge=0)
+    embedding_required: bool = False
+    embedding_verified: bool = False
+    ooxml_readback_sha256: str
+
+    @field_validator("ooxml_readback_sha256")
+    @classmethod
+    def validate_ooxml_readback_sha256(cls, value: str) -> str:
+        normalized = value.lower()
+        if not _is_sha256(normalized):
+            raise ValueError("PowerPoint OOXML font readback digest is invalid")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_passed_preflight(self) -> "ExportFontPreflightEvidence":
+        if self.status == "not-required" and self.cjk_text_runs != 0:
+            raise ValueError("CJK text cannot bypass PowerPoint font preflight")
+        if self.status == "passed" and (
+            self.missing_east_asian_typeface_runs != 0
+            or self.replacement_glyphs != 0
+            or (
+                self.embedding_required
+                and (not self.embedding_verified or self.embedded_font_files == 0)
+            )
+        ):
+            raise ValueError("PowerPoint font preflight passed without complete evidence")
+        return self
+
+
 class ExportPowerPointQaEvidence(BaseModel):
     model_config = ConfigDict(
         alias_generator=to_camel,
@@ -355,6 +396,7 @@ class ExportPowerPointQaEvidence(BaseModel):
     geometry_contract_digest: str | None = None
     geometry_contract_mismatches: int = PydanticField(default=0, ge=0)
     backplate_collisions: int = PydanticField(default=0, ge=0)
+    font_preflight: ExportFontPreflightEvidence | None = None
 
     @field_validator("geometry_contract_digest")
     @classmethod
@@ -417,6 +459,12 @@ class ExportPowerPointQaEvidence(BaseModel):
             and self.typography_issues_gt_10pt == 0
         ):
             raise ValueError("PowerPoint visual parity requires COM reopen/render/readback evidence")
+        if (
+            self.status == "passed"
+            and self.font_preflight is not None
+            and self.font_preflight.status == "blocked"
+        ):
+            raise ValueError("PowerPoint QA cannot pass with blocked font preflight")
         if self.platform == "unsupported" and self.status not in {
             "preflight",
             "not-verified",
@@ -1093,11 +1141,45 @@ class PresentationExportAttemptProvenance(BaseModel):
             ):
                 raise ValueError("quality receipt export binding is inconsistent")
             release_profile = receipt.release_profile.lower().replace("-", "_")
+            release_required = release_profile in {
+                "release",
+                "strict",
+                "production",
+                "release_strict",
+            }
+            if release_required:
+                font_preflight = (
+                    self.powerpoint_qa.font_preflight
+                    if self.powerpoint_qa is not None
+                    else None
+                )
+                try:
+                    sidecar_powerpoint_qa = ExportPowerPointQaEvidence.model_validate(
+                        self.quality_sidecar.get("powerPointQa")
+                    )
+                except ValueError:
+                    sidecar_powerpoint_qa = None
+                if (
+                    self.powerpoint_qa is None
+                    or self.powerpoint_qa.status != "passed"
+                    or sidecar_powerpoint_qa != self.powerpoint_qa
+                    or font_preflight is None
+                    or font_preflight.status not in {"not-required", "passed"}
+                    or (
+                        font_preflight.cjk_text_runs > 0
+                        and (
+                            not font_preflight.embedding_verified
+                            or font_preflight.embedded_font_files == 0
+                        )
+                    )
+                ):
+                    raise ValueError(
+                        "release quality receipt requires bound CJK/font PowerPoint QA"
+                    )
             validate_export_quality_coverage_consistency(
                 self.quality_sidecar,
                 self.coverage_manifest,
-                require_release=release_profile
-                in {"release", "strict", "production", "release_strict"},
+                require_release=release_required,
                 minimum_native_ratio=0.70,
             )
         return self

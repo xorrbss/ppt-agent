@@ -52,7 +52,18 @@ export type PreparedNativeElement =
       png: Buffer;
     }
   | { kind: "chart"; source: AuthoredHybridNativeChartSource }
-  | { kind: "table"; source: AuthoredHybridNativeTableSource };
+  | { kind: "table"; source: AuthoredHybridNativeTableSource }
+  | {
+      kind: "group";
+      source: AuthoredHybridRasterElement;
+      /**
+       * Exact direct semantic children owned by this structural container.
+       * A group is admitted only when every one of these QIDs is native, so a
+       * residual backplate never becomes a child that fails to move with it.
+       */
+      childElementIds: readonly string[];
+      children: readonly PreparedNativeElement[];
+    };
 
 type AuthoredHybridNativeElement =
   | AuthoredHybridNativeTextElement
@@ -1065,6 +1076,162 @@ export async function prepareNativeElements(
     }
   }
   return prepared;
+}
+
+function isPaintlessStructuralContainer(
+  element: AuthoredHybridElement
+): element is AuthoredHybridRasterElement {
+  if (
+    element.classification.mode !== "raster" ||
+    element.classification.candidateKind !== "shape" ||
+    element.classification.reasons.length !== 1 ||
+    element.classification.reasons[0] !== "unsupported-shape" ||
+    element.identityAuthority !== "declared-qid" ||
+    Math.abs(element.rotationDeg) >= 0.001 ||
+    element.opacity !== 1 ||
+    !boundsAreSafe(element)
+  ) return false;
+  if (!("shape" in element) || !element.shape) return false;
+  return !element.shape.fill &&
+    !element.shape.gradient &&
+    !element.shape.stroke &&
+    !(element.shape.borderLines?.length) &&
+    !(element.shape.shadowLayers?.length) &&
+    !element.shape.outline;
+}
+
+/**
+ * Build paintless PowerPoint group candidates from declared DOM
+ * containers. The admission is intentionally strict:
+ *
+ * - the group must have no authored paint of its own;
+ * - every direct semantic child must already have a prepared native owner or
+ *   be another independently qualified structural candidate;
+ * - every descendant stays inside the container bounds and no unrelated paint
+ *   is interleaved through the descendant z-range.
+ *
+ * This makes the group a real editable owner rather than a hidden coverage
+ * marker, and keeps the semantic denominator unchanged.
+ */
+export function prepareStructuralNativeGroups(
+  elements: readonly AuthoredHybridElement[],
+  prepared: readonly PreparedNativeElement[],
+  declaredGroupElementIds: ReadonlySet<string>,
+): PreparedNativeElement[] {
+  const preparedIds = new Set(prepared.map((item) => item.source.id));
+  const structuralIds = new Set(
+    elements
+      .filter(isPaintlessStructuralContainer)
+      .filter((element) => declaredGroupElementIds.has(element.id))
+      .map((element) => element.id)
+  );
+  const childrenByParent = new Map<string, AuthoredHybridElement[]>();
+  for (const element of elements) {
+    if (!element.parentElementId) continue;
+    const children = childrenByParent.get(element.parentElementId) ?? [];
+    children.push(element);
+    childrenByParent.set(element.parentElementId, children);
+  }
+  const descendantsOf = (elementId: string): AuthoredHybridElement[] => {
+    const descendants: AuthoredHybridElement[] = [];
+    const pending = [...(childrenByParent.get(elementId) ?? [])];
+    const seen = new Set<string>();
+    while (pending.length) {
+      const child = pending.shift()!;
+      if (seen.has(child.id)) return [];
+      seen.add(child.id);
+      descendants.push(child);
+      pending.push(...(childrenByParent.get(child.id) ?? []));
+    }
+    return descendants;
+  };
+  return elements
+    .filter(isPaintlessStructuralContainer)
+    .filter((element) => declaredGroupElementIds.has(element.id))
+    .flatMap((element): PreparedNativeElement[] => {
+      const children = childrenByParent.get(element.id) ?? [];
+      const descendants = descendantsOf(element.id);
+      const descendantIds = new Set(descendants.map((child) => child.id));
+      const childPaintOrders = descendants.map((child) => child.zOrder);
+      const minimumPaintOrder = Math.min(...childPaintOrders);
+      const maximumPaintOrder = Math.max(...childPaintOrders);
+      const bounds = element.bounds.px;
+      const containsChild = (child: AuthoredHybridElement) => {
+        const childBounds = child.bounds.px;
+        return childBounds.x >= bounds.x - 0.5 &&
+          childBounds.y >= bounds.y - 0.5 &&
+          childBounds.x + childBounds.width <= bounds.x + bounds.width + 0.5 &&
+          childBounds.y + childBounds.height <= bounds.y + bounds.height + 0.5;
+      };
+      const interleavedExternalPaint = elements.some((other) =>
+        other.id !== element.id &&
+        !descendantIds.has(other.id) &&
+        other.zOrder >= minimumPaintOrder &&
+        other.zOrder <= maximumPaintOrder &&
+        intersects(element, other)
+      );
+      if (
+        children.length === 0 ||
+        descendants.length === 0 ||
+        children.some(
+          (child) => !preparedIds.has(child.id) && !structuralIds.has(child.id),
+        ) ||
+        descendants.some((child) => !containsChild(child)) ||
+        interleavedExternalPaint
+      ) return [];
+      return [{
+        kind: "group",
+        source: element,
+        childElementIds: children.map((child) => child.id).sort(),
+        children: [],
+      }];
+    });
+}
+
+/** Close flat group candidates over the final layer-safe selection. */
+export function nestPreparedNativeGroups(
+  selected: readonly PreparedNativeElement[]
+): PreparedNativeElement[] {
+  const selectedById = new Map(
+    selected.map((item) => [item.source.id, item] as const)
+  );
+  const admittedGroups = selected.filter(
+    (item): item is Extract<PreparedNativeElement, { kind: "group" }> =>
+      item.kind === "group" &&
+      item.childElementIds.length > 0 &&
+      item.childElementIds.every((childId) => selectedById.has(childId))
+  );
+  const childIds = new Set(admittedGroups.flatMap((group) => group.childElementIds));
+  const groupById = new Map(admittedGroups.map((group) => [group.source.id, group]));
+  const build = (
+    item: PreparedNativeElement,
+    visiting: ReadonlySet<string> = new Set(),
+  ): PreparedNativeElement => {
+    if (item.kind !== "group") return item;
+    if (visiting.has(item.source.id)) {
+      throw new Error("Hybrid structural group cycle detected.");
+    }
+    const nextVisiting = new Set(visiting);
+    nextVisiting.add(item.source.id);
+    return {
+      ...item,
+      children: item.childElementIds.map((childId) =>
+        build(selectedById.get(childId)!, nextVisiting)
+      ),
+    };
+  };
+  return selected
+    .filter((item) => !childIds.has(item.source.id))
+    .filter((item) => item.kind !== "group" || groupById.has(item.source.id))
+    .map((item) => build(item));
+}
+
+export function flattenPreparedNativeElements(
+  elements: readonly PreparedNativeElement[]
+): PreparedNativeElement[] {
+  return elements.flatMap((item) => item.kind === "group"
+    ? [item, ...flattenPreparedNativeElements(item.children)]
+    : [item]);
 }
 
 function intersects(
@@ -2129,6 +2296,12 @@ function shapeBaseObjectCount(shape: AuthoredHybridShapePayload): number {
 export function preparedNativeElementNonVisualIdCount(
   item: PreparedNativeElement
 ): number {
+  if (item.kind === "group") {
+    return 1 + item.children.reduce(
+      (count, child) => count + preparedNativeElementNonVisualIdCount(child),
+      0,
+    );
+  }
   // Border/shadow/outline-only shapes are split into multiple physical OOXML
   // fragments with no single base object whose geometry can carry the QID.
   // Keep those owners on the audited raster plane until a grouped native
@@ -2199,6 +2372,7 @@ function transparentTextOverlayItem(
 export function preparedNativeElementUnderlayNonVisualIdCount(
   item: PreparedNativeElement
 ): number {
+  if (item.kind === "group") return 0;
   const shapeItem = item.kind === "shape"
     ? item
     : item.kind === "text"
@@ -2214,7 +2388,7 @@ export function preparedNativeElementUnderlayNonVisualIdCount(
 function preparedNativeElementOverlayNonVisualIdCount(
   item: PreparedNativeElement
 ): number {
-  return item.kind === "shape" ? 0 : 1;
+  return item.kind === "shape" || item.kind === "group" ? 0 : 1;
 }
 
 function powerPointWrapMode(
@@ -2263,13 +2437,18 @@ export function serializePreparedNativeElement(
   relationshipId?: string,
   options: PowerPointTypefaceSerializationOptions = {}
 ): string {
+  if (item.kind === "group") {
+    throw new Error("Native groups require the hierarchy-aware PPTX assembler.");
+  }
   if (item.kind === "text") {
     const element = item.source;
-    const name = escapeXml(
-      element.classification.mode === "raster" && element.text.containerShape
-        ? `Presenton raster visual fragment ${nonVisualId}`
-        : nonVisualName(element)
-    );
+    // A promoted text element with a separately emitted painted container still
+    // needs one semantic owner in OOXML. The container name is deliberately
+    // suffixed with `-container`, so the editable text overlay carries the QID
+    // even when the source classifier originally marked it as raster. Calling
+    // it an anonymous visual fragment made the logical plan claim native while
+    // readback could not find any owner for the element.
+    const name = escapeXml(nonVisualName(element));
     const anchor = { top: "t", middle: "ctr", bottom: "b" }[
       element.text.style.verticalAlignment
     ];
@@ -2394,7 +2573,7 @@ export function serializePreparedNativeElementOverlay(
   relationshipId?: string,
   options: PowerPointTypefaceSerializationOptions = {}
 ): string {
-  if (item.kind === "shape") return "";
+  if (item.kind === "shape" || item.kind === "group") return "";
   return serializePreparedNativeElement(
     item.kind === "text" ? transparentTextOverlayItem(item) : item,
     nonVisualId,

@@ -125,13 +125,19 @@ def test_authored_render_runtime_metrics_are_metadata_only() -> None:
     assert response.headers["content-type"].startswith("application/json")
     assert response.headers["cache-control"] == "no-store"
     payload = response.json()
-    assert payload["schemaVersion"] == "authored-render-runtime/v1"
+    assert payload["schemaVersion"] == "authored-render-runtime/v2"
     assert payload["chromeRuntimeDigest"].startswith("sha256:")
     assert set(payload["cacheIdentity"]) == {
-        "render", "domMetrics", "occlusionSensor", "chromeReuseEnabled"
+        "render",
+        "identity",
+        "measurement",
+        "domMetrics",
+        "occlusionSensor",
+        "chromeReuseEnabled",
     }
     assert "render_cache_hits" in payload["counters"]
     assert "metrics_recollection_requests" in payload["counters"]
+    assert "cache_identity_invalidations" in payload["counters"]
     serialized = response.text.lower()
     assert "<html" not in serialized
     assert "data-qid" not in serialized

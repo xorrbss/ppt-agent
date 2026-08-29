@@ -83,9 +83,29 @@ from utils.slide_capture import (
 )
 
 
-_AUTHORED_SLIDE_WORKERS = max(
-    1, int(os.getenv("AUTHORED_SLIDE_PIPELINE_CONCURRENCY", "8"))
+# ``AUTHORED_SLIDE_PIPELINE_CONCURRENCY`` was historically both the number of
+# provider calls and the number of whole-slide workers.  A worker spent most of
+# its time in the provider, but it remained occupied by Chromium/checkpoint work
+# after the response had returned.  Keep that setting as the provider ceiling,
+# then give the downstream work its own bounded window.  This lets the next
+# slide enter authoring as soon as one author response is durable without ever
+# exceeding the configured provider or Chromium capacities.
+_AUTHORED_AUTHOR_WORKERS = max(
+    1,
+    int(
+        os.getenv(
+            "AUTHORED_SLIDE_AUTHOR_CONCURRENCY",
+            os.getenv("AUTHORED_SLIDE_PIPELINE_CONCURRENCY", "8"),
+        )
+    ),
 )
+_AUTHORED_RENDER_WORKERS = max(
+    1,
+    int(
+        os.getenv("AUTHORED_SLIDE_RENDER_CONCURRENCY", str(_AUTHORED_AUTHOR_WORKERS))
+    ),
+)
+_AUTHORED_SLIDE_WORKERS = _AUTHORED_AUTHOR_WORKERS + _AUTHORED_RENDER_WORKERS
 
 
 def _evaluate_slide_quality(
@@ -262,6 +282,12 @@ async def _author_illustrate_render_pipeline(
             roles=roles,
         )
 
+    # These are attempt-local on purpose.  Provider admission owns the process
+    # wide/rate-limit policy; these gates only keep one large deck from filling
+    # every local worker while previous slides are in a different stage.
+    author_gate = asyncio.Semaphore(_AUTHORED_AUTHOR_WORKERS)
+    render_gate = asyncio.Semaphore(_AUTHORED_RENDER_WORKERS)
+
     async def process_slide(
         index: int,
     ) -> tuple[
@@ -335,44 +361,59 @@ async def _author_illustrate_render_pipeline(
                         attempt_token=attempt_token,
                     )
                 author_started = time.monotonic()
-                with provider_usage_scope(
-                    job_id=generation_job.id if generation_job is not None else None,
-                    operation="authored_generation",
-                    stage="author",
-                    attempt_number=(generation_job.attempt_number if generation_job else 0),
-                    slide_index=index,
-                ):
-                    author_kwargs: dict[str, Any] = {}
-                    if generation_job is not None:
-                        author_kwargs["raise_on_failure"] = True
-                    if offered:
-                        author_kwargs["source_images"] = tuple(offered.values())
-                        author_kwargs["require_all_source_images"] = (
-                            require_all_source_images
-                        )
-                    try:
-                        html = await author_planned_slide(
-                            plan, index, **author_kwargs
-                        )
-                    except RendererPolicyError as exc:
-                        raise AuthoredStageError(
-                            slide_index=index,
+                try:
+                    # Do not make a completed author response wait behind its
+                    # own Chromium/quality/checkpoint tail.  A spare slide
+                    # worker can acquire this gate while this worker advances
+                    # downstream, so authoring and rendering overlap.
+                    async with author_gate:
+                        with provider_usage_scope(
+                            job_id=(
+                                generation_job.id
+                                if generation_job is not None
+                                else None
+                            ),
+                            operation="authored_generation",
                             stage="author",
-                            code="authored_slide_author_failed",
-                            cause=exc,
-                            retryable=False,
-                        ) from exc
-                    except Exception as exc:
-                        raise AuthoredStageError(
+                            attempt_number=(
+                                generation_job.attempt_number
+                                if generation_job
+                                else 0
+                            ),
                             slide_index=index,
-                            stage="author",
-                            code="authored_slide_author_failed",
-                            cause=exc,
-                            retryable=is_retryable_exception(exc),
-                        ) from exc
-                    finally:
-                        author_work = time.monotonic() - author_started
-                        await record_local_stage(latency_ms=author_work * 1000)
+                        ):
+                            author_kwargs: dict[str, Any] = {}
+                            if generation_job is not None:
+                                author_kwargs["raise_on_failure"] = True
+                            if offered:
+                                author_kwargs["source_images"] = tuple(
+                                    offered.values()
+                                )
+                                author_kwargs["require_all_source_images"] = (
+                                    require_all_source_images
+                                )
+                            html = await author_planned_slide(
+                                plan, index, **author_kwargs
+                            )
+                except RendererPolicyError as exc:
+                    raise AuthoredStageError(
+                        slide_index=index,
+                        stage="author",
+                        code="authored_slide_author_failed",
+                        cause=exc,
+                        retryable=False,
+                    ) from exc
+                except Exception as exc:
+                    raise AuthoredStageError(
+                        slide_index=index,
+                        stage="author",
+                        code="authored_slide_author_failed",
+                        cause=exc,
+                        retryable=is_retryable_exception(exc),
+                    ) from exc
+                finally:
+                    author_work = time.monotonic() - author_started
+                    await record_local_stage(latency_ms=author_work * 1000)
                 if is_fallback_slide_html(html):
                     raise AuthoredStageError(
                         slide_index=index,
@@ -565,29 +606,44 @@ async def _author_illustrate_render_pipeline(
                         attempt_token=attempt_token,
                     )
                 render_started = time.monotonic()
-                with provider_usage_scope(
-                    job_id=generation_job.id if generation_job is not None else None,
-                    operation="authored_generation",
-                    stage="render",
-                    attempt_number=(generation_job.attempt_number if generation_job else 0),
-                    slide_index=index,
-                ):
-                    try:
-                        png = await render_html_to_png(illustrated_html)
-                        browser_metrics = get_cached_browser_metrics(illustrated_html)
-                        if png == _placeholder_png():
-                            raise RuntimeError("renderer returned a placeholder")
-                    except Exception as exc:
-                        raise AuthoredStageError(
-                            slide_index=index,
+                try:
+                    # Chromium is independently bounded.  The author gate is
+                    # released before this point, allowing the next queued
+                    # slide to call the provider while this exact HTML is
+                    # rendered, checked, and checkpointed.
+                    async with render_gate:
+                        with provider_usage_scope(
+                            job_id=(
+                                generation_job.id
+                                if generation_job is not None
+                                else None
+                            ),
+                            operation="authored_generation",
                             stage="render",
-                            code="authored_slide_render_failed",
-                            cause=exc,
-                            retryable=is_retryable_exception(exc),
-                        ) from exc
-                    finally:
-                        render_work = time.monotonic() - render_started
-                        await record_local_stage(latency_ms=render_work * 1000)
+                            attempt_number=(
+                                generation_job.attempt_number
+                                if generation_job
+                                else 0
+                            ),
+                            slide_index=index,
+                        ):
+                            png = await render_html_to_png(illustrated_html)
+                            browser_metrics = get_cached_browser_metrics(
+                                illustrated_html
+                            )
+                            if png == _placeholder_png():
+                                raise RuntimeError("renderer returned a placeholder")
+                except Exception as exc:
+                    raise AuthoredStageError(
+                        slide_index=index,
+                        stage="render",
+                        code="authored_slide_render_failed",
+                        cause=exc,
+                        retryable=is_retryable_exception(exc),
+                    ) from exc
+                finally:
+                    render_work = time.monotonic() - render_started
+                    await record_local_stage(latency_ms=render_work * 1000)
             if require_all_source_images:
                 try:
                     if browser_metrics is None:
