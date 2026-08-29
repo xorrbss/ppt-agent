@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.product-pptx-owned-com-validation",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Owned Office validation requires exact slide QIDs, unchanged source SHA, bound PID and HWND, inspectionFailures zero, and zero survivors.",
+  "scope": [
+    "authored",
+    "pptx",
+    "powerpoint",
+    "validation"
+  ],
+  "invariants": [
+    "Refuse preexisting POWERPNT or soffice ownership ambiguity.",
+    "Source and reopened slide plus QID ownership must match the product manifest.",
+    "PowerPoint QA pass requires inspectionFailures zero and never self-promotes visual parity.",
+    "Source PPTX SHA stays unchanged and launched Office processes are gone after validation."
+  ],
+  "forbidden": [
+    "Attach save close or terminate an ownership-uncertain Office process",
+    "Equate exact reopen hashes with native editability or cross-renderer parity"
+  ],
+  "evidence": [
+    "scripts/validate-authored-product-pptx.ps1",
+    "servers/fastapi/models/sql/presentation_export_attempt.py",
+    "servers/fastapi/tests/unit/test_presentation_export_attempt_service.py",
+    "artifacts/authored-vnext-product-validation-20260829/run-a14d61c2-v2/product-pptx-validation.json"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-29T03:16:28.1920977+00:00"
+}
