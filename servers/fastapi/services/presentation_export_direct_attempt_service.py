@@ -282,7 +282,7 @@ async def _current_export_canonical_digest(
     return build_export_source_snapshot_sha256(presentation, slides)
 
 
-async def _bind_completed_semantic_export_attempt(
+async def bind_completed_semantic_export_attempt(
     session: AsyncSession,
     *,
     attempt: PresentationExportAttempt,
@@ -290,12 +290,19 @@ async def _bind_completed_semantic_export_attempt(
     renderer_source_sha256: str,
     pptx_sha256: str,
     receipt_payloads: list[dict[str, Any]],
+    owner_id: uuid.UUID | None = None,
 ) -> str | None:
-    active = await _active_semantic_emission(session, attempt.presentation_id)
-    owner_id = get_current_owner_id()
+    semantic_owner_id = owner_id or get_current_owner_id()
+    if semantic_owner_id is None:
+        return None
+    active = await get_active_authored_emission(
+        session,
+        presentation_id=attempt.presentation_id,
+        owner_id=semantic_owner_id,
+        tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+    )
     if (
         active is None
-        or owner_id is None
         or active.canonical_mode != "bundleGraph"
         or active.manifest is None
         or active.manifest.canonical_digest is None
@@ -371,7 +378,7 @@ async def _bind_completed_semantic_export_attempt(
             projection_v3 = await get_workbench_capability_projection_v3(
                 session,
                 presentation_id=attempt.presentation_id,
-                owner_id=owner_id,
+                owner_id=semantic_owner_id,
                 tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
             )
             _validate_v3_release_authority_claim(
@@ -381,7 +388,7 @@ async def _bind_completed_semantic_export_attempt(
             projection_v2 = await get_workbench_capability_projection_v2(
                 session,
                 presentation_id=attempt.presentation_id,
-                owner_id=owner_id,
+                owner_id=semantic_owner_id,
                 tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
             )
             validate_export_authority_claim(projection_v2, claim)
@@ -392,7 +399,7 @@ async def _bind_completed_semantic_export_attempt(
     binding = _completed_export_binding(binding_values, claim)
     sealed = await bind_existing_export_attempt(
         session,
-        owner_id=owner_id,
+        owner_id=semantic_owner_id,
         binding=binding,
         tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
     )
@@ -756,7 +763,7 @@ async def complete_direct_hybrid_export_attempt(
         provenance=provenance,
     )
     await session.refresh(attempt)
-    semantic_binding_digest = await _bind_completed_semantic_export_attempt(
+    semantic_binding_digest = await bind_completed_semantic_export_attempt(
         session,
         attempt=attempt,
         mode="hybrid",
@@ -899,7 +906,7 @@ async def complete_direct_fidelity_export_attempt(
         provenance=provenance,
     )
     await session.refresh(attempt)
-    semantic_binding_digest = await _bind_completed_semantic_export_attempt(
+    semantic_binding_digest = await bind_completed_semantic_export_attempt(
         session,
         attempt=attempt,
         mode="fidelity",
@@ -1157,6 +1164,7 @@ async def fail_direct_fidelity_export_attempt(
 
 
 __all__ = [
+    "bind_completed_semantic_export_attempt",
     "begin_direct_hybrid_export_attempt",
     "begin_direct_fidelity_export_attempt",
     "complete_direct_hybrid_export_attempt",

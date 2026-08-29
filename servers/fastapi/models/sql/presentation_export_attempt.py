@@ -228,6 +228,7 @@ class ExportPowerPointQaEvidence(BaseModel):
     slide_count: int | None = PydanticField(default=None, ge=1, le=100)
     typography_issues_gt_5pt: int = PydanticField(default=0, ge=0)
     typography_issues_gt_10pt: int = PydanticField(default=0, ge=0)
+    inspection_failures: int = PydanticField(default=0, ge=0)
     native_text: int | None = PydanticField(default=None, ge=0)
     native_image: int | None = PydanticField(default=None, ge=0)
     native_shape: int | None = PydanticField(default=None, ge=0)

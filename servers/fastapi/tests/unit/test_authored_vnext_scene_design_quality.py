@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from io import BytesIO
 import json
 import re
 
 import pytest
+from PIL import Image
 
 from models.authored_vnext.deck.scene import (
     DeckSceneIR,
@@ -28,6 +30,8 @@ from models.authored_vnext.master.operations import MasterRevisionResponse
 from models.authored_vnext.master.slide import SlideSpecV2
 from services.authored_vnext.generation.outline import OutlineItem, plan_outline
 from services.authored_vnext.generation.scene_compiler import (
+    _compose_stacked_cards,
+    _require_readable_panel,
     compile_deck_scene,
     compile_slide_scene,
     default_scene_capabilities,
@@ -35,6 +39,7 @@ from services.authored_vnext.generation.scene_compiler import (
 from services.authored_vnext.semantic.editable_scene import (
     _is_declared_atomic_owner,
 )
+from services.authored_vnext.semantic import editable_scene as editable_scene_mod
 from services.authored_vnext.master.digests import canonical_digest, seal_master_contract
 from tests.support.authored_vnext_master_fixture import master_contract_payload
 
@@ -624,6 +629,232 @@ def test_cover_is_one_editorial_field_and_preserves_planned_title_lines() -> Non
     assert any(item.semantic_role == "heroField" for item in first.elements)
     assert all(item.semantic_role != "heroEvidence" for item in first.elements)
     assert first.slide_digest == second.slide_digest
+
+
+def test_dense_cover_preserves_all_copy_in_one_field_at_the_16pt_floor() -> None:
+    contract = _contract()
+    body = "\n".join(
+        (
+            "- 발표자: 미지정",
+            "- 날짜: 2026년 8월 28일",
+            "- 개요: 입력·근거·계산·보안 검증",
+            "- 개요: 렌더링·회귀시험·최종 승인 기준",
+            "- 목표: 치명적 오류 없는 배포 체계 확립",
+            "## 핵심 검증 항목",
+            "- 입력 원본·버전·요구사항을 100% 확인",
+            "- 핵심 주장과 출처를 100% 연결",
+            "- 중요 수치·차트를 결정론적으로 재계산",
+            "- 모든 페이지 렌더링·접근성·보안을 검사",
+            "- 변경 때마다 골든 테스트로 회귀시험 수행",
+            "## 결론",
+            "- 중대한 사실 오류와 보안 사고 허용치: 0건",
+            "- 고위험 발표의 핵심 주장·수치 검토: 100%",
+            "- 주장-출처표와 계산·렌더링 결과를 보관",
+            "- 최종 책임자의 승인 기록 후 배포",
+            "- 운영 오류를 회귀 테스트 자산으로 편입",
+        )
+    )
+    slide, plan, title_bounds = _slide_and_plan(
+        contract,
+        title="신뢰할 수 있는 AI 프레젠테이션 생성 파이프라인 검증",
+        body=body,
+        slide_id="slide:dense-cover-editorial",
+    )
+    plan = plan.model_copy(update={"role": "cover"})
+
+    first = compile_slide_scene(
+        slide=slide,
+        visual_plan=plan,
+        title_bounds=title_bounds,
+        contract=contract,
+    )
+    second = compile_slide_scene(
+        slide=slide,
+        visual_plan=plan,
+        title_bounds=title_bounds,
+        contract=contract,
+    )
+
+    body_elements = [
+        item
+        for item in first.elements
+        if isinstance(item, SceneTextElement) and item.semantic_role == "body"
+    ]
+    assert len(body_elements) == 1
+    editorial = body_elements[0]
+    assert editorial.text == " ".join(body.split())
+    assert editorial.style is not None
+    assert editorial.style.font_size >= 16.0
+    assert editorial.bounds.height >= 218.0
+    assert first.slide_digest == second.slide_digest
+
+
+def test_dense_stacked_cards_repartition_without_dropping_semantic_copy() -> None:
+    body = "\n".join(
+        (
+            "- 입력 원본·버전·요구사항을 100% 확인",
+            "- 핵심 주장과 출처를 100% 연결",
+            "- 중요 수치·차트를 결정론적으로 재계산",
+            "- 모든 페이지 렌더링·접근성·보안을 검사",
+            "- 변경 때마다 골든 테스트로 회귀시험 수행",
+            "## 입력·근거 검증",
+            "- OCR·표 구조·각주·단위 손실을 원본과 대조",
+            "- 문서 해시·버전·수집 시각·추출기 버전 기록",
+            "- 주장별 문서명·페이지·URL·접근일 연결",
+            "- 출처 충돌은 숨기지 않고 상태로 표시",
+            "- 외부 문서 명령문은 참고 데이터로 격리",
+            "## 수치·시각화·출력 검증",
+            "- 합계·비율·증감률·단위를 코드로 재계산",
+            "- 100에서 120 증가는 20%로 검증",
+            "- 원본 데이터와 차트 계열·축·단위 대조",
+            "- 전 페이지 렌더링 검사율 100%",
+            "- 일반 텍스트 명암비 4.5:1 이상 확인",
+        )
+    )
+    contract = _contract()
+    _slide, plan, _title_bounds = _slide_and_plan(
+        contract,
+        title="핵심 검증 항목",
+        body=body,
+        slide_id="slide:dense-stacked-cards",
+    )
+    source_body = next(
+        item for item in plan.elements if item.semantic_role == "body"
+    )
+    first = _compose_stacked_cards(
+        slide_id="slide:dense-stacked-cards",
+        body=source_body,
+        contract=contract,
+    )
+    second = _compose_stacked_cards(
+        slide_id="slide:dense-stacked-cards",
+        body=source_body,
+        contract=contract,
+    )
+
+    text_elements = [
+        item
+        for item in first
+        if isinstance(item, SceneTextElement)
+        and item.semantic_role in {"body", "cardBody"}
+    ]
+    assert len(text_elements) == 1
+    assert [item.semantic_role for item in text_elements] == ["body"]
+    assert text_elements[0].text == " ".join(body.split())
+    assert _semantic_copy(" ".join(item.text for item in text_elements)) == _semantic_copy(
+        body
+    )
+    assert all(item.style is not None and item.style.font_size >= 16.0 for item in text_elements)
+    assert text_elements[0].editability.text is True
+    panels = [
+        item
+        for item in first
+        if isinstance(item, SceneShapeElement)
+        and item.semantic_role == "cardSurface"
+    ]
+    assert len(panels) == len(text_elements)
+    for panel, text_element in zip(panels, text_elements, strict=True):
+        assert text_element.style is not None
+        insets = (
+            text_element.bounds.x - panel.bounds.x,
+            text_element.bounds.y - panel.bounds.y,
+            panel.bounds.right - text_element.bounds.right,
+            panel.bounds.bottom - text_element.bounds.bottom,
+        )
+        assert min(insets) >= 8.0
+        _require_readable_panel(
+            panel=panel.bounds,
+            text_bounds=text_element.bounds,
+            text=text_element.text,
+            style=text_element.style,
+            consumer="stacked card test",
+            minimum_panel_height=48,
+            minimum_text_height=28,
+            minimum_inset=8,
+            contract=contract,
+        )
+    assert first == second
+
+
+def test_hybrid_build_seals_non_native_text_owner_with_shape_capability(
+    monkeypatch,
+) -> None:
+    html = '<p data-qid="body.owner">편집 가능한 본문 원문</p>'
+    metrics = {
+        "width": 1280,
+        "height": 720,
+        "fonts_ready": True,
+        "elements": [
+            {
+                "qid": "body.owner",
+                "tag": "p",
+                "bbox": {"x": 80, "y": 180, "width": 1040, "height": 220},
+                "clientWidth": 1040,
+                "clientHeight": 220,
+                "scrollWidth": 1040,
+                "scrollHeight": 220,
+                "rendered_text": "편집 가능한 본문 원문",
+                "font_loaded": True,
+                "computed_style": {
+                    "display": "block",
+                    "visibility": "visible",
+                    "opacity": "1",
+                    # Force the real native-admission fallback that previously
+                    # paired a shape placeholder with a text-only capability.
+                    "fontFamily": '"Unreviewed Font"',
+                    "fontSize": "21.333px",
+                    "lineHeight": "25.6px",
+                    "color": "#111827",
+                    "backgroundColor": "#ffffff",
+                },
+            }
+        ],
+    }
+    monkeypatch.setattr(
+        editable_scene_mod,
+        "get_cached_browser_metrics",
+        lambda _html: metrics,
+    )
+    png_buffer = BytesIO()
+    Image.new("RGB", (1280, 720), "white").save(png_buffer, format="PNG")
+    png = png_buffer.getvalue()
+    scene = editable_scene_mod.build_editable_hybrid_scene(
+        presentation_id="00000000-0000-0000-0000-000000000001",
+        revision=1,
+        slides=None,
+        slide_ids=["slide:dense-stacked-cards"],
+        htmls=[html],
+        pngs=[png],
+        semantic_drafts=[
+            {
+                "semanticSource": {
+                    "elements": [
+                        {
+                            "kind": "text",
+                            "elementId": "body.owner",
+                            "semanticRole": "body",
+                            "requiredFeatures": [],
+                            "payload": {},
+                        }
+                    ]
+                }
+            }
+        ],
+        composition_digest="sha256:" + "9" * 64,
+    )
+
+    sealed = scene.slides[0]
+    assert len(sealed.elements) == 1
+    assert sealed.elements[0].kind == "shape"
+    assert sealed.elements[0].element_id == "body.owner"
+    assert sealed.elements[0].semantic_role == "body"
+    assert sealed.hybrid_export is not None
+    decision = sealed.hybrid_export.owner_decisions[0]
+    assert decision.owner_id == "body.owner"
+    assert decision.decision == "rasterIsland"
+    assert decision.capability_id == "editable.raster-island-integrity.v1"
+    assert decision.reason_code == "unsupported_representation"
+    assert sealed.hybrid_export.raster_islands[0].source_owner_ids == ["body.owner"]
 
 
 def test_three_step_process_uses_an_ascending_non_card_silhouette() -> None:

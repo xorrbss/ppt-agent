@@ -33,10 +33,14 @@
     "authored.source-reflow-patch-validation-retry": "decisions/authored.source-reflow-patch-validation-retry.1.json",
     "authored.quality-composition-first": "decisions/authored.quality-composition-first.3.json",
     "authored.checkpoint.crash-recovery": "decisions/authored.checkpoint.crash-recovery.1.json",
-    "authored.capacity.terminal-residual": "decisions/authored.capacity.terminal-residual.1.json",
+    "authored.capacity.terminal-residual": "decisions/authored.capacity.terminal-residual.2.json",
     "authored.export-progress-correlation": "decisions/authored.export-progress-correlation.1.json",
-    "authored.layout-alignment-repair": "decisions/authored.layout-alignment-repair.1.json"
+    "authored.layout-alignment-repair": "decisions/authored.layout-alignment-repair.1.json",
+    "authored.quality-failure-transition": "decisions/authored.quality-failure-transition.1.json",
+    "authored.hybrid-workspace-semantic-binding": "decisions/authored.hybrid-workspace-semantic-binding.1.json",
+    "authored.product-pptx-owned-com-validation": "decisions/authored.product-pptx-owned-com-validation.1.json",
+    "authored.raster-owner-capability": "decisions/authored.raster-owner-capability.1.json"
   },
   "readFirst": [],
-  "updatedAt": "2026-08-29T02:19:26.8227351+00:00"
+  "updatedAt": "2026-08-29T03:16:29.2255263+00:00"
 }

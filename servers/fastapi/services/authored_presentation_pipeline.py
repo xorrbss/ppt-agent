@@ -71,12 +71,74 @@ from utils.slide_capture import (
     ensure_browser_metrics,
     get_cached_browser_metrics,
     render_html_to_png,
+    render_html_to_png_with_metrics,
 )
 
 
 _AUTHORED_SLIDE_WORKERS = max(
     1, int(os.getenv("AUTHORED_SLIDE_PIPELINE_CONCURRENCY", "8"))
 )
+
+
+async def _refresh_semantic_gate_evidence(
+    *,
+    htmls: Sequence[str],
+    pngs: list[bytes],
+    evidence_ledger: DeckEvidenceLedger,
+    evidence_attempt_id: str,
+) -> tuple[Mapping[str, Any] | None, ...]:
+    """Bind final-gate metrics and pixels to the exact semantically stamped HTML.
+
+    A durable render checkpoint can predate deterministic semantic-role stamping.
+    Reusing its metrics would make the old role classification authoritative over
+    the HTML admitted by the final gate.  Capture only slides whose ledger HTML or
+    metrics do not match, append that evidence to the attempt ledger, and leave the
+    immutable durable checkpoint untouched.
+    """
+
+    metrics: list[Mapping[str, Any] | None] = []
+    for index, html in enumerate(htmls):
+        latest = evidence_ledger.latest(evidence_attempt_id, index)
+        if (
+            latest is not None
+            and latest.html == html
+            and latest.browser_metrics is not None
+        ):
+            metrics.append(latest.browser_metrics)
+            continue
+
+        try:
+            capture = await render_html_to_png_with_metrics(html)
+        except Exception as exc:
+            raise AuthoredStageError(
+                slide_index=index,
+                stage="render",
+                code="authored_slide_render_failed",
+                cause=exc,
+                retryable=is_retryable_exception(exc),
+            ) from exc
+        if capture.png == _placeholder_png() or capture.browser_metrics is None:
+            raise AuthoredStageError(
+                slide_index=index,
+                stage="render",
+                code="authored_composition_safety_gate_failed",
+                retryable=True,
+                message=(
+                    f"Slide {index + 1} did not produce browser evidence for "
+                    "the final semantic gate"
+                ),
+            )
+        pngs[index] = capture.png
+        evidence_ledger.record_slide(
+            attempt_id=evidence_attempt_id,
+            slide_index=index,
+            html=html,
+            png=capture.png,
+            browser_metrics=capture.browser_metrics,
+            checkpoint_revision=(latest.checkpoint_revision if latest is not None else 0),
+        )
+        metrics.append(capture.browser_metrics)
+    return tuple(metrics)
 
 
 async def _author_illustrate_render_pipeline(
@@ -652,15 +714,17 @@ async def _author_illustrate_render_pipeline(
             ensure_authored_semantic_roles(ensure_authored_qids(html))
             for html in htmls
         ]
-        # The ledger is the sole source for the final gate.  Never recollect
-        # browser metrics for an unchanged slide after the renderer cache has
-        # evicted it; unavailable evidence is a deliberate fail-closed result.
-        metrics = tuple(
-            (evidence_ledger.latest(evidence_attempt_id, index).browser_metrics
-             if evidence_ledger.latest(evidence_attempt_id, index) is not None
-             else None)
-            for index in range(len(gate_htmls))
+        # The ledger remains the sole source for the final gate.  A checkpoint
+        # recovered from an older semantic-role policy is not unchanged merely
+        # because its pixels survived: bind one bounded recapture to the exact
+        # gate HTML before reading its metrics.
+        metrics = await _refresh_semantic_gate_evidence(
+            htmls=gate_htmls,
+            pngs=pngs,
+            evidence_ledger=evidence_ledger,
+            evidence_attempt_id=evidence_attempt_id,
         )
+        htmls = gate_htmls
         for index, (html, browser_metrics) in enumerate(
             zip(gate_htmls, metrics, strict=True)
         ):

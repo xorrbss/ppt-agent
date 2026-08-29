@@ -104,6 +104,66 @@ def _install_one_slide_pipeline_fakes(monkeypatch, *, rendered_html):
     monkeypatch.setattr(pipeline, "record_local_stage", no_recording)
 
 
+def test_semantic_gate_recaptures_stale_role_metrics_once(monkeypatch):
+    old_html = (
+        '<main data-qid="slide" data-semantic-role="body">'
+        '<div data-qid="decorative"></div></main>'
+    )
+    gate_html = (
+        '<main data-qid="slide" data-semantic-role="decoration">'
+        '<div data-qid="decorative" data-semantic-role="decoration"></div></main>'
+    )
+    old_metrics = {"elements": [{"qid": "slide", "semanticRole": "body"}]}
+    gate_metrics = {
+        "elements": [{"qid": "slide", "semanticRole": "decoration"}]
+    }
+    ledger = pipeline.DeckEvidenceLedger(attempt_id="semantic-attempt")
+    ledger.record_slide(
+        attempt_id="semantic-attempt",
+        slide_index=0,
+        html=old_html,
+        png=b"old-png",
+        browser_metrics=old_metrics,
+        checkpoint_revision=7,
+    )
+    captures = []
+
+    async def fake_capture(html):
+        captures.append(html)
+        return SimpleNamespace(png=b"gate-png", browser_metrics=gate_metrics)
+
+    monkeypatch.setattr(pipeline, "render_html_to_png_with_metrics", fake_capture)
+
+    async def scenario():
+        pngs = [b"old-png"]
+        first = await pipeline._refresh_semantic_gate_evidence(
+            htmls=(gate_html,),
+            pngs=pngs,
+            evidence_ledger=ledger,
+            evidence_attempt_id="semantic-attempt",
+        )
+        second = await pipeline._refresh_semantic_gate_evidence(
+            htmls=(gate_html,),
+            pngs=pngs,
+            evidence_ledger=ledger,
+            evidence_attempt_id="semantic-attempt",
+        )
+        return pngs, first, second
+
+    pngs, first, second = asyncio.run(scenario())
+
+    assert captures == [gate_html]
+    assert pngs == [b"gate-png"]
+    assert first == (gate_metrics,)
+    assert second[0]["elements"][0]["semanticRole"] == "decoration"
+    latest = ledger.latest("semantic-attempt", 0)
+    assert latest is not None
+    assert latest.html == gate_html
+    assert latest.png == b"gate-png"
+    assert latest.browser_metrics["elements"][0]["semanticRole"] == "decoration"
+    assert latest.checkpoint_revision == 7
+
+
 def test_exception_metadata_is_bounded_and_redacts_secrets_paths_and_html():
     unsafe = RuntimeError(
         "provider failed api_key=top-secret-value "

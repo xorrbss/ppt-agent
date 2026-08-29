@@ -41,6 +41,10 @@ GLOBAL_ATTRIBUTES = {
     # the value; admitting the attribute keeps model-declared and deterministic
     # post-processed semantic roles on the same renderer-safe path.
     "data-semantic-role",
+    # Inert, server-stamped source identity used to join the admitted manifest
+    # block to Chromium DOM geometry/readback evidence. The isolation parser
+    # still applies its ordinary size, NUL, traversal, and duplicate checks.
+    "data-source-block-id",
     # Inert export-planning hint occasionally emitted by Authored.  It carries
     # no URL or executable value; Hybrid still derives authoritative coverage
     # from the admitted DOM instead of trusting this hint.

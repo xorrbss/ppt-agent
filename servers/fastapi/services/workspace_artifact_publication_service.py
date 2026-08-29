@@ -45,6 +45,9 @@ from services.account_deletion_service import (
 from services.presentation_export_attempt_service import (
     terminalize_export_attempt_succeeded,
 )
+from services.presentation_export_direct_attempt_service import (
+    bind_completed_semantic_export_attempt,
+)
 from services.workspace_artifact_copy import copy_and_hash as _copy_and_hash
 from services.workspace_artifact_runtime_config import (
     configured_positive_int as _configured_positive_int,
@@ -1910,7 +1913,50 @@ async def _terminalize_linked_export_attempt(
             artifact_size_bytes=artifact.size_bytes,
             provenance=provenance,
         )
+        capability_evidence = provenance.get("capability_evidence") or {}
+        atomic_binding = provenance.get("atomic_binding")
+        if capability_evidence.get("pptx_mode") == "hybrid":
+            if artifact.owner_id is None or not isinstance(atomic_binding, dict):
+                raise WorkspaceArtifactPublicationError(
+                    "workspace_export_semantic_binding_required"
+                )
+            attempt = await session.get(
+                PresentationExportAttempt, artifact.export_attempt_id
+            )
+            if attempt is None:
+                raise WorkspaceArtifactPublicationError(
+                    "workspace_export_semantic_binding_required"
+                )
+            await session.refresh(attempt)
+            receipt_payloads = [
+                payload
+                for payload in (
+                    provenance.get("coverage_manifest"),
+                    provenance.get("quality_sidecar"),
+                    provenance.get("powerpoint_qa"),
+                )
+                if isinstance(payload, dict)
+            ]
+            if not receipt_payloads:
+                receipt_payloads = [atomic_binding]
+            binding_digest = await bind_completed_semantic_export_attempt(
+                session,
+                attempt=attempt,
+                mode="hybrid",
+                renderer_source_sha256=str(
+                    atomic_binding.get("renderer_source_sha256", "")
+                ),
+                pptx_sha256=str(atomic_binding.get("pptx_sha256", "")),
+                receipt_payloads=receipt_payloads,
+                owner_id=artifact.owner_id,
+            )
+            if binding_digest is None:
+                raise WorkspaceArtifactPublicationError(
+                    "workspace_export_semantic_binding_required"
+                )
     except Exception as error:
+        if isinstance(error, WorkspaceArtifactPublicationError):
+            raise
         raise WorkspaceArtifactPublicationError(
             "workspace_export_attempt_terminal_conflict"
         ) from error

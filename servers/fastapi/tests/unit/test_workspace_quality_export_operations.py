@@ -5,6 +5,7 @@ import hashlib
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
@@ -61,6 +62,89 @@ TABLES = [
     WorkspaceArtifact.__table__,
     AsyncPresentationGenerationTaskModel.__table__,
 ]
+
+
+def test_workspace_hybrid_publication_seals_semantic_binding(monkeypatch) -> None:
+    async def scenario() -> None:
+        owner_id = uuid.uuid4()
+        presentation_id = uuid.uuid4()
+        operation_id = uuid.uuid4()
+        attempt_id = uuid.uuid4()
+        attempt = SimpleNamespace(id=attempt_id)
+        calls: list[tuple[str, dict]] = []
+
+        class Session:
+            async def get(self, model, identity):
+                assert model is PresentationExportAttempt
+                assert identity == attempt_id
+                return attempt
+
+            async def refresh(self, value):
+                assert value is attempt
+
+        async def terminalize(_session, **kwargs):
+            calls.append(("terminalize", kwargs))
+
+        async def bind(_session, **kwargs):
+            calls.append(("bind", kwargs))
+            return "sha256:" + "b" * 64
+
+        monkeypatch.setattr(
+            publication, "terminalize_export_attempt_succeeded", terminalize
+        )
+        monkeypatch.setattr(
+            publication, "bind_completed_semantic_export_attempt", bind
+        )
+        artifact = publication.PreparedWorkspaceArtifact(
+            artifact_id=uuid.uuid4(),
+            owner_id=owner_id,
+            operation_id=operation_id,
+            presentation_id=presentation_id,
+            kind="export.pptx",
+            absolute_path=Path("deck.pptx"),
+            storage_key="exports/deck.pptx",
+            public_path="/exports/deck.pptx",
+            sha256="a" * 64,
+            size_bytes=123,
+            source_revision=4,
+            export_attempt_id=attempt_id,
+        )
+        coverage = {
+            "schemaVersion": "presenton.authored-hybrid-coverage/v2",
+            "slides": [],
+        }
+        atomic = {
+            "presentation_id": str(presentation_id),
+            "export_attempt_id": str(attempt_id),
+            "presentation_revision": 4,
+            "canonical_source_sha256": "c" * 64,
+            "renderer_source_sha256": "d" * 64,
+            "pptx_sha256": "a" * 64,
+        }
+        await publication._terminalize_linked_export_attempt(
+            Session(),
+            artifact=artifact,
+            source_snapshot_sha256="c" * 64,
+            selected_adapter="general",
+            provenance={
+                "capability_evidence": {"pptx_mode": "hybrid"},
+                "coverage_manifest": coverage,
+                "atomic_binding": atomic,
+            },
+        )
+
+        assert [name for name, _ in calls] == ["terminalize", "bind"]
+        bind_call = calls[1][1]
+        assert bind_call == {
+            "attempt": attempt,
+            "mode": "hybrid",
+            "renderer_source_sha256": "d" * 64,
+            "pptx_sha256": "a" * 64,
+            "receipt_payloads": [coverage],
+            "owner_id": owner_id,
+        }
+
+    asyncio.run(scenario())
 
 
 async def _database(path: Path):
