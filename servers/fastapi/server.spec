@@ -51,7 +51,7 @@ hiddenimports_mem0 = safe_collect_submodules("mem0.configs.vector_stores") + [
 ]
 
 a = Analysis(
-    ["server.py"],
+    ["packaged_runtime_entrypoint.py"],
     pathex=[],
     binaries=binaries_fastembed
     + binaries_fastembed_vs

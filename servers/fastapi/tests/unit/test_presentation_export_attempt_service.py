@@ -4,6 +4,7 @@ import asyncio
 import base64
 from datetime import datetime, timezone
 from hashlib import sha256
+import json
 from pathlib import Path
 import uuid
 
@@ -47,6 +48,7 @@ from services.presentation_export_direct_attempt_service import (
     list_direct_hybrid_export_attempt_history,
 )
 import services.presentation_export_direct_attempt_service as direct_attempt_service
+import services.presentation_export_powerpoint_qa as powerpoint_qa_service
 from services.presentation_export_adapters import PresentationExportAdapterResult
 from services.presentation_export_capabilities import (
     PresentationExportContractError,
@@ -58,6 +60,59 @@ from services.presentation_export_router import (
     PresentationExportRouteResult,
     terminalize_standalone_presentation_export,
 )
+
+
+def test_hybrid_sidecar_pointer_survives_second_replace_interruption(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    artifact = tmp_path / "deck.pptx"
+    artifact.write_bytes(b"pptx")
+    first = powerpoint_qa_service.publish_finalized_hybrid_sidecars(
+        artifact,
+        quality={"generation": 1, "kind": "quality"},
+        coverage={"generation": 1, "kind": "coverage"},
+    )
+    pointer = Path(f"{artifact}.evidence.json")
+    assert json.loads(pointer.read_text(encoding="utf-8")) == first
+
+    real_replace = powerpoint_qa_service.os.replace
+    replacements = 0
+
+    def interrupt_second_replace(source, destination):
+        nonlocal replacements
+        replacements += 1
+        if replacements == 2:
+            raise OSError("injected second replace interruption")
+        return real_replace(source, destination)
+
+    monkeypatch.setattr(powerpoint_qa_service.os, "replace", interrupt_second_replace)
+    with pytest.raises(
+        PresentationExportContractError,
+        match="presentation_export_evidence_sidecar_finalization_failed",
+    ):
+        powerpoint_qa_service.publish_finalized_hybrid_sidecars(
+            artifact,
+            quality={"generation": 2, "kind": "quality"},
+            coverage={"generation": 2, "kind": "coverage"},
+        )
+    assert json.loads(pointer.read_text(encoding="utf-8")) == first
+
+    monkeypatch.setattr(powerpoint_qa_service.os, "replace", real_replace)
+    second = powerpoint_qa_service.publish_finalized_hybrid_sidecars(
+        artifact,
+        quality={"generation": 2, "kind": "quality"},
+        coverage={"generation": 2, "kind": "coverage"},
+    )
+    assert json.loads(pointer.read_text(encoding="utf-8")) == second
+    for member in (second["quality"], second["coverage"]):
+        payload = (tmp_path / member["file"]).read_bytes()
+        assert sha256(payload).hexdigest() == member["sha256"]
+    powerpoint_qa_service.require_matching_hybrid_sidecars(
+        artifact,
+        quality={"generation": 2, "kind": "quality"},
+        coverage={"generation": 2, "kind": "coverage"},
+        canonical_digest=sha256_canonical_json,
+    )
 
 
 def test_powerpoint_qa_does_not_self_promote_visual_parity() -> None:
@@ -882,11 +937,6 @@ def test_complete_direct_hybrid_accepts_exact_bounded_cjk_coverage_contract(
             )
             monkeypatch.setattr(
                 direct_attempt_service,
-                "publish_finalized_hybrid_sidecars",
-                lambda *_args, **_kwargs: None,
-            )
-            monkeypatch.setattr(
-                direct_attempt_service,
                 "trusted_powerpoint_qa",
                 trusted_qa,
             )
@@ -896,6 +946,37 @@ def test_complete_direct_hybrid_accepts_exact_bounded_cjk_coverage_contract(
                 bind_semantic,
             )
             async with maker() as session:
+                real_commit = session.commit
+                fail_commit_once = True
+
+                async def interrupted_commit() -> None:
+                    nonlocal fail_commit_once
+                    if fail_commit_once:
+                        fail_commit_once = False
+                        raise RuntimeError("injected terminal commit interruption")
+                    await real_commit()
+
+                monkeypatch.setattr(session, "commit", interrupted_commit)
+                with pytest.raises(
+                    RuntimeError,
+                    match="injected terminal commit interruption",
+                ):
+                    await complete_direct_hybrid_export_attempt(
+                        session,
+                        presentation_id=presentation_id,
+                        attempt_id=attempt_id,
+                        pptx_sha256=pptx_sha256,
+                        pptx_size_bytes=artifact.stat().st_size,
+                        artifact_path=str(artifact),
+                        quality=quality,
+                        coverage=coverage,
+                        powerpoint_qa=None,
+                    )
+                await session.rollback()
+                interrupted = await session.get(PresentationExportAttempt, attempt_id)
+                assert interrupted is not None and interrupted.state == "running"
+                assert Path(f"{artifact}.evidence.json").is_file()
+
                 completed, finalized = await complete_direct_hybrid_export_attempt(
                     session,
                     presentation_id=presentation_id,
@@ -928,6 +1009,11 @@ def test_complete_direct_hybrid_accepts_exact_bounded_cjk_coverage_contract(
                 assert receipt_binding["qid_owner_census_digest"].startswith("sha256:")
                 assert receipt_binding["atomic_run_digest"].startswith("sha256:")
                 assert receipt_binding["export_binding"]["pptx_sha256"] == pptx_sha256
+                unified = finalized["unifiedReleaseReceipt"]
+                assert unified["artifactSucceeded"] is True
+                assert unified["releaseReady"] is False
+                assert unified["visualParityStatus"] == "not-verified"
+                assert "visual-parity-not-passed" in unified["blockers"]
         finally:
             await engine.dispose()
 

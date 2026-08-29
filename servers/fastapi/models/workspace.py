@@ -600,6 +600,20 @@ class WorkspaceOperationEventResponse(BaseModel):
     error: Optional[str] = None
     safe_message: Optional[str] = Field(default=None, min_length=1, max_length=512)
     retryable: Optional[bool] = None
+    # Durable aggregate operation telemetry.  Provider call counts are nullable
+    # because older receipts did not record them; clients must not infer zero.
+    providerAttemptCount: Optional[int] = Field(default=None, ge=0)
+    retryCount: Optional[int] = Field(default=None, ge=0)
+    recoveryReason: Optional[str] = Field(default=None, min_length=1, max_length=128)
+    recoveryStatus: Literal[
+        "not_required",
+        "required",
+        "scheduled",
+        "in_progress",
+        "recovered",
+        "failed",
+        "unavailable",
+    ] = "unavailable"
     capacity_waiting: Optional[bool] = None
     queue_position: Optional[int] = Field(default=None, ge=1)
     result: Any = None
@@ -672,6 +686,18 @@ class WorkspaceOperationTimelineItem(BaseModel):
     error: Optional[str] = None
     error_message: Optional[str] = None
     retryable: Optional[bool] = None
+    providerAttemptCount: Optional[int] = Field(default=None, ge=0)
+    retryCount: Optional[int] = Field(default=None, ge=0)
+    recoveryReason: Optional[str] = Field(default=None, min_length=1, max_length=128)
+    recoveryStatus: Literal[
+        "not_required",
+        "required",
+        "scheduled",
+        "in_progress",
+        "recovered",
+        "failed",
+        "unavailable",
+    ] = "unavailable"
     capacity_waiting: bool = False
     queue_position: Optional[int] = Field(default=None, ge=1)
     result: Any = None

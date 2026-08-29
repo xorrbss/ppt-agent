@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.export-release-finalization",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Publish Hybrid evidence via one immutable-pair pointer; artifact success never implies release readiness; COM leases persist hash-only.",
+  "scope": [
+    "authored-export",
+    "release-readiness",
+    "security"
+  ],
+  "invariants": [
+    "Requested source, visual, performance, and native policy gates are evaluated in the final unified receipt.",
+    "visualParity not-verified keeps releaseReady false.",
+    "COM lease bearer tokens are returned only by a successful claim and never persisted raw."
+  ],
+  "forbidden": [
+    "Treating artifact succeeded as release ready",
+    "Publishing quality and coverage as independently mutable final authorities",
+    "Persisting raw COM lease bearer tokens"
+  ],
+  "evidence": [
+    "servers/fastapi/services/presentation_export_powerpoint_qa.py",
+    "servers/fastapi/services/presentation_export_direct_attempt_service.py",
+    "servers/fastapi/models/sql/presentation_export_attempt.py",
+    "servers/fastapi/services/authored_vnext/semantic/qualification_v3.py",
+    "servers/nextjs/app/api/rasterize-icon/route.ts"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-29T14:35:48.8533728+00:00"
+}

@@ -194,12 +194,14 @@ function Restore-NextGeneratedProjectFiles {
         try {
             $originalConfig = ($utf8.GetString($TsConfigOriginal) | ConvertFrom-Json)
             $currentConfig = (Get-Content -Raw -LiteralPath $nextTsConfigPath | ConvertFrom-Json)
-            $generatedIncludes = @(
-                "$DistDirectoryName/types/**/*.ts",
-                "$DistDirectoryName/dev/types/**/*.ts"
-            )
+            # Next can append either this launch's exact PID directory or stale
+            # generated authored-vNext paths left by an interrupted launcher.
+            # They are derived type outputs, never source includes. Remove only
+            # that generated family; preserve every unrelated user include.
             $currentConfig.include = @(
-                $currentConfig.include | Where-Object { $_ -notin $generatedIncludes }
+                $currentConfig.include | Where-Object {
+                    $_ -notmatch '^\.next-authored-vnext-dev-[0-9]+/(?:dev/)?types/\*\*/\*\.ts$'
+                }
             )
             $originalComparable = $originalConfig | ConvertTo-Json -Depth 100 -Compress
             $currentComparable = $currentConfig | ConvertTo-Json -Depth 100 -Compress

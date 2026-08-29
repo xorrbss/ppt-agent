@@ -18,8 +18,10 @@ import {
   readPptxArchive,
   referencedPackageTargets,
   relationshipTargetPath,
+  type PptxCustomPropertyInput,
   upsertPptxCustomProperties,
   writePptxArchive,
+  writePptxArchiveAsync,
   xmlAttributeValue as relationshipAttribute,
 } from "./pptx-archive.ts";
 
@@ -504,7 +506,9 @@ function hardenTextOverlay(
     .replace(/<a:(?:normAutofit|noAutofit)\/>/, "<a:noAutofit/>");
   return expandStandaloneTextBounds(hardened, item);
 }
-function provenanceProperties(provenance?: AuthoredHybridPptxProvenance) {
+function provenanceProperties(
+  provenance?: AuthoredHybridPptxProvenance,
+): PptxCustomPropertyInput[] {
   if (!provenance) return [];
   const digest = (value: string | undefined, label: string): string | undefined => {
     if (value === undefined) return undefined;
@@ -521,13 +525,28 @@ function provenanceProperties(provenance?: AuthoredHybridPptxProvenance) {
       (!Number.isSafeInteger(provenance.presentationRevision) || provenance.presentationRevision < 0)) {
     throw new Error("Hybrid presentationRevision is invalid.");
   }
-  return [
-    provenance.exportAttemptId === undefined ? null : { name: "Presenton.ExportAttemptId", value: provenance.exportAttemptId },
-    provenance.presentationRevision === undefined ? null : { name: "Presenton.PresentationRevision", value: provenance.presentationRevision },
-    provenance.profileId === undefined ? null : { name: "Presenton.EditableHybridProfileId", value: provenance.profileId },
-    digest(provenance.canonicalSourceDigest, "canonicalSourceDigest") === undefined ? null : { name: "Presenton.CanonicalSourceDigest", value: digest(provenance.canonicalSourceDigest, "canonicalSourceDigest")! },
-    digest(provenance.sourceDigest, "sourceDigest") === undefined ? null : { name: "Presenton.SourceDigest", value: digest(provenance.sourceDigest, "sourceDigest")! },
-  ].filter((property): property is { name: string; value: string | number } => property !== null);
+  const properties: PptxCustomPropertyInput[] = [];
+  if (provenance.exportAttemptId !== undefined) {
+    properties.push({ name: "Presenton.ExportAttemptId", value: provenance.exportAttemptId });
+  }
+  if (provenance.presentationRevision !== undefined) {
+    properties.push({ name: "Presenton.PresentationRevision", value: provenance.presentationRevision });
+  }
+  if (provenance.profileId !== undefined) {
+    properties.push({ name: "Presenton.EditableHybridProfileId", value: provenance.profileId });
+  }
+  const canonicalSourceDigest = digest(
+    provenance.canonicalSourceDigest,
+    "canonicalSourceDigest",
+  );
+  if (canonicalSourceDigest !== undefined) {
+    properties.push({ name: "Presenton.CanonicalSourceDigest", value: canonicalSourceDigest });
+  }
+  const sourceDigest = digest(provenance.sourceDigest, "sourceDigest");
+  if (sourceDigest !== undefined) {
+    properties.push({ name: "Presenton.SourceDigest", value: sourceDigest });
+  }
+  return properties;
 }
 
 function assembleSlide(
@@ -754,12 +773,12 @@ function assembleSlide(
 }
 
 /** Rebuild selected slides inside the already-generated fidelity PPTX skeleton. */
-export function assembleAuthoredHybridPptx(
+function assembleAuthoredHybridEntries(
   fidelityPptx: Buffer,
   layers: readonly AuthoredHybridSlideLayer[],
   options: AuthoredHybridAssemblerOptions = {}
-): Buffer {
-  if (!layers.length && !options.provenance) return Buffer.from(fidelityPptx);
+): Map<string, Buffer> | null {
+  if (!layers.length && !options.provenance) return null;
   const slideNumbers = new Set<number>();
   for (const layer of layers) {
     if (slideNumbers.has(layer.slideNumber)) {
@@ -788,7 +807,26 @@ export function assembleAuthoredHybridPptx(
     }
   }
   upsertPptxCustomProperties(entries, provenanceProperties(options.provenance));
-  const output = writePptxArchive(entries);
-  readPptxArchive(output);
-  return output;
+  return entries;
+}
+
+export function assembleAuthoredHybridPptx(
+  fidelityPptx: Buffer,
+  layers: readonly AuthoredHybridSlideLayer[],
+  options: AuthoredHybridAssemblerOptions = {}
+): Buffer {
+  const entries = assembleAuthoredHybridEntries(fidelityPptx, layers, options);
+  return entries === null ? Buffer.from(fidelityPptx) : writePptxArchive(entries);
+}
+
+/** Async ZIP assembly used by the server export path for large presentations. */
+export async function assembleAuthoredHybridPptxAsync(
+  fidelityPptx: Buffer,
+  layers: readonly AuthoredHybridSlideLayer[],
+  options: AuthoredHybridAssemblerOptions = {}
+): Promise<Buffer> {
+  const entries = assembleAuthoredHybridEntries(fidelityPptx, layers, options);
+  return entries === null
+    ? Buffer.from(fidelityPptx)
+    : await writePptxArchiveAsync(entries);
 }

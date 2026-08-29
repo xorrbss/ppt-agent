@@ -128,7 +128,13 @@ class AuthoredComQualificationJobV3(SQLModel, table=True):
     state: str = Field(default="captured", sa_column=Column(String(32), nullable=False))
     transition_sequence: int = Field(default=0, sa_column=Column(Integer, nullable=False))
     lease_owner: str | None = Field(default=None, sa_column=Column(String(128), nullable=True))
-    lease_token: str | None = Field(default=None, sa_column=Column(String(128), nullable=True))
+    # Keep the deployed column name for migration compatibility, but persist
+    # only a prefixed SHA-256 verifier. The bearer token exists only in the
+    # successful claim response and worker memory.
+    lease_token_hash: str | None = Field(
+        default=None,
+        sa_column=Column("lease_token", String(71), nullable=True),
+    )
     lease_expires_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
     heartbeat_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
     attempt_count: int = Field(default=0, sa_column=Column(Integer, nullable=False))

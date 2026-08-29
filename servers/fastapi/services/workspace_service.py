@@ -1059,6 +1059,8 @@ def _event_to_wire(
     event: WorkspaceOperationEvent,
     *,
     operation_anchor_position: int | None = None,
+    operation_retry_count: int | None = None,
+    operation_result: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload = _safe_payload(event.payload or {})
     queue_position = payload.get("queue_position") if isinstance(payload, dict) else None
@@ -1068,6 +1070,60 @@ def _event_to_wire(
         or queue_position < 1
     ):
         queue_position = None
+    retry_count = payload.get("retry_count") if isinstance(payload, dict) else None
+    if isinstance(retry_count, bool) or not isinstance(retry_count, int) or retry_count < 0:
+        retry_count = operation_retry_count
+    provider_attempt_count = None
+    for candidate in (
+        operation_result,
+        (
+            operation_result.get("generation_timing_receipt")
+            if isinstance(operation_result, Mapping)
+            else None
+        ),
+    ):
+        if not isinstance(candidate, Mapping):
+            continue
+        raw_count = candidate.get(
+            "providerAttemptCount", candidate.get("provider_attempt_count")
+        )
+        if (
+            not isinstance(raw_count, bool)
+            and isinstance(raw_count, int)
+            and raw_count >= 0
+        ):
+            provider_attempt_count = min(raw_count, 1_000_000)
+            break
+    reason_code = payload.get("reason_code") if isinstance(payload, dict) else None
+    error_code = payload.get("error_code") if isinstance(payload, dict) else None
+    recovery_reason = reason_code
+    if recovery_reason is None and error_code == "operation_recovery_required":
+        recovery_reason = error_code
+    if not (
+        isinstance(recovery_reason, str)
+        and 1 <= len(recovery_reason) <= 128
+        and all(char.isalnum() or char in "_.-" for char in recovery_reason)
+    ):
+        recovery_reason = None
+    event_state = (
+        payload.get("state", payload.get("status"))
+        if isinstance(payload, dict)
+        else None
+    )
+    if retry_count is None:
+        recovery_status = "unavailable"
+    elif retry_count == 0 and recovery_reason is None:
+        recovery_status = "not_required"
+    elif event_state in {"queued", "waiting_for_assets", "blocked"}:
+        recovery_status = "scheduled"
+    elif event_state in {"running", "cancelling"}:
+        recovery_status = "in_progress"
+    elif event_state == "succeeded":
+        recovery_status = "recovered"
+    elif event_state in {"failed", "dead_letter", "cancelled"}:
+        recovery_status = "failed"
+    else:
+        recovery_status = "required"
     return {
         "id": f"{event.operation_id}:{event.sequence}",
         "operation_id": str(event.operation_id),
@@ -1094,6 +1150,10 @@ def _event_to_wire(
             and isinstance(payload.get("retryable"), bool)
             else None
         ),
+        "providerAttemptCount": provider_attempt_count,
+        "retryCount": retry_count,
+        "recoveryReason": recovery_reason,
+        "recoveryStatus": recovery_status,
         "capacity_waiting": (
             payload.get("capacity_waiting")
             if isinstance(payload, dict)
@@ -1415,6 +1475,17 @@ async def workspace_timeline(
                     operation_anchor_position=operations_by_id[
                         event.operation_id
                     ].anchor_position,
+                    operation_retry_count=operations_by_id[
+                        event.operation_id
+                    ].retry_count,
+                    operation_result=(
+                        operations_by_id[event.operation_id].result
+                        if isinstance(
+                            operations_by_id[event.operation_id].result,
+                            Mapping,
+                        )
+                        else None
+                    ),
                 )
             )
 
@@ -1456,6 +1527,7 @@ async def workspace_timeline(
                     "error": row.error_code,
                     "error_message": _SAFE_ERROR_MESSAGES.get(row.error_code or ""),
                     "retryable": _operation_retryable(row),
+                    "retry_count": row.retry_count,
                     "result": _safe_payload(row.result),
                     "version": row.version,
                     "expected_revision": row.expected_revision,
@@ -1580,6 +1652,8 @@ async def workspace_events(
                 select(
                     WorkspaceOperationEvent,
                     WorkspaceOperation.anchor_position,
+                    WorkspaceOperation.retry_count,
+                    WorkspaceOperation.result,
                 )
                 .join(
                     WorkspaceOperation,
@@ -1604,8 +1678,14 @@ async def workspace_events(
             _event_to_wire(
                 event,
                 operation_anchor_position=anchor_position,
+                operation_retry_count=retry_count,
+                operation_result=(
+                    operation_result
+                    if isinstance(operation_result, Mapping)
+                    else None
+                ),
             )
-            for event, anchor_position in rows
+            for event, anchor_position, retry_count, operation_result in rows
         ],
         "event_high_watermark": str(high_watermark),
     }

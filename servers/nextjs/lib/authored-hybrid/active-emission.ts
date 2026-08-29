@@ -30,6 +30,7 @@ interface ParsedManifestV1 {
   readonly presentationId: string;
   readonly presentationRevision: number;
   readonly canonicalDigest: string;
+  readonly sceneDigest: string | null;
   readonly orderedSlides: readonly OrderedSlideBundleV1[];
 }
 
@@ -78,6 +79,7 @@ export interface ActiveEmissionExportBinding {
   readonly presentationRevision: number;
   readonly activeGeneration: number;
   readonly canonicalDigest: string | null;
+  readonly sceneDigest: string | null;
   readonly slides: readonly ActiveEmissionSlideBinding[];
 }
 
@@ -563,6 +565,7 @@ function parseManifest(value: unknown): ParsedManifestV1 {
     presentationId: stringValue(value.presentationId),
     presentationRevision,
     canonicalDigest: digestValue(value.canonicalDigest),
+    sceneDigest,
     orderedSlides,
   });
 }
@@ -647,6 +650,7 @@ export function bindActiveAuthoredEmissionForExport(
       presentationRevision: active.presentationRevision,
       activeGeneration: active.activeGeneration,
       canonicalDigest: attemptDigest ?? active.canonicalDigest,
+      sceneDigest: null,
       slides: Object.freeze([]),
     });
   }
@@ -693,6 +697,7 @@ export function bindActiveAuthoredEmissionForExport(
     presentationRevision: active.presentationRevision,
     activeGeneration: active.activeGeneration,
     canonicalDigest: active.canonicalDigest,
+    sceneDigest: active.manifest.sceneDigest,
     slides: Object.freeze(slides),
   });
 }

@@ -9,7 +9,11 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import { findUnusedPorts, setupEnv, setUserConfig } from "./utils";
-import { startFastApiServer, startNextJsServer } from "./utils/servers";
+import {
+  startFastApiServer,
+  startNextJsServer,
+  startWorkspaceOperationWorker,
+} from "./utils/servers";
 import {
   baseDir,
   ensureDirectoriesExist,
@@ -68,6 +72,7 @@ var win: BrowserWindow | undefined;
 type ManagedServerProcess = Awaited<ReturnType<typeof startFastApiServer>>;
 var fastApiServer: ManagedServerProcess | undefined;
 var nextjsServer: ManagedServerProcess | undefined;
+var workspaceOperationWorker: ManagedServerProcess | undefined;
 let isStopping = false;
 let trustedAppOrigin: string | undefined;
 const startupStatus: Record<string, string> = {
@@ -267,51 +272,59 @@ async function startServers(fastApiPort: number, nextjsPort: number, userConfigR
     const sofficePath = getSofficePath();
     const exportPackageRoot = path.join(baseDir, "resources", "export");
     const exportConverterPath = resolveExportConverterPath(baseDir);
+    const workspaceWorkerMode = "external";
+    const fastApiEnvironment: FastApiEnv = {
+      DEBUG: isDev ? "True" : "False",
+      ...buildProviderNonSecretStartupConfig(process.env),
+      DATABASE_URL: process.env.DATABASE_URL,
+      SLIDESPEC_IMPORT_SHADOW: process.env.SLIDESPEC_IMPORT_SHADOW,
+      SLIDESPEC_REPAIR_SHADOW: process.env.SLIDESPEC_REPAIR_SHADOW,
+      SLIDESPEC_REPAIR_CANARY: process.env.SLIDESPEC_REPAIR_CANARY,
+      SLIDESPEC_REPAIR_APPLY: process.env.SLIDESPEC_REPAIR_APPLY,
+      SLIDESPEC_REPAIR_ALL_SLIDES: process.env.SLIDESPEC_REPAIR_ALL_SLIDES,
+      SLIDESPEC_KILL_SWITCH: process.env.SLIDESPEC_KILL_SWITCH,
+      SLIDESPEC_REPAIR_ROLLOUT_SALT: process.env.SLIDESPEC_REPAIR_ROLLOUT_SALT,
+      APP_DATA_DIRECTORY: appDataDir,
+      ...buildProviderSecureEnv(appDataDir),
+      TEMP_DIRECTORY: tempDir,
+      USER_CONFIG_PATH: userConfigPath, ...userConfigRuntimeEnv,
+      MIGRATE_DATABASE_ON_STARTUP: "True",
+      WORKSPACE_OPERATION_WORKER_MODE: workspaceWorkerMode,
+      DISABLE_AUTH: disableAuthForElectron,
+      ...(sofficePath && { SOFFICE_PATH: sofficePath }),
+      IMAGEMAGICK_BINARY: getImageMagickBinaryPath(),
+      LITEPARSE_RUNNER_PATH: getLiteParseRunnerPath(),
+      LITEPARSE_NODE_BINARY:
+        process.env.PRESENTON_DEV_NODE_BINARY || (isDev ? "node" : process.execPath),
+      ELECTRON_RUN_AS_NODE: "1",
+      EXPORT_PACKAGE_ROOT: exportPackageRoot,
+      EXPORT_RUNTIME_DIR: exportPackageRoot,
+      ...(exportConverterPath && { BUILT_PYTHON_MODULE_PATH: exportConverterPath }),
+    };
     const fastApi = await startFastApiServer(
       fastapiDir,
       fastApiPort,
-      {
-        DEBUG: isDev ? "True" : "False",
-        ...buildProviderNonSecretStartupConfig(process.env),
-        DATABASE_URL: process.env.DATABASE_URL,
-        SLIDESPEC_IMPORT_SHADOW: process.env.SLIDESPEC_IMPORT_SHADOW,
-        SLIDESPEC_REPAIR_SHADOW: process.env.SLIDESPEC_REPAIR_SHADOW,
-        SLIDESPEC_REPAIR_CANARY: process.env.SLIDESPEC_REPAIR_CANARY,
-        SLIDESPEC_REPAIR_APPLY: process.env.SLIDESPEC_REPAIR_APPLY,
-        SLIDESPEC_REPAIR_ALL_SLIDES: process.env.SLIDESPEC_REPAIR_ALL_SLIDES,
-        SLIDESPEC_KILL_SWITCH: process.env.SLIDESPEC_KILL_SWITCH,
-        SLIDESPEC_REPAIR_ROLLOUT_SALT: process.env.SLIDESPEC_REPAIR_ROLLOUT_SALT,
-        APP_DATA_DIRECTORY: appDataDir,
-        ...buildProviderSecureEnv(appDataDir),
-        TEMP_DIRECTORY: tempDir,
-        USER_CONFIG_PATH: userConfigPath, ...userConfigRuntimeEnv,
-        MIGRATE_DATABASE_ON_STARTUP: "True",
-        DISABLE_AUTH: disableAuthForElectron,
-        // Resolved by libreoffice-check.ts at startup when available; lets
-        // Python invoke the exact binary path instead of relying on PATH.
-        ...(sofficePath && {
-          SOFFICE_PATH: sofficePath,
-        }),
-        IMAGEMAGICK_BINARY: getImageMagickBinaryPath(),
-        LITEPARSE_RUNNER_PATH: getLiteParseRunnerPath(),
-        // Packaged builds use Electron's embedded runtime so LiteParse does not
-        // depend on a system-wide Node install. In dev, electron-as-node imports
-        // @llamaindex/liteparse too slowly (>20s, native-addon ABI mismatch),
-        // tripping the backend's readiness timeout — use system Node instead.
-        // PRESENTON_DEV_NODE_BINARY lets the launcher pin an absolute node path.
-        LITEPARSE_NODE_BINARY:
-          process.env.PRESENTON_DEV_NODE_BINARY || (isDev ? "node" : process.execPath),
-        ELECTRON_RUN_AS_NODE: "1",
-        EXPORT_PACKAGE_ROOT: exportPackageRoot,
-        EXPORT_RUNTIME_DIR: exportPackageRoot,
-        ...(exportConverterPath && {
-          BUILT_PYTHON_MODULE_PATH: exportConverterPath,
-        }),
-      },
+      fastApiEnvironment,
       isDev,
     );
     fastApiServer = fastApi;
     await fastApi.ready;
+
+    const worker = await startWorkspaceOperationWorker(
+      fastapiDir,
+      fastApiEnvironment,
+      isDev,
+    );
+    workspaceOperationWorker = worker;
+    await worker.ready;
+    if (worker.process.exitCode !== null) {
+      throw new Error("Workspace operation worker exited during startup");
+    }
+    worker.process.once("exit", (code, signal) => {
+      if (workspaceOperationWorker !== worker) return;
+      safeError(`Workspace operation worker exited unexpectedly: code=${code}, signal=${signal}`);
+      void forceQuitApp(1);
+    });
 
     const nextjs = await startNextJsServer(
       nextjsDir,
@@ -340,14 +353,18 @@ async function startServers(fastApiPort: number, nextjsPort: number, userConfigR
     await nextjs.ready;
   } catch (error) {
     safeError("Server startup error:", error);
+    await stopServers();
+    throw error;
   }
 }
 
 async function stopServers() {
   const fastApi = fastApiServer;
   const nextjs = nextjsServer;
+  const worker = workspaceOperationWorker;
   fastApiServer = undefined;
   nextjsServer = undefined;
+  workspaceOperationWorker = undefined;
 
   await Promise.all([
     fastApi
@@ -355,6 +372,9 @@ async function stopServers() {
       : Promise.resolve(),
     nextjs
       ? nextjs.stop().catch((error) => safeError("Failed to stop NextJS:", error))
+      : Promise.resolve(),
+    worker
+      ? worker.stop().catch((error) => safeError("Failed to stop workspace worker:", error))
       : Promise.resolve(),
   ]);
 }
@@ -461,7 +481,13 @@ app.whenReady().then(async () => {
     () => trustedAppOrigin,
   );
 
-  await startServers(fastApiPort, nextjsPort, userConfigRuntimeEnv);
+  try {
+    await startServers(fastApiPort, nextjsPort, userConfigRuntimeEnv);
+  } catch (error) {
+    safeError("[Presenton] Required application servers did not become ready", error);
+    await forceQuitApp(1);
+    return;
+  }
   if (isStopping) {
     return;
   }

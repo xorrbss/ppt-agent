@@ -94,6 +94,7 @@ from services.authored_composition_policy import (
     repair_authored_header_eyebrow_clip,
     repair_authored_layout_alignment,
     resolve_composition_profile,
+    semantic_repair_boundary_violations,
 )
 from services.provider_usage_instrumentation import provider_usage_scope, record_local_stage
 from utils.authored_dom_quality import ensure_authored_qids, inspect_authored_dom
@@ -124,6 +125,9 @@ from utils.slide_capture import (
     render_html_to_png_with_metrics,
 )
 from services.authored_evidence_ledger import digest_html, digest_png
+from services.authored_generation_timing_receipt import (
+    create_generation_timing_receipt,
+)
 from services.authored_quality_receipt_v2 import (
     create_quality_receipt_v2,
     evaluate_capacity_browser_metrics,
@@ -236,30 +240,47 @@ def _capacity_gate_initial_critiques(
 ) -> list[SlideCritique | None]:
     """Make deterministic capacity failures start the existing one-cycle repair."""
 
-    violations_by_slide: dict[int, list[str]] = {}
+    details_by_slide: dict[int, list[CritiqueIssue]] = {}
     for failure in gate_failures:
         slide_index = failure.get("slide_index")
         if not isinstance(slide_index, int):
             continue
         for issue in failure.get("issues", ()):
-            if isinstance(issue, dict) and issue.get("category") == "capacity":
-                message = str(issue.get("message") or "").strip()
-                if message:
-                    violations_by_slide.setdefault(slide_index, []).append(message)
+            if not isinstance(issue, dict):
+                continue
+            category = str(issue.get("category") or "other").strip().lower()
+            message = str(issue.get("message") or issue.get("detail") or "").strip()
+            if not message:
+                continue
+            if category == "capacity":
+                instructions = capacity_repair_instructions(
+                    roles[slide_index],
+                    (message,),
+                    allow_text_reduction=allow_text_reduction,
+                )
+                details_by_slide.setdefault(slide_index, []).extend(
+                    CritiqueIssue(type="overflow", severity="high", detail=detail)
+                    for detail in instructions
+                )
+                continue
+            issue_type = "overlap" if category == "overlap" else "overflow"
+            details_by_slide.setdefault(slide_index, []).append(
+                CritiqueIssue(
+                    type=issue_type,
+                    severity="high",
+                    detail=(
+                        f"Deterministic DOM {category} gate: {message}. Preserve all "
+                        "QIDs, semantic roles, source owners, and title/header text."
+                    )[:200],
+                )
+            )
     return [
         (
             SlideCritique(
                 needs_fix=True,
-                issues=[
-                    CritiqueIssue(type="overflow", severity="high", detail=detail)
-                    for detail in capacity_repair_instructions(
-                        roles[index],
-                        violations_by_slide.get(index, ()),
-                        allow_text_reduction=allow_text_reduction,
-                    )
-                ],
+                issues=details_by_slide[index],
             )
-            if violations_by_slide.get(index)
+            if details_by_slide.get(index)
             else None
         )
         for index in slide_indices
@@ -285,13 +306,6 @@ def _deterministic_repair_candidate(
         capacity,
         profile_id=profile_id,
     )
-    if reduced == candidate:
-        reduced = reduce_authored_closing_title_punctuation(
-            candidate,
-            browser_metrics,
-            capacity,
-            profile_id=profile_id,
-        )
     candidate = reduced
     if capacity_violations(
         candidate,
@@ -368,9 +382,32 @@ def _admit_vqa_capacity_candidate(
     return original_html, original_png, original_metrics, False
 
 
-def _admit_gate_repair_capacity_candidate(**kwargs):
+def _admit_gate_repair_capacity_candidate(
+    *,
+    allow_primary_title_shortening: bool = False,
+    **kwargs,
+):
     """Gate-repair originals remain failed, so an invalid rewrite is terminal."""
 
+    semantic_violations = semantic_repair_boundary_violations(
+        kwargs["original_html"],
+        kwargs["candidate_html"],
+        allow_primary_title_shortening=allow_primary_title_shortening,
+    )
+    if semantic_violations:
+        LOGGER.warning(
+            "[authored] rejected bounded gate repair semantic boundary slide=%d "
+            "violations=%s",
+            int(kwargs["slide_index"]) + 1,
+            list(semantic_violations),
+        )
+        raise AuthoredStageError(
+            slide_index=int(kwargs["slide_index"]),
+            stage="render",
+            code="authored_composition_safety_gate_failed",
+            retryable=False,
+            message="bounded repair changed protected semantic ownership",
+        )
     return _admit_vqa_capacity_candidate(
         **kwargs,
         allow_original_fallback=False,
@@ -598,13 +635,6 @@ async def _apply_final_checkpoint_closing_capacity_reducer(
             capacity=capacity,
             profile_id=profile_id,
         )
-        if reduced is None:
-            reduced = await _apply_bounded_closing_title_reducer(
-                html=html,
-                browser_metrics=metrics,
-                capacity=capacity,
-                profile_id=profile_id,
-            )
         if reduced is None:
             continue
         htmls[index], pngs[index], metrics_override[index] = reduced
@@ -1330,6 +1360,13 @@ async def _generate_authored_presentation(
         for item in gate_failures_raw
         if isinstance(item, dict) and isinstance(item.get("slide_index"), int)
     ]
+    author_provider_attempt_counts = [
+        int(value)
+        for value in getattr(pipeline, "author_provider_attempt_counts", ())
+    ]
+    has_author_provider_attempt_counts = (
+        len(author_provider_attempt_counts) == len(htmls)
+    )
     initial_gate_signatures = {
         signature
         for item in gate_failures
@@ -1374,8 +1411,12 @@ async def _generate_authored_presentation(
             "max_cycles": 1,
             "style": style,
             "return_details": True,
-            "local_patch_only": source_reflow,
+            # Gate recovery is never allowed to return a free-form replacement
+            # document. It may only use the existing structured QID patch path
+            # or the deterministic reducers below.
+            "local_patch_only": True,
             "fail_on_residual_dom_issues": True,
+            "allow_patch_proposal_retry": False,
             "capacity_briefs": [capacity_briefs[index] for index in flagged],
             "initial_critiques": _capacity_gate_initial_critiques(
                 gate_failures,
@@ -1384,6 +1425,12 @@ async def _generate_authored_presentation(
                 allow_text_reduction=composition_profile.allow_summarization,
             ),
         }
+        provider_recovery_allowed = [
+            has_author_provider_attempt_counts
+            and author_provider_attempt_counts[index] < 2
+            for index in flagged
+        ]
+        repair_kwargs["provider_recovery_allowed"] = provider_recovery_allowed
         if chapter_plan is not None:
             repair_kwargs["chapter_prefixes"] = [
                 chapter_plan.eyebrow_prefix_at(index) for index in flagged
@@ -1412,31 +1459,64 @@ async def _generate_authored_presentation(
                 original_metrics,
                 getattr(latest, "capture_policy", None),
             )
-        try:
-            repaired = await revise_authored_deck(
-                [htmls[index] for index in flagged],
-                [pngs[index] for index in flagged],
-                [contents[index] for index in flagged],
-                [roles[index] for index in flagged],
-                brand,
-                authored_deck.design_system,
-                **repair_kwargs,
+        deterministic_gate_candidates: dict[int, str] = {}
+        for local_index, absolute_index in enumerate(flagged):
+            original_html, _png, metrics, capture_policy = frozen_gate_inputs[
+                absolute_index
+            ]
+            deterministic = _deterministic_repair_candidate(
+                html=original_html,
+                browser_metrics=metrics,
+                capacity=capacity_plan.at(absolute_index),
+                header_contract=header_contract,
+                role=roles[absolute_index],
+                profile_id=composition_profile.profile_id,
+                allow_immutable_checkpoint_geometry=(capture_policy == "hydrated"),
             )
+            deterministic_gate_candidates[absolute_index] = deterministic
+            if digest_html(deterministic) != digest_html(original_html):
+                # A deterministic local candidate needs only the one bound
+                # Chromium recapture below, not a provider recovery.
+                provider_recovery_allowed[local_index] = False
+        try:
+            accepted_repair_kwargs = inspect.signature(
+                revise_authored_deck
+            ).parameters
+            repair_kwargs = {
+                key: value
+                for key, value in repair_kwargs.items()
+                if key in accepted_repair_kwargs
+            }
+            with provider_usage_scope(
+                job_id=(generation_job.id if generation_job is not None else None),
+                operation="authored_generation",
+                stage="repair",
+                attempt_number=(generation_job.attempt_number if generation_job else 0),
+            ):
+                repaired = await revise_authored_deck(
+                    [htmls[index] for index in flagged],
+                    [pngs[index] for index in flagged],
+                    [contents[index] for index in flagged],
+                    [roles[index] for index in flagged],
+                    brand,
+                    authored_deck.design_system,
+                    **repair_kwargs,
+                )
+            if has_author_provider_attempt_counts:
+                for local_index, index in enumerate(flagged):
+                    # One structured patch proposal is the single remaining
+                    # recovery call. Reserve it before any later VQA pass.
+                    if provider_recovery_allowed[local_index]:
+                        author_provider_attempt_counts[index] = 2
             revised_htmls, revised_pngs, fixed = repaired[:3]
             revised_htmls = list(revised_htmls)
             for local_index, absolute_index in enumerate(flagged):
-                _, _, metrics, capture_policy = frozen_gate_inputs[absolute_index]
-                revised_htmls[local_index] = _deterministic_repair_candidate(
-                    html=revised_htmls[local_index],
-                    browser_metrics=metrics,
-                    capacity=capacity_plan.at(absolute_index),
-                    header_contract=header_contract,
-                    role=roles[absolute_index],
-                    profile_id=composition_profile.profile_id,
-                    allow_immutable_checkpoint_geometry=(
-                        capture_policy == "hydrated"
-                    ),
-                )
+                if digest_html(revised_htmls[local_index]) == digest_html(
+                    frozen_gate_inputs[absolute_index][0]
+                ):
+                    revised_htmls[local_index] = deterministic_gate_candidates[
+                        absolute_index
+                    ]
             # Bind the repaired HTML, pixels, and Chromium readback atomically.
             # All deterministic mutations above form one candidate and consume
             # exactly one recapture for each failed slide.
@@ -1461,6 +1541,12 @@ async def _generate_authored_presentation(
                         candidate_png=revised_pngs[local_index],
                         candidate_metrics=revised_metrics[local_index],
                         capacity=capacity_plan.at(absolute_index),
+                        allow_primary_title_shortening=(
+                            composition_profile.profile_id == "ordinary"
+                            and composition_profile.allow_summarization
+                            and "data-source-block-id"
+                            not in original_html.lower()
+                        ),
                     )
                 )
                 if not admitted or selected_metrics is None:
@@ -1598,6 +1684,10 @@ async def _generate_authored_presentation(
                     "capacity_briefs": capacity_briefs,
                     **vision_qa_kwargs,
                 }
+                if has_author_provider_attempt_counts:
+                    revise_kwargs["provider_recovery_allowed"] = [
+                        count < 2 for count in author_provider_attempt_counts
+                    ]
                 accepted_revise_kwargs = inspect.signature(
                     revise_authored_deck
                 ).parameters
@@ -1833,6 +1923,7 @@ async def _generate_authored_presentation(
     if source_readback_receipt is not None:
         quality_gate_receipt["sourceReadback"] = source_readback_receipt.as_dict()
 
+    quality_receipt_v2 = None
     if evidence_ledger is not None and evidence_attempt_id is not None:
         capacity_checks: list[dict[str, object]] = []
         for index, metrics in enumerate(retained_final_metrics or ()):
@@ -1879,7 +1970,7 @@ async def _generate_authored_presentation(
             },
             "totalMs": round((time.monotonic() - started) * 1000),
         }
-        v2 = create_quality_receipt_v2(
+        quality_receipt_v2 = create_quality_receipt_v2(
             evidence_ledger,
             attempt_id=evidence_attempt_id,
             revision=evidence_ledger.revision(evidence_attempt_id),
@@ -1915,11 +2006,11 @@ async def _generate_authored_presentation(
         )
         quality_gate_receipt = {
             **quality_gate_receipt,
-            **v2.to_dict(),
+            **quality_receipt_v2.to_dict(),
             "profileId": composition_profile.profile_id,
             "slideCount": len(htmls),
             "htmlDigest": "sha256:" + sha256_canonical_json(htmls),
-            "status": "passed" if v2.gate_passed else "blocked",
+            "status": "passed" if quality_receipt_v2.gate_passed else "blocked",
             "residualIssues": residual_gate_failures,
             "residualIssueCount": len(residual_gate_failures),
             "requestedQualityProfile": quality_profile_id,
@@ -1936,7 +2027,7 @@ async def _generate_authored_presentation(
                 else []
             ),
         }
-        if not v2.gate_passed:
+        if not quality_receipt_v2.gate_passed:
             raise AuthoredStageError(
                 slide_index=0,
                 stage="render",
@@ -2057,6 +2148,14 @@ async def _generate_authored_presentation(
         stage="publication",
         elapsed_seconds=publication_elapsed,
     )
+    if generation_job is not None and quality_receipt_v2 is not None:
+        create_generation_timing_receipt(
+            job_id=generation_job.id,
+            quality_receipt=quality_receipt_v2,
+            attempt_number=generation_job.attempt_number,
+            stage_timings_ms=stage_timings_ms,
+            total_ms=round((time.monotonic() - started) * 1000),
+        )
     if generation_job is not None:
         # Seal the evidence directory only after publication and the durable
         # QualityReceipt v2 gate have succeeded.  The sweeper may then reclaim

@@ -161,8 +161,9 @@ async def app_lifespan(_: FastAPI):
         source_locked_maintenance_started = True
         await start_presentation_generation_dispatcher()
         presentation_generation_dispatcher_started = True
-        await start_workspace_cleanup_maintenance()
-        workspace_cleanup_maintenance_started = True
+        if should_start_embedded_workspace_operation_worker():
+            await start_workspace_cleanup_maintenance()
+            workspace_cleanup_maintenance_started = True
         register_presentation_generation_operation_handler(replace=True)
         register_presentation_deletion_operation_handler(replace=True)
         register_presentation_chat_operation_handlers(replace=True)
@@ -175,10 +176,11 @@ async def app_lifespan(_: FastAPI):
         if should_start_embedded_workspace_operation_worker():
             await start_workspace_operation_runner()
             workspace_operation_runner_started = True
-        await start_workspace_asset_maintenance()
-        workspace_asset_maintenance_started = True
-        await start_workspace_event_retention()
-        workspace_event_retention_started = True
+        if should_start_embedded_workspace_operation_worker():
+            await start_workspace_asset_maintenance()
+            workspace_asset_maintenance_started = True
+            await start_workspace_event_retention()
+            workspace_event_retention_started = True
         if (
             template_v2_policy.creation_enabled
             and template_v2_policy.allowed_template_ids

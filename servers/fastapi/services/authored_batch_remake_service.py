@@ -27,6 +27,7 @@ from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 from services.authored_page_remake_service import _run_preview_background
 from services.database import async_session_maker
+from services.workspace_authored_async_admission import admit_workspace_authored_task
 from services import presentation_version_service as version_service
 from utils.datetime_utils import get_current_utc_datetime
 
@@ -239,41 +240,52 @@ async def queue_authored_batch_remake_preview(
         if not slides[slide_index].html_content:
             raise HTTPException(status_code=400, detail="Slide has no authored HTML")
 
+    presentation = await session.get(PresentationModel, presentation_id)
+    if presentation is None:
+        raise HTTPException(status_code=404, detail="Presentation not found")
+    parent = await admit_workspace_authored_task(
+        session,
+        presentation_id=presentation_id,
+        operation_kind="slide.regenerate.batch.preview",
+        expected_revision=int(presentation.revision),
+        command=f"선택한 {len(slide_indexes)}개 페이지 다시 만들기 미리보기",
+        context={
+            "slide_indexes": slide_indexes,
+            "instruction": request.instruction,
+        },
+        task_id_prefix="workspace-batch-preview",
+        pending_message=f"{len(slide_indexes)}개 페이지의 새 버전 작업을 대기열에 추가했습니다.",
+    )
+    operation_suffix = parent.id.removeprefix("workspace-batch-preview-")
     pairs: list[tuple[int, str]] = []
     for slide_index in slide_indexes:
-        child = AsyncPresentationGenerationTaskModel(
-            status="pending",
-            message=f"{slide_index + 1}페이지의 새 버전 작업을 대기열에 추가했습니다.",
-            data=None,
-        )
-        session.add(child)
-        pairs.append((slide_index, child.id))
+        child_task_id = f"workspace-page-preview-{operation_suffix}-{slide_index}"
+        child = await session.get(AsyncPresentationGenerationTaskModel, child_task_id)
+        if child is None:
+            child = AsyncPresentationGenerationTaskModel(
+                id=child_task_id,
+                owner_id=parent.owner_id,
+                status="pending",
+                message=f"{slide_index + 1}페이지의 새 버전 작업을 대기열에 추가했습니다.",
+                data=None,
+            )
+            session.add(child)
+        pairs.append((slide_index, child_task_id))
 
     total = len(pairs)
-    parent = AsyncPresentationGenerationTaskModel(
-        status="processing",
-        message=f"{total}개 페이지의 새 버전을 만들고 있습니다.",
-        data={
-            "kind": BATCH_PREVIEW_KIND,
-            "phase": "previewing",
-            "presentation_id": str(presentation_id),
-            "total": total,
-            "completed": 0,
-            "slides": [
-                _pending_entry(slide_index, child_task_id)
-                for slide_index, child_task_id in pairs
-            ],
-        },
-    )
+    parent.status = "processing"
+    parent.message = f"{total}개 페이지의 새 버전을 만들고 있습니다."
+    parent.data = {
+        "kind": BATCH_PREVIEW_KIND,
+        "phase": "previewing",
+        "presentation_id": str(presentation_id),
+        "total": total,
+        "completed": 0,
+        "slides": [
+            _pending_entry(slide_index, child_task_id)
+            for slide_index, child_task_id in pairs
+        ],
+    }
     session.add(parent)
     await session.commit()
-    # Exactly one background task: Starlette runs a request's background tasks
-    # in order, so scheduling one per slide would silently serialize the fan-out.
-    background_tasks.add_task(
-        _run_batch_preview_background,
-        presentation_id,
-        request,
-        parent.id,
-        tuple(pairs),
-    )
     return parent

@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "key": "runtime.workspace-operation-worker-boundary",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Container, dev Electron, and packaged Electron start workspace operations externally after API readiness via a dedicated managed worker executable.",
+  "scope": [
+    "runtime",
+    "workspace-operations",
+    "electron",
+    "container",
+    "packaging"
+  ],
+  "invariants": [
+    "API migrations complete before the external worker starts",
+    "Packaged API and worker share one frozen runtime but use distinct executable roles",
+    "Worker readiness and early exit fail startup or quit the app",
+    "Managed children are stopped together"
+  ],
+  "forbidden": [
+    "Loading the UI with external mode but no ready worker",
+    "Using embedded worker fallback in packaged Electron"
+  ],
+  "evidence": [
+    "servers/fastapi/packaged_runtime_entrypoint.py",
+    "servers/fastapi/server.spec",
+    "electron/scripts/materialize-workspace-worker.cjs",
+    "electron/scripts/verify-packaging-inputs.cjs",
+    "electron/app/main.ts",
+    "electron/app/utils/servers.ts",
+    "servers/fastapi/tests/unit/test_packaged_runtime_entrypoint.py",
+    "electron/scripts/materialize-workspace-worker.test.cjs"
+  ],
+  "supersedes": "runtime.workspace-operation-worker-boundary@1",
+  "recordedAt": "2026-08-29T15:13:48.8822990+00:00"
+}

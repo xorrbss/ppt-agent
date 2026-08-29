@@ -121,6 +121,7 @@ def test_database_admin_bootstrap_runs_during_startup(monkeypatch, tmp_path):
             "log_template_v2_operational_health",
         "start_template_v2_private_source_cleanup",
         "start_export_retention_sweeper",
+        "start_source_locked_maintenance",
         "start_presentation_generation_dispatcher",
         "start_workspace_cleanup_maintenance",
         # The runner always owns presentation writes, so its workers always start.
@@ -136,6 +137,7 @@ def test_database_admin_bootstrap_runs_during_startup(monkeypatch, tmp_path):
         "stop_workspace_cleanup_maintenance",
         "stop_presentation_generation_dispatcher",
         "stop_export_retention_sweeper",
+        "stop_source_locked_maintenance",
         "stop_template_v2_private_source_cleanup",
         "dispose_engines",
     )
@@ -198,11 +200,13 @@ def test_chat_first_workers_start_and_stop_in_dependency_order(monkeypatch, tmp_
             "log_template_v2_operational_health",
         "start_template_v2_private_source_cleanup",
         "start_export_retention_sweeper",
+        "start_source_locked_maintenance",
         "start_presentation_generation_dispatcher",
         "bootstrap_database_admin",
         "check_llm_and_image_provider_api_or_model_availability",
         "stop_presentation_generation_dispatcher",
         "stop_export_retention_sweeper",
+        "stop_source_locked_maintenance",
         "stop_template_v2_private_source_cleanup",
         "dispose_engines",
     ):

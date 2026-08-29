@@ -21,5 +21,6 @@ test("packaged smoke creates isolated bootstrap administrator credentials", () =
   assert.equal(result.APP_DATA_DIRECTORY, "C:\\smoke-app-data")
   assert.equal(result.DISABLE_AUTH, "true")
   assert.equal(result.MIGRATE_DATABASE_ON_STARTUP, "True")
+  assert.equal(result.WORKSPACE_OPERATION_WORKER_MODE, "external")
   assert.equal(result.USER_CONFIG_PATH, "C:\\smoke-app-data\\userConfig.json")
 })

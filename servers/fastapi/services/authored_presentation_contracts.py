@@ -32,6 +32,10 @@ class AuthoredGenerationPipelineResult:
     # derive geometry from its HTML projection, but may not recompile meaning
     # or QID ownership from a different source.
     scene_envelope: Any | None = None
+    # Per-slide provider calls already consumed by the first-pass author. A
+    # resumed checkpoint is conservatively treated as budget-exhausted because
+    # its historical call count is not encoded in the checkpoint row.
+    author_provider_attempt_counts: tuple[int, ...] = ()
 
     def __post_init__(self) -> None:
         # The result is a public boundary consumed by API/publication code.

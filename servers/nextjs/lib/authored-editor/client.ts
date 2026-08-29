@@ -53,10 +53,14 @@ type ApiErrorPayload = {
   current?: unknown;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function errorCode(payload: ApiErrorPayload): string {
   if (typeof payload.code === "string") return payload.code;
-  if (payload.detail && typeof payload.detail === "object") {
-    const code = (payload.detail as { code?: unknown }).code;
+  if (isRecord(payload.detail)) {
+    const code = payload.detail.code;
     if (typeof code === "string") return code;
   }
   return "authored_editor_request_failed";
@@ -133,14 +137,22 @@ export class AuthoredEditorApi {
       headers: { ...getHeader(), ...(init.headers ?? {}) },
       cache: "no-store",
     });
-    const payload = (await response
+    const rawPayload: unknown = await response
       .json()
-      .catch(() => ({}))) as ApiErrorPayload;
+      .catch(() => ({}));
+    const payload: ApiErrorPayload = isRecord(rawPayload)
+      ? {
+          detail: rawPayload.detail,
+          code: rawPayload.code,
+          current: rawPayload.current,
+        }
+      : {};
     if (response.status === 409) {
-      const detail =
-        payload.detail && typeof payload.detail === "object"
-          ? (payload.detail as Record<string, unknown>)
-          : payload;
+      const detail = isRecord(payload.detail)
+        ? payload.detail
+        : isRecord(rawPayload)
+          ? rawPayload
+          : {};
       throw new AuthoredCanonicalConflict(
         typeof detail.currentRevision === "number"
           ? detail.currentRevision

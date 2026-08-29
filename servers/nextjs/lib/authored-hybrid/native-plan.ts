@@ -118,6 +118,11 @@ export interface LayerSafetyPlan {
     readonly opacity: number;
     readonly blockedByElementIds: readonly string[];
   }[];
+  readonly paintBands: readonly {
+    readonly zBand: number;
+    readonly paintOwner: "native" | "rasterIsland";
+    readonly elementIds: readonly string[];
+  }[];
   readonly downgradeReceipt: {
     readonly schemaVersion: "hybrid-layer-downgrade-receipt/browser-v1";
     readonly state: "closed" | "slideRaster";
@@ -223,9 +228,10 @@ export function parseAuthoredNativeOwnerAlternativeText(
   ] as const;
   if (!exactObjectKeys(value, advanced ? advancedKeys : baseKeys) ||
       value.schemaVersion !== "authored-vnext-owner/v1" ||
-      !Number.isSafeInteger(value.slideNumber) || Number(value.slideNumber) < 1 ||
+      !Number.isSafeInteger(value.slideNumber) || Number(value.slideNumber) < 1 || Number(value.slideNumber) > 100 ||
       !boundedOwnerToken(value.slideId, /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/) ||
-      !boundedOwnerToken(value.elementId, /^s\d{2}-[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/) ||
+      !boundedOwnerToken(value.elementId, /^s\d{2,3}-[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/) ||
+      !value.elementId.startsWith(`s${String(value.slideNumber).padStart(2, "0")}-`) ||
       !["text", "shape", "image", "table", "chart"].includes(String(value.kind)) ||
       !boundedOwnerToken(value.capabilityId, /^[A-Za-z][A-Za-z0-9._:-]{0,127}$/) ||
       !boundedOwnerToken(value.ownerDigest, /^sha256:[0-9a-f]{64}$/)) return null;
@@ -1584,7 +1590,11 @@ function isCapturedCompositeChildPaint(
   // those labels can remain editable. If a label fails native preflight, it is
   // not represented by the picture and must keep the composite on the raster
   // backplate. Non-text child paint is already captured in the picture PNG.
-  return other.classification.candidateKind !== "text" && !("text" in other);
+  return !(
+    "text" in other ||
+    (other.classification.mode === "raster" &&
+      other.classification.candidateKind === "text")
+  );
 }
 
 function transformXml(element: AuthoredHybridElement): string {

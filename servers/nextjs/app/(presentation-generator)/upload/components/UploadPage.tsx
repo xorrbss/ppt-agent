@@ -303,7 +303,7 @@ const UploadPage = ({
                 <span>
                   원본 콘텐츠 유지
                   <span className="ml-2 font-normal text-[#737780]">
-                    문구·수치·표·이미지는 유지하고 선택한 템플릿으로 다시 디자인합니다.
+                    페이지별 텍스트와 이미지(반복 포함)를 유지하고, 표·차트·기존 배치는 제외해 선택한 템플릿으로 다시 구성합니다.
                   </span>
                 </span>
               </label>
@@ -313,10 +313,10 @@ const UploadPage = ({
               <p className="font-semibold">콘텐츠 · 원본 유지</p>
               <p className="mt-1 text-[#5E626A]">AI 저작 스타일 · {authoredStyle}</p>
               <p className="mt-1 text-[#5E626A]">회사 표준 · {companyStandard ? `${companyStandard.name} v${companyStandard.revision}` : "사용 안 함"}</p>
-              <p className="mt-1 text-[#5E626A]">overflow · 내용 삭제 없이 슬라이드 추가</p>
+              <p className="mt-1 text-[#5E626A]">페이지 수 고정 · 같은 페이지에서 다시 구성할 수 없으면 생성하지 않음</p>
               {isSourceContentAnalyzing ? <p className="mt-2 text-xs text-[#737780]">원본 콘텐츠를 안전하게 분석하는 중입니다.</p> : null}
               {sourceContentSummary ? <p className="mt-2 text-xs text-[#737780]" data-testid="source-content-analysis-summary">
-                {sourceContentSummary.sourceType.toUpperCase()} {sourceContentSummary.sourceUnits}장 · 텍스트 {sourceContentSummary.textBlocks}개 · 표/차트 {sourceContentSummary.tables}/{sourceContentSummary.charts}개 · 고유 이미지 {sourceContentSummary.uniqueImages}개 (occurrence {sourceContentSummary.imageOccurrences}개) · raster fallback {sourceContentSummary.rasterFallbackBlocks}개
+                {sourceContentSummary.sourceType.toUpperCase()} {sourceContentSummary.sourceUnits}페이지 · 텍스트 {sourceContentSummary.textBlocks}개 · 제외된 표/차트 {sourceContentSummary.tables}/{sourceContentSummary.charts}개 · 이미지 {sourceContentSummary.uniqueImages}종(표시 {sourceContentSummary.imageOccurrences}회) · 이미지로 보관 {sourceContentSummary.rasterFallbackBlocks}개
               </p> : null}
             </div> : null}
 

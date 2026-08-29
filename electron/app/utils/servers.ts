@@ -59,7 +59,7 @@ function ensureNestedStandaloneAssets(bundleRoot: string, serverCwd: string): vo
 function createManagedServerProcess(params: {
   name: string;
   process: ChildProcess;
-  readyUrl: string;
+  waitUntilReady: (signal: AbortSignal) => Promise<void>;
   cleanupListeners: () => void;
   markStopping?: (stopping: boolean) => void;
 }): ManagedServerProcess {
@@ -89,7 +89,7 @@ function createManagedServerProcess(params: {
 
   return {
     process: params.process,
-    ready: waitForServer(params.readyUrl, 300000, abortController.signal),
+    ready: params.waitUntilReady(abortController.signal),
     stop,
   };
 }
@@ -163,7 +163,67 @@ export async function startFastApiServer(
   return createManagedServerProcess({
     name: "FastAPI",
     process: fastApiProcess,
-    readyUrl: `${localhost}:${port}/docs`,
+    waitUntilReady: (signal) => waitForServer(`${localhost}:${port}/docs`, 300000, signal),
+    cleanupListeners,
+  });
+}
+
+export async function startWorkspaceOperationWorker(
+  directory: string,
+  env: FastApiEnv,
+  isDev: boolean,
+) {
+  const workerBinary = process.platform === "win32"
+    ? "workspace-operation-worker.exe"
+    : "workspace-operation-worker";
+  const workerProcess = spawn(
+    isDev ? "uv" : path.join(directory, workerBinary),
+    isDev
+      ? ["run", "python", "-m", "services.workspace_operation_worker"]
+      : [],
+    {
+      cwd: directory,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env, ...env, MIGRATE_DATABASE_ON_STARTUP: "false" },
+      windowsHide: process.platform === "win32" && !isDev,
+    },
+  );
+  const workerLogPath = path.join(getLogsDir(), "workspace-operation-worker.log");
+  const safeWorkerLog = (data: Buffer | string) => {
+    try {
+      fs.appendFileSync(workerLogPath, data);
+    } catch {
+      /* ignore if logs dir not writable */
+    }
+  };
+  const onStdoutData = (data: Buffer) => {
+    safeWorkerLog(data);
+    safeConsoleLog(`Workspace worker: ${data}`);
+  };
+  const onStderrData = (data: Buffer) => {
+    safeWorkerLog(data);
+    safeError(`Workspace worker: ${data}`);
+  };
+  const onError = (error: Error) => safeWorkerLog(`Spawn error: ${error.message}\n`);
+  workerProcess.stdout?.on("data", onStdoutData);
+  workerProcess.stderr?.on("data", onStderrData);
+  workerProcess.on("error", onError);
+
+  const cleanupListeners = () => {
+    workerProcess.stdout?.removeListener("data", onStdoutData);
+    workerProcess.stderr?.removeListener("data", onStderrData);
+    workerProcess.removeListener("error", onError);
+  };
+
+  return createManagedServerProcess({
+    name: "Workspace operation worker",
+    process: workerProcess,
+    waitUntilReady: (signal) => waitForProcessOutput(
+      workerProcess,
+      /Workspace operation external worker started/i,
+      300000,
+      signal,
+    ),
     cleanupListeners,
   });
 }
@@ -230,7 +290,7 @@ export async function startNextJsServer(
     return createManagedServerProcess({
       name: "NextJS",
       process: nextjsProcess,
-      readyUrl: `${localhost}:${port}`,
+      waitUntilReady: (signal) => waitForServer(`${localhost}:${port}`, 300000, signal),
       cleanupListeners,
       markStopping: (value) => {
         stopping = value;
@@ -297,13 +357,54 @@ export async function startNextJsServer(
     return createManagedServerProcess({
       name: "NextJS",
       process: nextjsProcess,
-      readyUrl: `${localhost}:${port}`,
+      waitUntilReady: (signal) => waitForServer(`${localhost}:${port}`, 300000, signal),
       cleanupListeners,
       markStopping: (value) => {
         stopping = value;
       },
     });
   }
+}
+
+function waitForProcessOutput(
+  child: ChildProcess,
+  readyPattern: RegExp,
+  timeout: number,
+  signal?: AbortSignal,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let output = "";
+    const cleanup = () => {
+      clearTimeout(timer);
+      child.stdout?.removeListener("data", onData);
+      child.stderr?.removeListener("data", onData);
+      child.removeListener("exit", onExit);
+      child.removeListener("error", onError);
+      signal?.removeEventListener("abort", onAbort);
+    };
+    const settle = (callback: () => void) => {
+      cleanup();
+      callback();
+    };
+    const onData = (data: Buffer) => {
+      output = `${output}${data.toString()}`.slice(-8192);
+      if (readyPattern.test(output)) settle(resolve);
+    };
+    const onExit = (code: number | null) => settle(() => reject(
+      new Error(`Workspace operation worker exited before ready: ${code}`),
+    ));
+    const onError = (error: Error) => settle(() => reject(error));
+    const onAbort = () => settle(() => reject(new Error("Server wait aborted")));
+    const timer = setTimeout(
+      () => settle(() => reject(new Error("Workspace operation worker readiness timed out"))),
+      timeout,
+    );
+    child.stdout?.on("data", onData);
+    child.stderr?.on("data", onData);
+    child.once("exit", onExit);
+    child.once("error", onError);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 

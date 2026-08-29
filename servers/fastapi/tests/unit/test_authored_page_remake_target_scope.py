@@ -29,6 +29,7 @@ from models.sql.async_presentation_generation_status import (
 )
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
+import services.authored_page_remake_service as remake_service
 from services.authored_page_remake_service import (
     AuthoredPageRemakeError,
     queue_authored_page_remake_preview,
@@ -98,16 +99,39 @@ async def _seed_deck_with_one_blank(maker) -> uuid.UUID:
     return presentation_id
 
 
-def test_an_authored_page_is_remakeable_beside_a_blank_sibling(tmp_path: Path):
-    asyncio.run(_an_authored_page_is_remakeable_beside_a_blank_sibling(tmp_path))
+def test_an_authored_page_is_remakeable_beside_a_blank_sibling(
+    tmp_path: Path, monkeypatch
+):
+    asyncio.run(
+        _an_authored_page_is_remakeable_beside_a_blank_sibling(
+            tmp_path, monkeypatch
+        )
+    )
 
 
-async def _an_authored_page_is_remakeable_beside_a_blank_sibling(tmp_path: Path):
+async def _an_authored_page_is_remakeable_beside_a_blank_sibling(
+    tmp_path: Path, monkeypatch
+):
     engine, maker = await _database(tmp_path / "remake-scope.db")
     try:
         presentation_id = await _seed_deck_with_one_blank(maker)
         async with maker() as session:
             background_tasks = BackgroundTasks()
+
+            async def admit(target_session, **values):
+                assert values["operation_kind"] == "slide.regenerate.preview"
+                task = AsyncPresentationGenerationTaskModel(
+                    id=f"workspace-page-preview-{uuid.uuid4()}",
+                    status="pending",
+                    message=values["pending_message"],
+                )
+                target_session.add(task)
+                await target_session.commit()
+                return task
+
+            monkeypatch.setattr(
+                remake_service, "admit_workspace_authored_task", admit
+            )
             task = await queue_authored_page_remake_preview(
                 presentation_id,
                 0,
@@ -117,7 +141,7 @@ async def _an_authored_page_is_remakeable_beside_a_blank_sibling(tmp_path: Path)
             )
 
         assert task.status == "pending"
-        assert len(background_tasks.tasks) == 1
+        assert background_tasks.tasks == []
     finally:
         await engine.dispose()
 

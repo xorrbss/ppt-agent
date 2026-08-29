@@ -268,6 +268,49 @@ def test_forced_full_reauthor_is_bounded_and_reports_success(monkeypatch):
     }
 
 
+def test_full_reauthor_does_not_exceed_consumed_provider_budget(monkeypatch):
+    author_calls = 0
+
+    async def fake_author(*_args, **_kwargs):
+        nonlocal author_calls
+        author_calls += 1
+        return _VALID_HTML.replace("Title", "Unexpected")
+
+    monkeypatch.setattr(author_vision_qa, "author_slide_html", fake_author)
+
+    htmls, pngs, fixed, details = asyncio.run(
+        author_vision_qa.revise_authored_deck(
+            [_VALID_HTML],
+            [b"original-png"],
+            ["content"],
+            ["CONTENT"],
+            Brand(topic="topic"),
+            "design",
+            initial_critiques=[
+                SlideCritique(
+                    needs_fix=True,
+                    issues=[
+                        CritiqueIssue(
+                            type="overflow",
+                            severity="high",
+                            detail="aggregate body budget exceeded",
+                        )
+                    ],
+                )
+            ],
+            return_details=True,
+            force_full_reauthor_indices=[0],
+            provider_recovery_allowed=[False],
+        )
+    )
+
+    assert author_calls == 0
+    assert htmls == [_VALID_HTML]
+    assert pngs == [b"original-png"]
+    assert fixed == []
+    assert details[0]["fallback"]["attempted"] is False
+
+
 def test_full_reauthor_canonicalizes_time_once_and_keeps_active_tags_blocked(
     monkeypatch,
 ):

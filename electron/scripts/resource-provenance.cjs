@@ -44,7 +44,11 @@ function listSourceFiles(sourceRoot) {
       if (entry.name === ".env" || entry.name.startsWith(".env.")) continue;
       if (
         entry.isDirectory() &&
-        (COMMON_EXCLUDED_DIRECTORIES.has(entry.name) || entry.name.startsWith(".pytest"))
+        (
+          COMMON_EXCLUDED_DIRECTORIES.has(entry.name) ||
+          entry.name.startsWith(".next-") ||
+          entry.name.startsWith(".pytest")
+        )
       ) continue;
       const candidate = path.join(current, entry.name);
       if (entry.isDirectory()) pending.push(candidate);

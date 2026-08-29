@@ -24,7 +24,12 @@ from models.presentation_outline_model import (
 from models.sql.presentation import PresentationModel
 from services import authored_presentation_service as authored_service
 from services import authored_presentation_generation as authored_generation_mod
+from services import authored_presentation_pipeline as authored_pipeline_mod
 from services.authored_presentation_service import resolve_brand
+from services.authored_composition_policy import (
+    SlideCapacity,
+    aggregate_owner_capacity_violations,
+)
 from utils import slide_capture
 from utils.llm_calls import author_deck as author_deck_mod
 from utils.llm_calls import author_slide as author_slide_mod
@@ -50,12 +55,164 @@ from utils.llm_calls.author_slide import (
     is_valid_slide_html,
     validate_authored_slide_html,
 )
-from utils.llm_calls.critique_slide import SlideCritique
+from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
 from utils.renderer_isolation import RendererPolicyError
 
 
 def _run(coro):
     return asyncio.run(coro)
+
+
+def test_author_aggregate_capacity_fails_after_two_calls_before_render(monkeypatch):
+    calls = []
+    candidate = (
+        "<!DOCTYPE html><html><head></head><body>"
+        '<h1 data-qid="header.title" data-semantic-role="title">Title</h1>'
+        '<p data-qid="body.item1" data-semantic-role="body">1234567890</p>'
+        "</body></html>"
+    )
+
+    async def fake_author(*args, **kwargs):
+        calls.append(kwargs.get("receipt_attempt_ordinal"))
+        return candidate
+
+    monkeypatch.setattr(author_deck_mod, "author_slide_html", fake_author)
+
+    with pytest.raises(
+        author_deck_mod.AuthoredAggregateOwnerCapacityExhausted
+    ) as caught:
+        _run(
+            author_deck_mod._author_one_resilient(
+                "content",
+                "design",
+                _brand(),
+                "PROBLEM",
+                0,
+                1,
+                (),
+                raise_on_failure=True,
+                capacity=SlideCapacity(0, "PROBLEM", 10, 5, 20, 0, 2),
+            )
+        )
+
+    assert calls == [1, 2]
+    assert caught.value.code == "authored_aggregate_owner_capacity_exhausted"
+
+
+def test_author_budget_exhaustion_is_non_retryable_but_transport_stays_retryable():
+    deterministic = author_deck_mod.AuthoredProviderBudgetExhausted(
+        "authored_aggregate_owner_capacity_exhausted",
+        "owner_title:112>64",
+    )
+    deterministic_stage = authored_pipeline_mod._author_stage_failure(
+        2, deterministic
+    )
+
+    class TemporaryProviderFailure(RuntimeError):
+        status_code = 503
+
+    transport = TemporaryProviderFailure("provider unavailable")
+    transport_stage = authored_pipeline_mod._author_stage_failure(2, transport)
+
+    assert deterministic_stage.code == "authored_slide_author_failed"
+    assert deterministic_stage.cause is deterministic
+    assert deterministic_stage.retryable is False
+    assert transport_stage.code == "authored_slide_author_failed"
+    assert transport_stage.cause is transport
+    assert transport_stage.retryable is True
+
+
+def test_author_uses_deterministic_owner_reducer_after_second_capacity_failure(
+    monkeypatch,
+):
+    title = "T" * 41
+    bodies = (("a " * 59) + "a", ("b " * 59) + "b", ("c " * 58) + "c")
+    supporting = ("s " * 15) + "s"
+    candidate = (
+        "<!DOCTYPE html><html><head></head><body>"
+        f'<h1 data-qid="slide.title" data-semantic-role="title">{title}</h1>'
+        f'<p data-qid="content.primary" data-semantic-role="body">{bodies[0]}</p>'
+        f'<p data-qid="content.secondary" data-semantic-role="body">{bodies[1]}</p>'
+        f'<p data-qid="content.tertiary" data-semantic-role="body">{bodies[2]}</p>'
+        f'<p data-qid="content.note" data-semantic-role="supporting">{supporting}</p>'
+        "</body></html>"
+    )
+    calls = []
+
+    async def fake_author(*args, **kwargs):
+        calls.append(kwargs["receipt_attempt_ordinal"])
+        return candidate
+
+    monkeypatch.setattr(author_deck_mod, "author_slide_html", fake_author)
+    capacity = SlideCapacity(2, "PILLARS", 64, 290, 380, 0, 30)
+    reduced = _run(
+        author_deck_mod._author_one_resilient(
+            "content",
+            "design",
+            _brand(),
+            "PILLARS",
+            2,
+            5,
+            (),
+            raise_on_failure=True,
+            capacity=capacity,
+            allow_deterministic_owner_reduction=True,
+        )
+    )
+
+    assert calls == [1, 2]
+    assert "authored-owner-text-capacity-reducer-v1" in reduced
+    assert aggregate_owner_capacity_violations(reduced, capacity) == ()
+    assert f'>{title}</h1>' in reduced
+
+
+def test_gate_repair_budget_exhaustion_makes_no_third_provider_call(monkeypatch):
+    html = (
+        "<!DOCTYPE html><html><head></head><body>"
+        '<h1 data-qid="header.title" data-semantic-role="title">Title</h1>'
+        '<p data-qid="body.item1" data-semantic-role="body">Body</p>'
+        "</body></html>"
+    )
+    provider_calls = []
+
+    async def forbidden_provider(*args, **kwargs):
+        provider_calls.append((args, kwargs))
+        raise AssertionError("third provider call")
+
+    monkeypatch.setattr(
+        author_vision_qa_mod, "propose_authored_slide_patch", forbidden_provider
+    )
+    monkeypatch.setattr(author_vision_qa_mod, "author_slide_html", forbidden_provider)
+    monkeypatch.setattr(author_vision_qa_mod, "critique_authored", forbidden_provider)
+
+    result = _run(
+        author_vision_qa_mod.revise_authored_deck(
+            [html],
+            [b"png"],
+            ["content"],
+            ["PROBLEM"],
+            _brand(),
+            "design",
+            max_cycles=1,
+            return_details=True,
+            local_patch_only=True,
+            provider_recovery_allowed=[False],
+            initial_critiques=[
+                SlideCritique(
+                    needs_fix=True,
+                    issues=[
+                        CritiqueIssue(
+                            type="overflow", severity="high", detail="capacity"
+                        )
+                    ],
+                )
+            ],
+        )
+    )
+
+    assert result[0] == [html]
+    assert result[2] == []
+    assert provider_calls == []
 
 
 _VALID = (
@@ -2309,6 +2466,45 @@ def test_slide_pipeline_renders_fast_slide_before_slowest_author_finishes(monkey
     assert ["slide-1" in html for html in result.deck.htmls] == [False, True]
     assert result.pngs == [b"png-0", b"png-1"]
     assert result.deck.design_system == "PIPELINED DESIGN SYSTEM"
+
+
+def test_slide_pipeline_exposes_first_pass_provider_attempt_counts(monkeypatch):
+    async def scenario():
+        plan = SimpleNamespace(
+            contents=("slide 0", "slide 1"),
+            design_system="PIPELINED DESIGN SYSTEM",
+        )
+
+        async def fake_author(selected_plan, index, attempt_observer=None):
+            assert selected_plan is plan
+            assert attempt_observer is not None
+            attempt_observer(1)
+            if index == 1:
+                attempt_observer(2)
+            return (
+                "<!DOCTYPE html><html><head></head><body>"
+                f"<h1 data-qid='slide-{index}.title'>slide-{index}</h1>"
+                "</body></html>"
+            )
+
+        async def fake_render(_html):
+            return b"png"
+
+        monkeypatch.setattr(
+            authored_service, "prepare_authored_deck", lambda *args, **kwargs: plan
+        )
+        monkeypatch.setattr(authored_service, "author_planned_slide", fake_author)
+        monkeypatch.setattr(authored_service, "render_html_to_png", fake_render)
+
+        return await authored_service._author_illustrate_render_pipeline(
+            _outline(2),
+            _brand(),
+            SimpleNamespace(id="default", illustration_prompt=None),
+        )
+
+    result = _run(scenario())
+
+    assert result.author_provider_attempt_counts == (1, 2)
 
 
 def test_slide_pipeline_rejects_fallback_instead_of_publishing_incomplete_deck(

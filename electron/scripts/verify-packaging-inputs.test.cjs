@@ -4,13 +4,17 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const crypto = require("node:crypto");
-const { writeResourceProvenance } = require("./resource-provenance.cjs");
+const {
+  digestSourceTree,
+  writeResourceProvenance,
+} = require("./resource-provenance.cjs");
 const {
   materializeTailwindRuntimeClosure,
 } = require("./next-runtime-dependencies.cjs");
 
 const {
   EXPECTED_EXPORT_VERSION,
+  AUTHORED_SEMANTIC_CONTRACT_RELATIVE,
   OOXML_CONTRACT_RELATIVE,
   TEMPLATE_ENGINE_RELATIVE,
   TEMPLATE_RENDERER_RELATIVE,
@@ -39,6 +43,30 @@ function readinessOverlayFixture() {
       "Template V2 required resource failed"
   );
 }
+
+test("source provenance excludes generated Next.js .next-* runtime trees", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "presenton-provenance-"));
+  try {
+    writeFile(path.join(root, "app", "page.tsx"), "export default function Page() {}\n");
+    writeFile(
+      path.join(root, ".next-authored-vnext-dev-1234", "server", "artifact.js"),
+      "generated-one\n"
+    );
+    const before = digestSourceTree(root);
+
+    writeFile(
+      path.join(root, ".next-authored-vnext-dev-1234", "server", "artifact.js"),
+      "generated-two\n"
+    );
+    const afterGeneratedChange = digestSourceTree(root);
+    assert.deepEqual(afterGeneratedChange, before);
+
+    writeFile(path.join(root, "app", "page.tsx"), "export default function Changed() {}\n");
+    assert.notEqual(digestSourceTree(root).digest, before.digest);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
 
 function createFixture({ nested = false, platform = "win32", arch = "x64" } = {}) {
   const workspaceRoot = fs.mkdtempSync(
@@ -141,6 +169,20 @@ function createFixture({ nested = false, platform = "win32", arch = "x64" } = {}
     path.join(electronRoot, "resources", "contracts", OOXML_CONTRACT_RELATIVE),
     ooxmlContract
   );
+  const authoredSemanticProfiles = {
+    "release-profile.v2.json": JSON.stringify({ schemaVersion: "authored-release-profile/v2" }),
+    "release-profile.v3.json": JSON.stringify({ schemaVersion: "authored-release-profile/v3" }),
+  };
+  for (const [name, contents] of Object.entries(authoredSemanticProfiles)) {
+    writeFile(
+      path.join(workspaceRoot, "contracts", AUTHORED_SEMANTIC_CONTRACT_RELATIVE, name),
+      contents
+    );
+    writeFile(
+      path.join(electronRoot, "resources", "contracts", AUTHORED_SEMANTIC_CONTRACT_RELATIVE, name),
+      contents
+    );
+  }
   writeFile(path.join(workspaceRoot, "LICENSE"), "L".repeat(1000));
   writeFile(path.join(workspaceRoot, "NOTICE"), "N".repeat(1000));
   writeFile(
@@ -200,6 +242,15 @@ function createFixture({ nested = false, platform = "win32", arch = "x64" } = {}
     path.join(
       fastapiRoot,
       platform === "win32" ? "fastapi.exe" : "fastapi"
+    ),
+    binaryHeader(platform)
+  );
+  writeFile(
+    path.join(
+      fastapiRoot,
+      platform === "win32"
+        ? "workspace-operation-worker.exe"
+        : "workspace-operation-worker"
     ),
     binaryHeader(platform)
   );
@@ -542,7 +593,7 @@ test("rejects missing or damaged Next.js Sharp from the standalone cwd", async (
   });
 });
 
-test("rejects incompatible converter and FastAPI executable formats", async (t) => {
+test("rejects incompatible packaged executable formats", async (t) => {
   await t.test("converter", () => {
     const fixture = createFixture();
     try {
@@ -584,6 +635,85 @@ test("rejects incompatible converter and FastAPI executable formats", async (t) 
       fixture.cleanup();
     }
   });
+
+  await t.test("workspace worker", () => {
+    const fixture = createFixture();
+    try {
+      writeFile(
+        path.join(
+          fixture.electronRoot,
+          "resources",
+          "fastapi",
+          "workspace-operation-worker.exe"
+        ),
+        "bad!"
+      );
+      assert.throws(
+        () => validate(fixture),
+        /Workspace operation worker executable has incompatible format/
+      );
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  await t.test("missing workspace worker", () => {
+    const fixture = createFixture();
+    try {
+      fs.rmSync(
+        path.join(
+          fixture.electronRoot,
+          "resources",
+          "fastapi",
+          "workspace-operation-worker.exe"
+        )
+      );
+      assert.throws(
+        () => validate(fixture),
+        /Workspace operation worker executable is missing/
+      );
+    } finally {
+      fixture.cleanup();
+    }
+  });
+});
+
+test("rejects stale or incomplete packaged authored semantic contract tree", () => {
+  const fixture = createFixture();
+  try {
+    const resourceRoot = path.join(
+      fixture.electronRoot,
+      "resources",
+      "contracts",
+      AUTHORED_SEMANTIC_CONTRACT_RELATIVE
+    );
+    writeFile(path.join(resourceRoot, "release-profile.v2.json"), "{\"stale\":true}");
+    assert.throws(
+      () => validate(fixture),
+      /Packaged authored semantic contract tree file is stale: release-profile\.v2\.json; rebuild the FastAPI resource/
+    );
+
+    const fresh = createFixture();
+    try {
+      fs.rmSync(
+        path.join(
+          fresh.electronRoot,
+          "resources",
+          "contracts",
+          AUTHORED_SEMANTIC_CONTRACT_RELATIVE,
+          "release-profile.v3.json"
+        )
+      );
+      assert.throws(
+        () => validate(fresh),
+        /Packaged authored semantic contract tree inventory is stale; rebuild the FastAPI resource/
+      );
+    } finally {
+      fresh.cleanup();
+    }
+  } finally {
+    fixture.cleanup();
+  }
 });
 
 test("rejects unexpected standalone roots, excessive files, and excessive bytes", async (t) => {

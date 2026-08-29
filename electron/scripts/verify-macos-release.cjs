@@ -56,6 +56,10 @@ function validateMacosRelease(options = {}) {
   requireArm64MachO(path.join(contents, "MacOS", appName), "Electron executable");
   const resources = path.join(contents, "Resources", "app", "resources");
   requireArm64MachO(path.join(resources, "fastapi", "fastapi"), "FastAPI executable");
+  requireArm64MachO(
+    path.join(resources, "fastapi", "workspace-operation-worker"),
+    "Workspace operation worker executable"
+  );
   requireArm64MachO(path.join(resources, "export", "py", "convert-darwin-arm64"), "Export converter");
 
   const run = options.run || ((command, args) => execFileSync(command, args, { stdio: "pipe" }));

@@ -4,6 +4,7 @@ const os = require("node:os")
 const path = require("node:path")
 const test = require("node:test")
 const {
+  materializeSharpNativeRuntime,
   materializeTailwindRuntimeClosure,
   resolveProductionClosure,
   verifyTailwindRuntimeClosure,
@@ -108,6 +109,59 @@ test("rejects an unsafe production dependency package name", () => {
     assert.throws(
       () => resolveProductionClosure(current.nextjsRoot),
       /Unsafe runtime dependency package name: \.\.\/escape/
+    )
+  } finally {
+    current.cleanup()
+  }
+})
+
+test("materializes the Sharp native package resolved from the installed Sharp version", () => {
+  const current = fixture()
+  try {
+    const modules = path.join(current.nextjsRoot, "node_modules")
+    const sharpRoot = path.join(modules, "sharp")
+    writePackage(sharpRoot, "sharp", "0.34.5")
+    const nativeName = "@img/sharp-win32-x64"
+    const compatibleNative = path.join(sharpRoot, "node_modules", ...nativeName.split("/"))
+    writePackage(compatibleNative, nativeName, "0.34.5")
+    fs.writeFileSync(path.join(compatibleNative, "sharp.node"), "compatible", "utf8")
+
+    const mismatchedNative = path.join(modules, ...nativeName.split("/"))
+    writePackage(mismatchedNative, nativeName, "0.35.3")
+    fs.mkdirSync(path.join(current.serverRoot, "node_modules", "@img"), {
+      recursive: true,
+    })
+    writePackage(
+      path.join(current.serverRoot, "node_modules", ...nativeName.split("/")),
+      nativeName,
+      "0.35.3"
+    )
+
+    const result = materializeSharpNativeRuntime({
+      ...current,
+      runtimePlatform: "win32-x64",
+    })
+
+    assert.deepEqual(result, {
+      sharpVersion: "0.34.5",
+      nativePackage: nativeName,
+      nativeVersion: "0.34.5",
+      runtimePlatform: "win32-x64",
+    })
+    const packagedNative = path.join(
+      current.serverRoot,
+      "node_modules",
+      ...nativeName.split("/")
+    )
+    assert.equal(
+      JSON.parse(
+        fs.readFileSync(path.join(packagedNative, "package.json"), "utf8")
+      ).version,
+      "0.34.5"
+    )
+    assert.equal(
+      fs.readFileSync(path.join(packagedNative, "sharp.node"), "utf8"),
+      "compatible"
     )
   } finally {
     current.cleanup()

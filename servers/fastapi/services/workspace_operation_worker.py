@@ -28,6 +28,18 @@ from services.runtime_settings_coordinator import (
 from services.workspace_asset_service import (
     require_workspace_asset_malware_scan_safety,
 )
+from services.workspace_asset_maintenance import (
+    start_workspace_asset_maintenance,
+    stop_workspace_asset_maintenance,
+)
+from services.workspace_cleanup_journal_service import (
+    start_workspace_cleanup_maintenance,
+    stop_workspace_cleanup_maintenance,
+)
+from services.workspace_event_retention import (
+    start_workspace_event_retention,
+    stop_workspace_event_retention,
+)
 from services.workspace_chat_operation_handler import (
     register_presentation_chat_operation_handlers,
 )
@@ -46,6 +58,9 @@ from services.workspace_page_remake_operation_handler import (
 )
 from services.workspace_batch_remake_operation_handler import (
     register_workspace_batch_remake_operation_handler,
+)
+from services.workspace_authored_preview_operation_handlers import (
+    register_workspace_authored_preview_operation_handlers,
 )
 from services.workspace_authored_template_operation_handler import (
     register_workspace_authored_template_operation_handler,
@@ -77,6 +92,7 @@ def register_workspace_operation_handlers() -> None:
     register_presentation_chat_operation_handlers(replace=True)
     register_workspace_page_remake_operation_handler(replace=True)
     register_workspace_batch_remake_operation_handler(replace=True)
+    register_workspace_authored_preview_operation_handlers(replace=True)
     register_workspace_quality_export_operation_handlers(replace=True)
     register_workspace_authored_template_operation_handler(replace=True)
 
@@ -93,12 +109,21 @@ async def run_external_worker(stop: asyncio.Event | None = None) -> None:
     coordinator_started = True
     stop = stop or asyncio.Event()
     runner_started = False
+    asset_maintenance_started = False
+    cleanup_maintenance_started = False
+    event_retention_started = False
     metrics_exporter = None
     try:
         register_workspace_operation_handlers()
         metrics_exporter = await start_workspace_worker_metrics_exporter()
         await start_workspace_operation_runner()
         runner_started = True
+        await start_workspace_cleanup_maintenance()
+        cleanup_maintenance_started = True
+        await start_workspace_asset_maintenance()
+        asset_maintenance_started = True
+        await start_workspace_event_retention()
+        event_retention_started = True
         logger.info("Workspace operation external worker started")
         await stop.wait()
     finally:
@@ -107,14 +132,26 @@ async def run_external_worker(stop: asyncio.Event | None = None) -> None:
                 await stop_runtime_settings_coordinator()
         finally:
             try:
-                if runner_started:
-                    await stop_workspace_operation_runner()
+                if event_retention_started:
+                    await stop_workspace_event_retention()
             finally:
                 try:
-                    if metrics_exporter is not None:
-                        await metrics_exporter.close()
+                    if asset_maintenance_started:
+                        await stop_workspace_asset_maintenance()
                 finally:
-                    await dispose_engines()
+                    try:
+                        if cleanup_maintenance_started:
+                            await stop_workspace_cleanup_maintenance()
+                    finally:
+                        try:
+                            if runner_started:
+                                await stop_workspace_operation_runner()
+                        finally:
+                            try:
+                                if metrics_exporter is not None:
+                                    await metrics_exporter.close()
+                            finally:
+                                await dispose_engines()
 
 
 def main() -> None:

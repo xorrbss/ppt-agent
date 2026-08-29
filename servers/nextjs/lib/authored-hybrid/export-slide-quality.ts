@@ -56,7 +56,7 @@ export function fallbackElementForContractElement(
 ): PresentationExportFallbackElement {
   const candidateKind = element.classification.mode === "native" ? element.classification.kind : element.classification.candidateKind;
   const nativeBackplateReasons =
-    element.classification.mode === "native" && "shape" in element
+    element.classification.mode === "native" && "shape" in element && element.shape !== undefined
       ? [
           ...(element.shape.gradient ? ["gradient-backplate-only"] : []),
           ...(element.shape.shadowLayers?.length ? ["shadow-backplate-only"] : []),

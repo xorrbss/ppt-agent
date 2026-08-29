@@ -1,14 +1,12 @@
 "use client";
 
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
   X,
   Minimize2,
   Maximize2,
-  StickyNote,
-  EyeOff,
   Keyboard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -40,13 +38,7 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
 }) => {
   const rootRef = useRef<HTMLDivElement>(null);
   const hideChromeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [showSpeakerNotes, setShowSpeakerNotes] = useState(true);
   const [chromeVisible, setChromeVisible] = useState(true);
-
-  const currentSpeakerNote = useMemo(
-    () => slides[currentSlide]?.speaker_note?.trim() || "",
-    [slides, currentSlide]
-  );
 
   const activeSlide = slides[currentSlide];
 
@@ -152,12 +144,6 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
         case "F":
           if (!event.ctrlKey && !event.metaKey && !event.altKey) {
             onFullscreenToggle();
-          }
-          break;
-        case "n":
-        case "N":
-          if (!event.ctrlKey && !event.metaKey && !event.altKey) {
-            setShowSpeakerNotes((prev) => !prev);
           }
           break;
         default:
@@ -320,57 +306,10 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
         >
           <Keyboard className="h-3.5 w-3.5 shrink-0" />
           <span>
-            ← → Space · Home/End · F 전체 화면 · N 노트 · Esc 종료
+            ← → Space · Home/End · F 전체 화면 · Esc 종료
           </span>
         </div>
       </div>
-
-      {currentSpeakerNote ? (
-        <div
-          className={`presentation-controls absolute bottom-16 right-3 z-50 max-w-[min(380px,46vw)] md:bottom-20 md:right-6 ${isFullscreen && !chromeVisible ? "opacity-90" : ""
-            }`}
-        >
-          {showSpeakerNotes ? (
-            <div className="rounded-xl border border-gray-200/90 bg-white/95 shadow-lg backdrop-blur-sm">
-              <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
-                <div className="flex items-center gap-2 text-sm font-medium text-gray-800">
-                  <StickyNote className="h-4 w-4 text-amber-600" />
-                  발표자 노트
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowSpeakerNotes(false);
-                  }}
-                  className="h-8 px-2 text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                >
-                  <EyeOff className="mr-1 h-4 w-4" />
-                  숨기기
-                </Button>
-              </div>
-              <div className="max-h-[min(28vh,220px)] overflow-auto whitespace-pre-wrap px-3 py-2.5 text-sm leading-relaxed text-gray-700">
-                {currentSpeakerNote}
-              </div>
-            </div>
-          ) : (
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowSpeakerNotes(true);
-              }}
-              className="h-9 rounded-full border border-gray-200 bg-white/95 px-3 text-gray-800 shadow-md backdrop-blur-sm hover:bg-gray-50"
-            >
-              <StickyNote className="mr-2 h-4 w-4 text-amber-600" />
-              노트 보기
-            </Button>
-          )}
-        </div>
-      ) : null}
     </div>
   );
 };

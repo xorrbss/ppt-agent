@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import secrets
 from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.authored_vnext.semantic.release_authority_v3 import (
@@ -18,6 +19,7 @@ from models.authored_vnext.semantic.release_authority_v3 import (
     DurableArtifactPutRequestV3,
     DurableArtifactRefV3,
     GATE1_GRAPH_BASE_ARTIFACT_IDS_V3,
+    MAX_DURABLE_ARTIFACT_BYTES_V3,
 )
 from models.sql.authored_release_evidence_v3 import (
     AuthoredComQualificationJobV3,
@@ -33,6 +35,7 @@ from utils.datetime_utils import get_current_utc_datetime
 
 
 _LEASE_TTL = timedelta(seconds=900)
+_MAX_DURABLE_ARTIFACT_TOTAL_BYTES_V3 = 64 * 1024 * 1024
 _ORDER = (
     "captured",
     "planned",
@@ -64,7 +67,15 @@ def _artifact_ref(record: AuthoredReleaseArtifactV3) -> DurableArtifactRefV3:
     )
 
 
-def _job(record: AuthoredComQualificationJobV3) -> ComQualificationJobV3:
+def _lease_token_hash(token: str) -> str:
+    return "sha256:" + sha256(token.encode("utf-8")).hexdigest()
+
+
+def _job(
+    record: AuthoredComQualificationJobV3,
+    *,
+    claimed_lease_token: str | None = None,
+) -> ComQualificationJobV3:
     return ComQualificationJobV3(
         job_id=record.id,
         export_attempt_id=record.export_attempt_id,
@@ -73,7 +84,9 @@ def _job(record: AuthoredComQualificationJobV3) -> ComQualificationJobV3:
         state=record.state,
         transition_sequence=record.transition_sequence,
         lease_owner=record.lease_owner,
-        lease_token=record.lease_token,
+        # A bearer token is returned exactly once by claim. Ordinary create,
+        # transition, idempotent replay, and GET readback remain redacted.
+        lease_token=claimed_lease_token,
         lease_expires_at=record.lease_expires_at,
         heartbeat_at=record.heartbeat_at,
         attempt_count=record.attempt_count,
@@ -89,9 +102,15 @@ async def put_durable_artifact_v3(
     session: AsyncSession, *, request: DurableArtifactPutRequestV3, tenant_id: str
 ) -> DurableArtifactRefV3:
     try:
-        content = base64.b64decode(request.content_base64, validate=True)
+        content = await asyncio.to_thread(
+            base64.b64decode,
+            request.content_base64,
+            validate=True,
+        )
     except ValueError as error:
         raise SemanticContractError("authored_release_artifact_base64_invalid") from error
+    if len(content) > MAX_DURABLE_ARTIFACT_BYTES_V3:
+        raise SemanticContractError("authored_release_artifact_too_large")
     observed_digest = "sha256:" + sha256(content).hexdigest()
     if not content or observed_digest != request.sha256:
         raise SemanticContractError("authored_release_artifact_digest_mismatch")
@@ -115,6 +134,17 @@ async def put_durable_artifact_v3(
         ):
             raise SemanticContractError("authored_release_artifact_cas_conflict")
         return _artifact_ref(existing)
+    current_total = int(
+        await session.scalar(
+            select(func.coalesce(func.sum(AuthoredReleaseArtifactV3.byte_length), 0)).where(
+                AuthoredReleaseArtifactV3.tenant_id == tenant_id,
+                AuthoredReleaseArtifactV3.export_attempt_id == request.export_attempt_id,
+            )
+        )
+        or 0
+    )
+    if current_total + len(content) > _MAX_DURABLE_ARTIFACT_TOTAL_BYTES_V3:
+        raise SemanticContractError("authored_release_artifact_total_too_large")
     record = AuthoredReleaseArtifactV3(
         tenant_id=tenant_id,
         export_attempt_id=request.export_attempt_id,
@@ -223,7 +253,7 @@ async def claim_com_qualification_job_v3(
         )
         .values(
             lease_owner=worker_id,
-            lease_token=token,
+            lease_token_hash=_lease_token_hash(token),
             lease_expires_at=observed_at + _LEASE_TTL,
             heartbeat_at=observed_at,
             attempt_count=AuthoredComQualificationJobV3.attempt_count + 1,
@@ -234,7 +264,7 @@ async def claim_com_qualification_job_v3(
         raise SemanticContractError("authored_com_qualification_claim_conflict")
     record = await session.get(AuthoredComQualificationJobV3, job_id)
     assert record is not None
-    return _job(record)
+    return _job(record, claimed_lease_token=token)
 
 
 def _sealed_evidence_error(evidence: dict[str, Any]) -> str | None:
@@ -341,7 +371,7 @@ async def transition_com_qualification_job_v3(
         record is None
         or record.tenant_id != tenant_id
         or record.lease_owner != request.worker_id
-        or record.lease_token != request.lease_token
+        or record.lease_token_hash != _lease_token_hash(request.lease_token)
         or record.lease_expires_at is None
         or _utc(record.lease_expires_at) <= observed_at
         or record.state != request.expected_state
@@ -370,7 +400,8 @@ async def transition_com_qualification_job_v3(
             AuthoredComQualificationJobV3.id == job_id,
             AuthoredComQualificationJobV3.state == request.expected_state,
             AuthoredComQualificationJobV3.transition_sequence == request.expected_transition_sequence,
-            AuthoredComQualificationJobV3.lease_token == request.lease_token,
+            AuthoredComQualificationJobV3.lease_token_hash
+            == _lease_token_hash(request.lease_token),
         )
         .values(
             state=next_state,
@@ -380,7 +411,11 @@ async def transition_com_qualification_job_v3(
             heartbeat_at=observed_at,
             lease_expires_at=(None if next_state in {"sealed", "rejected"} else observed_at + _LEASE_TTL),
             lease_owner=None if next_state in {"sealed", "rejected"} else request.worker_id,
-            lease_token=None if next_state in {"sealed", "rejected"} else request.lease_token,
+            lease_token_hash=(
+                None
+                if next_state in {"sealed", "rejected"}
+                else _lease_token_hash(request.lease_token)
+            ),
             updated_at=observed_at,
         )
     )

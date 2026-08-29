@@ -1,6 +1,6 @@
 "use client";
 
-import React, { ChangeEvent, useEffect, useMemo, useState } from 'react'
+import React, { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { File, Paperclip, Plus, X } from 'lucide-react'
 import { notify } from '@/components/ui/sonner'
 import { useUploadLimits } from '@/lib/use-upload-limits'
@@ -81,6 +81,7 @@ const SupportingDoc = ({
     const uploadLimits = useUploadLimits()
     const [isDragging, setIsDragging] = useState(false)
     const [previewUrls, setPreviewUrls] = useState<(string | null)[]>([])
+    const fileInputRef = useRef<HTMLInputElement>(null)
 
     const hasFiles = files.length > 0
 
@@ -146,7 +147,7 @@ const SupportingDoc = ({
         e.currentTarget.value = ''
     }
 
-    const handleDrop = (e: React.DragEvent<HTMLLabelElement>) => {
+    const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault()
         setIsDragging(false)
 
@@ -170,12 +171,12 @@ const SupportingDoc = ({
         }
     }
 
-    const handleDragOver = (e: React.DragEvent<HTMLLabelElement>) => {
+    const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault()
         setIsDragging(true)
     }
 
-    const handleDragLeave = (e: React.DragEvent<HTMLLabelElement>) => {
+    const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault()
         setIsDragging(false)
     }
@@ -190,22 +191,35 @@ const SupportingDoc = ({
         onFilesChange([])
     }
 
+    const openFilePicker = () => fileInputRef.current?.click()
+
+    const handleDropzoneKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            openFilePicker()
+        }
+    }
+
     return (
         <div className="space-y-2" data-testid="attachments-uploader">
             {compact ? (
                 <div className="flex items-center gap-3">
-                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-full h-[34px] px-3.5 ring-1 ring-inset ring-slate-200 shadow-sm text-xs font-medium text-[#191919] font-syne transition-colors hover:ring-[#5146E5]/40">
+                    <div
+                        className="relative inline-flex h-[34px] items-center gap-2 overflow-hidden rounded-full px-3.5 text-xs font-medium text-[#191919] font-syne shadow-sm ring-1 ring-inset ring-slate-200 transition-colors hover:ring-[#5146E5]/40 focus-within:ring-2 focus-within:ring-[#5146E5] focus-within:ring-offset-2"
+                    >
                         <input
+                            ref={fileInputRef}
                             type="file"
-                            className="hidden"
+                            className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
                             onChange={handleFilesSelected}
                             accept={accept}
                             multiple={multiple}
                             data-testid="file-upload-input"
+                            aria-label="첨부 파일 선택"
                         />
-                        <Paperclip className="w-3.5 h-3.5" />
-                        <span>{hasFiles ? `첨부 ${filteredFiles.length}개` : '파일 첨부'}</span>
-                    </label>
+                        <Paperclip aria-hidden="true" className="w-3.5 h-3.5" />
+                        <span aria-hidden="true">{hasFiles ? `첨부 ${filteredFiles.length}개` : '파일 첨부'}</span>
+                    </div>
                     {hasFiles && (
                         <button
                             type="button"
@@ -235,19 +249,27 @@ const SupportingDoc = ({
                         </button>}
                     </div>
 
-                    <label
-                        className={`mt-1 block cursor-pointer rounded-lg border-2 border-dashed px-4 py-6 text-center transition-colors ${isDragging ? 'border-[#5146E5] bg-[#5146E5]/5' : 'border-gray-200 hover:border-[#5146E5]'}`}
+                    <div
+                        role="button"
+                        tabIndex={0}
+                        aria-label="첨부 파일 선택 또는 끌어 놓기"
+                        className={`mt-1 block cursor-pointer rounded-lg border-2 border-dashed px-4 py-6 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5146E5] focus-visible:ring-offset-2 ${isDragging ? 'border-[#5146E5] bg-[#5146E5]/5' : 'border-gray-200 hover:border-[#5146E5]'}`}
                         onDragOver={handleDragOver}
                         onDragLeave={handleDragLeave}
                         onDrop={handleDrop}
+                        onClick={openFilePicker}
+                        onKeyDown={handleDropzoneKeyDown}
                     >
                         <input
+                            ref={fileInputRef}
                             type="file"
-                            className="hidden"
+                            className="sr-only"
                             onChange={handleFilesSelected}
                             accept={accept}
                             multiple={multiple}
                             data-testid="file-upload-input"
+                            tabIndex={-1}
+                            aria-hidden="true"
                         />
                         <div className="flex flex-col items-center gap-2">
                             <div className='w-[42px] h-[42px] flex justify-center items-center rounded-full bg-[#EBE9FE]' >
@@ -260,7 +282,7 @@ const SupportingDoc = ({
                                 파일당 최대 {uploadLimits.document.mb}MB
                             </p>
                         </div>
-                    </label>
+                    </div>
                 </>
             )}
 

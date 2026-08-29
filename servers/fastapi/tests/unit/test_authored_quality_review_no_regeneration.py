@@ -2,10 +2,75 @@ import asyncio
 import uuid
 from types import SimpleNamespace
 
+from fastapi import BackgroundTasks
+
 from models.presentation_from_template import AuthoredQualityReviewRequest
+from models.sql.async_presentation_generation_status import (
+    AsyncPresentationGenerationTaskModel,
+)
 from services import authored_quality_review_service as quality_service
 from services import slidespec_authored_importer
 from services.slidespec_authored_importer import AuthoredImportExecution
+
+
+def test_quality_review_queue_uses_durable_workspace_admission(monkeypatch) -> None:
+    presentation_id = uuid.uuid4()
+    presentation = SimpleNamespace(
+        id=presentation_id,
+        revision=7,
+        is_authored=lambda: True,
+    )
+    slide = SimpleNamespace(is_authored=lambda: True)
+
+    class _Session:
+        async def get(self, _model, _identifier):
+            return presentation
+
+    class _Rows:
+        def scalars(self):
+            return self
+
+        def all(self):
+            return [slide]
+
+    async def fake_execute(_session, _statement):
+        return _Rows()
+
+    admitted = {}
+
+    async def fake_admit(_session, **values):
+        admitted.update(values)
+        return AsyncPresentationGenerationTaskModel(
+            id=f"workspace-quality-{uuid.uuid4()}",
+            status="pending",
+            message=values["pending_message"],
+        )
+
+    monkeypatch.setattr(quality_service, "_execute_sqlalchemy", fake_execute)
+    monkeypatch.setattr(
+        quality_service, "admit_workspace_authored_task", fake_admit
+    )
+    background_tasks = BackgroundTasks()
+
+    task = asyncio.run(
+        quality_service.queue_authored_quality_review(
+            presentation_id,
+            AuthoredQualityReviewRequest(scope="subset", slide_indices=[0]),
+            background_tasks,
+            _Session(),
+        )
+    )
+
+    assert task.status == "pending"
+    assert background_tasks.tasks == []
+    assert admitted["operation_kind"] == "quality.review"
+    assert admitted["expected_revision"] == 7
+    assert admitted["context"] == {
+        "scope": "subset",
+        "slide_indices": [0],
+        "mode": "analyze_and_fix",
+        "slidespec_opt_in": True,
+    }
 
 
 def test_unclaimed_slides_are_explained_without_page_regeneration() -> None:

@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.generation-stage-timing-durable",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Persist six authored generation stage timings in a digest-bound atomic receipt and expose only bounded retry-stable operation results.",
+  "scope": [
+    "authored-generation",
+    "workspace-operations",
+    "observability"
+  ],
+  "invariants": [
+    "Stages are outline, author, repair, checkpoint, export, publication",
+    "Timing values are finite, nonnegative, and bounded",
+    "Retry for the same attempt and revision must reuse identical receipt content"
+  ],
+  "forbidden": [
+    "Expose private attempt lease tokens",
+    "Overwrite an existing timing binding with different values"
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_generation_timing_receipt.py",
+    "servers/fastapi/services/workspace_generation_timing_payload.py",
+    "servers/fastapi/services/workspace_operation_runner.py",
+    "servers/fastapi/tests/unit/test_authored_generation_timing_receipt.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-29T14:56:17.3997938+00:00"
+}

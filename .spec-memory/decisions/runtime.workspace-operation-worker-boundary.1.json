@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "key": "runtime.workspace-operation-worker-boundary",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Start workspace operations and maintenance externally after API readiness; packaged Electron falls back to embedded until a worker executable ships.",
+  "scope": [
+    "runtime",
+    "workspace-operations",
+    "electron",
+    "container"
+  ],
+  "invariants": [
+    "API migrations complete before the external worker starts",
+    "Worker readiness and early exit fail startup or quit the app",
+    "Managed children are stopped together"
+  ],
+  "forbidden": [
+    "Loading the UI with external mode but no ready worker"
+  ],
+  "evidence": [
+    "start.js",
+    "electron/app/main.ts",
+    "electron/app/utils/servers.ts",
+    "servers/fastapi/api/lifespan.py",
+    "servers/fastapi/services/workspace_operation_worker.py",
+    "servers/fastapi/tests/unit/test_workspace_operation_worker.py",
+    "servers/fastapi/tests/unit/test_runtime_startup_security.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-29T14:48:45.7538164+00:00"
+}

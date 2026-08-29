@@ -23,6 +23,14 @@ from services.workspace_quality_review_payload import (
     _sanitize_quality_review_slide_results,
     _sanitize_quality_review_stage_timings,
 )
+from services.workspace_generation_timing_payload import (
+    GENERATION_TIMING_RESULT_KEYS,
+    sanitize_generation_timing_result,
+)
+from services.workspace_generation_timing_attachment import (
+    amend_generation_timing_projection,
+    attach_durable_generation_timing as _attach_durable_generation_timing,
+)
 import inspect
 import json
 import logging
@@ -180,6 +188,13 @@ _MAX_TOOL_SUMMARY_LENGTH = 500
 # these out of the general event allowlist prevents an unrelated handler from
 # publishing fields that only make sense for another operation's result card.
 _SAFE_RESULT_PAYLOAD_KEYS_BY_KIND: dict[str, frozenset[str]] = {
+    "presentation.generate": frozenset(
+        {
+            "stage_timings_ms",
+            "total_ms",
+            "generation_timing_receipt",
+        }
+    ),
     "quality.review": frozenset(
         {
             "kind",
@@ -392,9 +407,16 @@ def sanitize_workspace_event_payload(
     if operation_kind in {"presentation.edit", "slide.edit", "slide.delete"}:
         allowed_keys |= _PUBLIC_RUNTIME_PAYLOAD_KEYS
     safe: dict[str, Any] = {}
+    if operation_kind == "presentation.generate":
+        safe.update(sanitize_generation_timing_result(payload))
     for key, value in payload.items():
         normalized = str(key)
         if normalized not in allowed_keys:
+            continue
+        if (
+            operation_kind == "presentation.generate"
+            and normalized in GENERATION_TIMING_RESULT_KEYS
+        ):
             continue
         if isinstance(value, uuid.UUID):
             safe[normalized] = str(value)
@@ -966,8 +988,9 @@ async def finalize_workspace_operation_success(
     session_factory: async_sessionmaker[AsyncSession] = async_session_maker,
 ) -> bool:
     now = _utc_now()
+    result_payload = await _attach_durable_generation_timing(claim, result.payload)
     safe_result = sanitize_workspace_event_payload(
-        result.payload,
+        result_payload,
         operation_kind=claim.kind,
     )
     if result.result_revision is not None:
@@ -1060,6 +1083,19 @@ async def finalize_workspace_operation_success(
             )
         ).scalar_one_or_none()
         if existing is not None:
+            if claim.kind == "presentation.generate":
+                amended = await amend_generation_timing_projection(
+                    session,
+                    operation=operation,
+                    safe_result=safe_result,
+                    now=now,
+                )
+                if amended is not None:
+                    if not amended:
+                        await session.rollback()
+                        return False
+                    await session.commit()
+                    return True
             await session.rollback()
             return True
         publication_payload = dict(safe_result)

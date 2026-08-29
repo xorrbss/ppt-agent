@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.capacity.semantic-bounded-recovery",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Ordinary non-source gate repair may strictly shorten one nonempty primary title; QID, role, order, header, source, and limits remain fixed.",
+  "scope": [
+    "authored",
+    "capacity",
+    "recovery"
+  ],
+  "invariants": [
+    "At most two provider calls per slide",
+    "One primary title owner may be strictly shortened only for ordinary non-source summarizable gate recovery",
+    "Retain QIDs roles order header parts source owners and frozen limits",
+    "At most three eligible low-priority body or supporting reducer leaves"
+  ],
+  "forbidden": [
+    "Full free-form HTML gate reauthor",
+    "Capacity limit increase",
+    "Title removal or empty title",
+    "Header-part or source-owned text change",
+    "Broad content deletion"
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_composition_policy.py",
+    "servers/fastapi/services/authored_presentation_generation.py",
+    "servers/fastapi/tests/unit/test_authored_composition_policy.py"
+  ],
+  "supersedes": "authored.capacity.semantic-bounded-recovery@1",
+  "recordedAt": "2026-08-29T16:35:29.7770699+00:00"
+}

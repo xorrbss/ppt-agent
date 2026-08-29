@@ -7,6 +7,13 @@ const SCHEMA = "presenton.next-runtime-dependency-closure/v1"
 const RECEIPT_NAME = ".presenton-runtime-dependencies.json"
 const ROOT_PACKAGES = ["tailwindcss"]
 
+function sharpRuntimePackageName(runtimePlatform) {
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)+$/u.test(runtimePlatform)) {
+    throw new Error(`Unsafe Sharp runtime platform: ${runtimePlatform}`)
+  }
+  return `@img/sharp-${runtimePlatform}`
+}
+
 function packagePath(root, name) {
   const segments = name.split("/")
   const scoped = name.startsWith("@")
@@ -219,6 +226,43 @@ function copyPackage(source, destination) {
   }
 }
 
+function materializeSharpNativeRuntime({
+  nextjsRoot,
+  serverRoot,
+  runtimePlatform,
+}) {
+  const sharpRoot = fs.realpathSync(
+    packagePath(path.join(path.resolve(nextjsRoot), "node_modules"), "sharp")
+  )
+  const sharpManifest = readPackage(sharpRoot)
+  const selectedRuntime =
+    runtimePlatform ||
+    require(path.join(sharpRoot, "lib", "libvips.js")).runtimePlatformArch()
+  const nativeName = sharpRuntimePackageName(selectedRuntime)
+  const nativeRoot = resolveDependencyRoot(nextjsRoot, sharpRoot, nativeName)
+  const nativeManifest = readPackage(nativeRoot)
+
+  if (
+    nativeManifest.name !== nativeName ||
+    nativeManifest.version !== sharpManifest.version
+  ) {
+    throw new Error(
+      `Sharp runtime version mismatch: ${sharpManifest.name}@${sharpManifest.version} ` +
+        `resolved ${nativeManifest.name}@${nativeManifest.version}`
+    )
+  }
+
+  const destination = resourcePath(serverRoot, nativeName)
+  fs.rmSync(destination, { recursive: true, force: true })
+  copyPackage(nativeRoot, destination)
+  return {
+    sharpVersion: sharpManifest.version,
+    nativePackage: nativeManifest.name,
+    nativeVersion: nativeManifest.version,
+    runtimePlatform: selectedRuntime,
+  }
+}
+
 function materializeTailwindRuntimeClosure({ nextjsRoot, serverRoot }) {
   const closure = resolveProductionClosure(nextjsRoot)
   for (const entry of [...closure.packages].sort(
@@ -273,6 +317,7 @@ module.exports = {
   RECEIPT_NAME,
   ROOT_PACKAGES,
   SCHEMA,
+  materializeSharpNativeRuntime,
   materializeTailwindRuntimeClosure,
   resolveProductionClosure,
   verifyTailwindRuntimeClosure,

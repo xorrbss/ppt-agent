@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.capacity.semantic-bounded-recovery",
+  "revision": 4,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "After two calls, ordinary non-source slides may locally shorten up to three nonempty body or supporting owners at text boundaries to frozen budgets.",
+  "scope": [
+    "authored",
+    "capacity",
+    "recovery"
+  ],
+  "invariants": [
+    "No provider call after the second author response",
+    "Preserve QID role order element count title header source image font geometry and limits",
+    "Shorten at most three body or supporting owners at sentence or word boundaries",
+    "Recheck aggregate capacity and semantic owner census before admission"
+  ],
+  "forbidden": [
+    "Owner deletion or empty text",
+    "Title or source text change",
+    "Limit increase",
+    "Image QID font or geometry relaxation"
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_composition_policy.py",
+    "servers/fastapi/utils/llm_calls/author_deck.py",
+    "servers/fastapi/tests/unit/test_authored_composition_policy.py",
+    "servers/fastapi/tests/unit/test_authored_pipeline.py"
+  ],
+  "supersedes": "authored.capacity.semantic-bounded-recovery@3",
+  "recordedAt": "2026-08-29T17:11:10.1195467+00:00"
+}

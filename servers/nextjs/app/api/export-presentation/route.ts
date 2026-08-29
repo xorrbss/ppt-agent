@@ -9,6 +9,7 @@ import {
 } from "@/lib/run-bundled-presentation-export";
 import { resolveAppDataDirectory } from "@/lib/app-data-directory";
 import {
+  runAuthoredPdfPresentationExport,
   runAuthoredFidelityPresentationExport,
   runAuthoredHybridPresentationExport,
 } from "@/lib/authored-hybrid/export";
@@ -47,6 +48,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isSha256(value: unknown): value is string {
   return typeof value === "string" && /^[a-f0-9]{64}$/i.test(value);
+}
+
+function isSafeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value);
 }
 
 function isHybridPptxRequest(body: ExportPresentationRouteBody): boolean {
@@ -119,11 +124,14 @@ function readHybridAttemptBinding(
   value: unknown,
   attemptMode: "hybrid" | "fidelity" = "hybrid",
 ): HybridAttemptBinding {
+  const presentationRevision = isRecord(value)
+    ? value.presentationRevision
+    : undefined;
   if (
     !isRecord(value) ||
     typeof value.exportAttemptId !== "string" ||
     !value.exportAttemptId.trim() ||
-    !Number.isSafeInteger(value.presentationRevision) ||
+    !isSafeInteger(presentationRevision) ||
     !isSha256(value.canonicalSourceDigest) ||
     !isSha256(value.rendererSourceDigest) ||
     !isSha256(value.htmlSourceDigest) ||
@@ -136,7 +144,7 @@ function readHybridAttemptBinding(
   }
   return {
     exportAttemptId: value.exportAttemptId.trim(),
-    presentationRevision: value.presentationRevision,
+    presentationRevision,
     canonicalSourceDigest: value.canonicalSourceDigest.toLowerCase(),
     rendererSourceDigest: value.rendererSourceDigest.toLowerCase(),
     htmlSourceDigest: value.htmlSourceDigest.toLowerCase(),
@@ -200,6 +208,17 @@ export async function POST(req: NextRequest) {
     let cachedPresentation:
       | Awaited<ReturnType<typeof fetchPersistedPresentation>>
       | undefined;
+
+    if (
+      body.format === "pdf" &&
+      typeof body.id === "string" &&
+      body.id
+    ) {
+      cachedPresentation = await fetchPersistedPresentation(
+        body.id,
+        cookieHeader,
+      );
+    }
 
     // Direct browser Authored PPTX exports begin a durable attempt against the
     // exact persisted snapshot consumed by the renderer. Callers arriving
@@ -285,14 +304,23 @@ export async function POST(req: NextRequest) {
             expectedPresentationSha256,
             expectedPresentationRevision,
           }) =>
-            runBundledPresentationExport({
-              format,
-              presentationId,
-              title,
-              cookieHeader,
-              expectedPresentationSha256,
-              expectedPresentationRevision,
-            }),
+            format === "pdf" &&
+            cachedPresentation &&
+            resolvePersistedExportStrategy(cachedPresentation) === "authored-hybrid"
+              ? runAuthoredPdfPresentationExport({
+                  presentationId,
+                  title,
+                  cookieHeader,
+                  expectedPresentationRevision,
+                })
+              : runBundledPresentationExport({
+                  format,
+                  presentationId,
+                  title,
+                  cookieHeader,
+                  expectedPresentationSha256,
+                  expectedPresentationRevision,
+                }),
           authoredFidelity: ({
             presentationId,
             title,
@@ -404,15 +432,11 @@ export async function POST(req: NextRequest) {
       completedPowerPointQa = isRecord(completed)
         ? completed.powerPointQa
         : undefined;
-      if (isRecord(completed) && isRecord(completed.quality)) {
-        responseQuality = completed.quality as typeof exportResult.quality;
-      }
-      if (isRecord(completed) && isRecord(completed.coverage)) {
-        responseExportMetadata = {
-          ...exportResult.exportMetadata,
-          coverageManifest: completed.coverage,
-        } as typeof exportResult.exportMetadata;
-      }
+      // The local exporter produced the typed, attempt-bound sidecars that were
+      // just validated above. The completion endpoint is cross-process JSON, so
+      // its finalized copies are not reflected back into this typed response
+      // without a full schema parser. Its separate PowerPoint QA fact remains
+      // additive below; quality and coverage retain the exact local binding.
       completedAttempt = true;
     } else if (routeOwnedAttempt && routeOwnedAttemptMode === "fidelity") {
       const { pptxSha256, pptxSizeBytes } = await exportedPptxDigest(

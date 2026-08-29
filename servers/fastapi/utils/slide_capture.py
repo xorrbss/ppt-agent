@@ -47,6 +47,12 @@ from utils.renderer_isolation import (
     renderer_requires_external_worker,
     worker_command,
 )
+from utils.render_cache_budget import (
+    capture_cache_resident_bytes,
+    metrics_cache_resident_bytes,
+    metrics_payload_bytes,
+    render_cache_resident_bytes,
+)
 
 SLIDE_W = 1280
 SLIDE_H = 720
@@ -1001,7 +1007,10 @@ def _cache_browser_metrics(html: str, metrics: Mapping[str, Any]) -> None:
     except Exception:
         metric_bytes = 0
     _count_runtime("metrics_cache_bytes", metric_bytes)
-    while len(_browser_metrics_cache) > DOM_METRICS_CACHE_SIZE:
+    while (
+        len(_browser_metrics_cache) > DOM_METRICS_CACHE_SIZE
+        or _metrics_cache_resident_bytes() > DOM_METRICS_CACHE_BYTE_BUDGET
+    ):
         _browser_metrics_cache.popitem(last=False)
         _count_runtime("metrics_cache_evictions")
 
@@ -1212,7 +1221,10 @@ def _cache_capture(html: str, timeout: int, capture: RenderCapture) -> None:
     key = _capture_cache_key(html, timeout)
     _capture_cache[key] = capture
     _capture_cache.move_to_end(key)
-    while len(_capture_cache) > CAPTURE_CACHE_SIZE:
+    while (
+        len(_capture_cache) > CAPTURE_CACHE_SIZE
+        or _capture_cache_resident_bytes() > CAPTURE_CACHE_BYTE_BUDGET
+    ):
         _capture_cache.popitem(last=False)
         _count_runtime("capture_cache_evictions")
 
@@ -1286,16 +1298,14 @@ def get_render_runtime_counters() -> dict[str, int]:
     # lock; cache mutation is event-loop serialized and these values are only
     # benchmark evidence, never admission decisions.
     snapshot["render_cache_entries"] = len(_render_cache)
-    snapshot["render_cache_bytes_current"] = sum(len(value) for value in _render_cache.values())
+    snapshot["render_cache_bytes_current"] = _render_cache_resident_bytes()
+    snapshot["render_cache_byte_budget"] = RENDER_CACHE_BYTE_BUDGET
     snapshot["metrics_cache_entries"] = len(_browser_metrics_cache)
-    snapshot["metrics_cache_bytes_current"] = sum(
-        len(json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str).encode("utf-8"))
-        for value in _browser_metrics_cache.values()
-    )
+    snapshot["metrics_cache_bytes_current"] = _metrics_cache_resident_bytes()
+    snapshot["metrics_cache_byte_budget"] = DOM_METRICS_CACHE_BYTE_BUDGET
     snapshot["capture_cache_entries"] = len(_capture_cache)
-    snapshot["capture_cache_bytes_current"] = sum(
-        len(value.png) for value in _capture_cache.values()
-    )
+    snapshot["capture_cache_bytes_current"] = _capture_cache_resident_bytes()
+    snapshot["capture_cache_byte_budget"] = CAPTURE_CACHE_BYTE_BUDGET
     return snapshot
 
 
@@ -1827,7 +1837,10 @@ async def render_html_to_png(html: str, timeout: int = 60) -> bytes:
                 runtime_counters=get_render_runtime_counters(),
             ),
         )
-    while len(_render_cache) > RENDER_CACHE_SIZE:
+    while (
+        len(_render_cache) > RENDER_CACHE_SIZE
+        or _render_cache_resident_bytes() > RENDER_CACHE_BYTE_BUDGET
+    ):
         _render_cache.popitem(last=False)
         _count_runtime("render_cache_evictions")
     return rendered
@@ -1856,17 +1869,26 @@ def _env_nonnegative_int(name: str, default: int) -> int:
 
 
 RENDER_CACHE_SIZE = _env_nonnegative_int("AUTHORED_RENDER_CACHE_SIZE", 32)
+RENDER_CACHE_BYTE_BUDGET = _env_nonnegative_int(
+    "AUTHORED_RENDER_CACHE_BYTE_BUDGET", 256 * 1024 * 1024
+)
 # This changes whenever rendering semantics change. In particular, v3 prevents
 # Reuse of PNGs created under the former minimum-font rendering policy is unsafe.
 RENDER_CACHE_VERSION = "authored-render-v8-owned-paint-cdp"
 _render_cache: "OrderedDict[tuple[str, str, str], bytes]" = OrderedDict()
 _render_inflight: Dict[tuple[str, str, str], "asyncio.Task[bytes]"] = {}
 CAPTURE_CACHE_SIZE = max(0, min(RENDER_CACHE_SIZE, 8))
+CAPTURE_CACHE_BYTE_BUDGET = _env_nonnegative_int(
+    "AUTHORED_CAPTURE_CACHE_BYTE_BUDGET", 64 * 1024 * 1024
+)
 _capture_cache: "OrderedDict[tuple[str, str, str], RenderCapture]" = OrderedDict()
 OCCLUSION_PROBE_CONTRACT_VERSION = "owned-paint-v3"
 OCCLUSION_SENSOR_VERSION = "owned-paint-v5-inset-retry"
 DOM_METRICS_VERSION = "authored-dom-metrics-v15-source-block-visibility"
 DOM_METRICS_CACHE_SIZE = max(1, RENDER_CACHE_SIZE)
+DOM_METRICS_CACHE_BYTE_BUDGET = _env_nonnegative_int(
+    "AUTHORED_DOM_METRICS_CACHE_BYTE_BUDGET", 32 * 1024 * 1024
+)
 _browser_metrics_cache: "OrderedDict[tuple[str, str, str], Mapping[str, Any]]" = OrderedDict()
 _browser_metrics_inflight: Dict[tuple[str, str, str], "asyncio.Task[Mapping[str, Any] | None]"] = {}
 _observed_cache_identities: "OrderedDict[str, _RenderCacheIdentity]" = OrderedDict()
@@ -1879,6 +1901,28 @@ CHROME_REUSE_ENABLED = os.getenv("AUTHORED_CHROME_REUSE", "1").strip().lower() n
     "no",
 }
 _render_sem: Optional[asyncio.Semaphore] = None
+
+
+def _render_cache_resident_bytes() -> int:
+    return render_cache_resident_bytes(_render_cache)
+
+
+def _metrics_payload_bytes(value: Mapping[str, Any]) -> int:
+    return metrics_payload_bytes(
+        value, overflow_bytes=DOM_METRICS_CACHE_BYTE_BUDGET
+    )
+
+
+def _metrics_cache_resident_bytes() -> int:
+    return metrics_cache_resident_bytes(
+        _browser_metrics_cache, overflow_bytes=DOM_METRICS_CACHE_BYTE_BUDGET
+    )
+
+
+def _capture_cache_resident_bytes() -> int:
+    return capture_cache_resident_bytes(
+        _capture_cache, overflow_bytes=DOM_METRICS_CACHE_BYTE_BUDGET
+    )
 
 
 def _invalidate_stale_source_entries(source_digest: str, current_digest: str) -> int:

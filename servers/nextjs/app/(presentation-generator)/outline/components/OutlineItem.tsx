@@ -181,7 +181,8 @@ export function OutlineItem({
         <div
           {...attributes}
           {...listeners}
-          className=" flex items-center justify-center relative cursor-grab"
+          className="relative flex items-center justify-center rounded cursor-grab focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8]"
+          aria-label={`슬라이드 ${index} 순서 변경`}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -282,7 +283,6 @@ export function OutlineItem({
                   tabIndex={0}
                   aria-label={`슬라이드 ${index} 마크다운 편집`}
                   onClick={() => setIsEditing(true)}
-                  onFocus={() => setIsEditing(true)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
@@ -307,11 +307,14 @@ export function OutlineItem({
           )}
         </div>
 
-        <div className="hidden group-hover:flex absolute -top-3 -right-3 gap-1 sm:gap-2 items-center">
+        <div className="absolute -top-3 -right-3 hidden items-center gap-1 sm:gap-2 group-hover:flex group-focus-within:flex">
           <ToolTip content="슬라이드 삭제">
             <button
+              type="button"
               onClick={handleSlideDelete}
-              className="p-1.5 sm:p-2 bg-white shadow-md  rounded-full transition-colors"
+              disabled={isStreaming}
+              aria-label={`슬라이드 ${index} 삭제`}
+              className="rounded-full bg-white p-1.5 shadow-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8] disabled:cursor-not-allowed disabled:opacity-50 sm:p-2"
             >
               <Trash className="w-4 h-4  text-black/70" />
             </button>

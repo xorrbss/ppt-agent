@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import { ProgressBar } from "./progress-bar";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface OverlayLoaderProps {
   text?: string;
@@ -30,6 +30,8 @@ export const OverlayLoader = ({
   cancelText = "취소",
 }: OverlayLoaderProps) => {
   const [isVisible, setIsVisible] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (show) {
@@ -38,6 +40,46 @@ export const OverlayLoader = ({
       setIsVisible(false);
     }
   }, [show]);
+
+  useEffect(() => {
+    if (!show) return;
+
+    previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
+    dialogRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && onCancel) {
+        event.preventDefault();
+        onCancel();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusable?.length) {
+        event.preventDefault();
+        dialogRef.current?.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === dialogRef.current)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      previouslyFocusedRef.current?.focus?.();
+    };
+  }, [show, onCancel]);
 
   if (!show) return null;
 
@@ -50,8 +92,15 @@ export const OverlayLoader = ({
         "fixed inset-0 bg-black/70 z-50 flex items-center justify-center transition-opacity duration-300",
         isVisible ? "opacity-100" : "opacity-0"
       )}
+      role="presentation"
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={text || "작업을 진행하고 있습니다"}
+        aria-busy="true"
+        tabIndex={-1}
         className={cn(
           "flex flex-col items-center justify-center px-6 pt-6 pb-10 rounded-xl bg-white shadow-2xl relative min-h-[347px]",
           "min-w-[280px] sm:min-w-[447px] border border-white/10 transition-all duration-400 ease-out",

@@ -22,6 +22,7 @@ chroma
 container.db
 .next-build
 servers/nextjs/.next-workspace-e2e/
+servers/nextjs/.next-authored-vnext-dev-*/
 servers/nextjs/.next-build-checkpoint8/
 servers/nextjs/.tmp/
 servers/nextjs/servers/nextjs/.tmp/

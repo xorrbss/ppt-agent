@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.capacity.semantic-bounded-recovery",
+  "revision": 3,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Deterministic slide provider-budget or aggregate-capacity exhaustion is non-retryable; transient provider and transport failures retain retry semantics.",
+  "scope": [
+    "authored",
+    "capacity",
+    "recovery",
+    "workspace-operation"
+  ],
+  "invariants": [
+    "At most two provider calls per slide and no operation retry after deterministic budget exhaustion",
+    "Aggregate owner capacity exhaustion propagates authored_slide_author_failed with retryable false",
+    "429 5xx and transient transport causes retain existing retryability",
+    "Retain frozen semantic repair and capacity limits"
+  ],
+  "forbidden": [
+    "Operation-level automatic retry that resets deterministic slide provider budget",
+    "Reclassifying transient provider transport errors as terminal"
+  ],
+  "evidence": [
+    "servers/fastapi/utils/llm_calls/author_deck.py",
+    "servers/fastapi/services/authored_presentation_pipeline.py",
+    "servers/fastapi/tests/unit/test_authored_pipeline.py"
+  ],
+  "supersedes": "authored.capacity.semantic-bounded-recovery@2",
+  "recordedAt": "2026-08-29T17:05:11.0989322+00:00"
+}

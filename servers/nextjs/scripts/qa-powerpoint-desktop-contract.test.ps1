@@ -14,11 +14,14 @@ if ($parseErrors.Count -ne 0) {
 }
 foreach ($functionName in @(
   "Get-Sha256Text",
+  "ConvertTo-CanonicalLayerJson",
   "Get-PowerPointApplicationIdentity",
   "Complete-PowerPointFallbackWindowBinding",
   "Get-UnexpectedPowerPointObservation",
   "Get-PowerPointObserverEpochGuarantee",
-  "Read-SemanticOwnershipAlternativeText"
+  "Read-SemanticOwnershipAlternativeText",
+  "Read-BoundedNativeNameFallback",
+  "Read-ExpectedOwnershipManifest"
 )) {
   $functionAst = $ast.Find({
     param($node)
@@ -69,6 +72,45 @@ try {
 }
 if (-not $rejected) {
   throw "semantic-ownership-digest-mutation-not-rejected"
+}
+
+$genericExpectation = [ordered]@{
+  schemaVersion = "authored-powerpoint-qid-expectation/v2"
+  presentationId = "deck-generic"
+  presentationRevision = 9
+  activeManifestDigest = "sha256:" + ("a" * 64)
+  sceneDigest = "sha256:" + ("b" * 64)
+  editableHybridProfileId = "authored-editable-hybrid-ko-en-basic-v1"
+  pptxSha256 = "sha256:" + ("c" * 64)
+  slideCount = 2
+  expectedCount = 2
+  entries = @(
+    [ordered]@{
+      slideNumber = 1; slideId = "slide-1"; qid = "s01-title"
+      kind = "text"; capabilityId = "editable.text.v1"; hybridDisposition = "native"
+      advancedTextExpectation = $null; tableExpectation = $null; chartExpectation = $null
+    },
+    [ordered]@{
+      slideNumber = 2; slideId = "slide-2"; qid = "s02-art"
+      kind = "image"; capabilityId = "raster.owner.v1"; hybridDisposition = "raster"
+      advancedTextExpectation = $null; tableExpectation = $null; chartExpectation = $null
+    }
+  )
+}
+$expectationFile = New-TemporaryFile
+try {
+  Set-Content -LiteralPath $expectationFile -Value ($genericExpectation | ConvertTo-Json -Depth 12 -Compress) -NoNewline
+  $readExpectation = Read-ExpectedOwnershipManifest $expectationFile "deck-generic" 9
+  if ($readExpectation.SlideCount -ne 2 -or $readExpectation.ExpectedCount -ne 2 -or $readExpectation.PptxSha256 -ne $genericExpectation.pptxSha256) {
+    throw "generic-qid-expectation-not-read"
+  }
+} finally {
+  Remove-Item -LiteralPath $expectationFile -Force -ErrorAction SilentlyContinue
+}
+$hundredthSlideOwner = Read-BoundedNativeNameFallback `
+  "Presenton hybrid shape s100-edge" 100
+if ($hundredthSlideOwner.Qids[0] -ne "s100-edge") {
+  throw "three-digit-slide-qid-not-read"
 }
 
 $observation = Get-UnexpectedPowerPointObservation 41 `
@@ -150,6 +192,14 @@ foreach ($required in @(
 )) {
   if (-not $source.Contains($required)) {
     throw "qa-powerpoint-desktop-authority-contract-missing:$required"
+  }
+}
+foreach ($retiredFixtureConstraint in @(
+  "[int]`$manifest.expectedCount -ne 27",
+  "[int]`$entry.slideNumber -gt 8"
+)) {
+  if ($source.Contains($retiredFixtureConstraint)) {
+    throw "qa-powerpoint-desktop-retired-fixture-constraint-present:$retiredFixtureConstraint"
   }
 }
 

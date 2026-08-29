@@ -346,7 +346,8 @@ function Read-AuthoredOwnershipAlternativeText(
       $payload.schemaVersion -ne "authored-vnext-owner/v1" -or
       [int]$payload.slideNumber -ne $ExpectedSlideNumber -or
       $payload.slideId -notmatch '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' -or
-      $payload.elementId -notmatch '^s\d{2}-[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' -or
+      $payload.elementId -notmatch '^s\d{2,3}-[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' -or
+      -not $payload.elementId.StartsWith(("s{0:d2}-" -f $ExpectedSlideNumber)) -or
       -not @("text", "shape", "image", "table", "chart").Contains([string]$payload.kind) -or
       $payload.capabilityId -notmatch '^[A-Za-z][A-Za-z0-9._:-]{0,127}$' -or
       -not $shapeNameValid
@@ -529,7 +530,7 @@ function Read-BoundedNativeNameFallback(
 ) {
   $match = [regex]::Match(
     $ShapeName,
-    '^Presenton hybrid (text|shape|image|table|chart) (s\d{2}-[A-Za-z0-9][A-Za-z0-9._:-]{0,127})$'
+    '^Presenton hybrid (text|shape|image|table|chart) (s\d{2,3}-[A-Za-z0-9][A-Za-z0-9._:-]{0,127})$'
   )
   if (-not $match.Success) {
     if ($ShapeName -match '^Presenton hybrid (text|shape|image|table|chart)\b') {
@@ -538,7 +539,7 @@ function Read-BoundedNativeNameFallback(
     return $null
   }
   $qid = $match.Groups[2].Value
-  if ($qid.Substring(1, 2) -ne ("{0:d2}" -f $ExpectedSlideNumber)) {
+  if (-not $qid.StartsWith(("s{0:d2}-" -f $ExpectedSlideNumber))) {
     throw "Authored native shape name slide identity is invalid."
   }
   [PSCustomObject]@{
@@ -614,8 +615,8 @@ function Read-AuthoredChartTagMapOwnership(
   )
   if (-not $carrier.Success -or $kind -ne "chart" -or
     $role -ne "native-chart-object" -or
-    $qid -notmatch '^s\d{2}-[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' -or
-    $qid.Substring(1, 2) -ne ("{0:d2}" -f $ExpectedSlideNumber)) {
+    $qid -notmatch '^s\d{2,3}-[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' -or
+    -not $qid.StartsWith(("s{0:d2}-" -f $ExpectedSlideNumber))) {
     throw "Authored chart tag payload failed validation."
   }
   [PSCustomObject]@{
@@ -696,8 +697,10 @@ function Read-ExpectedOwnershipManifest(
   $expectedRootProperties = @(
     "schemaVersion", "presentationId", "presentationRevision",
     "activeManifestDigest", "sceneDigest", "editableHybridProfileId",
-    "expectedCount", "entries"
+    "pptxSha256", "slideCount", "expectedCount", "entries"
   )
+  $slideCount = [int]$manifest.slideCount
+  $expectedCount = [int]$manifest.expectedCount
   if (
     (@($manifest.PSObject.Properties.Name) | ConvertTo-Json -Compress) -ne
       ($expectedRootProperties | ConvertTo-Json -Compress) -or
@@ -708,8 +711,10 @@ function Read-ExpectedOwnershipManifest(
     $manifest.sceneDigest -notmatch '^sha256:[0-9a-f]{64}$' -or
     $manifest.editableHybridProfileId -ne
       "authored-editable-hybrid-ko-en-basic-v1" -or
-    [int]$manifest.expectedCount -ne 27 -or
-    @($manifest.entries).Count -ne 27
+    $manifest.pptxSha256 -notmatch '^sha256:[0-9a-f]{64}$' -or
+    $slideCount -lt 1 -or $slideCount -gt 100 -or
+    $expectedCount -lt $slideCount -or
+    @($manifest.entries).Count -ne $expectedCount
   ) {
     throw "Expected ownership manifest root failed validation."
   }
@@ -723,10 +728,10 @@ function Read-ExpectedOwnershipManifest(
       if (
         (@($entry.PSObject.Properties.Name) | ConvertTo-Json -Compress) -ne
           ($expectedEntryProperties | ConvertTo-Json -Compress) -or
-        [int]$entry.slideNumber -lt 1 -or [int]$entry.slideNumber -gt 8 -or
+        [int]$entry.slideNumber -lt 1 -or [int]$entry.slideNumber -gt $slideCount -or
         $entry.slideId -notmatch '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' -or
-        $entry.qid -notmatch '^s\d{2}-[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' -or
-        $entry.qid.Substring(1, 2) -ne ("{0:d2}" -f [int]$entry.slideNumber) -or
+        $entry.qid -notmatch '^s\d{2,3}-[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' -or
+        -not $entry.qid.StartsWith(("s{0:d2}-" -f [int]$entry.slideNumber)) -or
         -not @("text", "shape", "image", "table", "chart").Contains(
           [string]$entry.kind
         ) -or
@@ -817,8 +822,12 @@ function Read-ExpectedOwnershipManifest(
       }
     }
   )
-  if (@($entries.Qid | Sort-Object -Unique).Count -ne 27) {
+  if (@($entries.Qid | Sort-Object -Unique).Count -ne $expectedCount) {
     throw "Expected ownership manifest contains duplicate QIDs."
+  }
+  $actualSlides = @($entries.SlideNumber | Sort-Object -Unique)
+  if (Compare-Object -ReferenceObject @(1..$slideCount) -DifferenceObject $actualSlides) {
+    throw "Expected ownership manifest has an empty or mismatched slide range."
   }
   [PSCustomObject]@{
     Path = $resolved
@@ -826,6 +835,9 @@ function Read-ExpectedOwnershipManifest(
     ActiveManifestDigest = [string]$manifest.activeManifestDigest
     SceneDigest = [string]$manifest.sceneDigest
     EditableHybridProfileId = [string]$manifest.editableHybridProfileId
+    PptxSha256 = [string]$manifest.pptxSha256
+    SlideCount = $slideCount
+    ExpectedCount = $expectedCount
     Entries = @($entries | Sort-Object SlideNumber, Qid)
   }
 }
@@ -2005,10 +2017,23 @@ if (
 ) {
   throw "Actual-product COM authority requires presentation/revision and one mode/attempt ID per PPTX."
 }
+if (
+  $authorityPinsProvided -and
+  [string]::IsNullOrWhiteSpace($ExpectedOwnershipManifest) -and
+  $Presentation.Count -eq 1
+) {
+  $adjacentExpectation = "$($Presentation[0]).powerpoint-qid-expectation.json"
+  if (Test-Path -LiteralPath $adjacentExpectation -PathType Leaf) {
+    $ExpectedOwnershipManifest = $adjacentExpectation
+  }
+}
 $expectedOwnership = Read-ExpectedOwnershipManifest `
   $ExpectedOwnershipManifest $PresentationId $PresentationRevision
 if ($authorityPinsProvided -and $null -eq $expectedOwnership) {
   throw "Actual-product COM authority requires the exact expected ownership manifest."
+}
+if ($null -ne $expectedOwnership -and $Presentation.Count -ne 1) {
+  throw "Expected ownership manifest is bound to exactly one PPTX."
 }
 
 $launched = $null
@@ -2160,9 +2185,16 @@ try {
     } else {
       $originalName
     }
-    $inputDigestPrefix = (
+    $inputDigest = "sha256:" + (
       Get-FileHash -Algorithm SHA256 -LiteralPath $resolvedInput
-    ).Hash.Substring(0, 12).ToLowerInvariant()
+    ).Hash.ToLowerInvariant()
+    if (
+      $null -ne $expectedOwnership -and
+      $inputDigest -ne [string]$expectedOwnership.PptxSha256
+    ) {
+      throw "Expected ownership manifest PPTX digest does not match the COM input."
+    }
+    $inputDigestPrefix = $inputDigest.Substring(7, 12)
     $name = "$shortStem-$inputDigestPrefix"
     $renderDirectory = Join-Path $resolvedOutput $name
     [System.IO.Directory]::CreateDirectory($renderDirectory) | Out-Null
@@ -2175,6 +2207,12 @@ try {
       $firstOpenCallStartedAt = (Get-Date).ToUniversalTime().ToString("o")
       $sourceDeck = $application.Presentations.Open($resolvedInput, -1, 0, -1)
       $firstOpenCallReturnedAt = (Get-Date).ToUniversalTime().ToString("o")
+      if (
+        $null -ne $expectedOwnership -and
+        [int]$sourceDeck.Slides.Count -ne [int]$expectedOwnership.SlideCount
+      ) {
+        throw "Expected ownership manifest slide count does not match the COM input."
+      }
       if ($requiresPostOpenWindowBinding) {
         $postOpenIdentity = $null
         for ($identityAttempt = 0; $identityAttempt -lt 20 -and $null -eq $postOpenIdentity; $identityAttempt += 1) {

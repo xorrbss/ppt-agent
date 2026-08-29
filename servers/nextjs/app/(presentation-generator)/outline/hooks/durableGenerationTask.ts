@@ -2,6 +2,7 @@ import type {
   GenerationFailure,
   GenerationProgress,
 } from "../../services/api/presentation-generation";
+import type { SourceContentPolicy } from "../../services/api/source-content/contract";
 
 export type DurableGenerationMode = "authored" | "template-v2";
 
@@ -43,17 +44,7 @@ export interface DurableGenerationTask {
       manifestId: string;
       digest: `sha256:${string}`;
     };
-    contentPolicy?: {
-      text: "outline";
-        preserveAllTableCells: false;
-        preserveAllChartValues: false;
-      preserveAllImageOccurrences: true;
-      preserveSourceOrder: true;
-      preserveSourceSlideCount: true;
-      allowSlideExpansion: false;
-      allowSummarization: true;
-      overflowPolicy: "same_page_recompose_or_fail";
-    };
+    contentPolicy?: SourceContentPolicy;
   };
 }
 

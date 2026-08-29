@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.capacity.semantic-bounded-recovery",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Gate recovery uses one final QID patch or deterministic reducers; never full-HTML reauthor, raise limits, or change source/title/header owners.",
+  "scope": [
+    "authored",
+    "capacity",
+    "recovery"
+  ],
+  "invariants": [
+    "At most two provider calls per slide",
+    "Retain existing QIDs and semantic roles except at most three eligible low-priority reducer leaves",
+    "Source-owned and title/header owners remain fail-closed"
+  ],
+  "forbidden": [
+    "Full free-form HTML gate reauthor",
+    "Capacity limit increase",
+    "Broad content deletion"
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_composition_policy.py",
+    "servers/fastapi/services/authored_presentation_generation.py",
+    "servers/fastapi/utils/llm_calls/author_deck.py",
+    "servers/fastapi/utils/llm_calls/author_vision_qa.py",
+    "servers/fastapi/tests/unit/test_authored_composition_policy.py",
+    "servers/fastapi/tests/unit/test_authored_pipeline.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-29T16:31:39.9830237+00:00"
+}

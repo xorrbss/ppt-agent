@@ -16,7 +16,7 @@ import { fetchPersistedPresentationProjectionForExport } from "@/lib/export-pres
 
 import { resolveAuthoredHybridChromeExecutable } from "./index.ts";
 import {
-  assembleAuthoredHybridPptx,
+  assembleAuthoredHybridPptxAsync,
   type AuthoredHybridSlideLayer,
   type AuthoredHybridPptxProvenance,
 } from "./pptx-assembler.ts";
@@ -51,23 +51,17 @@ import {
 import { attachAuthoredHybridEvidence } from "./export-evidence.ts";
 import {
   resolveFontEmbeddingPlan,
-  sfntHasCodePoint,
   type FontEmbeddingPlan,
 } from "./font-embedding-policy.ts";
 import {
-  embedPowerPointFonts,
-  type PowerPointTypefaceInput,
-} from "./pptx-font-embedding.ts";
-import {
-  embeddedFaceForStyle,
-  resolvePowerPointTypeface,
-  type AuthoredEmbeddedTypefaceFaceEvidence,
-} from "./font-policy.ts";
-import { flattenPreparedNativeElements } from "./native-plan.ts";
+  embeddedGlyphAvailable,
+  nativeEmbeddingFamilies,
+  nativeFontUsage,
+  prepareFontEmbedding,
+} from "./export-font-embedding.ts";
 import {
   attachPresentationExportOoxmlReadback,
   createPresentationExportQuality,
-  type PresentationExportFontEmbeddingStatus,
   type PresentationExportRendererIsolation,
 } from "../presentation-export-quality.ts";
 import { attachAuthoredHybridStage2ReadbackMetadata, inspectPptxEditability } from "./pptx-quality-inspection.ts";
@@ -75,12 +69,15 @@ import {
   imageFallbackSlide,
   noFontRenderingTelemetry,
 } from "./export-slide-quality.ts";
+import {
+  buildRasterPdfFromPngs,
+  rasterPdfPageCount,
+} from "./raster-pdf.ts";
 import { materializeCanonicalSceneAssetsForSlide } from "./scene-html-assets.ts";
 
 const MAX_PRESENTATION_RESPONSE_BYTES = 50 * 1024 * 1024;
 const MAX_HYBRID_SLIDES = 100;
 const MAX_FIDELITY_PPTX_BYTES = 512 * 1024 * 1024;
-const KOREAN_NATIVE_EMBEDDING_FAMILY = "Noto Sans KR";
 const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
 // Total wall-clock budget for the bounded-concurrency per-slide hybrid pass. Each slide can
 // take ~90s worst case (extract + font-layout + backplate relaunches); without a ceiling a
@@ -253,241 +250,6 @@ async function resolveSafeFidelityPptx(outPath: string): Promise<string> {
   return resolved;
 }
 
-interface PreparedFontEmbedding {
-  pptx: Buffer;
-  status: PresentationExportFontEmbeddingStatus;
-  embeddedTypefaceFamilies: readonly string[];
-  embeddedTypefaceFaces: readonly AuthoredEmbeddedTypefaceFaceEvidence[];
-}
-
-function normalizedTypeface(value: string): string {
-  return value.trim().replace(/^['"]|['"]$/g, "").toLocaleLowerCase("en-US");
-}
-
-function nativeFontUsage(
-  layers: readonly AuthoredHybridSlideLayer[],
-  embedding: PreparedFontEmbedding,
-): Pick<
-  PresentationExportFontEmbeddingStatus,
-  | "nativeTextUsage"
-  | "nativeTextElements"
-  | "nativeTextElementsUsingEmbeddedTypefaces"
-  | "nativeTypefaceFamilies"
-> {
-  const textElements = layers.flatMap((layer) =>
-    flattenPreparedNativeElements(layer.elements).filter(
-      (element) => element.kind === "text"
-    ),
-  );
-  const usedFamilies = new Set<string>();
-  let usingEmbedded = 0;
-  for (const element of textElements) {
-    const usesEmbedded = element.source.text.runs.some((run) => {
-      const face = embeddedFaceForStyle(run.style);
-      const faceFamilies = new Set(
-        embedding.embeddedTypefaceFaces
-          .filter((entry) => entry.face === face)
-          .map((entry) => entry.typeface),
-      );
-      if (!faceFamilies.size) return false;
-      const normalizedEmbedded = new Set(
-        [...faceFamilies].map(normalizedTypeface),
-      );
-      const latin = resolvePowerPointTypeface(run.style.fontFamilies, "Aptos", {
-        preserveAuthoredFamilies: faceFamilies,
-      });
-      const eastAsian = normalizedEmbedded.has(normalizedTypeface(latin))
-        ? latin
-        : resolvePowerPointTypeface(
-            run.style.cjkFallbackFamilies,
-            process.platform === "win32" ? "Malgun Gothic" : "Noto Sans CJK KR",
-            { preserveAuthoredFamilies: faceFamilies },
-          );
-      for (const typeface of [latin, eastAsian]) {
-        if (normalizedEmbedded.has(normalizedTypeface(typeface))) {
-          usedFamilies.add(typeface);
-          return true;
-        }
-      }
-      return false;
-    });
-    if (usesEmbedded) usingEmbedded += 1;
-  }
-  const nativeTextElements = textElements.length;
-  const nativeTextUsage = !embedding.status.applied
-    ? "not-embedded"
-    : nativeTextElements === 0
-      ? "raster-only-unused"
-      : usingEmbedded > 0
-        ? "used"
-        : "not-used";
-  return {
-    nativeTextUsage,
-    nativeTextElements,
-    nativeTextElementsUsingEmbeddedTypefaces: usingEmbedded,
-    nativeTypefaceFamilies: [...usedFamilies].sort(),
-  };
-}
-
-function fontEmbeddingFailures(
-  plan: FontEmbeddingPlan,
-): NonNullable<PresentationExportFontEmbeddingStatus["failures"]> {
-  return plan.status.failures.map((failure) => ({
-    family: failure.family,
-    ...(failure.face ? { face: failure.face } : {}),
-    reason: failure.reason,
-    detail: failure.detail,
-  }));
-}
-
-function powerPointFontInputs(
-  plan: FontEmbeddingPlan,
-): PowerPointTypefaceInput[] {
-  const filesById = new Map(plan.files.map((file) => [file.sourceId, file]));
-  const byFamily = new Map<
-    string,
-    Partial<
-      Record<
-        "regular" | "bold" | "italic" | "boldItalic",
-        { data: Buffer; subset: boolean; source: string; collectionFaceIndex?: number }
-      >
-    >
-  >();
-  for (const face of plan.faces) {
-    const file = filesById.get(face.sourceId);
-    if (!file) continue;
-    const faces = byFamily.get(face.family) ?? {};
-    faces[face.face] = {
-      data: file.data,
-      subset: plan.strategy === "subset",
-      source: file.sourceId,
-      ...(file.collectionFaceIndex === undefined ? {} : { collectionFaceIndex: file.collectionFaceIndex }),
-    };
-    byFamily.set(face.family, faces);
-  }
-  return [...byFamily.entries()].map(([typeface, faces]) => ({
-    typeface,
-    // Hangul charset and a variable/sans-serif pitch-family value. These values
-    // match Office's normal declaration for a Korean sans-serif typeface.
-    pitchFamily: 34,
-    charset: 129,
-    faces,
-  }));
-}
-
-async function prepareFontEmbedding(
-  fidelityPath: string,
-  plan: FontEmbeddingPlan,
-): Promise<PreparedFontEmbedding> {
-  const safeFidelityPath = await resolveSafeFidelityPptx(fidelityPath);
-  const fidelityBytes = await fs.readFile(safeFidelityPath);
-  const failures = fontEmbeddingFailures(plan);
-  if (!plan.requested) {
-    return {
-      pptx: fidelityBytes,
-      embeddedTypefaceFamilies: [],
-      embeddedTypefaceFaces: [],
-      status: {
-        policy: "opt-in",
-        requested: false,
-        applied: false,
-        embeddedFontFiles: 0,
-        embeddedTypefaces: 0,
-        strategy: plan.strategy,
-        editLimitation: "none",
-        reason: "not-requested",
-      },
-    };
-  }
-  if (!plan.status.eligible) {
-    throw new Error("authored_hybrid_font_embedding_ineligible");
-  }
-
-  try {
-    const packaged = embedPowerPointFonts(
-      fidelityBytes,
-      powerPointFontInputs(plan),
-    );
-    if (!packaged.result.applied) {
-      throw new Error("authored_hybrid_font_embedding_not_applied");
-    }
-
-    const filesById = new Map(plan.files.map((file) => [file.sourceId, file]));
-    const facesBySource = new Map(
-      plan.faces.map((face) => [
-        `${face.family}\0${face.sourceId}\0${face.face}`,
-        face,
-      ]),
-    );
-    const faceStatus = packaged.result.fonts.flatMap((font) =>
-      font.faces.map((face) => {
-        const sourceId = face.source ?? "";
-        const file = filesById.get(sourceId);
-        const plannedFace = facesBySource.get(
-          `${font.typeface}\0${sourceId}\0${face.face}`,
-        );
-        return {
-          typeface: font.typeface,
-          face: face.face,
-          weight: plannedFace?.weight ?? face.weight,
-          style: (plannedFace?.style ?? (face.italic ? "italic" : "normal")) as
-            "normal" | "italic",
-          source: file?.source ?? "server-font-allowlist",
-          ...(file?.sourcePath ? { sourcePath: file.sourcePath } : {}),
-          sourceSha256: face.sourceSha256,
-          sourceBytes: face.sourceBytes,
-          embeddedBytes: face.embeddedBytes,
-          fsType: face.fsType,
-          licenseDecision:
-            file?.license.decision ?? ("denied-invalid" as const),
-          subset: face.subset,
-          strategy: plan.strategy,
-          partName: face.partName,
-          format: face.format,
-          ...(file?.derivedFromVariable ? { derivedFromVariable: true } : {}),
-        };
-      }),
-    );
-    const embeddedTypefaceFamilies = packaged.result.fonts.map(
-      (font) => font.typeface,
-    );
-    return {
-      pptx: packaged.pptx,
-      embeddedTypefaceFamilies,
-      embeddedTypefaceFaces: faceStatus.map((face) => ({
-        typeface: face.typeface,
-        face: face.face,
-      })),
-      status: {
-        policy: "opt-in",
-        requested: true,
-        applied: true,
-        embeddedFontFiles: packaged.result.embeddedFontFiles,
-        embeddedTypefaces: packaged.result.embeddedTypefaces,
-        strategy: plan.strategy,
-        editLimitation:
-          plan.strategy === "subset"
-            ? "characters-outside-subset-may-substitute"
-            : "none",
-        faces: faceStatus,
-        ...(failures.length ? { failures } : {}),
-        reason: "embedded",
-      },
-    };
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message === "authored_hybrid_font_embedding_not_applied"
-    ) {
-      throw error;
-    }
-    const stableCollectionReason = error instanceof Error
-      ? error.message.match(/^(pptx_font_collection_[a-z_]+)/)?.[1]
-      : undefined;
-    throw new Error(stableCollectionReason ?? "authored_hybrid_font_embedding_failed", { cause: error });
-  }
-}
-
 async function writeHybridPptx(
   fidelityPath: string,
   layers: readonly AuthoredHybridSlideLayer[],
@@ -495,10 +257,10 @@ async function writeHybridPptx(
   embeddedTypefaceFamilies: readonly string[] = [],
   artifactKind: "hybrid" | "authored-fidelity" = "hybrid",
   provenance?: AuthoredHybridPptxProvenance,
-): Promise<string> {
+): Promise<{ path: string; bytes: Buffer }> {
   const safeFidelityPath = await resolveSafeFidelityPptx(fidelityPath);
   const fidelityBytes = basePptx ?? (await fs.readFile(safeFidelityPath));
-  const hybridBytes = assembleAuthoredHybridPptx(fidelityBytes, layers, {
+  const hybridBytes = await assembleAuthoredHybridPptxAsync(fidelityBytes, layers, {
     embeddedTypefaceFamilies,
     provenance,
   });
@@ -524,7 +286,7 @@ async function writeHybridPptx(
   // Keep the fidelity PPTX: it is a normal export artifact at a title-derived path,
   // so a previously issued download link (or a concurrent export reading it) must
   // not 404 just because a hybrid variant was written alongside it.
-  return hybridPath;
+  return { path: hybridPath, bytes: hybridBytes };
 }
 
 /**
@@ -605,7 +367,7 @@ export async function runAuthoredFidelityPresentationExport(
       },
     );
     recordExportProgress(progressKey, { phase: "assembly" });
-    const resultPath = await writeHybridPptx(
+    const resultArtifact = await writeHybridPptx(
       fidelity.path,
       layers,
       undefined,
@@ -623,29 +385,112 @@ export async function runAuthoredFidelityPresentationExport(
       },
     );
     recordExportProgress(progressKey, { phase: "completed" });
-    return { path: resultPath };
+    return { path: resultArtifact.path };
   } catch (error) {
     recordExportProgress(progressKey, { phase: "failed" });
     throw error;
   }
 }
 
-function embeddedGlyphAvailable(plan: FontEmbeddingPlan) {
-  const files = new Map(plan.files.map((file) => [file.sourceId, file] as const));
-  const faces = new Map(plan.faces.map((face) => [
-    `${normalizedTypeface(face.family)}\0${face.face}`,
-    face,
-  ] as const));
-  return (typeface: string, face: AuthoredEmbeddedTypefaceFaceEvidence["face"], codePoint: number) => {
-    const planned = faces.get(`${normalizedTypeface(typeface)}\0${face}`);
-    const file = planned ? files.get(planned.sourceId) : undefined;
-    if (!file) return false;
-    try {
-      return sfntHasCodePoint(file.data, codePoint, file.collectionFaceIndex);
-    } catch {
-      return false;
+/**
+ * Render each Authored slide in its own isolated Chromium page, then assemble
+ * one raster image into exactly one PDF page. This avoids shared-DOM print
+ * fragmentation, which can insert blank or trailing pages.
+ */
+export async function runAuthoredPdfPresentationExport(
+  params: Omit<AuthoredHybridExportParams, "fontEmbedding">,
+): Promise<BundledPresentationExportResult> {
+  const fetched = await fetchPresentation(
+    params.presentationId,
+    params.cookieHeader ?? "",
+  );
+  const { presentation } = fetched;
+  if (
+    !Number.isSafeInteger(presentation.revision) ||
+    (presentation.revision as number) < 0 ||
+    (params.expectedPresentationRevision !== undefined &&
+      presentation.revision !== params.expectedPresentationRevision) ||
+    !isAuthoredPresentation(presentation) ||
+    !Array.isArray(presentation.slides) ||
+    presentation.slides.length === 0 ||
+    presentation.slides.length > MAX_HYBRID_SLIDES
+  ) throw new Error("authored_pdf_source_invalid");
+
+  const progressKey = `pdf:${params.exportAttemptId ?? `${params.presentationId}:${presentation.revision}:${fetched.sourceSha256}`}`;
+  beginExportProgress(progressKey, params.operationId, Date.now());
+  recordExportProgress(progressKey, {
+    phase: "slides",
+    completedSlides: 0,
+    totalSlides: presentation.slides.length,
+  });
+  try {
+    const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
+    if (!chromeExecutable) throw new Error("authored_pdf_chrome_unavailable");
+    let completedSlides = 0;
+    const pngs = await mapWithConcurrency(
+      presentation.slides,
+      HYBRID_EXPORT_CONCURRENCY,
+      async (rawSlide, arrayIndex) => {
+        if (!isRecord(rawSlide) || typeof rawSlide.html_content !== "string") {
+          throw new Error("authored_pdf_slide_html_required");
+        }
+        const prepared = await prepareFidelitySlideLayer(
+          materializeCanonicalSceneAssetsForSlide(
+            presentation,
+            rawSlide.html_content,
+            arrayIndex,
+          ),
+          arrayIndex + 1,
+          chromeExecutable,
+        );
+        if (!prepared.layer) throw new Error("authored_pdf_slide_capture_failed");
+        completedSlides += 1;
+        recordExportProgress(progressKey, { completedSlides });
+        return prepared.layer.backplatePng;
+      },
+    );
+    recordExportProgress(progressKey, { phase: "assembly" });
+    const pdf = await buildRasterPdfFromPngs(pngs);
+    if (rasterPdfPageCount(pdf) !== presentation.slides.length) {
+      throw new Error("authored_pdf_page_count_mismatch");
     }
-  };
+    const exportsDirectory = path.join(resolveAppDataDirectory(), "exports");
+    await fs.mkdir(exportsDirectory, { recursive: true, mode: 0o755 });
+    const safeTitle = (params.title ?? "presentation")
+      .normalize("NFKC")
+      .replace(/[<>:"/\\|?*\u0000-\u001f]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/^\.+|\.+$/g, "")
+      .slice(0, 120) || "presentation";
+    const identity = createHash("sha256")
+      .update(params.presentationId)
+      .update("\0")
+      .update(fetched.sourceSha256)
+      .digest("hex")
+      .slice(0, 16);
+    const publicationId = randomUUID();
+    const destination = path.join(
+      exportsDirectory,
+      `${safeTitle}-${identity}-${publicationId}.pdf`,
+    );
+    const temporary = path.join(
+      exportsDirectory,
+      `.${safeTitle}-${identity}-${publicationId}.tmp`,
+    );
+    try {
+      await fs.writeFile(temporary, pdf, { flag: "wx", mode: 0o600 });
+      await fs.rename(temporary, destination);
+      await fs.chmod(destination, 0o644);
+    } finally {
+      await fs.rm(temporary, { force: true }).catch(() => {});
+    }
+    recordExportProgress(progressKey, { phase: "completed" });
+    return { path: destination };
+  } catch (error) {
+    recordExportProgress(progressKey, { phase: "failed" });
+    throw error;
+  }
 }
 
 async function runUncachedAuthoredHybridExport(
@@ -668,8 +513,9 @@ async function runUncachedAuthoredHybridExport(
     expectedPresentationRevision: params.expectedPresentationRevision,
   });
   const fidelityMs = elapsedMs(fidelityStartedAt);
+  const safeFidelityPath = await resolveSafeFidelityPptx(fidelity.path);
   const fontEmbedding = await prepareFontEmbedding(
-    fidelity.path,
+    await fs.readFile(safeFidelityPath),
     fontEmbeddingPlan,
   );
 
@@ -920,7 +766,7 @@ async function runUncachedAuthoredHybridExport(
     if (!params.exportAttemptId || !params.canonicalSourceDigest) {
       throw new Error("authored_hybrid_export_attempt_binding_required");
     }
-    const hybridPath = await writeHybridPptx(
+    const hybridArtifact = await writeHybridPptx(
       fidelity.path,
       layers,
       fontEmbedding.pptx,
@@ -935,18 +781,20 @@ async function runUncachedAuthoredHybridExport(
       },
     );
     const assemblyMs = elapsedMs(assemblyStartedAt);
-    const hybridBytes = await fs.readFile(hybridPath);
+    const hybridBytes = hybridArtifact.bytes;
     const quality = attachAuthoredHybridStage2ReadbackMetadata(
       attachPresentationExportOoxmlReadback(logicalQuality, inspectPptxEditability(hybridBytes)),
       hybridBytes,
     );
-    const result = await attachAuthoredHybridEvidence({ path: hybridPath }, quality, {
+    const result = await attachAuthoredHybridEvidence({ path: hybridArtifact.path }, quality, {
       exportAttemptId: params.exportAttemptId,
       presentationId: params.presentationId,
       presentationRevision: Number(presentation.revision),
       canonicalSourceDigest: params.canonicalSourceDigest,
       sourceDigest: sourceSha256,
       pptxSha256: createHash("sha256").update(hybridBytes).digest("hex"),
+      activeBinding,
+      editableHybridProfileId: params.editableHybridProfileId,
     });
     await rememberCompletedHybridExport(cacheKey, result);
     console.info(
@@ -1175,23 +1023,4 @@ async function readCompletedHybridExport(
 
 function elapsedMs(startedAt: number): number {
   return Math.round(performance.now() - startedAt);
-}
-function nativeEmbeddingFamilies(
-  binding: ActiveEmissionExportBinding,
-  profileId: string | undefined,
-): string[] {
-  const authored = binding.slides.flatMap((slide) => slide.fontFamilies);
-  const requiresKoreanFace =
-    profileId === EDITABLE_HYBRID_SHADOW_PROFILE_ID ||
-    authored.some((family) =>
-      /(?:noto\s+sans\s+(?:kr|cjk)|pretendard|malgun|맑은\s*고딕)/iu.test(family)
-    );
-  // Browser CSS may name only the Latin face even when Hangul is resolved by
-  // a fallback. The sealed ko/en profile's script-aware serializer always
-  // emits Noto Sans KR for Hangul, so include that exact package family in the
-  // plan instead of discovering the requirement after packaging.
-  return [...new Set([
-    ...(requiresKoreanFace ? [KOREAN_NATIVE_EMBEDDING_FAMILY] : []),
-    ...authored,
-  ])];
 }

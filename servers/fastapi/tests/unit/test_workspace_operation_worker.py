@@ -63,6 +63,15 @@ def test_external_worker_owns_migrations_runner_and_shutdown(
     )
     monkeypatch.setattr(worker, "start_workspace_operation_runner", AsyncMock())
     monkeypatch.setattr(worker, "stop_workspace_operation_runner", AsyncMock())
+    for name in (
+        "start_workspace_cleanup_maintenance",
+        "stop_workspace_cleanup_maintenance",
+        "start_workspace_asset_maintenance",
+        "stop_workspace_asset_maintenance",
+        "start_workspace_event_retention",
+        "stop_workspace_event_retention",
+    ):
+        monkeypatch.setattr(worker, name, AsyncMock())
     monkeypatch.setattr(worker, "dispose_engines", AsyncMock())
 
     asyncio.run(worker.run_external_worker(stop))
@@ -73,13 +82,19 @@ def test_external_worker_owns_migrations_runner_and_shutdown(
     worker.register_workspace_operation_handlers.assert_called_once_with()
     worker.start_workspace_worker_metrics_exporter.assert_awaited_once_with()
     worker.start_workspace_operation_runner.assert_awaited_once_with()
+    worker.start_workspace_cleanup_maintenance.assert_awaited_once_with()
+    worker.start_workspace_asset_maintenance.assert_awaited_once_with()
+    worker.start_workspace_event_retention.assert_awaited_once_with()
+    worker.stop_workspace_event_retention.assert_awaited_once_with()
+    worker.stop_workspace_asset_maintenance.assert_awaited_once_with()
+    worker.stop_workspace_cleanup_maintenance.assert_awaited_once_with()
     worker.stop_workspace_operation_runner.assert_awaited_once_with()
     worker.stop_runtime_settings_coordinator.assert_awaited_once_with()
     metrics_exporter.close.assert_awaited_once_with()
     worker.dispose_engines.assert_awaited_once_with()
 
 
-def test_worker_registration_includes_the_batch_remake_handler() -> None:
+def test_worker_registration_includes_all_durable_remake_handlers() -> None:
     # An external worker that misses a handler fails only in production, so the
     # registration list is asserted against the process registry it publishes to.
     worker.register_workspace_operation_handlers()
@@ -92,6 +107,12 @@ def test_worker_registration_includes_the_batch_remake_handler() -> None:
         workspace_operation_handler_registry.recovery_policy("slide.regenerate.batch")
         == "automatic"
     )
+    for kind in (
+        "slide.regenerate.preview",
+        "slide.regenerate.batch.preview",
+    ):
+        assert workspace_operation_handler_registry.resolve(kind) is not None
+        assert workspace_operation_handler_registry.recovery_policy(kind) == "automatic"
 
 
 def test_external_worker_requires_a_supported_sql_runtime(monkeypatch) -> None:

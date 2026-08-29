@@ -19,6 +19,10 @@ import {
   writeFileSync,
 } from "fs";
 import { printPresentonStartupBanner } from "./scripts/presenton-terminal-banner.mjs";
+import {
+  stopManagedProcesses,
+  waitForProcessReady,
+} from "./scripts/managed-processes.mjs";
 
 process.umask(0o022);
 
@@ -213,54 +217,6 @@ const runNodeScript = (scriptPath, scriptArgs) => {
   });
 };
 
-const forwardProcessOutput = (stream, target, onChunk) => {
-  if (!stream) {
-    return;
-  }
-  stream.on("data", (chunk) => {
-    const text = chunk.toString();
-    target.write(text);
-    onChunk?.(text);
-  });
-};
-
-const waitForProcessReady = (processName, childProcess, readinessRegexes = []) => {
-  if (readinessRegexes.length === 0) {
-    return Promise.resolve();
-  }
-
-  return new Promise((resolve, reject) => {
-    let isReady = false;
-
-    const markReady = (text) => {
-      if (isReady) {
-        return;
-      }
-      if (readinessRegexes.some((regex) => regex.test(text))) {
-        isReady = true;
-        resolve();
-      }
-    };
-
-    forwardProcessOutput(childProcess.stdout, process.stdout, markReady);
-    forwardProcessOutput(childProcess.stderr, process.stderr, markReady);
-
-    childProcess.on("exit", (code) => {
-      if (!isReady) {
-        reject(
-          new Error(`${processName} exited before reporting ready (exit code: ${code})`)
-        );
-      }
-    });
-
-    childProcess.on("error", (err) => {
-      if (!isReady) {
-        reject(err);
-      }
-    });
-  });
-};
-
 const isTruthyEnv = (value) => {
   if (value == null) {
     return false;
@@ -406,12 +362,15 @@ const setupUserConfigFromEnv = () => {
 };
 
 const startServers = async (nginxReadyPromise) => {
+  const managedProcesses = [];
   const fastApiEnvironment = {
     ...process.env,
     // Compose already sets this value. Keep direct start.js launches equally
     // safe while preserving an explicit operator override such as "false".
     MIGRATE_DATABASE_ON_STARTUP:
       process.env.MIGRATE_DATABASE_ON_STARTUP ?? "true",
+    WORKSPACE_OPERATION_WORKER_MODE:
+      process.env.WORKSPACE_OPERATION_WORKER_MODE ?? "external",
   };
   const fastApiProcess = spawn(
     "python",
@@ -428,6 +387,7 @@ const startServers = async (nginxReadyPromise) => {
       env: fastApiEnvironment,
     }
   );
+  managedProcesses.push(fastApiProcess);
 
   fastApiProcess.on("error", (err) => {
     console.error("FastAPI process failed to start:", err);
@@ -449,6 +409,7 @@ const startServers = async (nginxReadyPromise) => {
         env: process.env,
       }
     );
+    managedProcesses.push(appmcpProcess);
 
     appmcpProcess.on("error", (err) => {
       console.error("App MCP process failed to start:", err);
@@ -487,6 +448,7 @@ const startServers = async (nginxReadyPromise) => {
           : process.env,
     }
   );
+  managedProcesses.push(nextjsProcess);
 
   nextjsProcess.on("error", (err) => {
     console.error("Next.js process failed to start:", err);
@@ -504,8 +466,8 @@ const startServers = async (nginxReadyPromise) => {
   ]);
 
   const exitPromises = [
-    new Promise((resolve) => fastApiProcess.on("exit", resolve)),
-    new Promise((resolve) => nextjsProcess.on("exit", resolve)),
+    new Promise((resolve) => fastApiProcess.on("exit", (code) => resolve({ name: "FastAPI", code }))),
+    new Promise((resolve) => nextjsProcess.on("exit", (code) => resolve({ name: "Next.js", code }))),
   ];
 
   if (shouldStartOllamaRuntime && ollamaInstalled) {
@@ -514,10 +476,11 @@ const startServers = async (nginxReadyPromise) => {
       stdio: "inherit",
       env: process.env,
     });
+    managedProcesses.push(ollamaProcess);
     ollamaProcess.on("error", (err) => {
       console.error("Ollama process failed to start:", err);
     });
-    exitPromises.push(new Promise((resolve) => ollamaProcess.on("exit", resolve)));
+    exitPromises.push(new Promise((resolve) => ollamaProcess.on("exit", (code) => resolve({ name: "Ollama", code }))));
   } else if (shouldStartOllamaRuntime) {
     console.log(
       "Ollama requested, but the binary is not installed. Set START_OLLAMA=true to install it at startup, or set OLLAMA_URL to a remote daemon."
@@ -530,25 +493,44 @@ const startServers = async (nginxReadyPromise) => {
 
   try {
     await Promise.all([fastApiReadyPromise, nextjsReadyPromise, nginxReadyPromise]);
+    if (fastApiEnvironment.WORKSPACE_OPERATION_WORKER_MODE.trim().toLowerCase() === "external") {
+      const workspaceWorkerProcess = spawn(
+        "python",
+        ["-m", "services.workspace_operation_worker"],
+        {
+          cwd: fastapiDir,
+          stdio: ["ignore", "pipe", "pipe"],
+          env: { ...fastApiEnvironment, MIGRATE_DATABASE_ON_STARTUP: "false" },
+        }
+      );
+      managedProcesses.push(workspaceWorkerProcess);
+      exitPromises.push(new Promise((resolve) => workspaceWorkerProcess.on("exit", (code) => resolve({ name: "Workspace operation worker", code }))));
+      await waitForProcessReady("Workspace operation worker", workspaceWorkerProcess, [
+        /Workspace operation external worker started/i,
+      ]);
+    }
     printPresentonStartupBanner({
       nextPort: nextjsPort,
       fastapiPort,
       nginxInternalPort: nginxListenPort,
     });
   } catch (err) {
-    console.warn(`Skipping startup banner: ${err.message}`);
+    console.error(`Required service failed readiness: ${err.message}`);
+    await stopManagedProcesses(managedProcesses);
+    throw err;
   }
 
   // Keep the Node process alive until one of the servers exits
-  const exitCode = await Promise.race(exitPromises);
+  const exited = await Promise.race(exitPromises);
 
-  console.log(`One of the processes exited. Exit code: ${exitCode}`);
-  process.exit(exitCode);
+  console.error(`${exited.name} exited unexpectedly. Exit code: ${exited.code}`);
+  await stopManagedProcesses(managedProcesses);
+  process.exitCode = typeof exited.code === "number" && exited.code !== 0 ? exited.code : 1;
 };
 
 // Start nginx service (reverse proxy: see nginx.conf listen + upstream ports)
 const startNginx = () => {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const nginxProcess = spawn("service", ["nginx", "start"], {
       stdio: "inherit",
       env: process.env,
@@ -556,7 +538,7 @@ const startNginx = () => {
 
     nginxProcess.on("error", (err) => {
       console.error("Nginx process failed to start:", err);
-      resolve(false);
+      reject(err);
     });
 
     nginxProcess.on("exit", (code) => {
@@ -564,8 +546,7 @@ const startNginx = () => {
         console.log("Nginx started successfully");
         resolve(true);
       } else {
-        console.error(`Nginx failed to start with exit code: ${code}`);
-        resolve(false);
+        reject(new Error(`Nginx failed to start with exit code: ${code}`));
       }
     });
   });
@@ -584,8 +565,10 @@ const main = async () => {
   }
 
   const nginxReadyPromise = startNginx();
-  startServers(nginxReadyPromise);
-  await nginxReadyPromise;
+  await startServers(nginxReadyPromise);
 };
 
-main();
+main().catch((error) => {
+  console.error("Presenton startup failed:", error);
+  process.exitCode = 1;
+});

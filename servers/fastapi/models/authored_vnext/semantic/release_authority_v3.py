@@ -12,6 +12,10 @@ from models.authored_vnext.master.base import StrictCamelModel
 from models.authored_vnext.semantic.readiness import CapabilityReceiptIssueRequestV2
 
 
+MAX_DURABLE_ARTIFACT_BYTES_V3 = 16 * 1024 * 1024
+MAX_DURABLE_ARTIFACT_BASE64_CHARS_V3 = ((MAX_DURABLE_ARTIFACT_BYTES_V3 + 2) // 3) * 4
+
+
 GATE1_REQUIRED_ARTIFACT_IDS_V3: tuple[str, ...] = (
     "semantic-source-json",
     "active-manifest-json",
@@ -131,7 +135,10 @@ class DurableArtifactPutRequestV3(StrictCamelModel):
     media_type: str = Field(min_length=1, max_length=128)
     encryption_key_ref: str = Field(pattern=r"^[A-Za-z0-9._:/-]{3,256}$")
     storage_generation: int = Field(ge=1)
-    content_base64: str = Field(min_length=4)
+    content_base64: str = Field(
+        min_length=4,
+        max_length=MAX_DURABLE_ARTIFACT_BASE64_CHARS_V3,
+    )
 
     @field_validator("export_attempt_id", mode="before")
     @classmethod

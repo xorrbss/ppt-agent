@@ -119,6 +119,7 @@ from services.authored_quality_telemetry import (
 )
 from services.authored_review_asset_store import publish_reviewed_png
 from services.database import async_session_maker
+from services.workspace_authored_async_admission import admit_workspace_authored_task
 from services.image_generation_service import ImageGenerationService
 from utils.asset_directory_utils import get_images_directory
 from utils.authored_dom_quality import (
@@ -305,7 +306,7 @@ async def _run_quality_review(
                 session,
                 task,
                 status="error",
-                message="怨좏뭹吏?寃??以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.",
+                message="품질 검토 중 오류가 발생했습니다.",
                 error={"detail": _public_review_error_detail(exc)},
             )
 
@@ -341,12 +342,16 @@ async def queue_authored_quality_review(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    task = AsyncPresentationGenerationTaskModel(
-        status="pending",
-        message="怨좏뭹吏?寃???묒뾽???湲곗뿴??異붽??덉뒿?덈떎.",
-        data=None,
+    # Keep the legacy task response, but make the workspace operation the
+    # durable execution and recovery authority. ``background_tasks`` remains in
+    # the signature for wire compatibility and is intentionally unused.
+    return await admit_workspace_authored_task(
+        session,
+        presentation_id=presentation_id,
+        operation_kind="quality.review",
+        expected_revision=int(presentation.revision),
+        command="AI 작성 프레젠테이션 품질 검토",
+        context=request.model_dump(mode="json"),
+        task_id_prefix="workspace-quality",
+        pending_message="품질 검토 작업을 대기열에 추가했습니다.",
     )
-    session.add(task)
-    await session.commit()
-    background_tasks.add_task(_run_quality_review, presentation_id, request, task.id)
-    return task

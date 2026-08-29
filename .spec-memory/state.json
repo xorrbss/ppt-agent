@@ -69,11 +69,15 @@
     "authored.full-reauthor-safe-semantic-alias": "decisions/authored.full-reauthor-safe-semantic-alias.1.json",
     "authored.author-provider-call-budget": "decisions/authored.author-provider-call-budget.1.json",
     "authored.capacity.chart-week-ticks": "decisions/authored.capacity.chart-week-ticks.1.json",
-    "authored.hybrid-multizband-quality-schema": "decisions/authored.hybrid-multizband-quality-schema.1.json"
+    "authored.hybrid-multizband-quality-schema": "decisions/authored.hybrid-multizband-quality-schema.1.json",
+    "authored.export-release-finalization": "decisions/authored.export-release-finalization.1.json",
+    "runtime.workspace-operation-worker-boundary": "decisions/runtime.workspace-operation-worker-boundary.2.json",
+    "authored.generation-stage-timing-durable": "decisions/authored.generation-stage-timing-durable.1.json",
+    "authored.capacity.semantic-bounded-recovery": "decisions/authored.capacity.semantic-bounded-recovery.4.json"
   },
   "readFirst": [
     "servers/fastapi/utils/llm_calls/author_vision_qa.py",
     "scripts/authored-vnext-controlled-load.mjs"
   ],
-  "updatedAt": "2026-08-29T13:45:25.6109399+00:00"
+  "updatedAt": "2026-08-29T17:11:10.1551589+00:00"
 }

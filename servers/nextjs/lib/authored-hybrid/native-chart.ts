@@ -78,6 +78,12 @@ export interface NativeChartPreparationResult {
   >;
 }
 
+function nativeChartAdmissionEnabled(): boolean {
+  // Native chart serialization remains compiled and type-checked, but actual
+  // product admission stays disabled until the PowerPoint reopen seal passes.
+  return false;
+}
+
 const HEX = /^#?[0-9A-Fa-f]{6}$/;
 const MAX_CATEGORIES = 500;
 const MAX_SERIES = 50;
@@ -274,13 +280,19 @@ export function prepareDeclaredNativeCharts(
     // Actual-product PowerPoint qualification currently fails in chart.dll.
     // Keep the chart on the fidelity backplate and emit no native chart OOXML
     // until this admission path has a fresh first-open/save/reopen seal.
-    rejections.set(declared.elementId, "unsupported-native-chart");
-    continue;
+    if (!nativeChartAdmissionEnabled()) {
+      rejections.set(declared.elementId, "unsupported-native-chart");
+      continue;
+    }
     const observedEntry = observed.get(declared.elementId);
-    const actual = observedEntry?.element;
     const payload = parseAuthoredNativeChartPayload(declared.payload);
+    if (!observedEntry || !payload) {
+      rejections.set(declared.elementId, "unsupported-native-chart");
+      continue;
+    }
+    const actual = observedEntry.element;
     if (
-      !payload || !actual || actual.candidateKind !== "complex" ||
+      actual.candidateKind !== "complex" ||
       !actual.fallbackReasons.includes("complex-chart") ||
       (declared.requiredFeatures ?? []).some(
         (feature) => !SUPPORTED_CHART_FEATURES.has(feature),
@@ -301,7 +313,7 @@ export function prepareDeclaredNativeCharts(
       domPath: actual.domPath,
       tagName: actual.tagName,
       sourceIndex: actual.sourceIndex,
-      zOrder: observedEntry!.zOrder,
+      zOrder: observedEntry.zOrder,
       cssZIndex: actual.cssZIndex,
       bounds: {
         px: actual.boundsPx,

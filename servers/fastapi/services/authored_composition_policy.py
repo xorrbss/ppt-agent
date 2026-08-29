@@ -26,6 +26,11 @@ _CAPACITY_REDUCER_MARKER = "authored-closing-capacity-reducer-v1"
 _TITLE_PUNCTUATION_REDUCER_MARKER = "authored-closing-title-punctuation-reducer-v1"
 _LAYOUT_ALIGNMENT_MARKER = "authored-layout-alignment-repair-v1"
 _CONNECTOR_CLEARANCE_MARKER = "authored-connector-clearance-repair-v1"
+_LOW_PRIORITY_OWNER_QID = re.compile(
+    r"(?:^|[._-])(?:cue|footer|note|aside|detail|tagline|item\d+)$",
+    flags=re.IGNORECASE,
+)
+_OWNER_TEXT_REDUCER_MARKER = "authored-owner-text-capacity-reducer-v1"
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,8 +152,10 @@ class SlideCapacity:
         return (
             "SERVER-FROZEN COMPOSITION ENVELOPE (do not negotiate): "
             "viewport 1280x720; keep every painted target inside the viewport; "
-            f"one-line title target <= {self.title_max_chars} chars; "
-            f"body target <= {self.body_max_chars} chars and total visible text <= "
+            f"combined text across all title owners <= {self.title_max_chars} chars; "
+            f"combined text across all body owners <= {self.body_max_chars} chars "
+            "(do not repeat the same words in nested owners), and total visible text "
+            "across title, body, and supporting owners <= "
             f"{self.max_visible_text_chars} chars; {image_rule}; "
             f"keep semantic targets <= {self.max_qids}; never use text below "
             f"{self.min_font_px}px. {source_rule}"
@@ -650,6 +657,396 @@ def ensure_authored_semantic_roles(html: str) -> str:
         cursor = index + len(raw_tag)
     parts.append(html[cursor:])
     return "".join(parts)
+
+
+def aggregate_owner_capacity_violations(
+    html: str,
+    capacity: SlideCapacity,
+) -> tuple[str, ...]:
+    """Reject aggregate semantic-owner excess before launching Chromium.
+
+    This is a deliberately geometry-free admission check. Direct text belongs
+    to its nearest QID owner, so nested wrappers cannot double count the same
+    words. Chromium remains authoritative for visibility, clipping, font, and
+    measured geometry after this inexpensive provider-response boundary.
+    """
+
+    normalized = ensure_authored_semantic_roles(html)
+    parser = _AuthoredStartTagCollector()
+    parser.feed(normalized)
+    parser.close()
+
+    content_targets = 0
+    title_chars = 0
+    body_chars = 0
+    visible_chars = 0
+    image_count = 0
+    for index, (tag, raw_attrs, _raw_tag) in enumerate(parser.tags):
+        attrs = _attribute_map(raw_attrs)
+        qid = attrs.get("data-qid", "").strip()
+        if not qid:
+            continue
+        role = attrs.get("data-semantic-role", "").strip().lower()
+        owned_text = re.sub(
+            r"\s+", " ", "".join(parser.owned_text_parts[index])
+        ).strip()
+        is_supporting = _is_supporting_role(role) or _is_supporting_candidate(
+            attrs,
+            owned_text=owned_text,
+            capacity_only=True,
+        )
+        if tag == "img":
+            image_count += 1
+            content_targets += 1
+            continue
+        if not owned_text or role == "decoration":
+            continue
+        visible_chars += len(owned_text)
+        if _is_title_role(role):
+            title_chars += len(owned_text)
+            if not is_supporting:
+                content_targets += 1
+        elif _is_body_role(role):
+            body_chars += len(owned_text)
+            if not is_supporting:
+                content_targets += 1
+
+    violations: list[str] = []
+    if content_targets > capacity.max_qids:
+        violations.append(f"owner_qids:{content_targets}>{capacity.max_qids}")
+    if title_chars > capacity.title_max_chars:
+        violations.append(f"owner_title:{title_chars}>{capacity.title_max_chars}")
+    if body_chars > capacity.body_max_chars:
+        violations.append(f"owner_body:{body_chars}>{capacity.body_max_chars}")
+    if visible_chars > capacity.max_visible_text_chars:
+        violations.append(
+            f"owner_visible_text:{visible_chars}>{capacity.max_visible_text_chars}"
+        )
+    if image_count > capacity.max_images:
+        violations.append(f"owner_images:{image_count}>{capacity.max_images}")
+    return tuple(violations)
+
+
+def semantic_repair_boundary_violations(
+    original_html: str,
+    candidate_html: str,
+    *,
+    allow_primary_title_shortening: bool = False,
+    allow_bounded_body_shortening: bool = False,
+) -> tuple[str, ...]:
+    """Validate one bounded repair without granting structural authority.
+
+    QIDs and roles are immutable. The existing CLOSING reducer may withdraw at
+    most three explicitly marked low-priority body/supporting leaves; otherwise
+    every owner remains. A structured patch may shorten at most three such
+    owners. Source-owned and title/header text always remains byte-equivalent
+    after whitespace normalization.
+    """
+
+    def snapshot(source: str):
+        normalized = ensure_authored_semantic_roles(source)
+        parser = _AuthoredStartTagCollector()
+        parser.feed(normalized)
+        parser.close()
+        owners: dict[str, tuple[str, str, str, str, bool]] = {}
+        order: list[str] = []
+        duplicates: set[str] = set()
+        source_bindings: list[tuple[str, str]] = []
+        for index, (tag, raw_attrs, _raw_tag) in enumerate(parser.tags):
+            attrs = _attribute_map(raw_attrs)
+            qid = attrs.get("data-qid", "").strip()
+            source_block_id = attrs.get("data-source-block-id", "").strip()
+            if source_block_id:
+                source_bindings.append((qid, source_block_id))
+            if not qid:
+                continue
+            if qid in owners:
+                duplicates.add(qid)
+                continue
+            role = attrs.get("data-semantic-role", "").strip().lower()
+            text = re.sub(
+                r"\s+", " ", "".join(parser.owned_text_parts[index])
+            ).strip()
+            header_part = attrs.get("data-header-part", "").strip().lower()
+            owners[qid] = (
+                role,
+                text,
+                source_block_id,
+                header_part,
+                _is_primary_title_candidate(tag, attrs),
+            )
+            order.append(qid)
+        return owners, tuple(order), tuple(source_bindings), duplicates
+
+    original, original_order, original_sources, original_duplicates = snapshot(
+        original_html
+    )
+    candidate, candidate_order, candidate_sources, candidate_duplicates = snapshot(
+        candidate_html
+    )
+    violations: list[str] = []
+    if original_duplicates or candidate_duplicates:
+        violations.append("semantic_qid_duplicate")
+    if candidate_sources != original_sources:
+        violations.append("semantic_source_owner_changed")
+
+    marker = re.search(
+        rf"<!--\s*{re.escape(_CAPACITY_REDUCER_MARKER)}:([^>]*)-->",
+        candidate_html,
+        flags=re.IGNORECASE,
+    )
+    declared_removed = {
+        value.strip() for value in (marker.group(1).split(",") if marker else ())
+        if value.strip()
+    }
+    removed = set(original) - set(candidate)
+    added = set(candidate) - set(original)
+    if added:
+        violations.append("semantic_qid_added")
+    if removed != declared_removed or len(removed) > 3:
+        violations.append("semantic_qid_removed_outside_bounded_reducer")
+
+    source_bound_slide = bool(original_sources) or (
+        "data-source-block-id" in original_html.lower()
+    )
+    unscoped_source_owner = (
+        "data-source-block-id" in original_html.lower() and not original_sources
+    )
+    for qid in sorted(removed):
+        role, _text, source_block_id, header_part, _primary_title = original[qid]
+        if (
+            source_bound_slide
+            or source_block_id
+            or header_part
+            or _is_title_role(role)
+            or not (_is_body_role(role) or _is_supporting_role(role))
+            or _LOW_PRIORITY_OWNER_QID.search(qid) is None
+        ):
+            violations.append(f"semantic_owner_removal_forbidden:{qid}")
+
+    retained_order = tuple(qid for qid in original_order if qid not in removed)
+    if candidate_order != retained_order:
+        violations.append("semantic_qid_order_changed")
+
+    changed_text_qids: list[str] = []
+    shortened_primary_titles: list[str] = []
+    for qid in sorted(set(original) & set(candidate)):
+        (
+            original_role,
+            original_text,
+            original_source,
+            original_header,
+            original_primary_title,
+        ) = original[qid]
+        (
+            candidate_role,
+            candidate_text,
+            candidate_source,
+            candidate_header,
+            candidate_primary_title,
+        ) = candidate[qid]
+        if candidate_role != original_role:
+            violations.append(f"semantic_role_changed:{qid}")
+        if (candidate_source, candidate_header) != (original_source, original_header):
+            violations.append(f"semantic_owner_binding_changed:{qid}")
+        if candidate_text == original_text:
+            continue
+        changed_text_qids.append(qid)
+        title_shortening_allowed = bool(
+            allow_primary_title_shortening
+            and not source_bound_slide
+            and original_primary_title
+            and candidate_primary_title
+            and _is_title_role(original_role)
+            and not original_header
+            and not original_source
+            and candidate_text
+            and len(candidate_text) < len(original_text)
+        )
+        if title_shortening_allowed:
+            shortened_primary_titles.append(qid)
+            continue
+        if (
+            unscoped_source_owner
+            or original_source
+            or original_header
+            or _is_title_role(original_role)
+            or not (_is_body_role(original_role) or _is_supporting_role(original_role))
+            or (
+                not _is_supporting_role(original_role)
+                and not (
+                    allow_bounded_body_shortening
+                    and _is_body_role(original_role)
+                )
+                and _LOW_PRIORITY_OWNER_QID.search(qid) is None
+            )
+            or not candidate_text
+            or len(candidate_text) >= len(original_text)
+        ):
+            violations.append(f"semantic_text_rewrite_forbidden:{qid}")
+    if len(shortened_primary_titles) > 1:
+        violations.append("semantic_primary_title_rewrite_too_broad")
+    if len(
+        [qid for qid in changed_text_qids if qid not in shortened_primary_titles]
+    ) > 3:
+        violations.append("semantic_text_rewrite_too_broad")
+    return tuple(dict.fromkeys(violations))
+
+
+def _shorten_at_sentence_or_word_boundary(text: str, maximum: int) -> str:
+    """Return a non-empty strict prefix ending at a sentence/word boundary."""
+
+    normalized = re.sub(r"\s+", " ", text).strip()
+    if maximum < 1 or len(normalized) <= maximum:
+        return normalized
+    prefix = normalized[: maximum + 1]
+    sentence_ends = [
+        match.end()
+        for match in re.finditer(r"[.!?。！？](?=\s|$)", prefix)
+        if match.end() <= maximum
+    ]
+    if sentence_ends:
+        shortened = normalized[: sentence_ends[-1]].strip()
+        if shortened:
+            return shortened
+    word_break = prefix.rfind(" ", 1, maximum + 1)
+    if word_break > 0:
+        return normalized[:word_break].rstrip(" ,;:，；：")
+    return normalized
+
+
+def reduce_authored_owner_text_capacity(
+    html: str,
+    capacity: SlideCapacity,
+    *,
+    profile_id: str,
+    allow_summarization: bool,
+) -> str:
+    """Deterministically shorten at most three text owners after call exhaustion."""
+
+    if (
+        profile_id != "ordinary"
+        or not allow_summarization
+        or _OWNER_TEXT_REDUCER_MARKER in html
+        or "data-source-block-id" in html.lower()
+    ):
+        return html
+    normalized = ensure_authored_semantic_roles(html)
+    violations = aggregate_owner_capacity_violations(normalized, capacity)
+    measured: dict[str, tuple[int, int]] = {}
+    for violation in violations:
+        match = re.fullmatch(
+            r"(owner_body|owner_visible_text):(\d+)>(\d+)", violation
+        )
+        if match is None:
+            return html
+        measured[match.group(1)] = (int(match.group(2)), int(match.group(3)))
+    body_excess = max(
+        0,
+        measured.get("owner_body", (0, 0))[0]
+        - measured.get("owner_body", (0, 0))[1],
+    )
+    visible_excess = max(
+        0,
+        measured.get("owner_visible_text", (0, 0))[0]
+        - measured.get("owner_visible_text", (0, 0))[1],
+    )
+    if body_excess <= 0 and visible_excess <= 0:
+        return html
+
+    collector = _AuthoredStartTagCollector()
+    collector.feed(normalized)
+    collector.close()
+    owned_text_by_qid: dict[str, str] = {}
+    for index, (_tag, raw_attrs, _raw_tag) in enumerate(collector.tags):
+        attrs = _attribute_map(raw_attrs)
+        qid = attrs.get("data-qid", "").strip()
+        if qid:
+            owned_text_by_qid[qid] = re.sub(
+                r"\s+", " ", "".join(collector.owned_text_parts[index])
+            ).strip()
+
+    parser = _CapacityReducerParser(normalized)
+    parser.feed(normalized)
+    parser.close()
+    candidates: list[tuple[_CapacityReducerNode, str, bool, bool]] = []
+    for node in parser.nodes:
+        role = node.attrs.get("data-semantic-role", "").strip().lower()
+        text = owned_text_by_qid.get(node.qid, "")
+        segment = normalized[node.start : node.end] if node.end is not None else ""
+        is_body = _is_body_role(role)
+        is_supporting = _is_supporting_role(role)
+        if (
+            node.end is None
+            or node.descendant_qids
+            or not text
+            or not (is_body or is_supporting)
+            or _is_title_role(role)
+            or node.attrs.get("data-header-part")
+            or node.attrs.get("data-source-block-id")
+            or segment.count("<") != 2
+        ):
+            continue
+        candidates.append((node, text, is_body, is_supporting))
+
+    selected: list[tuple[_CapacityReducerNode, str]] = []
+    remaining = list(candidates)
+    while (body_excess > 0 or visible_excess > 0) and len(selected) < 3:
+        eligible = [item for item in remaining if item[2] or body_excess <= 0]
+        if not eligible:
+            break
+        eligible.sort(
+            key=lambda item: (
+                0 if (body_excess > 0 and item[2]) else (0 if item[3] else 1),
+                -len(item[1]),
+                item[0].qid,
+            )
+        )
+        node, text, is_body, _is_supporting = eligible[0]
+        remaining.remove(eligible[0])
+        required = max(body_excess if is_body else 0, visible_excess)
+        shortened = _shorten_at_sentence_or_word_boundary(
+            text,
+            max(1, len(text) - required),
+        )
+        if not shortened or len(shortened) >= len(text):
+            continue
+        reduction = len(text) - len(shortened)
+        selected.append((node, shortened))
+        if is_body:
+            body_excess = max(0, body_excess - reduction)
+        visible_excess = max(0, visible_excess - reduction)
+    if body_excess > 0 or visible_excess > 0 or not selected:
+        return html
+
+    reduced = normalized
+    for node, shortened in sorted(
+        selected, key=lambda item: item[0].start, reverse=True
+    ):
+        segment = reduced[node.start : node.end]
+        inner_start = segment.find(">") + 1
+        inner_end = segment.rfind("<")
+        replacement = html_lib.escape(shortened, quote=False)
+        segment = segment[:inner_start] + replacement + segment[inner_end:]
+        reduced = reduced[: node.start] + segment + reduced[node.end :]
+    insertion = re.search(r"</head\s*>", reduced, flags=re.IGNORECASE)
+    if insertion is None:
+        return html
+    marker = (
+        f"<!-- {_OWNER_TEXT_REDUCER_MARKER}:"
+        + ",".join(sorted(node.qid for node, _text in selected))
+        + " -->"
+    )
+    reduced = reduced[: insertion.start()] + marker + reduced[insertion.start() :]
+    if aggregate_owner_capacity_violations(reduced, capacity):
+        return html
+    if semantic_repair_boundary_violations(
+        normalized,
+        reduced,
+        allow_bounded_body_shortening=True,
+    ):
+        return html
+    return reduced
 
 
 _HEADER_EYEBROW_CLIP_REPAIR_MARKER = "authored-header-eyebrow-clip-repair-v1"
@@ -1423,11 +1820,14 @@ __all__ = [
     "SlideCapacity",
     "build_authored_capacity_plan",
     "blocking_safety_issues",
+    "aggregate_owner_capacity_violations",
     "capacity_overflow",
     "capacity_repair_instructions",
     "capacity_violations",
     "ensure_authored_semantic_roles",
     "repair_authored_layout_alignment",
+    "reduce_authored_owner_text_capacity",
+    "semantic_repair_boundary_violations",
     "reduce_authored_closing_capacity",
     "reduce_authored_closing_title_punctuation",
     "resolve_composition_profile",

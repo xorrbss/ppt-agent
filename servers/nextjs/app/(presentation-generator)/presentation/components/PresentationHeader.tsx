@@ -2,7 +2,6 @@
 import { Loader2, AlertTriangle } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import Image from "next/image";
 import { useDispatch, useSelector } from "react-redux";
 
 import { RootState } from "@/store/store";
@@ -27,6 +26,7 @@ import HybridCoverageDialog, {
 } from "./header/HybridCoverageDialog";
 import HybridExportHistoryDialog from "./header/HybridExportHistoryDialog";
 import HeaderToolbar from "./header/HeaderToolbar";
+import DashboardNavigationButton from "./header/DashboardNavigationButton";
 import PresentationTitleEditor from "./header/PresentationTitleEditor";
 import RegenerateConfirmDialog from "./header/RegenerateConfirmDialog";
 import type { PptxExportMode } from "./header/types";
@@ -451,18 +451,9 @@ const PresentationHeader = ({
 
   return (
     <>
-      <div className="sticky top-0 z-50 flex w-full min-w-0 items-center justify-between gap-4 bg-white px-4 py-[18px] font-syne shadow-sm">
+      <div className="sticky top-0 z-50 flex w-full min-w-0 items-center justify-between gap-2 bg-white px-3 py-[18px] font-syne shadow-sm sm:gap-4 sm:px-4">
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          <Image
-            onClick={() => {
-              router.push("/dashboard");
-            }}
-            src="/logo-with-bg.png"
-            alt=""
-            width={40}
-            height={40}
-            className="h-10 w-10 shrink-0 cursor-pointer object-contain"
-          />
+          <DashboardNavigationButton onNavigate={() => router.push("/dashboard")} />
           {mutationsEnabled &&
           presentationData &&
           !isStreaming &&
@@ -480,7 +471,7 @@ const PresentationHeader = ({
           )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-2.5">
+        <div className="flex max-w-[58vw] shrink-0 items-center gap-2.5 overflow-x-auto pb-1 pr-1 sm:max-w-none">
           {isPresentationSaving && (
             <div className="flex items-center gap-2">
               <Loader2 className="w-3.5 h-3.5 animate-spin" />

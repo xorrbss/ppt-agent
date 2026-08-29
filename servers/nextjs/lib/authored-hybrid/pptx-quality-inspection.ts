@@ -129,6 +129,8 @@ export interface AuthoredHybridNativeReadbackElement extends PresentationExportN
       readonly eastAsianTypefaces: readonly string[];
     };
     readonly title: string | null;
+    readonly titleLatinTypefaces: readonly string[];
+    readonly titleEastAsianTypefaces: readonly string[];
   };
   readonly table?: {
     readonly rows: number;
@@ -158,7 +160,9 @@ export interface AuthoredHybridNativeReadbackElement extends PresentationExportN
 
 function typefaces(xml: string, tag: "latin" | "ea"): string[] {
   return [...xml.matchAll(new RegExp(`<a:${tag}\\b[^>]*\\btypeface="([^"]*)"`, "g"))]
-    .map((match) => decodeXmlAttributeValue(match[1]).trim())
+    .map((match) => decodeXmlAttributeValue(match[1] ?? ""))
+    .filter((value): value is string => value !== null)
+    .map((value) => value.trim())
     .filter((value, index, values) => value.length > 0 && values.indexOf(value) === index);
 }
 
@@ -195,7 +199,9 @@ function hybridIdentity(name: string, serializedKind: ReturnType<typeof serializ
   kind: "text" | "shape" | "image" | "table" | "chart";
   elementId: string;
 } | null {
-  const decoded = decodeXmlAttributeValue(name).trim();
+  const decodedValue = decodeXmlAttributeValue(name);
+  if (decodedValue === null) return null;
+  const decoded = decodedValue.trim();
   // Text containers, shadows, outlines, and split borders are physical paint
   // fragments of the primary native object, not additional semantic QID
   // owners. The corresponding text/base object carries the logical owner.
@@ -383,7 +389,9 @@ function chartTextReadback(xml: string, tag: "catAx" | "valAx") {
 
 function semanticRasterOwnerQids(xml: string): string[] {
   return [...xml.matchAll(/<p:cNvPr\b[^>]*\bname="([^"]*)"[^>]*>/g)]
-    .map((match) => decodeXmlAttributeValue(match[1]).trim())
+    .map((match) => decodeXmlAttributeValue(match[1] ?? ""))
+    .filter((value): value is string => value !== null)
+    .map((value) => value.trim())
     .map((name) => /^Presenton raster visual fragment ([A-Za-z][A-Za-z0-9._:-]{0,127}) semantic-owner$/.exec(name)?.[1] ?? null)
     .filter((qid): qid is string => qid !== null);
 }
@@ -495,8 +503,9 @@ function relatedChartTagOwner(
     throw new Error("Hybrid chart tag relationship type is invalid.");
   }
   const rawTarget = relationship.match(/\bTarget="([^"]+)"/)?.[1];
-  const target = rawTarget
-    ? relationshipTargetPath(relsPath, decodeXmlAttributeValue(rawTarget))
+  const decodedTarget = rawTarget ? decodeXmlAttributeValue(rawTarget) : null;
+  const target = decodedTarget
+    ? relationshipTargetPath(relsPath, decodedTarget)
     : null;
   const tagXml = target ? archive.get(target)?.toString("utf8") : null;
   if (!tagXml) throw new Error("Hybrid chart tag part is missing.");
@@ -658,16 +667,20 @@ export function inspectPptxNativeElementReadback(
         : null;
       const chart = chartXml ? chartReadback(chartXml) : null;
       if (tagOwner) {
+        const decodedName = decodeXmlAttributeValue(rawName);
         const carrier = /^Presenton hybrid chart slide-3:chart:(line|pie)_01$/.exec(
-          decodeXmlAttributeValue(rawName),
+          decodedName ?? "",
         );
         if (!carrier || !chart || carrier[1] !== chart.chartType) {
           throw new Error(`Hybrid chart ${identity.elementId} normalized carrier mismatch.`);
         }
       }
       const bounds = renderedBounds(block);
-      const owner = tagOwner ?? nativeOwnerReceipt(block, slideNumber, identity);
-      const advancedText = advancedTextReadback(block, identity, owner);
+      const nativeOwner = tagOwner
+        ? null
+        : nativeOwnerReceipt(block, slideNumber, identity);
+      const owner = tagOwner ?? nativeOwner;
+      const advancedText = advancedTextReadback(block, identity, nativeOwner);
       const table = identity.kind === "table" ? tableReadback(block, identity.elementId) : null;
       const sourceRect = identity.kind === "image" ? block.match(/<a:srcRect\b[^>]*\/>/)?.[0] : undefined;
       results.push({
