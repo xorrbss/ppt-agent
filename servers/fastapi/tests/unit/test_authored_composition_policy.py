@@ -9,6 +9,7 @@ from services.authored_composition_policy import (
     SlideCapacity,
     capacity_violations,
     ensure_authored_semantic_roles,
+    repair_authored_layout_alignment,
 )
 from services.authored_presentation_generation import _final_authored_quality_gate
 
@@ -95,6 +96,36 @@ def test_capacity_violations_require_browser_title_and_body_roles():
     violations = capacity_violations(html, metrics, capacity)
     assert "browser_title_role_missing" in violations
     assert "browser_body_role_missing" in violations
+
+
+def test_layout_alignment_repair_restores_header_inset_and_symmetric_body_margin():
+    problem = """<!doctype html><html><head><style>
+    *{box-sizing:border-box}.header{height:127px}
+    .eyebrow{height:22px;padding-top:0;font-size:16px}
+    </style></head><body><div data-header-part="eyebrow">검증 기준</div></body></html>"""
+    repaired_problem = repair_authored_layout_alignment(problem, role="PROBLEM")
+    assert "authored-layout-alignment-repair-v1:header-inset" in repaired_problem
+    assert "padding-top:34px" in repaired_problem
+    assert "height:22px" not in repaired_problem
+    assert repair_authored_layout_alignment(
+        repaired_problem, role="PROBLEM"
+    ) == repaired_problem
+
+    closing = """<!doctype html><html><head><style>
+    .body{margin:28px 72px 0;height:533px}
+    </style></head><body><div data-header-part="body" data-qid="body.root"></div></body></html>"""
+    repaired_closing = repair_authored_layout_alignment(closing, role="CLOSING")
+    assert "authored-layout-alignment-repair-v1:body-class" in repaired_closing
+    assert '<div class="body" data-header-part="body"' in repaired_closing
+    assert repair_authored_layout_alignment(
+        repaired_closing, role="CLOSING"
+    ) == repaired_closing
+    source_bound = closing.replace(
+        "<body>", '<body data-source-block-id="source:1">'
+    )
+    assert repair_authored_layout_alignment(
+        source_bound, role="CLOSING"
+    ) == source_bound
 
 
 def test_capacity_violations_require_image_semantic_role():

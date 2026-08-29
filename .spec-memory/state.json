@@ -34,8 +34,9 @@
     "authored.quality-composition-first": "decisions/authored.quality-composition-first.3.json",
     "authored.checkpoint.crash-recovery": "decisions/authored.checkpoint.crash-recovery.1.json",
     "authored.capacity.terminal-residual": "decisions/authored.capacity.terminal-residual.1.json",
-    "authored.export-progress-correlation": "decisions/authored.export-progress-correlation.1.json"
+    "authored.export-progress-correlation": "decisions/authored.export-progress-correlation.1.json",
+    "authored.layout-alignment-repair": "decisions/authored.layout-alignment-repair.1.json"
   },
   "readFirst": [],
-  "updatedAt": "2026-08-28T06:15:42.8215415+00:00"
+  "updatedAt": "2026-08-29T02:19:26.8227351+00:00"
 }

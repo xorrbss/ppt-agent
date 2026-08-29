@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.layout-alignment-repair",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Repair PROBLEM zero-inset eyebrows and CLOSING body roots missing symmetric margins, then require Chromium capacity remeasurement.",
+  "scope": [
+    "authored-generation",
+    "layout",
+    "quality-gate"
+  ],
+  "invariants": [
+    "Preserve semantic roles and capacity limits",
+    "Skip source-bound HTML",
+    "Bind repaired HTML to fresh Chromium metrics before publication"
+  ],
+  "forbidden": [
+    "Direct DB repair",
+    "Capacity-limit relaxation"
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_composition_policy.py",
+    "servers/fastapi/services/authored_presentation_generation.py",
+    "servers/fastapi/tests/unit/test_authored_composition_policy.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-29T02:19:26.7866691+00:00"
+}
