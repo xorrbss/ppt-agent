@@ -62,8 +62,12 @@ from services.presentation_export_powerpoint_qa import (
     resolve_hybrid_artifact,
     trusted_powerpoint_qa,
 )
-from services.authored_quality_receipt_v2 import release_quality_policy
+from services.authored_quality_receipt_v2 import (
+    release_quality_policy,
+    validate_current_quality_receipt_payload,
+)
 from services.authored_vnext.semantic.canonical import (
+    SemanticContractError,
     canonical_digest as semantic_canonical_digest,
 )
 from services.authored_vnext.semantic.export_binding import (
@@ -98,7 +102,13 @@ def _published_quality_receipt(
     digest = receipt.get("receiptDigest")
     attempt_id = receipt.get("attemptId")
     revision = receipt.get("revision")
-    profile = receipt.get("releaseProfile", "development")
+    profile = receipt.get(
+        "requestedReleaseProfile",
+        receipt.get(
+            "requestedQualityProfile",
+            receipt.get("releaseProfile", "development"),
+        ),
+    )
     invalid = (
         not isinstance(digest, str)
         or not digest.startswith("sha256:")
@@ -121,19 +131,39 @@ def _published_quality_receipt(
             )
         # Legacy development receipts predate the versioned receipt digest.
         return None
-    if not receipt["gatePassed"] and release_quality_policy(
-        profile
-    ).require_native_coverage:
+    requested_policy = release_quality_policy(profile)
+    try:
+        current = validate_current_quality_receipt_payload(receipt)
+    except (TypeError, ValueError) as error:
+        if requested_policy.require_native_coverage:
+            raise PresentationExportContractError(
+                "presentation_export_quality_receipt_invalid"
+            ) from error
+        current = None
+    if not receipt["gatePassed"] and requested_policy.require_native_coverage:
         raise PresentationExportContractError(
             "presentation_export_release_quality_receipt_blocked"
         )
-    return {
+    binding = {
         "receipt_digest": digest.lower(),
         "generation_attempt_id": attempt_id.strip(),
         "generation_revision": revision,
-        "release_profile": profile.strip(),
+        "release_profile": requested_policy.profile_name,
         "gate_passed": receipt["gatePassed"],
     }
+    if current is not None:
+        binding.update(
+            {
+                "requested_release_profile": current.release_profile,
+                "pre_export_evaluation_profile": current.pre_export_evaluation_profile,
+                "requested_release_policy_digest": current.requested_release_policy_digest,
+                "pre_export_evaluation_policy_digest": current.pre_export_evaluation_policy_digest,
+                "scene_envelope_digest": current.scene_envelope_digest,
+                "scene_source_digest": current.scene_source_digest,
+                "scene_qid_digest": current.scene_qid_digest,
+            }
+        )
+    return binding
 
 
 def _visual_parity_status_from_powerpoint_qa(
@@ -169,6 +199,111 @@ def _expected_qid_owners_from_quality(
             ):
                 owners.add((slide_number, item["elementId"], item["logical"]))
     return frozenset(owners)
+
+
+def _qid_owner_census(
+    quality: dict[str, Any],
+    *,
+    required: bool,
+) -> tuple[tuple[int, str, str], ...]:
+    """Return every QID's single declared native/raster owner, fail closed."""
+
+    census: list[tuple[int, str, str]] = []
+    seen: set[tuple[int, str]] = set()
+    slides = quality.get("slides")
+    if not isinstance(slides, list):
+        if required:
+            raise PresentationExportContractError(
+                "presentation_export_qid_owner_census_missing"
+            )
+        return ()
+    for slide in slides:
+        if not isinstance(slide, dict):
+            if required:
+                raise PresentationExportContractError(
+                    "presentation_export_qid_owner_census_invalid"
+                )
+            continue
+        slide_number = slide.get("slideNumber")
+        coverage = slide.get("qidCoverage")
+        if (
+            isinstance(slide_number, bool)
+            or not isinstance(slide_number, int)
+            or not isinstance(coverage, list)
+        ):
+            if required:
+                raise PresentationExportContractError(
+                    "presentation_export_qid_owner_census_invalid"
+                )
+            continue
+        for item in coverage:
+            if not isinstance(item, dict):
+                raise PresentationExportContractError(
+                    "presentation_export_qid_owner_census_invalid"
+                )
+            element_id = item.get("elementId")
+            owner = item.get("logical")
+            if (
+                not isinstance(element_id, str)
+                or not element_id.strip()
+                or owner not in {"native", "raster"}
+                or (required and item.get("ooxml") != "present")
+            ):
+                raise PresentationExportContractError(
+                    "presentation_export_qid_owner_census_invalid"
+                )
+            identity = (slide_number, element_id)
+            if identity in seen:
+                raise PresentationExportContractError(
+                    "presentation_export_qid_owner_census_duplicate"
+                )
+            seen.add(identity)
+            census.append((slide_number, element_id, owner))
+    if required and not census:
+        raise PresentationExportContractError(
+            "presentation_export_qid_owner_census_missing"
+        )
+    return tuple(sorted(census))
+
+
+def _atomic_run_digest(payload: dict[str, Any]) -> str:
+    return "sha256:" + sha256_canonical_json(payload)
+
+
+def _require_scene_envelope_binding(
+    presentation: PresentationModel,
+    generation_receipt: dict[str, Any] | None,
+    *,
+    required: bool,
+) -> None:
+    if generation_receipt is None:
+        if required:
+            raise PresentationExportContractError(
+                "presentation_export_scene_envelope_binding_missing"
+            )
+        return
+    theme = presentation.theme if isinstance(presentation.theme, dict) else {}
+    quality_receipt = theme.get("authoredQualityGate")
+    scene = quality_receipt.get("sceneEnvelope") if isinstance(quality_receipt, dict) else None
+    expected = (
+        generation_receipt.get("scene_envelope_digest"),
+        generation_receipt.get("scene_source_digest"),
+        generation_receipt.get("scene_qid_digest"),
+    )
+    observed = (
+        scene.get("sceneDigest") if isinstance(scene, dict) else None,
+        scene.get("sourceDigest") if isinstance(scene, dict) else None,
+        scene.get("qidDigest") if isinstance(scene, dict) else None,
+    )
+    if required and (
+        not isinstance(scene, dict)
+        or scene.get("schemaVersion") != "authored-deck-scene-envelope/v1"
+        or any(value is None for value in expected)
+        or observed != expected
+    ):
+        raise PresentationExportContractError(
+            "presentation_export_scene_envelope_binding_mismatch"
+        )
 
 
 def _expected_geometry_from_quality(
@@ -773,6 +908,15 @@ async def complete_direct_hybrid_export_attempt(
         raise PresentationExportContractError(
             "presentation_export_release_quality_receipt_blocked"
         )
+    _require_scene_envelope_binding(
+        presentation,
+        generation_receipt,
+        required=release_policy.require_native_coverage,
+    )
+    qid_owner_census = _qid_owner_census(
+        quality,
+        required=release_policy.require_native_coverage,
+    )
     try:
         validate_export_quality_coverage_consistency(
             quality,
@@ -805,6 +949,7 @@ async def complete_direct_hybrid_export_attempt(
             expected_qid_owners=_expected_qid_owners_from_quality(quality),
             expected_geometry=expected_geometry,
             geometry_contract_digest=geometry_contract_digest,
+            release_required=release_policy.require_native_coverage,
         )
     )
     if qa.status == "passed" and (
@@ -880,17 +1025,72 @@ async def complete_direct_hybrid_export_attempt(
         "powerpoint_qa": qa.model_dump(mode="json"),
     }
     if generation_receipt is not None:
-        provenance["quality_receipt_binding"] = {
-            "schema_version": "presenton.export-quality-receipt-binding/v1",
-            **generation_receipt,
-            "export_binding": atomic_binding,
-            "quality_sidecar_sha256": provenance["visual_parity"][
-                "quality_sidecar_sha256"
-            ],
-            "coverage_sidecar_sha256": provenance["visual_parity"][
-                "coverage_sidecar_sha256"
-            ],
-        }
+        quality_sidecar_sha256 = provenance["visual_parity"][
+            "quality_sidecar_sha256"
+        ]
+        coverage_sidecar_sha256 = provenance["visual_parity"][
+            "coverage_sidecar_sha256"
+        ]
+        qid_owner_census_digest = _atomic_run_digest(
+            {
+                "schemaVersion": "presenton.qid-owner-census/v1",
+                "owners": [list(item) for item in qid_owner_census],
+            }
+        )
+        if "requested_release_profile" not in generation_receipt:
+            provenance["quality_receipt_binding"] = {
+                "schema_version": "presenton.export-quality-receipt-binding/v1",
+                **generation_receipt,
+                "export_binding": atomic_binding,
+                "quality_sidecar_sha256": quality_sidecar_sha256,
+                "coverage_sidecar_sha256": coverage_sidecar_sha256,
+            }
+        else:
+            receipt_binding = {
+                "schema_version": "presenton.export-quality-receipt-binding/v2",
+                **generation_receipt,
+                "semantic_emission_digest": _prefixed_digest(
+                    attempt.source_snapshot_sha256
+                ),
+                "qid_owner_census_digest": qid_owner_census_digest,
+                "export_binding": atomic_binding,
+                "quality_sidecar_sha256": quality_sidecar_sha256,
+                "coverage_sidecar_sha256": coverage_sidecar_sha256,
+            }
+            receipt_binding["atomic_run_digest"] = _atomic_run_digest(
+                {
+                    "schemaVersion": receipt_binding["schema_version"],
+                    "receiptDigest": receipt_binding["receipt_digest"],
+                    "generationAttemptId": receipt_binding["generation_attempt_id"],
+                    "generationRevision": receipt_binding["generation_revision"],
+                    "requestedReleaseProfile": receipt_binding[
+                        "requested_release_profile"
+                    ],
+                    "preExportEvaluationProfile": receipt_binding[
+                        "pre_export_evaluation_profile"
+                    ],
+                    "requestedReleasePolicyDigest": receipt_binding[
+                        "requested_release_policy_digest"
+                    ],
+                    "preExportEvaluationPolicyDigest": receipt_binding[
+                        "pre_export_evaluation_policy_digest"
+                    ],
+                    "sceneEnvelopeDigest": receipt_binding["scene_envelope_digest"],
+                    "sceneSourceDigest": receipt_binding["scene_source_digest"],
+                    "sceneQidDigest": receipt_binding["scene_qid_digest"],
+                    "semanticEmissionDigest": receipt_binding[
+                        "semantic_emission_digest"
+                    ],
+                    "qidOwnerCensusDigest": receipt_binding[
+                        "qid_owner_census_digest"
+                    ],
+                    "gatePassed": receipt_binding["gate_passed"],
+                    "exportBinding": atomic_binding,
+                    "qualitySidecarSha256": quality_sidecar_sha256,
+                    "coverageSidecarSha256": coverage_sidecar_sha256,
+                }
+            )
+            provenance["quality_receipt_binding"] = receipt_binding
     try:
         validate_export_quality_coverage_consistency(
             finalized_quality,
@@ -902,6 +1102,34 @@ async def complete_direct_hybrid_export_attempt(
         raise PresentationExportContractError(
             "presentation_export_quality_coverage_mismatch"
         ) from error
+    try:
+        semantic_binding_digest = await bind_completed_semantic_export_attempt(
+            session,
+            attempt=attempt,
+            mode="hybrid",
+            renderer_source_sha256=expected_binding["rendererSourceDigest"],
+            pptx_sha256=pptx_sha256,
+            receipt_payloads=[
+                finalized_quality,
+                finalized_coverage_json,
+                qa.model_dump(mode="json"),
+                *(
+                    [provenance["quality_receipt_binding"]]
+                    if "quality_receipt_binding" in provenance
+                    else []
+                ),
+            ],
+        )
+    except (SemanticContractError, ValueError) as error:
+        raise PresentationExportContractError(
+            "presentation_export_semantic_binding_mismatch"
+        ) from error
+    if release_policy.require_native_coverage and semantic_binding_digest is None:
+        raise PresentationExportContractError(
+            "presentation_export_release_semantic_binding_required"
+        )
+    # All digest graph validation, including active semantic emission, QID
+    # census, sidecars and the package hash, completes before success is staged.
     publish_finalized_hybrid_sidecars(
         artifact,
         quality=finalized_quality,
@@ -920,24 +1148,6 @@ async def complete_direct_hybrid_export_attempt(
         artifact_sha256=pptx_sha256,
         artifact_size_bytes=pptx_size_bytes,
         provenance=provenance,
-    )
-    await session.refresh(attempt)
-    semantic_binding_digest = await bind_completed_semantic_export_attempt(
-        session,
-        attempt=attempt,
-        mode="hybrid",
-        renderer_source_sha256=expected_binding["rendererSourceDigest"],
-        pptx_sha256=pptx_sha256,
-        receipt_payloads=[
-            finalized_quality,
-            finalized_coverage_json,
-            qa.model_dump(mode="json"),
-            *(
-                [provenance["quality_receipt_binding"]]
-                if "quality_receipt_binding" in provenance
-                else []
-            ),
-        ],
     )
     await session.commit()
     await session.refresh(attempt)

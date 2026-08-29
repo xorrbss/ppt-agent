@@ -19,6 +19,8 @@ const EVIDENCE_ROOT = path.join(REPO, "artifacts", "authored-vnext-controlled-lo
 const TERMINAL = new Set(["completed", "error", "failed", "cancelled", "canceled"]);
 const PHASES = ["outline", "author", "repair", "checkpoint", "publication", "export"];
 const FINGERPRINT = /^sha256:[a-f0-9]{64}$/;
+const QUALITY_PROFILES = new Set(["development", "release"]);
+const PPTX_MODES = new Set(["fidelity", "hybrid"]);
 const RENDER_RUNTIME_METRICS_PATH = "/metrics/authored-render-runtime";
 
 class BenchmarkRequestError extends Error {
@@ -88,7 +90,20 @@ function promptInvariant(deck) {
     includeTableOfContents: deck.includeTableOfContents === true,
     webSearch: deck.webSearch === true,
     visionQa: deck.visionQa === true,
+    qualityProfile: deck.qualityProfile,
+    pptxMode: deck.pptxMode,
   });
+}
+
+function profileInvariant(deck) {
+  return {
+    qualityProfile: deck.qualityProfile,
+    pptxMode: deck.pptxMode,
+    fingerprint: fingerprint(JSON.stringify({
+      qualityProfile: deck.qualityProfile,
+      pptxMode: deck.pptxMode,
+    })),
+  };
 }
 
 function normalizeFixedInvariants(input, deck) {
@@ -101,6 +116,7 @@ function normalizeFixedInvariants(input, deck) {
     model: { id: modelId, fingerprint: requiredFingerprint(input.model?.fingerprint, "matrix.fixedInvariants.model.fingerprint") },
     prompt: { fingerprint: requiredFingerprint(input.prompt?.fingerprint, "matrix.fixedInvariants.prompt.fingerprint") },
     environment: { fingerprint: requiredFingerprint(input.environment?.fingerprint, "matrix.fixedInvariants.environment.fingerprint") },
+    profile: profileInvariant(deck),
   };
   const computedPromptFingerprint = fingerprint(promptInvariant(deck));
   if (fixedInvariants.prompt.fingerprint !== computedPromptFingerprint) {
@@ -165,7 +181,12 @@ function normalizeManifest(raw) {
     if (!new Set(["pptx", "pdf"]).has(exportAs)) fail(`${id}: exportAs must be pptx or pdf`);
     const nSlides = Number(deck.nSlides ?? 1);
     if (!Number.isInteger(nSlides) || nSlides < 1 || nSlides > 50) fail(`${id}: nSlides must be 1..50`);
-    return { ...deck, id, exportAs, nSlides };
+    const qualityProfile = String(deck.qualityProfile ?? "development").trim().toLowerCase();
+    if (!QUALITY_PROFILES.has(qualityProfile)) fail(`${id}: qualityProfile must be development or release`);
+    const pptxMode = String(deck.pptxMode ?? "fidelity").trim().toLowerCase();
+    if (!PPTX_MODES.has(pptxMode)) fail(`${id}: pptxMode must be fidelity or hybrid`);
+    if (exportAs !== "pptx" && pptxMode !== "fidelity") fail(`${id}: pptxMode hybrid requires exportAs pptx`);
+    return { ...deck, id, exportAs, nSlides, qualityProfile, pptxMode };
   });
   const resourcePids = [...new Set((raw.resourcePids || []).map(Number))];
   if (resourcePids.some((pid) => !Number.isInteger(pid) || pid <= 0)) fail("resourcePids must contain positive integers");
@@ -196,7 +217,11 @@ function normalizeManifest(raw) {
     schemaVersion: raw.schemaVersion, baseUrl: baseUrl.href.replace(/\/$/, ""), metricsBaseUrl: metricsBaseUrl.href.replace(/\/$/, ""), outputDirectory,
     concurrency, pollIntervalMs, timeoutMs, resourceIntervalMs, soakDurationSeconds,
     resourcePids, requireWorkspaceOperation: raw.requireWorkspaceOperation !== false,
-    decks, matrix, durability: raw.durability || null,
+    decks, matrix, deckInvariants: decks.map((deck) => ({
+      deckId: deck.id,
+      prompt: { fingerprint: fingerprint(promptInvariant(deck)) },
+      profile: profileInvariant(deck),
+    })), durability: raw.durability || null,
   };
 }
 
@@ -270,6 +295,7 @@ function requestBody(deck) {
     include_title_slide: deck.includeTitleSlide !== false,
     include_table_of_contents: deck.includeTableOfContents === true,
     web_search: deck.webSearch === true, vision_qa: deck.visionQa === true,
+    quality_profile: deck.qualityProfile,
   };
   for (const [source, target] of [["language", "language"], ["style", "authored_style"],
     ["instructions", "instructions"], ["tone", "tone"], ["verbosity", "verbosity"]]) {
@@ -283,6 +309,9 @@ function assertOperationInvariants(manifest, deck, scenario) {
   const fixed = manifest.matrix.fixedInvariants;
   if (!fixed || fingerprint(promptInvariant(deck)) !== fixed.prompt.fingerprint) {
     fail(`${deck.id}: prompt invariant drift`);
+  }
+  if (JSON.stringify(fixed.profile) !== JSON.stringify(profileInvariant(deck))) {
+    fail(`${deck.id}: quality profile/pptx mode invariant drift`);
   }
   if (!scenario || JSON.stringify(scenario.fixedInvariants) !== JSON.stringify(fixed)) {
     fail(`${deck.id}: provider/model/environment invariant drift`);
@@ -308,6 +337,30 @@ function exportName(serverPath) {
 function verifyMagic(bytes, format) {
   if (format === "pdf" && bytes.subarray(0, 5).toString("ascii") !== "%PDF-") fail("downloaded PDF magic mismatch");
   if (format === "pptx" && !(bytes[0] === 0x50 && bytes[1] === 0x4b)) fail("downloaded PPTX ZIP magic mismatch");
+}
+
+function redactedExportEvidence(value, key = "", depth = 0) {
+  if (depth > 12) return "[redacted:depth]";
+  if (/(authorization|cookie|content|html|password|prompt|secret|token|url|path)/i.test(key)) {
+    return "[redacted]";
+  }
+  if (value === null || typeof value === "boolean" || typeof value === "number") return value;
+  if (typeof value === "string") return value.length <= 512 ? value : `[redacted:string:${value.length}]`;
+  if (Array.isArray(value)) return value.map((item) => redactedExportEvidence(item, key, depth + 1));
+  if (!value || typeof value !== "object") return String(value);
+  return Object.fromEntries(Object.entries(value).map(([nestedKey, nestedValue]) => [
+    nestedKey,
+    redactedExportEvidence(nestedValue, nestedKey, depth + 1),
+  ]));
+}
+
+function redactedPptxExportEvidence(payload, pptxMode) {
+  return {
+    success: payload?.success === true,
+    pptxMode,
+    quality: redactedExportEvidence(payload?.quality, "quality"),
+    exportMetadata: redactedExportEvidence(payload?.exportMetadata, "exportMetadata"),
+  };
 }
 
 function stageTimings(timeline, operationId) {
@@ -376,7 +429,10 @@ function retryAudit(events) {
 }
 
 function cacheTelemetrySnapshot(payload) {
-  if (!payload || typeof payload !== "object" || payload.schemaVersion !== "authored-render-runtime/v1") {
+  if (!payload || typeof payload !== "object" || ![
+    "authored-render-runtime/v1",
+    "authored-render-runtime/v2",
+  ].includes(payload.schemaVersion)) {
     fail("authored render runtime metrics response is invalid");
   }
   const chromeRuntimeDigest = requiredFingerprint(payload.chromeRuntimeDigest, "authored render runtime chromeRuntimeDigest");
@@ -396,6 +452,8 @@ function cacheTelemetrySnapshot(payload) {
     chromeRuntimeDigest,
     cacheIdentity: {
       render: String(payload.cacheIdentity.render || ""),
+      identity: String(payload.cacheIdentity.identity || ""),
+      measurement: String(payload.cacheIdentity.measurement || ""),
       domMetrics: String(payload.cacheIdentity.domMetrics || ""),
       occlusionSensor: String(payload.cacheIdentity.occlusionSensor || ""),
       chromeReuseEnabled: payload.cacheIdentity.chromeReuseEnabled === true,
@@ -478,6 +536,7 @@ async function runDeck(deck, manifest, ordinal, onStatus = null, scenario = null
   let downloadPath = data.path;
   if (!presentationId || !downloadPath) fail(`${deck.id}: completed result lacks presentation_id/path`);
   let pdfExport = null;
+  let pptxExport = null;
   const exportStartedAt = Date.now();
   if (deck.exportAs === "pdf") {
     pdfExport = (await request(`${manifest.baseUrl}/api/export-presentation`, {
@@ -489,6 +548,24 @@ async function runDeck(deck, manifest, ordinal, onStatus = null, scenario = null
       fail(`${deck.id}: PDF export returned no downloadable path`);
     }
     downloadPath = pdfExport.path;
+  } else if (deck.pptxMode === "hybrid") {
+    if (!operationId) fail(`${deck.id}: hybrid PPTX export requires operationId`);
+    const exported = (await request(`${manifest.baseUrl}/api/export-presentation`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        format: "pptx",
+        id: presentationId,
+        title: deck.content.slice(0, 120),
+        pptxMode: "hybrid",
+        operationId,
+      }),
+    }, Math.max(1, deadline - Date.now()))).json;
+    if (exported?.success !== true || typeof exported?.path !== "string") {
+      fail(`${deck.id}: Hybrid PPTX export returned no downloadable path`);
+    }
+    pptxExport = redactedPptxExportEvidence(exported, deck.pptxMode);
+    downloadPath = exported.path;
   }
   const name = exportName(downloadPath);
   if (!name) fail(`${deck.id}: export path has no file name`);
@@ -522,10 +599,11 @@ async function runDeck(deck, manifest, ordinal, onStatus = null, scenario = null
   const phaseTimingsMs = { ...observed.phaseTimingsMs, export: Date.now() - exportStartedAt };
   return {
     deckId: deck.id, taskId, operationId, presentationId, exportAs: deck.exportAs,
+    qualityProfile: deck.qualityProfile, pptxMode: deck.pptxMode,
     startedAt: new Date(startedAt).toISOString(), completedAt: now(), latencyMs: Date.now() - startedAt,
     output: { path: destination, bytes: downloaded.bytes.length, sha256: sha256(downloaded.bytes) },
     generationArtifactPath: data.path,
-    pdfExport,
+    pdfExport, pptxExport,
     statusHistory, stages: observed.stages, operation: observed.operation, retryAudit: retry,
     admissionMs, phaseTimingsMs,
     resources: {
@@ -611,6 +689,10 @@ async function atomicJson(target, payload) {
 async function runSingleControlledLoad(manifest, hook = null, scenario = null) {
   await mkdir(manifest.outputDirectory, { recursive: true });
   const cacheBefore = await fetchCacheTelemetry(manifest);
+  const poolBefore = await sampleResources([...new Set(manifest.resourcePids)]);
+  if (!Array.isArray(poolBefore) || poolBefore.length !== manifest.resourcePids.length) {
+    fail("one or more configured resourcePids are unavailable before controlled scenario");
+  }
   const coldControl = coldControlResult(scenario, cacheBefore);
   const startedAt = Date.now();
   const resourceState = { stop: false, pids: manifest.resourcePids, samples: [] };
@@ -645,11 +727,21 @@ async function runSingleControlledLoad(manifest, hook = null, scenario = null) {
   resourceState.stop = true;
   await sampler;
   const cacheAfter = await fetchCacheTelemetry(manifest);
+  const poolAfter = await sampleResources([...new Set(manifest.resourcePids)]);
+  if (!Array.isArray(poolAfter) || poolAfter.length !== manifest.resourcePids.length) {
+    fail("one or more configured resourcePids are unavailable after controlled scenario");
+  }
   const cacheTelemetry = {
     before: cacheBefore,
     after: cacheAfter,
     delta: cacheTelemetryDelta(cacheBefore, cacheAfter),
     coldControl,
+  };
+  const poolTelemetry = {
+    before: poolBefore,
+    after: poolAfter,
+    incrementalDelta: resourceDelta(poolBefore, poolAfter),
+    samplingScope: "sum of configured owned resourcePids; shared-process attribution applies when concurrency exceeds one",
   };
   const wallTimeMs = Date.now() - startedAt;
   const report = {
@@ -666,8 +758,9 @@ async function runSingleControlledLoad(manifest, hook = null, scenario = null) {
       listenerInterrupted: failures.filter((failure) => ["listener_interrupted", "proxy_or_listener_http_failure"].includes(failure.classification)).length,
       hiddenInternalRetries: failures.filter((failure) => failure.classification === "hidden_internal_retry_detected").length,
       automaticRetries: 0, listenerRestartedByHarness: false },
-    cacheTelemetry,
+    cacheTelemetry, poolTelemetry,
     fixedInvariants: manifest.matrix?.fixedInvariants || null,
+    deckInvariants: manifest.deckInvariants,
     soakVerification: {
       requestedDurationSeconds: manifest.soakDurationSeconds,
       twoHourVerified: manifest.soakDurationSeconds >= 7200 && wallTimeMs >= 7_200_000,

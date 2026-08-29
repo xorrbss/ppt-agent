@@ -50,6 +50,7 @@ from services.authored_vnext.generation.scene_envelope import (
     seal_slide_scene_envelope,
 )
 from services.provider_usage_instrumentation import provider_usage_scope, record_local_stage
+from services.authored_generation_performance import authored_provider_concurrency
 from services.source_images.models import SourceImageCandidate
 from services.source_content.browser_readback import stamp_source_block_ids, BrowserSourceReadbackError
 from utils.asset_directory_utils import get_images_directory
@@ -75,6 +76,7 @@ from utils.llm_calls.author_slide import (
     validate_authored_slide_html,
 )
 from utils.renderer_isolation import RendererPolicyError
+from utils.llm_provider import get_llm_provider
 from utils.slide_capture import (
     _placeholder_png,
     ensure_browser_metrics,
@@ -83,22 +85,15 @@ from utils.slide_capture import (
 )
 
 
-# ``AUTHORED_SLIDE_PIPELINE_CONCURRENCY`` was historically both the number of
-# provider calls and the number of whole-slide workers.  A worker spent most of
-# its time in the provider, but it remained occupied by Chromium/checkpoint work
-# after the response had returned.  Keep that setting as the provider ceiling,
-# then give the downstream work its own bounded window.  This lets the next
-# slide enter authoring as soon as one author response is durable without ever
-# exceeding the configured provider or Chromium capacities.
-_AUTHORED_AUTHOR_WORKERS = max(
-    1,
-    int(
-        os.getenv(
-            "AUTHORED_SLIDE_AUTHOR_CONCURRENCY",
-            os.getenv("AUTHORED_SLIDE_PIPELINE_CONCURRENCY", "8"),
-        )
-    ),
-)
+# Provider authoring consumes one selected-provider policy shared with the
+# author executor. Chromium keeps its independent local gate so completed
+# provider responses can overlap render/checkpoint work without expanding
+# provider concurrency.
+try:
+    _selected_provider = str(get_llm_provider().value)
+except Exception:
+    _selected_provider = None
+_AUTHORED_AUTHOR_WORKERS = authored_provider_concurrency(_selected_provider)
 _AUTHORED_RENDER_WORKERS = max(
     1,
     int(

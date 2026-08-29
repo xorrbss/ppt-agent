@@ -208,6 +208,35 @@ test("assembler sandwiches residual raster between the editable canvas and foreg
   assert.match(entries.get("[Content_Types].xml").toString("utf8"), /Extension="png"/);
 });
 
+test("assembler preserves audited raster-native-raster z-band order", async () => {
+  const raster = await sharp({
+    create: { width: 1280, height: 720, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+  }).png().toBuffer();
+  const text = {
+    id: "middle.text", identityAuthority: "declared-qid", domPath: "body > p", tagName: "p",
+    sourceIndex: 0, zOrder: 1, cssZIndex: 1, bounds: bounds(100, 100, 300, 60), rotationDeg: 0, opacity: 1,
+    classification: { mode: "native", kind: "text", confidence: "safe" },
+    text: { role: "body", plainText: "중간 native", paragraphs: ["중간 native"], style: textStyle, runs: [] },
+  };
+  const prepared = await prepareNativeElements([text]);
+  const pptx = assembleAuthoredHybridPptx(skeleton(), [{
+    slideNumber: 1,
+    backplatePng: raster,
+    elements: prepared,
+    rasterBands: [
+      { zBand: 0, rasterPng: raster, semanticOwnerQids: ["lower.raster"] },
+      { zBand: 2, rasterPng: raster, semanticOwnerQids: ["upper.raster"] },
+    ],
+    nativeZBandByElementId: { "middle.text": 1 },
+  }]);
+  const xml = readPptxArchive(pptx).get("ppt/slides/slide1.xml").toString("utf8");
+  const lower = xml.indexOf("Presenton hybrid backplate");
+  const middle = xml.indexOf("Presenton hybrid text middle.text");
+  const upper = xml.indexOf("Presenton hybrid raster z-band 1");
+  assert.ok(lower >= 0 && lower < middle && middle < upper);
+  assert.equal((xml.match(/presenton-semantic-raster-ownership-v1:/g) ?? []).length, 2);
+});
+
 test("assembler stores an opaque full-slide residual as the slide background", async () => {
   const backplate = await sharp({
     create: { width: 1280, height: 720, channels: 3, background: "#F7FAFC" },

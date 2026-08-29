@@ -5,6 +5,8 @@ import sharp from "sharp";
 
 import {
   preparedNativeElementNonVisualIdCount,
+  connectorTextClearanceViolations,
+  planLayerSafeNativeElements,
   prepareNativeElements,
   selectLayerSafeNativeElements,
   serializePreparedNativeElement,
@@ -1401,4 +1403,74 @@ test("standalone multiline boxes account for the largest run on each line", asyn
   assert.ok(heightEmu >= Math.round(117 * 9525));
   assert.ok(heightEmu <= Math.round(118 * 9525));
   assert.match(xml, /<a:br\/>/);
+});
+
+test("declared paint order produces auditable raster-native-raster z-bands", async () => {
+  const shape = (id, sourceIndex, zOrder, mode) => ({
+    ...base(id, sourceIndex, zOrder, bounds(40 + sourceIndex * 30, 40, 100, 30)),
+    identityAuthority: "declared-qid",
+    classification: mode === "native"
+      ? { mode: "native", kind: "shape", confidence: "safe" }
+      : { mode: "raster", candidateKind: "complex", reasons: ["complex-diagram"] },
+    ...(mode === "native" ? {
+      shape: {
+        shape: "rectangle", fill: { hex: "123456", alpha: 1 },
+        stroke: null, strokeWidthPt: 0, radiusPt: 0,
+      },
+    } : {}),
+  });
+  const elements = [shape("native.low", 0, 0, "native"), shape("css.raster", 1, 1, "raster"), shape("native.high", 2, 2, "native")];
+  const prepared = await prepareNativeElements(elements);
+  const plan = planLayerSafeNativeElements(elements, prepared);
+  assert.equal(plan.strategy, "audited-multi-z-band");
+  assert.deepEqual(plan.selected.map((item) => item.source.id), ["native.low", "native.high"]);
+  assert.deepEqual(plan.paintBands, [
+    { zBand: 0, paintOwner: "rasterIsland", elementIds: [] },
+    { zBand: 1, paintOwner: "native", elementIds: ["native.low"] },
+    { zBand: 2, paintOwner: "rasterIsland", elementIds: ["css.raster"] },
+    { zBand: 3, paintOwner: "native", elementIds: ["native.high"] },
+  ]);
+});
+
+test("Chromium line indices restore a missing Korean soft wrap in DrawingML", async () => {
+  const element = {
+    ...base("cjk-wrap", 0, 0, bounds(80, 80, 260, 64)),
+    classification: { mode: "native", kind: "text", confidence: "safe" },
+    text: {
+      role: "body", plainText: "첫째 줄둘째 줄", paragraphs: ["첫째 줄둘째 줄"], style: style(),
+      runs: [
+        { text: "첫째 줄", bounds: bounds(80, 80, 100, 28), fragments: [bounds(80, 80, 100, 28)], style: style(), lineIndex: 0 },
+        { text: "둘째 줄", bounds: bounds(80, 112, 100, 28), fragments: [bounds(80, 112, 100, 28)], style: style(), lineIndex: 1 },
+      ],
+      layout: {
+        boxBounds: bounds(80, 80, 260, 64), contentBounds: bounds(80, 80, 260, 64),
+        paintedTextBounds: bounds(80, 80, 100, 60), paddingPx: { top: 0, right: 0, bottom: 0, left: 0 },
+        borderPx: { top: 0, right: 0, bottom: 0, left: 0 }, marginPx: { top: 0, right: 0, bottom: 0, left: 0 },
+        rowGapPx: 0, columnGapPx: 0, display: "block", flexDirection: null,
+        alignItems: "normal", justifyContent: "normal", textAlignSource: "self",
+        lineCount: 2, singleLine: false, lineRects: [bounds(80, 80, 100, 28), bounds(80, 112, 100, 28)],
+        paragraphSpacingPx: { before: 0, after: 0 },
+      },
+    },
+  };
+  const [prepared] = await prepareNativeElements([element]);
+  assert.match(serializePreparedNativeElement(prepared, 3), /<a:br\/>/);
+});
+
+test("connector admission blocks rotated painted bounds within 12px of text", async () => {
+  const connector = {
+    ...base("connector", 0, 0, bounds(100, 100, 100, 2)), rotationDeg: 45,
+    classification: { mode: "native", kind: "shape", confidence: "safe" },
+    shape: { shape: "line", fill: null, stroke: { hex: "000000", alpha: 1 }, strokeWidthPt: 3, radiusPt: 0 },
+  };
+  const label = {
+    ...base("label", 1, 1, bounds(188, 92, 80, 24)),
+    classification: { mode: "native", kind: "text", confidence: "safe" },
+    text: { role: "body", plainText: "가까운 글자", paragraphs: ["가까운 글자"], style: style(), runs: [] },
+  };
+  const prepared = await prepareNativeElements([connector, label]);
+  const violations = connectorTextClearanceViolations(prepared, [connector, label], new Set(["connector"]));
+  assert.equal(violations.length, 1);
+  assert.equal(violations[0].elementId, "connector");
+  assert.ok(violations[0].clearancePx < 12);
 });

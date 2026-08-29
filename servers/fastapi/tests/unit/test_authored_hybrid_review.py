@@ -2,6 +2,7 @@ import asyncio
 import io
 import logging
 
+import pytest
 from PIL import Image
 
 from services import authored_quality_review_service as quality_service
@@ -9,6 +10,7 @@ from utils.authored_dom_quality import STYLE_REFERENCE, DomQualityReport
 from utils.llm_calls import author_vision_qa
 from utils.llm_calls.author_slide import Brand
 from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
+from utils.renderer_isolation import RendererPolicyError
 
 
 def _png(color: tuple[int, int, int]) -> bytes:
@@ -264,6 +266,88 @@ def test_forced_full_reauthor_is_bounded_and_reports_success(monkeypatch):
         "succeeded": True,
         "failure_detail": None,
     }
+
+
+def test_full_reauthor_canonicalizes_time_once_and_keeps_active_tags_blocked(
+    monkeypatch,
+):
+    author_calls = 0
+    rendered: list[str] = []
+    candidate = (
+        "<!DOCTYPE html><html lang='ko'><head><meta charset='utf-8'></head>"
+        "<body><time datetime='2026-08-29T09:30:00+09:00' "
+        "data-qid='release.timestamp' class='stamp' style='color:#123456'>"
+        "2026년 8월 29일 09:30</time></body></html>"
+    )
+
+    async def fake_author(*_args, **_kwargs):
+        nonlocal author_calls
+        author_calls += 1
+        return candidate
+
+    async def fake_render(html, timeout=60):
+        rendered.append(html)
+        return b"canonicalized-png"
+
+    monkeypatch.setattr(author_vision_qa, "author_slide_html", fake_author)
+    monkeypatch.setattr(author_vision_qa, "render_html_to_png", fake_render)
+
+    htmls, pngs, fixed, _details = asyncio.run(
+        author_vision_qa.revise_authored_deck(
+            [_VALID_HTML],
+            [b"original-png"],
+            ["content"],
+            ["CONTENT"],
+            Brand(topic="topic"),
+            "design",
+            initial_critiques=[
+                SlideCritique(
+                    needs_fix=True,
+                    issues=[
+                        CritiqueIssue(
+                            type="overflow",
+                            severity="high",
+                            detail="timestamp is clipped",
+                        )
+                    ],
+                )
+            ],
+            return_details=True,
+            force_full_reauthor_indices=[0],
+        )
+    )
+
+    admitted = htmls[0]
+    assert author_calls == 1
+    assert rendered == [admitted]
+    assert pngs == [b"canonicalized-png"]
+    assert fixed == [0]
+    assert "<time" not in admitted and "</time>" not in admitted
+    assert "<span" in admitted and "</span>" in admitted
+    assert 'title="2026-08-29T09:30:00+09:00"' in admitted
+    assert "data-qid='release.timestamp'" in admitted
+    assert "class='stamp'" in admitted
+    assert "style='color:#123456'" in admitted
+    assert "2026년 8월 29일 09:30" in admitted
+
+    dangerous_documents = (
+        _VALID_HTML.replace("<h1", "<script").replace("</h1>", "</script>"),
+        _VALID_HTML.replace("<h1", "<iframe").replace("</h1>", "</iframe>"),
+        _VALID_HTML.replace(
+            "<h1 data-qid='q-title'>Title</h1>",
+            "<style>@import url(https://example.invalid/x.css)</style>",
+        ),
+    )
+    for dangerous in dangerous_documents:
+        canonical = author_vision_qa._canonicalize_full_reauthor_semantic_aliases(
+            dangerous
+        )
+        assert canonical == dangerous
+        with pytest.raises(RendererPolicyError):
+            author_vision_qa.validate_authored_slide_html(
+                canonical, finalized=True
+            )
+    assert author_calls == 1
 
 
 def test_forced_full_reauthor_failure_is_logged_and_machine_readable(

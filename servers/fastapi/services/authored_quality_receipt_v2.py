@@ -152,6 +152,41 @@ class ReleaseQualityPolicy:
     minimum_native_coverage_ratio: float = 0.0
 
 
+def release_quality_policy_digest(policy: ReleaseQualityPolicy) -> str:
+    """Seal the exact policy flags used at one quality boundary."""
+
+    payload = {
+        "profileName": policy.profile_name,
+        "requireSourceReadback": policy.require_source_readback,
+        "requireVisualReview": policy.require_visual_review,
+        "requirePerformance": policy.require_performance,
+        "requireNativeCoverage": policy.require_native_coverage,
+        "requireFontPreflight": policy.require_font_preflight,
+        "minimumNativeCoverageRatio": policy.minimum_native_coverage_ratio,
+    }
+    return "sha256:" + hashlib.sha256(
+        json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def _optional_prefixed_sha256(value: object, field_name: str) -> str | None:
+    if value is None:
+        return None
+    normalized = str(value).strip().lower()
+    if (
+        len(normalized) != 71
+        or not normalized.startswith("sha256:")
+        or any(character not in "0123456789abcdef" for character in normalized[7:])
+    ):
+        raise ValueError(f"quality_receipt_{field_name}_invalid")
+    return normalized
+
+
 def release_quality_policy(profile: object = None) -> ReleaseQualityPolicy:
     """Resolve the additive development/release quality contract.
 
@@ -714,7 +749,16 @@ class QualityReceiptV2:
     blockers: tuple[str, ...] = ()
     gate_passed: bool = False
     receipt_digest: str = ""
+    # ``release_profile`` is the caller-requested export policy.  Generation
+    # may evaluate a narrower pre-export boundary before OOXML exists, but it
+    # must never overwrite the requested profile with that evaluation policy.
     release_profile: str = "default"
+    pre_export_evaluation_profile: str = "default"
+    requested_release_policy_digest: str = ""
+    pre_export_evaluation_policy_digest: str = ""
+    scene_envelope_digest: str | None = None
+    scene_source_digest: str | None = None
+    scene_qid_digest: str | None = None
     require_visual_review: bool = False
     require_performance: bool = False
     require_source_readback: bool = False
@@ -763,6 +807,13 @@ class QualityReceiptV2:
             "gatePassed": self.gate_passed,
             "receiptDigest": self.receipt_digest,
             "releaseProfile": self.release_profile,
+            "requestedReleaseProfile": self.release_profile,
+            "preExportEvaluationProfile": self.pre_export_evaluation_profile,
+            "requestedReleasePolicyDigest": self.requested_release_policy_digest,
+            "preExportEvaluationPolicyDigest": self.pre_export_evaluation_policy_digest,
+            "sceneEnvelopeDigest": self.scene_envelope_digest,
+            "sceneSourceDigest": self.scene_source_digest,
+            "sceneQidDigest": self.scene_qid_digest,
             "requireSourceReadback": self.require_source_readback,
             "requireVisualReview": self.require_visual_review,
             "requirePerformance": self.require_performance,
@@ -802,6 +853,13 @@ def _receipt_digest(receipt: QualityReceiptV2) -> str:
         "qualityStatus": receipt.quality_status,
         "publicationStatus": receipt.publication_status,
         "releaseProfile": receipt.release_profile,
+        "requestedReleaseProfile": receipt.release_profile,
+        "preExportEvaluationProfile": receipt.pre_export_evaluation_profile,
+        "requestedReleasePolicyDigest": receipt.requested_release_policy_digest,
+        "preExportEvaluationPolicyDigest": receipt.pre_export_evaluation_policy_digest,
+        "sceneEnvelopeDigest": receipt.scene_envelope_digest,
+        "sceneSourceDigest": receipt.scene_source_digest,
+        "sceneQidDigest": receipt.scene_qid_digest,
         "requireSourceReadback": receipt.require_source_readback,
         "requireVisualReview": receipt.require_visual_review,
         "requirePerformance": receipt.require_performance,
@@ -817,6 +875,167 @@ def _receipt_digest(receipt: QualityReceiptV2) -> str:
             ensure_ascii=False,
         ).encode("utf-8")
     ).hexdigest()
+
+
+def _receipt_digest_pre_profile_split(receipt: QualityReceiptV2) -> str:
+    """Digest used before requested/evaluation policies were split."""
+
+    payload = {
+        "schemaVersion": receipt.schema_version,
+        "attemptId": receipt.attempt_id,
+        "revision": receipt.revision,
+        "ledgerDigest": receipt.ledger_digest,
+        "deckHtmlDigest": receipt.deck_html_digest,
+        "passed": receipt.gate_passed,
+        "blockers": list(receipt.blockers),
+        "safetyStatus": receipt.safety_status,
+        "capacityStatus": receipt.capacity_status,
+        "sourceReadbackStatus": receipt.source_readback_status,
+        "visualReviewStatus": receipt.visual_review_status,
+        "performanceStatus": receipt.performance_status,
+        "nativeCoverageStatus": receipt.native_coverage_status,
+        "fontPreflightStatus": receipt.font_preflight_status,
+        "nativeCoverageRatio": receipt.native_coverage_ratio,
+        "nativeCoverageDenominator": receipt.native_coverage_denominator,
+        "nativeElementCount": receipt.native_element_count,
+        "rasterFallbacks": [list(item) for item in receipt.raster_fallbacks],
+        "qualityStatus": receipt.quality_status,
+        "publicationStatus": receipt.publication_status,
+        "releaseProfile": receipt.release_profile,
+        "requireSourceReadback": receipt.require_source_readback,
+        "requireVisualReview": receipt.require_visual_review,
+        "requirePerformance": receipt.require_performance,
+        "requireNativeCoverage": receipt.require_native_coverage,
+        "requireFontPreflight": receipt.require_font_preflight,
+        "minimumNativeCoverageRatio": receipt.minimum_native_coverage_ratio,
+    }
+    return "sha256:" + hashlib.sha256(
+        json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def validate_current_quality_receipt_payload(
+    payload: Mapping[str, object],
+) -> QualityReceiptV2:
+    """Validate the current digest-bound receipt projection used by export."""
+
+    raw_fallbacks = payload.get("rasterFallbacks", ())
+    if not isinstance(raw_fallbacks, (list, tuple)):
+        raise ValueError("quality_receipt_payload_fallbacks_invalid")
+    fallbacks: list[tuple[str, str, bool]] = []
+    for raw in raw_fallbacks:
+        if not isinstance(raw, Mapping):
+            raise ValueError("quality_receipt_payload_fallbacks_invalid")
+        element_id = raw.get("elementId")
+        reason = raw.get("reason")
+        eligible = raw.get("eligible")
+        if (
+            not isinstance(element_id, str)
+            or not isinstance(reason, str)
+            or not isinstance(eligible, bool)
+        ):
+            raise ValueError("quality_receipt_payload_fallbacks_invalid")
+        fallbacks.append((element_id, reason, eligible))
+    blockers = payload.get("blockers", ())
+    if not isinstance(blockers, (list, tuple)) or not all(
+        isinstance(value, str) for value in blockers
+    ):
+        raise ValueError("quality_receipt_payload_blockers_invalid")
+    requested_profile = payload.get("requestedReleaseProfile")
+    release_profile = payload.get("releaseProfile")
+    evaluation_profile = payload.get("preExportEvaluationProfile")
+    if (
+        not isinstance(requested_profile, str)
+        or requested_profile != release_profile
+        or not isinstance(evaluation_profile, str)
+    ):
+        raise ValueError("quality_receipt_payload_profile_binding_invalid")
+    requested_policy = release_quality_policy(requested_profile)
+    evaluation_policy = release_quality_policy(evaluation_profile)
+    requested_policy_digest = _optional_prefixed_sha256(
+        payload.get("requestedReleasePolicyDigest"),
+        "requested_release_policy_digest",
+    )
+    evaluation_policy_digest = _optional_prefixed_sha256(
+        payload.get("preExportEvaluationPolicyDigest"),
+        "pre_export_evaluation_policy_digest",
+    )
+    if requested_policy_digest != release_quality_policy_digest(requested_policy):
+        raise ValueError("quality_receipt_requested_release_policy_digest_mismatch")
+    if evaluation_policy_digest != release_quality_policy_digest(evaluation_policy):
+        raise ValueError("quality_receipt_pre_export_evaluation_policy_digest_mismatch")
+    receipt = QualityReceiptV2(
+        schema_version=str(payload.get("schemaVersion", "")),
+        attempt_id=str(payload.get("attemptId", "")),
+        revision=int(payload.get("revision", -1)),
+        ledger_digest=str(payload.get("ledgerDigest", "")),
+        deck_html_digest=str(payload.get("deckHtmlDigest", "")),
+        safety_status=str(payload.get("safetyStatus", "pending")),
+        capacity_status=str(payload.get("capacityStatus", "pending")),
+        source_readback_status=str(payload.get("sourceReadbackStatus", "pending")),
+        visual_review_status=str(payload.get("visualReviewStatus", "not_assessed")),
+        performance_status=str(payload.get("performanceStatus", "not_assessed")),
+        publication_status=str(payload.get("publicationStatus", "pending")),
+        quality_status=str(payload.get("qualityStatus", "blocked")),
+        native_coverage_status=str(payload.get("nativeCoverageStatus", "not_assessed")),
+        font_preflight_status=str(payload.get("fontPreflightStatus", "not_assessed")),
+        native_coverage_ratio=(
+            float(payload["nativeCoverageRatio"])
+            if isinstance(payload.get("nativeCoverageRatio"), (int, float))
+            and not isinstance(payload.get("nativeCoverageRatio"), bool)
+            else None
+        ),
+        native_coverage_denominator=int(payload.get("nativeCoverageDenominator", 0)),
+        native_element_count=int(payload.get("nativeElementCount", 0)),
+        raster_fallbacks=tuple(fallbacks),
+        blockers=tuple(blockers),
+        gate_passed=_coerce_bool(payload.get("gatePassed"), "gatePassed"),
+        receipt_digest=str(payload.get("receiptDigest", "")),
+        release_profile=requested_profile,
+        pre_export_evaluation_profile=evaluation_profile,
+        requested_release_policy_digest=requested_policy_digest or "",
+        pre_export_evaluation_policy_digest=evaluation_policy_digest or "",
+        scene_envelope_digest=_optional_prefixed_sha256(
+            payload.get("sceneEnvelopeDigest"), "scene_envelope_digest"
+        ),
+        scene_source_digest=_optional_prefixed_sha256(
+            payload.get("sceneSourceDigest"), "scene_source_digest"
+        ),
+        scene_qid_digest=_optional_prefixed_sha256(
+            payload.get("sceneQidDigest"), "scene_qid_digest"
+        ),
+        require_source_readback=_coerce_bool(
+            payload.get("requireSourceReadback"), "requireSourceReadback"
+        ),
+        require_visual_review=_coerce_bool(
+            payload.get("requireVisualReview"), "requireVisualReview"
+        ),
+        require_performance=_coerce_bool(
+            payload.get("requirePerformance"), "requirePerformance"
+        ),
+        require_native_coverage=_coerce_bool(
+            payload.get("requireNativeCoverage"), "requireNativeCoverage"
+        ),
+        require_font_preflight=_coerce_bool(
+            payload.get("requireFontPreflight"), "requireFontPreflight"
+        ),
+        minimum_native_coverage_ratio=float(
+            payload.get("minimumNativeCoverageRatio", 0.0)
+        ),
+    )
+    if (
+        receipt.schema_version != "quality-receipt/v2"
+        or receipt.revision < 0
+        or not receipt.attempt_id
+        or receipt.receipt_digest != _receipt_digest(receipt)
+    ):
+        raise ValueError("quality_receipt_payload_digest_mismatch")
+    return receipt
 
 
 def _receipt_digest_pre_font(receipt: QualityReceiptV2) -> str:
@@ -1060,9 +1279,41 @@ class QualityReceiptLedger:
                 blockers = item.get("blockers", ())
                 if not isinstance(blockers, (list, tuple)) or not all(isinstance(value, str) for value in blockers):
                     raise ValueError("quality_receipt_manifest_blockers_invalid")
-                profile_name = str(item.get("releaseProfile", "development")).strip() or "development"
-                profile_visual = item.get("requireVisualReview", profile_name in {"strict", "production", "release_strict", "visual", "visual_review"})
-                profile_performance = item.get("requirePerformance", profile_name in {"strict", "production", "release_strict", "performance", "perf"})
+                profile_name = str(
+                    item.get(
+                        "requestedReleaseProfile",
+                        item.get("releaseProfile", "development"),
+                    )
+                ).strip() or "development"
+                evaluation_profile_name = str(
+                    item.get("preExportEvaluationProfile", profile_name)
+                ).strip() or profile_name
+                requested_policy = release_quality_policy(profile_name)
+                evaluation_policy = release_quality_policy(evaluation_profile_name)
+                requested_policy_digest = str(
+                    item.get(
+                        "requestedReleasePolicyDigest",
+                        release_quality_policy_digest(requested_policy),
+                    )
+                )
+                evaluation_policy_digest = str(
+                    item.get(
+                        "preExportEvaluationPolicyDigest",
+                        release_quality_policy_digest(evaluation_policy),
+                    )
+                )
+                if _optional_prefixed_sha256(
+                    requested_policy_digest,
+                    "requested_release_policy_digest",
+                ) != release_quality_policy_digest(requested_policy):
+                    raise ValueError("quality_receipt_requested_release_policy_digest_mismatch")
+                if _optional_prefixed_sha256(
+                    evaluation_policy_digest,
+                    "pre_export_evaluation_policy_digest",
+                ) != release_quality_policy_digest(evaluation_policy):
+                    raise ValueError("quality_receipt_pre_export_evaluation_policy_digest_mismatch")
+                profile_visual = item.get("requireVisualReview", evaluation_policy.require_visual_review)
+                profile_performance = item.get("requirePerformance", evaluation_policy.require_performance)
                 raw_fallbacks = item.get("rasterFallbacks", ())
                 parsed_fallbacks: list[tuple[str, str, bool]] = []
                 if not isinstance(raw_fallbacks, (list, tuple)):
@@ -1107,6 +1358,18 @@ class QualityReceiptLedger:
                     gate_passed=bool(item.get("gatePassed", False)),
                     receipt_digest=str(item.get("receiptDigest", "")),
                     release_profile=profile_name,
+                    pre_export_evaluation_profile=evaluation_profile_name,
+                    requested_release_policy_digest=requested_policy_digest,
+                    pre_export_evaluation_policy_digest=evaluation_policy_digest,
+                    scene_envelope_digest=_optional_prefixed_sha256(
+                        item.get("sceneEnvelopeDigest"), "scene_envelope_digest"
+                    ),
+                    scene_source_digest=_optional_prefixed_sha256(
+                        item.get("sceneSourceDigest"), "scene_source_digest"
+                    ),
+                    scene_qid_digest=_optional_prefixed_sha256(
+                        item.get("sceneQidDigest"), "scene_qid_digest"
+                    ),
                     require_source_readback=_coerce_bool(item.get("requireSourceReadback", False), "requireSourceReadback"),
                     require_visual_review=_coerce_bool(profile_visual, "requireVisualReview"),
                     require_performance=_coerce_bool(profile_performance, "requirePerformance"),
@@ -1118,6 +1381,7 @@ class QualityReceiptLedger:
                 legacy_digest = False
                 if receipt.receipt_digest != expected_digest:
                     if receipt.receipt_digest not in {
+                        _receipt_digest_pre_profile_split(receipt),
                         _receipt_digest_pre_font(receipt),
                         _receipt_digest_policy_v1(receipt),
                         _receipt_digest_legacy(receipt),
@@ -1194,7 +1458,21 @@ class QualityReceiptLedger:
         with _manifest_lock(path):
             self._persist_unlocked()
 
-    def create_once(self, *, attempt_id: str, revision: int, ledger_digest: str, deck_html_digest: str, evidence: object, require_visual_review: bool = False, require_performance: bool = False, release_profile: object = None) -> QualityReceiptV2:
+    def create_once(
+        self,
+        *,
+        attempt_id: str,
+        revision: int,
+        ledger_digest: str,
+        deck_html_digest: str,
+        evidence: object,
+        require_visual_review: bool = False,
+        require_performance: bool = False,
+        release_profile: object = None,
+        requested_release_profile: object = None,
+        pre_export_evaluation_profile: object = None,
+        scene_envelope: object = None,
+    ) -> QualityReceiptV2:
         attempt_id = public_attempt_id(attempt_id)
         if self._load_failed:
             raise ValueError("quality_receipt_manifest_corrupt")
@@ -1210,10 +1488,45 @@ class QualityReceiptLedger:
                 self._load(replace_existing=True, lock_held=True)
                 if self._load_failed:
                     raise ValueError("quality_receipt_manifest_corrupt")
-            policy = release_quality_policy(release_profile)
-            profile_name = policy.profile_name
-            effective_visual = require_visual_review or policy.require_visual_review
-            effective_performance = require_performance or policy.require_performance
+            requested_policy = release_quality_policy(
+                release_profile
+                if requested_release_profile is None
+                else requested_release_profile
+            )
+            evaluation_policy = release_quality_policy(
+                release_profile
+                if pre_export_evaluation_profile is None
+                else pre_export_evaluation_profile
+            )
+            profile_name = requested_policy.profile_name
+            evaluation_profile_name = evaluation_policy.profile_name
+            requested_policy_digest = release_quality_policy_digest(requested_policy)
+            evaluation_policy_digest = release_quality_policy_digest(evaluation_policy)
+            scene = _mapping(scene_envelope)
+            scene_envelope_digest = _optional_prefixed_sha256(
+                _read(scene, "sceneDigest", "scene_digest", default=None),
+                "scene_envelope_digest",
+            )
+            scene_source_digest = _optional_prefixed_sha256(
+                _read(scene, "sourceDigest", "source_digest", default=None),
+                "scene_source_digest",
+            )
+            scene_qid_digest = _optional_prefixed_sha256(
+                _read(scene, "qidDigest", "qid_digest", default=None),
+                "scene_qid_digest",
+            )
+            if scene is not None and (
+                scene_envelope_digest is None
+                or scene_source_digest is None
+                or scene_qid_digest is None
+            ):
+                raise ValueError("quality_receipt_scene_envelope_binding_incomplete")
+            effective_visual = (
+                require_visual_review or evaluation_policy.require_visual_review
+            )
+            effective_performance = (
+                require_performance or evaluation_policy.require_performance
+            )
             key = (attempt_id, revision)
             existing = self._receipts.get(key)
             if existing is not None:
@@ -1221,13 +1534,25 @@ class QualityReceiptLedger:
                     raise ValueError("quality_receipt_v2_binding_changed")
                 if (
                     existing.release_profile != profile_name
-                    or existing.require_source_readback != policy.require_source_readback
+                    or existing.pre_export_evaluation_profile
+                    != evaluation_profile_name
+                    or existing.requested_release_policy_digest
+                    != requested_policy_digest
+                    or existing.pre_export_evaluation_policy_digest
+                    != evaluation_policy_digest
+                    or existing.scene_envelope_digest != scene_envelope_digest
+                    or existing.scene_source_digest != scene_source_digest
+                    or existing.scene_qid_digest != scene_qid_digest
+                    or existing.require_source_readback
+                    != evaluation_policy.require_source_readback
                     or existing.require_visual_review != effective_visual
                     or existing.require_performance != effective_performance
-                    or existing.require_native_coverage != policy.require_native_coverage
-                    or existing.require_font_preflight != policy.require_font_preflight
+                    or existing.require_native_coverage
+                    != evaluation_policy.require_native_coverage
+                    or existing.require_font_preflight
+                    != evaluation_policy.require_font_preflight
                     or existing.minimum_native_coverage_ratio
-                    != policy.minimum_native_coverage_ratio
+                    != evaluation_policy.minimum_native_coverage_ratio
                 ):
                     raise ValueError("quality_receipt_v2_policy_changed")
                 return existing
@@ -1235,7 +1560,7 @@ class QualityReceiptLedger:
                 evidence,
                 require_visual_review=effective_visual,
                 require_performance=effective_performance,
-                release_profile=release_profile,
+                release_profile=evaluation_profile_name,
             )
             receipt = QualityReceiptV2(
                 schema_version="quality-receipt/v2",
@@ -1259,12 +1584,18 @@ class QualityReceiptLedger:
                 blockers=evaluation.blockers,
                 gate_passed=evaluation.passed,
                 release_profile=profile_name,
-                require_source_readback=policy.require_source_readback,
+                pre_export_evaluation_profile=evaluation_profile_name,
+                requested_release_policy_digest=requested_policy_digest,
+                pre_export_evaluation_policy_digest=evaluation_policy_digest,
+                scene_envelope_digest=scene_envelope_digest,
+                scene_source_digest=scene_source_digest,
+                scene_qid_digest=scene_qid_digest,
+                require_source_readback=evaluation_policy.require_source_readback,
                 require_visual_review=effective_visual,
                 require_performance=effective_performance,
-                require_native_coverage=policy.require_native_coverage,
-                require_font_preflight=policy.require_font_preflight,
-                minimum_native_coverage_ratio=policy.minimum_native_coverage_ratio,
+                require_native_coverage=evaluation_policy.require_native_coverage,
+                require_font_preflight=evaluation_policy.require_font_preflight,
+                minimum_native_coverage_ratio=evaluation_policy.minimum_native_coverage_ratio,
             )
             receipt = replace(receipt, receipt_digest=_receipt_digest(receipt))
             self._receipts[key] = receipt
@@ -1278,7 +1609,25 @@ class QualityReceiptLedger:
             return create_unlocked()
 
 
-def create_quality_receipt_v2(ledger: QualityReceiptLedger | MutableMapping[tuple[str, int], QualityReceiptV2] | Mapping[str, object], *, attempt_id: str | None = None, revision: int | None = None, ledger_digest: str | None = None, deck_html_digest: str | None = None, evidence: object | None = None, receipt_store: MutableMapping[tuple[str, int], QualityReceiptV2] | None = None, require_visual_review: bool = False, require_performance: bool = False, release_profile: object = None, storage_path: str | Path | None = None) -> QualityReceiptV2:
+def create_quality_receipt_v2(
+    ledger: QualityReceiptLedger
+    | MutableMapping[tuple[str, int], QualityReceiptV2]
+    | Mapping[str, object],
+    *,
+    attempt_id: str | None = None,
+    revision: int | None = None,
+    ledger_digest: str | None = None,
+    deck_html_digest: str | None = None,
+    evidence: object | None = None,
+    receipt_store: MutableMapping[tuple[str, int], QualityReceiptV2] | None = None,
+    require_visual_review: bool = False,
+    require_performance: bool = False,
+    release_profile: object = None,
+    requested_release_profile: object = None,
+    pre_export_evaluation_profile: object = None,
+    scene_envelope: object = None,
+    storage_path: str | Path | None = None,
+) -> QualityReceiptV2:
     """Create one immutable receipt per attempt/revision (idempotent retry)."""
     # A ledger projection from authored_evidence_ledger.as_dict(attempt_id) is
     # accepted directly; explicit arguments still win when supplied.
@@ -1312,9 +1661,33 @@ def create_quality_receipt_v2(ledger: QualityReceiptLedger | MutableMapping[tupl
                     ledger._load(lock_held=True)
             elif Path(ledger.storage_path) != requested_path:
                 raise ValueError("quality_receipt_storage_changed")
-        return ledger.create_once(attempt_id=attempt_id, revision=revision, ledger_digest=ledger_digest, deck_html_digest=deck_html_digest, evidence=evidence, require_visual_review=require_visual_review, require_performance=require_performance, release_profile=release_profile)
+        return ledger.create_once(
+            attempt_id=attempt_id,
+            revision=revision,
+            ledger_digest=ledger_digest,
+            deck_html_digest=deck_html_digest,
+            evidence=evidence,
+            require_visual_review=require_visual_review,
+            require_performance=require_performance,
+            release_profile=release_profile,
+            requested_release_profile=requested_release_profile,
+            pre_export_evaluation_profile=pre_export_evaluation_profile,
+            scene_envelope=scene_envelope,
+        )
     helper = QualityReceiptLedger(ledger if isinstance(ledger, MutableMapping) else {}, storage_path=storage_path)
-    return helper.create_once(attempt_id=attempt_id, revision=revision, ledger_digest=ledger_digest, deck_html_digest=deck_html_digest, evidence=evidence, require_visual_review=require_visual_review, require_performance=require_performance, release_profile=release_profile)
+    return helper.create_once(
+        attempt_id=attempt_id,
+        revision=revision,
+        ledger_digest=ledger_digest,
+        deck_html_digest=deck_html_digest,
+        evidence=evidence,
+        require_visual_review=require_visual_review,
+        require_performance=require_performance,
+        release_profile=release_profile,
+        requested_release_profile=requested_release_profile,
+        pre_export_evaluation_profile=pre_export_evaluation_profile,
+        scene_envelope=scene_envelope,
+    )
 
 
 # Compatibility aliases make the versioned wire type discoverable to callers
@@ -1324,4 +1697,4 @@ build_quality_receipt_v2 = create_quality_receipt_v2
 evaluate_capacity = evaluate_capacity_browser_metrics
 evaluate_unified_quality_gate = evaluate_unified_gate
 
-__all__ = ["QualityReceipt", "QualityReceiptLedger", "QualityReceiptV2", "ReleaseQualityPolicy", "UnifiedGateEvaluation", "build_quality_receipt_v2", "create_quality_receipt_v2", "evaluate_capacity", "evaluate_capacity_browser_metrics", "evaluate_unified_gate", "evaluate_unified_quality_gate", "public_attempt_id", "quality_receipt_manifest_path", "quality_receipt_root", "release_profile_requirements", "release_quality_policy"]
+__all__ = ["QualityReceipt", "QualityReceiptLedger", "QualityReceiptV2", "ReleaseQualityPolicy", "UnifiedGateEvaluation", "build_quality_receipt_v2", "create_quality_receipt_v2", "evaluate_capacity", "evaluate_capacity_browser_metrics", "evaluate_unified_gate", "evaluate_unified_quality_gate", "public_attempt_id", "quality_receipt_manifest_path", "quality_receipt_root", "release_profile_requirements", "release_quality_policy", "release_quality_policy_digest", "validate_current_quality_receipt_payload"]

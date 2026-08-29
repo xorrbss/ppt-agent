@@ -48,39 +48,7 @@ from utils.renderer_worker_policy import RendererPolicyError
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_AUTHOR_ATTEMPTS = 2
-_LOCAL_VALIDATION_AUTHOR_ATTEMPTS = 3
-_TRANSIENT_AUTHOR_ATTEMPTS = 4
-_MAX_MIXED_AUTHOR_ATTEMPTS = (
-    (_DEFAULT_AUTHOR_ATTEMPTS - 1)
-    + (_LOCAL_VALIDATION_AUTHOR_ATTEMPTS - 1)
-    + (_TRANSIENT_AUTHOR_ATTEMPTS - 1)
-    + 1
-)
-_TRANSIENT_RETRY_BASE_SECONDS = 1.5
-_TRANSIENT_RETRY_MAX_SECONDS = 8.0
-_TRANSIENT_ERROR_HINTS = (
-    "429",
-    "500",
-    "502",
-    "503",
-    "504",
-    "connection aborted",
-    "connection reset",
-    "incomplete chunked read",
-    "overload",
-    "peer closed",
-    "rate limit",
-    "temporarily unavailable",
-    "timed out",
-    "timeout",
-)
-
-
-def _is_transient_author_error(error: object) -> bool:
-    """Return True for provider/network failures that are safe to retry."""
-    message = str(error).lower()
-    return any(hint in message for hint in _TRANSIENT_ERROR_HINTS)
+_MAX_AUTHOR_CALLS_PER_SLIDE = 2
 
 
 @dataclass(frozen=True)
@@ -785,12 +753,12 @@ async def _author_one_resilient(
     require_all_source_images: bool = False,
     capacity_brief: str | None = None,
 ) -> str:
-    """Author one slide with bounded retries and a style-mode branded fallback.
+    """Author one slide with one explicit correction and a branded fallback.
 
-    Ordinary invalid/permanent failures retain the original two-attempt behavior.
-    Local admission/semantic failures get at most three correction attempts, independently
-    from the provider's four-attempt transient budget. Mixed failure classes have an explicit
-    seven-call ceiling. Exact reconstruction fails closed rather than replacing the source slide.
+    Every slide has one initial author call and, only when that candidate fails,
+    one correction call.  Validation, provider and permanent failures share this
+    same two-call ceiling; none receives a private retry budget. Exact reconstruction
+    fails closed rather than replacing the source slide.
 
     A slide that renders but breaks the deck's header contract is retried like any
     other failure. If the retries run out, the best rendered attempt is still
@@ -804,75 +772,51 @@ async def _author_one_resilient(
     source_image_ids = tuple(candidate.asset_id for candidate in source_images)
     last_error: object = "invalid HTML"
     attempts_made = 0
-    local_rejections = 0
-    transient_failures = 0
-    permanent_failures = 0
     header_reject: str | None = None
     correction_hint: str | None = None
     rejected_html: str | None = None
-    while attempts_made < _MAX_MIXED_AUTHOR_ATTEMPTS:
+    while attempts_made < _MAX_AUTHOR_CALLS_PER_SLIDE:
         attempts_made += 1
-        failure_kind = "permanent"
         local_correction: _AuthorValidationCorrection | None = None
         try:
+            kwargs: dict[str, Any] = {
+                "receipt_retry_class": (
+                    "initial" if attempts_made == 1 else "recovery"
+                ),
+                "receipt_attempt_ordinal": attempts_made,
+                # author_deck owns the complete two-call budget. An inner
+                # multimodal -> text-only provider retry would make it unauditable.
+                "allow_provider_fallback": False,
+            }
             if reference_images:
-                kwargs = {"reference_images": reference_images}
-                if reference_mode == EXACT_RECONSTRUCTION:
-                    kwargs["reference_mode"] = reference_mode
-                if source_images:
-                    kwargs["source_images"] = source_images
-                    kwargs["require_all_source_images"] = require_all_source_images
-                if correction_hint:
-                    kwargs["correction_hint"] = correction_hint
-                    if rejected_html is not None:
-                        kwargs["rejected_html"] = rejected_html
-                html = await author_slide_html(
-                    content,
-                    design_system,
-                    brand,
-                    role,
-                    index,
-                    n,
-                    structured_context=structured_context,
-                    page_number_mode=page_number_mode,
-                    requirements_enabled=_requirements_enabled(header_contract),
-                    chapter_breadcrumb=_chapter_breadcrumb(header_contract),
-                    chapter_prefix=chapter_prefix,
-                    instructions=instructions,
-                    illustration_allowed=illustration_allowed,
-                    visual_intent=visual_intent,
-                    capacity_brief=capacity_brief,
-                    **kwargs,
-                )
-            else:
-                kwargs = {}
-                if reference_mode == EXACT_RECONSTRUCTION:
-                    kwargs["reference_mode"] = reference_mode
-                if source_images:
-                    kwargs["source_images"] = source_images
-                    kwargs["require_all_source_images"] = require_all_source_images
-                if correction_hint:
-                    kwargs["correction_hint"] = correction_hint
-                    if rejected_html is not None:
-                        kwargs["rejected_html"] = rejected_html
-                html = await author_slide_html(
-                    content,
-                    design_system,
-                    brand,
-                    role,
-                    index,
-                    n,
-                    structured_context=structured_context,
-                    page_number_mode=page_number_mode,
-                    requirements_enabled=_requirements_enabled(header_contract),
-                    chapter_breadcrumb=_chapter_breadcrumb(header_contract),
-                    chapter_prefix=chapter_prefix,
-                    instructions=instructions,
-                    illustration_allowed=illustration_allowed,
-                    visual_intent=visual_intent,
-                    capacity_brief=capacity_brief,
-                    **kwargs,
-                )
+                kwargs["reference_images"] = reference_images
+            if reference_mode == EXACT_RECONSTRUCTION:
+                kwargs["reference_mode"] = reference_mode
+            if source_images:
+                kwargs["source_images"] = source_images
+                kwargs["require_all_source_images"] = require_all_source_images
+            if correction_hint:
+                kwargs["correction_hint"] = correction_hint
+                if rejected_html is not None:
+                    kwargs["rejected_html"] = rejected_html
+            html = await author_slide_html(
+                content,
+                design_system,
+                brand,
+                role,
+                index,
+                n,
+                structured_context=structured_context,
+                page_number_mode=page_number_mode,
+                requirements_enabled=_requirements_enabled(header_contract),
+                chapter_breadcrumb=_chapter_breadcrumb(header_contract),
+                chapter_prefix=chapter_prefix,
+                instructions=instructions,
+                illustration_allowed=illustration_allowed,
+                visual_intent=visual_intent,
+                capacity_brief=capacity_brief,
+                **kwargs,
+            )
             if is_valid_slide_html(html):
                 constrained = _constrain_structured_zone_html(html, structured_context)
                 violations = (
@@ -912,14 +856,9 @@ async def _author_one_resilient(
                 source_image_ids=source_image_ids,
             )
             if local_correction is not None:
-                # Local policy wins even when rejected CSS/text happens to contain
-                # a provider-transient keyword such as "timeout".
-                failure_kind = "local"
                 correction_hint = local_correction.hint
                 candidate = getattr(e, "rejected_html", None)
                 rejected_html = candidate if isinstance(candidate, str) else None
-            elif _is_transient_author_error(e):
-                failure_kind = "transient"
             else:
                 correction_hint = _author_retry_correction(
                     e,
@@ -929,44 +868,21 @@ async def _author_one_resilient(
                 if reference_mode == EXACT_RECONSTRUCTION and isinstance(e, ValueError):
                     raise
 
-        if failure_kind == "local":
-            local_rejections += 1
-            if local_rejections >= _LOCAL_VALIDATION_AUTHOR_ATTEMPTS:
-                break
+        if attempts_made < _MAX_AUTHOR_CALLS_PER_SLIDE:
             logger.warning(
-                "[authored] slide %d/%d local validation %s; retrying correction %d/%d",
+                "[authored] slide %d/%d scheduling explicit correction %d/%d "
+                "(class=%s; last error: %s)",
                 index + 1,
                 n,
-                local_correction.category if local_correction is not None else "unknown",
-                local_rejections + 1,
-                _LOCAL_VALIDATION_AUTHOR_ATTEMPTS,
-            )
-            continue
-
-        if failure_kind == "transient":
-            transient_failures += 1
-            if transient_failures >= _TRANSIENT_AUTHOR_ATTEMPTS:
-                break
-            delay = min(
-                _TRANSIENT_RETRY_BASE_SECONDS * (2 ** (transient_failures - 1)),
-                _TRANSIENT_RETRY_MAX_SECONDS,
-            )
-            logger.warning(
-                "[authored] slide %d/%d transient authoring failure; "
-                "retrying attempt %d/%d in %.1fs (last error: %s)",
-                index + 1,
-                n,
-                transient_failures + 1,
-                _TRANSIENT_AUTHOR_ATTEMPTS,
-                delay,
+                attempts_made + 1,
+                _MAX_AUTHOR_CALLS_PER_SLIDE,
+                (
+                    local_correction.category
+                    if local_correction is not None
+                    else "author_failure"
+                ),
                 last_error,
             )
-            await asyncio.sleep(delay)
-            continue
-
-        permanent_failures += 1
-        if permanent_failures >= _DEFAULT_AUTHOR_ATTEMPTS:
-            break
 
     if header_reject is not None:
         logger.warning(

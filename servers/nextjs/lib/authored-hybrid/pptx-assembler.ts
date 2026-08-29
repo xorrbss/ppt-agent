@@ -42,6 +42,14 @@ export interface AuthoredHybridSlideLayer {
   elements: readonly PreparedNativeElement[];
   /** Ordered semantic QIDs represented by native objects or this slide's raster. */
   semanticOwnerQids?: readonly string[];
+  /** Transparent Chromium raster bands in audited paint order. */
+  rasterBands?: readonly {
+    readonly zBand: number;
+    readonly rasterPng: Buffer;
+    readonly semanticOwnerQids: readonly string[];
+  }[];
+  /** Exact band assignment for each top-level native owner. */
+  nativeZBandByElementId?: Readonly<Record<string, number>>;
 }
 export interface AuthoredHybridPptxProvenance {
   readonly exportAttemptId?: string; readonly presentationRevision?: number;
@@ -218,7 +226,9 @@ export const SEMANTIC_OWNERSHIP_ALT_TEXT_PREFIX =
   "presenton-semantic-raster-ownership-v1:";
 
 function semanticOwnerQids(layer: AuthoredHybridSlideLayer): string[] {
-  const qids = [...(layer.semanticOwnerQids ?? [])];
+  const qids = layer.rasterBands
+    ? layer.rasterBands.flatMap((band) => [...band.semanticOwnerQids])
+    : [...(layer.semanticOwnerQids ?? [])];
   if (qids.length > 2048) {
     throw new Error("Hybrid semantic ownership QID count exceeds the bounded limit.");
   }
@@ -251,13 +261,18 @@ function semanticOwnershipAltText(slideNumber: number, qids: readonly string[]):
 
 function backplatePictureXml(
   relationshipId: string,
-  slideNumber: number,
-  qids: readonly string[],
+  _slideNumber: number,
+  _qids: readonly string[],
+  nonVisualId = 2,
+  bandIndex = 0,
 ): string {
-  const description = qids.length
-    ? ` descr="${escapeXmlAttribute(semanticOwnershipAltText(slideNumber, qids))}"`
-    : "";
-  return `<p:pic><p:nvPicPr><p:cNvPr id="2" name="Presenton hybrid backplate"${description}/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${relationshipId}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${SLIDE_WIDTH_EMU}" cy="${SLIDE_HEIGHT_EMU}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr></p:pic>`;
+  // Semantic QIDs live only on the hidden exact-owner carriers. Repeating the
+  // set on a raster picture would create a second logical owner in readback.
+  const description = "";
+  const name = bandIndex === 0
+    ? "Presenton hybrid backplate"
+    : `Presenton hybrid raster z-band ${bandIndex}`;
+  return `<p:pic><p:nvPicPr><p:cNvPr id="${nonVisualId}" name="${name}"${description}/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${relationshipId}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${SLIDE_WIDTH_EMU}" cy="${SLIDE_HEIGHT_EMU}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr></p:pic>`;
 }
 
 function semanticOwnershipShapeXml(
@@ -524,6 +539,18 @@ function assembleSlide(
     throw new Error("Hybrid slide number is invalid.");
   }
   assertBackplatePng(layer.backplatePng);
+  const rasterBands = layer.rasterBands?.length
+    ? [...layer.rasterBands].sort((left, right) => left.zBand - right.zBand)
+    : [{ zBand: 0, rasterPng: layer.backplatePng, semanticOwnerQids: layer.semanticOwnerQids ?? [] }];
+  if (
+    rasterBands.some((band, index) =>
+      !Number.isInteger(band.zBand) || band.zBand < 0 ||
+      (index > 0 && rasterBands[index - 1].zBand >= band.zBand)
+    )
+  ) {
+    throw new Error("Hybrid raster z-bands must be unique ascending integers.");
+  }
+  rasterBands.forEach((band) => assertBackplatePng(band.rasterPng));
   const slidePath = `ppt/slides/slide${layer.slideNumber}.xml`;
   const relsPath = `ppt/slides/_rels/slide${layer.slideNumber}.xml.rels`;
   const slideXml = entries.get(slidePath)?.toString("utf8");
@@ -536,20 +563,27 @@ function assembleSlide(
   if (!spTree) throw new Error("PPTX slide shape tree is malformed.");
 
   let relationshipNumber = nextRelationshipNumber(relationshipsXml);
-  const backplateName = allocateMediaName(
-    entries,
-    layer.slideNumber,
-    "backplate",
-    layer.backplatePng
-  );
-  const backplateRelationshipId = `rId${relationshipNumber}`;
-  relationshipNumber += 1;
-  relationshipsXml = appendRelationship(
-    relationshipsXml,
-    backplateRelationshipId,
-    `../media/${backplateName}`
-  );
-  const useSlideBackground = isOpaqueRgbPng(layer.backplatePng);
+  const rasterBandParts = rasterBands.map((band, index) => {
+    const mediaName = allocateMediaName(
+      entries,
+      layer.slideNumber,
+      `raster-band-${band.zBand}`,
+      band.rasterPng,
+    );
+    const relationshipId = `rId${relationshipNumber}`;
+    relationshipNumber += 1;
+    relationshipsXml = appendRelationship(
+      relationshipsXml,
+      relationshipId,
+      `../media/${mediaName}`,
+    );
+    entries.set(`ppt/media/${mediaName}`, Buffer.from(band.rasterPng));
+    return { ...band, relationshipId, mediaName, nonVisualId: index + 2 };
+  });
+  const useSlideBackground =
+    rasterBandParts.length === 1 &&
+    rasterBandParts[0].zBand === 0 &&
+    isOpaqueRgbPng(rasterBandParts[0].rasterPng);
   const ownershipQids = semanticOwnerQids(layer);
   const flatNativeElements = flattenPreparedNativeElements(layer.elements);
   const nativeOwnerQids = new Set(flatNativeElements.map((item) => item.source.id));
@@ -562,16 +596,16 @@ function assembleSlide(
   // overlays, and native images sit above it. This preserves raster-only
   // illustrations without baking editable boxes and lines into the background.
   const canvasBackgroundXml: string[] = [];
-  const orderedNativeXml: string[] = [];
+  const orderedNativeXml: Array<{ zBand: number; xml: string }> = [];
   const ordered = [...layer.elements].sort(
     (left, right) =>
       left.source.zOrder - right.source.zOrder ||
       left.source.sourceIndex - right.source.sourceIndex
   );
   const semanticOwnershipXml = ownershipQids.map((qid, index) =>
-    semanticOwnershipShapeXml(index + 3, layer.slideNumber, qid)
+    semanticOwnershipShapeXml(index + 2 + rasterBandParts.length, layer.slideNumber, qid)
   );
-  let nextNonVisualId = 3 + semanticOwnershipXml.length;
+  let nextNonVisualId = 2 + rasterBandParts.length + semanticOwnershipXml.length;
   let mediaIndex = 0;
   const serializeTreeItem = (
     item: PreparedNativeElement,
@@ -660,21 +694,44 @@ function assembleSlide(
   };
   ordered.forEach((item) => {
     const xml = serializeTreeItem(item);
-    if (xml) orderedNativeXml.push(xml);
+    const zBand = layer.nativeZBandByElementId?.[item.source.id] ?? 1;
+    if (
+      layer.rasterBands &&
+      (!Number.isInteger(zBand) || zBand < 0)
+    ) {
+      throw new Error(`Hybrid native z-band missing for ${item.source.id}.`);
+    }
+    if (xml) orderedNativeXml.push({ zBand, xml });
   });
 
-  entries.set(`ppt/media/${backplateName}`, Buffer.from(layer.backplatePng));
+  const paintXml = [
+    ...rasterBandParts.map((band, index) => ({
+      zBand: band.zBand,
+      ownerOrder: 0,
+      xml: useSlideBackground
+        ? ""
+        : backplatePictureXml(
+            band.relationshipId,
+            layer.slideNumber,
+            band.semanticOwnerQids,
+            band.nonVisualId,
+            index,
+          ),
+    })),
+    ...orderedNativeXml.map((item) => ({ ...item, ownerOrder: 1 })),
+  ].sort((left, right) => left.zBand - right.zBand || left.ownerOrder - right.ownerOrder)
+    .map((item) => item.xml)
+    .join("");
   const replacement =
     `<p:spTree>${GROUP_ROOT_XML}${useSlideBackground ? "" : canvasBackgroundXml.join("")}` +
-    `${useSlideBackground ? "" : backplatePictureXml(backplateRelationshipId, layer.slideNumber, ownershipQids)}` +
     `${semanticOwnershipXml.join("")}` +
-    `${orderedNativeXml.join("")}</p:spTree>`;
+    `${paintXml}</p:spTree>`;
   // Pass a replacer function so `$&`, `$'`, `$\`` and `$$` sequences inside the
   // assembled shape XML (e.g. text like "US$'000") are inserted literally instead
   // of being expanded as String.replace special patterns.
   let newSlideXml = slideXml.replace(spTree[0], () => replacement);
   if (useSlideBackground) {
-    const background = backplateBackgroundXml(backplateRelationshipId);
+    const background = backplateBackgroundXml(rasterBandParts[0].relationshipId);
     if (/<p:bg\b[^>]*>[\s\S]*?<\/p:bg>/i.test(newSlideXml)) {
       newSlideXml = newSlideXml.replace(
         /<p:bg\b[^>]*>[\s\S]*?<\/p:bg>/i,

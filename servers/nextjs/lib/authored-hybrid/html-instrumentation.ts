@@ -26,6 +26,8 @@ export type AuthoredHybridFontLayoutMode = "source" | "powerpoint";
 interface InstrumentAuthoredHtmlOptions {
   baseUrl?: string;
   promotedElements?: readonly AuthoredHybridExpectedPromotedElement[];
+  /** Declared QIDs whose original paint remains in an isolated transparent band. */
+  paintBandElementIds?: readonly string[];
   /** Opaque, runner-verified token emitted after the browser observation. */
   completionToken?: string;
   /**
@@ -35,7 +37,7 @@ interface InstrumentAuthoredHtmlOptions {
    */
   fontLayoutMode?: AuthoredHybridFontLayoutMode;
   /** Fidelity is an exact source capture and must not run layout instrumentation. */
-  captureMode?: "observation" | "hybrid-backplate" | "fidelity";
+  captureMode?: "observation" | "hybrid-backplate" | "hybrid-paint-band" | "fidelity";
   /** Exact authored data-qid registry for declared semantic observations. */
   declaredElementIds?: readonly string[];
 }
@@ -108,6 +110,7 @@ export function instrumentAuthoredHtml(
   const promotedElements = [...(options.promotedElements ?? [])];
   const config = JSON.stringify({
     promotedElements,
+    paintBandElementIds: [...(options.paintBandElementIds ?? [])],
     fontFallbackPolicy: AUTHORED_FONT_FALLBACK_POLICY,
     captureMode: options.captureMode ??
       (promotedElements.length ? "hybrid-backplate" : "observation"),

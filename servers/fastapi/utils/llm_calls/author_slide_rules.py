@@ -143,6 +143,9 @@ DESIGN SYSTEM (obey on EVERY slide so the deck is cohesive):
 - No fragile positioning: do NOT hard-pin a block to a fixed top/absolute offset that a longer
   heading could overlap. Prefer normal document flow (flex/grid column with gaps); reserve
   absolute positioning for decorative layers only, and keep clear gaps between text blocks.
+- Connector clearance: keep every line and its complete arrowhead bounding box inside a dedicated
+  gutter, at least 12px away from text glyphs. Budget rotated arrowheads by their painted bounds,
+  not only the unrotated CSS box; shorten the connector before reducing text clearance.
 - Korean/CJK: set `word-break: keep-all` AND `overflow-wrap: anywhere` on text containers so
   words are never split mid-word across lines.
 - Boxes/cards/labels: each one's text must fit ENTIRELY inside it with padding — never let text
@@ -301,4 +304,3 @@ REFERENCE MODE: EXACT_RECONSTRUCTION / EXACT RECONSTRUCTION MODE (highest priori
   canvas overflow. Fix discrepancies in the HTML before returning it.
 - Keep the existing output contract: return ONLY one complete self-contained HTML document,
   with no Markdown fence, commentary, analysis, JSON, or alternate version."""
-

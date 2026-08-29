@@ -252,15 +252,32 @@ class ExportQualityReceiptBinding(BaseModel):
         extra="forbid",
     )
 
-    schema_version: Literal["presenton.export-quality-receipt-binding/v1"]
+    schema_version: Literal[
+        "presenton.export-quality-receipt-binding/v1",
+        "presenton.export-quality-receipt-binding/v2",
+    ]
     receipt_digest: str
     generation_attempt_id: str = PydanticField(min_length=1, max_length=128)
     generation_revision: int = PydanticField(ge=0)
     release_profile: str = PydanticField(min_length=1, max_length=64)
+    requested_release_profile: str | None = PydanticField(
+        default=None, min_length=1, max_length=64
+    )
+    pre_export_evaluation_profile: str | None = PydanticField(
+        default=None, min_length=1, max_length=64
+    )
+    requested_release_policy_digest: str | None = None
+    pre_export_evaluation_policy_digest: str | None = None
+    scene_envelope_digest: str | None = None
+    scene_source_digest: str | None = None
+    scene_qid_digest: str | None = None
+    semantic_emission_digest: str | None = None
+    qid_owner_census_digest: str | None = None
     gate_passed: bool
     export_binding: ExportAtomicBinding
     quality_sidecar_sha256: str
     coverage_sidecar_sha256: str
+    atomic_run_digest: str | None = None
 
     @field_validator("receipt_digest")
     @classmethod
@@ -268,6 +285,25 @@ class ExportQualityReceiptBinding(BaseModel):
         normalized = value.lower()
         if not normalized.startswith("sha256:") or not _is_sha256(normalized[7:]):
             raise ValueError("quality receipt digest must be prefixed SHA-256")
+        return normalized
+
+    @field_validator(
+        "requested_release_policy_digest",
+        "pre_export_evaluation_policy_digest",
+        "scene_envelope_digest",
+        "scene_source_digest",
+        "scene_qid_digest",
+        "semantic_emission_digest",
+        "qid_owner_census_digest",
+        "atomic_run_digest",
+    )
+    @classmethod
+    def validate_atomic_prefixed_digest(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.lower()
+        if not normalized.startswith("sha256:") or not _is_sha256(normalized[7:]):
+            raise ValueError("quality receipt atomic digest must be prefixed SHA-256")
         return normalized
 
     @field_validator("quality_sidecar_sha256", "coverage_sidecar_sha256")
@@ -281,9 +317,61 @@ class ExportQualityReceiptBinding(BaseModel):
     @model_validator(mode="after")
     def validate_release_receipt(self) -> "ExportQualityReceiptBinding":
         self.release_profile = self.release_profile.strip()
+        if self.requested_release_profile is not None:
+            self.requested_release_profile = self.requested_release_profile.strip()
+        if self.pre_export_evaluation_profile is not None:
+            self.pre_export_evaluation_profile = (
+                self.pre_export_evaluation_profile.strip()
+            )
         normalized = self.release_profile.lower().replace("-", "_")
         if normalized in {"release", "strict", "production", "release_strict"} and not self.gate_passed:
             raise ValueError("release export requires a passed generation quality receipt")
+        if self.schema_version.endswith("/v2"):
+            required = (
+                self.requested_release_profile,
+                self.pre_export_evaluation_profile,
+                self.requested_release_policy_digest,
+                self.pre_export_evaluation_policy_digest,
+                self.scene_envelope_digest,
+                self.scene_source_digest,
+                self.scene_qid_digest,
+                self.semantic_emission_digest,
+                self.qid_owner_census_digest,
+                self.atomic_run_digest,
+            )
+            if any(value is None for value in required):
+                raise ValueError("quality receipt atomic run binding is incomplete")
+            if self.requested_release_profile != self.release_profile:
+                raise ValueError("quality receipt requested release profile is inconsistent")
+            payload = {
+                "schemaVersion": self.schema_version,
+                "receiptDigest": self.receipt_digest,
+                "generationAttemptId": self.generation_attempt_id,
+                "generationRevision": self.generation_revision,
+                "requestedReleaseProfile": self.requested_release_profile,
+                "preExportEvaluationProfile": self.pre_export_evaluation_profile,
+                "requestedReleasePolicyDigest": self.requested_release_policy_digest,
+                "preExportEvaluationPolicyDigest": self.pre_export_evaluation_policy_digest,
+                "sceneEnvelopeDigest": self.scene_envelope_digest,
+                "sceneSourceDigest": self.scene_source_digest,
+                "sceneQidDigest": self.scene_qid_digest,
+                "semanticEmissionDigest": self.semantic_emission_digest,
+                "qidOwnerCensusDigest": self.qid_owner_census_digest,
+                "gatePassed": self.gate_passed,
+                "exportBinding": self.export_binding.model_dump(mode="json"),
+                "qualitySidecarSha256": self.quality_sidecar_sha256,
+                "coverageSidecarSha256": self.coverage_sidecar_sha256,
+            }
+            expected = "sha256:" + sha256(
+                json.dumps(
+                    payload,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    ensure_ascii=False,
+                ).encode("utf-8")
+            ).hexdigest()
+            if self.atomic_run_digest != expected:
+                raise ValueError("quality receipt atomic run digest is inconsistent")
         return self
 
 
@@ -384,6 +472,37 @@ class ExportPowerPointQaEvidence(BaseModel):
     typography_issues_gt_5pt: int = PydanticField(default=0, ge=0)
     typography_issues_gt_10pt: int = PydanticField(default=0, ge=0)
     inspection_failures: int = PydanticField(default=0, ge=0)
+    observation_states: list[
+        Literal[
+            "first-open",
+            "save-copy",
+            "reopen",
+            "readback",
+            "observation-sealed",
+        ]
+    ] = PydanticField(default_factory=list, max_length=5)
+    dialog_watcher_status: Literal[
+        "not-requested",
+        "unavailable",
+        "armed",
+        "interrupted",
+        "stop-failed",
+        "sealed",
+    ] | None = None
+    dialog_watcher_armed_before_first_open: bool = False
+    owned_process_id: int | None = PydanticField(default=None, ge=1)
+    release_gate_failures: list[
+        Literal[
+            "watcher-unavailable",
+            "watcher-interrupted",
+            "watcher-stop-failed",
+            "repair-observation-required",
+            "repair-dialog-observed",
+            "readback-mismatch",
+            "semantic-binding-mismatch",
+            "observation-state-incomplete",
+        ]
+    ] = PydanticField(default_factory=list, max_length=16)
     native_text: int | None = PydanticField(default=None, ge=0)
     native_image: int | None = PydanticField(default=None, ge=0)
     native_shape: int | None = PydanticField(default=None, ge=0)
@@ -903,6 +1022,51 @@ def _canonical_sidecar_sha256(value: dict[str, Any]) -> str:
     ).hexdigest()
 
 
+def _quality_qid_owner_census_digest(quality: dict[str, Any]) -> str:
+    owners: list[list[object]] = []
+    seen: set[tuple[int, str]] = set()
+    slides = quality.get("slides")
+    if not isinstance(slides, list):
+        raise ValueError("quality receipt QID owner census is missing")
+    for slide in slides:
+        if not isinstance(slide, dict):
+            raise ValueError("quality receipt QID owner census is invalid")
+        slide_number = slide.get("slideNumber")
+        coverage = slide.get("qidCoverage")
+        if (
+            isinstance(slide_number, bool)
+            or not isinstance(slide_number, int)
+            or not isinstance(coverage, list)
+        ):
+            raise ValueError("quality receipt QID owner census is invalid")
+        for item in coverage:
+            if not isinstance(item, dict):
+                raise ValueError("quality receipt QID owner census is invalid")
+            element_id = item.get("elementId")
+            owner = item.get("logical")
+            if (
+                not isinstance(element_id, str)
+                or not element_id.strip()
+                or owner not in {"native", "raster"}
+                or item.get("ooxml") != "present"
+            ):
+                raise ValueError("quality receipt QID owner census is invalid")
+            identity = (slide_number, element_id)
+            if identity in seen:
+                raise ValueError("quality receipt QID owner census has duplicate owners")
+            seen.add(identity)
+            owners.append([slide_number, element_id, owner])
+    if not owners:
+        raise ValueError("quality receipt QID owner census is missing")
+    owners.sort(key=lambda item: (int(item[0]), str(item[1]), str(item[2])))
+    return "sha256:" + _canonical_sidecar_sha256(
+        {
+            "schemaVersion": "presenton.qid-owner-census/v1",
+            "owners": owners,
+        }
+    )
+
+
 def _without_default_native_crop(value: Any) -> Any:
     """Canonical legacy-v2 view from before nativeImageCrop was first-class."""
 
@@ -1140,6 +1304,13 @@ class PresentationExportAttemptProvenance(BaseModel):
                 )
             ):
                 raise ValueError("quality receipt export binding is inconsistent")
+            if receipt.schema_version.endswith("/v2") and (
+                receipt.semantic_emission_digest
+                != "sha256:" + binding.canonical_source_sha256
+                or receipt.qid_owner_census_digest
+                != _quality_qid_owner_census_digest(self.quality_sidecar)
+            ):
+                raise ValueError("quality receipt semantic/QID binding is inconsistent")
             release_profile = receipt.release_profile.lower().replace("-", "_")
             release_required = release_profile in {
                 "release",
@@ -1163,6 +1334,22 @@ class PresentationExportAttemptProvenance(BaseModel):
                     self.powerpoint_qa is None
                     or self.powerpoint_qa.status != "passed"
                     or sidecar_powerpoint_qa != self.powerpoint_qa
+                    or self.powerpoint_qa.observation_states
+                    != [
+                        "first-open",
+                        "save-copy",
+                        "reopen",
+                        "readback",
+                        "observation-sealed",
+                    ]
+                    or self.powerpoint_qa.dialog_watcher_status != "sealed"
+                    or not self.powerpoint_qa.dialog_watcher_armed_before_first_open
+                    or self.powerpoint_qa.owned_process_id is None
+                    or self.powerpoint_qa.repair_dialogs != 0
+                    or self.powerpoint_qa.readback_match is not True
+                    or self.powerpoint_qa.semantic_payload_binding != "passed"
+                    or self.powerpoint_qa.qid_owner_mismatches != 0
+                    or bool(self.powerpoint_qa.release_gate_failures)
                     or font_preflight is None
                     or font_preflight.status not in {"not-required", "passed"}
                     or (

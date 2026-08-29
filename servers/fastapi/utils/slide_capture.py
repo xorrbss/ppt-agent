@@ -1751,8 +1751,6 @@ async def _render_html_to_png_uncached(html: str, timeout: int = 60) -> bytes:
         return rendered
 
     # Development uses one isolated Chrome process with disposable page sessions.
-    # Each attempted browser boundary independently acquires the process-wide
-    # limiter, so a failed reusable session cannot overlap its one-shot fallback.
     if CHROME_REUSE_ENABLED:
         try:
             async with _get_render_sem():
@@ -1766,7 +1764,9 @@ async def _render_html_to_png_uncached(html: str, timeout: int = 60) -> bytes:
                 _cache_browser_metrics(html, metrics)
             return rendered
         except Exception as error:
-            LOGGER.warning("reusable authored Chrome failed; using one-shot: %s", error)
+            # A request gets one browser attempt. Silently retrying the exact
+            # input in a one-shot process obscures reusable-runtime failures.
+            raise RuntimeError("reusable authored Chrome render failed") from error
 
     return await _render_html_to_png_subprocess(
         admitted.html,

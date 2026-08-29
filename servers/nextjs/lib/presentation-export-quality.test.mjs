@@ -8,6 +8,43 @@ import {
   createPresentationExportQuality,
 } from "./presentation-export-quality.ts";
 
+test("quality sidecar preserves audited multi-z-band paint evidence", () => {
+  const paintPlan = {
+    schemaVersion: "hybrid-paint-plan/browser-v1",
+    strategy: "audited-multi-z-band",
+    fixedPointReached: true,
+    closureIterations: 2,
+    closureDigest: "a".repeat(64),
+    hybridPlanDigest: "b".repeat(64),
+    slideDemotedToRaster: false,
+    downgradeReceipt: {
+      schemaVersion: "hybrid-layer-downgrade-receipt/browser-v1",
+      state: "closed",
+      reason: null,
+      demotedElementIds: [],
+      receiptDigest: "c".repeat(64),
+    },
+    demotions: [],
+    bands: [
+      { zBand: 0, paintOwner: "rasterIsland", elementIds: ["s01-bg"], artifactDigest: "d".repeat(64) },
+      { zBand: 1, paintOwner: "native", elementIds: ["s01-title"] },
+    ],
+  };
+  const report = createPresentationExportQuality("hybrid", [{
+    slideNumber: 1,
+    editable: true,
+    imageFallback: false,
+    nativeTextElements: 1,
+    nativeShapeElements: 0,
+    nativeImageElements: 0,
+    rasterFallbackElements: 1,
+    fallbackReasons: ["external-paint"],
+    paintPlan,
+  }]);
+
+  assert.deepEqual(report.slides[0].paintPlan, paintPlan);
+});
+
 test("native coverage scopes repeated QIDs by slide without shrinking unsupported fallbacks", () => {
   const slide = (slideNumber, candidateKind) => ({
     slideNumber,

@@ -12,6 +12,7 @@ from utils.authored_patch_engine import (
     EXACT_RECONSTRUCTION,
     AuthoredPatchPlan,
     apply_authored_patch,
+    inspect_authored_edit_capabilities,
 )
 
 HTML = """<!doctype html>
@@ -221,6 +222,37 @@ def test_set_text_cannot_destroy_descendant_stable_ids():
     assert result.ok is False
     assert result.html == nested
     assert result.fallback_reason == "unsafe_patch"
+
+
+def test_multiline_text_box_allows_style_but_not_text_replacement():
+    source = '<div data-qid="metric">5종 KPI로<br>효과 측정</div>'
+    capability = next(
+        item
+        for item in inspect_authored_edit_capabilities(source)
+        if item["qid"] == "metric"
+    )
+
+    styled = apply_authored_patch(
+        source,
+        _plan(
+            {
+                "action": "setStyle",
+                "qid": "metric",
+                "styles": {"paddingLeft": "16px"},
+            }
+        ),
+    )
+    replaced = apply_authored_patch(
+        source,
+        _plan({"action": "setText", "qid": "metric", "text": "replacement"}),
+    )
+
+    assert capability["editable"] is True
+    assert capability["fields"] == ["style", "position", "size"]
+    assert styled.ok is True
+    assert "padding-left: 16px" in styled.html
+    assert replaced.ok is False
+    assert replaced.fallback_reason == "unsafe_patch"
 
 
 def test_full_reauthor_request_is_explicitly_routed_to_fallback():

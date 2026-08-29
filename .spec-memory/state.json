@@ -2,11 +2,28 @@
   "schemaVersion": 2,
   "active": true,
   "projectName": "ppt-agent",
-  "activeTask": null,
+  "activeTask": "Complete Authored release product verification after safe semantic alias fix, then run controlled matrix and owned PowerPoint QA only after successful RC artifact.",
   "taskContext": {
-    "paths": [],
-    "scopes": [],
-    "includeKeys": []
+    "paths": [
+      "servers/fastapi",
+      "servers/nextjs/lib/authored-hybrid",
+      "scripts",
+      "artifacts/authored-vnext-controlled-load-20260829"
+    ],
+    "scopes": [
+      "authored-vnext",
+      "release",
+      "performance",
+      "hybrid",
+      "powerpoint-qa"
+    ],
+    "includeKeys": [
+      "authored.release-export-atomic-binding",
+      "authored.performance-matrix-control",
+      "authored.product-pptx-owned-com-validation",
+      "authored.capacity.terminal-residual",
+      "authored.full-reauthor-safe-semantic-alias"
+    ]
   },
   "bindingPolicy": {
     "maxContextChars": 3200,
@@ -46,10 +63,17 @@
     "authored.quality-preexport-native-coverage-boundary": "decisions/authored.quality-preexport-native-coverage-boundary.1.json",
     "authored.performance-matrix-control": "decisions/authored.performance-matrix-control.2.json",
     "authored.hybrid-qid-ooxml-ownership": "decisions/authored.hybrid-qid-ooxml-ownership.1.json",
-    "workflow.implementation-before-validation": "decisions/workflow.implementation-before-validation.1.json"
+    "workflow.implementation-before-validation": "decisions/workflow.implementation-before-validation.1.json",
+    "authored.connector-text-clearance": "decisions/authored.connector-text-clearance.1.json",
+    "authored.release-export-atomic-binding": "decisions/authored.release-export-atomic-binding.1.json",
+    "authored.full-reauthor-safe-semantic-alias": "decisions/authored.full-reauthor-safe-semantic-alias.1.json",
+    "authored.author-provider-call-budget": "decisions/authored.author-provider-call-budget.1.json",
+    "authored.capacity.chart-week-ticks": "decisions/authored.capacity.chart-week-ticks.1.json",
+    "authored.hybrid-multizband-quality-schema": "decisions/authored.hybrid-multizband-quality-schema.1.json"
   },
   "readFirst": [
-    "AGENTS.md"
+    "servers/fastapi/utils/llm_calls/author_vision_qa.py",
+    "scripts/authored-vnext-controlled-load.mjs"
   ],
-  "updatedAt": "2026-08-29T10:57:55.3137478+00:00"
+  "updatedAt": "2026-08-29T13:45:25.6109399+00:00"
 }

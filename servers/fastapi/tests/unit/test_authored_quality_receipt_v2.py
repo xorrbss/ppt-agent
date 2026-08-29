@@ -229,6 +229,45 @@ def test_receipt_is_created_once_and_digest_binding_is_immutable() -> None:
         )
 
 
+def test_requested_release_and_pre_export_policy_are_separately_digest_bound() -> None:
+    scene = {
+        "sceneDigest": "sha256:" + "3" * 64,
+        "sourceDigest": "sha256:" + "4" * 64,
+        "qidDigest": "sha256:" + "5" * 64,
+    }
+    receipt = create_quality_receipt_v2(
+        QualityReceiptLedger(),
+        attempt_id="release-attempt",
+        revision=3,
+        ledger_digest="sha256:" + "1" * 64,
+        deck_html_digest="sha256:" + "2" * 64,
+        evidence={
+            "safety": {"status": "passed"},
+            "capacity": {
+                "browserObserved": True,
+                "checks": {
+                    name: True
+                    for name in ("text", "title", "body", "font", "qid", "image")
+                },
+            },
+            "sourceReadback": {"required": False, "status": "not_applicable"},
+        },
+        requested_release_profile="release",
+        pre_export_evaluation_profile="default",
+        scene_envelope=scene,
+    )
+
+    payload = receipt.to_dict()
+    assert payload["releaseProfile"] == "release"
+    assert payload["requestedReleaseProfile"] == "release"
+    assert payload["preExportEvaluationProfile"] == "default"
+    assert payload["requestedReleasePolicyDigest"] != payload[
+        "preExportEvaluationPolicyDigest"
+    ]
+    assert payload["sceneEnvelopeDigest"] == scene["sceneDigest"]
+    assert receipt.gate_passed is True
+
+
 def test_missing_browser_metrics_fails_capacity_closed() -> None:
     result = evaluate_unified_gate(
         {

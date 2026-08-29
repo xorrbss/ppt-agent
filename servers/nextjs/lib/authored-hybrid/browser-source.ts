@@ -23,7 +23,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
   var WIDTH = 1280;
   var HEIGHT = 720;
   var config = window.__PRESENTON_AUTHORED_HYBRID_CONFIG__ || {};
-  var captureMode = ["observation", "hybrid-backplate", "fidelity"].includes(
+  var captureMode = ["observation", "hybrid-backplate", "hybrid-paint-band", "fidelity"].includes(
     config.captureMode
   ) ? config.captureMode : "observation";
   var declaredElementIds = Array.isArray(config.declaredElementIds)
@@ -33,6 +33,9 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
   var completionToken = typeof config.completionToken === "string" ? config.completionToken : "";
   var promotedElements = Array.isArray(config.promotedElements)
     ? config.promotedElements
+    : [];
+  var paintBandElementIds = Array.isArray(config.paintBandElementIds)
+    ? config.paintBandElementIds
     : [];
   var fontFallbackPolicy = new Map(
     (Array.isArray(config.fontFallbackPolicy) ? config.fontFallbackPolicy : [])
@@ -1630,6 +1633,30 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
         (run.fragmentRectsPx || []).length > 0;
     });
     var lineRectsPx = measuredLineRects(runs);
+    var nextLineIndex = 0;
+    runs.forEach(function (run) {
+      if (run.text === "\n") {
+        run.lineIndex = nextLineIndex;
+        nextLineIndex += 1;
+        return;
+      }
+      var fragments = (run.fragmentRectsPx || []).filter(function (rect) {
+        return rect && rect.height > 0 && Object.values(rect).every(Number.isFinite);
+      });
+      if (!fragments.length || !lineRectsPx.length) {
+        run.lineIndex = nextLineIndex;
+        return;
+      }
+      var centerY = fragments.reduce(function (sum, rect) {
+        return sum + rect.y + rect.height / 2;
+      }, 0) / fragments.length;
+      var nearestLine = lineRectsPx.reduce(function (best, line, index) {
+        var distance = Math.abs(centerY - (line.y + line.height / 2));
+        return distance < best.distance ? { index: index, distance: distance } : best;
+      }, { index: 0, distance: Number.POSITIVE_INFINITY });
+      run.lineIndex = nearestLine.index;
+      nextLineIndex = Math.max(nextLineIndex, nearestLine.index);
+    });
     var explicitLineCount = hasPaintedText
       ? 1 + runs.filter(function (run) { return run.text === "\n"; }).length
       : 0;
@@ -3419,6 +3446,67 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     return { applied: applied, rejected: rejected };
   }
 
+  function isolatePaintBand(records) {
+    var requested = new Set(paintBandElementIds);
+    if (requested.size !== paintBandElementIds.length) {
+      throw new Error("authored_hybrid_paint_band_qid_duplicate");
+    }
+    var byId = new Map(records.map(function (record) {
+      return [record.observation.id, record];
+    }));
+    paintBandElementIds.forEach(function (id) {
+      var record = byId.get(id);
+      if (!record || record.observation.identityAuthority !== "declared-qid") {
+        throw new Error("authored_hybrid_paint_band_qid_mismatch");
+      }
+    });
+    var keptRecords = records.filter(function (record) {
+      return requested.has(record.observation.id);
+    });
+    ensurePseudoSuppressionStyle();
+    function clearOwnedPaint(record) {
+      var element = record.element;
+      var kind = record.observation.candidateKind;
+      if (record.pseudo) {
+        element.setAttribute(pseudoSuppressionAttribute(record.pseudo), "true");
+        return;
+      }
+      if (kind === "text") {
+        [element].concat(Array.from(element.querySelectorAll("*"))).forEach(function (target) {
+          target.style.setProperty("-webkit-text-fill-color", "transparent", "important");
+          target.style.setProperty("text-decoration-color", "transparent", "important");
+          target.style.setProperty("-webkit-text-stroke-color", "transparent", "important");
+          target.style.setProperty("text-shadow", "none", "important");
+        });
+      }
+      if (kind === "image") element.style.setProperty("opacity", "0", "important");
+      element.style.setProperty("background", "none", "important");
+      element.style.setProperty("border-color", "transparent", "important");
+      element.style.setProperty("outline", "none", "important");
+      element.style.setProperty("box-shadow", "none", "important");
+      element.setAttribute("data-presenton-authored-hybrid-suppress-pseudo", "true");
+    }
+    records.forEach(function (record) {
+      if (requested.has(record.observation.id)) return;
+      var containsKeptPaint = keptRecords.some(function (kept) {
+        return record.element !== kept.element && record.element.contains(kept.element);
+      });
+      if (
+        containsKeptPaint &&
+        record.observation.candidateKind === "complex"
+      ) {
+        throw new Error("authored_hybrid_paint_band_complex_ancestor");
+      }
+      if (containsKeptPaint) clearOwnedPaint(record);
+      else record.element.style.setProperty("visibility", "hidden", "important");
+    });
+    if (!requested.has(document.body.getAttribute("data-qid") || "")) {
+      document.documentElement.style.setProperty("background", "transparent", "important");
+      document.body.style.setProperty("background", "transparent", "important");
+    }
+    return paintBandElementIds.slice();
+  }
+
   function writeResult(payload) {
     var json = JSON.stringify(payload);
     var bytes = new TextEncoder().encode(json);
@@ -3816,8 +3904,13 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       warnings.push("Expected devicePixelRatio 1 but observed " + window.devicePixelRatio + ".");
     }
 
-    var suppression = applySuppression(records);
-    if (suppression.applied.length) {
+    var suppression = captureMode === "hybrid-paint-band"
+      ? { applied: [], rejected: [] }
+      : applySuppression(records);
+    var appliedPaintBandElementIds = captureMode === "hybrid-paint-band"
+      ? isolatePaintBand(records)
+      : [];
+    if (suppression.applied.length || appliedPaintBandElementIds.length || captureMode === "hybrid-paint-band") {
       // Suppressed images are already synchronously removed from paint by an
       // inline !important opacity. decode() is unnecessary here and can remain
       // pending forever in headless Chrome after swapping an image source.
@@ -3836,6 +3929,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
         warnings: warnings,
         appliedPromotedElementIds: suppression.applied,
         rejectedPromotedElementIds: suppression.rejected,
+        appliedPaintBandElementIds: appliedPaintBandElementIds,
         renderReadiness: renderReadiness,
       },
     });

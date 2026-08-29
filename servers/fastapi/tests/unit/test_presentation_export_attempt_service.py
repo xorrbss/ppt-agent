@@ -35,6 +35,10 @@ from services.presentation_export_attempt_service import (
     terminalize_export_attempt_failed,
     terminalize_export_attempt_succeeded,
 )
+from services.authored_quality_receipt_v2 import (
+    QualityReceiptLedger,
+    create_quality_receipt_v2,
+)
 from services.presentation_export_direct_attempt_service import (
     _visual_parity_status_from_powerpoint_qa,
     begin_direct_fidelity_export_attempt,
@@ -639,13 +643,49 @@ def test_complete_direct_hybrid_accepts_exact_bounded_cjk_coverage_contract(
                     )
                 )
                 assert presentation is not None
+                scene_receipt = {
+                    "schemaVersion": "authored-deck-scene-envelope/v1",
+                    "sceneDigest": "sha256:" + ("6" * 64),
+                    "sourceDigest": "sha256:" + ("7" * 64),
+                    "qidDigest": "sha256:" + ("8" * 64),
+                    "slideSceneDigests": ["sha256:" + ("a" * 64)],
+                    "slideRevisions": [1],
+                }
+                generation_receipt = create_quality_receipt_v2(
+                    QualityReceiptLedger(),
+                    attempt_id="generation-attempt-1",
+                    revision=7,
+                    ledger_digest="sha256:" + ("1" * 64),
+                    deck_html_digest="sha256:" + ("2" * 64),
+                    evidence={
+                        "safety": {"status": "passed"},
+                        "capacity": {
+                            "browserObserved": True,
+                            "checks": {
+                                name: True
+                                for name in (
+                                    "text",
+                                    "title",
+                                    "body",
+                                    "font",
+                                    "qid",
+                                    "image",
+                                )
+                            },
+                        },
+                        "sourceReadback": {
+                            "required": False,
+                            "status": "not_applicable",
+                        },
+                    },
+                    requested_release_profile="release",
+                    pre_export_evaluation_profile="default",
+                    scene_envelope=scene_receipt,
+                )
                 presentation.theme = {
                     "authoredQualityGate": {
-                        "receiptDigest": "sha256:" + ("9" * 64),
-                        "attemptId": "generation-attempt-1",
-                        "revision": 7,
-                        "releaseProfile": "release",
-                        "gatePassed": True,
+                        **generation_receipt.to_dict(),
+                        "sceneEnvelope": scene_receipt,
                     }
                 }
                 canonical = build_export_source_snapshot_sha256(presentation, slides)
@@ -754,7 +794,18 @@ def test_complete_direct_hybrid_accepts_exact_bounded_cjk_coverage_contract(
                     "rendererSourceDigest": renderer,
                     "pptxSha256": pptx_sha256,
                 },
-                "slides": [{"slideNumber": 1, "qidCoverage": []}],
+                "slides": [
+                    {
+                        "slideNumber": 1,
+                        "qidCoverage": [
+                            {
+                                "elementId": "s01-title",
+                                "logical": "native",
+                                "ooxml": "present",
+                            }
+                        ],
+                    }
+                ],
             }
 
             invalid_profile = {**coverage, "cjkCoverageProfileId": "unbounded"}
@@ -779,7 +830,19 @@ def test_complete_direct_hybrid_accepts_exact_bounded_cjk_coverage_contract(
                     "reopened": True,
                     "rendered": True,
                     "readback": True,
+                    "semanticPayloadBinding": "passed",
                     "repairDialogs": 0,
+                    "observationStates": [
+                        "first-open",
+                        "save-copy",
+                        "reopen",
+                        "readback",
+                        "observation-sealed",
+                    ],
+                    "dialogWatcherStatus": "sealed",
+                    "dialogWatcherArmedBeforeFirstOpen": True,
+                    "ownedProcessId": 4242,
+                    "readbackMatch": True,
                     "renderedPngSha256": ["f" * 64],
                     "slideCount": 1,
                     "typographyIssuesGt5Pt": 0,
@@ -803,6 +866,10 @@ def test_complete_direct_hybrid_accepts_exact_bounded_cjk_coverage_contract(
                     },
                 }
 
+            async def bind_semantic(*_args, **_kwargs):
+                assert _kwargs["attempt"].state == "running"
+                return "sha256:" + ("e" * 64)
+
             monkeypatch.setattr(
                 direct_attempt_service,
                 "resolve_hybrid_artifact",
@@ -822,6 +889,11 @@ def test_complete_direct_hybrid_accepts_exact_bounded_cjk_coverage_contract(
                 direct_attempt_service,
                 "trusted_powerpoint_qa",
                 trusted_qa,
+            )
+            monkeypatch.setattr(
+                direct_attempt_service,
+                "bind_completed_semantic_export_attempt",
+                bind_semantic,
             )
             async with maker() as session:
                 completed, finalized = await complete_direct_hybrid_export_attempt(
@@ -843,9 +915,18 @@ def test_complete_direct_hybrid_accepts_exact_bounded_cjk_coverage_contract(
                     "nativeTextPolicy"
                 ]
                 receipt_binding = completed.provenance["quality_receipt_binding"]
-                assert receipt_binding["receipt_digest"] == "sha256:" + ("9" * 64)
-                assert receipt_binding["generation_attempt_id"] == "generation-attempt-1"
+                assert receipt_binding["receipt_digest"] == generation_receipt.receipt_digest
+                assert receipt_binding["generation_attempt_id"] == generation_receipt.attempt_id
                 assert receipt_binding["release_profile"] == "release"
+                assert receipt_binding["pre_export_evaluation_profile"] == "default"
+                assert receipt_binding["scene_envelope_digest"] == scene_receipt[
+                    "sceneDigest"
+                ]
+                assert receipt_binding["semantic_emission_digest"] == (
+                    "sha256:" + canonical
+                )
+                assert receipt_binding["qid_owner_census_digest"].startswith("sha256:")
+                assert receipt_binding["atomic_run_digest"].startswith("sha256:")
                 assert receipt_binding["export_binding"]["pptx_sha256"] == pptx_sha256
         finally:
             await engine.dispose()

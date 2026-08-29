@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.connector-text-clearance",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Authored connectors must keep their full painted arrowhead bounds at least 12px from text; multiline labels allow layout-only patching.",
+  "scope": [
+    "authored-generation",
+    "layout-quality",
+    "canonical-editing"
+  ],
+  "invariants": [
+    "Measure connector clearance from painted arrowhead bounds, including rotation.",
+    "Keep at least 12px between connector paint and text glyphs.",
+    "Multiline text boxes with only hard breaks allow style, position, and size patches but not text replacement."
+  ],
+  "forbidden": [
+    "Do not treat the unrotated CSS arrowhead box as the clearance boundary.",
+    "Do not overlap connector paint with visible text."
+  ],
+  "evidence": [
+    "servers/fastapi/utils/llm_calls/author_slide_rules.py",
+    "servers/fastapi/services/authored_composition_policy.py",
+    "servers/fastapi/utils/authored_patch_engine.py",
+    "servers/fastapi/tests/unit/test_authored_composition_policy.py",
+    "servers/fastapi/tests/unit/test_authored_patch_engine.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-29T11:35:22.7599094+00:00"
+}

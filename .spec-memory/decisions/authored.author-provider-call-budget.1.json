@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.author-provider-call-budget",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Each authored slide uses one initial provider call and at most one explicit recovery, with internal multimodal fallback disabled in deck authoring.",
+  "scope": [
+    "authored-vnext",
+    "authoring",
+    "provider-usage"
+  ],
+  "invariants": [
+    "Author deck calls are bounded to initial ordinal 1 and recovery ordinal 2.",
+    "Receipts classify the second call as recovery and deck authoring disables inner text-only provider fallback.",
+    "Provider-specific reasoning maps logical minimal to the lowest supported effort without another provider call."
+  ],
+  "forbidden": [
+    "Do not restore per-error retry budgets, backoff retries, or hidden multimodal provider fallback in author deck."
+  ],
+  "evidence": [
+    "servers/fastapi/utils/llm_calls/author_slide.py",
+    "servers/fastapi/utils/llm_calls/author_deck.py",
+    "servers/fastapi/tests/unit/test_author_deck_correction_boundary.py",
+    "servers/fastapi/tests/unit/test_authored_generation_speed_cache_contract.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-29T13:45:23.3237742+00:00"
+}

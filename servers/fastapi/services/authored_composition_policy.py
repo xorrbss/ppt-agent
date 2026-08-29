@@ -25,6 +25,7 @@ AUTHORED_CAPACITY_BOUNDED_REPAIR_REVISION = "authored-capacity-bounded-repair/v1
 _CAPACITY_REDUCER_MARKER = "authored-closing-capacity-reducer-v1"
 _TITLE_PUNCTUATION_REDUCER_MARKER = "authored-closing-title-punctuation-reducer-v1"
 _LAYOUT_ALIGNMENT_MARKER = "authored-layout-alignment-repair-v1"
+_CONNECTOR_CLEARANCE_MARKER = "authored-connector-clearance-repair-v1"
 
 
 @dataclass(frozen=True, slots=True)
@@ -326,6 +327,7 @@ class _AuthoredStartTagCollector(HTMLParser):
         super().__init__(convert_charrefs=False)
         self.tags: list[tuple[str, list[tuple[str, str | None]], str]] = []
         self.owns_text: list[bool] = []
+        self.owned_text_parts: list[list[str]] = []
         self._stack: list[tuple[str, int]] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
@@ -333,6 +335,7 @@ class _AuthoredStartTagCollector(HTMLParser):
         index = len(self.tags)
         self.tags.append((normalized, attrs, self.get_starttag_text()))
         self.owns_text.append(False)
+        self.owned_text_parts.append([])
         if normalized not in {
             "area", "base", "br", "col", "embed", "hr", "img", "input",
             "link", "meta", "param", "source", "track", "wbr",
@@ -344,6 +347,7 @@ class _AuthoredStartTagCollector(HTMLParser):
     ) -> None:
         self.tags.append((tag.lower(), attrs, self.get_starttag_text()))
         self.owns_text.append(False)
+        self.owned_text_parts.append([])
 
     def handle_endtag(self, tag: str) -> None:
         normalized = tag.lower()
@@ -360,13 +364,14 @@ class _AuthoredStartTagCollector(HTMLParser):
         for _tag, index in reversed(self._stack):
             if _attribute_map(self.tags[index][1]).get("data-qid", "").strip():
                 self.owns_text[index] = True
+                self.owned_text_parts[index].append(data)
                 return
 
-    def handle_entityref(self, _name: str) -> None:
-        self.handle_data("x")
+    def handle_entityref(self, name: str) -> None:
+        self.handle_data(html_lib.unescape(f"&{name};"))
 
-    def handle_charref(self, _name: str) -> None:
-        self.handle_data("x")
+    def handle_charref(self, name: str) -> None:
+        self.handle_data(html_lib.unescape(f"&#{name};"))
 
 
 @dataclass(slots=True)
@@ -515,7 +520,9 @@ def _is_primary_title_candidate(tag: str, attrs: dict[str, str]) -> bool:
     )
 
 
-def _is_supporting_candidate(attrs: dict[str, str]) -> bool:
+def _is_supporting_candidate(
+    attrs: dict[str, str], *, owned_text: str = "", capacity_only: bool = False
+) -> bool:
     qid = attrs.get("data-qid", "").strip().lower()
     hints = " ".join(
         (
@@ -544,12 +551,46 @@ def _is_supporting_candidate(attrs: dict[str, str]) -> bool:
         token in {"axis", "unit", "scale", "source", "zero", "mid", "max", "min"}
         for token in tokens
     )
-    return chart_annotation or any(
-        token in exact
-        or token.startswith("metric")
-        or token.startswith("label")
-        or token.startswith("num")
-        for token in tokens
+    normalized_text = re.sub(r"\s+", " ", owned_text).strip()
+    qid_suffix = next(
+        reversed(tuple(token for token in re.split(r"[._:-]+", qid) if token)),
+        "",
+    )
+    short_number_label = qid_suffix == "no" and bool(
+        re.fullmatch(r"0?[0-9]{1,2}[.)]?", normalized_text)
+    )
+    short_symbol_marker = (
+        qid_suffix == "mark"
+        and 0 < len(normalized_text) <= 3
+        and not any(character.isalnum() for character in normalized_text)
+    )
+    week_tick_match = (
+        re.fullmatch(r".+\.chart\.week(?P<tick>[0-9]{2})", qid)
+        if capacity_only
+        else None
+    )
+    numeric_tick = (
+        re.fullmatch(r"[0-9]{1,2}", normalized_text)
+        if week_tick_match is not None
+        else None
+    )
+    capacity_chart_week_tick = bool(
+        week_tick_match is not None
+        and numeric_tick is not None
+        and int(week_tick_match.group("tick")) == int(normalized_text)
+    )
+    return (
+        chart_annotation
+        or short_number_label
+        or short_symbol_marker
+        or capacity_chart_week_tick
+        or any(
+            token in exact
+            or token.startswith("metric")
+            or token.startswith("label")
+            or token.startswith("num")
+            for token in tokens
+        )
     )
 
 
@@ -583,11 +624,12 @@ def ensure_authored_semantic_roles(html: str) -> str:
         if attrs.get("data-qid", "").strip():
             declared = attrs.get("data-semantic-role", "").strip()
             owns_text = parser.owns_text[tag_index]
+            owned_text = "".join(parser.owned_text_parts[tag_index])
             if tag == "img":
                 role = "image"
             elif _is_primary_title_candidate(tag, attrs) and owns_text:
                 role = "title"
-            elif _is_supporting_candidate(attrs):
+            elif _is_supporting_candidate(attrs, owned_text=owned_text):
                 role = "supporting"
             elif declared.lower() == "decoration" and owns_text:
                 role = "body"
@@ -850,14 +892,22 @@ def capacity_violations(
                 role_bucket = "title"
             elif _is_body_role(role):
                 role_bucket = "body"
-            is_supporting = _is_supporting_role(role)
+            is_supporting = _is_supporting_role(role) or _is_supporting_candidate(
+                {"data-qid": qid},
+                owned_text=rendered,
+                capacity_only=True,
+            )
             is_decoration = role == "decoration"
             owns_content_text = owns_text and not is_decoration
             if owns_content_text and rendered:
                 browser_visible_text_parts.append(rendered)
-            if (owns_content_text and role_bucket in {"title", "body"}) or is_image:
+            if (
+                owns_content_text
+                and role_bucket in {"title", "body"}
+                and not is_supporting
+            ) or is_image:
                 browser_content_targets += 1
-            if role_bucket and owns_content_text and not is_image:
+            if role_bucket and owns_content_text and not is_image and not is_supporting:
                 role_nodes[role_bucket].append(item)
             if owns_content_text and role_bucket != "title" and not is_supporting:
                 browser_body_candidates += 1
@@ -1213,18 +1263,19 @@ def reduce_authored_closing_title_punctuation(
 
 
 def repair_authored_layout_alignment(html: str, *, role: str) -> str:
-    """Repair two bounded alignment defects without changing slide content.
+    """Repair bounded alignment defects without changing slide content.
 
     The repair is intentionally limited to the exact authored contracts that
     caused the observed PROBLEM and CLOSING imbalance: a zero-inset 22px
     eyebrow box, and a header-body root that omitted the CSS class carrying the
-    deck's symmetric 72px margins. Source-bound HTML is never rewritten.
+    deck's symmetric 72px margins. It also contracts the exact rotated
+    evidence-arrow tip whose painted bounds escape a 72px connector gutter.
+    Source-bound HTML is never rewritten.
     """
 
     normalized_role = role.strip().upper()
     if (
         normalized_role not in {"PROBLEM", "CLOSING"}
-        or _LAYOUT_ALIGNMENT_MARKER in html
         or "data-source-block-id" in html.lower()
     ):
         return html
@@ -1264,6 +1315,38 @@ def repair_authored_layout_alignment(html: str, *, role: str) -> str:
                     + repaired[eyebrow_rule.end() :]
                 )
                 applied.append("header-inset")
+
+        if (
+            _CONNECTOR_CLEARANCE_MARKER not in repaired
+            and 'data-qid="evidence.bridge"' in repaired
+            and 'data-qid="evidence.bridge.tip"' in repaired
+            and 'data-qid="evidence.measure.main"' in repaired
+            and re.search(
+                r"\.evidence\s*\{[^}]*grid-template-columns\s*:\s*1fr\s+72px\s+1fr\s*;",
+                repaired,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+            and re.search(
+                r"\.bridge-tip\s*\{[^}]*right\s*:\s*-1px\s*;[^}]*top\s*:\s*-6px\s*;"
+                r"[^}]*width\s*:\s*14px\s*;[^}]*height\s*:\s*14px\s*;[^}]*"
+                r"transform\s*:\s*rotate\(45deg\)\s*;?",
+                repaired,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+        ):
+            insertion = re.search(r"</head\s*>", repaired, flags=re.IGNORECASE)
+            if insertion is not None:
+                rule = (
+                    f'<style>/* {_CONNECTOR_CLEARANCE_MARKER} */'
+                    '[data-qid="evidence.bridge"]'
+                    '{width:44px!important;justify-self:start!important}</style>'
+                )
+                repaired = (
+                    repaired[: insertion.start()]
+                    + rule
+                    + repaired[insertion.start() :]
+                )
+                applied.append("connector-clearance")
 
     if normalized_role == "CLOSING" and re.search(
         r"\.body\s*\{[^}]*\bmargin\s*:\s*28px\s+72px\s+0\b",

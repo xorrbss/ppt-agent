@@ -103,7 +103,7 @@ export interface LayerSafetyDemotion {
 }
 
 export interface LayerSafetyPlan {
-  readonly strategy: "single-backplate-fixed-point";
+  readonly strategy: "single-backplate-fixed-point" | "audited-multi-z-band";
   readonly fixedPointReached: true;
   readonly closureIterations: number;
   readonly closureDigest: string;
@@ -140,6 +140,11 @@ export interface AuthoredNativeOwnerAlternativeText {
     readonly utf16Start: number;
     readonly utf16Length: number;
     readonly textDigest: string;
+  }[];
+  readonly paintBands: readonly {
+    readonly zBand: number;
+    readonly paintOwner: "native" | "rasterIsland";
+    readonly elementIds: readonly string[];
   }[];
   readonly textRunStyles?: readonly {
     readonly runIndex: number;
@@ -304,11 +309,26 @@ export interface NativeTypographyPreflightResult {
 function isEditableRasterText(
   element: AuthoredHybridElement
 ): element is AuthoredHybridRasterElement & { text: AuthoredHybridTextPayload } {
+  const unauditedPaintReasons = new Set([
+    "animated",
+    "backdrop-filter",
+    "background-clip-text",
+    "clip-path",
+    "complex-content",
+    "complex-diagram",
+    "filter",
+    "mask",
+    "mix-blend-mode",
+    "svg-text",
+    "text-shadow",
+    "transformed-ancestor",
+  ]);
   return (
     element.classification.mode === "raster" &&
     element.classification.candidateKind === "text" &&
     "text" in element &&
-    element.text !== undefined
+    element.text !== undefined &&
+    !element.classification.reasons.some((reason) => unauditedPaintReasons.has(reason))
   );
 }
 
@@ -323,6 +343,10 @@ function isEditableTextCandidate(
 function hasUnrepresentedVisualLineBreak(
   element: AuthoredHybridEditableTextElement
 ): boolean {
+  const measuredLineIndexes = element.text.runs
+    .filter((run) => run.text !== "\n" && run.lineIndex !== undefined)
+    .map((run) => run.lineIndex!);
+  if (new Set(measuredLineIndexes).size > 1) return false;
   if (
     element.text.runs.length < 2 ||
     element.text.runs.some((run) => run.text.includes("\n"))
@@ -944,9 +968,22 @@ export function preflightNativeTypography(
     const layout = element.text.layout;
     if (layout?.lineRects) {
       const breakCount = capturedBreakCount(runs);
+      const indexedRuns = runs.filter(
+        (run) => run.text !== "\n" && run.lineIndex !== undefined,
+      );
       if (
         layout.lineRects.length !== layout.lineCount ||
-        (layout.lineCount > 0 && breakCount + 1 !== layout.lineCount)
+        (layout.lineCount > 0 && breakCount + 1 !== layout.lineCount) ||
+        indexedRuns.some(
+          (run) => run.lineIndex! < 0 || run.lineIndex! >= layout.lineRects!.length,
+        ) ||
+        indexedRuns.some((run) => {
+          const line = layout.lineRects![run.lineIndex!].px;
+          const fragments = run.fragments.length
+            ? run.fragments.map((fragment) => fragment.px)
+            : [run.bounds.px];
+          return fragments.some((fragment) => !rectContains(line, fragment, tolerance));
+        })
       ) {
         issues.push({ code: "line-break-mismatch", elementId: element.id });
       }
@@ -1282,6 +1319,78 @@ export function planLayerSafeNativeElements(
   options: LayerSelectionOptions = {}
 ): LayerSafetyPlan {
   const eligible = prepared.filter((item) => allowedIds.has(item.source.id));
+  const declaredPaintOrder =
+    allElements.length > 0 &&
+    allElements.every((element) => element.identityAuthority === "declared-qid") &&
+    new Set(allElements.map((element) => element.id)).size === allElements.length;
+  if (declaredPaintOrder) {
+    const selected = eligible.slice().sort(
+      (left, right) =>
+        left.source.zOrder - right.source.zOrder ||
+        left.source.sourceIndex - right.source.sourceIndex,
+    );
+    const selectedIds = new Set(selected.map((item) => item.source.id));
+    const ordered = allElements.slice().sort(
+      (left, right) =>
+        left.zOrder - right.zOrder || left.sourceIndex - right.sourceIndex,
+    );
+    const paintBands: Array<{
+      zBand: number;
+      paintOwner: "native" | "rasterIsland";
+      elementIds: string[];
+    }> = [{ zBand: 0, paintOwner: "rasterIsland", elementIds: [] }];
+    for (const element of ordered) {
+      const paintOwner = selectedIds.has(element.id) ? "native" : "rasterIsland";
+      let band = paintBands.at(-1)!;
+      if (band.paintOwner !== paintOwner) {
+        band = { zBand: paintBands.length, paintOwner, elementIds: [] };
+        paintBands.push(band);
+      }
+      band.elementIds.push(element.id);
+    }
+    const bandById = new Map(
+      paintBands.flatMap((band) =>
+        band.elementIds.map((elementId) => [elementId, band.zBand] as const)
+      ),
+    );
+    const paintGraph = ordered.map((element) => ({
+      elementId: element.id,
+      parentElementId: element.parentElementId ?? null,
+      paintOwner: selectedIds.has(element.id) ? "native" as const : "rasterIsland" as const,
+      zBand: bandById.get(element.id) ?? 0,
+      opacity: element.opacity,
+      blockedByElementIds: [],
+    }));
+    const closureUnsigned = {
+      schemaVersion: "hybrid-paint-graph-closure/browser-v1",
+      strategy: "audited-multi-z-band",
+      closureIterations: 1,
+      paintGraph,
+      paintBands,
+    };
+    const slideDemotedToRaster = selected.length === 0;
+    const downgradeUnsigned = {
+      schemaVersion: "hybrid-layer-downgrade-receipt/browser-v1" as const,
+      state: slideDemotedToRaster ? "slideRaster" as const : "closed" as const,
+      reason: slideDemotedToRaster ? "no-closed-native-z-band" as const : null,
+      demotedElementIds: [],
+    };
+    return {
+      strategy: "audited-multi-z-band",
+      fixedPointReached: true,
+      closureIterations: 1,
+      closureDigest: layerDigest(closureUnsigned),
+      selected,
+      demotions: [],
+      slideDemotedToRaster,
+      paintGraph,
+      paintBands,
+      downgradeReceipt: {
+        ...downgradeUnsigned,
+        receiptDigest: layerDigest(downgradeUnsigned),
+      },
+    };
+  }
   const promotedIds = new Set(eligible.map((item) => item.source.id));
   const demotionBlockers = new Map<string, Set<string>>();
   const isAbove = (other: AuthoredHybridElement, item: PreparedNativeElement) =>
@@ -1380,6 +1489,20 @@ export function planLayerSafeNativeElements(
     demotions,
     slideDemotedToRaster,
     paintGraph,
+    paintBands: [
+      {
+        zBand: 0,
+        paintOwner: "rasterIsland",
+        elementIds: allElements
+          .filter((element) => !promotedIds.has(element.id))
+          .map((element) => element.id),
+      },
+      ...selected.map((element, index) => ({
+        zBand: index + 1,
+        paintOwner: "native" as const,
+        elementIds: [element.source.id],
+      })),
+    ],
     downgradeReceipt: {
       ...downgradeUnsigned,
       receiptDigest: layerDigest(downgradeUnsigned),
@@ -1617,11 +1740,29 @@ function textSegments(element: AuthoredHybridEditableTextElement): TextSegment[]
       preservesRichTextAcrossSoftWraps
     )
   ) {
-    return element.text.runs.map((run) => ({
-      text: collapseBreaks ? run.text.replace(/\n+/g, " ") : run.text,
-      style: run.style,
-      ...(run.breakKind ? { breakKind: run.breakKind } : {}),
-    }));
+    const segments: TextSegment[] = [];
+    let previousLineIndex: number | undefined;
+    for (const run of element.text.runs) {
+      if (
+        !collapseBreaks &&
+        run.text !== "\n" &&
+        previousLineIndex !== undefined &&
+        run.lineIndex !== undefined &&
+        run.lineIndex > previousLineIndex &&
+        segments.at(-1)?.text !== "\n"
+      ) {
+        segments.push({ text: "\n", style: run.style, breakKind: "soft" });
+      }
+      segments.push({
+        text: collapseBreaks ? run.text.replace(/\n+/g, " ") : run.text,
+        style: run.style,
+        ...(run.breakKind ? { breakKind: run.breakKind } : {}),
+      });
+      if (run.text !== "\n" && run.lineIndex !== undefined) {
+        previousLineIndex = run.lineIndex;
+      }
+    }
+    return segments;
   }
   return [{
     text: collapseBreaks ? element.text.plainText.replace(/\n+/g, " ") : element.text.plainText,
@@ -2309,6 +2450,98 @@ export function preparedNativeElementNonVisualIdCount(
   if (item.kind === "shape" && !shapeHasBaseObject(item.source.shape)) return 0;
   return preparedNativeElementUnderlayNonVisualIdCount(item) +
     preparedNativeElementOverlayNonVisualIdCount(item);
+}
+
+function rotatedPaintedBounds(
+  bounds: AuthoredHybridRect,
+  rotationDeg: number,
+  paintExpansionPx = 0,
+): AuthoredHybridRect {
+  const radians = rotationDeg * Math.PI / 180;
+  const cosine = Math.abs(Math.cos(radians));
+  const sine = Math.abs(Math.sin(radians));
+  const width = bounds.width * cosine + bounds.height * sine + paintExpansionPx * 2;
+  const height = bounds.width * sine + bounds.height * cosine + paintExpansionPx * 2;
+  return {
+    x: bounds.x + bounds.width / 2 - width / 2,
+    y: bounds.y + bounds.height / 2 - height / 2,
+    width,
+    height,
+  };
+}
+
+function rectClearance(left: AuthoredHybridRect, right: AuthoredHybridRect): number {
+  const dx = Math.max(
+    left.x - (right.x + right.width),
+    right.x - (left.x + left.width),
+    0,
+  );
+  const dy = Math.max(
+    left.y - (right.y + right.height),
+    right.y - (left.y + left.height),
+    0,
+  );
+  return Math.hypot(dx, dy);
+}
+
+export interface ConnectorTextClearanceViolation {
+  readonly elementId: string;
+  readonly textElementId: string;
+  readonly clearancePx: number;
+  readonly minimumClearancePx: number;
+}
+
+/**
+ * Quality gate for editable connectors. Both sides use their final painted
+ * axis-aligned bounds after rotation; the connector additionally includes its
+ * stroke/arrow paint. A failing connector remains an explicit raster owner.
+ */
+export function connectorTextClearanceViolations(
+  prepared: readonly PreparedNativeElement[],
+  allElements: readonly AuthoredHybridElement[],
+  declaredConnectorElementIds: ReadonlySet<string> = new Set(),
+  minimumClearancePx = 12,
+): ConnectorTextClearanceViolation[] {
+  const textElements = allElements.filter(
+    (element): element is AuthoredHybridEditableTextElement =>
+      "text" in element && element.text !== undefined &&
+      element.text.plainText.trim().length > 0,
+  );
+  return prepared.flatMap((item): ConnectorTextClearanceViolation[] => {
+    if (item.kind !== "shape") return [];
+    const shape = item.source.shape;
+    const connector = declaredConnectorElementIds.has(item.source.id) ||
+      shape.shape === "line" ||
+      (shape.shape === "freeform" && shape.closed !== true && !shape.fill);
+    if (!connector) return [];
+    const strokeExpansionPx = Math.max(
+      0.5,
+      shape.strokeWidthPt / 0.75 / 2,
+      shape.endArrow ? shape.strokeWidthPt / 0.75 * 1.5 : 0,
+    );
+    const connectorBounds = rotatedPaintedBounds(
+      item.source.bounds.px,
+      item.source.rotationDeg,
+      strokeExpansionPx,
+    );
+    return textElements.flatMap((text): ConnectorTextClearanceViolation[] => {
+      if (text.id === item.source.id) return [];
+      const textPaint = text.text.layout?.paintedTextBounds?.px ?? text.bounds.px;
+      const textBounds = rotatedPaintedBounds(textPaint, text.rotationDeg);
+      const clearancePx = rectClearance(connectorBounds, textBounds);
+      return clearancePx + 1e-6 < minimumClearancePx
+        ? [{
+            elementId: item.source.id,
+            textElementId: text.id,
+            clearancePx,
+            minimumClearancePx,
+          }]
+        : [];
+    });
+  }).sort((left, right) =>
+    left.elementId.localeCompare(right.elementId) ||
+    left.textElementId.localeCompare(right.textElementId)
+  );
 }
 
 function textContainerShapeItem(

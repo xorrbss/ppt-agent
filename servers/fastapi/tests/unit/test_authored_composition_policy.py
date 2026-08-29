@@ -3,11 +3,13 @@ from types import MappingProxyType, SimpleNamespace
 
 import pytest
 
+from models.generate_presentation_request import GeneratePresentationRequest
 from services.authored_checkpoint_errors import AuthoredStageError
 from services.authored_composition_policy import (
     AuthoredCapacityPlan,
     CompositionProfile,
     SlideCapacity,
+    _is_supporting_candidate,
     capacity_violations,
     ensure_authored_semantic_roles,
     repair_authored_layout_alignment,
@@ -16,6 +18,8 @@ from services.authored_composition_policy import (
     resolve_composition_profile,
 )
 from services.authored_presentation_generation import (
+    _admit_gate_repair_capacity_candidate,
+    _admit_vqa_capacity_candidate,
     _apply_bounded_closing_capacity_reducer,
     _apply_bounded_header_eyebrow_fallback,
     _apply_final_checkpoint_closing_capacity_reducer,
@@ -29,6 +33,101 @@ from services.authored_presentation_generation import (
 )
 from services.source_content.browser_readback import BrowserSourceReadbackError
 from utils.renderer_isolation import admit_authored_html
+
+
+def test_capacity_treats_only_exact_chart_week_ticks_as_supporting() -> None:
+    decorations = [f"roadmap.decoration.{index:02d}" for index in range(1, 26)]
+    content = ["roadmap.title", *[f"roadmap.item.{index:02d}" for index in range(1, 20)]]
+    ticks = [f"roadmap.chart.week{index:02d}" for index in range(1, 17)]
+    supporting = [f"roadmap.supporting.{index:02d}" for index in range(1, 5)]
+
+    html_parts = ["<section>"]
+    html_parts.extend(
+        f'<div data-qid="{qid}" data-semantic-role="decoration"></div>'
+        for qid in decorations
+    )
+    html_parts.append(
+        '<h1 data-qid="roadmap.title" data-semantic-role="title">Roadmap</h1>'
+    )
+    html_parts.extend(
+        f'<span data-qid="{qid}" data-semantic-role="body">item</span>'
+        for qid in content[1:]
+    )
+    html_parts.extend(
+        f'<span data-qid="{qid}" data-semantic-role="body">{index}</span>'
+        for index, qid in enumerate(ticks, start=1)
+    )
+    html_parts.extend(
+        f'<span data-qid="{qid}" data-semantic-role="supporting">note</span>'
+        for qid in supporting
+    )
+    html_parts.append("</section>")
+    html = "".join(html_parts)
+
+    def metric(qid: str, role: str, text: str, tag: str = "span") -> dict[str, object]:
+        return {
+            "qid": qid,
+            "tag": tag,
+            "semantic_role": role,
+            "rendered_text": text,
+            "has_owned_text": bool(text),
+            "font_size": 18,
+            "font_loaded": True,
+            "css_visible": True,
+            "clipped": False,
+            "glyph_clipped": False,
+            "line_box_clipped": False,
+            "bbox": {"x": 10, "y": 10, "width": 80, "height": 20},
+        }
+
+    elements = [metric(qid, "decoration", "", "div") for qid in decorations]
+    elements.append(metric("roadmap.title", "title", "Roadmap", "h1"))
+    elements.extend(metric(qid, "body", "item") for qid in content[1:])
+    elements.extend(
+        metric(qid, "body", str(index))
+        for index, qid in enumerate(ticks, start=1)
+    )
+    elements.extend(metric(qid, "supporting", "note") for qid in supporting)
+    assert len(elements) == 65
+
+    normalized_html = ensure_authored_semantic_roles(html)
+    assert normalized_html == html
+    assert normalized_html.count('data-qid="') == 65
+    assert all(
+        f'data-qid="{qid}" data-semantic-role="body">{index}</span>'
+        in normalized_html
+        for index, qid in enumerate(ticks, start=1)
+    )
+
+    capacity_only_ticks = [
+        qid
+        for index, qid in enumerate(ticks, start=1)
+        if _is_supporting_candidate(
+            {"data-qid": qid}, owned_text=str(index), capacity_only=True
+        )
+    ]
+    assert capacity_only_ticks == ticks
+    assert all(
+        not _is_supporting_candidate({"data-qid": qid}, owned_text=str(index))
+        for index, qid in enumerate(ticks, start=1)
+    )
+    assert all(
+        not _is_supporting_candidate(attrs, owned_text=text, capacity_only=True)
+        for attrs, text in (
+            ({"data-qid": "roadmap.chart.week01.copy"}, "1"),
+            ({"data-qid": "roadmap.week01"}, "1"),
+            ({"data-qid": "roadmap.chart.week1"}, "1"),
+            ({"data-qid": "roadmap.chart.week01"}, "Week 1"),
+            ({"data-qid": "roadmap.chart.week01"}, "100"),
+            ({"data-qid": "roadmap.chart.week01"}, "2"),
+        )
+    )
+
+    metrics = {"elements": elements}
+    admitted = SlideCapacity(5, "ROADMAP", 100, 500, 500, 0, 20, 16)
+    rejected = SlideCapacity(5, "ROADMAP", 100, 500, 500, 0, 19, 16)
+    assert capacity_violations(normalized_html, metrics, admitted) == ()
+    assert capacity_violations(normalized_html, metrics, rejected) == ("qids:20>19",)
 
 
 def test_composition_profile_defaults_to_development_quality_gates() -> None:
@@ -55,9 +154,195 @@ def test_composition_release_profile_seals_required_quality_gates() -> None:
     assert profile.minimum_native_coverage_ratio == pytest.approx(0.70)
 
 
+def test_http_request_preserves_release_quality_profile_at_admission() -> None:
+    request = GeneratePresentationRequest.model_validate(
+        {"content": "Release deck", "qualityProfile": "release"}
+    )
+
+    assert request.quality_profile == "release"
+    assert request.model_dump(mode="json", by_alias=True)["qualityProfile"] == "release"
+    assert resolve_composition_profile(request).quality_profile_id == "release"
+    assert GeneratePresentationRequest(content="Development deck").quality_profile == (
+        "development"
+    )
+
+
 def test_composition_profile_rejects_unknown_quality_profile() -> None:
     with pytest.raises(ValueError, match="authored_quality_profile_unknown"):
         resolve_composition_profile(SimpleNamespace(quality_profile="release-ish"))
+
+
+def test_post_vqa_qid_overflow_restores_frozen_gate_valid_candidate() -> None:
+    capacity = SlideCapacity(4, "PILLARS", 58, 290, 380, 0, 32)
+
+    def candidate(count: int) -> tuple[str, dict[str, object]]:
+        qids = [f"s05-item-{index}" for index in range(count)]
+        html = "<section>" + "".join(
+            f'<span data-qid="{qid}" data-semantic-role="body">x</span>'
+            for qid in qids
+        ) + "</section>"
+        metrics = {
+            "elements": [
+                {
+                    "qid": qid,
+                    "tag": "span",
+                    "semantic_role": "body",
+                    "rendered_text": "x",
+                    "has_owned_text": True,
+                    "css_visible": True,
+                    "clipped": False,
+                    "glyph_clipped": False,
+                    "line_box_clipped": False,
+                    "bbox": {"x": 1, "y": 1, "width": 10, "height": 10},
+                    "font_size": 18,
+                    "font_loaded": True,
+                }
+                for qid in qids
+            ]
+        }
+        return html, metrics
+
+    original_html, original_metrics = candidate(30)
+    revised_html, revised_metrics = candidate(34)
+    selected_html, selected_png, selected_metrics, admitted = (
+        _admit_vqa_capacity_candidate(
+            slide_index=4,
+            original_html=original_html,
+            original_png=b"original",
+            original_metrics=original_metrics,
+            candidate_html=revised_html,
+            candidate_png=b"revised",
+            candidate_metrics=revised_metrics,
+            capacity=capacity,
+        )
+    )
+
+    assert capacity_violations(original_html, original_metrics, capacity) == ()
+    assert "qids:34>32" in capacity_violations(
+        revised_html, revised_metrics, capacity
+    )
+    assert revised_html.count("data-qid=") == 34
+    assert admitted is False
+    assert selected_html == original_html
+    assert selected_png == b"original"
+    assert selected_metrics is original_metrics
+
+
+def test_vision_qa_false_gate_repair_normalizes_short_labels_without_qid_loss(
+    monkeypatch,
+) -> None:
+    request = GeneratePresentationRequest(content="Gate repair", vision_qa=False)
+    capacity = SlideCapacity(4, "PILLARS", 58, 290, 380, 0, 32)
+    body_qids = [f"content.{index}" for index in range(25)]
+    number_qids = [f"step.{index}.no" for index in range(7)]
+    marker_qids = ["controls.refresh.mark", "controls.alert.mark"]
+    labels = {
+        **{qid: "x" for qid in body_qids},
+        **{qid: f"{index + 1:02d}" for index, qid in enumerate(number_qids)},
+        marker_qids[0]: "↻",
+        marker_qids[1]: "!",
+    }
+    original_html = (
+        '<section data-qid="slide.root" data-semantic-role="decoration">'
+        + "".join(
+            f'<span data-qid="{qid}" data-semantic-role="body">{labels[qid]}</span>'
+            for qid in labels
+        )
+        + "</section>"
+    )
+
+    def metrics(*, normalized: bool) -> dict[str, object]:
+        return {
+            "elements": [
+                {
+                    "qid": "slide.root",
+                    "tag": "section",
+                    "semantic_role": "decoration",
+                    "rendered_text": "",
+                    "has_owned_text": False,
+                },
+                *[
+                    {
+                        "qid": qid,
+                        "tag": "span",
+                        "semantic_role": (
+                            "supporting"
+                            if normalized and qid in {*number_qids, *marker_qids}
+                            else "body"
+                        ),
+                        "rendered_text": labels[qid],
+                        "has_owned_text": True,
+                        "css_visible": True,
+                        "clipped": False,
+                        "glyph_clipped": False,
+                        "line_box_clipped": False,
+                        "bbox": {"x": 1, "y": 1, "width": 10, "height": 10},
+                        "font_size": 18,
+                        "font_loaded": True,
+                    }
+                    for qid in labels
+                ],
+            ]
+        }
+
+    original_metrics = metrics(normalized=False)
+    normalized_html = ensure_authored_semantic_roles(original_html)
+    normalized_metrics = metrics(normalized=True)
+    captures: list[str] = []
+
+    async def fake_capture(candidate_html):
+        captures.append(candidate_html)
+        assert candidate_html == normalized_html
+        return SimpleNamespace(png=b"fresh-repair", browser_metrics=normalized_metrics)
+
+    monkeypatch.setattr(
+        "services.authored_presentation_generation.render_html_to_png_with_metrics",
+        fake_capture,
+    )
+    rebound_htmls, rebound_pngs, rebound_metrics = asyncio.run(
+        _bind_bounded_repair_evidence([normalized_html])
+    )
+    selected_html, selected_png, selected_metrics, admitted = (
+        _admit_gate_repair_capacity_candidate(
+            slide_index=4,
+            original_html=original_html,
+            original_png=b"failed-original",
+            original_metrics=original_metrics,
+            candidate_html=rebound_htmls[0],
+            candidate_png=rebound_pngs[0],
+            candidate_metrics=rebound_metrics[0],
+            capacity=capacity,
+        )
+    )
+
+    assert request.vision_qa is False
+    assert captures == [normalized_html]
+    assert len(labels) == 34
+    assert original_html.count("data-qid=") == normalized_html.count("data-qid=") == 35
+    assert normalized_html.count('data-semantic-role="supporting"') == 9
+    assert "qids:34>32" in capacity_violations(
+        original_html, original_metrics, capacity
+    )
+    assert capacity_violations(selected_html, selected_metrics, capacity) == ()
+    assert (selected_html, selected_png, admitted) == (
+        normalized_html,
+        b"fresh-repair",
+        True,
+    )
+
+    with pytest.raises(AuthoredStageError) as failed:
+        _admit_gate_repair_capacity_candidate(
+            slide_index=4,
+            original_html=original_html,
+            original_png=b"failed-original",
+            original_metrics=original_metrics,
+            candidate_html=original_html,
+            candidate_png=b"still-over-capacity",
+            candidate_metrics=original_metrics,
+            capacity=capacity,
+        )
+    assert failed.value.code == "authored_slide_capacity_exceeded"
+    assert failed.value.retryable is False
 
 
 def test_capacity_violations_enforce_qids_images_text_and_font_floor():
@@ -456,6 +741,26 @@ def test_layout_alignment_repair_restores_header_inset_and_symmetric_body_margin
         closing.replace("<body>", '<body data-source-block-id="source:1">'),
         role="CLOSING",
     ) == closing.replace("<body>", '<body data-source-block-id="source:1">')
+
+
+def test_layout_alignment_repair_keeps_rotated_arrow_tip_inside_connector_gutter():
+    problem = '''<!doctype html><html><head><style>
+    .evidence{display:grid;grid-template-columns:1fr 72px 1fr;align-items:center}
+    .bridge{height:2px;background:#2563EB;position:relative}
+    .bridge-tip{position:absolute;right:-1px;top:-6px;width:14px;height:14px;
+      border-top:2px solid #2563EB;border-right:2px solid #2563EB;
+      transform:rotate(45deg)}
+    </style></head><body>
+    <div data-qid="evidence.bridge"><div data-qid="evidence.bridge.tip"></div></div>
+    <div data-qid="evidence.measure.main">5종 KPI로<br>효과 측정</div>
+    </body></html>'''
+
+    repaired = repair_authored_layout_alignment(problem, role="PROBLEM")
+
+    assert "authored-connector-clearance-repair-v1" in repaired
+    assert 'data-qid="evidence.bridge"]{width:44px!important;' in repaired
+    assert "justify-self:start!important" in repaired
+    assert repair_authored_layout_alignment(repaired, role="PROBLEM") == repaired
 
 
 def test_semantic_roles_bind_header_title_to_the_text_owner():

@@ -1,7 +1,12 @@
+import pytest
+
+from services.presentation_export_capabilities import PresentationExportContractError
 from services.presentation_export_powerpoint_qa import (
+    _advance_powerpoint_qa_observation,
     _contains_presenton_qid,
     _geometry_contract_mismatches,
     _powerpoint_main_hwnd,
+    _powerpoint_release_gate_failures,
     _powerpoint_window_pids,
     _qid_owner_census,
     _snapshot_comparison,
@@ -29,6 +34,69 @@ class _ProcessApi:
     @staticmethod
     def GetWindowThreadProcessId(hwnd):
         return 1, 9001 if hwnd == 101 else 9002
+
+
+def test_powerpoint_observation_states_are_strictly_ordered():
+    states = []
+    for state in (
+        "first-open",
+        "save-copy",
+        "reopen",
+        "readback",
+        "observation-sealed",
+    ):
+        _advance_powerpoint_qa_observation(states, state)
+    assert states == [
+        "first-open",
+        "save-copy",
+        "reopen",
+        "readback",
+        "observation-sealed",
+    ]
+    with pytest.raises(
+        PresentationExportContractError,
+        match="presentation_export_powerpoint_observation_state_invalid",
+    ):
+        _advance_powerpoint_qa_observation([], "save-copy")
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected_failure"),
+    [
+        ({"dialog_watcher_status": "unavailable"}, "watcher-unavailable"),
+        (
+            {"dialog_watcher_armed_before_first_open": False},
+            "watcher-unavailable",
+        ),
+        ({"dialog_watcher_status": "interrupted"}, "watcher-interrupted"),
+        ({"dialog_watcher_status": "stop-failed"}, "watcher-stop-failed"),
+        ({"repair_dialogs": None}, "repair-observation-required"),
+        ({"repair_dialogs": 1}, "repair-dialog-observed"),
+        ({"readback_match": False}, "readback-mismatch"),
+        ({"semantic_payload_binding": "failed"}, "semantic-binding-mismatch"),
+        ({"observation_states": ["first-open"]}, "observation-state-incomplete"),
+    ],
+)
+def test_release_powerpoint_qa_fails_closed_at_each_observation_boundary(
+    overrides, expected_failure
+):
+    evidence = {
+        "release_required": True,
+        "observation_states": [
+            "first-open",
+            "save-copy",
+            "reopen",
+            "readback",
+            "observation-sealed",
+        ],
+        "dialog_watcher_status": "sealed",
+        "dialog_watcher_armed_before_first_open": True,
+        "repair_dialogs": 0,
+        "readback_match": True,
+        "semantic_payload_binding": "passed",
+    }
+    failures = _powerpoint_release_gate_failures(**(evidence | overrides))
+    assert expected_failure in failures
 
 
 def test_powerpoint_qid_owner_and_interactive_hwnd_contracts():

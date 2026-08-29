@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import nullcontext
+from dataclasses import dataclass
 from hashlib import sha256
 import hmac
 import json
@@ -20,6 +21,74 @@ import zipfile
 
 from services.presentation_export_capabilities import PresentationExportContractError
 from utils.get_env import get_app_data_directory_env
+
+
+_POWERPOINT_QA_OBSERVATION_STATES = (
+    "first-open",
+    "save-copy",
+    "reopen",
+    "readback",
+    "observation-sealed",
+)
+
+
+@dataclass(slots=True)
+class _PowerPointDialogWatch:
+    stop: threading.Event
+    thread: threading.Thread
+    observed: set[tuple[int, str]]
+    failures: list[str]
+
+
+def _advance_powerpoint_qa_observation(
+    states: list[str], state: str
+) -> None:
+    """Append one auditable state without allowing gaps or reordering."""
+
+    next_index = len(states)
+    if (
+        next_index >= len(_POWERPOINT_QA_OBSERVATION_STATES)
+        or _POWERPOINT_QA_OBSERVATION_STATES[next_index] != state
+    ):
+        raise PresentationExportContractError(
+            "presentation_export_powerpoint_observation_state_invalid"
+        )
+    states.append(state)
+
+
+def _powerpoint_release_gate_failures(
+    *,
+    release_required: bool,
+    observation_states: list[str],
+    dialog_watcher_status: str,
+    dialog_watcher_armed_before_first_open: bool,
+    repair_dialogs: int | None,
+    readback_match: bool | None,
+    semantic_payload_binding: str,
+) -> list[str]:
+    failures: list[str] = []
+    if not release_required:
+        return failures
+    if (
+        dialog_watcher_status in {"not-requested", "unavailable"}
+        or not dialog_watcher_armed_before_first_open
+    ):
+        failures.append("watcher-unavailable")
+    elif dialog_watcher_status == "interrupted":
+        failures.append("watcher-interrupted")
+    elif dialog_watcher_status == "stop-failed":
+        failures.append("watcher-stop-failed")
+    if repair_dialogs is None:
+        failures.append("repair-observation-required")
+    elif repair_dialogs != 0:
+        failures.append("repair-dialog-observed")
+    if readback_match is not True:
+        failures.append("readback-mismatch")
+    if semantic_payload_binding != "passed":
+        failures.append("semantic-binding-mismatch")
+    if tuple(observation_states) != _POWERPOINT_QA_OBSERVATION_STATES:
+        failures.append("observation-state-incomplete")
+    return list(dict.fromkeys(failures))
 
 
 def _sha256_file(path: Path) -> str:
@@ -365,7 +434,7 @@ def _backplate_collisions(snapshot: list[list[dict[str, Any]]]) -> int:
     )
 
 
-def _start_powerpoint_dialog_watch(main_hwnd: int):
+def _start_powerpoint_dialog_watch(main_hwnd: int) -> _PowerPointDialogWatch:
     """Observe, but never dismiss, visible PowerPoint dialog windows."""
 
     import win32gui  # type: ignore[import-not-found]
@@ -373,9 +442,12 @@ def _start_powerpoint_dialog_watch(main_hwnd: int):
 
     _, process_id = win32process.GetWindowThreadProcessId(main_hwnd)
     stop = threading.Event()
+    ready = threading.Event()
     observed: set[tuple[int, str]] = set()
+    failures: list[str] = []
 
     def scan() -> None:
+        ready.set()
         while not stop.wait(0.05):
             def visit(hwnd: int, _context: object) -> bool:
                 try:
@@ -391,13 +463,53 @@ def _start_powerpoint_dialog_watch(main_hwnd: int):
                     pass
                 return True
 
-            win32gui.EnumWindows(visit, None)
+            try:
+                win32gui.EnumWindows(visit, None)
+            except Exception:
+                failures.append("dialog-enumeration-failed")
+                return
 
     thread = threading.Thread(
         target=scan, name="presenton-powerpoint-dialog-watch", daemon=True
     )
     thread.start()
-    return stop, thread, observed
+    if not ready.wait(timeout=1) or not thread.is_alive():
+        stop.set()
+        thread.join(timeout=1)
+        raise RuntimeError("powerpoint_dialog_watcher_unavailable")
+    return _PowerPointDialogWatch(
+        stop=stop,
+        thread=thread,
+        observed=observed,
+        failures=failures,
+    )
+
+
+def _seal_powerpoint_dialog_watch(
+    dialog_watch: _PowerPointDialogWatch | None,
+    *,
+    requested: bool,
+) -> tuple[str, int | None]:
+    if dialog_watch is None:
+        return ("unavailable" if requested else "not-requested"), None
+    interrupted = bool(dialog_watch.failures) or not dialog_watch.thread.is_alive()
+    # Allow delayed Office notifications to become visible before sealing the
+    # observation window. This is an observation only; dialogs are never dismissed.
+    time.sleep(0.15)
+    interrupted = (
+        interrupted
+        or bool(dialog_watch.failures)
+        or not dialog_watch.thread.is_alive()
+    )
+    dialog_watch.stop.set()
+    dialog_watch.thread.join(timeout=1)
+    if dialog_watch.thread.is_alive():
+        status = "stop-failed"
+    elif interrupted:
+        status = "interrupted"
+    else:
+        status = "sealed"
+    return status, len(dialog_watch.observed)
 
 
 def _powerpoint_main_hwnd(application, window_api=None) -> int:
@@ -743,6 +855,7 @@ def _run_powerpoint_com_qa(
     geometry_contract_digest: str | None = None,
     interactive_observation: bool = False,
     require_font_embedding: bool = True,
+    release_required: bool = False,
 ) -> dict[str, Any]:
     import pythoncom  # type: ignore[import-not-found]
     import win32com.client  # type: ignore[import-not-found]
@@ -750,7 +863,11 @@ def _run_powerpoint_com_qa(
     pythoncom.CoInitialize()
     application = first = reopened = None
     owned_application = False
-    dialog_watch = None
+    dialog_watch: _PowerPointDialogWatch | None = None
+    observation_states: list[str] = []
+    dialog_watcher_status = "not-requested"
+    dialog_watcher_armed_before_first_open = False
+    owned_process_id: int | None = None
     try:
         package_font_evidence = _ooxml_font_preflight(path)
         preexisting_pids = _powerpoint_window_pids()
@@ -760,15 +877,25 @@ def _run_powerpoint_com_qa(
         _, process_id = win32process.GetWindowThreadProcessId(main_hwnd)
         if int(process_id) <= 0 or int(process_id) in preexisting_pids:
             raise PresentationExportContractError("presentation_export_powerpoint_ownership_unproven")
+        owned_process_id = int(process_id)
         owned_application = True
         application.DisplayAlerts = 1
-        if interactive_observation:
+        watcher_requested = interactive_observation or release_required
+        if watcher_requested:
             try:
                 application.Visible = True
                 dialog_watch = _start_powerpoint_dialog_watch(
                     main_hwnd
                 )
+                interactive_observation = True
+                dialog_watcher_status = "armed"
+                dialog_watcher_armed_before_first_open = True
             except Exception:
+                dialog_watcher_status = "unavailable"
+                if release_required:
+                    raise PresentationExportContractError(
+                        "presentation_export_powerpoint_dialog_watcher_unavailable"
+                    )
                 interactive_observation = False
         if evidence_directory is None:
             evidence_context = tempfile.TemporaryDirectory(
@@ -791,6 +918,7 @@ def _run_powerpoint_com_qa(
             first = application.Presentations.Open(
                 str(path), True, False, bool(interactive_observation)
             )
+            _advance_powerpoint_qa_observation(observation_states, "first-open")
             slide_count = int(first.Slides.Count)
             shape_counts = [
                 int(first.Slides.Item(i).Shapes.Count)
@@ -799,11 +927,13 @@ def _run_powerpoint_com_qa(
             first_snapshot, first_snapshot_failures = _powerpoint_deck_snapshot(first)
             first.Export(str(first_render), "PNG", 1280, 720)
             first.SaveCopyAs(str(copy_path), 24)
+            _advance_powerpoint_qa_observation(observation_states, "save-copy")
             first.Close()
             first = None
             reopened = application.Presentations.Open(
                 str(copy_path), True, False, bool(interactive_observation)
             )
+            _advance_powerpoint_qa_observation(observation_states, "reopen")
             reopened_count = int(reopened.Slides.Count)
             reopened_shapes = [
                 int(reopened.Slides.Item(i).Shapes.Count)
@@ -898,25 +1028,29 @@ def _run_powerpoint_com_qa(
                 reopened_snapshot,
                 expected_geometry or {},
             )
+            has_semantic_expectation = bool(
+                expected_qid_owners or expected_native_qids
+            )
             semantic_payload_binding = (
                 "passed"
-                if (expected_qid_owners or expected_native_qids)
+                if has_semantic_expectation
                 and not any(owner_census.values())
                 and geometry_mismatches == 0
-                else "not-verified"
+                else "failed" if has_semantic_expectation else "not-verified"
             )
+            _advance_powerpoint_qa_observation(observation_states, "readback")
             native_qid_ghosting = owner_census["qid_owner_ghosting"]
             backplate_collisions = _backplate_collisions(reopened_snapshot)
-            if dialog_watch is not None:
-                # Allow delayed Office notifications to become visible before
-                # the observation window is sealed.
-                time.sleep(0.15)
-                dialog_watch[0].set()
-                dialog_watch[1].join(timeout=1)
-            repair_dialogs = len(dialog_watch[2]) if dialog_watch is not None else None
+            dialog_watcher_status, repair_dialogs = _seal_powerpoint_dialog_watch(
+                dialog_watch,
+                requested=watcher_requested,
+            )
+            _advance_powerpoint_qa_observation(
+                observation_states, "observation-sealed"
+            )
             repair_observation = (
                 "interactive-observation"
-                if dialog_watch is not None
+                if dialog_watcher_status == "sealed"
                 else "not-observable-via-noninteractive-com"
             )
             if evidence_directory is not None:
@@ -928,7 +1062,7 @@ def _run_powerpoint_com_qa(
                     json.dumps(reopened_snapshot, ensure_ascii=False, indent=2),
                     encoding="utf-8",
                 )
-            passed = not (
+            base_passed = not (
                 slide_count != expected_slides
                 or reopened_count != expected_slides
                 or shape_counts != reopened_shapes
@@ -944,8 +1078,20 @@ def _run_powerpoint_com_qa(
                 or native_qid_ghosting > 0
                 or geometry_mismatches > 0
                 or font_preflight["status"] == "blocked"
-                or (dialog_watch is not None and repair_dialogs != 0)
+                or (repair_dialogs is not None and repair_dialogs != 0)
             )
+            release_gate_failures = _powerpoint_release_gate_failures(
+                release_required=release_required,
+                observation_states=observation_states,
+                dialog_watcher_status=dialog_watcher_status,
+                dialog_watcher_armed_before_first_open=(
+                    dialog_watcher_armed_before_first_open
+                ),
+                repair_dialogs=repair_dialogs,
+                readback_match=comparison["readback_match"],
+                semantic_payload_binding=semantic_payload_binding,
+            )
+            passed = base_passed and not release_gate_failures
             report = {
                 "status": "passed" if passed else "failed",
                 "platform": "windows",
@@ -958,6 +1104,13 @@ def _run_powerpoint_com_qa(
                 "semantic_payload_binding": semantic_payload_binding,
                 "repair_dialogs": repair_dialogs,
                 "repair_observation": repair_observation,
+                "observation_states": observation_states.copy(),
+                "dialog_watcher_status": dialog_watcher_status,
+                "dialog_watcher_armed_before_first_open": (
+                    dialog_watcher_armed_before_first_open
+                ),
+                "owned_process_id": owned_process_id,
+                "release_gate_failures": release_gate_failures,
                 "rendered_png_sha256": reopen_png_hashes,
                 "first_open_rendered_png_sha256": first_png_hashes,
                 "reopen_rendered_png_sha256": reopen_png_hashes,
@@ -1002,8 +1155,8 @@ def _run_powerpoint_com_qa(
             return report
     finally:
         if dialog_watch is not None:
-            dialog_watch[0].set()
-            dialog_watch[1].join(timeout=1)
+            dialog_watch.stop.set()
+            dialog_watch.thread.join(timeout=1)
         for deck in (reopened, first) if owned_application else ():
             if deck is not None:
                 try:
@@ -1028,11 +1181,24 @@ async def trusted_powerpoint_qa(
     expected_geometry: dict[tuple[int, str], tuple[float, float, float, float]] | None = None,
     geometry_contract_digest: str | None = None,
     require_font_embedding: bool = True,
+    release_required: bool = False,
 ) -> dict[str, Any]:
     if os.name != "nt":
-        return {"status": "preflight", "platform": "unsupported"}
+        return {
+            "status": "failed" if release_required else "preflight",
+            "platform": "unsupported",
+            "release_gate_failures": (
+                ["watcher-unavailable"] if release_required else []
+            ),
+        }
     if not _powerpoint_executable_available():
-        return {"status": "not-verified", "platform": "windows"}
+        return {
+            "status": "failed" if release_required else "not-verified",
+            "platform": "windows",
+            "release_gate_failures": (
+                ["watcher-unavailable"] if release_required else []
+            ),
+        }
     try:
         return await asyncio.to_thread(
             _run_powerpoint_com_qa,
@@ -1048,13 +1214,20 @@ async def trusted_powerpoint_qa(
             ).lower()
             == "true",
             require_font_embedding,
+            release_required,
         )
-    except Exception:
+    except Exception as error:
+        reason = (
+            "watcher-unavailable"
+            if "dialog_watcher_unavailable" in str(error)
+            else "observation-state-incomplete"
+        )
         return {
             "status": "failed",
             "platform": "windows",
             "supported": True,
             "automation": "PowerPoint.COM",
+            "release_gate_failures": [reason] if release_required else [],
         }
 
 

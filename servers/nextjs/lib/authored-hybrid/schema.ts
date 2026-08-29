@@ -58,6 +58,7 @@ export const AUTHORED_HYBRID_FALLBACK_REASONS = [
   "complex-diagram",
   "complex-table",
   "complex-transform",
+  "connector-text-clearance",
   "css-columns",
   "decorated-image",
   "decorated-text",
@@ -158,6 +159,8 @@ export interface AuthoredHybridTextRun {
    * breaks separate block-flow text.
    */
   breakKind?: "soft" | "line" | "paragraph";
+  /** Zero-based Chromium visual-line owner for this run. */
+  lineIndex?: number;
 }
 
 export interface AuthoredHybridTextBoxEdgesPx {

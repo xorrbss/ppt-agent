@@ -141,7 +141,7 @@ export interface PresentationExportChartLegendReadback extends PresentationExpor
 
 export interface PresentationExportPaintPlanReadback {
   readonly schemaVersion: "hybrid-paint-plan/browser-v1";
-  readonly strategy: "single-backplate-fixed-point";
+  readonly strategy: "single-backplate-fixed-point" | "audited-multi-z-band";
   readonly fixedPointReached: true;
   readonly closureIterations: number;
   readonly closureDigest: string;
@@ -158,6 +158,12 @@ export interface PresentationExportPaintPlanReadback {
     readonly elementId: string;
     readonly fallbackReason: "z-band-unsafe";
     readonly blockedByElementIds: readonly string[];
+  }[];
+  readonly bands?: readonly {
+    readonly zBand: number;
+    readonly paintOwner: "native" | "rasterIsland";
+    readonly elementIds: readonly string[];
+    readonly artifactDigest?: string;
   }[];
 }
 
