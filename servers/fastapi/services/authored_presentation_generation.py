@@ -70,6 +70,7 @@ from services.authored_composition_policy import (
     build_authored_capacity_plan,
     capacity_violations,
     ensure_authored_semantic_roles,
+    repair_authored_layout_alignment,
     resolve_composition_profile,
 )
 from services.provider_usage_instrumentation import provider_usage_scope, record_local_stage
@@ -97,6 +98,7 @@ from utils.slide_capture import (
     ensure_browser_metrics,
     find_chrome,
     get_cached_browser_metrics,
+    render_html_to_png_with_metrics,
 )
 from services.authored_evidence_ledger import digest_html, digest_png
 from services.authored_quality_receipt_v2 import (
@@ -115,6 +117,42 @@ from services.source_content.readback import (
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+async def _apply_bounded_layout_alignment_repairs(
+    *,
+    htmls: list[str],
+    pngs: list[bytes],
+    roles: list[str],
+    capacity_plan,
+    profile_id: str,
+    metrics_override: dict[int, object],
+) -> list[int]:
+    """Apply one content-preserving alignment normalization per affected slide."""
+
+    if profile_id != "ordinary":
+        return []
+    repaired_indices: list[int] = []
+    for index, (html, role) in enumerate(zip(htmls, roles, strict=True)):
+        repaired = repair_authored_layout_alignment(html, role=role)
+        if repaired == html:
+            continue
+        canonical_html = ensure_authored_semantic_roles(ensure_authored_qids(repaired))
+        capture = await render_html_to_png_with_metrics(canonical_html)
+        if capture.png == _placeholder_png() or capture.browser_metrics is None:
+            raise RuntimeError("bounded layout alignment browser evidence unavailable")
+        violations = capacity_violations(
+            canonical_html, capture.browser_metrics, capacity_plan.at(index)
+        )
+        if violations:
+            raise RuntimeError(
+                "bounded layout alignment repair failed capacity validation: "
+                + ",".join(violations)
+            )
+        htmls[index], pngs[index] = canonical_html, capture.png
+        metrics_override[index] = capture.browser_metrics
+        repaired_indices.append(index)
+    return repaired_indices
 
 
 def build_authored_quality_gate_receipt(
@@ -863,6 +901,21 @@ async def _generate_authored_presentation(
             finally:
                 vision_elapsed = time.monotonic() - vision_started
                 await record_local_stage(latency_ms=vision_elapsed * 1000)
+
+    aligned_indices = await _apply_bounded_layout_alignment_repairs(
+        htmls=htmls,
+        pngs=pngs,
+        roles=roles,
+        capacity_plan=capacity_plan,
+        profile_id=composition_profile.profile_id,
+        metrics_override=revised_metrics_by_slide,
+    )
+    if aligned_indices:
+        repaired_gate_indices = sorted({*repaired_gate_indices, *aligned_indices})
+        LOGGER.info(
+            "[authored] bounded layout alignment repair slides=%s",
+            ",".join(str(index + 1) for index in aligned_indices),
+        )
 
     evidence_ledger, evidence_attempt_id, retained_final_metrics = (
         _finalize_attempt_evidence(

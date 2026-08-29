@@ -19,6 +19,7 @@ from utils.authored_dom_quality import build_compact_dom_map, normalize_browser_
 
 
 CompositionProfileId = Literal["ordinary", "source-verbatim", "source-outline"]
+_LAYOUT_ALIGNMENT_MARKER = "authored-layout-alignment-repair-v1"
 
 
 @dataclass(frozen=True, slots=True)
@@ -595,6 +596,107 @@ def capacity_violations(
     return tuple(violations)
 
 
+def repair_authored_layout_alignment(html: str, *, role: str) -> str:
+    """Repair two bounded alignment defects without changing slide content.
+
+    The repair is intentionally limited to the exact authored contracts that
+    caused the observed PROBLEM and CLOSING imbalance: a zero-inset 22px
+    eyebrow box, and a header-body root that omitted the CSS class carrying the
+    deck's symmetric 72px margins. Source-bound HTML is never rewritten.
+    """
+
+    normalized_role = role.strip().upper()
+    if (
+        normalized_role not in {"PROBLEM", "CLOSING"}
+        or _LAYOUT_ALIGNMENT_MARKER in html
+        or "data-source-block-id" in html.lower()
+    ):
+        return html
+
+    repaired = html
+    applied: list[str] = []
+    if normalized_role == "PROBLEM":
+        eyebrow_rule = re.search(
+            r"(?P<prefix>\.eyebrow\s*\{)(?P<body>[^}]*)\}",
+            repaired,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if eyebrow_rule is not None:
+            declarations = eyebrow_rule.group("body")
+            if re.search(r"(?:^|;)\s*height\s*:\s*22px\s*;", declarations) and re.search(
+                r"(?:^|;)\s*padding-top\s*:\s*0(?:px)?\s*;", declarations
+            ):
+                declarations = re.sub(
+                    r"(?:^|;)\s*height\s*:\s*22px\s*;",
+                    ";",
+                    declarations,
+                    count=1,
+                    flags=re.IGNORECASE,
+                )
+                declarations = re.sub(
+                    r"padding-top\s*:\s*0(?:px)?\s*;",
+                    "padding-top:34px;",
+                    declarations,
+                    count=1,
+                    flags=re.IGNORECASE,
+                )
+                repaired = (
+                    repaired[: eyebrow_rule.start()]
+                    + eyebrow_rule.group("prefix")
+                    + declarations
+                    + "}"
+                    + repaired[eyebrow_rule.end() :]
+                )
+                applied.append("header-inset")
+
+    if normalized_role == "CLOSING" and re.search(
+        r"\.body\s*\{[^}]*\bmargin\s*:\s*28px\s+72px\s+0\b",
+        repaired,
+        flags=re.IGNORECASE | re.DOTALL,
+    ):
+        body_root = re.search(
+            r"<(?P<tag>div|main|section)\b(?P<attrs>[^>]*\bdata-header-part\s*=\s*(?P<quote>['\"])body(?P=quote)[^>]*)>",
+            repaired,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if body_root is not None:
+            attrs = body_root.group("attrs")
+            class_match = re.search(
+                r"\bclass\s*=\s*(?P<quote>['\"])(?P<classes>.*?)(?P=quote)",
+                attrs,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+            if class_match is None:
+                replacement = f'<{body_root.group("tag")} class="body"{attrs}>'
+            else:
+                classes = class_match.group("classes").split()
+                if "body" in {item.casefold() for item in classes}:
+                    replacement = body_root.group(0)
+                else:
+                    updated = " ".join([*classes, "body"])
+                    updated_attrs = (
+                        attrs[: class_match.start("classes")]
+                        + updated
+                        + attrs[class_match.end("classes") :]
+                    )
+                    replacement = f'<{body_root.group("tag")}{updated_attrs}>'
+            if replacement != body_root.group(0):
+                repaired = (
+                    repaired[: body_root.start()]
+                    + replacement
+                    + repaired[body_root.end() :]
+                )
+                applied.append("body-class")
+
+    if not applied:
+        return html
+    insertion = re.search(r"</head\s*>", repaired, flags=re.IGNORECASE)
+    if insertion is None:
+        return html
+    marker = f"<!-- {_LAYOUT_ALIGNMENT_MARKER}:{','.join(applied)} -->"
+    return repaired[: insertion.start()] + marker + repaired[insertion.start() :]
+
+
 def blocking_safety_issues(report: Any) -> tuple[Any, ...]:
     """Return only binary publication-safety defects from a DOM report.
 
@@ -621,5 +723,6 @@ __all__ = [
     "capacity_overflow",
     "capacity_violations",
     "ensure_authored_semantic_roles",
+    "repair_authored_layout_alignment",
     "resolve_composition_profile",
 ]
