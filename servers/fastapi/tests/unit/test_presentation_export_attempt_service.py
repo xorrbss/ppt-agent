@@ -68,12 +68,14 @@ def test_powerpoint_qa_does_not_self_promote_visual_parity() -> None:
             "repairDialogs": 0,
             "renderedPngSha256": ["a" * 64],
             "slideCount": 1,
+            "inspectionFailures": 0,
         }
     )
     failed = passed.model_copy(update={"status": "failed"})
 
     assert _visual_parity_status_from_powerpoint_qa(passed) == "not-verified"
     assert _visual_parity_status_from_powerpoint_qa(failed) == "failed"
+    assert passed.inspection_failures == 0
 
 
 def test_passed_powerpoint_qa_allows_truthful_unverified_visual_parity() -> None:
