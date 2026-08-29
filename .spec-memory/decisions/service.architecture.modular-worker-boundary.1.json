@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "key": "service.architecture.modular-worker-boundary",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Use one FastAPI PPT Core and same-codebase generation, isolated render and export workers; add a broker only after measured scaling thresholds.",
+  "scope": [
+    "architecture",
+    "generation",
+    "rendering",
+    "export",
+    "scaling"
+  ],
+  "invariants": [
+    "Operation control and quality policy remain PPT Core modules, not separate microservices.",
+    "PostgreSQL operation, outbox and lease remain durable queue authority initially.",
+    "Render and export receive strong process or container isolation.",
+    "Next.js provides UI and status only and does not execute Chrome or converters."
+  ],
+  "forbidden": [
+    "Mandatory Redis, Kafka or SQS before measured queue thresholds.",
+    "Independent control-plane or quality-gate microservices as the initial design.",
+    "Duplicating the domain model across worker repositories."
+  ],
+  "evidence": [
+    "docs/public-generation-export-service-architecture-20260830.md"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-29T19:22:15.6147039+00:00"
+}

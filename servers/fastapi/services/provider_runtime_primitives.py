@@ -56,7 +56,11 @@ class RuntimeLimits:
     max_concurrency: int = 8
     requests_per_minute: int = 60
     rpm_window_seconds: float = 60.0
-    retry_amplification_ceiling: float = 2.0
+    # Structured generation performs at most four physical attempts for one
+    # logical call.  Keep the in-process secondary guard aligned with that
+    # bounded retry contract; the durable public reservation remains the hard
+    # per-operation request/cost authority.
+    retry_amplification_ceiling: float = 4.0
     circuit_failure_threshold: int = 5
     circuit_reset_seconds: float = 30.0
 

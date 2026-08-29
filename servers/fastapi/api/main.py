@@ -16,6 +16,8 @@ from api.v1.mock.router import API_V1_MOCK_ROUTER
 from api.v1.ppt.router import API_V1_PPT_ROUTER
 from api.v1.webhook.router import API_V1_WEBHOOK_ROUTER
 from services.workspace_metrics import WORKSPACE_METRICS
+from services.database import async_session_maker
+from services.public_operation_admission import public_prometheus_metrics_text
 from services.provider_telemetry_runtime import maybe_init_sentry
 from utils.get_env import (
     get_app_data_directory_env,
@@ -98,8 +100,10 @@ async def workspace_metrics_scrape() -> PlainTextResponse:
     authorization boundary for this aggregate-only scrape endpoint.
     """
 
+    async with async_session_maker() as session:
+        public_metrics = await public_prometheus_metrics_text(session)
     return PlainTextResponse(
-        WORKSPACE_METRICS.prometheus_text(),
+        WORKSPACE_METRICS.prometheus_text() + public_metrics,
         media_type="text/plain; version=0.0.4; charset=utf-8",
     )
 

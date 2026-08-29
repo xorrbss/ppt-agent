@@ -60,6 +60,11 @@ from services.authored_composition_policy import (
     AUTHORED_CAPACITY_BOUNDED_REPAIR_REVISION,
 )
 from services.workspace_error_registry import resolve_workspace_error
+from services.public_operation_admission import (
+    PublicAdmissionRejected,
+    admit_public_operation,
+    current_principal_context,
+)
 from services.workspace_operation_titles import workspace_operation_title
 from utils.datetime_utils import get_current_utc_datetime
 from utils.owner_context import get_current_owner_id
@@ -180,10 +185,12 @@ class WorkspaceServiceError(RuntimeError):
         status_code: int = 400,
         retryable: bool = False,
         message: Optional[str] = None,
+        retry_after_seconds: int | None = None,
     ) -> None:
         self.code = code
         self.status_code = status_code
         self.retryable = retryable
+        self.retry_after_seconds = retry_after_seconds
         self.safe_message = message or _SAFE_ERROR_MESSAGES.get(code, code)
         super().__init__(code)
 
@@ -1774,6 +1781,22 @@ async def create_workspace_command(
     session.add_all((message, operation))
     try:
         await session.flush()
+        if request.command_type in {"export.pptx", "export.pdf"}:
+            try:
+                await admit_public_operation(
+                    session,
+                    principal=current_principal_context(),
+                    operation_id=operation.id,
+                    operation_kind="export",
+                    request_plan=None,
+                )
+            except PublicAdmissionRejected as error:
+                raise WorkspaceServiceError(
+                    error.code,
+                    status_code=429,
+                    retryable=True,
+                    retry_after_seconds=error.retry_after_seconds or 15,
+                ) from error
         assets = await _materialize_attachments(
             session,
             conversation=conversation,

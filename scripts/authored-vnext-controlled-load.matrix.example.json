@@ -10,9 +10,9 @@
   "soak": { "durationSeconds": 0 },
   "matrix": {
     "slideCounts": [5, 10, 20],
-    "concurrencyLevels": [1, 2, 4],
+    "concurrencyLevels": [1, 2, 5, 10],
     "cacheStates": ["cold", "warm"],
-    "repetitions": 4,
+    "repetitions": 10,
     "fixedInvariants": {
       "provider": { "id": "provider-redacted-id", "fingerprint": "sha256:3558fe09beb425247d3702a53f3bdcaa1e6464c8cb7dc39bed8db8c44eb8cce0" },
       "model": { "id": "model-redacted-id", "fingerprint": "sha256:368194713e3755a7dbfcb328879d7c9e5e1c2b704273a69bdea14fe5c075c315" },
@@ -22,13 +22,16 @@
     "coldControlReceipts": {
       "cold-5slides-c1": { "method": "external-cache-control", "target": "redacted-cache-target", "completedAt": "2026-08-29T00:00:00.000Z", "environmentFingerprint": "sha256:949069795f9aca86c0936bb9e72aeb6927124668b5155dad796b2920cd47830d" },
       "cold-5slides-c2": { "method": "external-cache-control", "target": "redacted-cache-target", "completedAt": "2026-08-29T00:01:00.000Z", "environmentFingerprint": "sha256:949069795f9aca86c0936bb9e72aeb6927124668b5155dad796b2920cd47830d" },
-      "cold-5slides-c4": { "method": "external-cache-control", "target": "redacted-cache-target", "completedAt": "2026-08-29T00:02:00.000Z", "environmentFingerprint": "sha256:949069795f9aca86c0936bb9e72aeb6927124668b5155dad796b2920cd47830d" },
+      "cold-5slides-c5": { "method": "external-cache-control", "target": "redacted-cache-target", "completedAt": "2026-08-29T00:02:00.000Z", "environmentFingerprint": "sha256:949069795f9aca86c0936bb9e72aeb6927124668b5155dad796b2920cd47830d" },
+      "cold-5slides-c10": { "method": "external-cache-control", "target": "redacted-cache-target", "completedAt": "2026-08-29T00:02:30.000Z", "environmentFingerprint": "sha256:949069795f9aca86c0936bb9e72aeb6927124668b5155dad796b2920cd47830d" },
       "cold-10slides-c1": { "method": "external-cache-control", "target": "redacted-cache-target", "completedAt": "2026-08-29T00:03:00.000Z", "environmentFingerprint": "sha256:949069795f9aca86c0936bb9e72aeb6927124668b5155dad796b2920cd47830d" },
       "cold-10slides-c2": { "method": "external-cache-control", "target": "redacted-cache-target", "completedAt": "2026-08-29T00:04:00.000Z", "environmentFingerprint": "sha256:949069795f9aca86c0936bb9e72aeb6927124668b5155dad796b2920cd47830d" },
-      "cold-10slides-c4": { "method": "external-cache-control", "target": "redacted-cache-target", "completedAt": "2026-08-29T00:05:00.000Z", "environmentFingerprint": "sha256:949069795f9aca86c0936bb9e72aeb6927124668b5155dad796b2920cd47830d" },
+      "cold-10slides-c5": { "method": "external-cache-control", "target": "redacted-cache-target", "completedAt": "2026-08-29T00:05:00.000Z", "environmentFingerprint": "sha256:949069795f9aca86c0936bb9e72aeb6927124668b5155dad796b2920cd47830d" },
+      "cold-10slides-c10": { "method": "external-cache-control", "target": "redacted-cache-target", "completedAt": "2026-08-29T00:05:30.000Z", "environmentFingerprint": "sha256:949069795f9aca86c0936bb9e72aeb6927124668b5155dad796b2920cd47830d" },
       "cold-20slides-c1": { "method": "external-cache-control", "target": "redacted-cache-target", "completedAt": "2026-08-29T00:06:00.000Z", "environmentFingerprint": "sha256:949069795f9aca86c0936bb9e72aeb6927124668b5155dad796b2920cd47830d" },
       "cold-20slides-c2": { "method": "external-cache-control", "target": "redacted-cache-target", "completedAt": "2026-08-29T00:07:00.000Z", "environmentFingerprint": "sha256:949069795f9aca86c0936bb9e72aeb6927124668b5155dad796b2920cd47830d" },
-      "cold-20slides-c4": { "method": "external-cache-control", "target": "redacted-cache-target", "completedAt": "2026-08-29T00:08:00.000Z", "environmentFingerprint": "sha256:949069795f9aca86c0936bb9e72aeb6927124668b5155dad796b2920cd47830d" }
+      "cold-20slides-c5": { "method": "external-cache-control", "target": "redacted-cache-target", "completedAt": "2026-08-29T00:08:00.000Z", "environmentFingerprint": "sha256:949069795f9aca86c0936bb9e72aeb6927124668b5155dad796b2920cd47830d" },
+      "cold-20slides-c10": { "method": "external-cache-control", "target": "redacted-cache-target", "completedAt": "2026-08-29T00:08:30.000Z", "environmentFingerprint": "sha256:949069795f9aca86c0936bb9e72aeb6927124668b5155dad796b2920cd47830d" }
     }
   },
   "decks": [

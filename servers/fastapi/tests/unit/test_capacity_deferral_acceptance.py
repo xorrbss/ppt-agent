@@ -100,6 +100,8 @@ async def _seed_operations(maker):
                     n_slides=1,
                     language="en",
                     layout={"name": "test"},
+                    mode="authored",
+                    theme={"mode": "authored"},
                     revision=0,
                 )
                 session.add_all((user, presentation))

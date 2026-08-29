@@ -15,9 +15,13 @@ param(
 
     [string]$LogoSvgPath,
 
+    [string]$ChromePath,
+
     [switch]$IsolatedDatabase,
 
-    [switch]$AllowProviderSettings
+    [switch]$AllowProviderSettings,
+
+    [switch]$ExportOnlyValidation
 )
 
 $ErrorActionPreference = "Stop"
@@ -52,6 +56,9 @@ else {
 if ($ProviderConfigPath -and -not (Test-Path -LiteralPath $userConfigPath -PathType Leaf)) {
     throw "Provider config file does not exist: $userConfigPath"
 }
+if ($AllowProviderSettings -and $ExportOnlyValidation) {
+    throw "-AllowProviderSettings and -ExportOnlyValidation cannot be combined."
+}
 $resolvedLogoSvgPath = if ([string]::IsNullOrWhiteSpace($LogoSvgPath)) {
     $null
 }
@@ -59,6 +66,16 @@ else {
     $resolved = [System.IO.Path]::GetFullPath($LogoSvgPath, $repoRoot)
     if (-not (Test-Path -LiteralPath $resolved -PathType Leaf)) {
         throw "Logo SVG file does not exist: $resolved"
+    }
+    $resolved
+}
+$resolvedChromePath = if ([string]::IsNullOrWhiteSpace($ChromePath)) {
+    $null
+}
+else {
+    $resolved = [System.IO.Path]::GetFullPath($ChromePath, $repoRoot)
+    if (-not (Test-Path -LiteralPath $resolved -PathType Leaf)) {
+        throw "Chrome executable does not exist: $resolved"
     }
     $resolved
 }
@@ -241,6 +258,18 @@ finally {
     $randomNumberGenerator.Dispose()
 }
 $workerToken = [BitConverter]::ToString($workerTokenBytes).Replace("-", "").ToLowerInvariant()
+$workerCapabilityKeyPath = Join-Path $devSessionRoot "public-worker-capability.key"
+[System.IO.File]::WriteAllBytes($workerCapabilityKeyPath, $workerTokenBytes)
+$publicArtifactRoot = Join-Path $appDataRoot "public-artifacts"
+New-Item -ItemType Directory -Path $publicArtifactRoot -Force | Out-Null
+$uvCacheRoot = Join-Path $repoRoot ".tmp\uv-cache"
+New-Item -ItemType Directory -Path $uvCacheRoot -Force | Out-Null
+$fastApiPython = Join-Path $fastApiRoot ".venv\Scripts\python.exe"
+if (-not (Test-Path -LiteralPath $fastApiPython -PathType Leaf)) {
+    throw "FastAPI virtual-environment Python is unavailable: $fastApiPython"
+}
+$renderWorkerCommand = @($fastApiPython, "-m", "workers.public_render_worker") | ConvertTo-Json -Compress
+$exportWorkerCommand = @($fastApiPython, "-m", "workers.public_export_worker") | ConvertTo-Json -Compress
 $proxyUrl = "http://127.0.0.1:$ProxyPort"
 $fastApiUrl = "http://127.0.0.1:$FastApiPort"
 
@@ -268,11 +297,34 @@ $sharedAuthoredEnvironment = @{
     "AUTHORED_SEMANTIC_DUAL_OUTPUT_MODE" = "declared"
     "AUTHORED_SEMANTIC_BUNDLE_WRITES_ENABLED" = "true"
     "AUTHORED_VNEXT_OOXML_WORKER_TOKEN" = $workerToken
+    "PUBLIC_ARTIFACT_STORE_BACKEND" = "local-development"
+    "PUBLIC_WORKER_OBJECT_STORE_ROOT" = $publicArtifactRoot
+    "PUBLIC_WORKER_CAPABILITY_KEY_FILE" = $workerCapabilityKeyPath
+    "PUBLIC_RENDER_WORKER_COMMAND_JSON" = $renderWorkerCommand
+    "PUBLIC_EXPORT_WORKER_COMMAND_JSON" = $exportWorkerCommand
+    # This is a local functional profile. Release evidence must still prove
+    # the production container's actual non-root/read-only/tmpfs/network-none policy.
+    "PUBLIC_WORKER_OS_ISOLATION" = "nonroot-readonly-tmpfs-network-none"
+    "UV_CACHE_DIR" = $uvCacheRoot
+}
+if ($ExportOnlyValidation) {
+    # This profile is only for validating already-published decks. It keeps the
+    # durable Core export runner active but neither resolves a provider nor
+    # starts a generation process that could transmit content externally.
+    $sharedAuthoredEnvironment["AUTHORED_VNEXT_GENERATION_ENABLED"] = "false"
+    $sharedAuthoredEnvironment["PRESENTON_SKIP_PROVIDER_AVAILABILITY_CHECK"] = "true"
+}
+if ($resolvedChromePath) {
+    # An explicit executable takes precedence over an installed Playwright
+    # headless-shell revision. The isolated worker still receives only this
+    # allowlisted path and its operation-scoped capability.
+    $sharedAuthoredEnvironment["CHROME_PATH"] = $resolvedChromePath
 }
 
 $fastApiEnvironment = $sharedAuthoredEnvironment.Clone()
 $fastApiEnvironment["DATABASE_URL"] = "sqlite:///$devDatabasePath"
 $fastApiEnvironment["MIGRATE_DATABASE_ON_STARTUP"] = "true"
+$fastApiEnvironment["WORKSPACE_OPERATION_WORKER_MODE"] = "split"
 # Server-to-server OOXML envelopes can contain several megabytes of verified
 # native template fragments. Send them directly to Next instead of routing the
 # body through the browser-facing single-origin proxy.
@@ -337,6 +389,26 @@ try {
         -StderrPath (Join-Path $logRoot "fastapi.stderr.log")
     $processes.Add($fastApi)
     Wait-HttpReady -Name "FastAPI" -Uri "$fastApiUrl/metrics/workspace" -Process $fastApi
+
+    if (-not $ExportOnlyValidation) {
+        $generationWorkerEnvironment = $fastApiEnvironment.Clone()
+        $generationWorkerEnvironment["WORKSPACE_OPERATION_WORKER_MODE"] = "external"
+        $generationWorkerEnvironment["PPT_PROCESS_PROFILE"] = "generation"
+        $generationWorker = Start-LoggedProcess `
+            -Name "generation worker" `
+            -FilePath $fastApiPython `
+            -ArgumentList @("-m", "services.workspace_operation_worker") `
+            -WorkingDirectory $fastApiRoot `
+            -Environment $generationWorkerEnvironment `
+            -StdoutPath (Join-Path $logRoot "generation-worker.stdout.log") `
+            -StderrPath (Join-Path $logRoot "generation-worker.stderr.log")
+        $processes.Add($generationWorker)
+        Start-Sleep -Milliseconds 750
+        $generationWorker.Refresh()
+        if ($generationWorker.HasExited) {
+            throw "Generation worker exited before readiness (exit code $($generationWorker.ExitCode)). See $logRoot."
+        }
+    }
 
     if ($ProviderConfigPath) {
         # An existing local provider file can be newer than this worktree's
@@ -432,7 +504,8 @@ try {
     Write-Host "New-presentation engine: Authored only (vNext independent generation frozen; compatibility open/export preserved)"
     Write-Host "Database: $devDatabasePath"
     Write-Host "Logs: $logRoot"
-    Write-Host "Press Ctrl+C to stop only the three processes started by this script."
+    $startedProcessCount = $processes.Count
+    Write-Host "Press Ctrl+C to stop only the $startedProcessCount processes started by this script."
 
     while ($true) {
         foreach ($process in $processes) {

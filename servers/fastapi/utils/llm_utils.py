@@ -23,6 +23,7 @@ from llmai.shared import (
 
 from utils.llm_config import get_extra_body
 from utils.schema_utils import get_schema_validation_errors
+from services.provider_usage_instrumentation import provider_call_admission
 LOGGER = logging.getLogger(__name__)
 CLIENT_DISCONNECT_POLL_SECONDS = 0.1
 TRANSIENT_LLM_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
@@ -129,17 +130,19 @@ async def _generate_structured_content_with_transient_retries(
     client: Any,
     *,
     disconnect_checker: Optional[DisconnectChecker],
+    is_retry: bool = False,
     **kwargs: Any,
 ) -> Optional[dict]:
     """Retry only transient provider failures, then expose a retryable 503."""
     for attempt in range(1, TRANSIENT_LLM_MAX_ATTEMPTS + 1):
         await _raise_if_client_disconnected(disconnect_checker)
         try:
-            return await _generate_structured_content(
-                client,
-                disconnect_checker=disconnect_checker,
-                **kwargs,
-            )
+            async with provider_call_admission(is_retry=is_retry or attempt > 1):
+                return await _generate_structured_content(
+                    client,
+                    disconnect_checker=disconnect_checker,
+                    **kwargs,
+                )
         except Exception as error:
             status_code = _exception_status_code(error)
             is_transient = status_code in TRANSIENT_LLM_STATUS_CODES
@@ -738,6 +741,7 @@ async def generate_structured_with_schema_retries(
             content = await _generate_structured_content_with_transient_retries(
                 client,
                 disconnect_checker=disconnect_checker,
+                is_retry=validation_attempt > 0,
                 text_chunk_callback=(
                     text_chunk_callback
                     if validation_attempt == 0 and attempt == 0
@@ -882,7 +886,7 @@ def message_content_to_text(content: Sequence[Any] | str | None) -> Optional[str
     return joined or None
 
 
-async def stream_generate_events(
+async def _stream_generate_events_unadmitted(
     client: Any,
     *,
     disconnect_checker: Optional[DisconnectChecker] = None,
@@ -971,3 +975,22 @@ async def stream_generate_events(
             worker_task.add_done_callback(
                 lambda task: None if task.cancelled() else task.exception()
             )
+
+
+async def stream_generate_events(
+    client: Any,
+    *,
+    disconnect_checker: Optional[DisconnectChecker] = None,
+    inactivity_timeout_seconds: Optional[float] = None,
+    **kwargs: Any,
+) -> AsyncGenerator[Any, None]:
+    """Admit exactly one provider stream before its first network byte."""
+
+    async with provider_call_admission():
+        async for event in _stream_generate_events_unadmitted(
+            client,
+            disconnect_checker=disconnect_checker,
+            inactivity_timeout_seconds=inactivity_timeout_seconds,
+            **kwargs,
+        ):
+            yield event

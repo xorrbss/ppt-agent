@@ -86,6 +86,42 @@ def test_actual_call_admission_observes_job_cancellation(monkeypatch) -> None:
     asyncio.run(scenario())
 
 
+def test_new_operation_attempt_gets_fresh_bounded_runtime_job(monkeypatch) -> None:
+    async def scenario() -> None:
+        job_id = uuid.uuid4()
+        monkeypatch.delenv(
+            "PROVIDER_JOB_ESTIMATED_BUDGET_MICROUNITS", raising=False
+        )
+        with provider_usage_scope(
+            job_id=job_id,
+            operation="generate",
+            stage="content_brief",
+            attempt_number=1,
+        ):
+            async with provider_call_admission():
+                pass
+            for _ in range(3):
+                async with provider_call_admission(is_retry=True):
+                    pass
+            await cancel_provider_job(job_id, "retry_amplification_exceeded")
+
+        with provider_usage_scope(
+            job_id=job_id,
+            operation="generate",
+            stage="content_brief",
+            attempt_number=2,
+        ):
+            async with provider_call_admission():
+                pass
+
+        status = await provider_runtime_job_status(job_id)
+        assert status["job_id"].endswith(":attempt:2")
+        assert status["total_requests"] == 1
+        assert status["cancelled"] is False
+
+    asyncio.run(scenario())
+
+
 def test_required_durable_admission_reserves_and_reconciles_before_sdk(
     monkeypatch,
 ) -> None:

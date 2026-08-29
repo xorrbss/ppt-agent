@@ -17,6 +17,7 @@ from services.presentation_profiles import (
     PresentationProfileError,
     resolve_presentation_profile,
 )
+from services.provider_usage_instrumentation import public_operation_scope
 from utils.llm_config import disable_thinking
 from utils.llm_provider import generation_provider_policy
 
@@ -100,6 +101,8 @@ def generation_provider_admitted(
         request = cast(GeneratePresentationRequest, bound.arguments["request"])
         presentation_id = bound.arguments["presentation_id"]
         sql_session = cast(AsyncSession, bound.arguments["sql_session"])
+        generation_job = bound.arguments.get("generation_job")
+        public_operation_id = getattr(generation_job, "workspace_operation_id", None)
         persisted = await sql_session.get(PresentationModel, presentation_id)
         try:
             identity = server_generation_profile_identity(request, persisted)
@@ -107,11 +110,12 @@ def generation_provider_admitted(
             required = generation_provider_capabilities(request, profile.driver_id)
         except PresentationProfileError as error:
             raise HTTPException(status_code=422, detail=error.code) from error
-        with generation_provider_policy(
-            identity,
-            required_capabilities=required,
-        ):
-            return await handler(*args, **kwargs)
+        with public_operation_scope(public_operation_id):
+            with generation_provider_policy(
+                identity,
+                required_capabilities=required,
+            ):
+                return await handler(*args, **kwargs)
 
     return wrapped
 

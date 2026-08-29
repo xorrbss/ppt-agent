@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "key": "service.public-admission-budget-boundary",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Bind public operations to verified principal and versioned policy; reserve every logical provider call before I/O and reconcile scalar usage.",
+  "scope": [
+    "admission",
+    "provider-cost",
+    "multi-user"
+  ],
+  "invariants": [
+    "owner and tenant come only from PrincipalContext",
+    "outline and all provider stages require a unique logical reservation",
+    "request retry estimated and actual cost caps are durable"
+  ],
+  "forbidden": [
+    "cookie or session persistence",
+    "client supplied owner or tenant",
+    "provider I/O without reservation"
+  ],
+  "evidence": [
+    "servers/fastapi/services/public_operation_admission.py",
+    "servers/fastapi/tests/unit/test_public_operation_admission.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-29T19:39:24.7878368+00:00"
+}

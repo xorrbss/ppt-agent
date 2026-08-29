@@ -68,7 +68,7 @@ function usage() {
     "Credentials are read only from PRESENTON_BENCH_USER/PRESENTON_BENCH_PASSWORD.",
     "Durability mode additionally requires inherited WORKSPACE_OPERATION_WORKER_MODE=external,",
     "APP_DATA_DIRECTORY and DATABASE_URL values rooted below durability.isolatedRoot.",
-    "schemaVersion 2 supports matrix.slideCounts (5,10,20), matrix.concurrencyLevels (1,2,4),",
+    "schemaVersion 2 supports matrix.slideCounts (5,10,20), matrix.concurrencyLevels (1,2,5,10),",
     "matrix.cacheStates (cold,warm), and matrix.repetitions. Matrix runs require redacted provider/model/prompt/environment fingerprints, owned resource PIDs, and a cold-control receipt for every cold cell. This harness never restarts a listener.",
   ].join("\n");
 }
@@ -200,7 +200,7 @@ function normalizeManifest(raw) {
     const cacheStates = [...new Set((input.cacheStates || []).map((value) => String(value).toLowerCase()))];
     const repetitions = Number(input.repetitions ?? 2);
     if (JSON.stringify(slideCounts) !== JSON.stringify([5, 10, 20])) fail("matrix.slideCounts must be exactly [5,10,20]");
-    if (JSON.stringify(concurrencyLevels) !== JSON.stringify([1, 2, 4])) fail("matrix.concurrencyLevels must be exactly [1,2,4]");
+    if (JSON.stringify(concurrencyLevels) !== JSON.stringify([1, 2, 5, 10])) fail("matrix.concurrencyLevels must be exactly [1,2,5,10]");
     if (JSON.stringify(cacheStates) !== JSON.stringify(["cold", "warm"])) fail("matrix.cacheStates must be exactly [cold,warm]");
     if (!Number.isInteger(repetitions) || repetitions < 2 || repetitions > 20) fail("matrix.repetitions must be 2..20");
     if (repetitions < Math.max(...concurrencyLevels)) {

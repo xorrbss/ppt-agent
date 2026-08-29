@@ -31,6 +31,7 @@ from models.sql.presentation import (
 )
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.presentation_export_attempt import PresentationExportAttempt
+from models.sql.public_artifact import PublicArtifact
 from models.sql.workspace import (
     WorkspaceArtifact,
     WorkspaceOperation,
@@ -151,7 +152,8 @@ class ResolvedWorkspaceExportArtifact:
     sha256: str
     size_bytes: int
     expires_at: datetime
-    absolute_path: Path
+    absolute_path: Path | None
+    public_artifact_id: uuid.UUID | None
 
 
 def _app_data_root() -> Path:
@@ -2563,15 +2565,30 @@ async def resolve_workspace_export_artifact(
     if artifact.presentation_id is None or artifact.source_revision is None:
         raise WorkspaceArtifactPublicationError("workspace_export_not_ready")
 
-    absolute_path = (_app_data_root() / artifact.storage_key).resolve()
-    try:
-        absolute_path.relative_to(_app_data_root())
-    except ValueError as error:
-        raise WorkspaceArtifactPublicationError(
-            "workspace_artifact_path_invalid"
-        ) from error
-    if not absolute_path.is_file():
-        raise WorkspaceArtifactPublicationError("workspace_export_missing")
+    absolute_path: Path | None = None
+    if artifact.public_artifact_id is not None:
+        public_artifact = await session.scalar(
+            select(PublicArtifact).where(
+                PublicArtifact.id == artifact.public_artifact_id,
+                PublicArtifact.owner_id == artifact.owner_id,
+                PublicArtifact.created_by_operation_id == artifact.operation_id,
+                PublicArtifact.sha256 == artifact.sha256,
+                PublicArtifact.size_bytes == artifact.size_bytes,
+            )
+        )
+        expected_public_kind = f"presentation-{artifact.kind.removeprefix('export.')}"
+        if public_artifact is None or public_artifact.kind != expected_public_kind:
+            raise WorkspaceArtifactPublicationError("workspace_export_missing")
+    else:
+        absolute_path = (_app_data_root() / artifact.storage_key).resolve()
+        try:
+            absolute_path.relative_to(_app_data_root())
+        except ValueError as error:
+            raise WorkspaceArtifactPublicationError(
+                "workspace_artifact_path_invalid"
+            ) from error
+        if not absolute_path.is_file():
+            raise WorkspaceArtifactPublicationError("workspace_export_missing")
 
     return ResolvedWorkspaceExportArtifact(
         artifact_id=artifact.id,
@@ -2583,4 +2600,31 @@ async def resolve_workspace_export_artifact(
         size_bytes=artifact.size_bytes,
         expires_at=expires_at,
         absolute_path=absolute_path,
+        public_artifact_id=artifact.public_artifact_id,
+    )
+
+
+async def read_workspace_export_artifact_bytes(
+    session: AsyncSession,
+    artifact: ResolvedWorkspaceExportArtifact,
+) -> bytes:
+    if artifact.public_artifact_id is None:
+        if artifact.absolute_path is None:
+            raise WorkspaceArtifactPublicationError("workspace_export_missing")
+        return artifact.absolute_path.read_bytes()
+    public_artifact = await session.scalar(
+        select(PublicArtifact).where(
+            PublicArtifact.id == artifact.public_artifact_id,
+            PublicArtifact.owner_id == get_current_owner_id(),
+            PublicArtifact.created_by_operation_id == artifact.operation_id,
+            PublicArtifact.sha256 == artifact.sha256,
+            PublicArtifact.size_bytes == artifact.size_bytes,
+        )
+    )
+    if public_artifact is None:
+        raise WorkspaceArtifactPublicationError("workspace_export_missing")
+    from services.artifact_store import configured_public_artifact_service
+
+    return await configured_public_artifact_service().read_ref_bytes(
+        public_artifact.to_ref()
     )

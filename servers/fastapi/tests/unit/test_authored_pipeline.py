@@ -141,6 +141,8 @@ def test_author_uses_deterministic_owner_reducer_after_second_capacity_failure(
 
     async def fake_author(*args, **kwargs):
         calls.append(kwargs["receipt_attempt_ordinal"])
+        if kwargs["receipt_attempt_ordinal"] == 1:
+            return "invalid"
         return candidate
 
     monkeypatch.setattr(author_deck_mod, "author_slide_html", fake_author)
@@ -161,6 +163,48 @@ def test_author_uses_deterministic_owner_reducer_after_second_capacity_failure(
     )
 
     assert calls == [1, 2]
+    assert "authored-owner-text-capacity-reducer-v1" in reduced
+    assert aggregate_owner_capacity_violations(reduced, capacity) == ()
+    assert f'>{title}</h1>' in reduced
+
+
+def test_author_allocates_ordinary_owner_copy_before_capacity_retry(monkeypatch):
+    title = "T" * 41
+    bodies = (("a " * 59) + "a", ("b " * 59) + "b", ("c " * 58) + "c")
+    supporting = ("s " * 15) + "s"
+    candidate = (
+        "<!DOCTYPE html><html><head></head><body>"
+        f'<h1 data-qid="slide.title" data-semantic-role="title">{title}</h1>'
+        f'<p data-qid="content.primary" data-semantic-role="body">{bodies[0]}</p>'
+        f'<p data-qid="content.secondary" data-semantic-role="body">{bodies[1]}</p>'
+        f'<p data-qid="content.tertiary" data-semantic-role="body">{bodies[2]}</p>'
+        f'<p data-qid="content.note" data-semantic-role="supporting">{supporting}</p>'
+        "</body></html>"
+    )
+    calls = []
+
+    async def fake_author(*args, **kwargs):
+        calls.append(kwargs["receipt_attempt_ordinal"])
+        return candidate
+
+    monkeypatch.setattr(author_deck_mod, "author_slide_html", fake_author)
+    capacity = SlideCapacity(2, "PILLARS", 64, 290, 380, 0, 30)
+    reduced = _run(
+        author_deck_mod._author_one_resilient(
+            "content",
+            "design",
+            _brand(),
+            "PILLARS",
+            2,
+            5,
+            (),
+            raise_on_failure=True,
+            capacity=capacity,
+            allow_deterministic_owner_reduction=True,
+        )
+    )
+
+    assert calls == [1]
     assert "authored-owner-text-capacity-reducer-v1" in reduced
     assert aggregate_owner_capacity_violations(reduced, capacity) == ()
     assert f'>{title}</h1>' in reduced

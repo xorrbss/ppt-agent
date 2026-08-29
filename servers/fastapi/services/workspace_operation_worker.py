@@ -19,6 +19,7 @@ from services.presentation_deletion_operation_handler import (
     register_presentation_deletion_operation_handler,
 )
 from services.presentation_generation_operation_handler import (
+    PRESENTATION_GENERATION_OPERATION_KIND,
     register_presentation_generation_operation_handler,
 )
 from services.runtime_settings_coordinator import (
@@ -59,6 +60,9 @@ from services.workspace_page_remake_operation_handler import (
 from services.workspace_batch_remake_operation_handler import (
     register_workspace_batch_remake_operation_handler,
 )
+from services.workspace_operation_handler_registry import (
+    workspace_operation_handler_registry,
+)
 from services.workspace_authored_preview_operation_handlers import (
     register_workspace_authored_preview_operation_handlers,
 )
@@ -66,24 +70,48 @@ from services.workspace_authored_template_operation_handler import (
     register_workspace_authored_template_operation_handler,
 )
 from services.workspace_runtime_profile import require_supported_workspace_runtime
+from services.public_worker_profiles import require_public_worker_profile_from_environment
 from utils.get_env import get_app_data_directory_env
 
 
 logger = logging.getLogger(__name__)
 EMBEDDED_WORKER_MODE = "embedded"
 EXTERNAL_WORKER_MODE = "external"
+SPLIT_WORKER_MODE = "split"
 _WORKER_MODE_ENV = "WORKSPACE_OPERATION_WORKER_MODE"
 
 
 def get_workspace_operation_worker_mode() -> str:
     value = os.getenv(_WORKER_MODE_ENV, EMBEDDED_WORKER_MODE).strip().lower()
-    if value not in {EMBEDDED_WORKER_MODE, EXTERNAL_WORKER_MODE}:
+    if value not in {
+        EMBEDDED_WORKER_MODE,
+        EXTERNAL_WORKER_MODE,
+        SPLIT_WORKER_MODE,
+    }:
         raise RuntimeError("workspace_operation_worker_mode_invalid")
     return value
 
 
 def should_start_embedded_workspace_operation_worker() -> bool:
-    return get_workspace_operation_worker_mode() == EMBEDDED_WORKER_MODE
+    return get_workspace_operation_worker_mode() in {
+        EMBEDDED_WORKER_MODE,
+        SPLIT_WORKER_MODE,
+    }
+
+
+def embedded_workspace_operation_kinds() -> tuple[str, ...] | None:
+    """Return the API runner claim profile for embedded or split operation control."""
+
+    mode = get_workspace_operation_worker_mode()
+    if mode == EMBEDDED_WORKER_MODE:
+        return None
+    if mode == EXTERNAL_WORKER_MODE:
+        return ()
+    return tuple(
+        kind
+        for kind in workspace_operation_handler_registry.kinds
+        if kind != PRESENTATION_GENERATION_OPERATION_KIND
+    )
 
 
 def register_workspace_operation_handlers() -> None:
@@ -101,6 +129,9 @@ async def run_external_worker(stop: asyncio.Event | None = None) -> None:
     if get_workspace_operation_worker_mode() != EXTERNAL_WORKER_MODE:
         raise RuntimeError("workspace_operation_external_worker_mode_required")
     require_supported_workspace_runtime(sql_engine.url)
+    profile = require_public_worker_profile_from_environment()
+    if profile.role != "generation":
+        raise RuntimeError("workspace_operation_generation_profile_required")
     require_workspace_asset_malware_scan_safety(feature_enabled=True)
     os.makedirs(get_app_data_directory_env(), exist_ok=True)
     await migrate_database_on_startup()
@@ -114,9 +145,9 @@ async def run_external_worker(stop: asyncio.Event | None = None) -> None:
     event_retention_started = False
     metrics_exporter = None
     try:
-        register_workspace_operation_handlers()
+        register_presentation_generation_operation_handler(replace=True)
         metrics_exporter = await start_workspace_worker_metrics_exporter()
-        await start_workspace_operation_runner()
+        await start_workspace_operation_runner(allowed_kinds=profile.operation_kinds)
         runner_started = True
         await start_workspace_cleanup_maintenance()
         cleanup_maintenance_started = True

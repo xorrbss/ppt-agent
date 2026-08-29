@@ -48,6 +48,7 @@ from models.sql.presentation import (
     PRESENTATION_LIFECYCLE_DELETED,
     PresentationModel,
 )
+from models.sql.public_admission import PublicOperationAdmission
 from models.sql.workspace import (
     WorkspaceCleanupJournal,
     WorkspaceOperation,
@@ -55,6 +56,11 @@ from models.sql.workspace import (
     WorkspaceOutbox,
 )
 from services.database import async_session_maker
+from services.public_operation_admission import (
+    PublicAdmissionRejected,
+    activate_public_operation,
+    finish_public_operation,
+)
 from services.account_deletion_service import (
     AccountDeletionFenceConflict,
     require_active_account_generation,
@@ -554,6 +560,23 @@ class _EventAppendResult:
     version: int
 
 
+async def _public_admission_for_operation(
+    session: AsyncSession,
+    operation_id: uuid.UUID,
+) -> PublicOperationAdmission | None:
+    """Support rolling/partial fixtures while migrations precede public traffic."""
+
+    try:
+        async with session.begin_nested():
+            return await session.scalar(
+                select(PublicOperationAdmission)
+                .where(PublicOperationAdmission.operation_id == operation_id)
+                .with_for_update()
+            )
+    except OperationalError:
+        return None
+
+
 async def append_operation_event(
     session: AsyncSession,
     *,
@@ -655,6 +678,32 @@ async def append_operation_event(
             )
         )
         await session.flush()
+    terminal_state = str(row["state"])
+    if terminal_state in _TERMINAL_STATES:
+        admission = await _public_admission_for_operation(session, operation_id)
+        if admission is not None and admission.state not in {
+            "succeeded",
+            "failed",
+            "cancelled",
+            "budget_exhausted",
+        }:
+            public_terminal_state = (
+                "budget_exhausted"
+                if terminal_state in {"failed", "dead_letter"}
+                and safe_payload.get("error_code")
+                in {
+                    "public_provider_request_limit_exceeded",
+                    "public_provider_retry_limit_exceeded",
+                    "public_provider_estimated_cost_limit_exceeded",
+                    "public_provider_actual_cost_limit_exceeded",
+                }
+                else ("failed" if terminal_state == "dead_letter" else terminal_state)
+            )
+            await finish_public_operation(
+                session,
+                admission.id,
+                state=public_terminal_state,
+            )
     return event
 
 
@@ -662,6 +711,7 @@ async def claim_next_workspace_operation(
     *,
     session_factory: async_sessionmaker[AsyncSession] = async_session_maker,
     lease_seconds: int = WORKSPACE_OPERATION_LEASE_SECONDS,
+    allowed_kinds: Collection[str] | None = None,
 ) -> WorkspaceOperationClaim | None:
     """Claim a ready operation using a durable owner-aware fair order.
 
@@ -731,11 +781,43 @@ async def claim_next_workspace_operation(
                 WorkspaceOperation.created_at,
                 WorkspaceOperation.id,
             )
-            .limit(1)
+            .limit(256)
         )
+        if allowed_kinds is not None:
+            normalized_kinds = tuple(sorted({kind for kind in allowed_kinds if kind}))
+            if not normalized_kinds:
+                await session.rollback()
+                return None
+            statement = statement.where(WorkspaceOperation.kind.in_(normalized_kinds))
         if dialect == "postgresql":
             statement = statement.with_for_update(skip_locked=True)
-        candidate = (await session.execute(statement)).scalar_one_or_none()
+        candidates = list((await session.execute(statement)).scalars())
+        if not candidates:
+            await session.rollback()
+            return None
+
+        candidate: WorkspaceOperation | None = None
+        for queued_candidate in candidates:
+            admission = await _public_admission_for_operation(
+                session,
+                queued_candidate.id,
+            )
+            if admission is None or admission.state == "active":
+                candidate = queued_candidate
+                break
+            if admission.state != "queued":
+                continue
+            try:
+                await activate_public_operation(session, admission.id)
+            except PublicAdmissionRejected as error:
+                if error.code in {
+                    "public_owner_active_limit_exceeded",
+                    "public_tenant_active_limit_exceeded",
+                }:
+                    continue
+                raise
+            candidate = queued_candidate
+            break
         if candidate is None:
             await session.rollback()
             return None
@@ -2023,6 +2105,7 @@ class WorkspaceOperationRunner:
         lease_seconds: int | None = None,
         heartbeat_seconds: int | None = None,
         poll_seconds: float | None = None,
+        allowed_kinds: Collection[str] | None = None,
     ) -> None:
         self.session_factory = session_factory
         self.registry = registry
@@ -2040,6 +2123,7 @@ class WorkspaceOperationRunner:
         self.poll_seconds = poll_seconds or _positive_float_env(
             "WORKSPACE_OPERATION_POLL_SECONDS", WORKSPACE_OPERATION_POLL_SECONDS
         )
+        self.allowed_kinds = None if allowed_kinds is None else frozenset(allowed_kinds)
         self._loop_task: asyncio.Task[None] | None = None
         self._active: dict[uuid.UUID, asyncio.Task[None]] = {}
         self._wake = asyncio.Event()
@@ -2093,6 +2177,7 @@ class WorkspaceOperationRunner:
             claim = await claim_next_workspace_operation(
                 session_factory=self.session_factory,
                 lease_seconds=self.lease_seconds,
+                allowed_kinds=self.allowed_kinds,
             )
             if claim is None:
                 break
@@ -2322,10 +2407,20 @@ class WorkspaceOperationRunner:
 _workspace_operation_runner: WorkspaceOperationRunner | None = None
 
 
-async def start_workspace_operation_runner() -> WorkspaceOperationRunner:
+async def start_workspace_operation_runner(
+    *,
+    allowed_kinds: Collection[str] | None = None,
+) -> WorkspaceOperationRunner:
     global _workspace_operation_runner
     if _workspace_operation_runner is None:
-        _workspace_operation_runner = WorkspaceOperationRunner()
+        _workspace_operation_runner = WorkspaceOperationRunner(
+            allowed_kinds=allowed_kinds,
+        )
+    elif (
+        allowed_kinds is not None
+        and _workspace_operation_runner.allowed_kinds != frozenset(allowed_kinds)
+    ):
+        raise RuntimeError("workspace_operation_runner_profile_conflict")
     await _workspace_operation_runner.start()
     return _workspace_operation_runner
 

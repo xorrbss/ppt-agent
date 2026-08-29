@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "key": "artifact.public-content-authority",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "ArtifactRef v1 metadata points to owner-bound content-addressed objects; export identity is DB-unique and lease-fenced cluster-wide.",
+  "scope": [
+    "artifact",
+    "export",
+    "worker"
+  ],
+  "invariants": [
+    "Artifact bytes are addressed by owner, tenant, and SHA-256 digest.",
+    "Export completion requires a fenced attempt and an owner-bound result ArtifactRef."
+  ],
+  "forbidden": [
+    "Expose raw absolute artifact paths in worker or API contracts.",
+    "Use local filesystem as production artifact authority."
+  ],
+  "evidence": [
+    "servers/fastapi/models/sql/public_artifact.py",
+    "servers/fastapi/services/artifact_store.py",
+    "servers/fastapi/tests/unit/test_public_artifact_store.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-29T19:36:23.0791996+00:00"
+}

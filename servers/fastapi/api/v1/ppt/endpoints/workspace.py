@@ -22,7 +22,7 @@ from fastapi import (
     Request,
     UploadFile,
 )
-from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
+from fastapi.responses import FileResponse, PlainTextResponse, Response, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sql.workspace import WorkspaceOperation
@@ -57,6 +57,7 @@ from services.workspace_asset_service import (
 )
 from services.workspace_artifact_publication_service import (
     WorkspaceArtifactPublicationError,
+    read_workspace_export_artifact_bytes,
     resolve_workspace_export_artifact,
 )
 from services.database import async_session_maker, get_async_session, sql_engine
@@ -229,6 +230,11 @@ def _raise_service_error(error: WorkspaceServiceError) -> None:
         error.code,
         status_code=error.status_code,
         retryable=error.retryable,
+        headers=(
+            {"Retry-After": str(error.retry_after_seconds)}
+            if error.retry_after_seconds is not None
+            else None
+        ),
     ) from error
 
 
@@ -402,7 +408,7 @@ async def download_workspace_asset(
 async def download_workspace_export_artifact(
     artifact_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
-) -> FileResponse:
+) -> Response:
     """Reauthorize and stream one live export without exposing storage paths."""
 
     _require_supported_runtime()
@@ -421,17 +427,32 @@ async def download_workspace_export_artifact(
     media_type = media_types.get(export_format)
     if media_type is None:
         raise WorkspaceAPIException("workspace_export_not_found", status_code=404)
-    return FileResponse(
-        path=artifact.absolute_path,
-        filename=(
-            f"presentation-{artifact.presentation_id}-r{artifact.source_revision}."
-            f"{export_format}"
-        ),
+    filename = (
+        f"presentation-{artifact.presentation_id}-r{artifact.source_revision}."
+        f"{export_format}"
+    )
+    headers = {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+    }
+    if artifact.public_artifact_id is None:
+        if artifact.absolute_path is None:
+            raise WorkspaceAPIException("workspace_export_not_found", status_code=404)
+        return FileResponse(
+            path=artifact.absolute_path,
+            filename=filename,
+            media_type=media_type,
+            headers=headers,
+        )
+    try:
+        payload = await read_workspace_export_artifact_bytes(session, artifact)
+    except WorkspaceArtifactPublicationError as error:
+        _raise_artifact_error(error)
+    headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return StreamingResponse(
+        iter((payload,)),
         media_type=media_type,
-        headers={
-            "Cache-Control": "private, no-store",
-            "X-Content-Type-Options": "nosniff",
-        },
+        headers=headers,
     )
 
 

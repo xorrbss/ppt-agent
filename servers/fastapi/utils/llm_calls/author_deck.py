@@ -891,6 +891,25 @@ async def _author_one_resilient(
                     )
                     if not owner_violations:
                         return constrained
+                    if (
+                        allow_deterministic_owner_reduction
+                        and capacity is not None
+                    ):
+                        reduced = reduce_authored_owner_text_capacity(
+                            constrained,
+                            capacity,
+                            profile_id="ordinary",
+                            allow_summarization=True,
+                        )
+                        reduced_violations = aggregate_owner_capacity_violations(
+                            reduced,
+                            capacity,
+                        )
+                        if reduced != constrained and not reduced_violations:
+                            return reduced
+                        if reduced != constrained:
+                            constrained = reduced
+                            owner_violations = reduced_violations
                     capacity_error = AuthoredAggregateOwnerCapacityExhausted(
                         owner_violations,
                         rejected_html=constrained,
