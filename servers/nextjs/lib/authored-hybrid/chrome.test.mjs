@@ -108,6 +108,35 @@ test("declared HTML table is observed as one complex-table ownership node", asyn
   );
 });
 
+test("declared invisible QIDs remain audited raster owners", async (t) => {
+  const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
+  if (!chromeExecutable) {
+    if (process.env.CI === "true") assert.fail("CI must provide Chrome/Chromium");
+    t.skip("Chrome/Chromium is unavailable");
+    return;
+  }
+  const html = `<!doctype html><html><head><style>
+    html,body{width:1280px;height:720px;margin:0;overflow:hidden}
+    .visible{position:absolute;left:80px;top:80px;width:240px;height:80px}
+    .hidden{display:none}
+  </style></head><body>
+    <section class="visible" data-qid="owner.visible">Visible</section>
+    <section class="hidden" data-qid="owner.hidden">Hidden branch</section>
+  </body></html>`;
+  const result = await extractDeclaredAuthoredSlideDom(
+    html,
+    ["owner.hidden", "owner.visible"],
+    { chromeExecutable, timeoutMs: 30_000 },
+  );
+  assert.equal(result.observation.elements.length, 2);
+  const hidden = result.observation.elements.find(
+    (element) => element.id === "owner.hidden",
+  );
+  assert.ok(hidden);
+  assert.equal(hidden.identityAuthority, "declared-qid");
+  assert.ok(hidden.fallbackReasons.includes("invalid-bounds"));
+});
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE_PATH = path.join(HERE, "fixtures", "hybrid-v1.html");
 

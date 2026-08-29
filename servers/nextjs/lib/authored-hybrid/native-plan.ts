@@ -273,6 +273,11 @@ export interface PowerPointTypefaceSerializationOptions {
 
 export interface NativeTypographyPreflightOptions {
   readonly embeddedTypefaceFaces: readonly AuthoredEmbeddedTypefaceFaceEvidence[];
+  readonly embeddedGlyphAvailable?: (
+    typeface: string,
+    face: AuthoredEmbeddedTypefaceFaceEvidence["face"],
+    codePoint: number,
+  ) => boolean;
   /** Residual elements that will remain painted on the fidelity backplate. */
   readonly backplateElements?: readonly AuthoredHybridElement[];
   readonly boundsTolerancePx?: number;
@@ -826,6 +831,7 @@ function capturedBreakCount(runs: readonly AuthoredHybridTextRun[]): number {
 
 const ISSUE_FALLBACK_REASON = {
   "embedding-face-missing": "typography-embedding-face-missing",
+  "embedding-glyph-missing": "typography-embedding-glyph-missing",
   "font-substitution": "typography-font-substitution",
   "bounds-overflow": "typography-bounds-overflow",
   "backplate-collision": "typography-backplate-collision",
@@ -901,6 +907,26 @@ export function preflightNativeTypography(
             actualTypeface: resolution.fallbackTypeface,
           });
         }
+      } else if (
+        resolution.requiresEmbedding &&
+        options.embeddedGlyphAvailable !== undefined &&
+        [...run.text].some((character) =>
+          !/^\s$/u.test(character) &&
+          options.embeddedGlyphAvailable?.(
+            resolution.typeface,
+            face,
+            character.codePointAt(0)!,
+          ) !== true
+        )
+      ) {
+        issues.push({
+          code: "embedding-glyph-missing",
+          elementId: element.id,
+          runIndex,
+          script,
+          requiredTypeface: resolution.typeface,
+          requiredFace: face,
+        });
       }
     });
 
@@ -2103,6 +2129,11 @@ function shapeBaseObjectCount(shape: AuthoredHybridShapePayload): number {
 export function preparedNativeElementNonVisualIdCount(
   item: PreparedNativeElement
 ): number {
+  // Border/shadow/outline-only shapes are split into multiple physical OOXML
+  // fragments with no single base object whose geometry can carry the QID.
+  // Keep those owners on the audited raster plane until a grouped native
+  // serializer can prove one owner and one Chromium-equivalent readback box.
+  if (item.kind === "shape" && !shapeHasBaseObject(item.source.shape)) return 0;
   return preparedNativeElementUnderlayNonVisualIdCount(item) +
     preparedNativeElementOverlayNonVisualIdCount(item);
 }

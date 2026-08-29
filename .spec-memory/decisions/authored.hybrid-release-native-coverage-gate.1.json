@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.hybrid-release-native-coverage-gate",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Release Hybrid complete requires >=70% supported native coverage, explicit fallback audit, and generation receipt binding to source, package, and sidecars.",
+  "scope": [
+    "authored-hybrid",
+    "presentation-export",
+    "release-quality"
+  ],
+  "invariants": [
+    "Development exports remain compatible when no release profile is persisted.",
+    "Release profile authority is presentation.theme.authoredQualityGate.releaseProfile.",
+    "Font embedding failure is checked before attempt completion."
+  ],
+  "forbidden": [
+    "Do not complete or publish a release Hybrid attempt with unaudited fallback owners or native ratio below 0.70."
+  ],
+  "evidence": [
+    "servers/nextjs/lib/presentation-export-quality.ts",
+    "servers/nextjs/app/api/export-presentation/route.ts",
+    "servers/fastapi/models/sql/presentation_export_attempt.py",
+    "servers/fastapi/services/presentation_export_direct_attempt_service.py",
+    "servers/fastapi/tests/unit/test_presentation_export_attempt_service.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-29T04:10:11.8656386+00:00"
+}

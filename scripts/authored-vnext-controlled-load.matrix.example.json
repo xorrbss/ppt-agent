@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 2,
+  "baseUrl": "http://127.0.0.1:5110",
+  "outputDirectory": "artifacts/authored-vnext-controlled-load-20260829/matrix-example-invariants-v3",
+  "pollIntervalMs": 2000,
+  "timeoutMs": 1800000,
+  "resourceIntervalMs": 2000,
+  "resourcePids": [12345, 23456],
+  "requireWorkspaceOperation": true,
+  "soak": { "durationSeconds": 0 },
+  "matrix": {
+    "slideCounts": [5, 10, 20],
+    "concurrencyLevels": [1, 2, 4],
+    "cacheStates": ["cold", "warm"],
+    "repetitions": 4,
+    "fixedInvariants": {
+      "provider": { "id": "provider-redacted-id", "fingerprint": "sha256:3558fe09beb425247d3702a53f3bdcaa1e6464c8cb7dc39bed8db8c44eb8cce0" },
+      "model": { "id": "model-redacted-id", "fingerprint": "sha256:368194713e3755a7dbfcb328879d7c9e5e1c2b704273a69bdea14fe5c075c315" },
+      "prompt": { "fingerprint": "sha256:075c7000e22ff7941b427fae929f540a4832f1ae26c1aeeee310f5e063dae103" },
+      "environment": { "fingerprint": "sha256:949069795f9aca86c0936bb9e72aeb6927124668b5155dad796b2920cd47830d" }
+    },
+    "coldControlReceipts": {
+      "cold-5slides-c1": { "method": "external-cache-control", "target": "redacted-cache-target", "completedAt": "2026-08-29T00:00:00.000Z", "environmentFingerprint": "sha256:949069795f9aca86c0936bb9e72aeb6927124668b5155dad796b2920cd47830d" },
+      "cold-5slides-c2": { "method": "external-cache-control", "target": "redacted-cache-target", "completedAt": "2026-08-29T00:01:00.000Z", "environmentFingerprint": "sha256:949069795f9aca86c0936bb9e72aeb6927124668b5155dad796b2920cd47830d" },
+      "cold-5slides-c4": { "method": "external-cache-control", "target": "redacted-cache-target", "completedAt": "2026-08-29T00:02:00.000Z", "environmentFingerprint": "sha256:949069795f9aca86c0936bb9e72aeb6927124668b5155dad796b2920cd47830d" },
+      "cold-10slides-c1": { "method": "external-cache-control", "target": "redacted-cache-target", "completedAt": "2026-08-29T00:03:00.000Z", "environmentFingerprint": "sha256:949069795f9aca86c0936bb9e72aeb6927124668b5155dad796b2920cd47830d" },
+      "cold-10slides-c2": { "method": "external-cache-control", "target": "redacted-cache-target", "completedAt": "2026-08-29T00:04:00.000Z", "environmentFingerprint": "sha256:949069795f9aca86c0936bb9e72aeb6927124668b5155dad796b2920cd47830d" },
+      "cold-10slides-c4": { "method": "external-cache-control", "target": "redacted-cache-target", "completedAt": "2026-08-29T00:05:00.000Z", "environmentFingerprint": "sha256:949069795f9aca86c0936bb9e72aeb6927124668b5155dad796b2920cd47830d" },
+      "cold-20slides-c1": { "method": "external-cache-control", "target": "redacted-cache-target", "completedAt": "2026-08-29T00:06:00.000Z", "environmentFingerprint": "sha256:949069795f9aca86c0936bb9e72aeb6927124668b5155dad796b2920cd47830d" },
+      "cold-20slides-c2": { "method": "external-cache-control", "target": "redacted-cache-target", "completedAt": "2026-08-29T00:07:00.000Z", "environmentFingerprint": "sha256:949069795f9aca86c0936bb9e72aeb6927124668b5155dad796b2920cd47830d" },
+      "cold-20slides-c4": { "method": "external-cache-control", "target": "redacted-cache-target", "completedAt": "2026-08-29T00:08:00.000Z", "environmentFingerprint": "sha256:949069795f9aca86c0936bb9e72aeb6927124668b5155dad796b2920cd47830d" }
+    }
+  },
+  "decks": [
+    {
+      "id": "authored-matrix-template",
+      "content": "Authored-vNext performance matrix: speed, phase timings, output integrity, and resource increments.",
+      "nSlides": 5,
+      "exportAs": "pptx",
+      "language": "English",
+      "style": "strategic-navy"
+    }
+  ]
+}

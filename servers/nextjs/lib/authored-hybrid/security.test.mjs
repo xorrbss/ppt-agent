@@ -24,6 +24,13 @@ test("static legacy HTML and embedded raster images pass hybrid preflight", () =
   if (decoded.ok) assert.equal(decoded.mime, "png");
 });
 
+test("static authored pixel rendering hint passes hybrid preflight", () => {
+  const html = `<section style="image-rendering:auto">
+    <img data-qid="hero.image" src="${PNG}" alt="Hero">
+  </section>`;
+  assert.deepEqual(preflightAuthoredHtmlForHybrid(html), { ok: true });
+});
+
 test("same-document SVG marker URLs pass hybrid preflight", () => {
   const html = `<!doctype html><html><head><style>
     .flow{marker-end:url(#arrowBlue)}

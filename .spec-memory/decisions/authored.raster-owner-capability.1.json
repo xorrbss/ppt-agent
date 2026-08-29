@@ -4,7 +4,7 @@
   "revision": 1,
   "status": "accepted",
   "authority": "code",
-  "summary": "A shape owner that fails native admission remains a fixed raster island with unchanged QID, role, bounds, reason, source, and pixels.",
+  "summary": "Rasterized shape owners that forbid shape use raster-island integrity; QID, role, bounds, reason, source, and pixels stay fixed.",
   "scope": [
     "authored",
     "hybrid",
@@ -12,17 +12,18 @@
     "raster"
   ],
   "invariants": [
-    "Capability-only reclassification follows native admission failure for a shape raster placeholder.",
-    "Publication remains blocked for the raster island while owner identity and bytes are preserved."
+    "Capability-only reclassification occurs after native admission failure for a shape raster placeholder.",
+    "Publication remains blocked for the raster island and owner identity and raster bytes are preserved."
   ],
   "forbidden": [
-    "Claim native editability for a raster placeholder",
-    "Change semantic QID role geometry admission reason or raster source during capability repair"
+    "Do not claim native editability for a raster placeholder.",
+    "Do not change semantic QID, role, geometry, native-admission reason, or raster source during capability repair."
   ],
   "evidence": [
     "servers/fastapi/services/authored_vnext/semantic/editable_scene.py",
-    "servers/fastapi/tests/unit/test_authored_vnext_scene_design_quality.py"
+    "servers/fastapi/tests/unit/test_authored_vnext_scene_design_quality.py",
+    "artifacts/authored-vnext-product-validation-20260829/run-a14d61c2-v2/product-pptx-validation.json"
   ],
   "supersedes": null,
-  "recordedAt": "2026-08-29T03:16:29.1898287+00:00"
+  "recordedAt": "2026-08-29T01:17:09.3378660+00:00"
 }

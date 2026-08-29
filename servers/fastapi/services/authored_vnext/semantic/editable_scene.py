@@ -558,6 +558,7 @@ def build_editable_hybrid_scene(
     composition_digest: str,
     deck_id: str | None = None,
     slide_ids: Sequence[str] | None = None,
+    source_digest_override: str | None = None,
 ):
     """Create an immutable shadow Scene; identity/geometry failures block owners."""
 
@@ -951,7 +952,7 @@ def build_editable_hybrid_scene(
                 raster_islands=islands,
             ),
         ))
-    source_digest = scene_digest({
+    source_digest = source_digest_override or scene_digest({
         "presentationId": presentation_id,
         "revision": revision,
         "htmlDigests": [scene_digest({"html": html}) for html in htmls],

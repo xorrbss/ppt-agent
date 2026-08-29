@@ -18,6 +18,8 @@ class GenerationRepository(Protocol):
     def get_master(self, master_id: str, revision: int | None = None) -> MasterRevisionResponse: ...
     def get_master_head(self, master_id: str) -> MasterRevisionResponse: ...
     def get_deck(self, deck_id: str, revision: int | None = None) -> Any: ...
+    def append_imported_master(self, master: MasterRevisionResponse) -> None: ...
+    def append_imported_deck(self, deck: Any) -> None: ...
     def get_operation(self, operation_id: str) -> Any: ...
     def save_candidate(self, candidate_digest: str, payload: dict[str, object]) -> None: ...
     def get_candidate(self, candidate_digest: str) -> dict[str, object]: ...
@@ -53,6 +55,22 @@ class InMemoryGenerationRepository:
             )
 
     save_published_master = save_master
+
+    def append_imported_master(self, master: MasterRevisionResponse) -> None:
+        """Creation-only helper matching the product SQL repository."""
+
+        with self._lock:
+            existing = self._masters.get(master.master_id, {}).get(master.revision)
+            if existing is not None:
+                if existing != master:
+                    raise GenerationConflictError("immutable master revision conflict")
+                return
+            if master.revision != 1 or master.master_id in self._master_heads:
+                raise GenerationConflictError("imported master must start at revision 1")
+            self._masters.setdefault(master.master_id, {})[master.revision] = deepcopy(
+                master
+            )
+            self._master_heads[master.master_id] = master.revision
 
     def get_master(
         self, master_id: str, revision: int | None = None
@@ -143,6 +161,15 @@ class InMemoryGenerationRepository:
                 raise GenerationConflictError("immutable deck revision exists")
             revisions[deck.revision] = deepcopy(deck)
             self._deck_heads[deck.deck_id] = deck.revision
+
+    def append_imported_deck(self, deck: Any) -> None:
+        with self._lock:
+            existing = self._deck_revisions.get(deck.deck_id, {}).get(deck.revision)
+            if existing is not None:
+                if existing != deck:
+                    raise GenerationConflictError("immutable deck revision conflict")
+                return
+        self.append_deck(deck, expected_revision=None, expected_digest=None)
 
     def get_deck(self, deck_id: str, revision: int | None = None) -> Any:
         with self._lock:

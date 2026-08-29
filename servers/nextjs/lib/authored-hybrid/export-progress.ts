@@ -43,8 +43,26 @@ interface ExportProgressRecord {
  * operation that joined that job resolves to the same record. Keying by
  * operation id alone would leave the joining operation permanently silent.
  */
-const progressByCacheKey = new Map<string, ExportProgressRecord>();
-const cacheKeyByOperationId = new Map<string, string>();
+interface ExportProgressRegistry {
+  readonly progressByCacheKey: Map<string, ExportProgressRecord>;
+  readonly cacheKeyByOperationId: Map<string, string>;
+}
+
+// Next compiles route handlers into separate module graphs. Module-local maps
+// therefore make POST /api/export-presentation invisible to the progress GET
+// route even when both execute in the same Node process. A versioned global
+// registry preserves the intentionally ephemeral contract while sharing it
+// across those route bundles; process restart still safely drops narration.
+const GLOBAL_PROGRESS_REGISTRY = "__presentonAuthoredHybridExportProgressV1";
+const progressGlobal = globalThis as typeof globalThis & {
+  [GLOBAL_PROGRESS_REGISTRY]?: ExportProgressRegistry;
+};
+const registry = progressGlobal[GLOBAL_PROGRESS_REGISTRY] ?? {
+  progressByCacheKey: new Map<string, ExportProgressRecord>(),
+  cacheKeyByOperationId: new Map<string, string>(),
+};
+progressGlobal[GLOBAL_PROGRESS_REGISTRY] = registry;
+const { progressByCacheKey, cacheKeyByOperationId } = registry;
 
 /** Bounded so a long-lived server cannot accumulate finished exports. */
 const MAX_TRACKED_EXPORTS = 32;

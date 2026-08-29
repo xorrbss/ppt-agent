@@ -35,12 +35,20 @@
     "authored.checkpoint.crash-recovery": "decisions/authored.checkpoint.crash-recovery.1.json",
     "authored.capacity.terminal-residual": "decisions/authored.capacity.terminal-residual.2.json",
     "authored.export-progress-correlation": "decisions/authored.export-progress-correlation.1.json",
-    "authored.layout-alignment-repair": "decisions/authored.layout-alignment-repair.1.json",
     "authored.quality-failure-transition": "decisions/authored.quality-failure-transition.1.json",
     "authored.hybrid-workspace-semantic-binding": "decisions/authored.hybrid-workspace-semantic-binding.1.json",
-    "authored.product-pptx-owned-com-validation": "decisions/authored.product-pptx-owned-com-validation.1.json",
-    "authored.raster-owner-capability": "decisions/authored.raster-owner-capability.1.json"
+    "authored.product-pptx-owned-com-validation": "decisions/authored.product-pptx-owned-com-validation.3.json",
+    "authored.raster-owner-capability": "decisions/authored.raster-owner-capability.1.json",
+    "authored.layout-alignment-repair": "decisions/authored.layout-alignment-repair.1.json",
+    "authored.hybrid-release-native-coverage-gate": "decisions/authored.hybrid-release-native-coverage-gate.2.json",
+    "presentation-export.direct-ui-progress-boundary": "decisions/presentation-export.direct-ui-progress-boundary.1.json",
+    "authored.quality-outline-timing-boundary": "decisions/authored.quality-outline-timing-boundary.1.json",
+    "authored.quality-preexport-native-coverage-boundary": "decisions/authored.quality-preexport-native-coverage-boundary.1.json",
+    "authored.performance-matrix-control": "decisions/authored.performance-matrix-control.2.json",
+    "authored.hybrid-qid-ooxml-ownership": "decisions/authored.hybrid-qid-ooxml-ownership.1.json"
   },
-  "readFirst": [],
-  "updatedAt": "2026-08-29T03:16:29.2255263+00:00"
+  "readFirst": [
+    "AGENTS.md"
+  ],
+  "updatedAt": "2026-08-29T09:18:01.4659846+00:00"
 }

@@ -4,7 +4,7 @@
   "revision": 1,
   "status": "accepted",
   "authority": "code",
-  "summary": "Workspace Hybrid publication persists a full semantic export binding and fails closed when the binding cannot be sealed.",
+  "summary": "Workspace Hybrid publication persists a full semantic export binding and fails closed when it cannot be sealed.",
   "scope": [
     "authored-hybrid",
     "workspace-export",
@@ -12,12 +12,12 @@
   ],
   "invariants": [
     "Seal the binding in the workspace publication transaction.",
-    "Bind the attempt to active bundleGraph lineage.",
-    "Pin canonical renderer PPTX manifest semantic asset font quality and receipt digests."
+    "Bind the attempt to the active bundleGraph lineage.",
+    "Pin canonical, renderer, PPTX, manifest, semantic, asset, font, quality, and receipt digests."
   ],
   "forbidden": [
-    "Treating atomic provenance alone as the durable semantic binding",
-    "Publishing Hybrid when the full semantic binding cannot be sealed"
+    "Treat atomic_binding provenance alone as the durable semantic binding.",
+    "Publish Hybrid when the full semantic binding cannot be sealed."
   ],
   "evidence": [
     "servers/fastapi/services/workspace_artifact_publication_service.py",
@@ -25,5 +25,5 @@
     "servers/fastapi/tests/unit/test_workspace_quality_export_operations.py"
   ],
   "supersedes": null,
-  "recordedAt": "2026-08-29T03:16:27.2555389+00:00"
+  "recordedAt": "2026-08-28T15:27:50.0082409+00:00"
 }

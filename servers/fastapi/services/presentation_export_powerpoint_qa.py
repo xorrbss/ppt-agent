@@ -357,34 +357,89 @@ def _start_powerpoint_dialog_watch(main_hwnd: int):
 
 
 def _powerpoint_main_hwnd(application, window_api=None) -> int:
-    """Resolve the exact DispatchEx window without trusting pywin32's HWND shim."""
+    """Read and validate the exact HWND exposed by the new COM application."""
 
     if window_api is None:
         import win32gui as window_api  # type: ignore[import-not-found]
 
-    token = f"Presenton QA {uuid.uuid4().hex}"
-    application.Caption = token
-    matches: list[int] = []
+    try:
+        hwnd = int(application.HWND)
+    except Exception as error:
+        raise ValueError("powerpoint_main_hwnd_unavailable") from error
+    if hwnd <= 0 or window_api.GetClassName(hwnd) != "PPTFrameClass":
+        raise ValueError("powerpoint_main_hwnd_unavailable")
+    return hwnd
+
+
+def _powerpoint_window_pids(window_api=None, process_api=None) -> frozenset[int]:
+    if window_api is None:
+        import win32gui as window_api  # type: ignore[import-not-found]
+    if process_api is None:
+        import win32process as process_api  # type: ignore[import-not-found]
+    pids: set[int] = set()
 
     def visit(hwnd: int, _context: object) -> bool:
         try:
-            if (
-                window_api.GetClassName(hwnd) == "PPTFrameClass"
-                and window_api.GetWindowText(hwnd) == token
-            ):
-                matches.append(hwnd)
+            if window_api.GetClassName(hwnd) == "PPTFrameClass":
+                _, pid = process_api.GetWindowThreadProcessId(hwnd)
+                if int(pid) > 0:
+                    pids.add(int(pid))
         except Exception:
             pass
         return True
 
-    deadline = time.monotonic() + 2.0
-    while not matches and time.monotonic() < deadline:
-        window_api.EnumWindows(visit, None)
-        if not matches:
-            time.sleep(0.05)
-    if len(matches) != 1:
-        raise ValueError("powerpoint_main_hwnd_unavailable")
-    return matches[0]
+    window_api.EnumWindows(visit, None)
+    return frozenset(pids)
+
+
+def _qid_owner_census(
+    snapshot: list[list[dict[str, Any]]],
+    expected: frozenset[tuple[int, str, str]],
+) -> dict[str, int]:
+    missing = ghosting = mismatches = 0
+    for expected_slide, qid, disposition in expected:
+        matches: list[tuple[int, str]] = []
+        raster_name = f"Presenton raster visual fragment {qid} semantic-owner"
+        for slide_number, shapes in enumerate(snapshot, start=1):
+            for shape in shapes:
+                name = str(shape.get("name") or "")
+                actual_disposition = (
+                    "raster" if name == raster_name
+                    else "native" if _contains_presenton_qid(name, qid)
+                    else None
+                )
+                if actual_disposition is not None:
+                    matches.append((slide_number, actual_disposition))
+        correct = [item for item in matches if item == (expected_slide, disposition)]
+        if not correct:
+            missing += 1
+        ghosting += max(0, len(matches) - 1)
+        mismatches += sum(item != (expected_slide, disposition) for item in matches)
+    return {
+        "qid_owner_missing": missing,
+        "qid_owner_ghosting": ghosting,
+        "qid_owner_mismatches": mismatches,
+    }
+
+
+def _geometry_contract_mismatches(
+    snapshot: list[list[dict[str, Any]]],
+    expected: dict[tuple[int, str], tuple[float, float, float, float]],
+    *,
+    tolerance_px: float = 1.0,
+) -> int:
+    mismatches = 0
+    for (slide_number, qid), geometry in expected.items():
+        shapes = snapshot[slide_number - 1] if 0 < slide_number <= len(snapshot) else []
+        matches = [shape for shape in shapes if _contains_presenton_qid(str(shape.get("name") or ""), qid)]
+        if len(matches) != 1:
+            mismatches += 1
+            continue
+        shape = matches[0]
+        actual = tuple(float(shape[field]) * 4 / 3 for field in ("left", "top", "width", "height"))
+        if any(abs(left - right) > tolerance_px for left, right in zip(actual, geometry)):
+            mismatches += 1
+    return mismatches
 
 
 def _snapshot_comparison(
@@ -471,6 +526,9 @@ def _run_powerpoint_com_qa(
     expected_slides: int,
     evidence_directory: Path | None = None,
     expected_native_qids: frozenset[str] = frozenset(),
+    expected_qid_owners: frozenset[tuple[int, str, str]] = frozenset(),
+    expected_geometry: dict[tuple[int, str], tuple[float, float, float, float]] | None = None,
+    geometry_contract_digest: str | None = None,
     interactive_observation: bool = False,
 ) -> dict[str, Any]:
     import pythoncom  # type: ignore[import-not-found]
@@ -478,15 +536,23 @@ def _run_powerpoint_com_qa(
 
     pythoncom.CoInitialize()
     application = first = reopened = None
+    owned_application = False
     dialog_watch = None
     try:
+        preexisting_pids = _powerpoint_window_pids()
         application = win32com.client.DispatchEx("PowerPoint.Application")
+        main_hwnd = _powerpoint_main_hwnd(application)
+        import win32process  # type: ignore[import-not-found]
+        _, process_id = win32process.GetWindowThreadProcessId(main_hwnd)
+        if int(process_id) <= 0 or int(process_id) in preexisting_pids:
+            raise PresentationExportContractError("presentation_export_powerpoint_ownership_unproven")
+        owned_application = True
         application.DisplayAlerts = 1
         if interactive_observation:
             try:
                 application.Visible = True
                 dialog_watch = _start_powerpoint_dialog_watch(
-                    _powerpoint_main_hwnd(application)
+                    main_hwnd
                 )
             except Exception:
                 interactive_observation = False
@@ -551,6 +617,10 @@ def _run_powerpoint_com_qa(
                             native_chart += 1
                         shape_name = str(shape.Name or "").lower()
                         is_backplate = "presenton hybrid backplate" in shape_name
+                        is_raster_owner = (
+                            shape_name.startswith("presenton raster visual fragment ")
+                            and shape_name.endswith(" semantic-owner")
+                        )
                         shape_type = int(shape.Type)
                         if not is_backplate and shape_type in {11, 13}:
                             native_image += 1
@@ -559,6 +629,7 @@ def _run_powerpoint_com_qa(
                                 native_image_crop += 1
                         elif (
                             not is_backplate
+                            and not is_raster_owner
                             and not has_text
                             and not bool(shape.HasTable)
                             and not bool(shape.HasChart)
@@ -589,22 +660,32 @@ def _run_powerpoint_com_qa(
                 for slide in reopened_snapshot
                 for shape in slide
             }
-            missing_qids = sorted(
-                qid
-                for qid in expected_native_qids
-                if not any(
-                    _contains_presenton_qid(name, qid)
-                    for name in observed_shape_names
-                )
+            if expected_qid_owners:
+                owner_census = _qid_owner_census(reopened_snapshot, expected_qid_owners)
+            else:
+                owner_census = {
+                    "qid_owner_missing": sum(
+                        not any(_contains_presenton_qid(name, qid) for name in observed_shape_names)
+                        for qid in expected_native_qids
+                    ),
+                    "qid_owner_ghosting": _native_qid_ghosting(
+                        reopened_snapshot, expected_native_qids
+                    ),
+                    "qid_owner_mismatches": 0,
+                }
+            missing_qids = owner_census["qid_owner_missing"]
+            geometry_mismatches = _geometry_contract_mismatches(
+                reopened_snapshot,
+                expected_geometry or {},
             )
             semantic_payload_binding = (
                 "passed"
-                if expected_native_qids and not missing_qids
+                if (expected_qid_owners or expected_native_qids)
+                and not any(owner_census.values())
+                and geometry_mismatches == 0
                 else "not-verified"
             )
-            native_qid_ghosting = _native_qid_ghosting(
-                reopened_snapshot, expected_native_qids
-            )
+            native_qid_ghosting = owner_census["qid_owner_ghosting"]
             backplate_collisions = _backplate_collisions(reopened_snapshot)
             if dialog_watch is not None:
                 # Allow delayed Office notifications to become visible before
@@ -638,7 +719,10 @@ def _run_powerpoint_com_qa(
                 or typography_gt_10pt > 0
                 or inspection_failures > 0
                 or comparison["readback_match"] is not True
-                or bool(missing_qids)
+                or missing_qids > 0
+                or owner_census["qid_owner_mismatches"] > 0
+                or native_qid_ghosting > 0
+                or geometry_mismatches > 0
                 or (dialog_watch is not None and repair_dialogs != 0)
             )
             report = {
@@ -679,8 +763,11 @@ def _run_powerpoint_com_qa(
                 "native_table": native_table,
                 "native_chart": native_chart,
                 "native_image_crop": native_image_crop,
-                "native_qid_missing": len(missing_qids),
+                "native_qid_missing": missing_qids,
                 "native_qid_ghosting": native_qid_ghosting,
+                "qid_owner_mismatches": owner_census["qid_owner_mismatches"],
+                "geometry_contract_digest": geometry_contract_digest,
+                "geometry_contract_mismatches": geometry_mismatches,
                 "backplate_collisions": backplate_collisions,
                 "first_open_chart_readback": _chart_readback(first_snapshot),
                 "reopen_chart_readback": _chart_readback(reopened_snapshot),
@@ -695,13 +782,13 @@ def _run_powerpoint_com_qa(
         if dialog_watch is not None:
             dialog_watch[0].set()
             dialog_watch[1].join(timeout=1)
-        for deck in (reopened, first):
+        for deck in (reopened, first) if owned_application else ():
             if deck is not None:
                 try:
                     deck.Close()
                 except Exception:
                     pass
-        if application is not None:
+        if application is not None and owned_application:
             try:
                 application.Quit()
             except Exception:
@@ -715,6 +802,9 @@ async def trusted_powerpoint_qa(
     *,
     evidence_directory: Path | None = None,
     expected_native_qids: frozenset[str] = frozenset(),
+    expected_qid_owners: frozenset[tuple[int, str, str]] = frozenset(),
+    expected_geometry: dict[tuple[int, str], tuple[float, float, float, float]] | None = None,
+    geometry_contract_digest: str | None = None,
 ) -> dict[str, Any]:
     if os.name != "nt":
         return {"status": "preflight", "platform": "unsupported"}
@@ -727,6 +817,9 @@ async def trusted_powerpoint_qa(
             expected_slides,
             evidence_directory,
             expected_native_qids,
+            expected_qid_owners,
+            expected_geometry,
+            geometry_contract_digest,
             os.getenv(
                 "AUTHORED_POWERPOINT_QA_INTERACTIVE_OBSERVATION", "false"
             ).lower()

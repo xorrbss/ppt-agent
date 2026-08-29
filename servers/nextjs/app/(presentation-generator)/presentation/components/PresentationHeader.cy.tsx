@@ -83,6 +83,9 @@ const openExportOptions = () => cy.get('[data-testid="export-trigger"]').click()
 
 describe("PresentationHeader workspace controls", () => {
   beforeEach(() => {
+    cy.stub(notify, "loading").returns("direct-export").as("notifyLoading");
+    cy.stub(notify, "success").as("notifySuccess");
+    cy.stub(notify, "error").as("notifyError");
     cy.stub(PresentationGenerationApi, "updatePresentationContent")
       .as("updatePresentationContent")
       .resolves({});
@@ -134,6 +137,18 @@ describe("PresentationHeader workspace controls", () => {
     openExportOptions();
     cy.get('[data-testid="export-pptx"]').click({ force: true });
     cy.wait("@fidelityExport");
+    cy.get("@notifyLoading").should(
+      "have.been.calledWith",
+      "Fidelity PPTX를 준비하고 있습니다",
+      "완료되면 다운로드가 자동으로 시작됩니다.",
+    );
+    cy.get("@notifySuccess").should(
+      "have.been.calledWith",
+      "Fidelity PPTX 다운로드를 시작했습니다",
+      "브라우저의 다운로드 목록에서 파일을 확인하세요.",
+      { id: "direct-export" },
+    );
+    cy.get("@notifyError").should("not.have.been.called");
 
     cy.wrap(null).then(() => {
       expect(workspaceCommand.getCall(0).args).to.deep.equal([
@@ -145,7 +160,34 @@ describe("PresentationHeader workspace controls", () => {
     cy.get("@updatePresentationContent").should("not.have.been.called");
   });
 
-  it("labels font-free Hybrid as an explicit compatibility option", () => {
+  it("surfaces a direct Authored export failure without creating a workspace operation", () => {
+    const workspaceCommand = cy.stub().as("workspaceCommand").resolves();
+    cy.intercept("POST", "/api/export-presentation", {
+      statusCode: 409,
+      body: { success: false, error: "Hybrid export quality evidence is incomplete" },
+    }).as("failedDirectExport");
+    mountHeader(true, false, { enabled: true, command: workspaceCommand });
+
+    openExportOptions();
+    cy.get('[data-testid="export-pptx"]').click({ force: true });
+    cy.wait("@failedDirectExport");
+
+    cy.get("@notifyLoading").should(
+      "have.been.calledWith",
+      "Fidelity PPTX를 준비하고 있습니다",
+      "완료되면 다운로드가 자동으로 시작됩니다.",
+    );
+    cy.get("@notifyError").should(
+      "have.been.calledWith",
+      "PPTX 내보내기 실패",
+      "Hybrid export quality evidence is incomplete",
+      { id: "direct-export" },
+    );
+    cy.get("@notifySuccess").should("not.have.been.called");
+    cy.get("@workspaceCommand").should("not.have.been.called");
+  });
+
+  it("labels Hybrid fallback and font-free compatibility explicitly", () => {
     const workspaceCommand = cy.stub().as("workspaceCommand").resolves();
     mountHeader(true, false, { enabled: true, command: workspaceCommand });
 
@@ -154,11 +196,11 @@ describe("PresentationHeader workspace controls", () => {
       .should("contain.text", "Fidelity PPTX")
       .and("contain.text", "격리 캡처");
     cy.get('[data-testid="authored-export-hybrid"]')
-      .should("contain.text", "글꼴 포함 (기본)")
-      .and("contain.text", "적용되지 않으면 다운로드하지 않고");
+      .should("contain.text", "raster fallback (기본)")
+      .and("contain.text", "글꼴 포함 결과만 검증");
     cy.get('[data-testid="authored-export-hybrid-compatibility"]')
-      .should("contain.text", "호환 모드 (글꼴 미포함)")
-      .and("contain.text", "명시적 저품질 호환 옵션");
+      .should("contain.text", "raster fallback 호환 모드")
+      .and("contain.text", "글꼴 미포함 호환 모드");
   });
 
   it("dispatches durable version restore commands for chat-first undo and redo", () => {

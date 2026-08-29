@@ -25,6 +25,7 @@ from .errors import (
     MasterNotFoundError,
     MasterRevisionConflictError,
 )
+from .visibility import is_internal_authored_master_id
 
 
 class AuthoredVNextMasterRepository(Protocol):
@@ -178,7 +179,8 @@ class InMemoryAuthoredVNextMasterRepository:
             master_ids = sorted(
                 master_id
                 for master_id in self._master_heads
-                if after is None or master_id > after
+                if not is_internal_authored_master_id(master_id)
+                and (after is None or master_id > after)
             )
             selected_ids = master_ids[: limit + 1]
             has_more = len(selected_ids) > limit

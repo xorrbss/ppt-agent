@@ -20,6 +20,7 @@ from utils.authored_dom_quality import build_compact_dom_map, normalize_browser_
 
 
 CompositionProfileId = Literal["ordinary", "source-verbatim", "source-outline"]
+QualityProfileId = Literal["development", "release"]
 AUTHORED_CAPACITY_BOUNDED_REPAIR_REVISION = "authored-capacity-bounded-repair/v1"
 _CAPACITY_REDUCER_MARKER = "authored-closing-capacity-reducer-v1"
 _TITLE_PUNCTUATION_REDUCER_MARKER = "authored-closing-title-punctuation-reducer-v1"
@@ -36,6 +37,50 @@ class CompositionProfile:
     strict_dom_gate: bool
     max_repair_cycles: int
     require_atomic_publication: bool = True
+    quality_profile_id: QualityProfileId = "development"
+    require_source_readback: bool = False
+    require_visual_review: bool = False
+    require_performance: bool = False
+    require_native_coverage: bool = False
+    minimum_native_coverage_ratio: float = 0.0
+
+
+def _resolve_quality_profile_id(request: Any) -> QualityProfileId:
+    raw = getattr(request, "_authored_quality_profile", None)
+    if raw is None:
+        raw = getattr(request, "quality_profile", None)
+    if raw is None:
+        raw = getattr(request, "qualityProfile", None)
+    if isinstance(raw, Mapping):
+        raw = raw.get("id", raw.get("profileId"))
+    normalized = str(raw or "development").strip().lower().replace("-", "_")
+    if normalized in {"development", "dev", "default"}:
+        return "development"
+    if normalized in {"release", "strict", "production", "release_strict"}:
+        return "release"
+    raise ValueError("authored_quality_profile_unknown")
+
+
+def _with_quality_profile(
+    profile: CompositionProfile,
+    quality_profile_id: QualityProfileId,
+) -> CompositionProfile:
+    if quality_profile_id == "development":
+        return profile
+    return CompositionProfile(
+        profile_id=profile.profile_id,
+        text_mode=profile.text_mode,
+        allow_summarization=profile.allow_summarization,
+        strict_dom_gate=profile.strict_dom_gate,
+        max_repair_cycles=profile.max_repair_cycles,
+        require_atomic_publication=profile.require_atomic_publication,
+        quality_profile_id="release",
+        require_source_readback=True,
+        require_visual_review=True,
+        require_performance=True,
+        require_native_coverage=True,
+        minimum_native_coverage_ratio=0.70,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,15 +227,23 @@ def build_authored_capacity_plan(
 def resolve_composition_profile(request: Any) -> CompositionProfile:
     """Resolve one profile for both first-pass authoring and later repairs."""
 
+    quality_profile_id = _resolve_quality_profile_id(request)
     if bool(getattr(request, "_source_content_authored_reflow", False)):
         policy = getattr(request, "content_policy", None)
         text_mode = str(getattr(policy, "text", "verbatim") or "verbatim").strip().lower()
         if text_mode == "verbatim":
-            return CompositionProfile(
-                "source-verbatim", "verbatim", False, True, 2
+            return _with_quality_profile(
+                CompositionProfile("source-verbatim", "verbatim", False, True, 2),
+                quality_profile_id,
             )
-        return CompositionProfile("source-outline", "outline", True, True, 2)
-    return CompositionProfile("ordinary", "authored", True, True, 1)
+        return _with_quality_profile(
+            CompositionProfile("source-outline", "outline", True, True, 2),
+            quality_profile_id,
+        )
+    return _with_quality_profile(
+        CompositionProfile("ordinary", "authored", True, True, 1),
+        quality_profile_id,
+    )
 
 
 def capacity_overflow(
@@ -1283,6 +1336,7 @@ __all__ = [
     "AuthoredCapacityPlan",
     "CompositionProfile",
     "CompositionProfileId",
+    "QualityProfileId",
     "SlideCapacity",
     "build_authored_capacity_plan",
     "blocking_safety_issues",

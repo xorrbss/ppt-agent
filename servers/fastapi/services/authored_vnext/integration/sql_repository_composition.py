@@ -115,6 +115,9 @@ class AuthoredVNextCompositionRepositoryMixin:
             predicates = [
                 *self._scope(AuthoredVNextEntityHead),
                 AuthoredVNextEntityHead.entity_kind == "master",
+                AuthoredVNextEntityHead.entity_id.not_like(
+                    "master:internal-authored-%"
+                ),
             ]
             if after is not None:
                 predicates.append(AuthoredVNextEntityHead.entity_id > after)

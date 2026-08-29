@@ -28,6 +28,10 @@ class AuthoredGenerationPipelineResult:
     # before the generation owner builds its publication receipt.
     evidence_ledger: Any | None = None
     evidence_attempt_id: str | None = None
+    # One immutable authority sealed before Chromium. Publication/export may
+    # derive geometry from its HTML projection, but may not recompile meaning
+    # or QID ownership from a different source.
+    scene_envelope: Any | None = None
 
     def __post_init__(self) -> None:
         # The result is a public boundary consumed by API/publication code.

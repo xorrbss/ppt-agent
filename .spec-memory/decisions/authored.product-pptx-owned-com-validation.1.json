@@ -4,7 +4,7 @@
   "revision": 1,
   "status": "accepted",
   "authority": "code",
-  "summary": "Owned Office validation requires exact slide QIDs, unchanged source SHA, bound PID and HWND, inspectionFailures zero, and zero survivors.",
+  "summary": "Product PPTX COM validation requires zero preexisting Office processes, manifest SHA/QID exactness, owned reopen/save-copy/readback, and survivor-free cleanup.",
   "scope": [
     "authored",
     "pptx",
@@ -12,21 +12,18 @@
     "validation"
   ],
   "invariants": [
-    "Refuse preexisting POWERPNT or soffice ownership ambiguity.",
-    "Source and reopened slide plus QID ownership must match the product manifest.",
-    "PowerPoint QA pass requires inspectionFailures zero and never self-promotes visual parity.",
-    "Source PPTX SHA stays unchanged and launched Office processes are gone after validation."
+    "Refuse POWERPNT/soffice ownership ambiguity before Office work.",
+    "Compare source and reopened QID slide union exactly against a product-specific manifest.",
+    "Require source PPTX SHA stability, exact COM PID/HWND binding, render hash parity, and zero Office survivors."
   ],
   "forbidden": [
-    "Attach save close or terminate an ownership-uncertain Office process",
-    "Equate exact reopen hashes with native editability or cross-renderer parity"
+    "Do not attach to, save, close, or terminate an ownership-uncertain Office process.",
+    "Do not treat optional LibreOffice conversion as PowerPoint parity proof."
   ],
   "evidence": [
     "scripts/validate-authored-product-pptx.ps1",
-    "servers/fastapi/models/sql/presentation_export_attempt.py",
-    "servers/fastapi/tests/unit/test_presentation_export_attempt_service.py",
-    "artifacts/authored-vnext-product-validation-20260829/run-a14d61c2-v2/product-pptx-validation.json"
+    "artifacts/authored-vnext-product-validation-20260829/plan-only.json"
   ],
   "supersedes": null,
-  "recordedAt": "2026-08-29T03:16:28.1920977+00:00"
+  "recordedAt": "2026-08-28T23:52:46.7655510+00:00"
 }

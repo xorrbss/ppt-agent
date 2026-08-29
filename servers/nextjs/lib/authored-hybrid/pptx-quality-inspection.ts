@@ -15,6 +15,10 @@ import {
   AUTHORED_NATIVE_OWNER_ALTERNATIVE_TEXT_PREFIX,
   parseAuthoredNativeOwnerAlternativeText,
 } from "./native-plan.ts";
+import {
+  attachAuthoredNativeDispositionReceipt,
+  type WithAuthoredNativeDisposition,
+} from "./native-disposition.ts";
 
 const DEFAULT_SLIDE_WIDTH_EMU = 12_192_000;
 const DEFAULT_SLIDE_HEIGHT_EMU = 6_858_000;
@@ -158,17 +162,54 @@ function typefaces(xml: string, tag: "latin" | "ea"): string[] {
     .filter((value, index, values) => value.length > 0 && values.indexOf(value) === index);
 }
 
-function hybridIdentity(name: string): {
+function serializedNativeKind(block: string):
+  | "text"
+  | "shape"
+  | "image"
+  | "table"
+  | "chart"
+  | null {
+  if (block.startsWith("<p:pic")) return "image";
+  if (block.startsWith("<p:graphicFrame")) {
+    if (/<c:chart\b/.test(block)) return "chart";
+    if (/<a:tbl\b/.test(block)) return "table";
+    return null;
+  }
+  if (block.startsWith("<p:sp")) {
+    return /<p:txBody\b/.test(block) ? "text" : "shape";
+  }
+  return null;
+}
+
+function hybridIdentity(name: string, serializedKind: ReturnType<typeof serializedNativeKind>): {
   kind: "text" | "shape" | "image" | "table" | "chart";
   elementId: string;
 } | null {
   const decoded = decodeXmlAttributeValue(name).trim();
-  const match = /^Presenton hybrid (?:native |raster )?(text|shape|image|table|chart) (.+?)(?:-container)?(?: (?:outline|shadow \d+|(?:top|right|bottom|left) border))?$/.exec(decoded);
-  if (!match) return null;
-  return {
-    kind: match[1] as "text" | "shape" | "image" | "table" | "chart",
-    elementId: match[2],
-  };
+  // Text containers, shadows, outlines, and split borders are physical paint
+  // fragments of the primary native object, not additional semantic QID
+  // owners. The corresponding text/base object carries the logical owner.
+  if (
+    /-container$/.test(decoded) ||
+    / (?:outline|shadow \d+|(?:top|right|bottom|left) border)$/.test(decoded)
+  ) {
+    return null;
+  }
+  const typed = /^Presenton hybrid (?:native |raster )?(text|shape|image|table|chart) ([A-Za-z][A-Za-z0-9._:-]{0,127})$/.exec(decoded);
+  if (typed) {
+    return {
+      kind: typed[1] as "text" | "shape" | "image" | "table" | "chart",
+      elementId: typed[2],
+    };
+  }
+  // Raster-classified text/shapes can still be admitted as native after the
+  // bounded editable pre-serializer proves them safe. Their historical name
+  // carries the source disposition but omits the emitted OOXML kind; derive
+  // that kind from the exact serialized block instead of dropping ownership.
+  const raster = /^Presenton hybrid raster ([A-Za-z][A-Za-z0-9._:-]{0,127})$/.exec(decoded);
+  return raster && serializedKind
+    ? { kind: serializedKind, elementId: raster[1] }
+    : null;
 }
 
 function chartPointValues(xml: string): string[] {
@@ -592,7 +633,7 @@ export function inspectPptxNativeElementReadback(
         : null;
       const identity = tagOwner
         ? { kind: "chart" as const, elementId: tagOwner.elementId }
-        : hybridIdentity(rawName);
+        : hybridIdentity(rawName, serializedNativeKind(block));
       if (!identity) continue;
       if (results.some((entry) =>
         entry.slideNumber === slideNumber &&
@@ -663,7 +704,7 @@ function coversWholeSlide(
  */
 export function inspectPptxEditability(
   pptxBytes: Buffer
-): PresentationExportQualityReport {
+): WithAuthoredNativeDisposition<PresentationExportQualityReport> {
   const archive = readPptxArchive(pptxBytes);
   const slideSize = presentationSlideSize(
     archive.get("ppt/presentation.xml")?.toString("utf8")
@@ -679,7 +720,7 @@ export function inspectPptxEditability(
     .sort((a, b) => a.slideNumber - b.slideNumber);
 
   const nativeReadback = inspectPptxNativeElementReadback(pptxBytes);
-  return createPresentationExportQuality(
+  return attachAuthoredNativeDispositionReceipt(createPresentationExportQuality(
     "hybrid",
     slideEntries.map(({ slideNumber, bytes }) => {
       const xml = bytes.toString("utf8");
@@ -780,28 +821,68 @@ export function inspectPptxEditability(
         fallbackReasons: fallbackElements.flatMap((element) => element.reasons),
       };
     })
-  );
+  ));
 }
 
 /** Preserve stage2 structural counters after the generic logical/readback join. */
 export function attachAuthoredHybridStage2ReadbackMetadata<
   T extends PresentationExportQualityReport,
->(quality: T, pptxBytes: Buffer): T {
+>(quality: T, pptxBytes: Buffer): WithAuthoredNativeDisposition<T> {
   const structural = inspectPptxEditability(pptxBytes);
   const nativeReadback = inspectPptxNativeElementReadback(pptxBytes);
   const bySlide = new Map(structural.slides.map((slide) => [slide.slideNumber, slide as typeof slide & { nativeTableElements?: number; nativeImageCropElements?: number }]));
-  return {
+  return attachAuthoredNativeDispositionReceipt({
     ...quality,
     slides: quality.slides.map((slide) => {
       const observed = bySlide.get(slide.slideNumber);
+      const nativeForSlide = nativeReadback.filter(
+        (entry) => entry.slideNumber === slide.slideNumber,
+      );
+      const geometryContract = slide.geometryContract;
+      const ooxmlGeometry = geometryContract?.elements.map((expected) => {
+        const actual = nativeForSlide.find(
+          (entry) => entry.elementId === expected.elementId && entry.kind === expected.kind,
+        );
+        if (!actual?.renderedBounds) {
+          throw new Error("presentation_export_geometry_readback_missing");
+        }
+        for (const field of ["x", "y", "width", "height"] as const) {
+          if (Math.abs(actual.renderedBounds[field] - expected[field]) > 0.01) {
+            console.warn(
+              "[authored-hybrid] OOXML geometry mismatch " +
+                JSON.stringify({
+                  slideNumber: slide.slideNumber,
+                  elementId: expected.elementId,
+                  kind: expected.kind,
+                  field,
+                  expected: expected[field],
+                  actual: actual.renderedBounds[field],
+                }),
+            );
+            throw new Error("presentation_export_geometry_readback_mismatch");
+          }
+        }
+        return { elementId: expected.elementId, kind: expected.kind, ...actual.renderedBounds };
+      });
       return {
         ...slide,
         nativeTableElements: observed?.nativeTableElements ?? 0,
         nativeImageCropElements: observed?.nativeImageCropElements ?? 0,
-        nativeElementReadback: nativeReadback.filter(
-          (entry) => entry.slideNumber === slide.slideNumber,
-        ),
+        nativeElementReadback: nativeForSlide,
+        ...(geometryContract && ooxmlGeometry
+          ? {
+              geometryContract: {
+                ...geometryContract,
+                ooxmlDigest: canonicalDigest({
+                  schemaVersion: geometryContract.schemaVersion,
+                  slideNumber: slide.slideNumber,
+                  elements: ooxmlGeometry,
+                }),
+                ooxmlMatch: true as const,
+              },
+            }
+          : {}),
       };
     }),
-  } as T;
+  } as T);
 }

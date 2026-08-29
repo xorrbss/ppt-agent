@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
@@ -326,6 +327,8 @@ def _presentation(*, presentation_id: uuid.UUID | None = None) -> PresentationMo
         language="en",
         revision=4,
         title="Stable",
+        mode="authored",
+        theme={"mode": "authored"},
     )
 
 
@@ -413,6 +416,49 @@ def test_general_analysis_collects_persisted_assets_and_rejects_missing_digest()
             persisted_slide_payloads=(
                 {"content": {"image": {"asset_id": asset_id}}},
             ),
+        )
+
+
+def test_hybrid_analysis_accepts_only_digest_sealed_scene_manifest_assets() -> None:
+    content = b"canonical-scene-image"
+    digest = sha256(content).hexdigest()
+    asset_id = "asset:431cedf125e44b64a48b2351"
+    manifest = {
+        "assetId": asset_id,
+        "assetDigest": f"sha256:{digest}",
+        "mediaType": "image/png",
+        "storageReference": (
+            "data:image/png;base64," + base64.b64encode(content).decode("ascii")
+        ),
+        "sizeBytes": len(content),
+    }
+    theme_payload = {"presentationTheme": {"scene": {"assetManifest": [manifest]}}}
+    slide_payload = {
+        "content": {
+            "elements": [
+                {
+                    "kind": "image",
+                    "assetId": asset_id,
+                    "assetDigest": f"sha256:{digest}",
+                }
+            ]
+        }
+    }
+
+    analysis = analyze_presentation_export_capabilities(
+        export_format="pptx",
+        persisted_slide_payloads=(theme_payload, slide_payload),
+    )
+    assert analysis.asset_digests == {asset_id: digest}
+
+    manifest["storageReference"] = "https://example.invalid/image.png"
+    with pytest.raises(
+        PresentationExportContractError,
+        match="presentation_export_scene_asset_manifest_invalid",
+    ):
+        analyze_presentation_export_capabilities(
+            export_format="pptx",
+            persisted_slide_payloads=(theme_payload, slide_payload),
         )
 
 
@@ -593,6 +639,15 @@ def test_complete_direct_hybrid_accepts_exact_bounded_cjk_coverage_contract(
                     )
                 )
                 assert presentation is not None
+                presentation.theme = {
+                    "authoredQualityGate": {
+                        "receiptDigest": "sha256:" + ("9" * 64),
+                        "attemptId": "generation-attempt-1",
+                        "revision": 7,
+                        "releaseProfile": "release",
+                        "gatePassed": True,
+                    }
+                }
                 canonical = build_export_source_snapshot_sha256(presentation, slides)
                 attempt_id = uuid.uuid4()
                 renderer = "b" * 64
@@ -673,7 +728,24 @@ def test_complete_direct_hybrid_accepts_exact_bounded_cjk_coverage_contract(
             }
             quality = {
                 "schemaVersion": "presenton.export-quality/v1",
+                "mode": "hybrid",
                 "status": "fully-editable",
+                "totalSlides": 1,
+                "nativeTextElements": 1,
+                "nativeImageElements": 0,
+                "nativeShapeElements": 0,
+                "nativeTableElements": 0,
+                "nativeChartElements": 0,
+                "rasterFallbackElements": 0,
+                "logicalCoverage": counts,
+                "ooxmlReadback": {"status": "passed", **counts},
+                "nativeCoverage": {
+                    "status": "passed",
+                    "eligibleElementCount": 1,
+                    "nativeElementCount": 1,
+                    "ratio": 1.0,
+                    "rasterFallbacks": [],
+                },
                 "exportAttemptId": str(attempt_id),
                 "atomicBinding": {
                     "presentationId": str(presentation_id),
@@ -759,6 +831,11 @@ def test_complete_direct_hybrid_accepts_exact_bounded_cjk_coverage_contract(
                 assert finalized["coverage"]["nativeTextPolicy"] == coverage[
                     "nativeTextPolicy"
                 ]
+                receipt_binding = completed.provenance["quality_receipt_binding"]
+                assert receipt_binding["receipt_digest"] == "sha256:" + ("9" * 64)
+                assert receipt_binding["generation_attempt_id"] == "generation-attempt-1"
+                assert receipt_binding["release_profile"] == "release"
+                assert receipt_binding["export_binding"]["pptx_sha256"] == pptx_sha256
         finally:
             await engine.dispose()
 

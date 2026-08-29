@@ -186,6 +186,11 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
             "filesystemCurrentToImmutable": filesystem_to_immutable,
         },
         "orphanSweep": {"passed": True, "deletedFiles": removed, "ownedPath": str(orphan)},
+        "soakVerification": {
+            "twoHourVerified": False,
+            "sevenDayVerified": False,
+            "reason": "isolated checkpoint probe is not wall-clock soak evidence",
+        },
         "notVerified": [
             "public FastAPI to external worker crash recovery",
             "real presentation job DB pointer recovery",
@@ -209,4 +214,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

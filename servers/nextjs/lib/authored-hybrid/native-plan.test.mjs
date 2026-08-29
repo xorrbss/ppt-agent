@@ -1104,6 +1104,27 @@ test("raster-classified CSS panels retain editable fill and per-side borders", a
   assert.match(xml, /<a:prstDash val="dash"\/>/);
 });
 
+test("border-only shapes remain audited raster owners without a grouped serializer", async () => {
+  const element = {
+    ...base("flow.arrow.1", 0, 0, bounds(300, 180, 24, 24)),
+    classification: { mode: "native", kind: "shape", confidence: "safe" },
+    shape: {
+      shape: "rectangle",
+      fill: null,
+      stroke: null,
+      strokeWidthPt: 0,
+      radiusPt: 0,
+      borderLines: [
+        { side: "top", color: { hex: "2563EB", alpha: 1 }, widthPt: 2 },
+        { side: "right", color: { hex: "2563EB", alpha: 1 }, widthPt: 2 },
+      ],
+    },
+  };
+  const prepared = await prepareNativeElements([element]);
+  assert.equal(prepared.length, 1);
+  assert.equal(preparedNativeElementNonVisualIdCount(prepared[0]), 0);
+});
+
 test("CSS hard-stop gradients remain in the fidelity backplate", async () => {
   const element = {
     ...base("gradient-panel", 0, 0, bounds(0, 0, 1280, 720)),

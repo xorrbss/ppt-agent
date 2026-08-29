@@ -841,6 +841,7 @@ def _cache_browser_metrics(html: str, metrics: Mapping[str, Any]) -> None:
     _count_runtime("metrics_cache_bytes", metric_bytes)
     while len(_browser_metrics_cache) > DOM_METRICS_CACHE_SIZE:
         _browser_metrics_cache.popitem(last=False)
+        _count_runtime("metrics_cache_evictions")
 
 
 async def ensure_browser_metrics(
@@ -861,6 +862,7 @@ async def ensure_browser_metrics(
     # A cache miss means the PNG outlived its DOM telemetry and requires a
     # second browser pass; expose that duplicate work in benchmark evidence.
     _count_runtime("metrics_recollection_requests")
+    _count_runtime("metrics_cache_misses")
 
     key = _metrics_cache_key(html)
     task = _browser_metrics_inflight.get(key)
@@ -933,6 +935,7 @@ async def render_html_to_png_with_metrics(
             browser_metrics=cached_capture.browser_metrics,
             runtime_counters=get_render_runtime_counters(),
         )
+    _count_runtime("capture_cache_misses")
     cached_metrics = _peek_cached_browser_metrics(html)
     png = await render_html_to_png(html, timeout=timeout)
     if cached_metrics is not None:
@@ -1051,6 +1054,7 @@ def _cache_capture(html: str, timeout: int, capture: RenderCapture) -> None:
     _capture_cache.move_to_end(key)
     while len(_capture_cache) > CAPTURE_CACHE_SIZE:
         _capture_cache.popitem(last=False)
+        _count_runtime("capture_cache_evictions")
 
 
 async def _wait_for_output(out: str, timeout: float = 15.0) -> bool:
@@ -1075,9 +1079,18 @@ _runtime_counter_lock = threading.Lock()
 _runtime_counters: dict[str, int] = {
     "requests": 0,
     "render_cache_hits": 0,
+    "render_cache_misses": 0,
+    "render_inflight_joins": 0,
     "metrics_cache_hits": 0,
+    "metrics_cache_misses": 0,
     "capture_cache_hits": 0,
+    "capture_cache_misses": 0,
     "metrics_recollection_requests": 0,
+    "render_cache_evictions": 0,
+    "metrics_cache_evictions": 0,
+    "capture_cache_evictions": 0,
+    "cache_resets": 0,
+    "cache_invalidated_entries": 0,
     "chrome_process_launches": 0,
     "session_reuse_hits": 0,
     "session_restarts": 0,
@@ -1119,6 +1132,28 @@ def get_render_runtime_counters() -> dict[str, int]:
         len(value.png) for value in _capture_cache.values()
     )
     return snapshot
+
+
+def get_render_runtime_snapshot() -> dict[str, Any]:
+    """Return metadata-only cache/pool evidence safe for a public metrics read.
+
+    This intentionally omits HTML, QIDs, asset URLs, profiles, and filesystem
+    paths.  The digest and cache-version fields let a controlled-load report
+    prove which renderer identity and invalidation contract produced its
+    counters without exposing slide content.
+    """
+
+    return {
+        "schemaVersion": "authored-render-runtime/v1",
+        "chromeRuntimeDigest": chrome_runtime_digest(),
+        "cacheIdentity": {
+            "render": RENDER_CACHE_VERSION,
+            "domMetrics": DOM_METRICS_VERSION,
+            "occlusionSensor": OCCLUSION_SENSOR_VERSION,
+            "chromeReuseEnabled": CHROME_REUSE_ENABLED,
+        },
+        "counters": get_render_runtime_counters(),
+    }
 
 
 def chrome_runtime_digest() -> str:
@@ -1585,6 +1620,7 @@ async def render_html_to_png(html: str, timeout: int = 60) -> bytes:
     ensure_renderer_enabled()
     _count_runtime("requests")
     if RENDER_CACHE_SIZE <= 0:
+        _count_runtime("render_cache_misses")
         return await _render_html_to_png_uncached(html, timeout=timeout)
 
     key = hashlib.sha256(
@@ -1598,8 +1634,11 @@ async def render_html_to_png(html: str, timeout: int = 60) -> bytes:
 
     task = _render_inflight.get(key)
     if task is None:
+        _count_runtime("render_cache_misses")
         task = asyncio.create_task(_render_html_to_png_uncached(html, timeout=timeout))
         _render_inflight[key] = task
+    else:
+        _count_runtime("render_inflight_joins")
     try:
         rendered = await asyncio.shield(task)
     finally:
@@ -1623,6 +1662,7 @@ async def render_html_to_png(html: str, timeout: int = 60) -> bytes:
         )
     while len(_render_cache) > RENDER_CACHE_SIZE:
         _render_cache.popitem(last=False)
+        _count_runtime("render_cache_evictions")
     return rendered
 
 
@@ -1690,9 +1730,16 @@ def reset_render_runtime(
     if retire_session:
         _close_reusable_chrome()
     if clear_caches:
+        invalidated_entries = (
+            len(_render_cache)
+            + len(_browser_metrics_cache)
+            + len(_capture_cache)
+        )
         _render_cache.clear()
         _browser_metrics_cache.clear()
         _capture_cache.clear()
+        _count_runtime("cache_resets")
+        _count_runtime("cache_invalidated_entries", invalidated_entries)
         with _internal_capability_lock:
             _internal_capabilities.clear()
 

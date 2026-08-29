@@ -20,7 +20,13 @@ import {
   type AuthoredHybridSlideLayer,
   type AuthoredHybridPptxProvenance,
 } from "./pptx-assembler.ts";
-import { isAuthoredPresentation } from "./presentation-mode.ts";
+import {
+  boundedReleaseRasterOnly,
+  EDITABLE_HYBRID_SHADOW_PROFILE_ID,
+  isAuthoredPresentation,
+  presentationEditableHybridProfileId,
+  presentationRequiresRasterOnlyHybrid,
+} from "./presentation-mode.ts";
 import { authoredRendererIsolationPolicy } from "./renderer-isolation.ts";
 import {
   beginExportProgress,
@@ -45,6 +51,7 @@ import {
 import { attachAuthoredHybridEvidence } from "./export-evidence.ts";
 import {
   resolveFontEmbeddingPlan,
+  sfntHasCodePoint,
   type FontEmbeddingPlan,
 } from "./font-embedding-policy.ts";
 import {
@@ -67,6 +74,11 @@ import {
   imageFallbackSlide,
   noFontRenderingTelemetry,
 } from "./export-slide-quality.ts";
+import {
+  buildRasterPdfFromPngs,
+  rasterPdfPageCount,
+} from "./raster-pdf.ts";
+import { materializeCanonicalSceneAssetsForSlide } from "./scene-html-assets.ts";
 
 const MAX_PRESENTATION_RESPONSE_BYTES = 50 * 1024 * 1024;
 const MAX_HYBRID_SLIDES = 100;
@@ -80,22 +92,20 @@ const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
 const HYBRID_DECK_BUDGET_MS = 15 * 60_000;
 const HYBRID_CACHE_VERSION = "authored-hybrid-v17-editable-shadow-profile";
 const HYBRID_RESULT_CACHE_LIMIT = 24;
-// The bounded-release v3 contract has no Gate -1-qualified native subset.
-// Keep this code-path authoritative instead of making it conditional on an
-// operator-provided environment value: a missing or misspelled value must not
-// turn the bounded release into a native export.
-export const EDITABLE_HYBRID_SHADOW_PROFILE_ID =
-  "authored-editable-hybrid-ko-en-basic-v1";
+// Standard explicit Hybrid uses the element-level semantic/QID admission
+// gates. A persisted authored-vNext Scene projection, when present, is a
+// stronger authority and remains raster-only unless its bounded profile is
+// complete and unblocked.
+export {
+  boundedReleaseRasterOnly,
+  EDITABLE_HYBRID_SHADOW_PROFILE_ID,
+} from "./presentation-mode.ts";
 const HYBRID_EXPORT_CONCURRENCY = parseBoundedPositiveInt(
   process.env.AUTHORED_HYBRID_CONCURRENCY,
   resolveHybridExportConcurrencyDefault(),
   1,
   12,
 );
-
-export function boundedReleaseRasterOnly(profileId?: string): boolean {
-  return profileId !== EDITABLE_HYBRID_SHADOW_PROFILE_ID;
-}
 
 interface CompletedHybridExport {
   result: BundledPresentationExportResult;
@@ -139,6 +149,8 @@ export interface AuthoredHybridExportParams {
   explicitPptxMode?: boolean;
   /** Exact shadow-only profile that may exercise the bounded native subset. */
   editableHybridProfileId?: typeof EDITABLE_HYBRID_SHADOW_PROFILE_ID;
+  /** Internal fail-closed fact for a present but invalid Scene projection. */
+  invalidEditableHybridProjection?: boolean;
 }
 
 interface FetchedPresentation {
@@ -572,7 +584,11 @@ export async function runAuthoredFidelityPresentationExport(
           throw new Error("authored_fidelity_slide_html_required");
         }
         const prepared = await prepareFidelitySlideLayer(
-          rawSlide.html_content,
+          materializeCanonicalSceneAssetsForSlide(
+            presentation,
+            rawSlide.html_content,
+            arrayIndex,
+          ),
           arrayIndex + 1,
           chromeExecutable,
         );
@@ -607,6 +623,125 @@ export async function runAuthoredFidelityPresentationExport(
     );
     recordExportProgress(progressKey, { phase: "completed" });
     return { path: resultPath };
+  } catch (error) {
+    recordExportProgress(progressKey, { phase: "failed" });
+    throw error;
+  }
+}
+
+function embeddedGlyphAvailable(plan: FontEmbeddingPlan) {
+  const files = new Map(plan.files.map((file) => [file.sourceId, file] as const));
+  const faces = new Map(plan.faces.map((face) => [
+    `${normalizedTypeface(face.family)}\0${face.face}`,
+    face,
+  ] as const));
+  return (typeface: string, face: AuthoredEmbeddedTypefaceFaceEvidence["face"], codePoint: number) => {
+    const planned = faces.get(`${normalizedTypeface(typeface)}\0${face}`);
+    const file = planned ? files.get(planned.sourceId) : undefined;
+    if (!file) return false;
+    try {
+      return sfntHasCodePoint(file.data, codePoint, file.collectionFaceIndex);
+    } catch {
+      return false;
+    }
+  };
+}
+
+/**
+ * Render each Authored slide in its own isolated Chromium page, then assemble
+ * one raster image into exactly one PDF page. This avoids shared-DOM print
+ * fragmentation, which can insert blank or trailing pages.
+ */
+export async function runAuthoredPdfPresentationExport(
+  params: Omit<AuthoredHybridExportParams, "fontEmbedding">,
+): Promise<BundledPresentationExportResult> {
+  const fetched = await fetchPresentation(
+    params.presentationId,
+    params.cookieHeader ?? "",
+  );
+  const { presentation } = fetched;
+  if (
+    !Number.isSafeInteger(presentation.revision) ||
+    (presentation.revision as number) < 0 ||
+    (params.expectedPresentationRevision !== undefined &&
+      presentation.revision !== params.expectedPresentationRevision) ||
+    !isAuthoredPresentation(presentation) ||
+    !Array.isArray(presentation.slides) ||
+    presentation.slides.length === 0 ||
+    presentation.slides.length > MAX_HYBRID_SLIDES
+  ) throw new Error("authored_pdf_source_invalid");
+
+  const progressKey = `pdf:${params.exportAttemptId ?? `${params.presentationId}:${presentation.revision}:${fetched.sourceSha256}`}`;
+  beginExportProgress(progressKey, params.operationId, Date.now());
+  recordExportProgress(progressKey, {
+    phase: "slides",
+    completedSlides: 0,
+    totalSlides: presentation.slides.length,
+  });
+  try {
+    const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
+    if (!chromeExecutable) throw new Error("authored_pdf_chrome_unavailable");
+    let completedSlides = 0;
+    const pngs = await mapWithConcurrency(
+      presentation.slides,
+      HYBRID_EXPORT_CONCURRENCY,
+      async (rawSlide, arrayIndex) => {
+        if (!isRecord(rawSlide) || typeof rawSlide.html_content !== "string") {
+          throw new Error("authored_pdf_slide_html_required");
+        }
+        const prepared = await prepareFidelitySlideLayer(
+          materializeCanonicalSceneAssetsForSlide(
+            presentation,
+            rawSlide.html_content,
+            arrayIndex,
+          ),
+          arrayIndex + 1,
+          chromeExecutable,
+        );
+        if (!prepared.layer) throw new Error("authored_pdf_slide_capture_failed");
+        completedSlides += 1;
+        recordExportProgress(progressKey, { completedSlides });
+        return prepared.layer.backplatePng;
+      },
+    );
+    recordExportProgress(progressKey, { phase: "assembly" });
+    const pdf = await buildRasterPdfFromPngs(pngs);
+    if (rasterPdfPageCount(pdf) !== presentation.slides.length) {
+      throw new Error("authored_pdf_page_count_mismatch");
+    }
+    const exportsDirectory = path.join(resolveAppDataDirectory(), "exports");
+    await fs.mkdir(exportsDirectory, { recursive: true, mode: 0o755 });
+    const safeTitle = (params.title ?? "presentation")
+      .normalize("NFKC")
+      .replace(/[<>:"/\\|?*\u0000-\u001f]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/^\.+|\.+$/g, "")
+      .slice(0, 120) || "presentation";
+    const identity = createHash("sha256")
+      .update(params.presentationId)
+      .update("\0")
+      .update(fetched.sourceSha256)
+      .digest("hex")
+      .slice(0, 16);
+    const publicationId = randomUUID();
+    const destination = path.join(
+      exportsDirectory,
+      `${safeTitle}-${identity}-${publicationId}.pdf`,
+    );
+    const temporary = path.join(
+      exportsDirectory,
+      `.${safeTitle}-${identity}-${publicationId}.tmp`,
+    );
+    try {
+      await fs.writeFile(temporary, pdf, { flag: "wx", mode: 0o600 });
+      await fs.rename(temporary, destination);
+      await fs.chmod(destination, 0o644);
+    } finally {
+      await fs.rm(temporary, { force: true }).catch(() => {});
+    }
+    recordExportProgress(progressKey, { phase: "completed" });
+    return { path: destination };
   } catch (error) {
     recordExportProgress(progressKey, { phase: "failed" });
     throw error;
@@ -659,7 +794,15 @@ async function runUncachedAuthoredHybridExport(
       const slide = rawSlide as StoredSlide;
       const html =
         typeof slide.html_content === "string" ? slide.html_content : "";
-      return { html, slideNumber: arrayIndex + 1, semantic };
+      return {
+        html: materializeCanonicalSceneAssetsForSlide(
+          presentation,
+          html,
+          arrayIndex,
+        ),
+        slideNumber: arrayIndex + 1,
+        semantic,
+      };
     });
 
     const deckStart = Date.now();
@@ -689,7 +832,10 @@ async function runUncachedAuthoredHybridExport(
       HYBRID_EXPORT_CONCURRENCY,
       async ({ html, slideNumber, semantic }) => {
         try {
-          if (boundedReleaseRasterOnly(params.editableHybridProfileId)) {
+          if (boundedReleaseRasterOnly(
+            params.editableHybridProfileId,
+            params.invalidEditableHybridProjection,
+          )) {
             const reason = "bounded-release-visual-parity-raster-required";
             return {
               layer: null,
@@ -750,6 +896,7 @@ async function runUncachedAuthoredHybridExport(
                 declaredElementIds: semantic.declaredElementIds,
                 declaredElements: semantic.declaredElements,
               },
+              embeddedGlyphAvailable(fontEmbeddingPlan),
             );
           } catch (error) {
             if (error instanceof AuthoredSemanticPublicationError) {
@@ -969,6 +1116,14 @@ export async function runAuthoredHybridPresentationExport(
     presentation,
     "hybrid",
   );
+  const editableHybridProfileId =
+    presentationEditableHybridProfileId(presentation);
+  const effectiveParams = {
+    ...params,
+    editableHybridProfileId,
+    invalidEditableHybridProjection:
+      presentationRequiresRasterOnlyHybrid(presentation),
+  };
 
   const fontEmbeddingPlan = await resolveFontEmbeddingPlan({
     requested: params.fontEmbedding !== false,
@@ -989,7 +1144,7 @@ export async function runAuthoredHybridPresentationExport(
     fontEmbeddingPlan.cacheDiscriminator,
     params.exportAttemptId,
     params.canonicalSourceDigest,
-    params.editableHybridProfileId,
+    editableHybridProfileId,
   );
   const cached = await readCompletedHybridExport(cacheKey);
   if (cached) {
@@ -1011,7 +1166,7 @@ export async function runAuthoredHybridPresentationExport(
 
   beginExportProgress(cacheKey, params.operationId, Date.now());
   const job = runUncachedAuthoredHybridExport(
-    params,
+    effectiveParams,
     presentation,
     fetched.sourceSha256,
     activeBinding,

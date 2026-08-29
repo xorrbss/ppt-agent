@@ -3,6 +3,12 @@ import test from "node:test";
 
 import { writePptxArchive } from "./pptx-archive.ts";
 import { inspectPptxEditability } from "./pptx-quality-inspection.ts";
+import { createAuthoredNativeDispositionReceipt } from "./native-disposition.ts";
+import {
+  boundedReleaseRasterOnly,
+  EDITABLE_HYBRID_SHADOW_PROFILE_ID,
+  presentationRequiresRasterOnlyHybrid,
+} from "./presentation-mode.ts";
 
 test("structural editability inspection covers all 20 slides", () => {
   const entries = new Map([["[Content_Types].xml", Buffer.from("<Types/>")]]);
@@ -96,4 +102,99 @@ test("semantic raster ownership carriers do not inflate native shape coverage", 
   assert.equal(report.slides[0].nativeShapeElements, 0);
   assert.equal(report.slides[0].editable, false);
   assert.equal(report.slides[0].imageFallback, true);
+});
+
+test("explicit Hybrid admits supported native owners and reports QID-native ratio with fallback reasons", () => {
+  assert.equal(boundedReleaseRasterOnly(undefined), false);
+  assert.equal(
+    boundedReleaseRasterOnly(EDITABLE_HYBRID_SHADOW_PROFILE_ID),
+    false,
+  );
+  assert.equal(boundedReleaseRasterOnly("unknown-profile"), true);
+  assert.equal(
+    presentationRequiresRasterOnlyHybrid({
+      mode: "authored",
+      theme: {
+        authored_vnext: {
+          profileId: "unknown-profile",
+          status: "blocked",
+        },
+      },
+    }),
+    true,
+  );
+  assert.equal(
+    presentationRequiresRasterOnlyHybrid({
+      mode: "authored",
+      theme: { authored_vnext: { compositionPin: { digest: "a" } } },
+    }),
+    false,
+  );
+
+  const receipt = createAuthoredNativeDispositionReceipt([{
+    slideNumber: 1,
+    editable: true,
+    imageFallback: false,
+    nativeTextElements: 2,
+    nativeShapeElements: 1,
+    nativeImageElements: 0,
+    nativeTableElements: 1,
+    nativeChartElements: 1,
+    rasterFallbackElements: 1,
+    logicalCoverage: {
+      nativeText: 2,
+      nativeImage: 0,
+      nativeShape: 1,
+      nativeChart: 1,
+      nativeGroup: 0,
+      rasterRemaining: 1,
+    },
+    ooxmlReadback: {
+      status: "not-run",
+      nativeText: 0,
+      nativeImage: 0,
+      nativeShape: 0,
+      nativeChart: 0,
+      nativeGroup: 0,
+      rasterRemaining: 0,
+    },
+    backplateCount: 1,
+    typographyIssues: [],
+    fallbackReasons: ["unsupported-chart-css"],
+    fallbackElements: [{
+      elementId: "chart.complex",
+      candidateKind: "complex",
+      reasons: ["unsupported-chart-css"],
+    }],
+    qidCoverage: [
+      { elementId: "title", kind: "text", logical: "native", ooxml: "not-run", com: "not-run" },
+      { elementId: "body", kind: "text", logical: "native", ooxml: "not-run", com: "not-run" },
+      { elementId: "shape", kind: "shape", logical: "native", ooxml: "not-run", com: "not-run" },
+      { elementId: "table", kind: "table", logical: "native", ooxml: "not-run", com: "not-run" },
+      { elementId: "chart", kind: "chart", logical: "native", ooxml: "not-run", com: "not-run" },
+      { elementId: "chart.complex", kind: "chart", logical: "raster", ooxml: "not-run", com: "not-run" },
+    ],
+  }]);
+
+  assert.equal(receipt.status, "passed");
+  assert.equal(receipt.nativeElements, 5);
+  assert.equal(receipt.rasterFallbackElements, 1);
+  assert.equal(receipt.nativeRatioBasisPoints, 8333);
+  assert.equal(receipt.nativeRatio, 0.8333);
+  assert.deepEqual(receipt.nativeByKind, {
+    text: 2,
+    image: 0,
+    shape: 1,
+    table: 1,
+    chart: 1,
+  });
+  assert.deepEqual(receipt.fallbackReasonCounts, {
+    "unsupported-chart-css": 1,
+  });
+  assert.deepEqual(receipt.slides[0].elements.at(-1), {
+    elementId: "title",
+    kind: "text",
+    disposition: "native",
+    fallbackReasons: [],
+  });
 });

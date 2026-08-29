@@ -1,6 +1,10 @@
 import asyncio
 import hashlib
 import json
+import os
+from pathlib import Path
+import subprocess
+import sys
 import uuid
 from types import SimpleNamespace
 
@@ -465,16 +469,33 @@ def test_filesystem_evidence_recovers_db_pointer_and_clears_render_failure(
             html = "<section>durable html</section>"
             png = b"durable-png"
             metrics = {"revision": 0, "visible": True}
-            checkpoints.atomic_write(render_path, png)
-            checkpoints.write_valid_evidence(
-                render_path,
-                attempt_id=attempt_id,
-                slide_index=0,
-                revision=0,
-                html=html,
-                png=png,
-                metrics=metrics,
+            crash_writer = (
+                Path(__file__).parents[1]
+                / "support"
+                / "authored_checkpoint_crash_writer.py"
             )
+            crashed = subprocess.run(
+                [
+                    sys.executable,
+                    str(crash_writer),
+                    "--render-path",
+                    str(render_path),
+                    "--attempt-id",
+                    attempt_id,
+                    "--slide-index",
+                    "0",
+                    "--revision",
+                    "0",
+                ],
+                cwd=Path(__file__).parents[2],
+                env=os.environ.copy(),
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=30,
+            )
+            assert crashed.returncode == 91, crashed.stderr
+            assert render_path.read_bytes() == png
 
             recovered = await checkpoints.get_checkpoint(job.id, 0)
             assert recovered.render_status == "completed"

@@ -13,6 +13,7 @@ from services.authored_composition_policy import (
     repair_authored_layout_alignment,
     reduce_authored_closing_capacity,
     reduce_authored_closing_title_punctuation,
+    resolve_composition_profile,
 )
 from services.authored_presentation_generation import (
     _apply_bounded_closing_capacity_reducer,
@@ -28,6 +29,35 @@ from services.authored_presentation_generation import (
 )
 from services.source_content.browser_readback import BrowserSourceReadbackError
 from utils.renderer_isolation import admit_authored_html
+
+
+def test_composition_profile_defaults_to_development_quality_gates() -> None:
+    profile = resolve_composition_profile(SimpleNamespace())
+
+    assert profile.quality_profile_id == "development"
+    assert profile.require_source_readback is False
+    assert profile.require_visual_review is False
+    assert profile.require_performance is False
+    assert profile.require_native_coverage is False
+    assert profile.minimum_native_coverage_ratio == 0.0
+
+
+def test_composition_release_profile_seals_required_quality_gates() -> None:
+    profile = resolve_composition_profile(
+        SimpleNamespace(_authored_quality_profile="release")
+    )
+
+    assert profile.quality_profile_id == "release"
+    assert profile.require_source_readback is True
+    assert profile.require_visual_review is True
+    assert profile.require_performance is True
+    assert profile.require_native_coverage is True
+    assert profile.minimum_native_coverage_ratio == pytest.approx(0.70)
+
+
+def test_composition_profile_rejects_unknown_quality_profile() -> None:
+    with pytest.raises(ValueError, match="authored_quality_profile_unknown"):
+        resolve_composition_profile(SimpleNamespace(quality_profile="release-ish"))
 
 
 def test_capacity_violations_enforce_qids_images_text_and_font_floor():

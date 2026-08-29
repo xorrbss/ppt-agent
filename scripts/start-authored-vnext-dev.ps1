@@ -13,6 +13,8 @@ param(
 
     [string]$ProviderConfigPath,
 
+    [string]$LogoSvgPath,
+
     [switch]$IsolatedDatabase,
 
     [switch]$AllowProviderSettings
@@ -49,6 +51,16 @@ else {
 }
 if ($ProviderConfigPath -and -not (Test-Path -LiteralPath $userConfigPath -PathType Leaf)) {
     throw "Provider config file does not exist: $userConfigPath"
+}
+$resolvedLogoSvgPath = if ([string]::IsNullOrWhiteSpace($LogoSvgPath)) {
+    $null
+}
+else {
+    $resolved = [System.IO.Path]::GetFullPath($LogoSvgPath, $repoRoot)
+    if (-not (Test-Path -LiteralPath $resolved -PathType Leaf)) {
+        throw "Logo SVG file does not exist: $resolved"
+    }
+    $resolved
 }
 $logRoot = Join-Path $devSessionRoot "logs"
 $nextDistDirectoryName = ".next-authored-vnext-dev-$PID"
@@ -348,10 +360,16 @@ try {
         }
     }
 
+    $catalogSeedArguments = @("run", "python", "scripts\seed_authored_vnext_master_catalog.py")
+    if ($resolvedLogoSvgPath) {
+        # Start-Process joins ArgumentList with spaces, so preserve this leaf
+        # path as one argv token for Windows paths containing spaces or Hangul.
+        $catalogSeedArguments += @("--logo-svg", ('"{0}"' -f $resolvedLogoSvgPath))
+    }
     $catalogSeed = Start-LoggedProcess `
         -Name "PPT Master catalog seed" `
         -FilePath "uv.exe" `
-        -ArgumentList @("run", "python", "scripts\seed_authored_vnext_master_catalog.py") `
+        -ArgumentList $catalogSeedArguments `
         -WorkingDirectory $fastApiRoot `
         -Environment $fastApiEnvironment `
         -StdoutPath (Join-Path $logRoot "master-seed.stdout.log") `

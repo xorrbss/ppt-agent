@@ -165,6 +165,93 @@ function inspectSfntFace(buffer: Buffer, faceOffset: number): SfntFontInspection
   };
 }
 
+function cmapSubtables(buffer: Buffer, faceOffset: number): number[] {
+  const cmap = tableDirectory(buffer, faceOffset).find((table) => table.tag === "cmap");
+  if (!cmap || cmap.length < 4) return [];
+  const count = u16(buffer, cmap.offset + 2);
+  if (count < 1 || cmap.offset + 4 + count * 8 > cmap.offset + cmap.length) {
+    throw new Error("invalid cmap encoding directory");
+  }
+  return Array.from({ length: count }, (_, index) => {
+    const record = cmap.offset + 4 + index * 8;
+    const offset = u32(buffer, record + 4);
+    if (offset >= cmap.length) throw new Error("invalid cmap subtable offset");
+    return cmap.offset + offset;
+  });
+}
+
+function cmapFormat12HasCodePoint(buffer: Buffer, offset: number, codePoint: number): boolean {
+  const length = u32(buffer, offset + 4);
+  const groups = u32(buffer, offset + 12);
+  if (length < 16 || groups > 1_000_000 || offset + length > buffer.length || 16 + groups * 12 > length) {
+    throw new Error("invalid cmap format 12");
+  }
+  let low = 0;
+  let high = groups - 1;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const group = offset + 16 + middle * 12;
+    const start = u32(buffer, group);
+    const end = u32(buffer, group + 4);
+    if (codePoint < start) high = middle - 1;
+    else if (codePoint > end) low = middle + 1;
+    else return ((u32(buffer, group + 8) + codePoint - start) >>> 0) !== 0;
+  }
+  return false;
+}
+
+function cmapFormat4HasCodePoint(buffer: Buffer, offset: number, codePoint: number): boolean {
+  if (codePoint > 0xffff) return false;
+  const length = u16(buffer, offset + 2);
+  const segmentCount = u16(buffer, offset + 6) / 2;
+  if (!Number.isSafeInteger(segmentCount) || segmentCount < 1 || offset + length > buffer.length) {
+    throw new Error("invalid cmap format 4");
+  }
+  const endCodes = offset + 14;
+  const startCodes = endCodes + segmentCount * 2 + 2;
+  const deltas = startCodes + segmentCount * 2;
+  const rangeOffsets = deltas + segmentCount * 2;
+  if (rangeOffsets + segmentCount * 2 > offset + length) throw new Error("invalid cmap format 4");
+  for (let index = 0; index < segmentCount; index += 1) {
+    const end = u16(buffer, endCodes + index * 2);
+    if (codePoint > end) continue;
+    const start = u16(buffer, startCodes + index * 2);
+    if (codePoint < start) return false;
+    const delta = u16(buffer, deltas + index * 2);
+    const rangeOffsetAddress = rangeOffsets + index * 2;
+    const rangeOffset = u16(buffer, rangeOffsetAddress);
+    if (rangeOffset === 0) return ((codePoint + delta) & 0xffff) !== 0;
+    const glyphAddress = rangeOffsetAddress + rangeOffset + (codePoint - start) * 2;
+    if (glyphAddress + 2 > offset + length) throw new Error("invalid cmap glyph offset");
+    const glyph = u16(buffer, glyphAddress);
+    return glyph !== 0 && ((glyph + delta) & 0xffff) !== 0;
+  }
+  return false;
+}
+
+/** Fail-closed codepoint lookup against the exact SFNT/TTC face being embedded. */
+export function sfntHasCodePoint(
+  buffer: Buffer,
+  codePoint: number,
+  collectionFaceIndex?: number,
+): boolean {
+  if (!Number.isSafeInteger(codePoint) || codePoint < 0 || codePoint > 0x10ffff) return false;
+  const faceOffset = buffer.toString("ascii", 0, 4) === "ttcf"
+    ? collectionFaceOffsets(buffer)[collectionFaceIndex ?? -1]
+    : collectionFaceIndex === undefined ? 0 : undefined;
+  if (faceOffset === undefined) return false;
+  const subtables = cmapSubtables(buffer, faceOffset);
+  for (const format of [12, 4]) {
+    for (const offset of subtables) {
+      if (u16(buffer, offset) !== format) continue;
+      if (format === 12
+        ? cmapFormat12HasCodePoint(buffer, offset, codePoint)
+        : cmapFormat4HasCodePoint(buffer, offset, codePoint)) return true;
+    }
+  }
+  return false;
+}
+
 export function inspectSfntFont(buffer: Buffer): SfntFontInspection {
   if (buffer.toString("ascii", 0, 4) === "ttcf") throw new Error("sfnt_collection_requires_face_selection");
   return inspectSfntFace(buffer, 0);

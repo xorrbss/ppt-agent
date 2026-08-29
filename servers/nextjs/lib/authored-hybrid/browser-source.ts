@@ -3587,7 +3587,15 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
         !element.hasAttribute(ISOLATED_INLINE_ATTRIBUTE) &&
         coveredRoots.some(function (root) { return root.contains(element); })
       ) return;
-      if (!visibleElement(element)) return;
+      var elementVisible = visibleElement(element);
+      // Declared QIDs are part of the immutable semantic denominator even
+      // when Chromium does not paint them (for example a responsive branch
+      // hidden with display:none).  Dropping them here makes the observation
+      // graph smaller than the sealed identity registry and turns an audited
+      // raster fallback into a generic QID mismatch.  Compatibility mode may
+      // continue to omit invisible DOM nodes because it has no declared
+      // ownership graph.
+      if (!elementVisible && !declaredIdentity) return;
 
       var complexReason = complexKind(element);
       var candidateKind = null;

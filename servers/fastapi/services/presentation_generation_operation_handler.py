@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable, Mapping
 import logging
+import time
 from typing import Any
 import uuid
 
@@ -24,6 +25,7 @@ from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.workspace import WorkspaceOperation
 from api.v1.auth.internal import authenticated_internal_request_headers
 from services.authored_generation_progress_poller import (
+    mark_authored_generation_stage,
     start_authored_generation_progress_polling,
 )
 from services.database import async_session_maker
@@ -53,6 +55,13 @@ from services.workspace_operation_handler_registry import (
 logger = logging.getLogger(__name__)
 
 PRESENTATION_GENERATION_OPERATION_KIND = "presentation.generate"
+
+
+def _begin_upstream_outline_timing(request: object) -> None:
+    """Pin the authored outline clock before any upstream provider work."""
+
+    if str(getattr(request, "template", "")).strip().lower() == "authored":
+        object.__setattr__(request, "_authored_outline_started_at", time.monotonic())
 
 GenerationPipeline = Callable[
     [uuid.UUID, str, str | None, WorkspaceOperationExecutionContext],
@@ -165,6 +174,7 @@ class PresentationGenerationOperationHandler:
                 )
 
             request = _request_from_durable_payload(job.request_payload)
+            _begin_upstream_outline_timing(request)
             request._request_id = job.request_id
             _validate_authored_exact_admission(request)
             await _validate_authored_master_pin_admission(request)
@@ -291,6 +301,17 @@ class PresentationGenerationOperationHandler:
         )
         try:
             await context.progress(stage="generation_started")
+            await mark_authored_generation_stage(
+                job_id=job_id,
+                attempt_token=claim.attempt_token,
+                stage="outline",
+                session_factory=self._session_factory,
+            )
+            await context.progress(
+                stage="authored_outline",
+                percent=8,
+                message="발표 구조와 작성 기준을 준비하고 있습니다.",
+            )
             result = await self._pipeline(
                 job_id, task_id, export_cookie_header, context
             )

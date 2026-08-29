@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 import uuid
 
+from models.authored_vnext.deck.scene import SceneAssetManifestEntry
 from templates.v2.models.elements import (
     Container,
     Flex,
@@ -108,6 +109,53 @@ def _reconstructed_element_supported(element: Any) -> bool:
 
 def _collect_asset_digests(value: Any, *, path: str = "content") -> dict[str, str]:
     digests: dict[str, str] = {}
+    scene_assets: dict[str, tuple[str, str]] = {}
+    scene_manifest_lists: set[int] = set()
+
+    def collect_scene_manifests(candidate: Any, candidate_path: str) -> None:
+        if isinstance(candidate, list):
+            for index, child in enumerate(candidate):
+                collect_scene_manifests(child, f"{candidate_path}.{index}")
+            return
+        if not isinstance(candidate, Mapping):
+            return
+        for key, child in candidate.items():
+            child_path = f"{candidate_path}.{key}"
+            if key in {"assetManifest", "asset_manifest"} and isinstance(child, list):
+                is_scene_manifest = not child or all(
+                    isinstance(item, Mapping)
+                    and (
+                        "storageReference" in item
+                        or "storage_reference" in item
+                    )
+                    for item in child
+                )
+                if is_scene_manifest:
+                    scene_manifest_lists.add(id(child))
+                    for index, item in enumerate(child):
+                        try:
+                            entry = SceneAssetManifestEntry.model_validate(item)
+                        except ValueError as error:
+                            raise PresentationExportContractError(
+                                "presentation_export_scene_asset_manifest_invalid",
+                                path=f"{child_path}.{index}",
+                            ) from error
+                        normalized = entry.asset_digest.removeprefix("sha256:")
+                        current = scene_assets.get(entry.asset_id)
+                        sealed = (normalized, entry.storage_reference)
+                        if current is not None and current != sealed:
+                            raise PresentationExportFreshnessError(
+                                "presentation_export_asset_digest_mismatch",
+                                path=f"{child_path}.{index}",
+                            )
+                        scene_assets[entry.asset_id] = sealed
+                    continue
+            collect_scene_manifests(child, child_path)
+
+    collect_scene_manifests(value, path)
+    digests.update(
+        {asset_id: digest for asset_id, (digest, _reference) in scene_assets.items()}
+    )
 
     def visit(candidate: Any, candidate_path: str) -> None:
         if isinstance(candidate, list):
@@ -119,7 +167,13 @@ def _collect_asset_digests(value: Any, *, path: str = "content") -> dict[str, st
         asset_id = candidate.get("asset_id", candidate.get("assetId"))
         digest = candidate.get(
             "sha256",
-            candidate.get("source_sha256", candidate.get("digest")),
+            candidate.get(
+                "source_sha256",
+                candidate.get(
+                    "assetDigest",
+                    candidate.get("asset_digest", candidate.get("digest")),
+                ),
+            ),
         )
         if asset_id is not None:
             if not isinstance(asset_id, str) or not asset_id.strip():
@@ -127,23 +181,54 @@ def _collect_asset_digests(value: Any, *, path: str = "content") -> dict[str, st
                     "presentation_export_asset_id_invalid",
                     path=candidate_path,
                 )
-            try:
-                normalized_asset_id = str(uuid.UUID(asset_id.strip()))
-            except ValueError as error:
-                raise PresentationExportContractError(
-                    "presentation_export_asset_id_invalid",
-                    path=candidate_path,
-                ) from error
+            normalized_asset_id = asset_id.strip()
+            if normalized_asset_id.startswith("asset:"):
+                declared = scene_assets.get(normalized_asset_id)
+                if declared is None:
+                    raise PresentationExportContractError(
+                        "presentation_export_scene_asset_undeclared",
+                        path=candidate_path,
+                    )
+                if not isinstance(digest, str) or not digest.startswith("sha256:"):
+                    raise PresentationExportFreshnessError(
+                        "presentation_export_asset_digest_required",
+                        path=candidate_path,
+                    )
+                normalized = digest.removeprefix("sha256:").lower()
+                if normalized != declared[0]:
+                    raise PresentationExportFreshnessError(
+                        "presentation_export_asset_digest_mismatch",
+                        path=candidate_path,
+                    )
+            else:
+                try:
+                    normalized_asset_id = str(uuid.UUID(normalized_asset_id))
+                except ValueError as error:
+                    raise PresentationExportContractError(
+                        "presentation_export_asset_id_invalid",
+                        path=candidate_path,
+                    ) from error
+                if (
+                    not isinstance(digest, str)
+                    or len(digest) != 64
+                    or any(
+                        character not in "0123456789abcdefABCDEF"
+                        for character in digest
+                    )
+                ):
+                    raise PresentationExportFreshnessError(
+                        "presentation_export_asset_digest_required",
+                        path=candidate_path,
+                    )
+                normalized = digest.lower()
             if (
-                not isinstance(digest, str)
-                or len(digest) != 64
-                or any(character not in "0123456789abcdefABCDEF" for character in digest)
+                len(normalized) != 64
+                or any(character not in "0123456789abcdef" for character in normalized)
             ):
                 raise PresentationExportFreshnessError(
                     "presentation_export_asset_digest_required",
                     path=candidate_path,
                 )
-            normalized = digest.lower()
             previous = digests.get(normalized_asset_id)
             if previous is not None and previous != normalized:
                 raise PresentationExportFreshnessError(
@@ -152,6 +237,8 @@ def _collect_asset_digests(value: Any, *, path: str = "content") -> dict[str, st
                 )
             digests[normalized_asset_id] = normalized
         for key, child in candidate.items():
+            if id(child) in scene_manifest_lists:
+                continue
             visit(child, f"{candidate_path}.{key}")
 
     visit(value, path)
@@ -173,18 +260,12 @@ def analyze_presentation_export_capabilities(
     asset_payloads: list[Mapping[str, Any]] = list(persisted_slide_payloads)
     if not asset_payloads:
         asset_payloads.extend(slide.content for slide in slides)
-    for slide_index, payload in enumerate(asset_payloads):
-        for asset_id, digest in _collect_asset_digests(
-            payload,
-            path=f"slides.{slide_index}",
-        ).items():
-            previous = asset_digests.get(asset_id)
-            if previous is not None and previous != digest:
-                raise PresentationExportFreshnessError(
-                    "presentation_export_asset_digest_mismatch",
-                    path=f"slides.{slide_index}.content",
-                )
-            asset_digests[asset_id] = digest
+    asset_digests.update(
+        _collect_asset_digests(
+            asset_payloads,
+            path="persisted",
+        )
+    )
 
     if export_format == "pdf" or not slides:
         return PresentationExportCapabilityAnalysis(

@@ -142,6 +142,24 @@ test("face-complete mixed text promotes with Noto CJK and IBM Plex Mono Latin ru
   assert.doesNotMatch(xml, /<a:normAutofit\/>/);
 });
 
+test("embedded face without the authored cmap glyph fails closed", () => {
+  const result = preflightNativeTypography([mixedTextElement()], {
+    embeddedTypefaceFaces: [
+      { typeface: "IBM Plex Mono", face: "bold" },
+      { typeface: "Noto Sans KR", face: "bold" },
+    ],
+    embeddedGlyphAvailable: (_typeface, _face, codePoint) => codePoint < 0x80,
+  });
+  assert.deepEqual(result.rejectedElementIds, ["mixed-1"]);
+  assert.ok(result.typographyIssues.some((issue) =>
+    issue.code === "embedding-glyph-missing" &&
+      issue.requiredTypeface === "Noto Sans KR"
+  ));
+  assert.ok(result.elements[0].classification.reasons.includes(
+    "typography-embedding-glyph-missing",
+  ));
+});
+
 test("reviewed Windows fallback faces admit logical CJK and mono CSS names", async () => {
   const mixed = mixedTextElement();
   const serif = structuredClone(mixedTextElement());

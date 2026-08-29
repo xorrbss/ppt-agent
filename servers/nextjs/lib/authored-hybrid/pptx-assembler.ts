@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import {
   preparedNativeElementNonVisualIdCount,
   preparedNativeElementUnderlayNonVisualIdCount,
+  powerPointTextBoundsForPreflight,
   serializePreparedNativeElementOverlay,
   serializePreparedNativeElementUnderlay,
   type PowerPointTypefaceSerializationOptions,
@@ -359,6 +360,71 @@ function authoredBreakCount(item: Extract<PreparedNativeElement, { kind: "text" 
     0
   );
   return Math.max(explicit, Math.max(0, item.source.text.paragraphs.length - 1));
+}
+
+/** Exact geometry the assembler will expose to OOXML readback. */
+export function preparedNativeElementExpectedReadbackBounds(
+  item: PreparedNativeElement,
+): { x: number; y: number; width: number; height: number } {
+  const sourceBounds = item.kind === "text"
+    ? powerPointTextBoundsForPreflight(item.source) ?? item.source.bounds.px
+    : item.source.bounds.px;
+  const toEmu = (value: number) => Math.round(value * 9_525);
+  const toPx = (value: number) =>
+    Math.round((value / 9_525) * 1_000_000) / 1_000_000;
+  let x = toEmu(sourceBounds.x);
+  let y = toEmu(sourceBounds.y);
+  let width = Math.max(1, toEmu(sourceBounds.width));
+  let height = Math.max(1, toEmu(sourceBounds.height));
+  if (
+    item.kind === "text" &&
+    !item.source.text.containerShape &&
+    Math.abs(item.source.rotationDeg) < 0.001
+  ) {
+    const horizontalSlack = Math.round(
+      Math.max(
+        8,
+        Math.min(16, item.source.text.style.fontSizePt * 0.4 + 4),
+      ) * 9_525,
+    );
+    const verticalSlack = Math.round(
+      Math.max(
+        4,
+        Math.min(12, authoredBreakCount(item) > 0 ? 10 : 4),
+      ) * 9_525,
+    );
+    const horizontal = item.source.text.style.horizontalAlignment;
+    const vertical = item.source.text.style.verticalAlignment;
+    const left = horizontal === "right"
+      ? horizontalSlack
+      : horizontal === "center"
+        ? horizontalSlack / 2
+        : 0;
+    const right = horizontal === "left"
+      ? horizontalSlack
+      : horizontal === "center"
+        ? horizontalSlack / 2
+        : 0;
+    const top = vertical === "bottom"
+      ? verticalSlack
+      : vertical === "middle"
+        ? verticalSlack / 2
+        : 0;
+    const bottom = vertical === "top"
+      ? verticalSlack
+      : vertical === "middle"
+        ? verticalSlack / 2
+        : 0;
+    const nextX = Math.max(0, Math.round(x - left));
+    const nextY = Math.max(0, Math.round(y - top));
+    const nextRight = Math.min(SLIDE_WIDTH_EMU, Math.round(x + width + right));
+    const nextBottom = Math.min(SLIDE_HEIGHT_EMU, Math.round(y + height + bottom));
+    x = nextX;
+    y = nextY;
+    width = Math.max(1, nextRight - nextX);
+    height = Math.max(1, nextBottom - nextY);
+  }
+  return { x: toPx(x), y: toPx(y), width: toPx(width), height: toPx(height) };
 }
 
 function expandStandaloneTextBounds(

@@ -17,11 +17,25 @@ import { spawn } from "node:child_process";
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const EVIDENCE_ROOT = path.join(REPO, "artifacts", "authored-vnext-controlled-load-20260829");
 const TERMINAL = new Set(["completed", "error", "failed", "cancelled", "canceled"]);
+const PHASES = ["outline", "author", "repair", "checkpoint", "publication", "export"];
+const FINGERPRINT = /^sha256:[a-f0-9]{64}$/;
+const RENDER_RUNTIME_METRICS_PATH = "/metrics/authored-render-runtime";
+
+class BenchmarkRequestError extends Error {
+  constructor(message, classification, cause = null) {
+    super(message);
+    this.name = "BenchmarkRequestError";
+    this.classification = classification;
+    this.details = cause && typeof cause === "object" ? cause : null;
+    this.cause = cause ? String(cause?.stack || cause) : null;
+  }
+}
 
 function fail(message) { throw new Error(message); }
 function now() { return new Date().toISOString(); }
 function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 function sha256(bytes) { return createHash("sha256").update(bytes).digest("hex"); }
+function fingerprint(value) { return `sha256:${sha256(value)}`; }
 function inside(child, parent) {
   const relative = path.relative(path.resolve(parent), path.resolve(child));
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
@@ -51,22 +65,90 @@ function usage() {
     "Credentials are read only from PRESENTON_BENCH_USER/PRESENTON_BENCH_PASSWORD.",
     "Durability mode additionally requires inherited WORKSPACE_OPERATION_WORKER_MODE=external,",
     "APP_DATA_DIRECTORY and DATABASE_URL values rooted below durability.isolatedRoot.",
+    "schemaVersion 2 supports matrix.slideCounts (5,10,20), matrix.concurrencyLevels (1,2,4),",
+    "matrix.cacheStates (cold,warm), and matrix.repetitions. Matrix runs require redacted provider/model/prompt/environment fingerprints, owned resource PIDs, and a cold-control receipt for every cold cell. This harness never restarts a listener.",
   ].join("\n");
 }
 
+function requiredFingerprint(value, label) {
+  const normalized = String(value || "").toLowerCase();
+  if (!FINGERPRINT.test(normalized)) fail(`${label} must be sha256:<64 lowercase hex>`);
+  return normalized;
+}
+
+function promptInvariant(deck) {
+  return JSON.stringify({
+    content: deck.content,
+    language: deck.language ?? null,
+    style: deck.style ?? null,
+    instructions: deck.instructions ?? null,
+    tone: deck.tone ?? null,
+    verbosity: deck.verbosity ?? null,
+    includeTitleSlide: deck.includeTitleSlide !== false,
+    includeTableOfContents: deck.includeTableOfContents === true,
+    webSearch: deck.webSearch === true,
+    visionQa: deck.visionQa === true,
+  });
+}
+
+function normalizeFixedInvariants(input, deck) {
+  if (!input || typeof input !== "object") fail("matrix.fixedInvariants is required");
+  const providerId = String(input.provider?.id || "").trim();
+  const modelId = String(input.model?.id || "").trim();
+  if (!providerId || !modelId) fail("matrix.fixedInvariants provider.id and model.id are required");
+  const fixedInvariants = {
+    provider: { id: providerId, fingerprint: requiredFingerprint(input.provider?.fingerprint, "matrix.fixedInvariants.provider.fingerprint") },
+    model: { id: modelId, fingerprint: requiredFingerprint(input.model?.fingerprint, "matrix.fixedInvariants.model.fingerprint") },
+    prompt: { fingerprint: requiredFingerprint(input.prompt?.fingerprint, "matrix.fixedInvariants.prompt.fingerprint") },
+    environment: { fingerprint: requiredFingerprint(input.environment?.fingerprint, "matrix.fixedInvariants.environment.fingerprint") },
+  };
+  const computedPromptFingerprint = fingerprint(promptInvariant(deck));
+  if (fixedInvariants.prompt.fingerprint !== computedPromptFingerprint) {
+    fail("matrix.fixedInvariants.prompt.fingerprint must match the fixed deck prompt invariant");
+  }
+  return fixedInvariants;
+}
+
+function normalizeColdControlReceipts(input, matrix, environmentFingerprint) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) fail("matrix.coldControlReceipts is required");
+  const expected = new Set(matrix.slideCounts.flatMap((nSlides) => matrix.concurrencyLevels
+    .map((concurrency) => `cold-${nSlides}slides-c${concurrency}`)));
+  const supplied = Object.keys(input);
+  if (supplied.length !== expected.size || supplied.some((key) => !expected.has(key))) {
+    fail("matrix.coldControlReceipts must contain exactly one receipt for every cold matrix cell");
+  }
+  return Object.fromEntries(supplied.map((key) => {
+    const receipt = input[key];
+    const method = String(receipt?.method || "").trim();
+    const target = String(receipt?.target || "").trim();
+    const completedAt = String(receipt?.completedAt || "").trim();
+    if (!method || !target || !Number.isFinite(Date.parse(completedAt))) {
+      fail(`matrix.coldControlReceipts.${key} requires method, target, and completedAt`);
+    }
+    const receiptEnvironmentFingerprint = requiredFingerprint(receipt?.environmentFingerprint,
+      `matrix.coldControlReceipts.${key}.environmentFingerprint`);
+    if (receiptEnvironmentFingerprint !== environmentFingerprint) {
+      fail(`matrix.coldControlReceipts.${key}.environmentFingerprint must match matrix.fixedInvariants.environment.fingerprint`);
+    }
+    return [key, { method, target, completedAt, environmentFingerprint: receiptEnvironmentFingerprint }];
+  }));
+}
+
 function normalizeManifest(raw) {
-  if (raw?.schemaVersion !== 1) fail("manifest schemaVersion must be 1");
+  if (![1, 2].includes(raw?.schemaVersion)) fail("manifest schemaVersion must be 1 or 2");
   const outputDirectory = path.resolve(REPO, raw.outputDirectory || "");
   if (!inside(outputDirectory, EVIDENCE_ROOT) || outputDirectory === EVIDENCE_ROOT) {
     fail(`outputDirectory must be a child of ${EVIDENCE_ROOT}`);
   }
   const baseUrl = new URL(raw.baseUrl || "http://127.0.0.1:8010");
+  const metricsBaseUrl = new URL(raw.metricsBaseUrl || baseUrl.href);
   if (!["http:", "https:"].includes(baseUrl.protocol)) fail("baseUrl must use http or https");
+  if (!["http:", "https:"].includes(metricsBaseUrl.protocol)) fail("metricsBaseUrl must use http or https");
   const concurrency = Number(raw.concurrency ?? 2);
   const pollIntervalMs = Number(raw.pollIntervalMs ?? 2000);
   const timeoutMs = Number(raw.timeoutMs ?? 1_800_000);
   const resourceIntervalMs = Number(raw.resourceIntervalMs ?? 2000);
-  const soakDurationSeconds = Number(raw.soakDurationSeconds ?? 0);
+  const soakDurationSeconds = Number(raw.soak?.durationSeconds ?? raw.soakDurationSeconds ?? 0);
   if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 8) fail("concurrency must be 1..8");
   if (!Number.isInteger(pollIntervalMs) || pollIntervalMs < 250 || pollIntervalMs > 30_000) fail("pollIntervalMs must be 250..30000");
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 86_400_000) fail("timeoutMs must be 1000..86400000");
@@ -87,11 +169,34 @@ function normalizeManifest(raw) {
   });
   const resourcePids = [...new Set((raw.resourcePids || []).map(Number))];
   if (resourcePids.some((pid) => !Number.isInteger(pid) || pid <= 0)) fail("resourcePids must contain positive integers");
+  let matrix = null;
+  if (raw.schemaVersion === 2) {
+    const input = raw.matrix;
+    if (!input || typeof input !== "object") fail("schemaVersion 2 requires matrix");
+    const slideCounts = [...new Set((input.slideCounts || []).map(Number))];
+    const concurrencyLevels = [...new Set((input.concurrencyLevels || []).map(Number))];
+    const cacheStates = [...new Set((input.cacheStates || []).map((value) => String(value).toLowerCase()))];
+    const repetitions = Number(input.repetitions ?? 2);
+    if (JSON.stringify(slideCounts) !== JSON.stringify([5, 10, 20])) fail("matrix.slideCounts must be exactly [5,10,20]");
+    if (JSON.stringify(concurrencyLevels) !== JSON.stringify([1, 2, 4])) fail("matrix.concurrencyLevels must be exactly [1,2,4]");
+    if (JSON.stringify(cacheStates) !== JSON.stringify(["cold", "warm"])) fail("matrix.cacheStates must be exactly [cold,warm]");
+    if (!Number.isInteger(repetitions) || repetitions < 2 || repetitions > 20) fail("matrix.repetitions must be 2..20");
+    if (repetitions < Math.max(...concurrencyLevels)) {
+      fail("matrix.repetitions must be greater than or equal to the maximum concurrency level");
+    }
+    if (decks.length !== 1) fail("matrix requires exactly one deck template");
+    if (!resourcePids.length) fail("schemaVersion 2 matrix requires non-empty resourcePids");
+    const bareMatrix = { slideCounts, concurrencyLevels, cacheStates, repetitions };
+    const fixedInvariants = normalizeFixedInvariants(input.fixedInvariants, decks[0]);
+    const coldControlReceipts = normalizeColdControlReceipts(input.coldControlReceipts, bareMatrix,
+      fixedInvariants.environment.fingerprint);
+    matrix = { ...bareMatrix, fixedInvariants, coldControlReceipts };
+  }
   return {
-    schemaVersion: 1, baseUrl: baseUrl.href.replace(/\/$/, ""), outputDirectory,
+    schemaVersion: raw.schemaVersion, baseUrl: baseUrl.href.replace(/\/$/, ""), metricsBaseUrl: metricsBaseUrl.href.replace(/\/$/, ""), outputDirectory,
     concurrency, pollIntervalMs, timeoutMs, resourceIntervalMs, soakDurationSeconds,
     resourcePids, requireWorkspaceOperation: raw.requireWorkspaceOperation !== false,
-    decks, durability: raw.durability || null,
+    decks, matrix, durability: raw.durability || null,
   };
 }
 
@@ -107,16 +212,55 @@ async function request(url, init, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(url, { ...init, signal: controller.signal });
+    let response;
+    try { response = await fetch(url, { ...init, signal: controller.signal }); }
+    catch (error) {
+      const text = String(error?.message || error);
+      const classification = controller.signal.aborted ? "request_timeout" :
+        /fetch failed/i.test(text) ? "proxy_fetch_failed" :
+        /(ECONNREFUSED|ECONNRESET|socket hang up|network)/i.test(text) ? "listener_interrupted" : "network_request_failed";
+      throw new BenchmarkRequestError(`${classification}: ${url}: ${text}`, classification, error);
+    }
     const bytes = Buffer.from(await response.arrayBuffer());
     const text = bytes.toString("utf8");
     let json = null;
     try { json = JSON.parse(text); } catch { /* binary or non-JSON body */ }
-    if (!response.ok) fail(`HTTP ${response.status} ${url}: ${text.slice(0, 600)}`);
+    if (!response.ok) {
+      const classification = [502, 503, 504].includes(response.status) ? "proxy_or_listener_http_failure" : "http_request_failed";
+      throw new BenchmarkRequestError(`${classification}: HTTP ${response.status} ${url}: ${text.slice(0, 600)}`, classification);
+    }
     return { response, bytes, text, json };
   } finally {
     clearTimeout(timer);
   }
+}
+
+function phaseForLabel(label) {
+  const value = String(label || "").toLowerCase();
+  if (/(outline|plan|structure)/.test(value)) return "outline";
+  if (/(author|generate|composition|scene)/.test(value)) return "author";
+  if (/(repair|overflow|capacity)/.test(value)) return "repair";
+  if (/(checkpoint|persist|seal)/.test(value)) return "checkpoint";
+  if (/(publication|publish|complete)/.test(value)) return "publication";
+  if (/(export|download|pdf)/.test(value)) return "export";
+  return null;
+}
+
+function percentile(values, quantile) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.ceil(quantile * sorted.length) - 1];
+}
+
+function phaseSummary(results) {
+  const phases = Object.fromEntries(PHASES.map((phase) => [phase, []]));
+  for (const result of results) for (const [phase, value] of Object.entries(result.phaseTimingsMs || {})) {
+    if (Number.isFinite(value)) phases[phase]?.push(value);
+  }
+  return Object.fromEntries(PHASES.map((phase) => {
+    const values = phases[phase];
+    return [phase, { observations: values.length, p50Ms: percentile(values, 0.5), p95Ms: percentile(values, 0.95) }];
+  }));
 }
 
 function requestBody(deck) {
@@ -132,6 +276,21 @@ function requestBody(deck) {
     if (deck[source] != null) body[target] = deck[source];
   }
   return body;
+}
+
+function assertOperationInvariants(manifest, deck, scenario) {
+  if (!manifest.matrix) return;
+  const fixed = manifest.matrix.fixedInvariants;
+  if (!fixed || fingerprint(promptInvariant(deck)) !== fixed.prompt.fingerprint) {
+    fail(`${deck.id}: prompt invariant drift`);
+  }
+  if (!scenario || JSON.stringify(scenario.fixedInvariants) !== JSON.stringify(fixed)) {
+    fail(`${deck.id}: provider/model/environment invariant drift`);
+  }
+  if (scenario.cacheState === "cold" && !scenario.coldControl) fail(`${deck.id}: missing cold-control receipt`);
+  if (scenario.cacheState === "warm" && scenario.coldControl?.status !== "warm-no-cold-control") {
+    fail(`${deck.id}: warm scenario must not carry a cold-control receipt`);
+  }
 }
 
 function exportName(serverPath) {
@@ -164,11 +323,132 @@ function stageTimings(timeline, operationId) {
     const ended = index + 1 < events.length ? Date.parse(events[index + 1].created_at || events[index + 1].createdAt) : started;
     stages.push({ label, durationMsToNextEvent: Math.max(0, ended - started), event });
   }
-  return { operation: item || null, stages };
+  const phaseTimingsMs = {};
+  for (const phase of PHASES) phaseTimingsMs[phase] = null;
+  for (const stage of stages) {
+    const phase = phaseForLabel(stage.label);
+    if (phase) phaseTimingsMs[phase] = (phaseTimingsMs[phase] || 0) + stage.durationMsToNextEvent;
+  }
+  return { operation: item || null, events, stages, phaseTimingsMs };
 }
 
-async function runDeck(deck, manifest, ordinal, onStatus = null) {
+function eventsFromPayload(payload) {
+  for (const candidate of [payload?.items, payload?.events, payload?.data?.items, payload?.data?.events]) {
+    if (Array.isArray(candidate)) return candidate;
+  }
+  return [];
+}
+
+function eventMatchesOperation(event, operationId) {
+  const values = [event?.operation_id, event?.operationId, event?.result?.operation_id, event?.result?.operationId];
+  return values.filter(Boolean).some((value) => String(value) === String(operationId));
+}
+
+function retryAudit(events) {
+  let maximumExplicitRetryCount = 0;
+  let maximumAttemptNumber = 1;
+  let retryEventCount = 0;
+  for (const event of events) {
+    const stack = [event];
+    const visited = new Set();
+    let eventExplicitRetryCount = 0;
+    let eventAttemptNumber = 1;
+    while (stack.length) {
+      const value = stack.pop();
+      if (!value || typeof value !== "object" || visited.has(value)) continue;
+      visited.add(value);
+      for (const [rawKey, nested] of Object.entries(value)) {
+        const key = rawKey.replace(/[_-]/g, "").toLowerCase();
+        if (typeof nested === "number" && Number.isFinite(nested)) {
+          if (/(retrycount|retries|retryattempts)/.test(key)) eventExplicitRetryCount = Math.max(eventExplicitRetryCount, nested);
+          if (/(attemptnumber|attempt|retryattempt)/.test(key)) eventAttemptNumber = Math.max(eventAttemptNumber, nested);
+        }
+        if (nested && typeof nested === "object") stack.push(nested);
+      }
+    }
+    const eventLabel = JSON.stringify({ type: event?.type, status: event?.status, result: event?.result?.status || event?.result?.stage }).toLowerCase();
+    if (/retry|requeued|requeue/.test(eventLabel)) retryEventCount += 1;
+    maximumExplicitRetryCount = Math.max(maximumExplicitRetryCount, eventExplicitRetryCount);
+    maximumAttemptNumber = Math.max(maximumAttemptNumber, eventAttemptNumber);
+  }
+  const retryCount = Math.max(maximumExplicitRetryCount, Math.max(0, maximumAttemptNumber - 1), retryEventCount);
+  return { retryCount, eventCount: events.length, maximumExplicitRetryCount, maximumAttemptNumber, retryEventCount };
+}
+
+function cacheTelemetrySnapshot(payload) {
+  if (!payload || typeof payload !== "object" || payload.schemaVersion !== "authored-render-runtime/v1") {
+    fail("authored render runtime metrics response is invalid");
+  }
+  const chromeRuntimeDigest = requiredFingerprint(payload.chromeRuntimeDigest, "authored render runtime chromeRuntimeDigest");
+  if (!payload.cacheIdentity || typeof payload.cacheIdentity !== "object") {
+    fail("authored render runtime cacheIdentity is required");
+  }
+  if (!payload.counters || typeof payload.counters !== "object" || Array.isArray(payload.counters)) {
+    fail("authored render runtime counters are required");
+  }
+  const counters = {};
+  for (const [key, value] of Object.entries(payload.counters)) {
+    if (!Number.isInteger(value) || value < 0) fail(`authored render runtime counter ${key} is invalid`);
+    counters[key] = value;
+  }
+  return {
+    schemaVersion: payload.schemaVersion,
+    chromeRuntimeDigest,
+    cacheIdentity: {
+      render: String(payload.cacheIdentity.render || ""),
+      domMetrics: String(payload.cacheIdentity.domMetrics || ""),
+      occlusionSensor: String(payload.cacheIdentity.occlusionSensor || ""),
+      chromeReuseEnabled: payload.cacheIdentity.chromeReuseEnabled === true,
+    },
+    counters,
+  };
+}
+
+async function fetchCacheTelemetry(manifest) {
+  const response = await request(`${manifest.metricsBaseUrl}${RENDER_RUNTIME_METRICS_PATH}`, {
+    headers: { Accept: "application/json", ...authHeaders() },
+  }, 30_000);
+  return cacheTelemetrySnapshot(response.json);
+}
+
+function cacheTelemetryDelta(before, after) {
+  if (before.chromeRuntimeDigest !== after.chromeRuntimeDigest) {
+    fail("authored render Chrome identity changed during controlled scenario");
+  }
+  if (JSON.stringify(before.cacheIdentity) !== JSON.stringify(after.cacheIdentity)) {
+    fail("authored render cache identity changed during controlled scenario");
+  }
+  const counters = {};
+  for (const key of new Set([...Object.keys(before.counters), ...Object.keys(after.counters)])) {
+    counters[key] = (after.counters[key] || 0) - (before.counters[key] || 0);
+  }
+  return {
+    chromeRuntimeDigest: after.chromeRuntimeDigest,
+    cacheIdentity: after.cacheIdentity,
+    counters,
+    measurementRecollections: counters.metrics_recollection_requests || 0,
+  };
+}
+
+function coldControlResult(scenario, cacheBefore) {
+  if (scenario?.cacheState !== "cold") return null;
+  return {
+    receipt: scenario.coldControl,
+    receiptValidated: true,
+    observedBeforeSnapshotDigest: fingerprint(cacheBefore),
+    cacheStateVerified: false,
+    verificationBoundary: "external cold-control receipt is schema/fingerprint validated; this harness does not stop listeners or clear process caches",
+  };
+}
+
+async function runDeck(deck, manifest, ordinal, onStatus = null, scenario = null) {
+  assertOperationInvariants(manifest, deck, scenario);
   const startedAt = Date.now();
+  const resourceBefore = await sampleResources([...new Set(manifest.resourcePids)]);
+  if (!Array.isArray(resourceBefore) || resourceBefore.length !== manifest.resourcePids.length) {
+    fail(`${deck.id}: one or more configured resourcePids are unavailable`);
+  }
+  const admissionStartedAt = Date.now();
   const headers = { Accept: "application/json", "Content-Type": "application/json", ...authHeaders() };
   const admitted = await request(`${manifest.baseUrl}/api/v1/ppt/presentation/generate/async`, {
     method: "POST", headers, body: JSON.stringify(requestBody(deck)),
@@ -177,6 +457,7 @@ async function runDeck(deck, manifest, ordinal, onStatus = null) {
   const operationId = admitted.json?.operation_id || admitted.json?.operationId || null;
   if (!taskId) fail(`${deck.id}: admission returned no task id`);
   if (manifest.requireWorkspaceOperation && !operationId) fail(`${deck.id}: admission returned no workspace operation id`);
+  const admissionMs = Date.now() - admissionStartedAt;
   const deadline = startedAt + manifest.timeoutMs;
   const statusHistory = [];
   let terminal;
@@ -197,6 +478,7 @@ async function runDeck(deck, manifest, ordinal, onStatus = null) {
   let downloadPath = data.path;
   if (!presentationId || !downloadPath) fail(`${deck.id}: completed result lacks presentation_id/path`);
   let pdfExport = null;
+  const exportStartedAt = Date.now();
   if (deck.exportAs === "pdf") {
     pdfExport = (await request(`${manifest.baseUrl}/api/export-presentation`, {
       method: "POST",
@@ -218,19 +500,39 @@ async function runDeck(deck, manifest, ordinal, onStatus = null) {
   await mkdir(path.dirname(destination), { recursive: true });
   await writeFile(destination, downloaded.bytes);
   let timeline = null;
+  let operationEvents = null;
   if (operationId) {
     timeline = (await request(`${manifest.baseUrl}/api/v1/ppt/workspace/presentations/${presentationId}/timeline?limit=200`, {
       headers: { Accept: "application/json", ...authHeaders() },
     }, 30_000)).json;
+    operationEvents = (await request(`${manifest.baseUrl}/api/v1/ppt/workspace/presentations/${presentationId}/events?limit=200`, {
+      headers: { Accept: "application/json", ...authHeaders() },
+    }, 30_000)).json;
   }
   const observed = stageTimings(timeline, operationId);
+  if (!observed.operation) fail(`${deck.id}: timeline contains no matching workspace operation`);
+  const endpointEvents = eventsFromPayload(operationEvents).filter((event) => eventMatchesOperation(event, operationId));
+  if (!endpointEvents.length) fail(`${deck.id}: events endpoint contains no matching workspace operation events`);
+  const retry = retryAudit([...observed.events, ...endpointEvents]);
+  if (retry.retryCount !== 0) {
+    throw new BenchmarkRequestError(`${deck.id}: hidden/internal retry count ${retry.retryCount}`,
+      "hidden_internal_retry_detected", retry);
+  }
+  const resourceAfter = await sampleResources([...new Set(manifest.resourcePids)]);
+  const phaseTimingsMs = { ...observed.phaseTimingsMs, export: Date.now() - exportStartedAt };
   return {
     deckId: deck.id, taskId, operationId, presentationId, exportAs: deck.exportAs,
     startedAt: new Date(startedAt).toISOString(), completedAt: now(), latencyMs: Date.now() - startedAt,
     output: { path: destination, bytes: downloaded.bytes.length, sha256: sha256(downloaded.bytes) },
     generationArtifactPath: data.path,
     pdfExport,
-    statusHistory, stages: observed.stages, operation: observed.operation,
+    statusHistory, stages: observed.stages, operation: observed.operation, retryAudit: retry,
+    admissionMs, phaseTimingsMs,
+    resources: {
+      before: resourceBefore, after: resourceAfter,
+      incrementalDelta: resourceDelta(resourceBefore, resourceAfter),
+      attribution: manifest.concurrency === 1 ? "single-operation process delta" : "shared-process snapshot; not exclusively attributable under concurrency",
+    },
   };
 }
 
@@ -265,6 +567,40 @@ async function resourceLoop(manifest, state) {
   }
 }
 
+function resourceTotals(processes) {
+  if (!Array.isArray(processes)) return null;
+  return processes.reduce((total, process) => ({
+    cpuSeconds: total.cpuSeconds + (Number(process.cpuSeconds) || 0),
+    workingSetBytes: total.workingSetBytes + (Number(process.workingSetBytes) || 0),
+    privateBytes: total.privateBytes + (Number(process.privateBytes) || 0),
+    handles: total.handles + (Number(process.handles) || 0),
+  }), { cpuSeconds: 0, workingSetBytes: 0, privateBytes: 0, handles: 0 });
+}
+
+function resourceDelta(before, after) {
+  const initial = resourceTotals(before);
+  const final = resourceTotals(after);
+  if (!initial || !final) return null;
+  return Object.fromEntries(Object.entries(final).map(([key, value]) => [key, value - initial[key]]));
+}
+
+function resourceSummary(samples) {
+  const totals = samples.map((sample) => resourceTotals(sample.processes)).filter(Boolean);
+  const baseline = totals[0] || null;
+  if (!baseline) return { status: "not_assessed", reason: "no Windows resource samples" };
+  const peak = totals.reduce((current, value) => ({
+    cpuSeconds: Math.max(current.cpuSeconds, value.cpuSeconds),
+    workingSetBytes: Math.max(current.workingSetBytes, value.workingSetBytes),
+    privateBytes: Math.max(current.privateBytes, value.privateBytes),
+    handles: Math.max(current.handles, value.handles),
+  }), { ...baseline });
+  return {
+    status: "assessed", baseline, peak,
+    incrementalPeak: Object.fromEntries(Object.entries(peak).map(([key, value]) => [key, value - baseline[key]])),
+    samplingScope: "sum of configured resourcePids; task snapshots carry a shared-process attribution label",
+  };
+}
+
 async function atomicJson(target, payload) {
   await mkdir(path.dirname(target), { recursive: true });
   const temporary = `${target}.${process.pid}.tmp`;
@@ -272,8 +608,10 @@ async function atomicJson(target, payload) {
   await rename(temporary, target);
 }
 
-async function runControlledLoad(manifest, hook = null) {
+async function runSingleControlledLoad(manifest, hook = null, scenario = null) {
   await mkdir(manifest.outputDirectory, { recursive: true });
+  const cacheBefore = await fetchCacheTelemetry(manifest);
+  const coldControl = coldControlResult(scenario, cacheBefore);
   const startedAt = Date.now();
   const resourceState = { stop: false, pids: manifest.resourcePids, samples: [] };
   const sampler = resourceLoop(manifest, resourceState);
@@ -294,26 +632,90 @@ async function runControlledLoad(manifest, hook = null) {
         } else return;
       }
       const item = queue[cursor++];
-      try { results.push(await runDeck(item.deck, manifest, item.ordinal, hook)); }
-      catch (error) { failures.push({ deckId: item.deck.id, ordinal: item.ordinal, error: String(error?.stack || error) }); }
+      try { results.push(await runDeck(item.deck, manifest, item.ordinal, hook, scenario)); }
+       catch (error) {
+        failures.push({ deckId: item.deck.id, ordinal: item.ordinal,
+          classification: error instanceof BenchmarkRequestError ? error.classification : "operation_failed",
+          retryAudit: error instanceof BenchmarkRequestError ? error.details?.retryCount ?? null : null,
+          error: String(error?.stack || error) });
+       }
     }
   }
   await Promise.all(Array.from({ length: manifest.concurrency }, () => worker()));
   resourceState.stop = true;
   await sampler;
+  const cacheAfter = await fetchCacheTelemetry(manifest);
+  const cacheTelemetry = {
+    before: cacheBefore,
+    after: cacheAfter,
+    delta: cacheTelemetryDelta(cacheBefore, cacheAfter),
+    coldControl,
+  };
   const wallTimeMs = Date.now() - startedAt;
   const report = {
-    schemaVersion: 1, kind: "authored-vnext-controlled-load", startedAt: new Date(startedAt).toISOString(),
+    schemaVersion: 2, kind: "authored-vnext-controlled-load", scenario, startedAt: new Date(startedAt).toISOString(),
     completedAt: now(), wallTimeMs, concurrency: manifest.concurrency, requestedOperations: results.length + failures.length,
+    outputDirectory: manifest.outputDirectory,
     succeededOperations: results.length, failedOperations: failures.length,
     successRate: results.length / Math.max(1, results.length + failures.length),
+    latencyMs: { observations: results.length, p50Ms: percentile(results.map((result) => result.latencyMs), 0.5), p95Ms: percentile(results.map((result) => result.latencyMs), 0.95) },
+    phaseTimingsMs: phaseSummary(results),
     perOperationLatencyMs: results.map(({ deckId, latencyMs }) => ({ deckId, latencyMs })),
-    results, failures, resources: resourceState.samples,
-    sevenDaySoakVerified: manifest.soakDurationSeconds >= 604_800 && wallTimeMs >= 604_800_000,
+    results, failures, resources: { samples: resourceState.samples, summary: resourceSummary(resourceState.samples) },
+    requestFailures: { proxyFetchFailed: failures.filter((failure) => failure.classification === "proxy_fetch_failed").length,
+      listenerInterrupted: failures.filter((failure) => ["listener_interrupted", "proxy_or_listener_http_failure"].includes(failure.classification)).length,
+      hiddenInternalRetries: failures.filter((failure) => failure.classification === "hidden_internal_retry_detected").length,
+      automaticRetries: 0, listenerRestartedByHarness: false },
+    cacheTelemetry,
+    fixedInvariants: manifest.matrix?.fixedInvariants || null,
+    soakVerification: {
+      requestedDurationSeconds: manifest.soakDurationSeconds,
+      twoHourVerified: manifest.soakDurationSeconds >= 7200 && wallTimeMs >= 7_200_000,
+      sevenDayVerified: manifest.soakDurationSeconds >= 604_800 && wallTimeMs >= 604_800_000,
+    },
     notVerified: ["PowerPoint COM reopen/readback", "cross-renderer visual parity"],
   };
   await atomicJson(path.join(manifest.outputDirectory, "controlled-load-report.json"), report);
   return report;
+}
+
+function matrixScenarios(manifest) {
+  if (!manifest.matrix) return [{ manifest, scenario: null }];
+  const scenarios = [];
+  for (const cacheState of manifest.matrix.cacheStates) for (const nSlides of manifest.matrix.slideCounts)
+    for (const concurrency of manifest.matrix.concurrencyLevels) {
+      const label = `${cacheState}-${nSlides}slides-c${concurrency}`;
+      scenarios.push({
+        scenario: { cacheState, nSlides, concurrency, repetitions: manifest.matrix.repetitions,
+          fixedInvariants: manifest.matrix.fixedInvariants,
+          coldControl: cacheState === "cold" ? manifest.matrix.coldControlReceipts[label] : { status: "warm-no-cold-control" },
+        },
+        manifest: { ...manifest, concurrency, soakDurationSeconds: 0,
+          outputDirectory: path.join(manifest.outputDirectory, "matrix", label),
+          decks: Array.from({ length: manifest.matrix.repetitions }, (_, index) => ({ ...manifest.decks[0], id: `${label}-r${index + 1}`, nSlides })) },
+      });
+    }
+  return scenarios;
+}
+
+async function runControlledLoad(manifest, hook = null) {
+  const scenarios = matrixScenarios(manifest);
+  if (scenarios.length === 1 && !manifest.matrix) return runSingleControlledLoad(manifest, hook);
+  const startedAt = Date.now();
+  const reports = [];
+  for (const item of scenarios) reports.push(await runSingleControlledLoad(item.manifest, hook, item.scenario));
+  const results = reports.flatMap((report) => report.results);
+  const matrixReport = {
+    schemaVersion: 2, kind: "authored-vnext-controlled-load-matrix", startedAt: reports[0]?.startedAt || now(), completedAt: now(), wallTimeMs: Date.now() - startedAt,
+    matrix: manifest.matrix, fixedInvariants: manifest.matrix.fixedInvariants, scenarios: reports.map((report) => ({ scenario: report.scenario, outputDirectory: report.outputDirectory || null,
+      successRate: report.successRate, latencyMs: report.latencyMs, phaseTimingsMs: report.phaseTimingsMs, requestFailures: report.requestFailures,
+      cacheTelemetry: report.cacheTelemetry, soakVerification: report.soakVerification })),
+    aggregate: { operations: results.length, latencyMs: { observations: results.length, p50Ms: percentile(results.map((result) => result.latencyMs), .5), p95Ms: percentile(results.map((result) => result.latencyMs), .95) }, phaseTimingsMs: phaseSummary(results) },
+    soakVerification: { twoHourVerified: false, sevenDayVerified: false, reason: "matrix runs are bounded benchmarks, not soak evidence" },
+    productPathExecuted: true,
+  };
+  await atomicJson(path.join(manifest.outputDirectory, "controlled-load-matrix-report.json"), matrixReport);
+  return { ...matrixReport, successRate: reports.reduce((sum, report) => sum + report.successRate, 0) / reports.length, failedOperations: reports.reduce((sum, report) => sum + report.failedOperations, 0) };
 }
 
 function durabilityConfig(manifest) {
@@ -404,10 +806,13 @@ async function main() {
       checkpointProbe = JSON.parse(probe.stdout);
     }
     await atomicJson(path.join(manifest.outputDirectory, "manifest-validation.json"), {
-      schemaVersion: 1, valid: true, validatedAt: now(), deckCount: manifest.decks.length,
+      schemaVersion: 2, valid: true, validatedAt: now(), deckCount: manifest.decks.length, matrix: manifest.matrix,
+      fixedInvariants: manifest.matrix?.fixedInvariants || null,
       formats: [...new Set(manifest.decks.map((deck) => deck.exportAs))],
       checkpointProbe,
-      productPathExecuted: false, notVerified: ["FastAPI", "worker", "Chromium", "PPTX/PDF I/O", "durability"],
+      productPathExecuted: false,
+      soakVerification: { twoHourVerified: false, sevenDayVerified: false, reason: "validate mode does not execute wall-clock soak" },
+      notVerified: ["FastAPI", "worker", "Chromium", "PPTX/PDF I/O", "cold/warm cache state", "two-hour soak", "seven-day soak", "durability"],
     });
     console.log(`validated: ${manifest.outputDirectory}`);
     return;
@@ -418,4 +823,3 @@ async function main() {
 }
 
 main().catch((error) => { console.error(error?.stack || error); process.exitCode = 1; });
-

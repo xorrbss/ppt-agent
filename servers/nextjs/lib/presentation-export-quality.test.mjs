@@ -2,9 +2,122 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  assertPresentationExportQualityCoverage,
+  attachPresentationExportOoxmlReadback,
   createImageOnlyExportQuality,
   createPresentationExportQuality,
 } from "./presentation-export-quality.ts";
+
+test("native coverage scopes repeated QIDs by slide without shrinking unsupported fallbacks", () => {
+  const slide = (slideNumber, candidateKind) => ({
+    slideNumber,
+    editable: true,
+    imageFallback: false,
+    nativeTextElements: 1,
+    nativeShapeElements: 0,
+    nativeGroupElements: slideNumber === 1 ? 3 : 0,
+    nativeImageElements: 0,
+    rasterFallbackElements: 1,
+    logicalCoverage: {
+      nativeText: 1,
+      nativeImage: 0,
+      nativeShape: 0,
+      nativeGroup: 0,
+      rasterRemaining: 1,
+    },
+    ooxmlReadback: {
+      status: "not-run",
+      nativeText: 0,
+      nativeImage: 0,
+      nativeShape: 0,
+      nativeGroup: 0,
+      rasterRemaining: 0,
+    },
+    fallbackReasons: [candidateKind === "complex" ? "filter" : "unsupported-shape"],
+    fallbackElements: [{
+      elementId: "body.fx",
+      candidateKind,
+      reasons: [candidateKind === "complex" ? "filter" : "unsupported-shape"],
+    }],
+    qidCoverage: [
+      { elementId: "header.band", kind: "text", logical: "native", ooxml: "not-run", com: "not-run" },
+      { elementId: "body.fx", kind: "shape", logical: "raster", ooxml: "not-run", com: "not-run" },
+    ],
+  });
+  const report = createPresentationExportQuality("hybrid", [
+    slide(1, "complex"),
+    slide(2, "shape"),
+  ]);
+  assert.equal(report.nativeCoverage.status, "passed");
+  assert.equal(report.nativeCoverage.nativeElementCount, 2);
+  assert.equal(report.nativeCoverage.eligibleElementCount, 4);
+  assert.equal(report.nativeCoverage.ratio, 2 / 4);
+  assert.deepEqual(
+    report.nativeCoverage.rasterFallbacks.map((item) => [item.elementId, item.eligible]),
+    [["1:body.fx", true], ["2:body.fx", true]],
+  );
+
+  const coverageSlides = report.slides.map((item) => ({
+    slideNumber: item.slideNumber,
+    nativeText: 1,
+    nativeImage: 0,
+    nativeShape: 0,
+    nativeTable: 0,
+    nativeChart: 0,
+    rasterRemaining: 1,
+    logicalCoverage: {
+      nativeText: 1,
+      nativeImage: 0,
+      nativeShape: 0,
+      nativeTable: 0,
+      nativeChart: 0,
+      rasterRemaining: 1,
+    },
+    ooxmlReadback: {
+      status: "not-run",
+      nativeText: 0,
+      nativeImage: 0,
+      nativeShape: 0,
+      nativeTable: 0,
+      nativeChart: 0,
+      rasterRemaining: 0,
+    },
+  }));
+  const coverage = {
+    totalSlides: 2,
+    nativeText: 2,
+    nativeImage: 0,
+    nativeShape: 0,
+    nativeTable: 0,
+    nativeChart: 0,
+    rasterRemaining: 2,
+    logicalCoverage: {
+      nativeText: 2,
+      nativeImage: 0,
+      nativeShape: 0,
+      nativeTable: 0,
+      nativeChart: 0,
+      rasterRemaining: 2,
+    },
+    ooxmlReadback: {
+      status: "not-run",
+      nativeText: 0,
+      nativeImage: 0,
+      nativeShape: 0,
+      nativeTable: 0,
+      nativeChart: 0,
+      rasterRemaining: 0,
+    },
+    slides: coverageSlides,
+  };
+  assert.doesNotThrow(() =>
+    assertPresentationExportQualityCoverage(report, coverage, "development"),
+  );
+  assert.throws(
+    () => assertPresentationExportQualityCoverage(report, coverage, "release"),
+    /presentation_export_release_native_coverage_blocked/,
+  );
+});
 
 test("quality report totals, orders, and de-duplicates slide metadata", () => {
   const report = createPresentationExportQuality("hybrid", [
@@ -214,5 +327,55 @@ test("image-only fallback describes every slide", () => {
     report.slides.every(
       (slide) => slide.fallbackReasons[0] === "chrome-unavailable"
     )
+  );
+});
+
+test("OOXML QID ownership preserves exact native/raster disposition and fails closed", () => {
+  const baseSlide = {
+    slideNumber: 1,
+    editable: true,
+    imageFallback: false,
+    nativeTextElements: 1,
+    nativeShapeElements: 0,
+    nativeImageElements: 0,
+    rasterFallbackElements: 1,
+    fallbackReasons: [],
+  };
+  const logical = createPresentationExportQuality("hybrid", [{
+    ...baseSlide,
+    qidCoverage: [
+      { elementId: "s01-title", kind: "text", logical: "native", ooxml: "not-run", com: "not-run" },
+      { elementId: "s01-complex-copy", kind: "text", logical: "raster", ooxml: "not-run", com: "not-run" },
+    ],
+  }]);
+  const readback = (qidCoverage) => createPresentationExportQuality("hybrid", [{
+    ...baseSlide,
+    qidCoverage,
+    ooxmlReadback: { status: "passed" },
+  }]);
+
+  const joined = attachPresentationExportOoxmlReadback(logical, readback([
+    { elementId: "s01-title", kind: "text", logical: "native", ooxml: "present", com: "not-run" },
+    // Raster ownership uses a non-visual OOXML shape carrier by design.
+    { elementId: "s01-complex-copy", kind: "shape", logical: "raster", ooxml: "present", com: "not-run" },
+  ]));
+  assert.deepEqual(
+    joined.slides[0].qidCoverage.map((entry) => [entry.elementId, entry.ooxml]),
+    [["s01-title", "present"], ["s01-complex-copy", "present"]],
+  );
+
+  assert.throws(
+    () => attachPresentationExportOoxmlReadback(logical, readback([
+      { elementId: "s01-title", kind: "text", logical: "native", ooxml: "present", com: "not-run" },
+    ])),
+    /presentation_export_qid_ownership_mismatch/,
+  );
+  assert.throws(
+    () => attachPresentationExportOoxmlReadback(logical, readback([
+      { elementId: "s01-title", kind: "text", logical: "native", ooxml: "present", com: "not-run" },
+      { elementId: "s01-title", kind: "shape", logical: "raster", ooxml: "present", com: "not-run" },
+      { elementId: "s01-complex-copy", kind: "shape", logical: "raster", ooxml: "present", com: "not-run" },
+    ])),
+    /presentation_export_qid_ownership_mismatch/,
   );
 });

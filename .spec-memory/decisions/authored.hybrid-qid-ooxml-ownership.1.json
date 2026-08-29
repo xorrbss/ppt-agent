@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.hybrid-qid-ooxml-ownership",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Keep every declared QID in ownership; rasterize ungrouped border-only shapes and bind geometry to final assembler bounds.",
+  "scope": [
+    "authored-hybrid",
+    "ooxml",
+    "quality"
+  ],
+  "invariants": [
+    "Invisible declared QIDs remain in the audited denominator with raster fallback.",
+    "A native QID kind matches the actual serialized OOXML kind.",
+    "OOXML geometry readback compares against the assembler final bounds."
+  ],
+  "forbidden": [
+    "Do not shrink the declared QID denominator.",
+    "Do not create ghost owner carriers for multi-fragment border-only shapes."
+  ],
+  "evidence": [
+    "servers/nextjs/lib/authored-hybrid/browser-source.ts",
+    "servers/nextjs/lib/authored-hybrid/native-plan.ts",
+    "servers/nextjs/lib/authored-hybrid/slide-layer.ts",
+    "servers/nextjs/lib/authored-hybrid/pptx-assembler.ts",
+    "artifacts/authored-vnext-controlled-load-20260829/live-product-chain-5slides-hybrid-20260829-1813/evidence-summary.json"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-29T09:18:01.4334411+00:00"
+}

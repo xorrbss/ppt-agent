@@ -4,30 +4,31 @@
   "revision": 1,
   "status": "accepted",
   "authority": "code",
-  "summary": "Capacity defects get one role-safe repair; Chromium pass is required, and non-retryable terminal jobs disable resume.",
+  "summary": "Capacity defects get one role-safe repair; verified requires Chromium pass; non-retryable terminal jobs disable resume.",
   "scope": [
     "authored-quality",
     "source-content",
     "workspace-generation"
   ],
   "invariants": [
-    "Do not relax semantic roles or capacity limits.",
-    "Only passed browser source readback may set verified true.",
-    "Terminal non-retryable generation failure sets resume_allowed false."
+    "Do not relax title body image supporting roles or capacity limits.",
+    "Only a passed browser source readback may set verified true.",
+    "A terminal non-retryable workspace generation failure sets resume_allowed false."
   ],
   "forbidden": [
     "DB-side repair",
-    "Fixture-only product success claims"
+    "fixture-only product success claim"
   ],
   "evidence": [
     "servers/fastapi/services/authored_composition_policy.py",
     "servers/fastapi/services/authored_presentation_generation.py",
     "servers/fastapi/services/source_content/browser_readback.py",
     "servers/fastapi/services/workspace_operation_runner.py",
+    "servers/fastapi/services/presentation_generation_job_service.py",
     "servers/fastapi/tests/unit/test_authored_composition_policy.py",
     "servers/fastapi/tests/unit/test_source_content_browser_readback.py",
     "servers/fastapi/tests/unit/test_presentation_generation_operation_handler.py"
   ],
   "supersedes": null,
-  "recordedAt": "2026-08-29T03:16:25.3335759+00:00"
+  "recordedAt": "2026-08-28T07:50:59.4823083+00:00"
 }

@@ -44,6 +44,7 @@ from services.workspace_operation_runner import (
     sanitize_workspace_event_payload,
 )
 from services.workspace_quality_export_operation_handlers import (
+    _authored_vnext_export_path,
     WorkspaceExportOperationHandler,
     WorkspaceQualityReviewOperationHandler,
     register_workspace_quality_export_operation_handlers,
@@ -62,6 +63,29 @@ TABLES = [
     WorkspaceArtifact.__table__,
     AsyncPresentationGenerationTaskModel.__table__,
 ]
+
+
+def test_authored_vnext_hybrid_routes_to_semantic_manifest_not_legacy_master() -> None:
+    assert _authored_vnext_export_path(
+        projection_present=True,
+        export_format="pptx",
+        pptx_mode="hybrid",
+    ) == "semantic-hybrid"
+    assert _authored_vnext_export_path(
+        projection_present=True,
+        export_format="pptx",
+        pptx_mode="fidelity",
+    ) == "legacy-native"
+    assert _authored_vnext_export_path(
+        projection_present=True,
+        export_format="pdf",
+        pptx_mode="fidelity",
+    ) == "semantic-hybrid"
+    assert _authored_vnext_export_path(
+        projection_present=False,
+        export_format="pptx",
+        pptx_mode="hybrid",
+    ) == "shared"
 
 
 def test_workspace_hybrid_publication_seals_semantic_binding(monkeypatch) -> None:

@@ -36,13 +36,60 @@ from services.authored_vnext.generation.legacy_bridge import (
     _verified_resolved_snapshot_evidence,
     build_legacy_generation_export_payload,
 )
+from services.authored_vnext.generation.internal_authored_composition import (
+    build_internal_authored_composition,
+)
 from services.authored_vnext.generation.pipeline import AuthoredVNextGenerationPipeline
 from services.authored_vnext.generation.repository import InMemoryGenerationRepository
 from services.authored_vnext.integration.export_payload import worker_slides
 from services.authored_vnext.master.digests import canonical_digest, seal_master_contract
+from services.authored_vnext.master.repository import (
+    InMemoryAuthoredVNextMasterRepository,
+)
 from services.authored_vnext.master.preview import build_preview
 from tests.support.authored_vnext_master_fixture import master_contract_payload
 from utils.authored_styles import resolve_authored_style
+
+
+def test_masterless_authored_uses_hidden_deterministic_internal_composition() -> None:
+    owner_id = uuid.uuid4()
+    style = resolve_authored_style("tech-blueprint")
+
+    first = build_internal_authored_composition(
+        owner_id=owner_id,
+        style=style,
+        metadata=None,
+    )
+    replay = build_internal_authored_composition(
+        owner_id=owner_id,
+        style=style,
+        metadata=None,
+    )
+
+    assert replay == first
+    assert first.master.master_id.startswith("master:internal-authored-")
+    assert first.master.digest == first.resolved.pin.master_digest
+    assert first.composition.master_digest == first.master.digest
+    assert all(
+        getattr(first.master.contract.furniture, name).visibility == "hidden"
+        for name in ("logo", "header", "footer", "divider", "page_number")
+    )
+
+    generation_repository = InMemoryGenerationRepository()
+    generation_repository.append_imported_master(first.master)
+    generation_repository.append_imported_master(replay.master)
+    assert generation_repository.get_master(
+        first.master.master_id, first.master.revision
+    ) == first.master
+
+    catalog_repository = InMemoryAuthoredVNextMasterRepository()
+    catalog_repository.append_master(
+        first.master,
+        expected_revision=None,
+        expected_digest=None,
+    )
+    assert catalog_repository.get_master(first.master.master_id, 1) == first.master
+    assert catalog_repository.list_masters(cursor=None, limit=20).items == []
 
 
 def _overlaps(left, right) -> bool:

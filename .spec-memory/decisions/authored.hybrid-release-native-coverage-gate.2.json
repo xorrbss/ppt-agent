@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.hybrid-release-native-coverage-gate",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Release Hybrid 70% denominator includes every declared QID owner, including complex or unsupported raster fallback; every fallback requires explicit audit.",
+  "scope": [
+    "authored-hybrid",
+    "presentation-export",
+    "release-quality"
+  ],
+  "invariants": [
+    "Every declared QID owner remains in the denominator regardless of native capability support.",
+    "Development exports remain compatible when no release profile is persisted.",
+    "Release requires explicit nonempty fallback reasons and no denominator-shrinking eligibility flag."
+  ],
+  "forbidden": [
+    "Do not exclude complex, unsupported, slide, or raster fallback owners to reach the 0.70 gate."
+  ],
+  "evidence": [
+    "servers/nextjs/lib/presentation-export-quality.ts",
+    "servers/nextjs/lib/presentation-export-quality.test.mjs",
+    "servers/fastapi/services/authored_quality_receipt_v2.py",
+    "servers/fastapi/models/sql/presentation_export_attempt.py",
+    "servers/fastapi/tests/unit/test_authored_quality_receipt_v2.py"
+  ],
+  "supersedes": "authored.hybrid-release-native-coverage-gate@1",
+  "recordedAt": "2026-08-29T07:59:16.3992033+00:00"
+}

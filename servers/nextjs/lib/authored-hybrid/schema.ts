@@ -25,6 +25,7 @@ export type AuthoredHybridEmbeddedFontFace =
 
 export const AUTHORED_HYBRID_TYPOGRAPHY_ISSUE_CODES = [
   "embedding-face-missing",
+  "embedding-glyph-missing",
   "font-substitution",
   "bounds-overflow",
   "backplate-collision",
@@ -88,6 +89,7 @@ export const AUTHORED_HYBRID_FALLBACK_REASONS = [
   "unsupported-shape",
   "vertical-writing",
   "typography-embedding-face-missing",
+  "typography-embedding-glyph-missing",
   "typography-font-substitution",
   "typography-bounds-overflow",
   "typography-backplate-collision",

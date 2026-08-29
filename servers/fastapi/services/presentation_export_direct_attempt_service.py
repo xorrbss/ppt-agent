@@ -21,6 +21,7 @@ from models.sql.presentation_export_attempt import (
     ExportPowerPointQaEvidence,
     PresentationExportAttempt,
     PresentationExportCoverageManifest,
+    validate_export_quality_coverage_consistency,
 )
 from models.sql.slide import SlideModel
 from models.authored_vnext.semantic.contracts import (
@@ -61,6 +62,7 @@ from services.presentation_export_powerpoint_qa import (
     resolve_hybrid_artifact,
     trusted_powerpoint_qa,
 )
+from services.authored_quality_receipt_v2 import release_quality_policy
 from services.authored_vnext.semantic.canonical import (
     canonical_digest as semantic_canonical_digest,
 )
@@ -84,6 +86,56 @@ HYBRID_ATTEMPT_RETENTION_DAYS = 180
 HYBRID_EVIDENCE_RETENTION_DAYS = 30
 
 
+def _published_quality_receipt(
+    presentation: PresentationModel,
+) -> dict[str, Any] | None:
+    theme = presentation.theme
+    if not isinstance(theme, dict):
+        return None
+    receipt = theme.get("authoredQualityGate")
+    if not isinstance(receipt, dict):
+        return None
+    digest = receipt.get("receiptDigest")
+    attempt_id = receipt.get("attemptId")
+    revision = receipt.get("revision")
+    profile = receipt.get("releaseProfile", "development")
+    invalid = (
+        not isinstance(digest, str)
+        or not digest.startswith("sha256:")
+        or len(digest) != 71
+        or not all(character in "0123456789abcdef" for character in digest[7:].lower())
+        or not isinstance(attempt_id, str)
+        or not attempt_id.strip()
+        or isinstance(revision, bool)
+        or not isinstance(revision, int)
+        or revision < 0
+        or not isinstance(profile, str)
+        or not profile.strip()
+        or not isinstance(receipt.get("gatePassed"), bool)
+    )
+    if invalid:
+        profile_value = profile if isinstance(profile, str) else "development"
+        if release_quality_policy(profile_value).require_native_coverage:
+            raise PresentationExportContractError(
+                "presentation_export_quality_receipt_invalid"
+            )
+        # Legacy development receipts predate the versioned receipt digest.
+        return None
+    if not receipt["gatePassed"] and release_quality_policy(
+        profile
+    ).require_native_coverage:
+        raise PresentationExportContractError(
+            "presentation_export_release_quality_receipt_blocked"
+        )
+    return {
+        "receipt_digest": digest.lower(),
+        "generation_attempt_id": attempt_id.strip(),
+        "generation_revision": revision,
+        "release_profile": profile.strip(),
+        "gate_passed": receipt["gatePassed"],
+    }
+
+
 def _visual_parity_status_from_powerpoint_qa(
     qa: ExportPowerPointQaEvidence,
 ) -> str:
@@ -92,13 +144,18 @@ def _visual_parity_status_from_powerpoint_qa(
     return "failed" if qa.status == "failed" else "not-verified"
 
 
-def _expected_native_qids_from_quality(quality: dict[str, Any]) -> frozenset[str]:
-    qids: set[str] = set()
+def _expected_qid_owners_from_quality(
+    quality: dict[str, Any],
+) -> frozenset[tuple[int, str, str]]:
+    owners: set[tuple[int, str, str]] = set()
     slides = quality.get("slides")
     if not isinstance(slides, list):
         return frozenset()
     for slide in slides:
         if not isinstance(slide, dict):
+            continue
+        slide_number = slide.get("slideNumber")
+        if isinstance(slide_number, bool) or not isinstance(slide_number, int):
             continue
         coverage = slide.get("qidCoverage")
         if not isinstance(coverage, list):
@@ -106,12 +163,57 @@ def _expected_native_qids_from_quality(quality: dict[str, Any]) -> frozenset[str
         for item in coverage:
             if (
                 isinstance(item, dict)
-                and item.get("logical") == "native"
                 and item.get("ooxml") == "present"
                 and isinstance(item.get("elementId"), str)
+                and item.get("logical") in {"native", "raster"}
             ):
-                qids.add(item["elementId"])
-    return frozenset(qids)
+                owners.add((slide_number, item["elementId"], item["logical"]))
+    return frozenset(owners)
+
+
+def _expected_geometry_from_quality(
+    quality: dict[str, Any],
+) -> tuple[
+    dict[tuple[int, str], tuple[float, float, float, float]],
+    str | None,
+]:
+    geometry: dict[tuple[int, str], tuple[float, float, float, float]] = {}
+    digests: list[dict[str, object]] = []
+    slides = quality.get("slides")
+    if not isinstance(slides, list):
+        return geometry, None
+    for slide in slides:
+        if not isinstance(slide, dict) or not isinstance(slide.get("slideNumber"), int):
+            continue
+        contract = slide.get("geometryContract")
+        if (
+            not isinstance(contract, dict)
+            or contract.get("schemaVersion") != "presenton.hybrid-geometry/v1"
+            or contract.get("ooxmlMatch") is not True
+            or not isinstance(contract.get("chromiumDigest"), str)
+            or not isinstance(contract.get("ooxmlDigest"), str)
+            or not isinstance(contract.get("elements"), list)
+        ):
+            continue
+        slide_number = slide["slideNumber"]
+        digests.append({
+            "slideNumber": slide_number,
+            "chromiumDigest": contract["chromiumDigest"],
+            "ooxmlDigest": contract["ooxmlDigest"],
+        })
+        for item in contract["elements"]:
+            if not isinstance(item, dict) or not isinstance(item.get("elementId"), str):
+                continue
+            values = tuple(item.get(field) for field in ("x", "y", "width", "height"))
+            if any(isinstance(value, bool) or not isinstance(value, (int, float)) for value in values):
+                continue
+            geometry[(slide_number, item["elementId"])] = tuple(float(value) for value in values)  # type: ignore[assignment]
+    digest = (
+        f"sha256:{sha256_canonical_json(sorted(digests, key=lambda item: int(item['slideNumber'])))}"
+        if digests
+        else None
+    )
+    return geometry, digest
 
 
 def _prefixed_digest(value: str) -> str:
@@ -488,9 +590,16 @@ async def _begin_direct_authored_export_attempt(
     composition_digest = build_export_composition_sha256(presentation, slides)
     analysis = analyze_presentation_export_capabilities(
         export_format="pptx",
-        persisted_slide_payloads=tuple(
-            {"content": slide.content, "ui": slide.ui, "properties": slide.properties}
-            for slide in slides
+        persisted_slide_payloads=(
+            {"presentationTheme": presentation.theme},
+            *(
+                {
+                    "content": slide.content,
+                    "ui": slide.ui,
+                    "properties": slide.properties,
+                }
+                for slide in slides
+            ),
         ),
     )
     asset_manifest_digest = build_export_asset_manifest_sha256(analysis.asset_digests)
@@ -651,6 +760,30 @@ async def complete_direct_hybrid_export_attempt(
         != attempt.source_snapshot_sha256
     ):
         raise PresentationExportFreshnessError("presentation_export_source_digest_mismatch")
+    generation_receipt = _published_quality_receipt(presentation)
+    release_policy = release_quality_policy(
+        generation_receipt["release_profile"]
+        if generation_receipt is not None
+        else "development"
+    )
+    if (
+        release_policy.require_native_coverage
+        and (generation_receipt is None or not generation_receipt["gate_passed"])
+    ):
+        raise PresentationExportContractError(
+            "presentation_export_release_quality_receipt_blocked"
+        )
+    try:
+        validate_export_quality_coverage_consistency(
+            quality,
+            manifest,
+            require_release=release_policy.require_native_coverage,
+            minimum_native_ratio=release_policy.minimum_native_coverage_ratio,
+        )
+    except ValueError as error:
+        raise PresentationExportContractError(
+            "presentation_export_quality_coverage_mismatch"
+        ) from error
     artifact = resolve_hybrid_artifact(artifact_path)
     actual_size = artifact.stat().st_size
     actual_sha256 = await asyncio.to_thread(_sha256_file, artifact)
@@ -664,11 +797,14 @@ async def complete_direct_hybrid_export_attempt(
     )
     if manifest.ooxml_readback is None or manifest.ooxml_readback.status != "passed":
         raise PresentationExportContractError("presentation_export_ooxml_readback_required")
+    expected_geometry, geometry_contract_digest = _expected_geometry_from_quality(quality)
     qa = ExportPowerPointQaEvidence.model_validate(
         await trusted_powerpoint_qa(
             artifact,
             manifest.total_slides,
-            expected_native_qids=_expected_native_qids_from_quality(quality),
+            expected_qid_owners=_expected_qid_owners_from_quality(quality),
+            expected_geometry=expected_geometry,
+            geometry_contract_digest=geometry_contract_digest,
         )
     )
     if qa.status == "passed" and (
@@ -694,8 +830,8 @@ async def complete_direct_hybrid_export_attempt(
             for item in slide.get("qidCoverage", []):
                 if (
                     isinstance(item, dict)
-                    and item.get("logical") == "native"
                     and item.get("ooxml") == "present"
+                    and item.get("logical") in {"native", "raster"}
                 ):
                     item["com"] = "present"
     finalized_quality["atomicBinding"] = expected_binding
@@ -743,6 +879,29 @@ async def complete_direct_hybrid_export_attempt(
         "coverage_sidecar_sha256": sha256_canonical_json(finalized_coverage_json),
         "powerpoint_qa": qa.model_dump(mode="json"),
     }
+    if generation_receipt is not None:
+        provenance["quality_receipt_binding"] = {
+            "schema_version": "presenton.export-quality-receipt-binding/v1",
+            **generation_receipt,
+            "export_binding": atomic_binding,
+            "quality_sidecar_sha256": provenance["visual_parity"][
+                "quality_sidecar_sha256"
+            ],
+            "coverage_sidecar_sha256": provenance["visual_parity"][
+                "coverage_sidecar_sha256"
+            ],
+        }
+    try:
+        validate_export_quality_coverage_consistency(
+            finalized_quality,
+            finalized_coverage,
+            require_release=release_policy.require_native_coverage,
+            minimum_native_ratio=release_policy.minimum_native_coverage_ratio,
+        )
+    except ValueError as error:
+        raise PresentationExportContractError(
+            "presentation_export_quality_coverage_mismatch"
+        ) from error
     publish_finalized_hybrid_sidecars(
         artifact,
         quality=finalized_quality,
@@ -769,7 +928,16 @@ async def complete_direct_hybrid_export_attempt(
         mode="hybrid",
         renderer_source_sha256=expected_binding["rendererSourceDigest"],
         pptx_sha256=pptx_sha256,
-        receipt_payloads=[finalized_quality, finalized_coverage_json, qa.model_dump(mode="json")],
+        receipt_payloads=[
+            finalized_quality,
+            finalized_coverage_json,
+            qa.model_dump(mode="json"),
+            *(
+                [provenance["quality_receipt_binding"]]
+                if "quality_receipt_binding" in provenance
+                else []
+            ),
+        ],
     )
     await session.commit()
     await session.refresh(attempt)

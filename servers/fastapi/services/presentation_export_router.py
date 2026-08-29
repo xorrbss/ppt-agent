@@ -7,6 +7,7 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from hashlib import sha256
 import hmac
+import os
 from pathlib import Path
 from typing import Literal
 import uuid
@@ -17,6 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_export_attempt import validate_export_attempt_provenance
 from models.sql.slide import SlideModel
+from services.authored_vnext.semantic.canonical import SemanticContractError
+from services.authored_vnext.semantic.query import get_active_authored_emission
 from services.presentation_export_adapters import (
     PresentationExportAdapterRequest,
     PresentationExportAdapterResult,
@@ -55,6 +58,58 @@ PresentationExportAdapterRunner = Callable[
     [PresentationExportAdapterRequest],
     Awaitable[PresentationExportAdapterResult],
 ]
+
+
+async def _resolve_attempt_source_snapshot_sha256(
+    session: AsyncSession,
+    *,
+    presentation: PresentationModel,
+    slides: Sequence[SlideModel],
+    durable_presentation_id: uuid.UUID,
+    owner_id: uuid.UUID | None,
+    export_format: Literal["pptx", "pdf"],
+    pptx_mode: Literal["fidelity", "hybrid"],
+) -> str:
+    """Select the canonical source bound to this export attempt."""
+
+    generic_digest = build_export_source_snapshot_sha256(
+        presentation,
+        slides,
+        durable_presentation_id=durable_presentation_id,
+    )
+    if not (
+        export_format == "pptx"
+        and presentation.profile_driver_id == "authored"
+        and pptx_mode == "hybrid"
+    ):
+        return generic_digest
+
+    semantic_owner_id = owner_id or presentation.owner_id
+    if semantic_owner_id is None or (
+        presentation.owner_id is not None
+        and presentation.owner_id != semantic_owner_id
+    ):
+        raise PresentationExportContractError(
+            "authored_semantic_hybrid_owner_required"
+        )
+    try:
+        active = await get_active_authored_emission(
+            session,
+            presentation_id=presentation.id,
+            owner_id=semantic_owner_id,
+            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+        )
+    except SemanticContractError as error:
+        raise PresentationExportContractError(error.code) from error
+    if (
+        active.canonical_mode != "bundleGraph"
+        or active.presentation_revision != presentation.revision
+        or active.canonical_digest is None
+    ):
+        raise PresentationExportFreshnessError(
+            "authored_semantic_hybrid_manifest_required"
+        )
+    return active.canonical_digest.removeprefix("sha256:")
 
 
 DEFAULT_PRESENTATION_EXPORT_ADAPTERS: Mapping[
@@ -304,10 +359,14 @@ async def execute_presentation_export(
             .order_by(SlideModel.index, SlideModel.id)
         )
     ).scalars().all()
-    source_snapshot_sha256 = build_export_source_snapshot_sha256(
-        presentation,
-        slides,
+    source_snapshot_sha256 = await _resolve_attempt_source_snapshot_sha256(
+        session,
+        presentation=presentation,
+        slides=slides,
         durable_presentation_id=attempt_presentation_id,
+        owner_id=owner_id,
+        export_format=export_format,
+        pptx_mode=pptx_mode,
     )
     html_source_sha256 = build_export_html_source_sha256(slides)
     composition_sha256 = build_export_composition_sha256(presentation, slides)
@@ -344,13 +403,16 @@ async def execute_presentation_export(
     analysis = analyze_presentation_export_capabilities(
         export_format=export_format,
         slides=slide_inputs,
-        persisted_slide_payloads=tuple(
-            {
-                "content": slide.content,
-                "ui": slide.ui,
-                "properties": slide.properties,
-            }
-            for slide in slides
+        persisted_slide_payloads=(
+            {"presentationTheme": presentation.theme},
+            *(
+                {
+                    "content": slide.content,
+                    "ui": slide.ui,
+                    "properties": slide.properties,
+                }
+                for slide in slides
+            ),
         ),
         native_clone_available=(
             template_target is not None and template_target.native_source is not None

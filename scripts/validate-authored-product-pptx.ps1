@@ -257,4 +257,3 @@ $final = [ordered]@{
 }
 Write-Json (Join-Path $resolvedOutput "product-pptx-validation.json") $final
 $final
-

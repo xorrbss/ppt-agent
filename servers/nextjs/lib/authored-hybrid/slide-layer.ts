@@ -20,12 +20,16 @@ import type { AuthoredEmbeddedTypefaceFaceEvidence } from "./font-policy.ts";
 import {
   isCanvasBackgroundShape,
   isOpaqueRgbPng,
+  preparedNativeElementExpectedReadbackBounds,
   type AuthoredHybridSlideLayer,
 } from "./pptx-assembler.ts";
 import { preflightAuthoredHtmlForHybrid } from "./security.ts";
 import { getGoogleFontsCollector } from "./google-fonts-runtime.ts";
 import { mergePowerPointTextLayout } from "./font-layout.ts";
-import type { PresentationExportSlideQuality } from "../presentation-export-quality.ts";
+import type {
+  PresentationExportFallbackElement,
+  PresentationExportSlideQuality,
+} from "../presentation-export-quality.ts";
 import type { AuthoredHybridSlideV1 } from "./schema.ts";
 import {
   fallbackElementForContractElement,
@@ -115,6 +119,16 @@ export function semanticRasterDegradationDigest(
     state: "degradedFidelityOnly",
     reason,
   });
+}
+
+export function semanticRasterOwnerQids(
+  fallbackElements: readonly Pick<PresentationExportFallbackElement, "elementId">[],
+  nativeElementIds: ReadonlySet<string>,
+): string[] {
+  return fallbackElements
+    .map((element) => element.elementId)
+    .filter((elementId) => !nativeElementIds.has(elementId))
+    .sort();
 }
 
 export interface PreparedFidelitySlideOutcome {
@@ -243,6 +257,11 @@ export async function prepareSlideLayer(
   embeddedTypefaceFamilies: readonly string[] = [],
   embeddedTypefaceFaces: readonly AuthoredEmbeddedTypefaceFaceEvidence[] = [],
   semanticContext?: AuthoredSemanticSlideContext,
+  embeddedGlyphAvailable?: (
+    typeface: string,
+    face: AuthoredEmbeddedTypefaceFaceEvidence["face"],
+    codePoint: number,
+  ) => boolean,
 ): Promise<PreparedSlideOutcome> {
   // Network access is permitted only in this validated server-side collector.
   // The resulting document is self-contained before isolated Chrome receives it.
@@ -322,6 +341,7 @@ export async function prepareSlideLayer(
   }
   const typographyPreflight = preflightNativeTypography(nativeLayoutElements, {
     embeddedTypefaceFaces,
+    embeddedGlyphAvailable,
     backplateElements: contract.elements,
   });
   nativeLayoutElements = typographyPreflight.elements;
@@ -508,6 +528,9 @@ export async function prepareSlideLayer(
   const selectedIds = new Set(
     selected.map((element) => element.source.id)
   );
+  const selectedKindById = new Map(
+    selected.map((element) => [element.source.id, element.kind] as const),
+  );
   const selectedSemanticIslandIds = new Set(selected.filter((element) => element.kind === "chart" || element.kind === "table").map((element) => element.source.id));
   const zBandDemotions = new Set(
     layerSafetyPlan.demotions.map((demotion) => demotion.elementId)
@@ -613,10 +636,14 @@ export async function prepareSlideLayer(
         ? {
             // The residual raster owns only demoted semantic owners. Admitted
             // native QIDs are carried by their native object and must never be
-            // repeated on the raster plane as a second logical owner.
-            semanticOwnerQids: fallbackElements
-              .map((element) => element.elementId)
-              .sort(),
+            // repeated on the raster plane as a second logical owner. A native
+            // element can still retain backplate-only paint telemetry (for
+            // example a shadow), but that visual fragment does not become a
+            // second logical QID owner.
+            semanticOwnerQids: semanticRasterOwnerQids(
+              fallbackElements,
+              selectedIds,
+            ),
           }
         : {}),
     },
@@ -661,8 +688,45 @@ export async function prepareSlideLayer(
       fallbackElements,
       qidCoverage: semanticContext?.declaredElements.map((element) => {
         const native = selectedIds.has(element.elementId);
-        return { elementId: element.elementId, kind: element.kind === "connector" || element.kind === "group" || element.kind === "complexIsland" ? "shape" as const : element.kind, logical: native ? "native" as const : "raster" as const, ooxml: "not-run" as const, com: "not-run" as const };
+        // The sealed semantic kind describes source intent. A bounded native
+        // serializer can admit a raster-declared complex island as an actual
+        // text/image/shape object; OOXML ownership must record that emitted
+        // kind rather than coercing every complex island to shape. Raster
+        // carriers remain non-visual shapes by contract.
+        const kind = native
+          ? selectedKindById.get(element.elementId)!
+          : element.kind === "connector" ||
+              element.kind === "group" ||
+              element.kind === "complexIsland"
+            ? "shape" as const
+            : element.kind;
+        return { elementId: element.elementId, kind, logical: native ? "native" as const : "raster" as const, ooxml: "not-run" as const, com: "not-run" as const };
       }),
+      geometryContract: (() => {
+        const elements = selected.map((element) => {
+          // Seal the exact assembler bounds, including the bounded standalone
+          // text slack, so OOXML readback checks the emitted line-height and
+          // overflow contract rather than a pre-serialization DOM box.
+          const bounds = preparedNativeElementExpectedReadbackBounds(element);
+          return {
+            elementId: element.source.id,
+            kind: element.kind,
+            x: bounds.x,
+            y: bounds.y,
+            width: bounds.width,
+            height: bounds.height,
+          };
+        }).sort((left, right) => left.elementId.localeCompare(right.elementId));
+        return {
+          schemaVersion: "presenton.hybrid-geometry/v1" as const,
+          chromiumDigest: semanticDigest({
+            schemaVersion: "presenton.hybrid-geometry/v1",
+            slideNumber,
+            elements,
+          }),
+          elements,
+        };
+      })(),
       ...(semanticReceipts ? { semanticReceipts } : {}),
     },
     fontRendering,
