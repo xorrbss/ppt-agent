@@ -170,6 +170,7 @@ async def export_presentation(
     cookie_header: str | None = None,
     expected_revision: int | None = None,
     legacy_path_only_rolling_facade: bool = False,
+    workspace_operation_id: uuid.UUID | None = None,
 ) -> PresentationAndPath:
     log_memory(
         LOGGER,
@@ -177,6 +178,48 @@ async def export_presentation(
         presentation_id=str(presentation_id),
         export_as=export_as,
     )
+    if export_as == "pdf" and not legacy_path_only_rolling_facade:
+        if expected_revision is None:
+            raise ValueError("expected_revision is required for canonical export")
+        base_url = _get_next_public_url().rstrip("/")
+        headers = {"cookie": cookie_header} if cookie_header else {}
+        timeout = httpx.Timeout(_AUTHORED_HYBRID_EXPORT_TIMEOUT_SECONDS, connect=20.0)
+        async with httpx.AsyncClient(timeout=timeout, headers=headers) as client:
+            response = await client.post(
+                f"{base_url}/api/export-presentation",
+                json={
+                    "id": str(presentation_id),
+                    "format": "pdf",
+                    "title": title,
+                    "expectedPresentationRevision": expected_revision,
+                    **(
+                        {"operationId": str(workspace_operation_id)}
+                        if workspace_operation_id is not None
+                        else {}
+                    ),
+                },
+            )
+            response.raise_for_status()
+            result = response.json()
+            download_path = result.get("path") if isinstance(result, dict) else None
+            if (
+                not isinstance(result, dict)
+                or result.get("success") is not True
+                or not isinstance(download_path, str)
+            ):
+                raise RuntimeError("presentation_pdf_export_invalid_response")
+            shared_path = _resolve_hybrid_export_path(download_path)
+            if (
+                shared_path is None
+                or shared_path.suffix.lower() != ".pdf"
+                or not shared_path.is_file()
+            ):
+                raise RuntimeError("presentation_pdf_export_artifact_unavailable")
+            return PresentationAndPath(
+                presentation_id=presentation_id,
+                path=str(shared_path),
+            )
+
     session_token = _extract_session_token(cookie_header)
     export_url, fastapi_url = _build_presentation_export_url(
         presentation_id,
@@ -255,6 +298,8 @@ async def export_authored_hybrid_presentation(
                 "pptxMode": "hybrid",
                 "fontEmbedding": font_embedding,
                 "expectedPresentationRevision": expected_revision,
+                "exportAttemptId": str(export_attempt_id),
+                "canonicalSourceDigest": canonical_source_digest,
                 **(
                     {"operationId": str(workspace_operation_id)}
                     if workspace_operation_id is not None

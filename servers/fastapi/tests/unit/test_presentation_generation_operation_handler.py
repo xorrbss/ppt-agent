@@ -27,6 +27,9 @@ from models.sql.workspace import (
     WorkspaceOutbox,
 )
 from models.workspace import WorkspaceOperationActionRequest
+from services.authored_composition_policy import (
+    AUTHORED_CAPACITY_BOUNDED_REPAIR_REVISION,
+)
 from services import presentation_generation_job_service as jobs
 from services.presentation_generation_operation_handler import (
     PRESENTATION_GENERATION_OPERATION_KIND,
@@ -43,7 +46,7 @@ from services.workspace_operation_runner import (
     recover_expired_workspace_operations,
     request_workspace_operation_cancellation,
 )
-from services.workspace_service import apply_workspace_action
+from services.workspace_service import WorkspaceServiceError, apply_workspace_action
 from utils.owner_context import (
     get_current_owner_id,
     reset_current_owner_id,
@@ -355,6 +358,60 @@ async def _generation_handler_terminalizes_cancelled_job(tmp_path: Path, monkeyp
         await engine.dispose()
 
 
+def test_non_retryable_generation_failure_disables_resume(tmp_path: Path, monkeypatch):
+    asyncio.run(_non_retryable_generation_failure_disables_resume(tmp_path, monkeypatch))
+
+
+async def _non_retryable_generation_failure_disables_resume(
+    tmp_path: Path, monkeypatch
+):
+    engine, maker = await _database(tmp_path / "generation-non-retryable.db", monkeypatch)
+    try:
+        _, operation_id, task_id, job_id = await _seed_linked_generation(
+            maker, owner_id=None
+        )
+
+        async def internal_header_provider():
+            return {}
+
+        async def non_retryable_pipeline(*_args):
+            error = RuntimeError("authored_slide_capacity_exceeded")
+            error.code = "authored_slide_capacity_exceeded"
+            error.retryable = False
+            raise error
+
+        handler = PresentationGenerationOperationHandler(
+            session_factory=maker,
+            pipeline=non_retryable_pipeline,
+            internal_header_provider=internal_header_provider,
+            heartbeat_seconds=60,
+        )
+        registry = WorkspaceOperationHandlerRegistry()
+        registry.register(PRESENTATION_GENERATION_OPERATION_KIND, handler)
+        runner = WorkspaceOperationRunner(
+            session_factory=maker,
+            registry=registry,
+            max_concurrency=1,
+            heartbeat_seconds=60,
+        )
+
+        assert await _drain_once(runner) == 1
+        async with maker() as session:
+            operation = await session.get(WorkspaceOperation, operation_id)
+            job = await session.get(PresentationGenerationJob, job_id)
+            task = await session.get(AsyncPresentationGenerationTaskModel, task_id)
+        assert operation is not None and operation.state == "failed"
+        assert operation.error_detail is not None
+        assert operation.error_detail["retryable"] is False
+        assert job is not None and job.state == "failed"
+        assert job.resume_allowed is False
+        assert task is not None and task.status == "error"
+        assert task.error is not None
+        assert task.error["code"] == "authored_slide_capacity_exceeded"
+    finally:
+        await engine.dispose()
+
+
 def test_queued_generation_cancel_atomically_terminalizes_linked_status(
     tmp_path: Path, monkeypatch
 ):
@@ -577,6 +634,123 @@ async def _terminal_retry_rebinds_linked_job(tmp_path: Path, monkeypatch):
         assert source is not None and source.state == "failed"
         assert completed_retry is not None and completed_retry.state == "succeeded"
         assert completed_job is not None and completed_job.state == "published"
+    finally:
+        await engine.dispose()
+
+
+def test_explicit_capacity_recovery_rebinds_only_supported_authored_revision(
+    tmp_path: Path,
+    monkeypatch,
+):
+    asyncio.run(
+        _explicit_capacity_recovery_rebinds_only_supported_authored_revision(
+            tmp_path,
+            monkeypatch,
+        )
+    )
+
+
+async def _explicit_capacity_recovery_rebinds_only_supported_authored_revision(
+    tmp_path: Path,
+    monkeypatch,
+):
+    engine, maker = await _database(
+        tmp_path / "generation-capacity-recovery.db",
+        monkeypatch,
+    )
+    try:
+        _, source_operation_id, task_id, job_id = await _seed_linked_generation(
+            maker,
+            owner_id=None,
+        )
+        async with maker() as session:
+            source = await session.get(WorkspaceOperation, source_operation_id)
+            job = await session.get(PresentationGenerationJob, job_id)
+            task = await session.get(AsyncPresentationGenerationTaskModel, task_id)
+            assert source is not None and job is not None and task is not None
+            generation_request = {"strategy": "authored", "content": "test deck"}
+            source.state = "failed"
+            source.version = 4
+            source.error_code = "authored_slide_capacity_exceeded"
+            source.error_detail = {"retryable": False}
+            source.request_payload = {
+                "generation_request": generation_request,
+                "job_id": str(job.id),
+            }
+            job.state = "failed"
+            job.request_payload = generation_request
+            job.resume_allowed = False
+            job.last_error = {"code": "authored_slide_capacity_exceeded"}
+            task.status = "error"
+            task.error = {"code": "authored_slide_capacity_exceeded"}
+            session.add_all((source, job, task))
+            await session.commit()
+
+        async with maker() as session:
+            with pytest.raises(WorkspaceServiceError) as generic_retry:
+                await apply_workspace_action(
+                    session,
+                    operation_id=source_operation_id,
+                    request=WorkspaceOperationActionRequest(
+                        action="retry",
+                        idempotency_key="generic-capacity-retry",
+                        expected_operation_version=4,
+                        expected_revision=0,
+                    ),
+                )
+        assert generic_retry.value.code == "operation_not_retryable"
+
+        async with maker() as session:
+            with pytest.raises(WorkspaceServiceError) as stale_revision:
+                await apply_workspace_action(
+                    session,
+                    operation_id=source_operation_id,
+                    request=WorkspaceOperationActionRequest(
+                        action="retry",
+                        idempotency_key="stale-capacity-recovery",
+                        expected_operation_version=4,
+                        expected_revision=0,
+                        recovery_revision="authored-capacity-bounded-repair/v0",
+                    ),
+                )
+        assert stale_revision.value.code == "operation_not_retryable"
+
+        async with maker() as session:
+            receipt, recovery, duplicate = await apply_workspace_action(
+                session,
+                operation_id=source_operation_id,
+                request=WorkspaceOperationActionRequest(
+                    action="retry",
+                    idempotency_key="bounded-capacity-recovery",
+                    expected_operation_version=4,
+                    expected_revision=0,
+                    recovery_revision=AUTHORED_CAPACITY_BOUNDED_REPAIR_REVISION,
+                ),
+            )
+        assert duplicate is False
+        assert receipt.result_operation_id == recovery.id
+        assert recovery.retry_of_operation_id == source_operation_id
+        assert recovery.request_payload["recovery_revision"] == (
+            AUTHORED_CAPACITY_BOUNDED_REPAIR_REVISION
+        )
+
+        async with maker() as session:
+            source = await session.get(WorkspaceOperation, source_operation_id)
+            rebound_job = await session.get(PresentationGenerationJob, job_id)
+            rebound_task = await session.get(
+                AsyncPresentationGenerationTaskModel,
+                task_id,
+            )
+        assert source is not None
+        assert source.state == "failed"
+        assert source.error_detail == {"retryable": False}
+        assert rebound_job is not None
+        assert rebound_job.workspace_operation_id == recovery.id
+        assert rebound_job.state == "queued"
+        assert rebound_job.resume_allowed is False
+        assert rebound_job.resume_count == 1
+        assert rebound_task is not None and rebound_task.status == "pending"
+        assert rebound_task.error is None
     finally:
         await engine.dispose()
 

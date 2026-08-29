@@ -1,12 +1,20 @@
+import pytest
+
+from services.presentation_export_capabilities import PresentationExportContractError
 from services.presentation_export_powerpoint_qa import (
+    _advance_powerpoint_qa_observation,
     _contains_presenton_qid,
+    _geometry_contract_mismatches,
     _powerpoint_main_hwnd,
+    _powerpoint_release_gate_failures,
+    _powerpoint_window_pids,
+    _qid_owner_census,
     _snapshot_comparison,
 )
 
 
 class _Application:
-    Caption = ""
+    HWND = 101
 
 
 class _WindowApi:
@@ -21,8 +29,74 @@ class _WindowApi:
     def GetClassName(hwnd):
         return "PPTFrameClass" if hwnd == 101 else "OtherWindow"
 
-    def GetWindowText(self, hwnd):
-        return self.application.Caption if hwnd == 101 else ""
+
+class _ProcessApi:
+    @staticmethod
+    def GetWindowThreadProcessId(hwnd):
+        return 1, 9001 if hwnd == 101 else 9002
+
+
+def test_powerpoint_observation_states_are_strictly_ordered():
+    states = []
+    for state in (
+        "first-open",
+        "save-copy",
+        "reopen",
+        "readback",
+        "observation-sealed",
+    ):
+        _advance_powerpoint_qa_observation(states, state)
+    assert states == [
+        "first-open",
+        "save-copy",
+        "reopen",
+        "readback",
+        "observation-sealed",
+    ]
+    with pytest.raises(
+        PresentationExportContractError,
+        match="presentation_export_powerpoint_observation_state_invalid",
+    ):
+        _advance_powerpoint_qa_observation([], "save-copy")
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected_failure"),
+    [
+        ({"dialog_watcher_status": "unavailable"}, "watcher-unavailable"),
+        (
+            {"dialog_watcher_armed_before_first_open": False},
+            "watcher-unavailable",
+        ),
+        ({"dialog_watcher_status": "interrupted"}, "watcher-interrupted"),
+        ({"dialog_watcher_status": "stop-failed"}, "watcher-stop-failed"),
+        ({"repair_dialogs": None}, "repair-observation-required"),
+        ({"repair_dialogs": 1}, "repair-dialog-observed"),
+        ({"readback_match": False}, "readback-mismatch"),
+        ({"semantic_payload_binding": "failed"}, "semantic-binding-mismatch"),
+        ({"observation_states": ["first-open"]}, "observation-state-incomplete"),
+    ],
+)
+def test_release_powerpoint_qa_fails_closed_at_each_observation_boundary(
+    overrides, expected_failure
+):
+    evidence = {
+        "release_required": True,
+        "observation_states": [
+            "first-open",
+            "save-copy",
+            "reopen",
+            "readback",
+            "observation-sealed",
+        ],
+        "dialog_watcher_status": "sealed",
+        "dialog_watcher_armed_before_first_open": True,
+        "repair_dialogs": 0,
+        "readback_match": True,
+        "semantic_payload_binding": "passed",
+    }
+    failures = _powerpoint_release_gate_failures(**(evidence | overrides))
+    assert expected_failure in failures
 
 
 def test_powerpoint_qid_owner_and_interactive_hwnd_contracts():
@@ -38,6 +112,42 @@ def test_powerpoint_qid_owner_and_interactive_hwnd_contracts():
     )
     application = _Application()
     assert _powerpoint_main_hwnd(application, _WindowApi(application)) == 101
+    assert _powerpoint_window_pids(
+        _WindowApi(application), _ProcessApi()
+    ) == frozenset({9001})
+
+
+def test_powerpoint_qid_owners_are_slide_scoped_and_include_raster_carriers():
+    snapshot = [[
+        _shape(name="Presenton hybrid text s01-title"),
+        _shape(name="Presenton raster visual fragment s01-chart semantic-owner"),
+    ], [
+        _shape(name="Presenton hybrid text s02-title"),
+    ]]
+    expected = frozenset({
+        (1, "s01-title", "native"),
+        (1, "s01-chart", "raster"),
+        (2, "s02-title", "native"),
+    })
+    assert _qid_owner_census(snapshot, expected) == {
+        "qid_owner_missing": 0,
+        "qid_owner_ghosting": 0,
+        "qid_owner_mismatches": 0,
+    }
+    moved = [snapshot[0], [_shape(name="Presenton hybrid text s01-title")]]
+    assert _qid_owner_census(moved, expected)["qid_owner_mismatches"] == 1
+
+
+def test_powerpoint_geometry_contract_uses_chromium_pixels():
+    snapshot = [[_shape(name="Presenton hybrid text s01-title")]]
+    assert _geometry_contract_mismatches(
+        snapshot,
+        {(1, "s01-title"): (96.0, 64.0, 853.333333, 64.0)},
+    ) == 0
+    assert _geometry_contract_mismatches(
+        snapshot,
+        {(1, "s01-title"): (120.0, 64.0, 853.333333, 64.0)},
+    ) == 1
 
 
 def _shape(**overrides):

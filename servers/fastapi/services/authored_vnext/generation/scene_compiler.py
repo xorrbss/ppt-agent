@@ -1023,21 +1023,54 @@ def _compose_cover(
         editorial_copy = f"{parts[0]}     {parts[1]}\n{parts[2]}  ·  {parts[3]}"
     else:
         editorial_copy = "\n".join(parts)
-    field = _subrect(bounds, x=0.03, y=0.13, width=0.94, height=0.74)
-    text_bounds = _subrect(bounds, x=0.095, y=0.22, width=0.81, height=0.56)
-    style = _fit_text_style(
-        contract=contract,
-        text=editorial_copy,
-        bounds=text_bounds,
-        style=_emphasis_style(
-            contract,
-            body.semantic_role,
-            preferred_font_pt=28.0 if len(parts) <= 4 else 22.0,
-        ).model_copy(update={"vertical_align": "middle"}),
-        minimum_font_pt=_CANONICAL_BODY_MIN_FONT_PT,
-        consumer="cover editorial statement",
-        maximum_lines=max(1, editorial_copy.count("\n") + 1),
+    field_y = 0.13
+    field_height = 0.74
+    field = _subrect(
+        bounds, x=0.03, y=field_y, width=0.94, height=field_height
     )
+    text_bounds = _subrect(bounds, x=0.095, y=0.22, width=0.81, height=0.56)
+    base_style = _emphasis_style(
+        contract,
+        body.semantic_role,
+        preferred_font_pt=28.0 if len(parts) <= 4 else 22.0,
+    ).model_copy(update={"vertical_align": "middle"})
+    try:
+        style = _fit_text_style(
+            contract=contract,
+            text=editorial_copy,
+            bounds=text_bounds,
+            style=base_style,
+            minimum_font_pt=_CANONICAL_BODY_MIN_FONT_PT,
+            consumer="cover editorial statement",
+            maximum_lines=max(1, editorial_copy.count("\n") + 1),
+        )
+    except SceneTextFitError:
+        if len(source_parts) <= 4:
+            raise
+        # Dense generated covers can contain many explicit outline lines. Keep
+        # every source token in one editable body owner, but let the pinned font
+        # wrap a whitespace-only projection inside the full safe body envelope.
+        # This is a single bounded fallback; failure at the 16pt floor remains
+        # publication-blocking.
+        editorial_copy = " ".join(
+            " ".join(part.split()) for part in source_parts
+        )
+        field_y = 0.04
+        field_height = 0.92
+        field = _subrect(
+            bounds, x=0.03, y=field_y, width=0.94, height=field_height
+        )
+        text_bounds = _subrect(
+            bounds, x=0.06, y=0.08, width=0.88, height=0.84
+        )
+        style = _fit_text_style(
+            contract=contract,
+            text=editorial_copy,
+            bounds=text_bounds,
+            style=base_style,
+            minimum_font_pt=_CANONICAL_BODY_MIN_FONT_PT,
+            consumer="cover editorial statement",
+        )
     _require_readable_panel(
         panel=field,
         text_bounds=text_bounds,
@@ -1063,7 +1096,13 @@ def _compose_cover(
             slide_id=slide_id,
             suffix="cover-accent-rail",
             z_order=6,
-            bounds=_subrect(bounds, x=0.03, y=0.13, width=0.014, height=0.74),
+            bounds=_subrect(
+                bounds,
+                x=0.03,
+                y=field_y,
+                width=0.014,
+                height=field_height,
+            ),
             semantic_role="heroAccent",
             shape="rect",
             fill=accent,
@@ -1252,45 +1291,108 @@ def _compose_stacked_cards(
 ) -> list[SceneElement]:
     parts = _body_parts(body.text, maximum=5, grammar_parts=grammar_parts)
     bounds = body.bounds
-    count = len(parts)
     gap = 0.025
-    height = (0.9 - gap * (count - 1)) / count
-    if height <= 0:
-        raise ValueError("authored_vnext_card_variant_unavailable")
     base_style = _body_style(contract, body.semantic_role).model_copy(
         update={"font_size": 20.0}
     )
+
+    def fitted_specs(
+        candidate_parts: list[str], *, dense_fallback: bool
+    ) -> list[tuple[Rect, Rect, Rect, SceneTextStyle]]:
+        count = len(candidate_parts)
+        total_y = 0.02 if dense_fallback else 0.05
+        total_height = 0.96 if dense_fallback else 0.9
+        height = (total_height - gap * (count - 1)) / count
+        if height <= 0:
+            raise ValueError("authored_vnext_card_variant_unavailable")
+        result: list[tuple[Rect, Rect, Rect, SceneTextStyle]] = []
+        for index, part in enumerate(candidate_parts):
+            y = total_y + index * (height + gap)
+            panel = _subrect(bounds, x=0.035, y=y, width=0.93, height=height)
+            marker = _subrect(
+                bounds,
+                x=0.055,
+                y=y + height * 0.22,
+                width=0.035,
+                height=height * 0.56,
+            )
+            if dense_fallback:
+                # Use absolute safe insets because a ratio below 8px can pass
+                # font fitting on shorter product body slots and then fail the
+                # readable-panel gate. Ten pixels leaves deterministic margin
+                # above the 8px contract in every direction.
+                horizontal_inset = max(10.0, bounds.width * 0.025)
+                vertical_inset = 10.0
+                text_bounds = Rect(
+                    x=panel.x + horizontal_inset,
+                    y=panel.y + vertical_inset,
+                    width=panel.width - horizontal_inset * 2,
+                    height=panel.height - vertical_inset * 2,
+                )
+            else:
+                text_bounds = _subrect(
+                    bounds,
+                    x=0.115,
+                    y=y + height * 0.16,
+                    width=0.8,
+                    height=height * 0.68,
+                )
+            style = _fit_text_style(
+                contract=contract,
+                text=part,
+                bounds=text_bounds,
+                style=base_style,
+                minimum_font_pt=_CANONICAL_BODY_MIN_FONT_PT,
+                consumer=f"stacked card {index + 1}",
+            )
+            _require_readable_panel(
+                panel=panel,
+                text_bounds=text_bounds,
+                text=part,
+                style=style,
+                consumer=f"stacked card {index + 1}",
+                minimum_panel_height=48,
+                minimum_text_height=28,
+                minimum_inset=8,
+                contract=contract,
+            )
+            result.append((panel, marker, text_bounds, style))
+        return result
+
+    try:
+        specs = fitted_specs(parts, dense_fallback=False)
+    except SceneTextFitError as original_error:
+        # Five short cards cannot contain two measured lines each at the 16pt
+        # floor. Repartition a whitespace-only projection of the exact source
+        # into progressively fewer full-width cards and accept only the first
+        # real-font fit. At most four deterministic alternatives are
+        # considered; an impossible body keeps the original fail-closed error.
+        dense_source = " ".join(body.text.split())
+        specs = []
+        for maximum in range(len(parts) - 1, 0, -1):
+            candidate_parts = _body_parts(
+                dense_source, maximum=maximum, grammar_parts=grammar_parts
+            )
+            if len(candidate_parts) >= len(parts):
+                continue
+            if _semantic_copy(" ".join(candidate_parts)) != _semantic_copy(body.text):
+                continue
+            try:
+                candidate_specs = fitted_specs(
+                    candidate_parts, dense_fallback=True
+                )
+            except SceneTextFitError:
+                continue
+            parts = candidate_parts
+            specs = candidate_specs
+            break
+        if not specs:
+            raise original_error
+
+    count = len(parts)
     elements: list[SceneElement] = []
-    for index, part in enumerate(parts):
-        y = 0.05 + index * (height + gap)
-        panel = _subrect(bounds, x=0.035, y=y, width=0.93, height=height)
-        marker = _subrect(bounds, x=0.055, y=y + height * 0.22, width=0.035, height=height * 0.56)
-        text_bounds = _subrect(
-            bounds,
-            x=0.115,
-            y=y + height * 0.16,
-            width=0.8,
-            height=height * 0.68,
-        )
-        style = _fit_text_style(
-            contract=contract,
-            text=part,
-            bounds=text_bounds,
-            style=base_style,
-            minimum_font_pt=_CANONICAL_BODY_MIN_FONT_PT,
-            consumer=f"stacked card {index + 1}",
-        )
-        _require_readable_panel(
-            panel=panel,
-            text_bounds=text_bounds,
-            text=part,
-            style=style,
-            consumer=f"stacked card {index + 1}",
-            minimum_panel_height=48,
-            minimum_text_height=28,
-            minimum_inset=8,
-            contract=contract,
-        )
+    for index, (part, spec) in enumerate(zip(parts, specs, strict=True)):
+        panel, marker, text_bounds, style = spec
         elements.extend(
             [
                 _shape(

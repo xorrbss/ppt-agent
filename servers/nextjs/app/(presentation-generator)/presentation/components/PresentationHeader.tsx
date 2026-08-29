@@ -17,6 +17,7 @@ import { clearHistory } from "@/store/slices/undoRedoSlice";
 import type { PresentationExportQualityReport } from "@/lib/presentation-export-quality";
 import GenerationInfoDialog from "./GenerationInfoDialog";
 import { cn } from "@/lib/utils";
+import { notify } from "@/components/ui/sonner";
 import { KeyboardShortcutsDialog } from "./KeyboardShortcutsDialog";
 import AuthoredHeaderActions from "./header/AuthoredHeaderActions";
 import ExportMenu from "./header/ExportMenu";
@@ -101,6 +102,7 @@ const PresentationHeader = ({
     useState<string | null>(null);
   const [authoredCapabilityStatus, setAuthoredCapabilityStatus] =
     useState<AuthoredEmissionCapabilityStatus>({ state: "checking" });
+  const [directExportInFlight, setDirectExportInFlight] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const titleInputRef = useRef<HTMLInputElement>(null);
   /** Avoid committing on blur when Save/Cancel was used (focus/click ordering) */
@@ -234,10 +236,22 @@ const PresentationHeader = ({
     pptxMode?: PptxExportMode,
     fontEmbedding?: boolean,
   ) => {
-    if (isStreaming || !workspaceCommandsEnabled || !onWorkspaceCommand) return;
+    if (
+      isStreaming ||
+      directExportInFlight ||
+      !workspaceCommandsEnabled ||
+      !onWorkspaceCommand
+    )
+      return;
     if (pptxMode === "hybrid" && hybridDisabledReason !== undefined) return;
-    try {
-      if (isAuthoredDeck && (pptxMode === "hybrid" || pptxMode === "fidelity")) {
+    if (isAuthoredDeck && (pptxMode === "hybrid" || pptxMode === "fidelity")) {
+      setDirectExportInFlight(true);
+      const exportLabel = pptxMode === "hybrid" ? "Hybrid PPTX" : "Fidelity PPTX";
+      const notificationId = notify.loading(
+        `${exportLabel}를 준비하고 있습니다`,
+        "완료되면 다운로드가 자동으로 시작됩니다.",
+      );
+      try {
         // A caller must explicitly choose false to request the compatibility
         // path. Hybrid exports otherwise request embedding by default.
         const requestedFontEmbedding =
@@ -271,7 +285,7 @@ const PresentationHeader = ({
           result?.quality && result.powerPointQa
             ? { ...result.quality, powerPointQa: result.powerPointQa }
             : result?.quality;
-        if (!response.ok || !result?.path) {
+        if (!response.ok || result?.success !== true || !result.path) {
           if (quality) setExportQuality(quality);
           else if (coverage?.mode === "hybrid") setHybridCoverage(coverage);
           throw new Error(result?.error ?? "hybrid_export_failed");
@@ -295,8 +309,29 @@ const PresentationHeader = ({
         window.document.body.appendChild(anchor);
         anchor.click();
         anchor.remove();
-        return;
+        notify.success(
+          `${exportLabel} 다운로드를 시작했습니다`,
+          "브라우저의 다운로드 목록에서 파일을 확인하세요.",
+          { id: notificationId },
+        );
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error && error.message === "font_embedding_not_applied"
+            ? "글꼴 포함 검증에 실패해 다운로드를 시작하지 않았습니다."
+            : error instanceof Error &&
+                error.message &&
+                error.message !== "hybrid_export_failed"
+              ? error.message
+              : "파일을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.";
+        notify.error("PPTX 내보내기 실패", errorMessage, {
+          id: notificationId,
+        });
+      } finally {
+        setDirectExportInFlight(false);
       }
+      return;
+    }
+    try {
       const option = pptxMode === "hybrid" ? "편집 가능한 요소를 분리해 " : "";
       const requestedFontEmbedding = pptxMode === "hybrid" && fontEmbedding !== false;
       const fontOption = requestedFontEmbedding ? "(글꼴 포함 요청) " : "";
@@ -384,6 +419,7 @@ const PresentationHeader = ({
   const exportDisabled =
     !resolvedHeaderFeatures.exportActions ||
     isStreaming === true ||
+    directExportInFlight ||
     !workspaceCommandsEnabled ||
     !onWorkspaceCommand;
 

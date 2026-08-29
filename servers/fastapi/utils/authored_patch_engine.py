@@ -1030,6 +1030,19 @@ def inspect_authored_edit_capabilities(html: str) -> list[dict[str, Any]]:
                 reason = None
                 fields = ["source", "crop", "style", "position", "size"]
                 value = {"src": attrs.get("src", ""), "alt": attrs.get("alt", "")}
+            elif node.tag in _TEXT_TAGS and nested and all(
+                child.tag == "br" and child.get_attr("data-qid") is None
+                for child in nested
+            ):
+                # A hard line break is layout, not a separately editable child.
+                # Keep text replacement blocked, but allow bounded box/style
+                # changes so a multiline label can be moved away from a
+                # connector without re-authoring the slide.
+                kind = "text"
+                editable = True
+                reason = None
+                fields = ["style", "position", "size"]
+                value = _text_content(node)
             elif (
                 attrs.get("data-authored-kind") == "shape"
                 or attrs.get("data-native-kind") == "shape"

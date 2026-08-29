@@ -339,6 +339,7 @@ function convertTextPayload(
       style: run.style,
       ...(run.script ? { script: run.script } : {}),
       ...(run.breakKind ? { breakKind: run.breakKind } : {}),
+      ...(run.lineIndex !== undefined ? { lineIndex: run.lineIndex } : {}),
     })),
     ...(layout
       ? {
@@ -640,6 +641,12 @@ export function assertAuthoredHybridSlide(
             oneOf(run.breakKind, ["soft", "line", "paragraph"], `element ${element.id} run ${runIndex}.breakKind`);
             invariant(run.text === "\n", `element ${element.id} run ${runIndex}.breakKind requires a newline run`);
           }
+          if (run.lineIndex !== undefined) {
+            invariant(
+              Number.isInteger(run.lineIndex) && run.lineIndex >= 0,
+              `element ${element.id} run ${runIndex}.lineIndex must be a non-negative integer`
+            );
+          }
         });
         if (element.text.layout) {
           assertTextLayout(element.text.layout, `element ${element.id} text.layout`);
@@ -702,6 +709,12 @@ export function assertAuthoredHybridSlide(
           if (run.breakKind !== undefined) {
             oneOf(run.breakKind, ["soft", "line", "paragraph"], `element ${element.id} run ${runIndex}.breakKind`);
             invariant(run.text === "\n", `element ${element.id} run ${runIndex}.breakKind requires a newline run`);
+          }
+          if (run.lineIndex !== undefined) {
+            invariant(
+              Number.isInteger(run.lineIndex) && run.lineIndex >= 0,
+              `element ${element.id} run ${runIndex}.lineIndex must be a non-negative integer`
+            );
           }
         });
         if (element.text.layout) {

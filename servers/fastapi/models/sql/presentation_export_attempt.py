@@ -173,12 +173,255 @@ class ExportAtomicBinding(BaseModel):
         return normalized
 
 
+class ExportRasterFallbackAudit(BaseModel):
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra="forbid",
+    )
+
+    element_id: str = PydanticField(min_length=1, max_length=512)
+    reason: str = PydanticField(min_length=1, max_length=128)
+    eligible: bool
+    explicit: bool
+
+    @field_validator("element_id", "reason")
+    @classmethod
+    def normalize_audit_text(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("export native fallback audit is incomplete")
+        return normalized
+
+
+class ExportNativeCoverageEvidence(BaseModel):
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra="forbid",
+    )
+
+    status: Literal["passed", "blocked", "not_assessed"]
+    eligible_element_count: int = PydanticField(ge=0)
+    native_element_count: int = PydanticField(ge=0)
+    ratio: float | None = PydanticField(default=None, ge=0.0, le=1.0)
+    raster_fallbacks: list[ExportRasterFallbackAudit] = PydanticField(
+        default_factory=list,
+        max_length=100_000,
+    )
+
+    @model_validator(mode="after")
+    def validate_native_coverage(self) -> "ExportNativeCoverageEvidence":
+        if self.native_element_count > self.eligible_element_count:
+            raise ValueError("export native coverage denominator is inconsistent")
+        if any(not item.eligible for item in self.raster_fallbacks):
+            raise ValueError("export native coverage denominator is shrunk")
+        eligible_fallbacks = len(self.raster_fallbacks)
+        if (
+            self.eligible_element_count - self.native_element_count
+            != eligible_fallbacks
+        ):
+            raise ValueError("export native coverage fallback denominator is inconsistent")
+        if len({item.element_id for item in self.raster_fallbacks}) != len(
+            self.raster_fallbacks
+        ):
+            raise ValueError("export native fallback audit contains duplicate owners")
+        expected_ratio = (
+            self.native_element_count / self.eligible_element_count
+            if self.eligible_element_count
+            else None
+        )
+        if expected_ratio is None:
+            if self.ratio is not None:
+                raise ValueError("export native coverage ratio is inconsistent")
+        elif self.ratio is None or abs(self.ratio - expected_ratio) > 1e-12:
+            raise ValueError("export native coverage ratio is inconsistent")
+        if self.status == "passed" and any(
+            not item.explicit for item in self.raster_fallbacks
+        ):
+            raise ValueError("passed native coverage requires audited fallbacks")
+        return self
+
+
+class ExportQualityReceiptBinding(BaseModel):
+    """One immutable generation receipt pinned to the exported package."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra="forbid",
+    )
+
+    schema_version: Literal[
+        "presenton.export-quality-receipt-binding/v1",
+        "presenton.export-quality-receipt-binding/v2",
+    ]
+    receipt_digest: str
+    generation_attempt_id: str = PydanticField(min_length=1, max_length=128)
+    generation_revision: int = PydanticField(ge=0)
+    release_profile: str = PydanticField(min_length=1, max_length=64)
+    requested_release_profile: str | None = PydanticField(
+        default=None, min_length=1, max_length=64
+    )
+    pre_export_evaluation_profile: str | None = PydanticField(
+        default=None, min_length=1, max_length=64
+    )
+    requested_release_policy_digest: str | None = None
+    pre_export_evaluation_policy_digest: str | None = None
+    scene_envelope_digest: str | None = None
+    scene_source_digest: str | None = None
+    scene_qid_digest: str | None = None
+    semantic_emission_digest: str | None = None
+    qid_owner_census_digest: str | None = None
+    gate_passed: bool
+    export_binding: ExportAtomicBinding
+    quality_sidecar_sha256: str
+    coverage_sidecar_sha256: str
+    atomic_run_digest: str | None = None
+
+    @field_validator("receipt_digest")
+    @classmethod
+    def validate_receipt_digest(cls, value: str) -> str:
+        normalized = value.lower()
+        if not normalized.startswith("sha256:") or not _is_sha256(normalized[7:]):
+            raise ValueError("quality receipt digest must be prefixed SHA-256")
+        return normalized
+
+    @field_validator(
+        "requested_release_policy_digest",
+        "pre_export_evaluation_policy_digest",
+        "scene_envelope_digest",
+        "scene_source_digest",
+        "scene_qid_digest",
+        "semantic_emission_digest",
+        "qid_owner_census_digest",
+        "atomic_run_digest",
+    )
+    @classmethod
+    def validate_atomic_prefixed_digest(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.lower()
+        if not normalized.startswith("sha256:") or not _is_sha256(normalized[7:]):
+            raise ValueError("quality receipt atomic digest must be prefixed SHA-256")
+        return normalized
+
+    @field_validator("quality_sidecar_sha256", "coverage_sidecar_sha256")
+    @classmethod
+    def validate_sidecar_sha256(cls, value: str) -> str:
+        normalized = value.lower()
+        if not _is_sha256(normalized):
+            raise ValueError("quality receipt sidecar binding must be SHA-256")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_release_receipt(self) -> "ExportQualityReceiptBinding":
+        self.release_profile = self.release_profile.strip()
+        if self.requested_release_profile is not None:
+            self.requested_release_profile = self.requested_release_profile.strip()
+        if self.pre_export_evaluation_profile is not None:
+            self.pre_export_evaluation_profile = (
+                self.pre_export_evaluation_profile.strip()
+            )
+        normalized = self.release_profile.lower().replace("-", "_")
+        if normalized in {"release", "strict", "production", "release_strict"} and not self.gate_passed:
+            raise ValueError("release export requires a passed generation quality receipt")
+        if self.schema_version.endswith("/v2"):
+            required = (
+                self.requested_release_profile,
+                self.pre_export_evaluation_profile,
+                self.requested_release_policy_digest,
+                self.pre_export_evaluation_policy_digest,
+                self.scene_envelope_digest,
+                self.scene_source_digest,
+                self.scene_qid_digest,
+                self.semantic_emission_digest,
+                self.qid_owner_census_digest,
+                self.atomic_run_digest,
+            )
+            if any(value is None for value in required):
+                raise ValueError("quality receipt atomic run binding is incomplete")
+            if self.requested_release_profile != self.release_profile:
+                raise ValueError("quality receipt requested release profile is inconsistent")
+            payload = {
+                "schemaVersion": self.schema_version,
+                "receiptDigest": self.receipt_digest,
+                "generationAttemptId": self.generation_attempt_id,
+                "generationRevision": self.generation_revision,
+                "requestedReleaseProfile": self.requested_release_profile,
+                "preExportEvaluationProfile": self.pre_export_evaluation_profile,
+                "requestedReleasePolicyDigest": self.requested_release_policy_digest,
+                "preExportEvaluationPolicyDigest": self.pre_export_evaluation_policy_digest,
+                "sceneEnvelopeDigest": self.scene_envelope_digest,
+                "sceneSourceDigest": self.scene_source_digest,
+                "sceneQidDigest": self.scene_qid_digest,
+                "semanticEmissionDigest": self.semantic_emission_digest,
+                "qidOwnerCensusDigest": self.qid_owner_census_digest,
+                "gatePassed": self.gate_passed,
+                "exportBinding": self.export_binding.model_dump(mode="json"),
+                "qualitySidecarSha256": self.quality_sidecar_sha256,
+                "coverageSidecarSha256": self.coverage_sidecar_sha256,
+            }
+            expected = "sha256:" + sha256(
+                json.dumps(
+                    payload,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    ensure_ascii=False,
+                ).encode("utf-8")
+            ).hexdigest()
+            if self.atomic_run_digest != expected:
+                raise ValueError("quality receipt atomic run digest is inconsistent")
+        return self
+
+
 class ExportPowerPointChartReadback(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid")
 
     slide_number: int = PydanticField(ge=1, le=100)
     element_id: str = PydanticField(min_length=1, max_length=128)
     chart: dict[str, Any]
+
+
+class ExportFontPreflightEvidence(BaseModel):
+    """Fail-closed OOXML/PowerPoint font evidence for native CJK text."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid")
+
+    status: Literal["not-required", "passed", "blocked"]
+    cjk_text_runs: int = PydanticField(ge=0)
+    declared_east_asian_typefaces: list[str] = PydanticField(
+        default_factory=list, max_length=256
+    )
+    missing_east_asian_typeface_runs: int = PydanticField(default=0, ge=0)
+    replacement_glyphs: int = PydanticField(default=0, ge=0)
+    embedded_font_files: int = PydanticField(default=0, ge=0)
+    embedding_required: bool = False
+    embedding_verified: bool = False
+    ooxml_readback_sha256: str
+
+    @field_validator("ooxml_readback_sha256")
+    @classmethod
+    def validate_ooxml_readback_sha256(cls, value: str) -> str:
+        normalized = value.lower()
+        if not _is_sha256(normalized):
+            raise ValueError("PowerPoint OOXML font readback digest is invalid")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_passed_preflight(self) -> "ExportFontPreflightEvidence":
+        if self.status == "not-required" and self.cjk_text_runs != 0:
+            raise ValueError("CJK text cannot bypass PowerPoint font preflight")
+        if self.status == "passed" and (
+            self.missing_east_asian_typeface_runs != 0
+            or self.replacement_glyphs != 0
+            or (
+                self.embedding_required
+                and (not self.embedding_verified or self.embedded_font_files == 0)
+            )
+        ):
+            raise ValueError("PowerPoint font preflight passed without complete evidence")
+        return self
 
 
 class ExportPowerPointQaEvidence(BaseModel):
@@ -228,6 +471,38 @@ class ExportPowerPointQaEvidence(BaseModel):
     slide_count: int | None = PydanticField(default=None, ge=1, le=100)
     typography_issues_gt_5pt: int = PydanticField(default=0, ge=0)
     typography_issues_gt_10pt: int = PydanticField(default=0, ge=0)
+    inspection_failures: int = PydanticField(default=0, ge=0)
+    observation_states: list[
+        Literal[
+            "first-open",
+            "save-copy",
+            "reopen",
+            "readback",
+            "observation-sealed",
+        ]
+    ] = PydanticField(default_factory=list, max_length=5)
+    dialog_watcher_status: Literal[
+        "not-requested",
+        "unavailable",
+        "armed",
+        "interrupted",
+        "stop-failed",
+        "sealed",
+    ] | None = None
+    dialog_watcher_armed_before_first_open: bool = False
+    owned_process_id: int | None = PydanticField(default=None, ge=1)
+    release_gate_failures: list[
+        Literal[
+            "watcher-unavailable",
+            "watcher-interrupted",
+            "watcher-stop-failed",
+            "repair-observation-required",
+            "repair-dialog-observed",
+            "readback-mismatch",
+            "semantic-binding-mismatch",
+            "observation-state-incomplete",
+        ]
+    ] = PydanticField(default_factory=list, max_length=16)
     native_text: int | None = PydanticField(default=None, ge=0)
     native_image: int | None = PydanticField(default=None, ge=0)
     native_shape: int | None = PydanticField(default=None, ge=0)
@@ -236,7 +511,21 @@ class ExportPowerPointQaEvidence(BaseModel):
     native_image_crop: int | None = PydanticField(default=None, ge=0)
     native_qid_missing: int = PydanticField(default=0, ge=0)
     native_qid_ghosting: int = PydanticField(default=0, ge=0)
+    qid_owner_mismatches: int = PydanticField(default=0, ge=0)
+    geometry_contract_digest: str | None = None
+    geometry_contract_mismatches: int = PydanticField(default=0, ge=0)
     backplate_collisions: int = PydanticField(default=0, ge=0)
+    font_preflight: ExportFontPreflightEvidence | None = None
+
+    @field_validator("geometry_contract_digest")
+    @classmethod
+    def validate_geometry_contract_digest(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.lower()
+        if not normalized.startswith("sha256:") or not _is_sha256(normalized[7:]):
+            raise ValueError("PowerPoint geometry contract digest must be SHA-256")
+        return normalized
     first_open_chart_readback: list[ExportPowerPointChartReadback] = PydanticField(
         default_factory=list, max_length=1024
     )
@@ -289,6 +578,12 @@ class ExportPowerPointQaEvidence(BaseModel):
             and self.typography_issues_gt_10pt == 0
         ):
             raise ValueError("PowerPoint visual parity requires COM reopen/render/readback evidence")
+        if (
+            self.status == "passed"
+            and self.font_preflight is not None
+            and self.font_preflight.status == "blocked"
+        ):
+            raise ValueError("PowerPoint QA cannot pass with blocked font preflight")
         if self.platform == "unsupported" and self.status not in {
             "preflight",
             "not-verified",
@@ -578,6 +873,143 @@ class PresentationExportCoverageManifest(BaseModel):
         return self
 
 
+def _quality_non_negative_count(value: object, *, required: bool = False) -> int | None:
+    if value is None and not required:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError("export quality and coverage counts are inconsistent")
+    return value
+
+
+def _compare_quality_coverage_counts(
+    quality: dict[str, Any],
+    coverage: ExportCoverageCounts,
+) -> None:
+    for quality_key, coverage_field in (
+        ("nativeText", "native_text"),
+        ("nativeImage", "native_image"),
+        ("nativeShape", "native_shape"),
+        ("nativeTable", "native_table"),
+        ("nativeChart", "native_chart"),
+        ("rasterRemaining", "raster_remaining"),
+    ):
+        observed = _quality_non_negative_count(quality.get(quality_key))
+        if observed is not None and observed != getattr(coverage, coverage_field):
+            raise ValueError("export quality and coverage counts are inconsistent")
+
+
+def validate_export_quality_coverage_consistency(
+    quality: dict[str, Any],
+    coverage: PresentationExportCoverageManifest,
+    *,
+    require_release: bool = False,
+    minimum_native_ratio: float = 0.70,
+) -> ExportNativeCoverageEvidence | None:
+    """Validate both sidecars before publication or attempt terminalization."""
+
+    if quality.get("totalSlides") is not None and (
+        _quality_non_negative_count(quality.get("totalSlides"), required=True)
+        != coverage.total_slides
+    ):
+        raise ValueError("export quality and coverage counts are inconsistent")
+    for quality_key, coverage_value in (
+        ("nativeTextElements", coverage.native_text),
+        ("nativeImageElements", coverage.native_image),
+        ("nativeShapeElements", coverage.native_shape),
+        ("nativeTableElements", coverage.native_table),
+        ("nativeChartElements", coverage.native_chart),
+        ("rasterFallbackElements", coverage.raster_remaining),
+    ):
+        observed = _quality_non_negative_count(quality.get(quality_key))
+        if observed is not None and observed != coverage_value:
+            raise ValueError("export quality and coverage counts are inconsistent")
+    logical = quality.get("logicalCoverage")
+    if logical is not None:
+        if not isinstance(logical, dict) or coverage.logical_coverage is None:
+            raise ValueError("export quality logical coverage is inconsistent")
+        _compare_quality_coverage_counts(logical, coverage.logical_coverage)
+    readback = quality.get("ooxmlReadback")
+    if readback is not None:
+        if not isinstance(readback, dict) or coverage.ooxml_readback is None:
+            raise ValueError("export quality OOXML readback is inconsistent")
+        _compare_quality_coverage_counts(readback, coverage.ooxml_readback)
+        if readback.get("status") != coverage.ooxml_readback.status:
+            raise ValueError("export quality OOXML readback is inconsistent")
+    quality_slides = quality.get("slides")
+    if quality_slides is not None:
+        if not isinstance(quality_slides, list) or len(quality_slides) != len(
+            coverage.slides
+        ):
+            raise ValueError("export quality slide coverage is inconsistent")
+        by_slide: dict[int, dict[str, Any]] = {}
+        for item in quality_slides:
+            if not isinstance(item, dict):
+                raise ValueError("export quality slide coverage is inconsistent")
+            number = _quality_non_negative_count(item.get("slideNumber"), required=True)
+            if number is None or number in by_slide:
+                raise ValueError("export quality slide coverage is inconsistent")
+            by_slide[number] = item
+        for coverage_slide in coverage.slides:
+            item = by_slide.get(coverage_slide.slide_number)
+            if item is None:
+                raise ValueError("export quality slide coverage is inconsistent")
+            for quality_key, coverage_value in (
+                ("nativeTextElements", coverage_slide.native_text),
+                ("nativeImageElements", coverage_slide.native_image),
+                ("nativeShapeElements", coverage_slide.native_shape),
+                ("nativeTableElements", coverage_slide.native_table),
+                ("nativeChartElements", coverage_slide.native_chart),
+                ("rasterFallbackElements", coverage_slide.raster_remaining),
+            ):
+                observed = _quality_non_negative_count(item.get(quality_key))
+                if observed is not None and observed != coverage_value:
+                    raise ValueError("export quality slide coverage is inconsistent")
+            slide_logical = item.get("logicalCoverage")
+            if slide_logical is not None:
+                if not isinstance(slide_logical, dict) or coverage_slide.logical_coverage is None:
+                    raise ValueError("export quality slide coverage is inconsistent")
+                _compare_quality_coverage_counts(
+                    slide_logical,
+                    coverage_slide.logical_coverage,
+                )
+            slide_readback = item.get("ooxmlReadback")
+            if slide_readback is not None:
+                if not isinstance(slide_readback, dict) or coverage_slide.ooxml_readback is None:
+                    raise ValueError("export quality slide coverage is inconsistent")
+                _compare_quality_coverage_counts(
+                    slide_readback,
+                    coverage_slide.ooxml_readback,
+                )
+                if slide_readback.get("status") != coverage_slide.ooxml_readback.status:
+                    raise ValueError("export quality slide coverage is inconsistent")
+    native_payload = quality.get("nativeCoverage")
+    if native_payload is None:
+        if require_release:
+            raise ValueError("release export requires native coverage evidence")
+        return None
+    native = ExportNativeCoverageEvidence.model_validate(native_payload)
+    coverage_native = (
+        coverage.native_text
+        + coverage.native_image
+        + coverage.native_shape
+        + coverage.native_table
+        + coverage.native_chart
+    )
+    if (
+        native.native_element_count != coverage_native
+        or len(native.raster_fallbacks) != coverage.raster_remaining
+    ):
+        raise ValueError("export native coverage and coverage manifest are inconsistent")
+    if require_release and (
+        native.status != "passed"
+        or native.ratio is None
+        or native.ratio < minimum_native_ratio
+        or any(not item.explicit for item in native.raster_fallbacks)
+    ):
+        raise ValueError("release export native coverage gate failed")
+    return native
+
+
 def _canonical_sidecar_sha256(value: dict[str, Any]) -> str:
     return sha256(
         json.dumps(
@@ -588,6 +1020,51 @@ def _canonical_sidecar_sha256(value: dict[str, Any]) -> str:
             sort_keys=True,
         ).encode("utf-8")
     ).hexdigest()
+
+
+def _quality_qid_owner_census_digest(quality: dict[str, Any]) -> str:
+    owners: list[list[object]] = []
+    seen: set[tuple[int, str]] = set()
+    slides = quality.get("slides")
+    if not isinstance(slides, list):
+        raise ValueError("quality receipt QID owner census is missing")
+    for slide in slides:
+        if not isinstance(slide, dict):
+            raise ValueError("quality receipt QID owner census is invalid")
+        slide_number = slide.get("slideNumber")
+        coverage = slide.get("qidCoverage")
+        if (
+            isinstance(slide_number, bool)
+            or not isinstance(slide_number, int)
+            or not isinstance(coverage, list)
+        ):
+            raise ValueError("quality receipt QID owner census is invalid")
+        for item in coverage:
+            if not isinstance(item, dict):
+                raise ValueError("quality receipt QID owner census is invalid")
+            element_id = item.get("elementId")
+            owner = item.get("logical")
+            if (
+                not isinstance(element_id, str)
+                or not element_id.strip()
+                or owner not in {"native", "raster"}
+                or item.get("ooxml") != "present"
+            ):
+                raise ValueError("quality receipt QID owner census is invalid")
+            identity = (slide_number, element_id)
+            if identity in seen:
+                raise ValueError("quality receipt QID owner census has duplicate owners")
+            seen.add(identity)
+            owners.append([slide_number, element_id, owner])
+    if not owners:
+        raise ValueError("quality receipt QID owner census is missing")
+    owners.sort(key=lambda item: (int(item[0]), str(item[1]), str(item[2])))
+    return "sha256:" + _canonical_sidecar_sha256(
+        {
+            "schemaVersion": "presenton.qid-owner-census/v1",
+            "owners": owners,
+        }
+    )
 
 
 def _without_default_native_crop(value: Any) -> Any:
@@ -669,6 +1146,7 @@ class PresentationExportAttemptProvenance(BaseModel):
     atomic_binding: ExportAtomicBinding | None = None
     powerpoint_qa: ExportPowerPointQaEvidence | None = None
     visual_parity: ExportVisualParityEvidence | None = None
+    quality_receipt_binding: ExportQualityReceiptBinding | None = None
 
     @field_validator("adapter_chain")
     @classmethod
@@ -805,6 +1283,92 @@ class PresentationExportAttemptProvenance(BaseModel):
                 or evidence.coverage_sidecar_sha256 not in coverage_digests
             ):
                 raise ValueError("visual parity sidecar digest is inconsistent")
+        if self.quality_sidecar is not None and self.coverage_manifest is not None:
+            validate_export_quality_coverage_consistency(
+                self.quality_sidecar,
+                self.coverage_manifest,
+            )
+        if self.quality_receipt_binding is not None:
+            binding = self.atomic_binding
+            receipt = self.quality_receipt_binding
+            if (
+                binding is None
+                or self.quality_sidecar is None
+                or self.coverage_manifest is None
+                or receipt.export_binding != binding
+                or receipt.quality_sidecar_sha256
+                != _canonical_sidecar_sha256(self.quality_sidecar)
+                or receipt.coverage_sidecar_sha256
+                != _canonical_sidecar_sha256(
+                    self.coverage_manifest.model_dump(mode="json", by_alias=True)
+                )
+            ):
+                raise ValueError("quality receipt export binding is inconsistent")
+            if receipt.schema_version.endswith("/v2") and (
+                receipt.semantic_emission_digest
+                != "sha256:" + binding.canonical_source_sha256
+                or receipt.qid_owner_census_digest
+                != _quality_qid_owner_census_digest(self.quality_sidecar)
+            ):
+                raise ValueError("quality receipt semantic/QID binding is inconsistent")
+            release_profile = receipt.release_profile.lower().replace("-", "_")
+            release_required = release_profile in {
+                "release",
+                "strict",
+                "production",
+                "release_strict",
+            }
+            if release_required:
+                font_preflight = (
+                    self.powerpoint_qa.font_preflight
+                    if self.powerpoint_qa is not None
+                    else None
+                )
+                try:
+                    sidecar_powerpoint_qa = ExportPowerPointQaEvidence.model_validate(
+                        self.quality_sidecar.get("powerPointQa")
+                    )
+                except ValueError:
+                    sidecar_powerpoint_qa = None
+                if (
+                    self.powerpoint_qa is None
+                    or self.powerpoint_qa.status != "passed"
+                    or sidecar_powerpoint_qa != self.powerpoint_qa
+                    or self.powerpoint_qa.observation_states
+                    != [
+                        "first-open",
+                        "save-copy",
+                        "reopen",
+                        "readback",
+                        "observation-sealed",
+                    ]
+                    or self.powerpoint_qa.dialog_watcher_status != "sealed"
+                    or not self.powerpoint_qa.dialog_watcher_armed_before_first_open
+                    or self.powerpoint_qa.owned_process_id is None
+                    or self.powerpoint_qa.repair_dialogs != 0
+                    or self.powerpoint_qa.readback_match is not True
+                    or self.powerpoint_qa.semantic_payload_binding != "passed"
+                    or self.powerpoint_qa.qid_owner_mismatches != 0
+                    or bool(self.powerpoint_qa.release_gate_failures)
+                    or font_preflight is None
+                    or font_preflight.status not in {"not-required", "passed"}
+                    or (
+                        font_preflight.cjk_text_runs > 0
+                        and (
+                            not font_preflight.embedding_verified
+                            or font_preflight.embedded_font_files == 0
+                        )
+                    )
+                ):
+                    raise ValueError(
+                        "release quality receipt requires bound CJK/font PowerPoint QA"
+                    )
+            validate_export_quality_coverage_consistency(
+                self.quality_sidecar,
+                self.coverage_manifest,
+                require_release=release_required,
+                minimum_native_ratio=0.70,
+            )
         return self
 
 

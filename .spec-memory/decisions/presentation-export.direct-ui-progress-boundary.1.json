@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "key": "presentation-export.direct-ui-progress-boundary",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Direct Authored export shows indeterminate request, success, and failure UI without fabricating workspace progress or operation identity.",
+  "scope": [
+    "presentation-export",
+    "nextjs-ui"
+  ],
+  "invariants": [
+    "Workspace operationId remains distinct from exportAttemptId.",
+    "Direct export never reports numeric progress without a real workspace operation."
+  ],
+  "forbidden": [
+    "Alias exportAttemptId as operationId.",
+    "Fabricate progress or heartbeat for a direct export."
+  ],
+  "evidence": [
+    "servers/nextjs/app/(presentation-generator)/presentation/components/PresentationHeader.tsx",
+    "servers/nextjs/app/(presentation-generator)/presentation/components/PresentationHeader.cy.tsx"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-29T06:34:29.1828815+00:00"
+}

@@ -208,6 +208,7 @@ function promotedElementContentKey(
         style: run.style,
         script: run.script,
         breakKind: run.breakKind,
+        lineIndex: run.lineIndex,
       })),
       containerShape: element.text.containerShape
         ? {
@@ -461,5 +462,74 @@ export async function renderAuthoredBackplate(
     appliedPromotedElementIds: promoted.filter((id) => applied.includes(id)),
     fallbackElementIds: promoted.filter((id) => rejected.includes(id)),
     capturePngSha256: `sha256:${createHash("sha256").update(screenshotPng).digest("hex")}`,
+  };
+}
+
+export interface AuthoredHybridRasterPaintBandRenderResult {
+  readonly rasterPng: Buffer;
+  readonly elementIds: readonly string[];
+  readonly capturePngSha256: string;
+}
+
+/** Capture one transparent Chromium paint band without changing layout. */
+export async function renderAuthoredRasterPaintBand(
+  html: string,
+  slide: AuthoredHybridSlideV1,
+  elementIds: readonly string[],
+  options: AuthoredHybridExtractionOptions = {},
+): Promise<AuthoredHybridRasterPaintBandRenderResult> {
+  const preflight = preflightTrustedSelfContainedAuthoredHtml(html);
+  if (!preflight.ok) {
+    throw new Error(`Authored renderer preflight rejected HTML: ${preflight.reason ?? "unknown"}.`);
+  }
+  assertAuthoredHybridSlide(slide);
+  if (authoredHtmlSha256(html) !== slide.source.htmlSha256) {
+    throw new Error("Authored hybrid paint band source fingerprint mismatch.");
+  }
+  if (!slide.elements.every((element) => element.identityAuthority === "declared-qid")) {
+    throw new Error("Authored hybrid paint bands require declared QID identity.");
+  }
+  const requested = [...elementIds];
+  const known = new Set(slide.elements.map((element) => element.id));
+  if (
+    new Set(requested).size !== requested.length ||
+    requested.some((id) => !known.has(id))
+  ) {
+    throw new Error("Authored hybrid paint band QIDs must be unique declared owners.");
+  }
+  const baseUrl = normalizeAuthoredHybridBaseUrl(options.baseUrl);
+  if ((baseUrl ?? null) !== slide.source.baseUrl) {
+    throw new Error("Authored hybrid paint band baseUrl mismatch.");
+  }
+  const domCompletionToken = randomUUID();
+  const instrumented = instrumentAuthoredHtml(html, {
+    baseUrl,
+    captureMode: "hybrid-paint-band",
+    paintBandElementIds: requested,
+    declaredElementIds: slide.elements.map((element) => element.id),
+    completionToken: domCompletionToken,
+  });
+  const { capture, observation } = await captureWithFixedViewport(
+    instrumented,
+    true,
+    domCompletionToken,
+    options,
+  );
+  if (!capture.screenshotPng) {
+    throw new Error("Chrome did not return the authored hybrid paint band.");
+  }
+  if (
+    JSON.stringify(observation.appliedPaintBandElementIds ?? []) !==
+      JSON.stringify(requested) ||
+    JSON.stringify(buildAuthoredHybridSlide(html, observation, baseUrl).elements) !==
+      JSON.stringify(slide.elements)
+  ) {
+    throw new Error("Authored hybrid paint band observation drifted from its source contract.");
+  }
+  const rasterPng = await normalizeBackplatePng(capture.screenshotPng);
+  return {
+    rasterPng,
+    elementIds: requested,
+    capturePngSha256: `sha256:${createHash("sha256").update(rasterPng).digest("hex")}`,
   };
 }

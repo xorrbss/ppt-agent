@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.quality-outline-timing-boundary",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "QualityReceipt outline timing starts before upstream outline provider work and includes the complete outline LLM and deck-plan boundary.",
+  "scope": [
+    "authored",
+    "quality-receipt",
+    "performance"
+  ],
+  "invariants": [
+    "Start the outline clock before provider work.",
+    "Direct internal calls may fall back to a local monotonic start."
+  ],
+  "forbidden": [
+    "Do not report only the downstream deck-plan time as outline latency."
+  ],
+  "evidence": [
+    "servers/fastapi/services/presentation_generation_operation_handler.py",
+    "servers/fastapi/services/authored_presentation_generation.py",
+    "servers/fastapi/tests/unit/test_authored_generation_performance_contract.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-29T06:45:28.9874673+00:00"
+}

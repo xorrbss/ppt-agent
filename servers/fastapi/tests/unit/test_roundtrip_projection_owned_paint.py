@@ -108,7 +108,7 @@ class _TrackingSemaphore:
 
 
 @pytest.mark.parametrize("reuse_enabled", [False, True])
-def test_reuse_off_and_failed_reuse_fallback_enter_process_wide_limit(
+def test_failed_reuse_is_not_hidden_by_a_one_shot_retry(
     monkeypatch: pytest.MonkeyPatch, reuse_enabled: bool
 ) -> None:
     tracker = _TrackingSemaphore()
@@ -128,15 +128,14 @@ def test_reuse_off_and_failed_reuse_fallback_enter_process_wide_limit(
     monkeypatch.setattr(slide_capture, "_run_chrome_screenshot", fake_run)
     monkeypatch.setattr(slide_capture, "_render_html_in_reusable_chrome", failed_reuse)
 
-    png = asyncio.run(
-        slide_capture._render_html_to_png_uncached(
-            '<html><body><div data-qid="bounded">bounded</div></body></html>', timeout=2
-        )
-    )
-
-    assert png.startswith(b"\x89PNG")
+    source = '<html><body><div data-qid="bounded">bounded</div></body></html>'
+    if reuse_enabled:
+        with pytest.raises(RuntimeError, match="reusable authored Chrome render failed"):
+            asyncio.run(slide_capture._render_html_to_png_uncached(source, timeout=2))
+        assert tracker.entries == 1
+    else:
+        png = asyncio.run(slide_capture._render_html_to_png_uncached(source, timeout=2))
+        assert png.startswith(b"\x89PNG")
+        assert tracker.entries == 1
     assert tracker.active == 0
     assert tracker.maximum == 1
-    # reuse-off enters once in the subprocess path; failed reuse enters once for
-    # CDP and then once more (sequentially) for the one-shot fallback.
-    assert tracker.entries == (2 if reuse_enabled else 1)

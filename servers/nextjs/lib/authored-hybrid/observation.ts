@@ -19,6 +19,8 @@ export interface BrowserTextRunObservation {
   style: AuthoredHybridTextStyle;
   script?: AuthoredHybridTextScript;
   breakKind?: "soft" | "line" | "paragraph";
+  /** Zero-based Chromium visual-line owner for this run. */
+  lineIndex?: number;
 }
 
 export interface BrowserTextLayoutObservation {
@@ -117,7 +119,7 @@ export interface BrowserRenderReadinessObservation {
   mutationFreeWindowMs: number;
   continuousPaintEpochs: number;
   captureEpoch: number;
-  captureMode: "observation" | "hybrid-backplate" | "fidelity";
+  captureMode: "observation" | "hybrid-backplate" | "hybrid-paint-band" | "fidelity";
 }
 
 export interface BrowserAuthoredHybridObservation {
@@ -130,5 +132,7 @@ export interface BrowserAuthoredHybridObservation {
   warnings: string[];
   appliedPromotedElementIds: string[];
   rejectedPromotedElementIds: string[];
+  /** Exact declared QIDs left visible in an isolated transparent paint band. */
+  appliedPaintBandElementIds?: string[];
   renderReadiness?: BrowserRenderReadinessObservation;
 }

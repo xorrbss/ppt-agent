@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.performance-matrix-control",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Renderer metrics expose metadata-only cache and pool snapshots; controlled-load records before-after deltas and never treats a cold label alone as proof.",
+  "scope": [
+    "authored",
+    "performance",
+    "release"
+  ],
+  "invariants": [
+    "Public renderer telemetry contains counters, versions, and Chrome digest only; no slide content or paths.",
+    "Controlled-load records before-after cache deltas and rejects renderer identity drift.",
+    "Cold receipt validation remains distinct from observed cache-state proof."
+  ],
+  "forbidden": [
+    "Do not expose HTML, QIDs, asset URLs, profiles, or filesystem paths in renderer metrics.",
+    "Do not claim cold state from a receipt label alone."
+  ],
+  "evidence": [
+    "servers/fastapi/utils/slide_capture.py",
+    "servers/fastapi/api/main.py",
+    "scripts/authored-vnext-controlled-load.mjs",
+    "servers/fastapi/tests/unit/test_workspace_metrics_exporter.py"
+  ],
+  "supersedes": "authored.performance-matrix-control@1",
+  "recordedAt": "2026-08-29T07:53:31.0463425+00:00"
+}

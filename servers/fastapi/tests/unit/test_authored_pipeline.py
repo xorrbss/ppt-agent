@@ -199,6 +199,18 @@ def test_authored_html_validation_rejects_unsafe_meta_and_attributes(unsafe_html
         validate_authored_slide_html(unsafe_html)
 
 
+def test_authored_html_validation_allows_server_stamped_source_block_identity():
+    html = (
+        "<!doctype html><html><head><meta charset='utf-8'></head><body>"
+        '<p data-qid="source-copy" data-source-block-id="source-slide:1:text:2">'
+        "원문</p></body></html>"
+    )
+
+    validated = validate_authored_slide_html(html)
+
+    assert 'data-source-block-id="source-slide:1:text:2"' in validated
+
+
 def test_finalized_illustration_html_removes_prompt_only():
     html = (
         "<!doctype html><html><head><meta charset='utf-8'></head><body>"
@@ -320,12 +332,12 @@ def test_author_deck_retries_semantic_failure_with_bounded_correction(monkeypatc
     assert "data-qid" in hints[1]
 
 
-def test_author_deck_allows_third_bounded_semantic_attempt(monkeypatch):
-    hints = []
+def test_author_deck_stops_after_one_bounded_semantic_correction(monkeypatch):
+    calls = []
 
     async def flaky(content, ds, brand, role, index, n, **kwargs):
-        hints.append(kwargs.get("correction_hint"))
-        if len(hints) < 3:
+        calls.append(kwargs)
+        if len(calls) == 1:
             raise ValueError("authored_semantic_qid_missing:section")
         return _VALID
 
@@ -333,9 +345,11 @@ def test_author_deck_allows_third_bounded_semantic_attempt(monkeypatch):
     htmls = _run(author_deck(_outline(1), _brand())).htmls
 
     assert htmls == [_VALID]
-    assert len(hints) == 3
-    assert hints[0] is None
-    assert all("first rejected element was <section>" in hint for hint in hints[1:])
+    assert len(calls) == 2
+    assert calls[0].get("correction_hint") is None
+    assert "first rejected element was <section>" in calls[1]["correction_hint"]
+    assert [call["receipt_retry_class"] for call in calls] == ["initial", "recovery"]
+    assert [call["receipt_attempt_ordinal"] for call in calls] == [1, 2]
 
 
 @pytest.mark.parametrize(
@@ -393,7 +407,7 @@ def test_author_deck_retries_local_renderer_failure_with_rejected_html(monkeypat
     assert "pseudo-element" in calls[1]["correction_hint"]
 
 
-def test_author_deck_fails_closed_after_three_local_renderer_attempts(monkeypatch):
+def test_author_deck_fails_closed_after_one_local_renderer_correction(monkeypatch):
     rejected_html = (
         "<!doctype html><html><head><style>.bad{color red}</style></head>"
         "<body><section data-qid='slide.root'>x</section></body></html>"
@@ -415,9 +429,11 @@ def test_author_deck_fails_closed_after_three_local_renderer_attempts(monkeypatc
             )
         )
 
-    assert len(calls) == 3
+    assert len(calls) == 2
     assert calls[0].get("rejected_html") is None
-    assert all(call["rejected_html"] == rejected_html for call in calls[1:])
+    assert calls[1]["rejected_html"] == rejected_html
+    assert [call["receipt_retry_class"] for call in calls] == ["initial", "recovery"]
+    assert [call["receipt_attempt_ordinal"] for call in calls] == [1, 2]
 
 
 def test_author_image_retry_names_the_exact_offered_asset_id():
@@ -430,19 +446,19 @@ def test_author_image_retry_names_the_exact_offered_asset_id():
     assert "THE_OFFERED_ID" not in hint
 
 
-def test_author_deck_backs_off_and_retries_transient_provider_failures(monkeypatch):
+def test_author_deck_transient_failure_uses_one_explicit_recovery_without_backoff(
+    monkeypatch,
+):
     calls = {"n": 0}
     delays = []
-    rejected_htmls = []
+    attempt_metadata = []
 
     async def flaky(content, ds, brand, role, index, n, **kwargs):
         calls["n"] += 1
-        rejected_htmls.append(kwargs.get("rejected_html"))
-        if calls["n"] < 4:
-            raise RuntimeError(
-                "Our servers are currently overloaded: incomplete chunked read"
-            )
-        return _VALID
+        attempt_metadata.append(kwargs)
+        raise RuntimeError(
+            "Our servers are currently overloaded: incomplete chunked read"
+        )
 
     async def record_sleep(delay):
         delays.append(delay)
@@ -452,10 +468,15 @@ def test_author_deck_backs_off_and_retries_transient_provider_failures(monkeypat
 
     htmls = _run(author_deck(_outline(1), _brand())).htmls
 
-    assert htmls == [_VALID]
-    assert calls["n"] == 4
-    assert delays == [1.5, 3.0, 6.0]
-    assert rejected_htmls == [None] * 4
+    assert is_fallback_slide_html(htmls[0])
+    assert calls["n"] == 2
+    assert delays == []
+    assert [call.get("rejected_html") for call in attempt_metadata] == [None, None]
+    assert [call["receipt_retry_class"] for call in attempt_metadata] == [
+        "initial",
+        "recovery",
+    ]
+    assert [call["receipt_attempt_ordinal"] for call in attempt_metadata] == [1, 2]
 
 
 def test_author_deck_keeps_two_attempt_limit_for_permanent_failures(monkeypatch):

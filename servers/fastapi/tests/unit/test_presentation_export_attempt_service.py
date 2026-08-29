@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
@@ -33,6 +34,10 @@ from services.presentation_export_attempt_service import (
     sha256_canonical_json,
     terminalize_export_attempt_failed,
     terminalize_export_attempt_succeeded,
+)
+from services.authored_quality_receipt_v2 import (
+    QualityReceiptLedger,
+    create_quality_receipt_v2,
 )
 from services.presentation_export_direct_attempt_service import (
     _visual_parity_status_from_powerpoint_qa,
@@ -68,12 +73,14 @@ def test_powerpoint_qa_does_not_self_promote_visual_parity() -> None:
             "repairDialogs": 0,
             "renderedPngSha256": ["a" * 64],
             "slideCount": 1,
+            "inspectionFailures": 0,
         }
     )
     failed = passed.model_copy(update={"status": "failed"})
 
     assert _visual_parity_status_from_powerpoint_qa(passed) == "not-verified"
     assert _visual_parity_status_from_powerpoint_qa(failed) == "failed"
+    assert passed.inspection_failures == 0
 
 
 def test_passed_powerpoint_qa_allows_truthful_unverified_visual_parity() -> None:
@@ -324,6 +331,8 @@ def _presentation(*, presentation_id: uuid.UUID | None = None) -> PresentationMo
         language="en",
         revision=4,
         title="Stable",
+        mode="authored",
+        theme={"mode": "authored"},
     )
 
 
@@ -411,6 +420,49 @@ def test_general_analysis_collects_persisted_assets_and_rejects_missing_digest()
             persisted_slide_payloads=(
                 {"content": {"image": {"asset_id": asset_id}}},
             ),
+        )
+
+
+def test_hybrid_analysis_accepts_only_digest_sealed_scene_manifest_assets() -> None:
+    content = b"canonical-scene-image"
+    digest = sha256(content).hexdigest()
+    asset_id = "asset:431cedf125e44b64a48b2351"
+    manifest = {
+        "assetId": asset_id,
+        "assetDigest": f"sha256:{digest}",
+        "mediaType": "image/png",
+        "storageReference": (
+            "data:image/png;base64," + base64.b64encode(content).decode("ascii")
+        ),
+        "sizeBytes": len(content),
+    }
+    theme_payload = {"presentationTheme": {"scene": {"assetManifest": [manifest]}}}
+    slide_payload = {
+        "content": {
+            "elements": [
+                {
+                    "kind": "image",
+                    "assetId": asset_id,
+                    "assetDigest": f"sha256:{digest}",
+                }
+            ]
+        }
+    }
+
+    analysis = analyze_presentation_export_capabilities(
+        export_format="pptx",
+        persisted_slide_payloads=(theme_payload, slide_payload),
+    )
+    assert analysis.asset_digests == {asset_id: digest}
+
+    manifest["storageReference"] = "https://example.invalid/image.png"
+    with pytest.raises(
+        PresentationExportContractError,
+        match="presentation_export_scene_asset_manifest_invalid",
+    ):
+        analyze_presentation_export_capabilities(
+            export_format="pptx",
+            persisted_slide_payloads=(theme_payload, slide_payload),
         )
 
 
@@ -591,6 +643,51 @@ def test_complete_direct_hybrid_accepts_exact_bounded_cjk_coverage_contract(
                     )
                 )
                 assert presentation is not None
+                scene_receipt = {
+                    "schemaVersion": "authored-deck-scene-envelope/v1",
+                    "sceneDigest": "sha256:" + ("6" * 64),
+                    "sourceDigest": "sha256:" + ("7" * 64),
+                    "qidDigest": "sha256:" + ("8" * 64),
+                    "slideSceneDigests": ["sha256:" + ("a" * 64)],
+                    "slideRevisions": [1],
+                }
+                generation_receipt = create_quality_receipt_v2(
+                    QualityReceiptLedger(),
+                    attempt_id="generation-attempt-1",
+                    revision=7,
+                    ledger_digest="sha256:" + ("1" * 64),
+                    deck_html_digest="sha256:" + ("2" * 64),
+                    evidence={
+                        "safety": {"status": "passed"},
+                        "capacity": {
+                            "browserObserved": True,
+                            "checks": {
+                                name: True
+                                for name in (
+                                    "text",
+                                    "title",
+                                    "body",
+                                    "font",
+                                    "qid",
+                                    "image",
+                                )
+                            },
+                        },
+                        "sourceReadback": {
+                            "required": False,
+                            "status": "not_applicable",
+                        },
+                    },
+                    requested_release_profile="release",
+                    pre_export_evaluation_profile="default",
+                    scene_envelope=scene_receipt,
+                )
+                presentation.theme = {
+                    "authoredQualityGate": {
+                        **generation_receipt.to_dict(),
+                        "sceneEnvelope": scene_receipt,
+                    }
+                }
                 canonical = build_export_source_snapshot_sha256(presentation, slides)
                 attempt_id = uuid.uuid4()
                 renderer = "b" * 64
@@ -671,7 +768,24 @@ def test_complete_direct_hybrid_accepts_exact_bounded_cjk_coverage_contract(
             }
             quality = {
                 "schemaVersion": "presenton.export-quality/v1",
+                "mode": "hybrid",
                 "status": "fully-editable",
+                "totalSlides": 1,
+                "nativeTextElements": 1,
+                "nativeImageElements": 0,
+                "nativeShapeElements": 0,
+                "nativeTableElements": 0,
+                "nativeChartElements": 0,
+                "rasterFallbackElements": 0,
+                "logicalCoverage": counts,
+                "ooxmlReadback": {"status": "passed", **counts},
+                "nativeCoverage": {
+                    "status": "passed",
+                    "eligibleElementCount": 1,
+                    "nativeElementCount": 1,
+                    "ratio": 1.0,
+                    "rasterFallbacks": [],
+                },
                 "exportAttemptId": str(attempt_id),
                 "atomicBinding": {
                     "presentationId": str(presentation_id),
@@ -680,7 +794,18 @@ def test_complete_direct_hybrid_accepts_exact_bounded_cjk_coverage_contract(
                     "rendererSourceDigest": renderer,
                     "pptxSha256": pptx_sha256,
                 },
-                "slides": [{"slideNumber": 1, "qidCoverage": []}],
+                "slides": [
+                    {
+                        "slideNumber": 1,
+                        "qidCoverage": [
+                            {
+                                "elementId": "s01-title",
+                                "logical": "native",
+                                "ooxml": "present",
+                            }
+                        ],
+                    }
+                ],
             }
 
             invalid_profile = {**coverage, "cjkCoverageProfileId": "unbounded"}
@@ -705,7 +830,19 @@ def test_complete_direct_hybrid_accepts_exact_bounded_cjk_coverage_contract(
                     "reopened": True,
                     "rendered": True,
                     "readback": True,
+                    "semanticPayloadBinding": "passed",
                     "repairDialogs": 0,
+                    "observationStates": [
+                        "first-open",
+                        "save-copy",
+                        "reopen",
+                        "readback",
+                        "observation-sealed",
+                    ],
+                    "dialogWatcherStatus": "sealed",
+                    "dialogWatcherArmedBeforeFirstOpen": True,
+                    "ownedProcessId": 4242,
+                    "readbackMatch": True,
                     "renderedPngSha256": ["f" * 64],
                     "slideCount": 1,
                     "typographyIssuesGt5Pt": 0,
@@ -716,7 +853,22 @@ def test_complete_direct_hybrid_accepts_exact_bounded_cjk_coverage_contract(
                     "nativeTable": 0,
                     "nativeChart": 0,
                     "nativeImageCrop": 0,
+                    "fontPreflight": {
+                        "status": "passed",
+                        "cjkTextRuns": 1,
+                        "declaredEastAsianTypefaces": ["Noto Sans KR"],
+                        "missingEastAsianTypefaceRuns": 0,
+                        "replacementGlyphs": 0,
+                        "embeddedFontFiles": 1,
+                        "embeddingRequired": True,
+                        "embeddingVerified": True,
+                        "ooxmlReadbackSha256": "a" * 64,
+                    },
                 }
+
+            async def bind_semantic(*_args, **_kwargs):
+                assert _kwargs["attempt"].state == "running"
+                return "sha256:" + ("e" * 64)
 
             monkeypatch.setattr(
                 direct_attempt_service,
@@ -738,6 +890,11 @@ def test_complete_direct_hybrid_accepts_exact_bounded_cjk_coverage_contract(
                 "trusted_powerpoint_qa",
                 trusted_qa,
             )
+            monkeypatch.setattr(
+                direct_attempt_service,
+                "bind_completed_semantic_export_attempt",
+                bind_semantic,
+            )
             async with maker() as session:
                 completed, finalized = await complete_direct_hybrid_export_attempt(
                     session,
@@ -757,6 +914,20 @@ def test_complete_direct_hybrid_accepts_exact_bounded_cjk_coverage_contract(
                 assert finalized["coverage"]["nativeTextPolicy"] == coverage[
                     "nativeTextPolicy"
                 ]
+                receipt_binding = completed.provenance["quality_receipt_binding"]
+                assert receipt_binding["receipt_digest"] == generation_receipt.receipt_digest
+                assert receipt_binding["generation_attempt_id"] == generation_receipt.attempt_id
+                assert receipt_binding["release_profile"] == "release"
+                assert receipt_binding["pre_export_evaluation_profile"] == "default"
+                assert receipt_binding["scene_envelope_digest"] == scene_receipt[
+                    "sceneDigest"
+                ]
+                assert receipt_binding["semantic_emission_digest"] == (
+                    "sha256:" + canonical
+                )
+                assert receipt_binding["qid_owner_census_digest"].startswith("sha256:")
+                assert receipt_binding["atomic_run_digest"].startswith("sha256:")
+                assert receipt_binding["export_binding"]["pptx_sha256"] == pptx_sha256
         finally:
             await engine.dispose()
 

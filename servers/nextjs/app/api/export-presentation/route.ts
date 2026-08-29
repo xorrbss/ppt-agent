@@ -27,6 +27,7 @@ import {
   PRESENTATION_SOURCE_SHA256,
   resolvePersistedExportStrategy,
 } from "@/lib/presentation-export-strategy";
+import { assertPresentationExportQualityCoverage } from "@/lib/presentation-export-quality";
 
 const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
 const MAX_PRESENTATION_RESPONSE_BYTES = 50 * 1024 * 1024;
@@ -84,7 +85,11 @@ async function postHybridAttempt(
   if (!response.ok) {
     throw new ExportPresentationRequestError(
       `${modeLabel} export attempt was rejected`,
-      response.status === 401 || response.status === 403 ? response.status : 502,
+      response.status === 401 ||
+        response.status === 403 ||
+        response.status === 409
+        ? response.status
+        : 502,
     );
   }
   if (response.status === 204) return null;
@@ -96,6 +101,18 @@ async function postHybridAttempt(
       502,
     );
   }
+}
+
+function persistedReleaseProfile(presentation: unknown): string {
+  if (!isRecord(presentation)) return "development";
+  const theme = isRecord(presentation.theme) ? presentation.theme : undefined;
+  const receipt = isRecord(theme?.authoredQualityGate)
+    ? theme.authoredQualityGate
+    : undefined;
+  return typeof receipt?.releaseProfile === "string" &&
+    receipt.releaseProfile.trim()
+    ? receipt.releaseProfile.trim()
+    : "development";
 }
 
 function readHybridAttemptBinding(
@@ -243,11 +260,11 @@ export async function POST(req: NextRequest) {
           exportAttemptId: routeOwnedAttempt.exportAttemptId,
           canonicalSourceDigest: routeOwnedAttempt.canonicalSourceDigest,
           // Keep workspace progress correlation independent from the durable
-          // export-attempt identity. FastAPI polls with its operation UUID.
-          operationId:
-            typeof body.operationId === "string" && body.operationId.trim()
-              ? body.operationId.trim()
-              : routeOwnedAttempt.exportAttemptId,
+          // export-attempt identity. Direct browser exports have no workspace
+          // operation and therefore intentionally expose no progress key.
+          ...(typeof body.operationId === "string" && body.operationId.trim()
+            ? { operationId: body.operationId.trim() }
+            : {}),
         };
       }
     }
@@ -344,6 +361,32 @@ export async function POST(req: NextRequest) {
           409,
         );
       }
+      try {
+        assertPresentationExportQualityCoverage(
+          exportResult.quality,
+          coverage,
+          persistedReleaseProfile(cachedPresentation),
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        throw new ExportPresentationRequestError(
+          message === "presentation_export_release_native_coverage_blocked"
+            ? "Hybrid export does not satisfy the release native-coverage gate"
+            : "Hybrid export quality and coverage evidence do not agree",
+          409,
+        );
+      }
+      const embedding = exportResult.quality.fontEmbeddingStatus;
+      if (
+        exportResult.exportMetadata?.strategy === "authored-hybrid" &&
+        exportBody.fontEmbedding !== false &&
+        (!embedding?.requested || !embedding.applied)
+      ) {
+        throw new ExportPresentationRequestError(
+          "Font embedding was requested but was not applied",
+          409,
+        );
+      }
       const { pptxSha256, pptxSizeBytes } = await exportedPptxDigest(
         exportResult.path,
       );
@@ -386,29 +429,6 @@ export async function POST(req: NextRequest) {
         "fidelity",
       );
       completedAttempt = true;
-    }
-
-    const embedding = responseQuality?.fontEmbeddingStatus;
-    if (
-      exportResult.exportMetadata?.strategy === "authored-hybrid" &&
-      exportBody.fontEmbedding !== false &&
-      (!embedding?.requested || !embedding.applied)
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Font embedding was requested but was not applied",
-          ...(responseQuality ? { quality: responseQuality } : {}),
-          ...(responseExportMetadata
-            ? { exportMetadata: responseExportMetadata }
-            : {}),
-          ...(routeOwnedAttempt
-            ? { exportAttempt: completedAttemptReceipt ?? routeOwnedAttempt }
-            : {}),
-          ...(completedPowerPointQa ? { powerPointQa: completedPowerPointQa } : {}),
-        },
-        { status: 409 },
-      );
     }
 
     return NextResponse.json({

@@ -52,7 +52,18 @@ export type PreparedNativeElement =
       png: Buffer;
     }
   | { kind: "chart"; source: AuthoredHybridNativeChartSource }
-  | { kind: "table"; source: AuthoredHybridNativeTableSource };
+  | { kind: "table"; source: AuthoredHybridNativeTableSource }
+  | {
+      kind: "group";
+      source: AuthoredHybridRasterElement;
+      /**
+       * Exact direct semantic children owned by this structural container.
+       * A group is admitted only when every one of these QIDs is native, so a
+       * residual backplate never becomes a child that fails to move with it.
+       */
+      childElementIds: readonly string[];
+      children: readonly PreparedNativeElement[];
+    };
 
 type AuthoredHybridNativeElement =
   | AuthoredHybridNativeTextElement
@@ -92,7 +103,7 @@ export interface LayerSafetyDemotion {
 }
 
 export interface LayerSafetyPlan {
-  readonly strategy: "single-backplate-fixed-point";
+  readonly strategy: "single-backplate-fixed-point" | "audited-multi-z-band";
   readonly fixedPointReached: true;
   readonly closureIterations: number;
   readonly closureDigest: string;
@@ -129,6 +140,11 @@ export interface AuthoredNativeOwnerAlternativeText {
     readonly utf16Start: number;
     readonly utf16Length: number;
     readonly textDigest: string;
+  }[];
+  readonly paintBands: readonly {
+    readonly zBand: number;
+    readonly paintOwner: "native" | "rasterIsland";
+    readonly elementIds: readonly string[];
   }[];
   readonly textRunStyles?: readonly {
     readonly runIndex: number;
@@ -273,6 +289,11 @@ export interface PowerPointTypefaceSerializationOptions {
 
 export interface NativeTypographyPreflightOptions {
   readonly embeddedTypefaceFaces: readonly AuthoredEmbeddedTypefaceFaceEvidence[];
+  readonly embeddedGlyphAvailable?: (
+    typeface: string,
+    face: AuthoredEmbeddedTypefaceFaceEvidence["face"],
+    codePoint: number,
+  ) => boolean;
   /** Residual elements that will remain painted on the fidelity backplate. */
   readonly backplateElements?: readonly AuthoredHybridElement[];
   readonly boundsTolerancePx?: number;
@@ -288,11 +309,26 @@ export interface NativeTypographyPreflightResult {
 function isEditableRasterText(
   element: AuthoredHybridElement
 ): element is AuthoredHybridRasterElement & { text: AuthoredHybridTextPayload } {
+  const unauditedPaintReasons = new Set([
+    "animated",
+    "backdrop-filter",
+    "background-clip-text",
+    "clip-path",
+    "complex-content",
+    "complex-diagram",
+    "filter",
+    "mask",
+    "mix-blend-mode",
+    "svg-text",
+    "text-shadow",
+    "transformed-ancestor",
+  ]);
   return (
     element.classification.mode === "raster" &&
     element.classification.candidateKind === "text" &&
     "text" in element &&
-    element.text !== undefined
+    element.text !== undefined &&
+    !element.classification.reasons.some((reason) => unauditedPaintReasons.has(reason))
   );
 }
 
@@ -307,6 +343,10 @@ function isEditableTextCandidate(
 function hasUnrepresentedVisualLineBreak(
   element: AuthoredHybridEditableTextElement
 ): boolean {
+  const measuredLineIndexes = element.text.runs
+    .filter((run) => run.text !== "\n" && run.lineIndex !== undefined)
+    .map((run) => run.lineIndex!);
+  if (new Set(measuredLineIndexes).size > 1) return false;
   if (
     element.text.runs.length < 2 ||
     element.text.runs.some((run) => run.text.includes("\n"))
@@ -826,6 +866,7 @@ function capturedBreakCount(runs: readonly AuthoredHybridTextRun[]): number {
 
 const ISSUE_FALLBACK_REASON = {
   "embedding-face-missing": "typography-embedding-face-missing",
+  "embedding-glyph-missing": "typography-embedding-glyph-missing",
   "font-substitution": "typography-font-substitution",
   "bounds-overflow": "typography-bounds-overflow",
   "backplate-collision": "typography-backplate-collision",
@@ -901,15 +942,48 @@ export function preflightNativeTypography(
             actualTypeface: resolution.fallbackTypeface,
           });
         }
+      } else if (
+        resolution.requiresEmbedding &&
+        options.embeddedGlyphAvailable !== undefined &&
+        [...run.text].some((character) =>
+          !/^\s$/u.test(character) &&
+          options.embeddedGlyphAvailable?.(
+            resolution.typeface,
+            face,
+            character.codePointAt(0)!,
+          ) !== true
+        )
+      ) {
+        issues.push({
+          code: "embedding-glyph-missing",
+          elementId: element.id,
+          runIndex,
+          script,
+          requiredTypeface: resolution.typeface,
+          requiredFace: face,
+        });
       }
     });
 
     const layout = element.text.layout;
     if (layout?.lineRects) {
       const breakCount = capturedBreakCount(runs);
+      const indexedRuns = runs.filter(
+        (run) => run.text !== "\n" && run.lineIndex !== undefined,
+      );
       if (
         layout.lineRects.length !== layout.lineCount ||
-        (layout.lineCount > 0 && breakCount + 1 !== layout.lineCount)
+        (layout.lineCount > 0 && breakCount + 1 !== layout.lineCount) ||
+        indexedRuns.some(
+          (run) => run.lineIndex! < 0 || run.lineIndex! >= layout.lineRects!.length,
+        ) ||
+        indexedRuns.some((run) => {
+          const line = layout.lineRects![run.lineIndex!].px;
+          const fragments = run.fragments.length
+            ? run.fragments.map((fragment) => fragment.px)
+            : [run.bounds.px];
+          return fragments.some((fragment) => !rectContains(line, fragment, tolerance));
+        })
       ) {
         issues.push({ code: "line-break-mismatch", elementId: element.id });
       }
@@ -1041,6 +1115,162 @@ export async function prepareNativeElements(
   return prepared;
 }
 
+function isPaintlessStructuralContainer(
+  element: AuthoredHybridElement
+): element is AuthoredHybridRasterElement {
+  if (
+    element.classification.mode !== "raster" ||
+    element.classification.candidateKind !== "shape" ||
+    element.classification.reasons.length !== 1 ||
+    element.classification.reasons[0] !== "unsupported-shape" ||
+    element.identityAuthority !== "declared-qid" ||
+    Math.abs(element.rotationDeg) >= 0.001 ||
+    element.opacity !== 1 ||
+    !boundsAreSafe(element)
+  ) return false;
+  if (!("shape" in element) || !element.shape) return false;
+  return !element.shape.fill &&
+    !element.shape.gradient &&
+    !element.shape.stroke &&
+    !(element.shape.borderLines?.length) &&
+    !(element.shape.shadowLayers?.length) &&
+    !element.shape.outline;
+}
+
+/**
+ * Build paintless PowerPoint group candidates from declared DOM
+ * containers. The admission is intentionally strict:
+ *
+ * - the group must have no authored paint of its own;
+ * - every direct semantic child must already have a prepared native owner or
+ *   be another independently qualified structural candidate;
+ * - every descendant stays inside the container bounds and no unrelated paint
+ *   is interleaved through the descendant z-range.
+ *
+ * This makes the group a real editable owner rather than a hidden coverage
+ * marker, and keeps the semantic denominator unchanged.
+ */
+export function prepareStructuralNativeGroups(
+  elements: readonly AuthoredHybridElement[],
+  prepared: readonly PreparedNativeElement[],
+  declaredGroupElementIds: ReadonlySet<string>,
+): PreparedNativeElement[] {
+  const preparedIds = new Set(prepared.map((item) => item.source.id));
+  const structuralIds = new Set(
+    elements
+      .filter(isPaintlessStructuralContainer)
+      .filter((element) => declaredGroupElementIds.has(element.id))
+      .map((element) => element.id)
+  );
+  const childrenByParent = new Map<string, AuthoredHybridElement[]>();
+  for (const element of elements) {
+    if (!element.parentElementId) continue;
+    const children = childrenByParent.get(element.parentElementId) ?? [];
+    children.push(element);
+    childrenByParent.set(element.parentElementId, children);
+  }
+  const descendantsOf = (elementId: string): AuthoredHybridElement[] => {
+    const descendants: AuthoredHybridElement[] = [];
+    const pending = [...(childrenByParent.get(elementId) ?? [])];
+    const seen = new Set<string>();
+    while (pending.length) {
+      const child = pending.shift()!;
+      if (seen.has(child.id)) return [];
+      seen.add(child.id);
+      descendants.push(child);
+      pending.push(...(childrenByParent.get(child.id) ?? []));
+    }
+    return descendants;
+  };
+  return elements
+    .filter(isPaintlessStructuralContainer)
+    .filter((element) => declaredGroupElementIds.has(element.id))
+    .flatMap((element): PreparedNativeElement[] => {
+      const children = childrenByParent.get(element.id) ?? [];
+      const descendants = descendantsOf(element.id);
+      const descendantIds = new Set(descendants.map((child) => child.id));
+      const childPaintOrders = descendants.map((child) => child.zOrder);
+      const minimumPaintOrder = Math.min(...childPaintOrders);
+      const maximumPaintOrder = Math.max(...childPaintOrders);
+      const bounds = element.bounds.px;
+      const containsChild = (child: AuthoredHybridElement) => {
+        const childBounds = child.bounds.px;
+        return childBounds.x >= bounds.x - 0.5 &&
+          childBounds.y >= bounds.y - 0.5 &&
+          childBounds.x + childBounds.width <= bounds.x + bounds.width + 0.5 &&
+          childBounds.y + childBounds.height <= bounds.y + bounds.height + 0.5;
+      };
+      const interleavedExternalPaint = elements.some((other) =>
+        other.id !== element.id &&
+        !descendantIds.has(other.id) &&
+        other.zOrder >= minimumPaintOrder &&
+        other.zOrder <= maximumPaintOrder &&
+        intersects(element, other)
+      );
+      if (
+        children.length === 0 ||
+        descendants.length === 0 ||
+        children.some(
+          (child) => !preparedIds.has(child.id) && !structuralIds.has(child.id),
+        ) ||
+        descendants.some((child) => !containsChild(child)) ||
+        interleavedExternalPaint
+      ) return [];
+      return [{
+        kind: "group",
+        source: element,
+        childElementIds: children.map((child) => child.id).sort(),
+        children: [],
+      }];
+    });
+}
+
+/** Close flat group candidates over the final layer-safe selection. */
+export function nestPreparedNativeGroups(
+  selected: readonly PreparedNativeElement[]
+): PreparedNativeElement[] {
+  const selectedById = new Map(
+    selected.map((item) => [item.source.id, item] as const)
+  );
+  const admittedGroups = selected.filter(
+    (item): item is Extract<PreparedNativeElement, { kind: "group" }> =>
+      item.kind === "group" &&
+      item.childElementIds.length > 0 &&
+      item.childElementIds.every((childId) => selectedById.has(childId))
+  );
+  const childIds = new Set(admittedGroups.flatMap((group) => group.childElementIds));
+  const groupById = new Map(admittedGroups.map((group) => [group.source.id, group]));
+  const build = (
+    item: PreparedNativeElement,
+    visiting: ReadonlySet<string> = new Set(),
+  ): PreparedNativeElement => {
+    if (item.kind !== "group") return item;
+    if (visiting.has(item.source.id)) {
+      throw new Error("Hybrid structural group cycle detected.");
+    }
+    const nextVisiting = new Set(visiting);
+    nextVisiting.add(item.source.id);
+    return {
+      ...item,
+      children: item.childElementIds.map((childId) =>
+        build(selectedById.get(childId)!, nextVisiting)
+      ),
+    };
+  };
+  return selected
+    .filter((item) => !childIds.has(item.source.id))
+    .filter((item) => item.kind !== "group" || groupById.has(item.source.id))
+    .map((item) => build(item));
+}
+
+export function flattenPreparedNativeElements(
+  elements: readonly PreparedNativeElement[]
+): PreparedNativeElement[] {
+  return elements.flatMap((item) => item.kind === "group"
+    ? [item, ...flattenPreparedNativeElements(item.children)]
+    : [item]);
+}
+
 function intersects(
   a: Pick<AuthoredHybridElement, "bounds"> | AuthoredHybridNativeChartSource | AuthoredHybridNativeTableSource,
   b: Pick<AuthoredHybridElement, "bounds">,
@@ -1089,6 +1319,78 @@ export function planLayerSafeNativeElements(
   options: LayerSelectionOptions = {}
 ): LayerSafetyPlan {
   const eligible = prepared.filter((item) => allowedIds.has(item.source.id));
+  const declaredPaintOrder =
+    allElements.length > 0 &&
+    allElements.every((element) => element.identityAuthority === "declared-qid") &&
+    new Set(allElements.map((element) => element.id)).size === allElements.length;
+  if (declaredPaintOrder) {
+    const selected = eligible.slice().sort(
+      (left, right) =>
+        left.source.zOrder - right.source.zOrder ||
+        left.source.sourceIndex - right.source.sourceIndex,
+    );
+    const selectedIds = new Set(selected.map((item) => item.source.id));
+    const ordered = allElements.slice().sort(
+      (left, right) =>
+        left.zOrder - right.zOrder || left.sourceIndex - right.sourceIndex,
+    );
+    const paintBands: Array<{
+      zBand: number;
+      paintOwner: "native" | "rasterIsland";
+      elementIds: string[];
+    }> = [{ zBand: 0, paintOwner: "rasterIsland", elementIds: [] }];
+    for (const element of ordered) {
+      const paintOwner = selectedIds.has(element.id) ? "native" : "rasterIsland";
+      let band = paintBands.at(-1)!;
+      if (band.paintOwner !== paintOwner) {
+        band = { zBand: paintBands.length, paintOwner, elementIds: [] };
+        paintBands.push(band);
+      }
+      band.elementIds.push(element.id);
+    }
+    const bandById = new Map(
+      paintBands.flatMap((band) =>
+        band.elementIds.map((elementId) => [elementId, band.zBand] as const)
+      ),
+    );
+    const paintGraph = ordered.map((element) => ({
+      elementId: element.id,
+      parentElementId: element.parentElementId ?? null,
+      paintOwner: selectedIds.has(element.id) ? "native" as const : "rasterIsland" as const,
+      zBand: bandById.get(element.id) ?? 0,
+      opacity: element.opacity,
+      blockedByElementIds: [],
+    }));
+    const closureUnsigned = {
+      schemaVersion: "hybrid-paint-graph-closure/browser-v1",
+      strategy: "audited-multi-z-band",
+      closureIterations: 1,
+      paintGraph,
+      paintBands,
+    };
+    const slideDemotedToRaster = selected.length === 0;
+    const downgradeUnsigned = {
+      schemaVersion: "hybrid-layer-downgrade-receipt/browser-v1" as const,
+      state: slideDemotedToRaster ? "slideRaster" as const : "closed" as const,
+      reason: slideDemotedToRaster ? "no-closed-native-z-band" as const : null,
+      demotedElementIds: [],
+    };
+    return {
+      strategy: "audited-multi-z-band",
+      fixedPointReached: true,
+      closureIterations: 1,
+      closureDigest: layerDigest(closureUnsigned),
+      selected,
+      demotions: [],
+      slideDemotedToRaster,
+      paintGraph,
+      paintBands,
+      downgradeReceipt: {
+        ...downgradeUnsigned,
+        receiptDigest: layerDigest(downgradeUnsigned),
+      },
+    };
+  }
   const promotedIds = new Set(eligible.map((item) => item.source.id));
   const demotionBlockers = new Map<string, Set<string>>();
   const isAbove = (other: AuthoredHybridElement, item: PreparedNativeElement) =>
@@ -1187,6 +1489,20 @@ export function planLayerSafeNativeElements(
     demotions,
     slideDemotedToRaster,
     paintGraph,
+    paintBands: [
+      {
+        zBand: 0,
+        paintOwner: "rasterIsland",
+        elementIds: allElements
+          .filter((element) => !promotedIds.has(element.id))
+          .map((element) => element.id),
+      },
+      ...selected.map((element, index) => ({
+        zBand: index + 1,
+        paintOwner: "native" as const,
+        elementIds: [element.source.id],
+      })),
+    ],
     downgradeReceipt: {
       ...downgradeUnsigned,
       receiptDigest: layerDigest(downgradeUnsigned),
@@ -1424,11 +1740,29 @@ function textSegments(element: AuthoredHybridEditableTextElement): TextSegment[]
       preservesRichTextAcrossSoftWraps
     )
   ) {
-    return element.text.runs.map((run) => ({
-      text: collapseBreaks ? run.text.replace(/\n+/g, " ") : run.text,
-      style: run.style,
-      ...(run.breakKind ? { breakKind: run.breakKind } : {}),
-    }));
+    const segments: TextSegment[] = [];
+    let previousLineIndex: number | undefined;
+    for (const run of element.text.runs) {
+      if (
+        !collapseBreaks &&
+        run.text !== "\n" &&
+        previousLineIndex !== undefined &&
+        run.lineIndex !== undefined &&
+        run.lineIndex > previousLineIndex &&
+        segments.at(-1)?.text !== "\n"
+      ) {
+        segments.push({ text: "\n", style: run.style, breakKind: "soft" });
+      }
+      segments.push({
+        text: collapseBreaks ? run.text.replace(/\n+/g, " ") : run.text,
+        style: run.style,
+        ...(run.breakKind ? { breakKind: run.breakKind } : {}),
+      });
+      if (run.text !== "\n" && run.lineIndex !== undefined) {
+        previousLineIndex = run.lineIndex;
+      }
+    }
+    return segments;
   }
   return [{
     text: collapseBreaks ? element.text.plainText.replace(/\n+/g, " ") : element.text.plainText,
@@ -2103,8 +2437,111 @@ function shapeBaseObjectCount(shape: AuthoredHybridShapePayload): number {
 export function preparedNativeElementNonVisualIdCount(
   item: PreparedNativeElement
 ): number {
+  if (item.kind === "group") {
+    return 1 + item.children.reduce(
+      (count, child) => count + preparedNativeElementNonVisualIdCount(child),
+      0,
+    );
+  }
+  // Border/shadow/outline-only shapes are split into multiple physical OOXML
+  // fragments with no single base object whose geometry can carry the QID.
+  // Keep those owners on the audited raster plane until a grouped native
+  // serializer can prove one owner and one Chromium-equivalent readback box.
+  if (item.kind === "shape" && !shapeHasBaseObject(item.source.shape)) return 0;
   return preparedNativeElementUnderlayNonVisualIdCount(item) +
     preparedNativeElementOverlayNonVisualIdCount(item);
+}
+
+function rotatedPaintedBounds(
+  bounds: AuthoredHybridRect,
+  rotationDeg: number,
+  paintExpansionPx = 0,
+): AuthoredHybridRect {
+  const radians = rotationDeg * Math.PI / 180;
+  const cosine = Math.abs(Math.cos(radians));
+  const sine = Math.abs(Math.sin(radians));
+  const width = bounds.width * cosine + bounds.height * sine + paintExpansionPx * 2;
+  const height = bounds.width * sine + bounds.height * cosine + paintExpansionPx * 2;
+  return {
+    x: bounds.x + bounds.width / 2 - width / 2,
+    y: bounds.y + bounds.height / 2 - height / 2,
+    width,
+    height,
+  };
+}
+
+function rectClearance(left: AuthoredHybridRect, right: AuthoredHybridRect): number {
+  const dx = Math.max(
+    left.x - (right.x + right.width),
+    right.x - (left.x + left.width),
+    0,
+  );
+  const dy = Math.max(
+    left.y - (right.y + right.height),
+    right.y - (left.y + left.height),
+    0,
+  );
+  return Math.hypot(dx, dy);
+}
+
+export interface ConnectorTextClearanceViolation {
+  readonly elementId: string;
+  readonly textElementId: string;
+  readonly clearancePx: number;
+  readonly minimumClearancePx: number;
+}
+
+/**
+ * Quality gate for editable connectors. Both sides use their final painted
+ * axis-aligned bounds after rotation; the connector additionally includes its
+ * stroke/arrow paint. A failing connector remains an explicit raster owner.
+ */
+export function connectorTextClearanceViolations(
+  prepared: readonly PreparedNativeElement[],
+  allElements: readonly AuthoredHybridElement[],
+  declaredConnectorElementIds: ReadonlySet<string> = new Set(),
+  minimumClearancePx = 12,
+): ConnectorTextClearanceViolation[] {
+  const textElements = allElements.filter(
+    (element): element is AuthoredHybridEditableTextElement =>
+      "text" in element && element.text !== undefined &&
+      element.text.plainText.trim().length > 0,
+  );
+  return prepared.flatMap((item): ConnectorTextClearanceViolation[] => {
+    if (item.kind !== "shape") return [];
+    const shape = item.source.shape;
+    const connector = declaredConnectorElementIds.has(item.source.id) ||
+      shape.shape === "line" ||
+      (shape.shape === "freeform" && shape.closed !== true && !shape.fill);
+    if (!connector) return [];
+    const strokeExpansionPx = Math.max(
+      0.5,
+      shape.strokeWidthPt / 0.75 / 2,
+      shape.endArrow ? shape.strokeWidthPt / 0.75 * 1.5 : 0,
+    );
+    const connectorBounds = rotatedPaintedBounds(
+      item.source.bounds.px,
+      item.source.rotationDeg,
+      strokeExpansionPx,
+    );
+    return textElements.flatMap((text): ConnectorTextClearanceViolation[] => {
+      if (text.id === item.source.id) return [];
+      const textPaint = text.text.layout?.paintedTextBounds?.px ?? text.bounds.px;
+      const textBounds = rotatedPaintedBounds(textPaint, text.rotationDeg);
+      const clearancePx = rectClearance(connectorBounds, textBounds);
+      return clearancePx + 1e-6 < minimumClearancePx
+        ? [{
+            elementId: item.source.id,
+            textElementId: text.id,
+            clearancePx,
+            minimumClearancePx,
+          }]
+        : [];
+    });
+  }).sort((left, right) =>
+    left.elementId.localeCompare(right.elementId) ||
+    left.textElementId.localeCompare(right.textElementId)
+  );
 }
 
 function textContainerShapeItem(
@@ -2168,6 +2605,7 @@ function transparentTextOverlayItem(
 export function preparedNativeElementUnderlayNonVisualIdCount(
   item: PreparedNativeElement
 ): number {
+  if (item.kind === "group") return 0;
   const shapeItem = item.kind === "shape"
     ? item
     : item.kind === "text"
@@ -2183,7 +2621,7 @@ export function preparedNativeElementUnderlayNonVisualIdCount(
 function preparedNativeElementOverlayNonVisualIdCount(
   item: PreparedNativeElement
 ): number {
-  return item.kind === "shape" ? 0 : 1;
+  return item.kind === "shape" || item.kind === "group" ? 0 : 1;
 }
 
 function powerPointWrapMode(
@@ -2232,13 +2670,18 @@ export function serializePreparedNativeElement(
   relationshipId?: string,
   options: PowerPointTypefaceSerializationOptions = {}
 ): string {
+  if (item.kind === "group") {
+    throw new Error("Native groups require the hierarchy-aware PPTX assembler.");
+  }
   if (item.kind === "text") {
     const element = item.source;
-    const name = escapeXml(
-      element.classification.mode === "raster" && element.text.containerShape
-        ? `Presenton raster visual fragment ${nonVisualId}`
-        : nonVisualName(element)
-    );
+    // A promoted text element with a separately emitted painted container still
+    // needs one semantic owner in OOXML. The container name is deliberately
+    // suffixed with `-container`, so the editable text overlay carries the QID
+    // even when the source classifier originally marked it as raster. Calling
+    // it an anonymous visual fragment made the logical plan claim native while
+    // readback could not find any owner for the element.
+    const name = escapeXml(nonVisualName(element));
     const anchor = { top: "t", middle: "ctr", bottom: "b" }[
       element.text.style.verticalAlignment
     ];
@@ -2363,7 +2806,7 @@ export function serializePreparedNativeElementOverlay(
   relationshipId?: string,
   options: PowerPointTypefaceSerializationOptions = {}
 ): string {
-  if (item.kind === "shape") return "";
+  if (item.kind === "shape" || item.kind === "group") return "";
   return serializePreparedNativeElement(
     item.kind === "text" ? transparentTextOverlayItem(item) : item,
     nonVisualId,

@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import type {
   RenderArtifact,
   RenderAssetDependency,
@@ -15,6 +17,8 @@ import { RenderPolicyError } from "./runtime-policy.ts";
 type JsonRecord = Record<string, unknown>;
 
 const SHA256 = /^[0-9a-f]{64}$/i;
+const SCENE_DIGEST = /^sha256:([0-9a-f]{64})$/;
+const SCENE_MEDIA_TYPE = /^image\/(?:png|jpeg|svg\+xml|webp)$/;
 
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -46,6 +50,95 @@ function assetKind(value: unknown): RenderAssetDependency["kind"] {
     value === "generated"
     ? value
     : "image";
+}
+
+interface CanonicalSceneAsset {
+  readonly assetId: string;
+  readonly digest: string;
+  readonly mediaType: string;
+  readonly storageReference: string;
+  readonly sizeBytes: number;
+}
+
+function canonicalSceneAssets(
+  presentation: JsonRecord,
+): ReadonlyMap<string, CanonicalSceneAsset> {
+  const theme = isRecord(presentation.theme) ? presentation.theme : undefined;
+  const authored = theme && isRecord(theme.authored_vnext)
+    ? theme.authored_vnext
+    : undefined;
+  const scene = authored && isRecord(authored.scene) ? authored.scene : undefined;
+  const manifest = scene?.assetManifest ?? scene?.asset_manifest;
+  if (manifest === undefined || manifest === null) return new Map();
+  if (!Array.isArray(manifest)) {
+    throw new RenderPolicyError("render_scene_asset_manifest_invalid");
+  }
+  const assets = new Map<string, CanonicalSceneAsset>();
+  for (const value of manifest) {
+    if (!isRecord(value)) {
+      throw new RenderPolicyError("render_scene_asset_manifest_invalid");
+    }
+    const assetId = value.assetId ?? value.asset_id;
+    const rawDigest = value.assetDigest ?? value.asset_digest;
+    const mediaType = value.mediaType ?? value.media_type;
+    const storageReference = value.storageReference ?? value.storage_reference;
+    const sizeBytes = value.sizeBytes ?? value.size_bytes;
+    const digestMatch = typeof rawDigest === "string"
+      ? SCENE_DIGEST.exec(rawDigest)
+      : null;
+    if (
+      typeof assetId !== "string" ||
+      !assetId.startsWith("asset:") ||
+      !digestMatch ||
+      typeof mediaType !== "string" ||
+      !SCENE_MEDIA_TYPE.test(mediaType) ||
+      typeof storageReference !== "string" ||
+      !Number.isSafeInteger(sizeBytes) ||
+      Number(sizeBytes) <= 0
+    ) {
+      throw new RenderPolicyError("render_scene_asset_manifest_invalid");
+    }
+    const digest = digestMatch[1]!.toLowerCase();
+    const dataPrefix = `data:${mediaType};base64,`;
+    if (storageReference.startsWith("data:")) {
+      if (!storageReference.startsWith(dataPrefix)) {
+        throw new RenderPolicyError("render_scene_asset_manifest_invalid");
+      }
+      const encoded = storageReference.slice(dataPrefix.length);
+      if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encoded)) {
+        throw new RenderPolicyError("render_scene_asset_manifest_invalid");
+      }
+      const bytes = Buffer.from(encoded, "base64");
+      if (
+        bytes.length !== sizeBytes ||
+        bytes.toString("base64") !== encoded ||
+        createHash("sha256").update(bytes).digest("hex") !== digest
+      ) {
+        throw new RenderPolicyError("render_scene_asset_manifest_invalid");
+      }
+    } else if (storageReference !== `asset-store:${assetId}`) {
+      throw new RenderPolicyError("render_scene_asset_manifest_invalid");
+    }
+    const candidate = Object.freeze({
+      assetId,
+      digest,
+      mediaType,
+      storageReference,
+      sizeBytes: Number(sizeBytes),
+    });
+    const previous = assets.get(assetId);
+    if (
+      previous &&
+      (previous.digest !== candidate.digest ||
+        previous.mediaType !== candidate.mediaType ||
+        previous.storageReference !== candidate.storageReference ||
+        previous.sizeBytes !== candidate.sizeBytes)
+    ) {
+      throw new RenderPolicyError("render_asset_dependency_conflict");
+    }
+    assets.set(assetId, candidate);
+  }
+  return assets;
 }
 
 function persistedFontDependencies(
@@ -95,11 +188,38 @@ function persistedAssetDependencies(
   presentation: JsonRecord,
 ): readonly RenderAssetDependency[] {
   const dependencies = new Map<string, RenderAssetDependency>();
+  const sceneAssets = canonicalSceneAssets(presentation);
   visit(presentation.slides, (record) => {
     const assetId = record.asset_id ?? record.assetId;
     if (assetId === undefined || assetId === null) return;
     if (typeof assetId !== "string" || !assetId.trim()) {
       throw new RenderPolicyError("render_asset_not_ready");
+    }
+    const sceneAsset = sceneAssets.get(assetId);
+    if (assetId.startsWith("asset:")) {
+      const rawDigest = record.assetDigest ?? record.asset_digest;
+      const digestMatch = typeof rawDigest === "string"
+        ? SCENE_DIGEST.exec(rawDigest)
+        : null;
+      if (!sceneAsset || !digestMatch || digestMatch[1]!.toLowerCase() !== sceneAsset.digest) {
+        throw new RenderPolicyError("render_asset_not_ready");
+      }
+      const candidate = Object.freeze({
+        asset_id: assetId,
+        kind: "image" as const,
+        mime_type: sceneAsset.mediaType,
+        sha256: sceneAsset.digest,
+        status: "ready" as const,
+      });
+      const previous = dependencies.get(assetId);
+      if (
+        previous &&
+        (previous.sha256 !== candidate.sha256 || previous.kind !== candidate.kind)
+      ) {
+        throw new RenderPolicyError("render_asset_dependency_conflict");
+      }
+      dependencies.set(assetId, candidate);
+      return;
     }
     if (record.status !== "ready") {
       throw new RenderPolicyError("render_asset_not_ready");

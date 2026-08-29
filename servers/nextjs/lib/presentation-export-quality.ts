@@ -10,6 +10,8 @@ export type PresentationExportFallbackCandidateKind =
   | "text"
   | "image"
   | "shape"
+  | "table"
+  | "chart"
   | "complex"
   | "slide"
   | "unknown";
@@ -21,6 +23,25 @@ export interface PresentationExportFallbackElement {
   candidateKind: PresentationExportFallbackCandidateKind;
   reasons: string[];
 }
+
+export interface PresentationExportRasterFallbackAudit {
+  elementId: string;
+  reason: string;
+  /** True when this semantic owner is in the supported native denominator. */
+  eligible: boolean;
+  /** False means the exporter had to synthesize an unclassified reason. */
+  explicit: boolean;
+}
+
+export interface PresentationExportNativeCoverage {
+  status: "passed" | "blocked" | "not_assessed";
+  eligibleElementCount: number;
+  nativeElementCount: number;
+  ratio?: number;
+  rasterFallbacks: PresentationExportRasterFallbackAudit[];
+}
+
+export const PRESENTATION_EXPORT_MINIMUM_NATIVE_COVERAGE_RATIO = 0.7;
 
 import type {
   PresentationExportFontEmbeddingStatus,
@@ -67,6 +88,20 @@ export interface PresentationExportSlideQuality {
   };
   /** Single declared-QID authority across logical admission, OOXML, and optional COM reopen. */
   qidCoverage?: PresentationExportQidCoverage[];
+  geometryContract?: {
+    readonly schemaVersion: "presenton.hybrid-geometry/v1";
+    readonly chromiumDigest: string;
+    readonly elements: readonly {
+      readonly elementId: string;
+      readonly kind: "text" | "image" | "shape" | "table" | "chart";
+      readonly x: number;
+      readonly y: number;
+      readonly width: number;
+      readonly height: number;
+    }[];
+    readonly ooxmlDigest?: string;
+    readonly ooxmlMatch?: true;
+  };
   /** Immutable detailed OOXML projection, keyed by the declared QID. */
   nativeElementReadback?: PresentationExportNativeElementReadback[];
   /** Fixed-point paint closure that produced this native/backplate layering. */
@@ -106,7 +141,7 @@ export interface PresentationExportChartLegendReadback extends PresentationExpor
 
 export interface PresentationExportPaintPlanReadback {
   readonly schemaVersion: "hybrid-paint-plan/browser-v1";
-  readonly strategy: "single-backplate-fixed-point";
+  readonly strategy: "single-backplate-fixed-point" | "audited-multi-z-band";
   readonly fixedPointReached: true;
   readonly closureIterations: number;
   readonly closureDigest: string;
@@ -124,6 +159,12 @@ export interface PresentationExportPaintPlanReadback {
     readonly fallbackReason: "z-band-unsafe";
     readonly blockedByElementIds: readonly string[];
   }[];
+  readonly bands?: readonly {
+    readonly zBand: number;
+    readonly paintOwner: "native" | "rasterIsland";
+    readonly elementIds: readonly string[];
+    readonly artifactDigest?: string;
+  }[];
 }
 
 export interface PresentationExportQidCoverage {
@@ -138,6 +179,7 @@ export interface PresentationExportCoverageCounts {
   nativeText: number;
   nativeImage: number;
   nativeShape: number;
+  nativeTable?: number;
   nativeChart?: number;
   nativeGroup: number;
   rasterRemaining: number;
@@ -172,6 +214,7 @@ export interface PresentationExportQualityReport {
   imageFallbackSlides: number;
   nativeTextElements: number;
   nativeShapeElements: number;
+  nativeTableElements?: number;
   nativeChartElements?: number;
   nativeGroupElements?: number;
   nativeImageElements: number;
@@ -181,6 +224,8 @@ export interface PresentationExportQualityReport {
   backplateCount: number;
   typographyIssues: PresentationExportTypographyIssue[];
   fallbackReasonCounts?: Record<string, number>;
+  /** Supported semantic denominator and element-level raster audit. */
+  nativeCoverage?: PresentationExportNativeCoverage;
   slides: PresentationExportSlideQuality[];
   /** Kept for v1 consumers that only need a boolean. */
   fontEmbedding: boolean;
@@ -243,16 +288,136 @@ function coverageCounts(
   fallback: PresentationExportCoverageCounts
 ): PresentationExportCoverageCounts {
   const nativeChart = value?.nativeChart ?? fallback.nativeChart;
+  const nativeTable = value?.nativeTable ?? fallback.nativeTable;
   return {
     nativeText: nonNegativeInteger(value?.nativeText ?? fallback.nativeText),
     nativeImage: nonNegativeInteger(value?.nativeImage ?? fallback.nativeImage),
     nativeShape: nonNegativeInteger(value?.nativeShape ?? fallback.nativeShape),
+    ...(nativeTable === undefined
+      ? {}
+      : { nativeTable: nonNegativeInteger(nativeTable) }),
     nativeGroup: nonNegativeInteger(value?.nativeGroup ?? fallback.nativeGroup),
     ...(nativeChart === undefined
       ? {}
       : { nativeChart: nonNegativeInteger(nativeChart) }),
     rasterRemaining: nonNegativeInteger(
       value?.rasterRemaining ?? fallback.rasterRemaining
+    ),
+  };
+}
+
+function nativeCoverageForSlides(
+  slides: readonly PresentationExportSlideQuality[],
+): PresentationExportNativeCoverage {
+  const qids = slides.flatMap((slide) =>
+    (slide.qidCoverage ?? []).map((entry) => ({ slide, entry })),
+  );
+  if (!qids.length) {
+    return {
+      status: "not_assessed",
+      eligibleElementCount: 0,
+      nativeElementCount: 0,
+      rasterFallbacks: [],
+    };
+  }
+  const seen = new Set<string>();
+  let invalid = false;
+  for (const { slide, entry } of qids) {
+    const ownerKey = `${slide.slideNumber}:${entry.elementId}`;
+    if (seen.has(ownerKey)) invalid = true;
+    seen.add(ownerKey);
+  }
+  const fallbackAudit: PresentationExportRasterFallbackAudit[] = [];
+  const auditedIds = new Set<string>();
+  const supportedKinds = new Set<PresentationExportFallbackCandidateKind>([
+    "text",
+    "image",
+    "shape",
+    "table",
+    "chart",
+  ]);
+  for (const { slide, entry } of qids) {
+    if (entry.logical !== "raster") continue;
+    const declared = (slide.fallbackElements ?? []).find(
+      (element) => element.elementId === entry.elementId,
+    );
+    const reason = declared?.reasons.find((value) => value.trim())?.trim();
+    if (
+      declared &&
+      supportedKinds.has(declared.candidateKind) &&
+      declared.candidateKind !== entry.kind
+    ) {
+      invalid = true;
+    }
+    const ownerKey = `${slide.slideNumber}:${entry.elementId}`;
+    fallbackAudit.push({
+      elementId: ownerKey,
+      reason: reason ?? "unclassified-raster-fallback",
+      // Every declared semantic owner stays in the release denominator. Native
+      // capability support decides disposition, never denominator membership.
+      eligible: true,
+      explicit: Boolean(reason),
+    });
+    auditedIds.add(ownerKey);
+  }
+  for (const slide of slides) {
+    for (const element of slide.fallbackElements ?? []) {
+      const ownerKey = `${slide.slideNumber}:${element.elementId}`;
+      if (auditedIds.has(ownerKey)) continue;
+      const reason = element.reasons.find((value) => value.trim())?.trim();
+      const qidOwner = (slide.qidCoverage ?? []).find(
+        (entry) => entry.elementId === element.elementId,
+      );
+      fallbackAudit.push({
+        elementId: ownerKey,
+        reason: reason ?? "unclassified-raster-fallback",
+        eligible: qidOwner?.logical !== "native",
+        explicit: Boolean(reason),
+      });
+      auditedIds.add(ownerKey);
+    }
+  }
+  const nativeElementCount = qids.filter(
+    ({ entry }) => entry.logical === "native",
+  ).length;
+  const eligibleRasterCount = fallbackAudit.filter(
+    (fallback) => fallback.eligible,
+  ).length;
+  const eligibleElementCount = nativeElementCount + eligibleRasterCount;
+  const declaredNative = slides.reduce(
+    (sum, slide) =>
+      sum +
+      slide.logicalCoverage.nativeText +
+      slide.logicalCoverage.nativeImage +
+      slide.logicalCoverage.nativeShape +
+      (slide.logicalCoverage.nativeTable ?? 0) +
+      (slide.logicalCoverage.nativeChart ?? 0) +
+      // Groups are structural OOXML containers, not independently supported
+      // semantic owners. Their child QIDs are already counted by kind.
+      0,
+    0,
+  );
+  const declaredRaster = slides.reduce(
+    (sum, slide) => sum + slide.logicalCoverage.rasterRemaining,
+    0,
+  );
+  invalid ||= nativeElementCount !== declaredNative;
+  invalid ||= fallbackAudit.length !== declaredRaster;
+  invalid ||= fallbackAudit.some(
+    (fallback) =>
+      !fallback.elementId.trim() ||
+      !fallback.reason.trim() ||
+      !fallback.explicit,
+  );
+  return {
+    status: invalid ? "blocked" : "passed",
+    eligibleElementCount,
+    nativeElementCount,
+    ...(eligibleElementCount
+      ? { ratio: nativeElementCount / eligibleElementCount }
+      : {}),
+    rasterFallbacks: fallbackAudit.sort((left, right) =>
+      left.elementId.localeCompare(right.elementId),
     ),
   };
 }
@@ -265,6 +430,8 @@ function normalizeFallbackElement(
     "text",
     "image",
     "shape",
+    "table",
+    "chart",
     "complex",
     "slide",
     "unknown",
@@ -296,6 +463,12 @@ export function createPresentationExportQuality(
         nativeText: nonNegativeInteger(slide.nativeTextElements),
         nativeImage: nonNegativeInteger(slide.nativeImageElements),
         nativeShape: nonNegativeInteger(slide.nativeShapeElements),
+        ...(slide.nativeTableElements === undefined
+          ? {}
+          : { nativeTable: nonNegativeInteger(slide.nativeTableElements) }),
+        ...(slide.nativeChartElements === undefined
+          ? {}
+          : { nativeChart: nonNegativeInteger(slide.nativeChartElements) }),
         nativeGroup: nativeGroupElements,
         rasterRemaining: nonNegativeInteger(slide.rasterFallbackElements),
       });
@@ -303,6 +476,10 @@ export function createPresentationExportQuality(
         nativeText: 0,
         nativeImage: 0,
         nativeShape: 0,
+        ...(slide.ooxmlReadback?.status === "passed" &&
+        slide.nativeTableElements !== undefined
+          ? { nativeTable: nonNegativeInteger(slide.nativeTableElements) }
+          : {}),
         nativeGroup: 0,
         rasterRemaining: 0,
       });
@@ -486,6 +663,9 @@ export function createPresentationExportQuality(
   const hasNativeChartCounts = slides.some(
     (slide) => slide.nativeChartElements !== undefined,
   );
+  const hasNativeTableCounts = slides.some(
+    (slide) => slide.nativeTableElements !== undefined,
+  );
   return {
     schemaVersion: PRESENTATION_EXPORT_QUALITY_SCHEMA_VERSION,
     mode,
@@ -501,6 +681,14 @@ export function createPresentationExportQuality(
       (sum, slide) => sum + slide.nativeShapeElements,
       0
     ),
+    ...(hasNativeTableCounts
+      ? {
+          nativeTableElements: slides.reduce(
+            (sum, slide) => sum + (slide.nativeTableElements ?? 0),
+            0,
+          ),
+        }
+      : {}),
     ...(hasNativeChartCounts
       ? {
           nativeChartElements: slides.reduce(
@@ -522,6 +710,14 @@ export function createPresentationExportQuality(
       nativeText: slides.reduce((sum, slide) => sum + slide.logicalCoverage.nativeText, 0),
       nativeImage: slides.reduce((sum, slide) => sum + slide.logicalCoverage.nativeImage, 0),
       nativeShape: slides.reduce((sum, slide) => sum + slide.logicalCoverage.nativeShape, 0),
+      ...(slides.some((slide) => slide.logicalCoverage.nativeTable !== undefined)
+        ? {
+            nativeTable: slides.reduce(
+              (sum, slide) => sum + (slide.logicalCoverage.nativeTable ?? 0),
+              0,
+            ),
+          }
+        : {}),
       ...(slides.some((slide) => slide.logicalCoverage.nativeChart !== undefined)
         ? {
             nativeChart: slides.reduce(
@@ -542,6 +738,14 @@ export function createPresentationExportQuality(
       nativeText: slides.reduce((sum, slide) => sum + slide.ooxmlReadback.nativeText, 0),
       nativeImage: slides.reduce((sum, slide) => sum + slide.ooxmlReadback.nativeImage, 0),
       nativeShape: slides.reduce((sum, slide) => sum + slide.ooxmlReadback.nativeShape, 0),
+      ...(slides.some((slide) => slide.ooxmlReadback.nativeTable !== undefined)
+        ? {
+            nativeTable: slides.reduce(
+              (sum, slide) => sum + (slide.ooxmlReadback.nativeTable ?? 0),
+              0,
+            ),
+          }
+        : {}),
       ...(slides.some((slide) => slide.ooxmlReadback.nativeChart !== undefined)
         ? {
             nativeChart: slides.reduce(
@@ -560,6 +764,7 @@ export function createPresentationExportQuality(
         a.localeCompare(b)
       )
     ),
+    nativeCoverage: nativeCoverageForSlides(slides),
     slides,
     fontEmbedding: fontEmbeddingStatus.applied,
     fontEmbeddingStatus,
@@ -599,6 +804,194 @@ export function createImageOnlyExportQuality(
   );
 }
 
+type ExportCoverageWire = Record<string, unknown>;
+
+function wireRecord(
+  value: unknown,
+  code = "presentation_export_quality_coverage_mismatch",
+): ExportCoverageWire {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(code);
+  }
+  return value as ExportCoverageWire;
+}
+
+function wireCount(value: unknown): number {
+  if (!Number.isSafeInteger(value) || Number(value) < 0) {
+    throw new Error("presentation_export_quality_coverage_mismatch");
+  }
+  return Number(value);
+}
+
+function assertSameCount(left: unknown, right: unknown): void {
+  if (wireCount(left) !== wireCount(right)) {
+    throw new Error("presentation_export_quality_coverage_mismatch");
+  }
+}
+
+function assertCoverageProjection(
+  quality: ExportCoverageWire,
+  coverage: ExportCoverageWire,
+): void {
+  for (const [qualityKey, coverageKey] of [
+    ["nativeText", "nativeText"],
+    ["nativeImage", "nativeImage"],
+    ["nativeShape", "nativeShape"],
+    ["nativeTable", "nativeTable"],
+    ["nativeChart", "nativeChart"],
+    ["rasterRemaining", "rasterRemaining"],
+  ] as const) {
+    assertSameCount(quality[qualityKey] ?? 0, coverage[coverageKey] ?? 0);
+  }
+}
+
+function releaseQualityProfile(value: unknown): boolean {
+  const normalized = String(value ?? "development")
+    .trim()
+    .toLowerCase()
+    .replaceAll("-", "_");
+  return ["release", "strict", "production", "release_strict"].includes(
+    normalized,
+  );
+}
+
+/**
+ * Fail closed before a durable Hybrid attempt is completed. The quality and
+ * coverage sidecars must describe the same semantic owners and exact OOXML
+ * package; release profiles additionally require the audited 70% native gate.
+ */
+export function assertPresentationExportQualityCoverage(
+  quality: PresentationExportQualityReport,
+  coverageValue: unknown,
+  profile: unknown = "development",
+): void {
+  const coverage = wireRecord(coverageValue);
+  assertSameCount(quality.totalSlides, coverage.totalSlides);
+  assertSameCount(quality.nativeTextElements, coverage.nativeText);
+  assertSameCount(quality.nativeImageElements, coverage.nativeImage);
+  assertSameCount(quality.nativeShapeElements, coverage.nativeShape);
+  assertSameCount(quality.nativeTableElements ?? 0, coverage.nativeTable ?? 0);
+  assertSameCount(quality.nativeChartElements ?? 0, coverage.nativeChart ?? 0);
+  assertSameCount(quality.logicalCoverage.rasterRemaining, coverage.rasterRemaining);
+  assertCoverageProjection(
+    wireRecord(quality.logicalCoverage),
+    wireRecord(coverage.logicalCoverage),
+  );
+  assertCoverageProjection(
+    wireRecord(quality.ooxmlReadback),
+    wireRecord(coverage.ooxmlReadback),
+  );
+  if (quality.ooxmlReadback.status !== wireRecord(coverage.ooxmlReadback).status) {
+    throw new Error("presentation_export_quality_coverage_mismatch");
+  }
+  const coverageSlides = coverage.slides;
+  if (!Array.isArray(coverageSlides) || coverageSlides.length !== quality.slides.length) {
+    throw new Error("presentation_export_quality_coverage_mismatch");
+  }
+  const coverageBySlide = new Map(
+    coverageSlides.map((value) => {
+      const slide = wireRecord(value);
+      return [wireCount(slide.slideNumber), slide] as const;
+    }),
+  );
+  if (coverageBySlide.size !== coverageSlides.length) {
+    throw new Error("presentation_export_quality_coverage_mismatch");
+  }
+  for (const qualitySlide of quality.slides) {
+    const coverageSlide = coverageBySlide.get(qualitySlide.slideNumber);
+    if (!coverageSlide) {
+      throw new Error("presentation_export_quality_coverage_mismatch");
+    }
+    assertSameCount(qualitySlide.nativeTextElements, coverageSlide.nativeText);
+    assertSameCount(qualitySlide.nativeImageElements, coverageSlide.nativeImage);
+    assertSameCount(qualitySlide.nativeShapeElements, coverageSlide.nativeShape);
+    assertSameCount(qualitySlide.nativeTableElements ?? 0, coverageSlide.nativeTable ?? 0);
+    assertSameCount(qualitySlide.nativeChartElements ?? 0, coverageSlide.nativeChart ?? 0);
+    assertSameCount(
+      qualitySlide.logicalCoverage.rasterRemaining,
+      coverageSlide.rasterRemaining,
+    );
+    assertCoverageProjection(
+      wireRecord(qualitySlide.logicalCoverage),
+      wireRecord(coverageSlide.logicalCoverage),
+    );
+    assertCoverageProjection(
+      wireRecord(qualitySlide.ooxmlReadback),
+      wireRecord(coverageSlide.ooxmlReadback),
+    );
+    if (
+      qualitySlide.ooxmlReadback.status !==
+      wireRecord(coverageSlide.ooxmlReadback).status
+    ) {
+      throw new Error("presentation_export_quality_coverage_mismatch");
+    }
+  }
+  const nativeCoverage = quality.nativeCoverage;
+  if (nativeCoverage) {
+    const coverageNative =
+      wireCount(coverage.nativeText) +
+      wireCount(coverage.nativeImage) +
+      wireCount(coverage.nativeShape) +
+      wireCount(coverage.nativeTable ?? 0) +
+      wireCount(coverage.nativeChart ?? 0);
+    const auditedEligible = nativeCoverage.rasterFallbacks.length;
+    if (
+      new Set(
+        nativeCoverage.rasterFallbacks.map((fallback) => fallback.elementId),
+      ).size !== nativeCoverage.rasterFallbacks.length ||
+      nativeCoverage.rasterFallbacks.some(
+        (fallback) =>
+          typeof fallback.elementId !== "string" ||
+          typeof fallback.reason !== "string" ||
+          typeof fallback.eligible !== "boolean" ||
+          typeof fallback.explicit !== "boolean" ||
+          !fallback.elementId.trim() ||
+          !fallback.reason.trim() ||
+          fallback.eligible !== true,
+      )
+    ) {
+      throw new Error("presentation_export_native_coverage_mismatch");
+    }
+    assertSameCount(nativeCoverage.nativeElementCount, coverageNative);
+    assertSameCount(
+      nativeCoverage.eligibleElementCount,
+      nativeCoverage.nativeElementCount + auditedEligible,
+    );
+    assertSameCount(
+      nativeCoverage.rasterFallbacks.length,
+      coverage.rasterRemaining,
+    );
+    const expectedRatio = nativeCoverage.eligibleElementCount
+      ? nativeCoverage.nativeElementCount / nativeCoverage.eligibleElementCount
+      : undefined;
+    if (
+      (expectedRatio === undefined && nativeCoverage.ratio !== undefined) ||
+      (expectedRatio !== undefined &&
+        (nativeCoverage.ratio === undefined ||
+          Math.abs(nativeCoverage.ratio - expectedRatio) > Number.EPSILON))
+    ) {
+      throw new Error("presentation_export_native_coverage_mismatch");
+    }
+  }
+  if (releaseQualityProfile(profile)) {
+    if (
+      !nativeCoverage ||
+      nativeCoverage.status !== "passed" ||
+      nativeCoverage.ratio === undefined ||
+      nativeCoverage.ratio < PRESENTATION_EXPORT_MINIMUM_NATIVE_COVERAGE_RATIO ||
+      nativeCoverage.rasterFallbacks.some(
+        (fallback) =>
+          !fallback.explicit ||
+          fallback.eligible !== true ||
+          !fallback.elementId.trim() ||
+          !fallback.reason.trim(),
+      )
+    ) {
+      throw new Error("presentation_export_release_native_coverage_blocked");
+    }
+  }
+}
+
 /** Join logical DOM promotion facts with readback from the exact assembled PPTX. */
 export function attachPresentationExportOoxmlReadback(
   logical: PresentationExportQualityReport,
@@ -617,13 +1010,47 @@ export function attachPresentationExportOoxmlReadback(
     logical.mode,
     logical.slides.map((slide) => {
       const observed = readbackBySlide.get(slide.slideNumber)!;
-      const observedQids = new Set((observed.qidCoverage ?? []).filter((entry) => entry.ooxml === "present").map((entry) => `${entry.kind}:${entry.elementId}`));
+      const observedEntries = (observed.qidCoverage ?? []).filter(
+        (entry) => entry.ooxml === "present",
+      );
+      const observedById = new Map<string, typeof observedEntries>();
+      for (const entry of observedEntries) {
+        const owners = observedById.get(entry.elementId) ?? [];
+        owners.push(entry);
+        observedById.set(entry.elementId, owners);
+      }
+      if (slide.qidCoverage) {
+        const declaredIds = new Set(slide.qidCoverage.map((entry) => entry.elementId));
+        const duplicateObserved = [...observedById.values()].some(
+          (owners) => owners.length !== 1,
+        );
+        const unexpectedObserved = [...observedById.keys()].some(
+          (elementId) => !declaredIds.has(elementId),
+        );
+        const missingOrMisowned = slide.qidCoverage.some((entry) => {
+          const owner = observedById.get(entry.elementId)?.[0];
+          if (!owner || owner.logical !== entry.logical) return true;
+          // Raster ownership is carried by a non-visual OOXML shape, so its
+          // carrier kind is intentionally independent from the declared kind.
+          return entry.logical === "native" && owner.kind !== entry.kind;
+        });
+        if (duplicateObserved || unexpectedObserved || missingOrMisowned) {
+          throw new Error("presentation_export_qid_ownership_mismatch");
+        }
+      }
       return {
         ...slide,
         logicalCoverage: slide.logicalCoverage,
         ooxmlReadback: observed.ooxmlReadback,
         backplateCount: observed.backplateCount,
-        ...(slide.qidCoverage ? { qidCoverage: slide.qidCoverage.map((entry) => ({ ...entry, ooxml: observedQids.has(`${entry.kind}:${entry.elementId}`) ? "present" as const : "missing" as const })) } : {}),
+        ...(slide.qidCoverage
+          ? {
+              qidCoverage: slide.qidCoverage.map((entry) => ({
+                ...entry,
+                ooxml: "present" as const,
+              })),
+            }
+          : {}),
         typographyIssues: [
           ...slide.typographyIssues,
           ...observed.typographyIssues,

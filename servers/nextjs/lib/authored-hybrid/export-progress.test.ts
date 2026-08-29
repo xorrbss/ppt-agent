@@ -33,6 +33,15 @@ test("progress is readable by operation id and tracks the per-slide pass", () =>
   assert.ok((snapshot?.elapsedMs ?? -1) >= 0);
 });
 
+test("workspace operation identity is not aliased to export attempt identity", () => {
+  resetExportProgressForTesting();
+  const exportAttemptId = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+  beginExportProgress(CACHE_KEY, OPERATION, Date.now());
+
+  assert.equal(readExportProgress(OPERATION)?.phase, "queued");
+  assert.equal(readExportProgress(exportAttemptId), null);
+});
+
 test("a late slide callback never moves the count backwards", () => {
   resetExportProgressForTesting();
   beginExportProgress(CACHE_KEY, OPERATION, Date.now());
@@ -72,4 +81,21 @@ test("an unknown operation reads as absent rather than as zero progress", () => 
   // Recording against an untracked export is a no-op, never a phantom record.
   recordExportProgress("never-started", { phase: "slides" });
   assert.equal(readExportProgress(OPERATION), null);
+});
+
+test("separate Next route module graphs share operation progress", async () => {
+  const writer = await import(`./export-progress.ts?writer=${Date.now()}`);
+  const reader = await import(`./export-progress.ts?reader=${Date.now()}`);
+  writer.resetExportProgressForTesting();
+  writer.beginExportProgress(CACHE_KEY, OPERATION, Date.now());
+  writer.recordExportProgress(CACHE_KEY, {
+    phase: "slides",
+    completedSlides: 2,
+    totalSlides: 3,
+  });
+
+  const shared = reader.readExportProgress(OPERATION);
+  assert.equal(shared?.phase, "slides");
+  assert.equal(shared?.completedSlides, 2);
+  assert.equal(shared?.totalSlides, 3);
 });

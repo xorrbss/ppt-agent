@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.hybrid-multizband-quality-schema",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Release quality readback preserves audited multi-z-band paint plans and their ordered native or raster band evidence.",
+  "scope": [
+    "authored-vnext",
+    "hybrid",
+    "quality-sidecar"
+  ],
+  "invariants": [
+    "Legacy single-backplate strategy remains accepted.",
+    "Audited multi-z-band bands preserve zBand, paintOwner, elementIds, and optional artifactDigest without dropping evidence."
+  ],
+  "forbidden": [
+    "Do not collapse multi-z-band evidence into a single backplate or remove QID ownership fields."
+  ],
+  "evidence": [
+    "servers/nextjs/lib/presentation-export-quality.ts",
+    "servers/nextjs/lib/presentation-export-quality.test.mjs"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-29T13:45:25.5552958+00:00"
+}

@@ -310,6 +310,7 @@ async def run_general_adapter(
             request.export_format,
             cookie_header=request.cookie_header,
             expected_revision=request.expected_revision,
+            workspace_operation_id=request.workspace_operation_id,
         )
     return _result(
         exported,

@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.requests import Request
-from starlette.responses import FileResponse, PlainTextResponse
+from starlette.responses import FileResponse, JSONResponse, PlainTextResponse
 
 from api.error_handling import install_api_error_handling
 from api.lifespan import app_lifespan
@@ -22,6 +22,7 @@ from utils.get_env import (
     get_enable_mock_endpoints_env,
 )
 from utils.path_helpers import get_resource_path
+from utils.slide_capture import get_render_runtime_snapshot
 
 
 def _maybe_init_sentry() -> None:
@@ -100,6 +101,20 @@ async def workspace_metrics_scrape() -> PlainTextResponse:
     return PlainTextResponse(
         WORKSPACE_METRICS.prometheus_text(),
         media_type="text/plain; version=0.0.4; charset=utf-8",
+    )
+
+
+@app.get(
+    "/metrics/authored-render-runtime",
+    response_class=JSONResponse,
+    include_in_schema=False,
+)
+async def authored_render_runtime_metrics() -> JSONResponse:
+    """Expose metadata-only Authored renderer cache/pool telemetry."""
+
+    return JSONResponse(
+        get_render_runtime_snapshot(),
+        headers={"Cache-Control": "no-store"},
     )
 
 

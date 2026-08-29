@@ -23,6 +23,7 @@ from .repository import (
     encode_catalog_cursor,
     master_catalog_item,
 )
+from .visibility import is_internal_authored_master_id
 
 
 @contextmanager
@@ -169,6 +170,8 @@ class FileAuthoredVNextMasterRepository:
                     head_record = MasterRevisionResponse.model_validate_json(
                         head_path.read_text(encoding="utf-8")
                     )
+                    if is_internal_authored_master_id(head_record.master_id):
+                        continue
                     if after is not None and head_record.master_id <= after:
                         continue
                     try:

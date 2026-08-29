@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 
 import {
@@ -193,5 +194,68 @@ test("production export rejects stale revision, invalid dependency state, and ov
         },
       ),
     /render_overflow_validation_failed/,
+  );
+});
+
+test("production export resolves canonical Scene assets from the sealed manifest", () => {
+  const bytes = Buffer.from("canonical-scene-image");
+  const digest = createHash("sha256").update(bytes).digest("hex");
+  const assetId = "asset:431cedf125e44b64a48b2351";
+  const presentation = {
+    ...persistedPresentation("authored", [
+      {
+        ...authoredSlide,
+        content: {
+          elements: [
+            {
+              kind: "image",
+              assetId,
+              assetDigest: `sha256:${digest}`,
+            },
+          ],
+        },
+      },
+    ]),
+    theme: {
+      authored_vnext: {
+        scene: {
+          assetManifest: [
+            {
+              assetId,
+              assetDigest: `sha256:${digest}`,
+              mediaType: "image/png",
+              storageReference: `data:image/png;base64,${bytes.toString("base64")}`,
+              sizeBytes: bytes.length,
+            },
+          ],
+        },
+      },
+    },
+  };
+
+  const artifact = createProductionRenderArtifact(presentation, {
+    target: "pptx",
+    source_sha256: SOURCE_SHA256,
+    expected_revision: 11,
+  });
+  assert.deepEqual(artifact.assets, [
+    {
+      asset_id: assetId,
+      kind: "image",
+      mime_type: "image/png",
+      sha256: digest,
+      status: "ready",
+    },
+  ]);
+
+  presentation.theme.authored_vnext.scene.assetManifest[0]!.storageReference =
+    "https://example.invalid/image.png";
+  assert.throws(
+    () =>
+      createProductionRenderArtifact(presentation, {
+        target: "pdf",
+        source_sha256: SOURCE_SHA256,
+      }),
+    /render_scene_asset_manifest_invalid/,
   );
 });

@@ -81,6 +81,8 @@ async def resolve_deck_plans(
     brand,
     style,
     roles: List[str],
+    *,
+    resolve_illustration: bool = True,
 ) -> AuthoredDeckPlans:
     """Resolve every deck-wide plan, in the order they depend on each other.
 
@@ -113,7 +115,7 @@ async def resolve_deck_plans(
     # it oscillated: the same real 77-slide deck came back with 4, then 73, then
     # 1 illustrated slides, because the slides cannot see one another.
     illustration_plan: Optional[AuthoredIllustrationPlan] = None
-    if _illustration_plan_applies(request, style):
+    if resolve_illustration and _illustration_plan_applies(request, style):
         illustration_plan = await resolve_illustration_plan(
             outline,
             brand,
@@ -129,4 +131,31 @@ async def resolve_deck_plans(
     )
 
 
-__all__ = ["AuthoredDeckPlans", "resolve_deck_plans"]
+async def resolve_final_outline_illustration_plan(
+    request: GeneratePresentationRequest,
+    outline: PresentationOutlineModel,
+    brand,
+    style,
+) -> Optional[AuthoredIllustrationPlan]:
+    """Resolve illustration choices only after chapter expansion is final.
+
+    The generation service starts this alongside header-contract resolution.
+    Both are pure deck-scoped reads of the same final outline, so neither can
+    alter the other and their independent provider calls need not serialize.
+    """
+
+    if not _illustration_plan_applies(request, style):
+        return None
+    return await resolve_illustration_plan(
+        outline,
+        brand,
+        style,
+        instructions=request.instructions,
+    )
+
+
+__all__ = [
+    "AuthoredDeckPlans",
+    "resolve_deck_plans",
+    "resolve_final_outline_illustration_plan",
+]

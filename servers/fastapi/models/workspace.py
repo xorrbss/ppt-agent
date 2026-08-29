@@ -395,6 +395,11 @@ class WorkspaceOperationActionRequest(BaseModel):
     # Kept for the shipped frontend v1 wire shape.  It is a presentation
     # revision precondition and never substitutes for operation version.
     expected_revision: Optional[int] = Field(default=None, ge=0)
+    recovery_revision: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        max_length=128,
+    )
 
     @field_validator("idempotency_key")
     @classmethod
@@ -403,6 +408,12 @@ class WorkspaceOperationActionRequest(BaseModel):
         if not normalized:
             raise ValueError("value must not be blank")
         return normalized
+
+    @model_validator(mode="after")
+    def validate_recovery_revision_action(self):
+        if self.recovery_revision is not None and self.action != "retry":
+            raise ValueError("recovery_revision is only valid for retry actions")
+        return self
 
 
 class WorkspaceCapabilitiesResponse(BaseModel):

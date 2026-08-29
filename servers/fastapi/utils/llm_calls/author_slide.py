@@ -58,6 +58,7 @@ from services.provider_usage_instrumentation import (
     provider_call_admission,
     record_provider_call,
 )
+from services.authored_generation_performance import authored_provider_concurrency
 from utils.llm_utils import extract_text, get_generate_kwargs
 
 logger = logging.getLogger(__name__)
@@ -65,6 +66,12 @@ logger = logging.getLogger(__name__)
 # A bespoke full-bleed HTML slide with inline CSS is large; give the model room so
 # the document is never truncated mid-markup (truncation => broken render).
 AUTHOR_MAX_TOKENS = 16000
+_FAST_ROLE_OUTPUT_BUDGETS = {
+    "COVER": 10_000,
+    "SECTION": 8_000,
+    "AGENDA": 8_000,
+    "CLOSING": 6_000,
+}
 STYLE_REFERENCE = "style_reference"
 EXACT_RECONSTRUCTION = "exact_reconstruction"
 _REFERENCE_MODES = frozenset({STYLE_REFERENCE, EXACT_RECONSTRUCTION})
@@ -138,8 +145,13 @@ def authored_semantic_dual_output_mode() -> str:
 # exports) that also relies on the default executor. The pool size IS the process-wide
 # authoring concurrency cap: every caller (author_deck's first pass AND the vision-QA
 # re-author) funnels through author_slide_html, so excess calls queue here instead of
-# fanning out to hundreds of provider requests at once. Tune via AUTHORED_AUTHOR_CONCURRENCY.
-AUTHOR_CONCURRENCY = _env_int("AUTHORED_AUTHOR_CONCURRENCY", 5)
+# fanning out to hundreds of provider requests at once. The deck pipeline uses
+# this same provider-specific cap; do not introduce an author-only override.
+try:
+    _selected_provider = str(get_llm_provider().value)
+except Exception:
+    _selected_provider = None
+AUTHOR_CONCURRENCY = authored_provider_concurrency(_selected_provider)
 _AUTHOR_EXECUTOR = ThreadPoolExecutor(
     max_workers=AUTHOR_CONCURRENCY, thread_name_prefix="author-slide"
 )
@@ -764,9 +776,36 @@ def fallback_slide_html(
 # in the forward list, not the disable list.)
 _REASONING_EFFORTS = ("minimal", "none", "low", "medium", "high", "xhigh")
 _REASONING_DISABLE = ("off", "default")
+_CODEX_REASONING_CAPABILITIES = {
+    # gpt-5.6-sol rejects the otherwise valid "minimal" level. Keep this
+    # capability exception local to the one authoring request builder so every
+    # author call has the same deterministic normalization before egress.
+    "gpt-5.6-sol": frozenset(("none", "low", "medium", "high", "xhigh", "max")),
+}
 
 
-def _authoring_extra_body(effort: Optional[str] = None) -> Optional[dict]:
+def _normalized_authoring_reasoning_effort(model: object, effort: str) -> str:
+    """Map a recognized Codex effort to the selected model's capability set."""
+
+    model_id = str(model or "").strip().lower()
+    capabilities = next(
+        (
+            supported
+            for family, supported in _CODEX_REASONING_CAPABILITIES.items()
+            if model_id == family or model_id.startswith(f"{family}-")
+        ),
+        None,
+    )
+    if capabilities is None or effort in capabilities:
+        return effort
+    # The capability table is ordered nowhere; choose the explicit lowest
+    # supported level rather than relying on iteration order.
+    return "none" if "none" in capabilities else effort
+
+
+def _authoring_extra_body(
+    effort: Optional[str] = None, *, model: object = None
+) -> Optional[dict]:
     """Per-slide codex reasoning-effort override (codex-only — the param 400s on
     providers that don't support it).
 
@@ -793,6 +832,7 @@ def _authoring_extra_body(effort: Optional[str] = None) -> Optional[dict]:
     if level in _REASONING_DISABLE:
         return None
     if level in _REASONING_EFFORTS:
+        level = _normalized_authoring_reasoning_effort(model, level)
         return {"reasoning": {"effort": level}}
     logger.warning(
         "%s=%r is not a recognized reasoning effort %s or a disable word %s; "
@@ -803,6 +843,30 @@ def _authoring_extra_body(effort: Optional[str] = None) -> Optional[dict]:
         _REASONING_DISABLE,
     )
     return None
+
+
+def _authoring_output_profile(
+    *,
+    role: str,
+    reference_mode: str,
+    structured_context: dict | None,
+    correction_hint: str | None,
+) -> tuple[int, str]:
+    """Select a fast role profile without weakening strict authoring modes."""
+
+    # Structured contexts include source-verbatim requests. Exact reconstruction
+    # and repairs likewise need the established 16k/low profile so a fixed
+    # source or a complex rejected document is never truncated to save time.
+    if (
+        reference_mode == EXACT_RECONSTRUCTION
+        or structured_context is not None
+        or correction_hint is not None
+    ):
+        return AUTHOR_MAX_TOKENS, "low"
+    budget = _FAST_ROLE_OUTPUT_BUDGETS.get((role or "").strip().upper())
+    if budget is not None:
+        return budget, "minimal"
+    return AUTHOR_MAX_TOKENS, "low"
 
 
 async def author_slide_html(
@@ -831,6 +895,9 @@ async def author_slide_html(
     capacity_brief: Optional[str] = None,
     correction_hint: Optional[str] = None,
     rejected_html: Optional[str] = None,
+    allow_provider_fallback: bool = True,
+    receipt_retry_class: Optional[str] = None,
+    receipt_attempt_ordinal: Optional[int] = None,
 ) -> str:
     """Author one bespoke, self-contained 1280x720 HTML slide. Single text-generation
     call against the configured provider; returns the cleaned HTML document.
@@ -842,6 +909,12 @@ async def author_slide_html(
     `source_images` are pictures the user already owns that this slide may place.
     An empty sequence attaches nothing and leaves the request as it was."""
     mode = normalize_reference_mode(reference_mode)
+    output_budget, default_reasoning_effort = _authoring_output_profile(
+        role=role,
+        reference_mode=mode,
+        structured_context=structured_context,
+        correction_hint=correction_hint,
+    )
     requested_images = tuple(reference_images or ())
     prompt = _author_prompt(
         content,
@@ -934,21 +1007,32 @@ async def author_slide_html(
         SystemMessage(content=author_slide_rules.SYSTEM_PROMPT),
         UserMessage(content=user_content),
     ]
-    kwargs = get_generate_kwargs(
-        model=model, messages=messages, max_tokens=AUTHOR_MAX_TOKENS
+    kwargs = get_generate_kwargs(model=model, messages=messages, max_tokens=output_budget)
+    reasoning = _authoring_extra_body(
+        reasoning_effort or default_reasoning_effort, model=model
     )
-    reasoning = _authoring_extra_body(reasoning_effort)
     if reasoning:
         # codex-only; get_extra_body() populates extra_body only for the (mutually
         # exclusive) CUSTOM provider, so this reasoning dict is the sole source here.
         kwargs["extra_body"] = reasoning
+    if not isinstance(allow_provider_fallback, bool):
+        raise ValueError("allow_provider_fallback must be a boolean")
+    if receipt_retry_class is not None and receipt_retry_class not in {"initial", "recovery"}:
+        raise ValueError("receipt_retry_class must be initial or recovery when provided")
+    if receipt_attempt_ordinal is not None and (
+        isinstance(receipt_attempt_ordinal, bool)
+        or not isinstance(receipt_attempt_ordinal, int)
+        or receipt_attempt_ordinal not in {1, 2}
+    ):
+        raise ValueError("receipt_attempt_ordinal must be 1 or 2 when provided")
+    initial_provider_attempt = receipt_attempt_ordinal or 1
     try:
         provider = str(get_llm_provider().value)
     except Exception:
         # Keep test/offline clients and legacy no-provider paths behaviorally
         # identical. With no durable scope this is never persisted.
         provider = "unknown"
-    provider_attempt = 0
+    provider_call_attempt = initial_provider_attempt - 1
 
     async def generate(generate_kwargs: dict):
         # Run the blocking call on the dedicated authoring pool (bounds concurrency to
@@ -956,12 +1040,12 @@ async def author_slide_html(
         # executor used by other LLM calls / exports).
         await _wait_for_author_rate_slot()
         loop = asyncio.get_running_loop()
-        nonlocal provider_attempt
-        provider_attempt += 1
+        nonlocal provider_call_attempt
+        provider_call_attempt += 1
         timer = ProviderCallTimer()
         response = None
         try:
-            async with provider_call_admission(is_retry=provider_attempt > 1):
+            async with provider_call_admission(is_retry=provider_call_attempt > 1):
                 enforce_llm_egress_policy()
                 response = await loop.run_in_executor(
                     _AUTHOR_EXECUTOR,
@@ -980,13 +1064,18 @@ async def author_slide_html(
                 model=str(model),
                 response=response,
                 latency_ms=timer.elapsed_ms,
-                retry_class="initial" if provider_attempt == 1 else "retry",
+                retry_class=(
+                    receipt_retry_class
+                    if receipt_retry_class is not None
+                    and provider_call_attempt == initial_provider_attempt
+                    else "initial" if provider_call_attempt == 1 else "recovery"
+                ),
             )
 
     try:
         response = await generate(kwargs)
     except Exception as error:
-        if not image_parts or mode == EXACT_RECONSTRUCTION:
+        if not allow_provider_fallback or not image_parts or mode == EXACT_RECONSTRUCTION:
             raise handle_llm_client_exceptions(error)
         logger.warning(
             "Multimodal authored generation failed for slide %d; retrying text-only",
@@ -997,7 +1086,7 @@ async def author_slide_html(
             UserMessage(content=prompt),
         ]
         fallback_kwargs = get_generate_kwargs(
-            model=model, messages=fallback_messages, max_tokens=AUTHOR_MAX_TOKENS
+            model=model, messages=fallback_messages, max_tokens=output_budget
         )
         if reasoning:
             fallback_kwargs["extra_body"] = reasoning

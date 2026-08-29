@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.performance-matrix-control",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Release benchmarks bind provider, model, prompt, environment, owned PIDs, cold receipts, and zero internal retries before accepting matrix evidence.",
+  "scope": [
+    "authored",
+    "performance",
+    "release"
+  ],
+  "invariants": [
+    "Matrix is 5, 10, and 20 slides at concurrency 1, 2, and 4 for cold and warm, with at least four repetitions.",
+    "Listener restart and client retry remain disabled.",
+    "Any internal retry invalidates that operation."
+  ],
+  "forbidden": [
+    "Do not treat cache labels or redacted example receipts as actual cold evidence.",
+    "Do not accept empty resource PID lists."
+  ],
+  "evidence": [
+    "scripts/authored-vnext-controlled-load.mjs",
+    "scripts/authored-vnext-controlled-load.matrix.example.json"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-29T06:45:32.2336144+00:00"
+}

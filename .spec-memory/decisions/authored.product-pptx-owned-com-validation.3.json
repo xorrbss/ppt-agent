@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.product-pptx-owned-com-validation",
+  "revision": 3,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Product COM QA proves a new PowerPoint PID and HWND before document operations, then checks slide-scoped native or raster QID owners and geometry digest.",
+  "scope": [
+    "authored",
+    "pptx",
+    "powerpoint",
+    "validation"
+  ],
+  "invariants": [
+    "No presentation is opened or saved until the COM HWND resolves to a PID absent from the preexisting PowerPoint census.",
+    "Native and raster QID ownership is exact per slide after reopen.",
+    "Chromium geometry is bound through OOXML readback and checked against reopened COM geometry."
+  ],
+  "forbidden": [
+    "Do not attach to, save, close, or quit an ownership-uncertain PowerPoint process.",
+    "Do not treat reopen stability or geometry digest binding as cross-renderer visual parity."
+  ],
+  "evidence": [
+    "servers/fastapi/services/presentation_export_powerpoint_qa.py",
+    "servers/fastapi/services/presentation_export_direct_attempt_service.py",
+    "servers/fastapi/tests/unit/test_presentation_export_powerpoint_qa.py",
+    "servers/nextjs/lib/authored-hybrid/pptx-quality-inspection.ts",
+    "servers/nextjs/lib/authored-hybrid/slide-layer.ts"
+  ],
+  "supersedes": "authored.product-pptx-owned-com-validation@2",
+  "recordedAt": "2026-08-29T07:59:18.1407485+00:00"
+}

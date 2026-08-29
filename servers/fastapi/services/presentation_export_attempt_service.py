@@ -176,6 +176,12 @@ async def require_export_asset_digests(
     """Revalidate each canonical immutable workspace asset against real bytes."""
 
     for raw_asset_id, expected_digest in sorted(expected_asset_digests.items()):
+        if raw_asset_id.startswith("asset:"):
+            # Canonical Scene assets have no workspace UUID row. Their strict
+            # manifest entry already binds ID, digest, media type, byte size,
+            # and either a digest-verified data URI or the exact asset-store
+            # reference. The source snapshot seals that storage reference.
+            continue
         try:
             asset_id = uuid.UUID(raw_asset_id)
             asset, private_path = await resolve_workspace_asset_download(

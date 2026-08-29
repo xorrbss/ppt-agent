@@ -56,6 +56,9 @@ from services.account_deletion_service import (
     AccountDeletionFenceConflict,
     require_active_account_generation,
 )
+from services.authored_composition_policy import (
+    AUTHORED_CAPACITY_BOUNDED_REPAIR_REVISION,
+)
 from services.workspace_error_registry import resolve_workspace_error
 from services.workspace_operation_titles import workspace_operation_title
 from utils.datetime_utils import get_current_utc_datetime
@@ -1146,6 +1149,42 @@ def _operation_retryable(operation: WorkspaceOperation) -> bool | None:
     return None
 
 
+def _is_explicit_authored_capacity_recovery(
+    operation: WorkspaceOperation,
+    request: WorkspaceOperationActionRequest,
+) -> bool:
+    """Admit only the deterministic authored-capacity repair revision.
+
+    This is intentionally not projected as ``retryable=true``. The original
+    failure remains terminal; an operator must submit the exact server-supported
+    recovery revision after deploying the bounded one-cycle repair.
+    """
+
+    if request.recovery_revision != AUTHORED_CAPACITY_BOUNDED_REPAIR_REVISION:
+        return False
+    if (
+        request.action != "retry"
+        or operation.kind != "presentation.generate"
+        or operation.state not in {"failed", "dead_letter"}
+        or operation.error_code != "authored_slide_capacity_exceeded"
+    ):
+        return False
+    if not (
+        isinstance(operation.error_detail, dict)
+        and operation.error_detail.get("retryable") is False
+    ):
+        return False
+    payload = operation.request_payload
+    generation_request = (
+        payload.get("generation_request") if isinstance(payload, dict) else None
+    )
+    return bool(
+        isinstance(generation_request, dict)
+        and generation_request.get("strategy") == "authored"
+        and _linked_generation_job_id(operation) is not None
+    )
+
+
 def _capacity_wait_projection(operation: WorkspaceOperation) -> tuple[bool, int | None]:
     """Return only durable, non-error capacity-wait metadata for clients."""
 
@@ -1808,6 +1847,8 @@ async def apply_workspace_action(
         "expected_operation_version": request.expected_operation_version,
         "expected_revision": request.expected_revision,
     }
+    if request.recovery_revision is not None:
+        request_payload["recovery_revision"] = request.recovery_revision
     request_hash = canonical_payload_hash(request_payload)
     existing_receipt = await _existing_action_receipt(
         session,
@@ -1856,6 +1897,12 @@ async def apply_workspace_action(
         "cancelled",
         "dead_letter",
     }
+    explicit_capacity_recovery = _is_explicit_authored_capacity_recovery(
+        operation,
+        request,
+    )
+    if request.recovery_revision is not None and not explicit_capacity_recovery:
+        raise WorkspaceServiceError("operation_not_retryable", status_code=409)
     if terminal_retry:
         if (
             request.expected_operation_version is not None
@@ -1867,6 +1914,7 @@ async def apply_workspace_action(
             and isinstance(operation.error_detail, dict)
             and operation.error_detail.get("retryable") is False
             and not _is_retryable_template_v2_outline_admission(operation)
+            and not explicit_capacity_recovery
         ):
             raise WorkspaceServiceError("operation_not_retryable", status_code=409)
         retry_of_operation_id = operation.id
@@ -1896,6 +1944,8 @@ async def apply_workspace_action(
             "retry_of_operation_id": str(source_operation.id),
             "account_deletion_generation": account_generation,
         }
+        if explicit_capacity_recovery:
+            retry_payload["recovery_revision"] = request.recovery_revision
         retry_request_hash = canonical_payload_hash(
             {
                 "retry_of_operation_id": str(source_operation.id),

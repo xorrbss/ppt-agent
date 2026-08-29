@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.product-pptx-owned-com-validation",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Product PPTX COM validation requires zero preexisting Office processes, manifest SHA/QID exactness, owned reopen/save-copy/readback, and survivor-free cleanup.",
+  "scope": [
+    "authored",
+    "pptx",
+    "powerpoint",
+    "validation"
+  ],
+  "invariants": [
+    "Refuse POWERPNT/soffice ownership ambiguity before Office work.",
+    "Compare source and reopened QID slide union exactly against a product-specific manifest.",
+    "Require source PPTX SHA stability, exact COM PID/HWND binding, render hash parity, and zero Office survivors."
+  ],
+  "forbidden": [
+    "Do not attach to, save, close, or terminate an ownership-uncertain Office process.",
+    "Do not treat optional LibreOffice conversion as PowerPoint parity proof."
+  ],
+  "evidence": [
+    "scripts/validate-authored-product-pptx.ps1",
+    "artifacts/authored-vnext-product-validation-20260829/plan-only.json"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-28T23:52:46.7655510+00:00"
+}

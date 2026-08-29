@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.product-pptx-owned-com-validation",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Owned Office validation is slide-scoped by QID and requires exact source/reopen readback, render hashes, source SHA, PID/HWND ownership, and zero survivors.",
+  "scope": [
+    "authored",
+    "pptx",
+    "powerpoint",
+    "validation"
+  ],
+  "invariants": [
+    "QID uniqueness is enforced per slide; the same canonical QID may appear on different slides.",
+    "Source and reopened slide+QID ownership must exactly match the product manifest.",
+    "PowerPoint QA accepts a nonnegative inspection_failures count but never self-promotes visual parity.",
+    "Source PPTX SHA must remain unchanged and all launched Office processes must be gone after validation."
+  ],
+  "forbidden": [
+    "Do not attach to, save, close, or terminate an ownership-uncertain Office process.",
+    "Do not equate exact reopen render hashes with semantic editability or cross-renderer visual parity."
+  ],
+  "evidence": [
+    "scripts/validate-authored-product-pptx.ps1",
+    "servers/fastapi/models/sql/presentation_export_attempt.py",
+    "servers/fastapi/tests/unit/test_presentation_export_attempt_service.py",
+    "artifacts/authored-vnext-product-validation-20260829/run-a14d61c2-v2/product-pptx-validation.json"
+  ],
+  "supersedes": "authored.product-pptx-owned-com-validation@1",
+  "recordedAt": "2026-08-29T01:16:39.6295298+00:00"
+}

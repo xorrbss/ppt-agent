@@ -461,6 +461,7 @@ async def _project_linked_generation_terminal(
     *,
     state: str,
     error_code: str | None = None,
+    resume_allowed: bool = True,
 ) -> bool:
     """Keep the rollout compatibility task in the operation transaction."""
 
@@ -484,6 +485,7 @@ async def _project_linked_generation_terminal(
         session,
         operation.id,
         error_code=error_code or "presentation_generation_failed",
+        resume_allowed=resume_allowed,
         expected_job_id=job_id,
     )
 
@@ -889,6 +891,7 @@ async def _transition_claim_failure(
             operation,
             state=decision.state,
             error_code=code,
+            resume_allowed=retryable,
         ):
             await session.rollback()
             return False

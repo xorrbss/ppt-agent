@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.release-export-atomic-binding",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Release export preserves requested policy and fails before success unless receipt, Scene, semantic source, QID census, sidecars, PPTX, and owned COM QA bind.",
+  "scope": [
+    "authored",
+    "release",
+    "hybrid-export"
+  ],
+  "invariants": [
+    "requested release profile remains distinct from the pre-export evaluation profile",
+    "one atomic binding covers quality receipt, Scene envelope, semantic emission, renderer source, exact-once QID census, sidecars, and PPTX SHA-256",
+    "release PowerPoint QA must be observation-sealed before success metadata is exposed"
+  ],
+  "forbidden": [
+    "downgrade requested release policy to development",
+    "terminalize export success after a binding mismatch",
+    "expose download-success metadata when release PowerPoint QA fails"
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_quality_receipt_v2.py",
+    "servers/fastapi/services/presentation_export_direct_attempt_service.py",
+    "servers/fastapi/services/presentation_export_powerpoint_qa.py",
+    "servers/fastapi/tests/unit/test_authored_quality_receipt_v2.py",
+    "servers/fastapi/tests/unit/test_presentation_export_attempt_service.py",
+    "servers/fastapi/tests/unit/test_presentation_export_powerpoint_qa.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-29T12:31:27.6471149+00:00"
+}

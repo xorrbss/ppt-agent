@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.capacity.terminal-residual",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Before terminal CLOSING capacity failure, one deterministic repair may remove at most three low-priority body leaves and must pass one fresh Chromium capture.",
+  "scope": [
+    "authored",
+    "capacity",
+    "composition",
+    "closing"
+  ],
+  "invariants": [
+    "The reducer applies only to ordinary-profile CLOSING slides and only to browser_body or QID over-capacity.",
+    "Source block IDs, semantic roles, capacity limits, title-edge gates, and font floors remain unchanged.",
+    "Accept repair only when one fresh Chromium recapture has no capacity violations; otherwise fail nonretryably."
+  ],
+  "forbidden": [
+    "Do not relax title, body, image, or supporting roles to satisfy capacity.",
+    "Do not retry deterministic residual capacity violations or mutate the database directly."
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_composition_policy.py",
+    "servers/fastapi/services/authored_presentation_generation.py",
+    "servers/fastapi/tests/unit/test_authored_composition_policy.py"
+  ],
+  "supersedes": "authored.capacity.terminal-residual@1",
+  "recordedAt": "2026-08-29T01:16:49.6577181+00:00"
+}

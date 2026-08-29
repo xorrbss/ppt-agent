@@ -25,6 +25,7 @@ export type AuthoredHybridEmbeddedFontFace =
 
 export const AUTHORED_HYBRID_TYPOGRAPHY_ISSUE_CODES = [
   "embedding-face-missing",
+  "embedding-glyph-missing",
   "font-substitution",
   "bounds-overflow",
   "backplate-collision",
@@ -57,6 +58,7 @@ export const AUTHORED_HYBRID_FALLBACK_REASONS = [
   "complex-diagram",
   "complex-table",
   "complex-transform",
+  "connector-text-clearance",
   "css-columns",
   "decorated-image",
   "decorated-text",
@@ -88,6 +90,7 @@ export const AUTHORED_HYBRID_FALLBACK_REASONS = [
   "unsupported-shape",
   "vertical-writing",
   "typography-embedding-face-missing",
+  "typography-embedding-glyph-missing",
   "typography-font-substitution",
   "typography-bounds-overflow",
   "typography-backplate-collision",
@@ -156,6 +159,8 @@ export interface AuthoredHybridTextRun {
    * breaks separate block-flow text.
    */
   breakKind?: "soft" | "line" | "paragraph";
+  /** Zero-based Chromium visual-line owner for this run. */
+  lineIndex?: number;
 }
 
 export interface AuthoredHybridTextBoxEdgesPx {

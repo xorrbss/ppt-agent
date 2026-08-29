@@ -47,7 +47,10 @@ from services.authored_vnext.integration.sql_repository import (
     AuthoredVNextSqlRepository,
 )
 from services.authored_vnext.master.digests import canonical_json
-from services.authored_vnext.master.errors import DeckAlreadyExistsError
+from services.authored_vnext.master.errors import (
+    DeckAlreadyExistsError,
+    MasterRevisionConflictError,
+)
 from services.source_content.edit_lifecycle import (
     mark_workbench_edit_modified_in_transaction,
 )
@@ -231,6 +234,21 @@ class SqlGenerationRepository:
             deck = DeckGenerationSnapshot.model_validate(row.payload)
             remember_composition_pin(deck.composition)
             return deck
+
+    @_retry_sqlite_write
+    def append_imported_master(self, master: MasterRevisionResponse) -> None:
+        """Persist an immutable server-owned generation master idempotently."""
+
+        try:
+            self._base.append_master(
+                master,
+                expected_revision=None,
+                expected_digest=None,
+            )
+        except MasterRevisionConflictError:
+            current = self.get_master(master.master_id, master.revision)
+            if current != master:
+                raise
 
     @_retry_sqlite_write
     def append_imported_deck(self, deck: DeckGenerationSnapshot) -> None:

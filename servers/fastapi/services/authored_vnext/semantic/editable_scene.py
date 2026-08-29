@@ -34,6 +34,7 @@ from models.authored_vnext.deck import (
     seal_deck_scene,
     seal_slide_scene,
 )
+from models.authored_vnext.deck.scene import SCENE_OWNER_CAPABILITY_KINDS
 from models.authored_vnext.master.contract import Rect
 from models.sql.slide import SlideModel
 from services.authored_vnext.generation.scene_compiler import default_scene_capabilities
@@ -557,6 +558,7 @@ def build_editable_hybrid_scene(
     composition_digest: str,
     deck_id: str | None = None,
     slide_ids: Sequence[str] | None = None,
+    source_digest_override: str | None = None,
 ):
     """Create an immutable shadow Scene; identity/geometry failures block owners."""
 
@@ -916,6 +918,14 @@ def build_editable_hybrid_scene(
                     semantic_role=semantic_role, editability=SceneEditability(), shape="rect",
                     fill=None, stroke=None,
                 )
+                if "shape" not in SCENE_OWNER_CAPABILITY_KINDS[capability]:
+                    # A raster/publication-blocked owner is represented by a
+                    # shape placeholder in Scene IR. Preserve the QID, role,
+                    # geometry, reason, and raster pixels, but use the closed
+                    # raster-integrity capability when the requested native
+                    # capability cannot legally describe a shape. Otherwise
+                    # seal_slide_scene rejects the owner before publication.
+                    capability = "editable.raster-island-integrity.v1"
                 if decision == "rasterIsland":
                     asset, asset_id = _raster_asset(png, slide_id=slide_id, owner_id=owner_id, bounds=placeholder)
                     assets.append(asset)
@@ -942,7 +952,7 @@ def build_editable_hybrid_scene(
                 raster_islands=islands,
             ),
         ))
-    source_digest = scene_digest({
+    source_digest = source_digest_override or scene_digest({
         "presentationId": presentation_id,
         "revision": revision,
         "htmlDigests": [scene_digest({"html": html}) for html in htmls],

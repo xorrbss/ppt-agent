@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.quality-preexport-native-coverage-boundary",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Development pre-export receipts may leave native coverage unassessed; release Hybrid must fail closed on post-export coverage and fallback audit.",
+  "scope": [
+    "authored",
+    "quality-receipt",
+    "hybrid-export"
+  ],
+  "invariants": [
+    "Default development receipts allow pending native coverage before export.",
+    "Release and strict profiles require native coverage denominator and audited fallback evidence."
+  ],
+  "forbidden": [
+    "Do not block development publication solely because post-export native evidence does not yet exist.",
+    "Do not weaken release native coverage checks."
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_quality_receipt_v2.py",
+    "servers/fastapi/tests/unit/test_authored_quality_receipt_v2.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-29T06:45:30.6568432+00:00"
+}

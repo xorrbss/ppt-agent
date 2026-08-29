@@ -14,6 +14,7 @@ from services.authored_quality_receipt_v2 import (
     public_attempt_id,
     quality_receipt_manifest_path,
     release_profile_requirements,
+    release_quality_policy,
 )
 
 
@@ -180,7 +181,8 @@ def test_unified_gate_keeps_safety_and_source_failures_as_blockers() -> None:
         }
     )
     assert evaluation.passed is False
-    assert evaluation.publication_status == "blocked"
+    assert evaluation.quality_status == "blocked"
+    assert evaluation.publication_status == "pending"
     assert "safety.residual" in evaluation.blockers
     assert "sourceReadback.failed" in evaluation.blockers
     assert evaluation.visual_review_status == "not_assessed"
@@ -225,6 +227,45 @@ def test_receipt_is_created_once_and_digest_binding_is_immutable() -> None:
             deck_html_digest="sha256:" + "2" * 64,
             evidence=evidence,
         )
+
+
+def test_requested_release_and_pre_export_policy_are_separately_digest_bound() -> None:
+    scene = {
+        "sceneDigest": "sha256:" + "3" * 64,
+        "sourceDigest": "sha256:" + "4" * 64,
+        "qidDigest": "sha256:" + "5" * 64,
+    }
+    receipt = create_quality_receipt_v2(
+        QualityReceiptLedger(),
+        attempt_id="release-attempt",
+        revision=3,
+        ledger_digest="sha256:" + "1" * 64,
+        deck_html_digest="sha256:" + "2" * 64,
+        evidence={
+            "safety": {"status": "passed"},
+            "capacity": {
+                "browserObserved": True,
+                "checks": {
+                    name: True
+                    for name in ("text", "title", "body", "font", "qid", "image")
+                },
+            },
+            "sourceReadback": {"required": False, "status": "not_applicable"},
+        },
+        requested_release_profile="release",
+        pre_export_evaluation_profile="default",
+        scene_envelope=scene,
+    )
+
+    payload = receipt.to_dict()
+    assert payload["releaseProfile"] == "release"
+    assert payload["requestedReleaseProfile"] == "release"
+    assert payload["preExportEvaluationProfile"] == "default"
+    assert payload["requestedReleasePolicyDigest"] != payload[
+        "preExportEvaluationPolicyDigest"
+    ]
+    assert payload["sceneEnvelopeDigest"] == scene["sceneDigest"]
+    assert receipt.gate_passed is True
 
 
 def test_missing_browser_metrics_fails_capacity_closed() -> None:
@@ -296,21 +337,150 @@ def test_optional_release_domains_are_not_assessed_unless_profile_requires_them(
             "safety": {"status": "passed"},
             "capacity": {"browserObserved": True, "checks": {name: True for name in ("text", "title", "body", "font", "qid", "image")}},
             "sourceReadback": {"verified": True},
+            "nativeCoverage": {"status": "not_assessed"},
         }
     )
+    assert evaluation.passed is True
     assert evaluation.visual_review_status == "not_assessed"
     assert evaluation.performance_status == "not_assessed"
+    assert evaluation.native_coverage_status == "not_assessed"
+    assert not any(item.startswith("nativeCoverage.") for item in evaluation.blockers)
     strict = evaluate_unified_gate(
         {
             "safety": {"status": "passed"},
             "capacity": {"browserObserved": True, "checks": {name: True for name in ("text", "title", "body", "font", "qid", "image")}},
             "sourceReadback": {"verified": True},
+            "nativeCoverage": {"status": "not_assessed"},
         },
         release_profile="strict",
     )
     assert strict.passed is False
     assert "visualReview.unverified" in strict.blockers
     assert "performance.unverified" in strict.blockers
+    assert "nativeCoverage.denominator_invalid" in strict.blockers
+    assert "nativeCoverage.fallback_audit_missing" in strict.blockers
+    assert "nativeCoverage.unverified" in strict.blockers
+
+
+def _release_evidence(*, native_count: int = 7) -> dict[str, object]:
+    fallback_count = 10 - native_count
+    return {
+        "safety": {"status": "passed"},
+        "capacity": {
+            "browserObserved": True,
+            "checks": {
+                name: True
+                for name in ("text", "title", "body", "font", "qid", "image")
+            },
+        },
+        "sourceReadback": {"status": "passed", "verified": True},
+        "visualReview": {"status": "passed"},
+        "performance": {
+            "status": "passed",
+            "scope": "pre_publication",
+            "stagesMs": {"outline": 10, "author": 20, "checkpoint": 5},
+            "totalMs": 35,
+        },
+        "nativeCoverage": {
+            "status": "passed",
+            "eligibleElementCount": 10,
+            "nativeElementCount": native_count,
+            "ratio": native_count / 10,
+            "rasterFallbacks": [
+                {
+                    "elementId": f"eligible-fallback-{index}",
+                    "reason": "complex-css",
+                    "eligible": True,
+                    "explicit": True,
+                }
+                for index in range(fallback_count)
+            ],
+        },
+    }
+
+
+def test_release_profile_requires_source_visual_performance_and_native_evidence() -> None:
+    evidence = _release_evidence()
+    evidence["sourceReadback"] = {"status": "not_applicable", "required": False}
+    evidence["visualReview"] = {"status": "not_applicable"}
+    evidence["performance"] = {"status": "not_assessed"}
+
+    evaluation = evaluate_unified_gate(evidence, release_profile="release")
+
+    assert evaluation.passed is False
+    assert evaluation.quality_status == "blocked"
+    assert "sourceReadback.failed" in evaluation.blockers
+    assert "visualReview.unverified" in evaluation.blockers
+    assert "performance.unverified" in evaluation.blockers
+
+
+def test_release_native_coverage_uses_every_audited_declared_owner() -> None:
+    passing = evaluate_unified_gate(_release_evidence(), release_profile="release")
+
+    assert passing.passed is True
+    assert passing.quality_status == "passed"
+    assert passing.native_coverage_status == "passed"
+    assert passing.native_coverage_ratio == pytest.approx(0.70)
+    assert passing.native_coverage_denominator == 10
+    assert passing.native_element_count == 7
+    assert len(passing.raster_fallbacks) == 3
+
+    below_minimum = evaluate_unified_gate(
+        _release_evidence(native_count=6),
+        release_profile="release",
+    )
+    assert below_minimum.passed is False
+    assert "nativeCoverage.below_minimum" in below_minimum.blockers
+
+    unaudited = _release_evidence()
+    unaudited["nativeCoverage"]["rasterFallbacks"][0].pop("reason")
+    failed_audit = evaluate_unified_gate(unaudited, release_profile="release")
+    assert "nativeCoverage.fallback_invalid" in failed_audit.blockers
+
+    shrunk = _release_evidence()
+    shrunk["nativeCoverage"]["rasterFallbacks"].append({
+        "elementId": "unsupported-effect",
+        "reason": "unsupported-filter",
+        "eligible": False,
+        "explicit": True,
+    })
+    failed_denominator = evaluate_unified_gate(shrunk, release_profile="release")
+    assert "nativeCoverage.denominator_shrunk" in failed_denominator.blockers
+
+
+def test_publication_completion_is_independent_from_quality_status() -> None:
+    passed = evaluate_unified_gate(
+        {**_release_evidence(), "publication": {"status": "completed"}},
+        release_profile="release",
+    )
+    blocked_evidence = _release_evidence()
+    blocked_evidence["visualReview"] = {"status": "failed"}
+    blocked_evidence["publication"] = {"status": "completed"}
+    blocked = evaluate_unified_gate(blocked_evidence, release_profile="release")
+
+    assert passed.quality_status == "passed"
+    assert passed.publication_status == "completed"
+    assert blocked.quality_status == "blocked"
+    assert blocked.publication_status == "completed"
+
+
+def test_named_release_policy_cannot_be_weakened_by_mapping_flags() -> None:
+    policy = release_quality_policy(
+        {
+            "id": "release",
+            "requireSourceReadback": False,
+            "requireVisualReview": False,
+            "requirePerformance": False,
+            "requireNativeCoverage": False,
+            "minimumNativeCoverageRatio": 0.2,
+        }
+    )
+
+    assert policy.require_source_readback is True
+    assert policy.require_visual_review is True
+    assert policy.require_performance is True
+    assert policy.require_native_coverage is True
+    assert policy.minimum_native_coverage_ratio == pytest.approx(0.70)
 
 
 def test_durable_writers_refresh_under_lock_instead_of_losing_records(tmp_path) -> None:

@@ -121,6 +121,25 @@ def _validate_authored_vnext_export_request(
         )
 
 
+def _authored_vnext_export_path(
+    *,
+    projection_present: bool,
+    export_format: str,
+    pptx_mode: Literal["fidelity", "hybrid"],
+) -> Literal["shared", "legacy-native", "semantic-hybrid"]:
+    if not projection_present:
+        return "shared"
+    # PDF is a browser/raster publication and owns no legacy native master
+    # reconstruction. Route it through the same semantic-safe shared boundary
+    # as Hybrid so an absent company-standard pin cannot manufacture a
+    # master_changed failure.
+    if export_format == "pdf":
+        return "semantic-hybrid"
+    if pptx_mode == "hybrid":
+        return "semantic-hybrid"
+    return "legacy-native"
+
+
 class WorkspaceExportOperationHandler:
     """Render then immutably publish an owner-scoped export artifact."""
 
@@ -158,7 +177,15 @@ class WorkspaceExportOperationHandler:
                 if isinstance(presentation.theme, Mapping)
                 else None
             )
-            if authored_vnext_projection is not None:
+            authored_vnext_export_path = _authored_vnext_export_path(
+                projection_present=authored_vnext_projection is not None,
+                export_format=export_format,
+                pptx_mode=pptx_mode,
+            )
+            if (
+                authored_vnext_projection is not None
+                and authored_vnext_export_path != "semantic-hybrid"
+            ):
                 _validate_authored_vnext_export_request(
                     claim.request_payload,
                     projection=authored_vnext_projection,
@@ -180,7 +207,7 @@ class WorkspaceExportOperationHandler:
         native_export = None
         native_export_attempt_id = None
         try:
-            if authored_vnext_projection is not None and export_format == "pptx":
+            if authored_vnext_export_path == "legacy-native":
                 if not isinstance(authored_vnext_projection, dict):
                     raise PresentationExportContractError(
                         "authored_vnext_export_projection_incomplete"

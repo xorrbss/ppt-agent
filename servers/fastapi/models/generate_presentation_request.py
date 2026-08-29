@@ -107,6 +107,14 @@ class GeneratePresentationRequest(BaseModel):
     template: str = Field(
         default="authored", description="Presentation source to use for generation"
     )
+    quality_profile: Literal["development", "release"] = Field(
+        default="development",
+        alias="qualityProfile",
+        description=(
+            "Requested Authored quality policy. Release remains subject to the "
+            "server-owned pre-export and export evidence gates."
+        ),
+    )
     strategy: Optional[
         Literal["authored", "template_v2"]
     ] = Field(

@@ -12,6 +12,7 @@ import {
   digestObservedDeclaredAssets,
   reconcileDeclaredObservation,
 } from "./semantic-reconciliation.ts";
+import { semanticRasterOwnerQids } from "./slide-layer.ts";
 import { assembleAuthoredHybridPptx } from "./pptx-assembler.ts";
 import { inspectPptxNativeElementReadback } from "./pptx-quality-inspection.ts";
 import { readPptxArchive, writePptxArchive } from "./pptx-archive.ts";
@@ -149,6 +150,75 @@ test("declared QID reconciliation ignores diagnostic DOM path and fails closed o
   assert.throws(
     () => reconcileDeclaredObservation(childDeclared, observation),
     /authored_semantic_qid_mismatch/
+  );
+});
+
+test("raster ownership excludes admitted native QIDs with residual paint telemetry", () => {
+  const fallbackElements = [
+    { elementId: "shape.native-with-shadow" },
+    { elementId: "shape.demoted" },
+  ];
+
+  assert.deepEqual(
+    semanticRasterOwnerQids(
+      fallbackElements,
+      new Set(["shape.native-with-shadow"]),
+    ),
+    ["shape.demoted"],
+  );
+});
+
+test("OOXML readback recovers one native owner from raster-classified shape fragments", async () => {
+  const source = {
+    ...base("shape.raster-admitted", 0, [80, 70, 280, 120]),
+    classification: {
+      mode: "raster",
+      candidateKind: "shape",
+      reasons: ["external-paint"],
+    },
+    shape: {
+      shape: "rectangle",
+      fill: { hex: "2457D6", alpha: 1 },
+      stroke: null,
+      strokeWidthPt: 0,
+      radiusPt: 0,
+      borderLines: [{
+        side: "bottom",
+        color: { hex: "0B1F3A", alpha: 1 },
+        widthPt: 1,
+        dash: "solid",
+      }],
+    },
+  };
+  const prepared = await prepareNativeElements([source], {
+    includeRasterShapes: true,
+  });
+  const backplatePng = await sharp({
+    create: {
+      width: 1280,
+      height: 720,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  }).png().toBuffer();
+  const skeleton = writePptxArchive(new Map([
+    ["[Content_Types].xml", Buffer.from('<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/></Types>')],
+    ["ppt/presentation.xml", Buffer.from('<?xml version="1.0"?><p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:sldSz cx="12192000" cy="6858000"/></p:presentation>')],
+    ["ppt/slides/slide1.xml", Buffer.from('<?xml version="1.0"?><p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/></p:spTree></p:cSld></p:sld>')],
+    ["ppt/slides/_rels/slide1.xml.rels", Buffer.from('<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/></Relationships>')],
+  ]));
+  const pptx = assembleAuthoredHybridPptx(skeleton, [{
+    slideNumber: 1,
+    backplatePng,
+    elements: prepared,
+  }]);
+
+  assert.deepEqual(
+    inspectPptxNativeElementReadback(pptx).map(({ elementId, kind }) => ({
+      elementId,
+      kind,
+    })),
+    [{ elementId: "shape.raster-admitted", kind: "shape" }],
   );
 });
 

@@ -20,7 +20,13 @@ import {
   type AuthoredHybridSlideLayer,
   type AuthoredHybridPptxProvenance,
 } from "./pptx-assembler.ts";
-import { isAuthoredPresentation } from "./presentation-mode.ts";
+import {
+  boundedReleaseRasterOnly,
+  EDITABLE_HYBRID_SHADOW_PROFILE_ID,
+  isAuthoredPresentation,
+  presentationEditableHybridProfileId,
+  presentationRequiresRasterOnlyHybrid,
+} from "./presentation-mode.ts";
 import { authoredRendererIsolationPolicy } from "./renderer-isolation.ts";
 import {
   beginExportProgress,
@@ -45,6 +51,7 @@ import {
 import { attachAuthoredHybridEvidence } from "./export-evidence.ts";
 import {
   resolveFontEmbeddingPlan,
+  sfntHasCodePoint,
   type FontEmbeddingPlan,
 } from "./font-embedding-policy.ts";
 import {
@@ -56,6 +63,7 @@ import {
   resolvePowerPointTypeface,
   type AuthoredEmbeddedTypefaceFaceEvidence,
 } from "./font-policy.ts";
+import { flattenPreparedNativeElements } from "./native-plan.ts";
 import {
   attachPresentationExportOoxmlReadback,
   createPresentationExportQuality,
@@ -67,10 +75,12 @@ import {
   imageFallbackSlide,
   noFontRenderingTelemetry,
 } from "./export-slide-quality.ts";
+import { materializeCanonicalSceneAssetsForSlide } from "./scene-html-assets.ts";
 
 const MAX_PRESENTATION_RESPONSE_BYTES = 50 * 1024 * 1024;
 const MAX_HYBRID_SLIDES = 100;
 const MAX_FIDELITY_PPTX_BYTES = 512 * 1024 * 1024;
+const KOREAN_NATIVE_EMBEDDING_FAMILY = "Noto Sans KR";
 const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
 // Total wall-clock budget for the bounded-concurrency per-slide hybrid pass. Each slide can
 // take ~90s worst case (extract + font-layout + backplate relaunches); without a ceiling a
@@ -78,24 +88,23 @@ const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
 // spent the remaining slides receive a separately isolated fidelity capture below. Never
 // retain the bundled export's shared-DOM raster: authored slide styles can collide there.
 const HYBRID_DECK_BUDGET_MS = 15 * 60_000;
-const HYBRID_CACHE_VERSION = "authored-hybrid-v17-editable-shadow-profile";
+const HYBRID_CACHE_VERSION =
+  "authored-hybrid-v22-raster-kind-reconciliation";
 const HYBRID_RESULT_CACHE_LIMIT = 24;
-// The bounded-release v3 contract has no Gate -1-qualified native subset.
-// Keep this code-path authoritative instead of making it conditional on an
-// operator-provided environment value: a missing or misspelled value must not
-// turn the bounded release into a native export.
-export const EDITABLE_HYBRID_SHADOW_PROFILE_ID =
-  "authored-editable-hybrid-ko-en-basic-v1";
+// Standard explicit Hybrid uses the element-level semantic/QID admission
+// gates. A persisted authored-vNext Scene projection, when present, is a
+// stronger authority and remains raster-only unless its bounded profile is
+// complete and unblocked.
+export {
+  boundedReleaseRasterOnly,
+  EDITABLE_HYBRID_SHADOW_PROFILE_ID,
+} from "./presentation-mode.ts";
 const HYBRID_EXPORT_CONCURRENCY = parseBoundedPositiveInt(
   process.env.AUTHORED_HYBRID_CONCURRENCY,
   resolveHybridExportConcurrencyDefault(),
   1,
   12,
 );
-
-export function boundedReleaseRasterOnly(profileId?: string): boolean {
-  return profileId !== EDITABLE_HYBRID_SHADOW_PROFILE_ID;
-}
 
 interface CompletedHybridExport {
   result: BundledPresentationExportResult;
@@ -139,6 +148,8 @@ export interface AuthoredHybridExportParams {
   explicitPptxMode?: boolean;
   /** Exact shadow-only profile that may exercise the bounded native subset. */
   editableHybridProfileId?: typeof EDITABLE_HYBRID_SHADOW_PROFILE_ID;
+  /** Internal fail-closed fact for a present but invalid Scene projection. */
+  invalidEditableHybridProjection?: boolean;
 }
 
 interface FetchedPresentation {
@@ -264,7 +275,9 @@ function nativeFontUsage(
   | "nativeTypefaceFamilies"
 > {
   const textElements = layers.flatMap((layer) =>
-    layer.elements.filter((element) => element.kind === "text"),
+    flattenPreparedNativeElements(layer.elements).filter(
+      (element) => element.kind === "text"
+    ),
   );
   const usedFamilies = new Set<string>();
   let usingEmbedded = 0;
@@ -572,7 +585,11 @@ export async function runAuthoredFidelityPresentationExport(
           throw new Error("authored_fidelity_slide_html_required");
         }
         const prepared = await prepareFidelitySlideLayer(
-          rawSlide.html_content,
+          materializeCanonicalSceneAssetsForSlide(
+            presentation,
+            rawSlide.html_content,
+            arrayIndex,
+          ),
           arrayIndex + 1,
           chromeExecutable,
         );
@@ -611,6 +628,24 @@ export async function runAuthoredFidelityPresentationExport(
     recordExportProgress(progressKey, { phase: "failed" });
     throw error;
   }
+}
+
+function embeddedGlyphAvailable(plan: FontEmbeddingPlan) {
+  const files = new Map(plan.files.map((file) => [file.sourceId, file] as const));
+  const faces = new Map(plan.faces.map((face) => [
+    `${normalizedTypeface(face.family)}\0${face.face}`,
+    face,
+  ] as const));
+  return (typeface: string, face: AuthoredEmbeddedTypefaceFaceEvidence["face"], codePoint: number) => {
+    const planned = faces.get(`${normalizedTypeface(typeface)}\0${face}`);
+    const file = planned ? files.get(planned.sourceId) : undefined;
+    if (!file) return false;
+    try {
+      return sfntHasCodePoint(file.data, codePoint, file.collectionFaceIndex);
+    } catch {
+      return false;
+    }
+  };
 }
 
 async function runUncachedAuthoredHybridExport(
@@ -659,7 +694,15 @@ async function runUncachedAuthoredHybridExport(
       const slide = rawSlide as StoredSlide;
       const html =
         typeof slide.html_content === "string" ? slide.html_content : "";
-      return { html, slideNumber: arrayIndex + 1, semantic };
+      return {
+        html: materializeCanonicalSceneAssetsForSlide(
+          presentation,
+          html,
+          arrayIndex,
+        ),
+        slideNumber: arrayIndex + 1,
+        semantic,
+      };
     });
 
     const deckStart = Date.now();
@@ -689,7 +732,10 @@ async function runUncachedAuthoredHybridExport(
       HYBRID_EXPORT_CONCURRENCY,
       async ({ html, slideNumber, semantic }) => {
         try {
-          if (boundedReleaseRasterOnly(params.editableHybridProfileId)) {
+          if (boundedReleaseRasterOnly(
+            params.editableHybridProfileId,
+            params.invalidEditableHybridProjection,
+          )) {
             const reason = "bounded-release-visual-parity-raster-required";
             return {
               layer: null,
@@ -750,6 +796,7 @@ async function runUncachedAuthoredHybridExport(
                 declaredElementIds: semantic.declaredElementIds,
                 declaredElements: semantic.declaredElements,
               },
+              embeddedGlyphAvailable(fontEmbeddingPlan),
             );
           } catch (error) {
             if (error instanceof AuthoredSemanticPublicationError) {
@@ -969,12 +1016,18 @@ export async function runAuthoredHybridPresentationExport(
     presentation,
     "hybrid",
   );
+  const editableHybridProfileId =
+    presentationEditableHybridProfileId(presentation);
+  const effectiveParams = {
+    ...params,
+    editableHybridProfileId,
+    invalidEditableHybridProjection:
+      presentationRequiresRasterOnlyHybrid(presentation),
+  };
 
   const fontEmbeddingPlan = await resolveFontEmbeddingPlan({
     requested: params.fontEmbedding !== false,
-    families: [
-      ...new Set(activeBinding.slides.flatMap((slide) => slide.fontFamilies)),
-    ],
+    families: nativeEmbeddingFamilies(activeBinding, editableHybridProfileId),
     // Full-font embedding keeps newly typed Hangul editable. The opt-in API can
     // add subset selection later without changing this safe default.
     strategy: "full",
@@ -989,7 +1042,7 @@ export async function runAuthoredHybridPresentationExport(
     fontEmbeddingPlan.cacheDiscriminator,
     params.exportAttemptId,
     params.canonicalSourceDigest,
-    params.editableHybridProfileId,
+    editableHybridProfileId,
   );
   const cached = await readCompletedHybridExport(cacheKey);
   if (cached) {
@@ -1011,7 +1064,7 @@ export async function runAuthoredHybridPresentationExport(
 
   beginExportProgress(cacheKey, params.operationId, Date.now());
   const job = runUncachedAuthoredHybridExport(
-    params,
+    effectiveParams,
     presentation,
     fetched.sourceSha256,
     activeBinding,
@@ -1122,4 +1175,23 @@ async function readCompletedHybridExport(
 
 function elapsedMs(startedAt: number): number {
   return Math.round(performance.now() - startedAt);
+}
+function nativeEmbeddingFamilies(
+  binding: ActiveEmissionExportBinding,
+  profileId: string | undefined,
+): string[] {
+  const authored = binding.slides.flatMap((slide) => slide.fontFamilies);
+  const requiresKoreanFace =
+    profileId === EDITABLE_HYBRID_SHADOW_PROFILE_ID ||
+    authored.some((family) =>
+      /(?:noto\s+sans\s+(?:kr|cjk)|pretendard|malgun|맑은\s*고딕)/iu.test(family)
+    );
+  // Browser CSS may name only the Latin face even when Hangul is resolved by
+  // a fallback. The sealed ko/en profile's script-aware serializer always
+  // emits Noto Sans KR for Hangul, so include that exact package family in the
+  // plan instead of discovering the requirement after packaging.
+  return [...new Set([
+    ...(requiresKoreanFace ? [KOREAN_NATIVE_EMBEDDING_FAMILY] : []),
+    ...authored,
+  ])];
 }

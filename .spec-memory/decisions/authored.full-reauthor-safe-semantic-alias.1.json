@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.full-reauthor-safe-semantic-alias",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Full re-author canonicalizes only safe time semantics before renderer admission and keeps ambiguous or active markup fail-closed.",
+  "scope": [
+    "authored-vnext",
+    "full-reauthor",
+    "renderer-admission"
+  ],
+  "invariants": [
+    "time datetime maps once to span title while visible text, QID, class, style, and allowed attributes remain intact.",
+    "Canonicalization runs after the single provider response and before validation and rendering.",
+    "Ambiguous attributes, unbalanced tags, script, iframe, and unsafe style remain rejected."
+  ],
+  "forbidden": [
+    "Do not expand the renderer allowlist for unaudited active markup.",
+    "Do not add provider retries or a second repair cycle for semantic aliases."
+  ],
+  "evidence": [
+    "servers/fastapi/utils/llm_calls/author_vision_qa.py",
+    "servers/fastapi/tests/unit/test_authored_hybrid_review.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-29T13:12:51.8720235+00:00"
+}

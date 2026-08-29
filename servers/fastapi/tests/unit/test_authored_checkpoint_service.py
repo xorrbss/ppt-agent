@@ -1,6 +1,10 @@
 import asyncio
 import hashlib
 import json
+import os
+from pathlib import Path
+import subprocess
+import sys
 import uuid
 from types import SimpleNamespace
 
@@ -102,6 +106,66 @@ def _install_one_slide_pipeline_fakes(monkeypatch, *, rendered_html):
     monkeypatch.setattr(pipeline, "author_planned_slide", unexpected_author)
     monkeypatch.setattr(pipeline, "render_html_to_png", fake_render)
     monkeypatch.setattr(pipeline, "record_local_stage", no_recording)
+
+
+def test_semantic_gate_recaptures_stale_role_metrics_once(monkeypatch):
+    old_html = (
+        '<main data-qid="slide" data-semantic-role="body">'
+        '<div data-qid="decorative"></div></main>'
+    )
+    gate_html = (
+        '<main data-qid="slide" data-semantic-role="decoration">'
+        '<div data-qid="decorative" data-semantic-role="decoration"></div></main>'
+    )
+    old_metrics = {"elements": [{"qid": "slide", "semanticRole": "body"}]}
+    gate_metrics = {
+        "elements": [{"qid": "slide", "semanticRole": "decoration"}]
+    }
+    ledger = pipeline.DeckEvidenceLedger(attempt_id="semantic-attempt")
+    ledger.record_slide(
+        attempt_id="semantic-attempt",
+        slide_index=0,
+        html=old_html,
+        png=b"old-png",
+        browser_metrics=old_metrics,
+        checkpoint_revision=7,
+    )
+    captures = []
+
+    async def fake_capture(html):
+        captures.append(html)
+        return SimpleNamespace(png=b"gate-png", browser_metrics=gate_metrics)
+
+    monkeypatch.setattr(pipeline, "render_html_to_png_with_metrics", fake_capture)
+
+    async def scenario():
+        pngs = [b"old-png"]
+        first = await pipeline._refresh_semantic_gate_evidence(
+            htmls=(gate_html,),
+            pngs=pngs,
+            evidence_ledger=ledger,
+            evidence_attempt_id="semantic-attempt",
+        )
+        second = await pipeline._refresh_semantic_gate_evidence(
+            htmls=(gate_html,),
+            pngs=pngs,
+            evidence_ledger=ledger,
+            evidence_attempt_id="semantic-attempt",
+        )
+        return pngs, first, second
+
+    pngs, first, second = asyncio.run(scenario())
+
+    assert captures == [gate_html]
+    assert pngs == [b"gate-png"]
+    assert first == (gate_metrics,)
+    assert second[0]["elements"][0]["semanticRole"] == "decoration"
+    latest = ledger.latest("semantic-attempt", 0)
+    assert latest is not None
+    assert latest.html == gate_html
+    assert latest.png == b"gate-png"
+    assert latest.browser_metrics["elements"][0]["semanticRole"] == "decoration"
+    assert latest.checkpoint_revision == 7
 
 
 def test_exception_metadata_is_bounded_and_redacts_secrets_paths_and_html():
@@ -405,16 +469,33 @@ def test_filesystem_evidence_recovers_db_pointer_and_clears_render_failure(
             html = "<section>durable html</section>"
             png = b"durable-png"
             metrics = {"revision": 0, "visible": True}
-            checkpoints.atomic_write(render_path, png)
-            checkpoints.write_valid_evidence(
-                render_path,
-                attempt_id=attempt_id,
-                slide_index=0,
-                revision=0,
-                html=html,
-                png=png,
-                metrics=metrics,
+            crash_writer = (
+                Path(__file__).parents[1]
+                / "support"
+                / "authored_checkpoint_crash_writer.py"
             )
+            crashed = subprocess.run(
+                [
+                    sys.executable,
+                    str(crash_writer),
+                    "--render-path",
+                    str(render_path),
+                    "--attempt-id",
+                    attempt_id,
+                    "--slide-index",
+                    "0",
+                    "--revision",
+                    "0",
+                ],
+                cwd=Path(__file__).parents[2],
+                env=os.environ.copy(),
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=30,
+            )
+            assert crashed.returncode == 91, crashed.stderr
+            assert render_path.read_bytes() == png
 
             recovered = await checkpoints.get_checkpoint(job.id, 0)
             assert recovered.render_status == "completed"

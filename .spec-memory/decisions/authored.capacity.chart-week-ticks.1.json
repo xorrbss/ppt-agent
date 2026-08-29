@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.capacity.chart-week-ticks",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Capacity treats exact numeric chart week ticks as supporting annotations while preserving source roles, text, QIDs, and the complete owner census.",
+  "scope": [
+    "authored-vnext",
+    "capacity",
+    "roadmap"
+  ],
+  "invariants": [
+    "Only QIDs matching *.chart.weekNN with the same one or two digit text qualify.",
+    "The rule applies only to capacity counting and never mutates semantic role, QID, source text, visibility, geometry, or owner census."
+  ],
+  "forbidden": [
+    "Do not generalize the exception to roadmap body copy, nonnumeric labels, mismatched ticks, or three-digit values."
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_composition_policy.py",
+    "servers/fastapi/tests/unit/test_authored_composition_policy.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-29T13:45:24.2536982+00:00"
+}

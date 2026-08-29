@@ -12,6 +12,7 @@ import {
   assessEmbeddingLicense,
   extractSfntCollectionFace,
   inspectSfntFont,
+  sfntHasCodePoint,
 } from "./font-sfnt-inspection.ts";
 
 export type {
@@ -20,7 +21,7 @@ export type {
   FontEmbeddingStrategy,
   SfntFontInspection,
 };
-export { assessEmbeddingLicense, inspectSfntFont };
+export { assessEmbeddingLicense, inspectSfntFont, sfntHasCodePoint };
 
 const MAX_EMBEDDED_FONT_SOURCE_BYTES = 32 * 1024 * 1024;
 const DEFAULT_WINDOWS_FONT_ROOT = "C:\\Windows\\Fonts";

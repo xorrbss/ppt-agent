@@ -19,7 +19,10 @@ from models.sql.authored_semantic_bundle import (
 )
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
-from services.authored_semantic_candidate import compile_semantic_components
+from services.authored_semantic_candidate import (
+    compile_authored_semantic_source,
+    compile_semantic_components,
+)
 from services.authored_vnext.semantic.canonical import SemanticContractError, bytes_digest
 from services.authored_vnext.semantic.lifecycle import (
     cutover_authored_emission_to_legacy,
@@ -55,6 +58,32 @@ def test_lifecycle_http_contract_accepts_uuid_strings() -> None:
     )
     assert request.operation_id == operation_id
     assert request.generation_attempt_id == attempt_id
+
+
+def test_semantic_compiler_keeps_sibling_after_void_image_under_dom_parent() -> None:
+    source = compile_authored_semantic_source(
+        """
+        <main data-qid="cover.slide">
+          <div data-qid="cover.browser">
+            <div data-qid="cover.agent">
+              <div data-qid="cover.agent-core">
+                <img data-qid="source.image" src="data:image/png;base64,AA==">
+              </div>
+            </div>
+            <div data-qid="cover.verified-signal"></div>
+          </div>
+        </main>
+        """,
+        slide_index=0,
+    )
+    elements = {element["elementId"]: element for element in source["elements"]}
+
+    assert elements["source.image"]["parentId"] == "cover.agent-core"
+    assert elements["cover.verified-signal"]["parentId"] == "cover.browser"
+    assert elements["cover.browser"]["childIds"] == [
+        "cover.agent",
+        "cover.verified-signal",
+    ]
 
 
 async def _exercise_lifecycle() -> None:

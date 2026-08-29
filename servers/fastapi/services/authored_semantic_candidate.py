@@ -23,6 +23,22 @@ _COMPLEX_CSS = re.compile(
 )
 _TEXT_TAGS = frozenset({"h1", "h2", "h3", "h4", "h5", "h6", "p", "span", "li", "dt", "dd", "label", "strong", "em", "small"})
 _GROUP_TAGS = frozenset({"main", "section", "article", "aside", "header", "footer", "nav", "ul", "ol"})
+_VOID_TAGS = frozenset({
+    "area",
+    "base",
+    "br",
+    "col",
+    "embed",
+    "hr",
+    "img",
+    "input",
+    "link",
+    "meta",
+    "param",
+    "source",
+    "track",
+    "wbr",
+})
 
 
 def _sha256_bytes(value: bytes) -> str:
@@ -41,15 +57,17 @@ class _DeclaredElementParser(HTMLParser):
         self.by_id: dict[str, dict[str, Any]] = {}
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag = tag.lower()
         values = {name.lower(): value or "" for name, value in attrs}
         qid = values.get("data-qid") or None
         parent_id = next((item for item in reversed(self.stack) if item), None)
-        self.stack.append(qid)
+        if tag not in _VOID_TAGS:
+            self.stack.append(qid)
         if qid is None:
             return
         classes = frozenset(values.get("class", "").lower().split())
         style = values.get("style", "")
-        kind = self._kind(tag.lower(), values, classes, style)
+        kind = self._kind(tag, values, classes, style)
         payload: dict[str, Any] | None = None
         raster_reason: str | None = None
         # A semantic source may declare only resources whose actual bytes have
@@ -82,7 +100,7 @@ class _DeclaredElementParser(HTMLParser):
             "intendedOrder": len(self.elements),
             "requiredFeatures": self._required_features(tag.lower(), classes, style),
             "_sourceMaterial": {
-                "tag": tag.lower(),
+                "tag": tag,
                 "style": style,
                 "class": values.get("class", ""),
                 "src": values.get("src", ""),
@@ -101,7 +119,8 @@ class _DeclaredElementParser(HTMLParser):
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self.handle_starttag(tag, attrs)
-        self.handle_endtag(tag)
+        if tag.lower() not in _VOID_TAGS:
+            self.handle_endtag(tag)
 
     def handle_endtag(self, _tag: str) -> None:
         if self.stack:

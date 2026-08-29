@@ -123,6 +123,7 @@ from utils.llm_provider import get_llm_provider, get_model
 from utils.slide_capture import (
     DOM_METRICS_VERSION,
     RENDER_CACHE_VERSION,
+    _render_cache_identity,
     chrome_runtime_digest,
     get_render_runtime_counters,
     render_html_to_png_with_metrics,
@@ -238,6 +239,16 @@ def _baseline_inspection_cache_key(
         request.source.htmlHash
         if request.source is not None
         else digest_parts("native-html/1", html)
+    )
+    # ``_render_cache_identity`` is the renderer's authoritative full input
+    # identity: authored Scene projection, local fonts/images/CSS, Chromium and
+    # measurement version.  Baseline inspection includes its own request-level
+    # font/renderer contracts below; this additional binding prevents an HTML
+    # stable but asset/environment-drifted baseline from being reused.
+    source_digest = digest_parts(
+        "baseline-render-identity/1",
+        source_digest,
+        _render_cache_identity(html).digest,
     )
     return inspection_cache_digest(
         spec_digest=digest_parts(
@@ -1073,6 +1084,30 @@ def _candidate_state_key(render_input_hash: str, plan_id: str) -> str:
     """Keep plan-local evidence distinct when two plans render identical HTML."""
 
     return f"{render_input_hash}:{plan_id}"
+
+
+def _attempt_immutable_artifact_fingerprint(
+    *,
+    attempt_id: uuid.UUID,
+    artifact: SlideSpecArtifactBundle,
+) -> str:
+    """Bind candidate and publication reuse to one immutable review attempt.
+
+    A matching candidate spec hash is not sufficient: local fonts/assets or the
+    render manifest may have changed while a worker was between candidate and
+    publication.  Including the attempt UUID makes cross-attempt row reuse
+    fail closed; every field below is produced by the canonical artifact build.
+    """
+
+    return digest_parts(
+        "slidespec-attempt-immutable-artifact/v1",
+        str(attempt_id),
+        artifact.render_input_hash,
+        artifact.html_hash,
+        artifact.render_hash,
+        artifact.image_hash,
+        artifact.manifest,
+    )
 
 
 def _store_candidate_state(
@@ -2101,6 +2136,14 @@ async def _run_one(
                 evidence=evidence_payload,
                 image_bytes=state.image,
             )
+            immutable_fingerprint = _attempt_immutable_artifact_fingerprint(
+                attempt_id=attempt_id,
+                artifact=candidate_blueprint,
+            )
+            candidate_blueprint.evidence = {
+                **candidate_blueprint.evidence,
+                "attemptImmutableFingerprint": immutable_fingerprint,
+            }
             candidate_artifact = (
                 await session.execute(
                     select(SlideSpecArtifactBundle).where(
@@ -2122,9 +2165,11 @@ async def _run_one(
                 or candidate_artifact.html_hash != candidate_blueprint.html_hash
                 or candidate_artifact.render_hash != candidate_blueprint.render_hash
                 or candidate_artifact.manifest != candidate_blueprint.manifest
+                or candidate_artifact.evidence.get("attemptImmutableFingerprint")
+                != immutable_fingerprint
             ):
                 raise SlideSpecArtifactError(
-                    "artifact.publish.render_fingerprint_conflict"
+                    "artifact.publish.attempt_fingerprint_conflict"
                 )
             await record_publication_attempt(
                 session,
@@ -2178,6 +2223,18 @@ async def _run_one(
                 },
                 image_bytes=state.image,
             )
+            published_fingerprint = _attempt_immutable_artifact_fingerprint(
+                attempt_id=attempt_id,
+                artifact=published_blueprint,
+            )
+            if published_fingerprint != immutable_fingerprint:
+                raise SlideSpecArtifactError(
+                    "artifact.publish.attempt_fingerprint_conflict"
+                )
+            published_blueprint.evidence = {
+                **published_blueprint.evidence,
+                "attemptImmutableFingerprint": immutable_fingerprint,
+            }
             artifact = (
                 await session.execute(
                     select(SlideSpecArtifactBundle).where(
@@ -2196,9 +2253,11 @@ async def _run_one(
                 or artifact.html_hash != published_blueprint.html_hash
                 or artifact.render_hash != published_blueprint.render_hash
                 or artifact.manifest != published_blueprint.manifest
+                or artifact.evidence.get("attemptImmutableFingerprint")
+                != immutable_fingerprint
             ):
                 raise SlideSpecArtifactError(
-                    "artifact.publish.render_fingerprint_conflict"
+                    "artifact.publish.attempt_fingerprint_conflict"
                 )
             await version_service.snapshot_slides(
                 session,

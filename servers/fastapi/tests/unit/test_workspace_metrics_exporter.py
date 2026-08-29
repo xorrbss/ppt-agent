@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from api.main import app
 from services import workspace_metrics_exporter as exporter
 from services.workspace_metrics import WORKSPACE_METRICS
+from utils import slide_capture
 
 
 def test_worker_metrics_endpoint_is_opt_in_and_validated(monkeypatch) -> None:
@@ -112,3 +113,31 @@ def test_api_metrics_scrape_is_session_independent_and_closed_schema() -> None:
     assert "prompt" not in response.text.lower()
     assert "filename" not in response.text.lower()
     WORKSPACE_METRICS.reset()
+
+
+def test_authored_render_runtime_metrics_are_metadata_only() -> None:
+    slide_capture.reset_render_runtime(clear_caches=True, retire_session=False)
+    client = TestClient(app)
+
+    response = client.get("/metrics/authored-render-runtime")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")
+    assert response.headers["cache-control"] == "no-store"
+    payload = response.json()
+    assert payload["schemaVersion"] == "authored-render-runtime/v2"
+    assert payload["chromeRuntimeDigest"].startswith("sha256:")
+    assert set(payload["cacheIdentity"]) == {
+        "render",
+        "identity",
+        "measurement",
+        "domMetrics",
+        "occlusionSensor",
+        "chromeReuseEnabled",
+    }
+    assert "render_cache_hits" in payload["counters"]
+    assert "metrics_recollection_requests" in payload["counters"]
+    assert "cache_identity_invalidations" in payload["counters"]
+    serialized = response.text.lower()
+    assert "<html" not in serialized
+    assert "data-qid" not in serialized

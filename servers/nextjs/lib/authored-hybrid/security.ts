@@ -87,6 +87,7 @@ const ALLOWED_CSS_PROPERTIES = new Set([
   "grid-row-end", "grid-row-gap", "grid-row-start", "grid-template", "grid-template-areas",
   "grid-template-columns", "grid-template-rows", "height", "hyphens", "inset", "inset-block",
   "inset-inline", "isolation", "justify-content", "justify-items", "justify-self", "left", "letter-spacing",
+  "image-rendering",
   "line-break", "line-height", "list-style", "list-style-image", "list-style-position", "list-style-type",
   "margin", "margin-block", "margin-block-end", "margin-block-start", "margin-bottom", "margin-inline",
   "margin-inline-end", "margin-inline-start", "margin-left", "margin-right", "margin-top", "mask", "mask-image", "mask-position", "mask-repeat", "mask-size", "max-height",
