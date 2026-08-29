@@ -9,6 +9,7 @@ source block for publication gates and later audit.
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 import hashlib
@@ -89,11 +90,19 @@ class BrowserSourceReadbackResult:
             "orderViolations": self.order_violations,
             "visibilityFailures": list(self.visibility_failures),
             "passed": self.passed,
+            # Only this browser verifier can mint the explicit admission bit
+            # consumed by QualityReceipt v2.  Keeping it separate from
+            # ``passed`` prevents arbitrary caller dictionaries from being
+            # treated as Chromium-verified evidence.
+            "verified": self.passed,
         }
 
 
 class _StampNode:
-    __slots__ = ("start", "end", "text", "hidden", "stamped", "source_id", "has_qid", "has_semantic_role")
+    __slots__ = (
+        "start", "end", "text", "hidden", "stamped", "source_id",
+        "has_qid", "qid_count", "has_semantic_role",
+    )
 
     def __init__(self, start: int, hidden: bool) -> None:
         self.start = start
@@ -103,6 +112,7 @@ class _StampNode:
         self.stamped = False
         self.source_id: str | None = None
         self.has_qid = False
+        self.qid_count = 0
         self.has_semantic_role = False
 
 
@@ -135,7 +145,8 @@ class _StampParser(HTMLParser):
                 node.stamped = True
                 node.source_id = value or ""
             elif lowered == "data-qid":
-                node.has_qid = bool(value)
+                node.has_qid = True
+                node.qid_count += 1
             elif lowered in {"data-semantic-role", "data-role"} or lowered == "role":
                 node.has_semantic_role = bool(value)
         self.nodes.append(node)
@@ -193,6 +204,23 @@ def stamp_source_block_ids(html_source: str, block_texts: Sequence[tuple[str, st
         if not block_id or not expected or block_id in used:
             raise BrowserSourceReadbackError("source_content_browser_readback_invalid", detail="source block IDs/text must be unique and non-empty")
         matching = [node for node in parser.nodes if not node.hidden and _text("".join(node.text)) == expected]
+        punctuation_repair = False
+        if not matching:
+            # Verbatim authoring can occasionally append the same terminal
+            # punctuation already present in the immutable source (``.`` ->
+            # ``..``). This is not accepted as equivalent readback: repair the
+            # uniquely identified leaf back to the exact source bytes before
+            # Chromium capture. Any other wording/punctuation drift still
+            # fails closed.
+            matching = [
+                node
+                for node in parser.nodes
+                if not node.hidden
+                and _has_only_duplicated_terminal_punctuation(
+                    _text("".join(node.text)), expected
+                )
+            ]
+            punctuation_repair = bool(matching)
         conflicts = [node for node in matching if node.stamped and node.source_id != block_id]
         if conflicts:
             raise BrowserSourceReadbackError("source_content_browser_readback_failed", detail="source block text is already bound to a conflicting ID", block_ids=(block_id,))
@@ -211,13 +239,32 @@ def stamp_source_block_ids(html_source: str, block_texts: Sequence[tuple[str, st
         if len(candidates) != 1:
             raise BrowserSourceReadbackError("source_content_browser_readback_failed", detail="source block text has no unique DOM element", block_ids=(block_id,))
         node = candidates[0]
+        if node.qid_count > 1:
+            raise BrowserSourceReadbackError(
+                "source_content_browser_readback_failed",
+                detail="source block has duplicate authored QID attributes",
+                block_ids=(block_id,),
+            )
+        if punctuation_repair:
+            # Only a leaf with one direct text token can be rewritten without
+            # disturbing nested emphasis, inline objects, or author markup.
+            if node.end != node.start + 2:
+                raise BrowserSourceReadbackError(
+                    "source_content_browser_readback_failed",
+                    detail="source block punctuation drift is not safely repairable",
+                    block_ids=(block_id,),
+                )
+            parser.tokens[node.start + 1] = html.escape(expected, quote=False)
         raw_tag = parser.tokens[node.start]
+        source_qid = deterministic_source_qid(block_id)
+        if node.has_qid:
+            raw_tag = _replace_source_qid(raw_tag, source_qid)
         close = raw_tag.rfind("/") if raw_tag.rstrip().endswith("/>") else raw_tag.rfind(">")
         if close < 0:
             raise BrowserSourceReadbackError("source_content_browser_readback_invalid", detail="invalid DOM start tag", block_ids=(block_id,))
         attributes = "" if node.stamped else source_block_data_attribute(block_id)
         if not node.has_qid:
-            attributes = (attributes + " " if attributes else "") + f'data-qid="{deterministic_source_qid(block_id)}"'
+            attributes = (attributes + " " if attributes else "") + f'data-qid="{source_qid}"'
         if not node.has_semantic_role:
             # Keep source text in the same semantic contract as authored text.
             # Heading tags are title targets; all other visible source text is
@@ -310,19 +357,32 @@ def stamp_source_image_block_ids(
         node for node in image_nodes
         if not node.stamped and not _is_decorative_image_tag(parser.tokens[node.start])
     ]
-    existing = [node.source_id or "" for node in image_nodes if node.stamped and node.source_id]
+    bound_nodes = [node for node in image_nodes if node.stamped and node.source_id]
+    existing = [node.source_id or "" for node in bound_nodes]
     if not available and existing == ids:
-        # Retry-safe: a second stamping pass with the same occurrence contract
-        # must not append duplicate attributes or consume a different image.
-        return str(html_source)
-    if len(available) != len(ids):
+        # A durable retry may reopen HTML stamped before canonical source QID
+        # ownership was enforced. Reuse the same occurrence owners and repair
+        # only their QID value in place.
+        target_nodes = bound_nodes
+    elif len(available) != len(ids):
         raise BrowserSourceReadbackError(
             "source_content_browser_readback_failed",
             detail="source image occurrence count does not match DOM images",
             block_ids=tuple(ids),
         )
-    for node, block_id in zip(available, ids, strict=True):
+    else:
+        target_nodes = available
+    for node, block_id in zip(target_nodes, ids, strict=True):
+        if node.qid_count > 1:
+            raise BrowserSourceReadbackError(
+                "source_content_browser_readback_failed",
+                detail="source image has duplicate authored QID attributes",
+                block_ids=(block_id,),
+            )
         raw_tag = parser.tokens[node.start]
+        source_qid = deterministic_source_qid(block_id)
+        if node.has_qid:
+            raw_tag = _replace_source_qid(raw_tag, source_qid)
         close = raw_tag.rfind("/") if raw_tag.rstrip().endswith("/>") else raw_tag.rfind(">")
         if close < 0:
             raise BrowserSourceReadbackError(
@@ -330,17 +390,41 @@ def stamp_source_image_block_ids(
                 detail="invalid image start tag",
                 block_ids=(block_id,),
             )
-        attrs = source_block_data_attribute(block_id)
-        attrs += f' data-qid="{deterministic_source_qid(block_id)}"'
+        attrs = "" if node.stamped else source_block_data_attribute(block_id)
+        if not node.has_qid:
+            attrs = (attrs + " " if attrs else "") + f'data-qid="{source_qid}"'
         # Source occurrences participate in the same semantic capacity gate as
         # authored text.  Stamp the role at the DOM boundary so Chromium
         # readback can prove that this is an intentional image element rather
         # than merely an HTML string containing an <img> tag.
-        attrs += ' data-semantic-role="image"'
-        parser.tokens[node.start] = raw_tag[:close].rstrip() + " " + attrs + raw_tag[close:]
+        if not node.has_semantic_role:
+            attrs = (attrs + " " if attrs else "") + 'data-semantic-role="image"'
+        parser.tokens[node.start] = (
+            raw_tag[:close].rstrip() + " " + attrs + raw_tag[close:]
+            if attrs
+            else raw_tag
+        )
         node.stamped = True
         node.source_id = block_id
     return "".join(parser.tokens)
+
+
+def _replace_source_qid(raw_tag: str, source_qid: str) -> str:
+    """Replace the one authored QID on a source-owned start tag in place."""
+
+    pattern = re.compile(
+        r"(\sdata-qid)(?:\s*=\s*(?:\"[^\"]*\"|'[^']*'|[^\s>]+))?(?=\s|/?>)",
+        re.IGNORECASE,
+    )
+    replaced, count = pattern.subn(
+        lambda match: f'{match.group(1)}="{source_qid}"', raw_tag, count=1
+    )
+    if count != 1:
+        raise BrowserSourceReadbackError(
+            "source_content_browser_readback_invalid",
+            detail="source QID attribute could not be replaced safely",
+        )
+    return replaced
 
 
 def _is_decorative_image_tag(raw_tag: str) -> bool:
@@ -396,6 +480,17 @@ def _field(value: Mapping[str, Any], *names: str, default: Any = None) -> Any:
 
 def _text(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()
+
+
+def _has_only_duplicated_terminal_punctuation(actual: str, expected: str) -> bool:
+    """Recognize one safe verbatim repair: duplicated final punctuation."""
+
+    actual_value, expected_value = _text(actual), _text(expected)
+    match = re.search(r"([.!?\u3002\uff01\uff1f])\1+$", actual_value)
+    if match is None or not expected_value.endswith(match.group(1)):
+        return False
+    repaired = actual_value[: match.start()] + match.group(1)
+    return repaired == expected_value
 
 
 def _finite_bbox(value: Any) -> dict[str, float] | None:
@@ -539,8 +634,27 @@ def verify_browser_source_readback(*, manifest: Any, outline: Any, browser_metri
         if expected_unit_order[index] != unit_id or outline_text_ids != expected_ids:
             order_violations += 1
             failed_slides.add(index)
-        if htmls is not None and metrics.get("source_digest") != "sha256:" + hashlib.sha256(htmls[index].encode("utf-8")).hexdigest():
-            raise BrowserSourceReadbackError("source_content_browser_readback_failed", detail="browser source digest does not match the captured HTML", slide_indices=(index,))
+        if htmls is not None:
+            expected_html_digest = "sha256:" + hashlib.sha256(
+                htmls[index].encode("utf-8")
+            ).hexdigest()
+            admitted_source_digest = _field(
+                metrics, "source_digest", "sourceDigest", default=None
+            )
+            admitted_render_digest = _field(
+                metrics, "render_digest", "renderDigest", default=None
+            )
+            digest_pattern = r"sha256:[0-9a-f]{64}"
+            if (
+                admitted_source_digest != expected_html_digest
+                or not isinstance(admitted_render_digest, str)
+                or re.fullmatch(digest_pattern, admitted_render_digest) is None
+            ):
+                raise BrowserSourceReadbackError(
+                    "source_content_browser_readback_failed",
+                    detail="browser capture identity does not match the rendered HTML",
+                    slide_indices=(index,),
+                )
         if _field(metrics, "probe_error", "probeError", default=None) or _field(metrics, "fonts_ready", "fontsReady", default=None) is not True:
             raise BrowserSourceReadbackError("source_content_browser_readback_failed", detail="browser font/probe telemetry is incomplete", slide_indices=(index,))
         canvas_width, canvas_height = _number(metrics.get("width")), _number(metrics.get("height"))
@@ -549,6 +663,15 @@ def verify_browser_source_readback(*, manifest: Any, outline: Any, browser_metri
         raw_elements = _field(metrics, "elements", default=())
         if not isinstance(raw_elements, Sequence) or isinstance(raw_elements, (str, bytes)):
             raise BrowserSourceReadbackError("source_content_browser_readback_failed", detail="browser elements telemetry is missing", slide_indices=(index,))
+        # A source QID is canonical only when Chromium observed exactly one DOM
+        # owner for it. Count every measured element, including non-source
+        # authored furniture, so a duplicate outside the source subset cannot
+        # masquerade as a valid source binding.
+        qid_counts = Counter(
+            str(_field(_mapping(item, "browser element metric"), "qid", default="") or "").strip()
+            for item in raw_elements
+        )
+        qid_counts.pop("", None)
         observed: list[tuple[int, str, BrowserSourceBlockEvidence]] = []
         seen: set[str] = set()
         seen_qids: set[str] = set()
@@ -621,7 +744,7 @@ def verify_browser_source_readback(*, manifest: Any, outline: Any, browser_metri
             semantic_role = str(_field(metric, "semantic_role", "semanticRole", "role", default="") or "").strip()
             declared_qid = str(_field(block, "qid", "sourceQid", "source_qid", default="") or "").strip()
             expected_qid = declared_qid or deterministic_source_qid(block_id)
-            qid_failure = qid != expected_qid
+            qid_failure = qid != expected_qid or qid_counts.get(qid, 0) != 1
             if block_kind == "image":
                 complete = _field(image_payload or {}, "complete", default=None) if isinstance(image_payload, Mapping) else None
                 image_visible = _field(image_payload or {}, "cssVisible", "css_visible", default=None) if isinstance(image_payload, Mapping) else None

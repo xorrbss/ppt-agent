@@ -68,8 +68,12 @@ from services.authored_source_images import (
 from services.authored_composition_policy import (
     blocking_safety_issues,
     build_authored_capacity_plan,
+    capacity_repair_instructions,
     capacity_violations,
     ensure_authored_semantic_roles,
+    reduce_authored_closing_capacity,
+    reduce_authored_closing_title_punctuation,
+    repair_authored_header_eyebrow_clip,
     repair_authored_layout_alignment,
     resolve_composition_profile,
 )
@@ -93,6 +97,7 @@ from utils.llm_calls.author_vision_qa import (
     AuthoredVqaResidualDomIssuesError,
     revise_authored_deck,
 )
+from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
 from utils.slide_capture import (
     _placeholder_png,
     ensure_browser_metrics,
@@ -108,6 +113,7 @@ from services.authored_quality_receipt_v2 import (
 )
 from services.source_content.browser_readback import (
     BrowserSourceReadbackError,
+    stamp_source_block_ids,
     verify_browser_source_readback,
 )
 from services.source_content.readback import (
@@ -117,6 +123,154 @@ from services.source_content.readback import (
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _callable_accepts_keyword(callable_object, keyword: str) -> bool:
+    """Return whether a runtime adapter can receive one named argument."""
+
+    parameters = inspect.signature(callable_object).parameters
+    return keyword in parameters or any(
+        parameter.kind is inspect.Parameter.VAR_KEYWORD
+        for parameter in parameters.values()
+    )
+
+
+def _capacity_gate_initial_critiques(
+    gate_failures: list[dict[str, object]],
+    slide_indices: list[int],
+    roles: list[str],
+    *,
+    allow_text_reduction: bool = True,
+) -> list[SlideCritique | None]:
+    """Make deterministic capacity failures start the existing one-cycle repair."""
+
+    violations_by_slide: dict[int, list[str]] = {}
+    for failure in gate_failures:
+        slide_index = failure.get("slide_index")
+        if not isinstance(slide_index, int):
+            continue
+        for issue in failure.get("issues", ()):
+            if isinstance(issue, dict) and issue.get("category") == "capacity":
+                message = str(issue.get("message") or "").strip()
+                if message:
+                    violations_by_slide.setdefault(slide_index, []).append(message)
+    return [
+        (
+            SlideCritique(
+                needs_fix=True,
+                issues=[
+                    CritiqueIssue(type="overflow", severity="high", detail=detail)
+                    for detail in capacity_repair_instructions(
+                        roles[index],
+                        violations_by_slide.get(index, ()),
+                        allow_text_reduction=allow_text_reduction,
+                    )
+                ],
+            )
+            if violations_by_slide.get(index)
+            else None
+        )
+        for index in slide_indices
+    ]
+
+
+async def _bind_bounded_repair_evidence(
+    htmls: list[str],
+) -> tuple[list[str], list[bytes], list[object]]:
+    """Capture exact final HTML/pixels/metrics for bounded repair results."""
+
+    bound_htmls: list[str] = []
+    bound_pngs: list[bytes] = []
+    bound_metrics: list[object] = []
+    for html in htmls:
+        canonical_html = ensure_authored_semantic_roles(ensure_authored_qids(html))
+        capture = await render_html_to_png_with_metrics(canonical_html)
+        if capture.png == _placeholder_png() or capture.browser_metrics is None:
+            raise RuntimeError("bounded repair browser evidence unavailable")
+        bound_htmls.append(canonical_html)
+        bound_pngs.append(capture.png)
+        bound_metrics.append(capture.browser_metrics)
+    return bound_htmls, bound_pngs, bound_metrics
+
+
+async def _apply_bounded_header_eyebrow_fallback(
+    *,
+    html: str,
+    browser_metrics: object,
+    capacity,
+    header_contract: AuthoredHeaderContract | None,
+    role: str,
+    allow_immutable_checkpoint_geometry: bool = False,
+) -> tuple[str, bytes, object] | None:
+    """Apply and verify the single contract-scoped eyebrow clip fallback."""
+
+    if capacity_violations(html, browser_metrics, capacity) != (
+        "browser_text_not_visible:header.eyebrow",
+    ):
+        return None
+    patched = repair_authored_header_eyebrow_clip(
+        html,
+        browser_metrics,
+        header_contract,
+        role,
+        allow_immutable_checkpoint_geometry=allow_immutable_checkpoint_geometry,
+    )
+    if patched == html:
+        return None
+    bound_htmls, bound_pngs, bound_metrics = await _bind_bounded_repair_evidence(
+        [patched]
+    )
+    if capacity_violations(bound_htmls[0], bound_metrics[0], capacity):
+        return None
+    return bound_htmls[0], bound_pngs[0], bound_metrics[0]
+
+
+async def _apply_bounded_closing_capacity_reducer(
+    *,
+    html: str,
+    browser_metrics: object,
+    capacity,
+    profile_id: str,
+) -> tuple[str, bytes, object] | None:
+    """Reduce and Chromium-verify one ordinary CLOSING capacity residual."""
+
+    reduced = reduce_authored_closing_capacity(
+        html,
+        browser_metrics,
+        capacity,
+        profile_id=profile_id,
+    )
+    if reduced == html:
+        return None
+    bound_htmls, bound_pngs, bound_metrics = await _bind_bounded_repair_evidence(
+        [reduced]
+    )
+    if capacity_violations(bound_htmls[0], bound_metrics[0], capacity):
+        return None
+    return bound_htmls[0], bound_pngs[0], bound_metrics[0]
+
+
+async def _apply_bounded_closing_title_reducer(
+    *,
+    html: str,
+    browser_metrics: object,
+    capacity,
+    profile_id: str,
+) -> tuple[str, bytes, object] | None:
+    reduced = reduce_authored_closing_title_punctuation(
+        html,
+        browser_metrics,
+        capacity,
+        profile_id=profile_id,
+    )
+    if reduced == html:
+        return None
+    bound_htmls, bound_pngs, bound_metrics = await _bind_bounded_repair_evidence(
+        [reduced]
+    )
+    if capacity_violations(bound_htmls[0], bound_metrics[0], capacity):
+        return None
+    return bound_htmls[0], bound_pngs[0], bound_metrics[0]
 
 
 async def _apply_bounded_layout_alignment_repairs(
@@ -137,22 +291,122 @@ async def _apply_bounded_layout_alignment_repairs(
         repaired = repair_authored_layout_alignment(html, role=role)
         if repaired == html:
             continue
-        canonical_html = ensure_authored_semantic_roles(ensure_authored_qids(repaired))
-        capture = await render_html_to_png_with_metrics(canonical_html)
-        if capture.png == _placeholder_png() or capture.browser_metrics is None:
-            raise RuntimeError("bounded layout alignment browser evidence unavailable")
+        bound_htmls, bound_pngs, bound_metrics = await _bind_bounded_repair_evidence(
+            [repaired]
+        )
         violations = capacity_violations(
-            canonical_html, capture.browser_metrics, capacity_plan.at(index)
+            bound_htmls[0], bound_metrics[0], capacity_plan.at(index)
         )
         if violations:
             raise RuntimeError(
                 "bounded layout alignment repair failed capacity validation: "
                 + ",".join(violations)
             )
-        htmls[index], pngs[index] = canonical_html, capture.png
-        metrics_override[index] = capture.browser_metrics
+        htmls[index], pngs[index] = bound_htmls[0], bound_pngs[0]
+        metrics_override[index] = bound_metrics[0]
         repaired_indices.append(index)
     return repaired_indices
+
+
+async def _apply_final_checkpoint_header_eyebrow_fallback(
+    *,
+    pipeline,
+    htmls: list[str],
+    pngs: list[bytes],
+    capacity_plan,
+    header_contract: AuthoredHeaderContract | None,
+    roles: list[str],
+    metrics_override: dict[int, object],
+    already_attempted: bool,
+) -> tuple[bool, int | None]:
+    """Try the strict local fallback once when the first gate missed recovery.
+
+    The candidate metrics must be retained for the exact final HTML.  A caller
+    that already entered the fallback after provider repair cannot enter again,
+    even when its post-capture gate failed, so one deck attempt performs at most
+    one deterministic eyebrow recapture.
+    """
+
+    if already_attempted:
+        return True, None
+    ledger = getattr(pipeline, "evidence_ledger", None)
+    attempt_id = getattr(pipeline, "evidence_attempt_id", None)
+    if ledger is None or not attempt_id:
+        return False, None
+    for index, html in enumerate(htmls):
+        latest = ledger.latest(attempt_id, index)
+        if (
+            latest is None
+            or latest.html != html
+            or latest.browser_metrics is None
+            or capacity_violations(
+                html, latest.browser_metrics, capacity_plan.at(index)
+            )
+            != ("browser_text_not_visible:header.eyebrow",)
+        ):
+            continue
+        fallback = await _apply_bounded_header_eyebrow_fallback(
+            html=html,
+            browser_metrics=latest.browser_metrics,
+            capacity=capacity_plan.at(index),
+            header_contract=header_contract,
+            role=roles[index],
+            allow_immutable_checkpoint_geometry=(
+                latest.capture_policy == "hydrated"
+            ),
+        )
+        if fallback is None:
+            return True, None
+        htmls[index], pngs[index], metrics_override[index] = fallback
+        return True, index
+    return False, None
+
+
+async def _apply_final_checkpoint_closing_capacity_reducer(
+    *,
+    pipeline,
+    htmls: list[str],
+    pngs: list[bytes],
+    capacity_plan,
+    profile_id: str,
+    metrics_override: dict[int, object],
+) -> list[int]:
+    """Reduce final CLOSING-only capacity residuals from exact checkpoint bytes."""
+
+    if profile_id != "ordinary":
+        return []
+    ledger = getattr(pipeline, "evidence_ledger", None)
+    attempt_id = getattr(pipeline, "evidence_attempt_id", None)
+    repaired: list[int] = []
+    for index, html in enumerate(htmls):
+        capacity = capacity_plan.at(index)
+        if capacity.role.strip().upper() != "CLOSING":
+            continue
+        metrics = metrics_override.get(index)
+        if metrics is None and ledger is not None and attempt_id:
+            latest = ledger.latest(attempt_id, index)
+            if latest is not None and latest.html == html:
+                metrics = latest.browser_metrics
+        if metrics is None:
+            continue
+        reduced = await _apply_bounded_closing_capacity_reducer(
+            html=html,
+            browser_metrics=metrics,
+            capacity=capacity,
+            profile_id=profile_id,
+        )
+        if reduced is None:
+            reduced = await _apply_bounded_closing_title_reducer(
+                html=html,
+                browser_metrics=metrics,
+                capacity=capacity,
+                profile_id=profile_id,
+            )
+        if reduced is None:
+            continue
+        htmls[index], pngs[index], metrics_override[index] = reduced
+        repaired.append(index)
+    return repaired
 
 
 def build_authored_quality_gate_receipt(
@@ -180,6 +434,17 @@ def build_authored_quality_gate_receipt(
         "residualIssueCount": len(residual),
         "residualIssues": residual,
     }
+
+
+def _evaluate_capacity_role_evidence(metrics: object, capacity: object) -> dict[str, object]:
+    """Evaluate final semantic owners without rebinding source text to a role.
+
+    Source readback separately proves each immutable block's exact browser text.
+    Capacity owns the final composition instead: title/body role presence, caps,
+    font, QID, image, and visibility checks over the HTML being published.
+    """
+
+    return evaluate_capacity_browser_metrics(metrics, capacity)
 
 
 def _finalize_attempt_evidence(
@@ -264,6 +529,29 @@ def _source_block_bindings(request) -> tuple[tuple[tuple[str, str], ...], ...] |
     return tuple(result)
 
 
+def _require_source_verbatim_bindings(
+    htmls: list[str],
+    bindings: tuple[tuple[tuple[str, str], ...], ...] | None,
+) -> None:
+    """Require the exact source seal to have existed before Chromium render."""
+
+    if bindings is None or len(bindings) != len(htmls):
+        raise BrowserSourceReadbackError(
+            "source_content_browser_readback_failed",
+            detail="source text bindings are unavailable for the rendered deck",
+        )
+    for slide_index, (html, slide_bindings) in enumerate(
+        zip(htmls, bindings, strict=True)
+    ):
+        stamped = stamp_source_block_ids(html, slide_bindings)
+        if stamped != html:
+            raise BrowserSourceReadbackError(
+                "source_content_browser_readback_failed",
+                detail="source text was not sealed before Chromium render",
+                slide_indices=(slide_index,),
+            )
+
+
 def _source_image_block_bindings(request) -> tuple[tuple[str, ...], ...] | None:
     """Project source image *occurrences* into deterministic DOM bindings."""
 
@@ -321,6 +609,15 @@ async def _final_authored_quality_gate(
                 html, browser_metrics, capacity_plan.at(index)
             )
             if violations:
+                # Keep a content-free, digest-bound diagnostic in the service
+                # log even though the workspace projection exposes only a safe
+                # terminal code.
+                LOGGER.error(
+                    "[authored] final capacity failure slide=%d html_digest=%s violations=%s",
+                    index + 1,
+                    digest_html(html),
+                    list(violations),
+                )
                 raise AuthoredStageError(
                     slide_index=index,
                     stage="render",
@@ -658,6 +955,24 @@ async def _generate_authored_presentation(
         composition_profile = resolve_composition_profile(request)
         request._authored_composition_profile = composition_profile
     source_reflow = bool(request._source_content_authored_reflow)
+    source_text_bindings = (
+        _source_block_bindings(request)
+        if source_reflow and composition_profile.text_mode == "verbatim"
+        else None
+    )
+    source_image_bindings = (
+        _source_image_block_bindings(request) if source_reflow else None
+    )
+    if source_reflow and (
+        source_text_bindings is None or source_image_bindings is None
+    ):
+        raise AuthoredStageError(
+            slide_index=0,
+            stage="author",
+            code="source_content_browser_readback_failed",
+            retryable=False,
+            message="source bindings are unavailable before Chromium render",
+        )
     pipeline_kwargs = {
         "header_contract": header_contract,
         "page_number_mode": page_number_mode_for(header_contract),
@@ -668,23 +983,14 @@ async def _generate_authored_presentation(
     }
     # Keep narrow legacy/test doubles source-compatible while the product
     # pipeline consumes the frozen composition profile.
-    if "composition_profile" in inspect.signature(
-        _author_illustrate_render_pipeline
-    ).parameters:
+    if _callable_accepts_keyword(
+        _author_illustrate_render_pipeline, "composition_profile"
+    ):
         pipeline_kwargs["composition_profile"] = composition_profile
-    if (
-        source_reflow
-        and composition_profile.text_mode == "verbatim"
-        and "source_block_bindings"
-        in inspect.signature(_author_illustrate_render_pipeline).parameters
-    ):
-        pipeline_kwargs["source_block_bindings"] = _source_block_bindings(request)
-    if (
-        source_reflow
-        and "source_image_block_bindings"
-        in inspect.signature(_author_illustrate_render_pipeline).parameters
-    ):
-        pipeline_kwargs["source_image_block_bindings"] = _source_image_block_bindings(request)
+    if source_text_bindings is not None:
+        pipeline_kwargs["source_block_bindings"] = source_text_bindings
+    if source_image_bindings is not None:
+        pipeline_kwargs["source_image_block_bindings"] = source_image_bindings
     pipeline = await _author_illustrate_render_pipeline(
         outline,
         brand,
@@ -707,6 +1013,18 @@ async def _generate_authored_presentation(
         htmls = list(authored_deck.htmls)
     else:
         htmls = [ensure_authored_qids(html) for html in authored_deck.htmls]
+    if source_reflow and composition_profile.text_mode == "verbatim":
+        try:
+            _require_source_verbatim_bindings(htmls, source_text_bindings)
+        except BrowserSourceReadbackError as error:
+            raise AuthoredStageError(
+                slide_index=(error.slide_indices[0] if error.slide_indices else 0),
+                stage="author",
+                code=error.code,
+                cause=error,
+                retryable=False,
+                message=error.detail,
+            ) from error
     pngs = pipeline.pngs
 
     fixed_count = 0
@@ -740,6 +1058,7 @@ async def _generate_authored_presentation(
         if isinstance(item, dict) and isinstance(item.get("slide_index"), int)
     ]
     repaired_gate_indices: list[int] = []
+    header_fallback_attempted = False
     if gate_failures:
         flagged = sorted({int(item["slide_index"]) for item in gate_failures})
         repair_kwargs: dict[str, object] = {
@@ -751,6 +1070,12 @@ async def _generate_authored_presentation(
             "local_patch_only": source_reflow,
             "fail_on_residual_dom_issues": True,
             "capacity_briefs": [capacity_briefs[index] for index in flagged],
+            "initial_critiques": _capacity_gate_initial_critiques(
+                gate_failures,
+                flagged,
+                roles,
+                allow_text_reduction=composition_profile.allow_summarization,
+            ),
         }
         if chapter_plan is not None:
             repair_kwargs["chapter_prefixes"] = [
@@ -771,13 +1096,85 @@ async def _generate_authored_presentation(
                 **repair_kwargs,
             )
             revised_htmls, revised_pngs, fixed = repaired[:3]
+            # Bind the repaired HTML, pixels, and Chromium readback atomically.
+            # Checkpoint recovery may replay HTML stamped by an older semantic
+            # policy, and the process metrics cache is not durable evidence.
+            revised_htmls, revised_pngs, revised_metrics = (
+                await _bind_bounded_repair_evidence(list(revised_htmls))
+            )
+            fixed_local_indices = {int(index) for index in fixed}
+            for local_index, absolute_index in enumerate(flagged):
+                reduced = await _apply_bounded_closing_capacity_reducer(
+                    html=revised_htmls[local_index],
+                    browser_metrics=revised_metrics[local_index],
+                    capacity=capacity_plan.at(absolute_index),
+                    profile_id=composition_profile.profile_id,
+                )
+                if reduced is None:
+                    continue
+                (
+                    revised_htmls[local_index],
+                    revised_pngs[local_index],
+                    revised_metrics[local_index],
+                ) = reduced
+                fixed_local_indices.add(local_index)
+                LOGGER.info(
+                    "[authored] bounded closing capacity reducer slide=%d html_digest=%s",
+                    absolute_index + 1,
+                    digest_html(revised_htmls[local_index]),
+                )
+            for local_index, absolute_index in enumerate(flagged):
+                if header_fallback_attempted:
+                    break
+                if capacity_violations(
+                    revised_htmls[local_index],
+                    revised_metrics[local_index],
+                    capacity_plan.at(absolute_index),
+                ) != ("browser_text_not_visible:header.eyebrow",):
+                    continue
+                header_fallback_attempted = True
+                fallback = await _apply_bounded_header_eyebrow_fallback(
+                    html=revised_htmls[local_index],
+                    browser_metrics=revised_metrics[local_index],
+                    capacity=capacity_plan.at(absolute_index),
+                    header_contract=header_contract,
+                    role=roles[absolute_index],
+                    allow_immutable_checkpoint_geometry=(
+                        getattr(
+                            (
+                                pipeline.evidence_ledger.latest(
+                                    pipeline.evidence_attempt_id, absolute_index
+                                )
+                                if getattr(pipeline, "evidence_ledger", None) is not None
+                                and getattr(pipeline, "evidence_attempt_id", None)
+                                else None
+                            ),
+                            "capture_policy",
+                            None,
+                        )
+                        == "hydrated"
+                    ),
+                )
+                if fallback is None:
+                    break
+                (
+                    revised_htmls[local_index],
+                    revised_pngs[local_index],
+                    revised_metrics[local_index],
+                ) = fallback
+                fixed_local_indices.add(local_index)
+                LOGGER.info(
+                    "[authored] bounded header eyebrow fallback slide=%d html_digest=%s",
+                    absolute_index + 1,
+                    digest_html(revised_htmls[local_index]),
+                )
             for local_index, absolute_index in enumerate(flagged):
                 htmls[absolute_index] = revised_htmls[local_index]
                 pngs[absolute_index] = revised_pngs[local_index]
-                revised_metrics_by_slide[absolute_index] = get_cached_browser_metrics(
-                    revised_htmls[local_index]
-                )
-            repaired_gate_indices = [flagged[index] for index in fixed]
+                revised_metrics_by_slide[absolute_index] = revised_metrics[local_index]
+            repaired_gate_indices = [
+                flagged[index] for index in sorted(fixed_local_indices)
+            ]
         except Exception as error:
             LOGGER.warning(
                 "[authored] bounded quality-gate repair failed slides=%s error=%s",
@@ -901,6 +1298,45 @@ async def _generate_authored_presentation(
             finally:
                 vision_elapsed = time.monotonic() - vision_started
                 await record_local_stage(latency_ms=vision_elapsed * 1000)
+
+    header_fallback_attempted, final_fallback_index = (
+        await _apply_final_checkpoint_header_eyebrow_fallback(
+            pipeline=pipeline,
+            htmls=htmls,
+            pngs=pngs,
+            capacity_plan=capacity_plan,
+            header_contract=header_contract,
+            roles=roles,
+            metrics_override=revised_metrics_by_slide,
+            already_attempted=header_fallback_attempted,
+        )
+    )
+    if final_fallback_index is not None:
+        repaired_gate_indices = sorted(
+            {*repaired_gate_indices, final_fallback_index}
+        )
+        LOGGER.info(
+            "[authored] final checkpoint header eyebrow fallback slide=%d html_digest=%s",
+            final_fallback_index + 1,
+            digest_html(htmls[final_fallback_index]),
+        )
+
+    final_reduced_indices = await _apply_final_checkpoint_closing_capacity_reducer(
+        pipeline=pipeline,
+        htmls=htmls,
+        pngs=pngs,
+        capacity_plan=capacity_plan,
+        profile_id=composition_profile.profile_id,
+        metrics_override=revised_metrics_by_slide,
+    )
+    if final_reduced_indices:
+        repaired_gate_indices = sorted(
+            {*repaired_gate_indices, *final_reduced_indices}
+        )
+        LOGGER.info(
+            "[authored] final checkpoint closing capacity reducer slides=%s",
+            ",".join(str(index + 1) for index in final_reduced_indices),
+        )
 
     aligned_indices = await _apply_bounded_layout_alignment_repairs(
         htmls=htmls,
@@ -1034,25 +1470,10 @@ async def _generate_authored_presentation(
     if evidence_ledger is not None and evidence_attempt_id is not None:
         capacity_checks: list[dict[str, object]] = []
         for index, metrics in enumerate(retained_final_metrics or ()):
-            expected = contents[index] if index < len(contents) else None
-            if isinstance(expected, str):
-                lines = [line.strip() for line in expected.splitlines() if line.strip()]
-                title_text = lines[0].lstrip("# ") if lines and lines[0].startswith("#") else None
-                body_text = " ".join(lines[1:] if title_text else lines)
-            else:
-                title_text = body_text = None
             capacity_checks.append(
-                evaluate_capacity_browser_metrics(
+                _evaluate_capacity_role_evidence(
                     metrics,
                     capacity_plan.at(index) if capacity_plan is not None else {},
-                    # Ordinary authored slides may rewrite the outline heading.
-                    # Require a browser-observed title role, while source reflow
-                    # keeps exact text binding through its dedicated readback.
-                    expected_title=title_text if source_reflow else None,
-                    # Ordinary authored slides may condense and restructure the
-                    # outline. Browser role presence is still mandatory here;
-                    # exact source text is enforced separately by source readback.
-                    expected_body=(body_text or None) if source_reflow else None,
                 )
             )
         if capacity_checks:

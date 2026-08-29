@@ -678,6 +678,7 @@ async def project_workspace_linked_generation_failed(
     workspace_operation_id: uuid.UUID,
     *,
     error_code: str,
+    resume_allowed: bool = True,
     expected_job_id: uuid.UUID | None = None,
 ) -> bool:
     """Atomically expose a safe terminal workspace failure to legacy readers."""
@@ -707,7 +708,7 @@ async def project_workspace_linked_generation_failed(
 
     safe_code = error_code or "presentation_generation_failed"
     job.state = "failed"
-    job.resume_allowed = True
+    job.resume_allowed = resume_allowed
     job.attempt_token = None
     job.lease_expires_at = None
     job.heartbeat_at = now

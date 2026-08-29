@@ -199,6 +199,18 @@ def test_authored_html_validation_rejects_unsafe_meta_and_attributes(unsafe_html
         validate_authored_slide_html(unsafe_html)
 
 
+def test_authored_html_validation_allows_server_stamped_source_block_identity():
+    html = (
+        "<!doctype html><html><head><meta charset='utf-8'></head><body>"
+        '<p data-qid="source-copy" data-source-block-id="source-slide:1:text:2">'
+        "원문</p></body></html>"
+    )
+
+    validated = validate_authored_slide_html(html)
+
+    assert 'data-source-block-id="source-slide:1:text:2"' in validated
+
+
 def test_finalized_illustration_html_removes_prompt_only():
     html = (
         "<!doctype html><html><head><meta charset='utf-8'></head><body>"

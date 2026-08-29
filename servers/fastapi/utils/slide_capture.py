@@ -823,6 +823,14 @@ def get_cached_browser_metrics(html: str) -> Mapping[str, Any] | None:
 
 def _cache_browser_metrics(html: str, metrics: Mapping[str, Any]) -> None:
     """Store metrics under the same authored HTML identity as its rendered PNG."""
+    # The in-page probe runs over nonce-bearing admitted HTML, but its source
+    # identity is the exact pre-admission render request (the same contract as
+    # ``AdmittedHtml.source_digest`` and ``RenderCapture.html_digest``).
+    # Preserve the admitted/instrumented projection separately as render_digest.
+    metrics = {
+        **dict(metrics),
+        "source_digest": "sha256:" + hashlib.sha256(html.encode("utf-8")).hexdigest(),
+    }
     key = _metrics_cache_key(html)
     _browser_metrics_cache[key] = metrics
     _browser_metrics_cache.move_to_end(key)
