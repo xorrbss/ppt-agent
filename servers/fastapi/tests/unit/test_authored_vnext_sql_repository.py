@@ -9,11 +9,15 @@ import uuid
 from alembic import command
 from alembic.config import Config
 import pytest
+from pydantic import BaseModel
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session
 
 from models.authored_vnext.master.contract import DeckMasterContract
 from models.sql.user import User
+from models.sql.authored_vnext_generation_operation import (
+    AuthoredVNextGenerationOperation,
+)
 from models.authored_vnext.master.operations import (
     CreateDeckRequest,
     CreateDraftRequest,
@@ -34,6 +38,7 @@ from services.authored_vnext.master.service import AuthoredVNextMasterService
 import services.authored_vnext.generation.sql_repository as generation_sql_repository
 from services.authored_vnext.generation.sql_repository import SqlGenerationRepository
 import services.authored_vnext.integration.sql_repository as integration_sql_repository
+from api.v1.ppt.endpoints.authored_vnext.generation import router as generation_router
 from tests.support.authored_vnext_master_fixture import (
     long_title_slide_payload,
     master_contract_payload,
@@ -44,6 +49,11 @@ DIGEST_A = "sha256:" + "a" * 64
 DIGEST_B = "sha256:" + "b" * 64
 DIGEST_C = "sha256:" + "c" * 64
 DIGEST_D = "sha256:" + "d" * 64
+
+
+class _GenerationCommand(BaseModel):
+    operation_id: str
+    deck_id: str
 
 
 def _repository(
@@ -111,6 +121,50 @@ def test_candidate_write_recovers_sqlite_lock_within_first_call(
             ),
             {"digest": digest},
         ) == 1
+
+
+def test_same_owner_request_repositories_keep_operation_claims_isolated(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """Interleaved same-owner requests must not overwrite each other's fence."""
+
+    base = _repository(tmp_path / "same-owner-claims.db")
+    AuthoredVNextGenerationOperation.__table__.create(base.engine, checkfirst=True)
+    monkeypatch.setattr(
+        generation_router,
+        "_base_repository_for_owner",
+        lambda _owner_id: base,
+    )
+    first = generation_router._repository_for_owner(base.owner_scope)
+    second = generation_router._repository_for_owner(base.owner_scope)
+    assert first is not second
+    assert first._base is second._base is base
+    commands = [
+        _GenerationCommand(operation_id="operation:first", deck_id="deck:first"),
+        _GenerationCommand(operation_id="operation:second", deck_id="deck:second"),
+    ]
+    for repository, command in zip((first, second), commands, strict=True):
+        repository.begin_operation(
+            operation_id=command.operation_id,
+            deck_id=command.deck_id,
+            kind="test.complete",
+            idempotency_key=command.operation_id,
+            request=command,
+            expected_revision=None,
+            expected_digest=None,
+        )
+
+    first_claim = first.claim_operation("operation:first", worker_id="worker:first")
+    second_claim = second.claim_operation("operation:second", worker_id="worker:second")
+
+    first.complete_operation("operation:first", {"operationId": "operation:first"})
+    second.complete_operation("operation:second", {"operationId": "operation:second"})
+
+    assert first_claim.operation_id == "operation:first"
+    assert second_claim.operation_id == "operation:second"
+    assert first.get_operation_row("operation:first").state == "succeeded"
+    assert second.get_operation_row("operation:second").state == "succeeded"
 
 
 def _publish_process(

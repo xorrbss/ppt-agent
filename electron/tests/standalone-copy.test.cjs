@@ -551,6 +551,43 @@ test("atomically replaces a validated sibling directory", (t) => {
   assert.equal(fs.existsSync(temp), false)
 })
 
+test("retries a transient Windows rename before replacing the target", (t) => {
+  const root = fixture(t)
+  const target = path.join(root, "bundle")
+  const temp = path.join(root, "bundle-temp")
+  fs.mkdirSync(target)
+  fs.writeFileSync(path.join(target, "old.txt"), "old")
+  fs.mkdirSync(temp)
+  fs.writeFileSync(path.join(temp, "new.txt"), "new")
+
+  let promotionAttempts = 0
+  const fsImpl = {
+    ...fs,
+    renameSync(from, to) {
+      if (path.resolve(from) === temp && path.resolve(to) === target) {
+        promotionAttempts += 1
+        if (promotionAttempts === 1) {
+          const error = new Error("temporary Windows resource lock")
+          error.code = "EPERM"
+          throw error
+        }
+      }
+      return fs.renameSync(from, to)
+    },
+  }
+
+  atomicReplaceDirectory(temp, target, {
+    fsImpl,
+    platform: "win32",
+    retryAttempts: 2,
+    retryDelayMs: 0,
+  })
+
+  assert.equal(promotionAttempts, 2)
+  assert.equal(fs.readFileSync(path.join(target, "new.txt"), "utf8"), "new")
+  assert.equal(fs.existsSync(temp), false)
+})
+
 test("restores the old directory when atomic replacement fails", (t) => {
   const root = fixture(t)
   const target = path.join(root, "bundle")

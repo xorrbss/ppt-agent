@@ -30,6 +30,7 @@ function buildFastApiSmokeEnv(baseEnv, appDataDirectory, adminPassword) {
     AUTH_USERNAME: SMOKE_ADMIN_USERNAME,
     DISABLE_AUTH: "true",
     MIGRATE_DATABASE_ON_STARTUP: "True",
+    WORKSPACE_OPERATION_WORKER_MODE: "external",
     USER_CONFIG_PATH: path.join(appDataDirectory, "userConfig.json"),
   }
 }
@@ -89,6 +90,18 @@ async function waitForResponse(url, options = {}) {
   )
 }
 
+async function waitForOutput(processInfo, pattern) {
+  const deadline = Date.now() + startupTimeoutMs
+  while (Date.now() < deadline) {
+    if (pattern.test(processInfo.output())) return
+    if (processInfo.child.exitCode !== null) {
+      throw new Error(`Process exited before readiness: ${processInfo.child.exitCode}`)
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  throw new Error(`Timed out waiting for process readiness: ${pattern}`)
+}
+
 async function stopProcess(processInfo) {
   const child = processInfo?.child
   if (!child || child.exitCode !== null || child.signalCode !== null) return
@@ -117,6 +130,7 @@ async function main() {
     allocatePort(),
   ])
   let fastapi
+  let workspaceWorker
   let nextjs
   const smokeAdminPassword = createSmokeAdminPassword()
 
@@ -139,6 +153,26 @@ async function main() {
     if (docs.status !== 200) {
       throw new Error(`Packaged FastAPI /docs returned HTTP ${docs.status}`)
     }
+
+    workspaceWorker = startProcess(
+      validation.workspaceWorkerBinary,
+      [],
+      {
+        cwd: fastapiRoot,
+        env: {
+          ...buildFastApiSmokeEnv(
+            process.env,
+            appDataDirectory,
+            smokeAdminPassword,
+          ),
+          MIGRATE_DATABASE_ON_STARTUP: "false",
+        },
+      },
+    )
+    await waitForOutput(
+      workspaceWorker,
+      /Workspace operation external worker started/i,
+    )
 
     nextjs = startProcess(
       process.execPath,
@@ -186,6 +220,7 @@ async function main() {
     console.log("[packaged-servers-smoke] OK")
     console.log(`  - preflight: ${validation.nextLayout}, ${validation.fileCount} files`)
     console.log(`  - FastAPI: /docs HTTP ${docs.status}`)
+    console.log("  - Workspace worker: ready")
     console.log(`  - Next.js: / HTTP ${home.status}`)
     console.log(
       `  - runtime Tailwind: HTTP ${tailwind.status}, ${tailwindCss.length} bytes`,
@@ -193,11 +228,17 @@ async function main() {
   } catch (error) {
     const logs = [
       fastapi?.output() && `FastAPI output:\n${fastapi.output()}`,
+      workspaceWorker?.output() &&
+        `Workspace worker output:\n${workspaceWorker.output()}`,
       nextjs?.output() && `Next.js output:\n${nextjs.output()}`,
     ].filter(Boolean)
     throw new Error(`${error.message}${logs.length ? `\n${logs.join("\n")}` : ""}`)
   } finally {
-    await Promise.all([stopProcess(nextjs), stopProcess(fastapi)])
+    await Promise.all([
+      stopProcess(nextjs),
+      stopProcess(workspaceWorker),
+      stopProcess(fastapi),
+    ])
     fs.rmSync(appDataDirectory, { recursive: true, force: true })
   }
 }

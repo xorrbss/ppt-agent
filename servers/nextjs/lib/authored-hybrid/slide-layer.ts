@@ -395,18 +395,26 @@ export async function prepareSlideLayer(
   const declaredTablePreparation = semanticContext && declaredCapture
     ? prepareDeclaredNativeTables(semanticContext.declaredElements, declaredCapture.observation.elements)
     : { tables: [], rejections: new Map<string, "unsupported-native-table" | "unsupported-table-css" | "table-observation-mismatch">() };
+  const declaredPreparedElements: PreparedNativeElement[] = [
+    ...declaredChartPreparation.charts.map((source) => ({
+      kind: "chart" as const,
+      source,
+    })),
+    ...declaredTablePreparation.tables.map((source) => ({
+      kind: "table" as const,
+      source,
+    })),
+  ];
   const preparedLeaves = preSerializePreparedElements(
-    (
-      await prepareNativeElements(nativeLayoutElements, {
-        includeRasterText: true,
-        includeRasterShapes: true,
-      })
-    ).filter((element) => !typographyRejected.has(element.source.id)).concat(
-      declaredChartPreparation.charts.map((source) => ({
-        kind: "chart" as const,
-        source,
-      })).concat(declaredTablePreparation.tables.map((source) => ({ kind: "table" as const, source }))),
-    ),
+    [
+      ...(
+        await prepareNativeElements(nativeLayoutElements, {
+          includeRasterText: true,
+          includeRasterShapes: true,
+        })
+      ).filter((element) => !typographyRejected.has(element.source.id)),
+      ...declaredPreparedElements,
+    ],
     { embeddedTypefaceFamilies, embeddedTypefaceFaces }
   );
   const preparedBeforeConnectorGate = preparedLeaves.concat(

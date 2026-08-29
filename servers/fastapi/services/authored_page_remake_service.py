@@ -59,6 +59,7 @@ from services.authored_vnext.semantic.remake import (
 )
 from services.image_generation_service import ImageGenerationService
 from services.database import async_session_maker
+from services.workspace_authored_async_admission import admit_workspace_authored_task
 from services.slidespec_artifact_store import ACTIVE_POINTER_KEY
 from utils.authored_dom_quality import inspect_authored_dom
 from utils.asset_directory_utils import get_images_directory
@@ -610,28 +611,30 @@ async def queue_authored_page_remake_preview(
     background_tasks: BackgroundTasks,
     session: AsyncSession,
 ) -> AsyncPresentationGenerationTaskModel:
-    _presentation, slides = await _load_deck(session, presentation_id, slide_index)
+    presentation, slides = await _load_deck(session, presentation_id, slide_index)
     if slide_index < 0 or slide_index >= len(slides):
         raise HTTPException(
             status_code=400, detail="Slide index is outside the presentation"
         )
     if not slides[slide_index].html_content:
         raise HTTPException(status_code=400, detail="Slide has no authored HTML")
-    task = AsyncPresentationGenerationTaskModel(
-        status="pending",
-        message=f"{slide_index + 1}페이지의 새 버전 작업을 대기열에 추가했습니다.",
-        data=None,
+    # The stored workspace request is the restart-safe source of truth.  The
+    # legacy task remains the polling/read model consumed by the current UI.
+    return await admit_workspace_authored_task(
+        session,
+        presentation_id=presentation_id,
+        operation_kind="slide.regenerate.preview",
+        expected_revision=int(presentation.revision),
+        command=f"{slide_index + 1}페이지 다시 만들기 미리보기",
+        context={
+            "slide_index": slide_index,
+            "instruction": request.instruction,
+        },
+        task_id_prefix="workspace-page-preview",
+        pending_message=(
+            f"{slide_index + 1}페이지의 새 버전 작업을 대기열에 추가했습니다."
+        ),
     )
-    session.add(task)
-    await session.commit()
-    background_tasks.add_task(
-        _run_preview_background,
-        presentation_id,
-        slide_index,
-        request,
-        task.id,
-    )
-    return task
 
 
 def _validated_preview_data(

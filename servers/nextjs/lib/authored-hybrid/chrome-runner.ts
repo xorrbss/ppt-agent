@@ -22,6 +22,9 @@ import {
   authoredRendererIsolationPolicy,
 } from "./renderer-isolation.ts";
 import { preflightAuthoredHtmlForHybrid } from "./security.ts";
+import {
+  acquireAuthoredExportProcess,
+} from "./export-admission.ts";
 
 export { resolveAuthoredHybridChromeExecutable } from "./chrome-runtime-discovery.ts";
 export {
@@ -50,7 +53,12 @@ export interface ChromeRunResult {
   serializedDom?: string;
   screenshotPng?: Buffer;
   blockedRequestCount?: number;
+  admissionQueueWaitMs?: number;
+  activeProcessesAtAdmission?: number;
+  activeWeightAtAdmission?: number;
 }
+
+export { authoredExportAdmissionSnapshot } from "./export-admission.ts";
 
 function domCompletionPattern(token: string): RegExp {
   const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -406,17 +414,23 @@ async function runIsolatedAuthoredHybridChrome(
     throw new Error(`Configured authored hybrid Chrome is not accessible: ${executable}`);
   }
 
+  const admission = await acquireAuthoredExportProcess();
   const baseTempDirectory =
     process.env.TEMP_DIRECTORY?.trim() || path.join(os.tmpdir(), "presenton");
-  await fs.mkdir(baseTempDirectory, { recursive: true });
-  const workDirectory = await fs.mkdtemp(
-    path.join(baseTempDirectory, "authored-hybrid-")
-  );
+  let workDirectory: string | undefined;
+  try {
+    await fs.mkdir(baseTempDirectory, { recursive: true });
+    workDirectory = await fs.mkdtemp(
+      path.join(baseTempDirectory, "authored-hybrid-")
+    );
+  } catch (error) {
+    admission.release();
+    throw error;
+  }
   const profilePath = path.join(workDirectory, "chrome-profile");
   let result: ChromeRunResult | undefined;
   let captureError: unknown;
   let child: ChildProcess | undefined;
-
   try {
     const windowSize = options.windowSizePx ?? { width: 1280, height: 720 };
     const args = authoredRendererChromeArguments(profilePath, windowSize);
@@ -436,6 +450,9 @@ async function runIsolatedAuthoredHybridChrome(
         timer.unref?.();
       }),
     ]);
+    result.admissionQueueWaitMs = admission.queueWaitMs;
+    result.activeProcessesAtAdmission = admission.activeProcessesAtAdmission;
+    result.activeWeightAtAdmission = admission.activeWeightAtAdmission;
   } catch (error) {
     captureError = error;
   }
@@ -466,6 +483,8 @@ async function runIsolatedAuthoredHybridChrome(
       });
   } catch (error) {
     cleanupError = error;
+  } finally {
+    admission.release();
   }
   if (captureError !== undefined) {
     if (cleanupError !== undefined) {

@@ -20,6 +20,10 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 from services.presentation_export_capabilities import PresentationExportContractError
+from services.presentation_export_evidence_sidecars import (
+    publish_finalized_hybrid_sidecars,
+    require_matching_hybrid_sidecars,
+)
 from utils.get_env import get_app_data_directory_env
 
 
@@ -117,58 +121,6 @@ def resolve_hybrid_artifact(path_value: str) -> Path:
     if resolved.suffix.lower() != ".pptx" or not resolved.is_file():
         raise PresentationExportContractError("presentation_export_artifact_path_invalid")
     return resolved
-
-
-def require_matching_hybrid_sidecars(
-    artifact: Path,
-    *,
-    quality: dict[str, Any],
-    coverage: dict[str, Any],
-    canonical_digest,
-) -> None:
-    for suffix, expected in ((".quality.json", quality), (".coverage.json", coverage)):
-        sidecar = Path(f"{artifact}{suffix}")
-        try:
-            persisted = json.loads(sidecar.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as error:
-            raise PresentationExportContractError(
-                "presentation_export_evidence_sidecar_invalid"
-            ) from error
-        if not hmac.compare_digest(
-            canonical_digest(persisted), canonical_digest(expected)
-        ):
-            raise PresentationExportContractError(
-                "presentation_export_evidence_sidecar_mismatch"
-            )
-
-
-def publish_finalized_hybrid_sidecars(
-    artifact: Path,
-    *,
-    quality: dict[str, Any],
-    coverage: dict[str, Any],
-) -> None:
-    """Replace only this attempt's sidecars after trusted QA has finalized them."""
-
-    staged: list[tuple[Path, Path]] = []
-    token = uuid.uuid4().hex
-    try:
-        for suffix, payload in ((".quality.json", quality), (".coverage.json", coverage)):
-            target = Path(f"{artifact}{suffix}")
-            temporary = Path(f"{target}.{token}.tmp")
-            temporary.write_text(
-                json.dumps(payload, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-            staged.append((temporary, target))
-        for temporary, target in staged:
-            os.replace(temporary, target)
-    except OSError as error:
-        for temporary, _ in staged:
-            temporary.unlink(missing_ok=True)
-        raise PresentationExportContractError(
-            "presentation_export_evidence_sidecar_finalization_failed"
-        ) from error
 
 
 def _powerpoint_executable_available() -> bool:

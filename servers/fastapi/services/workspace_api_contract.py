@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any, Mapping
+import re
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -163,6 +164,88 @@ def _operation_card_context(
     return actor, target, f"{activity} {status_summary}."
 
 
+_SAFE_RECOVERY_REASON = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
+
+
+def _bounded_count(value: object) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return None
+    return min(value, 1_000_000)
+
+
+def _recovery_reason(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    candidate = value.strip()
+    return candidate if _SAFE_RECOVERY_REASON.fullmatch(candidate) else None
+
+
+def _provider_attempt_count(operation: Mapping[str, Any]) -> int | None:
+    """Read only an explicit durable aggregate; absence is never projected as zero."""
+
+    result = operation.get("result")
+    if not isinstance(result, Mapping):
+        return None
+    candidates: list[Mapping[str, Any]] = [result]
+    receipt = result.get("generation_timing_receipt")
+    if isinstance(receipt, Mapping):
+        candidates.append(receipt)
+    for candidate in candidates:
+        for key in ("providerAttemptCount", "provider_attempt_count"):
+            count = _bounded_count(candidate.get(key))
+            if count is not None:
+                return count
+    return None
+
+
+def _recovery_status_for_state(state: object) -> str:
+    normalized = str(state or "")
+    if normalized == "succeeded":
+        return "recovered"
+    if normalized in {"queued", "waiting_for_assets", "blocked"}:
+        return "scheduled"
+    if normalized in {"running", "cancelling"}:
+        return "in_progress"
+    if normalized in {"failed", "dead_letter", "cancelled"}:
+        return "failed"
+    return "required"
+
+
+def _operation_observability(operation: Mapping[str, Any]) -> dict[str, Any]:
+    events = [
+        event for event in operation.get("events", []) if isinstance(event, Mapping)
+    ]
+    recovery_events = [
+        event
+        for event in events
+        if event.get("recoveryStatus")
+        not in {None, "not_required", "unavailable"}
+    ]
+    reason = next(
+        (
+            candidate
+            for candidate in reversed(
+                [_recovery_reason(event.get("recoveryReason")) for event in events]
+            )
+            if candidate is not None
+        ),
+        None,
+    )
+    retry_count = _bounded_count(operation.get("retry_count"))
+    if retry_count is None:
+        recovery_status = "unavailable"
+    elif not recovery_events and retry_count == 0:
+        recovery_status = "not_required"
+    else:
+        recovery_status = _recovery_status_for_state(operation.get("status"))
+    return {
+        "providerAttemptCount": _provider_attempt_count(operation),
+        "retryCount": retry_count,
+        "recoveryReason": reason,
+        "recoveryStatus": recovery_status,
+    }
+
+
 def _project_event(value: Mapping[str, Any]) -> dict[str, Any]:
     event = dict(value)
     event["schema_version"] = 1
@@ -177,6 +260,33 @@ def _project_event(value: Mapping[str, Any]) -> dict[str, Any]:
     # Never reflect a private/internal message supplied by the durable event.
     # Public text is derived only from the central allow-listed registry.
     event["safe_message"] = None
+    event["providerAttemptCount"] = _bounded_count(
+        event.get("providerAttemptCount")
+    )
+    event["retryCount"] = _bounded_count(event.get("retryCount"))
+    event["recoveryReason"] = _recovery_reason(event.get("recoveryReason"))
+    if event.get("recoveryStatus") not in {
+        "not_required",
+        "required",
+        "scheduled",
+        "in_progress",
+        "recovered",
+        "failed",
+        "unavailable",
+    }:
+        event["recoveryStatus"] = "unavailable"
+    if event["retryCount"] is None:
+        event["recoveryStatus"] = "unavailable"
+    elif (
+        event["retryCount"] == 0
+        and event["recoveryReason"] is None
+    ):
+        event["recoveryStatus"] = "not_required"
+    elif event["retryCount"] > 0 and event["recoveryStatus"] in {
+        "not_required",
+        "unavailable",
+    }:
+        event["recoveryStatus"] = _recovery_status_for_state(event.get("status"))
     error = event.get("error")
     if error is not None:
         retryable = (
@@ -227,6 +337,8 @@ def project_workspace_timeline(
             item["target"] = target
             item["activity_summary"] = activity_summary
             item["allowed_actions"] = allowed_workspace_actions(item)
+            item.update(_operation_observability(item))
+            item.pop("retry_count", None)
             operation_spec = get_workspace_operation_kind(item.get("operation_type"))
             error = (
                 item.get("error")

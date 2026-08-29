@@ -11,7 +11,7 @@ import re
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Any, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Callable, List, Mapping, Optional, Sequence, Tuple
 
 from models.authored_chapter_plan import AuthoredChapterPlan
 from models.authored_header_contract import AuthoredHeaderContract
@@ -27,7 +27,10 @@ from services.source_images.models import SourceImageCandidate
 from services.authored_composition_policy import (
     AuthoredCapacityPlan,
     CompositionProfile,
+    SlideCapacity,
+    aggregate_owner_capacity_violations,
     build_authored_capacity_plan,
+    reduce_authored_owner_text_capacity,
 )
 from utils.llm_calls.author_slide import (
     EXACT_RECONSTRUCTION,
@@ -406,6 +409,34 @@ class _AuthorValidationCorrection:
     hint: str
 
 
+class AuthoredProviderBudgetExhausted(ValueError):
+    """A deterministic author rejection remained after the slide call budget."""
+
+    def __init__(
+        self,
+        code: str,
+        detail: object,
+        *,
+        rejected_html: str | None = None,
+    ) -> None:
+        self.code = code
+        self.detail = str(detail)
+        self.rejected_html = rejected_html
+        super().__init__(f"{code}:{self.detail}")
+
+
+class AuthoredAggregateOwnerCapacityExhausted(AuthoredProviderBudgetExhausted):
+    """The aggregate owner envelope still failed after both author calls."""
+
+    def __init__(self, violations: Sequence[str], *, rejected_html: str) -> None:
+        self.violations = tuple(str(value) for value in violations)
+        super().__init__(
+            "authored_aggregate_owner_capacity_exhausted",
+            ",".join(self.violations),
+            rejected_html=rejected_html,
+        )
+
+
 def _classify_author_validation_error(
     error: object,
     *,
@@ -414,6 +445,24 @@ def _classify_author_validation_error(
     """Classify fail-closed local rejections without weakening their policies."""
 
     message = str(error)
+    if isinstance(error, AuthoredAggregateOwnerCapacityExhausted) or (
+        "authored_aggregate_owner_capacity_exceeded:" in message
+    ):
+        violations = (
+            ",".join(error.violations)
+            if isinstance(error, AuthoredAggregateOwnerCapacityExhausted)
+            else message.partition("authored_aggregate_owner_capacity_exceeded:")[
+                2
+            ].strip()
+        )
+        return _AuthorValidationCorrection(
+            "aggregate_owner_capacity",
+            "The previous candidate exceeded the server-frozen aggregate owner "
+            f"envelope ({violations or 'capacity'}). Preserve every title/header "
+            "and source-owned QID, role, and text. Keep all limits unchanged; shorten "
+            "or consolidate only low-priority body/supporting copy and never remove "
+            "more than three such leaf owners.",
+        )
     if "authored_source_image_slots_missing" in message:
         return _AuthorValidationCorrection(
             "source_image_slots_missing",
@@ -752,6 +801,9 @@ async def _author_one_resilient(
     source_images: Sequence[SourceImageCandidate] = (),
     require_all_source_images: bool = False,
     capacity_brief: str | None = None,
+    capacity: SlideCapacity | None = None,
+    allow_deterministic_owner_reduction: bool = False,
+    attempt_observer: Callable[[int], None] | None = None,
 ) -> str:
     """Author one slide with one explicit correction and a branded fallback.
 
@@ -777,6 +829,8 @@ async def _author_one_resilient(
     rejected_html: str | None = None
     while attempts_made < _MAX_AUTHOR_CALLS_PER_SLIDE:
         attempts_made += 1
+        if attempt_observer is not None:
+            attempt_observer(attempts_made)
         local_correction: _AuthorValidationCorrection | None = None
         try:
             kwargs: dict[str, Any] = {
@@ -830,7 +884,37 @@ async def _author_one_resilient(
                     else ()
                 )
                 if not violations:
-                    return constrained
+                    owner_violations = (
+                        aggregate_owner_capacity_violations(constrained, capacity)
+                        if capacity is not None
+                        else ()
+                    )
+                    if not owner_violations:
+                        return constrained
+                    if (
+                        allow_deterministic_owner_reduction
+                        and capacity is not None
+                    ):
+                        reduced = reduce_authored_owner_text_capacity(
+                            constrained,
+                            capacity,
+                            profile_id="ordinary",
+                            allow_summarization=True,
+                        )
+                        reduced_violations = aggregate_owner_capacity_violations(
+                            reduced,
+                            capacity,
+                        )
+                        if reduced != constrained and not reduced_violations:
+                            return reduced
+                        if reduced != constrained:
+                            constrained = reduced
+                            owner_violations = reduced_violations
+                    capacity_error = AuthoredAggregateOwnerCapacityExhausted(
+                        owner_violations,
+                        rejected_html=constrained,
+                    )
+                    raise capacity_error
                 header_reject = constrained
                 last_error = "header contract violated: " + ", ".join(violations)
                 correction_hint = _author_retry_correction(
@@ -884,7 +968,11 @@ async def _author_one_resilient(
                 last_error,
             )
 
-    if header_reject is not None:
+    if header_reject is not None and not (
+        raise_on_failure
+        or reference_mode == EXACT_RECONSTRUCTION
+        or structured_context is not None
+    ):
         logger.warning(
             "[authored] slide %d/%d kept a header-contract-violating render after "
             "%d attempts (%s)",
@@ -907,6 +995,43 @@ async def _author_one_resilient(
             attempts_made,
             last_error,
         )
+        if (
+            isinstance(last_error, AuthoredAggregateOwnerCapacityExhausted)
+            and allow_deterministic_owner_reduction
+            and capacity is not None
+            and last_error.rejected_html is not None
+        ):
+            reduced = reduce_authored_owner_text_capacity(
+                last_error.rejected_html,
+                capacity,
+                profile_id="ordinary",
+                allow_summarization=True,
+            )
+            if reduced != last_error.rejected_html:
+                return reduced
+        if isinstance(last_error, AuthoredProviderBudgetExhausted):
+            raise last_error
+        deterministic_failure = _classify_author_validation_error(
+            last_error,
+            source_image_ids=source_image_ids,
+        )
+        if deterministic_failure is not None:
+            raise AuthoredProviderBudgetExhausted(
+                f"authored_{deterministic_failure.category}_budget_exhausted",
+                last_error,
+                rejected_html=rejected_html,
+            )
+        if header_reject is not None:
+            raise AuthoredProviderBudgetExhausted(
+                "authored_header_contract_budget_exhausted",
+                last_error,
+                rejected_html=header_reject,
+            )
+        if not isinstance(last_error, BaseException):
+            raise AuthoredProviderBudgetExhausted(
+                "authored_invalid_html_budget_exhausted",
+                last_error,
+            )
         if isinstance(last_error, BaseException):
             raise last_error
         raise RuntimeError(str(last_error))
@@ -1073,6 +1198,7 @@ async def author_planned_slide(
     raise_on_failure: bool = False,
     source_images: Sequence[SourceImageCandidate] = (),
     require_all_source_images: bool = False,
+    attempt_observer: Callable[[int], None] | None = None,
 ) -> str:
     """Author one planned slide; safe to compose with illustration/render stages.
 
@@ -1086,6 +1212,7 @@ async def author_planned_slide(
     visual_plan = getattr(plan, "visual_plan", None)
     capacity_plan = getattr(plan, "capacity_plan", None)
     capacity_brief = None
+    capacity = None
     if capacity_plan is not None:
         capacity = capacity_plan.at(index).with_source_images(len(source_images))
         capacity_brief = capacity.prompt_brief(capacity_plan.profile)
@@ -1113,6 +1240,14 @@ async def author_planned_slide(
         source_images=source_images,
         require_all_source_images=require_all_source_images,
         capacity_brief=capacity_brief,
+        capacity=capacity,
+        allow_deterministic_owner_reduction=bool(
+            capacity_plan is not None
+            and capacity_plan.profile.profile_id == "ordinary"
+            and capacity_plan.profile.allow_summarization
+            and not source_images
+        ),
+        attempt_observer=attempt_observer,
     )
 
 

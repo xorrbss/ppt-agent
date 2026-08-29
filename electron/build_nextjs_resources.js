@@ -10,6 +10,7 @@ const {
   validateLinkFreeTree,
 } = require("./scripts/standalone-copy.cjs")
 const {
+  materializeSharpNativeRuntime,
   materializeTailwindRuntimeClosure,
 } = require("./scripts/next-runtime-dependencies.cjs")
 
@@ -147,6 +148,15 @@ try {
       `(${runtimeDependencies.uniquePackageCount} unique packages)`
   )
 
+  const sharpRuntime = materializeSharpNativeRuntime({
+    nextjsRoot: nextjsDir,
+    serverRoot: serverDir,
+  })
+  console.log(
+    `Materialized ${sharpRuntime.nativePackage}@${sharpRuntime.nativeVersion} ` +
+      `for Sharp ${sharpRuntime.sharpVersion}`
+  )
+
   const staticSrc = path.join(nextBuildDir, "static")
   if (fs.existsSync(staticSrc)) {
     cpDir(staticSrc, path.join(serverDir, ".next-build", "static"))
@@ -183,7 +193,15 @@ try {
     workspaceRoot: path.join(electronRoot, ".."),
   })
 } catch (error) {
-  rm(tempOutDir)
+  if (error.atomicReplacementRecoveryRequired) {
+    console.error(
+      "Preserving staged Next.js resource directories after failed rollback:",
+      error.atomicReplacementTemp,
+      error.atomicReplacementBackup
+    )
+  } else {
+    rm(tempOutDir)
+  }
   throw error
 }
 

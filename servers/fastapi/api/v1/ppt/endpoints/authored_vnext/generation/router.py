@@ -112,14 +112,25 @@ def _require_internal_new_generation() -> None:
 
 
 @lru_cache(maxsize=32)
-def _repository_for_owner(owner_id: str) -> SqlGenerationRepository:
+def _base_repository_for_owner(owner_id: str) -> AuthoredVNextSqlRepository:
     owner_uuid = uuid.UUID(owner_id)
-    base = AuthoredVNextSqlRepository.from_application_database(
+    return AuthoredVNextSqlRepository.from_application_database(
         owner_scope=owner_id,
         tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
         owner_id=owner_uuid,
     )
-    return SqlGenerationRepository(base)
+
+
+def _repository_for_owner(owner_id: str) -> SqlGenerationRepository:
+    """Return a request-scoped claim holder over the cached owner SQL base.
+
+    ``SqlGenerationRepository`` carries the active generation lease claim.  A
+    cached wrapper lets two concurrent requests for the same owner overwrite
+    that mutable claim before either request publishes.  The engine-backed base
+    is safe to share; the claim-bearing adapter is intentionally not.
+    """
+
+    return SqlGenerationRepository(_base_repository_for_owner(owner_id))
 
 
 def get_generation_repository() -> SqlGenerationRepository:

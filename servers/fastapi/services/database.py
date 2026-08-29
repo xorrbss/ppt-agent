@@ -64,6 +64,13 @@ from models.sql.provider_runtime_reservation import (
     ProviderRuntimeCircuit,
     ProviderRuntimeReservation,
 )
+from models.sql.public_admission import (
+    PublicOperationAdmission,
+    PublicPolicyProfile,
+    PublicProviderLogicalCall,
+    PublicQuotaCounter,
+)
+from models.sql.public_artifact import PublicArtifact, PublicExportIdentity
 from models.sql.authored_vnext_repository import AUTHORED_VNEXT_SQL_TABLES
 from templates.v2.catalog import get_template_v2_default_template_id
 from services.presentation_profile_persistence import stamp_presentation_profile
@@ -156,6 +163,9 @@ _STRICT_OWNER_MODELS = (
     AssetGatewayIdempotencyReceipt,
     PresentationExportAttempt,
     AuthoredCanonicalRevision,
+    PublicOperationAdmission,
+    PublicArtifact,
+    PublicExportIdentity,
 )
 
 
@@ -287,6 +297,12 @@ async def create_db_and_tables():
                         ProviderRuntimeBudget.__table__,
                         ProviderRuntimeReservation.__table__,
                         ProviderRuntimeCircuit.__table__,
+                        PublicPolicyProfile.__table__,
+                        PublicQuotaCounter.__table__,
+                        PublicOperationAdmission.__table__,
+                        PublicProviderLogicalCall.__table__,
+                        PublicArtifact.__table__,
+                        PublicExportIdentity.__table__,
                         *AUTHORED_VNEXT_SQL_TABLES,
                     ],
                 )

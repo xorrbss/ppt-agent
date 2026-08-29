@@ -13,6 +13,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
+import { requestFailureSummary, retryAudit } from "./authored-vnext-controlled-load-retry-audit.mjs";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const EVIDENCE_ROOT = path.join(REPO, "artifacts", "authored-vnext-controlled-load-20260829");
@@ -67,7 +68,7 @@ function usage() {
     "Credentials are read only from PRESENTON_BENCH_USER/PRESENTON_BENCH_PASSWORD.",
     "Durability mode additionally requires inherited WORKSPACE_OPERATION_WORKER_MODE=external,",
     "APP_DATA_DIRECTORY and DATABASE_URL values rooted below durability.isolatedRoot.",
-    "schemaVersion 2 supports matrix.slideCounts (5,10,20), matrix.concurrencyLevels (1,2,4),",
+    "schemaVersion 2 supports matrix.slideCounts (5,10,20), matrix.concurrencyLevels (1,2,5,10),",
     "matrix.cacheStates (cold,warm), and matrix.repetitions. Matrix runs require redacted provider/model/prompt/environment fingerprints, owned resource PIDs, and a cold-control receipt for every cold cell. This harness never restarts a listener.",
   ].join("\n");
 }
@@ -199,7 +200,7 @@ function normalizeManifest(raw) {
     const cacheStates = [...new Set((input.cacheStates || []).map((value) => String(value).toLowerCase()))];
     const repetitions = Number(input.repetitions ?? 2);
     if (JSON.stringify(slideCounts) !== JSON.stringify([5, 10, 20])) fail("matrix.slideCounts must be exactly [5,10,20]");
-    if (JSON.stringify(concurrencyLevels) !== JSON.stringify([1, 2, 4])) fail("matrix.concurrencyLevels must be exactly [1,2,4]");
+    if (JSON.stringify(concurrencyLevels) !== JSON.stringify([1, 2, 5, 10])) fail("matrix.concurrencyLevels must be exactly [1,2,5,10]");
     if (JSON.stringify(cacheStates) !== JSON.stringify(["cold", "warm"])) fail("matrix.cacheStates must be exactly [cold,warm]");
     if (!Number.isInteger(repetitions) || repetitions < 2 || repetitions > 20) fail("matrix.repetitions must be 2..20");
     if (repetitions < Math.max(...concurrencyLevels)) {
@@ -397,35 +398,39 @@ function eventMatchesOperation(event, operationId) {
   return values.filter(Boolean).some((value) => String(value) === String(operationId));
 }
 
-function retryAudit(events) {
-  let maximumExplicitRetryCount = 0;
-  let maximumAttemptNumber = 1;
-  let retryEventCount = 0;
-  for (const event of events) {
-    const stack = [event];
-    const visited = new Set();
-    let eventExplicitRetryCount = 0;
-    let eventAttemptNumber = 1;
-    while (stack.length) {
-      const value = stack.pop();
-      if (!value || typeof value !== "object" || visited.has(value)) continue;
-      visited.add(value);
-      for (const [rawKey, nested] of Object.entries(value)) {
-        const key = rawKey.replace(/[_-]/g, "").toLowerCase();
-        if (typeof nested === "number" && Number.isFinite(nested)) {
-          if (/(retrycount|retries|retryattempts)/.test(key)) eventExplicitRetryCount = Math.max(eventExplicitRetryCount, nested);
-          if (/(attemptnumber|attempt|retryattempt)/.test(key)) eventAttemptNumber = Math.max(eventAttemptNumber, nested);
-        }
-        if (nested && typeof nested === "object") stack.push(nested);
-      }
-    }
-    const eventLabel = JSON.stringify({ type: event?.type, status: event?.status, result: event?.result?.status || event?.result?.stage }).toLowerCase();
-    if (/retry|requeued|requeue/.test(eventLabel)) retryEventCount += 1;
-    maximumExplicitRetryCount = Math.max(maximumExplicitRetryCount, eventExplicitRetryCount);
-    maximumAttemptNumber = Math.max(maximumAttemptNumber, eventAttemptNumber);
+async function durableOperationAudit({ baseUrl, taskId, operationId, headers, requestFn = request }) {
+  if (!operationId) return { status: "unavailable", reason: "workspace_operation_id_unavailable", retryAudit: retryAudit([]) };
+  try {
+    const task = (await requestFn(`${baseUrl}/api/v1/async-tasks/status/${encodeURIComponent(taskId)}`, {
+      headers: { Accept: "application/json", ...headers },
+    }, 30_000)).json;
+    const presentationId = task?.presentation_id || task?.presentationId || task?.data?.presentation_id || task?.data?.presentationId;
+    if (!presentationId) return { status: "unavailable", reason: "presentation_id_unavailable", retryAudit: retryAudit([]) };
+    const timeline = (await requestFn(`${baseUrl}/api/v1/ppt/workspace/presentations/${presentationId}/timeline?limit=200`, {
+      headers: { Accept: "application/json", ...headers },
+    }, 30_000)).json;
+    const operationEvents = (await requestFn(`${baseUrl}/api/v1/ppt/workspace/presentations/${presentationId}/events?limit=200`, {
+      headers: { Accept: "application/json", ...headers },
+    }, 30_000)).json;
+    const observed = stageTimings(timeline, operationId);
+    const endpointEvents = eventsFromPayload(operationEvents).filter((event) => eventMatchesOperation(event, operationId));
+    const evidence = [...(observed.operation ? [observed.operation] : []), ...observed.events, ...endpointEvents];
+    return {
+      status: observed.operation || endpointEvents.length ? "observed" : "unavailable",
+      reason: observed.operation || endpointEvents.length ? null : "workspace_operation_events_unavailable",
+      presentationId,
+      operation: observed.operation,
+      stages: observed.stages,
+      phaseTimingsMs: observed.phaseTimingsMs,
+      retryAudit: retryAudit(evidence),
+    };
+  } catch (error) {
+    return {
+      status: "unavailable",
+      reason: error instanceof BenchmarkRequestError ? error.classification : "workspace_operation_audit_request_failed",
+      retryAudit: retryAudit([]),
+    };
   }
-  const retryCount = Math.max(maximumExplicitRetryCount, Math.max(0, maximumAttemptNumber - 1), retryEventCount);
-  return { retryCount, eventCount: events.length, maximumExplicitRetryCount, maximumAttemptNumber, retryEventCount };
 }
 
 function cacheTelemetrySnapshot(payload) {
@@ -502,7 +507,10 @@ function coldControlResult(scenario, cacheBefore) {
 async function runDeck(deck, manifest, ordinal, onStatus = null, scenario = null) {
   assertOperationInvariants(manifest, deck, scenario);
   const startedAt = Date.now();
-  const resourceBefore = await sampleResources([...new Set(manifest.resourcePids)]);
+  const resourcePids = [...new Set(manifest.resourcePids)];
+  const [resourceBefore, resourceTreeBefore] = await Promise.all([
+    sampleResources(resourcePids), sampleResourceTree(resourcePids),
+  ]);
   if (!Array.isArray(resourceBefore) || resourceBefore.length !== manifest.resourcePids.length) {
     fail(`${deck.id}: one or more configured resourcePids are unavailable`);
   }
@@ -530,7 +538,16 @@ async function runDeck(deck, manifest, ordinal, onStatus = null, scenario = null
     await sleep(Math.min(manifest.pollIntervalMs, Math.max(1, deadline - Date.now())));
   }
   if (!terminal || !TERMINAL.has(String(terminal.status || "").toLowerCase())) fail(`${deck.id}: timed out`);
-  if (terminal.status !== "completed") fail(`${deck.id}: terminal status ${terminal.status}: ${JSON.stringify(terminal.failure || terminal.error || terminal.message)}`);
+  if (terminal.status !== "completed") {
+    const durableAudit = await durableOperationAudit({
+      baseUrl: manifest.baseUrl, taskId, operationId, headers: authHeaders(),
+    });
+    throw new BenchmarkRequestError(
+      `${deck.id}: terminal status ${terminal.status}: ${JSON.stringify(terminal.failure || terminal.error || terminal.message)}`,
+      "operation_failed",
+      { taskId, operationId, durableAudit, retryAudit: durableAudit.retryAudit },
+    );
+  }
   const data = terminal.data || {};
   const presentationId = data.presentation_id || data.presentationId;
   let downloadPath = data.path;
@@ -591,11 +608,13 @@ async function runDeck(deck, manifest, ordinal, onStatus = null, scenario = null
   const endpointEvents = eventsFromPayload(operationEvents).filter((event) => eventMatchesOperation(event, operationId));
   if (!endpointEvents.length) fail(`${deck.id}: events endpoint contains no matching workspace operation events`);
   const retry = retryAudit([...observed.events, ...endpointEvents]);
-  if (retry.retryCount !== 0) {
+  if (Number.isFinite(retry.retryCount) && retry.retryCount !== 0) {
     throw new BenchmarkRequestError(`${deck.id}: hidden/internal retry count ${retry.retryCount}`,
       "hidden_internal_retry_detected", retry);
   }
-  const resourceAfter = await sampleResources([...new Set(manifest.resourcePids)]);
+  const [resourceAfter, resourceTreeAfter] = await Promise.all([
+    sampleResources(resourcePids), sampleResourceTree(resourcePids),
+  ]);
   const phaseTimingsMs = { ...observed.phaseTimingsMs, export: Date.now() - exportStartedAt };
   return {
     deckId: deck.id, taskId, operationId, presentationId, exportAs: deck.exportAs,
@@ -610,6 +629,11 @@ async function runDeck(deck, manifest, ordinal, onStatus = null, scenario = null
       before: resourceBefore, after: resourceAfter,
       incrementalDelta: resourceDelta(resourceBefore, resourceAfter),
       attribution: manifest.concurrency === 1 ? "single-operation process delta" : "shared-process snapshot; not exclusively attributable under concurrency",
+      processTree: {
+        before: resourceTreeBefore,
+        after: resourceTreeAfter,
+        jobExclusiveAttribution: "unverified",
+      },
     },
   };
 }
@@ -638,9 +662,90 @@ async function sampleResources(pids) {
   try { return JSON.parse(result.stdout || "[]"); } catch { return { error: "resource sample JSON invalid" }; }
 }
 
+function finiteMetric(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric >= 0 ? numeric : null;
+}
+
+function resolveProcessTree(rows, rootPids) {
+  if (!Array.isArray(rows)) return { status: "unverified", reason: "process_snapshot_unavailable", processes: [] };
+  const roots = [...new Set(rootPids)].filter((pid) => Number.isInteger(pid) && pid > 0);
+  const byPid = new Map(rows.map((row) => [Number(row.pid), row]).filter(([pid]) => Number.isInteger(pid) && pid > 0));
+  const children = new Map();
+  for (const [pid, row] of byPid) {
+    const parentPid = Number(row.parentPid);
+    if (!children.has(parentPid)) children.set(parentPid, []);
+    children.get(parentPid).push(pid);
+  }
+  const attribution = new Map();
+  const queue = [];
+  for (const rootPid of roots) {
+    if (!byPid.has(rootPid)) continue;
+    attribution.set(rootPid, { rootPid, descendantDepth: 0 });
+    queue.push(rootPid);
+  }
+  while (queue.length) {
+    const parentPid = queue.shift();
+    const parent = attribution.get(parentPid);
+    for (const childPid of children.get(parentPid) || []) {
+      if (attribution.has(childPid)) continue;
+      attribution.set(childPid, { rootPid: parent.rootPid, descendantDepth: parent.descendantDepth + 1 });
+      queue.push(childPid);
+    }
+  }
+  const processes = [...attribution.entries()].map(([pid, scope]) => {
+    const row = byPid.get(pid);
+    const imageName = String(row.imageName || "").slice(0, 128);
+    return {
+      pid,
+      parentPid: Number.isInteger(Number(row.parentPid)) ? Number(row.parentPid) : null,
+      rootPid: scope.rootPid,
+      descendantDepth: scope.descendantDepth,
+      imageName,
+      processRole: /(chrome|chromium|msedge)/i.test(imageName) ? "chrome"
+        : /(python|node|pwsh|powershell)/i.test(imageName) ? "worker" : "other",
+      cpuSeconds: finiteMetric(row.cpuSeconds),
+      workingSetBytes: finiteMetric(row.workingSetBytes),
+      privateBytes: finiteMetric(row.privateBytes),
+      handles: finiteMetric(row.handles),
+    };
+  });
+  const observedRoots = roots.filter((pid) => byPid.has(pid));
+  return {
+    status: observedRoots.length === roots.length ? "assessed" : observedRoots.length ? "partial" : "unverified",
+    reason: observedRoots.length === roots.length ? null : "one_or_more_root_pids_unavailable",
+    configuredRootPids: roots,
+    observedRootPids: observedRoots,
+    processes,
+    attributionMethod: "same-snapshot parent chain from configured roots",
+    jobExclusiveAttribution: "unverified",
+  };
+}
+
+async function sampleResourceTree(pids) {
+  if (!pids.length || process.platform !== "win32") {
+    return { status: "unverified", reason: "Windows process ancestry unavailable", processes: [] };
+  }
+  const script = [
+    "$rows=@(Get-CimInstance Win32_Process -ErrorAction Stop | ForEach-Object {",
+    "[ordered]@{pid=[int]$_.ProcessId;parentPid=[int]$_.ParentProcessId;imageName=[string]$_.Name;cpuSeconds=(([double]$_.KernelModeTime+[double]$_.UserModeTime)/10000000);workingSetBytes=[double]$_.WorkingSetSize;privateBytes=[double]$_.PrivatePageCount;handles=[double]$_.HandleCount}})",
+    "$rows | ConvertTo-Json -Compress",
+  ].join("; ");
+  const result = await commandJson("pwsh", ["-NoLogo", "-NoProfile", "-Command", script]);
+  if (result.code !== 0) return { status: "unverified", reason: "process_tree_sample_failed", processes: [] };
+  try {
+    const payload = JSON.parse(result.stdout || "[]");
+    return resolveProcessTree(Array.isArray(payload) ? payload : [payload], pids);
+  } catch {
+    return { status: "unverified", reason: "process tree sample JSON invalid", processes: [] };
+  }
+}
+
 async function resourceLoop(manifest, state) {
   while (!state.stop) {
-    state.samples.push({ observedAt: now(), processes: await sampleResources([...new Set(state.pids)]) });
+    const pids = [...new Set(state.pids)];
+    const [processes, processTree] = await Promise.all([sampleResources(pids), sampleResourceTree(pids)]);
+    state.samples.push({ observedAt: now(), processes, processTree });
     await sleep(manifest.resourceIntervalMs);
   }
 }
@@ -665,17 +770,45 @@ function resourceDelta(before, after) {
 function resourceSummary(samples) {
   const totals = samples.map((sample) => resourceTotals(sample.processes)).filter(Boolean);
   const baseline = totals[0] || null;
-  if (!baseline) return { status: "not_assessed", reason: "no Windows resource samples" };
+  const treeSamples = samples.map((sample) => sample.processTree).filter((sample) => sample && Array.isArray(sample.processes));
+  if (!baseline) return {
+    status: "not_assessed",
+    reason: "no Windows resource samples",
+    processTree: {
+      status: "unverified",
+      reason: treeSamples.at(-1)?.reason || "process tree samples unavailable",
+      configuredRootPids: treeSamples[0]?.configuredRootPids || [],
+      observedDescendantPids: [],
+      chromeDescendantPeak: null,
+      workerDescendantPeak: null,
+      jobExclusiveAttribution: "unverified",
+    },
+  };
   const peak = totals.reduce((current, value) => ({
     cpuSeconds: Math.max(current.cpuSeconds, value.cpuSeconds),
     workingSetBytes: Math.max(current.workingSetBytes, value.workingSetBytes),
     privateBytes: Math.max(current.privateBytes, value.privateBytes),
     handles: Math.max(current.handles, value.handles),
   }), { ...baseline });
+  const rolePeak = (role) => Math.max(0, ...treeSamples.map((sample) => sample.processes
+    .filter((process) => process.descendantDepth > 0 && process.processRole === role).length));
+  const observedDescendantPids = [...new Set(treeSamples.flatMap((sample) => sample.processes
+    .filter((process) => process.descendantDepth > 0).map((process) => process.pid)))];
+  const treeStatus = treeSamples.some((sample) => sample.status === "assessed") ? "assessed"
+    : treeSamples.some((sample) => sample.status === "partial") ? "partial" : "unverified";
   return {
     status: "assessed", baseline, peak,
     incrementalPeak: Object.fromEntries(Object.entries(peak).map(([key, value]) => [key, value - baseline[key]])),
     samplingScope: "sum of configured resourcePids; task snapshots carry a shared-process attribution label",
+    processTree: {
+      status: treeStatus,
+      configuredRootPids: treeSamples[0]?.configuredRootPids || [],
+      observedDescendantPids,
+      chromeDescendantPeak: treeStatus === "unverified" ? null : rolePeak("chrome"),
+      workerDescendantPeak: treeStatus === "unverified" ? null : rolePeak("worker"),
+      attributionMethod: "same-snapshot parent chain from configured roots",
+      jobExclusiveAttribution: "unverified",
+    },
   };
 }
 
@@ -716,9 +849,19 @@ async function runSingleControlledLoad(manifest, hook = null, scenario = null) {
       const item = queue[cursor++];
       try { results.push(await runDeck(item.deck, manifest, item.ordinal, hook, scenario)); }
        catch (error) {
+        const retryDetail = error instanceof BenchmarkRequestError
+          ? error.details?.retryAudit || (Number.isFinite(error.details?.retryCount) ? error.details : null)
+          : null;
         failures.push({ deckId: item.deck.id, ordinal: item.ordinal,
           classification: error instanceof BenchmarkRequestError ? error.classification : "operation_failed",
-          retryAudit: error instanceof BenchmarkRequestError ? error.details?.retryCount ?? null : null,
+          retryAudit: Number.isFinite(retryDetail?.retryCount) ? retryDetail.retryCount : null,
+          retryAuditStatus: retryDetail?.status || "unavailable",
+          retryAuditDetail: retryDetail || { status: "unavailable", providerAttemptCount: null, retryCount: null,
+            recoveryReason: null, recoveryStatus: null,
+            unavailable: ["providerAttemptCount", "retryCount", "attemptNumber", "recoveryReason", "recoveryStatus"] },
+          durableOperationAudit: error instanceof BenchmarkRequestError ? error.details?.durableAudit || null : null,
+          taskId: error instanceof BenchmarkRequestError ? error.details?.taskId || null : null,
+          operationId: error instanceof BenchmarkRequestError ? error.details?.operationId || null : null,
           error: String(error?.stack || error) });
        }
     }
@@ -754,10 +897,7 @@ async function runSingleControlledLoad(manifest, hook = null, scenario = null) {
     phaseTimingsMs: phaseSummary(results),
     perOperationLatencyMs: results.map(({ deckId, latencyMs }) => ({ deckId, latencyMs })),
     results, failures, resources: { samples: resourceState.samples, summary: resourceSummary(resourceState.samples) },
-    requestFailures: { proxyFetchFailed: failures.filter((failure) => failure.classification === "proxy_fetch_failed").length,
-      listenerInterrupted: failures.filter((failure) => ["listener_interrupted", "proxy_or_listener_http_failure"].includes(failure.classification)).length,
-      hiddenInternalRetries: failures.filter((failure) => failure.classification === "hidden_internal_retry_detected").length,
-      automaticRetries: 0, listenerRestartedByHarness: false },
+    requestFailures: requestFailureSummary(failures),
     cacheTelemetry, poolTelemetry,
     fixedInvariants: manifest.matrix?.fixedInvariants || null,
     deckInvariants: manifest.deckInvariants,
@@ -915,4 +1055,8 @@ async function main() {
   if (report.failedOperations) process.exitCode = 2;
 }
 
-main().catch((error) => { console.error(error?.stack || error); process.exitCode = 1; });
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => { console.error(error?.stack || error); process.exitCode = 1; });
+}
+
+export { durableOperationAudit, resolveProcessTree };

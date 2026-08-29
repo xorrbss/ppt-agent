@@ -12,10 +12,14 @@ from api.v1.auth.assets import is_app_data_path_authorized
 from api.v1.auth.principal import AuthPrincipal, resolve_request_principal
 from utils.owner_context import (
     get_current_owner_id,
+    reset_current_tenant_id,
+    reset_current_trace_id,
     reset_current_owner_id,
     reset_current_owner_is_admin,
     set_current_owner_id,
     set_current_owner_is_admin,
+    set_current_tenant_id,
+    set_current_trace_id,
 )
 from api.v1.auth.users import get_jwt_strategy
 from models.sql.user import User
@@ -165,15 +169,21 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
                     username=admin.username,
                     is_admin=True,
                     method="jwt",
+                    tenant_id=(os.getenv("PPT_SERVICE_TENANT_ID") or "default").strip(),
+                    trace_id=str(getattr(request.state, "request_id", "") or secrets.token_hex(16)),
                 )
                 request.state.auth_principal = principal
                 request.state.current_user = admin
                 request.state.auth_username = principal.username
                 context_token = set_current_owner_id(principal.user_id)
                 admin_context_token = set_current_owner_is_admin(True)
+                tenant_context_token = set_current_tenant_id(principal.tenant_id)
+                trace_context_token = set_current_trace_id(principal.trace_id)
                 try:
                     return await call_next(request)
                 finally:
+                    reset_current_trace_id(trace_context_token)
+                    reset_current_tenant_id(tenant_context_token)
                     reset_current_owner_is_admin(admin_context_token)
                     reset_current_owner_id(context_token)
 
@@ -244,8 +254,12 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
                 )
             context_token = set_current_owner_id(principal.user_id)
             admin_context_token = set_current_owner_is_admin(principal.is_admin)
+            tenant_context_token = set_current_tenant_id(principal.tenant_id)
+            trace_context_token = set_current_trace_id(principal.trace_id)
             try:
                 return await call_next(request)
             finally:
+                reset_current_trace_id(trace_context_token)
+                reset_current_tenant_id(tenant_context_token)
                 reset_current_owner_is_admin(admin_context_token)
                 reset_current_owner_id(context_token)

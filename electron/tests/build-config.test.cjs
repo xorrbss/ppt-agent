@@ -84,4 +84,13 @@ test("packaged FastAPI keeps standard streams available for Uvicorn", () => {
     /\bconsole=True\b/,
     "Electron hides the child process window; PyInstaller must still provide stdio",
   )
+  assert.match(source, /\["packaged_runtime_entrypoint\.py"\]/)
+
+  const packageJson = JSON.parse(
+    fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"),
+  )
+  assert.match(
+    packageJson.scripts["build:fastapi"],
+    /PyInstaller[\s\S]*server\.spec[\s\S]*materialize-workspace-worker\.cjs/,
+  )
 })

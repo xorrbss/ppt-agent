@@ -138,20 +138,24 @@ export default function AuthoredEmissionCapabilityStatusView({
     const { projection } = readiness;
     const hybridReason = authoredHybridUnavailableReason(status, expectedRevision);
     const activeKillSwitches = projection.killSwitches.filter((item) => item.active);
+    let hybridStatusMessage: string;
+    if (hybridReason) {
+      hybridStatusMessage = `Hybrid 제한: ${hybridReason}`;
+    } else if (readiness.version === "v3") {
+      hybridStatusMessage = authoredV3HybridStatusMessage(readiness.projection);
+    } else {
+      hybridStatusMessage = `Hybrid 진단 export 가능 · immutable ${readiness.version} manifest binding 확인. Promotion은 서버 receipt만 결정합니다.`;
+    }
     return (
       <div className="space-y-1 text-[11px] leading-4" data-testid="authored-capability-status" data-readiness-version={readiness.version}>
         <p className={hybridReason ? "text-amber-800" : "text-emerald-800"}>
-          {hybridReason
-            ? `Hybrid 제한: ${hybridReason}`
-            : readiness.version === "v3"
-              ? authoredV3HybridStatusMessage(projection)
-              : `Hybrid 진단 export 가능 · immutable ${readiness.version} manifest binding 확인. Promotion은 서버 receipt만 결정합니다.`}
+          {hybridStatusMessage}
         </p>
         <details className="rounded border border-slate-200 bg-white/70 px-2 py-1" data-testid="authored-release-evidence-details">
           <summary className="cursor-pointer select-none font-medium text-slate-700">
             {readiness.version === "v3"
               ? `릴리스 증거 상세 · deck ${String(readiness.projection.releaseProfile.deckEvidenceReady)} · serializer ${String(readiness.projection.releaseProfile.serializerProfileReady)} · native N/A · commit ${String(readiness.projection.releaseProfile.releaseCommitReady)} · promotion ${String(readiness.projection.releaseProfile.promotionReady)}`
-              : `릴리스 증거 상세 · promotion ${String(projection.releaseProfile.promotionReady)} · bounded native ${String(projection.releaseProfile.boundedNativeParityReady)}`}
+              : `릴리스 증거 상세 · promotion ${String(readiness.projection.releaseProfile.promotionReady)} · bounded native ${String(readiness.projection.releaseProfile.boundedNativeParityReady)}`}
           </summary>
           <div className="mt-1 space-y-1">
         <p className="break-all text-slate-500">
@@ -174,7 +178,7 @@ export default function AuthoredEmissionCapabilityStatusView({
           </>
         ) : (
           <p className="text-slate-500">
-            promotionReady: {String(projection.releaseProfile.promotionReady)} · boundedNativeParityReady: {String(projection.releaseProfile.boundedNativeParityReady)} · independentGenerationReady: {String(projection.releaseProfile.independentGenerationReady)}
+            promotionReady: {String(readiness.projection.releaseProfile.promotionReady)} · boundedNativeParityReady: {String(readiness.projection.releaseProfile.boundedNativeParityReady)} · independentGenerationReady: {String(readiness.projection.releaseProfile.independentGenerationReady)}
           </p>
         )}
         <p className="break-all text-slate-500">
@@ -189,7 +193,7 @@ export default function AuthoredEmissionCapabilityStatusView({
           </p>
         ) : (
           <p className="break-all text-slate-500">
-            promotion [{projection.releaseProfile.promotionCapabilityIds.join(", ")}] · bounded native [{projection.releaseProfile.boundedNativeCapabilityIds.join(", ")}]
+            promotion [{readiness.projection.releaseProfile.promotionCapabilityIds.join(", ")}] · bounded native [{readiness.projection.releaseProfile.boundedNativeCapabilityIds.join(", ")}]
           </p>
         )}
         <section className="border-t border-slate-100 pt-1.5" aria-label={`서버 발행 ${readiness.version} scoped capabilities`}>

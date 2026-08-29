@@ -19,6 +19,7 @@ function fixture() {
   for (const relative of [
     "Contents/MacOS/Presenton Open Source",
     "Contents/Resources/app/resources/fastapi/fastapi",
+    "Contents/Resources/app/resources/fastapi/workspace-operation-worker",
     "Contents/Resources/app/resources/export/py/convert-darwin-arm64",
   ]) {
     const filePath = path.join(app, relative);

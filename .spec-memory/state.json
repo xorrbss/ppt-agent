@@ -69,11 +69,19 @@
     "authored.full-reauthor-safe-semantic-alias": "decisions/authored.full-reauthor-safe-semantic-alias.1.json",
     "authored.author-provider-call-budget": "decisions/authored.author-provider-call-budget.1.json",
     "authored.capacity.chart-week-ticks": "decisions/authored.capacity.chart-week-ticks.1.json",
-    "authored.hybrid-multizband-quality-schema": "decisions/authored.hybrid-multizband-quality-schema.1.json"
+    "authored.hybrid-multizband-quality-schema": "decisions/authored.hybrid-multizband-quality-schema.1.json",
+    "authored.export-release-finalization": "decisions/authored.export-release-finalization.1.json",
+    "runtime.workspace-operation-worker-boundary": "decisions/runtime.workspace-operation-worker-boundary.2.json",
+    "authored.generation-stage-timing-durable": "decisions/authored.generation-stage-timing-durable.1.json",
+    "authored.capacity.semantic-bounded-recovery": "decisions/authored.capacity.semantic-bounded-recovery.4.json",
+    "service.boundary.external-platform": "decisions/service.boundary.external-platform.1.json",
+    "service.architecture.modular-worker-boundary": "decisions/service.architecture.modular-worker-boundary.1.json",
+    "artifact.public-content-authority": "decisions/artifact.public-content-authority.1.json",
+    "service.public-admission-budget-boundary": "decisions/service.public-admission-budget-boundary.1.json"
   },
   "readFirst": [
     "servers/fastapi/utils/llm_calls/author_vision_qa.py",
     "scripts/authored-vnext-controlled-load.mjs"
   ],
-  "updatedAt": "2026-08-29T13:45:25.6109399+00:00"
+  "updatedAt": "2026-08-29T19:39:24.8677086+00:00"
 }

@@ -202,6 +202,14 @@ def test_catalog_seed_is_published_and_idempotent(tmp_path: Path) -> None:
     assert [item["revision"] for item in first] == [2, 2, 2, 2]
     assert [item["revision"] for item in second] == [2, 2, 2, 2]
 
+    reused = seed_catalog(
+        service,
+        asset_store,
+        ibiz_logo_svg=tmp_path / "missing-ibiz-logo.svg",
+    )
+    assert [item["action"] for item in reused] == ["unchanged"] * 4
+    assert [item["revision"] for item in reused] == [2, 2, 2, 2]
+
     catalog = service.list_masters(cursor=None, limit=20)
     assert {item.master_id for item in catalog.items} == {
         IBIZ_MASTER_ID,

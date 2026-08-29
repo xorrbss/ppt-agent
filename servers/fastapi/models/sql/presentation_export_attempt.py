@@ -35,6 +35,10 @@ from sqlalchemy import (
 from sqlmodel import Field, SQLModel
 
 from models.sql.workspace import get_workspace_owner_scope
+from models.sql.presentation_export_receipt_models import (
+    ExportEvidenceSidecarPointer,
+    ExportUnifiedReleaseReceipt,
+)
 from utils.datetime_utils import get_current_utc_datetime
 from utils.owner_context import get_current_owner_id
 
@@ -1147,6 +1151,8 @@ class PresentationExportAttemptProvenance(BaseModel):
     powerpoint_qa: ExportPowerPointQaEvidence | None = None
     visual_parity: ExportVisualParityEvidence | None = None
     quality_receipt_binding: ExportQualityReceiptBinding | None = None
+    evidence_sidecar_pointer: ExportEvidenceSidecarPointer | None = None
+    unified_release_receipt: ExportUnifiedReleaseReceipt | None = None
 
     @field_validator("adapter_chain")
     @classmethod
@@ -1369,6 +1375,23 @@ class PresentationExportAttemptProvenance(BaseModel):
                 require_release=release_required,
                 minimum_native_ratio=0.70,
             )
+        if self.unified_release_receipt is not None:
+            receipt = self.unified_release_receipt
+            if (
+                self.atomic_binding is None
+                or ExportAtomicBinding.model_validate(receipt.export_binding)
+                != self.atomic_binding
+                or self.quality_receipt_binding is None
+                or receipt.generation_receipt_digest
+                != self.quality_receipt_binding.receipt_digest
+                or self.visual_parity is None
+                or receipt.visual_parity_status != self.visual_parity.status
+                or self.powerpoint_qa is None
+                or receipt.powerpoint_qa_status != self.powerpoint_qa.status
+            ):
+                raise ValueError("unified release receipt binding is inconsistent")
+            if self.evidence_sidecar_pointer is None:
+                raise ValueError("unified release receipt requires atomic sidecar pointer")
         return self
 
 

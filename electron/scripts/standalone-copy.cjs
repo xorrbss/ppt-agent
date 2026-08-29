@@ -303,24 +303,87 @@ function removeMaterializedPnpmStore(serverRoot) {
   return true
 }
 
-function atomicReplaceDirectory(tempDirectory, targetDirectory) {
+const WINDOWS_TRANSIENT_RENAME_CODES = new Set(["EACCES", "EBUSY", "ENOTEMPTY", "EPERM"])
+const WINDOWS_RENAME_ATTEMPTS = 5
+const WINDOWS_RENAME_RETRY_DELAY_MS = 75
+
+function sleepSync(milliseconds) {
+  if (milliseconds > 0) {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds)
+  }
+}
+
+function renameDirectoryWithRetry(from, to, {
+  fsImpl = fs,
+  platform = process.platform,
+  retryAttempts = WINDOWS_RENAME_ATTEMPTS,
+  retryDelayMs = WINDOWS_RENAME_RETRY_DELAY_MS,
+  sleep = sleepSync,
+} = {}) {
+  const attempts = platform === "win32" ? retryAttempts : 1
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      fsImpl.renameSync(from, to)
+      return
+    } catch (error) {
+      const retryable = platform === "win32" && WINDOWS_TRANSIENT_RENAME_CODES.has(error?.code)
+      if (!retryable || attempt === attempts) throw error
+      sleep(retryDelayMs * attempt)
+    }
+  }
+}
+
+function atomicReplaceDirectory(tempDirectory, targetDirectory, options = {}) {
+  const {
+    fsImpl = fs,
+    platform = process.platform,
+    retryAttempts,
+    retryDelayMs,
+    sleep,
+  } = options
   const temp = path.resolve(tempDirectory)
   const target = path.resolve(targetDirectory)
   if (path.dirname(temp) !== path.dirname(target)) {
     throw new Error("Atomic replacement requires temp and target to be siblings")
   }
   const backup = `${target}.backup-${process.pid}-${Date.now()}`
-  const hadTarget = fs.existsSync(target)
+  const hadTarget = fsImpl.existsSync(target)
+  let targetMoved = false
   try {
-    if (hadTarget) fs.renameSync(target, backup)
-    fs.renameSync(temp, target)
+    if (hadTarget) {
+      renameDirectoryWithRetry(target, backup, {
+        fsImpl, platform, retryAttempts, retryDelayMs, sleep,
+      })
+      targetMoved = true
+    }
+    renameDirectoryWithRetry(temp, target, {
+      fsImpl, platform, retryAttempts, retryDelayMs, sleep,
+    })
   } catch (error) {
-    if (hadTarget && fs.existsSync(backup) && !fs.existsSync(target)) {
-      fs.renameSync(backup, target)
+    if (targetMoved && fsImpl.existsSync(backup) && !fsImpl.existsSync(target)) {
+      try {
+        renameDirectoryWithRetry(backup, target, {
+          fsImpl, platform, retryAttempts, retryDelayMs, sleep,
+        })
+      } catch (rollbackError) {
+        // Keep both exact, build-owned directories for recovery. Deleting the
+        // staged directory here could discard the only validated replacement.
+        error.atomicReplacementRecoveryRequired = true
+        error.atomicReplacementBackup = backup
+        error.atomicReplacementTemp = temp
+        error.rollbackError = rollbackError
+      }
     }
     throw error
   }
-  if (hadTarget) fs.rmSync(backup, { recursive: true, force: true })
+  if (hadTarget) {
+    fsImpl.rmSync(backup, {
+      recursive: true,
+      force: true,
+      maxRetries: platform === "win32" ? 12 : 3,
+      retryDelay: platform === "win32" ? 250 : 100,
+    })
+  }
 }
 
 function materializeTreeInPlace(rootDirectory) {

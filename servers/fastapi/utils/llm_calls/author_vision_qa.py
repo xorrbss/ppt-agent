@@ -559,6 +559,8 @@ async def revise_authored_deck(
     local_patch_only: bool = False,
     fail_on_residual_dom_issues: bool = False,
     capacity_briefs: Optional[Sequence[str]] = None,
+    provider_recovery_allowed: Optional[Sequence[bool]] = None,
+    allow_patch_proposal_retry: bool = True,
 ) -> Any:
     """Bounded critique -> re-author -> re-render loop over an authored deck. Returns
     the (possibly revised) htmls + pngs and the local indices that changed.
@@ -595,6 +597,10 @@ async def revise_authored_deck(
         raise ValueError("illustration_slots must match the reviewed slide count")
     if capacity_briefs is not None and len(capacity_briefs) != n:
         raise ValueError("capacity_briefs must match the reviewed slide count")
+    if provider_recovery_allowed is not None and len(provider_recovery_allowed) != n:
+        raise ValueError(
+            "provider_recovery_allowed must match the reviewed slide count"
+        )
     forced_full_reauthor = set(force_full_reauthor_indices or ())
     if any(type(index) is not int or index < 0 or index >= n for index in forced_full_reauthor):
         raise ValueError("force_full_reauthor_indices contains an invalid local index")
@@ -744,6 +750,9 @@ async def revise_authored_deck(
             absolute_indices[i],
             deck_size,
             reasoning_effort="high",
+            receipt_retry_class="recovery",
+            receipt_attempt_ordinal=2,
+            allow_provider_fallback=False,
             **reference_kwargs,
         )
         new_html = _canonicalize_full_reauthor_semantic_aliases(new_html)
@@ -889,8 +898,16 @@ async def revise_authored_deck(
             fallback_succeeded = False
             fallback_failure: dict[str, str] | None = None
             element_changes: list[dict[str, Any]] = []
+            recovery_allowed = (
+                provider_recovery_allowed is None
+                or provider_recovery_allowed[i] is True
+            )
             try:
-                if return_details and i not in forced_full_reauthor:
+                if (
+                    return_details
+                    and i not in forced_full_reauthor
+                    and recovery_allowed
+                ):
                     patch_attempted = True
                     compact_dom = [
                         node.to_dict()
@@ -910,7 +927,10 @@ async def revise_authored_deck(
                             compact_dom,
                             critique,
                             reference_mode=reference_mode,
-                            retry_invalid_model_patch=fail_on_residual_dom_issues,
+                            retry_invalid_model_patch=(
+                                fail_on_residual_dom_issues
+                                and allow_patch_proposal_retry
+                            ),
                         )
                     except Exception as error:
                         log_failure("patch_proposal", error)
@@ -994,7 +1014,11 @@ async def revise_authored_deck(
                             "code": fallback_reason,
                             "error_type": "PatchProposalFailure",
                         }
-                if (new_html is None or new_png is None) and not local_patch_only:
+                if (
+                    (new_html is None or new_png is None)
+                    and not local_patch_only
+                    and recovery_allowed
+                ):
                     fallback_started = time.monotonic()
                     fallback_attempted = True
                     try:

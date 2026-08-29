@@ -51,6 +51,7 @@ from services.workspace_operation_runner import (
     stop_workspace_operation_runner,
 )
 from services.workspace_operation_worker import (
+    embedded_workspace_operation_kinds,
     get_workspace_operation_worker_mode,
     should_start_embedded_workspace_operation_worker,
 )
@@ -161,8 +162,9 @@ async def app_lifespan(_: FastAPI):
         source_locked_maintenance_started = True
         await start_presentation_generation_dispatcher()
         presentation_generation_dispatcher_started = True
-        await start_workspace_cleanup_maintenance()
-        workspace_cleanup_maintenance_started = True
+        if should_start_embedded_workspace_operation_worker():
+            await start_workspace_cleanup_maintenance()
+            workspace_cleanup_maintenance_started = True
         register_presentation_generation_operation_handler(replace=True)
         register_presentation_deletion_operation_handler(replace=True)
         register_presentation_chat_operation_handlers(replace=True)
@@ -173,12 +175,15 @@ async def app_lifespan(_: FastAPI):
         await start_workspace_operation_outbox_dispatcher()
         workspace_outbox_dispatcher_started = True
         if should_start_embedded_workspace_operation_worker():
-            await start_workspace_operation_runner()
+            await start_workspace_operation_runner(
+                allowed_kinds=embedded_workspace_operation_kinds()
+            )
             workspace_operation_runner_started = True
-        await start_workspace_asset_maintenance()
-        workspace_asset_maintenance_started = True
-        await start_workspace_event_retention()
-        workspace_event_retention_started = True
+        if should_start_embedded_workspace_operation_worker():
+            await start_workspace_asset_maintenance()
+            workspace_asset_maintenance_started = True
+            await start_workspace_event_retention()
+            workspace_event_retention_started = True
         if (
             template_v2_policy.creation_enabled
             and template_v2_policy.allowed_template_ids
@@ -187,7 +192,12 @@ async def app_lifespan(_: FastAPI):
             await start_template_v2_pptx_dispatcher()
             template_v2_dispatcher_started = True
         await bootstrap_database_admin()
-        await check_llm_and_image_provider_api_or_model_availability()
+        if os.getenv("PRESENTON_SKIP_PROVIDER_AVAILABILITY_CHECK") != "true":
+            await check_llm_and_image_provider_api_or_model_availability()
+        else:
+            logger.info(
+                "provider_availability_check_skipped profile=export_only_validation"
+            )
         yield
     finally:
         try:

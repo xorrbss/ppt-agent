@@ -474,6 +474,15 @@ class WorkspaceArtifact(SQLModel, table=True):
             nullable=True,
         ),
     )
+    public_artifact_id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            Uuid,
+            ForeignKey("public_artifacts.id", ondelete="RESTRICT"),
+            nullable=True,
+            index=True,
+        ),
+    )
     kind: str = Field(sa_column=Column(String(128), nullable=False))
     status: str = Field(default="staging", sa_column=Column(String(24), nullable=False, default="staging", server_default="staging"))
     storage_key: str = Field(sa_column=Column(String(1024), nullable=False))

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "key": "service.boundary.external-platform",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Login, admin, setup and DB transition stay external; PPT service owns session-principal generation, rendering and export only.",
+  "scope": [
+    "architecture",
+    "authentication",
+    "generation",
+    "rendering",
+    "export"
+  ],
+  "invariants": [
+    "Owner and tenant identity come only from a trusted external session principal.",
+    "PPT workers do not implement login, admin, setup or DB transition workflows."
+  ],
+  "forbidden": [
+    "Client-supplied owner or tenant authority.",
+    "Adding login, admin, setup or DB transition scope to the PPT service without a new user decision."
+  ],
+  "evidence": [
+    "docs/public-generation-export-service-architecture-20260830.md"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-29T18:57:10.5700191+00:00"
+}

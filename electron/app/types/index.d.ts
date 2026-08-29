@@ -63,6 +63,7 @@ interface FastApiEnv {
   /** Electron-only process token for the loopback runtime snapshot refresh. */
   PRESENTON_RUNTIME_SETTINGS_REFRESH_TOKEN?: string,
   MIGRATE_DATABASE_ON_STARTUP?: string,
+  WORKSPACE_OPERATION_WORKER_MODE?: string,
   DISABLE_AUTH?: string,
   /** Absolute path to the resolved LibreOffice executable discovered at startup. */
   SOFFICE_PATH?: string,

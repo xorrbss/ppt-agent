@@ -3,16 +3,22 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
+import os
 from collections.abc import Awaitable, Callable, Mapping
 from pathlib import Path
 from typing import Any, Literal, cast
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from api.v1.auth.internal import authenticated_internal_request_headers
 from models.sql.presentation import PresentationModel
-from models.sql.workspace import WorkspaceOperation
+from models.sql.public_admission import PublicOperationAdmission
+from models.sql.slide import SlideModel
+from models.sql.workspace import WorkspaceArtifact, WorkspaceOperation
+from services.artifact_store import configured_public_artifact_service
 from services.authored_quality_review_service import (
     run_authored_quality_review as run_authored_quality_review,
 )
@@ -30,9 +36,9 @@ from services.presentation_export_attempt_service import (
 from services.presentation_export_capabilities import (
     PresentationExportContractError,
 )
-from services.presentation_export_router import execute_presentation_export
-from services.workspace_export_progress_poller import (
-    start_export_progress_polling,
+from services.public_export_operation import (
+    PublicExportOperationError,
+    render_and_export_authored_htmls,
 )
 from services.workspace_artifact_publication_service import (
     WorkspaceArtifactPublicationError,
@@ -53,12 +59,39 @@ from services.workspace_operation_handler_registry import (
 from services.workspace_quality_operation_handler import (
     WorkspaceQualityReviewOperationHandler,
 )
+from utils.get_env import get_app_data_directory_env
 
 QUALITY_REVIEW_OPERATION_KIND = "quality.review"
 EXPORT_OPERATION_KINDS = ("export.pptx", "export.pdf")
 InternalHeaderProvider = Callable[[], Awaitable[dict[str, str]]]
 LOGGER = logging.getLogger(__name__)
 QUALITY_REVIEW_PROGRESS_INTERVAL_SECONDS = 30.0
+
+
+def _stage_public_artifact_cache(
+    payload: bytes,
+    *,
+    operation_id: object,
+    artifact_id: object,
+    export_format: str,
+) -> Path:
+    root = Path(get_app_data_directory_env()).resolve()
+    target = root / "public-artifact-cache" / str(operation_id) / f"{artifact_id}.{export_format}"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.exists():
+        if hashlib.sha256(target.read_bytes()).digest() != hashlib.sha256(payload).digest():
+            raise PresentationExportContractError("public_export_cache_conflict")
+        return target
+    temporary = target.with_name(f".{target.name}.tmp")
+    try:
+        with temporary.open("xb") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, target)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return target
 
 
 def _context(claim_payload: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -206,6 +239,8 @@ class WorkspaceExportOperationHandler:
         execution = None
         native_export = None
         native_export_attempt_id = None
+        direct_export_selected_adapter: str | None = None
+        public_artifact_id = None
         try:
             if authored_vnext_export_path == "legacy-native":
                 if not isinstance(authored_vnext_projection, dict):
@@ -271,6 +306,7 @@ class WorkspaceExportOperationHandler:
                     )
                 export_attempt_id = attempt.id
                 native_export_attempt_id = attempt.id
+                direct_export_selected_adapter = "native_reconstructed"
                 try:
                     native_export = await export_persisted_legacy_master_deck(
                         owner_id=claim.owner_id,
@@ -299,48 +335,114 @@ class WorkspaceExportOperationHandler:
                     },
                 }
             else:
-                # Browser-backed exports alone need an ephemeral internal
-                # credential. Native master export stays document-server-free.
-                headers = await self._internal_header_provider()
-                cookie_header = headers.get("Cookie") or None
-                # The renderer runs in Next.js behind one blocking request, so
-                # without this poller the operation reports nothing for the
-                # minutes that render actually takes.
-                stop_progress_polling = start_export_progress_polling(
-                    operation_id=claim.operation_id,
-                    cookie_header=cookie_header,
-                    report=context.progress,
-                )
-                try:
-                    async with self._session_factory() as session:
-                        execution = await execute_presentation_export(
-                            session,
-                            render_presentation_id=claim.presentation_id,
-                            attempt_presentation_id=claim.presentation_id,
-                            export_format=cast(Literal["pptx", "pdf"], export_format),
-                            expected_render_revision=claim.expected_revision,
-                            source_revision=claim.expected_revision,
-                            title=title,
-                            cookie_header=cookie_header,
-                            owner_id=claim.owner_id,
-                            owner_scope=claim.owner_scope,
-                            workspace_operation_id=claim.operation_id,
-                            request_hash=operation.request_hash,
-                            idempotency_key_hash=operation.idempotency_key_hash,
-                            pptx_mode=pptx_mode,
-                            font_embedding=font_embedding,
+                if pptx_mode != "fidelity" or font_embedding:
+                    raise NonRetryableWorkspaceOperationError(
+                        "public_isolated_hybrid_not_supported"
+                    )
+                async with self._session_factory() as session:
+                    slides = list(
+                        (
+                            await session.execute(
+                                select(SlideModel)
+                                .where(SlideModel.presentation == claim.presentation_id)
+                                .order_by(SlideModel.index, SlideModel.id)
+                            )
+                        ).scalars()
+                    )
+                    admission = await session.scalar(
+                        select(PublicOperationAdmission).where(
+                            PublicOperationAdmission.operation_id == claim.operation_id
                         )
-                finally:
-                    await stop_progress_polling()
-                exported = execution.presentation
-                export_path = Path(exported.path)
+                    )
+                    if admission is None or admission.state != "active":
+                        raise NonRetryableWorkspaceOperationError(
+                            "public_export_admission_required"
+                        )
+                    tenant_id = admission.tenant_id
+                htmls = [slide.html_content for slide in slides]
+                if not htmls or any(not isinstance(html, str) or not html for html in htmls):
+                    raise NonRetryableWorkspaceOperationError(
+                        "public_isolated_authored_html_required"
+                    )
+                source_snapshot_sha256 = hashlib.sha256(
+                    json.dumps(
+                        htmls,
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    ).encode("utf-8")
+                ).hexdigest()
+                initial_provenance = {
+                    "schema_version": 1,
+                    "adapter_chain": ["general"],
+                    "capability_evidence": {
+                        "selected_adapter": "general",
+                        "execution_profile": "isolated_raster_v1",
+                        "network_none_worker": True,
+                        "sessionless_capability": True,
+                        "pptx_mode": "fidelity" if export_format == "pptx" else None,
+                    },
+                    "fallback_reason": None,
+                    "asset_digests": {},
+                    "compiler_runtime": {
+                        "compiler": "public-isolated-export",
+                        "compiler_version": "1",
+                        "runtime": "render-export-worker",
+                        "runtime_version": "public-worker-protocol/v1",
+                    },
+                    "freshness": {
+                        "source_revision": claim.expected_revision,
+                        "source_snapshot_sha256": source_snapshot_sha256,
+                        "package_sha256": None,
+                        "asset_digests_match": True,
+                        "package_digest_match": False,
+                    },
+                }
+                async with self._session_factory() as session:
+                    attempt = await begin_export_attempt(
+                        session,
+                        presentation_id=claim.presentation_id,
+                        owner_id=claim.owner_id,
+                        owner_scope=claim.owner_scope,
+                        workspace_operation_id=claim.operation_id,
+                        export_format=cast(Literal["pptx", "pdf"], export_format),
+                        source_revision=claim.expected_revision,
+                        source_snapshot_sha256=source_snapshot_sha256,
+                        request_hash=operation.request_hash,
+                        idempotency_key_hash=operation.idempotency_key_hash,
+                        requested_adapter="general",
+                        provenance=initial_provenance,
+                    )
+                export_attempt_id = attempt.id
+                native_export_attempt_id = attempt.id
+                direct_export_selected_adapter = "general"
+                public_ref = await render_and_export_authored_htmls(
+                    claim,
+                    tenant_id=tenant_id,
+                    htmls=cast(list[str], htmls),
+                    export_format=export_format,
+                    session_factory=self._session_factory,
+                )
+                public_artifact_id = public_ref.artifact_id
+                artifact_service = configured_public_artifact_service()
+                payload = await artifact_service.read_ref_bytes(public_ref)
+                export_path = _stage_public_artifact_cache(
+                    payload,
+                    operation_id=claim.operation_id,
+                    artifact_id=public_ref.artifact_id,
+                    export_format=export_format,
+                )
                 exported_source = export_path
-                artifact_sha256 = execution.route.result.artifact_sha256
-                artifact_size_bytes = execution.route.result.artifact_size_bytes
-                source_snapshot_sha256 = execution.source_snapshot_sha256
-                selected_adapter = execution.route.result.selected_adapter
-                export_provenance = execution.provenance
-                export_attempt_id = execution.attempt_id
+                artifact_sha256 = public_ref.sha256
+                artifact_size_bytes = public_ref.size_bytes
+                selected_adapter = "general"
+                export_provenance = {
+                    **initial_provenance,
+                    "freshness": {
+                        **initial_provenance["freshness"],
+                        "package_sha256": artifact_sha256,
+                        "package_digest_match": True,
+                    },
+                }
             if artifact_sha256 != hashlib.sha256(export_path.read_bytes()).hexdigest():
                 raise PresentationExportContractError(
                     "presentation_export_artifact_digest_mismatch"
@@ -359,6 +461,17 @@ class WorkspaceExportOperationHandler:
                     expected_source_sha256=artifact_sha256,
                     expected_source_size_bytes=artifact_size_bytes,
                 )
+                if public_artifact_id is not None:
+                    workspace_artifact = await session.get(
+                        WorkspaceArtifact,
+                        artifact.artifact_id,
+                    )
+                    if workspace_artifact is None:
+                        raise WorkspaceArtifactPublicationError(
+                            "workspace_artifact_intent_conflict"
+                        )
+                    workspace_artifact.public_artifact_id = public_artifact_id
+                    session.add(workspace_artifact)
                 try:
                     await context.raise_if_cancelled()
                 except WorkspaceOperationCancelled:
@@ -396,7 +509,7 @@ class WorkspaceExportOperationHandler:
                         expected_workspace_operation_id=claim.operation_id,
                         failure_code="presentation_export_cancelled",
                         failure_path=None,
-                        selected_adapter="native_reconstructed",
+                        selected_adapter=(direct_export_selected_adapter or "native_reconstructed"),
                     )
             raise
         except WorkspaceArtifactPublicationError as error:
@@ -431,7 +544,7 @@ class WorkspaceExportOperationHandler:
                         expected_workspace_operation_id=claim.operation_id,
                         failure_code=error.code,
                         failure_path=None,
-                        selected_adapter="native_reconstructed",
+                        selected_adapter=(direct_export_selected_adapter or "native_reconstructed"),
                     )
             if error.code == "operation_lease_lost":
                 raise WorkspaceOperationLeaseLost(error.code) from error
@@ -458,7 +571,7 @@ class WorkspaceExportOperationHandler:
                         expected_workspace_operation_id=claim.operation_id,
                         failure_code="operation_lease_lost",
                         failure_path=None,
-                        selected_adapter="native_reconstructed",
+                        selected_adapter=(direct_export_selected_adapter or "native_reconstructed"),
                     )
             raise
         except PresentationExportContractError as error:
@@ -483,7 +596,7 @@ class WorkspaceExportOperationHandler:
                         expected_workspace_operation_id=claim.operation_id,
                         failure_code=error.code,
                         failure_path=error.path,
-                        selected_adapter="native_reconstructed",
+                        selected_adapter=(direct_export_selected_adapter or "native_reconstructed"),
                     )
             raise NonRetryableWorkspaceOperationError(error.code) from error
         except Exception as error:
@@ -525,7 +638,7 @@ class WorkspaceExportOperationHandler:
                             "presentation_export_unexpected_failure",
                         ),
                         failure_path=getattr(error, "path", None),
-                        selected_adapter="native_reconstructed",
+                        selected_adapter=(direct_export_selected_adapter or "native_reconstructed"),
                     )
             raise RetryableWorkspaceOperationError("presentation_export_failed") from error
         finally:

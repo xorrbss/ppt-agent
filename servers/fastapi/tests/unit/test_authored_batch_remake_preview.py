@@ -33,6 +33,20 @@ def async_test(function):
     return run
 
 
+def _patch_durable_admission(monkeypatch):
+    async def admit(target_session, *, task_id_prefix, pending_message, **_values):
+        task = AsyncPresentationGenerationTaskModel(
+            id=f"{task_id_prefix}-{uuid.uuid4()}",
+            status="pending",
+            message=pending_message,
+        )
+        target_session.add(task)
+        await target_session.commit()
+        return task
+
+    monkeypatch.setattr(batch, "admit_workspace_authored_task", admit)
+
+
 async def _engine(path: Path):
     engine = create_async_engine(f"sqlite+aiosqlite:///{path}")
     async with engine.begin() as connection:
@@ -104,11 +118,39 @@ def test_batch_request_rejects_duplicates_negatives_and_oversize():
 
 
 @async_test
-async def test_queue_creates_one_child_per_slide_and_one_background_task(tmp_path):
+async def test_queue_creates_durable_parent_and_children_without_background_task(
+    tmp_path, monkeypatch
+):
     engine = await _engine(tmp_path / "queue.sqlite")
     async with AsyncSession(engine, expire_on_commit=False) as session:
         presentation = await _seed_deck(session, 5)
         background_tasks = BackgroundTasks()
+
+        async def admit(
+            target_session,
+            *,
+            presentation_id,
+            operation_kind,
+            expected_revision,
+            command,
+            context,
+            task_id_prefix,
+            pending_message,
+        ):
+            assert presentation_id == presentation.id
+            assert operation_kind == "slide.regenerate.batch.preview"
+            assert expected_revision == presentation.revision
+            assert context == {"slide_indexes": [1, 4], "instruction": None}
+            task = AsyncPresentationGenerationTaskModel(
+                id=f"{task_id_prefix}-{uuid.uuid4()}",
+                status="pending",
+                message=pending_message,
+            )
+            target_session.add(task)
+            await target_session.commit()
+            return task
+
+        monkeypatch.setattr(batch, "admit_workspace_authored_task", admit)
 
         parent = await batch.queue_authored_batch_remake_preview(
             presentation.id,
@@ -117,10 +159,7 @@ async def test_queue_creates_one_child_per_slide_and_one_background_task(tmp_pat
             session,
         )
 
-        # One background task, not N: Starlette runs a request's background
-        # tasks in order, which would silently serialize the fan-out.
-        assert len(background_tasks.tasks) == 1
-        assert background_tasks.tasks[0].func is batch._run_batch_preview_background
+        assert background_tasks.tasks == []
         assert parent.status == "processing"
         assert parent.data == {
             "kind": "authored_batch_remake_preview",
@@ -230,6 +269,7 @@ async def test_one_failed_slide_is_skipped_and_progress_is_reported(
     engine = await _engine(tmp_path / "fanout.sqlite")
     async with AsyncSession(engine, expire_on_commit=False) as session:
         presentation = await _seed_deck(session, 3)
+        _patch_durable_admission(monkeypatch)
         parent = await batch.queue_authored_batch_remake_preview(
             presentation.id,
             AuthoredBatchRemakePreviewRequest(slide_indexes=[0, 1, 2]),
@@ -312,6 +352,7 @@ async def test_partial_progress_keeps_the_parent_processing(tmp_path, monkeypatc
     engine = await _engine(tmp_path / "progress.sqlite")
     async with AsyncSession(engine, expire_on_commit=False) as session:
         presentation = await _seed_deck(session, 2)
+        _patch_durable_admission(monkeypatch)
         parent = await batch.queue_authored_batch_remake_preview(
             presentation.id,
             AuthoredBatchRemakePreviewRequest(slide_indexes=[0, 1]),

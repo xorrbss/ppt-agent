@@ -45,6 +45,7 @@ class _RuntimeState:
     )
     registration_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     registered_jobs: set[str] = field(default_factory=set)
+    latest_job_keys: dict[str, str] = field(default_factory=dict)
 
 
 _RUNTIME_STATES: WeakKeyDictionary[asyncio.AbstractEventLoop, _RuntimeState] = (
@@ -73,6 +74,7 @@ class ProviderUsageScope:
     attempt_number: int
     slide_index: int | None = None
     _sequence: int = field(default=0, init=False, repr=False)
+    _public_sequence: int = field(default=0, init=False, repr=False)
     _durable_leases: list[object] = field(default_factory=list, init=False, repr=False)
 
     def next_receipt_key_hash(self, outcome: str) -> str:
@@ -92,10 +94,31 @@ class ProviderUsageScope:
             f"{self._sequence}"
         )
 
+    def next_public_logical_call_ordinal(self) -> int:
+        self._public_sequence += 1
+        # Keep ordinals deterministic across process recovery while leaving
+        # room for bounded physical retries inside one operation attempt.
+        return max(1, self.attempt_number) * 1000 + self._public_sequence
+
 
 _ACTIVE_SCOPE: ContextVar[ProviderUsageScope | None] = ContextVar(
     "provider_usage_scope", default=None
 )
+_PUBLIC_OPERATION_ID: ContextVar[UUID | None] = ContextVar(
+    "public_provider_operation_id", default=None
+)
+_ACTIVE_PROVIDER_ADMISSION: ContextVar[ProviderCallLease | None] = ContextVar(
+    "active_provider_call_admission", default=None
+)
+
+
+@contextmanager
+def public_operation_scope(operation_id: UUID | None) -> Iterator[None]:
+    token = _PUBLIC_OPERATION_ID.set(operation_id)
+    try:
+        yield
+    finally:
+        _PUBLIC_OPERATION_ID.reset(token)
 
 
 @contextmanager
@@ -154,8 +177,14 @@ def _optional_env_int(name: str) -> int | None:
 
 async def _ensure_runtime_job(scope: ProviderUsageScope) -> str:
     runtime = _runtime_state()
-    job_id = str(scope.job_id)
+    durable_job_id = str(scope.job_id)
+    job_id = (
+        durable_job_id
+        if scope.attempt_number <= 0
+        else f"{durable_job_id}:attempt:{scope.attempt_number}"
+    )
     if job_id in runtime.registered_jobs:
+        runtime.latest_job_keys[durable_job_id] = job_id
         return job_id
     async with runtime.registration_lock:
         if job_id in runtime.registered_jobs:
@@ -183,6 +212,7 @@ async def _ensure_runtime_job(scope: ProviderUsageScope) -> str:
             ),
         )
         runtime.registered_jobs.add(job_id)
+        runtime.latest_job_keys[durable_job_id] = job_id
     return job_id
 
 
@@ -197,6 +227,10 @@ async def provider_call_admission(
     scope = _ACTIVE_SCOPE.get()
     if scope is None:
         yield None
+        return
+    active_lease = _ACTIVE_PROVIDER_ADMISSION.get()
+    if active_lease is not None:
+        yield active_lease
         return
     job_id = await _ensure_runtime_job(scope)
     estimated = estimated_cost_microunits
@@ -214,6 +248,9 @@ async def provider_call_admission(
         is_retry=is_retry,
     )
     durable_lease = None
+    public_lease = None
+    public_started_at = monotonic()
+    active_token = _ACTIVE_PROVIDER_ADMISSION.set(lease)
     try:
         if durable_provider_runtime_required():
             durable_lease = await reserve_provider_call_detached(
@@ -223,8 +260,41 @@ async def provider_call_admission(
                 request_id=request_id,
                 estimated_cost=estimated,
             )
+        public_operation_id = _PUBLIC_OPERATION_ID.get()
+        if public_operation_id is not None:
+            from services.public_operation_admission import (
+                reserve_public_provider_call_detached,
+            )
+
+            public_stage = {
+                "illustrate": "illustration",
+                "image": "illustration",
+            }.get(scope.stage, scope.stage)
+            public_lease = await reserve_public_provider_call_detached(
+                operation_id=public_operation_id,
+                stage=public_stage,
+                slide_index=scope.slide_index,
+                logical_call_ordinal=scope.next_public_logical_call_ordinal(),
+                retry_class=(
+                    "retry"
+                    if is_retry
+                    else ("resume" if scope.attempt_number > 1 else "initial")
+                ),
+                estimated_cost_microunits=estimated,
+            )
         yield lease
-    except BaseException:
+    except BaseException as error:
+        if public_lease is not None:
+            from services.public_operation_admission import (
+                reconcile_public_provider_call_detached,
+            )
+
+            await reconcile_public_provider_call_detached(
+                public_lease,
+                outcome=("cancelled" if isinstance(error, asyncio.CancelledError) else "failed"),
+                latency_ms=max(0, round((monotonic() - public_started_at) * 1000)),
+                actual_cost_microunits=None,
+            )
         if durable_lease is not None:
             await reconcile_provider_call_detached(
                 durable_lease,
@@ -237,6 +307,17 @@ async def provider_call_admission(
         )
         raise
     else:
+        if public_lease is not None:
+            from services.public_operation_admission import (
+                reconcile_public_provider_call_detached,
+            )
+
+            await reconcile_public_provider_call_detached(
+                public_lease,
+                outcome="succeeded",
+                latency_ms=max(0, round((monotonic() - public_started_at) * 1000)),
+                actual_cost_microunits=None,
+            )
         if durable_lease is not None:
             await reconcile_provider_call_detached(
                 durable_lease,
@@ -245,19 +326,30 @@ async def provider_call_admission(
             )
             scope._durable_leases.append(durable_lease)
         await lease.finish(actual_cost_microunits=None, outcome="success")
+    finally:
+        _ACTIVE_PROVIDER_ADMISSION.reset(active_token)
 
 
 async def cancel_provider_job(job_id: UUID, reason: str = "operator_cancelled") -> None:
     normalized = str(job_id)
     runtime = _runtime_state()
-    if normalized in runtime.registered_jobs:
-        await runtime.control.cancel_job(normalized, reason)
+    matching = tuple(
+        key
+        for key in runtime.registered_jobs
+        if key == normalized or key.startswith(f"{normalized}:attempt:")
+    )
+    for key in matching:
+        await runtime.control.cancel_job(key, reason)
 
 
 async def provider_runtime_job_status(
     job_id: UUID,
 ) -> dict[str, int | str | bool | None]:
-    return await _runtime_state().control.job_status(str(job_id))
+    runtime = _runtime_state()
+    normalized = str(job_id)
+    return await runtime.control.job_status(
+        runtime.latest_job_keys.get(normalized, normalized)
+    )
 
 
 def response_usage(response: object) -> tuple[str, int | None, int | None]:
@@ -393,6 +485,7 @@ __all__ = [
     "ProviderCallTimer",
     "cancel_provider_job",
     "provider_call_admission",
+    "public_operation_scope",
     "provider_runtime_job_status",
     "provider_usage_scope",
     "provider_receipt_observability_snapshot",

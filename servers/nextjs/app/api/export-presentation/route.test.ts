@@ -96,6 +96,22 @@ async function rejectedRequestError(
 function boundarySpies(presentation: Record<string, unknown>) {
   const canonicalPresentation = canonicalServerPresentation(presentation);
   const calls = { fetch: 0, general: 0, hybrid: 0 };
+  const registry: {
+    general(params: PresentationExportExecutionParams): Promise<{ path: string }>;
+    hybrid(params: PresentationExportExecutionParams): Promise<{ path: string }>;
+    authoredFidelity?: (params: PresentationExportExecutionParams) => Promise<{ path: string }>;
+  } = {
+    async general(params: PresentationExportExecutionParams) {
+      void params;
+      calls.general += 1;
+      return { path: "general.pptx" };
+    },
+    async hybrid(params: PresentationExportExecutionParams) {
+      void params;
+      calls.hybrid += 1;
+      return { path: "hybrid.pptx" };
+    },
+  };
   return {
     calls,
     dependencies: {
@@ -108,18 +124,7 @@ function boundarySpies(presentation: Record<string, unknown>) {
         assert.equal(cookieHeader, "session=test");
         return canonicalPresentation;
       },
-      registry: {
-        async general(params: PresentationExportExecutionParams) {
-          void params;
-          calls.general += 1;
-          return { path: "general.pptx" };
-        },
-        async hybrid(params: PresentationExportExecutionParams) {
-          void params;
-          calls.hybrid += 1;
-          return { path: "hybrid.pptx" };
-        },
-      },
+      registry,
     },
   };
 }

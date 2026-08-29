@@ -2,7 +2,6 @@
 import { Loader2, AlertTriangle } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import Image from "next/image";
 import { useDispatch, useSelector } from "react-redux";
 
 import { RootState } from "@/store/store";
@@ -17,7 +16,6 @@ import { clearHistory } from "@/store/slices/undoRedoSlice";
 import type { PresentationExportQualityReport } from "@/lib/presentation-export-quality";
 import GenerationInfoDialog from "./GenerationInfoDialog";
 import { cn } from "@/lib/utils";
-import { notify } from "@/components/ui/sonner";
 import { KeyboardShortcutsDialog } from "./KeyboardShortcutsDialog";
 import AuthoredHeaderActions from "./header/AuthoredHeaderActions";
 import ExportMenu from "./header/ExportMenu";
@@ -27,6 +25,7 @@ import HybridCoverageDialog, {
 } from "./header/HybridCoverageDialog";
 import HybridExportHistoryDialog from "./header/HybridExportHistoryDialog";
 import HeaderToolbar from "./header/HeaderToolbar";
+import DashboardNavigationButton from "./header/DashboardNavigationButton";
 import PresentationTitleEditor from "./header/PresentationTitleEditor";
 import RegenerateConfirmDialog from "./header/RegenerateConfirmDialog";
 import type { PptxExportMode } from "./header/types";
@@ -102,7 +101,6 @@ const PresentationHeader = ({
     useState<string | null>(null);
   const [authoredCapabilityStatus, setAuthoredCapabilityStatus] =
     useState<AuthoredEmissionCapabilityStatus>({ state: "checking" });
-  const [directExportInFlight, setDirectExportInFlight] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const titleInputRef = useRef<HTMLInputElement>(null);
   /** Avoid committing on blur when Save/Cancel was used (focus/click ordering) */
@@ -238,99 +236,11 @@ const PresentationHeader = ({
   ) => {
     if (
       isStreaming ||
-      directExportInFlight ||
       !workspaceCommandsEnabled ||
       !onWorkspaceCommand
     )
       return;
     if (pptxMode === "hybrid" && hybridDisabledReason !== undefined) return;
-    if (isAuthoredDeck && (pptxMode === "hybrid" || pptxMode === "fidelity")) {
-      setDirectExportInFlight(true);
-      const exportLabel = pptxMode === "hybrid" ? "Hybrid PPTX" : "Fidelity PPTX";
-      const notificationId = notify.loading(
-        `${exportLabel}를 준비하고 있습니다`,
-        "완료되면 다운로드가 자동으로 시작됩니다.",
-      );
-      try {
-        // A caller must explicitly choose false to request the compatibility
-        // path. Hybrid exports otherwise request embedding by default.
-        const requestedFontEmbedding =
-          pptxMode === "hybrid" && fontEmbedding !== false;
-        const response = await fetch("/api/export-presentation", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            format: "pptx",
-            id: presentation_id,
-            title: presentationData?.title ?? "presentation",
-            pptxMode,
-            ...(pptxMode === "hybrid"
-              ? { fontEmbedding: requestedFontEmbedding }
-              : {}),
-            ...(expectedRevision !== undefined
-              ? { expectedPresentationRevision: expectedRevision }
-              : {}),
-          }),
-        });
-        const result = (await response.json().catch(() => null)) as {
-          success?: boolean;
-          path?: string;
-          quality?: PresentationExportQualityReport;
-          powerPointQa?: PresentationExportQualityReport["powerPointQa"];
-          exportMetadata?: { coverageManifest?: HybridCoverageManifest };
-          error?: string;
-        } | null;
-        const coverage = result?.exportMetadata?.coverageManifest;
-        const quality =
-          result?.quality && result.powerPointQa
-            ? { ...result.quality, powerPointQa: result.powerPointQa }
-            : result?.quality;
-        if (!response.ok || result?.success !== true || !result.path) {
-          if (quality) setExportQuality(quality);
-          else if (coverage?.mode === "hybrid") setHybridCoverage(coverage);
-          throw new Error(result?.error ?? "hybrid_export_failed");
-        }
-        const embedding = quality?.fontEmbeddingStatus;
-        if (
-          pptxMode === "hybrid" &&
-          requestedFontEmbedding &&
-          (!embedding?.requested || !embedding.applied)
-        ) {
-          // Never treat an unaudited/failed embedding result as a successful
-          // font-preserving download, even if an older server returned a path.
-          if (quality) setExportQuality(quality);
-          throw new Error("font_embedding_not_applied");
-        }
-        if (quality) setExportQuality(quality);
-        if (coverage?.mode === "hybrid") setHybridCoverage(coverage);
-        const anchor = window.document.createElement("a");
-        anchor.href = result.path;
-        anchor.download = "";
-        window.document.body.appendChild(anchor);
-        anchor.click();
-        anchor.remove();
-        notify.success(
-          `${exportLabel} 다운로드를 시작했습니다`,
-          "브라우저의 다운로드 목록에서 파일을 확인하세요.",
-          { id: notificationId },
-        );
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error && error.message === "font_embedding_not_applied"
-            ? "글꼴 포함 검증에 실패해 다운로드를 시작하지 않았습니다."
-            : error instanceof Error &&
-                error.message &&
-                error.message !== "hybrid_export_failed"
-              ? error.message
-              : "파일을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.";
-        notify.error("PPTX 내보내기 실패", errorMessage, {
-          id: notificationId,
-        });
-      } finally {
-        setDirectExportInFlight(false);
-      }
-      return;
-    }
     try {
       const option = pptxMode === "hybrid" ? "편집 가능한 요소를 분리해 " : "";
       const requestedFontEmbedding = pptxMode === "hybrid" && fontEmbedding !== false;
@@ -419,7 +329,6 @@ const PresentationHeader = ({
   const exportDisabled =
     !resolvedHeaderFeatures.exportActions ||
     isStreaming === true ||
-    directExportInFlight ||
     !workspaceCommandsEnabled ||
     !onWorkspaceCommand;
 
@@ -451,18 +360,9 @@ const PresentationHeader = ({
 
   return (
     <>
-      <div className="sticky top-0 z-50 flex w-full min-w-0 items-center justify-between gap-4 bg-white px-4 py-[18px] font-syne shadow-sm">
+      <div className="sticky top-0 z-50 flex w-full min-w-0 items-center justify-between gap-2 bg-white px-3 py-[18px] font-syne shadow-sm sm:gap-4 sm:px-4">
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          <Image
-            onClick={() => {
-              router.push("/dashboard");
-            }}
-            src="/logo-with-bg.png"
-            alt=""
-            width={40}
-            height={40}
-            className="h-10 w-10 shrink-0 cursor-pointer object-contain"
-          />
+          <DashboardNavigationButton onNavigate={() => router.push("/dashboard")} />
           {mutationsEnabled &&
           presentationData &&
           !isStreaming &&
@@ -480,7 +380,7 @@ const PresentationHeader = ({
           )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-2.5">
+        <div className="flex max-w-[58vw] shrink-0 items-center gap-2.5 overflow-x-auto pb-1 pr-1 sm:max-w-none">
           {isPresentationSaving && (
             <div className="flex items-center gap-2">
               <Loader2 className="w-3.5 h-3.5 animate-spin" />

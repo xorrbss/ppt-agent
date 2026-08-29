@@ -1,5 +1,8 @@
-import { deflateRawSync, inflateRawSync } from "node:zlib";
+import { promisify } from "node:util";
+import { deflateRaw, deflateRawSync, inflateRawSync } from "node:zlib";
 import path from "node:path";
+
+const deflateRawAsync = promisify(deflateRaw);
 
 const EOCD_SIGNATURE = 0x06054b50;
 const CENTRAL_SIGNATURE = 0x02014b50;
@@ -392,13 +395,78 @@ interface EncodedEntry {
   offset: number;
 }
 
-export function writePptxArchive(entries: ReadonlyMap<string, Buffer>): Buffer {
+function writeEncodedArchive(encoded: EncodedEntry[]): Buffer {
+  let localOffset = 0;
+  for (const entry of encoded) {
+    entry.offset = localOffset;
+    localOffset += 30 + entry.name.length + entry.compressed.length;
+    if (localOffset > 0xffffffff) throw new Error("PPTX archive output requires ZIP64.");
+  }
+  const centralSize = encoded.reduce(
+    (size, entry) => size + 46 + entry.name.length,
+    0,
+  );
+  const output = Buffer.allocUnsafe(localOffset + centralSize + 22);
+  let cursor = 0;
+  for (const entry of encoded) {
+    output.writeUInt32LE(LOCAL_SIGNATURE, cursor);
+    output.writeUInt16LE(20, cursor + 4);
+    output.writeUInt16LE(0x0800, cursor + 6);
+    output.writeUInt16LE(entry.method, cursor + 8);
+    output.writeUInt16LE(0, cursor + 10);
+    output.writeUInt16LE(0x0021, cursor + 12);
+    output.writeUInt32LE(entry.crc, cursor + 14);
+    output.writeUInt32LE(entry.compressed.length, cursor + 18);
+    output.writeUInt32LE(entry.content.length, cursor + 22);
+    output.writeUInt16LE(entry.name.length, cursor + 26);
+    output.writeUInt16LE(0, cursor + 28);
+    cursor += 30;
+    entry.name.copy(output, cursor);
+    cursor += entry.name.length;
+    entry.compressed.copy(output, cursor);
+    cursor += entry.compressed.length;
+  }
+  for (const entry of encoded) {
+    output.writeUInt32LE(CENTRAL_SIGNATURE, cursor);
+    output.writeUInt16LE(20, cursor + 4);
+    output.writeUInt16LE(20, cursor + 6);
+    output.writeUInt16LE(0x0800, cursor + 8);
+    output.writeUInt16LE(entry.method, cursor + 10);
+    output.writeUInt16LE(0, cursor + 12);
+    output.writeUInt16LE(0x0021, cursor + 14);
+    output.writeUInt32LE(entry.crc, cursor + 16);
+    output.writeUInt32LE(entry.compressed.length, cursor + 20);
+    output.writeUInt32LE(entry.content.length, cursor + 24);
+    output.writeUInt16LE(entry.name.length, cursor + 28);
+    output.writeUInt16LE(0, cursor + 30);
+    output.writeUInt16LE(0, cursor + 32);
+    output.writeUInt16LE(0, cursor + 34);
+    output.writeUInt16LE(0, cursor + 36);
+    output.writeUInt32LE(0, cursor + 38);
+    output.writeUInt32LE(entry.offset, cursor + 42);
+    cursor += 46;
+    entry.name.copy(output, cursor);
+    cursor += entry.name.length;
+  }
+  output.writeUInt32LE(EOCD_SIGNATURE, cursor);
+  output.writeUInt16LE(0, cursor + 4);
+  output.writeUInt16LE(0, cursor + 6);
+  output.writeUInt16LE(encoded.length, cursor + 8);
+  output.writeUInt16LE(encoded.length, cursor + 10);
+  output.writeUInt32LE(centralSize, cursor + 12);
+  output.writeUInt32LE(localOffset, cursor + 16);
+  output.writeUInt16LE(0, cursor + 20);
+  return output;
+}
+
+function validatedArchiveEntries(
+  entries: ReadonlyMap<string, Buffer>,
+): Array<{ name: Buffer; content: Buffer }> {
   if (entries.size === 0 || entries.size > MAX_ENTRY_COUNT) {
     throw new Error("PPTX archive entry count is invalid.");
   }
   let totalBytes = 0;
-  const encoded: EncodedEntry[] = [];
-  for (const [name, contentValue] of entries) {
+  return [...entries].map(([name, contentValue]) => {
     assertArchivePath(name);
     const content = Buffer.from(contentValue);
     totalBytes += content.length;
@@ -407,10 +475,17 @@ export function writePptxArchive(entries: ReadonlyMap<string, Buffer>): Buffer {
     }
     const nameBytes = Buffer.from(name, "utf8");
     if (nameBytes.length > 0xffff) throw new Error("PPTX archive entry name is too long.");
+    return { name: nameBytes, content };
+  });
+}
+
+export function writePptxArchive(entries: ReadonlyMap<string, Buffer>): Buffer {
+  const encoded: EncodedEntry[] = [];
+  for (const { name, content } of validatedArchiveEntries(entries)) {
     const deflated = deflateRawSync(content, { level: 6 });
     const useDeflate = deflated.length < content.length;
     encoded.push({
-      name: nameBytes,
+      name,
       content,
       compressed: useDeflate ? deflated : content,
       method: useDeflate ? 8 : 0,
@@ -418,61 +493,27 @@ export function writePptxArchive(entries: ReadonlyMap<string, Buffer>): Buffer {
       offset: 0,
     });
   }
+  return writeEncodedArchive(encoded);
+}
 
-  const localParts: Buffer[] = [];
-  let localOffset = 0;
-  for (const entry of encoded) {
-    entry.offset = localOffset;
-    const header = Buffer.alloc(30);
-    header.writeUInt32LE(LOCAL_SIGNATURE, 0);
-    header.writeUInt16LE(20, 4);
-    header.writeUInt16LE(0x0800, 6);
-    header.writeUInt16LE(entry.method, 8);
-    header.writeUInt16LE(0, 10);
-    header.writeUInt16LE(0x0021, 12);
-    header.writeUInt32LE(entry.crc, 14);
-    header.writeUInt32LE(entry.compressed.length, 18);
-    header.writeUInt32LE(entry.content.length, 22);
-    header.writeUInt16LE(entry.name.length, 26);
-    header.writeUInt16LE(0, 28);
-    localParts.push(header, entry.name, entry.compressed);
-    localOffset += header.length + entry.name.length + entry.compressed.length;
-    if (localOffset > 0xffffffff) throw new Error("PPTX archive output requires ZIP64.");
+/** ZIP compression runs in libuv workers and never blocks the request loop. */
+export async function writePptxArchiveAsync(
+  entries: ReadonlyMap<string, Buffer>,
+): Promise<Buffer> {
+  const encoded: EncodedEntry[] = [];
+  // Sequential awaits bound native compression buffers for large decks while
+  // still moving the CPU-heavy deflate off the JavaScript event loop.
+  for (const { name, content } of validatedArchiveEntries(entries)) {
+    const deflated = await deflateRawAsync(content, { level: 6 });
+    const useDeflate = deflated.length < content.length;
+    encoded.push({
+      name,
+      content,
+      compressed: useDeflate ? deflated : content,
+      method: useDeflate ? 8 : 0,
+      crc: crc32(content),
+      offset: 0,
+    });
   }
-
-  const centralParts: Buffer[] = [];
-  let centralSize = 0;
-  for (const entry of encoded) {
-    const header = Buffer.alloc(46);
-    header.writeUInt32LE(CENTRAL_SIGNATURE, 0);
-    header.writeUInt16LE(20, 4);
-    header.writeUInt16LE(20, 6);
-    header.writeUInt16LE(0x0800, 8);
-    header.writeUInt16LE(entry.method, 10);
-    header.writeUInt16LE(0, 12);
-    header.writeUInt16LE(0x0021, 14);
-    header.writeUInt32LE(entry.crc, 16);
-    header.writeUInt32LE(entry.compressed.length, 20);
-    header.writeUInt32LE(entry.content.length, 24);
-    header.writeUInt16LE(entry.name.length, 28);
-    header.writeUInt16LE(0, 30);
-    header.writeUInt16LE(0, 32);
-    header.writeUInt16LE(0, 34);
-    header.writeUInt16LE(0, 36);
-    header.writeUInt32LE(0, 38);
-    header.writeUInt32LE(entry.offset, 42);
-    centralParts.push(header, entry.name);
-    centralSize += header.length + entry.name.length;
-  }
-
-  const eocd = Buffer.alloc(22);
-  eocd.writeUInt32LE(EOCD_SIGNATURE, 0);
-  eocd.writeUInt16LE(0, 4);
-  eocd.writeUInt16LE(0, 6);
-  eocd.writeUInt16LE(encoded.length, 8);
-  eocd.writeUInt16LE(encoded.length, 10);
-  eocd.writeUInt32LE(centralSize, 12);
-  eocd.writeUInt32LE(localOffset, 16);
-  eocd.writeUInt16LE(0, 20);
-  return Buffer.concat([...localParts, ...centralParts, eocd]);
+  return writeEncodedArchive(encoded);
 }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import os
 import time
 import uuid
@@ -61,6 +62,7 @@ from utils.authored_illustrations import (
 )
 from utils.authored_dom_quality import ensure_authored_qids, inspect_authored_dom
 from utils.llm_calls.author_deck import (
+    AuthoredProviderBudgetExhausted,
     AuthoredDeckResult,
     author_planned_slide,
     plan_deck_roles,
@@ -101,6 +103,26 @@ _AUTHORED_RENDER_WORKERS = max(
     ),
 )
 _AUTHORED_SLIDE_WORKERS = _AUTHORED_AUTHOR_WORKERS + _AUTHORED_RENDER_WORKERS
+
+
+def _author_failure_retryable(error: BaseException) -> bool:
+    """Keep deterministic slide-budget exhaustion out of operation retries."""
+
+    if isinstance(error, AuthoredProviderBudgetExhausted):
+        return False
+    return is_retryable_exception(error)
+
+
+def _author_stage_failure(slide_index: int, error: BaseException) -> AuthoredStageError:
+    """Build the exact author-stage envelope consumed by operation retry policy."""
+
+    return AuthoredStageError(
+        slide_index=slide_index,
+        stage="author",
+        code="authored_slide_author_failed",
+        cause=error,
+        retryable=_author_failure_retryable(error),
+    )
 
 
 def _evaluate_slide_quality(
@@ -295,6 +317,7 @@ async def _author_illustrate_render_pipeline(
         Any | None,
         dict[str, Any] | None,
         AuthoredSlideSceneEnvelope,
+        int,
     ]:
         author_work = 0.0
         illustration_work = 0.0
@@ -302,6 +325,7 @@ async def _author_illustrate_render_pipeline(
         browser_metrics = None
         quality_report = None
         quality_failure = None
+        author_provider_attempt_count = 0
         # The authoring call and the substitution step must see the identical
         # set: substitution resolves a placed id against this mapping, so an id
         # the author was never offered has nowhere to resolve.
@@ -339,6 +363,10 @@ async def _author_illustrate_render_pipeline(
 
         try:
             html = checkpoint.author_html if checkpoint else None
+            if html and checkpoint.author_status == "completed":
+                # The old checkpoint schema has no slide-scoped provider-call
+                # ordinal. Never risk a third billable call after recovery.
+                author_provider_attempt_count = 2
             if not html or checkpoint.author_status != "completed":
                 if checkpoint and should_inject_failure(
                     checkpoint, slide_index=index, stage="author"
@@ -387,6 +415,18 @@ async def _author_illustrate_render_pipeline(
                                 author_kwargs["require_all_source_images"] = (
                                     require_all_source_images
                                 )
+                            if "attempt_observer" in inspect.signature(
+                                author_planned_slide
+                            ).parameters:
+                                def observe_author_attempt(ordinal: int) -> None:
+                                    nonlocal author_provider_attempt_count
+                                    author_provider_attempt_count = max(
+                                        author_provider_attempt_count, int(ordinal)
+                                    )
+
+                                author_kwargs["attempt_observer"] = (
+                                    observe_author_attempt
+                                )
                             html = await author_planned_slide(
                                 plan, index, **author_kwargs
                             )
@@ -399,13 +439,7 @@ async def _author_illustrate_render_pipeline(
                         retryable=False,
                     ) from exc
                 except Exception as exc:
-                    raise AuthoredStageError(
-                        slide_index=index,
-                        stage="author",
-                        code="authored_slide_author_failed",
-                        cause=exc,
-                        retryable=is_retryable_exception(exc),
-                    ) from exc
+                    raise _author_stage_failure(index, exc) from exc
                 finally:
                     author_work = time.monotonic() - author_started
                     await record_local_stage(latency_ms=author_work * 1000)
@@ -751,6 +785,7 @@ async def _author_illustrate_render_pipeline(
                 quality_report,
                 quality_failure,
                 scene_envelope,
+                author_provider_attempt_count,
             )
         except AuthoredStageError as exc:
             if generation_job is not None:
@@ -859,4 +894,7 @@ async def _author_illustrate_render_pipeline(
         evidence_ledger=evidence_ledger,
         evidence_attempt_id=evidence_attempt_id,
         scene_envelope=scene_envelope,
+        author_provider_attempt_counts=tuple(
+            int(result[9]) for result in completed_results
+        ),
     )

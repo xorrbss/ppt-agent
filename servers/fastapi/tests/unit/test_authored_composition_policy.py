@@ -10,12 +10,15 @@ from services.authored_composition_policy import (
     CompositionProfile,
     SlideCapacity,
     _is_supporting_candidate,
+    aggregate_owner_capacity_violations,
     capacity_violations,
     ensure_authored_semantic_roles,
     repair_authored_layout_alignment,
     reduce_authored_closing_capacity,
     reduce_authored_closing_title_punctuation,
+    reduce_authored_owner_text_capacity,
     resolve_composition_profile,
+    semantic_repair_boundary_violations,
 )
 from services.authored_presentation_generation import (
     _admit_gate_repair_capacity_candidate,
@@ -128,6 +131,185 @@ def test_capacity_treats_only_exact_chart_week_ticks_as_supporting() -> None:
     rejected = SlideCapacity(5, "ROADMAP", 100, 500, 500, 0, 19, 16)
     assert capacity_violations(normalized_html, metrics, admitted) == ()
     assert capacity_violations(normalized_html, metrics, rejected) == ("qids:20>19",)
+
+
+def test_capacity_prompt_states_aggregate_owner_budgets() -> None:
+    capacity = SlideCapacity(1, "PROBLEM", 64, 310, 400, 1, 28, 16)
+    brief = capacity.prompt_brief(resolve_composition_profile(SimpleNamespace()))
+
+    assert "combined text across all title owners <= 64 chars" in brief
+    assert "combined text across all body owners <= 310 chars" in brief
+    assert "do not repeat the same words in nested owners" in brief
+    assert "title, body, and supporting owners <= 400 chars" in brief
+
+
+def test_aggregate_owner_capacity_rejects_before_browser_without_double_counting() -> None:
+    html = (
+        "<html><head></head><body>"
+        '<h1 data-qid="header.title" data-semantic-role="title">Title</h1>'
+        '<div data-qid="body.wrapper" data-semantic-role="body">'
+        '<p data-qid="body.item1" data-semantic-role="body">123456</p>'
+        '<p data-qid="body.item2" data-semantic-role="body">789012</p>'
+        "</div></body></html>"
+    )
+    capacity = SlideCapacity(0, "PROBLEM", 10, 10, 30, 0, 3)
+
+    assert aggregate_owner_capacity_violations(html, capacity) == (
+        "owner_body:12>10",
+    )
+
+
+def test_semantic_repair_boundary_preserves_qids_roles_and_source_owners() -> None:
+    original = (
+        "<html><head></head><body>"
+        '<h1 data-qid="header.title" data-header-part="title" '
+        'data-semantic-role="title">Protected title</h1>'
+        '<p data-qid="body.item1" data-semantic-role="body">Long supporting detail</p>'
+        '<p data-qid="source.copy" data-source-block-id="source:1" '
+        'data-semantic-role="body">Verbatim source</p>'
+        "</body></html>"
+    )
+    safe = original.replace("Long supporting detail", "Short detail")
+    assert semantic_repair_boundary_violations(original, safe) == ()
+
+    renamed = safe.replace('data-qid="body.item1"', 'data-qid="body.renamed"')
+    assert "semantic_qid_added" in semantic_repair_boundary_violations(
+        original, renamed
+    )
+    title_changed = safe.replace("Protected title", "Changed title")
+    assert "semantic_text_rewrite_forbidden:header.title" in (
+        semantic_repair_boundary_violations(original, title_changed)
+    )
+    source_changed = safe.replace("Verbatim source", "Changed source")
+    assert "semantic_text_rewrite_forbidden:source.copy" in (
+        semantic_repair_boundary_violations(original, source_changed)
+    )
+
+
+def test_semantic_repair_boundary_narrowly_allows_one_primary_title_shortening() -> None:
+    original = (
+        "<html><head></head><body>"
+        '<h1 data-qid="slide.title" data-semantic-role="title">'
+        "A deliberately long primary title</h1>"
+        '<p data-qid="body.item1" data-semantic-role="body">Body</p>'
+        "</body></html>"
+    )
+    shortened = original.replace(
+        "A deliberately long primary title", "Short primary title"
+    )
+    assert "semantic_text_rewrite_forbidden:slide.title" in (
+        semantic_repair_boundary_violations(original, shortened)
+    )
+    assert semantic_repair_boundary_violations(
+        original,
+        shortened,
+        allow_primary_title_shortening=True,
+    ) == ()
+
+    header_original = original.replace(
+        'data-qid="slide.title"',
+        'data-qid="header.title" data-header-part="title"',
+    )
+    header_shortened = header_original.replace(
+        "A deliberately long primary title", "Short primary title"
+    )
+    assert "semantic_text_rewrite_forbidden:header.title" in (
+        semantic_repair_boundary_violations(
+            header_original,
+            header_shortened,
+            allow_primary_title_shortening=True,
+        )
+    )
+
+    source_original = original.replace(
+        'data-qid="body.item1"',
+        'data-qid="body.item1" data-source-block-id="source:1"',
+    )
+    source_shortened = source_original.replace(
+        "A deliberately long primary title", "Short primary title"
+    )
+    assert "semantic_text_rewrite_forbidden:slide.title" in (
+        semantic_repair_boundary_violations(
+            source_original,
+            source_shortened,
+            allow_primary_title_shortening=True,
+        )
+    )
+
+    two_titles = original.replace(
+        '<p data-qid="body.item1" data-semantic-role="body">Body</p>',
+        '<h2 data-qid="slide.subtitle" data-semantic-role="title">Second long title</h2>',
+    )
+    two_shortened = two_titles.replace(
+        "A deliberately long primary title", "Short title"
+    ).replace("Second long title", "Second")
+    assert "semantic_primary_title_rewrite_too_broad" in (
+        semantic_repair_boundary_violations(
+            two_titles,
+            two_shortened,
+            allow_primary_title_shortening=True,
+        )
+    )
+
+
+def test_owner_text_reducer_fixes_actual_355_427_shape_without_owner_drift() -> None:
+    title = "T" * 41
+    body_one = ("a " * 59) + "a"
+    body_two = ("b " * 59) + "b"
+    body_three = ("c " * 58) + "c"
+    supporting = ("s " * 15) + "s"
+    assert sum(map(len, (body_one, body_two, body_three))) == 355
+    assert len(title) + 355 + len(supporting) == 427
+    original = (
+        "<html><head></head><body>"
+        f'<h1 data-qid="slide.title" data-semantic-role="title">{title}</h1>'
+        f'<p data-qid="content.primary" data-semantic-role="body">{body_one}</p>'
+        f'<p data-qid="content.secondary" data-semantic-role="body">{body_two}</p>'
+        f'<p data-qid="content.tertiary" data-semantic-role="body">{body_three}</p>'
+        f'<p data-qid="content.note" data-semantic-role="supporting">{supporting}</p>'
+        "</body></html>"
+    )
+    capacity = SlideCapacity(2, "PILLARS", 64, 290, 380, 0, 30)
+    assert aggregate_owner_capacity_violations(original, capacity) == (
+        "owner_body:355>290",
+        "owner_visible_text:427>380",
+    )
+
+    reduced = reduce_authored_owner_text_capacity(
+        original,
+        capacity,
+        profile_id="ordinary",
+        allow_summarization=True,
+    )
+
+    assert reduced != original
+    assert aggregate_owner_capacity_violations(reduced, capacity) == ()
+    assert semantic_repair_boundary_violations(
+        original,
+        reduced,
+        allow_bounded_body_shortening=True,
+    ) == ()
+    assert f'>{title}</h1>' in reduced
+    assert reduced.count("data-qid=") == original.count("data-qid=")
+    assert all(
+        f'data-qid="{qid}"' in reduced
+        for qid in (
+            "slide.title",
+            "content.primary",
+            "content.secondary",
+            "content.tertiary",
+            "content.note",
+        )
+    )
+    assert reduce_authored_owner_text_capacity(
+        original.replace(
+            'data-qid="content.primary"',
+            'data-qid="content.primary" data-source-block-id="source:1"',
+        ),
+        capacity,
+        profile_id="ordinary",
+        allow_summarization=True,
+    ).find("authored-owner-text-capacity-reducer-v1") == -1
 
 
 def test_composition_profile_defaults_to_development_quality_gates() -> None:
@@ -968,6 +1150,7 @@ def test_bounded_closing_reducer_recaptures_21_targets_and_299_body_chars(
     assert 'data-qid="artifacts.item5"' not in reduced
     assert 'data-qid="closing.claim" data-semantic-role="body"' in reduced
     assert 'data-qid="closing.emphasis" data-semantic-role="body"' in reduced
+    assert semantic_repair_boundary_violations(html, reduced) == ()
     assert reduce_authored_closing_capacity(
         reduced, before_metrics, capacity, profile_id="ordinary"
     ) == reduced

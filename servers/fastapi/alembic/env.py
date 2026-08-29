@@ -122,6 +122,16 @@ from models.sql.provider_runtime_reservation import (  # noqa: F401, E402
     ProviderRuntimeCircuit,
     ProviderRuntimeReservation,
 )
+from models.sql.public_admission import (  # noqa: F401, E402
+    PublicOperationAdmission,
+    PublicPolicyProfile,
+    PublicProviderLogicalCall,
+    PublicQuotaCounter,
+)
+from models.sql.public_artifact import (  # noqa: F401, E402
+    PublicArtifact,
+    PublicExportIdentity,
+)
 from models.sql.source_content import (  # noqa: F401, E402
     SourceContentCoverageReceipt,
     SourceContentGenerationBinding,

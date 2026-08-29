@@ -107,3 +107,27 @@ def test_native_fastapi_launch_paths_enable_startup_migrations():
         r'"--reload",\s*"false"',
         electron_servers,
     )
+
+
+def test_native_launchers_fail_closed_around_external_workspace_worker():
+    launcher = _read("start.js")
+    electron_main = _read("electron/app/main.ts")
+    electron_servers = _read("electron/app/utils/servers.ts")
+
+    assert re.search(
+        r"WORKSPACE_OPERATION_WORKER_MODE:\s*"
+        r'process\.env\.WORKSPACE_OPERATION_WORKER_MODE\s*\?\?\s*"external"',
+        launcher,
+    )
+    assert '["-m", "services.workspace_operation_worker"]' in launcher
+    assert 'MIGRATE_DATABASE_ON_STARTUP: "false"' in launcher
+    assert "await stopManagedProcesses(managedProcesses)" in launcher
+
+    assert 'const workspaceWorkerMode = "external"' in electron_main
+    assert "await fastApi.ready" in electron_main
+    assert "await worker.ready" in electron_main
+    assert electron_main.index("await fastApi.ready") < electron_main.index("await worker.ready")
+    assert "Packaged workspace worker uses embedded safe fallback" not in electron_main
+    assert '"workspace-operation-worker.exe"' in electron_servers
+    assert 'path.join(directory, workerBinary)' in electron_servers
+    assert '["run", "python", "-m", "services.workspace_operation_worker"]' in electron_servers

@@ -180,10 +180,11 @@ function assertTextLayout(value: unknown, label: string): void {
   invariant(typeof layout.alignItems === "string", `${label}.alignItems is invalid`);
   invariant(typeof layout.justifyContent === "string", `${label}.justifyContent is invalid`);
   oneOf(layout.textAlignSource, ["self", "inherited", "default"], `${label}.textAlignSource`);
-  invariant(Number.isInteger(layout.lineCount) && (layout.lineCount as number) >= 0, `${label}.lineCount is invalid`);
+  const lineCount = layout.lineCount;
+  invariant(finite(lineCount) && Number.isInteger(lineCount) && lineCount >= 0, `${label}.lineCount is invalid`);
   invariant(typeof layout.singleLine === "boolean", `${label}.singleLine is invalid`);
   invariant(
-    layout.singleLine === (layout.lineCount === 1),
+    layout.singleLine === (lineCount === 1),
     `${label}.singleLine must match lineCount`
   );
   invariant(
@@ -199,7 +200,7 @@ function assertTextLayout(value: unknown, label: string): void {
       assertBounds(rect, `${label}.lineRects[${index}]`)
     );
     invariant(
-      layout.lineRects.length <= layout.lineCount,
+      layout.lineRects.length <= lineCount,
       `${label}.lineRects cannot exceed lineCount`
     );
   }
@@ -585,10 +586,11 @@ export function assertAuthoredHybridSlide(
     "source.viewport must use the fixed 1280x720 @ 96 CSS dpi contract"
   );
   invariant(Array.isArray(slide.elements), "elements must be an array");
+  const elements = slide.elements;
   const ids = new Set<string>();
   const eligibleIds: string[] = [];
   const rasterIds: string[] = [];
-  slide.elements.forEach((element, index) => {
+  elements.forEach((element, index) => {
     invariant(typeof element.id === "string" && element.id.length > 0, `elements[${index}].id is invalid`);
     invariant(!ids.has(element.id), `duplicate element id ${element.id}`);
     ids.add(element.id);
@@ -734,7 +736,7 @@ export function assertAuthoredHybridSlide(
       }
     }
   });
-  slide.elements.forEach((element) => {
+  elements.forEach((element) => {
     if (element.parentElementId) {
       invariant(ids.has(element.parentElementId), `element ${element.id} has unknown parentElementId`);
       invariant(element.parentElementId !== element.id, `element ${element.id} cannot parent itself`);
@@ -761,7 +763,7 @@ export function assertAuthoredHybridSlide(
     Array.isArray(nativeChartElementIds) &&
       new Set(nativeChartElementIds).size === nativeChartElementIds.length &&
       nativeChartElementIds.every((id) => {
-        const element = slide.elements.find((candidate) => candidate.id === id);
+        const element = elements.find((candidate) => candidate.id === id);
         return element?.classification.mode === "raster" &&
           element.classification.candidateKind === "complex";
       }),
@@ -771,7 +773,7 @@ export function assertAuthoredHybridSlide(
     Array.isArray(nativeTableElementIds) &&
       new Set(nativeTableElementIds).size === nativeTableElementIds.length &&
       nativeTableElementIds.every((id) => {
-        const element = slide.elements.find((candidate) => candidate.id === id);
+        const element = elements.find((candidate) => candidate.id === id);
         return element?.classification.mode === "raster" && element.classification.candidateKind === "complex";
       }),
     "backplate native table IDs are invalid"

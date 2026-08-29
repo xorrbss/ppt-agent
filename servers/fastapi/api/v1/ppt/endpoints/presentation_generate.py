@@ -186,6 +186,13 @@ from services.workspace_runtime_profile import (
     UnsupportedWorkspaceRuntimeError,
     require_supported_workspace_runtime,
 )
+from services.public_operation_admission import (
+    PublicAdmissionRejected,
+    admit_public_operation,
+    current_principal_context,
+    plan_provider_requests,
+)
+from services.provider_usage_instrumentation import provider_usage_scope
 from services.workspace_service import (
     WorkspaceServiceError,
     activate_workspace_operation,
@@ -1504,14 +1511,20 @@ async def generate_presentation_handler(
             # then ground the outline in it. Falls back to documents-only on failure.
             outline_context = additional_context
             try:
-                content_brief = await generate_content_brief(
-                    request.content,
-                    language_to_use,
-                    additional_context,
-                    request.tone.value,
-                    request.verbosity.value,
-                    request.instructions,
-                )
+                with provider_usage_scope(
+                    job_id=(generation_job.id if generation_job is not None else None),
+                    operation="authored_generation",
+                    stage="content_brief",
+                    attempt_number=(generation_job.attempt_number if generation_job else 0),
+                ):
+                    content_brief = await generate_content_brief(
+                        request.content,
+                        language_to_use,
+                        additional_context,
+                        request.tone.value,
+                        request.verbosity.value,
+                        request.instructions,
+                    )
                 brief_context = content_brief.to_prompt_context()
                 outline_context = (
                     f"{additional_context}\n\n{brief_context}".strip()
@@ -1576,23 +1589,29 @@ async def generate_presentation_handler(
             )
 
             presentation_outlines_text = ""
-            async for chunk in generate_ppt_outline(
-                request.content,
-                n_slides_to_generate,
-                language_to_use,
-                outline_context,
-                request.tone.value,
-                request.verbosity.value,
-                request.instructions,
-                request.include_title_slide,
-                request.web_search,
-                request.include_table_of_contents,
+            with provider_usage_scope(
+                job_id=(generation_job.id if generation_job is not None else None),
+                operation="authored_generation",
+                stage="outline",
+                attempt_number=(generation_job.attempt_number if generation_job else 0),
             ):
+                async for chunk in generate_ppt_outline(
+                    request.content,
+                    n_slides_to_generate,
+                    language_to_use,
+                    outline_context,
+                    request.tone.value,
+                    request.verbosity.value,
+                    request.instructions,
+                    request.include_title_slide,
+                    request.web_search,
+                    request.include_table_of_contents,
+                ):
 
-                if isinstance(chunk, HTTPException):
-                    raise chunk
+                    if isinstance(chunk, HTTPException):
+                        raise chunk
 
-                presentation_outlines_text += chunk
+                    presentation_outlines_text += chunk
 
             try:
                 presentation_outlines_json = dict(
@@ -2296,6 +2315,27 @@ async def queue_presentation_generation(
                 status_code=409,
                 detail="chat_first_bootstrap_operation_not_found",
             )
+        try:
+            await admit_public_operation(
+                sql_session,
+                principal=current_principal_context(),
+                operation_id=workspace_operation.id,
+                operation_kind="generation",
+                request_plan=plan_provider_requests(
+                    slide_count=request.n_slides,
+                    image_budget=request.n_slides,
+                    repair_budget=request.n_slides,
+                    vqa_budget=request.n_slides if request.vision_qa else 0,
+                ),
+            )
+        except PublicAdmissionRejected as error:
+            raise HTTPException(
+                status_code=429,
+                detail=error.code,
+                headers={
+                    "Retry-After": str(error.retry_after_seconds or 15),
+                },
+            ) from error
         existing_for_presentation = (
             await sql_session.execute(
                 select(PresentationGenerationJob)

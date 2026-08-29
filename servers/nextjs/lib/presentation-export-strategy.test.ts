@@ -5,6 +5,7 @@ import {
   executePersistedPresentationExport,
   PRESENTATION_SOURCE_SHA256,
   type PersistedPresentation,
+  type PresentationExportAdapterRegistry,
   type PresentationExportExecutionParams,
   resolvePersistedExportStrategy,
 } from "./presentation-export-strategy.ts";
@@ -69,18 +70,19 @@ function withCanonicalRuntime(
 
 function spyRegistry() {
   const calls = { general: 0, hybrid: 0 };
+  const registry: PresentationExportAdapterRegistry = {
+    async general(_params) {
+      calls.general += 1;
+      return { path: "general.pptx" };
+    },
+    async hybrid(_params) {
+      calls.hybrid += 1;
+      return { path: "hybrid.pptx" };
+    },
+  };
   return {
     calls,
-    registry: {
-      async general() {
-        calls.general += 1;
-        return { path: "general.pptx" };
-      },
-      async hybrid() {
-        calls.hybrid += 1;
-        return { path: "hybrid.pptx" };
-      },
-    },
+    registry,
   };
 }
 

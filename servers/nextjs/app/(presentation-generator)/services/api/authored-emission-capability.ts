@@ -382,7 +382,13 @@ function stringRecord(value: unknown, field: string): Record<string, string> {
   if (entries.length === 0 || entries.some(([key, item]) => !key || typeof item !== "string" || !item.trim())) {
     throw new Error(`Capability projection has invalid ${field}`);
   }
-  return Object.fromEntries(entries.map(([key, item]) => [key, item.trim()]));
+  const normalizedEntries = entries.map(([key, item]) => {
+    if (typeof item !== "string") {
+      throw new Error(`Capability projection has invalid ${field}`);
+    }
+    return [key, item.trim()] as const;
+  });
+  return Object.fromEntries(normalizedEntries);
 }
 
 function matrixEntries<T extends string>(

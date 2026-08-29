@@ -23,6 +23,14 @@ from services.workspace_quality_review_payload import (
     _sanitize_quality_review_slide_results,
     _sanitize_quality_review_stage_timings,
 )
+from services.workspace_generation_timing_payload import (
+    GENERATION_TIMING_RESULT_KEYS,
+    sanitize_generation_timing_result,
+)
+from services.workspace_generation_timing_attachment import (
+    amend_generation_timing_projection,
+    attach_durable_generation_timing as _attach_durable_generation_timing,
+)
 import inspect
 import json
 import logging
@@ -40,6 +48,7 @@ from models.sql.presentation import (
     PRESENTATION_LIFECYCLE_DELETED,
     PresentationModel,
 )
+from models.sql.public_admission import PublicOperationAdmission
 from models.sql.workspace import (
     WorkspaceCleanupJournal,
     WorkspaceOperation,
@@ -47,6 +56,11 @@ from models.sql.workspace import (
     WorkspaceOutbox,
 )
 from services.database import async_session_maker
+from services.public_operation_admission import (
+    PublicAdmissionRejected,
+    activate_public_operation,
+    finish_public_operation,
+)
 from services.account_deletion_service import (
     AccountDeletionFenceConflict,
     require_active_account_generation,
@@ -180,6 +194,13 @@ _MAX_TOOL_SUMMARY_LENGTH = 500
 # these out of the general event allowlist prevents an unrelated handler from
 # publishing fields that only make sense for another operation's result card.
 _SAFE_RESULT_PAYLOAD_KEYS_BY_KIND: dict[str, frozenset[str]] = {
+    "presentation.generate": frozenset(
+        {
+            "stage_timings_ms",
+            "total_ms",
+            "generation_timing_receipt",
+        }
+    ),
     "quality.review": frozenset(
         {
             "kind",
@@ -392,9 +413,16 @@ def sanitize_workspace_event_payload(
     if operation_kind in {"presentation.edit", "slide.edit", "slide.delete"}:
         allowed_keys |= _PUBLIC_RUNTIME_PAYLOAD_KEYS
     safe: dict[str, Any] = {}
+    if operation_kind == "presentation.generate":
+        safe.update(sanitize_generation_timing_result(payload))
     for key, value in payload.items():
         normalized = str(key)
         if normalized not in allowed_keys:
+            continue
+        if (
+            operation_kind == "presentation.generate"
+            and normalized in GENERATION_TIMING_RESULT_KEYS
+        ):
             continue
         if isinstance(value, uuid.UUID):
             safe[normalized] = str(value)
@@ -532,6 +560,23 @@ class _EventAppendResult:
     version: int
 
 
+async def _public_admission_for_operation(
+    session: AsyncSession,
+    operation_id: uuid.UUID,
+) -> PublicOperationAdmission | None:
+    """Support rolling/partial fixtures while migrations precede public traffic."""
+
+    try:
+        async with session.begin_nested():
+            return await session.scalar(
+                select(PublicOperationAdmission)
+                .where(PublicOperationAdmission.operation_id == operation_id)
+                .with_for_update()
+            )
+    except OperationalError:
+        return None
+
+
 async def append_operation_event(
     session: AsyncSession,
     *,
@@ -633,6 +678,32 @@ async def append_operation_event(
             )
         )
         await session.flush()
+    terminal_state = str(row["state"])
+    if terminal_state in _TERMINAL_STATES:
+        admission = await _public_admission_for_operation(session, operation_id)
+        if admission is not None and admission.state not in {
+            "succeeded",
+            "failed",
+            "cancelled",
+            "budget_exhausted",
+        }:
+            public_terminal_state = (
+                "budget_exhausted"
+                if terminal_state in {"failed", "dead_letter"}
+                and safe_payload.get("error_code")
+                in {
+                    "public_provider_request_limit_exceeded",
+                    "public_provider_retry_limit_exceeded",
+                    "public_provider_estimated_cost_limit_exceeded",
+                    "public_provider_actual_cost_limit_exceeded",
+                }
+                else ("failed" if terminal_state == "dead_letter" else terminal_state)
+            )
+            await finish_public_operation(
+                session,
+                admission.id,
+                state=public_terminal_state,
+            )
     return event
 
 
@@ -640,6 +711,7 @@ async def claim_next_workspace_operation(
     *,
     session_factory: async_sessionmaker[AsyncSession] = async_session_maker,
     lease_seconds: int = WORKSPACE_OPERATION_LEASE_SECONDS,
+    allowed_kinds: Collection[str] | None = None,
 ) -> WorkspaceOperationClaim | None:
     """Claim a ready operation using a durable owner-aware fair order.
 
@@ -709,11 +781,43 @@ async def claim_next_workspace_operation(
                 WorkspaceOperation.created_at,
                 WorkspaceOperation.id,
             )
-            .limit(1)
+            .limit(256)
         )
+        if allowed_kinds is not None:
+            normalized_kinds = tuple(sorted({kind for kind in allowed_kinds if kind}))
+            if not normalized_kinds:
+                await session.rollback()
+                return None
+            statement = statement.where(WorkspaceOperation.kind.in_(normalized_kinds))
         if dialect == "postgresql":
             statement = statement.with_for_update(skip_locked=True)
-        candidate = (await session.execute(statement)).scalar_one_or_none()
+        candidates = list((await session.execute(statement)).scalars())
+        if not candidates:
+            await session.rollback()
+            return None
+
+        candidate: WorkspaceOperation | None = None
+        for queued_candidate in candidates:
+            admission = await _public_admission_for_operation(
+                session,
+                queued_candidate.id,
+            )
+            if admission is None or admission.state == "active":
+                candidate = queued_candidate
+                break
+            if admission.state != "queued":
+                continue
+            try:
+                await activate_public_operation(session, admission.id)
+            except PublicAdmissionRejected as error:
+                if error.code in {
+                    "public_owner_active_limit_exceeded",
+                    "public_tenant_active_limit_exceeded",
+                }:
+                    continue
+                raise
+            candidate = queued_candidate
+            break
         if candidate is None:
             await session.rollback()
             return None
@@ -966,8 +1070,9 @@ async def finalize_workspace_operation_success(
     session_factory: async_sessionmaker[AsyncSession] = async_session_maker,
 ) -> bool:
     now = _utc_now()
+    result_payload = await _attach_durable_generation_timing(claim, result.payload)
     safe_result = sanitize_workspace_event_payload(
-        result.payload,
+        result_payload,
         operation_kind=claim.kind,
     )
     if result.result_revision is not None:
@@ -1060,6 +1165,19 @@ async def finalize_workspace_operation_success(
             )
         ).scalar_one_or_none()
         if existing is not None:
+            if claim.kind == "presentation.generate":
+                amended = await amend_generation_timing_projection(
+                    session,
+                    operation=operation,
+                    safe_result=safe_result,
+                    now=now,
+                )
+                if amended is not None:
+                    if not amended:
+                        await session.rollback()
+                        return False
+                    await session.commit()
+                    return True
             await session.rollback()
             return True
         publication_payload = dict(safe_result)
@@ -1987,6 +2105,7 @@ class WorkspaceOperationRunner:
         lease_seconds: int | None = None,
         heartbeat_seconds: int | None = None,
         poll_seconds: float | None = None,
+        allowed_kinds: Collection[str] | None = None,
     ) -> None:
         self.session_factory = session_factory
         self.registry = registry
@@ -2004,6 +2123,7 @@ class WorkspaceOperationRunner:
         self.poll_seconds = poll_seconds or _positive_float_env(
             "WORKSPACE_OPERATION_POLL_SECONDS", WORKSPACE_OPERATION_POLL_SECONDS
         )
+        self.allowed_kinds = None if allowed_kinds is None else frozenset(allowed_kinds)
         self._loop_task: asyncio.Task[None] | None = None
         self._active: dict[uuid.UUID, asyncio.Task[None]] = {}
         self._wake = asyncio.Event()
@@ -2057,6 +2177,7 @@ class WorkspaceOperationRunner:
             claim = await claim_next_workspace_operation(
                 session_factory=self.session_factory,
                 lease_seconds=self.lease_seconds,
+                allowed_kinds=self.allowed_kinds,
             )
             if claim is None:
                 break
@@ -2286,10 +2407,20 @@ class WorkspaceOperationRunner:
 _workspace_operation_runner: WorkspaceOperationRunner | None = None
 
 
-async def start_workspace_operation_runner() -> WorkspaceOperationRunner:
+async def start_workspace_operation_runner(
+    *,
+    allowed_kinds: Collection[str] | None = None,
+) -> WorkspaceOperationRunner:
     global _workspace_operation_runner
     if _workspace_operation_runner is None:
-        _workspace_operation_runner = WorkspaceOperationRunner()
+        _workspace_operation_runner = WorkspaceOperationRunner(
+            allowed_kinds=allowed_kinds,
+        )
+    elif (
+        allowed_kinds is not None
+        and _workspace_operation_runner.allowed_kinds != frozenset(allowed_kinds)
+    ):
+        raise RuntimeError("workspace_operation_runner_profile_conflict")
     await _workspace_operation_runner.start()
     return _workspace_operation_runner
 

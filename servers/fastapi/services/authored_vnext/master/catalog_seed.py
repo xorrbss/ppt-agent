@@ -378,7 +378,24 @@ def seed_catalog(
     *,
     ibiz_logo_svg: Path = DEFAULT_IBIZ_LOGO_SVG,
 ) -> list[dict[str, object]]:
-    logo = publish_ibiz_logo(asset_store, ibiz_logo_svg)
+    if ibiz_logo_svg.is_file():
+        logo = publish_ibiz_logo(asset_store, ibiz_logo_svg)
+    else:
+        try:
+            current_ibiz = service.get_revision(IBIZ_MASTER_ID)
+        except MasterNotFoundError:
+            current_ibiz = None
+        current_logo = (
+            current_ibiz.contract.brand_assets.logo
+            if current_ibiz is not None
+            else None
+        )
+        if current_logo is None:
+            raise FileNotFoundError(
+                "IBIZ logo source is missing and no catalog logo can be reused: "
+                f"{ibiz_logo_svg}"
+            )
+        logo = current_logo.model_dump(by_alias=True)
     results: list[dict[str, object]] = []
     for contract in catalog_seed_contracts(logo):
         desired = seal_master_contract(contract)

@@ -38,9 +38,11 @@ from services.authored_vnext.semantic.qualification_v3 import (
     bind_durable_artifact_v3,
     claim_com_qualification_job_v3,
     create_com_qualification_job_v3,
+    get_com_qualification_job_v3,
     put_durable_artifact_v3,
     transition_com_qualification_job_v3,
 )
+import services.authored_vnext.semantic.qualification_v3 as qualification_service
 from services.authored_vnext.semantic.readiness_v3 import (
     issue_capability_receipt_v3,
     release_authority_target_v3_from_environment,
@@ -575,6 +577,24 @@ def test_durable_artifact_cas_and_com_failure_closure(tmp_path: Path, monkeypatc
             artifact = await put_durable_artifact_v3(session, request=put, tenant_id="t")
             replay = await put_durable_artifact_v3(session, request=put, tenant_id="t")
             assert replay.version_id == artifact.version_id
+            monkeypatch.setattr(
+                qualification_service,
+                "_MAX_DURABLE_ARTIFACT_TOTAL_BYTES_V3",
+                len(content),
+            )
+            overflow_content = b"x"
+            overflow = put.model_copy(
+                update={
+                    "artifact_id": "pptx/overflow",
+                    "sha256": "sha256:" + sha256(overflow_content).hexdigest(),
+                    "content_base64": base64.b64encode(overflow_content).decode("ascii"),
+                }
+            )
+            with pytest.raises(
+                SemanticContractError,
+                match="authored_release_artifact_total_too_large",
+            ):
+                await put_durable_artifact_v3(session, request=overflow, tenant_id="t")
             conflict = put.model_copy(
                 update={
                     "sha256": "sha256:" + sha256(b"changed").hexdigest(),
@@ -632,6 +652,16 @@ def test_durable_artifact_cas_and_com_failure_closure(tmp_path: Path, monkeypatc
             claimed = await claim_com_qualification_job_v3(
                 session, job_id=job.job_id, worker_id="release.worker", tenant_id="t", now=now
             )
+            assert claimed.lease_token is not None
+            stored_job = await session.get(AuthoredComQualificationJobV3, job.job_id)
+            assert stored_job is not None
+            assert stored_job.lease_token_hash is not None
+            assert stored_job.lease_token_hash.startswith("sha256:")
+            assert stored_job.lease_token_hash != claimed.lease_token
+            readback = await get_com_qualification_job_v3(
+                session, job_id=job.job_id, tenant_id="t"
+            )
+            assert readback.lease_token is None
             current = claimed
             for index, next_state in enumerate(
                 (
@@ -687,6 +717,7 @@ def test_durable_artifact_cas_and_com_failure_closure(tmp_path: Path, monkeypatc
                     tenant_id="t",
                     now=now,
                 )
+                assert current.lease_token is None
             assert current.state == "rejected"
             assert current.failure_code == "powerpoint_process_survived"
         await engine.dispose()

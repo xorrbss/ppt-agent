@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+import os
+import re
 from typing import Literal
 import uuid
 
@@ -18,6 +20,25 @@ class AuthPrincipal:
     username: str
     is_admin: bool
     method: Literal["jwt", "api_key"]
+    tenant_id: str
+    trace_id: str
+
+
+_SAFE_PRINCIPAL_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
+
+
+def _trusted_tenant_id() -> str:
+    tenant_id = (os.getenv("PPT_SERVICE_TENANT_ID") or "default").strip()
+    if not _SAFE_PRINCIPAL_ID.fullmatch(tenant_id):
+        raise RuntimeError("ppt_service_tenant_id_invalid")
+    return tenant_id
+
+
+def _request_trace_id(request: Request) -> str:
+    trace_id = str(getattr(request.state, "request_id", "") or uuid.uuid4())
+    if not _SAFE_PRINCIPAL_ID.fullmatch(trace_id):
+        return str(uuid.uuid4())
+    return trace_id
 
 
 async def resolve_request_principal(
@@ -34,6 +55,8 @@ async def resolve_request_principal(
                     username=user.username,
                     is_admin=user.is_superuser,
                     method="jwt",
+                    tenant_id=_trusted_tenant_id(),
+                    trace_id=_request_trace_id(request),
                 ),
                 user,
             )
@@ -55,6 +78,8 @@ async def resolve_request_principal(
                 username=user.username,
                 is_admin=True,
                 method="api_key",
+                tenant_id=_trusted_tenant_id(),
+                trace_id=_request_trace_id(request),
             ),
             user,
         )

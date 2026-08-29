@@ -22,6 +22,23 @@ const ooxmlContractDestination = path.join(
   "contracts",
   ooxmlContractRelative
 );
+// Both readiness modules resolve their release profile from the runtime's
+// sibling contracts tree. Keep this bounded to the authored semantic subtree:
+// it contains the v2 and v3 authority profiles without copying unrelated
+// authored contract families into the packaged application.
+const authoredSemanticContractRelative = path.join("authored_vnext", "semantic");
+const authoredSemanticContractSource = path.join(
+  __dirname,
+  "..",
+  "contracts",
+  authoredSemanticContractRelative
+);
+const authoredSemanticContractDestination = path.join(
+  __dirname,
+  "resources",
+  "contracts",
+  authoredSemanticContractRelative
+);
 const templateEngineRelative = path.join(
   "template_package",
   "engines",
@@ -82,7 +99,18 @@ function copyDirExact(src, dest) {
     copyTreeSafe(src, temporary, { materializeLinks: true });
     atomicReplaceDirectory(temporary, dest);
   } catch (error) {
-    fs.rmSync(temporary, { recursive: true, force: true });
+    if (error.atomicReplacementRecoveryRequired) {
+      console.error(
+        `[fastapi-assets] Preserving staged resource directories after failed rollback: ${error.atomicReplacementTemp} ${error.atomicReplacementBackup}`
+      );
+    } else {
+      fs.rmSync(temporary, {
+        recursive: true,
+        force: true,
+        maxRetries: process.platform === "win32" ? 12 : 3,
+        retryDelay: process.platform === "win32" ? 250 : 100,
+      });
+    }
     throw error;
   }
 }
@@ -97,6 +125,10 @@ function main() {
 
   console.log(`[fastapi-assets] Copying OOXML contract -> ${ooxmlContractDestination}`);
   copyFile(ooxmlContractSource, ooxmlContractDestination);
+  console.log(
+    `[fastapi-assets] Copying authored semantic contract tree -> ${authoredSemanticContractDestination}`
+  );
+  copyDirExact(authoredSemanticContractSource, authoredSemanticContractDestination);
   console.log(`[fastapi-assets] Copying template engine -> ${templateEngineDestination}`);
   copyFile(templateEngineSource, templateEngineDestination);
   console.log(`[fastapi-assets] Copying template packages -> ${templatePackagesDestination}`);

@@ -16,6 +16,11 @@ const afterPack = async (context) => {
       "resources"
     )
     const fastapiPath = path.join(resourcesRoot, "fastapi", "fastapi")
+    const workspaceWorkerPath = path.join(
+      resourcesRoot,
+      "fastapi",
+      "workspace-operation-worker"
+    )
     const exportPyDir = path.join(resourcesRoot, "export", "py")
     const converterCandidates = [
       `convert-${process.platform}-${process.arch}`,
@@ -31,6 +36,13 @@ const afterPack = async (context) => {
       console.log("✓ Execute permissions set for FastAPI")
     } else {
       console.warn("⚠ FastAPI binary not found at:", fastapiPath)
+    }
+
+    if (fs.existsSync(workspaceWorkerPath)) {
+      fs.chmodSync(workspaceWorkerPath, 0o755)
+      console.log("✓ Execute permissions set for workspace operation worker")
+    } else {
+      console.warn("⚠ Workspace operation worker not found at:", workspaceWorkerPath)
     }
 
     console.log("Setting executable permissions for export converter binary...")

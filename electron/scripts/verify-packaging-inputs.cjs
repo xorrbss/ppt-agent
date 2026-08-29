@@ -16,6 +16,10 @@ const OOXML_CONTRACT_RELATIVE = path.join(
   "generated",
   "ooxml_package.py"
 );
+const AUTHORED_SEMANTIC_CONTRACT_RELATIVE = path.join(
+  "authored_vnext",
+  "semantic"
+);
 const TEMPLATE_ENGINE_RELATIVE = path.join(
   "template_package",
   "engines",
@@ -31,6 +35,7 @@ const DEFAULT_MAX_STANDALONE_FILES = 150000;
 const DEFAULT_MAX_STANDALONE_BYTES = 3 * 1024 * 1024 * 1024;
 const ALLOWED_STANDALONE_ROOTS = new Set([
   ".source-provenance.json",
+  ".presenton-runtime-dependencies.json",
   ".next-build",
   "node_modules",
   "package.json",
@@ -354,7 +359,25 @@ function positiveLimit(value, fallback, name) {
   return parsed;
 }
 
+function createStageProfiler(options = {}) {
+  const emit = options.onStage || (
+    process.env.PRESENTON_PREFLIGHT_PROFILE === "1"
+      ? (name, elapsedMs) =>
+          console.log(`[packaging-preflight] ${name}: ${elapsedMs}ms`)
+      : null
+  );
+  return (name, operation) => {
+    const startedAt = process.hrtime.bigint();
+    try {
+      return operation();
+    } finally {
+      emit?.(name, Number(process.hrtime.bigint() - startedAt) / 1_000_000);
+    }
+  };
+}
+
 function validatePackagingInputs(options = {}) {
+  const stage = createStageProfiler(options);
   const electronRoot = path.resolve(options.electronRoot || path.join(__dirname, ".."));
   const workspaceRoot = path.resolve(
     options.workspaceRoot || path.join(electronRoot, "..")
@@ -398,6 +421,16 @@ function validatePackagingInputs(options = {}) {
     "contracts",
     OOXML_CONTRACT_RELATIVE
   );
+  const authoredSemanticContractSource = path.join(
+    workspaceRoot,
+    "contracts",
+    AUTHORED_SEMANTIC_CONTRACT_RELATIVE
+  );
+  const authoredSemanticContractResource = path.join(
+    resourcesRoot,
+    "contracts",
+    AUTHORED_SEMANTIC_CONTRACT_RELATIVE
+  );
   const templateEngineSource = path.join(
     workspaceRoot,
     "contracts",
@@ -418,34 +451,34 @@ function validatePackagingInputs(options = {}) {
   const standalone = resolveNextStandalone(nextRoot);
 
   const provenanceCheck = options.provenanceCheck || verifyResourceProvenance;
-  const compliance = (options.complianceCheck || validateReleaseCompliance)(
-    workspaceRoot
+  const compliance = stage("release-compliance", () =>
+    (options.complianceCheck || validateReleaseCompliance)(workspaceRoot)
   );
   const provenance = {
-    electron: provenanceCheck({
+    electron: stage("resource-provenance:electron", () => provenanceCheck({
       kind: "electron",
       sourceRoot: electronSourceRoot,
       resourceRoot: electronBundleRoot,
       workspaceRoot,
-    }),
-    nextjs: provenanceCheck({
+    })),
+    nextjs: stage("resource-provenance:nextjs", () => provenanceCheck({
       kind: "nextjs",
       sourceRoot: nextSourceRoot,
       resourceRoot: nextRoot,
       workspaceRoot,
-    }),
-    fastapi: provenanceCheck({
+    })),
+    fastapi: stage("resource-provenance:fastapi", () => provenanceCheck({
       kind: "fastapi",
       sourceRoot: fastapiSourceRoot,
       resourceRoot: fastapiRoot,
       workspaceRoot,
-    }),
-    templatePackages: provenanceCheck({
+    })),
+    templatePackages: stage("resource-provenance:template-packages", () => provenanceCheck({
       kind: "template-packages",
       sourceRoot: templatePackagesSource,
       resourceRoot: templatePackagesResource,
       workspaceRoot,
-    }),
+    })),
   };
 
   requireFile(standalone.serverScript, "Next.js standalone server");
@@ -457,19 +490,21 @@ function validatePackagingInputs(options = {}) {
     path.join(standalone.serverRoot, "public"),
     "Next.js public assets"
   );
-  const nextRuntimeDependencies = verifyTailwindRuntimeClosure({
-    nextjsRoot: nextSourceRoot,
-    serverRoot: standalone.serverRoot,
-  });
+  const nextRuntimeDependencies = stage("next-runtime-dependency-closure", () =>
+    verifyTailwindRuntimeClosure({
+      nextjsRoot: nextSourceRoot,
+      serverRoot: standalone.serverRoot,
+    })
+  );
 
-  const standaloneStats = scanTree(nextRoot, {
+  const standaloneStats = stage("next-standalone-scan", () => scanTree(nextRoot, {
     workspaceRoot,
     maxFiles,
     maxBytes,
     allowedTopLevel: ALLOWED_STANDALONE_ROOTS,
     allowLinks: false,
     platform,
-  });
+  }));
 
   const markerFile = path.join(exportRoot, ".installed-version");
   requireFile(markerFile, "Export runtime marker");
@@ -498,6 +533,17 @@ function validatePackagingInputs(options = {}) {
     platform === "win32" ? "fastapi.exe" : "fastapi"
   );
   requireCompatibleBinary(fastapiBinary, "FastAPI executable", platform);
+  const workspaceWorkerBinary = path.join(
+    fastapiRoot,
+    platform === "win32"
+      ? "workspace-operation-worker.exe"
+      : "workspace-operation-worker"
+  );
+  requireCompatibleBinary(
+    workspaceWorkerBinary,
+    "Workspace operation worker executable",
+    platform
+  );
   requireFile(ooxmlContractSource, "Authored OOXML contract source", 100);
   requireFile(ooxmlContractResource, "Packaged authored OOXML contract", 100);
   if (
@@ -505,6 +551,12 @@ function validatePackagingInputs(options = {}) {
   ) {
     fail("Packaged authored OOXML contract is stale; rebuild the FastAPI resource");
   }
+  stage("authored-semantic-contract-byte-parity", () => requireDirectoryByteParity(
+    authoredSemanticContractSource,
+    authoredSemanticContractResource,
+    "Packaged authored semantic contract tree",
+    "FastAPI"
+  ));
   requireFile(templateEngineSource, "Template package engine source", 100);
   requireFile(templateEngineResource, "Packaged template package engine", 100);
   if (
@@ -519,12 +571,12 @@ function validatePackagingInputs(options = {}) {
   ) {
     fail("Packaged template package renderer evidence is stale; rebuild the FastAPI resource");
   }
-  requireDirectoryByteParity(
+  stage("template-package-byte-parity", () => requireDirectoryByteParity(
     templatePackagesSource,
     templatePackagesResource,
     "Packaged template package tree",
     "FastAPI"
-  );
+  ));
   const packagedRegistry = JSON.parse(
     fs.readFileSync(path.join(templatePackagesResource, "package-registry.v1.json"), "utf8")
   );
@@ -532,21 +584,26 @@ function validatePackagingInputs(options = {}) {
     fail("Packaged template registry must keep legacyCompatibility.enabled=false");
   }
 
-  scanTree(exportRoot, { workspaceRoot, platform });
-  scanTree(fastapiRoot, {
+  stage("export-runtime-scan", () => scanTree(exportRoot, { workspaceRoot, platform }));
+  stage("fastapi-runtime-scan", () => scanTree(fastapiRoot, {
     workspaceRoot,
     allowLinks: false,
     platform,
-  });
-  (options.nextSharpCheck ||
-    ((root) => defaultSharpCheck(root, "Next.js")))(standalone.serverRoot);
-  (options.sharpCheck ||
-    ((root) => defaultSharpCheck(root, "Electron")))(electronRoot);
+  }));
+  stage("nextjs-sharp", () =>
+    (options.nextSharpCheck ||
+      ((root) => defaultSharpCheck(root, "Next.js")))(standalone.serverRoot)
+  );
+  stage("electron-sharp", () =>
+    (options.sharpCheck ||
+      ((root) => defaultSharpCheck(root, "Electron")))(electronRoot)
+  );
 
   return {
     exportVersion: installedVersion,
     converter,
     fastapiBinary,
+    workspaceWorkerBinary,
     nextLayout: standalone.layout,
     nextServer: standalone.serverScript,
     provenance,
@@ -566,6 +623,7 @@ function main() {
     );
     console.log(`  - export: ${result.exportVersion} (${result.converter})`);
     console.log(`  - FastAPI: ${result.fastapiBinary}`);
+    console.log(`  - Workspace worker: ${result.workspaceWorkerBinary}`);
   } catch (error) {
     console.error(`[packaging-preflight] ${error.message}`);
     process.exitCode = 1;
@@ -577,11 +635,13 @@ if (require.main === module) {
 } else {
   module.exports = {
     ALLOWED_STANDALONE_ROOTS,
+    AUTHORED_SEMANTIC_CONTRACT_RELATIVE,
     EXPECTED_EXPORT_VERSION,
     OOXML_CONTRACT_RELATIVE,
     TEMPLATE_ENGINE_RELATIVE,
     TEMPLATE_RENDERER_RELATIVE,
     detectBinaryFormat,
+    createStageProfiler,
     isWithin,
     resolveNextStandalone,
     scanTree,

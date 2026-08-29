@@ -123,10 +123,11 @@ export function authoredRendererAttestationProjection(
   environment: NodeJS.ProcessEnv = process.env,
   now = Date.now(),
 ): AuthoredRendererAttestationProjection {
-  const nodeEnvironment = environment.NODE_ENV === "production" ? "production" : "development";
+  const nodeEnvironment: AuthoredRendererAttestationProjection["environment"]["nodeEnvironment"] =
+    environment.NODE_ENV === "production" ? "production" : "development";
   const osIsolation = environment.AUTHORED_RENDERER_OS_ISOLATION?.trim() || "undeclared";
   const executionBoundary = environment.AUTHORED_RENDERER_EXECUTION_BOUNDARY?.trim() || "undeclared";
-  const base = {
+  const base: Omit<AuthoredRendererAttestationProjection, "state" | "reasonCode"> = {
     schemaVersion: "authored-renderer-attestation/v1" as const,
     attestationDigest: optionalAttestationDigest(environment.AUTHORED_RENDERER_ATTESTATION_DIGEST),
     environment: { nodeEnvironment, osIsolation, executionBoundary },
