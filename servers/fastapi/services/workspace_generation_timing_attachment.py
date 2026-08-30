@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from services.workspace_generation_timing_payload import (
     GENERATION_TIMING_RESULT_KEYS,
     generation_timing_result_projection,
+    sanitize_generation_timing_receipt,
 )
 
 
@@ -24,6 +25,8 @@ class _GenerationOperationClaim(Protocol):
     kind: str
     operation_id: object
     request_payload: Mapping[str, Any]
+    attempt_token: str
+    attempt_number: int
 
 
 async def attach_durable_generation_timing(
@@ -35,6 +38,15 @@ async def attach_durable_generation_timing(
     result = dict(payload)
     if claim.kind != "presentation.generate":
         return result
+    # A handled failure is CAS-projected into PostgreSQL before the handler
+    # unwinds. Prefer that durable authority and use the local ledger only as a
+    # recovery fallback.
+    projected = sanitize_generation_timing_receipt(
+        result.get("generation_timing_receipt")
+    )
+    if projected:
+        result.update(generation_timing_result_projection(projected))
+        return result
     job_id = result.get("job_id") or claim.request_payload.get("job_id")
     if not job_id:
         return result
@@ -42,10 +54,44 @@ async def attach_durable_generation_timing(
         # Runtime import keeps the generic runner outside the receipt store's
         # initialization graph.
         from services.authored_generation_timing_receipt import (
+            load_generation_attempt_timing_receipts,
             load_generation_timing_receipt,
         )
+        from services.authored_quality_receipt_v2 import public_attempt_id
 
         receipt = await asyncio.to_thread(load_generation_timing_receipt, job_id)
+        attempt_token = getattr(claim, "attempt_token", None)
+        attempt_number = getattr(claim, "attempt_number", None)
+        expected_attempt_id = (
+            public_attempt_id(attempt_token)
+            if isinstance(attempt_token, str) and attempt_token
+            else None
+        )
+        if receipt is not None and (
+            (expected_attempt_id is not None and receipt.attempt_id != expected_attempt_id)
+            or (
+                isinstance(attempt_number, int)
+                and receipt.attempt_number != attempt_number
+            )
+        ):
+            receipt = None
+        if receipt is None:
+            attempt_receipts = await asyncio.to_thread(
+                load_generation_attempt_timing_receipts, job_id
+            )
+            matching = tuple(
+                candidate
+                for candidate in attempt_receipts
+                if (
+                    expected_attempt_id is None
+                    or candidate.attempt_id == expected_attempt_id
+                )
+                and (
+                    not isinstance(attempt_number, int)
+                    or candidate.attempt_number == attempt_number
+                )
+            )
+            receipt = matching[-1] if matching else None
     except (OSError, ValueError):
         LOGGER.warning(
             "Unable to load generation timing receipt for operation %s",

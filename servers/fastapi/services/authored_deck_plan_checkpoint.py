@@ -9,8 +9,10 @@ input and stored output digests both verify.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping
+from dataclasses import dataclass
 from hashlib import sha256
 import json
+from time import monotonic
 from typing import TypeVar
 import uuid
 
@@ -36,6 +38,36 @@ class AuthoredDeckPlanCheckpointError(RuntimeError):
     def __init__(self, code: str) -> None:
         super().__init__(code)
         self.code = code
+
+
+@dataclass(frozen=True, slots=True)
+class AuthoredDeckPlanCheckpointSignal:
+    """Content-free timing and reuse result for one checkpoint resolution."""
+
+    stage: str
+    enabled: bool
+    reused: bool
+    outcome: str
+    lookup_ms: int
+    resolve_ms: int
+    commit_ms: int
+    total_ms: int
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "stage": self.stage,
+            "enabled": self.enabled,
+            "reused": self.reused,
+            "outcome": self.outcome,
+            "lookupMs": self.lookup_ms,
+            "resolveMs": self.resolve_ms,
+            "commitMs": self.commit_ms,
+            "totalMs": self.total_ms,
+        }
+
+
+def _elapsed_ms(started_at: float) -> int:
+    return max(0, round((monotonic() - started_at) * 1000))
 
 
 def canonical_checkpoint_digest(value: object) -> str:
@@ -206,36 +238,179 @@ async def resolve_with_authored_deck_plan_checkpoint(
     resolve: Callable[[], Awaitable[_T]],
     encode: Callable[[_T], Mapping[str, object]],
     decode: Callable[[Mapping[str, object]], _T],
+    observe: Callable[[AuthoredDeckPlanCheckpointSignal], None] | None = None,
 ) -> tuple[_T, bool]:
     """Return `(value, reused)` around one deck-wide planning call."""
 
+    value, signal = await resolve_with_authored_deck_plan_checkpoint_signal(
+        generation_job=generation_job,
+        stage=stage,
+        input_contract=input_contract,
+        resolve=resolve,
+        encode=encode,
+        decode=decode,
+        observe=observe,
+    )
+    return value, signal.reused
+
+
+async def resolve_with_authored_deck_plan_checkpoint_signal(
+    *,
+    generation_job: PresentationGenerationJob | None,
+    stage: str,
+    input_contract: Mapping[str, object],
+    resolve: Callable[[], Awaitable[_T]],
+    encode: Callable[[_T], Mapping[str, object]],
+    decode: Callable[[Mapping[str, object]], _T],
+    observe: Callable[[AuthoredDeckPlanCheckpointSignal], None] | None = None,
+) -> tuple[_T, AuthoredDeckPlanCheckpointSignal]:
+    """Resolve one plan and return durable-reuse plus monotonic timing signals."""
+
     _validate_stage(stage)
+    total_started = monotonic()
+
+    def signal(
+        *,
+        enabled: bool,
+        reused: bool,
+        outcome: str,
+        lookup_ms: int,
+        resolve_ms: int,
+        commit_ms: int,
+    ) -> AuthoredDeckPlanCheckpointSignal:
+        result = AuthoredDeckPlanCheckpointSignal(
+            stage=stage,
+            enabled=enabled,
+            reused=reused,
+            outcome=outcome,
+            lookup_ms=lookup_ms,
+            resolve_ms=resolve_ms,
+            commit_ms=commit_ms,
+            total_ms=_elapsed_ms(total_started),
+        )
+        if observe is not None:
+            try:
+                observe(result)
+            except Exception:
+                # A telemetry observer must not replace a generation outcome.
+                pass
+        return result
+
     if generation_job is None:
-        return await resolve(), False
+        resolve_started = monotonic()
+        try:
+            value = await resolve()
+        except BaseException:
+            signal(
+                enabled=False,
+                reused=False,
+                outcome="failed",
+                lookup_ms=0,
+                resolve_ms=_elapsed_ms(resolve_started),
+                commit_ms=0,
+            )
+            raise
+        resolve_ms = _elapsed_ms(resolve_started)
+        return value, signal(
+            enabled=False,
+            reused=False,
+            outcome="succeeded",
+            lookup_ms=0,
+            resolve_ms=resolve_ms,
+            commit_ms=0,
+        )
     input_digest = canonical_checkpoint_digest(dict(input_contract))
-    existing = await load_authored_deck_plan_checkpoint(
-        generation_job_id=generation_job.id,
-        stage=stage,
-        input_digest=input_digest,
-    )
+    lookup_started = monotonic()
+    try:
+        existing = await load_authored_deck_plan_checkpoint(
+            generation_job_id=generation_job.id,
+            stage=stage,
+            input_digest=input_digest,
+        )
+    except BaseException:
+        signal(
+            enabled=True,
+            reused=False,
+            outcome="failed",
+            lookup_ms=_elapsed_ms(lookup_started),
+            resolve_ms=0,
+            commit_ms=0,
+        )
+        raise
+    lookup_ms = _elapsed_ms(lookup_started)
     if existing is not None:
-        return decode(existing), True
-    value = await resolve()
-    payload = await commit_authored_deck_plan_checkpoint(
-        generation_job_id=generation_job.id,
-        attempt_token=generation_job.attempt_token or "",
-        attempt_number=generation_job.attempt_number,
-        stage=stage,
-        input_digest=input_digest,
-        payload=encode(value),
+        try:
+            value = decode(existing)
+        except BaseException:
+            signal(
+                enabled=True,
+                reused=True,
+                outcome="failed",
+                lookup_ms=lookup_ms,
+                resolve_ms=0,
+                commit_ms=0,
+            )
+            raise
+        return value, signal(
+            enabled=True,
+            reused=True,
+            outcome="succeeded",
+            lookup_ms=lookup_ms,
+            resolve_ms=0,
+            commit_ms=0,
+        )
+    resolve_started = monotonic()
+    try:
+        value = await resolve()
+    except BaseException:
+        signal(
+            enabled=True,
+            reused=False,
+            outcome="failed",
+            lookup_ms=lookup_ms,
+            resolve_ms=_elapsed_ms(resolve_started),
+            commit_ms=0,
+        )
+        raise
+    resolve_ms = _elapsed_ms(resolve_started)
+    commit_started = monotonic()
+    try:
+        payload = await commit_authored_deck_plan_checkpoint(
+            generation_job_id=generation_job.id,
+            attempt_token=generation_job.attempt_token or "",
+            attempt_number=generation_job.attempt_number,
+            stage=stage,
+            input_digest=input_digest,
+            payload=encode(value),
+        )
+        decoded = decode(payload)
+    except BaseException:
+        signal(
+            enabled=True,
+            reused=False,
+            outcome="failed",
+            lookup_ms=lookup_ms,
+            resolve_ms=resolve_ms,
+            commit_ms=_elapsed_ms(commit_started),
+        )
+        raise
+    commit_ms = _elapsed_ms(commit_started)
+    return decoded, signal(
+        enabled=True,
+        reused=False,
+        outcome="succeeded",
+        lookup_ms=lookup_ms,
+        resolve_ms=resolve_ms,
+        commit_ms=commit_ms,
     )
-    return decode(payload), False
 
 
 __all__ = [
+    "AuthoredDeckPlanCheckpointSignal",
     "AuthoredDeckPlanCheckpointError",
     "canonical_checkpoint_digest",
     "commit_authored_deck_plan_checkpoint",
     "load_authored_deck_plan_checkpoint",
     "resolve_with_authored_deck_plan_checkpoint",
+    "resolve_with_authored_deck_plan_checkpoint_signal",
 ]

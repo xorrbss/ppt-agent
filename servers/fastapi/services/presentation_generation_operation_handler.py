@@ -14,7 +14,7 @@ import time
 from typing import Any
 import uuid
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from models.sql.async_presentation_generation_status import (
@@ -29,6 +29,11 @@ from services.authored_generation_progress_poller import (
     mark_authored_generation_stage,
     start_authored_generation_progress_polling,
 )
+from services.authored_generation_timing_receipt import (
+    GENERATION_ATTEMPT_TIMING_STAGES,
+    GenerationTimingRecorder,
+    create_generation_attempt_timing_receipt,
+)
 from services.database import async_session_maker
 from services.presentation_generation_job_service import (
     GENERATION_JOB_HEARTBEAT_SECONDS,
@@ -42,6 +47,7 @@ from services.presentation_generation_job_service import (
 from services.public_quality_receipt_v3_store import (
     PostgresOperationQualityReceiptV3Port,
 )
+from services.provider_usage_instrumentation import provider_operation_usage_scope
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
     RetryableWorkspaceOperationError,
@@ -53,6 +59,9 @@ from services.workspace_operation_handler_registry import (
     WorkspaceOperationLeaseLost,
     WorkspaceOperationResult,
     workspace_operation_handler_registry,
+)
+from services.workspace_generation_timing_payload import (
+    generation_timing_result_projection,
 )
 
 
@@ -92,6 +101,148 @@ def _safe_failure(status: AsyncPresentationGenerationTaskModel) -> tuple[str, bo
     except (TypeError, ValueError):
         numeric_status = 500
     return code, numeric_status == 429 or numeric_status >= 500
+
+
+def _attempt_failure_stage(
+    error: BaseException,
+    status: AsyncPresentationGenerationTaskModel,
+    current_stage: object = None,
+) -> str:
+    payload = status.error if isinstance(status.error, Mapping) else {}
+    detail = payload.get("detail")
+    nested = detail if isinstance(detail, Mapping) else {}
+    stage = str(
+        getattr(error, "stage", "")
+        or payload.get("stage")
+        or nested.get("stage")
+        or current_stage
+        or ""
+    ).strip().lower()
+    if stage in GENERATION_ATTEMPT_TIMING_STAGES:
+        return stage
+    if stage == "persist":
+        return "checkpoint"
+    return "author"
+
+
+async def _persist_failed_attempt_timing(
+    *,
+    request: object,
+    job: PresentationGenerationJob,
+    status: AsyncPresentationGenerationTaskModel,
+    context: WorkspaceOperationExecutionContext,
+    error: BaseException,
+    recorder: GenerationTimingRecorder,
+    provider_usage: object,
+) -> dict[str, object] | None:
+    if str(getattr(request, "template", "")).lower() != "authored":
+        return None
+    failure_stage = _attempt_failure_stage(
+        error,
+        status,
+        getattr(request, "_authored_timing_stage", None),
+    )
+    active_stage = str(
+        getattr(request, "_authored_timing_stage", "") or ""
+    ).strip().lower()
+    measurement_stage = (
+        active_stage
+        if active_stage in GENERATION_ATTEMPT_TIMING_STAGES
+        else failure_stage
+    )
+    stage_started_at = getattr(request, "_authored_timing_stage_started_at", None)
+    if isinstance(stage_started_at, (int, float)):
+        recorder.record_stage_ms(
+            measurement_stage,
+            max(
+                recorder.snapshot_stage_timings_ms().get(measurement_stage, 0),
+                round((time.monotonic() - stage_started_at) * 1000),
+            ),
+        )
+    usage_snapshot = provider_usage.snapshot()
+    totals = usage_snapshot.get("totals", {})
+    recorder.record_stage_ms(
+        "provider",
+        totals.get("latencyMs", 0) if isinstance(totals, Mapping) else 0,
+    )
+    try:
+        receipt = await asyncio.to_thread(
+            create_generation_attempt_timing_receipt,
+            job_id=job.id,
+            attempt_id=context.claim.attempt_token,
+            attempt_number=context.claim.attempt_number,
+            revision=max(0, int(context.claim.expected_revision or 0)),
+            outcome=(
+                "cancelled" if isinstance(error, asyncio.CancelledError) else "failed"
+            ),
+            failure_stage=failure_stage,
+            stage_timings_ms=recorder.snapshot_stage_timings_ms(),
+            total_ms=recorder.elapsed_ms,
+            provider_usage=usage_snapshot,
+            checkpoint_signals=recorder.checkpoint_signals(),
+        )
+        return receipt.to_dict()
+    except (OSError, TypeError, ValueError):
+        logger.warning(
+            "Failed to persist generation attempt timing for job %s",
+            job.id,
+            exc_info=True,
+        )
+        return None
+
+
+async def _project_failed_attempt_timing(
+    *,
+    session: AsyncSession,
+    context: WorkspaceOperationExecutionContext,
+    receipt_payload: Mapping[str, object] | None,
+) -> bool:
+    """CAS-project one verified receipt into PostgreSQL before failure unwind.
+
+    The local immutable ledger remains crash-recovery evidence, but the
+    operation row is the public authority once a handled exception reaches this
+    boundary.  Losing the fence leaves the generation outcome unchanged and
+    prevents stale timing from amending a newer attempt.
+    """
+
+    if receipt_payload is None:
+        return False
+    projection = generation_timing_result_projection(receipt_payload)
+    if not projection:
+        return False
+    operation = await session.get(
+        WorkspaceOperation, context.claim.operation_id
+    )
+    if (
+        operation is None
+        or operation.state != "running"
+        or operation.attempt_token != context.claim.attempt_token
+        or operation.fencing_token != context.claim.fencing_token
+    ):
+        return False
+    current_result = (
+        dict(operation.result) if isinstance(operation.result, Mapping) else {}
+    )
+    projected = await session.execute(
+        update(WorkspaceOperation)
+        .where(
+            WorkspaceOperation.id == context.claim.operation_id,
+            WorkspaceOperation.state == "running",
+            WorkspaceOperation.attempt_token == context.claim.attempt_token,
+            WorkspaceOperation.fencing_token == context.claim.fencing_token,
+            WorkspaceOperation.version == operation.version,
+        )
+        .values(
+            result={**current_result, **projection},
+            version=WorkspaceOperation.version + 1,
+            updated_at=func.now(),
+        )
+    )
+    if projected.rowcount != 1:
+        await session.rollback()
+        return False
+    await session.commit()
+    return True
 
 
 class PresentationGenerationOperationHandler:
@@ -180,40 +331,99 @@ class PresentationGenerationOperationHandler:
             request = _request_from_durable_payload(job.request_payload)
             _begin_upstream_outline_timing(request)
             request._request_id = job.request_id
-            request._quality_receipt_v3_persistence_port = (
-                PostgresOperationQualityReceiptV3Port(
-                    session,
-                    operation_id=context.claim.operation_id,
-                    attempt_token=context.claim.attempt_token,
-                    fencing_token=context.claim.fencing_token,
-                )
-            )
-            request._quality_receipt_v3_durability_profile = "public"
-            _validate_authored_exact_admission(request)
-            await _validate_authored_master_pin_admission(request)
-            if job.template_v2_target is not None:
-                from services.template_v2_generation_service import (
-                    TemplateV2GenerationTarget,
-                )
-
-                request._template_v2_generation_target = (
-                    TemplateV2GenerationTarget.from_durable_payload(
-                        job.template_v2_target
-                    )
-                )
-
-            await generate_presentation_handler(
+            timing_recorder = GenerationTimingRecorder()
+            for stage in GENERATION_ATTEMPT_TIMING_STAGES:
+                timing_recorder.record_stage_ms(stage, 0)
+            object.__setattr__(
                 request,
-                job.presentation_id,
-                async_status=status,
-                export_cookie_header=export_cookie_header,
-                generation_job=job,
-                progress_reporter=context.progress,
-                sql_session=session,
+                "_authored_generation_timing_recorder",
+                timing_recorder,
             )
+            object.__setattr__(request, "_authored_timing_stage", "outline")
+            object.__setattr__(
+                request,
+                "_authored_timing_stage_started_at",
+                getattr(request, "_authored_outline_started_at", time.monotonic()),
+            )
+            with provider_operation_usage_scope() as provider_usage:
+                try:
+                    request._quality_receipt_v3_persistence_port = (
+                        PostgresOperationQualityReceiptV3Port(
+                            session,
+                            operation_id=context.claim.operation_id,
+                            attempt_token=context.claim.attempt_token,
+                            fencing_token=context.claim.fencing_token,
+                        )
+                    )
+                    request._quality_receipt_v3_durability_profile = "public"
+                    _validate_authored_exact_admission(request)
+                    await _validate_authored_master_pin_admission(request)
+                    if job.template_v2_target is not None:
+                        from services.template_v2_generation_service import (
+                            TemplateV2GenerationTarget,
+                        )
+
+                        request._template_v2_generation_target = (
+                            TemplateV2GenerationTarget.from_durable_payload(
+                                job.template_v2_target
+                            )
+                        )
+                    await generate_presentation_handler(
+                        request,
+                        job.presentation_id,
+                        async_status=status,
+                        export_cookie_header=export_cookie_header,
+                        generation_job=job,
+                        progress_reporter=context.progress,
+                        sql_session=session,
+                    )
+                except BaseException as error:
+                    receipt_payload = await _persist_failed_attempt_timing(
+                        request=request,
+                        job=job,
+                        status=status,
+                        context=context,
+                        error=error,
+                        recorder=timing_recorder,
+                        provider_usage=provider_usage,
+                    )
+                    if receipt_payload is not None:
+                        try:
+                            # Discard any partial generation transaction before
+                            # making the content-free timing projection durable.
+                            await session.rollback()
+                            await _project_failed_attempt_timing(
+                                session=session,
+                                context=context,
+                                receipt_payload=receipt_payload,
+                            )
+                        except Exception:
+                            await session.rollback()
+                            logger.warning(
+                                "Failed to project generation attempt timing for job %s",
+                                job.id,
+                                exc_info=True,
+                            )
+                    raise
             await session.refresh(status)
             if status.status != "completed":
                 code, retryable = _safe_failure(status)
+                projected_error = RuntimeError(code)
+                receipt_payload = await _persist_failed_attempt_timing(
+                    request=request,
+                    job=job,
+                    status=status,
+                    context=context,
+                    error=projected_error,
+                    recorder=timing_recorder,
+                    provider_usage=provider_usage,
+                )
+                if receipt_payload is not None:
+                    await _project_failed_attempt_timing(
+                        session=session,
+                        context=context,
+                        receipt_payload=receipt_payload,
+                    )
                 error_type = (
                     RetryableWorkspaceOperationError
                     if retryable

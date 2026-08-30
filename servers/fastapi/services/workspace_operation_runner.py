@@ -1479,6 +1479,14 @@ async def _transition_claim_failure(
                 "max_attempts": operation.max_attempts,
             }
         )
+        failure_result = await _attach_durable_generation_timing(
+            claim,
+            operation.result if isinstance(operation.result, Mapping) else {},
+        )
+        safe_failure_result = sanitize_workspace_event_payload(
+            failure_result,
+            operation_kind=operation.kind,
+        )
         projection_values: dict[str, Any] = {
             "state": decision.state,
             "retry_count": decision.retry_count,
@@ -1493,6 +1501,11 @@ async def _transition_claim_failure(
                 now
                 if decision.state in {"failed", "dead_letter", "deadline_exceeded"}
                 else None
+            ),
+            **(
+                {"result": safe_failure_result}
+                if "generation_timing_receipt" in safe_failure_result
+                else {}
             ),
         }
         public_requeue = bool(

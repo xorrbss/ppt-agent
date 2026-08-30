@@ -64,6 +64,15 @@ def sanitize_generation_stage_timings(value: Any) -> dict[str, int]:
 def sanitize_generation_timing_receipt(value: Any) -> dict[str, object]:
     if not isinstance(value, Mapping):
         return {}
+    if value.get("schemaVersion") == "generation-attempt-timing-receipt/v1":
+        try:
+            from services.authored_generation_timing_receipt import (
+                _attempt_receipt_from_dict,
+            )
+
+            return _attempt_receipt_from_dict(value).to_dict()
+        except (TypeError, ValueError):
+            return {}
     stages = sanitize_generation_stage_timings(value.get("stagesMs"))
     total_ms = _generation_timing_ms(value.get("totalMs"))
     attempt_number = value.get("attemptNumber")
@@ -178,8 +187,8 @@ def sanitize_generation_timing_result(payload: Mapping[str, Any]) -> dict[str, o
     )
     if receipt:
         safe["generation_timing_receipt"] = receipt
-        if "total_ms" in payload:
-            safe["total_ms"] = receipt["totalMs"]
+        safe["stage_timings_ms"] = dict(receipt["stagesMs"])
+        safe["total_ms"] = receipt["totalMs"]
     return safe
 
 

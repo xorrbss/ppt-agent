@@ -319,6 +319,7 @@ class OperationStatusV2(PublicWireModel):
     updated_at: AwareDatetime
     absolute_deadline_at: AwareDatetime
     error: PublicOperationErrorV2 | None = None
+    generation_timing_receipt: dict[str, Any] | None = None
     quality_receipt: QualityReceiptV3 | None = None
     release_readiness: Literal["ready", "blocked", "not_assessed"] = "not_assessed"
     artifacts: list[PublicArtifactV2] = Field(default_factory=list)

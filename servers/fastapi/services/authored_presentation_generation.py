@@ -108,6 +108,10 @@ from services.authored_composition_policy import (
     resolve_composition_profile,
     semantic_repair_boundary_violations,
 )
+from services.authored_generation_preflight import (
+    AuthoredSlideArtifact,
+    preflight_authored_provider_repair,
+)
 from services.provider_usage_instrumentation import provider_usage_scope, record_local_stage
 from utils.authored_dom_quality import ensure_authored_qids, inspect_authored_dom
 from utils.authored_illustrations import validate_visible_source_images
@@ -1370,10 +1374,28 @@ async def _generate_authored_presentation(
     Returns the path to the produced file plus the editor path."""
     started = time.monotonic()
     stage_timings_ms = {stage: 0 for stage in _PERFORMANCE_STAGE_NAMES}
+    timing_recorder = getattr(
+        request, "_authored_generation_timing_recorder", None
+    )
+
+    def record_stage_timing(stage: str, value_ms: object) -> None:
+        value = max(0, round(float(value_ms)))
+        stage_timings_ms[stage] = value
+        if timing_recorder is not None:
+            timing_recorder.record_stage_ms(stage, value)
+
+    def observe_deck_checkpoint(signal: object) -> None:
+        if timing_recorder is not None and hasattr(signal, "to_dict"):
+            timing_recorder.record_checkpoint_signal(signal.to_dict())
+
     render_runtime_before = get_render_runtime_counters()
     worker_handle_count_before = _worker_handle_count_metric()
 
     async def mark_stage(stage: str) -> None:
+        object.__setattr__(request, "_authored_timing_stage", stage)
+        object.__setattr__(
+            request, "_authored_timing_stage_started_at", time.monotonic()
+        )
         if (
             generation_job is not None
             and isinstance(generation_job.attempt_token, str)
@@ -1463,6 +1485,7 @@ async def _generate_authored_presentation(
                 resolve=resolve_current_deck_plans,
                 encode=_encode_deck_plans,
                 decode=_decode_deck_plans,
+                observe=observe_deck_checkpoint,
             )
         )
     outline = deck_plans.outline
@@ -1491,6 +1514,7 @@ async def _generate_authored_presentation(
                 if isinstance(payload.get("chapterPlan"), dict)
                 else None
             ),
+            observe=observe_deck_checkpoint,
         )
     )
     if chapter_payload != chapter_plan:
@@ -1621,6 +1645,7 @@ async def _generate_authored_presentation(
                     if isinstance(payload.get("illustrationPlan"), dict)
                     else None
                 ),
+                observe=observe_deck_checkpoint,
             )
 
     illustration_plan_task = asyncio.create_task(
@@ -1655,6 +1680,7 @@ async def _generate_authored_presentation(
                 decode=lambda payload: AuthoredHeaderContract.model_validate(
                     payload.get("headerContract")
                 ),
+                observe=observe_deck_checkpoint,
             )
         )
     else:
@@ -1692,6 +1718,7 @@ async def _generate_authored_presentation(
                     decode=lambda payload: AuthoredHeaderContract.model_validate(
                         payload.get("headerContract")
                     ),
+                    observe=observe_deck_checkpoint,
                 )
             )
     illustration_plan, illustration_reused = await illustration_plan_task
@@ -1701,7 +1728,7 @@ async def _generate_authored_presentation(
         illustration_reused,
     )
     outline_elapsed = time.monotonic() - outline_stage_started
-    stage_timings_ms["outline"] = round(outline_elapsed * 1000)
+    record_stage_timing("outline", outline_elapsed * 1000)
     await _record_deck_stage_latency(
         generation_job, stage="outline", elapsed_seconds=outline_elapsed
     )
@@ -1765,12 +1792,12 @@ async def _generate_authored_presentation(
         style,
         **pipeline_kwargs,
     )
-    stage_timings_ms["author"] = round(max(0.0, pipeline.author_work) * 1000)
-    stage_timings_ms["illustration"] = round(
-        max(0.0, pipeline.illustration_work) * 1000
+    record_stage_timing("author", max(0.0, pipeline.author_work) * 1000)
+    record_stage_timing(
+        "illustration", max(0.0, pipeline.illustration_work) * 1000
     )
-    stage_timings_ms["render"] = round(max(0.0, pipeline.render_work) * 1000)
-    stage_timings_ms["quality"] = round(max(0.0, pipeline.quality_work) * 1000)
+    record_stage_timing("render", max(0.0, pipeline.render_work) * 1000)
+    record_stage_timing("quality", max(0.0, pipeline.quality_work) * 1000)
     for observed_stage, elapsed in (
         ("author", pipeline.author_work),
         ("illustration", pipeline.illustration_work),
@@ -1956,6 +1983,53 @@ async def _generate_authored_presentation(
             original_html, _png, metrics, capture_policy = frozen_gate_inputs[
                 absolute_index
             ]
+            if metrics is None:
+                # Provider repair cannot compensate for missing Chromium
+                # authority.  Recollect on a later operation attempt instead
+                # of spending a provider call against an unmeasured slide.
+                provider_recovery_allowed[local_index] = False
+                raise AuthoredStageError(
+                    slide_index=absolute_index,
+                    stage="render",
+                    code="authored_composition_safety_gate_failed",
+                    retryable=True,
+                    message="Chromium telemetry is unavailable before repair preflight",
+                )
+            preflight = preflight_authored_provider_repair(
+                slide_index=absolute_index,
+                artifact=AuthoredSlideArtifact(
+                    html=original_html,
+                    png=_png,
+                    browser_metrics=metrics,
+                ),
+                capacity=capacity_plan.at(absolute_index),
+                profile_id=composition_profile.profile_id,
+                reference_mode=reference_mode,
+            )
+            # The exact preflight decision is the provider-call authority. A
+            # deterministic or terminal slide may still use the local reducer
+            # below, but it cannot consume a provider recovery slot.
+            provider_recovery_allowed[local_index] = bool(
+                provider_recovery_allowed[local_index]
+                and preflight.provider_call_allowed
+            )
+            if (
+                preflight.terminal
+                and preflight.code != "authored_composition_safety_gate_failed"
+            ):
+                raise AuthoredStageError(
+                    slide_index=absolute_index,
+                    stage="render",
+                    code=(
+                        preflight.code
+                        or "authored_deterministic_preflight_failed"
+                    ),
+                    retryable=False,
+                    message=(
+                        "deterministic preflight blocked provider repair: "
+                        + ", ".join(preflight.violations)
+                    ),
+                )
             deterministic = _deterministic_repair_candidate(
                 html=original_html,
                 browser_metrics=metrics,
@@ -2292,13 +2366,16 @@ async def _generate_authored_presentation(
     # are confined to the initially failed indices and their one claimed budget.
 
     repair_elapsed = time.monotonic() - repair_started
-    stage_timings_ms["quality"] += round(max(0.0, vision_elapsed) * 1000)
+    record_stage_timing(
+        "quality",
+        stage_timings_ms["quality"] + max(0.0, vision_elapsed) * 1000,
+    )
     await _record_deck_stage_latency(
         generation_job,
         stage="quality",
         elapsed_seconds=max(0.0, pipeline.quality_work + vision_elapsed),
     )
-    stage_timings_ms["repair"] = round(repair_elapsed * 1000)
+    record_stage_timing("repair", repair_elapsed * 1000)
     await _record_deck_stage_latency(
         generation_job, stage="repair", elapsed_seconds=repair_elapsed
     )
@@ -2375,7 +2452,9 @@ async def _generate_authored_presentation(
                 slide_index=int(first.get("slide_index", 0)),
                 stage="render",
                 code="authored_composition_safety_gate_failed",
-                retryable=not repeated_signature,
+                # This is the exact post-repair HTML/metrics tuple. Replaying
+                # every completed slide cannot change a deterministic residual.
+                retryable=False,
                 message=(
                     "One or more slides still fail the composition safety gate "
                     "after bounded repair"
@@ -2462,7 +2541,7 @@ async def _generate_authored_presentation(
             "residuals": residual_gate_failures,
         }
         checkpoint_elapsed = time.monotonic() - checkpoint_started
-        stage_timings_ms["checkpoint"] = round(checkpoint_elapsed * 1000)
+        record_stage_timing("checkpoint", checkpoint_elapsed * 1000)
         await _record_deck_stage_latency(
             generation_job,
             stage="checkpoint",
@@ -2589,7 +2668,9 @@ async def _generate_authored_presentation(
                 slide_index=0,
                 stage="render",
                 code="authored_quality_receipt_gate_failed",
-                retryable=True,
+                # QualityReceipt v2 evaluates the sealed final evidence after
+                # the one bounded slide repair. A whole-deck retry is wasteful.
+                retryable=False,
                 message="QualityReceipt v2 unified gate blocked publication",
             )
 
@@ -2632,7 +2713,7 @@ async def _generate_authored_presentation(
             )
         raise error from exc
     export_elapsed = time.monotonic() - export_started
-    stage_timings_ms["export"] = round(export_elapsed * 1000)
+    record_stage_timing("export", export_elapsed * 1000)
     await _record_deck_stage_latency(
         generation_job, stage="export", elapsed_seconds=export_elapsed
     )
@@ -2699,7 +2780,7 @@ async def _generate_authored_presentation(
         quality_gate_receipt=quality_gate_receipt,
     )
     publication_elapsed = time.monotonic() - publication_started
-    stage_timings_ms["publication"] = round(publication_elapsed * 1000)
+    record_stage_timing("publication", publication_elapsed * 1000)
     await _record_deck_stage_latency(
         generation_job,
         stage="publication",

@@ -1078,7 +1078,19 @@ class SqlPublicV2Orchestrator:
             else None
         )
         quality: QualityReceiptV3 | None = None
+        generation_timing_receipt: dict[str, object] | None = None
         if isinstance(operation.result, Mapping):
+            if operation.kind == _GENERATION_KIND:
+                from services.workspace_generation_timing_payload import (
+                    sanitize_generation_timing_receipt,
+                )
+
+                generation_timing_receipt = (
+                    sanitize_generation_timing_receipt(
+                        operation.result.get("generation_timing_receipt")
+                    )
+                    or None
+                )
             raw_quality = operation.result.get("quality_receipt") or operation.result.get(
                 "qualityReceipt"
             )
@@ -1109,6 +1121,7 @@ class SqlPublicV2Orchestrator:
             updated_at=_aware(operation.updated_at),
             absolute_deadline_at=_aware(admission.deadline_at),
             error=error,
+            generation_timing_receipt=generation_timing_receipt,
             quality_receipt=quality,
             release_readiness=readiness,
             artifacts=artifacts,
