@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "key": "public-release.evidence-gating",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Only same-RC actual product-path evidence can be release-ready; fixture/plan evidence fails and deployment approval remains separate.",
+  "scope": [
+    "public-release",
+    "evidence",
+    "deployment"
+  ],
+  "invariants": [
+    "release-quality E2E passes only when derived releaseReadiness is ready",
+    "deploymentAuthorized remains false without separate approval"
+  ],
+  "forbidden": [
+    "Treating fixture, plan, or synthetic evidence as release success"
+  ],
+  "evidence": [
+    "scripts/public-service-release-gate.mjs",
+    "scripts/public-service-release-evidence-bundle.mjs",
+    "scripts/public-service-release-matrix.mjs"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-30T13:45:59.7748688+00:00"
+}

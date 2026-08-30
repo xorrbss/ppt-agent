@@ -96,7 +96,8 @@
     "artifact.public-content-authority": "decisions/artifact.public-content-authority.1.json",
     "service.public-admission-budget-boundary": "decisions/service.public-admission-budget-boundary.1.json",
     "public-generation-export.execution-orchestration": "decisions/public-generation-export.execution-orchestration.1.json",
-    "public-export.runtime.no-docker": "decisions/public-export.runtime.no-docker.1.json"
+    "public-export.runtime.no-docker": "decisions/public-export.runtime.no-docker.1.json",
+    "public-release.evidence-gating": "decisions/public-release.evidence-gating.1.json"
   },
   "readFirst": [
     "AGENTS.md",
@@ -105,5 +106,5 @@
     "docs/public-generation-export-phase6-quality-contract-session-e-20260830.md",
     "docs/public-generation-export-phase8-phase9-readiness-manifest-20260830.md"
   ],
-  "updatedAt": "2026-08-30T09:45:13.4892181+00:00"
+  "updatedAt": "2026-08-30T13:45:59.8194716+00:00"
 }

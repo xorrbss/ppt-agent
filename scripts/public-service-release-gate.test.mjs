@@ -173,14 +173,16 @@ function passingEvidence() {
   };
 }
 
-test("public service release gate passes only complete same-RC product-path evidence", () => {
+test("base evidence cannot promote without immutable functional and release-quality E2E bundles", () => {
   const passed = evaluateReleaseEvidence(passingEvidence());
-  assert.equal(passed.status, "PASS");
+  assert.equal(passed.status, "FAIL");
   assert.equal(passed.compositeScore, 87);
-  assert.equal(passed.promotionReady, true);
+  assert.equal(passed.releaseReadiness, "blocked");
+  assert.equal(passed.promotionReady, false);
   assert.equal(passed.deploymentAuthorized, false);
   assert.deepEqual(Object.fromEntries(Object.entries(passed.gates).map(([name, item]) => [name, item.status])), {
-    evidenceIntegrity: "PASS", architecture: "PASS", businessReliability: "PASS",
+    evidenceIntegrity: "PASS", trustedCollector: "FAIL", functionalE2E: "FAIL", releaseQualityE2E: "FAIL",
+    architecture: "PASS", businessReliability: "PASS",
     performance: "PASS", security: "PASS", observability: "PASS",
   });
 

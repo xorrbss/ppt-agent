@@ -5,6 +5,11 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { validateImmutableBundle } from "./public-service-release-evidence-bundle.mjs";
+import { validateReleaseMatrixEvidence } from "./public-service-release-matrix.mjs";
+import { validateRenderRangeEvidence } from "./public-service-render-range-evidence.mjs";
+import { validateTrustedCollectorAttestations } from "./public-service-trusted-collector.mjs";
+
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SOURCE_MANIFEST_SCHEMA = "public-service-source-manifest/v1";
 
@@ -465,11 +470,137 @@ function observabilityChecks(controlled, reliability) {
   return checks;
 }
 
-export function evaluateReleaseEvidence(reports = {}) {
+function externalValidationChecks(prefix, report, validator) {
+  let evaluated;
+  try {
+    evaluated = validator(report);
+  } catch (error) {
+    return {
+      evaluated: { pass: false, checks: [] },
+      checks: [customCheck(`${prefix}.validator`, false, "validator completes without an exception", null,
+        `validator_error:${error?.message || "unknown"}`)],
+    };
+  }
+  const childChecks = Array.isArray(evaluated?.checks) ? evaluated.checks : [];
+  return {
+    evaluated,
+    checks: [
+      customCheck(`${prefix}.validator`, evaluated?.pass === true,
+        "fail-closed immutable evidence validator PASS", evaluated?.pass ?? null),
+      ...childChecks.map((item) => customCheck(`${prefix}.${item?.id || "unnamed"}`, item?.pass === true,
+        item?.expected ?? true, item?.actual ?? null, item?.reason || "child_evidence_check_failed")),
+    ],
+  };
+}
+
+function immutableBundleChecks(bundleValidation, bundle, sourceManifest) {
+  const manifestFiles = Array.isArray(sourceManifest?.files)
+    ? new Map(sourceManifest.files.map((item) => [item?.path, item?.sha256])) : new Map();
+  return [
+    ...bundleValidation.checks,
+    check("functionalE2E.releaseCandidateBinding", bundle, "releaseCandidate.releaseCandidateDigest",
+      (value) => value === sourceManifest?.exactByteSha256,
+      "equals exact source manifest byte SHA-256"),
+    check("functionalE2E.runnerPath", bundle, "provenance.runnerPath",
+      (value) => value === "scripts/public-service-release-evidence-bundle.mjs",
+      "scripts/public-service-release-evidence-bundle.mjs"),
+    customCheck("functionalE2E.runnerManifestBinding",
+      manifestFiles.get(bundle?.provenance?.runnerPath) === bundle?.provenance?.runnerSha256,
+      "bundle runner exact-byte SHA-256 equals source manifest entry", bundle?.provenance?.runnerSha256),
+    check("functionalE2E.runnerSourceManifestBinding", bundle, "provenance.sourceManifestDigest",
+      (value) => value === sourceManifest?.exactByteSha256,
+      "equals exact source manifest byte SHA-256"),
+  ];
+}
+
+function releaseQualityChecks({ functional, bundle, render, matrix, sourceManifest }) {
+  const manifestFiles = Array.isArray(sourceManifest?.files)
+    ? new Map(sourceManifest.files.map((item) => [item?.path, item?.sha256])) : new Map();
+  const renderValidation = externalValidationChecks("releaseQualityE2E.renderRange", render, validateRenderRangeEvidence);
+  const matrixValidation = externalValidationChecks("releaseQualityE2E.matrix", matrix, validateReleaseMatrixEvidence);
+  const bundleDigest = bundle?.integrity?.bundleDigest ?? bundle?.bundleDigest ?? null;
+  const renderBound = renderValidation.evaluated?.immutableEvidenceBundleBinding?.available === true
+    && renderValidation.evaluated?.immutableEvidenceBundleBinding?.valid === true
+    && renderValidation.evaluated?.immutableEvidenceBundleDigest === bundleDigest;
+  return {
+    renderValidation,
+    matrixValidation,
+    checks: [
+      customCheck("releaseQualityE2E.functionalE2E", functional.status === "PASS",
+        "functional product-path E2E PASS", functional.status),
+      ...renderValidation.checks,
+      ...matrixValidation.checks,
+      customCheck("releaseQualityE2E.renderBundleBinding", renderBound,
+        "PowerPoint/LibreOffice/Range evidence points at the functional immutable bundle", {
+          expected: bundleDigest,
+          actual: renderValidation.evaluated?.immutableEvidenceBundleDigest ?? null,
+        }, "immutable_bundle_binding_mismatch"),
+      customCheck("releaseQualityE2E.renderSameRc",
+        renderValidation.evaluated?.releaseCandidate === bundle?.releaseCandidate?.releaseCandidateDigest
+          && renderValidation.evaluated?.sourceTreeCommit === bundle?.releaseCandidate?.sourceCommit,
+        "renderer evidence uses the functional bundle source commit and RC", {
+          expected: bundle?.releaseCandidate ?? null,
+          actual: { releaseCandidate: renderValidation.evaluated?.releaseCandidate ?? null,
+            sourceTreeCommit: renderValidation.evaluated?.sourceTreeCommit ?? null },
+        }, "renderer_release_candidate_mismatch"),
+      customCheck("releaseQualityE2E.matrixSameRc",
+        matrix?.releaseCandidate === bundle?.releaseCandidate?.releaseCandidateDigest
+          && matrix?.sourceTreeCommit === bundle?.releaseCandidate?.sourceCommit,
+        "matrix evidence uses the functional bundle source commit and RC", {
+          expected: bundle?.releaseCandidate ?? null,
+          actual: { releaseCandidate: matrix?.releaseCandidate ?? null, sourceTreeCommit: matrix?.sourceTreeCommit ?? null },
+        }, "matrix_release_candidate_mismatch"),
+      customCheck("releaseQualityE2E.renderRunnerManifestBinding",
+        manifestFiles.get(render?.provenance?.runnerPath) === render?.provenance?.runnerSha256,
+        "renderer runner exact-byte SHA-256 equals source manifest entry", render?.provenance?.runnerSha256),
+      customCheck("releaseQualityE2E.matrixRunnerManifestBinding",
+        manifestFiles.get(matrix?.provenance?.runnerPath) === matrix?.provenance?.runnerSha256,
+        "matrix runner exact-byte SHA-256 equals source manifest entry", matrix?.provenance?.runnerSha256),
+      customCheck("releaseQualityE2E.releaseReadiness",
+        matrixValidation.evaluated?.releaseReadiness === "ready",
+        "ready (only a derived ready matrix can pass release-quality E2E)",
+        matrixValidation.evaluated?.releaseReadiness ?? null, "release_readiness_not_ready"),
+      customCheck("releaseQualityE2E.deploymentBoundary",
+        bundle?.run?.deploymentAuthorized === false && renderValidation.evaluated?.deploymentAuthorized === false
+          && matrixValidation.evaluated?.deploymentAuthorized === false,
+        "all evidence preserves deploymentAuthorized=false", {
+          bundle: bundle?.run?.deploymentAuthorized ?? null,
+          render: renderValidation.evaluated?.deploymentAuthorized ?? null,
+          matrix: matrixValidation.evaluated?.deploymentAuthorized ?? null,
+        }, "deployment_authority_must_be_separate"),
+    ],
+  };
+}
+
+const TRUSTED_COLLECTOR_REPORTS = Object.freeze([
+  "sourceManifest",
+  ...Object.keys(EVIDENCE),
+  "immutableBundle",
+  "renderRange",
+  "releaseMatrix",
+]);
+
+export function evaluateReleaseEvidence(reports = {}, { trustedCollectorPublicKeyPem = null } = {}) {
   const sourceManifest = reports.sourceManifest;
   const evidenceIntegrity = gate(sourceChecks(reports, sourceManifest));
+  const collectorValidation = validateTrustedCollectorAttestations({
+    reports,
+    attestations: reports.collectorAttestations,
+    publicKeyPem: trustedCollectorPublicKeyPem,
+    requiredReportNames: TRUSTED_COLLECTOR_REPORTS,
+  });
+  const trustedCollector = gate(collectorValidation.checks);
+  const functionalValidation = externalValidationChecks("functionalE2E.bundle", reports.immutableBundle,
+    validateImmutableBundle);
+  const functionalE2E = gate(immutableBundleChecks(functionalValidation, reports.immutableBundle, sourceManifest));
+  const qualityValidation = releaseQualityChecks({ functional: functionalE2E, bundle: reports.immutableBundle,
+    render: reports.renderRange, matrix: reports.releaseMatrix, sourceManifest });
+  const releaseQualityE2E = gate(qualityValidation.checks);
   const gates = {
     evidenceIntegrity,
+    trustedCollector,
+    functionalE2E,
+    releaseQualityE2E,
     architecture: gate(architectureChecks(reports.controlledLoad), SCORE_TARGETS.architecture),
     businessReliability: gate(reliabilityChecks(reports.reliability, reports.crashRecovery,
       reports.powerpointReadback), SCORE_TARGETS.businessReliability),
@@ -481,16 +612,18 @@ export function evaluateReleaseEvidence(reports = {}) {
   const compositeScore = Math.floor(scoredGates.reduce((sum, item) => sum + item.awardedScore, 0)
     / scoredGates.length);
   const allGatesPass = Object.values(gates).every((item) => item.status === "PASS");
-  const promotionReady = allGatesPass && compositeScore >= 85;
+  const releaseReadiness = allGatesPass && compositeScore >= 85 ? "ready" : "blocked";
+  const promotionReady = releaseReadiness === "ready";
   const releaseCandidate = evidenceIntegrity.status === "PASS"
     ? reports.controlledLoad.releaseCandidate : null;
 
   return {
-    schemaVersion: "public-service-release-gate-result/v1",
+    schemaVersion: "public-service-release-gate-result/v2",
     status: promotionReady ? "PASS" : "FAIL",
     releaseCandidate,
     compositeScore,
     requiredCompositeScore: 85,
+    releaseReadiness,
     promotionReady,
     deploymentAuthorized: false,
     deploymentAuthorizationReason: "separate_operator_authorization_required",
@@ -501,7 +634,13 @@ export function evaluateReleaseEvidence(reports = {}) {
       sourceTreeCommit: sourceManifest?.sourceTreeCommit ?? null,
       currentDigestsVerified: sourceManifest?._verified?.currentDigestsMatch === true,
     },
-    evidenceSources: Object.fromEntries(Object.keys(EVIDENCE).map((name) => [name, {
+    trustedCollector: {
+      keyId: collectorValidation.keyId,
+      schemaVersion: reports.collectorAttestations?.schemaVersion ?? null,
+      attestationsSourceDigest: reports.collectorAttestations?.sourceDigest ?? null,
+    },
+    evidenceSources: Object.fromEntries([...Object.keys(EVIDENCE), "immutableBundle", "renderRange",
+      "releaseMatrix"].map((name) => [name, {
       schemaVersion: reports?.[name]?.schemaVersion ?? null,
       evidenceClass: reports?.[name]?.evidenceClass ?? null,
       releaseCandidate: reports?.[name]?.releaseCandidate ?? null,
@@ -516,6 +655,18 @@ function parseArgs(argv) {
     const option = argv[index];
     if (option === "--source-manifest") {
       paths.sourceManifest = argv[index + 1];
+      index += 1;
+      continue;
+    }
+    const additional = {
+      "--immutable-bundle": "immutableBundle",
+      "--render-range": "renderRange",
+      "--release-matrix": "releaseMatrix",
+      "--collector-attestations": "collectorAttestations",
+      "--trusted-collector-public-key": "trustedCollectorPublicKey",
+    }[option];
+    if (additional) {
+      paths[additional] = argv[index + 1];
       index += 1;
       continue;
     }
@@ -620,8 +771,14 @@ async function main(argv = process.argv.slice(2)) {
     name,
     await loadEvidence(inputPaths[name]),
   ])));
+  reports.immutableBundle = await loadEvidence(inputPaths.immutableBundle);
+  reports.renderRange = await loadEvidence(inputPaths.renderRange);
+  reports.releaseMatrix = await loadEvidence(inputPaths.releaseMatrix);
+  reports.collectorAttestations = await loadEvidence(inputPaths.collectorAttestations);
   reports.sourceManifest = sourceManifest;
-  const result = evaluateReleaseEvidence(reports);
+  const trustedCollectorPublicKeyPem = inputPaths.trustedCollectorPublicKey
+    ? await readFile(path.resolve(inputPaths.trustedCollectorPublicKey), "utf8") : null;
+  const result = evaluateReleaseEvidence(reports, { trustedCollectorPublicKeyPem });
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   if (!result.promotionReady) process.exitCode = 2;
 }
