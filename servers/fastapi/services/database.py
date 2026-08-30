@@ -70,7 +70,12 @@ from models.sql.public_admission import (
     PublicProviderLogicalCall,
     PublicQuotaCounter,
 )
-from models.sql.public_artifact import PublicArtifact, PublicExportIdentity
+from models.sql.public_artifact import (
+    PublicArtifact,
+    PublicArtifactPublication,
+    PublicExportIdentity,
+    PublicSlideCheckpoint,
+)
 from models.sql.authored_vnext_repository import AUTHORED_VNEXT_SQL_TABLES
 from templates.v2.catalog import get_template_v2_default_template_id
 from services.presentation_profile_persistence import stamp_presentation_profile

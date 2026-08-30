@@ -1697,4 +1697,824 @@ build_quality_receipt_v2 = create_quality_receipt_v2
 evaluate_capacity = evaluate_capacity_browser_metrics
 evaluate_unified_quality_gate = evaluate_unified_gate
 
-__all__ = ["QualityReceipt", "QualityReceiptLedger", "QualityReceiptV2", "ReleaseQualityPolicy", "UnifiedGateEvaluation", "build_quality_receipt_v2", "create_quality_receipt_v2", "evaluate_capacity", "evaluate_capacity_browser_metrics", "evaluate_unified_gate", "evaluate_unified_quality_gate", "public_attempt_id", "quality_receipt_manifest_path", "quality_receipt_root", "release_profile_requirements", "release_quality_policy", "release_quality_policy_digest", "validate_current_quality_receipt_payload"]
+
+# V3 is deliberately additive.  Generation continues to seal its pre-export
+# V2 receipt while Phase 6 callers can opt into the stronger, append-only
+# evidence contract without silently changing a legacy publication outcome.
+_QUALITY_TIERS = ("T0", "T1", "T2", "T3")
+_CAPABILITY_CONSUMERS = (
+    "prompt",
+    "validator",
+    "font",
+    "chromium",
+    "scene",
+    "ooxml",
+    "readback",
+)
+_CAPABILITY_CONSUMER_STATUSES = ("passed", "unavailable", "not_required")
+
+
+def _required_prefixed_sha256(value: object, field_name: str) -> str:
+    normalized = _optional_prefixed_sha256(value, field_name)
+    if normalized is None:
+        raise ValueError(f"quality_receipt_{field_name}_missing")
+    return normalized
+
+
+def _canonical_evidence_digest(evidence: Mapping[str, object]) -> str:
+    """Hash a complete evidence snapshot before it reaches a V3 receipt."""
+
+    try:
+        serialized = json.dumps(
+            evidence,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
+    except (TypeError, ValueError) as error:
+        raise ValueError("quality_receipt_v3_evidence_not_canonical") from error
+    return "sha256:" + hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def quality_receipt_t1_triggers(evidence: object) -> tuple[str, ...]:
+    """Return deterministic visual-review triggers from a quality snapshot.
+
+    Trigger names are part of the receipt contract: a caller cannot downgrade
+    a risk-bearing slide to T0 merely by omitting an optional VQA flag.
+    """
+
+    payload = _mapping(evidence) or {}
+    triggers: list[str] = []
+    slides = payload.get("slides", ())
+    if not isinstance(slides, Sequence) or isinstance(slides, (str, bytes)):
+        slides = ()
+    for index, slide in enumerate(slides):
+        item = _mapping(slide) or {}
+        role = str(item.get("role", item.get("semanticRole", ""))).strip().lower()
+        if role in {"cover", "closing", "last", "last_slide"}:
+            _append(triggers, f"slide:{index}:boundary")
+        if item.get("denseData") is True or item.get("hasTable") is True or item.get("hasChart") is True:
+            _append(triggers, f"slide:{index}:dense_data")
+        capacity = item.get("layoutCapacity", item.get("layout_capacity"))
+        if isinstance(capacity, (int, float)) and not isinstance(capacity, bool) and float(capacity) >= 0.80:
+            _append(triggers, f"slide:{index}:capacity_80pct")
+        if item.get("repairApplied") is True or item.get("repair_applied") is True:
+            _append(triggers, f"slide:{index}:repair")
+        if item.get("cjkFontWarning") is True or item.get("cjk_font_warning") is True:
+            _append(triggers, f"slide:{index}:cjk_font")
+        if item.get("nearOverlap") is True or item.get("nearOverflow") is True:
+            _append(triggers, f"slide:{index}:near_geometry_threshold")
+        if item.get("largeRasterIsland") is True or item.get("hybridBoundary") is True:
+            _append(triggers, f"slide:{index}:hybrid_or_raster_boundary")
+    provider = _mapping(payload.get("providerCalls")) or {}
+    provider_slides = provider.get("slides")
+    if isinstance(provider_slides, Sequence) and not isinstance(provider_slides, (str, bytes)):
+        for item in provider_slides:
+            call = _mapping(item) or {}
+            recovery = call.get("recovery", 0)
+            slide_index = call.get("slideIndex")
+            if isinstance(recovery, int) and not isinstance(recovery, bool) and recovery > 0:
+                _append(triggers, f"provider:slide:{slide_index}:recovery")
+    else:
+        recovery = provider.get("recovery", 0)
+        if isinstance(recovery, int) and not isinstance(recovery, bool) and recovery > 0:
+            _append(triggers, "provider:recovery")
+    return tuple(triggers)
+
+
+def _v3_capability_binding(
+    evidence: Mapping[str, object],
+) -> tuple[str, tuple[tuple[str, str], ...], tuple[str, ...]]:
+    """Validate and project the registry binding carried by every consumer.
+
+    A bare digest remains accepted as the additive Phase 6 wire form and means
+    ``passed``.  Status-bearing entries make an unavailable adapter distinct
+    from an adapter that is explicitly outside the selected product path.
+    """
+
+    blockers: list[str] = []
+    registry = _mapping(evidence.get("capabilityRegistry"))
+    digest = ""
+    statuses: list[tuple[str, str]] = []
+    if registry is None:
+        _append(blockers, "capabilityRegistry.evidence_missing")
+    else:
+        try:
+            digest = _required_prefixed_sha256(registry.get("digest"), "capability_registry_digest")
+        except ValueError:
+            _append(blockers, "capabilityRegistry.digest_invalid")
+            digest = ""
+        consumers = _mapping(registry.get("consumers"))
+        if consumers is None:
+            _append(blockers, "capabilityRegistry.consumers_missing")
+        else:
+            for consumer in _CAPABILITY_CONSUMERS:
+                value = consumers.get(consumer)
+                item = _mapping(value)
+                if item is None:
+                    if isinstance(value, str):
+                        status = "passed"
+                        consumer_digest = value
+                        required = True
+                        reason_code = None
+                    else:
+                        status = "unavailable"
+                        consumer_digest = None
+                        required = True
+                        reason_code = None
+                        _append(blockers, f"capabilityRegistry.consumer_missing:{consumer}")
+                else:
+                    status = _status(item.get("status"))
+                    consumer_digest = item.get("digest", item.get("registryDigest"))
+                    required = item.get("required", True)
+                    reason_code = item.get("reasonCode")
+                    if not isinstance(required, bool):
+                        _append(blockers, f"capabilityRegistry.consumer_required_invalid:{consumer}")
+                        required = True
+                if status not in _CAPABILITY_CONSUMER_STATUSES:
+                    _append(blockers, f"capabilityRegistry.consumer_status_invalid:{consumer}")
+                    status = "unavailable"
+                if status == "passed":
+                    try:
+                        normalized = _required_prefixed_sha256(
+                            consumer_digest,
+                            f"capability_registry_consumer_{consumer}_digest",
+                        )
+                    except ValueError:
+                        normalized = ""
+                    if not digest or normalized != digest:
+                        _append(blockers, f"capabilityRegistry.consumer_mismatch:{consumer}")
+                elif status == "unavailable":
+                    if not isinstance(reason_code, str) or not reason_code.strip():
+                        _append(blockers, f"capabilityRegistry.consumer_unavailable_reason_missing:{consumer}")
+                    if required:
+                        _append(blockers, f"capabilityRegistry.consumer_unavailable:{consumer}")
+                elif required:
+                    _append(blockers, f"capabilityRegistry.consumer_not_required_invalid:{consumer}")
+                statuses.append((consumer, status))
+    if registry is None or _mapping(registry.get("consumers")) is None:
+        statuses = [(consumer, "unavailable") for consumer in _CAPABILITY_CONSUMERS]
+    return digest, tuple(statuses), tuple(blockers)
+
+
+def _v3_version_transition(
+    evidence: Mapping[str, object],
+) -> tuple[str | None, str | None, tuple[str, ...]]:
+    transition = _mapping(evidence.get("versionTransition"))
+    if transition is None:
+        return None, None, ()
+    blockers: list[str] = []
+    schema_version = transition.get("fromSchemaVersion")
+    if schema_version != "quality-receipt/v2":
+        _append(blockers, "versionTransition.source_schema_invalid")
+    try:
+        receipt_digest = _required_prefixed_sha256(
+            transition.get("fromReceiptDigest"),
+            "version_transition_receipt_digest",
+        )
+    except ValueError:
+        receipt_digest = None
+        _append(blockers, "versionTransition.receipt_digest_invalid")
+    # V3 extends a sealed V2 decision; it must never turn a failed V2 gate
+    # into a passed V3 result merely because a later evidence projection looks
+    # well formed.  Older, transition-less V3 records remain additive, but an
+    # explicit V2 transition has to carry this bit.
+    source_gate_passed = transition.get("fromGatePassed")
+    if not isinstance(source_gate_passed, bool):
+        _append(blockers, "versionTransition.source_gate_missing")
+    elif not source_gate_passed:
+        _append(blockers, "versionTransition.source_gate_failed")
+    return str(schema_version) if isinstance(schema_version, str) else None, receipt_digest, tuple(blockers)
+
+
+def _v3_provider_call_blockers(evidence: Mapping[str, object]) -> tuple[str, ...]:
+    blockers: list[str] = []
+    provider = _mapping(evidence.get("providerCalls"))
+    if provider is None:
+        return ("providerCalls.evidence_missing",)
+    calls = provider.get("slides")
+    if calls is None:
+        # Scalar counts are retained only for an explicit V2 transition.  New
+        # V3 generation must account for each slide independently.
+        schema_version, receipt_digest, transition_blockers = _v3_version_transition(evidence)
+        if transition_blockers or schema_version != "quality-receipt/v2" or receipt_digest is None:
+            return ("providerCalls.slides_missing",)
+        calls = (provider,)
+        expected_indices = {0}
+    else:
+        if not isinstance(calls, Sequence) or isinstance(calls, (str, bytes)):
+            return ("providerCalls.slides_invalid",)
+        evidence_slides = evidence.get("slides")
+        if not isinstance(evidence_slides, Sequence) or isinstance(evidence_slides, (str, bytes)):
+            return ("providerCalls.slide_inventory_missing",)
+        expected_indices = set(range(len(evidence_slides)))
+    observed_indices: set[int] = set()
+    for position, raw_call in enumerate(calls):
+        call = _mapping(raw_call)
+        if call is None:
+            _append(blockers, f"providerCalls.slide_invalid:{position}")
+            continue
+        slide_index = call.get("slideIndex", 0 if calls is provider else position)
+        if not isinstance(slide_index, int) or isinstance(slide_index, bool) or slide_index not in expected_indices:
+            _append(blockers, f"providerCalls.slide_index_out_of_range:{position}")
+            continue
+        if slide_index in observed_indices:
+            _append(blockers, f"providerCalls.slide_duplicate:{slide_index}")
+            continue
+        observed_indices.add(slide_index)
+        initial, recovery, declared_total = call.get("initial"), call.get("recovery"), call.get("total")
+        if (
+            not isinstance(initial, int)
+            or isinstance(initial, bool)
+            or initial != 1
+            or not isinstance(recovery, int)
+            or isinstance(recovery, bool)
+            or recovery not in (0, 1)
+        ):
+            _append(blockers, f"providerCalls.slide_budget_invalid:{slide_index}")
+        if (
+            not isinstance(initial, int)
+            or isinstance(initial, bool)
+            or not isinstance(recovery, int)
+            or isinstance(recovery, bool)
+            or declared_total != initial + recovery
+        ):
+            _append(blockers, f"providerCalls.slide_total_mismatch:{slide_index}")
+    for missing in sorted(expected_indices - observed_indices):
+        _append(blockers, f"providerCalls.slide_missing:{missing}")
+    return tuple(blockers)
+
+
+def _v3_source_inventory_blockers(source: Mapping[str, object]) -> tuple[str, ...]:
+    blockers: list[str] = []
+    text_occurrences = source.get("textOccurrences")
+    image_occurrences = source.get("imageOccurrences")
+    occurrence_groups = (
+        ("text", text_occurrences, source.get("textOccurrenceCount")),
+        ("image", image_occurrences, source.get("imageOccurrenceCount")),
+    )
+    for label, occurrences, declared_count in occurrence_groups:
+        if not isinstance(occurrences, Sequence) or isinstance(occurrences, (str, bytes)):
+            _append(blockers, f"sourceContent.{label}_occurrences_invalid")
+            continue
+        for index, occurrence in enumerate(occurrences):
+            item = _mapping(occurrence)
+            if (
+                item is None
+                or not isinstance(item.get("sourceBlockId"), str)
+                or not item.get("sourceBlockId")
+                or not isinstance(item.get("contentDigest"), str)
+                or not item.get("contentDigest")
+            ):
+                _append(blockers, f"sourceContent.{label}_occurrence_invalid:{index}")
+        if not isinstance(declared_count, int) or isinstance(declared_count, bool) or declared_count != len(occurrences):
+            _append(blockers, f"sourceContent.{label}_occurrence_count_mismatch")
+    excluded_counts = _mapping(source.get("excludedSourceObjectCounts"))
+    if excluded_counts is None or any(
+        not isinstance(value, int) or isinstance(value, bool) or value < 0
+        for value in excluded_counts.values()
+    ):
+        _append(blockers, "sourceContent.excluded_counts_invalid")
+    if blockers:
+        return tuple(blockers)
+    from services.authored_vnext.master.digests import canonical_digest
+
+    inventory_payload = {
+        "schemaVersion": "source-content-text-image-inventory/v1",
+        "sourceMode": source.get("sourceMode"),
+        "sourceCompleteClaim": source.get("sourceCompleteClaim"),
+        "preserved": source.get("preserved"),
+        "excluded": source.get("excluded"),
+        "excludedSourceObjectCounts": dict(excluded_counts or {}),
+        "textOccurrences": list(text_occurrences or ()),
+        "imageOccurrences": list(image_occurrences or ()),
+    }
+    if source.get("occurrenceInventoryDigest") != canonical_digest(inventory_payload):
+        _append(blockers, "sourceContent.occurrence_inventory_digest_mismatch")
+    return tuple(blockers)
+
+
+def _v3_blockers(evidence: Mapping[str, object], *, quality_tier: str) -> tuple[str, ...]:
+    blockers: list[str] = []
+    _, _, capability_blockers = _v3_capability_binding(evidence)
+    for blocker in capability_blockers:
+        _append(blockers, blocker)
+    _, _, transition_blockers = _v3_version_transition(evidence)
+    for blocker in transition_blockers:
+        _append(blockers, blocker)
+
+    # A V3 receipt can be an in-memory unit-test record, but a normal/public
+    # product run cannot present a worker-local JSON file as cluster authority.
+    # The generation adapter emits this evidence from its injected persistence
+    # port; absent or failed authority remains a release blocker.
+    persistence = _mapping(evidence.get("persistence"))
+    if persistence is not None:
+        status = _status(persistence.get("status"))
+        required = persistence.get("required")
+        if not isinstance(required, bool):
+            _append(blockers, "persistence.required_invalid")
+        elif required and status != "passed":
+            _append(blockers, "persistence.durable_authority_required")
+        elif not required and status != "not_required":
+            _append(blockers, "persistence.status_invalid")
+        if status == "unavailable" and not isinstance(persistence.get("reasonCode"), str):
+            _append(blockers, "persistence.unavailable_reason_missing")
+
+    deterministic = _mapping(evidence.get("deterministic"))
+    if deterministic is None:
+        _append(blockers, "deterministic.evidence_missing")
+    else:
+        for domain in ("geometry", "font", "content"):
+            check = _mapping(deterministic.get(domain))
+            if check is None:
+                _append(blockers, f"deterministic.{domain}.missing")
+                continue
+            status = _status(check.get("status"))
+            if status == "passed" and check.get("observed") is True:
+                try:
+                    _required_prefixed_sha256(
+                        check.get("evidenceDigest"),
+                        f"deterministic_{domain}_digest",
+                    )
+                except ValueError:
+                    _append(blockers, f"deterministic.{domain}.digest_invalid")
+                continue
+            # Do not require a fabricated digest for an absent checker. The
+            # non-passed state itself is the fail-closed result and must carry
+            # a reason rather than masquerading as measured evidence.
+            if (
+                status not in {"failed", "unavailable", "not_assessed"}
+                or check.get("observed") is not False
+                or not isinstance(check.get("reasonCode"), str)
+                or not check["reasonCode"].strip()
+            ):
+                _append(blockers, f"deterministic.{domain}.evidence_invalid")
+            _append(blockers, f"deterministic.{domain}.failed")
+
+    for blocker in _v3_provider_call_blockers(evidence):
+        _append(blockers, blocker)
+
+    source = _mapping(evidence.get("sourceContent"))
+    if source is None:
+        _append(blockers, "sourceContent.evidence_missing")
+    elif source.get("status") == "not_required" and source.get("required") is False:
+        pass
+    elif source.get("sourceMode", source.get("mode")) != "text-image":
+        _append(blockers, "sourceContent.mode_invalid")
+    else:
+        if source.get("sourceCompleteClaim") is not False:
+            _append(blockers, "sourceContent.complete_claim_forbidden")
+        preserved = source.get("preserved", ())
+        excluded = source.get("excluded", ())
+        if (
+            not isinstance(preserved, (list, tuple, set))
+            or not all(isinstance(value, str) for value in preserved)
+            or set(preserved) != {"text", "image-occurrences"}
+        ):
+            _append(blockers, "sourceContent.preserved_contract_invalid")
+        if (
+            not isinstance(excluded, (list, tuple, set))
+            or not all(isinstance(value, str) for value in excluded)
+            or set(excluded) != {"tables", "charts", "original-layout"}
+        ):
+            _append(blockers, "sourceContent.excluded_contract_invalid")
+        for blocker in _v3_source_inventory_blockers(source):
+            _append(blockers, blocker)
+
+    triggers = quality_receipt_t1_triggers(evidence)
+    if triggers and quality_tier == "T0":
+        _append(blockers, "tier.t1_required")
+    visual = _mapping(evidence.get("visualReview"))
+    if quality_tier in {"T1", "T2", "T3"} and _status(_read(visual, "status", "verdict", default=None)) != "passed":
+        _append(blockers, "visualReview.required_failed")
+    if quality_tier in {"T2", "T3"} and (visual is None or visual.get("fullDeck") is not True):
+        _append(blockers, "visualReview.full_deck_required")
+    if quality_tier == "T3":
+        readback = _mapping(evidence.get("desktopReadback"))
+        if readback is None or _status(readback.get("powerpoint")) != "passed" or _status(readback.get("libreoffice")) != "passed":
+            _append(blockers, "desktopReadback.parity_required")
+    return tuple(blockers)
+
+
+@dataclass(frozen=True, slots=True)
+class QualityReceiptV3:
+    """Evidence-bound, append-only Phase 6 quality record.
+
+    Every record seals a canonical evidence digest.  Appended records link to
+    the preceding digest and never mutate a prior result, which keeps recovery
+    evidence auditable without rewriting a successful or failed decision.
+    """
+
+    attempt_id: str
+    revision: int
+    sequence: int
+    event_type: str
+    evidence_digest: str
+    capability_registry_digest: str
+    capability_consumer_statuses: tuple[tuple[str, str], ...]
+    quality_tier: str
+    t1_triggers: tuple[str, ...]
+    blockers: tuple[str, ...]
+    gate_passed: bool
+    previous_schema_version: str | None = None
+    previous_version_receipt_digest: str | None = None
+    previous_receipt_digest: str | None = None
+    receipt_digest: str = ""
+    schema_version: str = "quality-receipt/v3"
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schemaVersion": self.schema_version,
+            "attemptId": self.attempt_id,
+            "revision": self.revision,
+            "sequence": self.sequence,
+            "eventType": self.event_type,
+            "evidenceDigest": self.evidence_digest,
+            "capabilityRegistryDigest": self.capability_registry_digest,
+            "capabilityConsumerStatuses": dict(self.capability_consumer_statuses),
+            "qualityTier": self.quality_tier,
+            "t1Triggers": list(self.t1_triggers),
+            "blockers": list(self.blockers),
+            "gatePassed": self.gate_passed,
+            "previousSchemaVersion": self.previous_schema_version,
+            "previousVersionReceiptDigest": self.previous_version_receipt_digest,
+            "previousReceiptDigest": self.previous_receipt_digest,
+            "receiptDigest": self.receipt_digest,
+        }
+
+
+def _receipt_v3_digest(receipt: QualityReceiptV3) -> str:
+    payload = receipt.to_dict()
+    payload.pop("receiptDigest")
+    return "sha256:" + hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+
+
+def validate_quality_receipt_v3_payload(
+    payload: Mapping[str, object],
+) -> QualityReceiptV3:
+    """Validate an immutable internal V3 receipt before public projection."""
+
+    raw_statuses = payload.get("capabilityConsumerStatuses")
+    if not isinstance(raw_statuses, Mapping) or set(raw_statuses) != set(
+        _CAPABILITY_CONSUMERS
+    ):
+        raise ValueError("quality_receipt_v3_payload_consumer_statuses_invalid")
+    raw_triggers = payload.get("t1Triggers", ())
+    raw_blockers = payload.get("blockers", ())
+    if (
+        not isinstance(raw_triggers, (list, tuple))
+        or not isinstance(raw_blockers, (list, tuple))
+        or not all(isinstance(value, str) for value in (*raw_triggers, *raw_blockers))
+    ):
+        raise ValueError("quality_receipt_v3_payload_evidence_invalid")
+    try:
+        receipt = QualityReceiptV3(
+            schema_version=str(payload.get("schemaVersion", "")),
+            attempt_id=public_attempt_id(str(payload.get("attemptId", ""))),
+            revision=int(payload.get("revision", -1)),
+            sequence=int(payload.get("sequence", -1)),
+            event_type=str(payload.get("eventType", "")),
+            evidence_digest=_required_prefixed_sha256(
+                payload.get("evidenceDigest"), "v3_evidence_digest"
+            ),
+            capability_registry_digest=(
+                _optional_prefixed_sha256(
+                    payload.get("capabilityRegistryDigest"),
+                    "capability_registry_digest",
+                )
+                or ""
+            ),
+            capability_consumer_statuses=tuple(
+                (consumer, str(raw_statuses[consumer]))
+                for consumer in _CAPABILITY_CONSUMERS
+            ),
+            quality_tier=str(payload.get("qualityTier", "")),
+            t1_triggers=tuple(raw_triggers),
+            blockers=tuple(raw_blockers),
+            gate_passed=_coerce_bool(payload.get("gatePassed"), "gatePassed"),
+            previous_schema_version=(
+                str(payload["previousSchemaVersion"])
+                if payload.get("previousSchemaVersion") is not None
+                else None
+            ),
+            previous_version_receipt_digest=_optional_prefixed_sha256(
+                payload.get("previousVersionReceiptDigest"),
+                "previous_version_receipt_digest",
+            ),
+            previous_receipt_digest=_optional_prefixed_sha256(
+                payload.get("previousReceiptDigest"), "previous_receipt_digest"
+            ),
+            receipt_digest=str(payload.get("receiptDigest", "")),
+        )
+    except (TypeError, ValueError) as error:
+        raise ValueError("quality_receipt_v3_payload_invalid") from error
+    if (
+        receipt.schema_version != "quality-receipt/v3"
+        or receipt.revision < 0
+        or receipt.sequence < 0
+        or not receipt.event_type
+        or receipt.quality_tier not in _QUALITY_TIERS
+        or (receipt.gate_passed and not receipt.capability_registry_digest)
+        or any(
+            status not in _CAPABILITY_CONSUMER_STATUSES
+            for _, status in receipt.capability_consumer_statuses
+        )
+        or ((receipt.previous_schema_version is None) != (receipt.previous_version_receipt_digest is None))
+        or receipt.previous_schema_version not in {None, "quality-receipt/v2"}
+        or receipt.receipt_digest != _receipt_v3_digest(receipt)
+    ):
+        raise ValueError("quality_receipt_v3_payload_digest_mismatch")
+    return receipt
+
+
+def _v3_manifest_digest(records: Mapping[str, object]) -> str:
+    return "sha256:" + hashlib.sha256(
+        json.dumps(
+            {"schemaVersion": "quality-receipt-manifest/v3", "events": records},
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+@dataclass(slots=True)
+class QualityReceiptV3Ledger:
+    """Append-only V3 evidence log with an optional durable manifest."""
+
+    _events: MutableMapping[tuple[str, int, int], QualityReceiptV3] = field(default_factory=dict)
+    storage_path: str | Path | None = None
+
+    def __post_init__(self) -> None:
+        if self.storage_path is not None:
+            self.storage_path = Path(self.storage_path)
+            with _manifest_lock(Path(self.storage_path)):
+                self._load_unlocked()
+
+    def _load_unlocked(self) -> None:
+        path = Path(self.storage_path) if self.storage_path is not None else None
+        if path is None or not path.is_file():
+            return
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(payload, Mapping) or payload.get("schemaVersion") != "quality-receipt-manifest/v3":
+                raise ValueError("quality_receipt_v3_manifest_schema_invalid")
+            records = payload.get("events")
+            if not isinstance(records, Mapping) or payload.get("manifestDigest") != _v3_manifest_digest(records):
+                raise ValueError("quality_receipt_v3_manifest_digest_mismatch")
+            loaded: dict[tuple[str, int, int], QualityReceiptV3] = {}
+            for key, item in records.items():
+                if not isinstance(item, Mapping):
+                    raise ValueError("quality_receipt_v3_manifest_record_invalid")
+                parts = str(key).split("#")
+                if len(parts) != 3 or not parts[1].isdigit() or not parts[2].isdigit():
+                    raise ValueError("quality_receipt_v3_manifest_key_invalid")
+                attempt, revision, sequence = public_attempt_id(parts[0]), int(parts[1]), int(parts[2])
+                raw_consumer_statuses = item.get("capabilityConsumerStatuses")
+                if not isinstance(raw_consumer_statuses, Mapping) or set(raw_consumer_statuses) != set(_CAPABILITY_CONSUMERS):
+                    raise ValueError("quality_receipt_v3_manifest_consumer_statuses_invalid")
+                receipt = QualityReceiptV3(
+                    schema_version=str(item.get("schemaVersion", "")),
+                    attempt_id=str(item.get("attemptId", "")),
+                    revision=int(item.get("revision", -1)),
+                    sequence=int(item.get("sequence", -1)),
+                    event_type=str(item.get("eventType", "")),
+                    evidence_digest=_required_prefixed_sha256(item.get("evidenceDigest"), "v3_evidence_digest"),
+                    capability_registry_digest=_optional_prefixed_sha256(item.get("capabilityRegistryDigest"), "capability_registry_digest") or "",
+                    capability_consumer_statuses=tuple(
+                        (consumer, str(raw_consumer_statuses[consumer]))
+                        for consumer in _CAPABILITY_CONSUMERS
+                    ),
+                    quality_tier=str(item.get("qualityTier", "")),
+                    t1_triggers=tuple(item.get("t1Triggers", ())),
+                    blockers=tuple(item.get("blockers", ())),
+                    gate_passed=_coerce_bool(item.get("gatePassed"), "gatePassed"),
+                    previous_schema_version=(
+                        str(item["previousSchemaVersion"])
+                        if item.get("previousSchemaVersion") is not None
+                        else None
+                    ),
+                    previous_version_receipt_digest=_optional_prefixed_sha256(
+                        item.get("previousVersionReceiptDigest"),
+                        "previous_version_receipt_digest",
+                    ),
+                    previous_receipt_digest=_optional_prefixed_sha256(item.get("previousReceiptDigest"), "previous_receipt_digest"),
+                    receipt_digest=str(item.get("receiptDigest", "")),
+                )
+                if (
+                    receipt.schema_version != "quality-receipt/v3"
+                    or receipt.attempt_id != attempt
+                    or receipt.revision != revision
+                    or receipt.sequence != sequence
+                    or receipt.quality_tier not in _QUALITY_TIERS
+                    or not receipt.event_type
+                    or (receipt.gate_passed and not receipt.capability_registry_digest)
+                    or any(status not in _CAPABILITY_CONSUMER_STATUSES for _, status in receipt.capability_consumer_statuses)
+                    or ((receipt.previous_schema_version is None) != (receipt.previous_version_receipt_digest is None))
+                    or receipt.previous_schema_version not in {None, "quality-receipt/v2"}
+                    or not all(isinstance(value, str) for value in receipt.t1_triggers + receipt.blockers)
+                    or receipt.receipt_digest != _receipt_v3_digest(receipt)
+                ):
+                    raise ValueError("quality_receipt_v3_manifest_record_invalid")
+                loaded[(attempt, revision, sequence)] = receipt
+            for (attempt, revision, sequence), receipt in loaded.items():
+                if sequence == 0:
+                    if receipt.previous_receipt_digest is not None:
+                        raise ValueError("quality_receipt_v3_manifest_chain_invalid")
+                else:
+                    previous = loaded.get((attempt, revision, sequence - 1))
+                    if previous is None or receipt.previous_receipt_digest != previous.receipt_digest:
+                        raise ValueError("quality_receipt_v3_manifest_chain_invalid")
+            self._events.clear()
+            self._events.update(loaded)
+        except (AttributeError, OSError, TypeError, ValueError, json.JSONDecodeError) as error:
+            raise ValueError("quality_receipt_v3_manifest_corrupt") from error
+
+    def _persist_unlocked(self) -> None:
+        path = Path(self.storage_path) if self.storage_path is not None else None
+        if path is None:
+            return
+        path.parent.mkdir(parents=True, exist_ok=True)
+        records = {
+            f"{attempt}#{revision}#{sequence}": receipt.to_dict()
+            for (attempt, revision, sequence), receipt in sorted(self._events.items())
+        }
+        payload = json.dumps(
+            {
+                "schemaVersion": "quality-receipt-manifest/v3",
+                "events": records,
+                "manifestDigest": _v3_manifest_digest(records),
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+        fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+        try:
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(payload)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temp_name, path)
+        finally:
+            if os.path.exists(temp_name):
+                os.unlink(temp_name)
+
+    def create_or_append(
+        self,
+        *,
+        attempt_id: str,
+        revision: int,
+        evidence: Mapping[str, object],
+        event_type: str = "evaluation",
+    ) -> QualityReceiptV3:
+        public_id = public_attempt_id(attempt_id)
+        if not isinstance(revision, int) or revision < 0:
+            raise ValueError("quality_receipt_v3_revision_invalid")
+        if not isinstance(event_type, str) or not event_type.strip():
+            raise ValueError("quality_receipt_v3_event_type_invalid")
+        if not isinstance(evidence, Mapping):
+            raise ValueError("quality_receipt_v3_evidence_invalid")
+        evidence_digest = _canonical_evidence_digest(evidence)
+        if self.storage_path is not None:
+            with _manifest_lock(Path(self.storage_path)):
+                self._load_unlocked()
+                return self._create_or_append_unlocked(
+                    attempt_id=public_id,
+                    revision=revision,
+                    evidence=evidence,
+                    evidence_digest=evidence_digest,
+                    event_type=event_type,
+                )
+        return self._create_or_append_unlocked(
+            attempt_id=public_id,
+            revision=revision,
+            evidence=evidence,
+            evidence_digest=evidence_digest,
+            event_type=event_type,
+        )
+
+    def _create_or_append_unlocked(
+        self,
+        *,
+        attempt_id: str,
+        revision: int,
+        evidence: Mapping[str, object],
+        evidence_digest: str,
+        event_type: str,
+    ) -> QualityReceiptV3:
+        """Create under the manifest lock when durable storage is configured."""
+
+        public_id = attempt_id
+        history = [
+            record
+            for (record_attempt, record_revision, _), record in self._events.items()
+            if record_attempt == public_id and record_revision == revision
+        ]
+        history.sort(key=lambda record: record.sequence)
+        for record in history:
+            if record.event_type == event_type and record.evidence_digest == evidence_digest:
+                return record
+        sequence = len(history)
+        previous = history[-1].receipt_digest if history else None
+        tier = str(evidence.get("qualityTier", "T0")).upper()
+        if tier not in _QUALITY_TIERS:
+            raise ValueError("quality_receipt_v3_tier_invalid")
+        capability_digest, capability_consumer_statuses, _ = _v3_capability_binding(evidence)
+        previous_schema_version, previous_version_receipt_digest, _ = _v3_version_transition(evidence)
+        blockers = _v3_blockers(evidence, quality_tier=tier)
+        receipt = QualityReceiptV3(
+            attempt_id=public_id,
+            revision=revision,
+            sequence=sequence,
+            event_type=event_type.strip(),
+            evidence_digest=evidence_digest,
+            capability_registry_digest=capability_digest,
+            capability_consumer_statuses=capability_consumer_statuses,
+            quality_tier=tier,
+            t1_triggers=quality_receipt_t1_triggers(evidence),
+            blockers=blockers,
+            gate_passed=not blockers,
+            previous_schema_version=previous_schema_version,
+            previous_version_receipt_digest=previous_version_receipt_digest,
+            previous_receipt_digest=previous,
+        )
+        receipt = replace(receipt, receipt_digest=_receipt_v3_digest(receipt))
+        self._events[(public_id, revision, sequence)] = receipt
+        if self.storage_path is not None:
+            self._persist_unlocked()
+        return receipt
+
+
+def create_quality_receipt_v3(
+    ledger: QualityReceiptV3Ledger,
+    *,
+    attempt_id: str,
+    revision: int,
+    evidence: Mapping[str, object],
+) -> QualityReceiptV3:
+    """Seal the initial V3 record or return an identical idempotent retry."""
+
+    return ledger.create_or_append(
+        attempt_id=attempt_id,
+        revision=revision,
+        evidence=evidence,
+        event_type="evaluation",
+    )
+
+
+def append_quality_receipt_v3_evidence(
+    ledger: QualityReceiptV3Ledger,
+    *,
+    attempt_id: str,
+    revision: int,
+    evidence: Mapping[str, object],
+    event_type: str,
+) -> QualityReceiptV3:
+    """Append new evidence; an existing digest/event pair is idempotent."""
+
+    return ledger.create_or_append(
+        attempt_id=attempt_id,
+        revision=revision,
+        evidence=evidence,
+        event_type=event_type,
+    )
+
+
+def create_quality_receipt_v3_from_v2(
+    ledger: QualityReceiptV3Ledger,
+    *,
+    receipt_v2: QualityReceiptV2 | Mapping[str, object],
+    evidence: Mapping[str, object],
+) -> QualityReceiptV3:
+    """Adapt a sealed V2 pre-export receipt into the additive V3 chain.
+
+    The V2 wire payload remains unchanged.  Its receipt digest is included in
+    the V3 evidence snapshot and projected onto the V3 receipt so a caller can
+    verify the version boundary without treating V3 as an in-place V2 rewrite.
+    """
+
+    payload = receipt_v2.to_dict() if isinstance(receipt_v2, QualityReceiptV2) else receipt_v2
+    if not isinstance(payload, Mapping):
+        raise ValueError("quality_receipt_v2_adapter_payload_invalid")
+    sealed_v2 = validate_current_quality_receipt_payload(payload)
+    transition = {
+        "fromSchemaVersion": "quality-receipt/v2",
+        "fromReceiptDigest": sealed_v2.receipt_digest,
+        "fromGatePassed": sealed_v2.gate_passed,
+    }
+    existing_transition = evidence.get("versionTransition")
+    if existing_transition is not None and _mapping(existing_transition) != transition:
+        raise ValueError("quality_receipt_v2_adapter_transition_conflict")
+    adapted_evidence = dict(evidence)
+    adapted_evidence["versionTransition"] = transition
+    return create_quality_receipt_v3(
+        ledger,
+        attempt_id=sealed_v2.attempt_id,
+        revision=sealed_v2.revision,
+        evidence=adapted_evidence,
+    )
+
+__all__ = ["QualityReceipt", "QualityReceiptLedger", "QualityReceiptV2", "QualityReceiptV3", "QualityReceiptV3Ledger", "ReleaseQualityPolicy", "UnifiedGateEvaluation", "append_quality_receipt_v3_evidence", "build_quality_receipt_v2", "create_quality_receipt_v2", "create_quality_receipt_v3", "create_quality_receipt_v3_from_v2", "evaluate_capacity", "evaluate_capacity_browser_metrics", "evaluate_unified_gate", "evaluate_unified_quality_gate", "public_attempt_id", "quality_receipt_manifest_path", "quality_receipt_root", "quality_receipt_t1_triggers", "release_profile_requirements", "release_quality_policy", "release_quality_policy_digest", "validate_current_quality_receipt_payload", "validate_quality_receipt_v3_payload"]

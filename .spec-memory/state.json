@@ -2,27 +2,33 @@
   "schemaVersion": 2,
   "active": true,
   "projectName": "ppt-agent",
-  "activeTask": "Complete Authored release product verification after safe semantic alias fix, then run controlled matrix and owned PowerPoint QA only after successful RC artifact.",
+  "activeTask": "Integrate and validate the remaining public PPT generation and export architecture across bounded multi-session lanes",
   "taskContext": {
     "paths": [
-      "servers/fastapi",
-      "servers/nextjs/lib/authored-hybrid",
-      "scripts",
-      "artifacts/authored-vnext-controlled-load-20260829"
+      "servers/fastapi/api/v2",
+      "servers/fastapi/services/public_operation_admission.py",
+      "servers/fastapi/services/artifact_store.py",
+      "servers/fastapi/services/trusted_executor",
+      "servers/fastapi/services/authored_quality_receipt_v2.py",
+      "servers/nextjs/app/api/v2"
     ],
     "scopes": [
-      "authored-vnext",
-      "release",
-      "performance",
+      "public-generation-export",
+      "api",
+      "control-plane",
+      "artifact",
+      "executor",
+      "quality",
       "hybrid",
-      "powerpoint-qa"
+      "release-readiness"
     ],
     "includeKeys": [
+      "public-generation-export.execution-orchestration",
+      "artifact.public-content-authority",
       "authored.release-export-atomic-binding",
-      "authored.performance-matrix-control",
-      "authored.product-pptx-owned-com-validation",
-      "authored.capacity.terminal-residual",
-      "authored.full-reauthor-safe-semantic-alias"
+      "authored.quality-composition-first",
+      "authored.hybrid-release-native-coverage-gate",
+      "source-content.template-restyle-contract"
     ]
   },
   "bindingPolicy": {
@@ -77,11 +83,15 @@
     "service.boundary.external-platform": "decisions/service.boundary.external-platform.1.json",
     "service.architecture.modular-worker-boundary": "decisions/service.architecture.modular-worker-boundary.1.json",
     "artifact.public-content-authority": "decisions/artifact.public-content-authority.1.json",
-    "service.public-admission-budget-boundary": "decisions/service.public-admission-budget-boundary.1.json"
+    "service.public-admission-budget-boundary": "decisions/service.public-admission-budget-boundary.1.json",
+    "public-generation-export.execution-orchestration": "decisions/public-generation-export.execution-orchestration.1.json",
+    "public-export.runtime.no-docker": "decisions/public-export.runtime.no-docker.1.json"
   },
   "readFirst": [
-    "servers/fastapi/utils/llm_calls/author_vision_qa.py",
-    "scripts/authored-vnext-controlled-load.mjs"
+    "docs/public-generation-export-target-design-handoff-20260830.md",
+    "docs/public-generation-artifact-export-durability-contract-20260830.md",
+    "docs/public-generation-export-phase6-quality-contract-session-e-20260830.md",
+    "docs/public-generation-export-phase8-phase9-readiness-manifest-20260830.md"
   ],
-  "updatedAt": "2026-08-29T19:39:24.8677086+00:00"
+  "updatedAt": "2026-08-30T09:45:13.4892181+00:00"
 }

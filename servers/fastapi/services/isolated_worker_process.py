@@ -7,13 +7,12 @@ import hashlib
 import json
 import os
 import pathlib
-import signal
-import subprocess
+from pathlib import PurePosixPath
 import sys
-import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
+import uuid
 
 from services.isolated_worker_contracts import (
     ISOLATED_RESULT_SCHEMA,
@@ -25,6 +24,7 @@ from services.isolated_worker_contracts import (
 
 
 NETWORK_NONE_ATTESTATION = "nonroot-readonly-tmpfs-network-none"
+WINDOWS_LOCAL_DEVELOPMENT_ATTESTATION = "windows-job-object-local-development"
 MAX_JOB_BYTES = 2 * 1024 * 1024
 MAX_RESULT_BYTES = 16 * 1024 * 1024
 _ENV_ALLOWLIST = frozenset(
@@ -48,7 +48,10 @@ _ENV_ALLOWLIST = frozenset(
         "VIRTUAL_ENV",
         "WINDIR",
         "PUBLIC_WORKER_CAPABILITY_KEY_FILE",
+        "PUBLIC_WORKER_INPUT_STORE_ROOT",
+        "PUBLIC_WORKER_LOCAL_DEVELOPMENT",
         "PUBLIC_WORKER_OBJECT_STORE_ROOT",
+        "PUBLIC_WORKER_OUTPUT_STORE_ROOT",
     }
 )
 _FORBIDDEN_ENV_MARKERS = (
@@ -71,6 +74,16 @@ class IsolatedWorkerProcessError(RuntimeError):
     pass
 
 
+_trusted_worker_dispatcher: Any | None = None
+
+
+def install_trusted_worker_dispatcher(dispatcher: Any | None) -> None:
+    """Install the composition-root trusted wire port; ``None`` fails closed."""
+
+    global _trusted_worker_dispatcher
+    _trusted_worker_dispatcher = dispatcher
+
+
 @dataclass(frozen=True, slots=True)
 class IsolatedWorkerResult:
     role: WorkerRole
@@ -86,10 +99,17 @@ class IsolatedWorkerResult:
 def worker_environment(
     role: WorkerRole,
     source: Mapping[str, str] | None = None,
+    *,
+    trusted_dispatch: bool = False,
 ) -> dict[str, str]:
     incoming = os.environ if source is None else source
     attestation = incoming.get("PUBLIC_WORKER_OS_ISOLATION", "").strip()
-    if attestation != NETWORK_NONE_ATTESTATION:
+    local_development = (
+        trusted_dispatch
+        and incoming.get("PUBLIC_TRUSTED_WORKER_LOCAL_POLICY", "").strip().lower()
+        == "development"
+    )
+    if not local_development and attestation != NETWORK_NONE_ATTESTATION:
         raise IsolatedWorkerProcessError(
             "public worker requires network-none OS isolation attestation"
         )
@@ -109,10 +129,16 @@ def worker_environment(
     result.update(
         {
             "PUBLIC_WORKER_ROLE": role,
-            "PUBLIC_WORKER_OS_ISOLATION": NETWORK_NONE_ATTESTATION,
+            "PUBLIC_WORKER_OS_ISOLATION": (
+                WINDOWS_LOCAL_DEVELOPMENT_ATTESTATION
+                if local_development
+                else NETWORK_NONE_ATTESTATION
+            ),
             "PUBLIC_WORKER_SESSIONLESS": "1",
         }
     )
+    if local_development:
+        result["PUBLIC_WORKER_LOCAL_DEVELOPMENT"] = "1"
     if role == "render":
         # The public render process is already the one-shot isolation boundary;
         # this marker permits the low-level CDP entry without recursively
@@ -140,7 +166,10 @@ def worker_command(
         or any(not isinstance(item, str) or not item or "\x00" in item for item in command)
     ):
         raise IsolatedWorkerProcessError(f"{variable} must be a JSON argv array")
-    if not pathlib.Path(command[0]).is_absolute():
+    if not (
+        pathlib.Path(command[0]).is_absolute()
+        or PurePosixPath(command[0]).is_absolute()
+    ):
         raise IsolatedWorkerProcessError("public worker executable must be absolute")
     return command
 
@@ -223,59 +252,45 @@ def _decode_result(payload: bytes, job: IsolatedWorkerJob) -> IsolatedWorkerResu
 async def execute_isolated_worker_job(
     job: IsolatedWorkerJob,
     *,
+    presentation_id: uuid.UUID,
     source_environment: Mapping[str, str] | None = None,
     command: Sequence[str] | None = None,
+    dispatcher: Any | None = None,
 ) -> IsolatedWorkerResult:
-    """Execute exactly one stdin/stdout job without a task file or inherited env."""
+    """Dispatch one immutable job through the trusted-executor product port."""
 
     encoded = json.dumps(
         job.to_wire(), ensure_ascii=True, sort_keys=True, separators=(",", ":")
     ).encode("utf-8")
     if len(encoded) > MAX_JOB_BYTES:
         raise IsolatedWorkerContractError("public worker job exceeds the wire limit")
-    environment = worker_environment(job.role, source_environment)
+    environment = worker_environment(
+        job.role,
+        source_environment,
+        trusted_dispatch=True,
+    )
     argv = list(command) if command is not None else worker_command(
         job.role, source_environment
     )
-    if not argv or not pathlib.Path(argv[0]).is_absolute():
+    if not argv or not (
+        pathlib.Path(argv[0]).is_absolute()
+        or PurePosixPath(argv[0]).is_absolute()
+    ):
         raise IsolatedWorkerProcessError("public worker executable must be absolute")
-    kwargs: dict[str, Any] = {
-        "stdin": asyncio.subprocess.PIPE,
-        "stdout": asyncio.subprocess.PIPE,
-        "stderr": asyncio.subprocess.DEVNULL,
-        "env": environment,
-    }
-    if os.name == "nt":
-        kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-    else:
-        kwargs["start_new_session"] = True
-    process = await asyncio.create_subprocess_exec(*argv, **kwargs)
-
-    async def terminate() -> None:
-        if process.returncode is None:
-            try:
-                if os.name == "nt":
-                    process.kill()
-                else:
-                    os.killpg(process.pid, signal.SIGKILL)
-            except (ProcessLookupError, PermissionError):
-                pass
-        await process.wait()
-
-    timeout = max(1, job.deadline_epoch_seconds - int(time.time()))
-    try:
-        stdout, _ = await asyncio.wait_for(
-            process.communicate(encoded),
-            timeout=min(timeout, 600),
-        )
-    except (asyncio.TimeoutError, asyncio.CancelledError):
-        await terminate()
-        raise
+    selected_dispatcher = dispatcher or _trusted_worker_dispatcher
+    if selected_dispatcher is None:
+        raise IsolatedWorkerProcessError("trusted worker dispatcher is unavailable")
+    stdout = await selected_dispatcher.execute(
+        job=job,
+        presentation_id=presentation_id,
+        payload=encoded,
+        command=argv,
+        environment=environment,
+    )
     if len(stdout) > MAX_RESULT_BYTES:
-        await terminate()
         raise IsolatedWorkerProcessError("public worker result exceeded the wire limit")
     result = _decode_result(stdout, job)
-    if process.returncode != 0 or not result.ok:
+    if not result.ok:
         raise IsolatedWorkerProcessError(
             result.error_code or "public_worker_execution_failed"
         )
@@ -293,8 +308,10 @@ __all__ = [
     "IsolatedWorkerProcessError",
     "IsolatedWorkerResult",
     "NETWORK_NONE_ATTESTATION",
+    "WINDOWS_LOCAL_DEVELOPMENT_ATTESTATION",
     "development_worker_command",
     "execute_isolated_worker_job",
+    "install_trusted_worker_dispatcher",
     "worker_command",
     "worker_environment",
 ]

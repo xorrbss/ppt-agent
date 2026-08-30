@@ -15,9 +15,14 @@ from api.v1.async_tasks.router import API_V1_ASYNC_TASKS_ROUTER
 from api.v1.mock.router import API_V1_MOCK_ROUTER
 from api.v1.ppt.router import API_V1_PPT_ROUTER
 from api.v1.webhook.router import API_V1_WEBHOOK_ROUTER
+from api.v2 import API_V2_PUBLIC_ROUTER
 from services.workspace_metrics import WORKSPACE_METRICS
 from services.database import async_session_maker
 from services.public_operation_admission import public_prometheus_metrics_text
+from services.public_v2_orchestrator import (
+    create_public_v2_orchestrator,
+    resolve_public_v2_integration_profile,
+)
 from services.provider_telemetry_runtime import maybe_init_sentry
 from utils.get_env import (
     get_app_data_directory_env,
@@ -35,6 +40,12 @@ _maybe_init_sentry()
 
 app = FastAPI(lifespan=app_lifespan)
 install_api_error_handling(app)
+_public_v2_integration_profile = resolve_public_v2_integration_profile(os.environ)
+if _public_v2_integration_profile is not None:
+    app.state.public_v2_orchestrator = create_public_v2_orchestrator(
+        async_session_maker,
+        integration_profile=_public_v2_integration_profile,
+    )
 
 # Routers
 app.include_router(API_V1_PPT_ROUTER)
@@ -45,6 +56,8 @@ if (get_enable_mock_endpoints_env() or "").lower() == "true":
     app.include_router(API_V1_MOCK_ROUTER)
 app.include_router(API_V1_AUTH_ROUTER)
 app.include_router(API_V1_ADMIN_ROUTER)
+if _public_v2_integration_profile is not None:
+    app.include_router(API_V2_PUBLIC_ROUTER)
 
 # Mount app_data and static assets (direct FastAPI access; nginx also serves /static in Docker).
 app_data_dir = get_app_data_directory_env()

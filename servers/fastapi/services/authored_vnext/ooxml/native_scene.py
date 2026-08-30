@@ -29,6 +29,16 @@ from pptx.enum.text import MSO_AUTO_SIZE, PP_ALIGN, MSO_VERTICAL_ANCHOR
 from pptx.parts.image import Image as PptxImage
 from pptx.util import Inches, Pt
 
+from services.authored_vnext.capability_registry import (
+    CapabilityRegistryMismatchError,
+    EDITABLE_HYBRID_PROFILE_ID,
+    NATIVE_CAPABILITY_IDS_V1,
+    capability_metadata,
+    hybrid_capability_for_kind,
+    hybrid_ooxml_capabilities,
+    is_hybrid_native_capability,
+    require_capability_metadata,
+)
 from services.authored_vnext.master.digests import canonical_digest, canonical_json
 
 
@@ -68,22 +78,6 @@ _TAGS_REL_TYPE = (
 )
 _TAGS_CONTENT_TYPE = (
     "application/vnd.openxmlformats-officedocument.presentationml.tags+xml"
-)
-EDITABLE_HYBRID_PROFILE_ID = "authored-editable-hybrid-ko-en-basic-v1"
-_HYBRID_NATIVE_CAPABILITY_BY_KIND = {
-    "text": "editable.text.ko-en.v1",
-    "shape": "editable.shape.solid-basic.v1",
-    "image": "editable.image.rect-crop.v1",
-    "table": "editable.table.basic.v1",
-    "chart": "editable.chart.line-pie.v1",
-}
-_HYBRID_NATIVE_CAPABILITY_VERSIONS = frozenset(
-    {
-        *_HYBRID_NATIVE_CAPABILITY_BY_KIND.values(),
-        "editable.text.advanced.v1",
-        "editable.shape.advanced.v1",
-        "editable.table.advanced.v1",
-    }
 )
 _REVIEWED_JA_ZH_TYPEFACES = frozenset(
     {
@@ -2062,7 +2056,7 @@ def _expected_hybrid_capability(kind: str, element: dict[str, Any]) -> str | Non
             if element.get("chartType") in {"line", "pie"}
             else None
         )
-    return _HYBRID_NATIVE_CAPABILITY_BY_KIND.get(kind)
+    return hybrid_capability_for_kind(kind)
 
 
 def _rectangles_overlap(
@@ -2117,6 +2111,14 @@ def _hybrid_plan_for_slide(
         owner_id = _string(
             decision.get("ownerId"), "authored_vnext_hybrid_owner_decision_invalid"
         )
+        capability_id = _string(
+            decision.get("capabilityId"),
+            "authored_vnext_hybrid_owner_decision_invalid",
+        )
+        if capability_id not in NATIVE_CAPABILITY_IDS_V1:
+            raise NativeSceneError(
+                "authored_vnext_hybrid_native_capability_unsupported"
+            )
         outcome = decision.get("decision")
         if (
             _QID.fullmatch(owner_id) is None
@@ -2145,7 +2147,9 @@ def _hybrid_plan_for_slide(
                 raise NativeSceneError(
                     "authored_vnext_hybrid_native_capability_unsupported"
                 )
-            if decision.get("capabilityId") != expected_capability:
+            if not is_hybrid_native_capability(
+                capability_id
+            ) or capability_id != expected_capability:
                 raise NativeSceneError(
                     "authored_vnext_hybrid_native_capability_mismatch"
                 )
@@ -2699,13 +2703,7 @@ def materialize_scene_pptx(
     tagged_content = _inject_shape_owner_tags(buffer.getvalue())
     capabilities = (
         {
-            "profileId": EDITABLE_HYBRID_PROFILE_ID,
-            "nativeEditable": sorted(_HYBRID_NATIVE_CAPABILITY_BY_KIND),
-            "nativeCapabilityVersions": sorted(_HYBRID_NATIVE_CAPABILITY_VERSIONS),
-            "rasterOnlyCapabilityVersions": [
-                "editable.image.advanced-crop-mask.v1",
-                "editable.text.ja-zh.v1",
-            ],
+            **hybrid_ooxml_capabilities(),
             "rasterIsland": sorted(
                 SUPPORTED_SCENE_ELEMENT_KINDS.union(
                     UNSUPPORTED_SCENE_ELEMENT_KINDS
@@ -2716,6 +2714,7 @@ def materialize_scene_pptx(
         else {
             "supported": sorted(SUPPORTED_SCENE_ELEMENT_KINDS),
             "unsupported": sorted(UNSUPPORTED_SCENE_ELEMENT_KINDS),
+            **capability_metadata(consumer="ooxml"),
         }
     )
     content = _inject_custom_properties(
@@ -2749,6 +2748,31 @@ def readback_scene_pptx(content: bytes) -> dict[str, Any]:
     except (KeyError, TypeError, ValueError) as error:
         raise NativeSceneError("authored_vnext_scene_metadata_invalid") from error
     presentation = Presentation(BytesIO(content))
+    hybrid_profile_id = properties.get("AuthoredHybridProfileId")
+    expected_capabilities = (
+        {
+            **hybrid_ooxml_capabilities(),
+            "rasterIsland": sorted(
+                SUPPORTED_SCENE_ELEMENT_KINDS.union(
+                    UNSUPPORTED_SCENE_ELEMENT_KINDS
+                )
+            ),
+        }
+        if hybrid_profile_id
+        else {
+            "supported": sorted(SUPPORTED_SCENE_ELEMENT_KINDS),
+            "unsupported": sorted(UNSUPPORTED_SCENE_ELEMENT_KINDS),
+            **capability_metadata(consumer="ooxml"),
+        }
+    )
+    try:
+        require_capability_metadata(capabilities, consumer="ooxml")
+    except CapabilityRegistryMismatchError as error:
+        raise NativeSceneError(
+            "authored_vnext_capability_registry_mismatch"
+        ) from error
+    if capabilities != expected_capabilities:
+        raise NativeSceneError("authored_vnext_capability_registry_mismatch")
     actual_slides: list[dict[str, Any]] = []
     expected_slides = identity.get("slides") if isinstance(identity, dict) else None
     if not isinstance(expected_slides, list) or len(expected_slides) != len(presentation.slides):
@@ -3099,7 +3123,10 @@ def readback_scene_pptx(content: bytes) -> dict[str, Any]:
         raise NativeSceneError("authored_vnext_scene_readback_mismatch")
     return {
         "scene": actual_identity,
-        "capabilities": capabilities,
+        "capabilities": {
+            **capabilities,
+            "readbackRegistry": capability_metadata(consumer="readback"),
+        },
         "nativeObjectCounts": native_counts,
         "hybridOwnership": {
             "profileId": properties.get("AuthoredHybridProfileId") or None,

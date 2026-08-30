@@ -36,7 +36,6 @@ class AuthoredGenerationPipelineResult:
     # resumed checkpoint is conservatively treated as budget-exhausted because
     # its historical call count is not encoded in the checkpoint row.
     author_provider_attempt_counts: tuple[int, ...] = ()
-
     def __post_init__(self) -> None:
         # The result is a public boundary consumed by API/publication code.
         # Never propagate a worker lease or raw generation token through it.

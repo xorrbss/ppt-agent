@@ -47,6 +47,7 @@ WORKSPACE_OPERATION_STATES = (
     "succeeded",
     "failed",
     "cancelled",
+    "deadline_exceeded",
     "dead_letter",
 )
 WORKSPACE_CLEANUP_STATES = (
@@ -272,6 +273,17 @@ class WorkspaceOperation(SQLModel, table=True):
         CheckConstraint("max_attempts >= 1", name="ck_workspace_operations_max_attempts"),
         CheckConstraint("version >= 0", name="ck_workspace_operations_version"),
         CheckConstraint("next_event_sequence >= 1", name="ck_workspace_operations_next_event_sequence"),
+        CheckConstraint(
+            "(contract_version IS NULL AND execution_profile_version IS NULL "
+            "AND phase IS NULL AND deadline_at IS NULL) OR "
+            "(contract_version IS NOT NULL AND execution_profile_version IS NOT NULL "
+            "AND phase IS NOT NULL AND deadline_at IS NOT NULL)",
+            name="ck_workspace_operations_execution_contract",
+        ),
+        CheckConstraint(
+            "deadline_at IS NULL OR deadline_at > created_at",
+            name="ck_workspace_operations_deadline",
+        ),
         Index("ix_workspace_operations_dispatch", "state", "next_attempt_at", "lease_expires_at"),
         Index("ix_workspace_operations_owner_created", "owner_id", "created_at"),
     )
@@ -301,6 +313,18 @@ class WorkspaceOperation(SQLModel, table=True):
     state: str = Field(default="queued", sa_column=Column(String(24), nullable=False, default="queued", server_default="queued"))
     idempotency_key_hash: str = Field(sa_column=Column(String(64), nullable=False))
     request_hash: str = Field(sa_column=Column(String(64), nullable=False))
+    contract_version: Optional[str] = Field(
+        default=None, sa_column=Column(String(64), nullable=True)
+    )
+    execution_profile_version: Optional[str] = Field(
+        default=None, sa_column=Column(String(64), nullable=True)
+    )
+    phase: Optional[str] = Field(
+        default=None, sa_column=Column(String(32), nullable=True)
+    )
+    deadline_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
     request_payload: dict = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
     expected_revision: Optional[int] = Field(default=None, sa_column=Column(BigInteger, nullable=True))
     result_revision: Optional[int] = Field(default=None, sa_column=Column(BigInteger, nullable=True))

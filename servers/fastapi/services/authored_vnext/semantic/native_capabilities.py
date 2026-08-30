@@ -16,42 +16,9 @@ from models.authored_vnext.semantic.native_capabilities import (
     NativeCapabilityProjectionV1,
     NativeCapabilityReadinessV1,
 )
-
-
-NATIVE_CAPABILITY_IDS_V1: tuple[str, ...] = tuple(
-    sorted(
-        {
-            "css.background-plane.v1",
-            "css.clip-path.v1",
-            "css.filter-blend.v1",
-            "css.gradient.v1",
-            "css.grid-flex.v1",
-            "css.paint-closure.v1",
-            "css.shadow.v1",
-            "editable.chart.line-pie.v1",
-            # Retained only for read compatibility with pre-v1 raster receipts.
-            "editable.chart.raster.v1",
-            "editable.image.advanced-crop-mask.v1",
-            "editable.image.rect-crop.v1",
-            "editable.raster-island-integrity.v1",
-            "editable.shape.advanced.v1",
-            "editable.shape.solid-basic.v1",
-            "editable.table.advanced.v1",
-            "editable.table.basic.v1",
-            "editable.text.advanced.v1",
-            "editable.text.ja-zh.v1",
-            "editable.text.ko-en.v1",
-        }
-    )
-)
-
-EDITABLE_MVP_CAPABILITY_IDS_V1: frozenset[str] = frozenset(
-    {
-        "editable.image.rect-crop.v1",
-        "editable.shape.solid-basic.v1",
-        "editable.table.basic.v1",
-        "editable.text.ko-en.v1",
-    }
+from services.authored_vnext.capability_registry import (
+    EDITABLE_MVP_CAPABILITY_IDS_V1,
+    NATIVE_CAPABILITY_IDS_V1,
 )
 
 

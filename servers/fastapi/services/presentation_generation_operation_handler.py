@@ -38,6 +38,9 @@ from services.presentation_generation_job_service import (
     heartbeat_workspace_linked_generation_job,
     release_workspace_linked_generation_job,
 )
+from services.public_quality_receipt_v3_store import (
+    PostgresOperationQualityReceiptV3Port,
+)
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
     RetryableWorkspaceOperationError,
@@ -176,6 +179,15 @@ class PresentationGenerationOperationHandler:
             request = _request_from_durable_payload(job.request_payload)
             _begin_upstream_outline_timing(request)
             request._request_id = job.request_id
+            request._quality_receipt_v3_persistence_port = (
+                PostgresOperationQualityReceiptV3Port(
+                    session,
+                    operation_id=context.claim.operation_id,
+                    attempt_token=context.claim.attempt_token,
+                    fencing_token=context.claim.fencing_token,
+                )
+            )
+            request._quality_receipt_v3_durability_profile = "public"
             _validate_authored_exact_admission(request)
             await _validate_authored_master_pin_admission(request)
             if job.template_v2_target is not None:

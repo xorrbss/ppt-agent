@@ -29,6 +29,39 @@ ENV HF_HOME=/root/.cache/huggingface \
 RUN /opt/venv/bin/python scripts/warm_fastembed_cache.py
 
 
+FROM python:3.11-slim-trixie AS public-worker-runtime
+
+ARG SOURCE_REVISION=unknown
+ARG SOURCE_TREE_DIGEST=unknown
+LABEL org.opencontainers.image.revision=${SOURCE_REVISION} \
+      io.presenton.public-worker.source-tree-digest=${SOURCE_TREE_DIGEST} \
+      org.opencontainers.image.title="Presenton public render/export worker"
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+      ca-certificates chromium chromium-sandbox fonts-liberation fonts-noto-cjk \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 65532 presenton-worker \
+    && useradd --uid 65532 --gid 65532 --no-create-home --home-dir /tmp presenton-worker
+
+COPY --from=fastapi-builder /opt/venv /opt/venv
+COPY --from=fastapi-builder /app/servers/fastapi /app/servers/fastapi
+
+ENV HOME=/tmp \
+    TMPDIR=/tmp \
+    XDG_RUNTIME_DIR=/tmp/runtime \
+    LANG=C.UTF-8 \
+    PATH=/opt/venv/bin:/usr/bin:/bin \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
+    CHROME_PATH=/usr/bin/chromium \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+USER 65532:65532
+WORKDIR /app/servers/fastapi
+ENTRYPOINT ["/opt/venv/bin/python"]
+
+
 FROM python:3.11-slim-trixie AS authored-renderer-builder
 
 WORKDIR /app/servers/fastapi

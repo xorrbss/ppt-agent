@@ -3,7 +3,19 @@
 .env
 .env.*
 .codex-tmp
+.codex-review
+.codex-test-artifacts
+.agents
+.do
+.local-runtime-logs
+.server-logs-*
+.spec-memory
+.pytest-*
+.tmp
 .test-runtime
+artifacts
+output
+output-*
 
 node_modules
 **/node_modules

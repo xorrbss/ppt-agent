@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field as PydanticField, field_valida
 from pydantic.alias_generators import to_camel
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     Column,
     DateTime,
@@ -43,6 +44,12 @@ PUBLIC_ARTIFACT_KINDS = (
     "presentation-pdf",
 )
 PUBLIC_ARTIFACT_RETENTION_CLASSES = ("checkpoint", "ephemeral", "published")
+PUBLIC_ARTIFACT_LIFECYCLE_STATES = (
+    "provisional",
+    "committed",
+    "tombstoned",
+    "deleted",
+)
 EXPORT_IDENTITY_STATES = ("running", "succeeded", "failed")
 EXPORT_MODES = ("pptx", "pdf")
 
@@ -163,8 +170,22 @@ class PublicArtifact(SQLModel, table=True):
         ),
         CheckConstraint("size_bytes >= 0", name="ck_public_artifact_size"),
         CheckConstraint("length(sha256) = 64", name="ck_public_artifact_digest_length"),
+        CheckConstraint(
+            "lifecycle_state IN ('provisional', 'committed', 'tombstoned', 'deleted')",
+            name="ck_public_artifact_lifecycle_state",
+        ),
+        CheckConstraint("refcount >= 0", name="ck_public_artifact_refcount"),
+        CheckConstraint(
+            "lifecycle_revision >= 1",
+            name="ck_public_artifact_lifecycle_revision",
+        ),
+        CheckConstraint(
+            "lifecycle_state <> 'deleted' OR refcount = 0",
+            name="ck_public_artifact_deleted_refcount",
+        ),
         Index("ix_public_artifact_owner_created", "owner_id", "tenant_id", "created_at"),
         Index("ix_public_artifact_digest", "sha256"),
+        Index("ix_public_artifact_gc", "lifecycle_state", "expires_at", "refcount"),
     )
 
     id: uuid.UUID = Field(primary_key=True, default_factory=uuid.uuid4)
@@ -181,12 +202,46 @@ class PublicArtifact(SQLModel, table=True):
     storage_key: str = Field(sa_column=Column(String(512), nullable=False))
     created_by_operation_id: uuid.UUID = Field(sa_column=Column(Uuid, nullable=False))
     retention_class: str = Field(sa_column=Column(String(24), nullable=False))
+    lifecycle_state: str = Field(
+        default="committed",
+        sa_column=Column(String(16), nullable=False, server_default="committed"),
+    )
+    expires_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    tombstoned_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    deleted_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    refcount: int = Field(
+        default=0,
+        sa_column=Column(BigInteger, nullable=False, server_default=text("0")),
+    )
+    lifecycle_revision: int = Field(
+        default=1,
+        sa_column=Column(BigInteger, nullable=False, server_default=text("1")),
+    )
+    last_gc_error: str | None = Field(
+        default=None, sa_column=Column(String(512), nullable=True)
+    )
     created_at: datetime = Field(
         default_factory=get_current_utc_datetime,
         sa_column=Column(
             DateTime(timezone=True),
             nullable=False,
             default=get_current_utc_datetime,
+            server_default=func.now(),
+        ),
+    )
+    updated_at: datetime = Field(
+        default_factory=get_current_utc_datetime,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            default=get_current_utc_datetime,
+            onupdate=get_current_utc_datetime,
             server_default=func.now(),
         ),
     )
@@ -214,18 +269,33 @@ class PublicExportIdentity(SQLModel, table=True):
     __table_args__ = (
         UniqueConstraint(
             "owner_id",
+            "tenant_id",
             "presentation_id",
             "revision",
-            "canonical_digest",
+            "scene_digest",
+            "semantic_digest",
+            "quality_digest",
+            "exporter_digest",
             "export_mode",
+            "output_mode",
             "font_manifest_digest",
-            "exporter_version",
+            "render_adapter",
+            "identity_contract_version",
             name="uq_public_export_identity",
         ),
         CheckConstraint("revision >= 0", name="ck_public_export_identity_revision"),
         CheckConstraint(
             "export_mode IN ('pptx', 'pdf')",
             name="ck_public_export_identity_mode",
+        ),
+        CheckConstraint(
+            "output_mode IN ('fidelity-raster', 'editable-hybrid')",
+            name="ck_public_export_identity_output_mode",
+        ),
+        CheckConstraint(
+            "(identity_contract_version = 'digest-bound/v2' AND reuse_eligible = true) "
+            "OR (identity_contract_version = 'legacy-unreusable/v1' AND reuse_eligible = false)",
+            name="ck_public_export_identity_reuse_contract",
         ),
         CheckConstraint(
             "state IN ('running', 'succeeded', 'failed')",
@@ -236,7 +306,9 @@ class PublicExportIdentity(SQLModel, table=True):
             name="ck_public_export_identity_counters",
         ),
         CheckConstraint(
-            "length(canonical_digest) = 64 AND length(font_manifest_digest) = 64",
+            "length(canonical_digest) = 64 AND length(scene_digest) = 64 "
+            "AND length(semantic_digest) = 64 AND length(quality_digest) = 64 "
+            "AND length(exporter_digest) = 64 AND length(font_manifest_digest) = 64",
             name="ck_public_export_identity_digests",
         ),
         Index("ix_public_export_identity_claim", "state", "lease_expires_at", "created_at"),
@@ -249,9 +321,25 @@ class PublicExportIdentity(SQLModel, table=True):
     presentation_id: uuid.UUID = Field(sa_column=Column(Uuid, nullable=False))
     revision: int = Field(sa_column=Column(BigInteger, nullable=False))
     canonical_digest: str = Field(sa_column=Column(String(64), nullable=False))
+    scene_digest: str = Field(sa_column=Column(String(64), nullable=False))
+    semantic_digest: str = Field(sa_column=Column(String(64), nullable=False))
+    quality_digest: str = Field(sa_column=Column(String(64), nullable=False))
+    exporter_digest: str = Field(sa_column=Column(String(64), nullable=False))
     export_mode: str = Field(sa_column=Column(String(8), nullable=False))
+    output_mode: str = Field(sa_column=Column(String(24), nullable=False))
     font_manifest_digest: str = Field(sa_column=Column(String(64), nullable=False))
     exporter_version: str = Field(sa_column=Column(String(128), nullable=False))
+    render_adapter: str = Field(sa_column=Column(String(128), nullable=False))
+    identity_contract_version: str = Field(
+        default="digest-bound/v2",
+        sa_column=Column(
+            String(32), nullable=False, server_default="digest-bound/v2"
+        ),
+    )
+    reuse_eligible: bool = Field(
+        default=True,
+        sa_column=Column(Boolean, nullable=False, server_default=text("true")),
+    )
     source_artifact_id: uuid.UUID = Field(
         sa_column=Column(
             Uuid,
@@ -306,4 +394,117 @@ class PublicExportIdentity(SQLModel, table=True):
     completed_at: datetime | None = Field(
         default=None,
         sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+
+
+class PublicArtifactPublication(SQLModel, table=True):
+    """One fenced, owner-scoped publication pointer for an operation result."""
+
+    __tablename__ = "public_artifact_publications"
+    __table_args__ = (
+        UniqueConstraint(
+            "operation_id",
+            "publication_name",
+            name="uq_public_artifact_publication_operation_name",
+        ),
+        CheckConstraint("revision >= 0", name="ck_public_artifact_publication_revision"),
+        CheckConstraint(
+            "fencing_token >= 1 AND length(attempt_token_hash) = 71 "
+            "AND length(quality_digest) = 64",
+            name="ck_public_artifact_publication_fence",
+        ),
+        Index(
+            "ix_public_artifact_publication_artifact",
+            "artifact_id",
+            "published_at",
+        ),
+    )
+
+    id: uuid.UUID = Field(primary_key=True, default_factory=uuid.uuid4)
+    operation_id: uuid.UUID = Field(
+        sa_column=Column(
+            Uuid,
+            ForeignKey("workspace_operations.id", ondelete="CASCADE"),
+            nullable=False,
+        )
+    )
+    publication_name: str = Field(sa_column=Column(String(64), nullable=False))
+    revision: int = Field(sa_column=Column(BigInteger, nullable=False))
+    artifact_id: uuid.UUID = Field(
+        sa_column=Column(
+            Uuid,
+            ForeignKey("public_artifacts.id", ondelete="RESTRICT"),
+            nullable=False,
+        )
+    )
+    quality_digest: str = Field(sa_column=Column(String(64), nullable=False))
+    attempt_token_hash: str = Field(sa_column=Column(String(71), nullable=False))
+    fencing_token: int = Field(sa_column=Column(BigInteger, nullable=False))
+    published_at: datetime = Field(
+        default_factory=get_current_utc_datetime,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            server_default=func.now(),
+        ),
+    )
+
+
+class PublicSlideCheckpoint(SQLModel, table=True):
+    """Fenced immutable checkpoint pointer used for cross-node resume."""
+
+    __tablename__ = "public_slide_checkpoints"
+    __table_args__ = (
+        UniqueConstraint(
+            "operation_id",
+            "revision",
+            "slide_index",
+            "input_digest",
+            "stage_version",
+            name="uq_public_slide_checkpoint_identity",
+        ),
+        CheckConstraint(
+            "revision >= 0 AND slide_index >= 0",
+            name="ck_public_slide_checkpoint_position",
+        ),
+        CheckConstraint(
+            "length(input_digest) = 64 AND length(attempt_token_hash) = 71 "
+            "AND fencing_token >= 1",
+            name="ck_public_slide_checkpoint_fence",
+        ),
+        Index(
+            "ix_public_slide_checkpoint_artifact",
+            "artifact_id",
+            "committed_at",
+        ),
+    )
+
+    id: uuid.UUID = Field(primary_key=True, default_factory=uuid.uuid4)
+    operation_id: uuid.UUID = Field(
+        sa_column=Column(
+            Uuid,
+            ForeignKey("workspace_operations.id", ondelete="CASCADE"),
+            nullable=False,
+        )
+    )
+    revision: int = Field(sa_column=Column(BigInteger, nullable=False))
+    slide_index: int = Field(sa_column=Column(Integer, nullable=False))
+    input_digest: str = Field(sa_column=Column(String(64), nullable=False))
+    stage_version: str = Field(sa_column=Column(String(64), nullable=False))
+    artifact_id: uuid.UUID = Field(
+        sa_column=Column(
+            Uuid,
+            ForeignKey("public_artifacts.id", ondelete="RESTRICT"),
+            nullable=False,
+        )
+    )
+    attempt_token_hash: str = Field(sa_column=Column(String(71), nullable=False))
+    fencing_token: int = Field(sa_column=Column(BigInteger, nullable=False))
+    committed_at: datetime = Field(
+        default_factory=get_current_utc_datetime,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            server_default=func.now(),
+        ),
     )

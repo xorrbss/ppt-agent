@@ -130,7 +130,9 @@ from models.sql.public_admission import (  # noqa: F401, E402
 )
 from models.sql.public_artifact import (  # noqa: F401, E402
     PublicArtifact,
+    PublicArtifactPublication,
     PublicExportIdentity,
+    PublicSlideCheckpoint,
 )
 from models.sql.source_content import (  # noqa: F401, E402
     SourceContentCoverageReceipt,

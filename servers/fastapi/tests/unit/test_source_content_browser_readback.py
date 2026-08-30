@@ -4,6 +4,7 @@ import hashlib
 
 import pytest
 
+from services.authored_vnext.capability_registry import CAPABILITY_REGISTRY_DIGEST
 from utils.authored_dom_quality import ensure_authored_qids
 from services.source_content.browser_readback import (
     BrowserSourceReadbackError,
@@ -64,6 +65,11 @@ def test_browser_readback_binds_rendered_geometry_and_visibility() -> None:
     assert result.evidence[0].bbox["width"] == 200
     receipt = result.as_dict()
     assert receipt["verified"] is True
+    assert receipt["capabilityRegistry"] == {
+        "registrySchemaVersion": "authored-capability-registry/v1",
+        "registryDigest": CAPABILITY_REGISTRY_DIGEST,
+        "registryConsumer": "readback",
+    }
     assert receipt["evidence"][0] == {
         "sourceBlockId": "b1",
         "qid": deterministic_source_qid("b1"),

@@ -15,6 +15,12 @@ import signal
 
 from migrations import migrate_database_on_startup
 from services.database import create_db_and_tables, dispose_engines, sql_engine
+from services.artifact_store import configured_public_artifact_worker_object_port
+from services.artifact_lifecycle_runtime import (
+    start_public_artifact_lifecycle_runtime,
+    stop_public_artifact_lifecycle_runtime,
+)
+from services.isolated_worker_process import install_trusted_worker_dispatcher
 from services.presentation_deletion_operation_handler import (
     register_presentation_deletion_operation_handler,
 )
@@ -52,6 +58,7 @@ from services.workspace_metrics_exporter import (
     start_workspace_worker_metrics_exporter,
 )
 from services.workspace_quality_export_operation_handlers import (
+    EXPORT_OPERATION_KINDS,
     register_workspace_quality_export_operation_handlers,
 )
 from services.workspace_page_remake_operation_handler import (
@@ -71,6 +78,10 @@ from services.workspace_authored_template_operation_handler import (
 )
 from services.workspace_runtime_profile import require_supported_workspace_runtime
 from services.public_worker_profiles import require_public_worker_profile_from_environment
+from services.trusted_executor.composition import (
+    TrustedWorkerExecutorRuntime,
+    create_configured_trusted_worker_executor_runtime,
+)
 from utils.get_env import get_app_data_directory_env
 
 
@@ -79,6 +90,8 @@ EMBEDDED_WORKER_MODE = "embedded"
 EXTERNAL_WORKER_MODE = "external"
 SPLIT_WORKER_MODE = "split"
 _WORKER_MODE_ENV = "WORKSPACE_OPERATION_WORKER_MODE"
+_EXTERNAL_CONTROLLER_ENV = "WORKSPACE_OPERATION_EXTERNAL_CONTROLLER"
+EXPORT_CONTROLLER = "export"
 
 
 def get_workspace_operation_worker_mode() -> str:
@@ -114,6 +127,32 @@ def embedded_workspace_operation_kinds() -> tuple[str, ...] | None:
     )
 
 
+def external_workspace_operation_kinds(profile_role: str) -> tuple[str, ...]:
+    """Resolve one explicit DB-claim controller profile.
+
+    ``ppt-core`` here is the metadata-authority controller, never the
+    sessionless converter child.  The latter remains ``PUBLIC_WORKER_ROLE=export``
+    with no canonical DB credentials.
+    """
+
+    controller = os.getenv(_EXTERNAL_CONTROLLER_ENV, "").strip().lower()
+    if profile_role == "generation":
+        if controller not in {"", "generation"}:
+            raise RuntimeError("workspace_operation_external_controller_invalid")
+        return (PRESENTATION_GENERATION_OPERATION_KIND,)
+    if profile_role == "ppt-core" and controller == EXPORT_CONTROLLER:
+        return EXPORT_OPERATION_KINDS
+    raise RuntimeError("workspace_operation_external_controller_required")
+
+
+def create_external_export_controller_runtime() -> TrustedWorkerExecutorRuntime:
+    """Compose the controller dispatcher before any export claim can start."""
+
+    return create_configured_trusted_worker_executor_runtime(
+        artifact_authority=configured_public_artifact_worker_object_port(),
+    )
+
+
 def register_workspace_operation_handlers() -> None:
     register_presentation_generation_operation_handler(replace=True)
     register_presentation_deletion_operation_handler(replace=True)
@@ -130,8 +169,12 @@ async def run_external_worker(stop: asyncio.Event | None = None) -> None:
         raise RuntimeError("workspace_operation_external_worker_mode_required")
     require_supported_workspace_runtime(sql_engine.url)
     profile = require_public_worker_profile_from_environment()
-    if profile.role != "generation":
-        raise RuntimeError("workspace_operation_generation_profile_required")
+    allowed_kinds = external_workspace_operation_kinds(profile.role)
+    trusted_worker_runtime = (
+        create_external_export_controller_runtime()
+        if profile.role == "ppt-core"
+        else None
+    )
     require_workspace_asset_malware_scan_safety(feature_enabled=True)
     os.makedirs(get_app_data_directory_env(), exist_ok=True)
     await migrate_database_on_startup()
@@ -144,11 +187,20 @@ async def run_external_worker(stop: asyncio.Event | None = None) -> None:
     cleanup_maintenance_started = False
     event_retention_started = False
     metrics_exporter = None
+    artifact_lifecycle_started = False
+    if trusted_worker_runtime is not None:
+        install_trusted_worker_dispatcher(trusted_worker_runtime.dispatcher)
     try:
-        register_presentation_generation_operation_handler(replace=True)
+        if profile.role == "generation":
+            register_presentation_generation_operation_handler(replace=True)
+        else:
+            register_workspace_quality_export_operation_handlers(replace=True)
         metrics_exporter = await start_workspace_worker_metrics_exporter()
-        await start_workspace_operation_runner(allowed_kinds=profile.operation_kinds)
+        await start_workspace_operation_runner(allowed_kinds=allowed_kinds)
         runner_started = True
+        if profile.role == "ppt-core":
+            await start_public_artifact_lifecycle_runtime()
+            artifact_lifecycle_started = True
         await start_workspace_cleanup_maintenance()
         cleanup_maintenance_started = True
         await start_workspace_asset_maintenance()
@@ -175,14 +227,23 @@ async def run_external_worker(stop: asyncio.Event | None = None) -> None:
                             await stop_workspace_cleanup_maintenance()
                     finally:
                         try:
-                            if runner_started:
-                                await stop_workspace_operation_runner()
+                            if artifact_lifecycle_started:
+                                await stop_public_artifact_lifecycle_runtime()
                         finally:
                             try:
-                                if metrics_exporter is not None:
-                                    await metrics_exporter.close()
+                                if runner_started:
+                                    await stop_workspace_operation_runner()
                             finally:
-                                await dispose_engines()
+                                try:
+                                    if metrics_exporter is not None:
+                                        await metrics_exporter.close()
+                                finally:
+                                    try:
+                                        if trusted_worker_runtime is not None:
+                                            install_trusted_worker_dispatcher(None)
+                                            await trusted_worker_runtime.close()
+                                    finally:
+                                        await dispose_engines()
 
 
 def main() -> None:

@@ -14,6 +14,7 @@ import os
 import sys
 from typing import Any, Mapping
 
+from services.authored_vnext.capability_registry import capability_metadata
 from utils.renderer_isolation import (
     MAX_HTML_BYTES,
     MAX_REQUEST_BYTES,
@@ -61,6 +62,8 @@ async def _render(request: Mapping[str, Any]) -> Mapping[str, Any]:
     png, metrics = await slide_capture._render_admitted_html_in_worker(
         admitted, timeout=int(request["timeout"])
     )
+    metrics = dict(metrics)
+    metrics["capabilityRegistry"] = capability_metadata(consumer="chromium")
     return {
         "schema_version": "authored-render-response/v1",
         "ok": True,

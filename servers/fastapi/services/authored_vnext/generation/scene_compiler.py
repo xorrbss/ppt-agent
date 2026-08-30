@@ -47,6 +47,7 @@ from models.authored_vnext.deck.visual_plan import (
 )
 from models.authored_vnext.master.contract import DeckMasterContract, Rect
 from models.authored_vnext.master.slide import SlideSpecV2
+from services.authored_vnext.capability_registry import scene_capabilities
 from services.authored_vnext.generation.body_grammar import build_body_grammar_snapshot
 from services.authored_vnext.master.digests import canonical_digest
 
@@ -117,54 +118,9 @@ class SceneTextFitError(ValueError):
 
 
 def default_scene_capabilities() -> list[SceneCapability]:
-    """Declare the real product boundary; unsupported native kinds stay closed."""
+    """Declare the registry-owned boundary; unsupported native kinds stay closed."""
 
-    return [
-        SceneCapability(
-            kind="text",
-            preview="supported",
-            workbench_edit="supported",
-            native_pptx_export="supported",
-        ),
-        SceneCapability(
-            kind="image",
-            preview="supported",
-            workbench_edit="supported",
-            native_pptx_export="supported",
-        ),
-        SceneCapability(
-            kind="shape",
-            preview="supported",
-            workbench_edit="supported",
-            native_pptx_export="supported",
-        ),
-        SceneCapability(
-            kind="connector",
-            preview="partial",
-            workbench_edit="partial",
-            native_pptx_export="unsupported",
-            reason="connector routing is preserved but native connector export is not implemented",
-        ),
-        SceneCapability(
-            kind="table",
-            preview="supported",
-            workbench_edit="supported",
-            native_pptx_export="supported",
-        ),
-        SceneCapability(
-            kind="chart",
-            preview="supported",
-            workbench_edit="supported",
-            native_pptx_export="supported",
-        ),
-        SceneCapability(
-            kind="group",
-            preview="supported",
-            workbench_edit="readOnly",
-            native_pptx_export="unsupported",
-            reason="native group export is not implemented; child identities remain preserved",
-        ),
-    ]
+    return scene_capabilities()
 
 
 def compatibility_composition_digest(*, master_pin: Any) -> str:
@@ -1045,11 +1001,10 @@ def _compose_cover(
             maximum_lines=max(1, editorial_copy.count("\n") + 1),
         )
     except SceneTextFitError:
-        if len(source_parts) <= 4:
-            raise
-        # Dense generated covers can contain many explicit outline lines. Keep
-        # every source token in one editable body owner, but let the pinned font
-        # wrap a whitespace-only projection inside the full safe body envelope.
+        # Generated covers can contain either many explicit outline lines or a
+        # few individually long fragments. Keep every source token in one
+        # editable body owner, but let the pinned font wrap a whitespace-only
+        # projection inside the full safe body envelope.
         # This is a single bounded fallback; failure at the 16pt floor remains
         # publication-blocking.
         editorial_copy = " ".join(

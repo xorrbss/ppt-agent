@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
 import uuid
 
@@ -7,6 +8,7 @@ import pytest
 from models.presentation_outline_model import PresentationOutlineModel, SlideOutlineModel
 from services import authored_deck_plans
 from services.authored_generation_performance import authored_provider_concurrency
+from services.public_operation_admission import PublicAdmissionRejected
 from services import slidespec_authored_executor as executor
 from utils.llm_calls.author_slide import (
     AUTHOR_MAX_TOKENS,
@@ -107,6 +109,56 @@ def test_codex_model_reasoning_capability_normalizes_once_at_author_egress(
     assert calls[0]["extra_body"] == {"reasoning": {"effort": "none"}}
     assert len(receipts) == 1
     assert receipts[0]["retry_class"] == "recovery"
+
+
+def test_author_slide_preserves_nonretryable_public_provider_budget_limit(monkeypatch) -> None:
+    class FakeClient:
+        def generate(self, **_kwargs):
+            raise AssertionError("provider call must not bypass public admission")
+
+    @asynccontextmanager
+    async def reject_public_admission(*, is_retry: bool):
+        assert is_retry is False
+        raise PublicAdmissionRejected("public_provider_retry_limit_exceeded")
+        yield
+
+    async def no_rate_limit() -> None:
+        return None
+
+    async def record_receipt(**_kwargs) -> None:
+        return None
+
+    monkeypatch.setattr(author_slide_mod, "get_client", lambda **_kwargs: FakeClient())
+    monkeypatch.setattr(author_slide_mod, "get_llm_config", lambda: {})
+    monkeypatch.setattr(author_slide_mod, "get_model", lambda: "test-model")
+    monkeypatch.setattr(author_slide_mod, "get_llm_provider", lambda: SimpleNamespace(value="test"))
+    monkeypatch.setattr(author_slide_mod, "get_generate_kwargs", lambda **kwargs: kwargs)
+    monkeypatch.setattr(author_slide_mod, "is_codex_selected", lambda: False)
+    monkeypatch.setattr(author_slide_mod, "enforce_llm_egress_policy", lambda: None)
+    monkeypatch.setattr(author_slide_mod, "_wait_for_author_rate_slot", no_rate_limit)
+    monkeypatch.setattr(author_slide_mod, "provider_call_admission", reject_public_admission)
+    monkeypatch.setattr(author_slide_mod, "record_provider_call", record_receipt)
+    monkeypatch.setattr(
+        author_slide_mod,
+        "handle_llm_client_exceptions",
+        lambda _error: AssertionError("public admission must propagate unchanged"),
+    )
+
+    with pytest.raises(PublicAdmissionRejected) as raised:
+        asyncio.run(
+            author_slide_mod.author_slide_html(
+                "content",
+                "DESIGN",
+                Brand(topic="topic", language="English", primary="#2563EB", fonts="Arial"),
+                "CONTENT",
+                0,
+                1,
+                allow_provider_fallback=False,
+            )
+        )
+
+    assert raised.value.code == "public_provider_retry_limit_exceeded"
+    assert raised.value.retryable is False
 
 
 def test_final_outline_illustration_resolver_is_separate_from_outline_expansion(

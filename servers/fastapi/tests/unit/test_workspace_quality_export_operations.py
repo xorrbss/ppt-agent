@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import io
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -20,6 +21,8 @@ from models.sql.async_presentation_generation_status import (
 )
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_export_attempt import PresentationExportAttempt
+from models.sql.public_artifact import PublicArtifact
+from models.sql.public_admission import PublicOperationAdmission
 from models.sql.slide import SlideModel
 from models.sql.user import User
 from models.sql.workspace import (
@@ -31,8 +34,10 @@ from models.sql.workspace import (
 )
 from models.workspace import WorkspaceCommandRequest
 from services import workspace_artifact_publication_service as publication
+from services.presentation_export_capabilities import PresentationExportContractError
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
+    RetryableWorkspaceOperationError,
     WorkspaceOperationCancelled,
     WorkspaceOperationClaim,
     WorkspaceOperationHandlerRegistry,
@@ -44,7 +49,11 @@ from services.workspace_operation_runner import (
     sanitize_workspace_event_payload,
 )
 from services.workspace_quality_export_operation_handlers import (
+    ARTIFACT_EXPORT_DURABILITY_SHADOW_ENV,
+    _artifact_export_durability_shadow_enabled,
     _authored_vnext_export_path,
+    _stage_public_artifact_compatibility_spool,
+    _validate_shadow_durable_publication_candidate,
     WorkspaceExportOperationHandler,
     WorkspaceQualityReviewOperationHandler,
     register_workspace_quality_export_operation_handlers,
@@ -61,6 +70,8 @@ TABLES = [
     WorkspaceOutbox.__table__,
     PresentationExportAttempt.__table__,
     WorkspaceArtifact.__table__,
+    PublicArtifact.__table__,
+    PublicOperationAdmission.__table__,
     AsyncPresentationGenerationTaskModel.__table__,
 ]
 
@@ -86,6 +97,120 @@ def test_authored_vnext_hybrid_routes_to_semantic_manifest_not_legacy_master() -
         export_format="pptx",
         pptx_mode="hybrid",
     ) == "shared"
+
+
+def test_durable_export_shadow_rejects_unfenced_or_unbound_promotion_candidate(monkeypatch) -> None:
+    monkeypatch.delenv(ARTIFACT_EXPORT_DURABILITY_SHADOW_ENV, raising=False)
+    assert not _artifact_export_durability_shadow_enabled()
+    monkeypatch.setenv(ARTIFACT_EXPORT_DURABILITY_SHADOW_ENV, "true")
+    assert _artifact_export_durability_shadow_enabled()
+
+    owner_id = uuid.uuid4()
+    operation_id = uuid.uuid4()
+    claim = SimpleNamespace(
+        owner_id=owner_id,
+        operation_id=operation_id,
+        attempt_token="attempt-current",
+        fencing_token=3,
+    )
+    reference = SimpleNamespace(
+        owner_id=owner_id,
+        tenant_id="tenant-a",
+        created_by_operation_id=operation_id,
+        kind="presentation-pptx",
+        sha256="a" * 64,
+        size_bytes=12,
+    )
+
+    _validate_shadow_durable_publication_candidate(
+        claim=claim,
+        reference=reference,
+        tenant_id="tenant-a",
+        export_format="pptx",
+    )
+
+    claim.fencing_token = 0
+    with pytest.raises(
+        NonRetryableWorkspaceOperationError,
+        match="artifact_export_shadow_fence_invalid",
+    ):
+        _validate_shadow_durable_publication_candidate(
+            claim=claim,
+            reference=reference,
+            tenant_id="tenant-a",
+            export_format="pptx",
+        )
+
+    claim.fencing_token = 3
+    reference.created_by_operation_id = uuid.uuid4()
+    with pytest.raises(
+        NonRetryableWorkspaceOperationError,
+        match="artifact_export_shadow_operation_mismatch",
+    ):
+        _validate_shadow_durable_publication_candidate(
+            claim=claim,
+            reference=reference,
+            tenant_id="tenant-a",
+            export_format="pptx",
+        )
+
+    reference.created_by_operation_id = operation_id
+    claim.attempt_token = ""
+    with pytest.raises(
+        NonRetryableWorkspaceOperationError,
+        match="artifact_export_shadow_attempt_invalid",
+    ):
+        _validate_shadow_durable_publication_candidate(
+            claim=claim,
+            reference=reference,
+            tenant_id="tenant-a",
+            export_format="pptx",
+        )
+
+
+def test_public_artifact_compatibility_spool_streams_and_verifies_ref_identity(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    class BoundedReader(io.BytesIO):
+        def __init__(self, payload: bytes) -> None:
+            super().__init__(payload)
+            self.read_sizes: list[int] = []
+
+        def read(self, size: int = -1) -> bytes:
+            assert 0 < size <= 1024 * 1024
+            self.read_sizes.append(size)
+            return super().read(size)
+
+    payload = b"durable-public-export" * (1024 * 128)
+    source = BoundedReader(payload)
+    monkeypatch.setenv("APP_DATA_DIRECTORY", str(tmp_path))
+
+    path = _stage_public_artifact_compatibility_spool(
+        source,
+        operation_id="operation-1",
+        artifact_id="artifact-1",
+        export_format="pptx",
+        expected_sha256=hashlib.sha256(payload).hexdigest(),
+        expected_size_bytes=len(payload),
+    )
+
+    assert path.read_bytes() == payload
+    assert source.read_sizes
+    assert max(source.read_sizes) <= 1024 * 1024
+
+    with pytest.raises(
+        PresentationExportContractError,
+        match="presentation_export_artifact_digest_mismatch",
+    ):
+        _stage_public_artifact_compatibility_spool(
+            BoundedReader(payload),
+            operation_id="operation-1",
+            artifact_id="artifact-2",
+            export_format="pptx",
+            expected_sha256="0" * 64,
+            expected_size_bytes=len(payload),
+        )
 
 
 def test_workspace_hybrid_publication_seals_semantic_binding(monkeypatch) -> None:
@@ -193,6 +318,8 @@ async def _seed_export(maker, *, revision: int = 7):
             content="export",
             n_slides=1,
             language="ko",
+            mode="authored",
+            theme={},
             revision=revision,
         )
         session.add(presentation)
@@ -234,6 +361,8 @@ async def _seed_quality_operation(
             content="quality",
             n_slides=1,
             language="ko",
+            mode="authored",
+            theme={},
             revision=revision,
         )
         session.add(presentation)
@@ -693,6 +822,8 @@ def test_quality_review_without_fixes_is_revision_neutral_and_detects_change(
                     content="quality",
                     n_slides=1,
                     language="ko",
+                    mode="authored",
+                    theme={},
                     revision=11,
                 )
                 session.add(presentation)
@@ -1134,6 +1265,8 @@ def test_quality_review_propagates_lease_loss_after_review(
                     content="quality",
                     n_slides=1,
                     language="ko",
+                    mode="authored",
+                    theme={},
                     revision=4,
                 )
                 session.add(presentation)
@@ -1623,40 +1756,23 @@ def test_stale_export_publication_compensates_external_file(
     asyncio.run(scenario())
 
 
-def test_export_cancellation_after_prepare_cleans_artifact_and_staging_source(
+def test_export_without_public_admission_fails_before_artifact_prepare(
     tmp_path: Path, monkeypatch
 ):
     async def scenario():
         engine, maker = await _database(tmp_path / "cancel.db")
         app_data = tmp_path / "app-data-cancel"
-        source = app_data / "exports" / "cancel.pptx"
-        source.parent.mkdir(parents=True)
-        source.write_bytes(b"cancel me")
         monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
         try:
             presentation_id, operation_id = await _seed_export(maker)
             async with maker() as session:
                 operation = await session.get(WorkspaceOperation, operation_id)
 
-            async def fake_headers():
-                return {"Cookie": "session=ephemeral"}
-
-            async def fake_export(*_args, **_kwargs):
-                return PresentationAndPath(
-                    presentation_id=presentation_id,
-                    path=str(source),
-                )
-
-            monkeypatch.setattr(
-                "services.presentation_export_adapters.export_presentation",
-                fake_export,
-            )
             prepare_calls: list[dict] = []
-            original_prepare = publication.prepare_workspace_generation_artifact
 
-            async def capture_prepare(session, **kwargs):
+            async def capture_prepare(_session, **kwargs):
                 prepare_calls.append(kwargs)
-                return await original_prepare(session, **kwargs)
+                raise AssertionError("artifact prepare must not run without admission")
 
             monkeypatch.setattr(
                 "services.workspace_quality_export_operation_handlers."
@@ -1677,29 +1793,25 @@ def test_export_cancellation_after_prepare_cleans_artifact_and_staging_source(
                 fencing_token=3,
             )
 
-            class CancellingContext:
+            class Context:
                 def __init__(self):
                     self.claim = claim
-                    self.checks = 0
 
                 async def progress(self, **_kwargs):
                     return True
 
                 async def raise_if_cancelled(self):
-                    self.checks += 1
-                    if self.checks == 3:
-                        raise WorkspaceOperationCancelled()
+                    return None
 
-            with pytest.raises(WorkspaceOperationCancelled):
+            with pytest.raises(
+                RetryableWorkspaceOperationError,
+                match="presentation_export_failed",
+            ):
                 await WorkspaceExportOperationHandler(
                     session_factory=maker,
-                    internal_header_provider=fake_headers,
-                ).execute(CancellingContext())
-            assert not source.exists()
-            assert prepare_calls[0]["expected_source_sha256"] == hashlib.sha256(
-                b"cancel me"
-            ).hexdigest()
-            assert prepare_calls[0]["expected_source_size_bytes"] == len(b"cancel me")
+                    internal_header_provider=lambda: None,
+                ).execute(Context())
+            assert prepare_calls == []
             async with maker() as session:
                 rows = (
                     await session.scalars(
@@ -1708,9 +1820,7 @@ def test_export_cancellation_after_prepare_cleans_artifact_and_staging_source(
                         )
                     )
                 ).all()
-                assert len(rows) == 1
-                assert rows[0].status == "deleted"
-                assert "ephemeral" not in str(rows[0])
+                assert rows == []
         finally:
             await engine.dispose()
 

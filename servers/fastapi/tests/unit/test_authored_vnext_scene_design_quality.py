@@ -689,6 +689,39 @@ def test_dense_cover_preserves_all_copy_in_one_field_at_the_16pt_floor() -> None
     assert first.slide_digest == second.slide_digest
 
 
+def test_four_long_cover_fragments_use_full_safe_envelope_without_lowering_font_floor() -> None:
+    contract = _contract()
+    body = "\n".join(
+        (
+            "Trusted generation keeps every operation identity bound to its durable database fence",
+            "Supervised export owns the complete child process tree until every descendant exits",
+            "Artifact publication verifies the exact digest before exposing an authorized download",
+            "Quality evidence remains blocked whenever required renderer readback is unavailable",
+        )
+    )
+    slide, plan, title_bounds = _slide_and_plan(
+        contract,
+        title="Reliable local presentation export",
+        body=body,
+        slide_id="slide:four-long-cover-fragments",
+    )
+    scene = compile_slide_scene(
+        slide=slide,
+        visual_plan=plan.model_copy(update={"role": "cover"}),
+        title_bounds=title_bounds,
+        contract=contract,
+    )
+
+    editorial = next(
+        item
+        for item in scene.elements
+        if isinstance(item, SceneTextElement) and item.semantic_role == "body"
+    )
+    assert editorial.text == " ".join(body.split())
+    assert editorial.style is not None and editorial.style.font_size >= 16.0
+    assert editorial.bounds.height >= 218.0
+
+
 def test_dense_stacked_cards_repartition_without_dropping_semantic_copy() -> None:
     body = "\n".join(
         (

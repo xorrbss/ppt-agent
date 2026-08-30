@@ -133,6 +133,9 @@ from services.authored_quality_receipt_v2 import (
     evaluate_capacity_browser_metrics,
     quality_receipt_manifest_path,
 )
+from services.authored_quality_receipt_v3_pipeline import (
+    create_generation_quality_receipt_v3,
+)
 from services.source_content.browser_readback import (
     BrowserSourceReadbackError,
     stamp_source_block_ids,
@@ -1684,10 +1687,14 @@ async def _generate_authored_presentation(
                     "capacity_briefs": capacity_briefs,
                     **vision_qa_kwargs,
                 }
+                vqa_provider_recovery_allowed: list[bool] | None = None
                 if has_author_provider_attempt_counts:
-                    revise_kwargs["provider_recovery_allowed"] = [
+                    vqa_provider_recovery_allowed = [
                         count < 2 for count in author_provider_attempt_counts
                     ]
+                    revise_kwargs["provider_recovery_allowed"] = (
+                        vqa_provider_recovery_allowed
+                    )
                 accepted_revise_kwargs = inspect.signature(
                     revise_authored_deck
                 ).parameters
@@ -1705,6 +1712,14 @@ async def _generate_authored_presentation(
                     authored_deck.design_system,
                     **revise_kwargs,
                 )
+                if vqa_provider_recovery_allowed is not None:
+                    # The live reviser receives this same slide-scoped mask
+                    # before provider I/O.  Every allowed VQA call consumes the
+                    # only recovery slot; later stages therefore cannot exceed
+                    # initial=1 + recovery<=1 for that slide.
+                    for index, allowed in enumerate(vqa_provider_recovery_allowed):
+                        if allowed:
+                            author_provider_attempt_counts[index] = 2
                 candidate_htmls, candidate_pngs, fixed = revised[:3]
                 candidate_htmls = list(candidate_htmls)
                 candidate_pngs = list(candidate_pngs)
@@ -1962,13 +1977,11 @@ async def _generate_authored_presentation(
             getattr(composition_profile, "quality_profile_id", "development")
         )
         performance_evidence = {
-            "status": "passed",
-            "scope": "pre_publication",
-            "stagesMs": {
-                name: stage_timings_ms[name]
-                for name in ("outline", "author", "repair", "checkpoint")
-            },
-            "totalMs": round((time.monotonic() - started) * 1000),
+            # Stage timing is observability, not a performance checker result.
+            # Do not mint a quality PASS until a bounded performance policy has
+            # its own versioned measurements and thresholds.
+            "status": "not_assessed",
+            "reasonCode": "performance_checker_evidence_not_persisted",
         }
         quality_receipt_v2 = create_quality_receipt_v2(
             evidence_ledger,
@@ -1980,7 +1993,12 @@ async def _generate_authored_presentation(
                 "safety": safety_evidence,
                 "capacity": capacity_evidence,
                 "sourceReadback": source_evidence,
-                "visualReview": {"status": "passed" if request.vision_qa else "not_applicable"},
+                # ``vision_qa`` selects a repair path; it is not a durable
+                # visual-checker receipt with versioned input/output evidence.
+                "visualReview": {
+                    "status": "not_assessed",
+                    "reasonCode": "visual_checker_evidence_not_persisted",
+                },
                 "performance": performance_evidence,
                 "nativeCoverage": {"status": "not_assessed"},
                 "publication": {"status": "pending"},
@@ -2004,6 +2022,37 @@ async def _generate_authored_presentation(
                 else None
             ),
         )
+        quality_receipt_v3 = await create_generation_quality_receipt_v3(
+            receipt_v2=quality_receipt_v2,
+            job_id=(generation_job.id if generation_job is not None else None),
+            slide_roles=roles,
+            provider_attempt_counts=author_provider_attempt_counts,
+            repaired_slide_indices=repaired_gate_indices,
+            capacity_evidence=capacity_evidence,
+            safety_evidence=safety_evidence,
+            browser_metrics=tuple(retained_final_metrics or ()),
+            visual_review_passed=bool(request.vision_qa),
+            source_manifest=(request._source_content_manifest if source_reflow else None),
+            source_readback=(
+                source_readback_receipt.as_dict()
+                if source_readback_receipt is not None
+                else None
+            ),
+            # These are the exact completed-deck artifacts, not registry
+            # imports: the frozen shared prompt and sealed Scene prove which
+            # prompt/semantic authority Chromium actually consumed.
+            design_system_prompt=getattr(authored_deck, "design_system", None),
+            scene_envelope=scene_envelope.receipt(),
+            # The public composition root may install a DB/Object Storage
+            # append port on the pipeline.  Its absence is deliberately
+            # recorded as a public durability blocker by the V3 adapter.
+            persistence_port=getattr(
+                request, "_quality_receipt_v3_persistence_port", None
+            ),
+            durability_profile=getattr(
+                request, "_quality_receipt_v3_durability_profile", None
+            ),
+        )
         quality_gate_receipt = {
             **quality_gate_receipt,
             **quality_receipt_v2.to_dict(),
@@ -2014,6 +2063,19 @@ async def _generate_authored_presentation(
             "residualIssues": residual_gate_failures,
             "residualIssueCount": len(residual_gate_failures),
             "requestedQualityProfile": quality_profile_id,
+            "qualityReceiptV3": {
+                **quality_receipt_v3.to_dict(),
+                "qualityStatus": (
+                    "passed" if quality_receipt_v3.gate_passed else "blocked"
+                ),
+                "releaseReadiness": "blocked",
+                "promotionReady": False,
+                "phase7Evidence": {
+                    "powerPointReadback": "unavailable",
+                    "libreOfficeReadback": "unavailable",
+                    "canary": "not_run",
+                },
+            },
             "releaseEligibility": {
                 "status": (
                     "pending"
