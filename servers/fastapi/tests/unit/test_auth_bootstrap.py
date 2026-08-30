@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from api.v1.auth import bootstrap
 from api.v1.auth.users import PASSWORD_HELPER
-from models.sql.access_token import AccessToken
+from models.sql.access_token import AccessToken, hash_access_token
 from models.sql.user import User
 from models.sql.template_v2 import TemplateV2
 from utils import user_config_store
@@ -113,7 +113,12 @@ def test_reset_auth_recovers_admin_without_replacing_account(
                 session.add(admin)
                 await session.flush()
                 original_id = admin.id
-                session.add(AccessToken(token="sk-presenton-old", user_id=admin.id))
+                session.add(
+                    AccessToken(
+                        token_hash=hash_access_token("sk-presenton-old"),
+                        user_id=admin.id,
+                    )
+                )
                 await session.commit()
 
             async def skip_ownership_backfill(_session, _admin):

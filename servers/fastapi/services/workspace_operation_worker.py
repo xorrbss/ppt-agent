@@ -14,7 +14,12 @@ import os
 import signal
 
 from migrations import migrate_database_on_startup
-from services.database import create_db_and_tables, dispose_engines, sql_engine
+from services.database import (
+    create_db_and_tables,
+    dispose_engines,
+    require_public_controller_database_authority,
+    sql_engine,
+)
 from services.artifact_store import configured_public_artifact_worker_object_port
 from services.artifact_lifecycle_runtime import (
     start_public_artifact_lifecycle_runtime,
@@ -179,6 +184,7 @@ async def run_external_worker(stop: asyncio.Event | None = None) -> None:
     os.makedirs(get_app_data_directory_env(), exist_ok=True)
     await migrate_database_on_startup()
     await create_db_and_tables()
+    await require_public_controller_database_authority()
     await start_runtime_settings_coordinator()
     coordinator_started = True
     stop = stop or asyncio.Event()

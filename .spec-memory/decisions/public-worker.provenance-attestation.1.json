@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "key": "public-worker.provenance-attestation",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Worker isolation provenance is computed from the exact launch attestation and must never hardcode network-none or production eligibility.",
+  "scope": [
+    "public-worker",
+    "provenance"
+  ],
+  "invariants": [
+    "Job Object-only attestation remains productionEligible false"
+  ],
+  "forbidden": [
+    "Hardcoded network_none_worker success evidence"
+  ],
+  "evidence": [
+    "servers/fastapi/services/trusted_executor/wire_transport.py",
+    "servers/fastapi/services/public_export_operation.py",
+    "servers/fastapi/services/workspace_quality_export_operation_handlers.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-30T13:55:38.7348990+00:00"
+}

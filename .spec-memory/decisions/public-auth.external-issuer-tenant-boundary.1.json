@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "key": "public-auth.external-issuer-tenant-boundary",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Public production requires verified external issuer tenant claims and exact scopes; automatic access is limited to explicit loopback development.",
+  "scope": [
+    "public-auth",
+    "tenant"
+  ],
+  "invariants": [
+    "Tenant authority comes from a verified principal envelope",
+    "Public API tokens are endpoint-scoped"
+  ],
+  "forbidden": [
+    "Claiming public multi-tenancy from a global tenant environment variable",
+    "Production auto-access without an external issuer"
+  ],
+  "evidence": [
+    "servers/fastapi/api/v1/auth/principal.py",
+    "servers/fastapi/api/v2/router.py",
+    "servers/fastapi/services/database.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-30T13:55:37.9710167+00:00"
+}

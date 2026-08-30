@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "key": "public-worker.windows-attestation-boundary",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Windows local workers are development-only; production fails closed unless launcher evidence proves network-none, read-only filesystem, and low privilege.",
+  "scope": [
+    "public-worker",
+    "windows-isolation"
+  ],
+  "invariants": [
+    "Job Object resource supervision is not network or filesystem isolation",
+    "Production eligibility is derived from launcher evidence"
+  ],
+  "forbidden": [
+    "Treating windows-local development markers as production isolation"
+  ],
+  "evidence": [
+    "servers/fastapi/services/trusted_executor/isolation_policy.py",
+    "servers/fastapi/services/trusted_executor/composition.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-30T13:55:37.2554401+00:00"
+}

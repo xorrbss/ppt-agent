@@ -1,4 +1,5 @@
 from collections.abc import AsyncGenerator
+import os
 import time
 
 from sqlalchemy import BigInteger, event, inspect, or_, text
@@ -52,6 +53,7 @@ from models.sql.workspace import (
 )
 from models.sql.user import User
 from models.sql.access_token import AccessToken
+from models.sql.public_principal_binding import PublicPrincipalBinding
 from models.sql.provider_settings import ProviderSettings
 from models.sql.reference_snapshot import ReferenceSnapshot
 from models.sql.asset_gateway_idempotency_receipt import (
@@ -79,7 +81,7 @@ from models.sql.public_artifact import (
 from models.sql.authored_vnext_repository import AUTHORED_VNEXT_SQL_TABLES
 from templates.v2.catalog import get_template_v2_default_template_id
 from services.presentation_profile_persistence import stamp_presentation_profile
-from utils.owner_context import get_current_owner_id
+from utils.owner_context import get_current_owner_id, get_current_tenant_id
 from utils.get_env import get_migrate_database_on_startup_env
 from utils.db_utils import get_database_url_and_connect_args, get_pool_kwargs
 
@@ -144,6 +146,81 @@ def _configure_sqlite_connection(dbapi_connection) -> None:
 async_session_maker = async_sessionmaker(sql_engine, expire_on_commit=False)
 
 
+PUBLIC_CONTROLLER_DATABASE_ROLE = "presenton_public_controller"
+
+
+def _local_development_environment() -> bool:
+    return (os.getenv("ENVIRONMENT") or "development").strip().lower() in {
+        "local",
+        "development",
+        "dev",
+        "test",
+    }
+
+
+async def _postgres_role_authority(engine: AsyncEngine) -> dict[str, object]:
+    async with engine.connect() as connection:
+        row = (
+            await connection.execute(
+                text(
+                    "SELECT current_user AS role_name, role.rolsuper AS is_superuser, "
+                    "role.rolbypassrls AS bypass_rls, "
+                    "pg_has_role(current_user, :controller_role, 'member') "
+                    "AS is_controller "
+                    "FROM pg_roles AS role WHERE role.rolname = current_user"
+                ),
+                {"controller_role": PUBLIC_CONTROLLER_DATABASE_ROLE},
+            )
+        ).mappings().one()
+    return dict(row)
+
+
+def validate_public_database_authority(
+    authority: dict[str, object], *, controller: bool
+) -> None:
+    """Reject shared/over-privileged roles at the public process boundary."""
+
+    if authority.get("is_superuser") is True or authority.get("bypass_rls") is True:
+        raise RuntimeError("public_database_role_bypasses_rls")
+    is_controller = authority.get("is_controller") is True
+    if controller and not is_controller:
+        raise RuntimeError("public_controller_database_role_required")
+    if not controller and is_controller:
+        raise RuntimeError("public_api_database_role_must_not_be_controller")
+
+
+async def require_public_controller_database_authority(
+    engine: AsyncEngine = sql_engine,
+) -> None:
+    """Require the dedicated cross-tenant queue role for a controller process."""
+
+    if engine.dialect.name != "postgresql":
+        if _local_development_environment() and engine.dialect.name == "sqlite":
+            return
+        raise RuntimeError("public_controller_postgresql_required")
+    validate_public_database_authority(
+        await _postgres_role_authority(engine),
+        controller=True,
+    )
+
+
+async def require_public_api_database_authority(
+    engine: AsyncEngine = sql_engine,
+) -> None:
+    """Ensure a remote public API cannot inherit controller or BYPASSRLS power."""
+
+    if _local_development_environment() or not (
+        os.getenv("PPT_PUBLIC_OIDC_ISSUER") or ""
+    ).strip():
+        return
+    if engine.dialect.name != "postgresql":
+        raise RuntimeError("public_api_postgresql_required")
+    validate_public_database_authority(
+        await _postgres_role_authority(engine),
+        controller=False,
+    )
+
+
 _STRICT_OWNER_MODELS = (
     PresentationModel,
     SlideModel,
@@ -173,42 +250,84 @@ _STRICT_OWNER_MODELS = (
     PublicExportIdentity,
 )
 
+# These public authority rows carry both dimensions.  Owner scoping alone is
+# insufficient because an external issuer may legitimately reuse the same
+# subject UUID in more than one tenant.
+_STRICT_TENANT_MODELS = (
+    PublicOperationAdmission,
+    PublicArtifact,
+    PublicExportIdentity,
+)
+
+
+@event.listens_for(Session, "after_begin")
+def _set_postgres_transaction_principal(_session, _transaction, connection) -> None:
+    """Expose request identity to PostgreSQL RLS without widening DB authority."""
+
+    if connection.dialect.name != "postgresql":
+        return
+    owner_id = get_current_owner_id()
+    tenant_id = get_current_tenant_id()
+    connection.execute(text("SET LOCAL row_security = on"))
+    connection.execute(
+        text(
+            "SELECT "
+            "set_config('presenton.owner_id', :owner_id, true), "
+            "set_config('presenton.tenant_id', :tenant_id, true)"
+        ),
+        {
+            "owner_id": str(owner_id) if owner_id is not None else "",
+            "tenant_id": tenant_id or "",
+        },
+    )
+
 
 @event.listens_for(Session, "do_orm_execute")
 def _scope_owned_selects(execute_state) -> None:
-    """Apply tenant criteria to every ORM SELECT performed during a request."""
+    """Apply independent owner and tenant criteria to request ORM SELECTs."""
     owner_id = get_current_owner_id()
-    if (
-        owner_id is None
-        or not execute_state.is_select
-        or execute_state.execution_options.get("skip_owner_scope")
-    ):
+    tenant_id = get_current_tenant_id()
+    if not execute_state.is_select:
         return
 
     statement = execute_state.statement
-    catalog_default_id = get_template_v2_default_template_id()
-    for model in _STRICT_OWNER_MODELS:
+    if owner_id is not None and not execute_state.execution_options.get(
+        "skip_owner_scope"
+    ):
+        catalog_default_id = get_template_v2_default_template_id()
+        for model in _STRICT_OWNER_MODELS:
+            statement = statement.options(
+                with_loader_criteria(
+                    model,
+                    lambda row: row.owner_id == owner_id,
+                    include_aliases=True,
+                )
+            )
         statement = statement.options(
             with_loader_criteria(
-                model,
-                lambda row: row.owner_id == owner_id,
+                TemplateV2,
+                lambda row: or_(
+                    row.owner_id == owner_id,
+                    (row.owner_id.is_(None) & row.is_default.is_(True)),
+                    (
+                        row.owner_id.is_(None)
+                        & (row.id == catalog_default_id)
+                    ),
+                ),
                 include_aliases=True,
             )
         )
-    statement = statement.options(
-        with_loader_criteria(
-            TemplateV2,
-            lambda row: or_(
-                row.owner_id == owner_id,
-                (row.owner_id.is_(None) & row.is_default.is_(True)),
-                (
-                    row.owner_id.is_(None)
-                    & (row.id == catalog_default_id)
-                ),
-            ),
-            include_aliases=True,
-        )
-    )
+    if tenant_id is not None and not execute_state.execution_options.get(
+        "skip_tenant_scope"
+    ):
+        for model in _STRICT_TENANT_MODELS:
+            statement = statement.options(
+                with_loader_criteria(
+                    model,
+                    lambda row: row.tenant_id == tenant_id,
+                    include_aliases=True,
+                )
+            )
     execute_state.statement = statement
 
 
@@ -238,12 +357,18 @@ def _stamp_new_owned_rows(session, _flush_context, _instances) -> None:
             stamp_presentation_profile(instance, allow_driver_transition=True)
 
     owner_id = get_current_owner_id()
-    if owner_id is None:
+    tenant_id = get_current_tenant_id()
+    if owner_id is None and tenant_id is None:
         return
     owner_models = _STRICT_OWNER_MODELS + (TemplateV2,)
     for instance in session.new:
-        if isinstance(instance, owner_models):
+        if owner_id is not None and isinstance(instance, owner_models):
             instance.owner_id = owner_id
+        if tenant_id is not None and isinstance(instance, _STRICT_TENANT_MODELS):
+            supplied_tenant = getattr(instance, "tenant_id", None)
+            if supplied_tenant not in {None, "", tenant_id}:
+                raise RuntimeError("tenant_scope_write_mismatch")
+            instance.tenant_id = tenant_id
 
 
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:

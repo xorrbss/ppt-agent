@@ -102,7 +102,11 @@
     "public-generation.failed-attempt-timing": "decisions/public-generation.failed-attempt-timing.2.json",
     "public-export.fidelity-performance-contract": "decisions/public-export.fidelity-performance-contract.2.json",
     "public-v2.fidelity-only-browser-export": "decisions/public-v2.fidelity-only-browser-export.1.json",
-    "public-v2.browser-operation-lifecycle": "decisions/public-v2.browser-operation-lifecycle.1.json"
+    "public-v2.browser-operation-lifecycle": "decisions/public-v2.browser-operation-lifecycle.1.json",
+    "public-worker.windows-attestation-boundary": "decisions/public-worker.windows-attestation-boundary.1.json",
+    "public-auth.external-issuer-tenant-boundary": "decisions/public-auth.external-issuer-tenant-boundary.2.json",
+    "public-worker.provenance-attestation": "decisions/public-worker.provenance-attestation.1.json",
+    "public-db.controller-authority": "decisions/public-db.controller-authority.1.json"
   },
   "readFirst": [
     "AGENTS.md",
@@ -111,5 +115,5 @@
     "docs/public-generation-export-phase6-quality-contract-session-e-20260830.md",
     "docs/public-generation-export-phase8-phase9-readiness-manifest-20260830.md"
   ],
-  "updatedAt": "2026-08-30T14:38:36.7745041+00:00"
+  "updatedAt": "2026-08-30T14:42:26.4840369+00:00"
 }

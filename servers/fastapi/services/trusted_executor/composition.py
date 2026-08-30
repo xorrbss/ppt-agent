@@ -10,6 +10,7 @@ from typing import Protocol
 
 from services.trusted_executor.isolation_policy import (
     IsolationUnavailableError,
+    PlatformIsolationReport,
     probe_platform_isolation,
 )
 from services.trusted_executor.process_supervisor import probe_process_supervisor
@@ -46,7 +47,12 @@ def default_trusted_worker_scheduler_policy() -> SchedulerPolicy:
 class TrustedWorkerExecutorRuntime:
     dispatcher: TrustedWorkerDispatcher
     transport: _ClosableTransport
+    isolation_report: PlatformIsolationReport
     _closed: bool = False
+
+    @property
+    def isolation_attestation(self) -> dict[str, object]:
+        return self.isolation_report.to_attestation()
 
     async def close(self) -> None:
         if self._closed:
@@ -86,11 +92,16 @@ def create_trusted_worker_executor_runtime(
         raise IsolationUnavailableError(
             "PUBLIC_TRUSTED_WORKER_SANDBOX_BACKEND=windows-local is required"
         )
+    runtime_environment = source.get("ENVIRONMENT", "production").strip().lower()
     local_policy = source.get("PUBLIC_TRUSTED_WORKER_LOCAL_POLICY", "").strip().lower()
     if local_policy != "development":
         raise IsolationUnavailableError(
             "windows-local requires PUBLIC_TRUSTED_WORKER_LOCAL_POLICY=development; "
             "normal public profiles require stronger network and filesystem isolation"
+        )
+    if runtime_environment not in {"local", "development", "dev", "test"}:
+        raise IsolationUnavailableError(
+            "windows-local is forbidden unless ENVIRONMENT is an explicit local development tier"
         )
     supervisor_capability = probe_process_supervisor()
     if (
@@ -102,6 +113,10 @@ def create_trusted_worker_executor_runtime(
     if isolation_report.backend != "windows-job-object-only":
         raise IsolationUnavailableError(
             "windows-local trusted workers require Windows Job Object supervision"
+        )
+    if isolation_report.production_eligible:
+        raise IsolationUnavailableError(
+            "windows-local development report unexpectedly claims production eligibility"
         )
     root.mkdir(parents=True, exist_ok=True)
     transport = SupervisedStdioWireTransport(
@@ -124,6 +139,7 @@ def create_trusted_worker_executor_runtime(
     return TrustedWorkerExecutorRuntime(
         dispatcher=dispatcher,
         transport=transport,
+        isolation_report=isolation_report,
     )
 
 

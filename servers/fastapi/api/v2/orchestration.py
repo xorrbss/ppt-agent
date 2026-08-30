@@ -30,6 +30,7 @@ class PublicRequestActor:
     owner_id: uuid.UUID
     tenant_id: str
     correlation_id: str
+    scopes: frozenset[str] = frozenset()
 
 
 class PublicV2OrchestrationError(RuntimeError):
@@ -103,7 +104,16 @@ def get_public_request_actor(request: Request) -> PublicRequestActor:
         owner_id=principal.user_id,
         tenant_id=principal.tenant_id,
         correlation_id=principal.trace_id,
+        scopes=frozenset(principal.scopes),
     )
+
+
+def require_public_actor_scope(actor: PublicRequestActor, required_scope: str) -> None:
+    if required_scope not in actor.scopes:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"reasonCode": "principal_scope_required"},
+        )
 
 
 def get_public_v2_orchestrator(request: Request) -> PublicV2Orchestrator:

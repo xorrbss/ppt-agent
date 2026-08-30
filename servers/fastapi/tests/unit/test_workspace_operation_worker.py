@@ -86,6 +86,9 @@ def test_external_worker_owns_migrations_runner_and_shutdown(
     monkeypatch.setattr(worker, "migrate_database_on_startup", AsyncMock())
     monkeypatch.setattr(worker, "create_db_and_tables", AsyncMock())
     monkeypatch.setattr(
+        worker, "require_public_controller_database_authority", AsyncMock()
+    )
+    monkeypatch.setattr(
         worker, "start_runtime_settings_coordinator", AsyncMock()
     )
     monkeypatch.setattr(
@@ -119,6 +122,7 @@ def test_external_worker_owns_migrations_runner_and_shutdown(
 
     worker.migrate_database_on_startup.assert_awaited_once_with()
     worker.create_db_and_tables.assert_awaited_once_with()
+    worker.require_public_controller_database_authority.assert_awaited_once_with()
     worker.start_runtime_settings_coordinator.assert_awaited_once_with()
     worker.register_presentation_generation_operation_handler.assert_called_once_with(
         replace=True

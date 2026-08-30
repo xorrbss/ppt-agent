@@ -23,6 +23,7 @@ from api.v2.orchestration import (
     PublicV2Orchestrator,
     get_public_request_actor,
     get_public_v2_orchestrator,
+    require_public_actor_scope,
 )
 from services.artifact_store import (
     ArtifactBindingError,
@@ -123,6 +124,7 @@ async def submit_presentation_generation(
     actor: ActorDependency,
     orchestrator: OrchestratorDependency,
 ) -> OperationReceiptV2:
+    require_public_actor_scope(actor, "presentations:write")
     receipt = await _delegate(
         orchestrator.submit_generation(
             actor=actor,
@@ -150,6 +152,7 @@ async def submit_presentation_export(
     actor: ActorDependency,
     orchestrator: OrchestratorDependency,
 ) -> OperationReceiptV2:
+    require_public_actor_scope(actor, "presentations:write")
     receipt = await _delegate(
         orchestrator.submit_export(
             actor=actor,
@@ -175,6 +178,7 @@ async def get_operation_status(
     actor: ActorDependency,
     orchestrator: OrchestratorDependency,
 ) -> OperationStatusV2:
+    require_public_actor_scope(actor, "operations:read")
     result = await _delegate(
         orchestrator.get_operation(actor=actor, operation_id=operation_id)
     )
@@ -193,6 +197,7 @@ async def list_operation_events(
     after: str | None = Query(default=None, pattern=PUBLIC_ID_PATTERN),
     limit: int = Query(default=100, ge=1, le=200),
 ) -> OperationEventPageV2:
+    require_public_actor_scope(actor, "operations:read")
     result = await _delegate(
         orchestrator.list_operation_events(
             actor=actor,
@@ -215,6 +220,7 @@ async def cancel_operation(
     actor: ActorDependency,
     orchestrator: OrchestratorDependency,
 ) -> CancelOperationReceiptV2:
+    require_public_actor_scope(actor, "operations:cancel")
     result = await _delegate(
         orchestrator.cancel_operation(actor=actor, operation_id=operation_id)
     )
@@ -237,6 +243,7 @@ async def download_artifact(
     actor: ActorDependency,
     orchestrator: OrchestratorDependency,
 ) -> RedirectResponse:
+    require_public_actor_scope(actor, "artifacts:read")
     grant = await _delegate(
         orchestrator.authorize_download(actor=actor, artifact_id=artifact_id)
     )

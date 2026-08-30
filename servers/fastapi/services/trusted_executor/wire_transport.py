@@ -281,7 +281,14 @@ class SupervisedStdioWireTransport:
                 (job.input_artifact, *references), staged_paths, strict=True
             ):
                 _verify_artifact_file(reference, staged_path)
-            resource_metrics = await asyncio.to_thread(supervisor.telemetry)
+            supervisor_metrics = await asyncio.to_thread(supervisor.telemetry)
+            resource_metrics = {
+                **supervisor_metrics,
+                # This is derived from the exact platform report used by launch
+                # admission.  Child environment markers are never accepted as
+                # isolation evidence.
+                "isolationAttestation": self._isolation_report.to_attestation(),
+            }
         except asyncio.CancelledError:
             await asyncio.to_thread(
                 supervisor.cancel, zero_timeout=self._zero_timeout_seconds

@@ -59,8 +59,18 @@ def probe_process_supervisor(*, cgroup_root: pathlib.Path | None = None) -> Proc
 
     if os.name == "nt":
         try:
-            ctypes.WinDLL("kernel32", use_last_error=True)
-        except OSError as error:
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            for symbol in (
+                "CreateJobObjectW",
+                "SetInformationJobObject",
+                "AssignProcessToJobObject",
+                "QueryInformationJobObject",
+                "TerminateJobObject",
+                "CreateProcessW",
+                "ResumeThread",
+            ):
+                getattr(kernel32, symbol)
+        except (AttributeError, OSError) as error:
             return ProcessSupervisorCapability(
                 backend="windows-job-object",
                 host_support_detected=False,
@@ -71,7 +81,10 @@ def probe_process_supervisor(*, cgroup_root: pathlib.Path | None = None) -> Proc
             backend="windows-job-object",
             host_support_detected=True,
             enforcement_ready=True,
-            reason="Windows Job Object APIs detected",
+            reason=(
+                "Windows Job Object ownership/resource APIs detected; restricted-token, "
+                "AppContainer, outbound-deny, and filesystem ACL isolation are not provided"
+            ),
         )
 
     if sys.platform.startswith("linux"):

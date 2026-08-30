@@ -9,7 +9,14 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
 from api.v1.auth.assets import is_app_data_path_authorized
-from api.v1.auth.principal import AuthPrincipal, resolve_request_principal
+from api.v1.auth.principal import (
+    PrincipalBoundaryError,
+    PrincipalEnvelope,
+    is_loopback_development_request,
+    local_development_tenant_id,
+    require_public_issuer_boundary,
+    resolve_request_principal,
+)
 from utils.owner_context import (
     get_current_owner_id,
     reset_current_tenant_id,
@@ -144,6 +151,17 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
         return path in self._PROTECTED_NON_API_PATHS
 
     async def dispatch(self, request: Request, call_next):
+        # Evaluate the external-principal boundary before DISABLE_AUTH or an
+        # already-populated ContextVar can bypass public production auth.
+        path = self._normalize(request.url.path)
+        try:
+            require_public_issuer_boundary(request)
+        except PrincipalBoundaryError as error:
+            return JSONResponse(
+                status_code=error.status_code,
+                content={"detail": error.code},
+            )
+
         if is_disable_auth_enabled():
             # Focused harnesses may install a stricter outer owner scope. Keep
             # that explicit request-local identity instead of replacing it.
@@ -164,13 +182,36 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
                         status_code=503,
                         content={"detail": "Bootstrap administrator is unavailable"},
                     )
-                principal = AuthPrincipal(
+                public_loopback = path.startswith("/api/v2/")
+                if public_loopback and not is_loopback_development_request(request):
+                    return JSONResponse(
+                        status_code=503,
+                        content={"detail": "public_local_auth_unavailable"},
+                    )
+                principal = PrincipalEnvelope(
                     user_id=admin.id,
                     username=admin.username,
                     is_admin=True,
                     method="jwt",
-                    tenant_id=(os.getenv("PPT_SERVICE_TENANT_ID") or "default").strip(),
+                    tenant_id=(
+                        local_development_tenant_id()
+                        if public_loopback
+                        else (os.getenv("PPT_SERVICE_TENANT_ID") or "default").strip()
+                    ),
                     trace_id=str(getattr(request.state, "request_id", "") or secrets.token_hex(16)),
+                    subject=str(admin.id),
+                    issuer="presenton-loopback-development",
+                    audience=("presenton-public-api" if public_loopback else "presenton-api"),
+                    scopes=(
+                        (
+                            "artifacts:read",
+                            "operations:cancel",
+                            "operations:read",
+                            "presentations:write",
+                        )
+                        if public_loopback
+                        else ()
+                    ),
                 )
                 request.state.auth_principal = principal
                 request.state.current_user = admin
@@ -189,8 +230,6 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
 
         # Decide auth on the NORMALIZED path so dot-segment traversal can't slip a
         # protected path past the exemptions (routing still uses the real path).
-        path = self._normalize(request.url.path)
-
         if (
             request.method == "OPTIONS"
             or not self._requires_auth(path)
@@ -202,7 +241,7 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
             configured = bool(
                 await session.scalar(select(func.count()).select_from(User))
             )
-            if not configured:
+            if not configured and not path.startswith("/api/v2/"):
                 return JSONResponse(
                     status_code=428,
                     content={
@@ -210,7 +249,13 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
                         "setup_required": True,
                     },
                 )
-            principal, user = await resolve_request_principal(request, session)
+            try:
+                principal, user = await resolve_request_principal(request, session)
+            except PrincipalBoundaryError as error:
+                return JSONResponse(
+                    status_code=error.status_code,
+                    content={"detail": error.code},
+                )
             if principal is None:
                 return JSONResponse(
                     status_code=401,
