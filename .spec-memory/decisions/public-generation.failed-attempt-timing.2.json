@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "key": "public-generation.failed-attempt-timing",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Handled authored failures CAS-project safe timing to PostgreSQL; exact preflight gates provider repair; hard worker crashes remain unmeasured.",
+  "scope": [
+    "public-generation",
+    "observability",
+    "reliability"
+  ],
+  "invariants": [
+    "A handled authored exception projects a digest-verified content-free timing receipt into the fenced PostgreSQL operation result before failure transition.",
+    "The local immutable attempt ledger is recovery fallback only after a PostgreSQL projection exists.",
+    "Missing Chromium metrics, font, QID, visible-text, and capacity failures cannot enter provider repair.",
+    "The existing flagged-slide repair path preserves non-flagged completed checkpoints and deterministic residuals do not retry the whole deck."
+  ],
+  "forbidden": [
+    "Do not claim a timing receipt for a hard process or host crash that occurs before the handled-failure projection.",
+    "Do not invoke provider repair before the exact HTML PNG Chromium tuple passes preflight authority."
+  ],
+  "evidence": [
+    "servers/fastapi/services/presentation_generation_operation_handler.py",
+    "servers/fastapi/services/workspace_generation_timing_attachment.py",
+    "servers/fastapi/services/authored_presentation_generation.py",
+    "servers/fastapi/services/authored_generation_preflight.py",
+    "servers/fastapi/tests/unit/test_authored_generation_timing_receipt.py",
+    "servers/fastapi/tests/unit/test_authored_generation_preflight.py"
+  ],
+  "supersedes": "public-generation.failed-attempt-timing@1",
+  "recordedAt": "2026-08-30T14:33:21.0763109+00:00"
+}

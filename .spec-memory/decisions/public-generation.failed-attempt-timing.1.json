@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "key": "public-generation.failed-attempt-timing",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Failed authored attempts expose safe timing through a fenced result; deterministic residual gates do not retry the whole deck.",
+  "scope": [
+    "public-generation",
+    "observability",
+    "reliability"
+  ],
+  "invariants": [
+    "Failed attempt timing contains no prompts, responses, credentials, filesystem paths, or raw provider payloads.",
+    "Completed slide checkpoints remain reusable and only failed slides enter bounded repair.",
+    "Font, QID, visible-text, and capacity preflight failures block provider repair before provider invocation."
+  ],
+  "forbidden": [
+    "Whole-deck retry after deterministic residual capacity, composition, or sealed quality gate failure."
+  ],
+  "evidence": [
+    "servers/fastapi/services/presentation_generation_operation_handler.py",
+    "servers/fastapi/services/workspace_operation_runner.py",
+    "servers/fastapi/services/authored_presentation_generation.py",
+    "servers/fastapi/services/authored_generation_preflight.py",
+    "servers/fastapi/tests/unit/test_authored_generation_timing_receipt.py",
+    "servers/fastapi/tests/unit/test_authored_generation_preflight.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-30T14:03:55.2186334+00:00"
+}

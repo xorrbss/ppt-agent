@@ -131,6 +131,118 @@ class PublicOperationFence:
     fencing_token: int | None
 
 
+@dataclass(slots=True)
+class _ProviderStageUsage:
+    logical_keys: set[tuple[int, int]] = field(default_factory=set)
+    physical_calls: int = 0
+    retry_calls: int = 0
+    reported_usage_calls: int = 0
+    unavailable_usage_calls: int = 0
+    priced_calls: int = 0
+    latency_ms: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    actual_cost_microunits: int = 0
+    estimated_cost_microunits: int = 0
+
+    def to_dict(self) -> dict[str, int]:
+        return {
+            "logicalCalls": len(self.logical_keys),
+            "physicalCalls": self.physical_calls,
+            "retryCalls": self.retry_calls,
+            "reportedUsageCalls": self.reported_usage_calls,
+            "unavailableUsageCalls": self.unavailable_usage_calls,
+            "pricedCalls": self.priced_calls,
+            "latencyMs": self.latency_ms,
+            "inputTokens": self.input_tokens,
+            "outputTokens": self.output_tokens,
+            "actualCostMicrounits": self.actual_cost_microunits,
+            "estimatedCostMicrounits": self.estimated_cost_microunits,
+        }
+
+
+@dataclass(slots=True)
+class ProviderOperationUsage:
+    """Content-free logical/physical provider usage for one operation attempt."""
+
+    _stages: dict[str, _ProviderStageUsage] = field(default_factory=dict)
+
+    def _stage(self, name: str) -> _ProviderStageUsage:
+        normalized = str(name).strip().lower()
+        if (
+            not normalized
+            or len(normalized) > 64
+            or any(
+                character not in "abcdefghijklmnopqrstuvwxyz0123456789._-"
+                for character in normalized
+            )
+        ):
+            raise ValueError("provider_usage_stage_invalid")
+        return self._stages.setdefault(normalized, _ProviderStageUsage())
+
+    def record_admission(
+        self,
+        scope: ProviderUsageScope,
+        *,
+        semantic_slot: str,
+        is_retry: bool,
+        estimated_cost_microunits: int,
+    ) -> None:
+        stage = self._stage(scope.stage)
+        slide = -1 if scope.slide_index is None else scope.slide_index
+        stage.logical_keys.add(
+            (slide, scope.public_logical_call_ordinal(semantic_slot))
+        )
+        stage.physical_calls += 1
+        stage.retry_calls += int(is_retry)
+        stage.estimated_cost_microunits += max(0, estimated_cost_microunits)
+
+    def record_latency(self, stage_name: str, latency_ms: float) -> None:
+        self._stage(stage_name).latency_ms += max(0, round(float(latency_ms)))
+
+    def record_usage(
+        self,
+        stage_name: str,
+        *,
+        usage_state: str,
+        input_tokens: int | None,
+        output_tokens: int | None,
+        actual_cost_microunits: int | None,
+    ) -> None:
+        stage = self._stage(stage_name)
+        stage.reported_usage_calls += int(usage_state == "reported")
+        stage.unavailable_usage_calls += int(usage_state == "unavailable")
+        stage.priced_calls += int(actual_cost_microunits is not None)
+        stage.input_tokens += input_tokens or 0
+        stage.output_tokens += output_tokens or 0
+        stage.actual_cost_microunits += actual_cost_microunits or 0
+
+    def snapshot(self) -> dict[str, object]:
+        """Return the strict scalar shape accepted by attempt timing receipts."""
+
+        stages = {
+            name: usage.to_dict()
+            for name, usage in sorted(self._stages.items())
+        }
+        totals = {
+            key: sum(stage[key] for stage in stages.values())
+            for key in (
+                "logicalCalls",
+                "physicalCalls",
+                "retryCalls",
+                "reportedUsageCalls",
+                "unavailableUsageCalls",
+                "pricedCalls",
+                "latencyMs",
+                "inputTokens",
+                "outputTokens",
+                "actualCostMicrounits",
+                "estimatedCostMicrounits",
+            )
+        }
+        return {"totals": totals, "stages": stages}
+
+
 class ProviderSpendFenceRejected(RuntimeError):
     """The worker no longer owns the durable operation claim."""
 
@@ -156,6 +268,25 @@ _ACTIVE_PROVIDER_ADMISSION: ContextVar[ProviderCallLease | None] = ContextVar(
 _ACTIVE_PROVIDER_IDEMPOTENCY_KEY: ContextVar[str | None] = ContextVar(
     "active_provider_idempotency_key", default=None
 )
+_ACTIVE_OPERATION_USAGE: ContextVar[ProviderOperationUsage | None] = ContextVar(
+    "active_provider_operation_usage", default=None
+)
+
+
+@contextmanager
+def provider_operation_usage_scope() -> Iterator[ProviderOperationUsage]:
+    """Collect safe provider counters across nested/concurrent stage scopes."""
+
+    existing = _ACTIVE_OPERATION_USAGE.get()
+    if existing is not None:
+        yield existing
+        return
+    usage = ProviderOperationUsage()
+    token = _ACTIVE_OPERATION_USAGE.set(usage)
+    try:
+        yield usage
+    finally:
+        _ACTIVE_OPERATION_USAGE.reset(token)
 
 
 @contextmanager
@@ -389,6 +520,8 @@ async def provider_call_admission(
     durable_lease = None
     public_lease = None
     public_started_at = monotonic()
+    sdk_started_at: float | None = None
+    operation_usage = _ACTIVE_OPERATION_USAGE.get()
     active_token = _ACTIVE_PROVIDER_ADMISSION.set(lease)
     idempotency_token: Token[str | None] | None = None
     try:
@@ -452,6 +585,14 @@ async def provider_call_admission(
                     )
                 )
             )
+        if operation_usage is not None:
+            operation_usage.record_admission(
+                scope,
+                semantic_slot=normalized_semantic_slot,
+                is_retry=is_retry,
+                estimated_cost_microunits=estimated,
+            )
+        sdk_started_at = monotonic()
         yield lease
     except BaseException as error:
         if public_lease is not None:
@@ -506,6 +647,11 @@ async def provider_call_admission(
         scope._receipt_request_ids.append(request_id)
         await lease.finish(actual_cost_microunits=None, outcome="success")
     finally:
+        if operation_usage is not None and sdk_started_at is not None:
+            operation_usage.record_latency(
+                scope.stage,
+                (monotonic() - sdk_started_at) * 1000,
+            )
         if idempotency_token is not None:
             _ACTIVE_PROVIDER_IDEMPOTENCY_KEY.reset(idempotency_token)
         _ACTIVE_PROVIDER_ADMISSION.reset(active_token)
@@ -619,6 +765,15 @@ async def record_provider_call(
             input_tokens,
             output_tokens,
         )
+        operation_usage = _ACTIVE_OPERATION_USAGE.get()
+        if operation_usage is not None:
+            operation_usage.record_usage(
+                scope.stage,
+                usage_state=usage_state,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                actual_cost_microunits=reported_cost,
+            )
         if public_accounting is not None:
             public_lease = public_accounting.lease
             if effective_pricing is not None and usage_state == "reported":
@@ -722,10 +877,12 @@ class ProviderCallTimer:
 
 __all__ = [
     "ProviderCallTimer",
+    "ProviderOperationUsage",
     "ProviderSpendFenceRejected",
     "cancel_provider_job",
     "current_provider_idempotency_key",
     "provider_call_admission",
+    "provider_operation_usage_scope",
     "public_operation_scope",
     "provider_runtime_job_status",
     "provider_usage_scope",

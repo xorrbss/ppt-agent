@@ -1445,6 +1445,46 @@ def capacity_violations(
     return tuple(violations)
 
 
+def bounded_capacity_repair_eligible(
+    html: str,
+    browser_metrics: Any,
+    capacity: SlideCapacity,
+    *,
+    profile_id: str,
+) -> bool:
+    """Return whether the existing deterministic reducers may repair a slide.
+
+    This is deliberately narrower than "has a capacity violation".  It exposes
+    the same fail-closed boundary used by the reducers without weakening QID,
+    font, visible-text, semantic ownership, or title-edge safety gates.  A
+    caller may attempt at most one fresh Chromium recapture after this check;
+    any residual violation is terminal for that bounded repair cycle.
+    """
+
+    violations = capacity_violations(html, browser_metrics, capacity)
+    if not violations:
+        return False
+    if violations == ("browser_text_not_visible:header.eyebrow",):
+        return True
+    if str(profile_id or "").strip().lower() != "ordinary":
+        return False
+    if capacity.role.strip().upper() != "CLOSING":
+        return False
+    return any(
+        reducer(
+            html,
+            browser_metrics,
+            capacity,
+            profile_id=profile_id,
+        )
+        != html
+        for reducer in (
+            reduce_authored_closing_capacity,
+            reduce_authored_closing_title_punctuation,
+        )
+    )
+
+
 def reduce_authored_closing_capacity(
     html: str,
     browser_metrics: Any,
@@ -1827,6 +1867,7 @@ __all__ = [
     "capacity_overflow",
     "capacity_repair_instructions",
     "capacity_violations",
+    "bounded_capacity_repair_eligible",
     "ensure_authored_semantic_roles",
     "repair_authored_layout_alignment",
     "reduce_authored_owner_text_capacity",
