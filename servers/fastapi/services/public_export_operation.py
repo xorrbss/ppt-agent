@@ -29,17 +29,22 @@ from services.database import async_session_maker
 from services.public_export_identity import (
     CanonicalExportExecution,
     CanonicalExportIdentity,
+    CanonicalSlideRenderIdentity,
     ExportEvidenceDigests,
     FencedExportPublicationCandidate,
     SlideCheckpointArtifact,
+    acquire_slide_render_authority,
+    bind_slide_render_checkpoint,
     checkpoint_canonical_export_slides,
     claim_canonical_export_identity,
     complete_canonical_export_identity,
+    find_reusable_slide_render_checkpoint,
     promote_canonical_export_publication,
     public_export_identity_v2_enabled,
     require_public_export_identity_v2_enabled,
     restore_canonical_export_identity,
     reuse_completed_export_identity,
+    run_slide_render_singleflight,
 )
 
 from services.isolated_worker_contracts import (
@@ -66,8 +71,25 @@ class PublicWorkerArtifactResult:
     resource_metrics: Mapping[str, Any]
 
 
-def _resource_summary(samples: list[Mapping[str, Any]]) -> dict[str, Any]:
+def _resource_summary(
+    samples: list[Mapping[str, Any]],
+    *,
+    cache_only: bool = False,
+) -> dict[str, Any]:
     if not samples:
+        if cache_only:
+            return {
+                "worker_peak_memory_bytes": 0,
+                "worker_peak_handle_count": 0,
+                "worker_peak_process_count": 0,
+                "worker_peak_cpu_millis": 0,
+                "worker_recycle_failure_count": 0,
+                "resource_limits_enforced": True,
+                "worker_enforcement_layer": "cache-only",
+                "worker_execution_count": 0,
+                "worker_resource_samples": [],
+                "cache_only_reuse": True,
+            }
         raise PublicExportOperationError("public_worker_resource_metrics_missing")
     layers = {str(sample.get("enforcementLayer", "")) for sample in samples}
     durable_samples = []
@@ -527,8 +549,7 @@ async def render_and_export_authored_htmls(
     await worker_cache.maintain()
 
     async def stage_worker_input(reference: PublicArtifactRef) -> None:
-        payload = await artifact_service.read_ref_bytes(reference)
-        await worker_cache.put_bytes(reference, payload)
+        await artifact_service.stream_ref_to_object_store(reference, worker_cache)
 
     async def adopt_worker_output(
         reference: PublicArtifactRef,
@@ -543,24 +564,30 @@ async def render_and_export_authored_htmls(
             or reference.created_by_operation_id != claim.operation_id
             or reference.kind != expected_kind
             or reference.media_type != expected_media_type
+            or reference.retention_class != retention_class
         ):
             raise PublicExportOperationError(
                 "public_worker_output_artifact_binding_invalid"
             )
-        payload = await worker_cache.read_bytes(reference)
-        async with session_factory() as session:
-            adopted = await artifact_service.persist_bytes(
-                session,
-                owner_id=claim.owner_id,
-                tenant_id=tenant_id,
-                kind=reference.kind,
-                payload=payload,
-                media_type=reference.media_type,
-                created_by_operation_id=claim.operation_id,
-                retention_class=retention_class,
-            )
-            await session.commit()
-            return adopted
+        opened = await worker_cache.open_read_stream(reference)
+        try:
+            async with session_factory() as session:
+                adopted = await artifact_service.persist_stream(
+                    session,
+                    owner_id=claim.owner_id,
+                    tenant_id=tenant_id,
+                    kind=reference.kind,
+                    source=opened.body,
+                    expected_digest=reference.sha256,
+                    size_bytes=reference.size_bytes,
+                    media_type=reference.media_type,
+                    created_by_operation_id=claim.operation_id,
+                    retention_class=retention_class,
+                )
+                await session.commit()
+                return adopted
+        finally:
+            opened.close()
 
     html_refs: list[PublicArtifactRef] = []
     async with session_factory() as session:
@@ -578,20 +605,34 @@ async def render_and_export_authored_htmls(
                 )
             )
         await session.commit()
-    await asyncio.gather(*(stage_worker_input(reference) for reference in html_refs))
-
     concurrency = max(1, min(8, int(os.getenv("PUBLIC_RENDER_MAX_CONCURRENCY", "4"))))
     gate = asyncio.Semaphore(concurrency)
     resource_samples: list[Mapping[str, Any]] = []
 
     canonical_enabled = public_export_identity_v2_enabled()
+    if canonical_enabled and claim.expected_revision is None:
+        raise PublicExportOperationError("public_export_revision_required")
+    render_execution_count = 0
+    render_checkpoint_reuse_count = 0
+    render_singleflight_join_count = 0
+    render_authority_modes: set[str] = set()
+    singleflight_wait_seconds = max(
+        1.0,
+        min(
+            600.0,
+            float(os.getenv("PUBLIC_RENDER_SINGLEFLIGHT_WAIT_SECONDS", "125")),
+        ),
+    )
 
-    async def render_one(reference: PublicArtifactRef) -> PublicArtifactRef:
+    async def render_fresh(reference: PublicArtifactRef) -> PublicArtifactRef:
+        nonlocal render_execution_count
+        await stage_worker_input(reference)
         async with gate:
             result = await execute_isolated_render_operation(
                 claim,
                 input_artifact=_worker_ref(reference),
             )
+        render_execution_count += 1
         if not result.ok:
             raise PublicExportOperationError(
                 result.error_code or "public_render_worker_failed"
@@ -607,21 +648,134 @@ async def render_and_export_authored_htmls(
             rendered,
             expected_kind="slide-png",
             expected_media_type="image/png",
-            retention_class="ephemeral",
+            retention_class=("checkpoint" if canonical_enabled else "ephemeral"),
         )
 
-    png_refs = list(await asyncio.gather(*(render_one(reference) for reference in html_refs)))
+    semantic_digest = sha256(
+        json.dumps(
+            htmls,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    renderer_version = "public-worker-protocol/v2"
+    slide_identities = (
+        tuple(
+            CanonicalSlideRenderIdentity(
+                owner_id=claim.owner_id,
+                tenant_id=tenant_id,
+                presentation_id=claim.presentation_id,
+                source_revision=claim.expected_revision,
+                slide_index=index,
+                html_digest=reference.sha256,
+                scene_digest=normalized_scene_digest,
+                quality_digest=normalized_quality_digest,
+                render_adapter="public-isolated-fidelity",
+                renderer_version=renderer_version,
+            )
+            for index, reference in enumerate(html_refs)
+        )
+        if canonical_enabled and claim.expected_revision is not None
+        else ()
+    )
+
+    async def render_canonical_slide(
+        reference: PublicArtifactRef,
+        identity: CanonicalSlideRenderIdentity,
+    ) -> PublicArtifactRef:
+        nonlocal render_checkpoint_reuse_count, render_singleflight_join_count
+        async with session_factory() as session:
+            reusable = await find_reusable_slide_render_checkpoint(
+                session,
+                identity=identity,
+            )
+        if reusable is not None:
+            render_checkpoint_reuse_count += 1
+            render_authority_modes.add("committed-checkpoint")
+            async with session_factory() as session:
+                await bind_slide_render_checkpoint(
+                    session,
+                    identity=identity,
+                    operation_claim=claim,
+                    artifact=reusable,
+                )
+                await session.commit()
+            return reusable
+
+        async def render_under_database_authority() -> PublicArtifactRef:
+            nonlocal render_checkpoint_reuse_count
+            async with session_factory() as authority_session:
+                async with acquire_slide_render_authority(
+                    authority_session,
+                    identity=identity,
+                    wait_seconds=singleflight_wait_seconds,
+                ) as authority_mode:
+                    render_authority_modes.add(authority_mode)
+                    # Another process may have committed while this caller
+                    # waited for the DB authority. Recheck before Chromium.
+                    async with session_factory() as lookup_session:
+                        authoritative_reuse = await find_reusable_slide_render_checkpoint(
+                            lookup_session,
+                            identity=identity,
+                        )
+                    if authoritative_reuse is not None:
+                        render_checkpoint_reuse_count += 1
+                        rendered = authoritative_reuse
+                    else:
+                        rendered = await render_fresh(reference)
+                    # Commit the checkpoint before releasing the transaction-
+                    # scoped authority so another replica cannot rerender.
+                    async with session_factory() as bind_session:
+                        await bind_slide_render_checkpoint(
+                            bind_session,
+                            identity=identity,
+                            operation_claim=claim,
+                            artifact=rendered,
+                        )
+                        await bind_session.commit()
+                    return rendered
+
+        rendered, joined = await run_slide_render_singleflight(
+            identity,
+            render_under_database_authority,
+            max_in_flight=max(
+                1,
+                min(
+                    256,
+                    int(os.getenv("PUBLIC_RENDER_SINGLEFLIGHT_MAX", "64")),
+                ),
+            ),
+            wait_seconds=singleflight_wait_seconds,
+        )
+        if joined:
+            render_singleflight_join_count += 1
+            # The shared producer binds only its own operation/slide pointer.
+            async with session_factory() as session:
+                await bind_slide_render_checkpoint(
+                    session,
+                    identity=identity,
+                    operation_claim=claim,
+                    artifact=rendered,
+                )
+                await session.commit()
+        return rendered
+
     if canonical_enabled:
-        if claim.expected_revision is None:
-            raise PublicExportOperationError("public_export_revision_required")
-        semantic_digest = sha256(
-            json.dumps(
-                htmls,
-                ensure_ascii=False,
-                separators=(",", ":"),
-            ).encode("utf-8")
-        ).hexdigest()
-        exporter_version = "public-worker-protocol/v2"
+        png_refs = list(
+            await asyncio.gather(
+                *(
+                    render_canonical_slide(reference, slide_identities[index])
+                    for index, reference in enumerate(html_refs)
+                )
+            )
+        )
+    else:
+        png_refs = list(
+            await asyncio.gather(*(render_fresh(reference) for reference in html_refs))
+        )
+    await asyncio.gather(*(stage_worker_input(reference) for reference in png_refs))
+    if canonical_enabled:
+        exporter_version = renderer_version
         identity = CanonicalExportIdentity.build(
             owner_id=claim.owner_id,
             tenant_id=tenant_id,
@@ -644,6 +798,8 @@ async def render_and_export_authored_htmls(
                 SlideCheckpointArtifact(
                     slide_index=index,
                     artifact=reference,
+                    input_digest=slide_identities[index].canonical_digest,
+                    stage_version=slide_identities[index].stage_version,
                     validation_digest=sha256(
                         json.dumps(
                             {
@@ -676,12 +832,20 @@ async def render_and_export_authored_htmls(
         )
         if canonical_result.resource_metrics:
             resource_samples.append(canonical_result.resource_metrics)
+        cache_only_reuse = not resource_samples
         await worker_cache.maintain()
         return PublicWorkerArtifactResult(
             artifact=canonical_result.artifact,
             resource_metrics={
-                **_resource_summary(resource_samples),
+                **_resource_summary(
+                    resource_samples,
+                    cache_only=cache_only_reuse,
+                ),
                 **public_artifact_store_metrics_delta(artifact_metrics_before),
+                "render_execution_count": render_execution_count,
+                "render_checkpoint_reuse_count": render_checkpoint_reuse_count,
+                "render_singleflight_join_count": render_singleflight_join_count,
+                "render_authority_modes": sorted(render_authority_modes),
             },
         )
     bundle = json.dumps(
@@ -741,6 +905,10 @@ async def render_and_export_authored_htmls(
         resource_metrics={
             **_resource_summary(resource_samples),
             **public_artifact_store_metrics_delta(artifact_metrics_before),
+            "render_execution_count": render_execution_count,
+            "render_checkpoint_reuse_count": render_checkpoint_reuse_count,
+            "render_singleflight_join_count": render_singleflight_join_count,
+            "render_authority_modes": sorted(render_authority_modes),
         },
     )
 

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "key": "public-export.fidelity-performance-contract",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Fidelity reuse is DB-authoritative, UUID-independent, cache-only safe, and every slide raster geometry and digest must read back exactly.",
+  "scope": [
+    "public-export",
+    "trusted-executor",
+    "artifact-streaming",
+    "fidelity-readback"
+  ],
+  "invariants": [
+    "PostgreSQL production render reuse acquires transaction-scoped database authority before Chromium",
+    "final export identity uses artifact digest bytes validation digest input digest and stage version, never artifact UUID",
+    "all-checkpoint and completed-export reuse returns explicit zero-worker cache-only telemetry",
+    "every Fidelity slide binds an existing image relationship target at full-slide geometry and matches the expected raster digest"
+  ],
+  "forbidden": [
+    "claiming process-local singleflight as multi-replica authority",
+    "including artifact or operation UUIDs in final export canonical identity",
+    "passing Fidelity readback for missing partial-size or digest-mismatched slide rasters"
+  ],
+  "evidence": [
+    "servers/fastapi/services/public_export_identity.py",
+    "servers/fastapi/services/public_export_operation.py",
+    "servers/fastapi/scripts/validate_public_fidelity_readback.py",
+    "servers/fastapi/tests/unit/test_public_export_identity_contract.py",
+    "servers/fastapi/tests/unit/test_validate_public_fidelity_readback.py"
+  ],
+  "supersedes": "public-export.fidelity-performance-contract@1",
+  "recordedAt": "2026-08-30T14:38:36.7038661+00:00"
+}

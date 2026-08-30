@@ -532,6 +532,7 @@ def test_durable_artifacts_are_owner_bound_and_export_is_cluster_single_flight(
                 exporter_version="exporter-1.0",
                 render_adapter="chromium-raster-v2",
                 source_artifact_id=source.artifact_id,
+                source_artifact_digest=source.sha256,
             )
             started = datetime(2026, 8, 30, tzinfo=timezone.utc)
             first = await claim_export_identity(

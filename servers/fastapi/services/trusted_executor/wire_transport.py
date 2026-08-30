@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import threading
+import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from typing import BinaryIO, Protocol
@@ -74,23 +75,40 @@ class ArtifactObjectStoreWireAdapter:
         destination.parent.mkdir(parents=True, exist_ok=True)
 
         def copy() -> None:
-            temporary = destination.with_name(f".{destination.name}.stage-{os.getpid()}.tmp")
+            temporary = destination.with_name(
+                f".{destination.name}.stage-{uuid.uuid4().hex}.tmp"
+            )
+            digest = hashlib.sha256()
+            size = 0
             try:
                 with temporary.open("xb") as target:
                     while True:
                         chunk = opened.body.read(_CHUNK_BYTES)
                         if not chunk:
                             break
+                        size += len(chunk)
+                        if size > reference.size_bytes:
+                            raise TrustedWorkerWireError(
+                                "trusted_worker_artifact_size_mismatch"
+                            )
+                        digest.update(chunk)
                         target.write(chunk)
                     target.flush()
                     os.fsync(target.fileno())
+                if size != reference.size_bytes:
+                    raise TrustedWorkerWireError(
+                        "trusted_worker_artifact_size_mismatch"
+                    )
+                if digest.hexdigest() != reference.sha256:
+                    raise TrustedWorkerWireError(
+                        "trusted_worker_artifact_digest_mismatch"
+                    )
                 os.replace(temporary, destination)
             finally:
                 opened.close()
                 temporary.unlink(missing_ok=True)
 
         await asyncio.to_thread(copy)
-        _verify_artifact_file(reference, destination)
 
     async def publish(self, *, reference: ArtifactRef, source: Path) -> None:
         _verify_artifact_file(reference, source)

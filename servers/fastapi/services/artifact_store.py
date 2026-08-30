@@ -817,10 +817,24 @@ class WorkerArtifactTransportCache(LocalDevelopmentArtifactObjectStore):
         if len(payload) > self._max_cache_bytes:
             _ARTIFACT_STORE_METRICS.observe_cache("miss")
             raise ArtifactStoreError("artifact.worker_cache_budget_exceeded")
+        await self.put_stream(artifact, io.BytesIO(payload))
+
+    async def put_stream(self, artifact: ArtifactRef, source: BinaryIO) -> None:
+        """Bounded cache admission without materializing a source artifact.
+
+        ``ArtifactRef`` binds the only permitted size up front, and the parent
+        stream writer repeats the digest/length validation while writing the
+        temporary file.  This makes public-export handoff independent of a
+        whole-artifact ``read_bytes`` allocation.
+        """
+
+        if artifact.size_bytes > self._max_cache_bytes:
+            _ARTIFACT_STORE_METRICS.observe_cache("miss")
+            raise ArtifactStoreError("artifact.worker_cache_budget_exceeded")
         target = self._path(artifact)
         existed = await asyncio.to_thread(target.is_file)
         try:
-            await super().put_bytes(artifact, payload)
+            await super().put_stream(artifact, source)
         except ArtifactStoreError:
             _ARTIFACT_STORE_METRICS.observe_cache("miss")
             raise
@@ -828,7 +842,14 @@ class WorkerArtifactTransportCache(LocalDevelopmentArtifactObjectStore):
         _ARTIFACT_STORE_METRICS.observe_cache("hit" if existed else "miss")
         await asyncio.to_thread(self._maintain_sync, protected=target)
 
-    async def read_bytes(self, artifact: ArtifactRef) -> bytes:
+    async def open_read_stream(
+        self,
+        artifact: ArtifactRef,
+        *,
+        byte_range: ArtifactByteRange | None = None,
+    ) -> ArtifactReadStream:
+        """Open one live cache entry as a caller-owned bounded stream."""
+
         target = self._path(artifact)
         try:
             modified = await asyncio.to_thread(lambda: target.stat().st_mtime)
@@ -836,7 +857,7 @@ class WorkerArtifactTransportCache(LocalDevelopmentArtifactObjectStore):
                 await asyncio.to_thread(target.unlink, missing_ok=True)
                 await asyncio.to_thread(self._maintain_sync)
                 raise ArtifactNotFound("artifact.cache_entry_expired")
-            payload = await super().read_bytes(artifact)
+            opened = await super().open_read_stream(artifact, byte_range=byte_range)
         except ArtifactStoreError:
             _ARTIFACT_STORE_METRICS.observe_cache("miss")
             raise
@@ -845,11 +866,29 @@ class WorkerArtifactTransportCache(LocalDevelopmentArtifactObjectStore):
             raise ArtifactNotFound("artifact.object_missing") from exc
         await asyncio.to_thread(os.utime, target, None)
         _ARTIFACT_STORE_METRICS.observe_cache("hit")
+        return opened
+
+    async def read_bytes(self, artifact: ArtifactRef) -> bytes:
+        opened: ArtifactReadStream | None = None
+        try:
+            opened = await self.open_read_stream(artifact)
+            payload = await asyncio.to_thread(opened.body.read)
+            if (
+                len(payload) != artifact.size_bytes
+                or sha256(payload).hexdigest() != artifact.sha256
+            ):
+                raise ArtifactStoreError("artifact.object_readback_mismatch")
+        except ArtifactStoreError:
+            raise
+        finally:
+            if opened is not None:
+                opened.close()
         return payload
 
     async def exists(self, artifact: ArtifactRef) -> bool:
         try:
-            await self.read_bytes(artifact)
+            opened = await self.open_read_stream(artifact)
+            opened.close()
             return True
         except ArtifactStoreError:
             return False
@@ -1475,6 +1514,25 @@ class DurableArtifactService:
 
         await asyncio.to_thread(copy_verified)
 
+    async def stream_ref_to_object_store(
+        self,
+        reference: ArtifactRef,
+        destination: ArtifactObjectStore,
+    ) -> None:
+        """Copy an exact artifact into another validating store in bounded chunks.
+
+        This is intended for the public authority -> worker-cache handoff.  It
+        delegates length/digest admission to the destination's ``put_stream``
+        contract and closes the source even if cancellation or a write error
+        interrupts the transfer.
+        """
+
+        opened = await self.open_read_stream(reference)
+        try:
+            await destination.put_stream(reference, opened.body)
+        finally:
+            opened.close()
+
     async def publish_worker_output_path(
         self,
         reference: ArtifactRef,
@@ -1849,6 +1907,7 @@ class ExportIdentityKey:
     exporter_version: str
     render_adapter: str
     source_artifact_id: uuid.UUID
+    source_artifact_digest: str
 
     def normalized(self) -> "ExportIdentityKey":
         if self.revision < 0:
@@ -1884,6 +1943,7 @@ class ExportIdentityKey:
             exporter_version=exporter_version,
             render_adapter=render_adapter,
             source_artifact_id=self.source_artifact_id,
+            source_artifact_digest=normalize_sha256(self.source_artifact_digest),
         )
 
 
@@ -1953,7 +2013,7 @@ async def _require_source_artifact(session: AsyncSession, key: ExportIdentityKey
             PublicArtifact.id == key.source_artifact_id,
             PublicArtifact.owner_id == key.owner_id,
             PublicArtifact.tenant_id == key.tenant_id,
-            PublicArtifact.sha256 == key.canonical_digest,
+            PublicArtifact.sha256 == key.source_artifact_digest,
             PublicArtifact.kind == "checkpoint",
             PublicArtifact.lifecycle_state == "committed",
         )
@@ -1969,6 +2029,7 @@ def _identity_predicate(key: ExportIdentityKey):
         & (PublicExportIdentity.tenant_id == key.tenant_id)
         & (PublicExportIdentity.presentation_id == key.presentation_id)
         & (PublicExportIdentity.revision == key.revision)
+        & (PublicExportIdentity.canonical_digest == key.canonical_digest)
         & (PublicExportIdentity.scene_digest == key.scene_digest)
         & (PublicExportIdentity.semantic_digest == key.semantic_digest)
         & (PublicExportIdentity.quality_digest == key.quality_digest)
@@ -2076,10 +2137,8 @@ async def claim_export_identity(
         raise ExportIdentityConflict("export.identity_owner_tenant_conflict")
     if existing.tenant_id != key.tenant_id:
         raise ExportIdentityConflict("export.identity_owner_tenant_conflict")
-    if existing.source_artifact_id != key.source_artifact_id:
-        source = await session.get(PublicArtifact, existing.source_artifact_id)
-        if source is None or source.sha256 != key.canonical_digest:
-            raise ExportIdentityConflict("export.identity_source_conflict")
+    if existing.canonical_digest != key.canonical_digest:
+        raise ExportIdentityConflict("export.identity_source_conflict")
     if existing.state == "succeeded":
         return await _completed_claim(session, existing)
 

@@ -12,19 +12,29 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
-from models.sql.public_artifact import PublicArtifact, PublicExportIdentity
+import services.public_export_operation as public_export_operation
+from models.sql.public_artifact import (
+    PublicArtifact,
+    PublicExportIdentity,
+    PublicSlideCheckpoint,
+)
+from models.sql.workspace import WorkspaceOperation
 from services.artifact_store import DurableArtifactService, LocalDevelopmentArtifactObjectStore
 from services.public_export_identity import (
     CanonicalExportIdentity,
+    CanonicalSlideRenderIdentity,
     ExportEvidenceDigests,
     PublicExportFenceRejected,
     PublicExportIdentityBindingError,
     PublicExportIdentityV2Disabled,
     SlideCheckpointArtifact,
+    acquire_slide_render_authority,
     claim_canonical_export_identity,
     complete_canonical_export_identity,
+    find_reusable_slide_render_checkpoint,
     restore_canonical_export_identity,
     reuse_completed_export_identity,
+    run_slide_render_singleflight,
 )
 from services.public_export_operation import (
     build_validated_checkpoint_export_bundle,
@@ -78,7 +88,12 @@ def test_canonical_export_identity_is_feature_gated_digest_bound_and_fenced(
             await connection.run_sync(
                 lambda sync_connection: SQLModel.metadata.create_all(
                     sync_connection,
-                    tables=[PublicArtifact.__table__, PublicExportIdentity.__table__],
+                    tables=[
+                        WorkspaceOperation.__table__,
+                        PublicArtifact.__table__,
+                        PublicExportIdentity.__table__,
+                        PublicSlideCheckpoint.__table__,
+                    ],
                 )
             )
         sessions = async_sessionmaker(engine, expire_on_commit=False)
@@ -129,6 +144,27 @@ def test_canonical_export_identity_is_feature_gated_digest_bound_and_fenced(
                 evidence=evidence,
                 slides=slides,
             )
+            relocated_slides = tuple(
+                replace(
+                    checkpoint,
+                    artifact=checkpoint.artifact.model_copy(
+                        update={
+                            "artifact_id": uuid.uuid4(),
+                            "created_by_operation_id": uuid.uuid4(),
+                        }
+                    ),
+                )
+                for checkpoint in slides
+            )
+            relocated_identity = replace(identity, slides=relocated_slides)
+            assert relocated_identity.canonical_digest == identity.canonical_digest
+            assert relocated_identity.checkpoint_payload() != identity.checkpoint_payload()
+            cache_only_metrics = public_export_operation._resource_summary(
+                [], cache_only=True
+            )
+            assert cache_only_metrics["worker_execution_count"] == 0
+            assert cache_only_metrics["worker_enforcement_layer"] == "cache-only"
+            assert cache_only_metrics["cache_only_reuse"] is True
 
             for field_name in (
                 "scene_digest",
@@ -201,6 +237,148 @@ def test_canonical_export_identity_is_feature_gated_digest_bound_and_fenced(
                 )
 
             monkeypatch.setenv("PUBLIC_EXPORT_IDENTITY_V2_ENABLED", "true")
+            render_identity = CanonicalSlideRenderIdentity(
+                owner_id=owner_id,
+                tenant_id="tenant-a",
+                presentation_id=presentation_id,
+                source_revision=7,
+                slide_index=0,
+                html_digest=_digest("html-0"),
+                scene_digest=evidence.scene_digest,
+                quality_digest=evidence.quality_digest,
+                render_adapter="public-isolated-fidelity",
+                renderer_version="public-worker-protocol/v2",
+            )
+            monkeypatch.setenv("ENVIRONMENT", "local")
+            async with acquire_slide_render_authority(
+                session,
+                identity=render_identity,
+                wait_seconds=1,
+            ) as authority_mode:
+                assert authority_mode == "process-local-development"
+            assert replace(
+                render_identity,
+                quality_digest=_digest("changed-render-quality"),
+            ).canonical_digest != render_identity.canonical_digest
+            second_position_identity = replace(render_identity, slide_index=1)
+            assert (
+                second_position_identity.canonical_digest
+                == render_identity.canonical_digest
+            )
+            with pytest.raises(
+                PublicExportIdentityBindingError,
+                match="public_slide_render_adapter_invalid",
+            ):
+                replace(render_identity, render_adapter="editable-hybrid")
+
+            checkpoint_operation = WorkspaceOperation(
+                id=producer_operation_id,
+                owner_id=owner_id,
+                owner_scope=str(owner_id),
+                conversation_id=uuid.uuid4(),
+                presentation_id=presentation_id,
+                anchor_position=1,
+                kind="export.pptx",
+                state="succeeded",
+                idempotency_key_hash=_digest("render-checkpoint-idempotency"),
+                request_hash=_digest("render-checkpoint-request"),
+                request_payload={},
+                expected_revision=7,
+                attempt_number=1,
+                attempt_token="render-checkpoint-attempt",
+                fencing_token=1,
+            )
+            session.add(checkpoint_operation)
+            session.add(
+                PublicSlideCheckpoint(
+                    operation_id=producer_operation_id,
+                    revision=7,
+                    slide_index=0,
+                    input_digest=render_identity.canonical_digest,
+                    stage_version=render_identity.stage_version,
+                    artifact_id=slides[0].artifact.artifact_id,
+                    attempt_token_hash="sha256:" + _digest("render-checkpoint-attempt"),
+                    fencing_token=1,
+                )
+            )
+            await session.commit()
+            reusable = await find_reusable_slide_render_checkpoint(
+                session,
+                identity=render_identity,
+            )
+            assert reusable == slides[0].artifact
+            assert (
+                await find_reusable_slide_render_checkpoint(
+                    session,
+                    identity=second_position_identity,
+                )
+                == slides[0].artifact
+            )
+            assert (
+                await find_reusable_slide_render_checkpoint(
+                    session,
+                    identity=replace(
+                        render_identity,
+                        quality_digest=_digest("other-quality"),
+                    ),
+                )
+                is None
+            )
+
+            producer_started = asyncio.Event()
+            release_producer = asyncio.Event()
+            isolated_render_calls = 0
+
+            async def isolated_render_once(*_args, **_kwargs):
+                nonlocal isolated_render_calls
+                isolated_render_calls += 1
+                producer_started.set()
+                await release_producer.wait()
+                return slides[0].artifact
+
+            monkeypatch.setattr(
+                public_export_operation,
+                "execute_isolated_render_operation",
+                isolated_render_once,
+            )
+
+            async def produce_once():
+                return await public_export_operation.execute_isolated_render_operation(
+                    initial_operation,
+                    input_artifact=slides[0].artifact,
+                )
+
+            leader = asyncio.create_task(
+                run_slide_render_singleflight(
+                    render_identity,
+                    produce_once,
+                    max_in_flight=4,
+                    wait_seconds=2,
+                )
+            )
+            await producer_started.wait()
+            followers = [
+                asyncio.create_task(
+                    run_slide_render_singleflight(
+                        second_position_identity,
+                        produce_once,
+                        max_in_flight=4,
+                        wait_seconds=2,
+                    )
+                )
+                for _ in range(99)
+            ]
+            await asyncio.sleep(0)
+            release_producer.set()
+            render_results = await asyncio.gather(leader, *followers)
+            assert isolated_render_calls == 1
+            assert sum(joined for _, joined in render_results) == 99
+            assert all(result == slides[0].artifact for result, _ in render_results)
+            assert all(
+                result.retention_class == "checkpoint"
+                for result, _ in render_results
+            )
+
             started = datetime(2026, 8, 30, tzinfo=timezone.utc)
             first = await claim_canonical_export_identity(
                 session,
