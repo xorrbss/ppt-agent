@@ -22,6 +22,7 @@ class PublicWorkerProfile:
     browser_allowed: bool
     converter_allowed: bool
     max_jobs_per_process: int
+    required_isolation_controls: tuple[str, ...] = ()
     independently_scalable: bool = True
 
 
@@ -59,6 +60,13 @@ PUBLIC_WORKER_PROFILES = MappingProxyType(
             browser_allowed=True,
             converter_allowed=False,
             max_jobs_per_process=1,
+            required_isolation_controls=(
+                "network-none",
+                "root-filesystem-read-only",
+                "scratch-tmpfs",
+                "run-as-non-root",
+                "seccomp-enforced",
+            ),
         ),
         "export": PublicWorkerProfile(
             role="export",
@@ -70,6 +78,13 @@ PUBLIC_WORKER_PROFILES = MappingProxyType(
             browser_allowed=False,
             converter_allowed=True,
             max_jobs_per_process=1,
+            required_isolation_controls=(
+                "network-none",
+                "root-filesystem-read-only",
+                "scratch-tmpfs",
+                "run-as-non-root",
+                "seccomp-enforced",
+            ),
         ),
     }
 )
@@ -115,6 +130,12 @@ _POSITIVE_LIMITS = (
     "PPT_WORKER_OPEN_FILE_LIMIT",
     "PPT_WORKER_OUTPUT_LIMIT_BYTES",
     "PPT_WORKER_WALL_CLOCK_SECONDS",
+    "PUBLIC_WORKER_ARTIFACT_CACHE_MAX_BYTES",
+    "PUBLIC_WORKER_ARTIFACT_CACHE_TTL_SECONDS",
+)
+_SECCOMP_PROFILE_KEY = "PPT_WORKER_SECCOMP_PROFILE"
+_DISABLED_SECCOMP_PROFILES = frozenset(
+    {"", "0", "disabled", "false", "none", "unconfined"}
 )
 
 
@@ -144,6 +165,11 @@ def validate_public_worker_environment(
         for key, expected in _ISOLATION_REQUIREMENTS.items():
             if environ.get(key, "").strip().lower() != expected:
                 raise RuntimeError(f"public_worker.isolation_requirement_missing:{key}")
+        seccomp_profile = environ.get(_SECCOMP_PROFILE_KEY, "").strip().lower()
+        if seccomp_profile in _DISABLED_SECCOMP_PROFILES:
+            raise RuntimeError(
+                f"public_worker.isolation_requirement_missing:{_SECCOMP_PROFILE_KEY}"
+            )
         for key in _POSITIVE_LIMITS:
             try:
                 value = int(environ.get(key, ""))

@@ -23,6 +23,7 @@ const FINGERPRINT = /^sha256:[a-f0-9]{64}$/;
 const QUALITY_PROFILES = new Set(["development", "release"]);
 const PPTX_MODES = new Set(["fidelity", "hybrid"]);
 const RENDER_RUNTIME_METRICS_PATH = "/metrics/authored-render-runtime";
+const WORKSPACE_METRICS_PATH = "/metrics/workspace";
 
 class BenchmarkRequestError extends Error {
   constructor(message, classification, cause = null) {
@@ -166,7 +167,7 @@ function normalizeManifest(raw) {
   const timeoutMs = Number(raw.timeoutMs ?? 1_800_000);
   const resourceIntervalMs = Number(raw.resourceIntervalMs ?? 2000);
   const soakDurationSeconds = Number(raw.soak?.durationSeconds ?? raw.soakDurationSeconds ?? 0);
-  if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 8) fail("concurrency must be 1..8");
+  if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 10) fail("concurrency must be 1..10");
   if (!Number.isInteger(pollIntervalMs) || pollIntervalMs < 250 || pollIntervalMs > 30_000) fail("pollIntervalMs must be 250..30000");
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 86_400_000) fail("timeoutMs must be 1000..86400000");
   if (!Number.isInteger(resourceIntervalMs) || resourceIntervalMs < 500 || resourceIntervalMs > 60_000) fail("resourceIntervalMs must be 500..60000");
@@ -226,7 +227,22 @@ function normalizeManifest(raw) {
   };
 }
 
-function authHeaders() {
+let parsedSessionTokens;
+async function loadSessionPrincipalFixture() {
+  if (process.env.PRESENTON_BENCH_PRINCIPALS_STDIN !== "1") return;
+  let input = "";
+  for await (const chunk of process.stdin) input += chunk;
+  try { parsedSessionTokens = JSON.parse(input); } catch { fail("session principal fixture is invalid"); }
+  if (!Array.isArray(parsedSessionTokens) || !parsedSessionTokens.length
+    || parsedSessionTokens.some((token) => typeof token !== "string" || !token)) {
+    fail("session principal fixture is invalid");
+  }
+}
+function authHeaders(principalOrdinal = 0) {
+  if (parsedSessionTokens) {
+    const index = Math.abs(Number(principalOrdinal) || 0) % parsedSessionTokens.length;
+    return { Cookie: `presenton_session=${parsedSessionTokens[index]}` };
+  }
   const user = process.env.PRESENTON_BENCH_USER;
   const password = process.env.PRESENTON_BENCH_PASSWORD;
   if (!user && !password) return {};
@@ -359,6 +375,9 @@ function redactedPptxExportEvidence(payload, pptxMode) {
   return {
     success: payload?.success === true,
     pptxMode,
+    operationId: payload?.operationId || null,
+    receiptId: payload?.receiptId || null,
+    duplicate: payload?.duplicate === true,
     quality: redactedExportEvidence(payload?.quality, "quality"),
     exportMetadata: redactedExportEvidence(payload?.exportMetadata, "exportMetadata"),
   };
@@ -474,6 +493,130 @@ async function fetchCacheTelemetry(manifest) {
   return cacheTelemetrySnapshot(response.json);
 }
 
+function nestedValue(root, aliases) {
+  const wanted = new Set(aliases);
+  const stack = [root]; const visited = new Set();
+  while (stack.length) {
+    const value = stack.pop();
+    if (!value || typeof value !== "object" || visited.has(value)) continue;
+    visited.add(value);
+    for (const [key, nested] of Object.entries(value)) {
+      if (wanted.has(key) && typeof nested === "string" && nested) return nested;
+      if (nested && typeof nested === "object") stack.push(nested);
+    }
+  }
+  return null;
+}
+
+async function waitForExportOperation({ manifest, presentationId, exportOperationId, headers, deadline }) {
+  while (Date.now() < deadline) {
+    const timeline = (await request(`${manifest.baseUrl}/api/v1/ppt/workspace/presentations/${presentationId}/timeline?limit=200`, {
+      headers: { Accept: "application/json", ...headers },
+    }, Math.max(1, Math.min(30_000, deadline - Date.now())))).json;
+    const item = timeline?.items?.find((value) => value.operation_id === exportOperationId || value.operationId === exportOperationId);
+    const status = String(item?.status || "").toLowerCase();
+    if (status === "succeeded") {
+      const artifactId = nestedValue(item, ["artifact_id", "artifactId"]);
+      if (!artifactId) fail("successful export operation returned no artifact id");
+      return { item, artifactId };
+    }
+    if (["failed", "cancelled", "canceled", "dead_letter"].includes(status)) {
+      throw new BenchmarkRequestError(`export operation terminal status ${status}`, "export_operation_failed",
+        { operationId: exportOperationId, status, error: item?.error || null });
+    }
+    await sleep(Math.min(manifest.pollIntervalMs, Math.max(1, deadline - Date.now())));
+  }
+  throw new BenchmarkRequestError("export operation timed out", "request_timeout", { operationId: exportOperationId });
+}
+
+async function exportWorkspaceArtifact({ manifest, deck, presentationId, expectedPresentationRevision,
+  format, requestHeaders, principalHeaders, deadline, ordinal }) {
+  // A PDF validation deck also emits a PPTX pair from the same presentation.
+  // Route that companion PPTX through the semantic Hybrid workspace boundary
+  // so both formats exercise the isolated render/export workers and publish an
+  // owner-scoped ArtifactRef. Fidelity PPTX remains available when it is the
+  // explicitly requested product mode of a PPTX deck.
+  const effectivePptxMode = format === "pptx" && deck.exportAs === "pdf"
+    ? "hybrid" : deck.pptxMode;
+  const exportRequestBody = JSON.stringify({ format, id: presentationId,
+    expectedPresentationRevision, pptxMode: effectivePptxMode });
+  const admitted = (await request(`${manifest.baseUrl}/api/export-presentation`, {
+    method: "POST", headers: requestHeaders, body: exportRequestBody,
+  }, Math.max(1, deadline - Date.now()))).json;
+  if (admitted?.success !== true || typeof admitted?.operationId !== "string") {
+    fail(`${deck.id}: ${format} export admission failed`);
+  }
+  const replayed = (await request(`${manifest.baseUrl}/api/export-presentation`, {
+    method: "POST", headers: requestHeaders, body: exportRequestBody,
+  }, Math.max(1, deadline - Date.now()))).json;
+  if (replayed?.success !== true || replayed?.duplicate !== true
+    || replayed?.operationId !== admitted.operationId) fail(`${deck.id}: ${format} export single-flight replay mismatch`);
+  const singleFlightReceipt = { operationId: replayed.operationId, receiptId: replayed.receiptId || null,
+    duplicate: true };
+  const completed = await waitForExportOperation({ manifest, presentationId,
+    exportOperationId: admitted.operationId, headers: principalHeaders, deadline });
+  const downloadPath = `/api/v1/ppt/workspace/artifacts/${encodeURIComponent(completed.artifactId)}/download`;
+  const downloaded = await request(new URL(downloadPath, `${manifest.baseUrl}/`).href, {
+    headers: principalHeaders,
+  }, Math.max(1, deadline - Date.now()));
+  verifyMagic(downloaded.bytes, format);
+  const name = `workspace-${completed.artifactId}.${format}`;
+  const destination = path.join(manifest.outputDirectory, "exports",
+    `${String(ordinal).padStart(4, "0")}-${deck.id}-${name}`);
+  await mkdir(path.dirname(destination), { recursive: true });
+  await writeFile(destination, downloaded.bytes);
+  return {
+    format,
+    pptxMode: effectivePptxMode,
+    mediaType: format === "pdf" ? "application/pdf"
+      : "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    exportOperationId: admitted.operationId,
+    artifactId: completed.artifactId,
+    output: { path: destination, bytes: downloaded.bytes.length, sha256: sha256(downloaded.bytes) },
+    exportOperation: completed.item,
+    singleFlightReceipt,
+    exportEvidence: redactedPptxExportEvidence(admitted, effectivePptxMode),
+  };
+}
+
+function parsePrometheusMetrics(text) {
+  const metrics = {};
+  for (const rawLine of String(text || "").split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const match = line.match(/^([A-Za-z_:][A-Za-z0-9_:]*)(\{([^}]*)\})?\s+(-?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?)$/);
+    if (!match) continue;
+    const labels = {};
+    for (const label of (match[3] || "").matchAll(/([A-Za-z_][A-Za-z0-9_]*)="((?:\\.|[^"\\])*)"/g)) {
+      labels[label[1]] = label[2].replace(/\\([\\"n])/g, (_value, escaped) => escaped === "n" ? "\n" : escaped);
+    }
+    const key = `${match[1]}${Object.keys(labels).length ? `{${Object.entries(labels)
+      .sort(([left], [right]) => left.localeCompare(right)).map(([name, value]) => `${name}=${value}`).join(",")}}` : ""}`;
+    metrics[key] = Number(match[4]);
+  }
+  return metrics;
+}
+
+async function fetchWorkspaceMetrics(manifest) {
+  const response = await request(`${manifest.metricsBaseUrl}${WORKSPACE_METRICS_PATH}`, {
+    headers: { Accept: "text/plain", ...authHeaders() },
+  }, 30_000);
+  const values = parsePrometheusMetrics(response.text);
+  if (values.presenton_public_metrics_available !== 1) fail("public operation metrics are unavailable");
+  return { schemaVersion: "public-workspace-metrics-snapshot/v1", values };
+}
+
+function workspaceMetricsDelta(before, after) {
+  const values = {};
+  for (const key of new Set([...Object.keys(before.values), ...Object.keys(after.values)])) {
+    if (!key.startsWith("presenton_public_")) continue;
+    const initial = before.values[key];
+    const final = after.values[key];
+    values[key] = Number.isFinite(initial) && Number.isFinite(final) ? final - initial : null;
+  }
+  return { schemaVersion: "public-workspace-metrics-delta/v1", values };
+}
+
 function cacheTelemetryDelta(before, after) {
   if (before.chromeRuntimeDigest !== after.chromeRuntimeDigest) {
     fail("authored render Chrome identity changed during controlled scenario");
@@ -515,7 +658,8 @@ async function runDeck(deck, manifest, ordinal, onStatus = null, scenario = null
     fail(`${deck.id}: one or more configured resourcePids are unavailable`);
   }
   const admissionStartedAt = Date.now();
-  const headers = { Accept: "application/json", "Content-Type": "application/json", ...authHeaders() };
+  const principalOrdinal = Math.max(0, ordinal - 1);
+  const headers = { Accept: "application/json", "Content-Type": "application/json", ...authHeaders(principalOrdinal) };
   const admitted = await request(`${manifest.baseUrl}/api/v1/ppt/presentation/generate/async`, {
     method: "POST", headers, body: JSON.stringify(requestBody(deck)),
   }, manifest.timeoutMs);
@@ -529,7 +673,7 @@ async function runDeck(deck, manifest, ordinal, onStatus = null, scenario = null
   let terminal;
   while (Date.now() < deadline) {
     const polled = await request(`${manifest.baseUrl}/api/v1/ppt/presentation/status/${encodeURIComponent(taskId)}`, {
-      headers: { Accept: "application/json", ...authHeaders() },
+      headers: { Accept: "application/json", ...authHeaders(principalOrdinal) },
     }, Math.max(1, deadline - Date.now()));
     terminal = polled.json;
     statusHistory.push({ observedAt: now(), status: terminal?.status, progress: terminal?.progress || null });
@@ -540,7 +684,7 @@ async function runDeck(deck, manifest, ordinal, onStatus = null, scenario = null
   if (!terminal || !TERMINAL.has(String(terminal.status || "").toLowerCase())) fail(`${deck.id}: timed out`);
   if (terminal.status !== "completed") {
     const durableAudit = await durableOperationAudit({
-      baseUrl: manifest.baseUrl, taskId, operationId, headers: authHeaders(),
+      baseUrl: manifest.baseUrl, taskId, operationId, headers: authHeaders(principalOrdinal),
     });
     throw new BenchmarkRequestError(
       `${deck.id}: terminal status ${terminal.status}: ${JSON.stringify(terminal.failure || terminal.error || terminal.message)}`,
@@ -550,61 +694,41 @@ async function runDeck(deck, manifest, ordinal, onStatus = null, scenario = null
   }
   const data = terminal.data || {};
   const presentationId = data.presentation_id || data.presentationId;
-  let downloadPath = data.path;
-  if (!presentationId || !downloadPath) fail(`${deck.id}: completed result lacks presentation_id/path`);
-  let pdfExport = null;
-  let pptxExport = null;
-  const exportStartedAt = Date.now();
-  if (deck.exportAs === "pdf") {
-    pdfExport = (await request(`${manifest.baseUrl}/api/export-presentation`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ format: "pdf", id: presentationId, title: deck.content.slice(0, 120) }),
-    }, Math.max(1, deadline - Date.now()))).json;
-    if (pdfExport?.success !== true || typeof pdfExport?.path !== "string") {
-      fail(`${deck.id}: PDF export returned no downloadable path`);
-    }
-    downloadPath = pdfExport.path;
-  } else if (deck.pptxMode === "hybrid") {
-    if (!operationId) fail(`${deck.id}: hybrid PPTX export requires operationId`);
-    const exported = (await request(`${manifest.baseUrl}/api/export-presentation`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        format: "pptx",
-        id: presentationId,
-        title: deck.content.slice(0, 120),
-        pptxMode: "hybrid",
-        operationId,
-      }),
-    }, Math.max(1, deadline - Date.now()))).json;
-    if (exported?.success !== true || typeof exported?.path !== "string") {
-      fail(`${deck.id}: Hybrid PPTX export returned no downloadable path`);
-    }
-    pptxExport = redactedPptxExportEvidence(exported, deck.pptxMode);
-    downloadPath = exported.path;
-  }
-  const name = exportName(downloadPath);
-  if (!name) fail(`${deck.id}: export path has no file name`);
-  const downloaded = await request(new URL(downloadPath, `${manifest.baseUrl}/`).href, {
-    headers: { ...authHeaders() },
-  }, Math.max(1, deadline - Date.now()));
-  verifyMagic(downloaded.bytes, deck.exportAs);
-  const destination = path.join(manifest.outputDirectory, "exports", `${String(ordinal).padStart(4, "0")}-${deck.id}-${name}`);
-  await mkdir(path.dirname(destination), { recursive: true });
-  await writeFile(destination, downloaded.bytes);
+  if (!presentationId) fail(`${deck.id}: completed result lacks presentation_id`);
   let timeline = null;
   let operationEvents = null;
   if (operationId) {
     timeline = (await request(`${manifest.baseUrl}/api/v1/ppt/workspace/presentations/${presentationId}/timeline?limit=200`, {
-      headers: { Accept: "application/json", ...authHeaders() },
+      headers: { Accept: "application/json", ...authHeaders(principalOrdinal) },
     }, 30_000)).json;
     operationEvents = (await request(`${manifest.baseUrl}/api/v1/ppt/workspace/presentations/${presentationId}/events?limit=200`, {
-      headers: { Accept: "application/json", ...authHeaders() },
+      headers: { Accept: "application/json", ...authHeaders(principalOrdinal) },
     }, 30_000)).json;
   }
   const observed = stageTimings(timeline, operationId);
   if (!observed.operation) fail(`${deck.id}: timeline contains no matching workspace operation`);
+  const expectedPresentationRevision = observed.operation.result_revision ?? observed.operation.resultRevision;
+  if (!Number.isSafeInteger(expectedPresentationRevision) || expectedPresentationRevision < 0) {
+    fail(`${deck.id}: generation result revision is unavailable`);
+  }
+  const exportStartedAt = Date.now();
+  const exportFormats = deck.exportAs === "pdf" ? ["pptx", "pdf"] : ["pptx"];
+  const exportedArtifacts = [];
+  for (const format of exportFormats) exportedArtifacts.push(await exportWorkspaceArtifact({
+    manifest, deck, presentationId, expectedPresentationRevision, format, requestHeaders: headers,
+    principalHeaders: authHeaders(principalOrdinal), deadline, ordinal,
+  }));
+  const primaryExport = exportedArtifacts.find((item) => item.format === deck.exportAs);
+  if (!primaryExport) fail(`${deck.id}: requested ${deck.exportAs} export result is missing`);
+  const outputs = exportedArtifacts.map((item) => ({ format: item.format, mediaType: item.mediaType,
+    path: item.output.path, bytes: item.output.bytes, sha256: item.output.sha256,
+    exportOperationId: item.exportOperationId, artifactId: item.artifactId,
+    pptxMode: item.pptxMode }));
+  const exportOperations = exportedArtifacts.map((item) => ({ format: item.format,
+    exportOperationId: item.exportOperationId, artifactId: item.artifactId,
+    exportOperation: item.exportOperation, singleFlightReceipt: item.singleFlightReceipt }));
+  const pptxExport = exportedArtifacts.find((item) => item.format === "pptx")?.exportEvidence || null;
+  const pdfExport = exportedArtifacts.find((item) => item.format === "pdf")?.exportEvidence || null;
   const endpointEvents = eventsFromPayload(operationEvents).filter((event) => eventMatchesOperation(event, operationId));
   if (!endpointEvents.length) fail(`${deck.id}: events endpoint contains no matching workspace operation events`);
   const retry = retryAudit([...observed.events, ...endpointEvents]);
@@ -617,12 +741,14 @@ async function runDeck(deck, manifest, ordinal, onStatus = null, scenario = null
   ]);
   const phaseTimingsMs = { ...observed.phaseTimingsMs, export: Date.now() - exportStartedAt };
   return {
-    deckId: deck.id, taskId, operationId, presentationId, exportAs: deck.exportAs,
+    deckId: deck.id, nSlides: deck.nSlides, taskId, operationId, presentationId,
+    exportOperationId: primaryExport.exportOperationId,
+    artifactId: primaryExport.artifactId, exportAs: deck.exportAs,
     qualityProfile: deck.qualityProfile, pptxMode: deck.pptxMode,
     startedAt: new Date(startedAt).toISOString(), completedAt: now(), latencyMs: Date.now() - startedAt,
-    output: { path: destination, bytes: downloaded.bytes.length, sha256: sha256(downloaded.bytes) },
-    generationArtifactPath: data.path,
-    pdfExport, pptxExport,
+    output: primaryExport.output, outputs, generationArtifactPath: data.path || null,
+    pdfExport, pptxExport, exportOperation: primaryExport.exportOperation,
+    singleFlightReceipt: primaryExport.singleFlightReceipt, exportOperations,
     statusHistory, stages: observed.stages, operation: observed.operation, retryAudit: retry,
     admissionMs, phaseTimingsMs,
     resources: {
@@ -821,7 +947,10 @@ async function atomicJson(target, payload) {
 
 async function runSingleControlledLoad(manifest, hook = null, scenario = null) {
   await mkdir(manifest.outputDirectory, { recursive: true });
-  const cacheBefore = await fetchCacheTelemetry(manifest);
+  const [cacheBefore, workspaceMetricsBefore] = await Promise.all([
+    fetchCacheTelemetry(manifest),
+    fetchWorkspaceMetrics(manifest),
+  ]);
   const poolBefore = await sampleResources([...new Set(manifest.resourcePids)]);
   if (!Array.isArray(poolBefore) || poolBefore.length !== manifest.resourcePids.length) {
     fail("one or more configured resourcePids are unavailable before controlled scenario");
@@ -869,7 +998,10 @@ async function runSingleControlledLoad(manifest, hook = null, scenario = null) {
   await Promise.all(Array.from({ length: manifest.concurrency }, () => worker()));
   resourceState.stop = true;
   await sampler;
-  const cacheAfter = await fetchCacheTelemetry(manifest);
+  const [cacheAfter, workspaceMetricsAfter] = await Promise.all([
+    fetchCacheTelemetry(manifest),
+    fetchWorkspaceMetrics(manifest),
+  ]);
   const poolAfter = await sampleResources([...new Set(manifest.resourcePids)]);
   if (!Array.isArray(poolAfter) || poolAfter.length !== manifest.resourcePids.length) {
     fail("one or more configured resourcePids are unavailable after controlled scenario");
@@ -899,6 +1031,11 @@ async function runSingleControlledLoad(manifest, hook = null, scenario = null) {
     results, failures, resources: { samples: resourceState.samples, summary: resourceSummary(resourceState.samples) },
     requestFailures: requestFailureSummary(failures),
     cacheTelemetry, poolTelemetry,
+    workspaceMetrics: {
+      before: workspaceMetricsBefore,
+      after: workspaceMetricsAfter,
+      delta: workspaceMetricsDelta(workspaceMetricsBefore, workspaceMetricsAfter),
+    },
     fixedInvariants: manifest.matrix?.fixedInvariants || null,
     deckInvariants: manifest.deckInvariants,
     soakVerification: {
@@ -1021,6 +1158,7 @@ async function runDurability(manifest) {
 }
 
 async function main() {
+  await loadSessionPrincipalFixture();
   const args = parseArgs(process.argv.slice(2));
   if (args.help) { console.log(usage()); return; }
   const modes = [args.validate, args.run, args.durability].filter(Boolean).length;
@@ -1059,4 +1197,4 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   main().catch((error) => { console.error(error?.stack || error); process.exitCode = 1; });
 }
 
-export { durableOperationAudit, resolveProcessTree };
+export { durableOperationAudit, parsePrometheusMetrics, resolveProcessTree, workspaceMetricsDelta };

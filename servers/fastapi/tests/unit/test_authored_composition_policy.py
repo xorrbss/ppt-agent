@@ -610,6 +610,34 @@ def test_capacity_violations_ignore_non_visible_script_text():
     assert capacity_violations(html, metrics, capacity) == ()
 
 
+def test_default_capacity_accepts_the_declared_15px_authored_floor():
+    capacity = SlideCapacity(0, "PROBLEM", 20, 20, 20, 0, 1)
+    html = '<p data-qid="body" data-semantic-role="body">Body</p>'
+
+    def metrics(font_size):
+        return {
+            "elements": [
+                {
+                    "qid": "body",
+                    "tag": "p",
+                    "semantic_role": "body",
+                    "rendered_text": "Body",
+                    "has_owned_text": True,
+                    "font_size": font_size,
+                    "font_loaded": True,
+                    "css_visible": True,
+                    "bbox": {"x": 10, "y": 10, "width": 80, "height": 20},
+                    "clipped": False,
+                    "glyph_clipped": False,
+                    "line_box_clipped": False,
+                }
+            ]
+        }
+
+    assert capacity_violations(html, metrics(15), capacity) == ()
+    assert "font:14<15" in capacity_violations(html, metrics(14), capacity)
+
+
 def test_capacity_violations_require_browser_title_and_body_roles():
     """Characterization: HTML title/body strings must not satisfy the gate alone."""
     capacity = SlideCapacity(0, "PROBLEM", 20, 20, 40, 1, 4, min_font_px=16)

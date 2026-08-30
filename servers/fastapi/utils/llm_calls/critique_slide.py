@@ -19,12 +19,7 @@ from pydantic import BaseModel, Field
 
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_config import enforce_llm_egress_policy, get_llm_config
-from utils.llm_provider import get_llm_provider, get_model
-from services.provider_usage_instrumentation import (
-    ProviderCallTimer,
-    provider_call_admission,
-    record_provider_call,
-)
+from utils.llm_provider import get_model
 from utils.llm_utils import generate_structured_with_schema_retries
 from utils.schema_utils import prepare_schema_for_validation
 
@@ -255,36 +250,21 @@ async def critique_slide_image(
         source_image=source_image,
         reference_mode=reference_mode,
     )
-    timer = ProviderCallTimer()
     content = None
     try:
-        async with provider_call_admission():
-            enforce_llm_egress_policy()
-            content = await generate_structured_with_schema_retries(
-                client,
-                model,
-                messages=messages,
-                response_format=response_format,
-                json_schema=schema,
-                strict=False,
-                validate_schema=True,
-            )
+        enforce_llm_egress_policy()
+        content = await generate_structured_with_schema_retries(
+            client,
+            model,
+            messages=messages,
+            response_format=response_format,
+            json_schema=schema,
+            strict=False,
+            validate_schema=True,
+        )
         return SlideCritique(**content)
     except Exception as e:
         raise handle_llm_client_exceptions(e)
-    finally:
-        # Structured helpers return validated content, not the raw provider
-        # response, so usage is deliberately marked unavailable rather than 0.
-        try:
-            provider = str(get_llm_provider().value)
-        except Exception:
-            provider = "unknown"
-        await record_provider_call(
-            provider=provider,
-            model=str(model),
-            response=None,
-            latency_ms=timer.elapsed_ms,
-        )
 
 
 async def critique_slide_style_comparison(
@@ -311,31 +291,18 @@ async def critique_slide_style_comparison(
         baseline_mime_type=baseline_mime_type,
         candidate_mime_type=candidate_mime_type,
     )
-    timer = ProviderCallTimer()
     content = None
     try:
-        async with provider_call_admission():
-            enforce_llm_egress_policy()
-            content = await generate_structured_with_schema_retries(
-                client,
-                model,
-                messages=messages,
-                response_format=response_format,
-                json_schema=schema,
-                strict=False,
-                validate_schema=True,
-            )
+        enforce_llm_egress_policy()
+        content = await generate_structured_with_schema_retries(
+            client,
+            model,
+            messages=messages,
+            response_format=response_format,
+            json_schema=schema,
+            strict=False,
+            validate_schema=True,
+        )
         return StyleComparisonCritique(**content)
     except Exception as e:
         raise handle_llm_client_exceptions(e)
-    finally:
-        try:
-            provider = str(get_llm_provider().value)
-        except Exception:
-            provider = "unknown"
-        await record_provider_call(
-            provider=provider,
-            model=str(model),
-            response=None,
-            latency_ms=timer.elapsed_ms,
-        )

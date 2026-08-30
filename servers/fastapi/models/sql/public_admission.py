@@ -14,6 +14,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    JSON,
     String,
     UniqueConstraint,
     Uuid,
@@ -278,6 +279,22 @@ class PublicProviderLogicalCall(SQLModel, table=True):
     logical_call_ordinal: int = Field(sa_column=Column(Integer, nullable=False))
     retry_class: str = Field(sa_column=Column(String(16), nullable=False))
     idempotency_key_hash: str = Field(sa_column=Column(String(64), nullable=False))
+    provider_id: str = Field(
+        default="unavailable",
+        sa_column=Column(String(64), nullable=False, server_default="unavailable"),
+    )
+    model_id: str = Field(
+        default="unavailable",
+        sa_column=Column(String(128), nullable=False, server_default="unavailable"),
+    )
+    pricing_revision: str = Field(
+        default="unpriced-v1",
+        sa_column=Column(String(64), nullable=False, server_default="unpriced-v1"),
+    )
+    provider_idempotency_capable: bool = Field(
+        default=False,
+        sa_column=Column(Boolean, nullable=False, server_default=text("0")),
+    )
     state: str = Field(
         default="reserved",
         sa_column=Column(String(16), nullable=False, server_default="reserved"),
@@ -299,7 +316,54 @@ class PublicProviderLogicalCall(SQLModel, table=True):
     )
 
 
+class AuthoredDeckPlanCheckpoint(SQLModel, table=True):
+    """Digest-bound deck-wide planning result reusable across fenced attempts."""
+
+    __tablename__ = "authored_deck_plan_checkpoints"
+    __table_args__ = (
+        UniqueConstraint(
+            "generation_job_id", "stage", name="uq_authored_deck_plan_checkpoint_stage"
+        ),
+        CheckConstraint(
+            "stage IN ('deck_plan', 'chapter_plan', 'header', 'illustration')",
+            name="ck_authored_deck_plan_checkpoint_stage",
+        ),
+        CheckConstraint(
+            "length(input_digest) = 64 AND length(output_digest) = 64",
+            name="ck_authored_deck_plan_checkpoint_digests",
+        ),
+        CheckConstraint(
+            "produced_attempt_number >= 1",
+            name="ck_authored_deck_plan_checkpoint_attempt",
+        ),
+        Index(
+            "ix_authored_deck_plan_checkpoint_job",
+            "generation_job_id",
+            "stage",
+        ),
+    )
+
+    id: uuid.UUID = Field(primary_key=True, default_factory=uuid.uuid4)
+    generation_job_id: uuid.UUID = Field(
+        sa_column=Column(
+            Uuid,
+            ForeignKey("presentation_generation_jobs.id", ondelete="CASCADE"),
+            nullable=False,
+        )
+    )
+    stage: str = Field(sa_column=Column(String(24), nullable=False))
+    input_digest: str = Field(sa_column=Column(String(64), nullable=False))
+    output_digest: str = Field(sa_column=Column(String(64), nullable=False))
+    payload: dict = Field(sa_column=Column(JSON, nullable=False))
+    produced_attempt_number: int = Field(sa_column=Column(Integer, nullable=False))
+    created_at: datetime = Field(
+        default_factory=get_current_utc_datetime,
+        sa_column=Column(DateTime(timezone=True), nullable=False, server_default=func.now()),
+    )
+
+
 __all__ = [
+    "AuthoredDeckPlanCheckpoint",
     "PublicOperationAdmission",
     "PublicPolicyProfile",
     "PublicProviderLogicalCall",

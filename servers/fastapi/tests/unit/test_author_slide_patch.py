@@ -233,6 +233,8 @@ def test_source_reflow_reproposes_invalid_patch_once_with_validator_feedback(
         "border-top-color": "#173A63",
     }
     assert len(calls) == 2
+    assert calls[0][2].get("is_retry") is None
+    assert calls[1][2]["is_retry"] is True
     retry_messages = calls[1][2]["messages"]
     feedback = retry_messages[-1].content[0].text
     assert "rejectedProposal" in feedback

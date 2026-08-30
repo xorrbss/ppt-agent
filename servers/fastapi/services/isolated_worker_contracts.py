@@ -309,6 +309,8 @@ class IsolatedWorkerJob:
 class CapabilityClaims:
     role: WorkerRole
     operation_id: uuid.UUID
+    owner_id: uuid.UUID
+    tenant_id: str
     artifact_id: uuid.UUID
     input_digest: str
     attempt_token_sha256: str
@@ -355,6 +357,8 @@ def issue_worker_capability(
         "schemaVersion": CAPABILITY_SCHEMA,
         "role": job.role,
         "operationId": str(job.operation_id),
+        "ownerId": str(job.input_artifact.owner_id),
+        "tenantId": job.input_artifact.tenant_id,
         "artifactId": str(job.input_artifact.artifact_id),
         "inputDigest": job.input_digest,
         "attemptTokenSha256": hashlib.sha256(
@@ -398,6 +402,8 @@ def verify_and_consume_worker_capability(
                 "schemaVersion",
                 "role",
                 "operationId",
+                "ownerId",
+                "tenantId",
                 "artifactId",
                 "inputDigest",
                 "attemptTokenSha256",
@@ -421,6 +427,8 @@ def verify_and_consume_worker_capability(
     bindings = (
         payload.get("role") == job.role,
         payload.get("operationId") == str(job.operation_id),
+        payload.get("ownerId") == str(job.input_artifact.owner_id),
+        payload.get("tenantId") == job.input_artifact.tenant_id,
         payload.get("artifactId") == str(job.input_artifact.artifact_id),
         payload.get("inputDigest") == job.input_digest,
         payload.get("attemptTokenSha256") == expected_attempt,
@@ -433,6 +441,8 @@ def verify_and_consume_worker_capability(
     return CapabilityClaims(
         role=job.role,
         operation_id=job.operation_id,
+        owner_id=job.input_artifact.owner_id,
+        tenant_id=job.input_artifact.tenant_id,
         artifact_id=job.input_artifact.artifact_id,
         input_digest=job.input_digest,
         attempt_token_sha256=expected_attempt,

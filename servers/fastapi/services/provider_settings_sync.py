@@ -1,4 +1,5 @@
 import logging
+import os
 import time
 from typing import Mapping
 
@@ -39,7 +40,11 @@ def sync_legacy_file_to_provider_settings(
         ProviderSettingsRecord,
     )
 
-    path = get_user_config_path_env()
+    # A release-validation launcher may import an existing read-only provider
+    # config into an isolated database while keeping USER_CONFIG_PATH pointed at
+    # the RC-local compatibility mirror. The import path is scoped to the
+    # one-shot sync process and is never inherited by API or worker processes.
+    path = os.getenv("PRESENTON_PROVIDER_CONFIG_IMPORT_PATH") or get_user_config_path_env()
     if not path:
         return None
     config = sanitize_provider_settings_for_storage(read_user_config_file(path))

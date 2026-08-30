@@ -370,6 +370,7 @@ async def propose_authored_slide_patch(
                 strict=False,
                 validate_schema=True,
                 validate_schema_max_loop_count=2,
+                is_retry=True,
             )
             plan = validate_patch_plan(
                 content,

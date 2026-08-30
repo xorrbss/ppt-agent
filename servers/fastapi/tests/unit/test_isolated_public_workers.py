@@ -4,6 +4,8 @@ import asyncio
 import hashlib
 import io
 import json
+import os
+import sys
 import time
 import uuid
 import zipfile
@@ -23,7 +25,9 @@ from services.isolated_worker_contracts import (
     verify_and_consume_worker_capability,
 )
 from services.isolated_worker_process import (
+    IsolatedWorkerProcessError,
     NETWORK_NONE_ATTESTATION,
+    execute_isolated_worker_job,
     worker_environment,
 )
 from workers.public_export_worker import EXPORT_BUNDLE_SCHEMA, execute_export
@@ -187,6 +191,112 @@ def test_export_worker_builds_digest_verified_pptx_from_artifact_refs(
     assert hashlib.sha256(payload).hexdigest() == output.sha256
     with zipfile.ZipFile(io.BytesIO(payload)) as archive:
         assert "ppt/presentation.xml" in archive.namelist()
+
+
+def test_export_subprocess_limit_kills_descendants_and_reports_recycle(
+    tmp_path: Path,
+) -> None:
+    launcher = (
+        Path(__file__).resolve().parents[4] / "scripts" / "start-authored-vnext-dev.ps1"
+    ).read_text(encoding="utf-8")
+    for variable, value in {
+        "PPT_WORKER_MEMORY_LIMIT_BYTES": "1073741824",
+        "PPT_WORKER_CPU_MILLIS": "600000",
+        "PPT_WORKER_PID_LIMIT": "64",
+        "PPT_WORKER_OPEN_FILE_LIMIT": "512",
+        "PPT_WORKER_OUTPUT_LIMIT_BYTES": "536870912",
+        "PPT_WORKER_WALL_CLOCK_SECONDS": "600",
+    }.items():
+        assert f'"{variable}" = "{value}"' in launcher
+    operation_id = uuid.uuid4()
+    image = Image.new("RGB", (320, 180), "#1265E3")
+    png_stream = io.BytesIO()
+    image.save(png_stream, format="PNG")
+    image.close()
+    png = png_stream.getvalue()
+    slide = _artifact(
+        operation_id=operation_id,
+        payload=png,
+        storage_key="tenant/owner/resource-slide.png",
+        kind="slide-png",
+        media_type="image/png",
+    )
+    _store_payload(tmp_path, slide, png)
+    bundle_payload = json.dumps(
+        {
+            "schemaVersion": EXPORT_BUNDLE_SCHEMA,
+            "exportFormat": "pptx",
+            "slides": [slide.to_wire()],
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    bundle = _artifact(
+        operation_id=operation_id,
+        payload=bundle_payload,
+        storage_key="tenant/owner/resource-bundle.json",
+        kind="export-bundle",
+        media_type="application/vnd.presenton.export-bundle+json",
+    )
+    _store_payload(tmp_path, bundle, bundle_payload)
+    key_path = tmp_path / "capability.key"
+    key_path.write_bytes(b"r" * 32)
+    now = int(time.time())
+    job = IsolatedWorkerJob(
+        role="export",
+        operation_id=operation_id,
+        attempt_token="resource-attempt-1234567890",
+        fencing_token=1,
+        input_digest=bundle.sha256,
+        input_artifact=bundle,
+        capability="pending",
+        deadline_epoch_seconds=now + 60,
+    )
+    job = replace(
+        job,
+        capability=issue_worker_capability(
+            job,
+            signing_key=key_path.read_bytes(),
+            ttl_seconds=60,
+            now=now,
+            nonce="b" * 32,
+        ),
+    )
+    environment = {
+        **os.environ,
+        "PUBLIC_WORKER_OS_ISOLATION": NETWORK_NONE_ATTESTATION,
+        "PUBLIC_WORKER_CAPABILITY_KEY_FILE": str(key_path),
+        "PUBLIC_WORKER_OBJECT_STORE_ROOT": str(tmp_path),
+        "PPT_WORKER_MEMORY_LIMIT_BYTES": str(1024 * 1024 * 1024),
+        "PPT_WORKER_CPU_MILLIS": "60000",
+        "PPT_WORKER_PID_LIMIT": "16",
+        "PPT_WORKER_OPEN_FILE_LIMIT": "8",
+        "PPT_WORKER_OUTPUT_LIMIT_BYTES": str(10 * 1024 * 1024),
+        "PPT_WORKER_WALL_CLOCK_SECONDS": "60",
+    }
+
+    child_script = (
+        "import subprocess,sys,time;"
+        "subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)']);"
+        "handles=[open(sys.executable,'rb') for _ in range(32)];"
+        "sys.stdin.buffer.read();time.sleep(60)"
+    )
+    with pytest.raises(IsolatedWorkerProcessError) as raised:
+        asyncio.run(
+            execute_isolated_worker_job(
+                job,
+                source_environment=environment,
+                command=[sys.executable, "-c", child_script],
+            )
+        )
+
+    assert "resource_limit_exceeded" in raised.value.code
+    assert raised.value.resource_metrics["resource_limits_enforced"] is True
+    assert raised.value.resource_metrics["worker_limit_triggered"] is True
+    assert raised.value.resource_metrics["worker_peak_handle_count"] > 8
+    assert raised.value.resource_metrics["worker_peak_process_count"] >= 2
+    assert raised.value.resource_metrics["worker_final_process_count"] == 0
+    assert raised.value.resource_metrics["worker_recycle_failure_count"] == 0
 
 
 def test_artifact_ref_rejects_paths_and_session_fields() -> None:

@@ -16,6 +16,7 @@ class AuthoredGenerationPipelineResult:
     author_work: float
     illustration_work: float
     render_work: float
+    quality_work: float = 0.0
     # Deterministic DOM safety findings are returned to the generation owner so
     # it can repair only the affected slides.  Capacity/telemetry admission
     # failures remain hard errors in the pipeline; geometry defects are bounded

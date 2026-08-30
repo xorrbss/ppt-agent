@@ -384,6 +384,13 @@ def test_handle_llm_client_exceptions(monkeypatch):
         == "auth"
     )
 
+    class DeterministicPublicBudgetError(RuntimeError):
+        code = "public_provider_retry_limit_exceeded"
+        retryable = False
+
+    budget_error = DeterministicPublicBudgetError()
+    assert handle_llm_client_exceptions(budget_error) is budget_error
+
     from google.genai.errors import APIError as GoogleAPIError
     from llmai.shared.errors import BaseError as LLMAIBaseError
 

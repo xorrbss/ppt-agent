@@ -15,6 +15,8 @@ from hashlib import sha256
 import os
 from pathlib import Path
 import secrets
+import threading
+import time
 from typing import Any, Literal, Protocol
 import uuid
 
@@ -47,6 +49,98 @@ class ExportIdentityConflict(ArtifactStoreError):
     pass
 
 
+class ArtifactStoreMetrics:
+    """Thread-safe per-process counters consumed by operation observability."""
+
+    _OPERATIONS = ("put", "read", "head")
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._values: dict[str, int] = {
+            **{
+                f"artifact_store_{operation}_{suffix}": 0
+                for operation in self._OPERATIONS
+                for suffix in (
+                    "count",
+                    "latency_micros_total",
+                    "latency_micros_process_max",
+                )
+            },
+            "artifact_cache_hit_count": 0,
+            "artifact_cache_miss_count": 0,
+            "artifact_cache_eviction_count": 0,
+            "artifact_cache_evicted_bytes": 0,
+            "artifact_cache_current_bytes": 0,
+            "artifact_cache_current_entries": 0,
+        }
+
+    def observe_store(self, operation: str, elapsed_seconds: float) -> None:
+        micros = max(0, int(elapsed_seconds * 1_000_000))
+        with self._lock:
+            self._values[f"artifact_store_{operation}_count"] += 1
+            self._values[f"artifact_store_{operation}_latency_micros_total"] += micros
+            maximum = f"artifact_store_{operation}_latency_micros_process_max"
+            self._values[maximum] = max(self._values[maximum], micros)
+
+    def observe_cache(self, outcome: str, *, count: int = 1, size_bytes: int = 0) -> None:
+        with self._lock:
+            if outcome in {"hit", "miss"}:
+                self._values[f"artifact_cache_{outcome}_count"] += count
+            elif outcome == "eviction":
+                self._values["artifact_cache_eviction_count"] += count
+                self._values["artifact_cache_evicted_bytes"] += max(0, size_bytes)
+            else:
+                raise ValueError("artifact cache metric outcome is invalid")
+
+    def set_cache_usage(self, *, entries: int, size_bytes: int) -> None:
+        with self._lock:
+            self._values["artifact_cache_current_entries"] = max(0, entries)
+            self._values["artifact_cache_current_bytes"] = max(0, size_bytes)
+
+    def snapshot(self) -> dict[str, int]:
+        with self._lock:
+            return dict(self._values)
+
+
+_ARTIFACT_STORE_METRICS = ArtifactStoreMetrics()
+
+
+def public_artifact_store_metrics_snapshot() -> dict[str, int]:
+    """Return numeric-only counters safe for state/operation receipt projection."""
+
+    return _ARTIFACT_STORE_METRICS.snapshot()
+
+
+def public_artifact_store_metrics_delta(
+    before: dict[str, int],
+    after: dict[str, int] | None = None,
+) -> dict[str, int]:
+    current = public_artifact_store_metrics_snapshot() if after is None else after
+    delta = {
+        key: max(0, int(current.get(key, 0)) - int(before.get(key, 0)))
+        for key in current
+        if not key.endswith((
+            "latency_micros_process_max",
+            "current_bytes",
+            "current_entries",
+        ))
+    }
+    for operation in ArtifactStoreMetrics._OPERATIONS:
+        count_key = f"artifact_store_{operation}_count"
+        maximum_key = f"artifact_store_{operation}_latency_micros_process_max"
+        delta[maximum_key] = (
+            int(current.get(maximum_key, 0)) if delta.get(count_key, 0) else 0
+        )
+    return delta | {
+        "artifact_cache_current_bytes": int(
+            current.get("artifact_cache_current_bytes", 0)
+        ),
+        "artifact_cache_current_entries": int(
+            current.get("artifact_cache_current_entries", 0)
+        ),
+    }
+
+
 class ArtifactObjectStore(Protocol):
     """Immutable object storage addressed only through a validated ArtifactRef."""
 
@@ -60,11 +154,18 @@ class ArtifactObjectStore(Protocol):
 class LocalDevelopmentArtifactObjectStore:
     """Filesystem adapter/cache for local development, never production authority."""
 
-    def __init__(self, root: Path, *, max_object_bytes: int = 512 * 1024 * 1024) -> None:
+    def __init__(
+        self,
+        root: Path,
+        *,
+        max_object_bytes: int = 512 * 1024 * 1024,
+        observe_authority_metrics: bool = True,
+    ) -> None:
         if max_object_bytes <= 0:
             raise ValueError("artifact object byte limit must be positive")
         self._root = root.resolve()
         self._max_object_bytes = max_object_bytes
+        self._observe_authority_metrics = observe_authority_metrics
 
     def _path(self, artifact: ArtifactRef) -> Path:
         expected = artifact_storage_key(
@@ -82,6 +183,7 @@ class LocalDevelopmentArtifactObjectStore:
         return candidate
 
     async def put_bytes(self, artifact: ArtifactRef, payload: bytes) -> None:
+        started = time.perf_counter()
         if len(payload) != artifact.size_bytes:
             raise ArtifactBindingError("artifact.size_binding_invalid")
         actual_digest = sha256(payload).hexdigest()
@@ -89,7 +191,13 @@ class LocalDevelopmentArtifactObjectStore:
             raise ArtifactBindingError("artifact.digest_binding_invalid")
         if len(payload) > self._max_object_bytes:
             raise ArtifactStoreError("artifact.object_too_large")
-        await asyncio.to_thread(self._put_bytes_sync, artifact, payload)
+        try:
+            await asyncio.to_thread(self._put_bytes_sync, artifact, payload)
+        finally:
+            if self._observe_authority_metrics:
+                _ARTIFACT_STORE_METRICS.observe_store(
+                    "put", time.perf_counter() - started
+                )
 
     def _put_bytes_sync(self, artifact: ArtifactRef, payload: bytes) -> None:
         target = self._path(artifact)
@@ -113,10 +221,17 @@ class LocalDevelopmentArtifactObjectStore:
                 pass
 
     async def read_bytes(self, artifact: ArtifactRef) -> bytes:
-        payload = await asyncio.to_thread(self._read_bytes_sync, artifact)
-        if len(payload) != artifact.size_bytes or sha256(payload).hexdigest() != artifact.sha256:
-            raise ArtifactStoreError("artifact.object_readback_mismatch")
-        return payload
+        started = time.perf_counter()
+        try:
+            payload = await asyncio.to_thread(self._read_bytes_sync, artifact)
+            if len(payload) != artifact.size_bytes or sha256(payload).hexdigest() != artifact.sha256:
+                raise ArtifactStoreError("artifact.object_readback_mismatch")
+            return payload
+        finally:
+            if self._observe_authority_metrics:
+                _ARTIFACT_STORE_METRICS.observe_store(
+                    "read", time.perf_counter() - started
+                )
 
     def _read_bytes_sync(self, artifact: ArtifactRef) -> bytes:
         target = self._path(artifact)
@@ -126,9 +241,153 @@ class LocalDevelopmentArtifactObjectStore:
             raise ArtifactNotFound("artifact.object_missing") from exc
 
     async def exists(self, artifact: ArtifactRef) -> bool:
+        started = time.perf_counter()
+        try:
+            target = self._path(artifact)
+            if not await asyncio.to_thread(target.is_file):
+                return False
+            try:
+                await self.read_bytes(artifact)
+            except ArtifactStoreError:
+                return False
+            return True
+        finally:
+            if self._observe_authority_metrics:
+                _ARTIFACT_STORE_METRICS.observe_store(
+                    "head", time.perf_counter() - started
+                )
+
+
+class WorkerArtifactTransportCache(LocalDevelopmentArtifactObjectStore):
+    """Digest-verified scratch shared with one-shot network-none workers.
+
+    This adapter is never registered as the production artifact authority.
+    PPT Core hydrates authoritative ``ArtifactRef`` bytes into it immediately
+    before dispatch and adopts verified worker output back into the configured
+    object store before any durable metadata is committed.
+    """
+
+    _maintenance_lock = threading.Lock()
+
+    def __init__(
+        self,
+        root: Path,
+        *,
+        max_cache_bytes: int,
+        ttl_seconds: int,
+        max_object_bytes: int = 512 * 1024 * 1024,
+    ) -> None:
+        if max_cache_bytes <= 0 or ttl_seconds <= 0:
+            raise ValueError("worker artifact cache limits must be positive")
+        super().__init__(
+            root,
+            max_object_bytes=max_object_bytes,
+            observe_authority_metrics=False,
+        )
+        self._max_cache_bytes = max_cache_bytes
+        self._ttl_seconds = ttl_seconds
+        self._known_entries: dict[Path, int] = {}
+
+    def _cache_entries(self) -> list[tuple[Path, float, int]]:
+        entries: list[tuple[Path, float, int]] = []
+        if not self._root.exists():
+            return entries
+        for path in self._root.rglob("*"):
+            try:
+                if path.is_symlink() or not path.is_file() or path.name.startswith("."):
+                    continue
+                stat = path.stat()
+            except OSError:
+                continue
+            entries.append((path, stat.st_mtime, stat.st_size))
+        return entries
+
+    def _maintain_sync(self, *, protected: Path | None = None) -> None:
+        with self._maintenance_lock:
+            now = time.time()
+            entries = self._cache_entries()
+            observed = {path: size for path, _, size in entries}
+            missing = {
+                path: size
+                for path, size in self._known_entries.items()
+                if path not in observed
+            }
+            survivors: list[tuple[Path, float, int]] = []
+            evicted_count = len(missing)
+            evicted_bytes = sum(missing.values())
+            for path, modified, size in entries:
+                if path != protected and now - modified > self._ttl_seconds:
+                    try:
+                        path.unlink(missing_ok=True)
+                    except OSError:
+                        survivors.append((path, modified, size))
+                    else:
+                        evicted_count += 1
+                        evicted_bytes += size
+                else:
+                    survivors.append((path, modified, size))
+            total = sum(size for _, _, size in survivors)
+            for path, modified, size in sorted(survivors, key=lambda item: item[1]):
+                if total <= self._max_cache_bytes:
+                    break
+                if path == protected:
+                    continue
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError:
+                    continue
+                total -= size
+                evicted_count += 1
+                evicted_bytes += size
+            current = self._cache_entries()
+            self._known_entries = {path: size for path, _, size in current}
+            _ARTIFACT_STORE_METRICS.set_cache_usage(
+                entries=len(current),
+                size_bytes=sum(size for _, _, size in current),
+            )
+            if evicted_count:
+                _ARTIFACT_STORE_METRICS.observe_cache(
+                    "eviction", count=evicted_count, size_bytes=evicted_bytes
+                )
+
+    async def maintain(self) -> None:
+        await asyncio.to_thread(self._maintain_sync)
+
+    async def put_bytes(self, artifact: ArtifactRef, payload: bytes) -> None:
+        if len(payload) > self._max_cache_bytes:
+            _ARTIFACT_STORE_METRICS.observe_cache("miss")
+            raise ArtifactStoreError("artifact.worker_cache_budget_exceeded")
         target = self._path(artifact)
-        if not await asyncio.to_thread(target.is_file):
-            return False
+        existed = await asyncio.to_thread(target.is_file)
+        try:
+            await super().put_bytes(artifact, payload)
+        except ArtifactStoreError:
+            _ARTIFACT_STORE_METRICS.observe_cache("miss")
+            raise
+        await asyncio.to_thread(os.utime, target, None)
+        _ARTIFACT_STORE_METRICS.observe_cache("hit" if existed else "miss")
+        await asyncio.to_thread(self._maintain_sync, protected=target)
+
+    async def read_bytes(self, artifact: ArtifactRef) -> bytes:
+        target = self._path(artifact)
+        try:
+            modified = await asyncio.to_thread(lambda: target.stat().st_mtime)
+            if time.time() - modified > self._ttl_seconds:
+                await asyncio.to_thread(target.unlink, missing_ok=True)
+                await asyncio.to_thread(self._maintain_sync)
+                raise ArtifactNotFound("artifact.cache_entry_expired")
+            payload = await super().read_bytes(artifact)
+        except ArtifactStoreError:
+            _ARTIFACT_STORE_METRICS.observe_cache("miss")
+            raise
+        except OSError as exc:
+            _ARTIFACT_STORE_METRICS.observe_cache("miss")
+            raise ArtifactNotFound("artifact.object_missing") from exc
+        await asyncio.to_thread(os.utime, target, None)
+        _ARTIFACT_STORE_METRICS.observe_cache("hit")
+        return payload
+
+    async def exists(self, artifact: ArtifactRef) -> bool:
         try:
             await self.read_bytes(artifact)
         except ArtifactStoreError:
@@ -219,11 +478,17 @@ class S3ArtifactObjectStore:
             raise ArtifactStoreError("artifact.immutable_object_conflict")
 
     async def put_bytes(self, artifact: ArtifactRef, payload: bytes) -> None:
+        started = time.perf_counter()
         if len(payload) != artifact.size_bytes or sha256(payload).hexdigest() != artifact.sha256:
             raise ArtifactBindingError("artifact.payload_binding_invalid")
         if len(payload) > self._max_object_bytes:
             raise ArtifactStoreError("artifact.object_too_large")
-        await asyncio.to_thread(self._put_bytes_sync, artifact, payload)
+        try:
+            await asyncio.to_thread(self._put_bytes_sync, artifact, payload)
+        finally:
+            _ARTIFACT_STORE_METRICS.observe_store(
+                "put", time.perf_counter() - started
+            )
 
     def _put_bytes_sync(self, artifact: ArtifactRef, payload: bytes) -> None:
         existing = self._head_sync(artifact)
@@ -254,7 +519,13 @@ class S3ArtifactObjectStore:
         self._validate_head(artifact, readback)
 
     async def read_bytes(self, artifact: ArtifactRef) -> bytes:
-        return await asyncio.to_thread(self._read_bytes_sync, artifact)
+        started = time.perf_counter()
+        try:
+            return await asyncio.to_thread(self._read_bytes_sync, artifact)
+        finally:
+            _ARTIFACT_STORE_METRICS.observe_store(
+                "read", time.perf_counter() - started
+            )
 
     def _read_bytes_sync(self, artifact: ArtifactRef) -> bytes:
         try:
@@ -275,11 +546,17 @@ class S3ArtifactObjectStore:
         return payload
 
     async def exists(self, artifact: ArtifactRef) -> bool:
-        head = await asyncio.to_thread(self._head_sync, artifact)
-        if head is None:
-            return False
-        self._validate_head(artifact, head)
-        return True
+        started = time.perf_counter()
+        try:
+            head = await asyncio.to_thread(self._head_sync, artifact)
+            if head is None:
+                return False
+            self._validate_head(artifact, head)
+            return True
+        finally:
+            _ARTIFACT_STORE_METRICS.observe_store(
+                "head", time.perf_counter() - started
+            )
 
 
 def require_development_local_artifact_store(
@@ -496,6 +773,45 @@ def configured_public_artifact_service() -> DurableArtifactService:
             S3ArtifactObjectStore(bucket=bucket, key_prefix=prefix)
         )
     raise RuntimeError("artifact.backend_required")
+
+
+def configured_worker_artifact_cache() -> WorkerArtifactTransportCache:
+    """Return the local transport cache; never infer it from request data."""
+
+    root_value = (os.getenv("PUBLIC_WORKER_ARTIFACT_CACHE_ROOT") or "").strip()
+    if not root_value:
+        # Compatibility is limited to the explicitly development-only backend.
+        backend = (os.getenv("PUBLIC_ARTIFACT_STORE_BACKEND") or "").strip().lower()
+        environment = (os.getenv("ENVIRONMENT") or "production").strip().lower()
+        if backend == "local-development" and environment in {
+            "development",
+            "dev",
+            "local",
+            "test",
+        }:
+            root_value = (os.getenv("PUBLIC_WORKER_OBJECT_STORE_ROOT") or "").strip()
+    root = Path(root_value)
+    if not root_value or not root.is_absolute():
+        raise RuntimeError("artifact.worker_cache_root_required")
+    try:
+        max_cache_bytes = int(
+            os.getenv(
+                "PUBLIC_WORKER_ARTIFACT_CACHE_MAX_BYTES",
+                str(1024 * 1024 * 1024),
+            )
+        )
+        ttl_seconds = int(
+            os.getenv("PUBLIC_WORKER_ARTIFACT_CACHE_TTL_SECONDS", "900")
+        )
+    except ValueError as exc:
+        raise RuntimeError("artifact.worker_cache_limits_invalid") from exc
+    if max_cache_bytes <= 0 or ttl_seconds <= 0:
+        raise RuntimeError("artifact.worker_cache_limits_invalid")
+    return WorkerArtifactTransportCache(
+        root,
+        max_cache_bytes=max_cache_bytes,
+        ttl_seconds=ttl_seconds,
+    )
 
 
 @dataclass(frozen=True, slots=True)

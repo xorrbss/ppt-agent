@@ -23,13 +23,25 @@ from llmai.shared import (
 
 from utils.llm_config import get_extra_body
 from utils.schema_utils import get_schema_validation_errors
-from services.provider_usage_instrumentation import provider_call_admission
+from services.provider_usage_instrumentation import (
+    ProviderCallTimer,
+    current_provider_idempotency_key,
+    provider_call_admission,
+    record_provider_call,
+)
+from utils.provider_idempotency import (
+    provider_generate_call,
+    supports_provider_idempotency,
+)
 LOGGER = logging.getLogger(__name__)
 CLIENT_DISCONNECT_POLL_SECONDS = 0.1
 TRANSIENT_LLM_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
-TRANSIENT_LLM_MAX_ATTEMPTS = 4
+TRANSIENT_LLM_MAX_ATTEMPTS = 2
 TRANSIENT_LLM_RETRY_BASE_DELAY_SECONDS = 1.0
 TRANSIENT_LLM_RETRY_MAX_DELAY_SECONDS = 8.0
+PUBLIC_STRUCTURED_MAX_PHYSICAL_CALLS = 2
+PUBLIC_STRUCTURED_MAX_PARSE_ATTEMPTS = 2
+PUBLIC_STRUCTURED_MAX_VALIDATION_LOOPS = 2
 DisconnectChecker = Callable[[], Awaitable[bool]]
 TextChunkCallback = Callable[[str], Awaitable[None]]
 
@@ -69,6 +81,44 @@ class TextLengthLimit:
     maximum: int
 
 
+@dataclass(frozen=True)
+class _StructuredGenerationResult:
+    content: Optional[dict]
+    response: object | None
+
+
+@dataclass
+class _StructuredProviderCallBudget:
+    """One initial call plus one public-policy retry across all helper loops."""
+
+    limit: int = PUBLIC_STRUCTURED_MAX_PHYSICAL_CALLS
+    used: int = 0
+
+    @property
+    def remaining(self) -> int:
+        return max(0, self.limit - self.used)
+
+    def consume(self) -> None:
+        if self.remaining <= 0:
+            raise HTTPException(
+                status_code=503,
+                detail="public_provider_retry_limit_exceeded",
+                headers={"Retry-After": "10"},
+            )
+        self.used += 1
+
+
+def _provider_receipt_identity() -> str:
+    """Resolve an allowlisted provider label without exposing call payloads."""
+
+    try:
+        from utils.llm_provider import get_llm_provider
+
+        return str(get_llm_provider().value)
+    except Exception:
+        return "unknown"
+
+
 async def _raise_if_client_disconnected(
     disconnect_checker: Optional[DisconnectChecker],
 ) -> None:
@@ -82,19 +132,30 @@ async def _generate_structured_content(
     disconnect_checker: Optional[DisconnectChecker],
     text_chunk_callback: Optional[TextChunkCallback] = None,
     **kwargs: Any,
-) -> Optional[dict]:
+) -> _StructuredGenerationResult:
+    generate_call = provider_generate_call(
+        client,
+        provider_id=_provider_receipt_identity(),
+        kwargs=kwargs,
+        idempotency_key=current_provider_idempotency_key(),
+    )
     if disconnect_checker is None and text_chunk_callback is None:
-        response = await asyncio.to_thread(client.generate, **kwargs)
-        return extract_structured_content(response.content)
+        response = await asyncio.to_thread(generate_call)
+        return _StructuredGenerationResult(
+            content=extract_structured_content(response.content),
+            response=response,
+        )
 
     completion_content: Any = None
+    completion: object | None = None
     streamed_text: list[str] = []
-    async for event in stream_generate_events(
+    async for event in _stream_generate_events_unadmitted(
         client,
         disconnect_checker=disconnect_checker,
         **{**kwargs, "stream": True},
     ):
         if isinstance(event, ResponseStreamCompletionChunk):
+            completion = event
             completion_content = event.content
         elif getattr(event, "type", None) == "content":
             chunk = getattr(event, "chunk", None)
@@ -109,8 +170,11 @@ async def _generate_structured_content(
             serialized = serialize_structured_content(completion_content)
             if serialized:
                 await text_chunk_callback(serialized)
-        return content
-    return extract_structured_content("".join(streamed_text))
+        return _StructuredGenerationResult(content=content, response=completion)
+    return _StructuredGenerationResult(
+        content=extract_structured_content("".join(streamed_text)),
+        response=completion,
+    )
 
 
 def _exception_status_code(error: Exception) -> Optional[int]:
@@ -131,25 +195,68 @@ async def _generate_structured_content_with_transient_retries(
     *,
     disconnect_checker: Optional[DisconnectChecker],
     is_retry: bool = False,
+    semantic_slot: str,
+    call_budget: _StructuredProviderCallBudget,
     **kwargs: Any,
 ) -> Optional[dict]:
     """Retry only transient provider failures, then expose a retryable 503."""
-    for attempt in range(1, TRANSIENT_LLM_MAX_ATTEMPTS + 1):
+    max_attempts = min(TRANSIENT_LLM_MAX_ATTEMPTS, call_budget.remaining)
+    for attempt in range(1, max_attempts + 1):
         await _raise_if_client_disconnected(disconnect_checker)
+        call_budget.consume()
+        timer = ProviderCallTimer()
+        provider = _provider_receipt_identity()
+        model = str(kwargs.get("model") or "unknown")
+        physical_semantic_slot = f"{semantic_slot}.attempt-{attempt}"
+        entered_provider_boundary = False
+        outcome = "succeeded"
+        result: _StructuredGenerationResult | None = None
         try:
-            async with provider_call_admission(is_retry=is_retry or attempt > 1):
-                return await _generate_structured_content(
-                    client,
-                    disconnect_checker=disconnect_checker,
-                    **kwargs,
+            try:
+                async with provider_call_admission(
+                    is_retry=is_retry or attempt > 1,
+                    semantic_slot=physical_semantic_slot,
+                    provider=provider,
+                    model=model,
+                    provider_idempotency_capable=supports_provider_idempotency(
+                        client, provider_id=provider
+                    ),
+                ):
+                    entered_provider_boundary = True
+                    result = await _generate_structured_content(
+                        client,
+                        disconnect_checker=disconnect_checker,
+                        **kwargs,
+                    )
+            except BaseException as call_error:
+                outcome = (
+                    "cancelled"
+                    if isinstance(call_error, asyncio.CancelledError)
+                    else "failed"
                 )
+                raise
+            finally:
+                if entered_provider_boundary:
+                    await record_provider_call(
+                        provider=provider,
+                        model=model,
+                        response=(result.response if result is not None else None),
+                        latency_ms=timer.elapsed_ms,
+                        retry_class=(
+                            "retry" if is_retry or attempt > 1 else "initial"
+                        ),
+                        outcome=outcome,
+                    )
+            if result is None:
+                raise RuntimeError("structured_provider_result_missing")
+            return result.content
         except Exception as error:
             status_code = _exception_status_code(error)
             is_transient = status_code in TRANSIENT_LLM_STATUS_CODES
             if not is_transient:
                 raise
 
-            if attempt == TRANSIENT_LLM_MAX_ATTEMPTS:
+            if attempt == max_attempts or call_budget.remaining <= 0:
                 LOGGER.error(
                     "Structured LLM generation unavailable after %s attempts "
                     "(last_status=%s)",
@@ -174,7 +281,7 @@ async def _generate_structured_content_with_transient_retries(
                 "(status=%s, attempt=%s/%s); retrying in %.1fs",
                 status_code,
                 attempt,
-                TRANSIENT_LLM_MAX_ATTEMPTS,
+                max_attempts,
                 delay_seconds,
             )
             await asyncio.sleep(delay_seconds)
@@ -726,25 +833,44 @@ async def generate_structured_with_schema_retries(
     validate_schema_max_loop_count: int = 4,
     disconnect_checker: Optional[DisconnectChecker] = None,
     text_chunk_callback: Optional[TextChunkCallback] = None,
+    is_retry: bool = False,
 ) -> dict:
     """
     Parse retries (inner loop) plus optional JSON Schema validation feedback loops (outer loop),
     matching the overflow-mitigation behavior from structured generation with validate_schema.
     """
-    max_validation_loops = max(1, validate_schema_max_loop_count)
+    max_validation_loops = min(
+        max(1, validate_schema_max_loop_count),
+        PUBLIC_STRUCTURED_MAX_VALIDATION_LOOPS,
+    )
     working_messages: list[Message] = list(messages)
+    call_budget = _StructuredProviderCallBudget()
 
     for validation_attempt in range(max_validation_loops):
         content: Optional[dict] = None
-        for attempt in range(3):
+        for parse_attempt in range(PUBLIC_STRUCTURED_MAX_PARSE_ATTEMPTS):
+            if call_budget.remaining <= 0:
+                break
             await _raise_if_client_disconnected(disconnect_checker)
+            if validation_attempt == 0 and parse_attempt == 0:
+                semantic_slot = "structured.initial"
+            elif validation_attempt == 0:
+                semantic_slot = "structured.parse-repair"
+            elif parse_attempt == 0:
+                semantic_slot = "structured.schema-repair"
+            else:
+                semantic_slot = "structured.schema-parse-repair"
             content = await _generate_structured_content_with_transient_retries(
                 client,
                 disconnect_checker=disconnect_checker,
-                is_retry=validation_attempt > 0,
+                is_retry=(
+                    is_retry or validation_attempt > 0 or parse_attempt > 0
+                ),
+                semantic_slot=semantic_slot,
+                call_budget=call_budget,
                 text_chunk_callback=(
                     text_chunk_callback
-                    if validation_attempt == 0 and attempt == 0
+                    if validation_attempt == 0 and parse_attempt == 0
                     else None
                 ),
                 **get_generate_kwargs(
@@ -755,8 +881,8 @@ async def generate_structured_with_schema_retries(
             )
             if content is not None:
                 break
-            if attempt < 2:
-                await asyncio.sleep(0.5 * (attempt + 1))
+            if call_budget.remaining > 0:
+                await asyncio.sleep(0.5 * (parse_attempt + 1))
 
         if content is None:
             raise HTTPException(
@@ -790,7 +916,10 @@ async def generate_structured_with_schema_retries(
             )
             return compacted
 
-        if validation_attempt == max_validation_loops - 1:
+        if (
+            validation_attempt == max_validation_loops - 1
+            or call_budget.remaining <= 0
+        ):
             # Last resort: clamp over-length strings / over-count arrays to the schema
             # so the response is valid (trimmed) rather than crashing the caller.
             clamped = clamp_to_schema(compacted, json_schema, json_schema)
@@ -893,6 +1022,12 @@ async def _stream_generate_events_unadmitted(
     inactivity_timeout_seconds: Optional[float] = None,
     **kwargs,
 ) -> AsyncGenerator[Any, None]:
+    generate_call = provider_generate_call(
+        client,
+        provider_id=_provider_receipt_identity(),
+        kwargs=kwargs,
+        idempotency_key=current_provider_idempotency_key(),
+    )
     loop = asyncio.get_running_loop()
     queue: asyncio.Queue[Any] = asyncio.Queue()
     sentinel = object()
@@ -907,7 +1042,7 @@ async def _stream_generate_events_unadmitted(
     def worker():
         events = None
         try:
-            events = iter(client.generate(**kwargs))
+            events = iter(generate_call())
             while not stop_requested.is_set():
                 try:
                     event = next(events)
@@ -986,11 +1121,43 @@ async def stream_generate_events(
 ) -> AsyncGenerator[Any, None]:
     """Admit exactly one provider stream before its first network byte."""
 
-    async with provider_call_admission():
-        async for event in _stream_generate_events_unadmitted(
-            client,
-            disconnect_checker=disconnect_checker,
-            inactivity_timeout_seconds=inactivity_timeout_seconds,
-            **kwargs,
+    timer = ProviderCallTimer()
+    completion: object | None = None
+    provider = _provider_receipt_identity()
+    model = str(kwargs.get("model") or "unknown")
+    entered_provider_boundary = False
+    outcome = "succeeded"
+    try:
+        async with provider_call_admission(
+            semantic_slot="stream.primary",
+            provider=provider,
+            model=model,
+            provider_idempotency_capable=supports_provider_idempotency(
+                client, provider_id=provider
+            ),
         ):
-            yield event
+            entered_provider_boundary = True
+            async for event in _stream_generate_events_unadmitted(
+                client,
+                disconnect_checker=disconnect_checker,
+                inactivity_timeout_seconds=inactivity_timeout_seconds,
+                **kwargs,
+            ):
+                if isinstance(event, ResponseStreamCompletionChunk):
+                    completion = event
+                    continue
+                yield event
+    except BaseException as error:
+        outcome = "cancelled" if isinstance(error, asyncio.CancelledError) else "failed"
+        raise
+    finally:
+        if entered_provider_boundary:
+            await record_provider_call(
+                provider=provider,
+                model=model,
+                response=completion,
+                latency_ms=timer.elapsed_ms,
+                outcome=outcome,
+            )
+    if completion is not None:
+        yield completion

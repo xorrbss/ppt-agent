@@ -5,6 +5,8 @@ import logging
 import os
 import re
 import secrets
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
 from weakref import WeakKeyDictionary
 
 import aiohttp
@@ -46,6 +48,7 @@ from utils.image_provider import (
 )
 from services.provider_usage_instrumentation import (
     ProviderCallTimer,
+    current_provider_idempotency_key,
     provider_call_admission,
     record_provider_call,
 )
@@ -82,9 +85,48 @@ def _get_image_generation_lock() -> asyncio.Lock:
         _IMAGE_GENERATION_LOCKS[loop] = lock
     return lock
 
+
+@asynccontextmanager
+async def _metered_image_provider_call(
+    *,
+    provider: str,
+    model: str,
+    semantic_slot: str,
+    is_retry: bool = False,
+    provider_idempotency_capable: bool = False,
+) -> AsyncIterator[None]:
+    """Fence and receipt one physical, potentially billable image request."""
+
+    timer = ProviderCallTimer()
+    entered_provider_boundary = False
+    outcome = "succeeded"
+    try:
+        async with provider_call_admission(
+            is_retry=is_retry,
+            semantic_slot=semantic_slot,
+            provider=provider,
+            model=model,
+            provider_idempotency_capable=provider_idempotency_capable,
+        ):
+            entered_provider_boundary = True
+            yield
+    except BaseException as error:
+        outcome = "cancelled" if isinstance(error, asyncio.CancelledError) else "failed"
+        raise
+    finally:
+        if entered_provider_boundary:
+            await record_provider_call(
+                provider=provider,
+                model=model,
+                response=None,
+                latency_ms=timer.elapsed_ms,
+                retry_class="retry" if is_retry else "initial",
+                outcome=outcome,
+            )
+
 # OpenAI image models (gpt-image-2 / gpt-image-1.5 / dall-e-3) enforce a per-minute rate limit.
 # On 429 we back off and retry instead of falling back to a placeholder.
-OPENAI_IMAGE_MAX_ATTEMPTS = 6
+OPENAI_IMAGE_MAX_ATTEMPTS = 2
 OPENAI_IMAGE_MAX_WAIT_SECONDS = 30.0
 
 # Generated illustrations land in slide slots that are roughly 16:9 and are painted
@@ -177,19 +219,12 @@ class ImageGenerationService:
         # Never log a user/model-authored image prompt. Receipt telemetry carries
         # only safe provider/model/timing scalars at the call boundary below.
         LOGGER.info("Starting image generation request")
-        timer = ProviderCallTimer()
-        provider_response: object | None = None
         try:
             if is_parallel_image_generation_enabled(self.settings):
-                async with provider_call_admission():
-                    image_path = await self._call_image_provider(image_prompt)
+                image_path = await self._call_image_provider(image_prompt)
             else:
                 async with _get_image_generation_lock():
-                    async with provider_call_admission():
-                        image_path = await self._call_image_provider(image_prompt)
-            # Image providers currently expose no portable usage envelope.  The
-            # successful path remains explicit as unavailable, never zero.
-            provider_response = None
+                    image_path = await self._call_image_provider(image_prompt)
             if image_path:
                 if image_path.startswith("http"):
                     return image_path
@@ -212,31 +247,20 @@ class ImageGenerationService:
             # keep this user-visible fallback content-free.
             LOGGER.warning("Image generation request failed")
             return absolute_fastapi_asset_url("/static/images/placeholder.jpg")
-        finally:
-            try:
-                selected = get_selected_image_provider(self.settings)
-                provider = str(selected.value) if selected is not None else "local"
-            except Exception:
-                # Provider selection errors must retain the legacy placeholder
-                # outcome and must not leak configuration details into telemetry.
-                provider = "local"
-            model_by_provider = {
-                "dall-e-3": "dall-e-3",
-                "gpt-image-1.5": "gpt-image-1.5",
-                "gpt-image-2": "gpt-image-2",
-                "gemini-flash": "gemini-2.5-flash-image",
-                "nanobanana-pro": "gemini-3-pro-image-preview",
-            }
-            await record_provider_call(
-                provider=provider,
-                model=model_by_provider.get(provider, "provider-default"),
-                response=provider_response,
-                latency_ms=timer.elapsed_ms,
-            )
 
     async def _call_image_provider(self, image_prompt: str) -> str:
         if self.is_stock_provider_selected():
-            return await self.image_gen_func(image_prompt)
+            try:
+                selected = get_selected_image_provider(self.settings)
+                provider = str(selected.value) if selected is not None else "stock"
+            except Exception:
+                provider = "stock"
+            async with _metered_image_provider_call(
+                semantic_slot="image.primary",
+                provider=provider,
+                model="provider-default",
+            ):
+                return await self.image_gen_func(image_prompt)
         return await self.image_gen_func(image_prompt, self.output_directory)
 
     async def generate_image_openai(
@@ -244,18 +268,36 @@ class ImageGenerationService:
     ) -> str:
         if not (api_key := get_openai_api_key_env(self.settings)):
             raise ValueError("OPENAI_API_KEY is not configured")
-        client = AsyncOpenAI(api_key=api_key)
+        # SDK retries would create unobservable physical spend outside our
+        # per-attempt admission boundary; public retries are explicit below.
+        client = AsyncOpenAI(api_key=api_key, max_retries=0)
         result = None
         for attempt in range(OPENAI_IMAGE_MAX_ATTEMPTS):
             try:
-                result = await client.images.generate(
+                semantic_slot = f"image.primary.attempt-{attempt + 1}"
+                async with _metered_image_provider_call(
+                    is_retry=attempt > 0,
+                    semantic_slot=semantic_slot,
+                    provider="openai",
                     model=model,
-                    prompt=prompt,
-                    n=1,
-                    quality=quality,
-                    response_format="b64_json" if model == "dall-e-3" else NOT_GIVEN,
-                    size=resolve_openai_image_size(model),
-                )
+                    provider_idempotency_capable=True,
+                ):
+                    idempotency_key = current_provider_idempotency_key()
+                    result = await client.images.generate(
+                        model=model,
+                        prompt=prompt,
+                        n=1,
+                        quality=quality,
+                        response_format=(
+                            "b64_json" if model == "dall-e-3" else NOT_GIVEN
+                        ),
+                        size=resolve_openai_image_size(model),
+                        extra_headers=(
+                            {"Idempotency-Key": idempotency_key}
+                            if idempotency_key
+                            else None
+                        ),
+                    )
                 break
             except RateLimitError as e:
                 if attempt == OPENAI_IMAGE_MAX_ATTEMPTS - 1:
@@ -326,12 +368,17 @@ class ImageGenerationService:
         }
 
         async with aiohttp.ClientSession(trust_env=True) as session:
-            resp = await session.post(
-                f"{base_url}/images/generations",
-                json=payload,
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(total=300),
-            )
+            async with _metered_image_provider_call(
+                semantic_slot="image.primary",
+                provider="open_webui",
+                model="provider-default",
+            ):
+                resp = await session.post(
+                    f"{base_url}/images/generations",
+                    json=payload,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=300),
+                )
 
             if resp.status != 200:
                 error_text = await resp.text()
@@ -386,14 +433,19 @@ class ImageGenerationService:
         self, prompt: str, output_directory: str, model: str
     ) -> str:
         """Base method for Google image generation models."""
-        return await generate_google_image(
-            prompt,
-            output_directory,
-            model,
-            api_key=get_google_api_key_env(self.settings),
-            client_factory=genai.Client,
-            config_factory=types.GenerateContentConfig,
-        )
+        async with _metered_image_provider_call(
+            semantic_slot="image.primary",
+            provider="google",
+            model=model,
+        ):
+            return await generate_google_image(
+                prompt,
+                output_directory,
+                model,
+                api_key=get_google_api_key_env(self.settings),
+                client_factory=genai.Client,
+                config_factory=types.GenerateContentConfig,
+            )
 
     async def generate_image_gemini_flash(
         self, prompt: str, output_directory: str
@@ -487,9 +539,14 @@ class ImageGenerationService:
 
         async with aiohttp.ClientSession(trust_env=True) as session:
             # Step 1: Submit workflow
-            prompt_id = await self._submit_comfyui_workflow(
-                session, comfyui_url, workflow
-            )
+            async with _metered_image_provider_call(
+                semantic_slot="image.primary",
+                provider="comfyui",
+                model="configured-workflow",
+            ):
+                prompt_id = await self._submit_comfyui_workflow(
+                    session, comfyui_url, workflow
+                )
 
             # Step 2: Wait for completion
             status_data = await self._wait_for_comfyui_completion(
@@ -893,17 +950,21 @@ class ImageGenerationService:
                 base_url=validated_endpoint.url,
                 api_key=api_key,
                 http_client=http_client,
+                max_retries=0,
             )
-            response = await client.images.generate(
+            async with _metered_image_provider_call(
+                semantic_slot="image.primary",
+                provider="openai_compatible",
                 model=model,
-                prompt=prompt,
-                n=1,
-                # Deliberately square, unlike the first-party OpenAI path above: this
-                # endpoint is user-configured and its model is arbitrary, so the
-                # landscape sizes verified against OpenAI may be rejected here and
-                # break setups that work today.
-                size="1024x1024",
-            )
+            ):
+                response = await client.images.generate(
+                    model=model,
+                    prompt=prompt,
+                    n=1,
+                    # Deliberately square, unlike the first-party OpenAI path above:
+                    # this endpoint is user-configured and its model is arbitrary.
+                    size="1024x1024",
+                )
 
         item = response.data[0]
         image_path = os.path.join(output_directory, f"{uuid.uuid4()}.png")

@@ -17,7 +17,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
-from typing import BinaryIO
+from typing import BinaryIO, Mapping
 
 from sqlalchemy import and_, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
@@ -31,7 +31,7 @@ from models.sql.presentation import (
 )
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.presentation_export_attempt import PresentationExportAttempt
-from models.sql.public_artifact import PublicArtifact
+from models.sql.public_artifact import ArtifactRef, PublicArtifact
 from models.sql.workspace import (
     WorkspaceArtifact,
     WorkspaceOperation,
@@ -83,18 +83,22 @@ class PreparedWorkspaceArtifact:
     operation_id: uuid.UUID
     presentation_id: uuid.UUID
     kind: str
-    absolute_path: Path
+    absolute_path: Path | None
     storage_key: str
     public_path: str
     sha256: str
     size_bytes: int
     source_revision: int
     export_attempt_id: uuid.UUID | None = None
+    public_artifact_id: uuid.UUID | None = None
+    tenant_id: str | None = None
 
     @property
-    def temporary_path(self) -> Path:
+    def temporary_path(self) -> Path | None:
         """Deterministic copy path recoverable from the durable intent."""
 
+        if self.absolute_path is None:
+            return None
         return self.absolute_path.parent / f".{self.artifact_id}.tmp"
 
     def result_payload(self) -> dict[str, object]:
@@ -103,8 +107,9 @@ class PreparedWorkspaceArtifact:
             "artifact_kind": self.kind,
             "artifact_sha256": self.sha256,
             "artifact_size_bytes": self.size_bytes,
-            "path": self.public_path,
         }
+        if self.public_path:
+            payload["path"] = self.public_path
         if self.export_attempt_id is not None:
             payload["export_attempt_id"] = str(self.export_attempt_id)
         return payload
@@ -138,6 +143,7 @@ class WorkspaceArtifactCleanupClaim:
     operation_id: uuid.UUID
     kind: str
     storage_key: str
+    public_artifact_id: uuid.UUID | None
     token: str
     attempts: int
 
@@ -282,8 +288,14 @@ def _remove_owned_tree(path: Path) -> None:
 
 
 def _remove_prepared_file(artifact: PreparedWorkspaceArtifact) -> bool:
+    if artifact.public_artifact_id is not None:
+        # Immutable object retention is owned by the artifact store lifecycle;
+        # compensation only closes this unpublished metadata intent.
+        return True
     removed = True
     for path in (artifact.temporary_path, artifact.absolute_path):
+        if path is None:
+            continue
         try:
             path.unlink(missing_ok=True)
         except OSError:
@@ -361,6 +373,7 @@ async def _staging_intent_was_committed(
                 WorkspaceArtifact.presentation_id == artifact.presentation_id,
                 WorkspaceArtifact.status == "staging",
                 WorkspaceArtifact.storage_key == artifact.storage_key,
+                WorkspaceArtifact.public_artifact_id == artifact.public_artifact_id,
                 WorkspaceArtifact.source_revision == artifact.source_revision,
                 WorkspaceArtifact.export_attempt_id == artifact.export_attempt_id,
             ).execution_options(skip_owner_scope=True)
@@ -768,6 +781,155 @@ async def prepare_workspace_generation_artifact(
     )
 
 
+async def prepare_workspace_export_artifact_ref(
+    session: AsyncSession,
+    *,
+    reference: ArtifactRef,
+    operation_id: uuid.UUID,
+    presentation_id: uuid.UUID,
+    source_revision: int,
+    kind: str,
+    export_attempt_id: uuid.UUID,
+) -> PreparedWorkspaceArtifact:
+    """Reserve publication directly from an immutable object-store ref.
+
+    No local path is accepted or created. The object is re-resolved through its
+    owner, tenant, operation and digest binding before the durable staging
+    intent is committed.
+    """
+
+    export_format = kind.removeprefix("export.")
+    if kind not in {"export.pptx", "export.pdf"}:
+        raise WorkspaceArtifactPublicationError("workspace_export_format_invalid")
+    if (
+        reference.kind != f"presentation-{export_format}"
+        or reference.created_by_operation_id != operation_id
+        or reference.retention_class != "published"
+    ):
+        raise WorkspaceArtifactPublicationError(
+            "workspace_public_artifact_binding_invalid"
+        )
+    owner_scope = get_workspace_owner_scope()
+    artifact_id = uuid.uuid4()
+    now = datetime.now(timezone.utc)
+    staging_timeout = _configured_positive_int(
+        "WORKSPACE_ARTIFACT_STAGING_TIMEOUT_SECONDS",
+        DEFAULT_ARTIFACT_STAGING_TIMEOUT_SECONDS,
+        minimum=60,
+    )
+    prepared = PreparedWorkspaceArtifact(
+        artifact_id=artifact_id,
+        owner_id=reference.owner_id,
+        operation_id=operation_id,
+        presentation_id=presentation_id,
+        kind=kind,
+        absolute_path=None,
+        storage_key=reference.storage_key,
+        public_path="",
+        sha256=reference.sha256,
+        size_bytes=reference.size_bytes,
+        source_revision=source_revision,
+        export_attempt_id=export_attempt_id,
+        public_artifact_id=reference.artifact_id,
+        tenant_id=reference.tenant_id,
+    )
+    intent_session = _new_independent_session(session)
+    try:
+        operation_identity = (
+            await intent_session.execute(
+                select(
+                    WorkspaceOperation.owner_id,
+                    WorkspaceOperation.owner_scope,
+                ).where(
+                    WorkspaceOperation.id == operation_id,
+                    WorkspaceOperation.presentation_id == presentation_id,
+                    WorkspaceOperation.owner_scope == owner_scope,
+                )
+            )
+        ).one_or_none()
+        if (
+            operation_identity is None
+            or operation_identity.owner_id != reference.owner_id
+            or operation_identity.owner_scope != str(reference.owner_id)
+        ):
+            raise WorkspaceArtifactPublicationError(
+                "workspace_artifact_operation_not_found"
+            )
+        public_row = await intent_session.scalar(
+            select(PublicArtifact).where(
+                PublicArtifact.id == reference.artifact_id,
+                PublicArtifact.owner_id == reference.owner_id,
+                PublicArtifact.tenant_id == reference.tenant_id,
+                PublicArtifact.kind == reference.kind,
+                PublicArtifact.sha256 == reference.sha256,
+                PublicArtifact.size_bytes == reference.size_bytes,
+                PublicArtifact.storage_key == reference.storage_key,
+                PublicArtifact.created_by_operation_id == operation_id,
+                PublicArtifact.retention_class == "published",
+            )
+        )
+        if public_row is None:
+            raise WorkspaceArtifactPublicationError(
+                "workspace_public_artifact_binding_invalid"
+            )
+        export_attempt = await intent_session.scalar(
+            select(PresentationExportAttempt).where(
+                PresentationExportAttempt.id == export_attempt_id,
+                PresentationExportAttempt.presentation_id == presentation_id,
+                PresentationExportAttempt.workspace_operation_id == operation_id,
+                PresentationExportAttempt.owner_scope == owner_scope,
+                PresentationExportAttempt.state == "running",
+                PresentationExportAttempt.source_revision == source_revision,
+            )
+        )
+        if export_attempt is None:
+            raise WorkspaceArtifactPublicationError("workspace_export_attempt_invalid")
+        previous_artifact = await intent_session.scalar(
+            select(WorkspaceArtifact).where(
+                WorkspaceArtifact.export_attempt_id == export_attempt_id
+            )
+        )
+        if previous_artifact is not None:
+            if previous_artifact.status not in {"deleted", "failed"}:
+                raise WorkspaceArtifactPublicationError(
+                    "workspace_export_attempt_artifact_active"
+                )
+            previous_artifact.export_attempt_id = None
+            previous_artifact.updated_at = now
+            intent_session.add(previous_artifact)
+        intent_session.add(
+            WorkspaceArtifact(
+                id=artifact_id,
+                owner_id=reference.owner_id,
+                operation_id=operation_id,
+                presentation_id=presentation_id,
+                kind=kind,
+                status="staging",
+                storage_key=reference.storage_key,
+                sha256=reference.sha256,
+                size_bytes=reference.size_bytes,
+                source_revision=source_revision,
+                export_attempt_id=export_attempt_id,
+                public_artifact_id=reference.artifact_id,
+                expires_at=now + timedelta(seconds=staging_timeout),
+            )
+        )
+        try:
+            await intent_session.commit()
+        except BaseException as intent_commit_error:
+            await intent_session.rollback()
+            if not await _staging_intent_was_committed(intent_session, prepared):
+                await intent_session.rollback()
+                raise
+            await intent_session.rollback()
+            if isinstance(intent_commit_error, asyncio.CancelledError):
+                await _mark_artifact_deleted(session, prepared)
+                raise
+    finally:
+        await intent_session.close()
+    return prepared
+
+
 async def prepare_workspace_chat_artifact_staging(
     session: AsyncSession,
     *,
@@ -898,11 +1060,58 @@ def _hash_file(path: Path) -> tuple[str, int]:
     return digest.hexdigest(), size_bytes
 
 
-def _require_prepared_artifact_integrity(
+async def _prepared_artifact_is_available(
+    session: AsyncSession,
+    artifact: PreparedWorkspaceArtifact,
+) -> bool:
+    if artifact.public_artifact_id is None:
+        return artifact.absolute_path is not None and artifact.absolute_path.is_file()
+    if artifact.owner_id is None or artifact.tenant_id is None:
+        return False
+    row = await session.scalar(
+        select(PublicArtifact).where(
+            PublicArtifact.id == artifact.public_artifact_id,
+            PublicArtifact.owner_id == artifact.owner_id,
+            PublicArtifact.tenant_id == artifact.tenant_id,
+            PublicArtifact.sha256 == artifact.sha256,
+            PublicArtifact.size_bytes == artifact.size_bytes,
+            PublicArtifact.storage_key == artifact.storage_key,
+            PublicArtifact.created_by_operation_id == artifact.operation_id,
+        )
+    )
+    if row is None:
+        return False
+    try:
+        from services.artifact_store import configured_public_artifact_service
+
+        await configured_public_artifact_service().resolve_ref(
+            session,
+            artifact_id=artifact.public_artifact_id,
+            owner_id=artifact.owner_id,
+            tenant_id=artifact.tenant_id,
+            expected_digest=artifact.sha256,
+        )
+    except Exception:
+        return False
+    return True
+
+
+async def _require_prepared_artifact_integrity(
+    session: AsyncSession,
     artifact: PreparedWorkspaceArtifact,
 ) -> None:
     """Fail closed if immutable bytes changed after preparation."""
 
+    if artifact.public_artifact_id is not None:
+        if not await _prepared_artifact_is_available(session, artifact):
+            raise WorkspaceArtifactPublicationError(
+                "workspace_artifact_source_digest_mismatch"
+            )
+        return
+    if artifact.absolute_path is None:
+        raise WorkspaceArtifactPublicationError(
+            "workspace_artifact_source_digest_mismatch"
+        )
     try:
         actual_sha256, actual_size = _hash_file(artifact.absolute_path)
     except OSError as error:
@@ -1340,6 +1549,7 @@ async def claim_workspace_artifact_cleanup(
             WorkspaceArtifact.operation_id,
             WorkspaceArtifact.kind,
             WorkspaceArtifact.storage_key,
+            WorkspaceArtifact.public_artifact_id,
             WorkspaceArtifact.cleanup_attempts,
         )
         .where(_cleanup_candidate_predicate(claimed_at))
@@ -1385,6 +1595,7 @@ async def claim_workspace_artifact_cleanup(
         operation_id=candidate.operation_id,
         kind=candidate.kind,
         storage_key=candidate.storage_key,
+        public_artifact_id=candidate.public_artifact_id,
         token=token,
         attempts=attempts,
     )
@@ -1485,6 +1696,10 @@ def _delete_claimed_artifact_files(
 ) -> None:
     """Idempotently remove both process-boundary filesystem possibilities."""
 
+    if claim.public_artifact_id is not None:
+        # Workspace expiry revokes the download pointer. Object deletion is a
+        # separate artifact-store retention/lifecycle policy operation.
+        return
     if claim.kind == "chat.image.journal":
         _remove_owned_tree(
             _chat_cleanup_directory_for_claim(
@@ -1756,10 +1971,12 @@ async def _publication_was_committed(
         session,
         artifact=artifact,
     )
+    artifact_available = await _prepared_artifact_is_available(session, artifact)
     return bool(
-        artifact.absolute_path.is_file()
+        artifact_available
         and artifact_row.status == "ready"
         and artifact_row.storage_key == artifact.storage_key
+        and artifact_row.public_artifact_id == artifact.public_artifact_id
         and artifact_row.sha256 == artifact.sha256
         and artifact_row.size_bytes == artifact.size_bytes
         and artifact_row.source_revision == artifact.source_revision
@@ -2088,7 +2305,7 @@ async def publish_workspace_generation_artifact(
                 )
             result_payload = {**result_payload, **result_evidence}
     try:
-        _require_prepared_artifact_integrity(artifact)
+        await _require_prepared_artifact_integrity(session, artifact)
         # Lock the active account generation before any operation, job or
         # presentation projection is mutated. Account deletion takes the same
         # serialization point before its durable cleanup snapshot and cascade.
@@ -2196,6 +2413,7 @@ async def publish_workspace_generation_artifact(
                 WorkspaceArtifact.presentation_id == artifact.presentation_id,
                 WorkspaceArtifact.status == "staging",
                 WorkspaceArtifact.storage_key == artifact.storage_key,
+                WorkspaceArtifact.public_artifact_id == artifact.public_artifact_id,
                 WorkspaceArtifact.source_revision == artifact.source_revision,
                 WorkspaceArtifact.cleanup_token.is_(None),
             )
@@ -2325,10 +2543,12 @@ async def _export_publication_was_committed(
         session,
         artifact=artifact,
     )
+    artifact_available = await _prepared_artifact_is_available(session, artifact)
     return bool(
-        artifact.absolute_path.is_file()
+        artifact_available
         and artifact_row.status == "ready"
         and artifact_row.storage_key == artifact.storage_key
+        and artifact_row.public_artifact_id == artifact.public_artifact_id
         and artifact_row.sha256 == artifact.sha256
         and artifact_row.size_bytes == artifact.size_bytes
         and artifact_row.source_revision == artifact.source_revision
@@ -2352,6 +2572,7 @@ async def publish_workspace_export_artifact(
     export_source_snapshot_sha256: str | None = None,
     export_selected_adapter: str | None = None,
     export_provenance: dict | None = None,
+    worker_resource_metrics: Mapping[str, object] | None = None,
 ) -> int:
     """Publish a read-only export without advancing the deck revision.
 
@@ -2387,12 +2608,14 @@ async def publish_workspace_export_artifact(
         "source_revision": artifact.source_revision,
         "expires_at": export_expires_at.isoformat(),
     }
+    if worker_resource_metrics:
+        result_payload.update(worker_resource_metrics)
     completion_progress = {
         "stage": "export_completed",
         "percent": 100,
     }
     try:
-        _require_prepared_artifact_integrity(artifact)
+        await _require_prepared_artifact_integrity(session, artifact)
         await _fence_artifact_publication_account(session, artifact=artifact)
         presentation_cas = await session.execute(
             update(PresentationModel)
@@ -2450,6 +2673,7 @@ async def publish_workspace_export_artifact(
                 WorkspaceArtifact.presentation_id == artifact.presentation_id,
                 WorkspaceArtifact.status == "staging",
                 WorkspaceArtifact.storage_key == artifact.storage_key,
+                WorkspaceArtifact.public_artifact_id == artifact.public_artifact_id,
                 WorkspaceArtifact.source_revision == artifact.source_revision,
                 WorkspaceArtifact.cleanup_token.is_(None),
             )

@@ -35,8 +35,15 @@ async def execute_render(
         try:
             admitted = admit_authored_html(html)
         except RendererPolicyError:
-            admitted = admit_static_output_html(html)
+            try:
+                admitted = admit_static_output_html(html)
+            except RendererPolicyError as static_error:
+                raise PublicWorkerExecutionError(
+                    "public_render_policy_rejected"
+                ) from static_error
         png, _metrics = await _render_admitted_html_in_worker(admitted, timeout=120)
+    except PublicWorkerExecutionError:
+        raise
     except Exception as error:
         raise PublicWorkerExecutionError("public_render_failed") from error
     if not png.startswith(b"\x89PNG\r\n\x1a\n"):

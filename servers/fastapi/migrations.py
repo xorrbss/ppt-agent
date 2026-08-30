@@ -418,6 +418,7 @@ AUTHORED_SLIDE_CHECKPOINT_COLUMNS = {
     "illustrated_html",
     "render_path",
     "render_sha256",
+    "artifact_refs",
     "failed_stage",
     "error",
     "attempt_token",

@@ -13,6 +13,7 @@ from hashlib import sha256
 import re
 import uuid
 
+from sqlalchemy import and_, or_, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,15 +35,28 @@ from utils.owner_context import (
 
 PUBLIC_DEFAULT_POLICY_VERSION = "public-default/v1"
 PUBLIC_PROVIDER_STAGES = frozenset(
-    {"outline", "content_brief", "author", "illustration", "repair", "vqa"}
+    {
+        "outline",
+        "content_brief",
+        "deck_plan",
+        "header",
+        "author",
+        "illustration",
+        "repair",
+        "vqa",
+    }
+)
+from models.sql.workspace import WorkspaceOperation
+from services.provider_pricing import (
+    ProviderModelPricing,
+    ProviderUsageCost,
+    calculate_actual_usage_cost,
 )
 _TERMINAL_STATES = frozenset(
     {"succeeded", "failed", "cancelled", "budget_exhausted"}
 )
 _HASH_RE = re.compile(r"^[a-f0-9]{64}$")
 _SAFE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
-
-
 @dataclass(frozen=True, slots=True)
 class PrincipalContext:
     """Identity already verified by the external session trust boundary."""
@@ -62,12 +76,18 @@ class ProviderRequestPlan:
     @property
     def initial_request_limit(self) -> int:
         return (
-            2  # content brief + outline are both provider calls
-            + (2 * self.slide_count)
+            4  # content brief + outline + chapter/deck plan + header contract
+            + self.slide_count
             + min(self.image_budget, self.slide_count)
             + self.repair_budget
             + self.vqa_budget
         )
+
+    @property
+    def retry_request_limit(self) -> int:
+        """Reserve at most one bounded validation retry per authored slide."""
+
+        return self.slide_count
 
 
 class PublicAdmissionRejected(RuntimeError):
@@ -80,6 +100,8 @@ class PublicAdmissionRejected(RuntimeError):
             "public_provider_retry_limit_exceeded",
             "public_provider_estimated_cost_limit_exceeded",
             "public_provider_actual_cost_limit_exceeded",
+            "public_provider_inflight_replay_unsupported",
+            "public_provider_terminal_replay_unsupported",
         }
 
 
@@ -87,6 +109,40 @@ class PublicAdmissionRejected(RuntimeError):
 class PublicProviderCallLease:
     logical_call_id: uuid.UUID
     admission_id: uuid.UUID
+    provider_idempotency_key: str
+    state: str
+    reused: bool = False
+
+    @property
+    def is_terminal_reuse(self) -> bool:
+        return self.reused and self.state != "reserved"
+
+    @property
+    def is_inflight_reuse(self) -> bool:
+        return self.reused and self.state == "reserved"
+
+
+def _logical_call_ordinal(
+    *,
+    operation_id: uuid.UUID,
+    stage: str,
+    slide_index: int,
+    logical_call_ordinal: int | None,
+    logical_call_key: str | None,
+) -> int:
+    if logical_call_key is None:
+        if logical_call_ordinal is None or logical_call_ordinal < 1:
+            raise ValueError("logical_call_ordinal_must_be_positive")
+        return logical_call_ordinal
+    if not _SAFE_ID_RE.fullmatch(logical_call_key):
+        raise ValueError("public_provider_logical_call_key_invalid")
+    digest = sha256(
+        f"public-provider-slot/v1:{operation_id}:{stage}:{slide_index}:"
+        f"{logical_call_key}".encode("utf-8")
+    ).digest()
+    # Positive PostgreSQL INTEGER; zero is invalid by the DB contract. The full
+    # semantic identity still feeds the separately persisted SHA-256 key hash.
+    return max(1, int.from_bytes(digest[:4], "big") & 0x7FFF_FFFF)
 
 
 def current_principal_context() -> PrincipalContext:
@@ -269,7 +325,11 @@ async def admit_public_operation(
         if request_plan.slide_count > policy.max_slides:
             raise PublicAdmissionRejected("public_slide_limit_exceeded")
         request_limit = request_plan.initial_request_limit
-        retry_limit = policy.retry_request_limit
+        # Planned author corrections and policy-bounded transient/schema
+        # recovery are distinct finite allowances. Persist their sum so the
+        # static policy cannot truncate a valid N-slide correction plan while
+        # every physical retry still consumes one durable hard-cap slot.
+        retry_limit = request_plan.retry_request_limit + policy.retry_request_limit
         estimated_limit = min(
             policy.estimated_cost_limit_microunits,
             estimated_cost_limit_microunits
@@ -413,6 +473,41 @@ async def finish_public_operation(
     )
     if row is None:
         raise PublicAdmissionRejected("public_operation_not_found")
+    # Acquire a real database write lock before sweeping reservations. This is
+    # required on SQLite where SELECT .. FOR UPDATE is ignored; PostgreSQL also
+    # serializes a concurrent reservation UPDATE behind this fence.
+    terminal_fence = await session.execute(
+        update(PublicOperationAdmission)
+        .where(
+            PublicOperationAdmission.id == row.id,
+            PublicOperationAdmission.state == row.state,
+        )
+        .values(state=PublicOperationAdmission.state)
+    )
+    if terminal_fence.rowcount != 1:
+        raise PublicAdmissionRejected("public_operation_terminal_conflict")
+    await reconcile_orphaned_public_provider_calls(
+        session,
+        admission_id=row.id,
+        force=True,
+    )
+    await session.refresh(row)
+    reserved_rows = list(
+        (
+            await session.execute(
+                select(PublicProviderLogicalCall.id).where(
+                    PublicProviderLogicalCall.admission_id == row.id,
+                    PublicProviderLogicalCall.state == "reserved",
+                )
+            )
+        ).scalars()
+    )
+    if (
+        reserved_rows
+        or row.estimated_reserved_microunits != 0
+        or row.actual_reserved_microunits != 0
+    ):
+        raise RuntimeError("public_provider_terminal_reserved_invariant")
     if row.state in _TERMINAL_STATES:
         if row.state != state:
             raise PublicAdmissionRejected("public_operation_terminal_conflict")
@@ -443,6 +538,11 @@ async def claim_next_public_operation(
     session: AsyncSession, *, operation_kind: str
 ) -> PublicOperationAdmission | None:
     """Choose one head per owner, then the least-recently-served owner."""
+
+    # Claim polling is the durable control-plane sweep cadence. Settle any
+    # reservation left by a terminal or lease-expired worker before allocating
+    # more provider budget; no background process-local timer is authoritative.
+    await reconcile_orphaned_public_provider_calls(session)
 
     candidates = list(
         (
@@ -507,91 +607,194 @@ async def reserve_public_provider_call(
     admission_id: uuid.UUID,
     stage: str,
     slide_index: int | None,
-    logical_call_ordinal: int,
+    logical_call_ordinal: int | None,
     retry_class: str,
     estimated_cost_microunits: int,
-) -> PublicProviderLogicalCall:
-    """Commit the unique logical-call reservation before any provider I/O."""
+    logical_call_key: str | None = None,
+    provider_id: str = "unavailable",
+    model_id: str = "unavailable",
+    pricing_revision: str = "unpriced-v1",
+    provider_idempotency_capable: bool = False,
+    _return_reuse: bool = False,
+) -> PublicProviderLogicalCall | tuple[PublicProviderLogicalCall, bool]:
+    """Atomically commit one stable logical-call reservation before provider I/O."""
 
     if stage not in PUBLIC_PROVIDER_STAGES:
         raise ValueError("public_provider_stage_invalid")
     normalized_slide = -1 if slide_index is None else slide_index
     _nonnegative(normalized_slide + 1, "slide_index")
-    if logical_call_ordinal < 1:
-        raise ValueError("logical_call_ordinal_must_be_positive")
     if retry_class not in {"initial", "retry", "resume", "recovery"}:
         raise ValueError("public_provider_retry_class_invalid")
+    for value, field in (
+        (provider_id, "provider_id"),
+        (model_id, "model_id"),
+        (pricing_revision, "pricing_revision"),
+    ):
+        max_length = 128 if field == "model_id" else 64
+        if len(value) > max_length or not _SAFE_ID_RE.fullmatch(value):
+            raise ValueError(f"public_provider_{field}_invalid")
+    if not isinstance(provider_idempotency_capable, bool):
+        raise ValueError("public_provider_idempotency_capability_invalid")
     estimated = _nonnegative(
         estimated_cost_microunits, "estimated_cost_microunits"
     )
     admission = await session.scalar(
         select(PublicOperationAdmission)
         .where(PublicOperationAdmission.id == admission_id)
-        .with_for_update()
     )
     if admission is None or admission.state != "active":
         raise PublicAdmissionRejected("public_provider_operation_not_active")
+    ordinal = _logical_call_ordinal(
+        operation_id=admission.operation_id,
+        stage=stage,
+        slide_index=normalized_slide,
+        logical_call_ordinal=logical_call_ordinal,
+        logical_call_key=logical_call_key,
+    )
+    identity_material = (
+        sha256(logical_call_key.encode("utf-8")).hexdigest()
+        if logical_call_key is not None
+        else str(ordinal)
+    )
+    preimage = (
+        f"public-provider-call/v2:{admission.operation_id}:{stage}:"
+        f"{normalized_slide}:{ordinal}:{identity_material}"
+    )
+    idempotency_key_hash = sha256(preimage.encode("utf-8")).hexdigest()
     existing = await session.scalar(
         select(PublicProviderLogicalCall).where(
             PublicProviderLogicalCall.admission_id == admission_id,
             PublicProviderLogicalCall.stage == stage,
             PublicProviderLogicalCall.slide_index == normalized_slide,
-            PublicProviderLogicalCall.logical_call_ordinal == logical_call_ordinal,
+            PublicProviderLogicalCall.logical_call_ordinal == ordinal,
         )
     )
     if existing is not None:
         if (
-            existing.retry_class != retry_class
-            or existing.estimated_cost_microunits != estimated
+            existing.estimated_cost_microunits != estimated
+            or existing.idempotency_key_hash != idempotency_key_hash
+            or existing.provider_id != provider_id
+            or existing.model_id != model_id
+            or existing.pricing_revision != pricing_revision
+            or existing.provider_idempotency_capable
+            != provider_idempotency_capable
+            or (
+                logical_call_key is None and existing.retry_class != retry_class
+            )
         ):
             raise PublicAdmissionRejected("public_provider_logical_call_conflict")
-        return existing
+        return (existing, True) if _return_reuse else existing
     is_retry = retry_class != "initial"
-    used = admission.retry_request_count if is_retry else admission.initial_request_count
-    limit = admission.retry_request_limit if is_retry else admission.planned_request_limit
-    if used >= limit:
-        raise PublicAdmissionRejected(
-            "public_provider_retry_limit_exceeded"
-            if is_retry
-            else "public_provider_request_limit_exceeded"
-        )
-    projected_estimated = (
-        admission.estimated_consumed_microunits
-        + admission.estimated_reserved_microunits
-        + estimated
-    )
-    projected_actual = (
-        admission.actual_consumed_microunits
-        + admission.actual_reserved_microunits
-        + estimated
-    )
-    if projected_estimated > admission.estimated_cost_limit_microunits:
-        raise PublicAdmissionRejected("public_provider_estimated_cost_limit_exceeded")
-    if projected_actual > admission.actual_cost_limit_microunits:
-        raise PublicAdmissionRejected("public_provider_actual_cost_limit_exceeded")
-    preimage = (
-        f"public-provider-call/v1:{admission.operation_id}:{stage}:"
-        f"{normalized_slide}:{logical_call_ordinal}"
-    )
     row = PublicProviderLogicalCall(
         admission_id=admission_id,
         stage=stage,
         slide_index=normalized_slide,
-        logical_call_ordinal=logical_call_ordinal,
+        logical_call_ordinal=ordinal,
         retry_class=retry_class,
-        idempotency_key_hash=sha256(preimage.encode("utf-8")).hexdigest(),
+        idempotency_key_hash=idempotency_key_hash,
         estimated_cost_microunits=estimated,
+        provider_id=provider_id,
+        model_id=model_id,
+        pricing_revision=pricing_revision,
+        provider_idempotency_capable=provider_idempotency_capable,
     )
-    if is_retry:
-        admission.retry_request_count += 1
-    else:
-        admission.initial_request_count += 1
-    admission.estimated_reserved_microunits += estimated
-    admission.actual_reserved_microunits += estimated
-    admission.updated_at = get_current_utc_datetime()
-    session.add(row)
-    await session.flush()
-    return row
+    request_count = (
+        PublicOperationAdmission.retry_request_count
+        if is_retry
+        else PublicOperationAdmission.initial_request_count
+    )
+    request_limit = (
+        PublicOperationAdmission.retry_request_limit
+        if is_retry
+        else PublicOperationAdmission.planned_request_limit
+    )
+    try:
+        async with session.begin_nested():
+            changed = await session.execute(
+                update(PublicOperationAdmission)
+                .where(
+                    PublicOperationAdmission.id == admission_id,
+                    PublicOperationAdmission.state == "active",
+                    request_count < request_limit,
+                    PublicOperationAdmission.estimated_consumed_microunits
+                    + PublicOperationAdmission.estimated_reserved_microunits
+                    + estimated
+                    <= PublicOperationAdmission.estimated_cost_limit_microunits,
+                    PublicOperationAdmission.actual_consumed_microunits
+                    + PublicOperationAdmission.actual_reserved_microunits
+                    + estimated
+                    <= PublicOperationAdmission.actual_cost_limit_microunits,
+                )
+                .values(
+                    {
+                        request_count: request_count + 1,
+                        PublicOperationAdmission.estimated_reserved_microunits:
+                            PublicOperationAdmission.estimated_reserved_microunits
+                            + estimated,
+                        PublicOperationAdmission.actual_reserved_microunits:
+                            PublicOperationAdmission.actual_reserved_microunits
+                            + estimated,
+                        PublicOperationAdmission.updated_at:
+                            get_current_utc_datetime(),
+                    }
+                )
+            )
+            if changed.rowcount != 1:
+                raise PublicAdmissionRejected("public_provider_budget_cas_rejected")
+            session.add(row)
+            await session.flush()
+    except IntegrityError:
+        existing = await session.scalar(
+            select(PublicProviderLogicalCall).where(
+                PublicProviderLogicalCall.admission_id == admission_id,
+                PublicProviderLogicalCall.stage == stage,
+                PublicProviderLogicalCall.slide_index == normalized_slide,
+                PublicProviderLogicalCall.logical_call_ordinal == ordinal,
+            )
+        )
+        if existing is not None and existing.estimated_cost_microunits == estimated:
+            if (
+                existing.idempotency_key_hash != idempotency_key_hash
+                or existing.provider_id != provider_id
+                or existing.model_id != model_id
+                or existing.pricing_revision != pricing_revision
+                or existing.provider_idempotency_capable
+                != provider_idempotency_capable
+            ):
+                raise PublicAdmissionRejected(
+                    "public_provider_logical_call_conflict"
+                )
+            return (existing, True) if _return_reuse else existing
+        raise PublicAdmissionRejected("public_provider_logical_call_conflict")
+    except PublicAdmissionRejected as error:
+        if error.code != "public_provider_budget_cas_rejected":
+            raise
+        current = await session.scalar(
+            select(PublicOperationAdmission)
+            .where(PublicOperationAdmission.id == admission_id)
+            .execution_options(populate_existing=True)
+        )
+        if current is None or current.state != "active":
+            raise PublicAdmissionRejected("public_provider_operation_not_active")
+        used = current.retry_request_count if is_retry else current.initial_request_count
+        limit = current.retry_request_limit if is_retry else current.planned_request_limit
+        if used >= limit:
+            raise PublicAdmissionRejected(
+                "public_provider_retry_limit_exceeded"
+                if is_retry
+                else "public_provider_request_limit_exceeded"
+            )
+        if (
+            current.estimated_consumed_microunits
+            + current.estimated_reserved_microunits
+            + estimated
+            > current.estimated_cost_limit_microunits
+        ):
+            raise PublicAdmissionRejected(
+                "public_provider_estimated_cost_limit_exceeded"
+            )
+        raise PublicAdmissionRejected("public_provider_actual_cost_limit_exceeded")
+    return (row, False) if _return_reuse else row
 
 
 async def reconcile_public_provider_call(
@@ -639,39 +842,386 @@ async def reconcile_public_provider_call(
         ):
             return call
         raise PublicAdmissionRejected("public_provider_receipt_conflict")
-    admission = await session.scalar(
-        select(PublicOperationAdmission)
-        .where(PublicOperationAdmission.id == call.admission_id)
-        .with_for_update()
-    )
-    if admission is None:
-        raise RuntimeError("public_provider_admission_missing")
     reserved = call.estimated_cost_microunits
-    if (
-        admission.estimated_reserved_microunits < reserved
-        or admission.actual_reserved_microunits < reserved
-    ):
+    reconciled_at = get_current_utc_datetime()
+    claimed = await session.execute(
+        update(PublicProviderLogicalCall)
+        .where(
+            PublicProviderLogicalCall.id == logical_call_id,
+            PublicProviderLogicalCall.state == "reserved",
+        )
+        .values(
+            state=target_state,
+            outcome=outcome,
+            latency_ms=latency,
+            actual_cost_microunits=actual,
+            input_tokens=input_count,
+            output_tokens=output_count,
+            reconciled_at=reconciled_at,
+        )
+    )
+    if claimed.rowcount != 1:
+        current = await session.scalar(
+            select(PublicProviderLogicalCall)
+            .where(PublicProviderLogicalCall.id == logical_call_id)
+            .execution_options(populate_existing=True)
+        )
+        if current is not None and (
+            current.state == target_state
+            and current.outcome == outcome
+            and current.latency_ms == latency
+            and current.actual_cost_microunits == actual
+            and current.input_tokens == input_count
+            and current.output_tokens == output_count
+        ):
+            return current
+        raise PublicAdmissionRejected("public_provider_receipt_conflict")
+    actual_charge = reserved if actual is None else actual
+    accounting = await session.execute(
+        update(PublicOperationAdmission)
+        .where(
+            PublicOperationAdmission.id == call.admission_id,
+            PublicOperationAdmission.estimated_reserved_microunits >= reserved,
+            PublicOperationAdmission.actual_reserved_microunits >= reserved,
+        )
+        .values(
+            estimated_reserved_microunits=(
+                PublicOperationAdmission.estimated_reserved_microunits - reserved
+            ),
+            estimated_consumed_microunits=(
+                PublicOperationAdmission.estimated_consumed_microunits + reserved
+            ),
+            actual_reserved_microunits=(
+                PublicOperationAdmission.actual_reserved_microunits - reserved
+            ),
+            actual_consumed_microunits=(
+                PublicOperationAdmission.actual_consumed_microunits + actual_charge
+            ),
+            actual_cost_unavailable_count=(
+                PublicOperationAdmission.actual_cost_unavailable_count
+                + (1 if actual is None else 0)
+            ),
+            updated_at=reconciled_at,
+        )
+    )
+    if accounting.rowcount != 1:
         raise RuntimeError("public_provider_reservation_underflow")
-    admission.estimated_reserved_microunits -= reserved
-    admission.estimated_consumed_microunits += reserved
-    admission.actual_reserved_microunits -= reserved
+    current = await session.scalar(
+        select(PublicProviderLogicalCall)
+        .where(PublicProviderLogicalCall.id == logical_call_id)
+        .execution_options(populate_existing=True)
+    )
+    if current is None:
+        raise RuntimeError("public_provider_logical_call_missing_after_reconcile")
+    return current
+
+
+async def reconcile_orphaned_public_provider_calls(
+    session: AsyncSession,
+    *,
+    admission_id: uuid.UUID | None = None,
+    now: datetime | None = None,
+    force: bool = False,
+) -> int:
+    """Settle reserved rows whose operation is terminal or whose lease expired.
+
+    Unknown external effects are charged at the estimate and represented as an
+    unavailable receipt. This is conservative: an orphan must never silently
+    release public actual-cost budget as though no provider I/O occurred.
+    """
+
+    observed_at = now or get_current_utc_datetime()
+    statement = (
+        select(PublicProviderLogicalCall.id)
+        .join(
+            PublicOperationAdmission,
+            PublicOperationAdmission.id == PublicProviderLogicalCall.admission_id,
+        )
+        .join(
+            WorkspaceOperation,
+            WorkspaceOperation.id == PublicOperationAdmission.operation_id,
+        )
+        .where(PublicProviderLogicalCall.state == "reserved")
+    )
+    if admission_id is not None:
+        statement = statement.where(
+            PublicProviderLogicalCall.admission_id == admission_id
+        )
+    if not force:
+        statement = statement.where(
+            or_(
+                PublicOperationAdmission.state.in_(_TERMINAL_STATES),
+                WorkspaceOperation.state.in_(
+                    {"succeeded", "failed", "cancelled", "dead_letter"}
+                ),
+                and_(
+                    WorkspaceOperation.state == "running",
+                    WorkspaceOperation.lease_expires_at.is_not(None),
+                    WorkspaceOperation.lease_expires_at <= observed_at,
+                ),
+            )
+        )
+    call_ids = list((await session.execute(statement)).scalars())
+    reconciled = 0
+    for call_id in call_ids:
+        try:
+            await reconcile_public_provider_call(
+                session,
+                logical_call_id=call_id,
+                outcome="cancelled",
+                latency_ms=0,
+                actual_cost_microunits=None,
+            )
+        except PublicAdmissionRejected as error:
+            if error.code != "public_provider_receipt_conflict":
+                raise
+            continue
+        reconciled += 1
+    return reconciled
+
+
+async def enrich_public_provider_call(
+    session: AsyncSession,
+    *,
+    logical_call_id: uuid.UUID,
+    latency_ms: int,
+    actual_cost_microunits: int | None,
+    input_tokens: int | None = None,
+    output_tokens: int | None = None,
+    provider_id: str | None = None,
+    model_id: str | None = None,
+    pricing_revision: str | None = None,
+) -> PublicProviderLogicalCall:
+    """Replace a succeeded unavailable receipt with provider-reported usage.
+
+    The first reconciliation charges the estimate fail-closed. A later SDK
+    usage observation may enrich that same logical call exactly once without
+    double charging it; no other terminal transition is permitted here.
+    """
+
+    latency = _nonnegative(latency_ms, "latency_ms")
+    actual = (
+        None
+        if actual_cost_microunits is None
+        else _nonnegative(actual_cost_microunits, "actual_cost_microunits")
+    )
+    input_count = (
+        None if input_tokens is None else _nonnegative(input_tokens, "input_tokens")
+    )
+    output_count = (
+        None if output_tokens is None else _nonnegative(output_tokens, "output_tokens")
+    )
+    metadata = {
+        "provider_id": provider_id,
+        "model_id": model_id,
+        "pricing_revision": pricing_revision,
+    }
+    for field, value in metadata.items():
+        max_length = 128 if field == "model_id" else 64
+        if value is not None and (
+            len(value) > max_length or not _SAFE_ID_RE.fullmatch(value)
+        ):
+            raise ValueError(f"public_provider_{field}_invalid")
+    call = await session.get(PublicProviderLogicalCall, logical_call_id)
+    if call is None:
+        raise PublicAdmissionRejected("public_provider_logical_call_not_found")
     if actual is None:
-        admission.actual_cost_unavailable_count += 1
-        # Unknown provider cost is charged at the pre-I/O reservation amount;
-        # unavailable telemetry must never turn a public call into zero cost.
-        admission.actual_consumed_microunits += reserved
-    else:
-        admission.actual_consumed_microunits += actual
-    admission.updated_at = get_current_utc_datetime()
-    call.state = target_state
-    call.outcome = outcome
-    call.latency_ms = latency
-    call.actual_cost_microunits = actual
-    call.input_tokens = input_count
-    call.output_tokens = output_count
-    call.reconciled_at = get_current_utc_datetime()
-    await session.flush()
-    return call
+        if not (
+            call.state == "unavailable"
+            and call.outcome == "succeeded"
+            and call.actual_cost_microunits is None
+        ):
+            raise PublicAdmissionRejected("public_provider_receipt_conflict")
+        if (
+            call.latency_ms == latency
+            and call.input_tokens == input_count
+            and call.output_tokens == output_count
+            and (provider_id is None or call.provider_id == provider_id)
+            and (model_id is None or call.model_id == model_id)
+            and (
+                pricing_revision is None
+                or call.pricing_revision == pricing_revision
+            )
+        ):
+            return call
+        # Usage tokens may arrive even when the selected pricing profile has no
+        # cost conversion. Keep the fail-closed estimated charge and unavailable
+        # counter while enriching only the content-free receipt fields.
+        if (
+            (call.input_tokens is not None and call.input_tokens != input_count)
+            or (call.output_tokens is not None and call.output_tokens != output_count)
+        ):
+            raise PublicAdmissionRejected("public_provider_receipt_conflict")
+        enriched = await session.execute(
+            update(PublicProviderLogicalCall)
+            .where(
+                PublicProviderLogicalCall.id == logical_call_id,
+                PublicProviderLogicalCall.state == "unavailable",
+                PublicProviderLogicalCall.outcome == "succeeded",
+                PublicProviderLogicalCall.actual_cost_microunits.is_(None),
+                or_(
+                    PublicProviderLogicalCall.input_tokens.is_(None),
+                    PublicProviderLogicalCall.input_tokens == input_count,
+                ),
+                or_(
+                    PublicProviderLogicalCall.output_tokens.is_(None),
+                    PublicProviderLogicalCall.output_tokens == output_count,
+                ),
+            )
+            .values(
+                latency_ms=latency,
+                input_tokens=input_count,
+                output_tokens=output_count,
+                provider_id=(
+                    provider_id
+                    if provider_id is not None
+                    else PublicProviderLogicalCall.provider_id
+                ),
+                model_id=(
+                    model_id
+                    if model_id is not None
+                    else PublicProviderLogicalCall.model_id
+                ),
+                pricing_revision=(
+                    pricing_revision
+                    if pricing_revision is not None
+                    else PublicProviderLogicalCall.pricing_revision
+                ),
+                reconciled_at=get_current_utc_datetime(),
+            )
+        )
+        if enriched.rowcount != 1:
+            current = await session.scalar(
+                select(PublicProviderLogicalCall)
+                .where(PublicProviderLogicalCall.id == logical_call_id)
+                .execution_options(populate_existing=True)
+            )
+            if current is not None and (
+                current.state == "unavailable"
+                and current.outcome == "succeeded"
+                and current.actual_cost_microunits is None
+                and current.input_tokens == input_count
+                and current.output_tokens == output_count
+                and (provider_id is None or current.provider_id == provider_id)
+                and (model_id is None or current.model_id == model_id)
+                and (
+                    pricing_revision is None
+                    or current.pricing_revision == pricing_revision
+                )
+            ):
+                return current
+            raise PublicAdmissionRejected("public_provider_receipt_conflict")
+        current = await session.scalar(
+            select(PublicProviderLogicalCall)
+            .where(PublicProviderLogicalCall.id == logical_call_id)
+            .execution_options(populate_existing=True)
+        )
+        if current is None:
+            raise RuntimeError("public_provider_logical_call_missing_after_enrich")
+        return current
+    if call.state == "reported":
+        if (
+            call.outcome == "succeeded"
+            and call.actual_cost_microunits == actual
+            and call.input_tokens == input_count
+            and call.output_tokens == output_count
+            and (provider_id is None or call.provider_id == provider_id)
+            and (model_id is None or call.model_id == model_id)
+            and (
+                pricing_revision is None
+                or call.pricing_revision == pricing_revision
+            )
+        ):
+            return call
+        raise PublicAdmissionRejected("public_provider_receipt_conflict")
+    if not (
+        call.state == "unavailable"
+        and call.outcome == "succeeded"
+        and call.actual_cost_microunits is None
+    ):
+        raise PublicAdmissionRejected("public_provider_receipt_conflict")
+    estimated_charge = call.estimated_cost_microunits
+    claimed_at = get_current_utc_datetime()
+    claimed = await session.execute(
+        update(PublicProviderLogicalCall)
+        .where(
+            PublicProviderLogicalCall.id == logical_call_id,
+            PublicProviderLogicalCall.state == "unavailable",
+            PublicProviderLogicalCall.outcome == "succeeded",
+            PublicProviderLogicalCall.actual_cost_microunits.is_(None),
+        )
+        .values(
+            state="reported",
+            latency_ms=latency,
+            actual_cost_microunits=actual,
+            input_tokens=input_count,
+            output_tokens=output_count,
+            provider_id=(
+                provider_id
+                if provider_id is not None
+                else PublicProviderLogicalCall.provider_id
+            ),
+            model_id=(
+                model_id if model_id is not None else PublicProviderLogicalCall.model_id
+            ),
+            pricing_revision=(
+                pricing_revision
+                if pricing_revision is not None
+                else PublicProviderLogicalCall.pricing_revision
+            ),
+            reconciled_at=claimed_at,
+        )
+    )
+    if claimed.rowcount != 1:
+        current = await session.scalar(
+            select(PublicProviderLogicalCall)
+            .where(PublicProviderLogicalCall.id == logical_call_id)
+            .execution_options(populate_existing=True)
+        )
+        if current is not None and (
+            current.state == "reported"
+            and current.outcome == "succeeded"
+            and current.actual_cost_microunits == actual
+            and current.input_tokens == input_count
+            and current.output_tokens == output_count
+            and (provider_id is None or current.provider_id == provider_id)
+            and (model_id is None or current.model_id == model_id)
+            and (
+                pricing_revision is None
+                or current.pricing_revision == pricing_revision
+            )
+        ):
+            return current
+        raise PublicAdmissionRejected("public_provider_receipt_conflict")
+    accounting = await session.execute(
+        update(PublicOperationAdmission)
+        .where(
+            PublicOperationAdmission.id == call.admission_id,
+            PublicOperationAdmission.actual_cost_unavailable_count >= 1,
+            PublicOperationAdmission.actual_consumed_microunits >= estimated_charge,
+        )
+        .values(
+            actual_cost_unavailable_count=(
+                PublicOperationAdmission.actual_cost_unavailable_count - 1
+            ),
+            actual_consumed_microunits=(
+                PublicOperationAdmission.actual_consumed_microunits
+                - estimated_charge
+                + actual
+            ),
+            updated_at=claimed_at,
+        )
+    )
+    if accounting.rowcount != 1:
+        raise RuntimeError("public_provider_unavailable_charge_underflow")
+    current = await session.scalar(
+        select(PublicProviderLogicalCall)
+        .where(PublicProviderLogicalCall.id == logical_call_id)
+        .execution_options(populate_existing=True)
+    )
+    if current is None:
+        raise RuntimeError("public_provider_logical_call_missing_after_enrich")
+    return current
 
 
 async def reserve_public_provider_call_detached(
@@ -679,9 +1229,16 @@ async def reserve_public_provider_call_detached(
     operation_id: uuid.UUID,
     stage: str,
     slide_index: int | None,
-    logical_call_ordinal: int,
+    logical_call_ordinal: int | None,
     retry_class: str,
     estimated_cost_microunits: int,
+    logical_call_key: str | None = None,
+    expected_attempt_token: str | None = None,
+    expected_fencing_token: int | None = None,
+    provider_id: str = "unavailable",
+    model_id: str = "unavailable",
+    pricing_revision: str = "unpriced-v1",
+    provider_idempotency_capable: bool = False,
 ) -> PublicProviderCallLease | None:
     """Reserve a public logical call in its own transaction before SDK I/O.
 
@@ -691,28 +1248,82 @@ async def reserve_public_provider_call_detached(
 
     from services.database import async_session_maker
 
-    async with async_session_maker() as session:
-        admission = await session.scalar(
-            select(PublicOperationAdmission).where(
-                PublicOperationAdmission.operation_id == operation_id
+    async with async_session_maker() as lookup_session:
+        result = (
+            await lookup_session.execute(
+                select(PublicOperationAdmission, WorkspaceOperation).join(
+                    WorkspaceOperation,
+                    WorkspaceOperation.id == PublicOperationAdmission.operation_id,
+                ).where(PublicOperationAdmission.operation_id == operation_id)
             )
-        )
-        if admission is None:
-            await session.rollback()
+        ).first()
+        if result is None:
+            await lookup_session.rollback()
             return None
-        call = await reserve_public_provider_call(
+        admission, operation = result
+        if expected_attempt_token is not None and (
+            operation.state != "running"
+            or operation.attempt_token != expected_attempt_token
+        ):
+            raise PublicAdmissionRejected("public_provider_stale_attempt")
+        if expected_fencing_token is not None and (
+            operation.fencing_token != expected_fencing_token
+        ):
+            raise PublicAdmissionRejected("public_provider_stale_fencing_token")
+        admission_id = admission.id
+        await lookup_session.rollback()
+    async with async_session_maker() as session:
+        if expected_attempt_token is not None or expected_fencing_token is not None:
+            fencing_conditions = [
+                WorkspaceOperation.id == operation_id,
+                WorkspaceOperation.state == "running",
+            ]
+            if expected_attempt_token is not None:
+                fencing_conditions.append(
+                    WorkspaceOperation.attempt_token == expected_attempt_token
+                )
+            if expected_fencing_token is not None:
+                fencing_conditions.append(
+                    WorkspaceOperation.fencing_token == expected_fencing_token
+                )
+            fenced = await session.execute(
+                update(WorkspaceOperation).where(
+                    *fencing_conditions
+                ).values(version=WorkspaceOperation.version)
+            )
+            if fenced.rowcount != 1:
+                raise PublicAdmissionRejected("public_provider_stale_attempt")
+        reserved_result = await reserve_public_provider_call(
             session,
-            admission_id=admission.id,
+            admission_id=admission_id,
             stage=stage,
             slide_index=slide_index,
             logical_call_ordinal=logical_call_ordinal,
             retry_class=retry_class,
             estimated_cost_microunits=estimated_cost_microunits,
+            logical_call_key=logical_call_key,
+            provider_id=provider_id,
+            model_id=model_id,
+            pricing_revision=pricing_revision,
+            provider_idempotency_capable=provider_idempotency_capable,
+            _return_reuse=True,
         )
+        if not isinstance(reserved_result, tuple):
+            raise RuntimeError("public_provider_reservation_reuse_contract_invalid")
+        call, reused = reserved_result
+        if reused and not provider_idempotency_capable:
+            raise PublicAdmissionRejected(
+                "public_provider_inflight_replay_unsupported"
+                if call.state == "reserved"
+                else "public_provider_terminal_replay_unsupported"
+            )
         await session.commit()
         return PublicProviderCallLease(
             logical_call_id=call.id,
-            admission_id=admission.id,
+            admission_id=admission_id,
+            provider_idempotency_key=call.idempotency_key_hash,
+            state=call.state,
+            reused=reused,
         )
 
 
@@ -727,6 +1338,11 @@ async def reconcile_public_provider_call_detached(
 ) -> None:
     from services.database import async_session_maker
 
+    if lease.is_terminal_reuse:
+        # The stable logical call was already durably settled by a prior
+        # attempt. A provider-idempotent replay may observe it again, but must
+        # not reconcile budget a second time or conflict on a new latency.
+        return
     async with async_session_maker() as session:
         await reconcile_public_provider_call(
             session,
@@ -738,6 +1354,68 @@ async def reconcile_public_provider_call_detached(
             output_tokens=output_tokens,
         )
         await session.commit()
+
+
+async def enrich_public_provider_call_detached(
+    lease: PublicProviderCallLease,
+    *,
+    latency_ms: int,
+    actual_cost_microunits: int | None,
+    input_tokens: int | None = None,
+    output_tokens: int | None = None,
+    provider_id: str | None = None,
+    model_id: str | None = None,
+    pricing_revision: str | None = None,
+) -> None:
+    """Enrich one fail-closed unavailable receipt in its own transaction."""
+
+    from services.database import async_session_maker
+
+    if lease.is_terminal_reuse and lease.state != "unavailable":
+        return
+    async with async_session_maker() as session:
+        await enrich_public_provider_call(
+            session,
+            logical_call_id=lease.logical_call_id,
+            latency_ms=latency_ms,
+            actual_cost_microunits=actual_cost_microunits,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            provider_id=provider_id,
+            model_id=model_id,
+            pricing_revision=pricing_revision,
+        )
+        await session.commit()
+
+
+async def enrich_public_provider_usage_detached(
+    lease: PublicProviderCallLease,
+    *,
+    pricing: ProviderModelPricing,
+    latency_ms: int,
+    input_tokens: int,
+    output_tokens: int,
+    cached_input_tokens: int = 0,
+) -> ProviderUsageCost:
+    """Price reported usage under one exact revision and atomically enrich it."""
+
+    usage_cost = calculate_actual_usage_cost(
+        pricing,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cached_input_tokens=cached_input_tokens,
+    )
+    await enrich_public_provider_call_detached(
+        lease,
+        latency_ms=latency_ms,
+        actual_cost_microunits=usage_cost.total_cost_microunits,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        provider_id=pricing.provider_id,
+        model_id=pricing.model_id,
+        pricing_revision=pricing.revision,
+    )
+    return usage_cost
 
 
 def _age_ms(now: datetime, then: datetime | None) -> int:
@@ -819,6 +1497,88 @@ async def public_operation_metrics(
     }
 
 
+def _observed_metric(value: int | str) -> dict[str, int | str]:
+    return {"state": "observed", "value": value}
+
+
+def _unavailable_metric(reason: str) -> dict[str, str]:
+    return {"state": "unavailable", "reason": reason}
+
+
+async def public_operation_observability_metrics(
+    session: AsyncSession, operation_id: uuid.UUID
+) -> dict[str, dict[str, int | str]]:
+    """Project one operation's durable queue/provider metrics without nulls.
+
+    Missing provider usage is represented as an allowlisted unavailable state;
+    it is never converted to a numeric zero.  Prompt/response/provider request
+    identifiers are intentionally outside this projection.
+    """
+
+    admission = await session.scalar(
+        select(PublicOperationAdmission).where(
+            PublicOperationAdmission.operation_id == operation_id
+        )
+    )
+    if admission is None:
+        return {
+            name: _unavailable_metric("public_admission_not_found")
+            for name in (
+                "queueWait",
+                "queuePosition",
+                "providerInitialCalls",
+                "providerRetryCalls",
+                "providerLogicalOrdinal",
+                "estimatedTokens",
+                "actualTokens",
+                "estimatedCost",
+                "actualCost",
+            )
+        }
+    calls = list(
+        (
+            await session.execute(
+                select(PublicProviderLogicalCall).where(
+                    PublicProviderLogicalCall.admission_id == admission.id
+                )
+            )
+        ).scalars()
+    )
+    actual_tokens_available = bool(calls) and all(
+        call.input_tokens is not None and call.output_tokens is not None
+        for call in calls
+    )
+    actual_cost_available = bool(calls) and all(
+        call.actual_cost_microunits is not None for call in calls
+    )
+    return {
+        "queueWait": _observed_metric(
+            _age_ms(admission.activated_at or get_current_utc_datetime(), admission.queued_at)
+        ),
+        "queuePosition": _unavailable_metric("queue_position_not_persisted"),
+        "providerInitialCalls": _observed_metric(admission.initial_request_count),
+        "providerRetryCalls": _observed_metric(admission.retry_request_count),
+        "providerLogicalOrdinal": _observed_metric(len(calls)),
+        "estimatedTokens": _unavailable_metric("provider_token_estimate_not_recorded"),
+        "actualTokens": (
+            _observed_metric(
+                sum((call.input_tokens or 0) + (call.output_tokens or 0) for call in calls)
+            )
+            if actual_tokens_available
+            else _unavailable_metric("provider_token_usage_not_reported")
+        ),
+        "estimatedCost": _observed_metric(
+            admission.estimated_consumed_microunits
+            + admission.estimated_reserved_microunits
+        ),
+        "actualCost": (
+            _observed_metric(sum(call.actual_cost_microunits or 0 for call in calls))
+            if actual_cost_available
+            else _unavailable_metric("provider_actual_cost_not_reported")
+        ),
+    }
+
+
 async def public_prometheus_metrics_text(session: AsyncSession) -> str:
     """Render aggregate-only public queue and budget metrics without identities."""
 
@@ -881,12 +1641,17 @@ __all__ = [
     "admit_public_operation",
     "claim_next_public_operation",
     "current_principal_context",
+    "enrich_public_provider_call",
+    "enrich_public_provider_call_detached",
+    "enrich_public_provider_usage_detached",
     "finish_public_operation",
     "load_public_policy",
     "plan_provider_requests",
     "public_operation_metrics",
+    "public_operation_observability_metrics",
     "public_prometheus_metrics_text",
     "public_quota_metrics",
+    "reconcile_orphaned_public_provider_calls",
     "reconcile_public_provider_call",
     "reconcile_public_provider_call_detached",
     "reserve_public_provider_call",

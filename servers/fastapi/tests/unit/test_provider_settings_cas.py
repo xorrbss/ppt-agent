@@ -427,6 +427,38 @@ def test_sync_codex_bridge_applies_managed_deletions_without_stale_clobber(
     assert "CODEX_ACCESS_TOKEN" not in stored
 
 
+def test_sync_import_path_is_read_only_and_mirrors_to_runtime_config(
+    monkeypatch,
+    tmp_path,
+):
+    database_path = tmp_path / "sync-import.db"
+    import_path = tmp_path / "existing-provider.json"
+    runtime_path = tmp_path / "rc-runtime" / "userConfig.json"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path}")
+    monkeypatch.setenv("USER_CONFIG_PATH", str(runtime_path))
+    monkeypatch.setenv("PRESENTON_PROVIDER_CONFIG_IMPORT_PATH", str(import_path))
+    engine = create_engine(f"sqlite:///{database_path}")
+    ProviderSettings.__table__.create(engine)
+    update_user_config_file(
+        str(import_path),
+        lambda _existing: {"LLM": "codex", "CODEX_ACCESS_TOKEN": "import-only"},
+    )
+    original_bytes = import_path.read_bytes()
+
+    committed = sync_legacy_file_to_provider_settings(managed_updates=None)
+
+    with engine.connect() as connection:
+        stored = connection.execute(
+            select(ProviderSettings.__table__.c.config)
+        ).scalar_one()
+    engine.dispose()
+    assert committed is not None
+    assert stored["CODEX_ACCESS_TOKEN"] == "import-only"
+    assert import_path.read_bytes() == original_bytes
+    assert runtime_path.is_file()
+    assert read_user_config_file(str(runtime_path))["CODEX_ACCESS_TOKEN"] == "import-only"
+
+
 def test_sync_semantic_noop_is_revision_guarded(monkeypatch, tmp_path):
     database_path = tmp_path / "sync-noop.db"
     config_path = tmp_path / "userConfig.json"

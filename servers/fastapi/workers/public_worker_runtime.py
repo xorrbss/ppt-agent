@@ -1,4 +1,4 @@
-"""Shared one-shot runtime and local CAS adapter for isolated public workers."""
+"""Shared one-shot runtime and digest-verified scratch for public workers."""
 
 from __future__ import annotations
 
@@ -25,6 +25,10 @@ from services.isolated_worker_process import (
     MAX_JOB_BYTES,
     NETWORK_NONE_ATTESTATION,
 )
+from services.public_worker_profiles import (
+    get_public_worker_profile,
+    validate_public_worker_environment,
+)
 
 
 MAX_ARTIFACT_BYTES = 512 * 1024 * 1024
@@ -38,13 +42,61 @@ class PublicWorkerExecutionError(RuntimeError):
 
 
 class LocalContentAddressedStore:
-    """Development adapter; production injects the object-store mount/sidecar."""
+    """Non-authoritative transport cache shared with one isolated worker."""
 
     def __init__(self, root: pathlib.Path) -> None:
         if not root.is_absolute():
             raise PublicWorkerExecutionError("public_worker_store_root_not_absolute")
+        try:
+            self.max_cache_bytes = int(
+                os.getenv("PUBLIC_WORKER_ARTIFACT_CACHE_MAX_BYTES", "")
+            )
+            self.ttl_seconds = int(
+                os.getenv("PUBLIC_WORKER_ARTIFACT_CACHE_TTL_SECONDS", "")
+            )
+        except ValueError as error:
+            raise PublicWorkerExecutionError(
+                "public_worker_cache_limits_invalid"
+            ) from error
+        if self.max_cache_bytes <= 0 or self.ttl_seconds <= 0:
+            raise PublicWorkerExecutionError("public_worker_cache_limits_invalid")
         self.root = root.resolve(strict=False)
         self.root.mkdir(parents=True, exist_ok=True)
+
+    def _entries(self) -> list[tuple[pathlib.Path, float, int]]:
+        entries: list[tuple[pathlib.Path, float, int]] = []
+        for path in self.root.rglob("*"):
+            try:
+                if path.is_symlink() or not path.is_file() or path.name.startswith("."):
+                    continue
+                stat = path.stat()
+            except OSError:
+                continue
+            entries.append((path, stat.st_mtime, stat.st_size))
+        return entries
+
+    def _evict(self, *, protected: pathlib.Path | None = None) -> None:
+        now = time.time()
+        survivors: list[tuple[pathlib.Path, float, int]] = []
+        for path, modified, size in self._entries():
+            if path != protected and now - modified > self.ttl_seconds:
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError:
+                    survivors.append((path, modified, size))
+            else:
+                survivors.append((path, modified, size))
+        total = sum(size for _, _, size in survivors)
+        for path, _, size in sorted(survivors, key=lambda item: item[1]):
+            if total <= self.max_cache_bytes:
+                break
+            if path == protected:
+                continue
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                continue
+            total -= size
 
     def _path(self, storage_key: str) -> pathlib.Path:
         candidate = (self.root / storage_key).resolve(strict=False)
@@ -59,14 +111,22 @@ class LocalContentAddressedStore:
     def read(self, reference: ArtifactRef) -> bytes:
         path = self._path(reference.storage_key)
         try:
-            size = path.stat().st_size
+            stat = path.stat()
         except OSError as error:
             raise PublicWorkerExecutionError("public_worker_artifact_unavailable") from error
+        if time.time() - stat.st_mtime > self.ttl_seconds:
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            raise PublicWorkerExecutionError("public_worker_artifact_expired")
+        size = stat.st_size
         if size != reference.size_bytes or size > MAX_ARTIFACT_BYTES:
             raise PublicWorkerExecutionError("public_worker_artifact_size_mismatch")
         payload = path.read_bytes()
         if hashlib.sha256(payload).hexdigest() != reference.sha256:
             raise PublicWorkerExecutionError("public_worker_artifact_digest_mismatch")
+        os.utime(path, None)
         return payload
 
     def put(
@@ -78,8 +138,19 @@ class LocalContentAddressedStore:
         kind: str,
         media_type: str,
     ) -> ArtifactRef:
-        if not payload or len(payload) > MAX_ARTIFACT_BYTES:
+        try:
+            configured_limit = int(
+                os.getenv("PPT_WORKER_OUTPUT_LIMIT_BYTES", str(MAX_ARTIFACT_BYTES))
+            )
+        except ValueError as error:
+            raise PublicWorkerExecutionError("public_worker_output_limit_invalid") from error
+        output_limit = min(MAX_ARTIFACT_BYTES, configured_limit)
+        if configured_limit <= 0:
+            raise PublicWorkerExecutionError("public_worker_output_limit_invalid")
+        if not payload or len(payload) > output_limit:
             raise PublicWorkerExecutionError("public_worker_output_size_invalid")
+        if len(payload) > self.max_cache_bytes:
+            raise PublicWorkerExecutionError("public_worker_cache_budget_exceeded")
         digest = hashlib.sha256(payload).hexdigest()
         tenant_scope = hashlib.sha256(source.tenant_id.encode("utf-8")).hexdigest()
         storage_key = (
@@ -101,6 +172,8 @@ class LocalContentAddressedStore:
                 os.replace(temporary, path)
         finally:
             temporary.unlink(missing_ok=True)
+        os.utime(path, None)
+        self._evict(protected=path)
         return ArtifactRef(
             artifact_id=uuid.uuid4(),
             owner_id=source.owner_id,
@@ -181,6 +254,13 @@ async def run_worker(role: WorkerRole, executor: WorkerExecutor) -> int:
             raise PublicWorkerExecutionError("public_worker_role_mismatch")
         if os.getenv("PUBLIC_WORKER_OS_ISOLATION") != NETWORK_NONE_ATTESTATION:
             raise PublicWorkerExecutionError("public_worker_network_none_required")
+        try:
+            validate_public_worker_environment(
+                get_public_worker_profile(role),
+                os.environ,
+            )
+        except RuntimeError as error:
+            raise PublicWorkerExecutionError(str(error)) from error
         forbidden = [
             name
             for name in os.environ
@@ -211,13 +291,24 @@ async def run_worker(role: WorkerRole, executor: WorkerExecutor) -> int:
             signing_key=_read_signing_key(),
             replay_guard=_REPLAY_GUARD,
         )
-        root_value = os.getenv("PUBLIC_WORKER_OBJECT_STORE_ROOT", "").strip()
+        root_value = os.getenv("PUBLIC_WORKER_ARTIFACT_CACHE_ROOT", "").strip()
         if not root_value:
-            raise PublicWorkerExecutionError("public_worker_store_root_required")
+            raise PublicWorkerExecutionError("public_worker_artifact_cache_root_required")
         output = await executor(
             job,
             LocalContentAddressedStore(pathlib.Path(root_value)),
         )
+        try:
+            output_limit = int(os.getenv("PPT_WORKER_OUTPUT_LIMIT_BYTES", ""))
+        except ValueError as error:
+            raise PublicWorkerExecutionError("public_worker_output_limit_invalid") from error
+        if output_limit <= 0:
+            raise PublicWorkerExecutionError("public_worker_output_limit_invalid")
+        # LocalContentAddressedStore.put rejects before writing a CAS object.
+        # Recheck the returned ref so a future injected store cannot bypass the
+        # same one-shot worker contract.
+        if output.size_bytes > min(MAX_ARTIFACT_BYTES, output_limit):
+            raise PublicWorkerExecutionError("public_worker_output_size_invalid")
         if (
             output.owner_id != job.input_artifact.owner_id
             or output.tenant_id != job.input_artifact.tenant_id

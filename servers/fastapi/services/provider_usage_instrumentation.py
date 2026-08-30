@@ -29,6 +29,10 @@ from services.provider_durable_admission import (
     reconcile_provider_call_detached,
     reserve_provider_call_detached,
 )
+from services.provider_pricing import (
+    ProviderModelPricing,
+    calculate_actual_usage_cost,
+)
 
 
 _RECEIPT_OBSERVABILITY = {
@@ -74,12 +78,22 @@ class ProviderUsageScope:
     attempt_number: int
     slide_index: int | None = None
     _sequence: int = field(default=0, init=False, repr=False)
-    _public_sequence: int = field(default=0, init=False, repr=False)
+    _physical_sequences: dict[str, int] = field(
+        default_factory=dict, init=False, repr=False
+    )
+    _receipt_request_ids: list[str] = field(default_factory=list, init=False, repr=False)
     _durable_leases: list[object] = field(default_factory=list, init=False, repr=False)
+    _public_leases: list[_PublicCallAccounting] = field(
+        default_factory=list, init=False, repr=False
+    )
 
     def next_receipt_key_hash(self, outcome: str) -> str:
         # Persist only this digest.  The preimage stays in process memory and is
         # restricted to UUID/count/allowlisted tokens, never a request/provider id.
+        if self._receipt_request_ids:
+            request_id = self._receipt_request_ids.pop(0)
+            key = f"receipt-v2:{self.job_id}:{request_id}:{outcome}"
+            return sha256(key.encode("utf-8")).hexdigest()
         self._sequence += 1
         key = (
             f"receipt-v1:{self.job_id}:{self.operation}:{self.stage}:"
@@ -87,38 +101,144 @@ class ProviderUsageScope:
         )
         return sha256(key.encode("utf-8")).hexdigest()
 
-    def next_runtime_request_id(self) -> str:
-        self._sequence += 1
+    def next_runtime_request_id(self, semantic_slot: str) -> str:
+        sequence = self._physical_sequences.get(semantic_slot, 0) + 1
+        self._physical_sequences[semantic_slot] = sequence
+        slot = "deck" if self.slide_index is None else f"slide-{self.slide_index}"
+        logical_ordinal = self.public_logical_call_ordinal(semantic_slot)
         return (
-            f"call:{self.attempt_number}:{self.slide_index or 0}:"
-            f"{self._sequence}"
+            f"call:{self.operation}:{self.stage}:{self.attempt_number}:{slot}:"
+            f"{logical_ordinal}:{sequence}"
         )
 
-    def next_public_logical_call_ordinal(self) -> int:
-        self._public_sequence += 1
-        # Keep ordinals deterministic across process recovery while leaving
-        # room for bounded physical retries inside one operation attempt.
-        return max(1, self.attempt_number) * 1000 + self._public_sequence
+    def public_logical_call_ordinal(self, semantic_slot: str) -> int:
+        """Map a semantic slot to a stable PostgreSQL ``INTEGER`` identity.
+
+        Operation, stage and slide are already columns in the durable unique key.
+        The ordinal therefore represents only the semantic slot and deliberately
+        excludes worker attempt and physical retry sequence.
+        """
+
+        normalized = _normalize_semantic_slot(semantic_slot)
+        digest = sha256(normalized.encode("utf-8")).digest()
+        return (int.from_bytes(digest[:4], "big") & 0x7FFF_FFFF) or 1
+
+
+@dataclass(frozen=True, slots=True)
+class PublicOperationFence:
+    operation_id: UUID
+    attempt_token: str | None
+    fencing_token: int | None
+
+
+class ProviderSpendFenceRejected(RuntimeError):
+    """The worker no longer owns the durable operation claim."""
+
+    code = "provider_workspace_operation_fence_lost"
+    retryable = True
+
+
+@dataclass(frozen=True, slots=True)
+class _PublicCallAccounting:
+    lease: object
+    pricing: ProviderModelPricing | None
 
 
 _ACTIVE_SCOPE: ContextVar[ProviderUsageScope | None] = ContextVar(
     "provider_usage_scope", default=None
 )
-_PUBLIC_OPERATION_ID: ContextVar[UUID | None] = ContextVar(
-    "public_provider_operation_id", default=None
+_PUBLIC_OPERATION_FENCE: ContextVar[PublicOperationFence | None] = ContextVar(
+    "public_provider_operation_fence", default=None
 )
 _ACTIVE_PROVIDER_ADMISSION: ContextVar[ProviderCallLease | None] = ContextVar(
     "active_provider_call_admission", default=None
 )
+_ACTIVE_PROVIDER_IDEMPOTENCY_KEY: ContextVar[str | None] = ContextVar(
+    "active_provider_idempotency_key", default=None
+)
 
 
 @contextmanager
-def public_operation_scope(operation_id: UUID | None) -> Iterator[None]:
-    token = _PUBLIC_OPERATION_ID.set(operation_id)
+def public_operation_scope(
+    operation_id: UUID | None,
+    *,
+    attempt_token: str | None = None,
+    fencing_token: int | None = None,
+) -> Iterator[None]:
+    fence = (
+        PublicOperationFence(
+            operation_id=operation_id,
+            attempt_token=attempt_token,
+            fencing_token=fencing_token,
+        )
+        if operation_id is not None
+        else None
+    )
+    token = _PUBLIC_OPERATION_FENCE.set(fence)
     try:
         yield
     finally:
-        _PUBLIC_OPERATION_ID.reset(token)
+        _PUBLIC_OPERATION_FENCE.reset(token)
+
+
+def current_provider_idempotency_key() -> str | None:
+    """Return the content-free stable key for the active provider SDK call."""
+
+    return _ACTIVE_PROVIDER_IDEMPOTENCY_KEY.get()
+
+
+def _normalize_semantic_slot(value: str) -> str:
+    normalized = str(value).strip().lower()
+    if not normalized or len(normalized) > 128:
+        raise ValueError("provider_semantic_slot_invalid")
+    if any(character not in "abcdefghijklmnopqrstuvwxyz0123456789._-" for character in normalized):
+        raise ValueError("provider_semantic_slot_invalid")
+    return normalized
+
+
+def _provider_idempotency_key(
+    fence: PublicOperationFence,
+    scope: ProviderUsageScope,
+    semantic_slot: str,
+) -> str:
+    slide = "deck" if scope.slide_index is None else str(scope.slide_index)
+    preimage = (
+        f"public-provider-call/v2:{fence.operation_id}:{scope.stage}:"
+        f"{slide}:{_normalize_semantic_slot(semantic_slot)}"
+    )
+    return f"ppt-{sha256(preimage.encode('utf-8')).hexdigest()}"
+
+
+async def _assert_current_public_operation_fence(
+    fence: PublicOperationFence,
+) -> None:
+    """Re-read the durable claim immediately before spend-capable provider I/O."""
+
+    if not fence.attempt_token or fence.fencing_token is None:
+        raise ProviderSpendFenceRejected("provider_workspace_operation_fence_required")
+
+    from sqlmodel import select
+
+    from models.sql.workspace import WorkspaceOperation
+    from services.database import async_session_maker
+    from utils.datetime_utils import get_current_utc_datetime
+
+    now = get_current_utc_datetime()
+    async with async_session_maker() as session:
+        current = await session.scalar(
+            select(WorkspaceOperation.id)
+            .where(WorkspaceOperation.id == fence.operation_id)
+            .where(WorkspaceOperation.state == "running")
+            .where(WorkspaceOperation.attempt_token == fence.attempt_token)
+            .where(WorkspaceOperation.fencing_token == fence.fencing_token)
+            .where(WorkspaceOperation.cancel_requested_at.is_(None))
+            .where(WorkspaceOperation.lease_expires_at.is_not(None))
+            .where(WorkspaceOperation.lease_expires_at > now)
+            .execution_options(skip_owner_scope=True)
+        )
+        await session.rollback()
+    if current is None:
+        raise ProviderSpendFenceRejected("provider_workspace_operation_fence_lost")
 
 
 @contextmanager
@@ -178,11 +298,10 @@ def _optional_env_int(name: str) -> int | None:
 async def _ensure_runtime_job(scope: ProviderUsageScope) -> str:
     runtime = _runtime_state()
     durable_job_id = str(scope.job_id)
-    job_id = (
-        durable_job_id
-        if scope.attempt_number <= 0
-        else f"{durable_job_id}:attempt:{scope.attempt_number}"
-    )
+    # A durable generation job has one provider budget across every operation
+    # attempt.  Re-registering an attempt-suffixed runtime job resets the hard
+    # cap after recovery and permits retry amplification.
+    job_id = durable_job_id
     if job_id in runtime.registered_jobs:
         runtime.latest_job_keys[durable_job_id] = job_id
         return job_id
@@ -221,6 +340,11 @@ async def provider_call_admission(
     *,
     is_retry: bool = False,
     estimated_cost_microunits: int | None = None,
+    semantic_slot: str = "primary",
+    provider: str = "unavailable",
+    model: str = "unavailable",
+    pricing: ProviderModelPricing | None = None,
+    provider_idempotency_capable: bool = False,
 ) -> AsyncIterator[ProviderCallLease | None]:
     """Enforce queue, RPM, budget, cancellation, and breaker before SDK I/O."""
 
@@ -240,7 +364,22 @@ async def provider_call_admission(
         # Unknown cost is not zero. Reserve a conservative accounting unit so
         # request amplification still consumes a configured job ceiling.
         estimated = 1
-    request_id = scope.next_runtime_request_id()
+    public_fence = _PUBLIC_OPERATION_FENCE.get()
+    if pricing is None and public_fence is not None:
+        from services.provider_pricing_registry import (
+            resolve_public_provider_pricing,
+        )
+
+        pricing = resolve_public_provider_pricing(
+            provider_id=provider,
+            model_id=model,
+        )
+    normalized_semantic_slot = _normalize_semantic_slot(semantic_slot)
+    if pricing is not None and (
+        pricing.provider_id != provider or pricing.model_id != model
+    ):
+        raise ValueError("provider_pricing_identity_mismatch")
+    request_id = scope.next_runtime_request_id(normalized_semantic_slot)
     lease = await _runtime_state().control.admit(
         job_id,
         request_id,
@@ -251,6 +390,7 @@ async def provider_call_admission(
     public_lease = None
     public_started_at = monotonic()
     active_token = _ACTIVE_PROVIDER_ADMISSION.set(lease)
+    idempotency_token: Token[str | None] | None = None
     try:
         if durable_provider_runtime_required():
             durable_lease = await reserve_provider_call_detached(
@@ -260,8 +400,7 @@ async def provider_call_admission(
                 request_id=request_id,
                 estimated_cost=estimated,
             )
-        public_operation_id = _PUBLIC_OPERATION_ID.get()
-        if public_operation_id is not None:
+        if public_fence is not None:
             from services.public_operation_admission import (
                 reserve_public_provider_call_detached,
             )
@@ -270,17 +409,48 @@ async def provider_call_admission(
                 "illustrate": "illustration",
                 "image": "illustration",
             }.get(scope.stage, scope.stage)
-            public_lease = await reserve_public_provider_call_detached(
-                operation_id=public_operation_id,
+            reserved_public_lease = await reserve_public_provider_call_detached(
+                operation_id=public_fence.operation_id,
                 stage=public_stage,
                 slide_index=scope.slide_index,
-                logical_call_ordinal=scope.next_public_logical_call_ordinal(),
+                logical_call_ordinal=None,
+                logical_call_key=normalized_semantic_slot,
                 retry_class=(
                     "retry"
                     if is_retry
                     else ("resume" if scope.attempt_number > 1 else "initial")
                 ),
                 estimated_cost_microunits=estimated,
+                expected_attempt_token=public_fence.attempt_token,
+                expected_fencing_token=public_fence.fencing_token,
+                provider_id=provider,
+                model_id=model,
+                pricing_revision=(pricing.revision if pricing else "unpriced-v1"),
+                provider_idempotency_capable=provider_idempotency_capable,
+            )
+            if (
+                reserved_public_lease is not None
+                and reserved_public_lease.is_terminal_reuse
+                and not provider_idempotency_capable
+            ):
+                raise ProviderSpendFenceRejected(
+                    "provider_logical_call_terminal_replay_unsupported"
+                )
+            public_lease = reserved_public_lease
+            # This is deliberately the final await before the SDK boundary.
+            # Admission/reservation can take time, so an earlier claim check is
+            # insufficient when a worker loses its lease while queued.
+            await _assert_current_public_operation_fence(public_fence)
+            idempotency_token = _ACTIVE_PROVIDER_IDEMPOTENCY_KEY.set(
+                (
+                    public_lease.provider_idempotency_key
+                    if public_lease is not None
+                    else _provider_idempotency_key(
+                        public_fence,
+                        scope,
+                        normalized_semantic_slot,
+                    )
+                )
             )
         yield lease
     except BaseException as error:
@@ -312,11 +482,19 @@ async def provider_call_admission(
                 reconcile_public_provider_call_detached,
             )
 
+            # A successful SDK boundary is terminal even when the caller omits
+            # receipt instrumentation.  Keeping a durable reservation open
+            # until a later best-effort telemetry hook strands quota forever.
             await reconcile_public_provider_call_detached(
                 public_lease,
                 outcome="succeeded",
-                latency_ms=max(0, round((monotonic() - public_started_at) * 1000)),
+                latency_ms=max(
+                    0, round((monotonic() - public_started_at) * 1000)
+                ),
                 actual_cost_microunits=None,
+            )
+            scope._public_leases.append(
+                _PublicCallAccounting(lease=public_lease, pricing=pricing)
             )
         if durable_lease is not None:
             await reconcile_provider_call_detached(
@@ -325,8 +503,11 @@ async def provider_call_admission(
                 outcome="success",
             )
             scope._durable_leases.append(durable_lease)
+        scope._receipt_request_ids.append(request_id)
         await lease.finish(actual_cost_microunits=None, outcome="success")
     finally:
+        if idempotency_token is not None:
+            _ACTIVE_PROVIDER_IDEMPOTENCY_KEY.reset(idempotency_token)
         _ACTIVE_PROVIDER_ADMISSION.reset(active_token)
 
 
@@ -379,15 +560,19 @@ def response_usage(response: object) -> tuple[str, int | None, int | None]:
     return "reported", input_tokens, output_tokens
 
 
-def _reported_cost(input_tokens: int | None, output_tokens: int | None) -> int | None:
-    input_rate = _optional_env_int("PROVIDER_INPUT_MICROUNITS_PER_1K")
-    output_rate = _optional_env_int("PROVIDER_OUTPUT_MICROUNITS_PER_1K")
-    if input_rate is None or output_rate is None:
+def _reported_cost(
+    pricing: ProviderModelPricing | None,
+    input_tokens: int | None,
+    output_tokens: int | None,
+) -> int | None:
+    if pricing is None or (input_tokens is None and output_tokens is None):
         return None
-    return (
-        ((input_tokens or 0) * input_rate + 999) // 1000
-        + ((output_tokens or 0) * output_rate + 999) // 1000
+    usage_cost = calculate_actual_usage_cost(
+        pricing,
+        input_tokens=input_tokens or 0,
+        output_tokens=output_tokens or 0,
     )
+    return usage_cost.total_cost_microunits
 
 
 async def record_provider_call(
@@ -399,6 +584,7 @@ async def record_provider_call(
     retry_class: str = "initial",
     outcome: str = "succeeded",
     pricing_version: str = "unpriced-v1",
+    pricing: ProviderModelPricing | None = None,
 ) -> None:
     """Persist one provider-call receipt when a durable job scope is active.
 
@@ -417,7 +603,56 @@ async def record_provider_call(
         )
 
         usage_state, input_tokens, output_tokens = response_usage(response)
-        reported_cost = _reported_cost(input_tokens, output_tokens)
+        public_accounting = (
+            scope._public_leases.pop(0) if scope._public_leases else None
+        )
+        effective_pricing = pricing or (
+            public_accounting.pricing if public_accounting is not None else None
+        )
+        if effective_pricing is not None and (
+            effective_pricing.provider_id != provider
+            or effective_pricing.model_id != model
+        ):
+            raise ValueError("provider_pricing_identity_mismatch")
+        reported_cost = _reported_cost(
+            effective_pricing,
+            input_tokens,
+            output_tokens,
+        )
+        if public_accounting is not None:
+            public_lease = public_accounting.lease
+            if effective_pricing is not None and usage_state == "reported":
+                from services.public_operation_admission import (
+                    enrich_public_provider_usage_detached,
+                )
+
+                usage_cost = await enrich_public_provider_usage_detached(
+                    public_lease,
+                    pricing=effective_pricing,
+                    latency_ms=max(0, round(float(latency_ms))),
+                    input_tokens=input_tokens or 0,
+                    output_tokens=output_tokens or 0,
+                )
+                reported_cost = usage_cost.total_cost_microunits
+            elif usage_state == "reported" or reported_cost is not None:
+                from services.public_operation_admission import (
+                    enrich_public_provider_call_detached,
+                )
+
+                await enrich_public_provider_call_detached(
+                    public_lease,
+                    latency_ms=max(0, round(float(latency_ms))),
+                    actual_cost_microunits=reported_cost,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    provider_id=provider,
+                    model_id=model,
+                    pricing_revision=(
+                        effective_pricing.revision
+                        if effective_pricing is not None
+                        else pricing_version
+                    ),
+                )
         receipt = ProviderUsageReceiptInput(
             job_id=scope.job_id,
             operation=scope.operation,
@@ -433,7 +668,11 @@ async def record_provider_call(
             output_tokens=output_tokens,
             reported_cost_microunits=reported_cost,
             estimated_cost_microunits=None,
-            pricing_version=pricing_version,
+            pricing_version=(
+                effective_pricing.revision
+                if effective_pricing is not None
+                else pricing_version
+            ),
         )
         await record_provider_usage_receipt_detached(receipt)
         if scope._durable_leases:
@@ -483,7 +722,9 @@ class ProviderCallTimer:
 
 __all__ = [
     "ProviderCallTimer",
+    "ProviderSpendFenceRejected",
     "cancel_provider_job",
+    "current_provider_idempotency_key",
     "provider_call_admission",
     "public_operation_scope",
     "provider_runtime_job_status",

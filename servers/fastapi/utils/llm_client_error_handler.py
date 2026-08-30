@@ -40,9 +40,20 @@ def _rate_limit_detail(message: str) -> str:
     return "AI provider is temporarily rate limited. Please wait and try again."
 
 
-def handle_llm_client_exceptions(e: Exception) -> HTTPException:
+def handle_llm_client_exceptions(e: Exception) -> Exception:
     traceback.print_exc()
     if isinstance(e, HTTPException):
+        return e
+    # Durable public budget rejections are already safe, content-free control
+    # errors. Preserve their code/retryability so a local provider wrapper
+    # cannot turn deterministic exhaustion into an HTTP 500 and operation
+    # retry/dead-letter cycle.
+    code = getattr(e, "code", None)
+    if (
+        isinstance(code, str)
+        and code.startswith("public_provider_")
+        and getattr(e, "retryable", None) is False
+    ):
         return e
     if isinstance(e, LLMAIBaseError):
         if e.status_code == 429:

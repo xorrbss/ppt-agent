@@ -14,8 +14,10 @@ import uuid
 from sqlalchemy import and_, case, func, or_, select, update
 
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
+from models.sql.public_artifact import ArtifactRef
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from services.database import async_session_maker
+from services.artifact_store import configured_public_artifact_service
 from utils.datetime_utils import get_current_utc_datetime
 from utils.get_env import get_app_data_directory_env
 from services.authored_slide_checkpoint_bundle import (
@@ -489,6 +491,39 @@ def read_valid_render(checkpoint: AuthoredSlideCheckpoint) -> bytes | None:
     return content
 
 
+def _checkpoint_artifact_ref(
+    checkpoint: AuthoredSlideCheckpoint,
+    name: str,
+) -> ArtifactRef | None:
+    refs = checkpoint.artifact_refs
+    if not isinstance(refs, dict):
+        return None
+    value = refs.get(name)
+    if not isinstance(value, dict):
+        return None
+    try:
+        return ArtifactRef.model_validate(value)
+    except Exception as exc:
+        raise SlideCheckpointCorrupt("checkpoint_artifact_ref_invalid") from exc
+
+
+async def read_valid_render_artifact(
+    checkpoint: AuthoredSlideCheckpoint,
+) -> bytes | None:
+    """Read the authoritative PNG ArtifactRef, with legacy cache fallback."""
+
+    reference = _checkpoint_artifact_ref(checkpoint, "render")
+    if reference is None:
+        return read_valid_render(checkpoint)
+    if (
+        reference.kind != "slide-png"
+        or reference.media_type != "image/png"
+        or checkpoint.render_sha256 != reference.sha256
+    ):
+        raise SlideCheckpointCorrupt("checkpoint_render_artifact_binding_invalid")
+    return await configured_public_artifact_service().read_ref_bytes(reference)
+
+
 def _evidence_sidecar_path(render_path: Path) -> Path:
     """Return deterministic metadata path adjacent to an existing render."""
 
@@ -610,6 +645,44 @@ def read_valid_evidence(
     return bundle
 
 
+async def read_valid_evidence_artifact(
+    checkpoint: AuthoredSlideCheckpoint,
+) -> SlideCheckpointBundle | None:
+    """Read an immutable checkpoint bundle from object storage when present."""
+
+    reference = _checkpoint_artifact_ref(checkpoint, "evidence")
+    if reference is None:
+        return read_valid_evidence(checkpoint)
+    if (
+        reference.kind != "checkpoint"
+        or reference.media_type != "application/json"
+    ):
+        raise SlideCheckpointCorrupt("checkpoint_evidence_artifact_binding_invalid")
+    try:
+        payload = json.loads(
+            (await configured_public_artifact_service().read_ref_bytes(reference)).decode(
+                "utf-8"
+            )
+        )
+        bundle = SlideCheckpointBundle.from_payload(payload)
+    except SlideCheckpointCorrupt:
+        raise
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise SlideCheckpointCorrupt("checkpoint_evidence_unreadable") from exc
+    render = await read_valid_render_artifact(checkpoint)
+    if (
+        render is None
+        or bundle.slide_index != checkpoint.slide_index
+        or bundle.png != render
+        or (
+            checkpoint.illustrated_html is not None
+            and checkpoint.illustrated_html != bundle.html
+        )
+    ):
+        raise SlideCheckpointCorrupt("checkpoint_evidence_pointer_mismatch")
+    return bundle
+
+
 def recover_unreferenced_evidence(
     checkpoint: AuthoredSlideCheckpoint,
 ) -> tuple[str, str, SlideCheckpointBundle] | None:
@@ -619,7 +692,7 @@ def recover_unreferenced_evidence(
     SQL pointer update did not commit. Candidates are accepted only when their
     sidecar, immutable revision sidecar, attempt digest, and PNG digest agree.
     """
-    if not checkpoint.attempt_token:
+    if checkpoint.artifact_refs is not None or not checkpoint.attempt_token:
         return None
     root = checkpoint_root()
     prefix = evidence_attempt_id(checkpoint.attempt_token)[:12]

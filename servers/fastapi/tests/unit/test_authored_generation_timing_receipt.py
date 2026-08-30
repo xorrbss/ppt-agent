@@ -7,6 +7,7 @@ import uuid
 import pytest
 
 from services.authored_generation_timing_receipt import (
+    GENERATION_OBSERVABILITY_METRICS,
     create_generation_timing_receipt,
     generation_timing_receipt_path,
     load_generation_timing_receipt,
@@ -55,10 +56,25 @@ def test_generation_timing_receipt_is_durable_bounded_and_runner_projected(
     stages = {
         "outline": 11,
         "author": 22,
+        "illustration": 23,
+        "render": 24,
+        "quality": 25,
         "repair": 33,
         "checkpoint": 44,
         "export": 55,
         "publication": 66,
+    }
+    observability = {
+        name: (
+            {"state": "observed", "value": "publish_committed"}
+            if name == "fencingOutcome"
+            else {"state": "observed", "value": "succeeded"}
+            if name == "finalOutcome"
+            else {"state": "unavailable", "reason": "counter_not_implemented"}
+            if name in {"blockedRequest", "timeout", "crash"}
+            else {"state": "observed", "value": 1}
+        )
+        for name in GENERATION_OBSERVABILITY_METRICS
     }
 
     first = create_generation_timing_receipt(
@@ -67,6 +83,7 @@ def test_generation_timing_receipt_is_durable_bounded_and_runner_projected(
         attempt_number=2,
         stage_timings_ms=stages,
         total_ms=250,
+        observability_metrics=observability,
     )
     second = create_generation_timing_receipt(
         job_id=job_id,
@@ -74,6 +91,7 @@ def test_generation_timing_receipt_is_durable_bounded_and_runner_projected(
         attempt_number=2,
         stage_timings_ms=stages,
         total_ms=250,
+        observability_metrics=observability,
     )
 
     assert second == first
@@ -105,6 +123,10 @@ def test_generation_timing_receipt_is_durable_bounded_and_runner_projected(
     assert safe["generation_timing_receipt"]["requestedReleasePolicyDigest"] == (
         quality_receipt.requested_release_policy_digest
     )
+    assert safe["generation_timing_receipt"]["observability"] == {
+        "schemaVersion": "generation-observability/v1",
+        "metrics": observability,
+    }
 
     with pytest.raises(ValueError, match="binding_changed"):
         create_generation_timing_receipt(
@@ -113,6 +135,7 @@ def test_generation_timing_receipt_is_durable_bounded_and_runner_projected(
             attempt_number=2,
             stage_timings_ms={**stages, "author": 23},
             total_ms=250,
+            observability_metrics=observability,
         )
 
 

@@ -10,10 +10,16 @@ from typing import Any
 GENERATION_TIMING_STAGES = (
     "outline",
     "author",
+    "illustration",
+    "render",
+    "quality",
     "repair",
     "checkpoint",
     "export",
     "publication",
+)
+LEGACY_GENERATION_TIMING_STAGES = (
+    "outline", "author", "repair", "checkpoint", "export", "publication"
 )
 MAX_GENERATION_TIMING_MS = 30 * 24 * 60 * 60 * 1000
 GENERATION_TIMING_RESULT_KEYS = frozenset(
@@ -37,8 +43,17 @@ def _generation_timing_ms(value: Any) -> int | None:
 def sanitize_generation_stage_timings(value: Any) -> dict[str, int]:
     if not isinstance(value, Mapping):
         return {}
+    stages = (
+        GENERATION_TIMING_STAGES
+        if set(value) == set(GENERATION_TIMING_STAGES)
+        else LEGACY_GENERATION_TIMING_STAGES
+        if set(value) == set(LEGACY_GENERATION_TIMING_STAGES)
+        else ()
+    )
+    if not stages:
+        return {}
     safe: dict[str, int] = {}
-    for stage in GENERATION_TIMING_STAGES:
+    for stage in stages:
         duration = _generation_timing_ms(value.get(stage))
         if duration is None:
             return {}
@@ -102,7 +117,7 @@ def sanitize_generation_timing_receipt(value: Any) -> dict[str, object]:
             return {}
         digests[key] = candidate.lower()
 
-    return {
+    safe = {
         "schemaVersion": "generation-timing-receipt/v1",
         "attemptId": attempt_id,
         "attemptNumber": attempt_number,
@@ -118,6 +133,26 @@ def sanitize_generation_timing_receipt(value: Any) -> dict[str, object]:
         "totalMs": total_ms,
         "timingReceiptDigest": digests["timingReceiptDigest"],
     }
+    observability = value.get("observability")
+    if observability is not None:
+        try:
+            from services.authored_generation_timing_receipt import (
+                _observability_metrics,
+            )
+
+            if (
+                not isinstance(observability, Mapping)
+                or observability.get("schemaVersion")
+                != "generation-observability/v1"
+            ):
+                return {}
+            safe["observability"] = {
+                "schemaVersion": "generation-observability/v1",
+                "metrics": dict(_observability_metrics(observability.get("metrics"))),
+            }
+        except (TypeError, ValueError):
+            return {}
+    return safe
 
 
 def generation_timing_result_projection(value: Any) -> dict[str, object]:

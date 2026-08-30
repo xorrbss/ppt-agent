@@ -1,6 +1,7 @@
 import asyncio
 import threading
 import time
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -60,6 +61,99 @@ def test_regular_generation_keeps_existing_retry_behavior(monkeypatch):
     assert result == {"result": "ok"}
     assert len(client.calls) == 2
     assert all(call["stream"] is False for call in client.calls)
+
+
+def test_supported_client_receives_stable_provider_idempotency_key(monkeypatch):
+    monkeypatch.setenv("LLM", "openai")
+    monkeypatch.setattr(
+        "utils.llm_utils.current_provider_idempotency_key",
+        lambda: "ppt-stable-logical-key",
+    )
+    monkeypatch.setattr(
+        "utils.llm_utils._provider_receipt_identity",
+        lambda: "openai",
+    )
+
+    class RawClient:
+        def __init__(self, headers=None):
+            self.headers = headers or {}
+
+        def with_options(self, *, max_retries, extra_headers=None):
+            assert max_retries == 0
+            return RawClient(extra_headers)
+
+    class IdempotentClient:
+        def __init__(self):
+            self.calls = []
+            self._client = RawClient()
+
+        def generate(self, **kwargs):
+            self.calls.append((kwargs, dict(self._client.headers)))
+            return SimpleNamespace(content={"result": "ok"})
+
+    IdempotentClient.__module__ = "llmai.openai.client"
+
+    client = IdempotentClient()
+    result = asyncio.run(
+        generate_structured_with_schema_retries(
+            client,
+            "test-model",
+            messages=[],
+            response_format=object(),
+            json_schema={},
+        )
+    )
+
+    assert result == {"result": "ok"}
+    assert client.calls[0][1]["Idempotency-Key"] == "ppt-stable-logical-key"
+
+
+def test_parse_retry_is_separately_admitted_and_each_success_records_usage(
+    monkeypatch,
+):
+    monkeypatch.setenv("LLM", "ollama")
+    client = RetryClient()
+    admitted = []
+    receipts = []
+
+    @asynccontextmanager
+    async def fake_admission(*, is_retry=False, semantic_slot="primary", **_kwargs):
+        admitted.append((is_retry, semantic_slot))
+        yield None
+
+    async def fake_record_provider_call(**kwargs):
+        receipts.append(kwargs)
+
+    monkeypatch.setattr(
+        "utils.llm_utils.provider_call_admission",
+        fake_admission,
+    )
+    monkeypatch.setattr(
+        "utils.llm_utils.record_provider_call",
+        fake_record_provider_call,
+    )
+
+    with patch("utils.llm_utils.asyncio.sleep", new=AsyncMock()):
+        result = asyncio.run(
+            generate_structured_with_schema_retries(
+                client,
+                "test-model",
+                messages=[],
+                response_format=object(),
+                json_schema={},
+            )
+        )
+
+    assert result == {"result": "ok"}
+    assert admitted == [
+        (False, "structured.initial.attempt-1"),
+        (True, "structured.parse-repair.attempt-1"),
+    ]
+    assert [receipt["retry_class"] for receipt in receipts] == [
+        "initial",
+        "retry",
+    ]
+    assert all(receipt["response"] is not None for receipt in receipts)
 
 
 def test_disconnect_cancels_generation_without_retrying(monkeypatch):
@@ -208,8 +302,6 @@ def test_transient_provider_errors_use_exponential_backoff_then_recover(monkeypa
             self.calls += 1
             if self.calls == 1:
                 raise TransientError(500)
-            if self.calls == 2:
-                raise TransientError(503)
             return SimpleNamespace(content={"result": "ok"})
 
     client = RecoveringClient()
@@ -226,8 +318,8 @@ def test_transient_provider_errors_use_exponential_backoff_then_recover(monkeypa
         )
 
     assert result == {"result": "ok"}
-    assert client.calls == 3
-    assert [call.args[0] for call in sleep.await_args_list] == [1.0, 2.0]
+    assert client.calls == 2
+    assert [call.args[0] for call in sleep.await_args_list] == [1.0]
 
 
 def test_exhausted_transient_provider_errors_are_mapped_to_retryable_503(
@@ -259,8 +351,8 @@ def test_exhausted_transient_provider_errors_are_mapped_to_retryable_503(
             )
         )
 
-    assert client.calls == 4
+    assert client.calls == 2
     assert error.value.status_code == 503
     assert error.value.headers == {"Retry-After": "10"}
     assert "temporarily unavailable" in error.value.detail
-    assert [call.args[0] for call in sleep.await_args_list] == [1.0, 2.0, 4.0]
+    assert [call.args[0] for call in sleep.await_args_list] == [1.0]

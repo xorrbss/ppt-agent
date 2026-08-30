@@ -119,6 +119,10 @@ class AuthoredSlideCheckpoint(SQLModel, table=True):
         default=None,
         sa_column=Column(String(64), nullable=True),
     )
+    artifact_refs: Optional[dict] = Field(
+        default=None,
+        sa_column=Column(JSON, nullable=True),
+    )
 
     failed_stage: Optional[str] = Field(
         default=None,

@@ -55,8 +55,13 @@ from services.source_images.models import (
 )
 from services.provider_usage_instrumentation import (
     ProviderCallTimer,
+    current_provider_idempotency_key,
     provider_call_admission,
     record_provider_call,
+)
+from utils.provider_idempotency import (
+    provider_generate_call,
+    supports_provider_idempotency,
 )
 from services.authored_generation_performance import authored_provider_concurrency
 from utils.llm_utils import extract_text, get_generate_kwargs
@@ -1034,7 +1039,7 @@ async def author_slide_html(
         provider = "unknown"
     provider_call_attempt = initial_provider_attempt - 1
 
-    async def generate(generate_kwargs: dict):
+    async def generate(generate_kwargs: dict, *, semantic_slot: str):
         # Run the blocking call on the dedicated authoring pool (bounds concurrency to
         # AUTHOR_CONCURRENCY and keeps long authoring threads off the shared default
         # executor used by other LLM calls / exports).
@@ -1045,11 +1050,25 @@ async def author_slide_html(
         timer = ProviderCallTimer()
         response = None
         try:
-            async with provider_call_admission(is_retry=provider_call_attempt > 1):
+            async with provider_call_admission(
+                is_retry=provider_call_attempt > 1,
+                semantic_slot=semantic_slot,
+                provider=provider,
+                model=str(model),
+                provider_idempotency_capable=supports_provider_idempotency(
+                    client, provider_id=provider
+                ),
+            ):
                 enforce_llm_egress_policy()
+                generate_call = provider_generate_call(
+                    client,
+                    provider_id=provider,
+                    kwargs=generate_kwargs,
+                    idempotency_key=current_provider_idempotency_key(),
+                )
                 response = await loop.run_in_executor(
                     _AUTHOR_EXECUTOR,
-                    functools.partial(client.generate, **generate_kwargs),
+                    generate_call,
                 )
             return response
         except Exception as error:
@@ -1073,7 +1092,7 @@ async def author_slide_html(
             )
 
     try:
-        response = await generate(kwargs)
+        response = await generate(kwargs, semantic_slot="author.primary")
     except Exception as error:
         if not allow_provider_fallback or not image_parts or mode == EXACT_RECONSTRUCTION:
             raise handle_llm_client_exceptions(error)
@@ -1091,7 +1110,10 @@ async def author_slide_html(
         if reasoning:
             fallback_kwargs["extra_body"] = reasoning
         try:
-            response = await generate(fallback_kwargs)
+            response = await generate(
+                fallback_kwargs,
+                semantic_slot="author.text-fallback",
+            )
         except Exception as fallback_error:
             raise handle_llm_client_exceptions(fallback_error)
     authored_html = extract_html_document(extract_text(response.content) or "")

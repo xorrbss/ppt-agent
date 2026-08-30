@@ -2,27 +2,26 @@
   "schemaVersion": 2,
   "active": true,
   "projectName": "ppt-agent",
-  "activeTask": "Complete Authored release product verification after safe semantic alias fix, then run controlled matrix and owned PowerPoint QA only after successful RC artifact.",
+  "activeTask": "Complete the same-RC public generation and export service 85-point approval gate with actual product-path evidence",
   "taskContext": {
     "paths": [
-      "servers/fastapi",
-      "servers/nextjs/lib/authored-hybrid",
-      "scripts",
-      "artifacts/authored-vnext-controlled-load-20260829"
+      "servers/fastapi/services",
+      "servers/fastapi/workers",
+      "servers/nextjs/app/api/export-presentation",
+      "scripts/public-service-release-gate.mjs"
     ],
     "scopes": [
-      "authored-vnext",
-      "release",
-      "performance",
-      "hybrid",
-      "powerpoint-qa"
+      "service-boundary",
+      "worker-isolation",
+      "artifact-authority",
+      "public-admission",
+      "release-evidence"
     ],
     "includeKeys": [
-      "authored.release-export-atomic-binding",
-      "authored.performance-matrix-control",
-      "authored.product-pptx-owned-com-validation",
-      "authored.capacity.terminal-residual",
-      "authored.full-reauthor-safe-semantic-alias"
+      "service.boundary.external-platform",
+      "service.architecture.modular-worker-boundary",
+      "artifact.public-content-authority",
+      "service.public-admission-budget-boundary"
     ]
   },
   "bindingPolicy": {
@@ -80,8 +79,7 @@
     "service.public-admission-budget-boundary": "decisions/service.public-admission-budget-boundary.1.json"
   },
   "readFirst": [
-    "servers/fastapi/utils/llm_calls/author_vision_qa.py",
-    "scripts/authored-vnext-controlled-load.mjs"
+    "AGENTS.md"
   ],
-  "updatedAt": "2026-08-29T19:39:24.8677086+00:00"
+  "updatedAt": "2026-08-29T23:52:38.2494528+00:00"
 }

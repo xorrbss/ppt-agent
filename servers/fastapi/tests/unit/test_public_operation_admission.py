@@ -23,6 +23,7 @@ from services.public_operation_admission import (
     PublicAdmissionRejected,
     activate_public_operation,
     admit_public_operation,
+    enrich_public_provider_call,
     finish_public_operation,
     plan_provider_requests,
     public_operation_metrics,
@@ -135,6 +136,15 @@ def test_public_admission_enforces_principal_quota_and_provider_hard_caps(
                 vqa_budget=1,
             )
             assert plan.initial_request_limit == 9
+            assert plan.retry_request_limit == 2
+            five_slide_plan = plan_provider_requests(
+                slide_count=5,
+                image_budget=5,
+                repair_budget=5,
+                vqa_budget=0,
+            )
+            assert five_slide_plan.initial_request_limit == 19
+            assert five_slide_plan.retry_request_limit == 5
 
             async with maker() as session, session.begin():
                 first = await admit_public_operation(
@@ -144,6 +154,8 @@ def test_public_admission_enforces_principal_quota_and_provider_hard_caps(
                     operation_kind="generation",
                     request_plan=plan,
                 )
+                assert first.planned_request_limit == 9
+                assert first.retry_request_limit == 3
                 with pytest.raises(PublicAdmissionRejected) as rejected:
                     await admit_public_operation(
                         session,
@@ -199,11 +211,31 @@ def test_public_admission_enforces_principal_quota_and_provider_hard_caps(
                     session,
                     logical_call_id=outline.id,
                     outcome="succeeded",
+                    latency_ms=100,
+                    actual_cost_microunits=None,
+                )
+                await enrich_public_provider_call(
+                    session,
+                    logical_call_id=outline.id,
+                    latency_ms=110,
+                    actual_cost_microunits=None,
+                    input_tokens=100,
+                    output_tokens=50,
+                )
+                accounting = await session.get(PublicOperationAdmission, first.id)
+                assert accounting is not None
+                assert accounting.actual_consumed_microunits == 10
+                assert accounting.actual_cost_unavailable_count == 1
+                await enrich_public_provider_call(
+                    session,
+                    logical_call_id=outline.id,
                     latency_ms=125,
                     actual_cost_microunits=11,
                     input_tokens=100,
                     output_tokens=50,
                 )
+                await session.refresh(accounting)
+                assert accounting.actual_cost_unavailable_count == 0
                 with pytest.raises(PublicAdmissionRejected) as rejected:
                     await reserve_public_provider_call(
                         session,

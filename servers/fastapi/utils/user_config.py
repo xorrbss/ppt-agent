@@ -61,8 +61,10 @@ def load_runtime_settings(
         if persisted_config is None and can_change_keys
         else (persisted_config or {})
     )
-    if not can_change_keys:
-        persisted = {}
+    # ``CAN_CHANGE_KEYS`` controls mutation and implicit legacy-file loading.
+    # A caller-supplied snapshot is already the selected durable authority
+    # (the runtime coordinator passes the database revision here), so a locked
+    # worker must still consume it.
     return RuntimeSettings.from_sources(environ=environment, user_config=persisted)
 
 

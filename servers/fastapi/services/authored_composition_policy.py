@@ -100,7 +100,10 @@ class SlideCapacity:
     max_visible_text_chars: int
     max_images: int
     max_qids: int
-    min_font_px: int = 16
+    # The authored design contract treats 15px as the inclusive 11pt floor.
+    # Keeping the capacity gate one pixel higher made a valid bounded repair
+    # fail after it fixed the actual clipping defect.
+    min_font_px: int = 15
     source_image_count: int = 0
 
     def with_source_images(self, count: int) -> "SlideCapacity":

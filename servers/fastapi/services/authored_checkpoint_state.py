@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 from typing import Any, Mapping
 import uuid
@@ -10,18 +11,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from models.sql.presentation_generation_job import PresentationGenerationJob
+from models.sql.public_admission import PublicOperationAdmission
 from models.sql.workspace import WorkspaceOperation
 from services.authored_checkpoint_artifacts import (
     atomic_write,
     checkpoint_root,
     render_artifact_path,
-    read_valid_evidence,
+    read_valid_evidence_artifact,
     recover_unreferenced_evidence,
     evidence_attempt_id,
     write_valid_evidence,
 )
+from services.artifact_store import configured_public_artifact_service
 from services.authored_checkpoint_errors import AuthoredStageError
-from services.authored_slide_checkpoint_bundle import SlideCheckpointConflict
+from services.authored_slide_checkpoint_bundle import (
+    SlideCheckpointBundle,
+    SlideCheckpointConflict,
+)
 from services.authored_generation_observability import log_authored_slide_failure_observation
 from services.database import async_session_maker
 from utils.datetime_utils import get_current_utc_datetime
@@ -133,41 +139,100 @@ async def complete_stage(
     render_path: str | None = None
     render_sha256: str | None = None
     expected_render_path: str | None = None
+    expected_artifact_refs: dict | None = None
+    artifact_refs: dict | None = None
     has_evidence = stage == "render" and html is not None and browser_metrics is not None
     if has_evidence and png is None:
         raise ValueError("checkpoint_evidence_requires_png")
     if png is not None:
-        path = render_artifact_path(job_id, slide_index, attempt_token)
         prior = None
         if has_evidence:
             previous = await get_checkpoint(job_id, slide_index)
             expected_render_path = previous.render_path
-            prior = read_valid_evidence(previous)
+            expected_artifact_refs = previous.artifact_refs
+            prior = await read_valid_evidence_artifact(previous)
             if checkpoint_revision is None:
                 checkpoint_revision = (prior.revision + 1) if prior else 0
             elif prior is not None and checkpoint_revision <= prior.revision:
                 raise SlideCheckpointConflict("checkpoint_revision_regressed")
-            # Never mutate bytes reachable from the previous DB checkpoint.
-            path = path.with_name(
-                f"{path.stem}-r{checkpoint_revision}-{uuid.uuid4().hex}.png"
-            )
-        atomic_write(path, png)
-        render_path = str(path.relative_to(checkpoint_root())).replace(os.sep, "/")
         render_sha256 = hashlib.sha256(png).hexdigest()
-        if has_evidence:
-            write_valid_evidence(
-                path,
-                attempt_id=evidence_attempt_id(attempt_token),
-                slide_index=slide_index,
-                revision=checkpoint_revision,
-                html=html,
-                png=png,
-                metrics=dict(browser_metrics),
-            )
+        public_binding = await _public_checkpoint_binding(job_id, attempt_token)
+        if public_binding is not None:
+            owner_id, tenant_id, operation_id = public_binding
+            artifact_service = configured_public_artifact_service()
+            async with async_session_maker() as artifact_session:
+                render_ref = await artifact_service.persist_bytes(
+                    artifact_session,
+                    owner_id=owner_id,
+                    tenant_id=tenant_id,
+                    kind="slide-png",
+                    payload=png,
+                    media_type="image/png",
+                    created_by_operation_id=operation_id,
+                    retention_class="checkpoint",
+                )
+                artifact_refs = {
+                    "render": render_ref.model_dump(mode="json", by_alias=True)
+                }
+                if has_evidence:
+                    bundle = SlideCheckpointBundle(
+                        evidence_attempt_id(attempt_token),
+                        slide_index,
+                        checkpoint_revision,
+                        html,
+                        bytes(png),
+                        dict(browser_metrics),
+                        SlideCheckpointBundle._digest_for_payload(
+                            html, png, browser_metrics
+                        ),
+                    )
+                    evidence_payload = json.dumps(
+                        bundle.to_payload(),
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                        allow_nan=False,
+                    ).encode("utf-8")
+                    evidence_ref = await artifact_service.persist_bytes(
+                        artifact_session,
+                        owner_id=owner_id,
+                        tenant_id=tenant_id,
+                        kind="checkpoint",
+                        payload=evidence_payload,
+                        media_type="application/json",
+                        created_by_operation_id=operation_id,
+                        retention_class="checkpoint",
+                    )
+                    artifact_refs["evidence"] = evidence_ref.model_dump(
+                        mode="json", by_alias=True
+                    )
+                await artifact_session.commit()
+        else:
+            path = render_artifact_path(job_id, slide_index, attempt_token)
+            if has_evidence:
+                # Never mutate bytes reachable from the previous DB checkpoint.
+                path = path.with_name(
+                    f"{path.stem}-r{checkpoint_revision}-{uuid.uuid4().hex}.png"
+                )
+            atomic_write(path, png)
+            render_path = str(path.relative_to(checkpoint_root())).replace(os.sep, "/")
+            if has_evidence:
+                write_valid_evidence(
+                    path,
+                    attempt_id=evidence_attempt_id(attempt_token),
+                    slide_index=slide_index,
+                    revision=checkpoint_revision,
+                    html=html,
+                    png=png,
+                    metrics=dict(browser_metrics),
+                )
     async with async_session_maker() as session:
         job = await _owned_job(session, job_id, attempt_token)
         checkpoint = await _checkpoint(session, job_id, slide_index)
-        if has_evidence and checkpoint.render_path != expected_render_path:
+        if has_evidence and (
+            checkpoint.render_path != expected_render_path
+            or checkpoint.artifact_refs != expected_artifact_refs
+        ):
             raise SlideCheckpointConflict("checkpoint_render_pointer_conflict")
         setattr(checkpoint, _STATUS_FIELD[stage], "skipped" if skipped else "completed")
         setattr(checkpoint, f"{stage}_completed_at", get_current_utc_datetime())
@@ -180,6 +245,11 @@ async def complete_stage(
         if render_path is not None:
             checkpoint.render_path = render_path
             checkpoint.render_sha256 = render_sha256
+            checkpoint.artifact_refs = None
+        elif artifact_refs is not None:
+            checkpoint.render_path = None
+            checkpoint.render_sha256 = render_sha256
+            checkpoint.artifact_refs = artifact_refs
         checkpoint.failed_stage = None
         checkpoint.error = None
         checkpoint.attempt_token = attempt_token
@@ -388,6 +458,39 @@ async def _owned_job(session, job_id: uuid.UUID, attempt_token: str) -> Presenta
             retryable=True,
         )
     return job
+
+
+async def _public_checkpoint_binding(
+    job_id: uuid.UUID,
+    attempt_token: str,
+) -> tuple[uuid.UUID, str, uuid.UUID] | None:
+    """Resolve a public generation's owner/tenant only from durable admission."""
+
+    async with async_session_maker() as session:
+        binding = (
+            await session.execute(
+                select(
+                    PublicOperationAdmission.owner_id,
+                    PublicOperationAdmission.tenant_id,
+                    PublicOperationAdmission.operation_id,
+                )
+                .join(
+                    PresentationGenerationJob,
+                    PresentationGenerationJob.workspace_operation_id
+                    == PublicOperationAdmission.operation_id,
+                )
+                .where(
+                    PresentationGenerationJob.id == job_id,
+                    PresentationGenerationJob.attempt_token == attempt_token,
+                    PresentationGenerationJob.state.in_(("running", "staging")),
+                    PublicOperationAdmission.operation_kind == "generation",
+                    PublicOperationAdmission.state == "active",
+                )
+            )
+        ).one_or_none()
+    if binding is None:
+        return None
+    return binding.owner_id, binding.tenant_id, binding.operation_id
 
 
 async def _checkpoint(session, job_id: uuid.UUID, slide_index: int) -> AuthoredSlideCheckpoint:

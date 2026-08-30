@@ -5,9 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import os
 from collections.abc import Awaitable, Callable, Mapping
-from pathlib import Path
 from typing import Any, Literal, cast
 
 from sqlalchemy import select
@@ -17,8 +15,7 @@ from api.v1.auth.internal import authenticated_internal_request_headers
 from models.sql.presentation import PresentationModel
 from models.sql.public_admission import PublicOperationAdmission
 from models.sql.slide import SlideModel
-from models.sql.workspace import WorkspaceArtifact, WorkspaceOperation
-from services.artifact_store import configured_public_artifact_service
+from models.sql.workspace import WorkspaceOperation
 from services.authored_quality_review_service import (
     run_authored_quality_review as run_authored_quality_review,
 )
@@ -43,6 +40,7 @@ from services.public_export_operation import (
 from services.workspace_artifact_publication_service import (
     WorkspaceArtifactPublicationError,
     compensate_workspace_artifact,
+    prepare_workspace_export_artifact_ref,
     prepare_workspace_generation_artifact,
     publish_workspace_export_artifact,
 )
@@ -59,39 +57,12 @@ from services.workspace_operation_handler_registry import (
 from services.workspace_quality_operation_handler import (
     WorkspaceQualityReviewOperationHandler,
 )
-from utils.get_env import get_app_data_directory_env
 
 QUALITY_REVIEW_OPERATION_KIND = "quality.review"
 EXPORT_OPERATION_KINDS = ("export.pptx", "export.pdf")
 InternalHeaderProvider = Callable[[], Awaitable[dict[str, str]]]
 LOGGER = logging.getLogger(__name__)
 QUALITY_REVIEW_PROGRESS_INTERVAL_SECONDS = 30.0
-
-
-def _stage_public_artifact_cache(
-    payload: bytes,
-    *,
-    operation_id: object,
-    artifact_id: object,
-    export_format: str,
-) -> Path:
-    root = Path(get_app_data_directory_env()).resolve()
-    target = root / "public-artifact-cache" / str(operation_id) / f"{artifact_id}.{export_format}"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    if target.exists():
-        if hashlib.sha256(target.read_bytes()).digest() != hashlib.sha256(payload).digest():
-            raise PresentationExportContractError("public_export_cache_conflict")
-        return target
-    temporary = target.with_name(f".{target.name}.tmp")
-    try:
-        with temporary.open("xb") as stream:
-            stream.write(payload)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary, target)
-    finally:
-        temporary.unlink(missing_ok=True)
-    return target
 
 
 def _context(claim_payload: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -198,6 +169,7 @@ class WorkspaceExportOperationHandler:
         )
 
         await context.raise_if_cancelled()
+        public_tenant_id: str | None = None
         async with self._session_factory() as session:
             presentation = await session.get(PresentationModel, claim.presentation_id)
             if presentation is None:
@@ -215,8 +187,21 @@ class WorkspaceExportOperationHandler:
                 export_format=export_format,
                 pptx_mode=pptx_mode,
             )
+            admission = await session.scalar(
+                select(PublicOperationAdmission).where(
+                    PublicOperationAdmission.operation_id == claim.operation_id
+                )
+            )
+            if admission is not None and admission.state == "active":
+                public_tenant_id = admission.tenant_id
+                # Public requests never execute Chrome or an OOXML converter in
+                # the durable operation/Core process. The isolated raster path
+                # is the public boundary; richer desktop/private modes retain
+                # their existing adapters outside this admission.
+                authored_vnext_export_path = "shared"
             if (
                 authored_vnext_projection is not None
+                and public_tenant_id is None
                 and authored_vnext_export_path != "semantic-hybrid"
             ):
                 _validate_authored_vnext_export_request(
@@ -235,12 +220,13 @@ class WorkspaceExportOperationHandler:
                 raise NonRetryableWorkspaceOperationError("workspace_export_operation_invalid")
 
         await context.progress(stage="export_rendering", percent=10)
-        exported_source: Path | None = None
         execution = None
         native_export = None
         native_export_attempt_id = None
         direct_export_selected_adapter: str | None = None
         public_artifact_id = None
+        public_ref = None
+        worker_resource_metrics: Mapping[str, Any] | None = None
         try:
             if authored_vnext_export_path == "legacy-native":
                 if not isinstance(authored_vnext_projection, dict):
@@ -349,16 +335,10 @@ class WorkspaceExportOperationHandler:
                             )
                         ).scalars()
                     )
-                    admission = await session.scalar(
-                        select(PublicOperationAdmission).where(
-                            PublicOperationAdmission.operation_id == claim.operation_id
-                        )
+                if public_tenant_id is None:
+                    raise NonRetryableWorkspaceOperationError(
+                        "public_export_admission_required"
                     )
-                    if admission is None or admission.state != "active":
-                        raise NonRetryableWorkspaceOperationError(
-                            "public_export_admission_required"
-                        )
-                    tenant_id = admission.tenant_id
                 htmls = [slide.html_content for slide in slides]
                 if not htmls or any(not isinstance(html, str) or not html for html in htmls):
                     raise NonRetryableWorkspaceOperationError(
@@ -415,23 +395,16 @@ class WorkspaceExportOperationHandler:
                 export_attempt_id = attempt.id
                 native_export_attempt_id = attempt.id
                 direct_export_selected_adapter = "general"
-                public_ref = await render_and_export_authored_htmls(
+                public_execution = await render_and_export_authored_htmls(
                     claim,
-                    tenant_id=tenant_id,
+                    tenant_id=public_tenant_id,
                     htmls=cast(list[str], htmls),
                     export_format=export_format,
                     session_factory=self._session_factory,
                 )
+                public_ref = public_execution.artifact
+                worker_resource_metrics = public_execution.resource_metrics
                 public_artifact_id = public_ref.artifact_id
-                artifact_service = configured_public_artifact_service()
-                payload = await artifact_service.read_ref_bytes(public_ref)
-                export_path = _stage_public_artifact_cache(
-                    payload,
-                    operation_id=claim.operation_id,
-                    artifact_id=public_ref.artifact_id,
-                    export_format=export_format,
-                )
-                exported_source = export_path
                 artifact_sha256 = public_ref.sha256
                 artifact_size_bytes = public_ref.size_bytes
                 selected_adapter = "general"
@@ -443,35 +416,41 @@ class WorkspaceExportOperationHandler:
                         "package_digest_match": True,
                     },
                 }
-            if artifact_sha256 != hashlib.sha256(export_path.read_bytes()).hexdigest():
-                raise PresentationExportContractError(
-                    "presentation_export_artifact_digest_mismatch"
-                )
             await context.raise_if_cancelled()
             await context.progress(stage="export_publishing", percent=80)
             async with self._session_factory() as session:
-                artifact = await prepare_workspace_generation_artifact(
-                    session,
-                    source_path=str(export_path),
-                    operation_id=claim.operation_id,
-                    presentation_id=claim.presentation_id,
-                    source_revision=claim.expected_revision,
-                    kind=claim.kind,
-                    export_attempt_id=export_attempt_id,
-                    expected_source_sha256=artifact_sha256,
-                    expected_source_size_bytes=artifact_size_bytes,
-                )
                 if public_artifact_id is not None:
-                    workspace_artifact = await session.get(
-                        WorkspaceArtifact,
-                        artifact.artifact_id,
-                    )
-                    if workspace_artifact is None:
+                    if public_ref is None:
                         raise WorkspaceArtifactPublicationError(
-                            "workspace_artifact_intent_conflict"
+                            "workspace_public_artifact_binding_invalid"
                         )
-                    workspace_artifact.public_artifact_id = public_artifact_id
-                    session.add(workspace_artifact)
+                    artifact = await prepare_workspace_export_artifact_ref(
+                        session,
+                        reference=public_ref,
+                        operation_id=claim.operation_id,
+                        presentation_id=claim.presentation_id,
+                        source_revision=claim.expected_revision,
+                        kind=claim.kind,
+                        export_attempt_id=export_attempt_id,
+                    )
+                else:
+                    if artifact_sha256 != hashlib.sha256(
+                        export_path.read_bytes()
+                    ).hexdigest():
+                        raise PresentationExportContractError(
+                            "presentation_export_artifact_digest_mismatch"
+                        )
+                    artifact = await prepare_workspace_generation_artifact(
+                        session,
+                        source_path=str(export_path),
+                        operation_id=claim.operation_id,
+                        presentation_id=claim.presentation_id,
+                        source_revision=claim.expected_revision,
+                        kind=claim.kind,
+                        export_attempt_id=export_attempt_id,
+                        expected_source_sha256=artifact_sha256,
+                        expected_source_size_bytes=artifact_size_bytes,
+                    )
                 try:
                     await context.raise_if_cancelled()
                 except WorkspaceOperationCancelled:
@@ -486,6 +465,7 @@ class WorkspaceExportOperationHandler:
                     export_source_snapshot_sha256=source_snapshot_sha256,
                     export_selected_adapter=selected_adapter,
                     export_provenance=export_provenance,
+                    worker_resource_metrics=worker_resource_metrics,
                 )
         except WorkspaceOperationCancelled:
             if execution is not None:
@@ -640,30 +620,20 @@ class WorkspaceExportOperationHandler:
                         failure_path=getattr(error, "path", None),
                         selected_adapter=(direct_export_selected_adapter or "native_reconstructed"),
                     )
-            raise RetryableWorkspaceOperationError("presentation_export_failed") from error
-        finally:
-            # The renderer output is only a staging source. The immutable,
-            # hashed workspace artifact is the durable copy and must be the
-            # sole downloadable file after prepare succeeds or fails.
-            if exported_source is not None:
-                try:
-                    exported_source.unlink(missing_ok=True)
-                except OSError:
-                    LOGGER.warning(
-                        "Unable to remove workspace export staging source",
-                        extra={
-                            "operation_id": str(claim.operation_id),
-                            "presentation_id": str(claim.presentation_id),
-                            "format": export_format,
-                        },
-                        exc_info=True,
-                    )
-
+            resource_detail = getattr(error, "resource_metrics", None)
+            raise RetryableWorkspaceOperationError(
+                "presentation_export_failed",
+                detail=(dict(resource_detail) if isinstance(resource_detail, Mapping) else None),
+            ) from error
         await context.progress(stage="export_completed", percent=100)
         # Publication has already terminalized the operation. The runner will
         # reconcile this canonical durable projection rather than append twice.
         return WorkspaceOperationResult(
-            payload={"status": "completed", "format": export_format},
+            payload={
+                "status": "completed",
+                "format": export_format,
+                **dict(worker_resource_metrics or {}),
+            },
             result_revision=revision,
         )
 

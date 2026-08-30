@@ -11,6 +11,8 @@ param(
 
     [string]$DatabasePath,
 
+    [string]$AppDataDirectory,
+
     [string]$ProviderConfigPath,
 
     [string]$LogoSvgPath,
@@ -21,6 +23,10 @@ param(
 
     [switch]$AllowProviderSettings,
 
+    [switch]$ReleaseValidationAuth,
+
+    [switch]$SkipGenerationWorker,
+
     [switch]$ExportOnlyValidation
 )
 
@@ -28,7 +34,12 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $fastApiRoot = Join-Path $repoRoot "servers\fastapi"
 $nextRoot = Join-Path $repoRoot "servers\nextjs"
-$appDataRoot = Join-Path $repoRoot "app_data"
+$appDataRoot = if ([string]::IsNullOrWhiteSpace($AppDataDirectory)) {
+    Join-Path $repoRoot "app_data"
+}
+else {
+    [System.IO.Path]::GetFullPath($AppDataDirectory, $repoRoot)
+}
 $devSessionName = "session-$PID"
 $devSessionRoot = Join-Path $appDataRoot "authored-vnext-dev\$devSessionName"
 $persistentDatabasePath = Join-Path $appDataRoot "fastapi.db"
@@ -47,17 +58,21 @@ else {
     $selectedDatabasePath = $persistentDatabasePath
 }
 $devDatabasePath = $selectedDatabasePath.Replace("\", "/")
-$userConfigPath = if ([string]::IsNullOrWhiteSpace($ProviderConfigPath)) {
-    Join-Path $appDataRoot "userConfig.json"
+$userConfigPath = Join-Path $appDataRoot "userConfig.json"
+$providerConfigImportPath = if ([string]::IsNullOrWhiteSpace($ProviderConfigPath)) {
+    $null
 }
 else {
     [System.IO.Path]::GetFullPath($ProviderConfigPath, $repoRoot)
 }
-if ($ProviderConfigPath -and -not (Test-Path -LiteralPath $userConfigPath -PathType Leaf)) {
-    throw "Provider config file does not exist: $userConfigPath"
+if ($providerConfigImportPath -and -not (Test-Path -LiteralPath $providerConfigImportPath -PathType Leaf)) {
+    throw "Provider config file does not exist: $providerConfigImportPath"
 }
 if ($AllowProviderSettings -and $ExportOnlyValidation) {
     throw "-AllowProviderSettings and -ExportOnlyValidation cannot be combined."
+}
+if ($SkipGenerationWorker -and $ExportOnlyValidation) {
+    throw "-SkipGenerationWorker keeps generation enabled and cannot be combined with -ExportOnlyValidation."
 }
 $resolvedLogoSvgPath = if ([string]::IsNullOrWhiteSpace($LogoSvgPath)) {
     $null
@@ -278,7 +293,7 @@ $sharedAuthoredEnvironment = @{
     "USER_CONFIG_PATH" = $userConfigPath
     "CAN_CHANGE_KEYS" = if ($AllowProviderSettings) { "true" } else { "false" }
     "ENVIRONMENT" = "local"
-    "DISABLE_AUTH" = "true"
+    "DISABLE_AUTH" = if ($ReleaseValidationAuth) { "false" } else { "true" }
     # A fresh clean worktree has no legacy credential sidecar. Seed a local-only
     # bootstrap principal so DISABLE_AUTH can still establish request ownership.
     # The random value is process-scoped and only its hash is persisted.
@@ -302,6 +317,19 @@ $sharedAuthoredEnvironment = @{
     "PUBLIC_WORKER_CAPABILITY_KEY_FILE" = $workerCapabilityKeyPath
     "PUBLIC_RENDER_WORKER_COMMAND_JSON" = $renderWorkerCommand
     "PUBLIC_EXPORT_WORKER_COMMAND_JSON" = $exportWorkerCommand
+    # The isolated worker boundary is fail-closed: every limit must be
+    # explicit in the launcher environment. CPU/wall values cover the 120s
+    # render and 600s export protocol deadlines without disabling enforcement.
+    "PPT_WORKER_MEMORY_LIMIT_BYTES" = "1073741824"
+    "PPT_WORKER_CPU_MILLIS" = "600000"
+    "PPT_WORKER_PID_LIMIT" = "64"
+    "PPT_WORKER_OPEN_FILE_LIMIT" = "512"
+    "PPT_WORKER_OUTPUT_LIMIT_BYTES" = "536870912"
+    "PPT_WORKER_WALL_CLOCK_SECONDS" = "600"
+    # Resolve application modules from this checkout even when a pre-existing
+    # virtual environment is reused by a clean RC worktree. This prevents an
+    # editable-install pointer from silently executing a different checkout.
+    "PYTHONPATH" = $fastApiRoot
     # This is a local functional profile. Release evidence must still prove
     # the production container's actual non-root/read-only/tmpfs/network-none policy.
     "PUBLIC_WORKER_OS_ISOLATION" = "nonroot-readonly-tmpfs-network-none"
@@ -312,6 +340,14 @@ if ($ExportOnlyValidation) {
     # durable Core export runner active but neither resolves a provider nor
     # starts a generation process that could transmit content externally.
     $sharedAuthoredEnvironment["AUTHORED_VNEXT_GENERATION_ENABLED"] = "false"
+    $sharedAuthoredEnvironment["PRESENTON_SKIP_PROVIDER_AVAILABILITY_CHECK"] = "true"
+}
+elseif ($ProviderConfigPath) {
+    # A clean isolated database has no provider_settings row until the
+    # post-start CAS import below runs. Skip only the startup availability
+    # probe so FastAPI can become ready and the existing provider config can be
+    # imported without copying credentials into argv or launcher logs. Runtime
+    # provider resolution and calls still validate the imported configuration.
     $sharedAuthoredEnvironment["PRESENTON_SKIP_PROVIDER_AVAILABILITY_CHECK"] = "true"
 }
 if ($resolvedChromePath) {
@@ -390,7 +426,7 @@ try {
     $processes.Add($fastApi)
     Wait-HttpReady -Name "FastAPI" -Uri "$fastApiUrl/metrics/workspace" -Process $fastApi
 
-    if (-not $ExportOnlyValidation) {
+    if (-not $ExportOnlyValidation -and -not $SkipGenerationWorker) {
         $generationWorkerEnvironment = $fastApiEnvironment.Clone()
         $generationWorkerEnvironment["WORKSPACE_OPERATION_WORKER_MODE"] = "external"
         $generationWorkerEnvironment["PPT_PROCESS_PROFILE"] = "generation"
@@ -409,12 +445,20 @@ try {
             throw "Generation worker exited before readiness (exit code $($generationWorker.ExitCode)). See $logRoot."
         }
     }
+    elseif ($SkipGenerationWorker) {
+        Write-Host "Generation worker: skipped; generation API remains enabled for an exclusive external worker."
+    }
 
     if ($ProviderConfigPath) {
         # An existing local provider file can be newer than this worktree's
         # already-created provider_settings row. Import it explicitly through
         # the same CAS bridge used by synchronous OAuth writers; no credential
         # value is passed on the command line or written to the launcher logs.
+        $providerConfigSyncEnvironment = $fastApiEnvironment.Clone()
+        # Only the one-shot import process may read the existing credential
+        # file. FastAPI, Next.js, and workers keep using the RC-local runtime
+        # config so bootstrap persistence cannot mutate the source file.
+        $providerConfigSyncEnvironment["PRESENTON_PROVIDER_CONFIG_IMPORT_PATH"] = $providerConfigImportPath
         $providerConfigSync = Start-LoggedProcess `
             -Name "existing provider settings sync" `
             -FilePath "uv.exe" `
@@ -424,7 +468,7 @@ try {
                 "scripts\sync_existing_provider_settings.py"
             ) `
             -WorkingDirectory $fastApiRoot `
-            -Environment $fastApiEnvironment `
+            -Environment $providerConfigSyncEnvironment `
             -StdoutPath (Join-Path $logRoot "provider-settings-sync.stdout.log") `
             -StderrPath (Join-Path $logRoot "provider-settings-sync.stderr.log")
         $providerConfigSync.WaitForExit()
@@ -467,10 +511,13 @@ try {
         throw "PPT Master catalog seed failed (exit code $catalogSeedExitCode). See $logRoot."
     }
 
+    # Webpack permits a clean RC worktree to reuse an existing dependency
+    # directory junction. Turbopack rejects that safe local arrangement as an
+    # out-of-root symlink before any application route can start.
     $next = Start-LoggedProcess `
         -Name "Next.js" `
         -FilePath "npm.cmd" `
-        -ArgumentList @("run", "dev", "--", "-p", [string]$NextPort) `
+        -ArgumentList @("run", "dev", "--", "--webpack", "-p", [string]$NextPort) `
         -WorkingDirectory $nextRoot `
         -Environment $nextEnvironment `
         -StdoutPath (Join-Path $logRoot "next.stdout.log") `
@@ -495,7 +542,17 @@ try {
         -StdoutPath (Join-Path $logRoot "proxy.stdout.log") `
         -StderrPath (Join-Path $logRoot "proxy.stderr.log")
     $processes.Add($proxy)
-    Wait-HttpReady -Name "single-origin proxy" -Uri "$proxyUrl/api/v1/ppt/authored-vnext/master/status" -Process $proxy
+    # The master-status route is intentionally authenticated in public-service
+    # validation. Probe the public UI root there; FastAPI readiness was already
+    # established independently above, so a 401 must not tear down a healthy
+    # authenticated stack after the full startup timeout.
+    $proxyReadyUri = if ($ReleaseValidationAuth) {
+        "$proxyUrl/"
+    }
+    else {
+        "$proxyUrl/api/v1/ppt/authored-vnext/master/status"
+    }
+    Wait-HttpReady -Name "single-origin proxy" -Uri $proxyReadyUri -Process $proxy
 
     Write-Host ""
     Write-Host "Presenton with PPT Master local development is ready."

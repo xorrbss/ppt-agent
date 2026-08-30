@@ -108,7 +108,9 @@ def test_poll_failure_keeps_last_good_and_logs_only_safe_metadata(caplog):
         replace_process_runtime_settings(previous)
 
 
-def test_coordinator_snapshot_respects_can_change_keys_false(monkeypatch):
+def test_coordinator_snapshot_consumes_database_authority_when_changes_are_locked(
+    monkeypatch,
+):
     monkeypatch.setenv("CAN_CHANGE_KEYS", "false")
     monkeypatch.setenv("LLM", "openai")
     monkeypatch.setenv("OPENAI_MODEL", "environment-model")
@@ -119,6 +121,6 @@ def test_coordinator_snapshot_respects_can_change_keys_false(monkeypatch):
 
     settings = RuntimeSettingsCoordinator._settings(record)
 
-    assert settings.get("LLM") == "openai"
+    assert settings.get("LLM") == "google"
     assert settings.get("OPENAI_MODEL") == "environment-model"
-    assert settings.get("GOOGLE_MODEL") != "database-model"
+    assert settings.get("GOOGLE_MODEL") == "database-model"

@@ -692,6 +692,24 @@
       "description": "GPT Image 2 output quality."
     },
     {
+      "key": "PUBLIC_PROVIDER_PRICING_REVISION",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "public.provider_pricing",
+      "description": "Exact immutable provider pricing revision required for public provider calls."
+    },
+    {
+      "key": "PUBLIC_PROVIDER_PRICING_CATALOG",
+      "type": "json",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "public.provider_pricing",
+      "description": "Revision-pinned provider/model pricing catalog used by public admission."
+    },
+    {
       "key": "WEB_SEARCH_PROVIDER",
       "type": "enum",
       "default": "auto",

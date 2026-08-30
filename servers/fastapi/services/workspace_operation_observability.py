@@ -86,6 +86,26 @@ _RESULT_STATUSES = frozenset(
         "dead_letter",
     }
 )
+_PUBLIC_GENERATION_STATES = frozenset(
+    {
+        "accepted",
+        "queued",
+        "outlining",
+        "authoring",
+        "rendering",
+        "quality_gate",
+        "staging",
+        "published",
+        "export_queued",
+        "exporting",
+        "completed",
+        "capacity_waiting",
+        "retry_waiting",
+        "cancelled",
+        "failed",
+        "dead_letter",
+    }
+)
 _ERROR_CODES = frozenset(
     {
         "app_data_directory_required",
@@ -97,6 +117,7 @@ _ERROR_CODES = frozenset(
         "invalid_operation_handler_result",
         "operation_lease_lost",
         "operation_recovery_required",
+        "operation_worker_crashed",
         "presentation_edit_failed",
         "presentation_generation_failed",
         "presentation_generation_job_missing",
@@ -131,6 +152,7 @@ _FENCE_OUTCOMES = frozenset(
         "lease_lost",
         "released",
         "recovery_committed",
+        "capacity_deferred",
         "not_applicable",
     }
 )
@@ -180,6 +202,7 @@ def build_workspace_operation_observation(
     conversation_id: uuid.UUID | str | None = None,
     command_type: str | None = None,
     result_status: str | None = None,
+    public_state: str | None = None,
     error_code: str | None = None,
     duration_ms: int | float | None = None,
     event_lag_ms: int | float | None = None,
@@ -198,6 +221,8 @@ def build_workspace_operation_observation(
         raise ValueError("unsupported workspace operation observation")
     if result_status is not None and result_status not in _RESULT_STATUSES:
         raise ValueError("unsupported workspace operation status")
+    if public_state is not None and public_state not in _PUBLIC_GENERATION_STATES:
+        raise ValueError("unsupported public generation state")
     if fence_outcome is not None and fence_outcome not in _FENCE_OUTCOMES:
         raise ValueError("unsupported workspace operation fence outcome")
     if revision_conflict is not None and not isinstance(revision_conflict, bool):
@@ -221,6 +246,8 @@ def build_workspace_operation_observation(
         )
     if result_status is not None:
         event["result_status"] = result_status
+    if public_state is not None:
+        event["public_state"] = public_state
     if error_code is not None:
         event["error_code"] = error_code if error_code in _ERROR_CODES else "other"
     if fence_outcome is not None:
@@ -252,6 +279,7 @@ def log_workspace_operation_observation(
     conversation_id: uuid.UUID | str | None = None,
     command_type: str | None = None,
     result_status: str | None = None,
+    public_state: str | None = None,
     error_code: str | None = None,
     duration_ms: int | float | None = None,
     event_lag_ms: int | float | None = None,
@@ -275,6 +303,7 @@ def log_workspace_operation_observation(
             conversation_id=conversation_id,
             command_type=command_type,
             result_status=result_status,
+            public_state=public_state,
             error_code=error_code,
             duration_ms=duration_ms,
             event_lag_ms=event_lag_ms,

@@ -130,6 +130,145 @@ _DIRECT_CANCEL_STATES = frozenset(
     }
 )
 
+PUBLIC_GENERATION_LIFECYCLE_SCHEMA = "public-generation-lifecycle/v1"
+PUBLIC_GENERATION_STATES = (
+    "accepted",
+    "queued",
+    "outlining",
+    "authoring",
+    "rendering",
+    "quality_gate",
+    "staging",
+    "published",
+    "export_queued",
+    "exporting",
+    "completed",
+    "capacity_waiting",
+    "retry_waiting",
+    "cancelled",
+    "failed",
+    "dead_letter",
+)
+_PUBLIC_GENERATION_FORWARD_STATES = PUBLIC_GENERATION_STATES[:11]
+_PUBLIC_GENERATION_WAIT_STATES = frozenset({"capacity_waiting", "retry_waiting"})
+_PUBLIC_GENERATION_TERMINAL_STATES = frozenset(
+    {"completed", "cancelled", "failed", "dead_letter"}
+)
+_PUBLIC_GENERATION_STAGE_STATES = {
+    "generation_started": "outlining",
+    "content_brief": "outlining",
+    "outline": "outlining",
+    "authored_outline": "outlining",
+    "template_v2_layout_selection": "outlining",
+    "authored_generation": "authoring",
+    "authored_slide_generation": "authoring",
+    "authored_author": "authoring",
+    "authored_illustrate": "authoring",
+    "template_v2_slide_generation": "authoring",
+    "authored_render": "rendering",
+    "template_v2_pptx_validation": "rendering",
+    "authored_repair": "quality_gate",
+    "authored_checkpoint": "quality_gate",
+    "authored_generation_finalizing": "quality_gate",
+    "template_v2_saving": "quality_gate",
+    # Both generators stage an immutable export before the publication CAS.
+    "authored_export": "staging",
+    "authored_publication": "staging",
+    "template_v2_exporting": "staging",
+    "template_v2_publishing": "staging",
+}
+_PUBLIC_BUDGET_ERROR_CODES = frozenset(
+    {
+        "public_provider_request_limit_exceeded",
+        "public_provider_retry_limit_exceeded",
+        "public_provider_estimated_cost_limit_exceeded",
+        "public_provider_actual_cost_limit_exceeded",
+    }
+)
+
+
+def _public_generation_transition_allowed(current: str, target: str) -> bool:
+    if current == target:
+        return True
+    if current in _PUBLIC_GENERATION_TERMINAL_STATES:
+        return False
+    if target in {"cancelled", "failed", "dead_letter"}:
+        return True
+    if target in _PUBLIC_GENERATION_WAIT_STATES:
+        return current not in {"accepted", "published", "export_queued", "exporting"}
+    if current in _PUBLIC_GENERATION_WAIT_STATES:
+        return target == "queued"
+    try:
+        return (
+            _PUBLIC_GENERATION_FORWARD_STATES.index(target)
+            == _PUBLIC_GENERATION_FORWARD_STATES.index(current) + 1
+        )
+    except ValueError:
+        return False
+
+
+def _public_generation_transition_path(current: str, target: str) -> tuple[str, ...]:
+    """Return the monotonic CAS steps needed to reach an observed lifecycle state."""
+
+    if current == target:
+        return (target,)
+    if current in _PUBLIC_GENERATION_FORWARD_STATES and target in _PUBLIC_GENERATION_FORWARD_STATES:
+        current_index = _PUBLIC_GENERATION_FORWARD_STATES.index(current)
+        target_index = _PUBLIC_GENERATION_FORWARD_STATES.index(target)
+        if target_index > current_index:
+            return _PUBLIC_GENERATION_FORWARD_STATES[current_index + 1 : target_index + 1]
+    if _public_generation_transition_allowed(current, target):
+        return (target,)
+    raise ValueError(f"public_generation_transition_invalid:{current}:{target}")
+
+
+def _public_generation_progress(
+    raw_progress: object,
+    *,
+    target: str,
+    operation_version: int,
+    attempt_number: int,
+    fencing_token: int,
+    stage: str,
+    reason: str,
+    terminal_reason: str | None = None,
+    values: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build one closed public lifecycle projection for a fenced CAS write."""
+
+    if target not in PUBLIC_GENERATION_STATES:
+        raise ValueError("public_generation_state_invalid")
+    existing = dict(raw_progress) if isinstance(raw_progress, Mapping) else {}
+    current = str(existing.get("public_state") or "accepted")
+    if current not in PUBLIC_GENERATION_STATES:
+        raise ValueError("public_generation_current_state_invalid")
+    if not _public_generation_transition_allowed(current, target):
+        raise ValueError(f"public_generation_transition_invalid:{current}:{target}")
+    lifecycle_version = existing.get("public_lifecycle_version", 0)
+    if isinstance(lifecycle_version, bool) or not isinstance(lifecycle_version, int):
+        lifecycle_version = 0
+    progress = {
+        **sanitize_workspace_event_payload(existing),
+        "stage": stage,
+        "public_lifecycle_schema": PUBLIC_GENERATION_LIFECYCLE_SCHEMA,
+        "previous_public_state": current,
+        "public_state": target,
+        "public_lifecycle_version": lifecycle_version + (0 if current == target else 1),
+        "operation_version": operation_version + 1,
+        "attempt_number": attempt_number,
+        "fencing_token": fencing_token,
+        "transition_reason": reason,
+    }
+    if terminal_reason is not None:
+        progress["terminal_reason"] = terminal_reason
+    if values:
+        progress.update(sanitize_workspace_event_payload(values))
+    return {
+        key: value
+        for key, value in sanitize_workspace_event_payload(progress).items()
+        if value is not None
+    }
+
 # Event/outbox payloads are intentionally metadata-only.  Full prompts,
 # filenames, paths, provider responses and exception messages stay out of the
 # event stream and telemetry by construction.
@@ -143,6 +282,13 @@ _SAFE_PAYLOAD_KEYS = frozenset(
         "state",
         "status",
         "stage",
+        "public_lifecycle_schema",
+        "previous_public_state",
+        "public_state",
+        "public_lifecycle_version",
+        "operation_version",
+        "transition_reason",
+        "terminal_reason",
         "current",
         "completed",
         "total",
@@ -166,6 +312,25 @@ _SAFE_PAYLOAD_KEYS = frozenset(
         "fencing_token",
         "queue_position",
         "wait_reason",
+        "worker_peak_memory_bytes",
+        "worker_peak_handle_count",
+        "worker_peak_process_count",
+        "worker_peak_cpu_millis",
+        "worker_recycle_failure_count",
+        "resource_limits_enforced",
+        "worker_enforcement_layer",
+        "worker_execution_count",
+        "worker_final_process_count",
+        "worker_limit_triggered",
+        "worker_limit_memory_bytes",
+        "worker_limit_cpu_millis",
+        "worker_limit_process_count",
+        "worker_limit_handle_count",
+        "worker_limit_output_bytes",
+        "worker_limit_wall_clock_seconds",
+        "worker_resource_samples",
+        "checkpoint_reuse_count",
+        "reclaimed_attempt_token_sha256",
     }
 )
 
@@ -372,6 +537,20 @@ def _observe_claim(
     revision_conflict: bool | None = None,
     fence_outcome: str | None = None,
 ) -> None:
+    public_state = None
+    if claim.kind == "presentation.generate":
+        public_state = {
+            "accepted": "accepted",
+            "claimed": "queued",
+            "running": "queued",
+            "retry_scheduled": "retry_waiting",
+            "cancel_requested": "cancelled",
+            "cancelled": "cancelled",
+            "succeeded": "completed",
+            "failed": "failed",
+            "dead_letter": "dead_letter",
+            "released": "retry_waiting",
+        }.get(name)
     log_workspace_operation_observation(
         name=name,
         operation_id=claim.operation_id,
@@ -379,6 +558,7 @@ def _observe_claim(
         conversation_id=claim.conversation_id,
         command_type=claim.kind,
         result_status=result_status,
+        public_state=public_state,
         error_code=error_code,
         duration_ms=duration_ms,
         attempt_number=claim.attempt_number,
@@ -455,6 +635,43 @@ def sanitize_workspace_event_payload(
             )
         elif operation_kind == BATCH_KIND and isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
             safe[normalized] = sanitize_batch_value(normalized, value)
+        elif normalized == "worker_resource_samples" and isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+            resource_samples: list[dict[str, Any]] = []
+            for item in value[:100]:
+                if not isinstance(item, Mapping):
+                    continue
+                limits = item.get("resourceLimits")
+                limits = limits if isinstance(limits, Mapping) else {}
+                methods = item.get("controlEnforcementMethods")
+                methods = methods if isinstance(methods, Mapping) else {}
+                residual_risks = item.get("residualRisks")
+                residual_risks = residual_risks if isinstance(residual_risks, Mapping) else {}
+                resource_samples.append({
+                    "role": str(item.get("role", ""))[:16],
+                    "enforcementLayer": str(item.get("enforcementLayer", ""))[:64],
+                    "resourceLimitsEnforced": item.get("resourceLimitsEnforced") is True,
+                    "resourceLimits": {
+                        key: int(limits.get(key, 0))
+                        for key in ("memory", "cpu", "pids", "openFiles", "outputBytes", "wallClock")
+                    },
+                    "controlEnforcementMethods": {
+                        key: str(methods.get(key, ""))[:96]
+                        for key in ("memory", "cpu", "pids", "openFiles", "outputBytes", "wallClock")
+                    },
+                    "residualRisks": {
+                        str(key)[:32]: str(detail)[:240]
+                        for key, detail in residual_risks.items()
+                    },
+                    "supervisorPollIntervalMillis": int(item.get("supervisorPollIntervalMillis", 0)),
+                    "peakRssBytes": int(item.get("peakRssBytes", 0)),
+                    "peakPrivateBytes": int(item.get("peakPrivateBytes", 0)),
+                    "peakHandleCount": int(item.get("peakHandleCount", 0)),
+                    "peakProcessCount": int(item.get("peakProcessCount", 0)),
+                    "peakCpuMillis": int(item.get("peakCpuMillis", 0)),
+                    "recycledWithinBaseline": item.get("recycledWithinBaseline") is True,
+                    "finalProcessCount": int(item.get("finalProcessCount", 0)),
+                })
+            safe[normalized] = resource_samples
         elif value is None or isinstance(value, (str, int, float, bool)):
             if isinstance(value, str):
                 if normalized == "assistant_text":
@@ -850,6 +1067,17 @@ async def claim_next_workspace_operation(
 
         next_attempt_number = candidate.attempt_number + 1
         next_fencing_token = candidate.fencing_token + 1
+        claim_progress = None
+        if candidate.kind == "presentation.generate":
+            claim_progress = _public_generation_progress(
+                candidate.progress,
+                target="queued",
+                operation_version=candidate.version,
+                attempt_number=next_attempt_number,
+                fencing_token=next_fencing_token,
+                stage="queued",
+                reason="claim_ready",
+            )
         event = await append_operation_event(
             session,
             operation_id=candidate.id,
@@ -857,6 +1085,19 @@ async def claim_next_workspace_operation(
             payload={
                 "state": "running",
                 "stage": "started",
+                **(
+                    {
+                        "public_state": claim_progress["public_state"],
+                        "previous_public_state": claim_progress[
+                            "previous_public_state"
+                        ],
+                        "public_lifecycle_version": claim_progress[
+                            "public_lifecycle_version"
+                        ],
+                    }
+                    if claim_progress is not None
+                    else {}
+                ),
                 "attempt_number": next_attempt_number,
                 "fencing_token": next_fencing_token,
             },
@@ -880,6 +1121,7 @@ async def claim_next_workspace_operation(
                 "started_at": candidate.started_at or now,
                 "error_code": None,
                 "error_detail": None,
+                **({"progress": claim_progress} if claim_progress is not None else {}),
             },
         )
         if event is None:
@@ -962,6 +1204,42 @@ async def _transition_claim_failure(
                 "max_attempts": operation.max_attempts,
             }
         )
+        public_progress = None
+        if claim.kind == "presentation.generate":
+            public_target = (
+                "retry_waiting" if decision.state == "queued" else decision.state
+            )
+            terminal_reason = (
+                "budget_exhausted"
+                if code in _PUBLIC_BUDGET_ERROR_CODES
+                else "failed"
+                if decision.state in {"failed", "dead_letter"}
+                else None
+            )
+            public_progress = _public_generation_progress(
+                operation.progress,
+                target=public_target,
+                operation_version=operation.version,
+                attempt_number=claim.attempt_number,
+                fencing_token=claim.fencing_token,
+                stage=(
+                    "retry_waiting"
+                    if decision.state == "queued"
+                    else "generation_failed"
+                ),
+                reason=(
+                    "retry_scheduled"
+                    if decision.state == "queued"
+                    else "attempt_failed"
+                ),
+                terminal_reason=terminal_reason,
+                values={
+                    "retry_count": decision.retry_count,
+                    "backoff_seconds": decision.backoff_seconds,
+                    "next_attempt_at": decision.next_attempt_at,
+                    "error_code": code,
+                },
+            )
         event = await append_operation_event(
             session,
             operation_id=operation.id,
@@ -969,11 +1247,30 @@ async def _transition_claim_failure(
             payload={
                 **error_detail,
                 "state": decision.state,
+                **(
+                    {
+                        "public_state": public_progress["public_state"],
+                        "previous_public_state": public_progress[
+                            "previous_public_state"
+                        ],
+                        **(
+                            {"terminal_reason": public_progress["terminal_reason"]}
+                            if "terminal_reason" in public_progress
+                            else {}
+                        ),
+                    }
+                    if public_progress is not None
+                    else {}
+                ),
                 "backoff_seconds": decision.backoff_seconds,
                 "next_attempt_at": decision.next_attempt_at,
             },
             attempt_token=claim.attempt_token,
             allowed_states=_RUNNING_STATES,
+            expected_version=operation.version,
+            additional_conditions=(
+                WorkspaceOperation.fencing_token == claim.fencing_token,
+            ),
             projection_values={
                 "state": decision.state,
                 "retry_count": decision.retry_count,
@@ -985,6 +1282,7 @@ async def _transition_claim_failure(
                 "error_code": code,
                 "error_detail": error_detail,
                 "completed_at": now if decision.state in {"failed", "dead_letter"} else None,
+                **({"progress": public_progress} if public_progress is not None else {}),
             },
         )
         if event is None:
@@ -1028,13 +1326,49 @@ async def _transition_claim_blocked(
     now = _utc_now()
     async with session_factory() as session:
         operation = await session.get(WorkspaceOperation, claim.operation_id)
+        if (
+            operation is None
+            or operation.attempt_token != claim.attempt_token
+            or operation.fencing_token != claim.fencing_token
+            or operation.state not in _RUNNING_STATES
+        ):
+            await session.rollback()
+            return False
+        public_progress = None
+        if claim.kind == "presentation.generate":
+            public_progress = _public_generation_progress(
+                operation.progress,
+                target="failed",
+                operation_version=operation.version,
+                attempt_number=claim.attempt_number,
+                fencing_token=claim.fencing_token,
+                stage="failed",
+                reason="blocked_request",
+                terminal_reason="blocked_request",
+                values={"error_code": error.code},
+            )
         event = await append_operation_event(
             session,
             operation_id=claim.operation_id,
             event_type="operation.error",
-            payload={"state": "blocked", "error_code": error.code},
+            payload={
+                "state": "blocked",
+                "error_code": error.code,
+                **(
+                    {
+                        "public_state": "failed",
+                        "terminal_reason": "blocked_request",
+                    }
+                    if public_progress is not None
+                    else {}
+                ),
+            },
             attempt_token=claim.attempt_token,
             allowed_states=("running",),
+            expected_version=operation.version,
+            additional_conditions=(
+                WorkspaceOperation.fencing_token == claim.fencing_token,
+            ),
             projection_values={
                 "state": "blocked",
                 "attempt_token": None,
@@ -1042,6 +1376,7 @@ async def _transition_claim_blocked(
                 "heartbeat_at": now,
                 "error_code": error.code,
                 "error_detail": sanitize_workspace_event_payload(error.detail),
+                **({"progress": public_progress} if public_progress is not None else {}),
             },
         )
         if event is None:
@@ -1061,6 +1396,85 @@ async def _transition_claim_blocked(
             fence_outcome="transition_committed",
         )
         return True
+
+
+async def _complete_published_generation_lifecycle(
+    session: AsyncSession,
+    *,
+    operation: WorkspaceOperation,
+    claim: WorkspaceOperationClaim,
+    now: datetime,
+) -> bool:
+    """Project completion only after the atomic publication witness exists."""
+
+    if claim.kind != "presentation.generate":
+        return True
+    if (
+        operation.state != "succeeded"
+        or operation.result_revision is None
+        or operation.fencing_token != claim.fencing_token
+        or operation.attempt_number != claim.attempt_number
+    ):
+        return False
+    current = str((operation.progress or {}).get("public_state") or "accepted")
+    if current == "completed":
+        return True
+    try:
+        path = _public_generation_transition_path(current, "completed")
+    except ValueError:
+        return False
+    for target in path:
+        reason = (
+            "publication_commit_observed"
+            if target == "published"
+            else "export_attachment_confirmed"
+            if target in {"export_queued", "exporting"}
+            else "generation_completed"
+            if target == "completed"
+            else "completed_stage_reconciled"
+        )
+        progress = _public_generation_progress(
+            operation.progress,
+            target=target,
+            operation_version=operation.version,
+            attempt_number=claim.attempt_number,
+            fencing_token=claim.fencing_token,
+            stage=target,
+            reason=reason,
+            values={"percent": 100 if target == "completed" else None},
+        )
+        # Do not persist a nullable placeholder for intermediate percentages.
+        if target != "completed":
+            progress.pop("percent", None)
+        event = await append_operation_event(
+            session,
+            operation_id=claim.operation_id,
+            event_type="operation.progress",
+            payload={
+                "state": "succeeded",
+                "stage": target,
+                "public_state": target,
+                "previous_public_state": progress["previous_public_state"],
+                "public_lifecycle_version": progress[
+                    "public_lifecycle_version"
+                ],
+                "operation_version": progress["operation_version"],
+                "transition_reason": reason,
+                **({"percent": 100} if target == "completed" else {}),
+            },
+            allowed_states=("succeeded",),
+            expected_version=operation.version,
+            additional_conditions=(
+                WorkspaceOperation.fencing_token == claim.fencing_token,
+                WorkspaceOperation.attempt_number == claim.attempt_number,
+                WorkspaceOperation.result_revision.is_not(None),
+            ),
+            projection_values={"progress": progress},
+        )
+        if event is None:
+            return False
+        await session.refresh(operation)
+    return True
 
 
 async def finalize_workspace_operation_success(
@@ -1132,6 +1546,19 @@ async def finalize_workspace_operation_success(
             projection_values=projection_values,
         )
         if event is not None:
+            completed_operation = await session.get(
+                WorkspaceOperation, claim.operation_id
+            )
+            if completed_operation is not None:
+                await session.refresh(completed_operation)
+            if completed_operation is None or not await _complete_published_generation_lifecycle(
+                session,
+                operation=completed_operation,
+                claim=claim,
+                now=now,
+            ):
+                await session.rollback()
+                return False
             await session.commit()
             _observe_claim(
                 claim,
@@ -1176,9 +1603,26 @@ async def finalize_workspace_operation_success(
                     if not amended:
                         await session.rollback()
                         return False
+                    await session.refresh(operation)
+                    if not await _complete_published_generation_lifecycle(
+                        session,
+                        operation=operation,
+                        claim=claim,
+                        now=now,
+                    ):
+                        await session.rollback()
+                        return False
                     await session.commit()
                     return True
-            await session.rollback()
+            if not await _complete_published_generation_lifecycle(
+                session,
+                operation=operation,
+                claim=claim,
+                now=now,
+            ):
+                await session.rollback()
+                return False
+            await session.commit()
             return True
         publication_payload = dict(safe_result)
         if operation.result_revision is not None:
@@ -1193,6 +1637,15 @@ async def finalize_workspace_operation_success(
             increment_version=True,
         )
         if event is None:
+            await session.rollback()
+            return False
+        await session.refresh(operation)
+        if not await _complete_published_generation_lifecycle(
+            session,
+            operation=operation,
+            claim=claim,
+            now=now,
+        ):
             await session.rollback()
             return False
         await session.commit()
@@ -1437,13 +1890,48 @@ async def finalize_workspace_operation_cancelled(
     now = _utc_now()
     async with session_factory() as session:
         operation = await session.get(WorkspaceOperation, claim.operation_id)
+        if (
+            operation is None
+            or operation.attempt_token != claim.attempt_token
+            or operation.fencing_token != claim.fencing_token
+            or operation.state not in _RUNNING_STATES
+        ):
+            await session.rollback()
+            return False
+        public_progress = None
+        if claim.kind == "presentation.generate":
+            public_progress = _public_generation_progress(
+                operation.progress,
+                target="cancelled",
+                operation_version=operation.version,
+                attempt_number=claim.attempt_number,
+                fencing_token=claim.fencing_token,
+                stage="cancelled",
+                reason="cancel_committed",
+                terminal_reason="user_cancelled",
+            )
         event = await append_operation_event(
             session,
             operation_id=claim.operation_id,
             event_type="operation.cancelled",
-            payload={"state": "cancelled", "reason_code": "user_cancelled"},
+            payload={
+                "state": "cancelled",
+                "reason_code": "user_cancelled",
+                **(
+                    {
+                        "public_state": "cancelled",
+                        "terminal_reason": "user_cancelled",
+                    }
+                    if public_progress is not None
+                    else {}
+                ),
+            },
             attempt_token=claim.attempt_token,
             allowed_states=_RUNNING_STATES,
+            expected_version=operation.version,
+            additional_conditions=(
+                WorkspaceOperation.fencing_token == claim.fencing_token,
+            ),
             projection_values={
                 "state": "cancelled",
                 "cancelled_at": now,
@@ -1451,12 +1939,13 @@ async def finalize_workspace_operation_cancelled(
                 "attempt_token": None,
                 "lease_expires_at": None,
                 "heartbeat_at": now,
+                **({"progress": public_progress} if public_progress is not None else {}),
             },
         )
         if event is None:
             await session.rollback()
             return False
-        if operation is not None and not await _project_linked_generation_terminal(
+        if not await _project_linked_generation_terminal(
             session,
             operation,
             state="cancelled",
@@ -1498,19 +1987,43 @@ async def release_workspace_operation_claim(
         if operation.cancel_requested_at is not None or operation.state == "cancelling":
             await session.rollback()
             return await finalize_workspace_operation_cancelled(claim, session_factory=session_factory)
+        release_progress = None
+        if claim.kind == "presentation.generate":
+            release_progress = _public_generation_progress(
+                operation.progress,
+                target="retry_waiting",
+                operation_version=operation.version,
+                attempt_number=claim.attempt_number,
+                fencing_token=claim.fencing_token,
+                stage="retry_waiting",
+                reason="orderly_release",
+            )
         event = await append_operation_event(
             session,
             operation_id=claim.operation_id,
             event_type="operation.progress",
-            payload={"state": "queued", "stage": "released"},
+            payload={
+                "state": "queued",
+                "stage": "released",
+                **(
+                    {"public_state": "retry_waiting"}
+                    if release_progress is not None
+                    else {}
+                ),
+            },
             attempt_token=claim.attempt_token,
             allowed_states=("running",),
+            expected_version=operation.version,
+            additional_conditions=(
+                WorkspaceOperation.fencing_token == claim.fencing_token,
+            ),
             projection_values={
                 "state": "queued",
                 "attempt_token": None,
                 "lease_expires_at": None,
                 "heartbeat_at": now,
                 "next_attempt_at": now,
+                **({"progress": release_progress} if release_progress is not None else {}),
             },
         )
         if event is None:
@@ -1576,6 +2089,17 @@ async def defer_workspace_operation_claim(
             "wait_reason": deferred.code,
             "capacity_waiting": True,
         }
+        if claim.kind == "presentation.generate":
+            progress = _public_generation_progress(
+                operation.progress,
+                target="capacity_waiting",
+                operation_version=operation.version,
+                attempt_number=max(0, operation.attempt_number - 1),
+                fencing_token=claim.fencing_token,
+                stage="capacity_waiting",
+                reason="capacity_deferred",
+                values=progress,
+            )
         event = await append_operation_event(
             session,
             operation_id=claim.operation_id,
@@ -1583,6 +2107,10 @@ async def defer_workspace_operation_claim(
             payload=progress,
             attempt_token=claim.attempt_token,
             allowed_states=("running",),
+            expected_version=operation.version,
+            additional_conditions=(
+                WorkspaceOperation.fencing_token == claim.fencing_token,
+            ),
             projection_values={
                 "state": "queued",
                 "attempt_number": max(0, operation.attempt_number - 1),
@@ -1650,6 +2178,20 @@ async def request_workspace_operation_cancellation(
         if operation.state in _DIRECT_CANCEL_STATES:
             event_type = "operation.cancelled"
             next_state = "cancelled"
+            public_progress = (
+                _public_generation_progress(
+                    operation.progress,
+                    target="cancelled",
+                    operation_version=operation.version,
+                    attempt_number=operation.attempt_number,
+                    fencing_token=operation.fencing_token,
+                    stage="cancelled",
+                    reason="cancel_committed",
+                    terminal_reason="user_cancelled",
+                )
+                if operation.kind == "presentation.generate"
+                else None
+            )
             projection = {
                 "state": next_state,
                 "cancel_requested_at": now,
@@ -1657,6 +2199,7 @@ async def request_workspace_operation_cancellation(
                 "completed_at": now,
                 "attempt_token": None,
                 "lease_expires_at": None,
+                **({"progress": public_progress} if public_progress is not None else {}),
             }
         elif operation.state == "running":
             event_type = "operation.cancelling"
@@ -1675,7 +2218,18 @@ async def request_workspace_operation_cancellation(
             session,
             operation_id=operation.id,
             event_type=event_type,
-            payload={"state": next_state, "reason_code": "user_cancelled"},
+            payload={
+                "state": next_state,
+                "reason_code": "user_cancelled",
+                **(
+                    {
+                        "public_state": "cancelled",
+                        "terminal_reason": "user_cancelled",
+                    }
+                    if next_state == "cancelled" and operation.kind == "presentation.generate"
+                    else {}
+                ),
+            },
             allowed_states=(operation.state,),
             expected_version=operation.version,
             projection_values=projection,
@@ -1742,6 +2296,7 @@ async def recover_expired_workspace_operations(
                         WorkspaceOperation.fencing_token,
                         WorkspaceOperation.expected_revision,
                         WorkspaceOperation.result_revision,
+                        WorkspaceOperation.progress,
                         WorkspaceOperation.version,
                         WorkspaceOperation.created_at,
                         WorkspaceOperation.updated_at,
@@ -1857,6 +2412,17 @@ async def recover_expired_workspace_operations(
                 payload = {
                     "state": next_state,
                     "error_code": "operation_recovery_required",
+                    "attempt_number": stale["attempt_number"],
+                    "fencing_token": stale["fencing_token"],
+                    **(
+                        {
+                            "reclaimed_attempt_token_sha256": sha256(
+                                str(stale["attempt_token"]).encode("utf-8")
+                            ).hexdigest()
+                        }
+                        if stale["attempt_token"] is not None
+                        else {}
+                    ),
                     "retryable": True,
                     "retry_count": decision.retry_count,
                     "max_attempts": stale["max_attempts"],
@@ -1888,6 +2454,17 @@ async def recover_expired_workspace_operations(
                 payload = {
                     "state": next_state,
                     "error_code": "operation_recovery_required",
+                    "attempt_number": stale["attempt_number"],
+                    "fencing_token": stale["fencing_token"],
+                    **(
+                        {
+                            "reclaimed_attempt_token_sha256": sha256(
+                                str(stale["attempt_token"]).encode("utf-8")
+                            ).hexdigest()
+                        }
+                        if stale["attempt_token"] is not None
+                        else {}
+                    ),
                     "retryable": False,
                     "retry_count": stale["retry_count"],
                     "max_attempts": stale["max_attempts"],
@@ -1912,6 +2489,74 @@ async def recover_expired_workspace_operations(
                     "completed_at": now,
                 }
                 observed_retry_count = stale["retry_count"]
+            if (
+                stale["kind"] == "presentation.generate"
+                and committed_delete_result is None
+            ):
+                public_target = (
+                    "cancelled"
+                    if next_state == "cancelled"
+                    else "retry_waiting"
+                    if next_state == "queued"
+                    else next_state
+                )
+                crash_terminal = next_state in {"failed", "dead_letter"}
+                public_progress = _public_generation_progress(
+                    stale["progress"],
+                    target=public_target,
+                    operation_version=stale["version"],
+                    attempt_number=stale["attempt_number"],
+                    fencing_token=stale["fencing_token"],
+                    stage=public_target,
+                    reason=(
+                        "cancel_recovered"
+                        if next_state == "cancelled"
+                        else "worker_crash_retry"
+                        if next_state == "queued"
+                        else "worker_crash_terminal"
+                    ),
+                    terminal_reason=(
+                        "user_cancelled"
+                        if next_state == "cancelled"
+                        else "worker_crash"
+                        if crash_terminal
+                        else None
+                    ),
+                    values={
+                        "retry_count": observed_retry_count,
+                        "error_code": (
+                            "operation_worker_crashed"
+                            if next_state != "cancelled"
+                            else None
+                        ),
+                    },
+                )
+                public_progress = {
+                    key: value
+                    for key, value in public_progress.items()
+                    if value is not None
+                }
+                projection["progress"] = public_progress
+                payload.update(
+                    public_state=public_target,
+                    previous_public_state=public_progress[
+                        "previous_public_state"
+                    ],
+                    transition_reason=public_progress["transition_reason"],
+                )
+                if next_state not in {"cancelled"}:
+                    payload["error_code"] = "operation_worker_crashed"
+                    projection["error_code"] = "operation_worker_crashed"
+                    if isinstance(projection.get("error_detail"), Mapping):
+                        projection["error_detail"] = {
+                            **projection["error_detail"],
+                            "error_code": "operation_worker_crashed",
+                            "reason_code": "worker_crash",
+                        }
+                if "terminal_reason" in public_progress:
+                    payload["terminal_reason"] = public_progress[
+                        "terminal_reason"
+                    ]
             event = await append_operation_event(
                 session,
                 operation_id=stale["id"],
@@ -1932,7 +2577,13 @@ async def recover_expired_workspace_operations(
                     session,
                     operation,
                     state=next_state,
-                    error_code=(None if next_state == "cancelled" else "operation_recovery_required"),
+                    error_code=(
+                        None
+                        if next_state == "cancelled"
+                        else "operation_worker_crashed"
+                        if stale["kind"] == "presentation.generate"
+                        else "operation_recovery_required"
+                    ),
                 ):
                     await session.rollback()
                     continue
@@ -1953,7 +2604,19 @@ async def recover_expired_workspace_operations(
                 conversation_id=stale["conversation_id"],
                 command_type=stale["kind"],
                 result_status=next_state,
-                error_code=(None if next_state in {"cancelled", "succeeded"} else "operation_recovery_required"),
+                error_code=(
+                    None
+                    if next_state in {"cancelled", "succeeded"}
+                    else "operation_worker_crashed"
+                    if stale["kind"] == "presentation.generate"
+                    else "operation_recovery_required"
+                ),
+                public_state=(
+                    public_target
+                    if stale["kind"] == "presentation.generate"
+                    and committed_delete_result is None
+                    else None
+                ),
                 duration_ms=_elapsed_ms(stale["created_at"], now),
                 attempt_number=stale["attempt_number"],
                 retry_count=observed_retry_count,
@@ -2006,29 +2669,102 @@ class _ExecutionContext(WorkspaceOperationExecutionContext):
         percent: int | None = None,
         message: str | None = None,
     ) -> bool:
-        progress = {
+        reported_progress = {
             "stage": stage,
-            "current": current,
-            "total": total,
-            "percent": percent,
+            **({"current": current} if current is not None else {}),
+            **({"total": total} if total is not None else {}),
+            **({"percent": percent} if percent is not None else {}),
         }
-        event_payload = {"state": "running", **progress}
+        event_payload = {"state": "running", **reported_progress}
         if message:
             event_payload["message"] = message
         try:
             async with self._session_factory() as session:
-                event = await append_operation_event(
-                    session,
-                    operation_id=self.claim.operation_id,
-                    event_type="operation.progress",
-                    payload=event_payload,
-                    attempt_token=self.claim.attempt_token,
-                    allowed_states=("running",),
-                    projection_values={"progress": sanitize_workspace_event_payload(progress)},
+                operation = await session.get(
+                    WorkspaceOperation, self.claim.operation_id
                 )
-                if event is None:
+                if (
+                    operation is None
+                    or operation.state != "running"
+                    or operation.attempt_token != self.claim.attempt_token
+                    or operation.fencing_token != self.claim.fencing_token
+                ):
                     await session.rollback()
                     return False
+                if self.claim.kind == "presentation.generate":
+                    current_public_state = str(
+                        (operation.progress or {}).get("public_state") or "queued"
+                    )
+                    target_public_state = _PUBLIC_GENERATION_STAGE_STATES.get(stage)
+                    path = (
+                        _public_generation_transition_path(
+                            current_public_state, target_public_state
+                        )
+                        if target_public_state is not None
+                        else (current_public_state,)
+                    )
+                    for public_state in path:
+                        progress = _public_generation_progress(
+                            operation.progress,
+                            target=public_state,
+                            operation_version=operation.version,
+                            attempt_number=self.claim.attempt_number,
+                            fencing_token=self.claim.fencing_token,
+                            stage=stage,
+                            reason="stage_observed",
+                            values=reported_progress,
+                        )
+                        event = await append_operation_event(
+                            session,
+                            operation_id=self.claim.operation_id,
+                            event_type="operation.progress",
+                            payload={
+                                **event_payload,
+                                "public_state": public_state,
+                                "previous_public_state": progress[
+                                    "previous_public_state"
+                                ],
+                                "public_lifecycle_version": progress[
+                                    "public_lifecycle_version"
+                                ],
+                                "operation_version": progress["operation_version"],
+                                "transition_reason": progress["transition_reason"],
+                            },
+                            attempt_token=self.claim.attempt_token,
+                            allowed_states=("running",),
+                            expected_version=operation.version,
+                            additional_conditions=(
+                                WorkspaceOperation.fencing_token
+                                == self.claim.fencing_token,
+                            ),
+                            projection_values={"progress": progress},
+                        )
+                        if event is None:
+                            await session.rollback()
+                            return False
+                        await session.refresh(operation)
+                else:
+                    event = await append_operation_event(
+                        session,
+                        operation_id=self.claim.operation_id,
+                        event_type="operation.progress",
+                        payload=event_payload,
+                        attempt_token=self.claim.attempt_token,
+                        allowed_states=("running",),
+                        expected_version=operation.version,
+                        additional_conditions=(
+                            WorkspaceOperation.fencing_token
+                            == self.claim.fencing_token,
+                        ),
+                        projection_values={
+                            "progress": sanitize_workspace_event_payload(
+                                reported_progress
+                            )
+                        },
+                    )
+                    if event is None:
+                        await session.rollback()
+                        return False
                 await session.commit()
                 return True
         except OperationalError:
@@ -2057,6 +2793,17 @@ class _ExecutionContext(WorkspaceOperationExecutionContext):
             raise ValueError("unsupported public runtime event type")
         try:
             async with self._session_factory() as session:
+                operation = await session.get(
+                    WorkspaceOperation, self.claim.operation_id
+                )
+                if (
+                    operation is None
+                    or operation.state != "running"
+                    or operation.attempt_token != self.claim.attempt_token
+                    or operation.fencing_token != self.claim.fencing_token
+                ):
+                    await session.rollback()
+                    return False
                 event = await append_operation_event(
                     session,
                     operation_id=self.claim.operation_id,
@@ -2065,6 +2812,12 @@ class _ExecutionContext(WorkspaceOperationExecutionContext):
                     operation_kind=self.claim.kind,
                     attempt_token=self.claim.attempt_token,
                     allowed_states=("running",),
+                    expected_version=operation.version,
+                    additional_conditions=(
+                        WorkspaceOperation.fencing_token
+                        == self.claim.fencing_token,
+                    ),
+                    increment_version=True,
                 )
                 if event is None:
                     await session.rollback()

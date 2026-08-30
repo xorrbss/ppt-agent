@@ -19,10 +19,12 @@ from services.authored_checkpoint_service import (
     get_checkpoint,
     initialize_checkpoints,
     is_retryable_exception,
-    read_valid_render,
-    read_valid_evidence,
     should_inject_failure,
     start_stage,
+)
+from services.authored_checkpoint_artifacts import (
+    read_valid_evidence_artifact,
+    read_valid_render_artifact,
 )
 from services.authored_presentation_artifacts import (
     _complete_stage_after_external_success,
@@ -110,16 +112,27 @@ def _author_failure_retryable(error: BaseException) -> bool:
 
     if isinstance(error, AuthoredProviderBudgetExhausted):
         return False
+    explicit_retryable = getattr(error, "retryable", None)
+    if isinstance(explicit_retryable, bool):
+        return explicit_retryable
     return is_retryable_exception(error)
 
 
 def _author_stage_failure(slide_index: int, error: BaseException) -> AuthoredStageError:
     """Build the exact author-stage envelope consumed by operation retry policy."""
 
+    explicit_code = getattr(error, "code", None)
+    code = (
+        explicit_code
+        if isinstance(explicit_code, str)
+        and explicit_code.startswith("public_provider_")
+        and getattr(error, "retryable", None) is False
+        else "authored_slide_author_failed"
+    )
     return AuthoredStageError(
         slide_index=slide_index,
         stage="author",
-        code="authored_slide_author_failed",
+        code=code,
         cause=error,
         retryable=_author_failure_retryable(error),
     )
@@ -314,6 +327,7 @@ async def _author_illustrate_render_pipeline(
         float,
         float,
         float,
+        float,
         Any | None,
         dict[str, Any] | None,
         AuthoredSlideSceneEnvelope,
@@ -322,6 +336,7 @@ async def _author_illustrate_render_pipeline(
         author_work = 0.0
         illustration_work = 0.0
         render_work = 0.0
+        quality_work = 0.0
         browser_metrics = None
         quality_report = None
         quality_failure = None
@@ -340,7 +355,7 @@ async def _author_illustrate_render_pipeline(
         durable_evidence = None
         if checkpoint is not None and checkpoint.render_status == "completed":
             try:
-                durable_evidence = read_valid_evidence(checkpoint)
+                durable_evidence = await read_valid_evidence_artifact(checkpoint)
             except Exception as exc:
                 raise AuthoredStageError(
                     slide_index=index,
@@ -610,7 +625,7 @@ async def _author_illustrate_render_pipeline(
                 )
             illustrated_html = scene_envelope.html_projection
 
-            png = read_valid_render(checkpoint) if checkpoint else None
+            png = await read_valid_render_artifact(checkpoint) if checkpoint else None
             html_changed = bool(
                 checkpoint is not None
                 and checkpoint.illustrated_html
@@ -695,14 +710,18 @@ async def _author_illustrate_render_pipeline(
                         retryable=True,
                     ) from exc
 
-            quality_report, quality_failure = _evaluate_slide_quality(
-                index=index,
-                html=illustrated_html,
-                browser_metrics=browser_metrics,
-                capacity_plan=capacity_plan,
-                composition_profile=composition_profile,
-                reference_mode=plan_reference_mode,
-            )
+            quality_started = time.monotonic()
+            try:
+                quality_report, quality_failure = _evaluate_slide_quality(
+                    index=index,
+                    html=illustrated_html,
+                    browser_metrics=browser_metrics,
+                    capacity_plan=capacity_plan,
+                    composition_profile=composition_profile,
+                    reference_mode=plan_reference_mode,
+                )
+            finally:
+                quality_work = time.monotonic() - quality_started
 
             # Quality is evaluated against the exact capture before advancing
             # the durable render pointer. Different slides can therefore be in
@@ -782,6 +801,7 @@ async def _author_illustrate_render_pipeline(
                 author_work,
                 illustration_work,
                 render_work,
+                quality_work,
                 quality_report,
                 quality_failure,
                 scene_envelope,
@@ -870,16 +890,16 @@ async def _author_illustrate_render_pipeline(
     htmls = [result[1] for result in completed_results]
     pngs = [result[2] for result in completed_results]
     quality_gate_reports = [
-        result[6] for result in completed_results if result[6] is not None
+        result[7] for result in completed_results if result[7] is not None
     ]
     quality_gate_failures = [
-        result[7] for result in completed_results if result[7] is not None
+        result[8] for result in completed_results if result[8] is not None
     ]
     quality_gate_failed_indices = [
         int(failure["slide_index"]) for failure in quality_gate_failures
     ]
     scene_envelope = seal_deck_scene_envelope(
-        result[8] for result in completed_results
+        result[9] for result in completed_results
     )
     return AuthoredGenerationPipelineResult(
         deck=AuthoredDeckResult(htmls=htmls, design_system=plan.design_system),
@@ -888,6 +908,7 @@ async def _author_illustrate_render_pipeline(
         author_work=sum(result[3] for result in completed_results),
         illustration_work=sum(result[4] for result in completed_results),
         render_work=sum(result[5] for result in completed_results),
+        quality_work=sum(result[6] for result in completed_results),
         quality_gate_reports=tuple(quality_gate_reports),
         quality_gate_failed_indices=tuple(quality_gate_failed_indices),
         quality_gate_failures=tuple(quality_gate_failures),
@@ -895,6 +916,6 @@ async def _author_illustrate_render_pipeline(
         evidence_attempt_id=evidence_attempt_id,
         scene_envelope=scene_envelope,
         author_provider_attempt_counts=tuple(
-            int(result[9]) for result in completed_results
+            int(result[10]) for result in completed_results
         ),
     )

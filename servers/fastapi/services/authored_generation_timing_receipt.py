@@ -24,12 +24,91 @@ from services.authored_quality_receipt_v2 import (
 GENERATION_TIMING_STAGES = (
     "outline",
     "author",
+    "illustration",
+    "render",
+    "quality",
     "repair",
     "checkpoint",
     "export",
     "publication",
 )
+LEGACY_GENERATION_TIMING_STAGES = (
+    "outline", "author", "repair", "checkpoint", "export", "publication"
+)
+GENERATION_OBSERVABILITY_METRICS = (
+    "queueWait", "queuePosition", "outlineDuration", "authorDuration",
+    "illustrationDuration", "renderDuration", "qualityDuration",
+    "checkpointDuration", "publicationDuration", "exportDuration",
+    "providerInitialCalls", "providerRetryCalls", "providerLogicalOrdinal",
+    "estimatedTokens", "actualTokens", "estimatedCost", "actualCost",
+    "stageRetryCalls", "stageEstimatedCost", "stageActualCost",
+    "attemptNumber", "fencingOutcome", "chromeLaunch", "chromeRestart",
+    "blockedRequest", "timeout", "crash", "workerPeakMemory",
+    "workerPeakHandles", "artifactBytes", "cacheHit", "cacheMiss",
+    "cacheEviction", "objectStoreLatency", "finalOutcome",
+)
+LEGACY_GENERATION_OBSERVABILITY_METRICS = tuple(
+    name
+    for name in GENERATION_OBSERVABILITY_METRICS
+    if name not in {"stageRetryCalls", "stageEstimatedCost", "stageActualCost"}
+)
+_TEXT_METRICS = frozenset(("fencingOutcome", "finalOutcome"))
+_STAGE_MAP_METRICS = frozenset(
+    {"stageRetryCalls", "stageEstimatedCost", "stageActualCost"}
+)
+_OBSERVED_TEXT_VALUES = {
+    "fencingOutcome": frozenset(
+        {"claim_acquired", "transition_committed", "publish_committed", "lease_lost"}
+    ),
+    "finalOutcome": frozenset(
+        {
+            "succeeded",
+            "budget_exhausted",
+            "cancelled",
+            "failed",
+            "dead_letter",
+            "worker_crash",
+        }
+    ),
+}
+_METRIC_STATES = frozenset(("observed", "unavailable", "not_applicable"))
+_UNAVAILABLE_REASONS = frozenset(
+    (
+        "legacy_receipt_no_metric",
+        "provider_actual_cost_not_reported",
+        "provider_token_estimate_not_recorded",
+        "provider_token_usage_not_reported",
+        "public_admission_not_found",
+    )
+)
+_NOT_APPLICABLE_REASONS = frozenset(
+    {
+        "stage_not_executed",
+        "provider_not_used",
+        "artifact_store_not_used",
+        "worker_resource_not_applicable",
+    }
+)
 MAX_GENERATION_STAGE_TIMING_MS = 30 * 24 * 60 * 60 * 1000
+
+
+def _stage_metric_values(value: object, field_name: str) -> dict[str, int]:
+    if not isinstance(value, Mapping) or not value or len(value) > 128:
+        raise ValueError(f"generation_observability_{field_name}_invalid")
+    output: dict[str, int] = {}
+    for raw_stage, raw_value in sorted(value.items(), key=lambda item: str(item[0])):
+        stage = str(raw_stage).strip().lower()
+        if (
+            not stage
+            or len(stage) > 64
+            or any(
+                character not in "abcdefghijklmnopqrstuvwxyz0123456789._-"
+                for character in stage
+            )
+        ):
+            raise ValueError(f"generation_observability_{field_name}_invalid")
+        output[stage] = _bounded_timing_ms(raw_value, field_name)
+    return output
 
 
 def generation_timing_receipt_path(job_id: object) -> Path:
@@ -49,12 +128,63 @@ def _bounded_timing_ms(value: object, field_name: str) -> int:
 
 
 def _stage_timings(value: object) -> tuple[tuple[str, int], ...]:
-    if not isinstance(value, Mapping) or set(value) != set(GENERATION_TIMING_STAGES):
+    if not isinstance(value, Mapping):
+        raise ValueError("generation_timing_stages_invalid")
+    stages = (
+        GENERATION_TIMING_STAGES
+        if set(value) == set(GENERATION_TIMING_STAGES)
+        else LEGACY_GENERATION_TIMING_STAGES
+        if set(value) == set(LEGACY_GENERATION_TIMING_STAGES)
+        else None
+    )
+    if stages is None:
         raise ValueError("generation_timing_stages_invalid")
     return tuple(
         (stage, _bounded_timing_ms(value[stage], stage))
-        for stage in GENERATION_TIMING_STAGES
+        for stage in stages
     )
+
+
+def _observability_metrics(value: object) -> tuple[tuple[str, dict[str, object]], ...]:
+    if not isinstance(value, Mapping):
+        raise ValueError("generation_observability_metrics_invalid")
+    metric_names = (
+        GENERATION_OBSERVABILITY_METRICS
+        if set(value) == set(GENERATION_OBSERVABILITY_METRICS)
+        else LEGACY_GENERATION_OBSERVABILITY_METRICS
+        if set(value) == set(LEGACY_GENERATION_OBSERVABILITY_METRICS)
+        else None
+    )
+    if metric_names is None:
+        raise ValueError("generation_observability_metrics_invalid")
+    output: list[tuple[str, dict[str, object]]] = []
+    for name in metric_names:
+        metric = value.get(name)
+        if not isinstance(metric, Mapping) or metric.get("state") not in _METRIC_STATES:
+            raise ValueError(f"generation_observability_{name}_invalid")
+        state = str(metric["state"])
+        if state == "observed":
+            observed = metric.get("value")
+            if name in _TEXT_METRICS:
+                if observed not in _OBSERVED_TEXT_VALUES[name]:
+                    raise ValueError(f"generation_observability_{name}_invalid")
+            elif name in _STAGE_MAP_METRICS:
+                observed = _stage_metric_values(observed, name)
+            else:
+                _bounded_timing_ms(observed, name)
+            normalized = {"state": state, "value": observed}
+        else:
+            reason = metric.get("reason")
+            allowed_reasons = (
+                _UNAVAILABLE_REASONS
+                if state == "unavailable"
+                else _NOT_APPLICABLE_REASONS
+            )
+            if reason not in allowed_reasons:
+                raise ValueError(f"generation_observability_{name}_invalid")
+            normalized = {"state": state, "reason": reason}
+        output.append((name, normalized))
+    return tuple(output)
 
 
 def _required_sha256(value: object, field_name: str) -> str:
@@ -75,10 +205,11 @@ class GenerationTimingReceipt:
     pre_export_evaluation_policy_digest: str
     stage_timings_ms: tuple[tuple[str, int], ...]
     total_ms: int
+    observability_metrics: tuple[tuple[str, dict[str, object]], ...] = ()
     timing_receipt_digest: str = ""
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        payload = {
             "schemaVersion": self.schema_version,
             "attemptId": self.attempt_id,
             "attemptNumber": self.attempt_number,
@@ -90,6 +221,12 @@ class GenerationTimingReceipt:
             "totalMs": self.total_ms,
             "timingReceiptDigest": self.timing_receipt_digest,
         }
+        if self.observability_metrics:
+            payload["observability"] = {
+                "schemaVersion": "generation-observability/v1",
+                "metrics": dict(self.observability_metrics),
+            }
+        return payload
 
 
 def _receipt_digest(receipt: GenerationTimingReceipt) -> str:
@@ -120,6 +257,12 @@ def _from_dict(value: object) -> GenerationTimingReceipt:
         or revision < 0
     ):
         raise ValueError("generation_timing_receipt_invalid")
+    observability = value.get("observability")
+    observability_metrics = ()
+    if observability is not None:
+        if not isinstance(observability, Mapping) or observability.get("schemaVersion") != "generation-observability/v1":
+            raise ValueError("generation_observability_receipt_invalid")
+        observability_metrics = _observability_metrics(observability.get("metrics"))
     receipt = GenerationTimingReceipt(
         schema_version="generation-timing-receipt/v1",
         attempt_id=public_attempt_id(value.get("attemptId")),
@@ -138,6 +281,7 @@ def _from_dict(value: object) -> GenerationTimingReceipt:
         ),
         stage_timings_ms=_stage_timings(value.get("stagesMs")),
         total_ms=_bounded_timing_ms(value.get("totalMs"), "total"),
+        observability_metrics=observability_metrics,
         timing_receipt_digest=_required_sha256(
             value.get("timingReceiptDigest"), "timing_receipt_digest"
         ),
@@ -216,6 +360,7 @@ def create_generation_timing_receipt(
     attempt_number: int,
     stage_timings_ms: Mapping[str, object],
     total_ms: object,
+    observability_metrics: Mapping[str, object] | None = None,
 ) -> GenerationTimingReceipt:
     """Atomically create one digest-bound timing receipt for a successful attempt."""
 
@@ -237,6 +382,11 @@ def create_generation_timing_receipt(
         pre_export_evaluation_policy_digest=quality_receipt.pre_export_evaluation_policy_digest,
         stage_timings_ms=_stage_timings(stage_timings_ms),
         total_ms=_bounded_timing_ms(total_ms, "total"),
+        observability_metrics=(
+            _observability_metrics(observability_metrics)
+            if observability_metrics is not None
+            else ()
+        ),
     )
     receipt = replace(receipt, timing_receipt_digest=_receipt_digest(receipt))
     path = generation_timing_receipt_path(job_id)

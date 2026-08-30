@@ -14,7 +14,7 @@ import time
 from typing import Any
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from models.sql.async_presentation_generation_status import (
@@ -22,6 +22,7 @@ from models.sql.async_presentation_generation_status import (
 )
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_generation_job import PresentationGenerationJob
+from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from models.sql.workspace import WorkspaceOperation
 from api.v1.auth.internal import authenticated_internal_request_headers
 from services.authored_generation_progress_poller import (
@@ -254,12 +255,11 @@ class PresentationGenerationOperationHandler:
         await context.raise_if_cancelled()
         await self._linked_job(claim.operation_id)
 
-        # Mint the credential before claiming the compatibility projection.
-        # If token issuance itself fails, the durable job remains queued and
-        # the generic runner can retry without waiting for a legacy lease.
-        # The short-lived Cookie header exists only in this stack frame.
-        internal_headers = await self._internal_header_provider()
-        export_cookie_header = internal_headers.get("Cookie") or None
+        # Public generation workers are sessionless.  Export is submitted as a
+        # principal-bound durable operation and must never inherit a browser or
+        # service Cookie through the generation stack.  Keep the compatibility
+        # pipeline argument during the staged rollout, but pin it to ``None``.
+        export_cookie_header = None
         try:
             linked_claim = await claim_workspace_linked_generation_job(
                 claim.operation_id,
@@ -285,6 +285,34 @@ class PresentationGenerationOperationHandler:
             )
 
         job_id, task_id = linked_claim
+        if claim.attempt_number > 1:
+            async with self._session_factory() as session:
+                checkpoint_reuse_count = int(
+                    await session.scalar(
+                        select(func.count())
+                        .select_from(AuthoredSlideCheckpoint)
+                        .where(AuthoredSlideCheckpoint.job_id == job_id)
+                        .where(
+                            or_(
+                                AuthoredSlideCheckpoint.persist_status == "completed",
+                                AuthoredSlideCheckpoint.render_status == "completed",
+                            )
+                        )
+                    )
+                    or 0
+                )
+            if checkpoint_reuse_count:
+                recorded = await context.emit_durable_event(
+                    event_type="run.status",
+                    payload={
+                        "attempt_number": claim.attempt_number,
+                        "checkpoint_reuse_count": checkpoint_reuse_count,
+                    },
+                )
+                if not recorded:
+                    raise WorkspaceOperationLeaseLost(
+                        "presentation_generation_checkpoint_reuse_event_fenced"
+                    )
         heartbeat = asyncio.create_task(
             self._legacy_heartbeat_loop(
                 job_id=job_id,
@@ -300,18 +328,24 @@ class PresentationGenerationOperationHandler:
             session_factory=self._session_factory,
         )
         try:
-            await context.progress(stage="generation_started")
+            if not await context.progress(stage="generation_started"):
+                raise WorkspaceOperationLeaseLost(
+                    "presentation_generation_lifecycle_fenced"
+                )
             await mark_authored_generation_stage(
                 job_id=job_id,
                 attempt_token=claim.attempt_token,
                 stage="outline",
                 session_factory=self._session_factory,
             )
-            await context.progress(
+            if not await context.progress(
                 stage="authored_outline",
                 percent=8,
                 message="발표 구조와 작성 기준을 준비하고 있습니다.",
-            )
+            ):
+                raise WorkspaceOperationLeaseLost(
+                    "presentation_generation_lifecycle_fenced"
+                )
             result = await self._pipeline(
                 job_id, task_id, export_cookie_header, context
             )
@@ -321,7 +355,6 @@ class PresentationGenerationOperationHandler:
                 raise WorkspaceOperationLeaseLost(
                     "presentation_generation_compatibility_finalize_lost"
                 )
-            await context.progress(stage="generation_completed", percent=100)
             return result
         except asyncio.CancelledError:
             await asyncio.shield(

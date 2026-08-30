@@ -9,9 +9,11 @@ from typing import Any, ParamSpec, TypeVar, cast
 
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
 
 from models.generate_presentation_request import GeneratePresentationRequest
 from models.sql.presentation import PresentationModel
+from models.sql.workspace import WorkspaceOperation
 from services.presentation_profiles import (
     PresentationDriverId,
     PresentationProfileError,
@@ -103,6 +105,16 @@ def generation_provider_admitted(
         sql_session = cast(AsyncSession, bound.arguments["sql_session"])
         generation_job = bound.arguments.get("generation_job")
         public_operation_id = getattr(generation_job, "workspace_operation_id", None)
+        public_attempt_token = getattr(generation_job, "attempt_token", None)
+        public_fencing_token = None
+        if public_operation_id is not None:
+            public_fencing_token = await sql_session.scalar(
+                select(WorkspaceOperation.fencing_token)
+                .where(WorkspaceOperation.id == public_operation_id)
+                .where(WorkspaceOperation.state == "running")
+                .where(WorkspaceOperation.attempt_token == public_attempt_token)
+                .execution_options(skip_owner_scope=True)
+            )
         persisted = await sql_session.get(PresentationModel, presentation_id)
         try:
             identity = server_generation_profile_identity(request, persisted)
@@ -110,7 +122,11 @@ def generation_provider_admitted(
             required = generation_provider_capabilities(request, profile.driver_id)
         except PresentationProfileError as error:
             raise HTTPException(status_code=422, detail=error.code) from error
-        with public_operation_scope(public_operation_id):
+        with public_operation_scope(
+            public_operation_id,
+            attempt_token=public_attempt_token,
+            fencing_token=public_fencing_token,
+        ):
             with generation_provider_policy(
                 identity,
                 required_capabilities=required,

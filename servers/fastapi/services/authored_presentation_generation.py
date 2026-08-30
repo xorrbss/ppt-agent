@@ -10,8 +10,10 @@ import os
 import time
 import traceback
 import uuid
+from collections.abc import Mapping
 from typing import Optional
 
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.generate_presentation_request import GeneratePresentationRequest
@@ -23,6 +25,10 @@ from models.sql.presentation import (
     PresentationModel,
 )
 from models.sql.presentation_generation_job import PresentationGenerationJob
+from models.sql.public_admission import (
+    PublicOperationAdmission,
+    PublicProviderLogicalCall,
+)
 from services.authored_checkpoint_service import (
     AuthoredStageError,
     fail_stage,
@@ -45,8 +51,14 @@ from models.authored_chapter_plan import AuthoredChapterPlan
 from models.authored_header_contract import AuthoredHeaderContract, default_header_contract
 from models.authored_illustration_plan import AuthoredIllustrationPlan
 from services.authored_deck_plans import (
+    AuthoredDeckPlans,
     resolve_deck_plans,
     resolve_final_outline_illustration_plan,
+)
+from services.authored_deck_plan_checkpoint import (
+    AuthoredDeckPlanCheckpointError,
+    canonical_checkpoint_digest,
+    resolve_with_authored_deck_plan_checkpoint,
 )
 from services.authored_header_contract_service import (
     page_number_mode_for,
@@ -118,10 +130,12 @@ from utils.llm_calls.author_vision_qa import (
 )
 from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
 from utils.slide_capture import (
+    _asset_references,
     _placeholder_png,
     ensure_browser_metrics,
     find_chrome,
     get_cached_browser_metrics,
+    get_render_runtime_counters,
     render_html_to_png_with_metrics,
 )
 from services.authored_evidence_ledger import digest_html, digest_png
@@ -150,11 +164,314 @@ LOGGER = logging.getLogger(__name__)
 _PERFORMANCE_STAGE_NAMES = (
     "outline",
     "author",
+    "illustration",
+    "render",
+    "quality",
     "repair",
     "checkpoint",
     "publication",
     "export",
 )
+
+
+def _deck_plan_checkpoint_input(
+    *,
+    generation_job: PresentationGenerationJob | None,
+    request: GeneratePresentationRequest,
+    outline: PresentationOutlineModel,
+    brand: object,
+    style: object,
+    stage: str,
+) -> dict[str, object]:
+    """Build a digest-only input contract; the payload itself is never stored."""
+
+    return {
+        "schemaVersion": "authored-deck-plan-input/v1",
+        "stage": stage,
+        "requestSha256": (
+            generation_job.request_sha256 if generation_job is not None else "legacy"
+        ),
+        "outline": outline.model_dump(mode="json"),
+        "brand": {
+            "topic": getattr(brand, "topic", None),
+            "language": getattr(brand, "language", None),
+            "primary": getattr(brand, "primary", None),
+            "fonts": getattr(brand, "fonts", None),
+        },
+        "styleId": getattr(style, "id", None),
+        "referenceMode": getattr(style, "reference_mode", None),
+        "includeTableOfContents": request.include_table_of_contents,
+        "hasFixedSlidesMarkdown": bool(request.slides_markdown),
+        "instructionsDigest": canonical_checkpoint_digest(
+            request.instructions or ""
+        ),
+    }
+
+
+def _encode_deck_plans(value: AuthoredDeckPlans) -> dict[str, object]:
+    return {
+        "schemaVersion": "authored-deck-plans/v1",
+        "outline": value.outline.model_dump(mode="json"),
+        "roles": list(value.roles),
+        "chapterPlan": (
+            value.chapter_plan.model_dump(mode="json")
+            if value.chapter_plan is not None
+            else None
+        ),
+    }
+
+
+def _decode_deck_plans(payload: Mapping[str, object]) -> AuthoredDeckPlans:
+    if payload.get("schemaVersion") != "authored-deck-plans/v1":
+        raise AuthoredDeckPlanCheckpointError(
+            "authored_deck_checkpoint_schema_invalid"
+        )
+    roles = payload.get("roles")
+    if not isinstance(roles, list) or not all(isinstance(item, str) for item in roles):
+        raise AuthoredDeckPlanCheckpointError(
+            "authored_deck_checkpoint_roles_invalid"
+        )
+    chapter_payload = payload.get("chapterPlan")
+    return AuthoredDeckPlans(
+        outline=PresentationOutlineModel.model_validate(payload.get("outline")),
+        roles=list(roles),
+        chapter_plan=(
+            AuthoredChapterPlan.model_validate(chapter_payload)
+            if isinstance(chapter_payload, dict)
+            else None
+        ),
+    )
+
+
+def _encode_optional_model(
+    schema_version: str, field: str, value: object | None
+) -> dict[str, object]:
+    return {
+        "schemaVersion": schema_version,
+        field: (
+            value.model_dump(mode="json")
+            if value is not None and hasattr(value, "model_dump")
+            else None
+        ),
+    }
+
+
+def _observed_metric(value: object) -> dict[str, object]:
+    return {"state": "observed", "value": value}
+
+
+def _unavailable_metric(reason: str) -> dict[str, object]:
+    return {"state": "unavailable", "reason": reason}
+
+
+def _not_applicable_metric(reason: str) -> dict[str, object]:
+    return {"state": "not_applicable", "reason": reason}
+
+
+def _runtime_counter_delta(
+    before: Mapping[str, int], after: Mapping[str, int], *names: str
+) -> int:
+    return sum(max(0, int(after.get(name, 0)) - int(before.get(name, 0))) for name in names)
+
+
+def _worker_peak_memory_metric() -> dict[str, object]:
+    """Read this worker's lifetime peak working set without third-party packages."""
+
+    if os.name != "nt":
+        return _not_applicable_metric("worker_resource_not_applicable")
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class ProcessMemoryCounters(ctypes.Structure):
+            _fields_ = [
+                ("cb", wintypes.DWORD),
+                ("PageFaultCount", wintypes.DWORD),
+                ("PeakWorkingSetSize", ctypes.c_size_t),
+                ("WorkingSetSize", ctypes.c_size_t),
+                ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                ("PagefileUsage", ctypes.c_size_t),
+                ("PeakPagefileUsage", ctypes.c_size_t),
+            ]
+
+        counters = ProcessMemoryCounters()
+        counters.cb = ctypes.sizeof(counters)
+        process_handle = ctypes.windll.kernel32.GetCurrentProcess()
+        if not ctypes.windll.psapi.GetProcessMemoryInfo(
+            process_handle, ctypes.byref(counters), counters.cb
+        ):
+            raise RuntimeError("worker_memory_peak_collection_failed")
+        return _observed_metric(int(counters.PeakWorkingSetSize))
+    except (AttributeError, OSError, TypeError, ValueError) as error:
+        raise RuntimeError("worker_memory_peak_collection_failed") from error
+
+
+def _worker_handle_count_metric() -> dict[str, object]:
+    """Read the current Windows worker handle count from the process kernel."""
+
+    if os.name != "nt":
+        return _not_applicable_metric("worker_resource_not_applicable")
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        count = wintypes.DWORD()
+        process_handle = ctypes.windll.kernel32.GetCurrentProcess()
+        if not ctypes.windll.kernel32.GetProcessHandleCount(
+            process_handle, ctypes.byref(count)
+        ):
+            raise RuntimeError("worker_handle_count_collection_failed")
+        return _observed_metric(int(count.value))
+    except (AttributeError, OSError, TypeError, ValueError) as error:
+        raise RuntimeError("worker_handle_count_collection_failed") from error
+
+
+def _maximum_observed_metric(
+    first: Mapping[str, object], second: Mapping[str, object]
+) -> dict[str, object]:
+    values = [
+        metric.get("value")
+        for metric in (first, second)
+        if metric.get("state") == "observed"
+    ]
+    numeric = [
+        int(value)
+        for value in values
+        if isinstance(value, (int, float)) and not isinstance(value, bool)
+    ]
+    if numeric:
+        return _observed_metric(max(numeric))
+    return dict(second)
+
+
+def _blocked_renderer_reference_count(htmls: object) -> int:
+    if not isinstance(htmls, (list, tuple)):
+        return 0
+    blocked_schemes = {"http", "https", "file", "ftp", "ws", "wss"}
+    count = 0
+    for html in htmls:
+        if not isinstance(html, str):
+            continue
+        for reference in _asset_references(html):
+            scheme = reference.split(":", 1)[0].strip().lower()
+            if scheme in blocked_schemes or reference.startswith("//"):
+                count += 1
+    return count
+
+
+def _object_store_latency_metric(*sources: object) -> dict[str, object]:
+    """Consume artifact-agent latency metadata without binding its container type."""
+
+    keys = ("object_store_latency_ms", "objectStoreLatencyMs")
+    for source in sources:
+        if isinstance(source, Mapping):
+            for key in keys:
+                value = source.get(key)
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    return _observed_metric(max(0, round(float(value))))
+        for key in keys:
+            value = getattr(source, key, None)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                return _observed_metric(max(0, round(float(value))))
+    # The current authored publisher writes to its local immutable artifact
+    # store. Object-store I/O is therefore not an executed stage on this path.
+    return _not_applicable_metric("artifact_store_not_used")
+
+
+async def _provider_stage_observability_metrics(
+    session: AsyncSession,
+    operation_id: uuid.UUID,
+) -> dict[str, dict[str, object]]:
+    admission = await session.scalar(
+        select(PublicOperationAdmission).where(
+            PublicOperationAdmission.operation_id == operation_id
+        )
+    )
+    if admission is None:
+        return {
+            name: _unavailable_metric("public_admission_not_found")
+            for name in (
+                "queuePosition",
+                "stageRetryCalls",
+                "stageEstimatedCost",
+                "stageActualCost",
+            )
+        }
+    calls = list(
+        (
+            await session.execute(
+                select(PublicProviderLogicalCall).where(
+                    PublicProviderLogicalCall.admission_id == admission.id
+                )
+            )
+        ).scalars()
+    )
+    queue_ahead = int(
+        await session.scalar(
+            select(func.count())
+            .select_from(PublicOperationAdmission)
+            .where(PublicOperationAdmission.id != admission.id)
+            .where(PublicOperationAdmission.policy_version == admission.policy_version)
+            .where(PublicOperationAdmission.tenant_id == admission.tenant_id)
+            .where(PublicOperationAdmission.operation_kind == admission.operation_kind)
+            .where(PublicOperationAdmission.queued_at < admission.queued_at)
+            .where(
+                or_(
+                    PublicOperationAdmission.activated_at.is_(None),
+                    PublicOperationAdmission.activated_at > admission.queued_at,
+                )
+            )
+        )
+        or 0
+    )
+    if not calls:
+        return {
+            "queuePosition": _observed_metric(queue_ahead + 1),
+            **{
+            name: _not_applicable_metric("provider_not_used")
+            for name in (
+                "stageRetryCalls",
+                "stageEstimatedCost",
+                "stageActualCost",
+            )
+            },
+        }
+    retry_by_stage: dict[str, int] = {}
+    estimated_by_stage: dict[str, int] = {}
+    actual_by_stage: dict[str, int] = {}
+    actual_available = True
+    for call in calls:
+        stage = str(call.stage).strip().lower()
+        retry_by_stage.setdefault(stage, 0)
+        estimated_by_stage.setdefault(stage, 0)
+        actual_by_stage.setdefault(stage, 0)
+        if call.retry_class != "initial":
+            retry_by_stage[stage] += 1
+        estimated_by_stage[stage] += max(0, int(call.estimated_cost_microunits))
+        if call.actual_cost_microunits is None:
+            actual_available = False
+        else:
+            actual_by_stage[stage] += max(0, int(call.actual_cost_microunits))
+    return {
+        "queuePosition": _observed_metric(queue_ahead + 1),
+        "stageRetryCalls": _observed_metric(retry_by_stage),
+        "stageEstimatedCost": _observed_metric(estimated_by_stage),
+        "stageActualCost": (
+            _observed_metric(actual_by_stage)
+            if actual_available
+            else _unavailable_metric("provider_actual_cost_not_reported")
+        ),
+    }
+
+
+def _artifact_bytes_metric(artifact_path: object) -> dict[str, object]:
+    try:
+        return _observed_metric(os.path.getsize(os.fspath(artifact_path)))
+    except (OSError, TypeError, ValueError) as error:
+        raise RuntimeError("artifact_bytes_collection_failed") from error
 
 
 async def _record_deck_stage_latency(
@@ -1050,6 +1367,8 @@ async def _generate_authored_presentation(
     Returns the path to the produced file plus the editor path."""
     started = time.monotonic()
     stage_timings_ms = {stage: 0 for stage in _PERFORMANCE_STAGE_NAMES}
+    render_runtime_before = get_render_runtime_counters()
+    worker_handle_count_before = _worker_handle_count_metric()
 
     async def mark_stage(stage: str) -> None:
         if (
@@ -1114,12 +1433,72 @@ async def _generate_authored_presentation(
     # together so they can never drift apart.
     await mark_stage("outline")
     outline_stage_started = _outline_stage_started_at(request)
-    deck_plans = await resolve_deck_plans(
-        request, outline, brand, style, roles, resolve_illustration=False
-    )
+
+    async def resolve_current_deck_plans() -> AuthoredDeckPlans:
+        return await resolve_deck_plans(
+            request, outline, brand, style, roles, resolve_illustration=False
+        )
+
+    with provider_usage_scope(
+        job_id=generation_job.id if generation_job is not None else None,
+        operation="authored_generation",
+        stage="deck_plan",
+        attempt_number=(generation_job.attempt_number if generation_job else 0),
+    ):
+        deck_plans, deck_plan_reused = (
+            await resolve_with_authored_deck_plan_checkpoint(
+                generation_job=generation_job,
+                stage="deck_plan",
+                input_contract=_deck_plan_checkpoint_input(
+                    generation_job=generation_job,
+                    request=request,
+                    outline=outline,
+                    brand=brand,
+                    style=style,
+                    stage="deck_plan",
+                ),
+                resolve=resolve_current_deck_plans,
+                encode=_encode_deck_plans,
+                decode=_decode_deck_plans,
+            )
+        )
     outline = deck_plans.outline
     roles = deck_plans.roles
     chapter_plan: AuthoredChapterPlan | None = deck_plans.chapter_plan
+
+    async def resolve_current_chapter_plan() -> AuthoredChapterPlan | None:
+        return chapter_plan
+
+    chapter_payload, chapter_plan_reused = (
+        await resolve_with_authored_deck_plan_checkpoint(
+            generation_job=generation_job,
+            stage="chapter_plan",
+            input_contract={
+                "schemaVersion": "authored-chapter-plan-input/v1",
+                "deckPlanDigest": canonical_checkpoint_digest(
+                    _encode_deck_plans(deck_plans)
+                ),
+            },
+            resolve=resolve_current_chapter_plan,
+            encode=lambda value: _encode_optional_model(
+                "authored-chapter-plan/v1", "chapterPlan", value
+            ),
+            decode=lambda payload: (
+                AuthoredChapterPlan.model_validate(payload.get("chapterPlan"))
+                if isinstance(payload.get("chapterPlan"), dict)
+                else None
+            ),
+        )
+    )
+    if chapter_payload != chapter_plan:
+        raise AuthoredDeckPlanCheckpointError(
+            "authored_chapter_checkpoint_deck_plan_mismatch"
+        )
+    LOGGER.info(
+        "[authored] deck checkpoint reuse: deck=%s chapter=%s",
+        deck_plan_reused,
+        chapter_plan_reused,
+    )
 
     # Render needs a headless Chrome. Without it every slide silently degrades to a
     # blank placeholder (resilience by design) ??so warn loudly to surface deploy
@@ -1203,26 +1582,121 @@ async def _generate_authored_presentation(
     # Start only after every existing-presentation/admission early exit. The
     # illustration and header calls now read the same final outline in parallel,
     # but no provider task survives an already-published return.
+    async def resolve_current_illustration_plan() -> AuthoredIllustrationPlan | None:
+        return await resolve_final_outline_illustration_plan(
+            request, outline, brand, style
+        )
+
+    async def resolve_checkpointed_illustration_plan() -> tuple[
+        AuthoredIllustrationPlan | None, bool
+    ]:
+        with provider_usage_scope(
+            job_id=generation_job.id if generation_job is not None else None,
+            operation="authored_generation",
+            stage="illustration",
+            attempt_number=(generation_job.attempt_number if generation_job else 0),
+        ):
+            return await resolve_with_authored_deck_plan_checkpoint(
+                generation_job=generation_job,
+                stage="illustration",
+                input_contract=_deck_plan_checkpoint_input(
+                    generation_job=generation_job,
+                    request=request,
+                    outline=outline,
+                    brand=brand,
+                    style=style,
+                    stage="illustration",
+                ),
+                resolve=resolve_current_illustration_plan,
+                encode=lambda value: _encode_optional_model(
+                    "authored-illustration-plan/v1", "illustrationPlan", value
+                ),
+                decode=lambda payload: (
+                    AuthoredIllustrationPlan.model_validate(
+                        payload.get("illustrationPlan")
+                    )
+                    if isinstance(payload.get("illustrationPlan"), dict)
+                    else None
+                ),
+            )
+
     illustration_plan_task = asyncio.create_task(
-        resolve_final_outline_illustration_plan(request, outline, brand, style)
+        resolve_checkpointed_illustration_plan()
     )
     use_single_slide_header_fast_path = _use_single_slide_header_fast_path(
         request, outline, style
     )
     if use_single_slide_header_fast_path:
-        header_contract = default_header_contract(
-            primary=getattr(brand, "primary", None) or "#2563EB",
-            chapter_breadcrumb=False,
+        async def resolve_current_header_contract() -> AuthoredHeaderContract:
+            return default_header_contract(
+                primary=getattr(brand, "primary", None) or "#2563EB",
+                chapter_breadcrumb=False,
+            )
+
+        header_contract, header_reused = (
+            await resolve_with_authored_deck_plan_checkpoint(
+                generation_job=generation_job,
+                stage="header",
+                input_contract=_deck_plan_checkpoint_input(
+                    generation_job=generation_job,
+                    request=request,
+                    outline=outline,
+                    brand=brand,
+                    style=style,
+                    stage="header",
+                ),
+                resolve=resolve_current_header_contract,
+                encode=lambda value: _encode_optional_model(
+                    "authored-header-contract/v1", "headerContract", value
+                ),
+                decode=lambda payload: AuthoredHeaderContract.model_validate(
+                    payload.get("headerContract")
+                ),
+            )
         )
     else:
-        header_contract = await resolve_header_contract(
-            outline,
-            brand,
-            style,
-            instructions=request.instructions,
-            chapter_breadcrumb=chapter_plan is not None,
-        )
-    illustration_plan: AuthoredIllustrationPlan | None = await illustration_plan_task
+        async def resolve_current_header_contract() -> AuthoredHeaderContract:
+            return await resolve_header_contract(
+                outline,
+                brand,
+                style,
+                instructions=request.instructions,
+                chapter_breadcrumb=chapter_plan is not None,
+            )
+
+        with provider_usage_scope(
+            job_id=generation_job.id if generation_job is not None else None,
+            operation="authored_generation",
+            stage="header",
+            attempt_number=(generation_job.attempt_number if generation_job else 0),
+        ):
+            header_contract, header_reused = (
+                await resolve_with_authored_deck_plan_checkpoint(
+                    generation_job=generation_job,
+                    stage="header",
+                    input_contract=_deck_plan_checkpoint_input(
+                        generation_job=generation_job,
+                        request=request,
+                        outline=outline,
+                        brand=brand,
+                        style=style,
+                        stage="header",
+                    ),
+                    resolve=resolve_current_header_contract,
+                    encode=lambda value: _encode_optional_model(
+                        "authored-header-contract/v1", "headerContract", value
+                    ),
+                    decode=lambda payload: AuthoredHeaderContract.model_validate(
+                        payload.get("headerContract")
+                    ),
+                )
+            )
+    illustration_plan, illustration_reused = await illustration_plan_task
+    LOGGER.info(
+        "[authored] deck checkpoint reuse: header=%s illustration=%s",
+        header_reused,
+        illustration_reused,
+    )
     outline_elapsed = time.monotonic() - outline_stage_started
     stage_timings_ms["outline"] = round(outline_elapsed * 1000)
     await _record_deck_stage_latency(
@@ -1289,6 +1763,21 @@ async def _generate_authored_presentation(
         **pipeline_kwargs,
     )
     stage_timings_ms["author"] = round(max(0.0, pipeline.author_work) * 1000)
+    stage_timings_ms["illustration"] = round(
+        max(0.0, pipeline.illustration_work) * 1000
+    )
+    stage_timings_ms["render"] = round(max(0.0, pipeline.render_work) * 1000)
+    stage_timings_ms["quality"] = round(max(0.0, pipeline.quality_work) * 1000)
+    for observed_stage, elapsed in (
+        ("author", pipeline.author_work),
+        ("illustration", pipeline.illustration_work),
+        ("render", pipeline.render_work),
+    ):
+        await _record_deck_stage_latency(
+            generation_job,
+            stage=observed_stage,
+            elapsed_seconds=max(0.0, elapsed),
+        )
     authored_deck = pipeline.deck
     # Persist stable edit targets for future local quality-review patches. Attribute
     # insertion is deterministic and has no visual effect on the already-rendered PNG.
@@ -1788,6 +2277,12 @@ async def _generate_authored_presentation(
     # are confined to the initially failed indices and their one claimed budget.
 
     repair_elapsed = time.monotonic() - repair_started
+    stage_timings_ms["quality"] += round(max(0.0, vision_elapsed) * 1000)
+    await _record_deck_stage_latency(
+        generation_job,
+        stage="quality",
+        elapsed_seconds=max(0.0, pipeline.quality_work + vision_elapsed),
+    )
     stage_timings_ms["repair"] = round(repair_elapsed * 1000)
     await _record_deck_stage_latency(
         generation_job, stage="repair", elapsed_seconds=repair_elapsed
@@ -2149,12 +2644,109 @@ async def _generate_authored_presentation(
         elapsed_seconds=publication_elapsed,
     )
     if generation_job is not None and quality_receipt_v2 is not None:
+        from services.public_operation_admission import (
+            public_operation_observability_metrics,
+        )
+
+        public_metrics = (
+            await public_operation_observability_metrics(
+                sql_session, generation_job.workspace_operation_id
+            )
+            if generation_job.workspace_operation_id is not None
+            else {
+                name: _unavailable_metric("public_admission_not_found")
+                for name in (
+                    "queueWait", "queuePosition", "providerInitialCalls",
+                    "providerRetryCalls", "providerLogicalOrdinal",
+                    "estimatedTokens", "actualTokens", "estimatedCost", "actualCost",
+                )
+            }
+        )
+        stage_provider_metrics = (
+            await _provider_stage_observability_metrics(
+                sql_session, generation_job.workspace_operation_id
+            )
+            if generation_job.workspace_operation_id is not None
+            else {
+                name: _unavailable_metric("public_admission_not_found")
+                for name in (
+                    "queuePosition",
+                    "stageRetryCalls",
+                    "stageEstimatedCost",
+                    "stageActualCost",
+                )
+            }
+        )
+        render_runtime_after = get_render_runtime_counters()
+        worker_handle_count_after = _worker_handle_count_metric()
+        observability_metrics = {
+            **public_metrics,
+            **stage_provider_metrics,
+            **{
+                f"{stage}Duration": _observed_metric(stage_timings_ms[stage])
+                for stage in _PERFORMANCE_STAGE_NAMES
+            },
+            "attemptNumber": _observed_metric(generation_job.attempt_number),
+            "fencingOutcome": _observed_metric("publish_committed"),
+            "chromeLaunch": _observed_metric(
+                _runtime_counter_delta(
+                    render_runtime_before, render_runtime_after, "chrome_process_launches"
+                )
+            ),
+            "chromeRestart": _observed_metric(
+                _runtime_counter_delta(
+                    render_runtime_before, render_runtime_after, "session_restarts"
+                )
+            ),
+            "blockedRequest": _observed_metric(
+                _blocked_renderer_reference_count(htmls)
+            ),
+            # A timing receipt is emitted only after this attempt completed all
+            # render and quality stages. Any render timeout aborts the attempt
+            # before this point, so the successful attempt's exact count is 0.
+            "timeout": _observed_metric(0),
+            "crash": _observed_metric(
+                _runtime_counter_delta(
+                    render_runtime_before, render_runtime_after, "session_restarts"
+                )
+            ),
+            "workerPeakMemory": _worker_peak_memory_metric(),
+            "workerPeakHandles": _maximum_observed_metric(
+                worker_handle_count_before, worker_handle_count_after
+            ),
+            "artifactBytes": _artifact_bytes_metric(published_path),
+            "cacheHit": _observed_metric(
+                _runtime_counter_delta(
+                    render_runtime_before, render_runtime_after,
+                    "render_cache_hits", "metrics_cache_hits", "capture_cache_hits",
+                )
+            ),
+            "cacheMiss": _observed_metric(
+                _runtime_counter_delta(
+                    render_runtime_before, render_runtime_after,
+                    "render_cache_misses", "metrics_cache_misses", "capture_cache_misses",
+                )
+            ),
+            "cacheEviction": _observed_metric(
+                _runtime_counter_delta(
+                    render_runtime_before, render_runtime_after,
+                    "render_cache_evictions", "metrics_cache_evictions", "capture_cache_evictions",
+                )
+            ),
+            "objectStoreLatency": _object_store_latency_metric(
+                getattr(request, "_object_store_metrics", None),
+                getattr(generation_job, "object_store_metrics", None),
+                published_path,
+            ),
+            "finalOutcome": _observed_metric("succeeded"),
+        }
         create_generation_timing_receipt(
             job_id=generation_job.id,
             quality_receipt=quality_receipt_v2,
             attempt_number=generation_job.attempt_number,
             stage_timings_ms=stage_timings_ms,
             total_ms=round((time.monotonic() - started) * 1000),
+            observability_metrics=observability_metrics,
         )
     if generation_job is not None:
         # Seal the evidence directory only after publication and the durable

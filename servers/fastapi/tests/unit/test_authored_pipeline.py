@@ -114,12 +114,24 @@ def test_author_budget_exhaustion_is_non_retryable_but_transport_stays_retryable
     transport = TemporaryProviderFailure("provider unavailable")
     transport_stage = authored_pipeline_mod._author_stage_failure(2, transport)
 
+    class PublicBudgetFailure(RuntimeError):
+        code = "public_provider_retry_limit_exceeded"
+        retryable = False
+
+    public_budget = PublicBudgetFailure()
+    public_budget_stage = authored_pipeline_mod._author_stage_failure(
+        2, public_budget
+    )
+
     assert deterministic_stage.code == "authored_slide_author_failed"
     assert deterministic_stage.cause is deterministic
     assert deterministic_stage.retryable is False
     assert transport_stage.code == "authored_slide_author_failed"
     assert transport_stage.cause is transport
     assert transport_stage.retryable is True
+    assert public_budget_stage.code == "public_provider_retry_limit_exceeded"
+    assert public_budget_stage.cause is public_budget
+    assert public_budget_stage.retryable is False
 
 
 def test_author_uses_deterministic_owner_reducer_after_second_capacity_failure(
