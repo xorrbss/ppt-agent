@@ -1,0 +1,228 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://presenton.local/contracts/public-service-release-evidence/release-evidence-bundle.schema.json",
+  "title": "Public service immutable release evidence bundle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "evidenceClass", "executionMode", "bundleId", "releaseCandidate", "provenance", "operationEvidence", "run", "phases", "terminalEvidence", "dbTerminalState", "artifactDigest", "download303", "download206", "failure", "integrity", "bundleDigest"],
+  "properties": {
+    "schemaVersion": { "const": "public-service-release-evidence-bundle/v1" },
+    "evidenceClass": { "const": "actual_product_path" },
+    "executionMode": { "const": "same_rc_product_path" },
+    "bundleId": { "type": "string", "minLength": 1 },
+    "releaseCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceCommit", "releaseCandidateDigest", "components"],
+      "properties": {
+        "sourceCommit": { "$ref": "#/$defs/commit" },
+        "releaseCandidateDigest": { "$ref": "#/$defs/sha256" },
+        "components": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["api", "worker", "provider", "renderer", "exporter", "fonts"],
+          "properties": {
+            "api": { "$ref": "#/$defs/sha256" },
+            "worker": { "$ref": "#/$defs/sha256" },
+            "provider": { "$ref": "#/$defs/sha256" },
+            "renderer": { "$ref": "#/$defs/sha256" },
+            "exporter": { "$ref": "#/$defs/sha256" },
+            "fonts": { "$ref": "#/$defs/sha256" }
+          }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runnerPath", "runnerSha256", "sourceManifestDigest"],
+      "properties": {
+        "runnerPath": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?![A-Za-z]:)[^\\\\]+$" },
+        "runnerSha256": { "$ref": "#/$defs/sha256" },
+        "sourceManifestDigest": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "operationEvidence": { "$ref": "#/$defs/operationEvidence" },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "operationId", "startedAt", "finishedAt", "outcome", "releaseReadiness", "deploymentAuthorized"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "operationId": { "type": "string", "minLength": 1 },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "finishedAt": { "type": "string", "format": "date-time" },
+        "outcome": { "enum": ["succeeded", "failed"] },
+        "releaseReadiness": { "enum": ["ready", "not_ready"] },
+        "deploymentAuthorized": { "const": false }
+      }
+    },
+    "phases": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/phase" } },
+    "terminalEvidence": { "$ref": "#/$defs/terminalEvidence" },
+    "dbTerminalState": { "$ref": "#/$defs/database" },
+    "artifactDigest": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+    "download303": { "$ref": "#/$defs/download" },
+    "download206": { "$ref": "#/$defs/download" },
+    "failure": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["code", "messageDigest", "phase"],
+          "properties": {
+            "code": { "type": "string", "minLength": 1 },
+            "messageDigest": { "$ref": "#/$defs/sha256" },
+            "phase": { "type": "string", "minLength": 1 }
+          }
+        }
+      ]
+    },
+    "integrity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["canonicalization", "immutable", "sealedAt", "bundleDigest"],
+      "properties": {
+        "canonicalization": { "const": "json-key-sort-v1" },
+        "immutable": { "const": true },
+        "sealedAt": { "type": "string", "format": "date-time" },
+        "bundleDigest": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "bundleDigest": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "commit": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "binding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["runId", "operationId", "sourceCommit", "releaseCandidateDigest"],
+      "properties": {
+        "runId": { "type": "string", "minLength": 1 },
+        "operationId": { "type": "string", "minLength": 1 },
+        "sourceCommit": { "$ref": "#/$defs/commit" },
+        "releaseCandidateDigest": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "evidenceEnvelope": {
+      "type": "object",
+      "required": ["evidenceClass", "evidenceDigest", "binding"],
+      "properties": {
+        "evidenceClass": { "const": "actual_product_path" },
+        "evidenceDigest": { "$ref": "#/$defs/sha256" },
+        "binding": { "$ref": "#/$defs/binding" }
+      }
+    },
+    "operationEvidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["evidenceClass", "evidenceDigest", "binding", "apiOperationId", "apiDigest", "workerOperationId", "workerDigest", "providerOperationId", "providerDigest", "renderOperationId", "renderDigest", "exportOperationId", "exportDigest"],
+      "properties": {
+        "evidenceClass": { "const": "actual_product_path" }, "evidenceDigest": { "$ref": "#/$defs/sha256" }, "binding": { "$ref": "#/$defs/binding" },
+        "apiOperationId": { "type": "string", "minLength": 1 }, "apiDigest": { "$ref": "#/$defs/sha256" },
+        "workerOperationId": { "type": "string", "minLength": 1 }, "workerDigest": { "$ref": "#/$defs/sha256" },
+        "providerOperationId": { "type": "string", "minLength": 1 }, "providerDigest": { "$ref": "#/$defs/sha256" },
+        "renderOperationId": { "type": "string", "minLength": 1 }, "renderDigest": { "$ref": "#/$defs/sha256" },
+        "exportOperationId": { "type": "string", "minLength": 1 }, "exportDigest": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "providerUsage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["initialCalls", "retryCalls", "totalCalls", "estimatedTokens", "actualTokens", "estimatedCostMicrounits", "actualCostMicrounits", "actualCostState", "unavailableReason"],
+      "properties": {
+        "initialCalls": { "type": "integer", "minimum": 0 },
+        "retryCalls": { "type": "integer", "minimum": 0 },
+        "totalCalls": { "type": "integer", "minimum": 0 },
+        "estimatedTokens": { "type": "integer", "minimum": 0 },
+        "actualTokens": { "type": "integer", "minimum": 0 },
+        "estimatedCostMicrounits": { "type": "integer", "minimum": 0 },
+        "actualCostMicrounits": { "type": "integer", "minimum": 0 },
+        "actualCostState": { "enum": ["observed", "unavailable", "not_applicable"] },
+        "unavailableReason": { "type": ["string", "null"] }
+      }
+    },
+    "phase": {
+      "allOf": [
+        { "$ref": "#/$defs/evidenceEnvelope" },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["evidenceClass", "evidenceDigest", "binding", "name", "status", "startedAt", "finishedAt", "durationMs", "attemptCount", "providerUsage"],
+          "properties": {
+            "evidenceClass": { "const": "actual_product_path" },
+            "evidenceDigest": { "$ref": "#/$defs/sha256" },
+            "binding": { "$ref": "#/$defs/binding" },
+            "name": { "type": "string", "minLength": 1 },
+            "status": { "enum": ["succeeded", "failed", "skipped"] },
+            "startedAt": { "type": "string", "format": "date-time" },
+            "finishedAt": { "type": "string", "format": "date-time" },
+            "durationMs": { "type": "integer", "minimum": 0 },
+            "attemptCount": { "type": "integer", "minimum": 0 },
+            "providerUsage": { "$ref": "#/$defs/providerUsage" },
+            "reason": { "type": "string", "minLength": 1 }
+          }
+        }
+      ]
+    },
+    "terminalEvidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["database", "artifact", "downloads", "readback"],
+      "properties": {
+        "database": { "$ref": "#/$defs/database" },
+        "artifact": { "$ref": "#/$defs/artifact" },
+        "downloads": {
+          "type": "object", "additionalProperties": false,
+          "required": ["redirect303", "range206"],
+          "properties": {
+            "redirect303": { "$ref": "#/$defs/download" },
+            "range206": { "$ref": "#/$defs/download" }
+          }
+        },
+        "readback": {
+          "type": "object", "additionalProperties": false,
+          "required": ["powerpoint", "libreoffice"],
+          "properties": {
+            "powerpoint": { "$ref": "#/$defs/readback" },
+            "libreoffice": { "$ref": "#/$defs/readback" }
+          }
+        }
+      }
+    },
+    "database": {
+      "type": "object", "additionalProperties": false,
+      "required": ["evidenceClass", "evidenceDigest", "binding", "operationState", "exportState", "artifactState", "observedAt", "stateDigest", "recordDigest"],
+      "properties": {
+        "evidenceClass": { "const": "actual_product_path" }, "evidenceDigest": { "$ref": "#/$defs/sha256" }, "binding": { "$ref": "#/$defs/binding" },
+        "operationState": { "enum": ["succeeded", "failed"] }, "exportState": { "enum": ["succeeded", "failed", "not_created"] },
+        "artifactState": { "enum": ["published", "not_published"] }, "observedAt": { "type": "string", "format": "date-time" },
+        "stateDigest": { "$ref": "#/$defs/sha256" }, "recordDigest": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "artifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["evidenceClass", "evidenceDigest", "binding", "state", "artifactId", "sha256", "bytes", "mediaType", "unavailableReason"],
+      "properties": {
+        "evidenceClass": { "const": "actual_product_path" }, "evidenceDigest": { "$ref": "#/$defs/sha256" }, "binding": { "$ref": "#/$defs/binding" },
+        "state": { "enum": ["available", "unavailable"] }, "artifactId": { "type": ["string", "null"] }, "sha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+        "bytes": { "type": ["integer", "null"], "minimum": 1 }, "mediaType": { "type": ["string", "null"] }, "unavailableReason": { "type": ["string", "null"] }
+      }
+    },
+    "download": {
+      "type": "object", "additionalProperties": false,
+      "required": ["evidenceClass", "evidenceDigest", "binding", "state", "httpStatus", "locationDigest", "contentRange", "responseSha256", "artifactSha256", "unavailableReason"],
+      "properties": {
+        "evidenceClass": { "const": "actual_product_path" }, "evidenceDigest": { "$ref": "#/$defs/sha256" }, "binding": { "$ref": "#/$defs/binding" },
+        "state": { "enum": ["observed", "unavailable"] }, "httpStatus": { "type": ["integer", "null"] },
+        "locationDigest": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] }, "contentRange": { "type": ["string", "null"] },
+        "responseSha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] }, "artifactSha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+        "unavailableReason": { "type": ["string", "null"] }
+      }
+    },
+    "readback": {
+      "type": "object", "additionalProperties": false,
+      "required": ["evidenceClass", "evidenceDigest", "binding", "state", "artifactSha256", "toolIdentityDigest", "readbackDigest", "slideCount", "unavailableReason"],
+      "properties": {
+        "evidenceClass": { "const": "actual_product_path" }, "evidenceDigest": { "$ref": "#/$defs/sha256" }, "binding": { "$ref": "#/$defs/binding" },
+        "state": { "enum": ["passed", "failed", "unavailable"] }, "artifactSha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+        "toolIdentityDigest": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] }, "readbackDigest": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+        "slideCount": { "type": ["integer", "null"], "minimum": 1 }, "unavailableReason": { "type": ["string", "null"] }
+      }
+    }
+  }
+}
