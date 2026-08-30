@@ -31,6 +31,7 @@ from services.artifact_store import (
     ArtifactStoreError,
     configured_local_development_artifact_store,
 )
+from services.public_operation_correlation import log_public_operation_correlation
 
 
 API_V2_PUBLIC_ROUTER = APIRouter(prefix="/api/v2", tags=["Public v2"])
@@ -76,6 +77,22 @@ async def _delegate(call: Awaitable[_T]) -> _T:
         ) from error
 
 
+def _observe_api_operation(
+    *,
+    operation_id: str,
+    action: str,
+    outcome: str = "succeeded",
+) -> None:
+    """Attach a durable operation id to the API boundary without logging input."""
+
+    log_public_operation_correlation(
+        operation_id=operation_id,
+        component="api",
+        action=action,  # type: ignore[arg-type]
+        outcome=outcome,  # type: ignore[arg-type]
+    )
+
+
 def _single_byte_range(value: str | None) -> ArtifactByteRange | None:
     """Accept the bounded byte-range form supported by the artifact stream."""
 
@@ -106,13 +123,19 @@ async def submit_presentation_generation(
     actor: ActorDependency,
     orchestrator: OrchestratorDependency,
 ) -> OperationReceiptV2:
-    return await _delegate(
+    receipt = await _delegate(
         orchestrator.submit_generation(
             actor=actor,
             idempotency_key=_idempotency_key(idempotency_key),
             request=request,
         )
     )
+    _observe_api_operation(
+        operation_id=receipt.operation_id,
+        action="accepted",
+        outcome="replayed" if receipt.duplicate else "succeeded",
+    )
+    return receipt
 
 
 @API_V2_PUBLIC_ROUTER.post(
@@ -127,7 +150,7 @@ async def submit_presentation_export(
     actor: ActorDependency,
     orchestrator: OrchestratorDependency,
 ) -> OperationReceiptV2:
-    return await _delegate(
+    receipt = await _delegate(
         orchestrator.submit_export(
             actor=actor,
             presentation_id=presentation_id,
@@ -135,6 +158,12 @@ async def submit_presentation_export(
             request=request,
         )
     )
+    _observe_api_operation(
+        operation_id=receipt.operation_id,
+        action="accepted",
+        outcome="replayed" if receipt.duplicate else "succeeded",
+    )
+    return receipt
 
 
 @API_V2_PUBLIC_ROUTER.get(
@@ -146,9 +175,11 @@ async def get_operation_status(
     actor: ActorDependency,
     orchestrator: OrchestratorDependency,
 ) -> OperationStatusV2:
-    return await _delegate(
+    result = await _delegate(
         orchestrator.get_operation(actor=actor, operation_id=operation_id)
     )
+    _observe_api_operation(operation_id=operation_id, action="status_read")
+    return result
 
 
 @API_V2_PUBLIC_ROUTER.get(
@@ -162,7 +193,7 @@ async def list_operation_events(
     after: str | None = Query(default=None, pattern=PUBLIC_ID_PATTERN),
     limit: int = Query(default=100, ge=1, le=200),
 ) -> OperationEventPageV2:
-    return await _delegate(
+    result = await _delegate(
         orchestrator.list_operation_events(
             actor=actor,
             operation_id=operation_id,
@@ -170,6 +201,8 @@ async def list_operation_events(
             limit=limit,
         )
     )
+    _observe_api_operation(operation_id=operation_id, action="events_read")
+    return result
 
 
 @API_V2_PUBLIC_ROUTER.post(
@@ -182,9 +215,11 @@ async def cancel_operation(
     actor: ActorDependency,
     orchestrator: OrchestratorDependency,
 ) -> CancelOperationReceiptV2:
-    return await _delegate(
+    result = await _delegate(
         orchestrator.cancel_operation(actor=actor, operation_id=operation_id)
     )
+    _observe_api_operation(operation_id=operation_id, action="cancel_requested")
+    return result
 
 
 @API_V2_PUBLIC_ROUTER.get(
@@ -205,6 +240,8 @@ async def download_artifact(
     grant = await _delegate(
         orchestrator.authorize_download(actor=actor, artifact_id=artifact_id)
     )
+    # The artifact identifier is intentionally not emitted.  The authority
+    # adapter joins it to its durable creating operation before issuing a URL.
     headers = {"Cache-Control": "no-store"}
     if grant.etag is not None:
         headers["ETag"] = grant.etag

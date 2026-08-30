@@ -737,9 +737,13 @@ class SqlPublicV2Orchestrator:
                         ).all()
                     )
                     events = [self._event(operation, row) for row in rows]
+                    # The public client persists this opaque cursor across a
+                    # reload. Returning it for every non-empty page (not only
+                    # a full page) prevents a short initial history from being
+                    # replayed forever on each status poll.
                     next_cursor = (
                         str(rows[-1].cursor)
-                        if len(rows) == limit and rows[-1].cursor is not None
+                        if rows and rows[-1].cursor is not None
                         else None
                     )
                     return OperationEventPageV2(
@@ -1105,6 +1109,12 @@ class SqlPublicV2Orchestrator:
                 progress=operation.progress,
             ),
             progress_percent=_progress_percent(operation.progress),
+            source_revision=(
+                int(operation.result_revision)
+                if operation.state == "succeeded"
+                and operation.result_revision is not None
+                else None
+            ),
             accepted_at=_aware(operation.created_at),
             updated_at=_aware(operation.updated_at),
             absolute_deadline_at=_aware(admission.deadline_at),

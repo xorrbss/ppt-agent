@@ -40,6 +40,7 @@ from models.sql.public_artifact import (
 )
 from models.sql.public_admission import PublicOperationAdmission
 from models.sql.workspace import WorkspaceOperation
+from services.public_operation_correlation import log_public_operation_correlation
 
 
 class ArtifactStoreError(RuntimeError):
@@ -1403,6 +1404,12 @@ class DurableArtifactService:
             async with session.begin_nested():
                 session.add(row)
                 await session.flush()
+            log_public_operation_correlation(
+                operation_id=reference.created_by_operation_id,
+                component="upload",
+                action="artifact_registered",
+                outcome="succeeded",
+            )
             return reference
         except IntegrityError:
             existing = await session.scalar(
@@ -1418,6 +1425,12 @@ class DurableArtifactService:
             )
             if existing is None:
                 raise ArtifactStoreError("artifact.metadata_deduplication_failed")
+            log_public_operation_correlation(
+                operation_id=reference.created_by_operation_id,
+                component="upload",
+                action="artifact_registered",
+                outcome="replayed",
+            )
             return existing.to_ref()
 
     async def stage_ref_to_path(
@@ -1498,6 +1511,12 @@ class DurableArtifactService:
             or metadata.size_bytes != reference.size_bytes
         ):
             raise ArtifactStoreError("artifact.worker_output_readback_mismatch")
+        log_public_operation_correlation(
+            operation_id=reference.created_by_operation_id,
+            component="upload",
+            action="artifact_uploaded",
+            outcome="succeeded",
+        )
 
     async def read_ref_bytes(self, reference: ArtifactRef) -> bytes:
         if not await self._object_store.exists(reference):
@@ -1518,10 +1537,17 @@ class DurableArtifactService:
         *,
         expires_seconds: int = 180,
     ) -> SignedArtifactDownload:
-        return await self._object_store.create_signed_download(
+        grant = await self._object_store.create_signed_download(
             reference,
             expires_seconds=expires_seconds,
         )
+        log_public_operation_correlation(
+            operation_id=reference.created_by_operation_id,
+            component="publication",
+            action="download_granted",
+            outcome="succeeded",
+        )
+        return grant
 
     async def persist_stream(
         self,
@@ -2435,6 +2461,14 @@ async def promote_artifact_publication_if_current(
         artifact_id=artifact_id,
     )
     await session.flush()
+    # This is intentionally a prepared pointer, not a committed-publication
+    # claim: the caller owns the enclosing transaction and may still roll back.
+    log_public_operation_correlation(
+        operation_id=operation_id,
+        component="publication",
+        action="publication_prepared",
+        outcome="succeeded",
+    )
     return pointer
 
 

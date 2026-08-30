@@ -79,7 +79,9 @@ const BlankPresentationGraphic = ({ loading }: { loading: boolean }) => (
   </span>
 );
 
-const DashboardPage: React.FC = () => {
+const DashboardPage: React.FC<{ publicV2CanaryEnabled?: boolean }> = ({
+  publicV2CanaryEnabled = false,
+}) => {
   const pathname = usePathname();
   const router = useRouter();
   const [presentations, setPresentations] = useState<
@@ -271,6 +273,23 @@ const DashboardPage: React.FC = () => {
             </span>
             <BlankPresentationGraphic loading={isCreatingBlankPresentation} />
           </button>
+          {publicV2CanaryEnabled && (
+            <Link
+              href="/public-v2"
+              data-testid="public-v2-canary-cta"
+              className="relative z-50 flex h-[89.983px] w-[304px] max-w-full items-center rounded-[10.8px] border border-indigo-200 bg-indigo-50 px-5 text-left outline-none transition hover:border-indigo-400 hover:bg-indigo-100 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-4"
+              aria-label="Public v2 시험 운영으로 발표자료 만들기"
+            >
+              <span className="flex min-w-0 flex-col">
+                <span className="font-syne text-sm font-medium text-indigo-950">
+                  Public v2 시험 운영
+                </span>
+                <span className="mt-1 text-[11px] leading-[14px] text-indigo-700">
+                  자동 복구 · 품질 확인 · Fidelity 다운로드
+                </span>
+              </span>
+            </Link>
+          )}
         </div>
       </section>
       <section className="relative z-10 mt-12">

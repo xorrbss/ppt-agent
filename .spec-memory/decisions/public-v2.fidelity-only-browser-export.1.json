@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "key": "public-v2.fidelity-only-browser-export",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Public v2 browser flow exposes Fidelity PPTX/PDF only and states that rendered appearance is preserved while objects are not editable.",
+  "scope": [
+    "public-v2",
+    "export",
+    "browser-ui"
+  ],
+  "invariants": [
+    "Do not offer editable-hybrid in the public v2 browser UI.",
+    "Keep quality readiness and artifact download availability distinct."
+  ],
+  "forbidden": [
+    "Do not change v1 flow without explicit compatibility or canary approval."
+  ],
+  "evidence": [
+    "servers/nextjs/app/(presentation-generator)/public-v2/PublicV2OperationsClient.tsx"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-30T13:44:17.8942873+00:00"
+}

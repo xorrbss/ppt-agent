@@ -315,6 +315,7 @@ class OperationStatusV2(PublicWireModel):
     status: OperationState
     phase: OperationPhase | None = None
     progress_percent: int | None = Field(default=None, ge=0, le=100)
+    source_revision: int | None = Field(default=None, ge=0)
     accepted_at: AwareDatetime
     updated_at: AwareDatetime
     absolute_deadline_at: AwareDatetime
@@ -333,6 +334,8 @@ class OperationStatusV2(PublicWireModel):
             raise ValueError("failed or cancelled operation requires error")
         if self.status not in {"failed", "cancelled"} and self.error is not None:
             raise ValueError("only failed or cancelled operation may expose error")
+        if self.status == "succeeded" and self.source_revision is None:
+            raise ValueError("succeeded operation requires sourceRevision")
         if self.release_readiness == "ready" and (
             self.quality_receipt is None
             or self.quality_receipt.release_readiness != "ready"
