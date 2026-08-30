@@ -100,7 +100,9 @@
     "public-service.remediation.multi-session-workflow": "decisions/public-service.remediation.multi-session-workflow.1.json",
     "public-release.evidence-gating": "decisions/public-release.evidence-gating.1.json",
     "public-generation.failed-attempt-timing": "decisions/public-generation.failed-attempt-timing.2.json",
-    "public-export.fidelity-performance-contract": "decisions/public-export.fidelity-performance-contract.2.json"
+    "public-export.fidelity-performance-contract": "decisions/public-export.fidelity-performance-contract.2.json",
+    "public-v2.fidelity-only-browser-export": "decisions/public-v2.fidelity-only-browser-export.1.json",
+    "public-v2.browser-operation-lifecycle": "decisions/public-v2.browser-operation-lifecycle.1.json"
   },
   "readFirst": [
     "AGENTS.md",

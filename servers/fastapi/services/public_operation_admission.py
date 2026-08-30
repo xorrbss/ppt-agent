@@ -58,6 +58,7 @@ from services.provider_pricing import (
     ProviderUsageCost,
     calculate_actual_usage_cost,
 )
+from services.public_operation_correlation import log_public_operation_correlation
 _TERMINAL_STATES = frozenset(
     {"succeeded", "failed", "cancelled", "budget_exhausted", "deadline_exceeded"}
 )
@@ -1516,6 +1517,12 @@ async def reserve_public_provider_call(
             )
         ):
             raise PublicAdmissionRejected("public_provider_logical_call_conflict")
+        log_public_operation_correlation(
+            operation_id=admission.operation_id,
+            component="provider",
+            action="call_reserved",
+            outcome="replayed",
+        )
         return (existing, True) if _return_reuse else existing
     is_retry = retry_class != "initial"
     row = PublicProviderLogicalCall(
@@ -1597,6 +1604,12 @@ async def reserve_public_provider_call(
                 raise PublicAdmissionRejected(
                     "public_provider_logical_call_conflict"
                 )
+            log_public_operation_correlation(
+                operation_id=admission.operation_id,
+                component="provider",
+                action="call_reserved",
+                outcome="replayed",
+            )
             return (existing, True) if _return_reuse else existing
         raise PublicAdmissionRejected("public_provider_logical_call_conflict")
     except PublicAdmissionRejected as error:
@@ -1627,6 +1640,12 @@ async def reserve_public_provider_call(
                 "public_provider_estimated_cost_limit_exceeded"
             )
         raise PublicAdmissionRejected("public_provider_actual_cost_limit_exceeded")
+    log_public_operation_correlation(
+        operation_id=admission.operation_id,
+        component="provider",
+        action="call_reserved",
+        outcome="succeeded",
+    )
     return (row, False) if _return_reuse else row
 
 

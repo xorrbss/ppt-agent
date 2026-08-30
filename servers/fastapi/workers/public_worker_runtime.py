@@ -31,6 +31,7 @@ from services.public_worker_profiles import (
     get_public_worker_profile,
     validate_public_worker_environment,
 )
+from services.public_operation_correlation import log_public_operation_correlation
 
 
 MAX_ARTIFACT_BYTES = 512 * 1024 * 1024
@@ -234,7 +235,7 @@ class LocalContentAddressedStore:
             temporary.unlink(missing_ok=True)
         os.utime(path, None)
         self._evict(protected=path)
-        return ArtifactRef(
+        reference = ArtifactRef(
             artifact_id=uuid.uuid4(),
             owner_id=source.owner_id,
             tenant_id=source.tenant_id,
@@ -246,6 +247,13 @@ class LocalContentAddressedStore:
             created_by_operation_id=operation_id,
             retention_class="ephemeral",
         )
+        log_public_operation_correlation(
+            operation_id=operation_id,
+            component="upload",
+            action="artifact_uploaded",
+            outcome="succeeded",
+        )
+        return reference
 
 
 WorkerExecutor = Callable[
@@ -361,6 +369,13 @@ async def run_worker(role: WorkerRole, executor: WorkerExecutor) -> int:
             signing_key=_read_signing_key(),
             replay_guard=_REPLAY_GUARD,
         )
+        component = "render" if role == "render" else "worker"
+        log_public_operation_correlation(
+            operation_id=job.operation_id,
+            component=component,
+            action="started",
+            outcome="succeeded",
+        )
         legacy_root = os.getenv("PUBLIC_WORKER_OBJECT_STORE_ROOT", "").strip()
         cache_root = os.getenv("PUBLIC_WORKER_ARTIFACT_CACHE_ROOT", "").strip()
         input_root_value = os.getenv("PUBLIC_WORKER_INPUT_STORE_ROOT", "").strip()
@@ -395,6 +410,12 @@ async def run_worker(role: WorkerRole, executor: WorkerExecutor) -> int:
             or output.created_by_operation_id != job.operation_id
         ):
             raise PublicWorkerExecutionError("public_worker_output_binding_mismatch")
+        log_public_operation_correlation(
+            operation_id=job.operation_id,
+            component=component,
+            action="completed",
+            outcome="succeeded",
+        )
         _write_result(
             {
                 **_base_result(job),
@@ -413,6 +434,13 @@ async def run_worker(role: WorkerRole, executor: WorkerExecutor) -> int:
             else "public_worker_unexpected_failure"
         )
         if job is not None:
+            component = "render" if role == "render" else "worker"
+            log_public_operation_correlation(
+                operation_id=job.operation_id,
+                component=component,
+                action="completed",
+                outcome="failed",
+            )
             _write_result(
                 {
                     **_base_result(job),

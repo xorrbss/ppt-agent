@@ -308,6 +308,7 @@ def test_public_v2_contract_delegates_async_surfaces_and_fails_closed_quality() 
         status="succeeded",
         phase="publishing",
         progress_percent=100,
+        source_revision=42,
         accepted_at=now,
         updated_at=now + timedelta(minutes=2),
         absolute_deadline_at=now + timedelta(minutes=5),
@@ -316,6 +317,7 @@ def test_public_v2_contract_delegates_async_surfaces_and_fails_closed_quality() 
         artifacts=[artifact],
     )
     assert bound_status.artifacts[0].digest == quality.artifact_digest
+    assert bound_status.source_revision == 42
 
     for invalid_update, expected_message in (
         (

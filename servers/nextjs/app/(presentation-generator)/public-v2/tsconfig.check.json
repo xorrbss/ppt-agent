@@ -1,0 +1,11 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "incremental": false
+  },
+  "include": [
+    "./page.tsx",
+    "./PublicV2OperationsClient.tsx",
+    "../../../lib/public-v2/**/*.ts"
+  ]
+}

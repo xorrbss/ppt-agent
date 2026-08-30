@@ -84,6 +84,25 @@ _OBSERVABILITY_SIGNALS = frozenset(
         "shadow_parity",
     }
 )
+_PUBLIC_CORRELATION_COMPONENTS = frozenset(
+    {"api", "provider", "worker", "render", "upload", "publication"}
+)
+_PUBLIC_CORRELATION_ACTIONS = frozenset(
+    {
+        "accepted",
+        "status_read",
+        "events_read",
+        "cancel_requested",
+        "download_granted",
+        "call_reserved",
+        "started",
+        "completed",
+        "artifact_registered",
+        "artifact_uploaded",
+        "publication_prepared",
+    }
+)
+_PUBLIC_CORRELATION_OUTCOMES = frozenset({"succeeded", "failed", "replayed"})
 
 
 def _threshold(name: str, default: float) -> float:
@@ -133,6 +152,7 @@ class WorkspaceMetrics:
         self._shadow_matches = 0
         self._silent_loss = 0
         self._signal_failures: dict[str, int] = defaultdict(int)
+        self._public_correlations: dict[tuple[str, str, str], int] = defaultdict(int)
         self._dead_letter_total = 0
         self._lease_lost_total = 0
         self._revision_conflict_total = 0
@@ -152,6 +172,7 @@ class WorkspaceMetrics:
             self._shadow_matches = 0
             self._silent_loss = 0
             self._signal_failures.clear()
+            self._public_correlations.clear()
             self._dead_letter_total = 0
             self._lease_lost_total = 0
             self._revision_conflict_total = 0
@@ -256,6 +277,33 @@ class WorkspaceMetrics:
         with self._lock:
             self._signal_failures[normalized] += 1
 
+    def record_public_operation_correlation(
+        self,
+        *,
+        component: str,
+        action: str,
+        outcome: str,
+    ) -> None:
+        """Count only closed cross-boundary correlation dimensions.
+
+        The operation id deliberately stays out of Prometheus labels.  It is
+        available in the paired structured log event instead.
+        """
+
+        normalized_component = (
+            component if component in _PUBLIC_CORRELATION_COMPONENTS else "other"
+        )
+        normalized_action = (
+            action if action in _PUBLIC_CORRELATION_ACTIONS else "other"
+        )
+        normalized_outcome = (
+            outcome if outcome in _PUBLIC_CORRELATION_OUTCOMES else "other"
+        )
+        with self._lock:
+            self._public_correlations[
+                (normalized_component, normalized_action, normalized_outcome)
+            ] += 1
+
     def snapshot(self) -> dict[str, object]:
         with self._lock:
             return {
@@ -272,6 +320,7 @@ class WorkspaceMetrics:
                 "shadow_matches": self._shadow_matches,
                 "silent_loss_total": self._silent_loss,
                 "signal_failures": dict(self._signal_failures),
+                "public_correlations": dict(self._public_correlations),
                 "dead_letter_total": self._dead_letter_total,
                 "lease_lost_total": self._lease_lost_total,
                 "revision_conflict_total": self._revision_conflict_total,
@@ -440,6 +489,17 @@ class WorkspaceMetrics:
             lines.append(
                 'workspace_observability_signal_failure_total{signal="%s"} %d'
                 % (signal, count)
+            )
+        lines.extend((
+            "# HELP presenton_public_operation_correlation_total Cross-boundary public operation correlation signals.",
+            "# TYPE presenton_public_operation_correlation_total counter",
+        ))
+        for (component, action, outcome), count in sorted(
+            snapshot["public_correlations"].items()
+        ):
+            lines.append(
+                'presenton_public_operation_correlation_total{component="%s",action="%s",outcome="%s"} %d'
+                % (component, action, outcome, count)
             )
         lines.extend((
             "# HELP workspace_cleanup_total Durable cleanup-journal outcomes.",

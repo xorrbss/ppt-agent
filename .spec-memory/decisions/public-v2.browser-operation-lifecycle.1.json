@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "key": "public-v2.browser-operation-lifecycle",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Public v2 auto-polls to terminal, exposes succeeded sourceRevision for export, and scopes opaque resume checkpoints to the authenticated principal.",
+  "scope": [
+    "public-v2",
+    "browser-ui",
+    "operations",
+    "export"
+  ],
+  "invariants": [
+    "Succeeded operation status exposes sourceRevision from the owner-scoped durable result.",
+    "Polling is single-flight, visibility-aware, bounded, and stops at a terminal status.",
+    "An uncertain admission reuses its key only for an exact request fingerprint or requires explicit abandon.",
+    "Browser checkpoints contain no request content or download grants and rotate on principal scope change.",
+    "The dashboard entry remains gated by PUBLIC_V2_WEB_CANARY_ENABLED."
+  ],
+  "forbidden": [
+    "Do not expose editable-hybrid in the public v2 browser flow.",
+    "Do not replace or silently cut over the v1 generation flow without the canary flag."
+  ],
+  "evidence": [
+    "servers/fastapi/api/v2/contracts.py",
+    "servers/fastapi/services/public_v2_orchestrator.py",
+    "servers/nextjs/lib/public-v2/operation-client.ts",
+    "servers/nextjs/lib/public-v2/use-public-v2-operation.ts",
+    "servers/nextjs/app/(presentation-generator)/public-v2/PublicV2OperationsClient.tsx",
+    "servers/nextjs/app/(presentation-generator)/(dashboard)/dashboard/page.tsx"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-30T14:37:41.4822791+00:00"
+}

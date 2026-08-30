@@ -177,6 +177,7 @@ def test_v2_api_delegates_to_db_profile_and_never_runs_executor_in_request_threa
                     raise PublicV2OrchestrationError(
                         status_code=409, reason_code="stale_revision", retry_after_seconds=7
                     )
+                self.calls.append("export")
                 return self._receipt("op_export_db", presentation_id)
 
             async def get_operation(self, *, actor, operation_id):
@@ -184,10 +185,15 @@ def test_v2_api_delegates_to_db_profile_and_never_runs_executor_in_request_threa
                 return OperationStatusV2(
                     operation_id=operation_id,
                     presentation_id="prs_db_1",
-                    kind="presentation.generate",
-                    status="running",
-                    phase="authoring",
-                    progress_percent=30,
+                    kind=(
+                        "presentation.export"
+                        if operation_id == "op_export_db"
+                        else "presentation.generate"
+                    ),
+                    status="succeeded",
+                    phase="publishing",
+                    progress_percent=100,
+                    source_revision=42,
                     accepted_at=now,
                     updated_at=now,
                     absolute_deadline_at=now + timedelta(seconds=300),
@@ -254,7 +260,17 @@ def test_v2_api_delegates_to_db_profile_and_never_runs_executor_in_request_threa
                     "output": {"format": "pptx", "mode": "fidelity-raster"},
                 },
             )
-            status = client.get("/api/v2/operations/op_db_1")
+            generation_status = client.get("/api/v2/operations/op_db_1")
+            export = client.post(
+                "/api/v2/presentations/prs_db_1/exports",
+                headers={"Idempotency-Key": "export-key"},
+                json={
+                    "schemaVersion": "presentation-export-request/v2",
+                    "sourceRevision": 42,
+                    "output": {"format": "pptx", "mode": "fidelity-raster"},
+                },
+            )
+            export_status = client.get("/api/v2/operations/op_export_db")
             events = client.get("/api/v2/operations/op_db_1/events")
             cancelled = client.post("/api/v2/operations/op_db_1/cancel")
             download = client.get("/api/v2/artifacts/artifact_db/download")
@@ -265,11 +281,19 @@ def test_v2_api_delegates_to_db_profile_and_never_runs_executor_in_request_threa
         assert conflict.json() == {"detail": {"reasonCode": "idempotency_key_conflict"}}
         assert stale.status_code == 409
         assert stale.headers["retry-after"] == "7"
-        assert status.status_code == 200 and status.json()["phase"] == "authoring"
+        assert generation_status.status_code == 200
+        assert generation_status.json()["sourceRevision"] == 42
+        assert export.status_code == 202
+        assert export.json()["operationId"] == "op_export_db"
+        assert export_status.status_code == 200
+        assert export_status.json()["kind"] == "presentation.export"
+        assert export_status.json()["sourceRevision"] == 42
         assert events.status_code == 200 and events.json()["events"][0]["sequence"] == 1
         assert cancelled.status_code == 202 and cancelled.json()["cancellationRequested"] is True
         assert download.status_code == 303 and download.headers["cache-control"] == "no-store"
-        assert authority.calls == ["submit", "duplicate", "status", "events", "cancel", "download"]
+        assert authority.calls == [
+            "submit", "duplicate", "status", "export", "status", "events", "cancel", "download"
+        ]
         assert authority.heavy_executor_calls == 0
 
         await engine.dispose()
@@ -341,6 +365,9 @@ def test_sql_adapter_projects_durable_operation_and_delegates_cancel_without_exe
         with TestClient(app, follow_redirects=False) as client:
             status = client.get(f"/api/v2/operations/{operation_id}")
             events = client.get(f"/api/v2/operations/{operation_id}/events")
+            resumed_events = client.get(
+                f"/api/v2/operations/{operation_id}/events?after=1"
+            )
             cancelled = client.post(f"/api/v2/operations/{operation_id}/cancel")
             app.dependency_overrides[get_public_request_actor] = lambda: PublicRequestActor(
                 owner, "tenant-other", "trace-other"
@@ -348,6 +375,14 @@ def test_sql_adapter_projects_durable_operation_and_delegates_cancel_without_exe
             cross_tenant_status = client.get(f"/api/v2/operations/{operation_id}")
         assert status.status_code == 200 and status.json()["status"] == "queued"
         assert events.status_code == 200 and events.json()["events"][0]["sequence"] == 1
+        assert events.json()["nextCursor"] == "1"
+        assert resumed_events.status_code == 200
+        assert resumed_events.json() == {
+            "schemaVersion": "operation-event-page/v2",
+            "operationId": str(operation_id),
+            "events": [],
+            "nextCursor": None,
+        }
         assert cancelled.status_code == 202 and cancelled.json()["cancellationRequested"] is True
         assert cross_tenant_status.status_code == 503
         assert cross_tenant_status.json() == {
@@ -695,6 +730,7 @@ def test_sql_adapter_requires_current_publication_and_rejects_unwired_export_cap
         assert [item.artifact_id for item in status.artifacts] == [
             str(current_artifact_id)
         ]
+        assert status.source_revision == 3
         grant = await adapter.authorize_download(
             actor=actor,
             artifact_id=str(current_artifact_id),

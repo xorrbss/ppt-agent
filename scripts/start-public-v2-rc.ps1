@@ -286,7 +286,11 @@ try {
         $generation = Start-LoggedProcess -FilePath $python -ArgumentList @("-m", "services.workspace_operation_worker") -WorkingDirectory $fastApi -Environment $generationEnvironment -StdoutPath (Join-Path $logs "generation-controller.stdout.log") -StderrPath (Join-Path $logs "generation-controller.stderr.log")
         $startedPids.Add($generation.Id)
     }
-    $nextEnvironment = @{ "FAST_API_INTERNAL_URL" = "http://127.0.0.1:8010"; "USER_CONFIG_PATH" = (Join-Path $appData "userConfig.json") }
+    $nextEnvironment = @{
+        "FAST_API_INTERNAL_URL" = "http://127.0.0.1:8010"
+        "USER_CONFIG_PATH" = (Join-Path $appData "userConfig.json")
+        "PUBLIC_V2_WEB_CANARY_ENABLED" = "true"
+    }
     $next = Start-LoggedProcess -FilePath "npm.cmd" -ArgumentList @("run", "dev", "--", "-p", "3010") -WorkingDirectory $nextJs -Environment $nextEnvironment -StdoutPath (Join-Path $logs "next.stdout.log") -StderrPath (Join-Path $logs "next.stderr.log")
     $startedPids.Add($next.Id)
     $proxyEnvironment = @{ "FASTAPI_PORT" = "8010"; "NEXT_PORT" = "3010"; "PROXY_PORT" = "5110" }
