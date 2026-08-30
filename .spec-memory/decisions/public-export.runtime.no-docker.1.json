@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "key": "public-export.runtime.no-docker",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Public PPT generation and export development and validation must use a Windows local supervised worker transport without Docker.",
+  "scope": [
+    "public-generation",
+    "public-export",
+    "trusted-worker",
+    "local-runtime"
+  ],
+  "invariants": [
+    "Do not start, probe, build, run, or validate Docker Desktop, its daemon, or containers.",
+    "Install a concrete bounded local supervised worker transport in the product composition root.",
+    "Treat unsupported isolation differences as fail-closed limitations or explicit residual risk."
+  ],
+  "forbidden": [
+    "Do not make Docker evidence a development-acceptance condition.",
+    "Do not silently replace the concrete worker path with a fake transport."
+  ],
+  "evidence": [],
+  "supersedes": null,
+  "recordedAt": "2026-08-30T09:45:13.3843621+00:00"
+}

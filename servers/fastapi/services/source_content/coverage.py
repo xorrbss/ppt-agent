@@ -27,6 +27,61 @@ class SourceContentCoverageError(ValueError):
 
 
 @dataclass(frozen=True)
+class SourceContentPreservationInventory:
+    """Bounded preservation claim for the ``text-image`` restyle mode.
+
+    This mode proves verbatim text and each image *occurrence*.  It deliberately
+    does not claim that source tables, charts, or original geometry survived a
+    template restyle.  A future structural-preservation capability must add its
+    own evidence and contract rather than changing this claim in place.
+    """
+
+    source_mode: str
+    source_complete_claim: bool
+    preserved: tuple[str, ...]
+    excluded: tuple[str, ...]
+    excluded_source_object_counts: dict[str, int]
+    text_occurrences: tuple[tuple[str, str], ...]
+    image_occurrences: tuple[tuple[str, str], ...]
+
+    def as_payload(self) -> dict[str, Any]:
+        """Return the exact bounded source-content claim sealed for publication."""
+
+        return {
+            "sourceMode": self.source_mode,
+            "sourceCompleteClaim": self.source_complete_claim,
+            "preserved": list(self.preserved),
+            "excluded": list(self.excluded),
+            "excludedSourceObjectCounts": self.excluded_source_object_counts,
+            "textOccurrences": [
+                {"sourceBlockId": block_id, "contentDigest": content_digest}
+                for block_id, content_digest in self.text_occurrences
+            ],
+            "imageOccurrences": [
+                {"sourceBlockId": block_id, "contentDigest": content_digest}
+                for block_id, content_digest in self.image_occurrences
+            ],
+        }
+
+    @property
+    def occurrence_inventory_digest(self) -> str:
+        return canonical_digest(
+            {
+                "schemaVersion": "source-content-text-image-inventory/v1",
+                **self.as_payload(),
+            }
+        )
+
+    @property
+    def text_occurrence_count(self) -> int:
+        return len(self.text_occurrences)
+
+    @property
+    def image_occurrence_count(self) -> int:
+        return len(self.image_occurrences)
+
+
+@dataclass(frozen=True)
 class SceneCoverageResult:
     manifest_digest: str
     plan_digest: str
@@ -46,6 +101,7 @@ class SceneCoverageResult:
     style_token_digest_matched: bool
     master_geometry_digest_matched: bool
     unplaced_block_ids: tuple[str, ...]
+    preservation_inventory: SourceContentPreservationInventory
 
 
 def _mapping(value: object, *, label: str) -> Mapping[str, Any]:
@@ -595,6 +651,38 @@ def verify_scene_coverage(
         raise SourceContentCoverageError(
             "source_content_coverage_failed", detail="manifest count coverage is incomplete"
         )
+    # ``text-image`` is a bounded re-composition mode.  Table/chart evidence
+    # remains useful for the internal materializer gate above, but must never
+    # be promoted into a user-facing source-completeness claim.
+    preservation_inventory = SourceContentPreservationInventory(
+        source_mode="text-image",
+        source_complete_claim=False,
+        preserved=("text", "image-occurrences"),
+        excluded=("tables", "charts", "original-layout"),
+        excluded_source_object_counts={
+            "tables": sum(1 for block in blocks if _value(block, "kind") == "table"),
+            "charts": sum(1 for block in blocks if _value(block, "kind") == "chart"),
+            "originalLayoutShapes": sum(
+                1 for block in blocks if _value(block, "kind") == "shape"
+            ),
+        },
+        text_occurrences=tuple(
+            (
+                str(_value(block, "sourceBlockId", "source_block_id")),
+                str(_value(block, "contentDigest", "content_digest")),
+            )
+            for block in blocks
+            if _value(block, "kind") == "text"
+        ),
+        image_occurrences=tuple(
+            (
+                str(_value(block, "sourceBlockId", "source_block_id")),
+                str(_value(block, "contentDigest", "content_digest")),
+            )
+            for block in blocks
+            if _value(block, "kind") == "image"
+        ),
+    )
     return SceneCoverageResult(
         manifest_digest=manifest_digest,
         plan_digest=plan_digest,
@@ -614,11 +702,13 @@ def verify_scene_coverage(
         style_token_digest_matched=True,
         master_geometry_digest_matched=True,
         unplaced_block_ids=(),
+        preservation_inventory=preservation_inventory,
     )
 
 
 __all__ = [
     "SceneCoverageResult",
+    "SourceContentPreservationInventory",
     "SourceContentCoverageError",
     "verify_scene_coverage",
 ]

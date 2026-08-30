@@ -30,7 +30,10 @@ from services.isolated_worker_process import (
     execute_isolated_worker_job,
     worker_environment,
 )
-from workers.public_export_worker import EXPORT_BUNDLE_SCHEMA, execute_export
+from workers.public_export_worker import (
+    EXPORT_CHECKPOINT_BUNDLE_SCHEMA,
+    execute_export,
+)
 from workers.public_worker_runtime import LocalContentAddressedStore
 
 
@@ -155,9 +158,18 @@ def test_export_worker_builds_digest_verified_pptx_from_artifact_refs(
     _store_payload(tmp_path, slide, png)
     bundle_payload = json.dumps(
         {
-            "schemaVersion": EXPORT_BUNDLE_SCHEMA,
+            "schemaVersion": EXPORT_CHECKPOINT_BUNDLE_SCHEMA,
+            "canonicalExportIdentity": hashlib.sha256(b"identity").hexdigest(),
             "exportFormat": "pptx",
-            "slides": [slide.to_wire()],
+            "exportMode": "fidelity-raster",
+            "renderAdapter": "chromium-raster-v2",
+            "slides": [
+                {
+                    "slideIndex": 0,
+                    "artifactRef": slide.to_wire(),
+                    "validationDigest": hashlib.sha256(b"validation").hexdigest(),
+                }
+            ],
         },
         sort_keys=True,
         separators=(",", ":"),

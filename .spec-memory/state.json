@@ -2,26 +2,44 @@
   "schemaVersion": 2,
   "active": true,
   "projectName": "ppt-agent",
-  "activeTask": "Complete the same-RC public generation and export service 85-point approval gate with actual product-path evidence",
+  "activeTask": "Integrate and validate the remaining public PPT generation and export architecture across bounded multi-session lanes",
   "taskContext": {
     "paths": [
       "servers/fastapi/services",
       "servers/fastapi/workers",
-      "servers/nextjs/app/api/export-presentation",
-      "scripts/public-service-release-gate.mjs"
+      "servers/fastapi/api/v2",
+      "servers/fastapi/services/public_operation_admission.py",
+      "servers/fastapi/services/artifact_store.py",
+      "servers/fastapi/services/trusted_executor",
+      "servers/fastapi/services/authored_quality_receipt_v2.py",
+      "servers/nextjs/app/api/v2"
     ],
     "scopes": [
       "service-boundary",
       "worker-isolation",
       "artifact-authority",
       "public-admission",
-      "release-evidence"
+      "release-evidence",
+      "public-generation-export",
+      "api",
+      "control-plane",
+      "artifact",
+      "executor",
+      "quality",
+      "hybrid",
+      "release-readiness"
     ],
     "includeKeys": [
       "service.boundary.external-platform",
       "service.architecture.modular-worker-boundary",
       "artifact.public-content-authority",
-      "service.public-admission-budget-boundary"
+      "service.public-admission-budget-boundary",
+      "public-generation-export.execution-orchestration",
+      "public-export.runtime.no-docker",
+      "authored.release-export-atomic-binding",
+      "authored.quality-composition-first",
+      "authored.hybrid-release-native-coverage-gate",
+      "source-content.template-restyle-contract"
     ]
   },
   "bindingPolicy": {
@@ -76,10 +94,16 @@
     "service.boundary.external-platform": "decisions/service.boundary.external-platform.1.json",
     "service.architecture.modular-worker-boundary": "decisions/service.architecture.modular-worker-boundary.1.json",
     "artifact.public-content-authority": "decisions/artifact.public-content-authority.1.json",
-    "service.public-admission-budget-boundary": "decisions/service.public-admission-budget-boundary.1.json"
+    "service.public-admission-budget-boundary": "decisions/service.public-admission-budget-boundary.1.json",
+    "public-generation-export.execution-orchestration": "decisions/public-generation-export.execution-orchestration.1.json",
+    "public-export.runtime.no-docker": "decisions/public-export.runtime.no-docker.1.json"
   },
   "readFirst": [
-    "AGENTS.md"
+    "AGENTS.md",
+    "docs/public-generation-export-target-design-handoff-20260830.md",
+    "docs/public-generation-artifact-export-durability-contract-20260830.md",
+    "docs/public-generation-export-phase6-quality-contract-session-e-20260830.md",
+    "docs/public-generation-export-phase8-phase9-readiness-manifest-20260830.md"
   ],
-  "updatedAt": "2026-08-29T23:52:38.2494528+00:00"
+  "updatedAt": "2026-08-30T09:45:13.4892181+00:00"
 }

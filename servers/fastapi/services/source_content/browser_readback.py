@@ -19,6 +19,8 @@ import math
 import re
 from typing import Any
 
+from services.authored_vnext.capability_registry import capability_metadata
+
 
 class BrowserSourceReadbackError(ValueError):
     """Publication-blocking failure in browser-observed source readback."""
@@ -95,6 +97,7 @@ class BrowserSourceReadbackResult:
             # ``passed`` prevents arbitrary caller dictionaries from being
             # treated as Chromium-verified evidence.
             "verified": self.passed,
+            "capabilityRegistry": capability_metadata(consumer="readback"),
         }
 
 

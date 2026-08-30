@@ -20,6 +20,8 @@ from models.sql.async_presentation_generation_status import (
 )
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_export_attempt import PresentationExportAttempt
+from models.sql.public_artifact import PublicArtifact
+from models.sql.public_admission import PublicOperationAdmission
 from models.sql.slide import SlideModel
 from models.sql.user import User
 from models.sql.workspace import (
@@ -33,6 +35,7 @@ from models.workspace import WorkspaceCommandRequest
 from services import workspace_artifact_publication_service as publication
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
+    RetryableWorkspaceOperationError,
     WorkspaceOperationCancelled,
     WorkspaceOperationClaim,
     WorkspaceOperationHandlerRegistry,
@@ -61,6 +64,8 @@ TABLES = [
     WorkspaceOutbox.__table__,
     PresentationExportAttempt.__table__,
     WorkspaceArtifact.__table__,
+    PublicArtifact.__table__,
+    PublicOperationAdmission.__table__,
     AsyncPresentationGenerationTaskModel.__table__,
 ]
 
@@ -193,6 +198,8 @@ async def _seed_export(maker, *, revision: int = 7):
             content="export",
             n_slides=1,
             language="ko",
+            mode="authored",
+            theme={},
             revision=revision,
         )
         session.add(presentation)
@@ -234,6 +241,8 @@ async def _seed_quality_operation(
             content="quality",
             n_slides=1,
             language="ko",
+            mode="authored",
+            theme={},
             revision=revision,
         )
         session.add(presentation)
@@ -693,6 +702,8 @@ def test_quality_review_without_fixes_is_revision_neutral_and_detects_change(
                     content="quality",
                     n_slides=1,
                     language="ko",
+                    mode="authored",
+                    theme={},
                     revision=11,
                 )
                 session.add(presentation)
@@ -1134,6 +1145,8 @@ def test_quality_review_propagates_lease_loss_after_review(
                     content="quality",
                     n_slides=1,
                     language="ko",
+                    mode="authored",
+                    theme={},
                     revision=4,
                 )
                 session.add(presentation)
@@ -1623,40 +1636,23 @@ def test_stale_export_publication_compensates_external_file(
     asyncio.run(scenario())
 
 
-def test_export_cancellation_after_prepare_cleans_artifact_and_staging_source(
+def test_export_without_public_admission_fails_before_artifact_prepare(
     tmp_path: Path, monkeypatch
 ):
     async def scenario():
         engine, maker = await _database(tmp_path / "cancel.db")
         app_data = tmp_path / "app-data-cancel"
-        source = app_data / "exports" / "cancel.pptx"
-        source.parent.mkdir(parents=True)
-        source.write_bytes(b"cancel me")
         monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
         try:
             presentation_id, operation_id = await _seed_export(maker)
             async with maker() as session:
                 operation = await session.get(WorkspaceOperation, operation_id)
 
-            async def fake_headers():
-                return {"Cookie": "session=ephemeral"}
-
-            async def fake_export(*_args, **_kwargs):
-                return PresentationAndPath(
-                    presentation_id=presentation_id,
-                    path=str(source),
-                )
-
-            monkeypatch.setattr(
-                "services.presentation_export_adapters.export_presentation",
-                fake_export,
-            )
             prepare_calls: list[dict] = []
-            original_prepare = publication.prepare_workspace_generation_artifact
 
-            async def capture_prepare(session, **kwargs):
+            async def capture_prepare(_session, **kwargs):
                 prepare_calls.append(kwargs)
-                return await original_prepare(session, **kwargs)
+                raise AssertionError("artifact prepare must not run without admission")
 
             monkeypatch.setattr(
                 "services.workspace_quality_export_operation_handlers."
@@ -1677,29 +1673,25 @@ def test_export_cancellation_after_prepare_cleans_artifact_and_staging_source(
                 fencing_token=3,
             )
 
-            class CancellingContext:
+            class Context:
                 def __init__(self):
                     self.claim = claim
-                    self.checks = 0
 
                 async def progress(self, **_kwargs):
                     return True
 
                 async def raise_if_cancelled(self):
-                    self.checks += 1
-                    if self.checks == 3:
-                        raise WorkspaceOperationCancelled()
+                    return None
 
-            with pytest.raises(WorkspaceOperationCancelled):
+            with pytest.raises(
+                RetryableWorkspaceOperationError,
+                match="presentation_export_failed",
+            ):
                 await WorkspaceExportOperationHandler(
                     session_factory=maker,
-                    internal_header_provider=fake_headers,
-                ).execute(CancellingContext())
-            assert not source.exists()
-            assert prepare_calls[0]["expected_source_sha256"] == hashlib.sha256(
-                b"cancel me"
-            ).hexdigest()
-            assert prepare_calls[0]["expected_source_size_bytes"] == len(b"cancel me")
+                    internal_header_provider=lambda: None,
+                ).execute(Context())
+            assert prepare_calls == []
             async with maker() as session:
                 rows = (
                     await session.scalars(
@@ -1708,9 +1700,7 @@ def test_export_cancellation_after_prepare_cleans_artifact_and_staging_source(
                         )
                     )
                 ).all()
-                assert len(rows) == 1
-                assert rows[0].status == "deleted"
-                assert "ephemeral" not in str(rows[0])
+                assert rows == []
         finally:
             await engine.dispose()
 

@@ -59,7 +59,10 @@ from services.database import async_session_maker
 from services.public_operation_admission import (
     PublicAdmissionRejected,
     activate_public_operation,
+    activate_public_operation_v2,
     finish_public_operation,
+    finish_public_operation_v2,
+    requeue_public_operation_v2,
 )
 from services.account_deletion_service import (
     AccountDeletionFenceConflict,
@@ -88,6 +91,7 @@ from services.workspace_operation_lease import (  # noqa: F401
     run_attempt_heartbeat_loop,
 )
 from services.workspace_operation_retry_policy import (
+    WorkspaceOperationRetryDecision,
     decide_workspace_operation_retry,
 )
 from services.workspace_operation_observability import (
@@ -113,6 +117,19 @@ WORKSPACE_OPERATION_MAX_CONCURRENCY = 2
 # so a crashed worker cannot strand the queue.
 _WORKSPACE_CLAIM_LOCK_ID = 0x50505457534F5043
 _MAX_OBSERVATION_DURATION_MS = 30 * 24 * 60 * 60 * 1000
+_PUBLIC_OPERATION_CONTRACT_VERSION = "public-operation/v2"
+_PUBLIC_OPERATION_EXECUTION_PROFILE_VERSION = "public-generation-export/v2"
+_PUBLIC_COMMIT_RESERVE_SECONDS = 10
+_PUBLIC_CAPACITY_REJECTIONS = frozenset(
+    {
+        "public_global_active_limit_exceeded",
+        "public_tenant_active_limit_exceeded",
+        "public_owner_active_limit_exceeded",
+        "public_global_active_resource_limit_exceeded",
+        "public_tenant_active_resource_limit_exceeded",
+        "public_owner_active_resource_limit_exceeded",
+    }
+)
 
 _TERMINAL_STATES = TERMINAL_OPERATION_STATES
 _RUNNING_STATES = frozenset({"running", "cancelling"})
@@ -794,6 +811,124 @@ async def _public_admission_for_operation(
         return None
 
 
+def _is_public_v2_admission(admission: PublicOperationAdmission) -> bool:
+    return bool(
+        getattr(admission, "policy_digest", None)
+        and getattr(admission, "deadline_at", None) is not None
+        and int(getattr(admission, "fence", 0)) >= 1
+    )
+
+
+def _is_public_v2_workspace_operation(operation: WorkspaceOperation) -> bool:
+    return operation.contract_version == _PUBLIC_OPERATION_CONTRACT_VERSION
+
+
+def _require_public_v2_workspace_contract(
+    operation: WorkspaceOperation,
+    admission: PublicOperationAdmission,
+    *,
+    allowed_phases: Collection[str] = ("admitted", "queued"),
+) -> None:
+    operation_deadline = _coerce_aware(getattr(operation, "deadline_at", None))
+    admission_deadline = _coerce_aware(getattr(admission, "deadline_at", None))
+    if (
+        operation.contract_version != _PUBLIC_OPERATION_CONTRACT_VERSION
+        or operation.execution_profile_version
+        != _PUBLIC_OPERATION_EXECUTION_PROFILE_VERSION
+        or operation.phase not in set(allowed_phases)
+        or operation_deadline is None
+        or operation_deadline != admission_deadline
+    ):
+        raise PublicAdmissionRejected("public_operation_workspace_contract_conflict")
+
+
+def _public_deadline_unavailable(
+    admission: PublicOperationAdmission,
+    *,
+    now: datetime,
+) -> bool:
+    deadline = _coerce_aware(getattr(admission, "deadline_at", None))
+    return deadline is None or deadline <= now + timedelta(
+        seconds=_PUBLIC_COMMIT_RESERVE_SECONDS
+    )
+
+
+async def _requeue_public_admission_for_claim(
+    session: AsyncSession,
+    claim: WorkspaceOperationClaim,
+) -> int | None:
+    operation = await session.get(WorkspaceOperation, claim.operation_id)
+    if operation is None:
+        raise PublicAdmissionRejected("public_operation_authority_unavailable")
+    admission = await _public_admission_for_operation(session, claim.operation_id)
+    if admission is None:
+        if _is_public_v2_workspace_operation(operation):
+            raise PublicAdmissionRejected("public_admission_authority_unavailable")
+        return None
+    if not _is_public_v2_admission(admission):
+        if _is_public_v2_workspace_operation(operation):
+            raise PublicAdmissionRejected("public_phase2_admission_invalid")
+        return None
+    _require_public_v2_workspace_contract(
+        operation,
+        admission,
+        allowed_phases=("active",),
+    )
+    requeued = await requeue_public_operation_v2(
+        session,
+        admission_id=admission.id,
+        expected_fence=claim.fencing_token,
+        expected_attempt=claim.attempt_number,
+    )
+    return int(requeued.fence)
+
+
+async def _terminalize_queued_public_deadline(
+    session: AsyncSession,
+    operation: WorkspaceOperation,
+    admission: PublicOperationAdmission,
+    *,
+    now: datetime,
+) -> bool:
+    event = await append_operation_event(
+        session,
+        operation_id=operation.id,
+        event_type="operation.error",
+        payload={
+            "state": "deadline_exceeded",
+            "error_code": "public_deadline_exceeded",
+            "retryable": False,
+        },
+        operation_kind=operation.kind,
+        fencing_token=operation.fencing_token,
+        public_admission_fence=int(admission.fence),
+        allowed_states=("queued",),
+        expected_version=operation.version,
+        projection_values={
+            "state": "deadline_exceeded",
+            "attempt_token": None,
+            "lease_expires_at": None,
+            "heartbeat_at": now,
+            "next_attempt_at": None,
+            "error_code": "public_deadline_exceeded",
+            "error_detail": {
+                "error_code": "public_deadline_exceeded",
+                "retryable": False,
+            },
+            "completed_at": now,
+        },
+    )
+    if event is None:
+        return False
+    return await _project_linked_generation_terminal(
+        session,
+        operation,
+        state="deadline_exceeded",
+        error_code="public_deadline_exceeded",
+        resume_allowed=False,
+    )
+
+
 async def append_operation_event(
     session: AsyncSession,
     *,
@@ -802,6 +937,9 @@ async def append_operation_event(
     payload: Mapping[str, Any] | None = None,
     operation_kind: str | None = None,
     attempt_token: str | None = None,
+    fencing_token: int | None = None,
+    public_admission_fence: int | None = None,
+    public_admission_attempt: int | None = None,
     allowed_states: Collection[str] | None = None,
     projection_values: Mapping[str, Any] | None = None,
     increment_version: bool = False,
@@ -812,8 +950,9 @@ async def append_operation_event(
     """CAS a projection and reserve/insert its event in one transaction.
 
     The counter UPDATE is the sequence allocator on SQLite and PostgreSQL.
-    When ``attempt_token`` is supplied, a stale worker cannot mutate the
-    projection, allocate a sequence, or append an event.
+    When ``attempt_token`` and ``fencing_token`` are supplied, a stale worker
+    cannot mutate the projection, allocate a sequence, or append an event even
+    if an attempt token were accidentally reused across a lease recovery.
     """
 
     now = _utc_now()
@@ -827,6 +966,8 @@ async def append_operation_event(
     statement = update(WorkspaceOperation).where(WorkspaceOperation.id == operation_id)
     if attempt_token is not None:
         statement = statement.where(WorkspaceOperation.attempt_token == attempt_token)
+    if fencing_token is not None:
+        statement = statement.where(WorkspaceOperation.fencing_token == fencing_token)
     if allowed_states:
         statement = statement.where(WorkspaceOperation.state.in_(tuple(allowed_states)))
     if expected_version is not None:
@@ -897,30 +1038,74 @@ async def append_operation_event(
         await session.flush()
     terminal_state = str(row["state"])
     if terminal_state in _TERMINAL_STATES:
+        operation = await session.get(WorkspaceOperation, operation_id)
         admission = await _public_admission_for_operation(session, operation_id)
-        if admission is not None and admission.state not in {
+        if (
+            operation is not None
+            and _is_public_v2_workspace_operation(operation)
+            and (
+                admission is None
+                or not _is_public_v2_admission(admission)
+            )
+        ):
+            raise PublicAdmissionRejected("public_phase2_admission_invalid")
+        public_terminal_state = (
+            "budget_exhausted"
+            if terminal_state in {"failed", "dead_letter"}
+            and safe_payload.get("error_code")
+            in {
+                "public_provider_request_limit_exceeded",
+                "public_provider_retry_limit_exceeded",
+                "public_provider_estimated_cost_limit_exceeded",
+                "public_provider_actual_cost_limit_exceeded",
+            }
+            else ("failed" if terminal_state == "dead_letter" else terminal_state)
+        )
+        if admission is not None and admission.state in {
             "succeeded",
             "failed",
             "cancelled",
             "budget_exhausted",
+            "deadline_exceeded",
         }:
-            public_terminal_state = (
-                "budget_exhausted"
-                if terminal_state in {"failed", "dead_letter"}
-                and safe_payload.get("error_code")
-                in {
-                    "public_provider_request_limit_exceeded",
-                    "public_provider_retry_limit_exceeded",
-                    "public_provider_estimated_cost_limit_exceeded",
-                    "public_provider_actual_cost_limit_exceeded",
-                }
-                else ("failed" if terminal_state == "dead_letter" else terminal_state)
-            )
-            await finish_public_operation(
-                session,
-                admission.id,
-                state=public_terminal_state,
-            )
+            if admission.state != public_terminal_state:
+                raise PublicAdmissionRejected(
+                    "public_provider_actual_cost_limit_exceeded"
+                    if admission.state == "budget_exhausted"
+                    else "public_operation_terminal_conflict"
+                )
+        elif admission is not None:
+            if _is_public_v2_admission(admission):
+                operation = await session.get(WorkspaceOperation, operation_id)
+                if operation is None:
+                    raise PublicAdmissionRejected("public_operation_authority_unavailable")
+                _require_public_v2_workspace_contract(
+                    operation,
+                    admission,
+                    allowed_phases=(
+                        "admitted",
+                        "queued",
+                        "active",
+                        public_terminal_state,
+                    ),
+                )
+                await finish_public_operation_v2(
+                    session,
+                    admission_id=admission.id,
+                    state=public_terminal_state,
+                    expected_fence=(
+                        public_admission_fence
+                        if public_admission_fence is not None
+                        else fencing_token
+                    ),
+                    expected_attempt=public_admission_attempt,
+                )
+            else:
+                await finish_public_operation(
+                    session,
+                    admission.id,
+                    state=public_terminal_state,
+                )
     return event
 
 
@@ -1014,26 +1199,100 @@ async def claim_next_workspace_operation(
             return None
 
         candidate: WorkspaceOperation | None = None
+        next_attempt_number = 0
+        next_fencing_token = 0
+        workspace_lease_expires_at = now + timedelta(seconds=max(1, lease_seconds))
         for queued_candidate in candidates:
             admission = await _public_admission_for_operation(
                 session,
                 queued_candidate.id,
             )
-            if admission is None or admission.state == "active":
+            proposed_attempt = queued_candidate.attempt_number + 1
+            proposed_fence = queued_candidate.fencing_token + 1
+            proposed_lease_expires_at = now + timedelta(seconds=max(1, lease_seconds))
+            if admission is None:
+                if _is_public_v2_workspace_operation(queued_candidate):
+                    raise PublicAdmissionRejected(
+                        "public_admission_authority_unavailable"
+                    )
                 candidate = queued_candidate
+                next_attempt_number = proposed_attempt
+                next_fencing_token = proposed_fence
+                workspace_lease_expires_at = proposed_lease_expires_at
+                break
+            if (
+                _is_public_v2_workspace_operation(queued_candidate)
+                and not _is_public_v2_admission(admission)
+            ):
+                raise PublicAdmissionRejected("public_phase2_admission_invalid")
+            if _is_public_v2_admission(admission):
+                _require_public_v2_workspace_contract(queued_candidate, admission)
+                admission_fence = int(admission.fence)
+                if queued_candidate.fencing_token != admission_fence:
+                    raise PublicAdmissionRejected("public_operation_fence_conflict")
+                if _public_deadline_unavailable(admission, now=now):
+                    if not await _terminalize_queued_public_deadline(
+                        session,
+                        queued_candidate,
+                        admission,
+                        now=now,
+                    ):
+                        await session.rollback()
+                        continue
+                    await session.commit()
+                    continue
+                if admission.state != "queued":
+                    raise PublicAdmissionRejected("public_operation_not_queued")
+                try:
+                    await activate_public_operation_v2(
+                        session,
+                        admission_id=admission.id,
+                        lease_owner_hash=sha256(token.encode("utf-8")).hexdigest(),
+                        lease_seconds=max(1, lease_seconds),
+                        attempt=proposed_attempt,
+                        fence=admission_fence,
+                    )
+                except PublicAdmissionRejected as error:
+                    if error.code in _PUBLIC_CAPACITY_REJECTIONS:
+                        continue
+                    if error.code == "public_deadline_insufficient":
+                        if not await _terminalize_queued_public_deadline(
+                            session,
+                            queued_candidate,
+                            admission,
+                            now=_utc_now(),
+                        ):
+                            await session.rollback()
+                            continue
+                        await session.commit()
+                        continue
+                    raise
+                candidate = queued_candidate
+                next_attempt_number = proposed_attempt
+                next_fencing_token = admission_fence
+                deadline = _coerce_aware(admission.deadline_at)
+                if deadline is None:
+                    raise PublicAdmissionRejected("public_operation_deadline_missing")
+                workspace_lease_expires_at = min(proposed_lease_expires_at, deadline)
+                break
+            if admission.state == "active":
+                candidate = queued_candidate
+                next_attempt_number = proposed_attempt
+                next_fencing_token = proposed_fence
+                workspace_lease_expires_at = proposed_lease_expires_at
                 break
             if admission.state != "queued":
                 continue
             try:
                 await activate_public_operation(session, admission.id)
             except PublicAdmissionRejected as error:
-                if error.code in {
-                    "public_owner_active_limit_exceeded",
-                    "public_tenant_active_limit_exceeded",
-                }:
+                if error.code in _PUBLIC_CAPACITY_REJECTIONS:
                     continue
                 raise
             candidate = queued_candidate
+            next_attempt_number = proposed_attempt
+            next_fencing_token = proposed_fence
+            workspace_lease_expires_at = proposed_lease_expires_at
             break
         if candidate is None:
             await session.rollback()
@@ -1065,8 +1324,6 @@ async def claim_next_workspace_operation(
             await session.rollback()
             return None
 
-        next_attempt_number = candidate.attempt_number + 1
-        next_fencing_token = candidate.fencing_token + 1
         claim_progress = None
         if candidate.kind == "presentation.generate":
             claim_progress = _public_generation_progress(
@@ -1104,6 +1361,7 @@ async def claim_next_workspace_operation(
             allowed_states=("queued",),
             expected_version=candidate.version,
             additional_conditions=(
+                WorkspaceOperation.fencing_token == candidate.fencing_token,
                 WorkspaceOperation.cancel_requested_at.is_(None),
                 or_(
                     WorkspaceOperation.next_attempt_at.is_(None),
@@ -1115,7 +1373,7 @@ async def claim_next_workspace_operation(
                 "attempt_number": next_attempt_number,
                 "attempt_token": token,
                 "fencing_token": next_fencing_token,
-                "lease_expires_at": now + timedelta(seconds=max(1, lease_seconds)),
+                "lease_expires_at": workspace_lease_expires_at,
                 "heartbeat_at": now,
                 "next_attempt_at": None,
                 "started_at": candidate.started_at or now,
@@ -1184,17 +1442,34 @@ async def _transition_claim_failure(
         if (
             operation is None
             or operation.attempt_token != claim.attempt_token
+            or operation.fencing_token != claim.fencing_token
             or operation.state not in _RUNNING_STATES
         ):
             await session.rollback()
             return False
-        decision = decide_workspace_operation_retry(
-            operation_id=operation.id,
-            retry_count=operation.retry_count,
-            max_attempts=operation.max_attempts,
-            now=now,
-            retryable=retryable,
+        admission = await _public_admission_for_operation(session, operation.id)
+        public_deadline_exceeded = bool(
+            admission is not None
+            and _is_public_v2_admission(admission)
+            and _public_deadline_unavailable(admission, now=now)
         )
+        if public_deadline_exceeded:
+            code = "public_deadline_exceeded"
+            retryable = False
+            decision = WorkspaceOperationRetryDecision(
+                state="deadline_exceeded",
+                retry_count=operation.retry_count,
+                backoff_seconds=0,
+                next_attempt_at=None,
+            )
+        else:
+            decision = decide_workspace_operation_retry(
+                operation_id=operation.id,
+                retry_count=operation.retry_count,
+                max_attempts=operation.max_attempts,
+                now=now,
+                retryable=retryable,
+            )
         error_detail = sanitize_workspace_event_payload(detail)
         error_detail.update(
             {
@@ -1204,14 +1479,47 @@ async def _transition_claim_failure(
                 "max_attempts": operation.max_attempts,
             }
         )
+        projection_values: dict[str, Any] = {
+            "state": decision.state,
+            "retry_count": decision.retry_count,
+            "backoff_seconds": decision.backoff_seconds,
+            "next_attempt_at": decision.next_attempt_at,
+            "attempt_token": None,
+            "lease_expires_at": None,
+            "heartbeat_at": now,
+            "error_code": code,
+            "error_detail": error_detail,
+            "completed_at": (
+                now
+                if decision.state in {"failed", "dead_letter", "deadline_exceeded"}
+                else None
+            ),
+        }
+        public_requeue = bool(
+            decision.state == "queued"
+            and admission is not None
+            and _is_public_v2_admission(admission)
+        )
+        event_fencing_token = claim.fencing_token
+        if public_requeue:
+            requeued_fence = await _requeue_public_admission_for_claim(session, claim)
+            if requeued_fence is None:
+                raise PublicAdmissionRejected("public_operation_requeue_authority_unavailable")
+            event_fencing_token = requeued_fence
         public_progress = None
         if claim.kind == "presentation.generate":
             public_target = (
-                "retry_waiting" if decision.state == "queued" else decision.state
+                "retry_waiting"
+                if decision.state == "queued"
+                else "failed"
+                if decision.state == "deadline_exceeded"
+                else decision.state
             )
             terminal_reason = (
                 "budget_exhausted"
                 if code in _PUBLIC_BUDGET_ERROR_CODES
+                else "deadline_exceeded"
+                if decision.state == "deadline_exceeded"
                 else "failed"
                 if decision.state in {"failed", "dead_letter"}
                 else None
@@ -1221,7 +1529,7 @@ async def _transition_claim_failure(
                 target=public_target,
                 operation_version=operation.version,
                 attempt_number=claim.attempt_number,
-                fencing_token=claim.fencing_token,
+                fencing_token=event_fencing_token,
                 stage=(
                     "retry_waiting"
                     if decision.state == "queued"
@@ -1240,6 +1548,7 @@ async def _transition_claim_failure(
                     "error_code": code,
                 },
             )
+            projection_values["progress"] = public_progress
         event = await append_operation_event(
             session,
             operation_id=operation.id,
@@ -1266,29 +1575,19 @@ async def _transition_claim_failure(
                 "next_attempt_at": decision.next_attempt_at,
             },
             attempt_token=claim.attempt_token,
+            fencing_token=event_fencing_token,
+            public_admission_attempt=claim.attempt_number,
             allowed_states=_RUNNING_STATES,
             expected_version=operation.version,
             additional_conditions=(
-                WorkspaceOperation.fencing_token == claim.fencing_token,
+                WorkspaceOperation.fencing_token == event_fencing_token,
             ),
-            projection_values={
-                "state": decision.state,
-                "retry_count": decision.retry_count,
-                "backoff_seconds": decision.backoff_seconds,
-                "next_attempt_at": decision.next_attempt_at,
-                "attempt_token": None,
-                "lease_expires_at": None,
-                "heartbeat_at": now,
-                "error_code": code,
-                "error_detail": error_detail,
-                "completed_at": now if decision.state in {"failed", "dead_letter"} else None,
-                **({"progress": public_progress} if public_progress is not None else {}),
-            },
+            projection_values=projection_values,
         )
         if event is None:
             await session.rollback()
             return False
-        if decision.state in {"failed", "dead_letter"} and not await _project_linked_generation_terminal(
+        if decision.state in {"failed", "dead_letter", "deadline_exceeded"} and not await _project_linked_generation_terminal(
             session,
             operation,
             state=decision.state,
@@ -1334,6 +1633,19 @@ async def _transition_claim_blocked(
         ):
             await session.rollback()
             return False
+        admission = await _public_admission_for_operation(session, claim.operation_id)
+        if admission is not None and _is_public_v2_admission(admission):
+            # Public v2 has no durable user-approval/blocked lease state.  A
+            # worker must release its resource authority through a fenced
+            # terminal transition instead of stranding active counters.
+            await session.rollback()
+            return await _transition_claim_failure(
+                claim,
+                code=error.code,
+                retryable=False,
+                detail=error.detail,
+                session_factory=session_factory,
+            )
         public_progress = None
         if claim.kind == "presentation.generate":
             public_progress = _public_generation_progress(
@@ -1364,6 +1676,8 @@ async def _transition_claim_blocked(
                 ),
             },
             attempt_token=claim.attempt_token,
+            fencing_token=claim.fencing_token,
+            public_admission_attempt=claim.attempt_number,
             allowed_states=("running",),
             expected_version=operation.version,
             additional_conditions=(
@@ -1542,6 +1856,8 @@ async def finalize_workspace_operation_success(
             payload=event_payload,
             operation_kind=claim.kind,
             attempt_token=claim.attempt_token,
+            fencing_token=claim.fencing_token,
+            public_admission_attempt=claim.attempt_number,
             allowed_states=("running",),
             projection_values=projection_values,
         )
@@ -1580,7 +1896,11 @@ async def finalize_workspace_operation_success(
         # result event in that transaction; this fallback supports older or
         # custom publishers while still preventing duplicate terminal events.
         operation = await session.get(WorkspaceOperation, claim.operation_id)
-        if operation is None or operation.state != "succeeded":
+        if (
+            operation is None
+            or operation.state != "succeeded"
+            or operation.fencing_token != claim.fencing_token
+        ):
             await session.rollback()
             return False
         existing = (
@@ -1632,9 +1952,14 @@ async def finalize_workspace_operation_success(
             operation_id=claim.operation_id,
             event_type="operation.result",
             payload={"state": "succeeded", **publication_payload},
+            fencing_token=claim.fencing_token,
+            public_admission_attempt=claim.attempt_number,
             allowed_states=("succeeded",),
             expected_version=operation.version,
             increment_version=True,
+            additional_conditions=(
+                WorkspaceOperation.fencing_token == claim.fencing_token,
+            ),
         )
         if event is None:
             await session.rollback()
@@ -1766,6 +2091,7 @@ async def _published_workspace_operation_result(
                 select(WorkspaceOperation)
                 .where(WorkspaceOperation.id == claim.operation_id)
                 .where(WorkspaceOperation.owner_id == claim.owner_id)
+                .where(WorkspaceOperation.fencing_token == claim.fencing_token)
             )
         ).scalar_one_or_none()
     if operation is None or operation.state != "succeeded":
@@ -1852,6 +2178,8 @@ async def reconcile_succeeded_workspace_operation_events(
                     allowed_states=("succeeded",),
                     expected_version=candidate["version"],
                     increment_version=True,
+                    fencing_token=candidate["fencing_token"],
+                    public_admission_attempt=candidate["attempt_number"],
                     additional_conditions=(missing_terminal_event,),
                 )
                 if event is None:
@@ -1927,6 +2255,8 @@ async def finalize_workspace_operation_cancelled(
                 ),
             },
             attempt_token=claim.attempt_token,
+            fencing_token=claim.fencing_token,
+            public_admission_attempt=claim.attempt_number,
             allowed_states=_RUNNING_STATES,
             expected_version=operation.version,
             additional_conditions=(
@@ -1980,6 +2310,7 @@ async def release_workspace_operation_claim(
         if (
             operation is None
             or operation.attempt_token != claim.attempt_token
+            or operation.fencing_token != claim.fencing_token
             or operation.state not in _RUNNING_STATES
         ):
             await session.rollback()
@@ -1987,6 +2318,31 @@ async def release_workspace_operation_claim(
         if operation.cancel_requested_at is not None or operation.state == "cancelling":
             await session.rollback()
             return await finalize_workspace_operation_cancelled(claim, session_factory=session_factory)
+        admission = await _public_admission_for_operation(session, claim.operation_id)
+        public_requeue = bool(
+            admission is not None and _is_public_v2_admission(admission)
+        )
+        if public_requeue and _public_deadline_unavailable(admission, now=now):
+            await session.rollback()
+            return await _transition_claim_failure(
+                claim,
+                code="public_deadline_exceeded",
+                retryable=False,
+                session_factory=session_factory,
+            )
+        projection_values: dict[str, Any] = {
+            "state": "queued",
+            "attempt_token": None,
+            "lease_expires_at": None,
+            "heartbeat_at": now,
+            "next_attempt_at": now,
+        }
+        event_fencing_token = claim.fencing_token
+        if public_requeue:
+            requeued_fence = await _requeue_public_admission_for_claim(session, claim)
+            if requeued_fence is None:
+                raise PublicAdmissionRejected("public_operation_requeue_authority_unavailable")
+            event_fencing_token = requeued_fence
         release_progress = None
         if claim.kind == "presentation.generate":
             release_progress = _public_generation_progress(
@@ -1994,10 +2350,11 @@ async def release_workspace_operation_claim(
                 target="retry_waiting",
                 operation_version=operation.version,
                 attempt_number=claim.attempt_number,
-                fencing_token=claim.fencing_token,
+                fencing_token=event_fencing_token,
                 stage="retry_waiting",
                 reason="orderly_release",
             )
+            projection_values["progress"] = release_progress
         event = await append_operation_event(
             session,
             operation_id=claim.operation_id,
@@ -2012,19 +2369,13 @@ async def release_workspace_operation_claim(
                 ),
             },
             attempt_token=claim.attempt_token,
+            fencing_token=event_fencing_token,
             allowed_states=("running",),
             expected_version=operation.version,
             additional_conditions=(
-                WorkspaceOperation.fencing_token == claim.fencing_token,
+                WorkspaceOperation.fencing_token == event_fencing_token,
             ),
-            projection_values={
-                "state": "queued",
-                "attempt_token": None,
-                "lease_expires_at": None,
-                "heartbeat_at": now,
-                "next_attempt_at": now,
-                **({"progress": release_progress} if release_progress is not None else {}),
-            },
+            projection_values=projection_values,
         )
         if event is None:
             await session.rollback()
@@ -2062,6 +2413,7 @@ async def defer_workspace_operation_claim(
         if (
             operation is None
             or operation.attempt_token != claim.attempt_token
+            or operation.fencing_token != claim.fencing_token
             or operation.state not in _RUNNING_STATES
         ):
             await session.rollback()
@@ -2073,6 +2425,19 @@ async def defer_workspace_operation_claim(
             await session.rollback()
             return await finalize_workspace_operation_cancelled(
                 claim,
+                session_factory=session_factory,
+            )
+
+        admission = await _public_admission_for_operation(session, claim.operation_id)
+        public_requeue = bool(
+            admission is not None and _is_public_v2_admission(admission)
+        )
+        if public_requeue and _public_deadline_unavailable(admission, now=now):
+            await session.rollback()
+            return await _transition_claim_failure(
+                claim,
+                code="public_deadline_exceeded",
+                retryable=False,
                 session_factory=session_factory,
             )
 
@@ -2089,43 +2454,52 @@ async def defer_workspace_operation_claim(
             "wait_reason": deferred.code,
             "capacity_waiting": True,
         }
+        projection_values = {
+            "state": "queued",
+            "attempt_number": max(0, operation.attempt_number - 1),
+            "attempt_token": None,
+            "lease_expires_at": None,
+            "heartbeat_at": now,
+            "next_attempt_at": next_attempt_at,
+            "backoff_seconds": max(1, math.ceil(deferred.retry_after_seconds)),
+            "progress": progress,
+            "error_code": None,
+            "error_detail": None,
+            "started_at": (
+                None if claim.attempt_number == 1 else operation.started_at
+            ),
+        }
+        event_fencing_token = claim.fencing_token
+        if public_requeue:
+            requeued_fence = await _requeue_public_admission_for_claim(session, claim)
+            if requeued_fence is None:
+                raise PublicAdmissionRejected("public_operation_requeue_authority_unavailable")
+            event_fencing_token = requeued_fence
         if claim.kind == "presentation.generate":
             progress = _public_generation_progress(
                 operation.progress,
                 target="capacity_waiting",
                 operation_version=operation.version,
                 attempt_number=max(0, operation.attempt_number - 1),
-                fencing_token=claim.fencing_token,
+                fencing_token=event_fencing_token,
                 stage="capacity_waiting",
                 reason="capacity_deferred",
                 values=progress,
             )
+            projection_values["progress"] = progress
         event = await append_operation_event(
             session,
             operation_id=claim.operation_id,
             event_type="operation.progress",
             payload=progress,
             attempt_token=claim.attempt_token,
+            fencing_token=event_fencing_token,
             allowed_states=("running",),
             expected_version=operation.version,
             additional_conditions=(
-                WorkspaceOperation.fencing_token == claim.fencing_token,
+                WorkspaceOperation.fencing_token == event_fencing_token,
             ),
-            projection_values={
-                "state": "queued",
-                "attempt_number": max(0, operation.attempt_number - 1),
-                "attempt_token": None,
-                "lease_expires_at": None,
-                "heartbeat_at": now,
-                "next_attempt_at": next_attempt_at,
-                "backoff_seconds": max(1, math.ceil(deferred.retry_after_seconds)),
-                "progress": progress,
-                "error_code": None,
-                "error_detail": None,
-                "started_at": (
-                    None if claim.attempt_number == 1 else operation.started_at
-                ),
-            },
+            projection_values=projection_values,
         )
         if event is None:
             await session.rollback()
@@ -2317,6 +2691,28 @@ async def recover_expired_workspace_operations(
 
     for stale in rows:
         async with session_factory() as session:
+            operation_authority = await session.get(WorkspaceOperation, stale["id"])
+            admission = await _public_admission_for_operation(session, stale["id"])
+            public_v2 = bool(
+                admission is not None and _is_public_v2_admission(admission)
+            )
+            if (
+                operation_authority is not None
+                and _is_public_v2_workspace_operation(operation_authority)
+                and (
+                    admission is None
+                    or not _is_public_v2_admission(admission)
+                )
+            ):
+                raise PublicAdmissionRejected("public_phase2_admission_invalid")
+            if public_v2:
+                if operation_authority is None:
+                    raise PublicAdmissionRejected("public_operation_authority_unavailable")
+                _require_public_v2_workspace_contract(
+                    operation_authority,
+                    admission,
+                    allowed_phases=("active",),
+                )
             lease_condition = (
                 WorkspaceOperation.lease_expires_at.is_(None)
                 if stale["lease_expires_at"] is None
@@ -2396,6 +2792,29 @@ async def recover_expired_workspace_operations(
                     "lease_expires_at": None,
                     "heartbeat_at": now,
                     "cancelled_at": now,
+                    "completed_at": now,
+                }
+                observed_retry_count = stale["retry_count"]
+            elif public_v2 and _public_deadline_unavailable(admission, now=now):
+                next_state = "deadline_exceeded"
+                event_type = "operation.error"
+                payload = {
+                    "state": next_state,
+                    "error_code": "public_deadline_exceeded",
+                    "retryable": False,
+                }
+                projection = {
+                    "state": next_state,
+                    "attempt_token": None,
+                    "lease_expires_at": None,
+                    "heartbeat_at": now,
+                    "next_attempt_at": None,
+                    "backoff_seconds": 0,
+                    "error_code": "public_deadline_exceeded",
+                    "error_detail": {
+                        "error_code": "public_deadline_exceeded",
+                        "retryable": False,
+                    },
                     "completed_at": now,
                 }
                 observed_retry_count = stale["retry_count"]
@@ -2489,6 +2908,24 @@ async def recover_expired_workspace_operations(
                     "completed_at": now,
                 }
                 observed_retry_count = stale["retry_count"]
+            recovery_error_code = (
+                None
+                if next_state in {"cancelled", "succeeded"}
+                else "public_deadline_exceeded"
+                if next_state == "deadline_exceeded"
+                else "operation_worker_crashed"
+                if stale["kind"] == "presentation.generate"
+                else "operation_recovery_required"
+            )
+            event_fencing_token = stale["fencing_token"]
+            if next_state == "queued" and public_v2:
+                requeued = await requeue_public_operation_v2(
+                    session,
+                    admission_id=admission.id,
+                    expected_fence=stale["fencing_token"],
+                    expected_attempt=stale["attempt_number"],
+                )
+                event_fencing_token = int(requeued.fence)
             if (
                 stale["kind"] == "presentation.generate"
                 and committed_delete_result is None
@@ -2498,6 +2935,8 @@ async def recover_expired_workspace_operations(
                     if next_state == "cancelled"
                     else "retry_waiting"
                     if next_state == "queued"
+                    else "failed"
+                    if next_state == "deadline_exceeded"
                     else next_state
                 )
                 crash_terminal = next_state in {"failed", "dead_letter"}
@@ -2506,29 +2945,29 @@ async def recover_expired_workspace_operations(
                     target=public_target,
                     operation_version=stale["version"],
                     attempt_number=stale["attempt_number"],
-                    fencing_token=stale["fencing_token"],
+                    fencing_token=event_fencing_token,
                     stage=public_target,
                     reason=(
                         "cancel_recovered"
                         if next_state == "cancelled"
                         else "worker_crash_retry"
                         if next_state == "queued"
+                        else "deadline_exceeded"
+                        if next_state == "deadline_exceeded"
                         else "worker_crash_terminal"
                     ),
                     terminal_reason=(
                         "user_cancelled"
                         if next_state == "cancelled"
+                        else "deadline_exceeded"
+                        if next_state == "deadline_exceeded"
                         else "worker_crash"
                         if crash_terminal
                         else None
                     ),
                     values={
                         "retry_count": observed_retry_count,
-                        "error_code": (
-                            "operation_worker_crashed"
-                            if next_state != "cancelled"
-                            else None
-                        ),
+                        "error_code": recovery_error_code,
                     },
                 )
                 public_progress = {
@@ -2544,14 +2983,18 @@ async def recover_expired_workspace_operations(
                     ],
                     transition_reason=public_progress["transition_reason"],
                 )
-                if next_state not in {"cancelled"}:
-                    payload["error_code"] = "operation_worker_crashed"
-                    projection["error_code"] = "operation_worker_crashed"
+                if recovery_error_code is not None:
+                    payload["error_code"] = recovery_error_code
+                    projection["error_code"] = recovery_error_code
                     if isinstance(projection.get("error_detail"), Mapping):
                         projection["error_detail"] = {
                             **projection["error_detail"],
-                            "error_code": "operation_worker_crashed",
-                            "reason_code": "worker_crash",
+                            "error_code": recovery_error_code,
+                            "reason_code": (
+                                "deadline_exceeded"
+                                if next_state == "deadline_exceeded"
+                                else "worker_crash"
+                            ),
                         }
                 if "terminal_reason" in public_progress:
                     payload["terminal_reason"] = public_progress[
@@ -2567,23 +3010,20 @@ async def recover_expired_workspace_operations(
                 expected_version=stale["version"],
                 projection_values=projection,
                 additional_conditions=(lease_condition, token_condition),
+                fencing_token=event_fencing_token,
+                public_admission_fence=stale["fencing_token"],
+                public_admission_attempt=stale["attempt_number"],
             )
             if event is None:
                 await session.rollback()
                 continue
-            if next_state in {"cancelled", "failed", "dead_letter"}:
+            if next_state in {"cancelled", "failed", "dead_letter", "deadline_exceeded"}:
                 operation = await session.get(WorkspaceOperation, stale["id"])
                 if operation is None or not await _project_linked_generation_terminal(
                     session,
                     operation,
                     state=next_state,
-                    error_code=(
-                        None
-                        if next_state == "cancelled"
-                        else "operation_worker_crashed"
-                        if stale["kind"] == "presentation.generate"
-                        else "operation_recovery_required"
-                    ),
+                    error_code=recovery_error_code,
                 ):
                     await session.rollback()
                     continue
@@ -2604,13 +3044,7 @@ async def recover_expired_workspace_operations(
                 conversation_id=stale["conversation_id"],
                 command_type=stale["kind"],
                 result_status=next_state,
-                error_code=(
-                    None
-                    if next_state in {"cancelled", "succeeded"}
-                    else "operation_worker_crashed"
-                    if stale["kind"] == "presentation.generate"
-                    else "operation_recovery_required"
-                ),
+                error_code=recovery_error_code,
                 public_state=(
                     public_target
                     if stale["kind"] == "presentation.generate"
@@ -2623,7 +3057,7 @@ async def recover_expired_workspace_operations(
                 recovery_count=1,
                 expected_revision=stale["expected_revision"],
                 result_revision=(stale["expected_revision"] if next_state == "succeeded" else stale["result_revision"]),
-                fencing_token=stale["fencing_token"],
+                fencing_token=event_fencing_token,
                 fence_outcome="recovery_committed",
             )
             recovered += 1
@@ -2651,6 +3085,7 @@ class _ExecutionContext(WorkspaceOperationExecutionContext):
         granted = await extend_workspace_operation_lease(
             self.claim.operation_id,
             self.claim.attempt_token,
+            fencing_token=self.claim.fencing_token,
             session_factory=self._session_factory,
             lease_seconds=seconds,
             minimum_seconds=self._lease_seconds,
@@ -2731,6 +3166,7 @@ class _ExecutionContext(WorkspaceOperationExecutionContext):
                                 "transition_reason": progress["transition_reason"],
                             },
                             attempt_token=self.claim.attempt_token,
+                            fencing_token=self.claim.fencing_token,
                             allowed_states=("running",),
                             expected_version=operation.version,
                             additional_conditions=(
@@ -2750,6 +3186,7 @@ class _ExecutionContext(WorkspaceOperationExecutionContext):
                         event_type="operation.progress",
                         payload=event_payload,
                         attempt_token=self.claim.attempt_token,
+                        fencing_token=self.claim.fencing_token,
                         allowed_states=("running",),
                         expected_version=operation.version,
                         additional_conditions=(
@@ -2811,6 +3248,7 @@ class _ExecutionContext(WorkspaceOperationExecutionContext):
                     payload={"state": "running", **dict(payload)},
                     operation_kind=self.claim.kind,
                     attempt_token=self.claim.attempt_token,
+                    fencing_token=self.claim.fencing_token,
                     allowed_states=("running",),
                     expected_version=operation.version,
                     additional_conditions=(
@@ -3008,13 +3446,54 @@ class WorkspaceOperationRunner:
         raise NonRetryableWorkspaceOperationError("invalid_operation_handler_result")
 
     async def _validate_claim_revision(self, claim: WorkspaceOperationClaim) -> None:
-        """Recheck deck/account deletion fences immediately before execution."""
+        """Recheck deletion, public authority, fence, and deadline before work."""
         async with self.session_factory() as session:
             await _fence_workspace_claim(
                 session,
                 claim,
                 check_revision=True,
             )
+            admission = await _public_admission_for_operation(
+                session,
+                claim.operation_id,
+            )
+            operation = await session.get(WorkspaceOperation, claim.operation_id)
+            if operation is None:
+                raise NonRetryableWorkspaceOperationError(
+                    "public_operation_authority_unavailable"
+                )
+            if admission is None:
+                if _is_public_v2_workspace_operation(operation):
+                    raise NonRetryableWorkspaceOperationError(
+                        "public_admission_authority_unavailable"
+                    )
+                return
+            if not _is_public_v2_admission(admission):
+                if _is_public_v2_workspace_operation(operation):
+                    raise NonRetryableWorkspaceOperationError(
+                        "public_phase2_admission_invalid"
+                    )
+                return
+            try:
+                _require_public_v2_workspace_contract(
+                    operation,
+                    admission,
+                    allowed_phases=("active",),
+                )
+            except PublicAdmissionRejected as error:
+                raise NonRetryableWorkspaceOperationError(error.code) from error
+            if (
+                admission.state != "active"
+                or int(admission.fence) != claim.fencing_token
+                or operation.fencing_token != claim.fencing_token
+            ):
+                raise NonRetryableWorkspaceOperationError(
+                    "public_operation_fence_conflict"
+                )
+            if _public_deadline_unavailable(admission, now=_utc_now()):
+                raise NonRetryableWorkspaceOperationError(
+                    "public_deadline_exceeded"
+                )
 
     async def _execute(self, claim: WorkspaceOperationClaim) -> None:
         # asyncio tasks copy contextvars at creation time.  Establish the
@@ -3111,6 +3590,13 @@ class WorkspaceOperationRunner:
                 code=error.code,
                 retryable=error.retryable,
                 detail=error.detail,
+                session_factory=self.session_factory,
+            )
+        except PublicAdmissionRejected as error:
+            await _transition_claim_failure(
+                claim,
+                code=error.code,
+                retryable=error.retryable,
                 session_factory=self.session_factory,
             )
         except asyncio.CancelledError:

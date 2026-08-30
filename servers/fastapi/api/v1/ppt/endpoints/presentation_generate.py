@@ -184,7 +184,9 @@ from services.workspace_service import (
 )
 from services.workspace_runtime_profile import (
     UnsupportedWorkspaceRuntimeError,
+    WorkspaceRuntimeKind,
     require_supported_workspace_runtime,
+    resolve_workspace_runtime_profile,
 )
 from services.public_operation_admission import (
     PublicAdmissionRejected,
@@ -263,6 +265,25 @@ def _chat_first_generation_enabled() -> bool:
     except UnsupportedWorkspaceRuntimeError as error:
         raise HTTPException(status_code=501, detail=error.code) from error
     return True
+
+
+def _require_local_sync_generation(database_url_or_dialect: Any) -> None:
+    """Keep the legacy inline generator on the explicit local SQLite path only."""
+
+    profile = resolve_workspace_runtime_profile(database_url_or_dialect)
+    if profile.kind == WorkspaceRuntimeKind.SQLITE_LOCAL:
+        return
+    raise HTTPException(
+        status_code=410,
+        detail={
+            "reasonCode": "sync_generation_deprecated",
+            "replacement": "/api/v2/presentations/generations",
+        },
+        headers={
+            "Deprecation": "true",
+            "Link": '</api/v2/presentations/generations>; rel="successor-version"',
+        },
+    )
 
 PRESENTATION_GENERATE_ROUTER = APIRouter(
     prefix="/presentation", tags=["Presentation"]
@@ -1837,12 +1858,11 @@ async def generate_presentation_sync(
     sql_session: AsyncSession = Depends(get_async_session),
 ):
     # The synchronous endpoint runs the whole generation inline, so it has no
-    # durable operation, lease, revision fence, or timeline card. It stays open
-    # because it is the documented one-shot API/CLI entry point for creating a
-    # deck (scripts/ppt-agent.mjs) and the workspace has no synchronous
-    # equivalent. Callers editing an existing deck must use a workspace command;
-    # concurrent use on a deck that already has a running operation is not
-    # fenced against that operation.
+    # durable operation, lease, revision fence, or timeline card. Preserve it
+    # only for the explicit local SQLite compatibility workflow. Cluster/public
+    # runtimes receive a deprecation error before validation, provider calls,
+    # rendering, or export can execute on the HTTP request lifetime.
+    _require_local_sync_generation(sql_engine.url)
     request._request_id = getattr(request_http.state, "request_id", None)
     try:
         (presentation_id,) = await check_if_api_request_is_valid(request, sql_session)

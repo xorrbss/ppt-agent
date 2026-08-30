@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+from collections.abc import Mapping
 from dataclasses import dataclass
 import json
 import re
@@ -36,6 +37,11 @@ from services.authored_vnext.generation.ai_text_zones import (
 from services.authored_vnext.generation.effective_style import (
     materialize_authored_composition,
 )
+from services.authored_vnext.capability_registry import (
+    EDITABLE_HYBRID_PROFILE_ID,
+    capability_metadata,
+    hybrid_ooxml_capabilities,
+)
 
 
 class ExportServiceError(RuntimeError):
@@ -47,6 +53,54 @@ class ExportServiceError(RuntimeError):
 
 _HEX_COLOR = re.compile(r"^#?([0-9a-fA-F]{6})$")
 _BACKGROUND_FURNITURE_ID = "company-standard:background"
+_HYBRID_FALLBACK_POLICIES = frozenset({
+    "reject",
+    "per-slide-raster",
+    "whole-deck-fidelity",
+})
+
+
+def _require_explicit_hybrid_fallback_policy(
+    scene: Mapping[str, Any], request_payload: Mapping[str, Any]
+) -> None:
+    """Reject an implicit or unsupported Hybrid fallback before job creation.
+
+    Raster islands are intentional only when the caller selected the per-slide
+    policy. This OOXML worker cannot produce a whole-deck Fidelity replacement,
+    so accepting that policy here would be a silent mode change.
+    """
+
+    if scene.get("hybridProfileId") != EDITABLE_HYBRID_PROFILE_ID:
+        return
+    policy = request_payload.get("fallbackPolicy")
+    if policy not in _HYBRID_FALLBACK_POLICIES:
+        raise ExportServiceError("authored_vnext_hybrid_fallback_policy_required")
+    if policy == "whole-deck-fidelity":
+        raise ExportServiceError("authored_vnext_hybrid_fallback_policy_unsupported")
+    if policy != "reject":
+        return
+    slides = scene.get("slides")
+    if not isinstance(slides, list):
+        raise ExportServiceError("authored_vnext_hybrid_export_plan_invalid")
+    for slide in slides:
+        if not isinstance(slide, Mapping):
+            raise ExportServiceError("authored_vnext_hybrid_export_plan_invalid")
+        plan = slide.get("hybridExport")
+        if not isinstance(plan, Mapping):
+            raise ExportServiceError("authored_vnext_hybrid_export_plan_invalid")
+        decisions = plan.get("ownerDecisions")
+        islands = plan.get("rasterIslands")
+        if (
+            not isinstance(decisions, list)
+            or not isinstance(islands, list)
+            or islands
+            or any(
+                not isinstance(decision, Mapping)
+                or decision.get("decision") != "nativeEditable"
+                for decision in decisions
+            )
+        ):
+            raise ExportServiceError("authored_vnext_hybrid_fallback_rejected")
 
 
 def _hex_color(value: object, default: str) -> str:
@@ -191,7 +245,7 @@ def _assert_worker_readback(
     expected_scene_slides: list[dict[str, Any]] = []
     expected_counts = {"chart": 0, "image": 0, "shape": 0, "table": 0, "text": 0}
     hybrid_profile_id = scene.get("hybridProfileId")
-    hybrid_mode = hybrid_profile_id == "authored-editable-hybrid-ko-en-basic-v1"
+    hybrid_mode = hybrid_profile_id == EDITABLE_HYBRID_PROFILE_ID
     if hybrid_profile_id is not None and not hybrid_mode:
         raise ExportServiceError("authored_vnext_hybrid_profile_mismatch")
     expected_raster_island_count = 0
@@ -384,8 +438,7 @@ def _assert_worker_readback(
     }
     expected_capabilities = (
         {
-            "profileId": "authored-editable-hybrid-ko-en-basic-v1",
-            "nativeEditable": ["image", "shape", "table", "text"],
+            **hybrid_ooxml_capabilities(),
             "rasterIsland": [
                 "chart",
                 "connector",
@@ -395,11 +448,14 @@ def _assert_worker_readback(
                 "table",
                 "text",
             ],
+            "readbackRegistry": capability_metadata(consumer="readback"),
         }
         if hybrid_mode
         else {
             "supported": ["chart", "image", "shape", "table", "text"],
             "unsupported": ["connector", "group"],
+            **capability_metadata(consumer="ooxml"),
+            "readbackRegistry": capability_metadata(consumer="readback"),
         }
     )
     expected_hybrid_ownership = {
@@ -785,6 +841,12 @@ class AuthoredVNextExportService:
             raise ExportServiceError(
                 "authored_vnext_editable_hybrid_profile_mismatch"
             )
+        if scene is None:
+            raise ExportServiceError("authored_vnext_scene_missing")
+        _require_explicit_hybrid_fallback_policy(
+            scene.model_dump(mode="json", by_alias=True),
+            command.request_payload,
+        )
         master_pin = getattr(deck, "master", None)
         deck_master_revision = (
             master_pin.master_revision

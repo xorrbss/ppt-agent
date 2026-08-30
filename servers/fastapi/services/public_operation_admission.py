@@ -8,22 +8,28 @@ provider-response fields.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
+from inspect import isawaitable
 import re
 import uuid
 
-from sqlalchemy import and_, or_, update
+from sqlalchemy import and_, or_, text, update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from models.sql import public_admission as public_admission_models
 from models.sql.public_admission import (
     PublicOperationAdmission,
     PublicPolicyProfile,
     PublicProviderLogicalCall,
     PublicQuotaCounter,
+)
+from migration_revision_contract import (
+    PUBLIC_CONTROL_PLANE_AUTHORITY_PROBE_SQL,
+    REVISION_PUBLIC_CONTROL_PLANE,
 )
 from utils.datetime_utils import get_current_utc_datetime
 from utils.owner_context import (
@@ -53,10 +59,17 @@ from services.provider_pricing import (
     calculate_actual_usage_cost,
 )
 _TERMINAL_STATES = frozenset(
-    {"succeeded", "failed", "cancelled", "budget_exhausted"}
+    {"succeeded", "failed", "cancelled", "budget_exhausted", "deadline_exceeded"}
 )
 _HASH_RE = re.compile(r"^[a-f0-9]{64}$")
 _SAFE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
+_PHASE2_COUNTER_FIELDS = frozenset({"queued_resource_units", "active_resource_units"})
+_PHASE2_ADMISSION_FIELDS = frozenset(
+    {"resource_units", "deadline_at", "policy_digest", "fence"}
+)
+_PHASE2_COMMIT_RESERVE_SECONDS = 10
+
+
 @dataclass(frozen=True, slots=True)
 class PrincipalContext:
     """Identity already verified by the external session trust boundary."""
@@ -88,6 +101,45 @@ class ProviderRequestPlan:
         """Reserve at most one bounded validation retry per authored slide."""
 
         return self.slide_count
+
+
+@dataclass(frozen=True, slots=True)
+class WeightedResourcePlan:
+    """Content-free scheduler estimate persisted as resource units.
+
+    The fixed weights deliberately make a high-DPR, SVG-heavy Hybrid deck cost
+    more than a small text deck.  The value is an admission reservation, not a
+    runtime measurement, so it is stable across retries and cluster nodes.
+    """
+
+    pixel_count: int
+    device_pixel_ratio_milli: int
+    dom_node_count: int
+    font_count: int
+    svg_complexity: int
+    estimated_memory_mib: int
+    fidelity_mode: str
+
+    @property
+    def resource_units(self) -> int:
+        mode_weight = {"standard": 0, "fidelity": 2, "hybrid": 4}.get(
+            self.fidelity_mode
+        )
+        if mode_weight is None:
+            raise ValueError("public_fidelity_mode_invalid")
+        # Integer arithmetic keeps the reservation deterministic and avoids a
+        # float/rounding difference becoming a distributed quota bypass.
+        dpr_squared_milli = self.device_pixel_ratio_milli**2
+        pixel_units = (self.pixel_count * dpr_squared_milli + 999_999_999_999) // 1_000_000_000_000
+        return max(
+            1,
+            pixel_units
+            + ((self.dom_node_count + 999) // 1_000)
+            + ((self.font_count + 7) // 8)
+            + ((self.svg_complexity + 249) // 250)
+            + ((self.estimated_memory_mib + 127) // 128)
+            + mode_weight,
+        )
 
 
 class PublicAdmissionRejected(RuntimeError):
@@ -200,6 +252,245 @@ def plan_provider_requests(
     return plan
 
 
+def plan_weighted_resources(
+    *,
+    pixel_count: int,
+    device_pixel_ratio_milli: int,
+    dom_node_count: int,
+    font_count: int,
+    svg_complexity: int,
+    estimated_memory_mib: int,
+    fidelity_mode: str,
+) -> WeightedResourcePlan:
+    """Normalize a scheduler estimate before it becomes a durable reservation."""
+
+    plan = WeightedResourcePlan(
+        pixel_count=_nonnegative(pixel_count, "pixel_count"),
+        device_pixel_ratio_milli=_nonnegative(
+            device_pixel_ratio_milli, "device_pixel_ratio_milli"
+        ),
+        dom_node_count=_nonnegative(dom_node_count, "dom_node_count"),
+        font_count=_nonnegative(font_count, "font_count"),
+        svg_complexity=_nonnegative(svg_complexity, "svg_complexity"),
+        estimated_memory_mib=_nonnegative(
+            estimated_memory_mib, "estimated_memory_mib"
+        ),
+        fidelity_mode=fidelity_mode,
+    )
+    if plan.device_pixel_ratio_milli < 1:
+        raise ValueError("device_pixel_ratio_milli_must_be_positive")
+    # Resolve the property here so an invalid fidelity mode never reaches DB.
+    _ = plan.resource_units
+    return plan
+
+
+def _model_columns(model: type[object]) -> set[str]:
+    table = getattr(model, "__table__", None)
+    return set(table.columns.keys()) if table is not None else set()
+
+
+def _phase2_resource_lease_model() -> type[object] | None:
+    """Read the DB-lane model lazily so a rolling Phase-1 deploy still imports."""
+
+    candidate = getattr(public_admission_models, "PublicResourceLease", None)
+    if candidate is None:
+        return None
+    required = {
+        "admission_id",
+        "operation_id",
+        "policy_version",
+        "scope_type",
+        "scope_key",
+        "operation_kind",
+        "resource_units",
+        "state",
+        "attempt",
+        "fence",
+        "reserved_at",
+        "deadline_at",
+    }
+    return candidate if required <= _model_columns(candidate) else None
+
+
+def _phase2_available() -> bool:
+    return (
+        _PHASE2_COUNTER_FIELDS <= _model_columns(PublicQuotaCounter)
+        and _PHASE2_ADMISSION_FIELDS <= _model_columns(PublicOperationAdmission)
+        and _phase2_resource_lease_model() is not None
+    )
+
+
+async def _require_phase2_authority(session: AsyncSession) -> type[object]:
+    """Reject instead of silently falling back when durable authority is absent."""
+
+    bind = session.get_bind()
+    if bind.dialect.name != "postgresql":
+        raise PublicAdmissionRejected("public_postgresql_authority_required")
+    lease_model = _phase2_resource_lease_model()
+    if not _phase2_available() or lease_model is None:
+        raise PublicAdmissionRejected("public_phase2_schema_unavailable")
+    try:
+        async with session.begin_nested():
+            authority_revision = await session.scalar(
+                text(PUBLIC_CONTROL_PLANE_AUTHORITY_PROBE_SQL)
+            )
+    except SQLAlchemyError as error:
+        raise PublicAdmissionRejected(
+            "public_phase2_schema_authority_unavailable"
+        ) from error
+    if authority_revision != REVISION_PUBLIC_CONTROL_PLANE:
+        raise PublicAdmissionRejected("public_phase2_schema_authority_unavailable")
+    return lease_model
+
+
+async def _resolved_phase2_authority(session: AsyncSession) -> type[object]:
+    """Resolve the async authority guard while retaining isolated test seams."""
+
+    authority = _require_phase2_authority(session)
+    if isawaitable(authority):
+        authority = await authority
+    return authority
+
+
+def _utc(value: datetime, field: str) -> datetime:
+    if not isinstance(value, datetime):
+        raise ValueError(f"{field}_required")
+    return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+
+
+def _absolute_deadline(
+    *,
+    now: datetime,
+    policy: PublicPolicyProfile,
+    operation_kind: str,
+    auth_expires_at: datetime | None,
+    server_hard_deadline_at: datetime | None,
+) -> datetime:
+    seconds = _nonnegative(
+        int(getattr(policy, f"{operation_kind}_deadline_seconds")),
+        "policy_deadline_seconds",
+    )
+    if seconds < _PHASE2_COMMIT_RESERVE_SECONDS:
+        raise PublicAdmissionRejected("public_policy_deadline_invalid")
+    candidates = [_utc(now, "admission_now") + timedelta(seconds=seconds)]
+    if auth_expires_at is not None:
+        candidates.append(_utc(auth_expires_at, "auth_expires_at"))
+    if server_hard_deadline_at is not None:
+        candidates.append(_utc(server_hard_deadline_at, "server_hard_deadline_at"))
+    deadline = min(candidates)
+    if deadline <= _utc(now, "admission_now") + timedelta(
+        seconds=_PHASE2_COMMIT_RESERVE_SECONDS
+    ):
+        raise PublicAdmissionRejected("public_deadline_insufficient")
+    return deadline
+
+
+def _policy_digest(policy: PublicPolicyProfile) -> str:
+    """Pin quota/deadline policy content rather than trusting a mutable version label."""
+
+    fields = sorted(_model_columns(PublicPolicyProfile) - {"created_at"})
+    values = "|".join(f"{field}={getattr(policy, field)!r}" for field in fields)
+    return sha256(f"public-policy/v2|{values}".encode("utf-8")).hexdigest()
+
+
+def _phase2_workspace_model() -> type[object] | None:
+    candidate = getattr(public_admission_models, "WorkspaceOperation", None)
+    if candidate is None:
+        # Keep the cross-module dependency lazy during the schema rollout.
+        from models.sql import workspace as workspace_models
+
+        candidate = getattr(workspace_models, "WorkspaceOperation", None)
+    required = {
+        "id",
+        "owner_id",
+        "deadline_at",
+        "contract_version",
+        "execution_profile_version",
+        "phase",
+    }
+    return candidate if candidate is not None and required <= _model_columns(candidate) else None
+
+
+def _require_phase2_workspace_model() -> type[object]:
+    model = _phase2_workspace_model()
+    if model is None:
+        raise PublicAdmissionRejected("public_phase2_workspace_schema_unavailable")
+    return model
+
+
+def _resource_lease_scope_key(scope_type: str, principal: PrincipalContext) -> str:
+    return {
+        "global": "global",
+        "tenant": principal.tenant_id,
+        "owner": str(principal.owner_id),
+    }[scope_type]
+
+
+def _assert_deadline_remaining(deadline_at: datetime, *, now: datetime) -> None:
+    if _utc(deadline_at, "deadline_at") <= _utc(now, "admission_now") + timedelta(
+        seconds=_PHASE2_COMMIT_RESERVE_SECONDS
+    ):
+        raise PublicAdmissionRejected("public_deadline_insufficient")
+
+
+async def _require_phase2_provider_contract(
+    session: AsyncSession,
+    admission: PublicOperationAdmission,
+    *,
+    allow_terminal_reconcile: bool = False,
+) -> None:
+    """Bind detached provider I/O to the PostgreSQL operation authority.
+
+    A public admission row alone is insufficient: Phase-1 rows and SQLite
+    fixtures do not carry the immutable deadline/fence contract required to
+    authorize external provider work. Reconciliation remains allowed after a
+    budget terminal transition so already-started calls cannot strand counters.
+    """
+
+    await _resolved_phase2_authority(session)
+    if (
+        not getattr(admission, "policy_digest", None)
+        or getattr(admission, "deadline_at", None) is None
+        or int(getattr(admission, "fence", 0)) < 1
+    ):
+        raise PublicAdmissionRejected("public_phase2_admission_invalid")
+    if admission.state == "budget_exhausted" and not allow_terminal_reconcile:
+        raise PublicAdmissionRejected(
+            "public_provider_actual_cost_limit_exceeded"
+        )
+    if admission.state != "active" and not (
+        allow_terminal_reconcile and admission.state == "budget_exhausted"
+    ):
+        raise PublicAdmissionRejected("public_provider_operation_not_active")
+    workspace_model = _require_phase2_workspace_model()
+    operation = await session.scalar(
+        select(workspace_model)
+        .where(workspace_model.id == admission.operation_id)
+        .with_for_update()
+    )
+    allowed_phases = (
+        {"active", "budget_exhausted"}
+        if allow_terminal_reconcile
+        else {"active"}
+    )
+    if (
+        operation is None
+        or operation.contract_version != "public-operation/v2"
+        or operation.execution_profile_version != "public-generation-export/v2"
+        or operation.phase not in allowed_phases
+        or operation.fencing_token != admission.fence
+        or operation.deadline_at is None
+        or _utc(operation.deadline_at, "operation_deadline_at")
+        != _utc(admission.deadline_at, "admission_deadline_at")
+    ):
+        raise PublicAdmissionRejected("public_operation_workspace_contract_conflict")
+    if not allow_terminal_reconcile:
+        _assert_deadline_remaining(
+            admission.deadline_at,
+            now=get_current_utc_datetime(),
+        )
+
+
 async def load_public_policy(
     session: AsyncSession, version: str = PUBLIC_DEFAULT_POLICY_VERSION
 ) -> PublicPolicyProfile:
@@ -212,7 +503,7 @@ async def load_public_policy(
 def _quota_limits(
     policy: PublicPolicyProfile, *, scope_type: str, operation_kind: str
 ) -> tuple[int, int]:
-    if scope_type not in {"owner", "tenant"} or operation_kind not in {
+    if scope_type not in {"global", "owner", "tenant"} or operation_kind not in {
         "generation",
         "export",
     }:
@@ -221,6 +512,18 @@ def _quota_limits(
     return (
         int(getattr(policy, f"{prefix}active_{operation_kind}")),
         int(getattr(policy, f"{prefix}queued_{operation_kind}")),
+    )
+
+
+def _resource_limits(
+    policy: PublicPolicyProfile, *, scope_type: str
+) -> tuple[int, int]:
+    if scope_type not in {"global", "tenant", "owner"}:
+        raise ValueError("public_resource_scope_invalid")
+    prefix = f"{scope_type}_"
+    return (
+        int(getattr(policy, f"{prefix}queued_resource_units")),
+        int(getattr(policy, f"{prefix}active_resource_units")),
     )
 
 
@@ -264,7 +567,9 @@ async def _locked_counters(
     tenant_id: str,
     operation_kind: str,
 ) -> tuple[PublicQuotaCounter, PublicQuotaCounter]:
-    identities = (("owner", str(owner_id)), ("tenant", tenant_id))
+    # Every transition follows the global/tenant/owner hierarchy.  Phase 1
+    # does not have a global counter, so its compatible subset is tenant/owner.
+    identities = (("tenant", tenant_id), ("owner", str(owner_id)))
     for scope_type, scope_key in identities:
         await _ensure_counter(
             session,
@@ -273,33 +578,64 @@ async def _locked_counters(
             scope_key=scope_key,
             operation_kind=operation_kind,
         )
-    rows = list(
-        (
-            await session.execute(
-                select(PublicQuotaCounter)
-                .where(
-                    PublicQuotaCounter.policy_version == policy_version,
-                    PublicQuotaCounter.operation_kind == operation_kind,
-                    (
-                        (
-                            (PublicQuotaCounter.scope_type == "owner")
-                            & (PublicQuotaCounter.scope_key == str(owner_id))
-                        )
-                        | (
-                            (PublicQuotaCounter.scope_type == "tenant")
-                            & (PublicQuotaCounter.scope_key == tenant_id)
-                        )
-                    ),
-                )
-                .order_by(PublicQuotaCounter.scope_type, PublicQuotaCounter.scope_key)
-                .with_for_update()
+    by_type: dict[str, PublicQuotaCounter] = {}
+    for scope_type, scope_key in identities:
+        row = await session.scalar(
+            select(PublicQuotaCounter)
+            .where(
+                PublicQuotaCounter.policy_version == policy_version,
+                PublicQuotaCounter.scope_type == scope_type,
+                PublicQuotaCounter.scope_key == scope_key,
+                PublicQuotaCounter.operation_kind == operation_kind,
             )
-        ).scalars()
-    )
-    by_type = {row.scope_type: row for row in rows}
+            .with_for_update()
+        )
+        if row is not None:
+            by_type[scope_type] = row
     if set(by_type) != {"owner", "tenant"}:
         raise RuntimeError("public_quota_counter_missing")
     return by_type["owner"], by_type["tenant"]
+
+
+async def _locked_phase2_counters(
+    session: AsyncSession,
+    *,
+    policy_version: str,
+    owner_id: uuid.UUID,
+    tenant_id: str,
+    operation_kind: str,
+) -> dict[str, PublicQuotaCounter]:
+    """Create and lock all scheduler axes in the only permitted order."""
+
+    identities = (
+        ("global", "global"),
+        ("tenant", tenant_id),
+        ("owner", str(owner_id)),
+    )
+    for scope_type, scope_key in identities:
+        await _ensure_counter(
+            session,
+            policy_version=policy_version,
+            scope_type=scope_type,
+            scope_key=scope_key,
+            operation_kind=operation_kind,
+        )
+    locked: dict[str, PublicQuotaCounter] = {}
+    for scope_type, scope_key in identities:
+        row = await session.scalar(
+            select(PublicQuotaCounter)
+            .where(
+                PublicQuotaCounter.policy_version == policy_version,
+                PublicQuotaCounter.scope_type == scope_type,
+                PublicQuotaCounter.scope_key == scope_key,
+                PublicQuotaCounter.operation_kind == operation_kind,
+            )
+            .with_for_update()
+        )
+        if row is None:
+            raise PublicAdmissionRejected("public_quota_authority_unavailable")
+        locked[scope_type] = row
+    return locked
 
 
 async def admit_public_operation(
@@ -388,6 +724,9 @@ async def admit_public_operation(
         )
 
     now = get_current_utc_datetime()
+    legacy_deadline_seconds = max(
+        1, int(getattr(policy, f"{operation_kind}_deadline_seconds"))
+    )
     row = PublicOperationAdmission(
         operation_id=operation_id,
         policy_version=policy_version,
@@ -400,6 +739,13 @@ async def admit_public_operation(
         retry_request_limit=retry_limit,
         estimated_cost_limit_microunits=estimated_limit,
         actual_cost_limit_microunits=actual_limit,
+        # Phase-1 callers have no auth/server deadline input.  Preserve their
+        # API while supplying durable non-null Phase-2 columns; the strict v2
+        # entry point computes the full min(policy, auth, server) contract.
+        resource_units=1,
+        deadline_at=now + timedelta(seconds=legacy_deadline_seconds),
+        policy_digest=_policy_digest(policy),
+        fence=0,
         queued_at=now,
         updated_at=now,
     )
@@ -411,6 +757,488 @@ async def admit_public_operation(
     session.add(row)
     await session.flush()
     return row
+
+
+async def admit_public_operation_v2(
+    session: AsyncSession,
+    *,
+    principal: PrincipalContext,
+    operation_id: uuid.UUID,
+    operation_kind: str,
+    request_plan: ProviderRequestPlan | None,
+    resource_plan: WeightedResourcePlan,
+    auth_expires_at: datetime | None = None,
+    server_hard_deadline_at: datetime | None = None,
+    policy_version: str = PUBLIC_DEFAULT_POLICY_VERSION,
+    estimated_cost_limit_microunits: int | None = None,
+    actual_cost_limit_microunits: int | None = None,
+) -> PublicOperationAdmission:
+    """Phase-2 control-plane admission in one PostgreSQL transaction.
+
+    This is intentionally separate from the Phase-1 entry point: callers that
+    opt in cannot accidentally receive a local/SQLite or incomplete-schema
+    admission.  The caller owns commit and must return a receipt only after it.
+    """
+
+    principal = _principal(principal)
+    if operation_kind not in {"generation", "export"}:
+        raise ValueError("public_operation_kind_invalid")
+    lease_model = await _resolved_phase2_authority(session)
+    workspace_model = _require_phase2_workspace_model()
+    operation = await session.scalar(
+        select(workspace_model)
+        .where(workspace_model.id == operation_id)
+        .with_for_update()
+    )
+    if operation is None or operation.owner_id != principal.owner_id:
+        raise PublicAdmissionRejected("public_operation_authority_unavailable")
+    existing = await session.scalar(
+        select(PublicOperationAdmission)
+        .where(PublicOperationAdmission.operation_id == operation_id)
+        .with_for_update()
+    )
+    resource_units = resource_plan.resource_units
+    if existing is not None:
+        if (
+            existing.owner_id != principal.owner_id
+            or existing.tenant_id != principal.tenant_id
+            or existing.operation_kind != operation_kind
+            or existing.policy_version != policy_version
+            or existing.resource_units != resource_units
+            or not existing.policy_digest
+            or operation.deadline_at is None
+            or operation.fencing_token != existing.fence
+            or _utc(operation.deadline_at, "operation_deadline_at")
+            != _utc(existing.deadline_at, "admission_deadline_at")
+        ):
+            raise PublicAdmissionRejected("public_operation_identity_conflict")
+        _assert_deadline_remaining(existing.deadline_at, now=get_current_utc_datetime())
+        return existing
+    policy = await load_public_policy(session, policy_version)
+    now = get_current_utc_datetime()
+    deadline = _absolute_deadline(
+        now=now,
+        policy=policy,
+        operation_kind=operation_kind,
+        auth_expires_at=auth_expires_at,
+        server_hard_deadline_at=server_hard_deadline_at,
+    )
+    existing_deadline = getattr(operation, "deadline_at", None)
+    if existing_deadline is not None and _utc(existing_deadline, "operation_deadline_at") != deadline:
+        raise PublicAdmissionRejected("public_operation_deadline_conflict")
+    contract = "public-operation/v2"
+    profile = "public-generation-export/v2"
+    for field, value in (
+        ("contract_version", contract),
+        ("execution_profile_version", profile),
+    ):
+        prior = getattr(operation, field, None)
+        if prior is not None and prior != value:
+            raise PublicAdmissionRejected("public_operation_contract_conflict")
+    prior_phase = getattr(operation, "phase", None)
+    if prior_phase not in {None, "queued", "admitted"}:
+        raise PublicAdmissionRejected("public_operation_phase_conflict")
+
+    if operation_kind == "generation":
+        if request_plan is None:
+            raise PublicAdmissionRejected("provider_request_plan_required")
+        if request_plan.slide_count > policy.max_slides:
+            raise PublicAdmissionRejected("public_slide_limit_exceeded")
+        request_limit = request_plan.initial_request_limit
+        retry_limit = policy.retry_request_limit
+        estimated_limit = min(
+            policy.estimated_cost_limit_microunits,
+            estimated_cost_limit_microunits
+            if estimated_cost_limit_microunits is not None
+            else policy.estimated_cost_limit_microunits,
+        )
+        actual_limit = min(
+            policy.actual_cost_limit_microunits,
+            actual_cost_limit_microunits
+            if actual_cost_limit_microunits is not None
+            else policy.actual_cost_limit_microunits,
+        )
+        if estimated_limit <= 0 or actual_limit <= 0:
+            raise PublicAdmissionRejected("provider_cost_cap_required")
+        slide_count = request_plan.slide_count
+    else:
+        if request_plan is not None:
+            raise ValueError("export_provider_request_plan_forbidden")
+        request_limit = retry_limit = estimated_limit = actual_limit = slide_count = 0
+
+    counters = await _locked_phase2_counters(
+        session,
+        policy_version=policy_version,
+        owner_id=principal.owner_id,
+        tenant_id=principal.tenant_id,
+        operation_kind=operation_kind,
+    )
+    for scope_type in ("global", "tenant", "owner"):
+        counter = counters[scope_type]
+        _, queued_count_limit = _quota_limits(
+            policy, scope_type=scope_type, operation_kind=operation_kind
+        )
+        queued_resource_limit, _ = _resource_limits(policy, scope_type=scope_type)
+        if counter.queued_count >= queued_count_limit:
+            raise PublicAdmissionRejected(
+                f"public_{scope_type}_queue_limit_exceeded", retry_after_seconds=15
+            )
+        if counter.queued_resource_units + resource_units > queued_resource_limit:
+            raise PublicAdmissionRejected(
+                f"public_{scope_type}_resource_limit_exceeded", retry_after_seconds=15
+            )
+
+    fence = 1
+    row = PublicOperationAdmission(
+        operation_id=operation_id,
+        policy_version=policy_version,
+        owner_id=principal.owner_id,
+        tenant_id=principal.tenant_id,
+        trace_id_hash=sha256(principal.trace_id.encode("utf-8")).hexdigest(),
+        operation_kind=operation_kind,
+        slide_count=slide_count,
+        planned_request_limit=request_limit,
+        retry_request_limit=retry_limit,
+        estimated_cost_limit_microunits=estimated_limit,
+        actual_cost_limit_microunits=actual_limit,
+        resource_units=resource_units,
+        deadline_at=deadline,
+        policy_digest=_policy_digest(policy),
+        fence=fence,
+        queued_at=now,
+        updated_at=now,
+    )
+    operation.deadline_at = deadline
+    operation.contract_version = contract
+    operation.execution_profile_version = profile
+    operation.phase = "admitted"
+    operation.fencing_token = fence
+    session.add(row)
+    await session.flush()
+    for scope_type in ("global", "tenant", "owner"):
+        counter = counters[scope_type]
+        counter.queued_count += 1
+        counter.queued_resource_units += resource_units
+        counter.version += 1
+        counter.updated_at = now
+        session.add(
+            lease_model(
+                admission_id=row.id,
+                operation_id=operation_id,
+                policy_version=policy_version,
+                scope_type=scope_type,
+                scope_key=_resource_lease_scope_key(scope_type, principal),
+                operation_kind=operation_kind,
+                resource_units=resource_units,
+                state="queued",
+                attempt=0,
+                fence=fence,
+                reserved_at=now,
+                deadline_at=deadline,
+                lease_expires_at=deadline,
+                version=0,
+            )
+        )
+    await session.flush()
+    return row
+
+
+async def _locked_phase2_leases(
+    session: AsyncSession, *, lease_model: type[object], admission: PublicOperationAdmission
+) -> list[object]:
+    leases = list(
+        (
+            await session.execute(
+                select(lease_model)
+                .where(lease_model.admission_id == admission.id)
+                .with_for_update()
+            )
+        ).scalars()
+    )
+    expected = {"global", "tenant", "owner"}
+    if len(leases) != 3 or {lease.scope_type for lease in leases} != expected:
+        raise PublicAdmissionRejected("public_resource_lease_authority_unavailable")
+    if any(
+        lease.operation_id != admission.operation_id
+        or lease.resource_units != admission.resource_units
+        for lease in leases
+    ):
+        raise PublicAdmissionRejected("public_resource_lease_conflict")
+    return leases
+
+
+async def activate_public_operation_v2(
+    session: AsyncSession,
+    *,
+    admission_id: uuid.UUID,
+    lease_owner_hash: str,
+    lease_seconds: int,
+    attempt: int | None = None,
+    fence: int | None = None,
+) -> PublicOperationAdmission:
+    """Atomically activate an admission and issue scope-aligned resource leases."""
+
+    lease_model = await _resolved_phase2_authority(session)
+    if not _HASH_RE.fullmatch(lease_owner_hash):
+        raise ValueError("public_lease_owner_hash_invalid")
+    duration = _nonnegative(lease_seconds, "lease_seconds")
+    if duration < 1:
+        raise ValueError("public_lease_seconds_must_be_positive")
+    admission = await session.scalar(
+        select(PublicOperationAdmission)
+        .where(PublicOperationAdmission.id == admission_id)
+        .with_for_update()
+    )
+    if admission is None:
+        raise PublicAdmissionRejected("public_operation_not_found")
+    if fence is not None and admission.fence != _nonnegative(fence, "fence"):
+        raise PublicAdmissionRejected("public_operation_fence_conflict")
+    workspace_model = _require_phase2_workspace_model()
+    operation = await session.scalar(
+        select(workspace_model)
+        .where(workspace_model.id == admission.operation_id)
+        .with_for_update()
+    )
+    if operation is None or _utc(operation.deadline_at, "operation_deadline_at") != _utc(
+        admission.deadline_at, "admission_deadline_at"
+    ) or operation.fencing_token != admission.fence:
+        raise PublicAdmissionRejected("public_operation_fence_conflict")
+    if admission.state == "active":
+        leases = await _locked_phase2_leases(session, lease_model=lease_model, admission=admission)
+        if attempt is not None and any(lease.attempt != attempt for lease in leases):
+            raise PublicAdmissionRejected("public_resource_lease_attempt_conflict")
+        return admission
+    if admission.state != "queued":
+        raise PublicAdmissionRejected("public_operation_not_queued")
+    now = get_current_utc_datetime()
+    _assert_deadline_remaining(admission.deadline_at, now=now)
+    policy = await load_public_policy(session, admission.policy_version)
+    counters = await _locked_phase2_counters(
+        session,
+        policy_version=admission.policy_version,
+        owner_id=admission.owner_id,
+        tenant_id=admission.tenant_id,
+        operation_kind=admission.operation_kind,
+    )
+    leases = await _locked_phase2_leases(session, lease_model=lease_model, admission=admission)
+    for scope_type in ("global", "tenant", "owner"):
+        counter = counters[scope_type]
+        active_count_limit, _ = _quota_limits(
+            policy, scope_type=scope_type, operation_kind=admission.operation_kind
+        )
+        _, active_resource_limit = _resource_limits(policy, scope_type=scope_type)
+        if counter.active_count >= active_count_limit:
+            raise PublicAdmissionRejected(f"public_{scope_type}_active_limit_exceeded")
+        if counter.active_resource_units + admission.resource_units > active_resource_limit:
+            raise PublicAdmissionRejected(f"public_{scope_type}_active_resource_limit_exceeded")
+        if (
+            counter.queued_count < 1
+            or counter.queued_resource_units < admission.resource_units
+        ):
+            raise PublicAdmissionRejected("public_quota_counter_underflow")
+        counter.queued_count -= 1
+        counter.queued_resource_units -= admission.resource_units
+        counter.active_count += 1
+        counter.active_resource_units += admission.resource_units
+        counter.last_activated_at = now
+        counter.updated_at = now
+        counter.version += 1
+    expires_at = min(
+        _utc(admission.deadline_at, "admission_deadline_at"),
+        _utc(now, "activation_now") + timedelta(seconds=duration),
+    )
+    for lease in leases:
+        if lease.state != "queued" or lease.fence != admission.fence:
+            raise PublicAdmissionRejected("public_resource_lease_conflict")
+        lease.state = "leased"
+        lease.attempt = (
+            _nonnegative(attempt, "attempt") if attempt is not None else lease.attempt + 1
+        )
+        if lease.attempt < 1:
+            raise PublicAdmissionRejected("public_resource_lease_attempt_invalid")
+        lease.lease_owner_hash = lease_owner_hash
+        lease.leased_at = now
+        lease.heartbeat_at = now
+        lease.lease_expires_at = expires_at
+        lease.version += 1
+    admission.state = "active"
+    admission.activated_at = now
+    admission.updated_at = now
+    operation.phase = "active"
+    operation.fencing_token = admission.fence
+    await session.flush()
+    return admission
+
+
+async def requeue_public_operation_v2(
+    session: AsyncSession,
+    *,
+    admission_id: uuid.UUID,
+    expected_fence: int,
+    expected_attempt: int | None = None,
+) -> PublicOperationAdmission:
+    """Return an active admission to queue without losing its resource reservation."""
+
+    lease_model = await _resolved_phase2_authority(session)
+    admission = await session.scalar(
+        select(PublicOperationAdmission)
+        .where(PublicOperationAdmission.id == admission_id)
+        .with_for_update()
+    )
+    if admission is None or admission.state != "active":
+        raise PublicAdmissionRejected("public_operation_not_active")
+    if admission.fence != _nonnegative(expected_fence, "expected_fence"):
+        raise PublicAdmissionRejected("public_operation_fence_conflict")
+    now = get_current_utc_datetime()
+    _assert_deadline_remaining(admission.deadline_at, now=now)
+    workspace_model = _require_phase2_workspace_model()
+    operation = await session.scalar(
+        select(workspace_model)
+        .where(workspace_model.id == admission.operation_id)
+        .with_for_update()
+    )
+    if operation is None or operation.fencing_token != expected_fence or _utc(
+        operation.deadline_at, "operation_deadline_at"
+    ) != _utc(admission.deadline_at, "admission_deadline_at"):
+        raise PublicAdmissionRejected("public_operation_fence_conflict")
+    counters = await _locked_phase2_counters(
+        session,
+        policy_version=admission.policy_version,
+        owner_id=admission.owner_id,
+        tenant_id=admission.tenant_id,
+        operation_kind=admission.operation_kind,
+    )
+    leases = await _locked_phase2_leases(session, lease_model=lease_model, admission=admission)
+    next_fence = admission.fence + 1
+    for scope_type in ("global", "tenant", "owner"):
+        counter = counters[scope_type]
+        if (
+            counter.active_count < 1
+            or counter.active_resource_units < admission.resource_units
+        ):
+            raise PublicAdmissionRejected("public_quota_counter_underflow")
+        counter.active_count -= 1
+        counter.active_resource_units -= admission.resource_units
+        counter.queued_count += 1
+        counter.queued_resource_units += admission.resource_units
+        counter.updated_at = now
+        counter.version += 1
+    for lease in leases:
+        if (
+            lease.state != "leased"
+            or lease.fence != expected_fence
+            or (expected_attempt is not None and lease.attempt != expected_attempt)
+        ):
+            raise PublicAdmissionRejected("public_resource_lease_fence_conflict")
+        lease.state = "queued"
+        lease.fence = next_fence
+        lease.lease_owner_hash = None
+        lease.lease_expires_at = admission.deadline_at
+        lease.version += 1
+    admission.state = "queued"
+    admission.fence = next_fence
+    admission.updated_at = now
+    operation.fencing_token = next_fence
+    operation.phase = "queued"
+    await session.flush()
+    return admission
+
+
+async def finish_public_operation_v2(
+    session: AsyncSession,
+    *,
+    admission_id: uuid.UUID,
+    state: str,
+    expected_fence: int | None = None,
+    expected_attempt: int | None = None,
+) -> PublicOperationAdmission:
+    """Release every count/resource lease with the same fence that owned it."""
+
+    if state not in _TERMINAL_STATES:
+        raise ValueError("public_terminal_state_invalid")
+    lease_model = await _resolved_phase2_authority(session)
+    admission = await session.scalar(
+        select(PublicOperationAdmission)
+        .where(PublicOperationAdmission.id == admission_id)
+        .with_for_update()
+    )
+    if admission is None:
+        raise PublicAdmissionRejected("public_operation_not_found")
+    if admission.state in _TERMINAL_STATES:
+        if admission.state != state:
+            raise PublicAdmissionRejected("public_operation_terminal_conflict")
+        return admission
+    workspace_model = _require_phase2_workspace_model()
+    operation = await session.scalar(
+        select(workspace_model)
+        .where(workspace_model.id == admission.operation_id)
+        .with_for_update()
+    )
+    if operation is None or operation.fencing_token != admission.fence or _utc(
+        operation.deadline_at, "operation_deadline_at"
+    ) != _utc(admission.deadline_at, "admission_deadline_at"):
+        raise PublicAdmissionRejected("public_operation_fence_conflict")
+    if admission.state == "active":
+        if expected_fence is None or admission.fence != _nonnegative(
+            expected_fence, "expected_fence"
+        ):
+            raise PublicAdmissionRejected("public_operation_fence_conflict")
+        source_count, source_resource = "active_count", "active_resource_units"
+        expected_lease_state = "leased"
+    else:
+        # Queued cancellation is permitted before a worker owns a fence.
+        if expected_fence is not None and admission.fence != _nonnegative(
+            expected_fence, "expected_fence"
+        ):
+            raise PublicAdmissionRejected("public_operation_fence_conflict")
+        source_count, source_resource = "queued_count", "queued_resource_units"
+        expected_lease_state = "queued"
+    now = get_current_utc_datetime()
+    counters = await _locked_phase2_counters(
+        session,
+        policy_version=admission.policy_version,
+        owner_id=admission.owner_id,
+        tenant_id=admission.tenant_id,
+        operation_kind=admission.operation_kind,
+    )
+    leases = await _locked_phase2_leases(session, lease_model=lease_model, admission=admission)
+    for scope_type in ("global", "tenant", "owner"):
+        counter = counters[scope_type]
+        if (
+            getattr(counter, source_count) < 1
+            or getattr(counter, source_resource) < admission.resource_units
+        ):
+            raise PublicAdmissionRejected("public_quota_counter_underflow")
+        setattr(counter, source_count, getattr(counter, source_count) - 1)
+        setattr(
+            counter,
+            source_resource,
+            getattr(counter, source_resource) - admission.resource_units,
+        )
+        counter.updated_at = now
+        counter.version += 1
+    for lease in leases:
+        if lease.state != expected_lease_state or (
+            expected_fence is not None and lease.fence != expected_fence
+        ) or (expected_attempt is not None and lease.attempt != expected_attempt):
+            raise PublicAdmissionRejected("public_resource_lease_fence_conflict")
+        lease.state = (
+            "cancelled"
+            if state == "cancelled"
+            else "expired"
+            if state == "deadline_exceeded"
+            else "released"
+        )
+        lease.released_at = now
+        lease.lease_owner_hash = None
+        lease.version += 1
+    admission.state = state
+    admission.terminal_at = now
+    admission.updated_at = now
+    operation.phase = state
+    operation.fencing_token = admission.fence
+    await session.flush()
+    return admission
 
 
 async def activate_public_operation(
@@ -642,8 +1470,13 @@ async def reserve_public_provider_call(
         select(PublicOperationAdmission)
         .where(PublicOperationAdmission.id == admission_id)
     )
+    if admission is not None and admission.state == "budget_exhausted":
+        raise PublicAdmissionRejected("public_provider_actual_cost_limit_exceeded")
     if admission is None or admission.state != "active":
         raise PublicAdmissionRejected("public_provider_operation_not_active")
+    deadline_at = getattr(admission, "deadline_at", None)
+    if deadline_at is not None:
+        _assert_deadline_remaining(deadline_at, now=get_current_utc_datetime())
     ordinal = _logical_call_ordinal(
         operation_id=admission.operation_id,
         stage=stage,
@@ -906,6 +1739,37 @@ async def reconcile_public_provider_call(
     )
     if accounting.rowcount != 1:
         raise RuntimeError("public_provider_reservation_underflow")
+    admission = await session.scalar(
+        select(PublicOperationAdmission)
+        .where(PublicOperationAdmission.id == call.admission_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if admission is None:
+        raise RuntimeError("public_provider_admission_missing_after_reconcile")
+    if (
+        admission.actual_consumed_microunits
+        + admission.actual_reserved_microunits
+        > admission.actual_cost_limit_microunits
+        and admission.state == "active"
+    ):
+        if (
+            getattr(admission, "policy_digest", None)
+            and getattr(admission, "deadline_at", None) is not None
+            and int(getattr(admission, "fence", 0)) >= 1
+        ):
+            await finish_public_operation_v2(
+                session,
+                admission_id=admission.id,
+                state="budget_exhausted",
+                expected_fence=admission.fence,
+            )
+        else:
+            await finish_public_operation(
+                session,
+                admission.id,
+                state="budget_exhausted",
+            )
     current = await session.scalar(
         select(PublicProviderLogicalCall)
         .where(PublicProviderLogicalCall.id == logical_call_id)
@@ -1293,6 +2157,14 @@ async def reserve_public_provider_call_detached(
             )
             if fenced.rowcount != 1:
                 raise PublicAdmissionRejected("public_provider_stale_attempt")
+        admission = await session.scalar(
+            select(PublicOperationAdmission)
+            .where(PublicOperationAdmission.id == admission_id)
+            .with_for_update()
+        )
+        if admission is None:
+            raise PublicAdmissionRejected("public_provider_admission_missing")
+        await _require_phase2_provider_contract(session, admission)
         reserved_result = await reserve_public_provider_call(
             session,
             admission_id=admission_id,
@@ -1344,6 +2216,7 @@ async def reconcile_public_provider_call_detached(
         # not reconcile budget a second time or conflict on a new latency.
         return
     async with async_session_maker() as session:
+        await _resolved_phase2_authority(session)
         await reconcile_public_provider_call(
             session,
             logical_call_id=lease.logical_call_id,
@@ -1352,6 +2225,14 @@ async def reconcile_public_provider_call_detached(
             actual_cost_microunits=actual_cost_microunits,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
+        )
+        admission = await session.get(PublicOperationAdmission, lease.admission_id)
+        if admission is None:
+            raise PublicAdmissionRejected("public_provider_admission_missing")
+        await _require_phase2_provider_contract(
+            session,
+            admission,
+            allow_terminal_reconcile=True,
         )
         await session.commit()
 
@@ -1635,10 +2516,13 @@ __all__ = [
     "PUBLIC_PROVIDER_STAGES",
     "PrincipalContext",
     "ProviderRequestPlan",
+    "WeightedResourcePlan",
     "PublicAdmissionRejected",
     "PublicProviderCallLease",
     "activate_public_operation",
+    "activate_public_operation_v2",
     "admit_public_operation",
+    "admit_public_operation_v2",
     "claim_next_public_operation",
     "current_principal_context",
     "enrich_public_provider_call",
@@ -1647,6 +2531,7 @@ __all__ = [
     "finish_public_operation",
     "load_public_policy",
     "plan_provider_requests",
+    "plan_weighted_resources",
     "public_operation_metrics",
     "public_operation_observability_metrics",
     "public_prometheus_metrics_text",
@@ -1654,6 +2539,8 @@ __all__ = [
     "reconcile_orphaned_public_provider_calls",
     "reconcile_public_provider_call",
     "reconcile_public_provider_call_detached",
+    "requeue_public_operation_v2",
     "reserve_public_provider_call",
     "reserve_public_provider_call_detached",
+    "finish_public_operation_v2",
 ]

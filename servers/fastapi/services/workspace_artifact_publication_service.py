@@ -2456,6 +2456,7 @@ async def publish_workspace_generation_artifact(
             additional_conditions=(
                 WorkspaceOperation.result_revision == artifact.source_revision,
             ),
+            fencing_token=fencing_token,
         )
         if terminal_event is None:
             raise WorkspaceArtifactPublicationError(
@@ -2573,6 +2574,11 @@ async def publish_workspace_export_artifact(
     export_selected_adapter: str | None = None,
     export_provenance: dict | None = None,
     worker_resource_metrics: Mapping[str, object] | None = None,
+    public_artifact_id: uuid.UUID | None = None,
+    public_tenant_id: str | None = None,
+    public_attempt_number: int | None = None,
+    public_quality_digest: str | None = None,
+    public_quality_receipt: dict[str, object] | None = None,
 ) -> int:
     """Publish a read-only export without advancing the deck revision.
 
@@ -2617,6 +2623,48 @@ async def publish_workspace_export_artifact(
     try:
         await _require_prepared_artifact_integrity(session, artifact)
         await _fence_artifact_publication_account(session, artifact=artifact)
+        if (artifact.public_artifact_id is None) != (public_artifact_id is None):
+            raise WorkspaceArtifactPublicationError(
+                "public_artifact_publication_identity_invalid"
+            )
+        if public_artifact_id is not None:
+            if (
+                artifact.owner_id is None
+                or public_tenant_id is None
+                or public_attempt_number is None
+                or public_quality_digest is None
+                or public_quality_receipt is None
+            ):
+                raise WorkspaceArtifactPublicationError(
+                    "public_artifact_publication_identity_missing"
+                )
+            if (
+                artifact.public_artifact_id != public_artifact_id
+                or artifact.tenant_id != public_tenant_id
+            ):
+                raise WorkspaceArtifactPublicationError(
+                    "public_artifact_publication_identity_invalid"
+                )
+            from services.artifact_store import promote_artifact_publication_if_current
+
+            pointer = await promote_artifact_publication_if_current(
+                session,
+                operation_id=artifact.operation_id,
+                owner_id=artifact.owner_id,
+                tenant_id=public_tenant_id,
+                attempt_number=public_attempt_number,
+                attempt_token=attempt_token,
+                fencing_token=fencing_token,
+                publication_name=f"export.{export_format}",
+                revision=artifact.source_revision,
+                artifact_id=public_artifact_id,
+                quality_digest=public_quality_digest,
+                now=now,
+            )
+            if pointer is None:
+                raise WorkspaceArtifactPublicationError("operation_lease_lost")
+            result_payload["public_artifact_id"] = str(public_artifact_id)
+            result_payload["quality_receipt"] = public_quality_receipt
         presentation_cas = await session.execute(
             update(PresentationModel)
             .where(
@@ -2716,6 +2764,11 @@ async def publish_workspace_export_artifact(
             additional_conditions=(
                 WorkspaceOperation.result_revision == artifact.source_revision,
             ),
+            fencing_token=fencing_token,
+            public_admission_fence=(
+                fencing_token if public_artifact_id is not None else None
+            ),
+            public_admission_attempt=public_attempt_number,
         )
         if terminal_event is None:
             raise WorkspaceArtifactPublicationError(

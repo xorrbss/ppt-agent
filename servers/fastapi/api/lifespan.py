@@ -51,10 +51,16 @@ from services.workspace_operation_runner import (
     stop_workspace_operation_runner,
 )
 from services.workspace_operation_worker import (
+    create_external_export_controller_runtime,
     embedded_workspace_operation_kinds,
     get_workspace_operation_worker_mode,
     should_start_embedded_workspace_operation_worker,
 )
+from services.artifact_lifecycle_runtime import (
+    start_public_artifact_lifecycle_runtime,
+    stop_public_artifact_lifecycle_runtime,
+)
+from services.isolated_worker_process import install_trusted_worker_dispatcher
 from services.workspace_chat_operation_handler import (
     register_presentation_chat_operation_handlers,
 )
@@ -149,6 +155,8 @@ async def app_lifespan(_: FastAPI):
     workspace_asset_maintenance_started = False
     workspace_cleanup_maintenance_started = False
     workspace_event_retention_started = False
+    trusted_worker_runtime = None
+    artifact_lifecycle_started = False
     try:
         try:
             await log_template_v2_operational_health()
@@ -172,6 +180,18 @@ async def app_lifespan(_: FastAPI):
         register_workspace_batch_remake_operation_handler(replace=True)
         register_workspace_quality_export_operation_handlers(replace=True)
         register_workspace_authored_template_operation_handler(replace=True)
+        if (
+            should_start_embedded_workspace_operation_worker()
+            and os.getenv("PUBLIC_V2_INTEGRATION_PROFILE", "").strip()
+            == "postgresql-strict"
+        ):
+            # The public embedded/split profile owns export claims in this
+            # process, so it must compose the real sandbox transport before
+            # the runner can claim. Unsupported OS isolation stops startup.
+            trusted_worker_runtime = create_external_export_controller_runtime()
+            install_trusted_worker_dispatcher(trusted_worker_runtime.dispatcher)
+            await start_public_artifact_lifecycle_runtime()
+            artifact_lifecycle_started = True
         await start_workspace_operation_outbox_dispatcher()
         workspace_outbox_dispatcher_started = True
         if should_start_embedded_workspace_operation_worker():
@@ -200,49 +220,35 @@ async def app_lifespan(_: FastAPI):
             )
         yield
     finally:
-        try:
-            if runtime_settings_coordinator_started:
-                await stop_runtime_settings_coordinator()
-        finally:
+        cleanup_steps = (
+            (runtime_settings_coordinator_started, stop_runtime_settings_coordinator),
+            (workspace_event_retention_started, stop_workspace_event_retention),
+            (workspace_cleanup_maintenance_started, stop_workspace_cleanup_maintenance),
+            (workspace_asset_maintenance_started, stop_workspace_asset_maintenance),
+            (workspace_operation_runner_started, stop_workspace_operation_runner),
+            (workspace_outbox_dispatcher_started, stop_workspace_operation_outbox_dispatcher),
+            (template_v2_dispatcher_started, stop_template_v2_pptx_dispatcher),
+            (
+                presentation_generation_dispatcher_started,
+                stop_presentation_generation_dispatcher,
+            ),
+            (export_retention_started, stop_export_retention_sweeper),
+            (source_locked_maintenance_started, stop_source_locked_maintenance),
+            (template_v2_cleanup_started, stop_template_v2_private_source_cleanup),
+            (artifact_lifecycle_started, stop_public_artifact_lifecycle_runtime),
+        )
+        for started, stop in cleanup_steps:
+            if not started:
+                continue
             try:
-                if workspace_event_retention_started:
-                    await stop_workspace_event_retention()
-            finally:
-                try:
-                    if workspace_cleanup_maintenance_started:
-                        await stop_workspace_cleanup_maintenance()
-                finally:
-                    try:
-                        if workspace_asset_maintenance_started:
-                            await stop_workspace_asset_maintenance()
-                    finally:
-                        try:
-                            if workspace_operation_runner_started:
-                                await stop_workspace_operation_runner()
-                        finally:
-                            try:
-                                if workspace_outbox_dispatcher_started:
-                                    await stop_workspace_operation_outbox_dispatcher()
-                            finally:
-                                try:
-                                    if template_v2_dispatcher_started:
-                                        await stop_template_v2_pptx_dispatcher()
-                                finally:
-                                    try:
-                                        if presentation_generation_dispatcher_started:
-                                            await stop_presentation_generation_dispatcher()
-                                    finally:
-                                        try:
-                                            if export_retention_started:
-                                                await stop_export_retention_sweeper()
-                                        finally:
-                                            try:
-                                                if source_locked_maintenance_started:
-                                                    await stop_source_locked_maintenance()
-                                            finally:
-                                                try:
-                                                    if template_v2_cleanup_started:
-                                                        await stop_template_v2_private_source_cleanup()
-                                                finally:
-                                                    # Release all database connections to prevent stale/leaked pools.
-                                                    await dispose_engines()
+                await stop()
+            except Exception:
+                logger.exception("Application shutdown step failed: %s", stop.__name__)
+        if trusted_worker_runtime is not None:
+            install_trusted_worker_dispatcher(None)
+            try:
+                await trusted_worker_runtime.close()
+            except Exception:
+                logger.exception("Trusted worker runtime shutdown failed")
+        # Release all database connections to prevent stale/leaked pools.
+        await dispose_engines()

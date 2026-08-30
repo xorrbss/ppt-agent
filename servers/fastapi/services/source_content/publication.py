@@ -16,6 +16,7 @@ from typing import Any, Literal, TypeVar
 from services.authored_vnext.master.digests import canonical_digest
 from services.source_content.coverage import (
     SceneCoverageResult,
+    SourceContentPreservationInventory,
     SourceContentCoverageError,
     verify_scene_coverage,
 )
@@ -61,6 +62,7 @@ class SourceContentCoverageReceiptV1:
     render_overflow_count: int
     composition_application: CompositionApplicationReceipt
     unplaced_block_ids: tuple[str, ...]
+    preservation_inventory: SourceContentPreservationInventory
     edit_state: Literal["pristine"]
     status: Literal["passed"]
     receipt_digest: str
@@ -99,10 +101,22 @@ class SourceContentCoverageReceiptV1:
                 "masterGeometryDigestMatched": True,
             },
             "unplacedBlockIds": list(payload["unplaced_block_ids"]),
+            "sourceContent": _source_content_payload(self.preservation_inventory),
             "editState": payload["edit_state"],
             "status": payload["status"],
             "receiptDigest": payload["receipt_digest"],
         }
+
+
+def _source_content_payload(
+    inventory: SourceContentPreservationInventory,
+) -> dict[str, Any]:
+    return {
+        **inventory.as_payload(),
+        "textOccurrenceCount": inventory.text_occurrence_count,
+        "imageOccurrenceCount": inventory.image_occurrence_count,
+        "occurrenceInventoryDigest": inventory.occurrence_inventory_digest,
+    }
 
 
 def _seal_receipt(
@@ -147,6 +161,7 @@ def _seal_receipt(
             and export.master_geometry_digest_matched,
         },
         "unplacedBlockIds": list(scene.unplaced_block_ids),
+        "sourceContent": _source_content_payload(scene.preservation_inventory),
         "editState": "pristine",
         "status": "passed",
     }
@@ -176,6 +191,7 @@ def _seal_receipt(
         render_overflow_count=export.render_overflow_count,
         composition_application=CompositionApplicationReceipt(),
         unplaced_block_ids=scene.unplaced_block_ids,
+        preservation_inventory=scene.preservation_inventory,
         edit_state="pristine",
         status="passed",
         receipt_digest=receipt_digest,
@@ -221,6 +237,14 @@ def require_publication_ready(
 ) -> None:
     """Reject stale, copied, failed, or artifact-mismatched receipts."""
 
+    receipt_payload = receipt.as_json()
+    sealed_receipt_digest = receipt_payload.pop("receiptDigest", None)
+    if sealed_receipt_digest != canonical_digest(receipt_payload):
+        raise SourceContentCoverageError(
+            "source_content_publication_blocked",
+            detail="coverage receipt digest does not bind its source-content inventory",
+        )
+
     if (
         receipt.contract_version != "source-content-coverage-receipt/v1"
         or receipt.status != "passed"
@@ -229,6 +253,20 @@ def require_publication_ready(
         or receipt.presentation_revision != presentation_revision
         or receipt.candidate_artifact_digest != candidate_artifact_digest
         or receipt.unplaced_block_ids
+        or receipt.preservation_inventory.source_mode != "text-image"
+        or receipt.preservation_inventory.source_complete_claim is not False
+        or receipt.preservation_inventory.preserved != ("text", "image-occurrences")
+        or receipt.preservation_inventory.excluded != (
+            "tables",
+            "charts",
+            "original-layout",
+        )
+        or receipt.text_block_coverage
+        != f"{receipt.preservation_inventory.text_occurrence_count}/"
+        f"{receipt.preservation_inventory.text_occurrence_count}"
+        or receipt.image_occurrence_coverage
+        != f"{receipt.preservation_inventory.image_occurrence_count}/"
+        f"{receipt.preservation_inventory.image_occurrence_count}"
         or any(
             value != 0
             for value in (

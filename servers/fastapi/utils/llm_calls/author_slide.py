@@ -53,6 +53,7 @@ from utils.renderer_worker_policy import RendererPolicyError
 from services.source_images.models import (
     SourceImageCandidate,
 )
+from services.public_operation_admission import PublicAdmissionRejected
 from services.provider_usage_instrumentation import (
     ProviderCallTimer,
     current_provider_idempotency_key,
@@ -1094,6 +1095,10 @@ async def author_slide_html(
     try:
         response = await generate(kwargs, semantic_slot="author.primary")
     except Exception as error:
+        # Public admission limits are durable, non-retryable control-plane
+        # decisions.  Do not reclassify them as generic provider HTTP errors.
+        if isinstance(error, PublicAdmissionRejected):
+            raise
         if not allow_provider_fallback or not image_parts or mode == EXACT_RECONSTRUCTION:
             raise handle_llm_client_exceptions(error)
         logger.warning(

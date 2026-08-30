@@ -10,9 +10,13 @@ from __future__ import annotations
 
 import re
 
+from services.authored_vnext.capability_registry import (
+    AUTHORED_FONT_FLOOR_PT,
+    AUTHORED_FONT_FLOOR_PX,
+)
 
-MIN_AUTHORED_FONT_SIZE_PX = 12.0
-MIN_AUTHORED_FONT_SIZE_PT = 9.0
+MIN_AUTHORED_FONT_SIZE_PX = AUTHORED_FONT_FLOOR_PX
+MIN_AUTHORED_FONT_SIZE_PT = AUTHORED_FONT_FLOOR_PT
 
 _SCRIPT_BLOCK_RE = re.compile(
     r"(<script\b[^>]*>.*?</script\s*>)", re.IGNORECASE | re.DOTALL

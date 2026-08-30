@@ -50,7 +50,8 @@ const MCP = { host: "127.0.0.1", port: Number(process.env.MCP_PORT || 8001) };
 
 function pickUpstream(url) {
   if (
-    url.startsWith("/api/v1/") ||
+      url.startsWith("/api/v1/") ||
+      url.startsWith("/api/v2/") ||
     url.startsWith("/docs") ||
     url === "/openapi.json" ||
     url.startsWith("/static/") ||

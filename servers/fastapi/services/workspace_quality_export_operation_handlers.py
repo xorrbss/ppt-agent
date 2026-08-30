@@ -6,6 +6,7 @@ import hashlib
 import json
 import logging
 from collections.abc import Awaitable, Callable, Mapping
+from datetime import datetime, timezone
 from typing import Any, Literal, cast
 
 from sqlalchemy import select
@@ -37,6 +38,9 @@ from services.public_export_operation import (
     PublicExportOperationError,
     render_and_export_authored_htmls,
 )
+from services.authored_quality_receipt_v3_pipeline import (
+    project_persisted_authored_quality_receipt_v3,
+)
 from services.workspace_artifact_publication_service import (
     WorkspaceArtifactPublicationError,
     compensate_workspace_artifact,
@@ -63,6 +67,60 @@ EXPORT_OPERATION_KINDS = ("export.pptx", "export.pdf")
 InternalHeaderProvider = Callable[[], Awaitable[dict[str, str]]]
 LOGGER = logging.getLogger(__name__)
 QUALITY_REVIEW_PROGRESS_INTERVAL_SECONDS = 30.0
+
+
+def _validated_authored_quality_receipt_digest(theme: object) -> str:
+    """Return the sealed V3 digest; absent or synthetic PASS evidence blocks export."""
+
+    if not isinstance(theme, Mapping):
+        raise NonRetryableWorkspaceOperationError("quality_receipt_v3_required")
+    gate = theme.get("authoredQualityGate")
+    receipt = gate.get("qualityReceiptV3") if isinstance(gate, Mapping) else None
+    if not isinstance(receipt, Mapping):
+        raise NonRetryableWorkspaceOperationError("quality_receipt_v3_required")
+    if (
+        receipt.get("schemaVersion") != "quality-receipt/v3"
+        or receipt.get("gatePassed") is not True
+        or receipt.get("qualityStatus") != "passed"
+    ):
+        raise NonRetryableWorkspaceOperationError("quality_receipt_v3_blocked")
+    receipt_digest = receipt.get("receiptDigest")
+    sealed_fields = {
+        "schemaVersion",
+        "attemptId",
+        "revision",
+        "sequence",
+        "eventType",
+        "evidenceDigest",
+        "capabilityRegistryDigest",
+        "capabilityConsumerStatuses",
+        "qualityTier",
+        "t1Triggers",
+        "blockers",
+        "gatePassed",
+        "previousSchemaVersion",
+        "previousVersionReceiptDigest",
+        "previousReceiptDigest",
+    }
+    if (
+        not isinstance(receipt_digest, str)
+        or not receipt_digest.startswith("sha256:")
+        or len(receipt_digest) != 71
+        or not sealed_fields.issubset(receipt)
+    ):
+        raise NonRetryableWorkspaceOperationError("quality_receipt_v3_digest_invalid")
+    sealed = {field: receipt[field] for field in sealed_fields}
+    actual = "sha256:" + hashlib.sha256(
+        json.dumps(
+            sealed,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+    ).hexdigest()
+    if actual != receipt_digest:
+        raise NonRetryableWorkspaceOperationError("quality_receipt_v3_digest_invalid")
+    return receipt_digest.removeprefix("sha256:")
 
 
 def _context(claim_payload: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -227,6 +285,10 @@ class WorkspaceExportOperationHandler:
         public_artifact_id = None
         public_ref = None
         worker_resource_metrics: Mapping[str, Any] | None = None
+        quality_receipt_digest: str | None = None
+        authored_quality_gate: object | None = None
+        authored_scene_digest: str | None = None
+        public_quality_receipt: dict[str, object] | None = None
         try:
             if authored_vnext_export_path == "legacy-native":
                 if not isinstance(authored_vnext_projection, dict):
@@ -339,6 +401,32 @@ class WorkspaceExportOperationHandler:
                     raise NonRetryableWorkspaceOperationError(
                         "public_export_admission_required"
                     )
+                async with self._session_factory() as session:
+                    admission = await session.scalar(
+                        select(PublicOperationAdmission).where(
+                            PublicOperationAdmission.operation_id == claim.operation_id
+                        )
+                    )
+                    if admission is None or admission.state != "active":
+                        raise NonRetryableWorkspaceOperationError(
+                            "public_export_admission_required"
+                        )
+                    public_tenant_id = admission.tenant_id
+                    quality_receipt_digest = _validated_authored_quality_receipt_digest(
+                        presentation.theme
+                    )
+                    authored_quality_gate = presentation.theme.get("authoredQualityGate")
+                    if isinstance(authored_vnext_projection, Mapping):
+                        raw_scene_digest = authored_vnext_projection.get("sceneDigest")
+                        if isinstance(raw_scene_digest, str):
+                            authored_scene_digest = raw_scene_digest
+                    if (
+                        authored_scene_digest is None
+                        or not authored_scene_digest.startswith("sha256:")
+                    ):
+                        raise NonRetryableWorkspaceOperationError(
+                            "public_quality_projection_inputs_missing"
+                        )
                 htmls = [slide.html_content for slide in slides]
                 if not htmls or any(not isinstance(html, str) or not html for html in htmls):
                     raise NonRetryableWorkspaceOperationError(
@@ -400,6 +488,8 @@ class WorkspaceExportOperationHandler:
                     tenant_id=public_tenant_id,
                     htmls=cast(list[str], htmls),
                     export_format=export_format,
+                    scene_digest=(authored_scene_digest or ""),
+                    quality_digest=quality_receipt_digest,
                     session_factory=self._session_factory,
                 )
                 public_ref = public_execution.artifact
@@ -416,6 +506,31 @@ class WorkspaceExportOperationHandler:
                         "package_digest_match": True,
                     },
                 }
+                if (
+                    authored_quality_gate is None
+                    or authored_scene_digest is None
+                    or not authored_scene_digest.startswith("sha256:")
+                ):
+                    raise NonRetryableWorkspaceOperationError(
+                        "public_quality_projection_inputs_missing"
+                    )
+                public_quality_receipt = project_persisted_authored_quality_receipt_v3(
+                    authored_quality_gate=authored_quality_gate,
+                    quality_receipt_id=f"quality:{claim.operation_id}:{public_ref.artifact_id}",
+                    operation_id=str(claim.operation_id),
+                    presentation_id=str(claim.presentation_id),
+                    artifact_digest=f"sha256:{public_ref.sha256}",
+                    source_revision=claim.expected_revision,
+                    scene_digest=authored_scene_digest,
+                    exporter_version="public-worker-protocol/v1",
+                    evaluated_at=datetime.now(timezone.utc),
+                ).model_dump(mode="json", by_alias=True)
+            if public_ref is None and artifact_sha256 != hashlib.sha256(
+                export_path.read_bytes()
+            ).hexdigest():
+                raise PresentationExportContractError(
+                    "presentation_export_artifact_digest_mismatch"
+                )
             await context.raise_if_cancelled()
             await context.progress(stage="export_publishing", percent=80)
             async with self._session_factory() as session:
@@ -466,6 +581,15 @@ class WorkspaceExportOperationHandler:
                     export_selected_adapter=selected_adapter,
                     export_provenance=export_provenance,
                     worker_resource_metrics=worker_resource_metrics,
+                    public_artifact_id=public_artifact_id,
+                    public_tenant_id=(
+                        public_tenant_id if public_artifact_id is not None else None
+                    ),
+                    public_attempt_number=(
+                        claim.attempt_number if public_artifact_id is not None else None
+                    ),
+                    public_quality_digest=quality_receipt_digest,
+                    public_quality_receipt=public_quality_receipt,
                 )
         except WorkspaceOperationCancelled:
             if execution is not None:

@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import os
 import pathlib
+from pathlib import PurePosixPath
 import sys
-import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
+import uuid
 
 from services.isolated_worker_contracts import (
     ISOLATED_RESULT_SCHEMA,
@@ -20,20 +20,14 @@ from services.isolated_worker_contracts import (
     IsolatedWorkerJob,
     WorkerRole,
 )
-from services.public_worker_resource_boundary import (
-    LIMIT_ENV,
-    SUPERVISOR_POLL_INTERVAL_MILLIS,
-    WorkerResourceBoundaryError,
-    WorkerResourceLimits,
-    create_worker_resource_boundary,
-)
-from services.public_worker_profiles import (
-    get_public_worker_profile,
-    validate_public_worker_environment,
+from services.trusted_executor.worker_dispatcher import (
+    TrustedWorkerDispatcher,
+    TrustedWorkerWireError,
 )
 
 
-NETWORK_NONE_ATTESTATION = "nonroot-readonly-tmpfs-network-none-seccomp"
+NETWORK_NONE_ATTESTATION = "nonroot-readonly-tmpfs-network-none"
+WINDOWS_LOCAL_DEVELOPMENT_ATTESTATION = "windows-job-object-local-development"
 MAX_JOB_BYTES = 2 * 1024 * 1024
 MAX_RESULT_BYTES = 16 * 1024 * 1024
 _ENV_ALLOWLIST = frozenset(
@@ -60,14 +54,22 @@ _ENV_ALLOWLIST = frozenset(
         "PUBLIC_WORKER_ARTIFACT_CACHE_ROOT",
         "PUBLIC_WORKER_ARTIFACT_CACHE_MAX_BYTES",
         "PUBLIC_WORKER_ARTIFACT_CACHE_TTL_SECONDS",
+        "PUBLIC_WORKER_INPUT_STORE_ROOT",
+        "PUBLIC_WORKER_LOCAL_DEVELOPMENT",
         "PUBLIC_WORKER_OBJECT_STORE_ROOT",
+        "PUBLIC_WORKER_OUTPUT_STORE_ROOT",
         "PPT_WORKER_NETWORK_MODE",
         "PPT_WORKER_ROOT_FILESYSTEM",
         "PPT_WORKER_SCRATCH",
         "PPT_WORKER_RUN_AS_NON_ROOT",
         "PPT_WORKER_SECCOMP_PROFILE",
         "PPT_WORKER_REPLICAS",
-        *LIMIT_ENV.values(),
+        "PPT_WORKER_MEMORY_LIMIT_BYTES",
+        "PPT_WORKER_CPU_MILLIS",
+        "PPT_WORKER_PID_LIMIT",
+        "PPT_WORKER_OPEN_FILE_LIMIT",
+        "PPT_WORKER_OUTPUT_LIMIT_BYTES",
+        "PPT_WORKER_WALL_CLOCK_SECONDS",
     }
 )
 _FORBIDDEN_ENV_MARKERS = (
@@ -98,6 +100,18 @@ class IsolatedWorkerProcessError(RuntimeError):
         super().__init__(code)
 
 
+_trusted_worker_dispatcher: TrustedWorkerDispatcher | None = None
+
+
+def install_trusted_worker_dispatcher(
+    dispatcher: TrustedWorkerDispatcher | None,
+) -> None:
+    """Install the composition-root trusted wire port; ``None`` fails closed."""
+
+    global _trusted_worker_dispatcher
+    _trusted_worker_dispatcher = dispatcher
+
+
 @dataclass(frozen=True, slots=True)
 class IsolatedWorkerResult:
     role: WorkerRole
@@ -114,10 +128,17 @@ class IsolatedWorkerResult:
 def worker_environment(
     role: WorkerRole,
     source: Mapping[str, str] | None = None,
+    *,
+    trusted_dispatch: bool = False,
 ) -> dict[str, str]:
     incoming = os.environ if source is None else source
     attestation = incoming.get("PUBLIC_WORKER_OS_ISOLATION", "").strip()
-    if attestation != NETWORK_NONE_ATTESTATION:
+    local_development = (
+        trusted_dispatch
+        and incoming.get("PUBLIC_TRUSTED_WORKER_LOCAL_POLICY", "").strip().lower()
+        == "development"
+    )
+    if not local_development and attestation != NETWORK_NONE_ATTESTATION:
         raise IsolatedWorkerProcessError(
             "public worker requires network-none OS isolation attestation"
         )
@@ -134,42 +155,28 @@ def worker_environment(
     ]
     if leaked:
         raise IsolatedWorkerProcessError("public worker environment contains secrets")
-    cache_root = incoming.get("PUBLIC_WORKER_ARTIFACT_CACHE_ROOT", "").strip()
-    if not cache_root:
-        environment = incoming.get("ENVIRONMENT", "production").strip().lower()
-        backend = incoming.get("PUBLIC_ARTIFACT_STORE_BACKEND", "").strip().lower()
-        legacy_root = incoming.get("PUBLIC_WORKER_OBJECT_STORE_ROOT", "").strip()
-        if (
-            legacy_root
-            and backend == "local-development"
-            and environment in {"development", "dev", "local", "test"}
-        ):
-            cache_root = legacy_root
-    if not cache_root or not pathlib.Path(cache_root).is_absolute():
-        raise IsolatedWorkerProcessError("public worker artifact cache root is required")
-    result["PUBLIC_WORKER_ARTIFACT_CACHE_ROOT"] = cache_root
-    # The legacy variable named this scratch directory as if it were durable
-    # object storage. Never pass that authority-shaped alias to the child.
+    # The trusted transport injects separate, operation-scoped input/output
+    # roots after staging. Never pass the legacy authority-shaped alias to the
+    # child or require a shared cache before that trusted boundary runs.
     result.pop("PUBLIC_WORKER_OBJECT_STORE_ROOT", None)
     result.update(
         {
             "PUBLIC_WORKER_ROLE": role,
-            "PUBLIC_WORKER_OS_ISOLATION": NETWORK_NONE_ATTESTATION,
+            "PUBLIC_WORKER_OS_ISOLATION": (
+                WINDOWS_LOCAL_DEVELOPMENT_ATTESTATION
+                if local_development
+                else NETWORK_NONE_ATTESTATION
+            ),
             "PUBLIC_WORKER_SESSIONLESS": "1",
         }
     )
+    if local_development:
+        result["PUBLIC_WORKER_LOCAL_DEVELOPMENT"] = "1"
     if role == "render":
         # The public render process is already the one-shot isolation boundary;
         # this marker permits the low-level CDP entry without recursively
         # spawning the legacy renderer worker.
         result["AUTHORED_RENDERER_WORKER"] = "1"
-    try:
-        validate_public_worker_environment(
-            get_public_worker_profile(role),
-            result,
-        )
-    except RuntimeError as error:
-        raise IsolatedWorkerProcessError(str(error)) from error
     return result
 
 
@@ -192,7 +199,10 @@ def worker_command(
         or any(not isinstance(item, str) or not item or "\x00" in item for item in command)
     ):
         raise IsolatedWorkerProcessError(f"{variable} must be a JSON argv array")
-    if not pathlib.Path(command[0]).is_absolute():
+    if not (
+        pathlib.Path(command[0]).is_absolute()
+        or PurePosixPath(command[0]).is_absolute()
+    ):
         raise IsolatedWorkerProcessError("public worker executable must be absolute")
     return command
 
@@ -275,164 +285,56 @@ def _decode_result(payload: bytes, job: IsolatedWorkerJob) -> IsolatedWorkerResu
 async def execute_isolated_worker_job(
     job: IsolatedWorkerJob,
     *,
+    presentation_id: uuid.UUID,
     source_environment: Mapping[str, str] | None = None,
     command: Sequence[str] | None = None,
+    dispatcher: TrustedWorkerDispatcher | None = None,
 ) -> IsolatedWorkerResult:
-    """Execute exactly one stdin/stdout job without a task file or inherited env."""
+    """Dispatch one immutable job through the trusted-executor product port."""
 
     encoded = json.dumps(
         job.to_wire(), ensure_ascii=True, sort_keys=True, separators=(",", ":")
     ).encode("utf-8")
     if len(encoded) > MAX_JOB_BYTES:
         raise IsolatedWorkerContractError("public worker job exceeds the wire limit")
-    incoming_environment = os.environ if source_environment is None else source_environment
-    limits = WorkerResourceLimits.from_environment(incoming_environment)
-    boundary = create_worker_resource_boundary(limits)
-    environment = worker_environment(job.role, incoming_environment)
+    environment = worker_environment(
+        job.role,
+        source_environment,
+        trusted_dispatch=True,
+    )
     argv = list(command) if command is not None else worker_command(
         job.role, source_environment
     )
-    if not argv or not pathlib.Path(argv[0]).is_absolute():
+    if not argv or not (
+        pathlib.Path(argv[0]).is_absolute()
+        or PurePosixPath(argv[0]).is_absolute()
+    ):
         raise IsolatedWorkerProcessError("public worker executable must be absolute")
-    kwargs: dict[str, Any] = {
-        "stdin": asyncio.subprocess.PIPE,
-        "stdout": asyncio.subprocess.PIPE,
-        "stderr": asyncio.subprocess.DEVNULL,
-        "env": environment,
-    }
-    kwargs.update(boundary.creation_kwargs)
+    selected_dispatcher = dispatcher or _trusted_worker_dispatcher
+    if selected_dispatcher is None:
+        raise IsolatedWorkerProcessError("trusted worker dispatcher is unavailable")
     try:
-        process = await asyncio.create_subprocess_exec(*argv, **kwargs)
-    except BaseException:
-        boundary.close()
-        raise
-    try:
-        boundary.attach(process.pid)
-        # Windows children are born suspended and cannot execute any worker
-        # code until the kernel Job Object owns them. POSIX boundaries resume
-        # implicitly after preexec rlimit/process-group setup.
-        boundary.resume()
-    except BaseException as error:
-        # Assignment failed while the process was still suspended, so it has
-        # executed no worker instruction and cannot have spawned descendants.
-        if process.returncode is None:
-            process.kill()
-        await process.wait()
-        metrics = boundary.terminate_and_verify()
-        boundary.close()
-        raise IsolatedWorkerProcessError(
-            getattr(error, "code", str(error)),
-            resource_metrics=_durable_failure_metrics(metrics, limit_triggered=False),
-        ) from error
-
-    async def terminate_and_collect(*, limit_triggered: bool) -> dict[str, Any]:
-        try:
-            boundary.sample()
-        except WorkerResourceBoundaryError:
-            limit_triggered = True
-        metrics = boundary.terminate_and_verify()
-        try:
-            await asyncio.wait_for(process.wait(), timeout=5)
-        except asyncio.TimeoutError:
-            process.kill()
-            await process.wait()
-        # Query after the OS process handle has signalled as well as after the
-        # boundary reports zero descendants. A non-zero count is a hard
-        # recycle failure and is preserved in the durable error projection.
-        metrics = boundary.telemetry()
-        return _durable_failure_metrics(metrics, limit_triggered=limit_triggered)
-
-    timeout = min(
-        max(1, job.deadline_epoch_seconds - int(time.time())),
-        limits.wall_clock_seconds,
-    )
-    communication = asyncio.create_task(process.communicate(encoded))
-    try:
-        deadline = time.monotonic() + min(timeout, 600)
-        while not communication.done():
-            if time.monotonic() >= deadline:
-                raise asyncio.TimeoutError
-            boundary.sample()
-            await asyncio.sleep(SUPERVISOR_POLL_INTERVAL_MILLIS / 1000)
-        stdout, _ = await communication
-        boundary.sample()
-    except asyncio.CancelledError:
-        await terminate_and_collect(limit_triggered=False)
-        boundary.close()
-        raise
-    except (asyncio.TimeoutError, WorkerResourceBoundaryError) as error:
-        failure_metrics = await terminate_and_collect(
-            limit_triggered=isinstance(error, WorkerResourceBoundaryError)
+        wire_result = await selected_dispatcher.execute(
+            job=job,
+            presentation_id=presentation_id,
+            payload=encoded,
+            command=argv,
+            environment=environment,
         )
-        code = (
-            str(error)
-            if isinstance(error, WorkerResourceBoundaryError)
-            else "public_worker_wall_clock_limit_exceeded"
+    except TrustedWorkerWireError as error:
+        raise IsolatedWorkerProcessError(
+            error.code,
+            resource_metrics=error.resource_metrics,
+        ) from error
+    if len(wire_result.stdout) > MAX_RESULT_BYTES:
+        raise IsolatedWorkerProcessError("public worker result exceeded the wire limit")
+    result = _decode_result(wire_result.stdout, job)
+    if wire_result.exit_code != 0 or not result.ok:
+        raise IsolatedWorkerProcessError(
+            result.error_code or "public_worker_execution_failed",
+            resource_metrics=wire_result.resource_metrics,
         )
-        boundary.close()
-        raise IsolatedWorkerProcessError(
-            code, resource_metrics=failure_metrics
-        ) from error
-    finally:
-        if not communication.done():
-            communication.cancel()
-            await asyncio.gather(communication, return_exceptions=True)
-    try:
-        if len(stdout) > MAX_RESULT_BYTES:
-            raise IsolatedWorkerProcessError("public worker result exceeded the wire limit")
-        result = _decode_result(stdout, job)
-        if process.returncode != 0 or not result.ok:
-            raise IsolatedWorkerProcessError(
-                result.error_code or "public_worker_execution_failed"
-            )
-        output_size = int(result.output_artifact.get("sizeBytes", 0)) if result.output_artifact else 0
-        if output_size > limits.output_bytes:
-            raise IsolatedWorkerProcessError("public_worker_output_limit_exceeded")
-        metrics = boundary.telemetry()
-        if metrics["resourceLimitsEnforced"] is not True or metrics["recycledWithinBaseline"] is not True:
-            raise IsolatedWorkerProcessError("public_worker_resource_recycle_failed")
-        return replace(result, resource_metrics=metrics)
-    except IsolatedWorkerProcessError as error:
-        failure_metrics = await terminate_and_collect(
-            limit_triggered=("limit" in error.code)
-        )
-        raise IsolatedWorkerProcessError(
-            error.code, resource_metrics=failure_metrics
-        ) from error
-    except BaseException as error:
-        failure_metrics = await terminate_and_collect(limit_triggered=False)
-        raise IsolatedWorkerProcessError(
-            "public_worker_execution_failed", resource_metrics=failure_metrics
-        ) from error
-    finally:
-        boundary.close()
-
-
-def _durable_failure_metrics(
-    metrics: Mapping[str, Any], *, limit_triggered: bool
-) -> dict[str, Any]:
-    limits = metrics.get("limits") if isinstance(metrics.get("limits"), Mapping) else {}
-    recycled = metrics.get("recycledWithinBaseline") is True and int(
-        metrics.get("finalProcessCount", 1)
-    ) == 0
-    return {
-        "worker_peak_memory_bytes": int(metrics.get("peakPrivateBytes", 0)),
-        "worker_peak_handle_count": int(metrics.get("peakHandleCount", 0)),
-        "worker_peak_process_count": int(metrics.get("peakProcessCount", 0)),
-        "worker_peak_cpu_millis": int(metrics.get("peakCpuMillis", 0)),
-        "worker_recycle_failure_count": 0 if recycled else 1,
-        "worker_final_process_count": int(metrics.get("finalProcessCount", 0)),
-        "resource_limits_enforced": metrics.get("resourceLimitsEnforced") is True,
-        "worker_enforcement_layer": str(metrics.get("enforcementLayer", "unavailable")),
-        "worker_execution_count": 1,
-        "worker_limit_triggered": bool(limit_triggered),
-        "worker_limit_memory_bytes": int(limits.get("memoryBytes", 0)),
-        "worker_limit_cpu_millis": int(limits.get("cpuMillis", 0)),
-        "worker_limit_process_count": int(limits.get("pidCount", 0)),
-        "worker_limit_handle_count": int(limits.get("openFiles", 0)),
-        "worker_limit_output_bytes": int(limits.get("outputBytes", 0)),
-        "worker_limit_wall_clock_seconds": int(limits.get("wallClockSeconds", 0)),
-    }
+    return replace(result, resource_metrics=dict(wire_result.resource_metrics))
 
 
 def development_worker_command(role: WorkerRole) -> list[str]:
@@ -446,8 +348,10 @@ __all__ = [
     "IsolatedWorkerProcessError",
     "IsolatedWorkerResult",
     "NETWORK_NONE_ATTESTATION",
+    "WINDOWS_LOCAL_DEVELOPMENT_ATTESTATION",
     "development_worker_command",
     "execute_isolated_worker_job",
+    "install_trusted_worker_dispatcher",
     "worker_command",
     "worker_environment",
 ]

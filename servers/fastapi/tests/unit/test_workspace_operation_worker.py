@@ -39,6 +39,30 @@ def test_workspace_split_mode_keeps_core_runner_without_generation(monkeypatch) 
     assert "export.pdf" in kinds
 
 
+def test_external_export_controller_claims_only_export_operations(monkeypatch) -> None:
+    monkeypatch.setenv("WORKSPACE_OPERATION_EXTERNAL_CONTROLLER", "export")
+
+    assert worker.external_workspace_operation_kinds("ppt-core") == (
+        "export.pptx",
+        "export.pdf",
+    )
+    with pytest.raises(
+        RuntimeError,
+        match="workspace_operation_external_controller_invalid",
+    ):
+        worker.external_workspace_operation_kinds("generation")
+
+
+def test_external_ppt_core_requires_explicit_controller_ownership(monkeypatch) -> None:
+    monkeypatch.delenv("WORKSPACE_OPERATION_EXTERNAL_CONTROLLER", raising=False)
+
+    with pytest.raises(
+        RuntimeError,
+        match="workspace_operation_external_controller_required",
+    ):
+        worker.external_workspace_operation_kinds("ppt-core")
+
+
 def test_invalid_workspace_worker_mode_fails_closed(monkeypatch) -> None:
     monkeypatch.setenv("WORKSPACE_OPERATION_WORKER_MODE", "sidecar")
 

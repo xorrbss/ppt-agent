@@ -14,6 +14,7 @@ from models.authored_vnext.semantic.contracts import (
     ShapeElementV1,
     TextElementV1,
 )
+from services.authored_vnext.capability_registry import admission_features_for_kind
 
 from .canonical import SemanticContractError, canonical_digest, seal_derived_receipt
 
@@ -23,12 +24,23 @@ class SerializerRegistryV1:
     serializer_id: str = "authored-hybrid-native"
     serializer_version: str = "1"
     reconciliation_policy_version: str = "reconciliation-policy/v1"
-    text_features: frozenset[str] = frozenset({"plain-text", "mixed-runs", "explicit-breaks"})
-    image_features: frozenset[str] = frozenset({"crop", "object-fit", "object-position"})
-    shape_features: frozenset[str] = frozenset({"solid-fill", "solid-stroke", "radius"})
-    chart_features: frozenset[str] = frozenset(
-        {"chart", "native-chart", "chart-data", "chart.axes", "chart.legend", "chart.fonts"}
-    )
+    text_features: frozenset[str] = admission_features_for_kind("text") or frozenset()
+    image_features: frozenset[str] = admission_features_for_kind("image") or frozenset()
+    shape_features: frozenset[str] = admission_features_for_kind("shape") or frozenset()
+    chart_features: frozenset[str] = admission_features_for_kind("chart") or frozenset()
+
+    def __post_init__(self) -> None:
+        """Do not permit caller-supplied validator features to drift from registry."""
+
+        expected = {
+            "text_features": admission_features_for_kind("text"),
+            "image_features": admission_features_for_kind("image"),
+            "shape_features": admission_features_for_kind("shape"),
+            "chart_features": admission_features_for_kind("chart"),
+        }
+        for field, expected_features in expected.items():
+            if getattr(self, field) != expected_features:
+                raise SemanticContractError("authored_capability_registry_validator_mismatch")
 
 
 def reconcile_and_issue_native_admission(

@@ -8,6 +8,7 @@ import json
 from typing import Any
 
 from models.authored_visual_plan import AuthoredSlideVisualIntent
+from services.authored_vnext.capability_registry import prompt_capability_clause
 from services.source_images.models import SourceImageCandidate
 from utils.prompt_safety import format_untrusted_source_documents
 
@@ -119,7 +120,7 @@ def build_design_system(
         header_system=f"{header_system}\n" if header_system else "",
         page_number_system=page_number_system,
         type_scale=type_scale,
-    )
+    ) + prompt_capability_clause()
 
 
 # Two kinds of picture can be attached to one authoring call and they carry

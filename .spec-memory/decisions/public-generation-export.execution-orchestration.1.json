@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "key": "public-generation-export.execution-orchestration",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Implement the target design across multiple sessions; each uses bounded multi-agents, difficulty-matched models, and reasoning capped at high.",
+  "scope": [
+    "public-generation-export",
+    "development-workflow"
+  ],
+  "invariants": [
+    "Use multiple development sessions",
+    "Each session uses bounded non-overlapping multi-agent ownership",
+    "Select model by task difficulty",
+    "Reasoning effort must not exceed high",
+    "Treat dispatch and in-progress work as incomplete"
+  ],
+  "forbidden": [
+    "Reasoning above high",
+    "Overlapping file ownership without coordination",
+    "Claiming completion from task creation alone"
+  ],
+  "evidence": [
+    "docs/public-generation-export-target-design-handoff-20260830.md"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-30T04:36:06.1494045+00:00"
+}
