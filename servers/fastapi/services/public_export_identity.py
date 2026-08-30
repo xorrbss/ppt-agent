@@ -8,21 +8,28 @@ in; importing this module does not change the legacy export path.
 
 from __future__ import annotations
 
+import asyncio
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from hashlib import sha256
 import json
 import os
-from typing import Literal, Sequence
+import threading
+from typing import AsyncIterator, Awaitable, Callable, Literal, Sequence
 import uuid
 
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sql.public_artifact import (
     ArtifactRef,
+    PublicArtifact,
     PublicArtifactPublication,
+    PublicSlideCheckpoint,
     normalize_sha256,
 )
+from models.sql.workspace import WorkspaceOperation
 from services.artifact_store import (
     ExportClaim,
     ExportIdentityKey,
@@ -36,6 +43,8 @@ from services.workspace_operation_handler_registry import WorkspaceOperationClai
 
 EXPORT_IDENTITY_SCHEMA_VERSION = "public-export-identity/v2"
 EXPORT_CHECKPOINT_SCHEMA_VERSION = "public-export-checkpoint/v1"
+SLIDE_RENDER_IDENTITY_SCHEMA_VERSION = "public-slide-render-identity/v1"
+SLIDE_RENDER_STAGE_VERSION = "public-fidelity-render/v2"
 PUBLIC_EXPORT_IDENTITY_V2_ENV = "PUBLIC_EXPORT_IDENTITY_V2_ENABLED"
 MAX_EXPORT_CHECKPOINT_BYTES = 4 * 1024 * 1024
 
@@ -56,6 +65,10 @@ class PublicExportIdentityBindingError(PublicExportIdentityError):
 
 
 class PublicExportFenceRejected(PublicExportIdentityError):
+    pass
+
+
+class PublicSlideRenderSingleflightError(PublicExportIdentityError):
     pass
 
 
@@ -86,6 +99,344 @@ def _attempt_token_hash(value: str) -> str:
     if not value:
         raise PublicExportIdentityBindingError("public_export_attempt_token_required")
     return "sha256:" + sha256(value.encode("utf-8")).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
+class CanonicalSlideRenderIdentity:
+    """Pre-render identity for one public Fidelity raster slide.
+
+    The identity intentionally excludes the final PPTX/PDF format so the same
+    validated PNG can serve either raster export. Owner, tenant, presentation,
+    revision, and quality inputs remain part of the digest, preventing reuse
+    across authority or evidence boundaries.
+    """
+
+    owner_id: uuid.UUID
+    tenant_id: str
+    presentation_id: uuid.UUID
+    source_revision: int
+    slide_index: int
+    html_digest: str
+    scene_digest: str
+    quality_digest: str
+    render_adapter: str
+    renderer_version: str
+
+    def __post_init__(self) -> None:
+        if self.source_revision < 0 or self.slide_index < 0:
+            raise ValueError("slide render position is invalid")
+        object.__setattr__(
+            self,
+            "tenant_id",
+            _normalized_text(self.tenant_id, field="render tenant", maximum=128),
+        )
+        for field_name in ("html_digest", "scene_digest", "quality_digest"):
+            object.__setattr__(
+                self,
+                field_name,
+                normalize_sha256(getattr(self, field_name)),
+            )
+        adapter = _normalized_text(
+            self.render_adapter,
+            field="render adapter",
+            maximum=128,
+        )
+        if adapter != "public-isolated-fidelity":
+            raise PublicExportIdentityBindingError(
+                "public_slide_render_adapter_invalid"
+            )
+        object.__setattr__(self, "render_adapter", adapter)
+        object.__setattr__(
+            self,
+            "renderer_version",
+            _normalized_text(
+                self.renderer_version,
+                field="renderer version",
+                maximum=128,
+            ),
+        )
+
+    def to_wire(self) -> dict[str, object]:
+        return {
+            **self.content_wire(),
+            "slideIndex": self.slide_index,
+        }
+
+    def content_wire(self) -> dict[str, object]:
+        """Return the position-independent inputs that determine PNG bytes."""
+
+        return {
+            "schemaVersion": SLIDE_RENDER_IDENTITY_SCHEMA_VERSION,
+            "ownerId": str(self.owner_id),
+            "tenantId": self.tenant_id,
+            "presentationId": str(self.presentation_id),
+            "sourceRevision": self.source_revision,
+            "htmlDigest": self.html_digest,
+            "sceneDigest": self.scene_digest,
+            "qualityDigest": self.quality_digest,
+            "renderAdapter": self.render_adapter,
+            "rendererVersion": self.renderer_version,
+        }
+
+    @property
+    def canonical_digest(self) -> str:
+        return sha256(
+            json.dumps(
+                self.content_wire(),
+                ensure_ascii=True,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+
+    @property
+    def stage_version(self) -> str:
+        return SLIDE_RENDER_STAGE_VERSION
+
+
+_slide_render_flights_lock = threading.Lock()
+_slide_render_flights: dict[
+    tuple[int, str], asyncio.Future[ArtifactRef]
+] = {}
+
+
+async def run_slide_render_singleflight(
+    identity: CanonicalSlideRenderIdentity,
+    producer: Callable[[], Awaitable[ArtifactRef]],
+    *,
+    max_in_flight: int,
+    wait_seconds: float,
+) -> tuple[ArtifactRef, bool]:
+    """Run or join one bounded, cancellation-safe in-process render flight.
+
+    The leader remains the producer task, so cancelling its operation cancels
+    the actual Chromium render. Followers shield the shared future so their
+    own cancellation cannot cancel another operation's work.
+    """
+
+    if max_in_flight < 1 or max_in_flight > 4096 or wait_seconds <= 0:
+        raise ValueError("slide render singleflight bounds are invalid")
+    loop = asyncio.get_running_loop()
+    key = (id(loop), identity.canonical_digest)
+    bypass_local_flight = False
+    with _slide_render_flights_lock:
+        shared = _slide_render_flights.get(key)
+        leader = shared is None
+        if leader:
+            if len(_slide_render_flights) >= max_in_flight:
+                # This map is only an in-process optimization.  Capacity must
+                # never reject an otherwise authoritative DB-backed render.
+                bypass_local_flight = True
+            else:
+                shared = loop.create_future()
+                _slide_render_flights[key] = shared
+    if bypass_local_flight:
+        return await producer(), False
+    assert shared is not None
+    if not leader:
+        try:
+            return (
+                await asyncio.wait_for(
+                    asyncio.shield(shared),
+                    timeout=wait_seconds,
+                ),
+                True,
+            )
+        except TimeoutError as error:
+            raise PublicSlideRenderSingleflightError(
+                "public_render_singleflight_timeout"
+            ) from error
+        except asyncio.CancelledError as error:
+            current = asyncio.current_task()
+            if current is not None and current.cancelling():
+                raise
+            raise PublicSlideRenderSingleflightError(
+                "public_render_singleflight_leader_cancelled"
+            ) from error
+
+    try:
+        artifact = await producer()
+        if not shared.done():
+            shared.set_result(artifact)
+        return artifact, False
+    except asyncio.CancelledError:
+        if not shared.done():
+            shared.cancel()
+        raise
+    except BaseException as error:
+        if not shared.done():
+            shared.set_exception(error)
+            # A leader can have no followers; retrieving preserves the original
+            # producer exception without emitting an orphaned-Future warning.
+            shared.exception()
+        raise
+    finally:
+        with _slide_render_flights_lock:
+            if _slide_render_flights.get(key) is shared:
+                del _slide_render_flights[key]
+
+
+def _slide_render_advisory_key(identity: CanonicalSlideRenderIdentity) -> int:
+    """Map one canonical render digest to PostgreSQL's signed bigint key."""
+
+    return int.from_bytes(
+        bytes.fromhex(identity.canonical_digest)[:8],
+        byteorder="big",
+        signed=True,
+    )
+
+
+@asynccontextmanager
+async def acquire_slide_render_authority(
+    session: AsyncSession,
+    *,
+    identity: CanonicalSlideRenderIdentity,
+    wait_seconds: float,
+) -> AsyncIterator[str]:
+    """Acquire the cross-process render authority before producing PNG bytes.
+
+    PostgreSQL uses one transaction-scoped advisory lock per canonical slide
+    render.  The connection owns the authority, so process loss releases it;
+    the operation checkpoint fence still owns publication.  SQLite is allowed
+    only for explicit local/test development and is reported truthfully as a
+    process-local optimization, never as multi-replica singleflight.
+    """
+
+    if wait_seconds <= 0:
+        raise ValueError("slide render authority wait must be positive")
+    bind = session.get_bind()
+    dialect = bind.dialect.name
+    if dialect != "postgresql":
+        environment = (os.getenv("ENVIRONMENT") or "production").strip().lower()
+        if environment not in {"local", "development", "test"}:
+            raise PublicSlideRenderSingleflightError(
+                "public_render_database_authority_required"
+            )
+        yield "process-local-development"
+        return
+
+    advisory_key = _slide_render_advisory_key(identity)
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + wait_seconds
+    while True:
+        async with session.begin():
+            acquired = await session.scalar(
+                text("SELECT pg_try_advisory_xact_lock(:advisory_key)"),
+                {"advisory_key": advisory_key},
+            )
+            if acquired is True:
+                yield "postgresql-advisory-xact"
+                return
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            raise PublicSlideRenderSingleflightError(
+                "public_render_database_authority_timeout"
+            )
+        await asyncio.sleep(min(0.1, remaining))
+
+
+async def find_reusable_slide_render_checkpoint(
+    session: AsyncSession,
+    *,
+    identity: CanonicalSlideRenderIdentity,
+) -> ArtifactRef | None:
+    """Resolve a committed owner-scoped PNG checkpoint from any prior export."""
+
+    require_public_export_identity_v2_enabled()
+    artifact = await session.scalar(
+        select(PublicArtifact)
+        .join(
+            PublicSlideCheckpoint,
+            PublicSlideCheckpoint.artifact_id == PublicArtifact.id,
+        )
+        .join(
+            WorkspaceOperation,
+            WorkspaceOperation.id == PublicSlideCheckpoint.operation_id,
+        )
+        .where(
+            WorkspaceOperation.owner_id == identity.owner_id,
+            WorkspaceOperation.presentation_id == identity.presentation_id,
+            WorkspaceOperation.kind.in_(("export.pptx", "export.pdf")),
+            PublicSlideCheckpoint.revision == identity.source_revision,
+            PublicSlideCheckpoint.input_digest == identity.canonical_digest,
+            PublicSlideCheckpoint.stage_version == identity.stage_version,
+            PublicArtifact.owner_id == identity.owner_id,
+            PublicArtifact.tenant_id == identity.tenant_id,
+            PublicArtifact.kind == "slide-png",
+            PublicArtifact.media_type == "image/png",
+            PublicArtifact.retention_class == "checkpoint",
+            PublicArtifact.lifecycle_state == "committed",
+        )
+        .order_by(PublicSlideCheckpoint.committed_at.desc())
+        .limit(1)
+    )
+    return artifact.to_ref() if artifact is not None else None
+
+
+def _validate_slide_render_claim(
+    claim: WorkspaceOperationClaim,
+    identity: CanonicalSlideRenderIdentity,
+) -> None:
+    if claim.kind not in {"export.pptx", "export.pdf"}:
+        raise PublicExportIdentityBindingError(
+            "public_render_operation_kind_invalid"
+        )
+    if claim.owner_id != identity.owner_id:
+        raise PublicExportIdentityBindingError(
+            "public_render_operation_owner_mismatch"
+        )
+    if claim.presentation_id != identity.presentation_id:
+        raise PublicExportIdentityBindingError(
+            "public_render_operation_presentation_mismatch"
+        )
+    if claim.expected_revision != identity.source_revision:
+        raise PublicExportIdentityBindingError(
+            "public_render_operation_revision_mismatch"
+        )
+    if claim.attempt_number < 1 or claim.fencing_token < 1:
+        raise PublicExportIdentityBindingError(
+            "public_render_operation_fence_invalid"
+        )
+    _attempt_token_hash(claim.attempt_token)
+
+
+async def bind_slide_render_checkpoint(
+    session: AsyncSession,
+    *,
+    identity: CanonicalSlideRenderIdentity,
+    operation_claim: WorkspaceOperationClaim,
+    artifact: ArtifactRef,
+) -> None:
+    """CAS a fresh or reused PNG checkpoint under the current operation fence."""
+
+    require_public_export_identity_v2_enabled()
+    _validate_slide_render_claim(operation_claim, identity)
+    if (
+        artifact.owner_id != identity.owner_id
+        or artifact.tenant_id != identity.tenant_id
+        or artifact.kind != "slide-png"
+        or artifact.media_type != "image/png"
+        or artifact.retention_class != "checkpoint"
+    ):
+        raise PublicExportIdentityBindingError(
+            "public_render_checkpoint_artifact_invalid"
+        )
+    pointer = await put_slide_checkpoint_if_current(
+        session,
+        operation_id=operation_claim.operation_id,
+        owner_id=identity.owner_id,
+        tenant_id=identity.tenant_id,
+        attempt_number=operation_claim.attempt_number,
+        attempt_token=operation_claim.attempt_token,
+        fencing_token=operation_claim.fencing_token,
+        revision=identity.source_revision,
+        slide_index=identity.slide_index,
+        input_digest=identity.canonical_digest,
+        stage_version=identity.stage_version,
+        artifact_id=artifact.artifact_id,
+    )
+    if pointer is None:
+        raise PublicExportFenceRejected("public_render_checkpoint_fence_stale")
 
 
 @dataclass(frozen=True, slots=True)
@@ -167,6 +518,18 @@ class SlideCheckpointArtifact:
         return {
             "slideIndex": self.slide_index,
             "artifactRef": self.artifact.model_dump(mode="json", by_alias=True),
+            "validationDigest": self.validation_digest,
+            "inputDigest": self.input_digest,
+            "stageVersion": self.stage_version,
+        }
+
+    def identity_wire(self) -> dict[str, object]:
+        """Stable final-export identity without row- or operation-local UUIDs."""
+
+        return {
+            "slideIndex": self.slide_index,
+            "artifactDigest": self.artifact.sha256,
+            "artifactBytes": self.artifact.size_bytes,
             "validationDigest": self.validation_digest,
             "inputDigest": self.input_digest,
             "stageVersion": self.stage_version,
@@ -272,9 +635,17 @@ class CanonicalExportIdentity:
             "slides": [checkpoint.to_wire() for checkpoint in self.slides],
         }
 
+    def canonical_wire(self) -> dict[str, object]:
+        """Return only content/version evidence that determines final bytes."""
+
+        value = self.to_wire()
+        value["slides"] = [checkpoint.identity_wire() for checkpoint in self.slides]
+        return value
+
     def checkpoint_payload(self) -> bytes:
         payload = {
             "schemaVersion": EXPORT_CHECKPOINT_SCHEMA_VERSION,
+            "canonicalDigest": self.canonical_digest,
             "identity": self.to_wire(),
         }
         return json.dumps(
@@ -286,7 +657,14 @@ class CanonicalExportIdentity:
 
     @property
     def canonical_digest(self) -> str:
-        return sha256(self.checkpoint_payload()).hexdigest()
+        return sha256(
+            json.dumps(
+                self.canonical_wire(),
+                ensure_ascii=True,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
 
     def export_key(self, source_checkpoint: ArtifactRef) -> ExportIdentityKey:
         if (
@@ -294,7 +672,8 @@ class CanonicalExportIdentity:
             or source_checkpoint.retention_class != "checkpoint"
             or source_checkpoint.owner_id != self.owner_id
             or source_checkpoint.tenant_id != self.tenant_id
-            or source_checkpoint.sha256 != self.canonical_digest
+            or source_checkpoint.sha256
+            != sha256(self.checkpoint_payload()).hexdigest()
         ):
             raise PublicExportIdentityBindingError(
                 "public_export_identity_checkpoint_binding_invalid"
@@ -315,6 +694,7 @@ class CanonicalExportIdentity:
             exporter_version=self.exporter_version,
             render_adapter=self.render_adapter,
             source_artifact_id=source_checkpoint.artifact_id,
+            source_artifact_digest=source_checkpoint.sha256,
         )
 
 
@@ -373,7 +753,7 @@ def restore_canonical_export_identity(
         ) from error
     root = _exact_object(
         decoded,
-        fields={"schemaVersion", "identity"},
+        fields={"schemaVersion", "canonicalDigest", "identity"},
         error_code="public_export_checkpoint_payload_invalid",
     )
     if root["schemaVersion"] != EXPORT_CHECKPOINT_SCHEMA_VERSION:
@@ -467,11 +847,19 @@ def restore_canonical_export_identity(
         raise PublicExportIdentityBindingError(
             "public_export_checkpoint_payload_invalid"
         ) from error
+    try:
+        checkpoint_canonical_digest = normalize_sha256(
+            str(root["canonicalDigest"])
+        )
+    except ValueError as error:
+        raise PublicExportIdentityBindingError(
+            "public_export_identity_checkpoint_binding_invalid"
+        ) from error
     if (
         identity.owner_id != source_checkpoint.owner_id
         or identity.tenant_id != source_checkpoint.tenant_id
         or identity.checkpoint_payload() != payload
-        or identity.canonical_digest != source_checkpoint.sha256
+        or identity.canonical_digest != checkpoint_canonical_digest
     ):
         raise PublicExportIdentityBindingError(
             "public_export_identity_checkpoint_binding_invalid"
@@ -768,23 +1156,31 @@ async def promote_canonical_export_publication(
 __all__ = [
     "CanonicalExportExecution",
     "CanonicalExportIdentity",
+    "CanonicalSlideRenderIdentity",
     "EXPORT_CHECKPOINT_SCHEMA_VERSION",
     "EXPORT_IDENTITY_SCHEMA_VERSION",
     "ExportEvidenceDigests",
     "FencedExportPublicationCandidate",
     "MAX_EXPORT_CHECKPOINT_BYTES",
     "PUBLIC_EXPORT_IDENTITY_V2_ENV",
+    "SLIDE_RENDER_IDENTITY_SCHEMA_VERSION",
+    "SLIDE_RENDER_STAGE_VERSION",
     "PublicExportFenceRejected",
     "PublicExportIdentityBindingError",
     "PublicExportIdentityError",
     "PublicExportIdentityV2Disabled",
+    "PublicSlideRenderSingleflightError",
     "SlideCheckpointArtifact",
+    "acquire_slide_render_authority",
+    "bind_slide_render_checkpoint",
     "claim_canonical_export_identity",
     "checkpoint_canonical_export_slides",
     "complete_canonical_export_identity",
+    "find_reusable_slide_render_checkpoint",
     "public_export_identity_v2_enabled",
     "promote_canonical_export_publication",
     "require_public_export_identity_v2_enabled",
     "restore_canonical_export_identity",
     "reuse_completed_export_identity",
+    "run_slide_render_singleflight",
 ]

@@ -99,7 +99,8 @@
     "public-export.runtime.no-docker": "decisions/public-export.runtime.no-docker.1.json",
     "public-service.remediation.multi-session-workflow": "decisions/public-service.remediation.multi-session-workflow.1.json",
     "public-release.evidence-gating": "decisions/public-release.evidence-gating.1.json",
-    "public-generation.failed-attempt-timing": "decisions/public-generation.failed-attempt-timing.2.json"
+    "public-generation.failed-attempt-timing": "decisions/public-generation.failed-attempt-timing.2.json",
+    "public-export.fidelity-performance-contract": "decisions/public-export.fidelity-performance-contract.2.json"
   },
   "readFirst": [
     "AGENTS.md",
@@ -108,5 +109,5 @@
     "docs/public-generation-export-phase6-quality-contract-session-e-20260830.md",
     "docs/public-generation-export-phase8-phase9-readiness-manifest-20260830.md"
   ],
-  "updatedAt": "2026-08-30T14:33:21.0975538+00:00"
+  "updatedAt": "2026-08-30T14:38:36.7745041+00:00"
 }

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "key": "public-export.fidelity-performance-contract",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Public v2 Fidelity stays raster-only; reuse digest-bound slide checkpoints/singleflight and run transport outside scheduler lock under owner/presentation caps.",
+  "scope": [
+    "public-export",
+    "trusted-executor",
+    "artifact-streaming"
+  ],
+  "invariants": [
+    "Fidelity output remains raster-preserving",
+    "checkpoint reuse remains owner tenant presentation revision quality renderer and fence bound",
+    "transport concurrency remains scheduler-cap bounded"
+  ],
+  "forbidden": [
+    "silently enabling Editable Hybrid",
+    "publishing stale or cross-owner checkpoints",
+    "holding the dispatcher selection lock for transport execution"
+  ],
+  "evidence": [
+    "servers/fastapi/services/public_export_identity.py",
+    "servers/fastapi/services/public_export_operation.py",
+    "servers/fastapi/services/trusted_executor/worker_dispatcher.py",
+    "servers/fastapi/tests/unit/test_public_export_identity_contract.py",
+    "servers/fastapi/tests/unit/test_trusted_executor_worker_dispatcher_concurrency.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-30T13:49:18.9468162+00:00"
+}

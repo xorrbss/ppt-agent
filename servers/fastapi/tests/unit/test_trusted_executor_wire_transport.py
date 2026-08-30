@@ -17,6 +17,7 @@ from services.trusted_executor.composition import (
     create_trusted_worker_executor_runtime,
 )
 from services.trusted_executor.isolation_policy import IsolationUnavailableError
+from services.trusted_executor.wire_transport import ArtifactObjectStoreWireAdapter
 from services.trusted_executor.worker_dispatcher import TrustedWorkerWireError
 
 
@@ -46,6 +47,75 @@ class _FilesystemAuthority:
 def _storage_key(owner_id: uuid.UUID, tenant_id: str, digest: str) -> str:
     tenant = hashlib.sha256(tenant_id.encode("utf-8")).hexdigest()
     return f"v1/tenant/{tenant}/owner/{owner_id}/sha256/{digest[:2]}/{digest}"
+
+
+def test_object_store_wire_adapter_stages_in_one_bounded_verified_pass(
+    tmp_path: Path,
+) -> None:
+    payload = (b"trusted-worker-input" * 131_072) + b"end"
+    owner_id = uuid.uuid4()
+    digest = hashlib.sha256(payload).hexdigest()
+    reference = ArtifactRef(
+        artifact_id=uuid.uuid4(),
+        owner_id=owner_id,
+        tenant_id="tenant-wire-stream",
+        kind="slide-html",
+        sha256=digest,
+        size_bytes=len(payload),
+        media_type="text/html",
+        storage_key=_storage_key(owner_id, "tenant-wire-stream", digest),
+        created_by_operation_id=uuid.uuid4(),
+        retention_class="ephemeral",
+    )
+
+    class _Probe:
+        def __init__(self) -> None:
+            import io
+
+            self._stream = io.BytesIO(payload)
+            self.read_sizes: list[int] = []
+
+        def read(self, size: int = -1) -> bytes:
+            self.read_sizes.append(size)
+            if size < 0:
+                raise AssertionError("wire staging attempted a whole-file read")
+            return self._stream.read(size)
+
+        def close(self) -> None:
+            self._stream.close()
+
+    class _Store:
+        def __init__(self) -> None:
+            self.probe = _Probe()
+
+        async def open_read_stream(self, artifact: object) -> object:
+            from services.artifact_store import ArtifactReadStream
+
+            return ArtifactReadStream(
+                body=self.probe,
+                content_length=len(payload),
+                media_type="text/html",
+                etag=None,
+            )
+
+        async def put_stream(self, artifact: object, source: object) -> None:
+            raise AssertionError("stage must not publish")
+
+        async def head(self, artifact: object) -> object:
+            return None
+
+    async def scenario() -> None:
+        store = _Store()
+        destination = (tmp_path / "sandbox" / "input.html").resolve()
+        await ArtifactObjectStoreWireAdapter(store).stage(
+            reference=reference,
+            destination=destination,
+        )
+        assert destination.read_bytes() == payload
+        assert store.probe.read_sizes
+        assert max(store.probe.read_sizes) <= 1024 * 1024
+
+    asyncio.run(scenario())
 
 
 def test_runtime_factory_fails_closed_without_complete_platform_isolation(

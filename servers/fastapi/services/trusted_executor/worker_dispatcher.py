@@ -9,6 +9,8 @@ selected by this module.
 from __future__ import annotations
 
 import asyncio
+from collections import deque
+from contextlib import suppress
 from dataclasses import dataclass, field
 import hashlib
 from pathlib import Path
@@ -62,8 +64,19 @@ class TrustedWorkerWireTransport(Protocol):
     ) -> TrustedWorkerWireResult: ...
 
 
+@dataclass(slots=True)
+class _PendingDispatch:
+    work_item: TrustedExecutorWorkItem
+    job: IsolatedWorkerJob
+    payload: bytes
+    environment: Mapping[str, str]
+    result: asyncio.Future[TrustedWorkerWireResult]
+    runner: asyncio.Task[object] | None = None
+    submitted: bool = False
+
+
 class TrustedWorkerDispatcher:
-    """Serialize fair dispatch while preserving per-operation wire results."""
+    """Serialize scheduler bookkeeping while allowing cap-safe wire concurrency."""
 
     def __init__(
         self,
@@ -81,6 +94,7 @@ class TrustedWorkerDispatcher:
         self._staging_root = root
         self._node_id = node_id.strip()
         self._dispatch_lock = asyncio.Lock()
+        self._pending: dict[str, deque[_PendingDispatch]] = {}
 
     async def execute(
         self,
@@ -140,31 +154,165 @@ class TrustedWorkerDispatcher:
             ),
             launch_spec=launch_spec,
         )
-        wire_result: TrustedWorkerWireResult | None = None
-
-        async def run(selected: TrustedExecutorWorkItem) -> ProductExecutionResult:
-            nonlocal wire_result
-            if selected is not work_item:
-                raise TrustedWorkerWireError("trusted worker dispatch identity mismatch")
-            wire_result = await self._transport.execute(
-                work_item=selected,
-                job=job,
-                payload=payload,
-                environment=environment,
-            )
-            return ProductExecutionResult(
-                status="completed",
-                exit_code=wire_result.exit_code,
-            )
-
+        operation_id = work_item.scheduling.operation_id
+        dispatch = _PendingDispatch(
+            work_item=work_item,
+            job=job,
+            payload=payload,
+            environment=dict(environment),
+            result=asyncio.get_running_loop().create_future(),
+        )
         async with self._dispatch_lock:
-            self._adapter.submit(work_item)
-            executed = await self._adapter.execute_next(run)
-        if executed is None or executed.work_item is not work_item or wire_result is None:
-            raise TrustedWorkerWireError("trusted worker was not dispatched")
-        if executed.result.status != "completed":
-            raise TrustedWorkerWireError("trusted worker execution failed")
-        return wire_result
+            queue = self._pending.setdefault(operation_id, deque())
+            queue.append(dispatch)
+            if len(queue) == 1:
+                self._submit_locked(dispatch)
+        try:
+            await asyncio.shield(self._pump())
+            return await asyncio.shield(dispatch.result)
+        except asyncio.CancelledError:
+            await self._cancel(operation_id, dispatch)
+            raise
+
+    async def _pump(self) -> None:
+        """Reserve every eligible item under the lock, then start transports outside it."""
+
+        gates: list[asyncio.Event] = []
+        async with self._dispatch_lock:
+            while gate := await self._reserve_one_locked():
+                gates.append(gate)
+        for gate in gates:
+            gate.set()
+
+    async def _reserve_one_locked(self) -> asyncio.Event | None:
+        """Make one adapter reservation while ``_dispatch_lock`` is held."""
+
+        selected = asyncio.get_running_loop().create_future()
+        transport_gate = asyncio.Event()
+        release_lock_owned = False
+        selected_dispatch: _PendingDispatch | None = None
+        selected_wire_result: TrustedWorkerWireResult | None = None
+
+        async def run(work_item: TrustedExecutorWorkItem) -> ProductExecutionResult:
+            nonlocal release_lock_owned, selected_dispatch, selected_wire_result
+            operation_id = work_item.scheduling.operation_id
+            queue = self._pending.get(operation_id)
+            selected_dispatch = queue[0] if queue else None
+            if selected_dispatch is None or selected_dispatch.work_item is not work_item:
+                raise TrustedWorkerWireError("trusted worker dispatch identity mismatch")
+            selected.set_result(selected_dispatch)
+            await transport_gate.wait()
+            try:
+                selected_wire_result = await self._transport.execute(
+                    work_item=work_item,
+                    job=selected_dispatch.job,
+                    payload=selected_dispatch.payload,
+                    environment=selected_dispatch.environment,
+                )
+                return ProductExecutionResult(
+                    status="completed",
+                    exit_code=selected_wire_result.exit_code,
+                )
+            finally:
+                # The adapter releases its generation-fenced reservation immediately
+                # after this callback returns.  Reacquire the bookkeeping lock so the
+                # release and the next fair selection cannot interleave.
+                await self._dispatch_lock.acquire()
+                release_lock_owned = True
+
+        async def execute_reserved() -> object:
+            try:
+                executed = await self._adapter.execute_next(run)
+                if executed is not None and executed.result.status != "completed":
+                    raise TrustedWorkerWireError("trusted worker execution failed")
+                if executed is not None:
+                    if selected_dispatch is None or selected_wire_result is None:
+                        raise TrustedWorkerWireError("trusted worker was not dispatched")
+                    if not selected_dispatch.result.done():
+                        selected_dispatch.result.set_result(selected_wire_result)
+                return executed
+            except BaseException as error:
+                if selected_dispatch is not None and not selected_dispatch.result.done():
+                    if isinstance(error, asyncio.CancelledError):
+                        selected_dispatch.result.cancel()
+                    else:
+                        selected_dispatch.result.set_exception(error)
+                raise
+            finally:
+                if release_lock_owned:
+                    if selected_dispatch is not None:
+                        operation_id = selected_dispatch.work_item.scheduling.operation_id
+                        queue = self._pending.get(operation_id)
+                        if queue and queue[0] is selected_dispatch:
+                            queue.popleft()
+                            if queue:
+                                self._submit_locked(queue[0])
+                            else:
+                                self._pending.pop(operation_id, None)
+                    self._dispatch_lock.release()
+                    await self._pump()
+
+        runner = asyncio.create_task(execute_reserved())
+        runner.add_done_callback(
+            lambda task: None if task.cancelled() else task.exception()
+        )
+        selection_waiter = asyncio.ensure_future(asyncio.shield(selected))
+        done, _ = await asyncio.wait(
+            {runner, selection_waiter},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if runner in done:
+            selection_waiter.cancel()
+            with suppress(asyncio.CancelledError):
+                await selection_waiter
+            executed = await runner
+            if executed is not None:
+                raise TrustedWorkerWireError("trusted worker selection was not observed")
+            return None
+
+        dispatch = await selection_waiter
+        dispatch.runner = runner
+        return transport_gate
+
+    async def _cancel(
+        self,
+        operation_id: str,
+        dispatch: _PendingDispatch,
+    ) -> None:
+        runner: asyncio.Task[object] | None = None
+        async with self._dispatch_lock:
+            queue = self._pending.get(operation_id)
+            if queue is None or dispatch not in queue:
+                return
+            runner = dispatch.runner
+            if runner is None:
+                if dispatch.submitted:
+                    if not self._adapter.cancel_pending(operation_id):
+                        raise TrustedWorkerWireError(
+                            "trusted worker pending cancellation failed"
+                        )
+                    if queue[0] is not dispatch:
+                        raise TrustedWorkerWireError(
+                            "trusted worker pending order mismatch"
+                        )
+                    queue.popleft()
+                    if queue:
+                        self._submit_locked(queue[0])
+                else:
+                    queue.remove(dispatch)
+                if not queue:
+                    self._pending.pop(operation_id, None)
+                dispatch.result.cancel()
+            else:
+                runner.cancel()
+        if runner is not None:
+            with suppress(asyncio.CancelledError):
+                await asyncio.shield(runner)
+        await self._pump()
+
+    def _submit_locked(self, dispatch: _PendingDispatch) -> None:
+        self._adapter.submit(dispatch.work_item)
+        dispatch.submitted = True
 
 
 __all__ = [
