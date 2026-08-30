@@ -17,6 +17,9 @@ from enum import Enum
 from typing import Iterable
 
 
+ISOLATION_ATTESTATION_SCHEMA = "presenton.worker-isolation-attestation/v1"
+
+
 class IsolationPolicyError(ValueError):
     """A launch filesystem layout does not preserve the isolation contract."""
 
@@ -28,6 +31,7 @@ class IsolationUnavailableError(RuntimeError):
 class IsolationControl(str, Enum):
     """Controls that must be enforced outside the child process itself."""
 
+    LOW_PRIVILEGE_IDENTITY = "low-privilege-identity"
     NETWORK_NONE = "network-none"
     ROOT_FILESYSTEM_READ_ONLY = "root-filesystem-read-only"
     STAGED_INPUTS_READ_ONLY = "staged-inputs-read-only"
@@ -90,6 +94,8 @@ class PlatformIsolationReport:
     controls: tuple[tuple[IsolationControl, EnforcementStatus, str], ...]
 
     def __post_init__(self) -> None:
+        if not self.platform.strip() or not self.backend.strip():
+            raise IsolationPolicyError("isolation platform and backend are required")
         seen: set[IsolationControl] = set()
         for control, _status, reason in self.controls:
             if control in seen:
@@ -121,6 +127,49 @@ class PlatformIsolationReport:
         if failures:
             raise IsolationUnavailableError("sandbox isolation unavailable: " + "; ".join(failures))
 
+    @property
+    def production_eligible(self) -> bool:
+        """Whether the report proves every production isolation control.
+
+        This value is derived only from the report's launcher/probe evidence.
+        Configuration names and environment variables cannot make it true.
+        """
+
+        return self.resource_limits_supported and all(
+            self.status_for(control) is EnforcementStatus.ENFORCED
+            for control in IsolationControl
+        )
+
+    def to_attestation(self) -> dict[str, object]:
+        """Return stable, secret-free provenance for admission and receipts."""
+
+        by_control = {
+            control: (status, reason) for control, status, reason in self.controls
+        }
+        controls: dict[str, dict[str, str]] = {}
+        for control in sorted(IsolationControl, key=lambda item: item.value):
+            status, reason = by_control.get(
+                control,
+                (EnforcementStatus.UNVERIFIED, "launcher supplied no evidence"),
+            )
+            controls[control.value] = {
+                "status": status.value,
+                "reason": reason,
+            }
+        return {
+            "schemaVersion": ISOLATION_ATTESTATION_SCHEMA,
+            "platform": self.platform,
+            "backend": self.backend,
+            "resourceLimits": {
+                "status": (
+                    "supported" if self.resource_limits_supported else "unsupported"
+                ),
+                "reason": self.resource_limits_reason,
+            },
+            "controls": controls,
+            "productionEligible": self.production_eligible,
+        }
+
 
 def probe_platform_isolation(*, platform: str | None = None) -> PlatformIsolationReport:
     """Return conservative host capability, never a declaration that policy passed.
@@ -135,26 +184,52 @@ def probe_platform_isolation(*, platform: str | None = None) -> PlatformIsolatio
     target = platform if platform is not None else os.name
     if target == "nt":
         backend = "windows-job-object-only"
-        reason = "Windows Job Object does not enforce this control"
         resource_limits_supported = True
         resource_limits_reason = "Windows Job Object supports CPU, memory, process-count, and descendant ownership limits"
+        reasons = {
+            IsolationControl.LOW_PRIVILEGE_IDENTITY: (
+                "launcher does not create a restricted token or AppContainer identity"
+            ),
+            IsolationControl.NETWORK_NONE: (
+                "no AppContainer network isolation or outbound-deny policy was applied"
+            ),
+            IsolationControl.ROOT_FILESYSTEM_READ_ONLY: (
+                "no AppContainer or ACL read-only root policy was applied"
+            ),
+            IsolationControl.STAGED_INPUTS_READ_ONLY: (
+                "no AppContainer or ACL read-only staged-input policy was applied"
+            ),
+            IsolationControl.TEMPORARY_BYTES_BOUNDED: (
+                "Job Object memory limits do not enforce a temporary-storage byte quota"
+            ),
+            IsolationControl.TEMPORARY_FILES_BOUNDED: (
+                "Job Object limits do not enforce a temporary-file count quota"
+            ),
+        }
     elif target == "posix" and sys.platform.startswith("linux"):
         backend = "linux-cgroup-only"
-        reason = "cgroup v2 alone does not enforce this control; namespace launcher is absent"
         resource_limits_supported = True
         resource_limits_reason = "cgroup v2 resource limits require a delegated launcher before use"
+        reasons = {
+            control: "cgroup v2 alone does not enforce this control; namespace launcher is absent"
+            for control in IsolationControl
+        }
     else:
         backend = "unsupported"
-        reason = "no supported OS sandbox launcher is configured"
         resource_limits_supported = False
         resource_limits_reason = "no supported resource-limit backend is configured"
+        reasons = {
+            control: "no supported OS sandbox launcher is configured"
+            for control in IsolationControl
+        }
     return PlatformIsolationReport(
         platform=target,
         backend=backend,
         resource_limits_supported=resource_limits_supported,
         resource_limits_reason=resource_limits_reason,
         controls=tuple(
-            (control, EnforcementStatus.UNSUPPORTED, reason) for control in IsolationControl
+            (control, EnforcementStatus.UNSUPPORTED, reasons[control])
+            for control in IsolationControl
         ),
     )
 
@@ -169,6 +244,7 @@ def _is_descendant(path: pathlib.Path, root: pathlib.Path) -> bool:
 
 __all__ = [
     "EnforcementStatus",
+    "ISOLATION_ATTESTATION_SCHEMA",
     "IsolationControl",
     "IsolationPolicyError",
     "IsolationUnavailableError",

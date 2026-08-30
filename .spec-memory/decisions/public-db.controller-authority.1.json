@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "key": "public-db.controller-authority",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Remote public API and cross-tenant controllers use separate PostgreSQL roles; controller scans require the dedicated non-BYPASSRLS role.",
+  "scope": [
+    "public-db",
+    "tenant",
+    "controller"
+  ],
+  "invariants": [
+    "Remote API login is not superuser, BYPASSRLS, or a controller-role member",
+    "Cross-tenant queue controllers require membership in presenton_public_controller",
+    "Request access remains owner-and-tenant RLS scoped"
+  ],
+  "forbidden": [
+    "Sharing one production DB authority between public API and controllers",
+    "Treating an unscoped request connection as controller authority"
+  ],
+  "evidence": [
+    "servers/fastapi/alembic/versions/ff2a6c8e0b14_harden_public_tenant_and_tokens.py",
+    "servers/fastapi/services/database.py",
+    "servers/fastapi/services/workspace_operation_worker.py",
+    "servers/fastapi/tests/integration/test_postgresql_public_tenant_security.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-30T14:42:25.5596046+00:00"
+}

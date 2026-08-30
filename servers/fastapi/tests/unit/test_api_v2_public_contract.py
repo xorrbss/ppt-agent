@@ -22,8 +22,30 @@ from api.v2.orchestration import (
     PublicRequestActor,
     PublicV2OrchestrationError,
     get_public_request_actor,
+    require_public_actor_scope,
 )
 from api.v2.router import API_V2_PUBLIC_ROUTER
+
+
+def test_public_actor_requires_each_exact_endpoint_scope() -> None:
+    actor = PublicRequestActor(
+        owner_id=uuid.uuid4(),
+        tenant_id="tenant-a",
+        correlation_id="request-a",
+        scopes=frozenset({"operations:read"}),
+    )
+    require_public_actor_scope(actor, "operations:read")
+    for missing in (
+        "presentations:write",
+        "operations:cancel",
+        "artifacts:read",
+    ):
+        try:
+            require_public_actor_scope(actor, missing)
+        except Exception as error:
+            assert getattr(error, "status_code", None) == 403
+        else:
+            raise AssertionError(f"missing public scope must fail closed: {missing}")
 
 
 def test_public_v2_contract_delegates_async_surfaces_and_fails_closed_quality() -> None:
@@ -32,6 +54,14 @@ def test_public_v2_contract_delegates_async_surfaces_and_fails_closed_quality() 
         owner_id=uuid.uuid4(),
         tenant_id="tenant-a",
         correlation_id="request-a",
+        scopes=frozenset(
+            {
+                "artifacts:read",
+                "operations:cancel",
+                "operations:read",
+                "presentations:write",
+            }
+        ),
     )
 
     def receipt(operation_id: str, presentation_id: str) -> OperationReceiptV2:

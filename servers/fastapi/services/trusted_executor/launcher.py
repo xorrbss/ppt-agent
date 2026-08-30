@@ -50,6 +50,12 @@ class TrustedExecutorProductLauncher:
         self._supervisor_factory = supervisor_factory
         self._zero_timeout_seconds = zero_timeout_seconds
 
+    @property
+    def isolation_attestation(self) -> dict[str, object]:
+        """Expose the exact report used for fail-closed launch admission."""
+
+        return self._isolation_report.to_attestation()
+
     async def execute(self, work_item: TrustedExecutorWorkItem) -> ProductExecutionResult:
         """Launch then wait for the operation process tree without bypassing policy."""
 

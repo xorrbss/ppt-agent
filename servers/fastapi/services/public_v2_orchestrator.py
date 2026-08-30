@@ -559,6 +559,28 @@ class SqlPublicV2Orchestrator:
                     actor=actor,
                     request_hash=request_hash,
                 )
+            # Presentation/workspace rows predate tenant columns.  Until those
+            # legacy tables can be migrated without widening non-public flows,
+            # the immutable public generation admission is the tenant binding
+            # for a presentation entering the public export path.
+            source_authority = await session.scalar(
+                select(PublicOperationAdmission.id)
+                .join(
+                    WorkspaceOperation,
+                    WorkspaceOperation.id == PublicOperationAdmission.operation_id,
+                )
+                .where(
+                    WorkspaceOperation.presentation_id == target_id,
+                    WorkspaceOperation.owner_id == actor.owner_id,
+                    WorkspaceOperation.kind == "presentation.generate",
+                    PublicOperationAdmission.owner_id == actor.owner_id,
+                    PublicOperationAdmission.tenant_id == actor.tenant_id,
+                    PublicOperationAdmission.operation_kind == "generation",
+                )
+                .limit(1)
+            )
+            if source_authority is None:
+                raise _public_error(404, "presentation_not_found")
             presentation = await session.scalar(
                 select(PresentationModel)
                 .where(

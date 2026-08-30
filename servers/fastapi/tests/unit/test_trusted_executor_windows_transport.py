@@ -92,6 +92,23 @@ def test_windows_local_composition_requires_explicit_development_policy(
         )
 
 
+def test_windows_local_composition_rejects_production_even_with_local_policy(
+    tmp_path: Path,
+) -> None:
+    authority = _FilesystemAuthority(tmp_path / "input", tmp_path / "published")
+    with pytest.raises(IsolationUnavailableError, match="explicit local development tier"):
+        create_trusted_worker_executor_runtime(
+            staging_root=tmp_path / "staging",
+            node_id="node-production-policy",
+            artifact_authority=authority,
+            environment={
+                "ENVIRONMENT": "production",
+                "PUBLIC_TRUSTED_WORKER_SANDBOX_BACKEND": "windows-local",
+                "PUBLIC_TRUSTED_WORKER_LOCAL_POLICY": "development",
+            },
+        )
+
+
 def test_windows_local_transport_runs_bounded_stdio_and_publishes_exact_output(
     tmp_path: Path,
 ) -> None:
@@ -173,6 +190,7 @@ sys.stdout.write(sys.argv[4])
         node_id="node-windows-local",
         artifact_authority=_FilesystemAuthority(input_path, published),
         environment={
+            "ENVIRONMENT": "development",
             "PUBLIC_TRUSTED_WORKER_SANDBOX_BACKEND": "windows-local",
             "PUBLIC_TRUSTED_WORKER_LOCAL_POLICY": "development",
         },
@@ -201,6 +219,13 @@ sys.stdout.write(sys.argv[4])
                 },
             )
             assert decoded.output_artifact == output_reference.to_wire()
+            assert decoded.resource_metrics is not None
+            isolation_attestation = decoded.resource_metrics["isolationAttestation"]
+            assert isolation_attestation["productionEligible"] is False
+            assert (
+                isolation_attestation["controls"]["network-none"]["status"]
+                == "unsupported"
+            )
         finally:
             await runtime.close()
 

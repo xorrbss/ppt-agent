@@ -445,7 +445,10 @@ class WorkspaceExportOperationHandler:
                     "capability_evidence": {
                         "selected_adapter": "general",
                         "execution_profile": "isolated_raster_v1",
-                        "network_none_worker": True,
+                        # Remains false until the completed worker samples carry
+                        # production-eligible OS isolation attestations.
+                        "network_none_worker": False,
+                        "isolation_attestations": [],
                         "sessionless_capability": True,
                         "pptx_mode": "fidelity" if export_format == "pptx" else None,
                     },
@@ -500,6 +503,17 @@ class WorkspaceExportOperationHandler:
                 selected_adapter = "general"
                 export_provenance = {
                     **initial_provenance,
+                    "capability_evidence": {
+                        **initial_provenance["capability_evidence"],
+                        "network_none_worker": (
+                            worker_resource_metrics.get("network_none_worker") is True
+                        ),
+                        "isolation_attestations": list(
+                            worker_resource_metrics.get(
+                                "worker_isolation_attestations", []
+                            )
+                        ),
+                    },
                     "freshness": {
                         **initial_provenance["freshness"],
                         "package_sha256": artifact_sha256,

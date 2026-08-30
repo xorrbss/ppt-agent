@@ -71,9 +71,15 @@ def _resource_summary(samples: list[Mapping[str, Any]]) -> dict[str, Any]:
         raise PublicExportOperationError("public_worker_resource_metrics_missing")
     layers = {str(sample.get("enforcementLayer", "")) for sample in samples}
     durable_samples = []
+    isolation_attestations: list[dict[str, Any]] = []
     for sample in samples:
         raw_limits = sample.get("limits")
         raw_limits = raw_limits if isinstance(raw_limits, Mapping) else {}
+        raw_attestation = sample.get("isolationAttestation")
+        attestation = (
+            dict(raw_attestation) if isinstance(raw_attestation, Mapping) else {}
+        )
+        isolation_attestations.append(attestation)
         durable_samples.append(
             {
                 "role": str(sample.get("role", "")),
@@ -107,8 +113,18 @@ def _resource_summary(samples: list[Mapping[str, Any]]) -> dict[str, Any]:
                 "peakCpuMillis": int(sample.get("peakCpuMillis", 0)),
                 "recycledWithinBaseline": sample.get("recycledWithinBaseline") is True,
                 "finalProcessCount": int(sample.get("finalProcessCount", 0)),
+                "isolationAttestation": attestation,
             }
         )
+    network_none_worker = all(
+        attestation.get("schemaVersion")
+        == "presenton.worker-isolation-attestation/v1"
+        and attestation.get("productionEligible") is True
+        and isinstance(attestation.get("controls"), Mapping)
+        and isinstance(attestation["controls"].get("network-none"), Mapping)
+        and attestation["controls"]["network-none"].get("status") == "enforced"
+        for attestation in isolation_attestations
+    )
     return {
         "worker_peak_memory_bytes": max(int(sample.get("peakPrivateBytes", 0)) for sample in samples),
         "worker_peak_handle_count": max(int(sample.get("peakHandleCount", 0)) for sample in samples),
@@ -119,6 +135,8 @@ def _resource_summary(samples: list[Mapping[str, Any]]) -> dict[str, Any]:
         "worker_enforcement_layer": layers.pop() if len(layers) == 1 else "mixed",
         "worker_execution_count": len(samples),
         "worker_resource_samples": durable_samples,
+        "worker_isolation_attestations": isolation_attestations,
+        "network_none_worker": network_none_worker,
     }
 
 

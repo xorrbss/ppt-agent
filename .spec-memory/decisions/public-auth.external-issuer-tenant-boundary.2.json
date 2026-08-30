@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "key": "public-auth.external-issuer-tenant-boundary",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Treat OIDC sub as opaque and authorize it only through a pre-provisioned issuer, tenant, and subject digest binding to an active internal owner.",
+  "scope": [
+    "public-auth",
+    "tenant",
+    "provisioning"
+  ],
+  "invariants": [
+    "External subjects are never parsed as internal UUID authority",
+    "Bindings are issuer-and-tenant scoped and store only subject digests",
+    "Missing or conflicting provisioning fails closed"
+  ],
+  "forbidden": [
+    "Just-in-time owner creation from an OIDC claim",
+    "Cross-issuer or cross-tenant subject reuse without an explicit binding"
+  ],
+  "evidence": [
+    "servers/fastapi/models/sql/public_principal_binding.py",
+    "servers/fastapi/services/public_principal_provisioning.py",
+    "servers/fastapi/api/v1/auth/principal.py",
+    "servers/fastapi/tests/unit/test_public_principal_boundary.py"
+  ],
+  "supersedes": "public-auth.external-issuer-tenant-boundary@1",
+  "recordedAt": "2026-08-30T14:42:26.4580967+00:00"
+}

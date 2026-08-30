@@ -114,7 +114,19 @@ def test_v2_api_delegates_to_db_profile_and_never_runs_executor_in_request_threa
             )
 
         now = datetime(2026, 8, 30, tzinfo=timezone.utc)
-        actor = PublicRequestActor(uuid.uuid4(), "tenant-db", "trace-db")
+        actor = PublicRequestActor(
+            uuid.uuid4(),
+            "tenant-db",
+            "trace-db",
+            frozenset(
+                {
+                    "presentations:write",
+                    "operations:read",
+                    "operations:cancel",
+                    "artifacts:read",
+                }
+            ),
+        )
 
         class DbAuthority:
             def __init__(self) -> None:
@@ -333,7 +345,12 @@ def test_sql_adapter_projects_durable_operation_and_delegates_cancel_without_exe
             raise AssertionError("submission admission must not run for projection test")
 
         adapter = SqlPublicV2Orchestrator(maker, admission=admission, cancel=cancel)
-        actor = PublicRequestActor(owner, "tenant-db", "trace-db")
+        actor = PublicRequestActor(
+            owner,
+            "tenant-db",
+            "trace-db",
+            frozenset({"operations:read", "operations:cancel"}),
+        )
         app = FastAPI()
         app.include_router(API_V2_PUBLIC_ROUTER)
         app.dependency_overrides[get_public_request_actor] = lambda: actor
@@ -343,7 +360,10 @@ def test_sql_adapter_projects_durable_operation_and_delegates_cancel_without_exe
             events = client.get(f"/api/v2/operations/{operation_id}/events")
             cancelled = client.post(f"/api/v2/operations/{operation_id}/cancel")
             app.dependency_overrides[get_public_request_actor] = lambda: PublicRequestActor(
-                owner, "tenant-other", "trace-other"
+                owner,
+                "tenant-other",
+                "trace-other",
+                frozenset({"operations:read"}),
             )
             cross_tenant_status = client.get(f"/api/v2/operations/{operation_id}")
         assert status.status_code == 200 and status.json()["status"] == "queued"
@@ -376,7 +396,12 @@ def test_api_submit_sql_adapter_persists_operation_job_and_admission(
             await connection.run_sync(lambda sync: SQLModel.metadata.create_all(sync, tables=tables))
         maker = async_sessionmaker(engine, expire_on_commit=False)
         owner = uuid.uuid4()
-        actor = PublicRequestActor(owner, "tenant-submit", "trace-submit")
+        actor = PublicRequestActor(
+            owner,
+            "tenant-submit",
+            "trace-submit",
+            frozenset({"presentations:write"}),
+        )
         admission_calls: list[uuid.UUID] = []
         executor_calls: list[str] = []
 
@@ -707,6 +732,111 @@ def test_sql_adapter_requires_current_publication_and_rejects_unwired_export_cap
             )
         assert stale.value.status_code == 404
         assert stale.value.reason_code == "artifact_not_found"
+        await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_public_export_requires_generation_authority_in_the_actor_tenant(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        engine = create_async_engine(
+            f"sqlite+aiosqlite:///{tmp_path / 'cross-tenant-export.db'}"
+        )
+        tables = [
+            User.__table__,
+            PresentationModel.__table__,
+            WorkspaceConversation.__table__,
+            WorkspaceOperation.__table__,
+            PublicOperationAdmission.__table__,
+        ]
+        async with engine.begin() as connection:
+            await connection.run_sync(
+                lambda sync: SQLModel.metadata.create_all(sync, tables=tables)
+            )
+        maker = async_sessionmaker(engine, expire_on_commit=False)
+        owner = uuid.uuid4()
+        presentation_id = uuid.uuid4()
+        generation_id = uuid.uuid4()
+        deadline = datetime.now(timezone.utc) + timedelta(minutes=5)
+        async with maker() as session, session.begin():
+            session.add(User(id=owner, username="tenant-owner", hashed_password="test"))
+            session.add(
+                PresentationModel(
+                    id=presentation_id,
+                    owner_id=owner,
+                    content="tenant-a presentation",
+                    n_slides=1,
+                    language="en",
+                    mode="authored",
+                    theme={},
+                )
+            )
+            conversation = WorkspaceConversation(
+                owner_id=owner,
+                owner_scope=str(owner),
+                presentation_id=presentation_id,
+            )
+            session.add(conversation)
+            await session.flush()
+            session.add(
+                WorkspaceOperation(
+                    id=generation_id,
+                    owner_id=owner,
+                    owner_scope=str(owner),
+                    conversation_id=conversation.id,
+                    presentation_id=presentation_id,
+                    anchor_position=1,
+                    kind="presentation.generate",
+                    state="succeeded",
+                    idempotency_key_hash="a" * 64,
+                    request_hash="b" * 64,
+                    request_payload={},
+                    expected_revision=0,
+                    result_revision=0,
+                    contract_version="public-operation/v2",
+                    execution_profile_version="public-generation-export/v2",
+                    phase="completed",
+                    deadline_at=deadline,
+                )
+            )
+            session.add(
+                PublicOperationAdmission(
+                    operation_id=generation_id,
+                    policy_version="tenant-test/v1",
+                    owner_id=owner,
+                    tenant_id="tenant-a",
+                    trace_id_hash="c" * 64,
+                    operation_kind="generation",
+                    resource_units=1,
+                    policy_digest="d" * 64,
+                    deadline_at=deadline,
+                    state="succeeded",
+                    slide_count=1,
+                    planned_request_limit=1,
+                    retry_request_limit=0,
+                    estimated_cost_limit_microunits=1,
+                    actual_cost_limit_microunits=1,
+                )
+            )
+
+        adapter = SqlPublicV2Orchestrator(maker)
+        request = PresentationExportRequestV2.model_validate(
+            {
+                "sourceRevision": 0,
+                "output": {"format": "pptx", "mode": "fidelity-raster"},
+            }
+        )
+        with pytest.raises(PublicV2OrchestrationError) as rejected:
+            await adapter.submit_export(
+                actor=PublicRequestActor(owner, "tenant-b", "trace-b"),
+                presentation_id=str(presentation_id),
+                idempotency_key="tenant-b-export",
+                request=request,
+            )
+        assert rejected.value.status_code == 404
+        assert rejected.value.reason_code == "presentation_not_found"
         await engine.dispose()
 
     asyncio.run(scenario())

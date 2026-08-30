@@ -13,6 +13,7 @@ from services.trusted_executor.contracts import (
     TrustedExecutorContractError,
 )
 from services.trusted_executor.isolation_policy import (
+    ISOLATION_ATTESTATION_SCHEMA,
     IsolationPolicyError,
     IsolationUnavailableError,
     SandboxFilesystemSpec,
@@ -72,6 +73,14 @@ def test_launch_contract_is_operation_bound_and_strips_secrets() -> None:
 def test_isolation_policy_requires_os_evidence_and_rejects_invalid_staging() -> None:
     report = probe_platform_isolation(platform="nt")
     assert report.resource_limits_supported is True
+    attestation = report.to_attestation()
+    assert attestation["schemaVersion"] == ISOLATION_ATTESTATION_SCHEMA
+    assert attestation["backend"] == "windows-job-object-only"
+    assert attestation["productionEligible"] is False
+    controls = attestation["controls"]
+    assert controls["low-privilege-identity"]["status"] == "unsupported"
+    assert controls["network-none"]["status"] == "unsupported"
+    assert controls["root-filesystem-read-only"]["status"] == "unsupported"
     with pytest.raises(IsolationUnavailableError, match="network-none=unsupported"):
         SandboxPolicy().require_os_enforcement(report)
 

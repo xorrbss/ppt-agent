@@ -6,7 +6,12 @@ from fastapi import FastAPI
 
 from api.v1.auth.bootstrap import bootstrap_database_admin
 from migrations import migrate_database_on_startup
-from services.database import create_db_and_tables, dispose_engines, sql_engine
+from services.database import (
+    create_db_and_tables,
+    dispose_engines,
+    require_public_api_database_authority,
+    sql_engine,
+)
 from services.export_retention_service import (
     start_export_retention_sweeper,
     stop_export_retention_sweeper,
@@ -142,6 +147,14 @@ async def app_lifespan(_: FastAPI):
     os.makedirs(get_app_data_directory_env(), exist_ok=True)
     await migrate_database_on_startup()
     await create_db_and_tables()
+    await require_public_api_database_authority()
+    if (
+        (os.getenv("ENVIRONMENT") or "development").strip().lower()
+        not in {"local", "development", "dev", "test"}
+        and (os.getenv("PPT_PUBLIC_OIDC_ISSUER") or "").strip()
+        and should_start_embedded_workspace_operation_worker()
+    ):
+        raise RuntimeError("public_controller_process_separation_required")
     await import_template_packages_on_startup(template_package_registry)
     await start_runtime_settings_coordinator()
     runtime_settings_coordinator_started = True
