@@ -5,11 +5,13 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import uuid
 from collections.abc import Awaitable, Callable, Mapping
+from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Any, Literal, cast
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from api.v1.auth.internal import authenticated_internal_request_headers
@@ -20,6 +22,7 @@ from models.sql.workspace import WorkspaceOperation
 from services.authored_quality_review_service import (
     run_authored_quality_review as run_authored_quality_review,
 )
+from services.authored_evidence_ledger import digest_deck_htmls
 from services.authored_vnext.generation.legacy_bridge import (
     export_persisted_legacy_master_deck,
 )
@@ -35,12 +38,17 @@ from services.presentation_export_capabilities import (
     PresentationExportContractError,
 )
 from services.public_export_operation import (
+    PUBLIC_RENDER_WORKER_PROTOCOL_VERSION,
     PublicExportOperationError,
+    public_release_review_deck_render_identity_digest,
+    public_release_review_runtime_binding,
+    public_render_runtime_binding_digest,
     render_and_export_authored_htmls,
 )
 from services.authored_quality_receipt_v3_pipeline import (
     project_persisted_authored_quality_receipt_v3,
 )
+from services.public_quality_receipt_v3_store import load_public_quality_evidence
 from services.workspace_artifact_publication_service import (
     WorkspaceArtifactPublicationError,
     compensate_workspace_artifact,
@@ -52,6 +60,7 @@ from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
     RetryableWorkspaceOperationError,
     WorkspaceOperationCancelled,
+    WorkspaceOperationDeferred,
     WorkspaceOperationExecutionContext,
     WorkspaceOperationHandlerRegistry,
     WorkspaceOperationLeaseLost,
@@ -60,6 +69,9 @@ from services.workspace_operation_handler_registry import (
 )
 from services.workspace_quality_operation_handler import (
     WorkspaceQualityReviewOperationHandler,
+    release_review_checker_policy_digest,
+    validate_release_review_base_evidence_for_export,
+    validate_export_release_review_receipt,
 )
 
 QUALITY_REVIEW_OPERATION_KIND = "quality.review"
@@ -228,12 +240,19 @@ class WorkspaceExportOperationHandler:
 
         await context.raise_if_cancelled()
         public_tenant_id: str | None = None
+        release_review_receipt_digest: str | None = None
+        release_review_base_receipt_digest: str | None = None
+        release_review_result_deck_html_digest: str | None = None
+        release_review_runtime_binding_digest: str | None = None
+        release_review_result_render_identity_digest: str | None = None
+        sealed_release_review_checker_policy_digest: str | None = None
+        review_evidence_operation_id: uuid.UUID | None = None
+        effective_revision = claim.expected_revision
+        effective_claim = claim
         async with self._session_factory() as session:
             presentation = await session.get(PresentationModel, claim.presentation_id)
             if presentation is None:
                 raise NonRetryableWorkspaceOperationError("presentation_not_found")
-            if presentation.revision != claim.expected_revision:
-                raise NonRetryableWorkspaceOperationError("stale_presentation_revision")
             title = presentation.title or "presentation"
             authored_vnext_projection = (
                 presentation.theme.get("authored_vnext")
@@ -257,6 +276,156 @@ class WorkspaceExportOperationHandler:
                 # is the public boundary; richer desktop/private modes retain
                 # their existing adapters outside this admission.
                 authored_vnext_export_path = "shared"
+                if claim.request_payload.get("quality_policy") == "release-v1":
+                    raw_reviewed_revision = claim.request_payload.get(
+                        "reviewed_source_revision", claim.expected_revision
+                    )
+                    if (
+                        isinstance(raw_reviewed_revision, bool)
+                        or not isinstance(raw_reviewed_revision, int)
+                        or raw_reviewed_revision < 0
+                    ):
+                        raise NonRetryableWorkspaceOperationError(
+                            "release_quality_review_required"
+                        )
+                    reviewed_revision = raw_reviewed_revision
+                    raw_review_operation_id = claim.request_payload.get(
+                        "release_review_operation_id"
+                    )
+                    try:
+                        review_operation_id = uuid.UUID(str(raw_review_operation_id))
+                    except (TypeError, ValueError) as error:
+                        raise NonRetryableWorkspaceOperationError(
+                            "release_quality_review_required"
+                        ) from error
+                    review_operation = await session.get(
+                        WorkspaceOperation, review_operation_id
+                    )
+                    if (
+                        review_operation is None
+                        or review_operation.presentation_id != claim.presentation_id
+                        or review_operation.owner_id != claim.owner_id
+                        or review_operation.owner_scope != claim.owner_scope
+                        or review_operation.kind != QUALITY_REVIEW_OPERATION_KIND
+                    ):
+                        raise NonRetryableWorkspaceOperationError(
+                            "release_quality_review_required"
+                        )
+                    review_admission = await session.scalar(
+                        select(PublicOperationAdmission).where(
+                            PublicOperationAdmission.operation_id
+                            == review_operation.id,
+                            PublicOperationAdmission.owner_id == claim.owner_id,
+                            PublicOperationAdmission.tenant_id == public_tenant_id,
+                            PublicOperationAdmission.operation_kind == "generation",
+                        )
+                    )
+                    if review_admission is None:
+                        raise NonRetryableWorkspaceOperationError(
+                            "release_quality_review_authority_invalid"
+                        )
+                    if (
+                        review_operation.state
+                        in {
+                            "queued",
+                            "waiting_for_assets",
+                            "blocked",
+                            "running",
+                            "approval_required",
+                            "awaiting_approval",
+                            "cancelling",
+                        }
+                        and review_admission.state in {"queued", "active"}
+                    ) or (
+                        review_operation.state == "succeeded"
+                        and review_admission.state in {"queued", "active"}
+                    ):
+                        raise WorkspaceOperationDeferred(
+                            "release_quality_review_pending",
+                            retry_after_seconds=1.0,
+                            detail={
+                                "release_review_operation_id": str(review_operation.id)
+                            },
+                        )
+                    if (
+                        review_operation.state != "succeeded"
+                        or review_admission.state != "succeeded"
+                        or review_operation.expected_revision != reviewed_revision
+                        or review_operation.result_revision is None
+                        or not isinstance(review_operation.result, Mapping)
+                    ):
+                        raise NonRetryableWorkspaceOperationError(
+                            "release_quality_review_failed"
+                        )
+                    effective_revision = int(review_operation.result_revision)
+                    release_review_receipt = review_operation.result.get(
+                        "release_review_receipt"
+                    )
+                    release_review_receipt_digest = (
+                        validate_export_release_review_receipt(
+                            release_review_receipt,
+                            operation_id=review_operation.id,
+                            source_revision=reviewed_revision,
+                            result_revision=effective_revision,
+                        )
+                    )
+                    review_evidence_operation_id = review_operation.id
+                    if not isinstance(release_review_receipt, Mapping):
+                        raise NonRetryableWorkspaceOperationError(
+                            "release_quality_review_required"
+                        )
+                    release_review_result_deck_html_digest = str(
+                        release_review_receipt.get("resultDeckHtmlDigest", "")
+                    )
+                    release_review_runtime_binding_digest = str(
+                        release_review_receipt.get(
+                            "renderRuntimeBindingDigest", ""
+                        )
+                    )
+                    release_review_result_render_identity_digest = str(
+                        release_review_receipt.get(
+                            "resultRenderIdentityDigest", ""
+                        )
+                    )
+                    sealed_release_review_checker_policy_digest = str(
+                        release_review_receipt.get("checkerPolicyDigest", "")
+                    )
+                    try:
+                        current_review_runtime_binding_digest = (
+                            public_render_runtime_binding_digest(
+                                public_release_review_runtime_binding()
+                            )
+                        )
+                    except PublicExportOperationError as error:
+                        raise NonRetryableWorkspaceOperationError(
+                            str(error)
+                        ) from error
+                    if (
+                        release_review_runtime_binding_digest
+                        != current_review_runtime_binding_digest
+                    ):
+                        raise NonRetryableWorkspaceOperationError(
+                            "release_quality_review_runtime_changed"
+                        )
+                    if (
+                        sealed_release_review_checker_policy_digest
+                        != release_review_checker_policy_digest()
+                    ):
+                        raise NonRetryableWorkspaceOperationError(
+                            "release_quality_review_checker_changed"
+                        )
+                    release_review_base_receipt_digest, _ = (
+                        await validate_release_review_base_evidence_for_export(
+                            session,
+                            presentation=presentation,
+                            review_operation=review_operation,
+                            receipt=release_review_receipt,
+                        )
+                    )
+                    if presentation.revision != effective_revision:
+                        raise NonRetryableWorkspaceOperationError(
+                            "stale_presentation_revision"
+                        )
             if (
                 authored_vnext_projection is not None
                 and public_tenant_id is None
@@ -273,9 +442,65 @@ class WorkspaceExportOperationHandler:
             if (
                 operation is None
                 or operation.presentation_id != claim.presentation_id
+                or operation.owner_id != claim.owner_id
                 or operation.owner_scope != claim.owner_scope
             ):
                 raise NonRetryableWorkspaceOperationError("workspace_export_operation_invalid")
+            if operation.cancel_requested_at is not None:
+                raise WorkspaceOperationCancelled("workspace_operation_cancelled")
+            if (
+                operation.state != "running"
+                or operation.attempt_token != claim.attempt_token
+                or operation.fencing_token != claim.fencing_token
+            ):
+                raise WorkspaceOperationLeaseLost("operation_lease_lost")
+            if operation.expected_revision != effective_revision:
+                locked_revision = await session.scalar(
+                    select(PresentationModel.revision)
+                    .where(PresentationModel.id == claim.presentation_id)
+                    .with_for_update()
+                )
+                if locked_revision != effective_revision:
+                    await session.rollback()
+                    raise NonRetryableWorkspaceOperationError(
+                        "stale_presentation_revision"
+                    )
+                request_payload = dict(operation.request_payload)
+                request_payload["source_revision"] = effective_revision
+                request_payload["reviewed_source_revision"] = claim.expected_revision
+                updated = await session.execute(
+                    update(WorkspaceOperation)
+                    .where(
+                        WorkspaceOperation.id == claim.operation_id,
+                        WorkspaceOperation.presentation_id
+                        == claim.presentation_id,
+                        WorkspaceOperation.owner_scope == claim.owner_scope,
+                        WorkspaceOperation.state == "running",
+                        WorkspaceOperation.attempt_token == claim.attempt_token,
+                        WorkspaceOperation.fencing_token == claim.fencing_token,
+                        WorkspaceOperation.cancel_requested_at.is_(None),
+                        WorkspaceOperation.expected_revision
+                        == claim.expected_revision,
+                        WorkspaceOperation.version == operation.version,
+                    )
+                    .values(
+                        expected_revision=effective_revision,
+                        request_payload=request_payload,
+                        version=WorkspaceOperation.version + 1,
+                        updated_at=datetime.now(timezone.utc),
+                    )
+                )
+                if updated.rowcount != 1:
+                    await session.rollback()
+                    raise WorkspaceOperationLeaseLost("operation_lease_lost")
+                await session.commit()
+                effective_claim = replace(
+                    claim,
+                    expected_revision=effective_revision,
+                    request_payload=request_payload,
+                )
+            elif presentation.revision != effective_revision:
+                raise NonRetryableWorkspaceOperationError("stale_presentation_revision")
 
         await context.progress(stage="export_rendering", percent=10)
         execution = None
@@ -330,7 +555,7 @@ class WorkspaceExportOperationHandler:
                         "runtime_version": "1",
                     },
                     "freshness": {
-                        "source_revision": claim.expected_revision,
+                        "source_revision": effective_revision,
                         "source_snapshot_sha256": source_snapshot_sha256,
                         "package_sha256": None,
                         "asset_digests_match": True,
@@ -345,7 +570,7 @@ class WorkspaceExportOperationHandler:
                         owner_scope=claim.owner_scope,
                         workspace_operation_id=claim.operation_id,
                         export_format="pptx",
-                        source_revision=claim.expected_revision,
+                        source_revision=effective_revision,
                         source_snapshot_sha256=source_snapshot_sha256,
                         request_hash=operation.request_hash,
                         idempotency_key_hash=operation.idempotency_key_hash,
@@ -379,7 +604,7 @@ class WorkspaceExportOperationHandler:
                     **native_export.provenance,
                     "freshness": {
                         **native_export.provenance["freshness"],
-                        "source_revision": claim.expected_revision,
+                        "source_revision": effective_revision,
                     },
                 }
             else:
@@ -412,26 +637,55 @@ class WorkspaceExportOperationHandler:
                             "public_export_admission_required"
                         )
                     public_tenant_id = admission.tenant_id
-                    quality_receipt_digest = _validated_authored_quality_receipt_digest(
-                        presentation.theme
-                    )
-                    authored_quality_gate = presentation.theme.get("authoredQualityGate")
-                    if isinstance(authored_vnext_projection, Mapping):
-                        raw_scene_digest = authored_vnext_projection.get("sceneDigest")
-                        if isinstance(raw_scene_digest, str):
-                            authored_scene_digest = raw_scene_digest
-                    if (
-                        authored_scene_digest is None
-                        or not authored_scene_digest.startswith("sha256:")
-                    ):
-                        raise NonRetryableWorkspaceOperationError(
-                            "public_quality_projection_inputs_missing"
+                    if release_review_receipt_digest is not None:
+                        if release_review_base_receipt_digest is None:
+                            raise NonRetryableWorkspaceOperationError(
+                                "quality_receipt_v3_required"
+                            )
+                        quality_receipt_digest = hashlib.sha256(
+                            (
+                                release_review_base_receipt_digest
+                                + ":"
+                                + release_review_receipt_digest
+                            ).encode("ascii")
+                        ).hexdigest()
+                    else:
+                        quality_receipt_digest = _validated_authored_quality_receipt_digest(
+                            presentation.theme
                         )
+                    authored_quality_gate = presentation.theme.get("authoredQualityGate")
                 htmls = [slide.html_content for slide in slides]
                 if not htmls or any(not isinstance(html, str) or not html for html in htmls):
                     raise NonRetryableWorkspaceOperationError(
                         "public_isolated_authored_html_required"
                     )
+                authored_scene_digest = digest_deck_htmls(cast(list[str], htmls))
+                if (
+                    release_review_result_deck_html_digest is not None
+                    and authored_scene_digest
+                    != release_review_result_deck_html_digest
+                ):
+                    raise NonRetryableWorkspaceOperationError(
+                        "release_quality_review_result_drift"
+                    )
+                if release_review_result_render_identity_digest is not None:
+                    try:
+                        current_result_render_identity_digest = (
+                            public_release_review_deck_render_identity_digest(
+                                cast(list[str], htmls)
+                            )
+                        )
+                    except PublicExportOperationError as error:
+                        raise NonRetryableWorkspaceOperationError(
+                            str(error)
+                        ) from error
+                    if (
+                        current_result_render_identity_digest
+                        != release_review_result_render_identity_digest
+                    ):
+                        raise NonRetryableWorkspaceOperationError(
+                            "release_quality_review_render_identity_changed"
+                        )
                 source_snapshot_sha256 = hashlib.sha256(
                     json.dumps(
                         htmls,
@@ -458,14 +712,19 @@ class WorkspaceExportOperationHandler:
                         "compiler": "public-isolated-export",
                         "compiler_version": "1",
                         "runtime": "render-export-worker",
-                        "runtime_version": "public-worker-protocol/v1",
+                        "runtime_version": PUBLIC_RENDER_WORKER_PROTOCOL_VERSION,
                     },
                     "freshness": {
-                        "source_revision": claim.expected_revision,
+                        "source_revision": effective_revision,
                         "source_snapshot_sha256": source_snapshot_sha256,
                         "package_sha256": None,
                         "asset_digests_match": True,
                         "package_digest_match": False,
+                    },
+                    "render_scene": {
+                        "schema_version": "authored-html-render-scene/v1",
+                        "scene_digest": authored_scene_digest,
+                        "ordered_slide_count": len(htmls),
                     },
                 }
                 async with self._session_factory() as session:
@@ -476,7 +735,7 @@ class WorkspaceExportOperationHandler:
                         owner_scope=claim.owner_scope,
                         workspace_operation_id=claim.operation_id,
                         export_format=cast(Literal["pptx", "pdf"], export_format),
-                        source_revision=claim.expected_revision,
+                        source_revision=effective_revision,
                         source_snapshot_sha256=source_snapshot_sha256,
                         request_hash=operation.request_hash,
                         idempotency_key_hash=operation.idempotency_key_hash,
@@ -487,12 +746,18 @@ class WorkspaceExportOperationHandler:
                 native_export_attempt_id = attempt.id
                 direct_export_selected_adapter = "general"
                 public_execution = await render_and_export_authored_htmls(
-                    claim,
+                    effective_claim,
                     tenant_id=public_tenant_id,
                     htmls=cast(list[str], htmls),
                     export_format=export_format,
                     scene_digest=(authored_scene_digest or ""),
                     quality_digest=quality_receipt_digest,
+                    expected_render_runtime_binding_digest=(
+                        release_review_runtime_binding_digest
+                    ),
+                    expected_deck_render_identity_digest=(
+                        release_review_result_render_identity_digest
+                    ),
                     session_factory=self._session_factory,
                 )
                 public_ref = public_execution.artifact
@@ -528,16 +793,40 @@ class WorkspaceExportOperationHandler:
                     raise NonRetryableWorkspaceOperationError(
                         "public_quality_projection_inputs_missing"
                     )
+                generation_receipt = (
+                    authored_quality_gate.get("qualityReceiptV3")
+                    if isinstance(authored_quality_gate, Mapping) else None
+                )
+                async with self._session_factory() as evidence_session:
+                    generation_evidence_record = await load_public_quality_evidence(
+                        evidence_session, owner_id=claim.owner_id, owner_scope=claim.owner_scope,
+                        presentation_id=claim.presentation_id,
+                        receipt_digest=str(generation_receipt.get("receiptDigest", ""))
+                        if isinstance(generation_receipt, Mapping) else "",
+                    )
+                    review_evidence_record = (
+                        await load_public_quality_evidence(
+                            evidence_session, owner_id=claim.owner_id, owner_scope=claim.owner_scope,
+                            presentation_id=claim.presentation_id,
+                            receipt_digest=f"sha256:{release_review_receipt_digest}",
+                            operation_id=review_evidence_operation_id,
+                        ) if review_evidence_operation_id is not None else None
+                    )
                 public_quality_receipt = project_persisted_authored_quality_receipt_v3(
                     authored_quality_gate=authored_quality_gate,
                     quality_receipt_id=f"quality:{claim.operation_id}:{public_ref.artifact_id}",
                     operation_id=str(claim.operation_id),
                     presentation_id=str(claim.presentation_id),
                     artifact_digest=f"sha256:{public_ref.sha256}",
-                    source_revision=claim.expected_revision,
+                    source_revision=effective_revision,
                     scene_digest=authored_scene_digest,
-                    exporter_version="public-worker-protocol/v1",
+                    exporter_version=PUBLIC_RENDER_WORKER_PROTOCOL_VERSION,
                     evaluated_at=datetime.now(timezone.utc),
+                    generation_evidence_record=generation_evidence_record,
+                    review_evidence_record=review_evidence_record,
+                    render_runtime_binding_digest=release_review_runtime_binding_digest,
+                    result_render_identity_digest=release_review_result_render_identity_digest,
+                    checker_policy_digest=sealed_release_review_checker_policy_digest,
                 ).model_dump(mode="json", by_alias=True)
             if public_ref is None and artifact_sha256 != hashlib.sha256(
                 export_path.read_bytes()
@@ -558,7 +847,7 @@ class WorkspaceExportOperationHandler:
                         reference=public_ref,
                         operation_id=claim.operation_id,
                         presentation_id=claim.presentation_id,
-                        source_revision=claim.expected_revision,
+                        source_revision=effective_revision,
                         kind=claim.kind,
                         export_attempt_id=export_attempt_id,
                     )
@@ -574,7 +863,7 @@ class WorkspaceExportOperationHandler:
                         source_path=str(export_path),
                         operation_id=claim.operation_id,
                         presentation_id=claim.presentation_id,
-                        source_revision=claim.expected_revision,
+                        source_revision=effective_revision,
                         kind=claim.kind,
                         export_attempt_id=export_attempt_id,
                         expected_source_sha256=artifact_sha256,

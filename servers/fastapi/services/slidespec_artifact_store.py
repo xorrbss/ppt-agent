@@ -7,7 +7,8 @@ from collections.abc import Mapping
 from typing import Any
 import uuid
 
-from sqlalchemy import select, update
+from sqlalchemy import cast, literal, select, update
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.slidespec_v1 import (
@@ -46,6 +47,18 @@ def _json(value: Any) -> Any:
 
 def _sha256_bytes(value: bytes) -> str:
     return "sha256:" + hashlib.sha256(value).hexdigest()
+
+
+def _json_cas_predicate(session: AsyncSession, column: Any, expected: Any) -> Any:
+    """Keep SQL NULL distinct while comparing PostgreSQL JSON structurally."""
+
+    if expected is None:
+        return column.is_(None)
+    if session.get_bind().dialect.name == "postgresql":
+        # PostgreSQL JSON has no equality operator.  Cast both operands to
+        # JSONB without dropping either immutable snapshot predicate.
+        return cast(column, JSONB) == literal(expected, type_=JSONB)
+    return column == expected
 
 
 def build_slidespec_artifact_bundle(
@@ -203,8 +216,8 @@ async def publish_slidespec_bundle_cas(
         .where(
             SlideModel.id == slide.id,
             SlideModel.html_content == expected_html,
-            SlideModel.content == expected_content,
-            SlideModel.properties == expected_properties,
+            _json_cas_predicate(session, SlideModel.content, expected_content),
+            _json_cas_predicate(session, SlideModel.properties, expected_properties),
         )
         .values(html_content=bundle.html, properties=next_properties)
         .execution_options(synchronize_session=False)
@@ -267,7 +280,7 @@ async def rollback_active_slide_cas(
         .where(
             SlideModel.id == slide_id,
             SlideModel.html_content == expected_html,
-            SlideModel.properties == expected_properties,
+            _json_cas_predicate(session, SlideModel.properties, expected_properties),
         )
         .values(html_content=restore_html, properties=restore_properties)
         .execution_options(synchronize_session=False)

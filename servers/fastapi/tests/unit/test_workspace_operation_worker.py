@@ -7,7 +7,9 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from services import workspace_operation_worker as worker
+from services.public_worker_profiles import get_public_worker_profile
 from services.workspace_operation_handler_registry import (
+    WorkspaceOperationHandlerRegistry,
     workspace_operation_handler_registry,
 )
 from services.workspace_runtime_profile import UnsupportedWorkspaceRuntimeError
@@ -76,7 +78,10 @@ def test_external_worker_owns_migrations_runner_and_shutdown(
     stop = asyncio.Event()
     stop.set()
     monkeypatch.setenv("WORKSPACE_OPERATION_WORKER_MODE", "external")
+    monkeypatch.setenv("WORKSPACE_OPERATION_EXTERNAL_CONTROLLER", "generation")
     monkeypatch.setenv("PPT_PROCESS_PROFILE", "generation")
+    registry = WorkspaceOperationHandlerRegistry()
+    monkeypatch.setattr(worker, "workspace_operation_handler_registry", registry)
     monkeypatch.setattr(
         worker, "require_workspace_asset_malware_scan_safety", Mock()
     )
@@ -127,9 +132,22 @@ def test_external_worker_owns_migrations_runner_and_shutdown(
     worker.register_presentation_generation_operation_handler.assert_called_once_with(
         replace=True
     )
+    profile = get_public_worker_profile("generation")
+    assert profile.operation_kinds == ("presentation.generate", "quality.review")
+    assert profile.canonical_database_access is True
+    assert profile.provider_network_access is True
+    assert profile.browser_allowed is False
+    assert profile.converter_allowed is False
+    assert worker.external_workspace_operation_kinds(profile.role) == profile.operation_kinds
+    assert isinstance(
+        registry.resolve("quality.review"), worker.WorkspaceQualityReviewOperationHandler
+    )
+    assert registry.recovery_policy("quality.review") == "automatic"
+    assert registry.resolve("export.pptx") is None
+    assert registry.resolve("export.pdf") is None
     worker.start_workspace_worker_metrics_exporter.assert_awaited_once_with()
     worker.start_workspace_operation_runner.assert_awaited_once_with(
-        allowed_kinds=("presentation.generate",)
+        allowed_kinds=("presentation.generate", "quality.review")
     )
     worker.start_workspace_cleanup_maintenance.assert_awaited_once_with()
     worker.start_workspace_asset_maintenance.assert_awaited_once_with()

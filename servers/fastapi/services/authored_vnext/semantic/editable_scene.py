@@ -559,6 +559,7 @@ def build_editable_hybrid_scene(
     deck_id: str | None = None,
     slide_ids: Sequence[str] | None = None,
     source_digest_override: str | None = None,
+    browser_metrics_by_slide: Sequence[Mapping[str, Any] | None] | None = None,
 ):
     """Create an immutable shadow Scene; identity/geometry failures block owners."""
 
@@ -569,13 +570,19 @@ def build_editable_hybrid_scene(
         slide_ids = [f"slide:{slide.id.hex}" for slide in slides]
     if len(slide_ids) != len(htmls):
         raise ValueError("editable Hybrid Scene slide identities differ from HTML")
+    if browser_metrics_by_slide is not None and len(browser_metrics_by_slide) != len(htmls):
+        raise ValueError("editable Hybrid Scene browser telemetry count differs from HTML")
     scene_slides = []
     assets: list[SceneAssetManifestEntry] = []
     data: list[SceneDataManifestEntry] = []
     for index, (slide_id, html, png, draft) in enumerate(
         zip(slide_ids, htmls, pngs, semantic_drafts, strict=True)
     ):
-        metrics = normalize_browser_metrics(get_cached_browser_metrics(html))
+        metrics = normalize_browser_metrics(
+            browser_metrics_by_slide[index]
+            if browser_metrics_by_slide is not None
+            else get_cached_browser_metrics(html)
+        )
         nodes = {node.qid: node for node in build_compact_dom_map(html, metrics)}
         parser = _NativeHtmlParser()
         parser.feed(html)

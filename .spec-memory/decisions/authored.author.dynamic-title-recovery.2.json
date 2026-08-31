@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.author.dynamic-title-recovery",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Second-response title recovery uses joint title-visible budgets and case-insensitive protected occurrences without weakening admission.",
+  "scope": [
+    "authored",
+    "generation",
+    "capacity"
+  ],
+  "invariants": [
+    "At most two calls. Only ordinary dynamic titles may shorten; fixed/source/header chrome and non-target text stay unchanged.",
+    "QID/role/CSS/geometry/font/structure stay unchanged; numbers, named tokens, negations and qualifiers remain protected.",
+    "Joint budget=min(title cap,visible cap-non-title text), less fixed titles; longest eligible title reduces first.",
+    "Named-token counts compare case-insensitively; deletion/replacement/addition stay rejected. Full semantic equivalence is not mechanically guaranteed.",
+    "Diagnostics contain bounded classes/counts/salted digests only; raw text, QIDs, tokens and salts are never persisted."
+  ],
+  "forbidden": [
+    "Third author call, weaker caps, role changes or local title truncation.",
+    "Source/fixed text, font or geometry changes.",
+    "Raw rejected HTML, text, QIDs, token values, diagnostic salts or credentials in persisted diagnostics."
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_title_recovery_contract.py",
+    "servers/fastapi/services/authored_author_capacity_recovery.py",
+    "servers/fastapi/utils/llm_calls/author_deck.py",
+    "servers/fastapi/services/authored_checkpoint_errors.py",
+    "servers/fastapi/tests/unit/test_authored_pipeline.py"
+  ],
+  "supersedes": "authored.author.dynamic-title-recovery@1",
+  "recordedAt": "2026-08-30T22:39:51.9348251+00:00"
+}

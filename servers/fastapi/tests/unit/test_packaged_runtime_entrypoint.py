@@ -1,4 +1,8 @@
+import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 from unittest.mock import Mock
 
 import pytest
@@ -24,7 +28,7 @@ def test_packaged_runtime_rejects_unknown_executable_name() -> None:
         entrypoint.resolve_packaged_runtime_role("presenton-helper.exe")
 
 
-def test_packaged_worker_entrypoint_cannot_fall_through_to_api(monkeypatch) -> None:
+def test_packaged_worker_entrypoint_cannot_fall_through_to_api(monkeypatch, tmp_path) -> None:
     run_api = Mock()
     run_worker = Mock()
     monkeypatch.setattr(entrypoint, "run_api", run_api)
@@ -34,3 +38,34 @@ def test_packaged_worker_entrypoint_cannot_fall_through_to_api(monkeypatch) -> N
 
     run_worker.assert_called_once_with()
     run_api.assert_not_called()
+
+    from services.isolated_worker_process import worker_environment
+
+    # The supervised worker starts outside the checkout. Isolated Python also
+    # ignores PYTHONPATH so an incomplete installation cannot borrow the cwd.
+    environment = worker_environment(
+        "render",
+        {**os.environ, "PUBLIC_TRUSTED_WORKER_LOCAL_POLICY": "development"},
+        trusted_dispatch=True,
+    )
+    modules = ("workers.public_render_worker", "workers.public_export_worker")
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-c",
+            "import importlib, json; "
+            f"print(json.dumps({{name: callable(importlib.import_module(name).main) for name in {modules!r}}}))",
+        ],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        timeout=15,
+        check=False,
+    )
+    exit_code = result.returncode
+    assert exit_code == 0, (
+        f"worker_import_exit={exit_code}, stdout_bytes={len(result.stdout)}, "
+        f"stderr_bytes={len(result.stderr)}"
+    )
+    assert json.loads(result.stdout) == {name: True for name in modules}

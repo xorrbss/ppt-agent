@@ -1,6 +1,7 @@
 import ipaddress
 import os
 import posixpath
+import re
 import secrets
 
 from fastapi import Request
@@ -119,6 +120,10 @@ class RuntimeSettingsContextMiddleware(BaseHTTPMiddleware):
 
 
 class SessionAuthMiddleware(BaseHTTPMiddleware):
+    _LOCAL_SIGNED_DOWNLOAD_PATH = re.compile(
+        r"/api/v2/artifacts/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-"
+        r"[0-9a-f]{4}-[0-9a-f]{12}/local-download"
+    )
     # Public, unauthenticated endpoints. The share endpoint is read-only and
     # reachable ONLY by an unguessable token (never a presentation id); the check
     # runs on the NORMALIZED path so a traversal segment can't ride this prefix to
@@ -150,6 +155,20 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
             return True
         return path in self._PROTECTED_NON_API_PATHS
 
+    def _delegates_local_download_grant(self, request: Request, path: str) -> bool:
+        # This exact development-only endpoint owns HMAC/expiry/artifact-bound
+        # bearer-grant validation. Grant issuance and every other API still
+        # require the session/principal boundary below; no prefix is exempted.
+        return (
+            request.method == "GET"
+            and path == request.url.path
+            and self._LOCAL_SIGNED_DOWNLOAD_PATH.fullmatch(path) is not None
+            and (os.getenv("ENVIRONMENT") or "").strip().lower() == "local"
+            and (os.getenv("PUBLIC_ARTIFACT_STORE_BACKEND") or "").strip().lower()
+            == "local-development"
+            and is_loopback_development_request(request)
+        )
+
     async def dispatch(self, request: Request, call_next):
         # Evaluate the external-principal boundary before DISABLE_AUTH or an
         # already-populated ContextVar can bypass public production auth.
@@ -161,6 +180,9 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
                 status_code=error.status_code,
                 content={"detail": error.code},
             )
+
+        if self._delegates_local_download_grant(request, path):
+            return await call_next(request)
 
         if is_disable_auth_enabled():
             # Focused harnesses may install a stricter outer owner scope. Keep

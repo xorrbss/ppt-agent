@@ -311,72 +311,26 @@ def project_persisted_authored_quality_receipt_v3(
     scene_digest: str,
     exporter_version: str,
     evaluated_at: datetime,
+    generation_evidence_record: Mapping[str, Any] | None = None,
+    review_evidence_record: Mapping[str, Any] | None = None,
+    render_runtime_binding_digest: str | None = None,
+    result_render_identity_digest: str | None = None,
+    checker_policy_digest: str | None = None,
 ) -> PublicQualityReceiptV3:
-    """Project a persisted internal receipt to the public V3 wire contract.
+    """Load the separate verifier without changing the producer import graph."""
+    from services.public_quality_receipt_v3_projection import project_persisted_authored_quality_receipt_v3 as project
 
-    The persisted theme payload is untrusted input at this boundary. Both its
-    V2 envelope and nested V3 receipt must verify their immutable digests and
-    their version-transition binding before a public status can expose them.
-    This adapter deliberately does not invent checker evidence: domains that
-    lack a persisted public checker receipt remain failed, unavailable, pending,
-    or not assessed and release readiness stays blocked.
-    """
-
-    gate = _mapping(authored_quality_gate)
-    if gate is None:
-        raise ValueError("authored_quality_gate_payload_invalid")
-    internal_v2 = validate_current_quality_receipt_payload(gate)
-    raw_v3 = _mapping(gate.get("qualityReceiptV3"))
-    if raw_v3 is None:
-        raise ValueError("authored_quality_gate_v3_missing")
-    internal_v3 = validate_quality_receipt_v3_payload(raw_v3)
-    if (
-        internal_v3.previous_schema_version != "quality-receipt/v2"
-        or internal_v3.previous_version_receipt_digest != internal_v2.receipt_digest
-    ):
-        raise ValueError("authored_quality_gate_version_transition_mismatch")
-    if not internal_v3.capability_registry_digest:
-        raise ValueError("authored_quality_gate_capability_registry_missing")
-    return PublicQualityReceiptV3(
-        quality_receipt_id=quality_receipt_id,
-        operation_id=operation_id,
-        presentation_id=presentation_id,
-        artifact_digest=artifact_digest,
-        source_revision=source_revision,
-        scene_digest=scene_digest,
-        capability_registry_digest=internal_v3.capability_registry_digest,
-        exporter_version=exporter_version,
-        evaluated_at=evaluated_at,
-        content_brief={"required": False, "status": "not_required"},
-        authoring={
-            "required": True,
-            "status": "failed",
-            "reasonCode": "authoring_checker_evidence_not_persisted",
-        },
-        geometry_font={
-            "required": True,
-            "status": "failed",
-            "reasonCode": "geometry_font_checker_evidence_not_persisted",
-        },
-        image_content_integrity={"required": False, "status": "not_required"},
-        visual_review={
-            "required": False,
-            "status": "unavailable",
-            "reasonCode": "visual_checker_evidence_not_persisted",
-        },
-        performance={
-            "required": False,
-            "status": "not_assessed",
-            "reasonCode": "performance_checker_evidence_not_persisted",
-        },
-        native_coverage_ooxml={
-            "required": False,
-            "status": "pending",
-            "reasonCode": "ooxml_checker_evidence_not_persisted",
-        },
-        release_readiness="blocked",
+    return project(
+        authored_quality_gate=authored_quality_gate, quality_receipt_id=quality_receipt_id,
+        operation_id=operation_id, presentation_id=presentation_id,
+        artifact_digest=artifact_digest, source_revision=source_revision,
+        scene_digest=scene_digest, exporter_version=exporter_version, evaluated_at=evaluated_at,
+        generation_evidence_record=generation_evidence_record,
+        review_evidence_record=review_evidence_record,
+        render_runtime_binding_digest=render_runtime_binding_digest,
+        result_render_identity_digest=result_render_identity_digest,
+        checker_policy_digest=checker_policy_digest,
     )
-
 
 async def create_generation_quality_receipt_v3(
     *,
@@ -546,6 +500,19 @@ async def create_generation_quality_receipt_v3(
             else None
         ),
         "persistence": persistence,
+        "checkerPayloads": {
+            "schemaVersion": "authored-generation-checker-payloads/v1",
+            "deckHtmlDigest": receipt_v2.deck_html_digest,
+            "capacity": dict(capacity_evidence),
+            "safety": dict(safety_evidence),
+        },
+        # The V2 adapter hashes this transition too. Persist exactly that
+        # complete snapshot, not the pre-adaptation caller dictionary.
+        "versionTransition": {
+            "fromSchemaVersion": "quality-receipt/v2",
+            "fromReceiptDigest": receipt_v2.receipt_digest,
+            "fromGatePassed": receipt_v2.gate_passed,
+        },
     }
     ledger = QualityReceiptV3Ledger(
         storage_path=(

@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "key": "public-v2.export-release-review",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Release-v1 Fidelity export requires a durable quality.review predecessor with separate public provider admission and a sealed revision-bound result.",
+  "scope": [
+    "public-v2",
+    "workspace-quality",
+    "workspace-export"
+  ],
+  "invariants": [
+    "Review provider calls and costs remain fenced by their own public admission.",
+    "Export may use only the reviewed source revision or the review result revision.",
+    "A PASS is derived only from complete full-deck review evidence."
+  ],
+  "forbidden": [
+    "Bypass blocked review with the development QualityReceiptV3.",
+    "Synthesize or relax a quality PASS."
+  ],
+  "evidence": [
+    "servers/fastapi/services/public_v2_orchestrator.py",
+    "servers/fastapi/services/workspace_quality_operation_handler.py",
+    "servers/fastapi/services/workspace_quality_export_operation_handlers.py",
+    "servers/fastapi/tests/unit/test_workspace_quality_export_operations.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-30T17:15:16.4887490+00:00"
+}

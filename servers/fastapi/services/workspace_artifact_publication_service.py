@@ -798,6 +798,8 @@ async def prepare_workspace_export_artifact_ref(
     intent is committed.
     """
 
+    from services.artifact_store import require_artifact_key_guard
+
     export_format = kind.removeprefix("export.")
     if kind not in {"export.pptx", "export.pdf"}:
         raise WorkspaceArtifactPublicationError("workspace_export_format_invalid")
@@ -855,6 +857,9 @@ async def prepare_workspace_export_artifact_ref(
             raise WorkspaceArtifactPublicationError(
                 "workspace_artifact_operation_not_found"
             )
+        # Serialize pointer attachment with shared-key GC. The guard remains
+        # held until the staging journal commit, not merely the artifact read.
+        await require_artifact_key_guard(intent_session, reference)
         public_row = await intent_session.scalar(
             select(PublicArtifact).where(
                 PublicArtifact.id == reference.artifact_id,
@@ -866,6 +871,7 @@ async def prepare_workspace_export_artifact_ref(
                 PublicArtifact.storage_key == reference.storage_key,
                 PublicArtifact.created_by_operation_id == operation_id,
                 PublicArtifact.retention_class == "published",
+                PublicArtifact.lifecycle_state == "committed",
             )
         )
         if public_row is None:
@@ -2220,13 +2226,31 @@ async def publish_workspace_generation_artifact(
             select(
                 WorkspaceOperation.kind,
                 WorkspaceOperation.request_payload,
+                WorkspaceOperation.fencing_token,
+                WorkspaceOperation.attempt_number,
             ).where(
                 WorkspaceOperation.id == artifact.operation_id,
                 WorkspaceOperation.presentation_id == artifact.presentation_id,
+                WorkspaceOperation.owner_id == artifact.owner_id,
                 WorkspaceOperation.owner_scope == get_workspace_owner_scope(),
+                WorkspaceOperation.state == "running",
+                WorkspaceOperation.attempt_token == attempt_token,
+                WorkspaceOperation.expected_revision == expected_revision,
             )
         )
     ).one_or_none()
+    # Capture the active claim before any projection is changed. Publication
+    # clears attempt_token, so its terminal event must retain this same fence.
+    fencing_token = (
+        int(operation_metadata.fencing_token)
+        if operation_metadata is not None
+        else None
+    )
+    attempt_number = (
+        int(operation_metadata.attempt_number)
+        if operation_metadata is not None
+        else None
+    )
     if operation_metadata is not None and operation_metadata.kind in {
         "template.apply",
         "design.apply",
@@ -2305,6 +2329,8 @@ async def publish_workspace_generation_artifact(
                 )
             result_payload = {**result_payload, **result_evidence}
     try:
+        if fencing_token is None:
+            raise WorkspaceArtifactPublicationError("operation_lease_lost")
         await _require_prepared_artifact_integrity(session, artifact)
         # Lock the active account generation before any operation, job or
         # presentation projection is mutated. Account deletion takes the same
@@ -2363,9 +2389,12 @@ async def publish_workspace_generation_artifact(
             .where(
                 WorkspaceOperation.id == artifact.operation_id,
                 WorkspaceOperation.presentation_id == artifact.presentation_id,
+                WorkspaceOperation.owner_id == artifact.owner_id,
                 WorkspaceOperation.owner_scope == get_workspace_owner_scope(),
                 WorkspaceOperation.state == "running",
                 WorkspaceOperation.attempt_token == attempt_token,
+                WorkspaceOperation.fencing_token == fencing_token,
+                WorkspaceOperation.attempt_number == attempt_number,
                 WorkspaceOperation.expected_revision == expected_revision,
             )
             .values(
@@ -2454,9 +2483,14 @@ async def publish_workspace_generation_artifact(
             payload={"state": "succeeded", **result_payload},
             allowed_states=("succeeded",),
             additional_conditions=(
+                WorkspaceOperation.presentation_id == artifact.presentation_id,
+                WorkspaceOperation.owner_id == artifact.owner_id,
+                WorkspaceOperation.owner_scope == get_workspace_owner_scope(),
+                WorkspaceOperation.attempt_number == attempt_number,
                 WorkspaceOperation.result_revision == artifact.source_revision,
             ),
             fencing_token=fencing_token,
+            public_admission_attempt=attempt_number,
         )
         if terminal_event is None:
             raise WorkspaceArtifactPublicationError(

@@ -67,8 +67,9 @@ from services.authored_header_contract_service import (
 from services.authored_presentation_pipeline import _author_illustrate_render_pipeline
 from services.authored_presentation_publication import publish_authored_presentation
 from services.authored_generation_progress_poller import mark_authored_generation_stage
-from models.authored_vnext.deck import ValidatedSlideSpecV2
+from models.authored_vnext.deck import DeckGenerationSnapshot, DeckSceneIR, ValidatedSlideSpecV2
 from services.authored_vnext.generation.ai_text_zones import AITextZoneContext
+from services.authored_vnext.generation.errors import GenerationNotFoundError
 from services.authored_vnext.generation.legacy_bridge import _generate_snapshot
 from services.authored_vnext.generation.legacy_pin import generation_repository_for_owner
 from services.authored_vnext.generation.internal_authored_composition import (
@@ -88,6 +89,7 @@ from services.authored_vnext.generation.scene_envelope import (
     seal_slide_scene_envelope,
 )
 from services.authored_vnext.master.digests import canonical_digest
+from services.authored_vnext.master.errors import DeckAlreadyExistsError
 from services.presentation_export_attempt_service import sha256_canonical_json
 from services.authored_vnext.semantic.editable_scene import build_editable_hybrid_scene
 from services.image_generation_service import ImageGenerationService
@@ -101,16 +103,22 @@ from services.authored_composition_policy import (
     capacity_repair_instructions,
     capacity_violations,
     ensure_authored_semantic_roles,
+    reduce_authored_owner_text_capacity,
     reduce_authored_closing_capacity,
     reduce_authored_closing_title_punctuation,
     repair_authored_header_eyebrow_clip,
     repair_authored_layout_alignment,
+    repair_authored_owned_text_paint_order,
     resolve_composition_profile,
     semantic_repair_boundary_violations,
 )
 from services.authored_generation_preflight import (
     AuthoredSlideArtifact,
     preflight_authored_provider_repair,
+)
+from services.authored_decoration_containment import (
+    plan_decoration_containment,
+    validate_decoration_containment,
 )
 from services.provider_usage_instrumentation import provider_usage_scope, record_local_stage
 from utils.authored_dom_quality import ensure_authored_qids, inspect_authored_dom
@@ -304,10 +312,21 @@ def _worker_peak_memory_metric() -> dict[str, object]:
                 ("PeakPagefileUsage", ctypes.c_size_t),
             ]
 
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        psapi = ctypes.WinDLL("psapi", use_last_error=True)
+        kernel32.GetCurrentProcess.argtypes = ()
+        kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+        psapi.GetProcessMemoryInfo.argtypes = (
+            wintypes.HANDLE,
+            ctypes.POINTER(ProcessMemoryCounters),
+            wintypes.DWORD,
+        )
+        psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+
         counters = ProcessMemoryCounters()
         counters.cb = ctypes.sizeof(counters)
-        process_handle = ctypes.windll.kernel32.GetCurrentProcess()
-        if not ctypes.windll.psapi.GetProcessMemoryInfo(
+        process_handle = kernel32.GetCurrentProcess()
+        if not psapi.GetProcessMemoryInfo(
             process_handle, ctypes.byref(counters), counters.cb
         ):
             raise RuntimeError("worker_memory_peak_collection_failed")
@@ -325,11 +344,18 @@ def _worker_handle_count_metric() -> dict[str, object]:
         import ctypes
         from ctypes import wintypes
 
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.GetCurrentProcess.argtypes = ()
+        kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+        kernel32.GetProcessHandleCount.argtypes = (
+            wintypes.HANDLE,
+            ctypes.POINTER(wintypes.DWORD),
+        )
+        kernel32.GetProcessHandleCount.restype = wintypes.BOOL
+
         count = wintypes.DWORD()
-        process_handle = ctypes.windll.kernel32.GetCurrentProcess()
-        if not ctypes.windll.kernel32.GetProcessHandleCount(
-            process_handle, ctypes.byref(count)
-        ):
+        process_handle = kernel32.GetCurrentProcess()
+        if not kernel32.GetProcessHandleCount(process_handle, ctypes.byref(count)):
             raise RuntimeError("worker_handle_count_collection_failed")
         return _observed_metric(int(count.value))
     except (AttributeError, OSError, TypeError, ValueError) as error:
@@ -623,7 +649,17 @@ def _deterministic_repair_candidate(
 ) -> str:
     """Compose every applicable local repair before a single recapture."""
 
-    candidate = html
+    candidate = repair_authored_owned_text_paint_order(
+        html,
+        browser_metrics,
+        profile_id=profile_id,
+    )
+    candidate = reduce_authored_owner_text_capacity(
+        candidate,
+        capacity,
+        profile_id=profile_id,
+        allow_summarization=(profile_id == "ordinary"),
+    )
     reduced = reduce_authored_closing_capacity(
         candidate,
         browser_metrics,
@@ -736,6 +772,82 @@ def _admit_gate_repair_capacity_candidate(
         **kwargs,
         allow_original_fallback=False,
     )
+
+
+async def _revise_gate_repair_candidates(
+    *,
+    flagged: list[int],
+    htmls: list[str],
+    pngs: list[bytes],
+    contents: list[str],
+    roles: list[str],
+    deterministic_candidates: Mapping[int, str],
+    brand: object,
+    design_system: str,
+    repair_kwargs: Mapping[str, object],
+) -> tuple[list[str], list[int]]:
+    """Review unchanged inputs only; admit all candidates after one fresh bind.
+
+    A changed deterministic candidate has no matching pixels/telemetry yet.
+    Passing its failed original into strict VQA would reject that original
+    before the candidate can be captured.  Unchanged originals, including
+    provider-disabled slides, retain the existing strict residual gate.
+    """
+
+    revised_htmls = [deterministic_candidates[index] for index in flagged]
+    reviewed_local_indices = [
+        local_index
+        for local_index, absolute_index in enumerate(flagged)
+        if digest_html(revised_htmls[local_index]) == digest_html(htmls[absolute_index])
+    ]
+    if not reviewed_local_indices:
+        return revised_htmls, []
+
+    subset_kwargs = dict(repair_kwargs)
+    for key in (
+        "slide_indices",
+        "initial_critiques",
+        "capacity_briefs",
+        "provider_recovery_allowed",
+        "chapter_prefixes",
+        "illustration_slots",
+        "reference_images_by_slide",
+    ):
+        values = subset_kwargs.get(key)
+        if values is not None:
+            if not isinstance(values, (list, tuple)) or len(values) != len(flagged):
+                raise ValueError(f"gate repair {key} must match flagged slides")
+            subset_kwargs[key] = [values[index] for index in reviewed_local_indices]
+    accepted_kwargs = inspect.signature(revise_authored_deck).parameters
+    subset_kwargs = {
+        key: value for key, value in subset_kwargs.items() if key in accepted_kwargs
+    }
+    reviewed_absolute_indices = [flagged[index] for index in reviewed_local_indices]
+    repaired = await revise_authored_deck(
+        [htmls[index] for index in reviewed_absolute_indices],
+        [pngs[index] for index in reviewed_absolute_indices],
+        [contents[index] for index in reviewed_absolute_indices],
+        [roles[index] for index in reviewed_absolute_indices],
+        brand,
+        design_system,
+        **subset_kwargs,
+    )
+    reviewed_htmls, reviewed_pngs, fixed = repaired[:3]
+    if not (
+        len(reviewed_htmls) == len(reviewed_pngs) == len(reviewed_local_indices)
+    ):
+        raise ValueError("gate repair result must match reviewed slides")
+    for local_index, html in zip(reviewed_local_indices, reviewed_htmls, strict=True):
+        revised_htmls[local_index] = html
+    fixed_local_indices: list[int] = []
+    for index in fixed:
+        reviewed_index = int(index)
+        if not 0 <= reviewed_index < len(reviewed_local_indices):
+            raise ValueError("gate repair fixed index is outside reviewed slides")
+        fixed_local_indices.append(reviewed_local_indices[reviewed_index])
+    # Returned PNGs are intentionally not merged: the caller binds every final
+    # candidate to fresh pixels and telemetry before semantic/capacity admission.
+    return revised_htmls, fixed_local_indices
 
 
 async def _bind_bounded_repair_evidence(
@@ -1243,6 +1355,40 @@ async def _checkpoint_source_reflow_vqa_repairs(
         )
 
 
+def _persist_or_reuse_identical_semantic_deck(
+    repository,
+    deck: DeckGenerationSnapshot,
+) -> DeckSceneIR:
+    """Recover only the same immutable import; never advance an existing head."""
+
+    try:
+        current = repository.get_deck(deck.deck_id)
+    except GenerationNotFoundError:
+        try:
+            repository.append_imported_deck(deck)
+        except DeckAlreadyExistsError:
+            # A concurrent importer may have won after the read. Inspect its
+            # current head with the same exact predicate as restart recovery.
+            pass
+        current = repository.get_deck(deck.deck_id)
+
+    stored_payload = current.model_dump(mode="json", by_alias=True)
+    stored_digest = stored_payload.pop("digest")
+    if stored_digest != canonical_digest(stored_payload):
+        raise DeckAlreadyExistsError()
+    candidate_payload = deck.model_dump(
+        mode="json", by_alias=True, exclude={"digest"}
+    )
+    # _seal_deck includes its wall-clock creation time in the digest. All other
+    # payload fields (including the complete Scene, assets and checkpoints) must
+    # still match; a new source, head revision or measured geometry is not a retry.
+    stored_payload.pop("createdAt")
+    candidate_payload.pop("createdAt")
+    if current.scene is None or stored_payload != candidate_payload:
+        raise DeckAlreadyExistsError()
+    return current.scene
+
+
 async def _persist_master_pinned_editable_scene_deck(
     *,
     request: GeneratePresentationRequest,
@@ -1303,6 +1449,11 @@ async def _persist_master_pinned_editable_scene_deck(
     base = result.deck
     if revision != 1:
         raise ValueError("normal Authored semantic deck must start at revision 1")
+    if (
+        result.operation_id != f"operation:legacy-{presentation_id.hex}"
+        or base.deck_id != f"deck:legacy-{presentation_id.hex}"
+    ):
+        raise ValueError("authored_semantic_generation_identity_mismatch")
     # Author/render checkpoints survive process restarts, while the DOM metrics
     # cache is intentionally process-local.  Recollect the exact instrumented
     # HTML before Scene compilation so a retry cannot publish every owner as
@@ -1326,6 +1477,7 @@ async def _persist_master_pinned_editable_scene_deck(
         semantic_drafts=semantic_components,
         composition_digest=composition.digest,
         source_digest_override=scene_envelope.scene_digest,
+        browser_metrics_by_slide=telemetry,
     )
     sealed_slides: list[ValidatedSlideSpecV2] = []
     for item, scene_slide in zip(base.slides, scene.slides, strict=True):
@@ -1358,8 +1510,11 @@ async def _persist_master_pinned_editable_scene_deck(
         slides=sealed_slides,
         canonical_scene=scene,
     )
-    repository.append_imported_deck(deck)
-    return scene
+    return await asyncio.to_thread(
+        _persist_or_reuse_identical_semantic_deck,
+        repository,
+        deck,
+    )
 
 
 async def _generate_authored_presentation(
@@ -1886,6 +2041,43 @@ async def _generate_authored_presentation(
     has_author_provider_attempt_counts = (
         len(author_provider_attempt_counts) == len(htmls)
     )
+    # Decoration geometry gets the same one-cycle, immutable Scene repair as
+    # existing gate failures, even when the text-only generation gate passed.
+    containment_plans = {}
+    if not source_reflow and reference_mode != EXACT_RECONSTRUCTION:
+        for index, original_html in enumerate(htmls):
+            latest = (
+                pipeline.evidence_ledger.latest(pipeline.evidence_attempt_id, index)
+                if getattr(pipeline, "evidence_ledger", None) is not None
+                and getattr(pipeline, "evidence_attempt_id", None) else None
+            )
+            original_metrics = getattr(latest, "browser_metrics", None)
+            if original_metrics is None:
+                original_metrics = get_cached_browser_metrics(original_html)
+            plan = plan_decoration_containment(
+                original_html, original_metrics,
+                profile_id=composition_profile.profile_id, reference_mode=reference_mode,
+            )
+            if plan is None:
+                continue
+            if plan.candidate == original_html:
+                raise AuthoredStageError(
+                    slide_index=index, stage="render",
+                    code="authored_decoration_containment_unavailable", retryable=False,
+                    message="No bounded decoration placement preserves protected content",
+                )
+            containment_plans[index] = plan
+            containment_issue = {
+                "category": "clipping", "severity": "high", "qids": list(plan.targets),
+                "message": "decoration containment repair required",
+            }
+            existing_failure = next(
+                (failure for failure in reversed(gate_failures) if failure["slide_index"] == index), None
+            )
+            if existing_failure is not None:
+                existing_failure["issues"] = [*existing_failure.get("issues", ()), containment_issue]
+            else:
+                gate_failures.append({"slide_index": index, "issues": [containment_issue]})
     initial_gate_signatures = {
         signature
         for item in gate_failures
@@ -2017,6 +2209,12 @@ async def _generate_authored_presentation(
                 preflight.terminal
                 and preflight.code != "authored_composition_safety_gate_failed"
             ):
+                LOGGER.warning(
+                    "[authored] terminal repair preflight slide=%d code=%s violations=%s",
+                    absolute_index + 1,
+                    preflight.code,
+                    list(preflight.violations),
+                )
                 raise AuthoredStageError(
                     slide_index=absolute_index,
                     stage="render",
@@ -2030,7 +2228,7 @@ async def _generate_authored_presentation(
                         + ", ".join(preflight.violations)
                     ),
                 )
-            deterministic = _deterministic_repair_candidate(
+            deterministic = containment_plans[absolute_index].candidate if absolute_index in containment_plans else _deterministic_repair_candidate(
                 html=original_html,
                 browser_metrics=metrics,
                 capacity=capacity_plan.at(absolute_index),
@@ -2045,28 +2243,22 @@ async def _generate_authored_presentation(
                 # Chromium recapture below, not a provider recovery.
                 provider_recovery_allowed[local_index] = False
         try:
-            accepted_repair_kwargs = inspect.signature(
-                revise_authored_deck
-            ).parameters
-            repair_kwargs = {
-                key: value
-                for key, value in repair_kwargs.items()
-                if key in accepted_repair_kwargs
-            }
             with provider_usage_scope(
                 job_id=(generation_job.id if generation_job is not None else None),
                 operation="authored_generation",
                 stage="repair",
                 attempt_number=(generation_job.attempt_number if generation_job else 0),
             ):
-                repaired = await revise_authored_deck(
-                    [htmls[index] for index in flagged],
-                    [pngs[index] for index in flagged],
-                    [contents[index] for index in flagged],
-                    [roles[index] for index in flagged],
-                    brand,
-                    authored_deck.design_system,
-                    **repair_kwargs,
+                revised_htmls, fixed = await _revise_gate_repair_candidates(
+                    flagged=flagged,
+                    htmls=htmls,
+                    pngs=pngs,
+                    contents=contents,
+                    roles=roles,
+                    deterministic_candidates=deterministic_gate_candidates,
+                    brand=brand,
+                    design_system=authored_deck.design_system,
+                    repair_kwargs=repair_kwargs,
                 )
             if has_author_provider_attempt_counts:
                 for local_index, index in enumerate(flagged):
@@ -2074,15 +2266,6 @@ async def _generate_authored_presentation(
                     # recovery call. Reserve it before any later VQA pass.
                     if provider_recovery_allowed[local_index]:
                         author_provider_attempt_counts[index] = 2
-            revised_htmls, revised_pngs, fixed = repaired[:3]
-            revised_htmls = list(revised_htmls)
-            for local_index, absolute_index in enumerate(flagged):
-                if digest_html(revised_htmls[local_index]) == digest_html(
-                    frozen_gate_inputs[absolute_index][0]
-                ):
-                    revised_htmls[local_index] = deterministic_gate_candidates[
-                        absolute_index
-                    ]
             # Bind the repaired HTML, pixels, and Chromium readback atomically.
             # All deterministic mutations above form one candidate and consume
             # exactly one recapture for each failed slide.
@@ -2097,6 +2280,16 @@ async def _generate_authored_presentation(
                     original_metrics,
                     _capture_policy,
                 ) = frozen_gate_inputs[absolute_index]
+                containment_plan = containment_plans.get(absolute_index)
+                if containment_plan is not None and not validate_decoration_containment(
+                    containment_plan, original_html, original_metrics,
+                    revised_htmls[local_index], revised_metrics[local_index],
+                ):
+                    raise AuthoredStageError(
+                        slide_index=absolute_index, stage="render",
+                        code="authored_decoration_containment_failed", retryable=False,
+                        message="Fresh decoration repair changed protected geometry or visibility",
+                    )
                 selected_html, selected_png, selected_metrics, admitted = (
                     _admit_gate_repair_capacity_candidate(
                         slide_index=absolute_index,
@@ -2682,6 +2875,10 @@ async def _generate_authored_presentation(
     await mark_stage("export")
     export_started = time.monotonic()
     attempt_token = generation_job.attempt_token if generation_job is not None else None
+    export_generation_job_id = generation_job.id if generation_job is not None else None
+    export_generation_request_id = (
+        generation_job.request_id if generation_job is not None else None
+    )
     native_export_evidence = None
     try:
         if generation_job is not None:
@@ -2692,6 +2889,11 @@ async def _generate_authored_presentation(
                     code="authored_attempt_lost",
                 )
         out_path = _build_authored_export(request, presentation_id, pngs, title)
+        if generation_job is not None and quality_receipt_v2 is not None:
+            # Publication copies these bytes and returns a public download URL,
+            # not a filesystem path. Collect before any publication commit so
+            # a missing source cannot turn a committed success into a failure.
+            artifact_bytes_observation = _artifact_bytes_metric(out_path)
     except Exception as exc:
         await sql_session.rollback()
         if isinstance(exc, AuthoredStageError):
@@ -2702,14 +2904,14 @@ async def _generate_authored_presentation(
             code="authored_slide_persist_failed",
             cause=exc,
         )
-        if generation_job is not None and attempt_token:
+        if export_generation_job_id is not None and attempt_token:
             await fail_stage(
-                job_id=generation_job.id,
+                job_id=export_generation_job_id,
                 slide_index=error.slide_index,
                 stage="persist",
                 attempt_token=attempt_token,
                 error=error,
-                request_id=generation_job.request_id,
+                request_id=export_generation_request_id,
             )
         raise error from exc
     export_elapsed = time.monotonic() - export_started
@@ -2857,7 +3059,7 @@ async def _generate_authored_presentation(
             "workerPeakHandles": _maximum_observed_metric(
                 worker_handle_count_before, worker_handle_count_after
             ),
-            "artifactBytes": _artifact_bytes_metric(published_path),
+            "artifactBytes": artifact_bytes_observation,
             "cacheHit": _observed_metric(
                 _runtime_counter_delta(
                     render_runtime_before, render_runtime_after,

@@ -1,4 +1,6 @@
 import asyncio
+from copy import deepcopy
+from hashlib import sha256
 from types import MappingProxyType, SimpleNamespace
 
 import pytest
@@ -11,9 +13,11 @@ from services.authored_composition_policy import (
     SlideCapacity,
     _is_supporting_candidate,
     aggregate_owner_capacity_violations,
+    canonicalize_authored_capacity_html,
     capacity_violations,
     ensure_authored_semantic_roles,
     repair_authored_layout_alignment,
+    repair_authored_owned_text_paint_order,
     reduce_authored_closing_capacity,
     reduce_authored_closing_title_punctuation,
     reduce_authored_owner_text_capacity,
@@ -33,6 +37,7 @@ from services.authored_presentation_generation import (
     _evaluate_capacity_role_evidence,
     _final_authored_quality_gate,
     _require_source_verbatim_bindings,
+    _revise_gate_repair_candidates,
 )
 from services.source_content.browser_readback import BrowserSourceReadbackError
 from utils.renderer_isolation import admit_authored_html
@@ -252,7 +257,7 @@ def test_semantic_repair_boundary_narrowly_allows_one_primary_title_shortening()
     )
 
 
-def test_owner_text_reducer_fixes_actual_355_427_shape_without_owner_drift() -> None:
+def test_owner_text_reducer_fixes_actual_355_427_shape_without_owner_drift(monkeypatch) -> None:
     title = "T" * 41
     body_one = ("a " * 59) + "a"
     body_two = ("b " * 59) + "b"
@@ -310,6 +315,53 @@ def test_owner_text_reducer_fixes_actual_355_427_shape_without_owner_drift() -> 
         profile_id="ordinary",
         allow_summarization=True,
     ).find("authored-owner-text-capacity-reducer-v1") == -1
+
+    # Real publication regression: unaddressed title/eyebrow owners added 36
+    # characters only after a 380-character reducer result reached Chromium.
+    from utils.llm_calls import author_deck as author_deck_mod
+    from utils.llm_calls.author_slide import Brand
+
+    unaddressed_header = (
+        "<html><head></head><body>"
+        '<div data-header-part="eyebrow" class="eyebrow">DELIVERY CONTROLS</div>'
+        '<div data-header-part="title" class="title">Secure Distribution</div>'
+        '<p data-qid="content.primary" data-semantic-role="body">'
+        + ("b " * 131) + "b</p>"
+        '<p data-qid="content.note" data-semantic-role="supporting">'
+        + ("s " * 58) + "s</p></body></html>"
+    )
+    assert aggregate_owner_capacity_violations(unaddressed_header, capacity) == (
+        "owner_visible_text:416>380",
+    )
+    calls = []
+
+    async def author_with_unaddressed_header(*_args, **kwargs):
+        calls.append(kwargs)
+        return unaddressed_header
+
+    monkeypatch.setattr(author_deck_mod, "author_slide_html", author_with_unaddressed_header)
+    admitted = asyncio.run(
+        author_deck_mod._author_one_resilient(
+            "secure distribution", "design",
+            Brand(topic="Exports", language="English", primary="#2563EB", fonts="Aptos"),
+            "PILLARS", 3, 5,
+            capacity=capacity,
+            allow_deterministic_owner_reduction=True,
+            raise_on_failure=True,
+        )
+    )
+    canonical_original = canonicalize_authored_capacity_html(unaddressed_header)
+    assert len(calls) == 1
+    assert admitted == canonicalize_authored_capacity_html(admitted)
+    assert aggregate_owner_capacity_violations(admitted, capacity) == ()
+    assert semantic_repair_boundary_violations(
+        canonical_original, admitted, allow_bounded_body_shortening=True,
+    ) == ()
+    assert admitted.count("data-qid=") == canonical_original.count("data-qid=")
+    assert ">DELIVERY CONTROLS</div>" in admitted
+    assert ">Secure Distribution</div>" in admitted
+    assert 'data-qid="content.primary"' in admitted
+    assert 'data-qid="content.note"' in admitted
 
 
 def test_composition_profile_defaults_to_development_quality_gates() -> None:
@@ -471,6 +523,80 @@ def test_vision_qa_false_gate_repair_normalizes_short_labels_without_qid_loss(
     normalized_html = ensure_authored_semantic_roles(original_html)
     normalized_metrics = metrics(normalized=True)
     captures: list[str] = []
+    reviews: list[dict[str, object]] = []
+
+    from utils.llm_calls.author_vision_qa import AuthoredVqaResidualDomIssuesError
+
+    residual_error = AuthoredVqaResidualDomIssuesError(
+        "5:available:1",
+        htmls=[original_html],
+        pngs=[b"failed-original"],
+        fixed=[],
+        repair_details=[],
+    )
+
+    async def fake_review(
+        htmls, pngs, contents, roles, brand, design_system, *,
+        slide_indices, total_slides, max_cycles, style, return_details,
+        local_patch_only, fail_on_residual_dom_issues, allow_patch_proposal_retry,
+        capacity_briefs, initial_critiques, provider_recovery_allowed,
+        chapter_prefixes, illustration_slots, reference_images_by_slide,
+    ):
+        assert htmls == [original_html]
+        assert pngs == [b"failed-original"]
+        assert contents == ["content-4"] and roles == ["PILLARS"]
+        assert slide_indices == [4] and total_slides == 9
+        assert max_cycles == 1 and return_details is True
+        assert local_patch_only is True and fail_on_residual_dom_issues is True
+        assert allow_patch_proposal_retry is False
+        assert capacity_briefs == ["capacity-4"]
+        assert initial_critiques == ["critique-4"]
+        assert chapter_prefixes == ["chapter-4"]
+        assert illustration_slots == [True]
+        assert reference_images_by_slide == [("reference-4",)]
+        reviews.append({"indices": slide_indices, "allowed": provider_recovery_allowed})
+        if provider_recovery_allowed == [False]:
+            raise residual_error
+        assert provider_recovery_allowed == [True]
+        return [original_html + "<!-- local provider patch -->"], [b"provider-png"], [0]
+
+    monkeypatch.setattr(
+        "services.authored_presentation_generation.revise_authored_deck", fake_review
+    )
+
+    def repair_options(indices, allowed):
+        return {
+            "slide_indices": indices,
+            "total_slides": 9,
+            "max_cycles": 1,
+            "style": None,
+            "return_details": True,
+            "local_patch_only": True,
+            "fail_on_residual_dom_issues": True,
+            "allow_patch_proposal_retry": False,
+            "capacity_briefs": [f"capacity-{index}" for index in indices],
+            "initial_critiques": [f"critique-{index}" for index in indices],
+            "provider_recovery_allowed": allowed,
+            "chapter_prefixes": [f"chapter-{index}" for index in indices],
+            "illustration_slots": [index == 4 for index in indices],
+            "reference_images_by_slide": [(f"reference-{index}",) for index in indices],
+        }
+
+    originals = [original_html] * 9
+    original_pngs = [b"failed-original"] * 9
+    candidate_htmls, fixed = asyncio.run(
+        _revise_gate_repair_candidates(
+            flagged=[4], htmls=originals, pngs=original_pngs,
+            contents=[f"content-{index}" for index in range(9)], roles=["PILLARS"] * 9,
+            deterministic_candidates={4: normalized_html},
+            brand=None, design_system="test",
+            repair_kwargs=repair_options([4], [False]),
+        )
+    )
+    # The failed original never enters strict review, and the unmeasured
+    # candidate is not paired with its old PNG or rendered before the bind.
+    assert reviews == [] and captures == []
+    assert candidate_htmls == [normalized_html] and fixed == []
 
     async def fake_capture(candidate_html):
         captures.append(candidate_html)
@@ -482,7 +608,7 @@ def test_vision_qa_false_gate_repair_normalizes_short_labels_without_qid_loss(
         fake_capture,
     )
     rebound_htmls, rebound_pngs, rebound_metrics = asyncio.run(
-        _bind_bounded_repair_evidence([normalized_html])
+        _bind_bounded_repair_evidence(candidate_htmls)
     )
     selected_html, selected_png, selected_metrics, admitted = (
         _admit_gate_repair_capacity_candidate(
@@ -502,9 +628,11 @@ def test_vision_qa_false_gate_repair_normalizes_short_labels_without_qid_loss(
     assert len(labels) == 34
     assert original_html.count("data-qid=") == normalized_html.count("data-qid=") == 35
     assert normalized_html.count('data-semantic-role="supporting"') == 9
-    assert "qids:34>32" in capacity_violations(
+    # Capacity already canonicalizes these short labels; normalization must
+    # still persist their roles without deleting any of the original QIDs.
+    assert capacity_violations(
         original_html, original_metrics, capacity
-    )
+    ) == ()
     assert capacity_violations(selected_html, selected_metrics, capacity) == ()
     assert (selected_html, selected_png, admitted) == (
         normalized_html,
@@ -521,10 +649,44 @@ def test_vision_qa_false_gate_repair_normalizes_short_labels_without_qid_loss(
             candidate_html=original_html,
             candidate_png=b"still-over-capacity",
             candidate_metrics=original_metrics,
-            capacity=capacity,
+            capacity=SlideCapacity(4, "PILLARS", 58, 290, 380, 0, 24),
         )
     assert failed.value.code == "authored_slide_capacity_exceeded"
     assert failed.value.retryable is False
+
+    # Mixed absolute indices preserve every per-slide option and map the
+    # reviewer's local fixed index back into the original flagged subset.
+    recovery_allowed = [False, True, False]
+    merged, fixed = asyncio.run(
+        _revise_gate_repair_candidates(
+            flagged=[1, 4, 7], htmls=originals, pngs=original_pngs,
+            contents=[f"content-{index}" for index in range(9)], roles=["PILLARS"] * 9,
+            deterministic_candidates={1: normalized_html, 4: original_html, 7: normalized_html},
+            brand=None, design_system="test",
+            repair_kwargs=repair_options([1, 4, 7], recovery_allowed),
+        )
+    )
+    assert merged == [normalized_html, original_html + "<!-- local provider patch -->", normalized_html]
+    assert fixed == [1]
+    assert reviews == [{"indices": [4], "allowed": [True]}]
+    assert recovery_allowed == [False, True, False]
+    assert originals == [original_html] * 9 and original_pngs == [b"failed-original"] * 9
+    assert captures == [normalized_html]
+
+    # Provider-disabled is not itself a skip condition: an unchanged failed
+    # original must still encounter the strict residual gate.
+    with pytest.raises(AuthoredVqaResidualDomIssuesError) as residual:
+        asyncio.run(
+            _revise_gate_repair_candidates(
+                flagged=[4], htmls=originals, pngs=original_pngs,
+                contents=[f"content-{index}" for index in range(9)], roles=["PILLARS"] * 9,
+                deterministic_candidates={4: original_html},
+                brand=None, design_system="test",
+                repair_kwargs=repair_options([4], [False]),
+            )
+        )
+    assert residual.value is residual_error
+    assert reviews[-1] == {"indices": [4], "allowed": [False]}
 
 
 def test_capacity_violations_enforce_qids_images_text_and_font_floor():
@@ -875,6 +1037,52 @@ def test_semantic_roles_are_stamped_before_owned_text_browser_capacity_gate(monk
     capacity = SlideCapacity(0, "COVER", 10, 10, 20, 1, 3, min_font_px=16)
     assert capacity_violations(stamped, {"elements": elements}, capacity) == ()
 
+    # A parent with its own text still exposes descendants in rendered_text.
+    # Only capacity accounting uses the independently measured owner string.
+    parent_text = "Inspect notes and comments"
+    child_text = "Clear internal discussion."
+    nested_html = (
+        '<h1 data-qid="header.title" data-semantic-role="title">Title</h1>'
+        '<div data-qid="copy" data-semantic-role="body">'
+        + parent_text
+        + '<p data-qid="copy.detail" data-semantic-role="body">'
+        + child_text + '</p></div>'
+    )
+    nested_metrics = [
+        {**metric("header.title", "h1", "title", "Title", True), "owned_text": "Title"},
+        {
+            **metric("copy", "div", "body", parent_text + " " + child_text, True),
+            "owned_text": parent_text,
+        },
+        {**metric("copy.detail", "p", "body", child_text, True), "ownedText": child_text},
+    ]
+    nested_capacity = SlideCapacity(3, "PILLARS", 5, 52, 57, 0, 3)
+    assert aggregate_owner_capacity_violations(nested_html, nested_capacity) == ()
+    assert capacity_violations(nested_html, {"elements": nested_metrics}, nested_capacity) == ()
+    legacy_metrics = [
+        {key: value for key, value in item.items() if key not in {"owned_text", "ownedText"}}
+        for item in nested_metrics
+    ]
+    assert capacity_violations(nested_html, {"elements": legacy_metrics}, nested_capacity) == (
+        "visible_text:84>57", "browser_body:79>52",
+    )
+    for invalid in (None, 1, True, [], {}, "", "   "):
+        invalid_metrics = [dict(item) for item in nested_metrics]
+        invalid_metrics[1]["owned_text"] = invalid
+        assert "browser_owned_text_unverified:copy" in capacity_violations(
+            nested_html, {"elements": invalid_metrics}, nested_capacity,
+        )
+    conflicting_metrics = [dict(item) for item in nested_metrics]
+    conflicting_metrics[1]["ownedText"] = "different owner text"
+    assert "browser_owned_text_unverified:copy" in capacity_violations(
+        nested_html, {"elements": conflicting_metrics}, nested_capacity,
+    )
+    clipped_metrics = [dict(item) for item in nested_metrics]
+    clipped_metrics[1]["glyph_clipped"] = True
+    assert "browser_text_not_visible:copy" in capacity_violations(
+        nested_html, {"elements": clipped_metrics}, nested_capacity,
+    )
+
     sealed = (
         '<p data-qid="copy" data-source-block-id="source:block:1" '
         'data-semantic-role="body">Body</p>'
@@ -954,6 +1162,13 @@ def test_layout_alignment_repair_restores_header_inset_and_symmetric_body_margin
 
 
 def test_layout_alignment_repair_keeps_rotated_arrow_tip_inside_connector_gutter():
+    prompt_capacity = SlideCapacity(0, "PILLARS", 58, 290, 380, 1, 32)
+    ordinary_prompt = prompt_capacity.prompt_brief(CompositionProfile("ordinary", "authored", True, True, 1))
+    source_prompt = prompt_capacity.prompt_brief(CompositionProfile("source-verbatim", "verbatim", False, True, 1))
+    assert "every clipping ancestor, including rounded corners" in ordinary_prompt
+    assert "never rely on overflow clipping to crop decoration" in ordinary_prompt
+    assert "Decorative paint, including rings" not in source_prompt
+    assert "Source text is verbatim authority" in source_prompt
     problem = '''<!doctype html><html><head><style>
     .evidence{display:grid;grid-template-columns:1fr 72px 1fr;align-items:center}
     .bridge{height:2px;background:#2563EB;position:relative}
@@ -971,6 +1186,343 @@ def test_layout_alignment_repair_keeps_rotated_arrow_tip_inside_connector_gutter
     assert 'data-qid="evidence.bridge"]{width:44px!important;' in repaired
     assert "justify-self:start!important" in repaired
     assert repair_authored_layout_alignment(repaired, role="PROBLEM") == repaired
+
+    # A paint-order candidate must not inherit the connector's geometry edit.
+    source = '''<!doctype html><html><head><style>
+    .panel{position:relative;display:flex;flex-direction:column;width:400px;height:300px}
+    .note{margin-top:200px;height:80px}.shape{position:absolute;width:200px;height:80px;
+      right:-20px;bottom:0;border:2px solid blue;transform:rotate(-8deg)}
+    </style></head><body><section class="panel" data-qid="panel" data-semantic-role="supporting">
+    <div class="note" data-qid="note" data-semantic-role="supporting">Preserve every exported element.</div>
+    <div class="shape" data-qid="shape" data-semantic-role="supporting"></div>
+    </section></body></html>'''
+    parent_box = {"x": 0, "y": 0, "width": 400, "height": 300}
+    text_box = {"x": 20, "y": 200, "width": 360, "height": 80}
+    render_digest = "sha256:" + "1" * 64
+
+    def metric(qid, tag, bounds, *, position, display="block", owned_text=""):
+        return {
+            "qid": qid, "tag": tag, "bbox": bounds,
+            "parent_qid": "panel" if qid != "panel" else None,
+            "offset_parent_qid": "panel", "source_block_id": None,
+            "semantic_role": "supporting", "owned_text": owned_text,
+            "rendered_text": owned_text, "has_owned_text": bool(owned_text),
+            "has_owned_paint": True, "css_visible": True, "effective_opacity": 1,
+            "intentional": False, "effective_z_index": 1 if qid == "note" else 2,
+            "clipped": False, "glyph_clipped": False, "line_box_clipped": False,
+            "measurement": {key: True for key in ("geometry", "stacking", "transform", "visual_effects", "occlusion", "clipping")},
+            "computed_style": {
+                "position": position, "display": display, "zIndex": "auto",
+                "opacity": "1", "visibility": "visible", "backgroundBlendMode": "normal",
+                "backgroundImage": "none", "transform": "none",
+                **{edge: "auto" for edge in ("top", "right", "bottom", "left")},
+            },
+            "visual_effects": {
+                "filter": "none", "backdropFilter": "none", "clipPath": "none",
+                "maskImage": "none", "mixBlendMode": "normal", "transform": "none",
+            },
+            "containing_block_proof": {
+                "source": "chrome", "telemetryComplete": True, "exactBoundOffsetParent": True,
+                "offsetParentQid": "panel", "offsetParentTag": "section",
+                "offsetParentBoundsPx": parent_box,
+            },
+            "text_fragments": [],
+        }
+
+    parent = metric("panel", "section", parent_box, position="relative", display="flex")
+    target = metric("note", "div", text_box, position="static", owned_text="Preserve every exported element.")
+    target.update({
+        "continuous_occluded_fraction": 0.14, "occluded_fraction": 0.15,
+        "occlusion_unknown_fraction": 0, "occlusion_unbound_count": 0,
+        "occlusion_measurement_error": None, "occlusion_occluder_qids": ["shape"],
+        "occlusion_known_sample_count": 100, "occlusion_sample_count": 100,
+        "occlusion_confirmed_covered_sample_count": 15,
+        "occlusion_probe_version": "owned-paint-v3", "occlusion_sensor_version": "owned-paint-v5-inset-retry",
+        "occlusion_measurement_evidence": {
+            "status": "measured", "stage": "chrome.owned_paint_sampling", "metric": "occlusion", "qid": "note",
+            "reason": None, "render_digest": render_digest, "source_digest": render_digest,
+            "known": 100, "covered": 15, "sampled": 100, "known_occluded_fraction": 0.15,
+            "sensor_version": "owned-paint-v5-inset-retry",
+        },
+        "static_translation_probe": {
+            "source": "chrome", "telemetryComplete": True, "layoutIsolation": True,
+            "stackingStable": True, "transformComposable": True, "unsupportedReason": None,
+            "flowImpactPx": 0, "maxSiblingDeltaPx": 0, "translationErrorPx": 0,
+            "targetBoundsPx": text_box, "parentBoundsPx": parent_box,
+        },
+        "text_fragments": [{"x": 20, "y": 230, "width": 330, "height": 20}],
+    })
+    shape = metric("shape", "div", {"x": 220, "y": 220, "width": 200, "height": 80}, position="absolute")
+    shape["computed_style"]["transform"] = "matrix(0.99, -0.14, 0.14, 0.99, 0, 0)"
+    # Its own off-panel coverage may be unknown; only the text's measured
+    # occlusion establishes this repair's authority.
+    shape["measurement"]["occlusion"] = False
+    shape["occlusion_measurement_evidence"] = {"status": "unknown"}
+    metrics = {
+        "dom_metrics_version": "authored-dom-metrics-v16-owned-text", "width": 1280, "height": 720,
+        "fonts_ready": True, "source_digest": "sha256:" + sha256(source.encode()).hexdigest(),
+        "render_digest": render_digest, "elements": [parent, target, shape],
+    }
+    candidate = repair_authored_owned_text_paint_order(source, metrics)
+    rule = '<style>/* authored-owned-text-paint-order-v1 */[data-qid="panel"]>[data-qid="note"]{z-index:1!important}</style>'
+    assert candidate.replace(rule, "", 1) == source
+    assert semantic_repair_boundary_violations(source, candidate) == ()
+    assert repair_authored_owned_text_paint_order(candidate, metrics) == candidate
+    assert repair_authored_owned_text_paint_order(source, metrics, profile_id="source-verbatim") == source
+
+    for element_index, path, value in (
+        (1, ("qid",), []),
+        (1, ("owned_text",), {}),
+        (1, ("ownedText",), "different owner text"),
+        (1, ("source_block_id",), "source:1"),
+        (1, ("continuous_occluded_fraction",), 0.12),
+        (1, ("occlusion_unknown_fraction",), 0.01),
+        (1, ("occlusion_unbound_count",), 1),
+        (1, ("occlusion_measurement_error",), "unknown"),
+        (1, ("occlusion_measurement_evidence", "status"), "unknown"),
+        (1, ("occlusion_occluder_qids",), ["unbound"]),
+        (1, ("parent_qid",), "unknown"),
+        (1, ("containing_block_proof", "exactBoundOffsetParent"), False),
+        (1, ("static_translation_probe", "maxSiblingDeltaPx"), 1),
+        (1, ("computed_style", "position"), "relative"),
+        (1, ("intentional",), None),
+        (2, ("has_owned_text",), True),
+        (2, ("owned_text",), "chart label"),
+        (2, ("computed_style",), None),
+        (2, ("computed_style", "backgroundImage"), 'url("image.png")'),
+        (2, ("computed_style", "zIndex"), "2"),
+        (2, ("computed_style", "transform"), "matrix3d(1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1)"),
+        (2, ("visual_effects", "mixBlendMode"), "multiply"),
+    ):
+        invalid = deepcopy(metrics)
+        leaf = invalid["elements"][element_index]
+        for key in path[:-1]:
+            leaf = leaf[key]
+        leaf[path[-1]] = value
+        assert repair_authored_owned_text_paint_order(source, invalid) == source
+    duplicate = deepcopy(metrics)
+    duplicate["elements"].append(deepcopy(target))
+    assert repair_authored_owned_text_paint_order(source, duplicate) == source
+    for changed_html in (
+        source.replace('<section class="panel"', '<section data-source-block-id="source:1" class="panel"'),
+        source.replace('class="shape"', 'class="shape chart-bar"'),
+        source.replace('data-qid="shape"', 'data-qid="note"'),
+        source.replace('data-semantic-role="supporting"></div>', 'data-semantic-role="supporting"><img src="image.png"></div>'),
+        source.replace('data-semantic-role="supporting"></div>', 'data-semantic-role="supporting"><svg></svg></div>'),
+        source.replace('data-semantic-role="supporting"></div>', 'data-semantic-role="supporting"><table></table></div>'),
+        source.replace('<div class="shape"', '<div><div class="shape"').replace('</section>', '</div></section>'),
+        source.replace('</head>', '<style>.note{animation:move 1s}</style></head>'),
+    ):
+        invalid = deepcopy(metrics)
+        invalid["source_digest"] = "sha256:" + sha256(changed_html.encode()).hexdigest()
+        assert repair_authored_owned_text_paint_order(changed_html, invalid) == changed_html
+
+    # Exact retained slides exercise the same single bind/final-admission
+    # boundary, without a provider call or changing the failed checkpoint.
+    import base64
+    import json
+    import os
+    from pathlib import Path
+    import re
+
+    from services.authored_decoration_containment import (
+        _bound_metrics, _family, _static_document, plan_decoration_containment,
+        validate_decoration_containment,
+    )
+    from utils import slide_capture
+
+    assert plan_decoration_containment(source, metrics) is None  # No explicit decorative-band authority.
+    retained = os.getenv("AUTHORED_DECORATION_CONTAINMENT_RETAINED_JSON")
+    for case_index, retained_path in enumerate(retained.split(os.pathsep) if retained else ()):
+        evidence_path = Path(retained_path)
+        original_bytes = evidence_path.read_bytes()
+        evidence = json.loads(original_bytes)
+        source, retained_metrics = evidence["html"], evidence["metrics"]
+        original_png = base64.b64decode(evidence["pngBase64"])
+        assert sha256(original_bytes).hexdigest() == evidence_path.name
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr(slide_capture, "CHROME_REUSE_ENABLED", True)
+            originals, original_pngs, original_measurements = asyncio.run(_bind_bounded_repair_evidence([source]))
+        before = original_measurements[0]
+        assert originals == [source] and original_pngs == [original_png]
+        output_directory = os.getenv("AUTHORED_DECORATION_CONTAINMENT_OUTPUT_DIR")
+        destination = Path(output_directory) if output_directory else None
+        if destination:
+            assert destination.is_absolute()
+            destination.mkdir(parents=True, exist_ok=True)
+            with (destination / f"decoration-containment-{case_index}-original-metrics.json").open("x", encoding="utf-8") as stream:
+                json.dump(before, stream, ensure_ascii=False)
+            with (destination / f"decoration-containment-{case_index}-original.png").open("xb") as stream:
+                stream.write(original_pngs[0])
+        retained_by_qid = {item["qid"]: item for item in retained_metrics["elements"]}
+        for item in before["elements"]:
+            prior = retained_by_qid[item["qid"]]
+            for key in ("bbox", "owned_text", "text_fragments", "semantic_role"):
+                assert item[key] == prior[key]
+            if item["quad"] != prior["quad"]:
+                # Older telemetry rounded offsetWidth/Height even for an
+                # identity mapping. Only the proven fractional bbox corners
+                # may differ; fresh-before/candidate equality remains strict.
+                assert before["dom_metrics_version"] != retained_metrics["dom_metrics_version"]
+                assert item["computed_style"]["transform"] == "none"
+                assert item["measurement"]["transform"] is True
+                box = item["bbox"]
+                x, y, right, bottom = box["x"], box["y"], box["x"] + box["width"], box["y"] + box["height"]
+                assert item["quad"] == [
+                    {"x": x, "y": y}, {"x": right, "y": y},
+                    {"x": right, "y": bottom}, {"x": x, "y": bottom},
+                ]
+            assert all(item["computed_style"][key] == value for key, value in prior["computed_style"].items())
+        if "cover.focal.glow" in retained_by_qid:
+            expected_targets = {"cover.focal.glow"}
+            capacity = SlideCapacity(0, "COVER", 58, 220, 280, 1, 22)
+        elif "release.corner" in retained_by_qid:
+            expected_targets = {"release.corner"}
+            capacity = SlideCapacity(0, "CLOSING", 62, 270, 350, 1, 20)
+        elif "risk.metric.diagonal" in retained_by_qid:
+            expected_targets = {"risk.metric.diagonal"}
+            capacity = SlideCapacity(0, "PILLARS", 58, 290, 380, 1, 32)
+            sheen = next(item for item in before["elements"] if item["qid"] == "risk.metric.diagonal")
+            node = {"class": "metric-diagonal", "data-semantic-role": "supporting"}
+            assert _family(sheen["qid"], node, sheen["computed_style"]) == "panel-sheen"
+            for qid, attrs, css in (
+                ("risk.metric.shape", node, sheen["computed_style"]),
+                (sheen["qid"], {**node, "class": "diagonal"}, sheen["computed_style"]),
+                (sheen["qid"], node, {**sheen["computed_style"], "backgroundImage": "none"}),
+                (sheen["qid"], node, {**sheen["computed_style"], "clipPath": "polygon(0 0, 100% 0, 100% 100%, 0 100%)"}),
+            ):
+                assert _family(qid, attrs, css) is None
+            for extra in (
+                '<style>.other{clip-path:polygon(64% 0,100% 0,100% 100%,0 100%)}</style>',
+                '<style>.metric-diagonal{clip-path:polygon(0 0,100% 0,100% 100%,0 100%)}</style>',
+            ):
+                assert not _static_document(source.replace("</head>", extra + "</head>"))
+        else:
+            expected_targets = {"integrity.metric.decor.one", "integrity.metric.decor.two"}
+            capacity = SlideCapacity(0, "PILLARS", 58, 290, 380, 1, 32)
+        plan = plan_decoration_containment(source, before)
+        assert plan is not None and plan.candidate != source, {
+            "bound": _bound_metrics(source, before) is not None,
+            "staticDocument": _static_document(source),
+            "styleProof": [{"qid": item["qid"], **{key: item["computed_style"].get(key) for key in (
+                "zoom", "contain", "contentVisibility", "translate", "rotate", "scale",
+                "perspective", "clipPath", "maskImage", "borderImageSource", "boxShadow",
+                "textShadow", "outlineWidth", "outlineStyle", "overflowClipMargin",
+            )}} for item in before["elements"] if item["qid"] in expected_targets or any(
+                target["qid"] in expected_targets and target["parent_qid"] == item["qid"]
+                for target in before["elements"]
+            )],
+        }
+        assert set(plan.targets) == expected_targets
+        assert all(.5 <= scale <= 1 for scale in plan.scales.values())
+        if destination:
+            with (destination / f"decoration-containment-{case_index}-plan.json").open("x", encoding="utf-8") as stream:
+                json.dump({key: getattr(plan, key) for key in ("targets", "clips", "translations", "scales", "geometry_styles")}, stream)
+        if expected_targets == {"integrity.metric.decor.one", "integrity.metric.decor.two"}:
+            assert set(plan.scales.values()) == {1.0}
+        assert re.sub(r'<style>/\* authored-decoration-containment-v3 \*/.*?</style>', "", plan.candidate) == source
+        assert semantic_repair_boundary_violations(source, plan.candidate) == ()
+        assert plan_decoration_containment(source, before, profile_id="source-verbatim") is None
+        assert plan_decoration_containment(source, before, reference_mode="exact_reconstruction") is None
+        assert plan_decoration_containment(source.replace("<body>", '<body data-source-block-id="source:1">'), before) is None
+        root_transformed = re.sub(r"<body\b", '<body style="transform:scaleX(2)"', source, count=1)
+        root_metrics = deepcopy(before)
+        root_metrics["source_digest"] = "sha256:" + sha256(root_transformed.encode()).hexdigest()
+        assert plan_decoration_containment(root_transformed, root_metrics) is None
+        duplicate = deepcopy(before)
+        duplicate["elements"].append(deepcopy(duplicate["elements"][0]))
+        assert plan_decoration_containment(source, duplicate) is None
+        for invalid_zoom in (None, "2"):
+            unsupported = deepcopy(before)
+            for item in unsupported["elements"]:
+                if item["qid"] in plan.targets:
+                    item["computed_style"]["zoom"] = invalid_zoom
+            assert plan_decoration_containment(source, unsupported) is None
+        for field, value in (("outlineStyle", "solid"), ("outlineWidth", None)):
+            unsupported = deepcopy(before)
+            for item in unsupported["elements"]:
+                if item["qid"] in plan.targets:
+                    item["computed_style"][field] = value
+            assert plan_decoration_containment(source, unsupported) is None
+        for forbidden_attribute in ('aria-label="meaningful content" ', 'data-shape-kind="chart" '):
+            changed = source.replace('data-qid="' + plan.targets[0] + '"', forbidden_attribute + 'data-qid="' + plan.targets[0] + '"')
+            changed_metrics = deepcopy(before)
+            changed_metrics["source_digest"] = "sha256:" + sha256(changed.encode()).hexdigest()
+            blocked = plan_decoration_containment(changed, changed_metrics)
+            assert blocked is None or plan.targets[0] not in blocked.targets
+
+        async def forbidden_provider(*args, **kwargs):
+            raise AssertionError("deterministic containment must not call a provider")
+
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr("services.authored_presentation_generation.revise_authored_deck", forbidden_provider)
+            patch.setattr(slide_capture, "CHROME_REUSE_ENABLED", True)
+            candidates, _fixed = asyncio.run(_revise_gate_repair_candidates(
+                flagged=[0], htmls=[source], pngs=[original_png], contents=[""], roles=[capacity.role],
+                deterministic_candidates={0: plan.candidate}, brand=None, design_system="",
+                repair_kwargs={"provider_recovery_allowed": [False]},
+            ))
+            htmls, pngs, measured = asyncio.run(_bind_bounded_repair_evidence(candidates))
+        assert htmls == [plan.candidate]
+        assert pngs[0] != original_png  # This is a geometry repair, not a sensor relabel.
+        assert evidence_path.read_bytes() == original_bytes
+        if destination:
+            with (destination / f"decoration-containment-{case_index}-candidate.png").open("xb") as stream:
+                stream.write(pngs[0])
+            with (destination / f"decoration-containment-{case_index}-metrics.json").open("x", encoding="utf-8") as stream:
+                json.dump(measured[0], stream, ensure_ascii=False)
+        assert validate_decoration_containment(plan, source, before, htmls[0], measured[0])
+        if "risk.metric.diagonal" in expected_targets:
+            fixed_sheen = next(item for item in measured[0]["elements"] if item["qid"] == "risk.metric.diagonal")
+            assert fixed_sheen["computed_style"]["transform"] == "none"
+            assert fixed_sheen["computed_style"]["clipPath"] == sheen["computed_style"]["clipPath"]
+            assert fixed_sheen["computed_style"]["backgroundImage"] == sheen["computed_style"]["backgroundImage"]
+            print(json.dumps({"case": "run30-panel-sheen", "scale": plan.scales["risk.metric.diagonal"],
+                              "bbox": fixed_sheen["bbox"], "occluded": fixed_sheen["occluded_fraction"],
+                              "unknown": fixed_sheen["occlusion_unknown_fraction"]}, sort_keys=True))
+        # Standard frozen role fixture limits, not recovered original plan metadata.
+        profile = CompositionProfile("ordinary", "authored", True, True, 1)
+        admitted = _admit_gate_repair_capacity_candidate(
+            slide_index=0, original_html=source, original_png=original_png,
+            original_metrics=before, candidate_html=htmls[0], candidate_png=pngs[0],
+            candidate_metrics=measured[0], capacity=capacity,
+        )
+        assert admitted[3] is True
+        assert asyncio.run(_final_authored_quality_gate(
+            htmls=htmls, capacity_plan=AuthoredCapacityPlan(profile, (capacity,)),
+            profile=profile, reference_mode="style_reference", browser_metrics_by_slide=measured,
+        )) == []
+        non_target = next(item["qid"] for item in measured[0]["elements"] if item["has_owned_text"])
+        for field in ("geometry", "occlusion", "continuous", "new_occluder", "small_unknown", "unknown"):
+            invalid = deepcopy(measured[0])
+            item = next(value for value in invalid["elements"] if value["qid"] == non_target)
+            if field == "geometry":
+                item["bbox"]["x"] += 1
+            elif field == "occlusion":
+                item["occluded_fraction"] += .001
+            elif field == "continuous":
+                item["continuous_occluded_fraction"] += .001
+            elif field == "new_occluder":
+                item["occlusion_occluder_qids"] = [*item["occlusion_occluder_qids"], plan.targets[0]]
+            elif field == "small_unknown":
+                item["occlusion_unknown_fraction"] += .001
+            else:
+                item["measurement"]["occlusion"] = False
+                item["occluded_fraction"] = None
+            assert not validate_decoration_containment(plan, source, before, htmls[0], invalid)
+        after = {item["qid"]: item for item in measured[0]["elements"]}
+        for qid in plan.targets:
+            if qid == "cover.focal.glow":
+                assert after[qid]["computed_style"]["transform"] == "none"
+                assert qid in plan.geometry_styles
+                assert plan.scales[qid] in {1, .75, .5}
+                assert all(plan.geometry_styles[qid][key] * 64 == round(plan.geometry_styles[qid][key] * 64) for key in ("left", "top"))
+            for field, value in (("backgroundColor", "rgb(255, 0, 0)"), ("borderTopWidth", "100px"), ("opacity", "0.5")):
+                invalid = deepcopy(measured[0])
+                next(item for item in invalid["elements"] if item["qid"] == qid)["computed_style"][field] = value
+                assert not validate_decoration_containment(plan, source, before, htmls[0], invalid)
+            print("retained-decoration-containment", qid, "translation", plan.translations[qid],
+                  "scale", plan.scales[qid], "bbox", after[qid]["bbox"], "occlusion", after[qid]["occluded_fraction"])
 
 
 def test_semantic_roles_bind_header_title_to_the_text_owner():
@@ -990,6 +1542,79 @@ def test_semantic_roles_bind_header_title_to_the_text_owner():
     assert (
         '<span data-qid="hdr.title.text" data-semantic-role="title">' in stamped
     )
+    assert ensure_authored_semantic_roles(stamped) == stamped
+    for qid in ("s3.header.title", "s3.actual.heading"):
+        nested = html.replace("hdr.title.text", qid).replace("<span", "<section><span").replace("</span>", "</span></section>")
+        canonical = ensure_authored_semantic_roles(nested)
+        assert f'data-qid="{qid}" data-semantic-role="title"' in canonical
+        assert ensure_authored_semantic_roles(canonical) == canonical
+        interrupted = nested.replace("<section>", '<section data-header-part="subline">')
+        assert f'data-qid="{qid}" data-semantic-role="body"' in ensure_authored_semantic_roles(interrupted)
+    ordinary_subtitles = (
+        '<span data-qid="s3.pillar.pptx.title" data-semantic-role="body">PowerPoint</span>'
+        '<span data-qid="card.title" data-semantic-role="body">Card subtitle</span>'
+    )
+    assert ensure_authored_semantic_roles(ordinary_subtitles) == ordinary_subtitles
+    mixed_owner = '<div data-qid="card" data-semantic-role="body">Body<span data-header-part="title">Caption</span></div>'
+    assert ensure_authored_semantic_roles(mixed_owner) == mixed_owner
+
+    # One optional retained product slide checks the exact pre-render seam.
+    import base64
+    import json
+    import os
+    from pathlib import Path
+
+    from utils import slide_capture
+
+    retained = os.getenv("AUTHORED_HEADER_TITLE_RETAINED_JSON")
+    if retained:
+        import re
+
+        evidence_path = Path(retained)
+        original_bytes = evidence_path.read_bytes()
+        assert sha256(original_bytes).hexdigest() == evidence_path.name
+        evidence = json.loads(original_bytes)
+        source = evidence["html"]
+        canonical = ensure_authored_semantic_roles(source)
+        old_tag = 'data-qid="s3.header.title" data-semantic-role="body"'
+        new_tag = 'data-qid="s3.header.title" data-semantic-role="title"'
+        assert source.count(old_tag) == 1 and canonical == source.replace(old_tag, new_tag, 1)
+        assert ensure_authored_semantic_roles(canonical) == canonical
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr(slide_capture, "CHROME_REUSE_ENABLED", True)
+            original = asyncio.run(slide_capture.render_html_to_png_with_metrics(source))
+            corrected = asyncio.run(slide_capture.render_html_to_png_with_metrics(canonical))
+        assert original.png == corrected.png == base64.b64decode(evidence["pngBase64"])
+        before, after = original.browser_metrics, corrected.browser_metrics
+        assert before is not None and after is not None
+        assert before["source_digest"] == "sha256:" + sha256(source.encode()).hexdigest()
+        assert after["source_digest"] == "sha256:" + sha256(canonical.encode()).hexdigest()
+        assert original.html_digest == before["source_digest"]
+        assert corrected.html_digest == after["source_digest"]
+        assert original.png_digest == corrected.png_digest
+        assert before["render_digest"] != after["render_digest"]
+        for binding in (before, after):
+            assert re.fullmatch(r"sha256:[0-9a-f]{64}", binding["render_digest"])
+            assert all(item["occlusion_measurement_evidence"]["render_digest"] == binding["render_digest"] for item in binding["elements"])
+        assert [item["qid"] for item in before["elements"]] == [item["qid"] for item in after["elements"]]
+        for prior, current in zip(before["elements"], after["elements"], strict=True):
+            for key in ("bbox", "quad", "owned_text", "rendered_text", "text_fragments", "computed_style"):
+                assert current[key] == prior[key]
+            if current["qid"] == "s3.header.title":
+                assert prior["semantic_role"] == "body" and current["semantic_role"] == "title"
+                assert current["has_owned_text"] is True and current["css_visible"] is True and current["clipped"] is False
+            else:
+                assert current["semantic_role"] == prior["semantic_role"]
+        # Standard PILLARS fixture limits; the retained checkpoint omits its plan.
+        capacity = SlideCapacity(2, "PILLARS", 58, 290, 380, 1, 32)
+        original_capacity = _evaluate_capacity_role_evidence(before, capacity)
+        corrected_capacity = _evaluate_capacity_role_evidence(after, capacity)
+        assert original_capacity["checks"]["title"] is False
+        assert "title:semantic_role_missing" in original_capacity["violations"]
+        assert corrected_capacity["browserObserved"] is True
+        assert all(corrected_capacity["checks"].values()) and corrected_capacity["violations"] == []
+        assert evidence_path.read_bytes() == original_bytes
+        print("retained-header-title-owner", "pngByteExact", True, "capacityChecks", corrected_capacity["checks"])
 
 
 def test_final_checkpoint_closing_capacity_reducer_uses_exact_ledger_metrics(

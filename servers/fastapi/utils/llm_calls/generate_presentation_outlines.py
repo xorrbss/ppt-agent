@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
+from fastapi import HTTPException
 from llmai import get_client
 from llmai.shared import (
     JSONSchemaResponse,
@@ -276,4 +277,12 @@ async def generate_ppt_outline(
                 if final_content:
                     yield final_content
     except Exception as e:
-        yield handle_llm_client_exceptions(e)
+        handled = handle_llm_client_exceptions(e)
+        if isinstance(handled, HTTPException):
+            yield handled
+            return
+        # Public admission/control failures intentionally keep their stable
+        # code and retryability metadata.  Do not feed those exception objects
+        # into the legacy text-chunk stream where callers would concatenate
+        # them with strings and mask the real fail-closed reason as HTTP 500.
+        raise handled

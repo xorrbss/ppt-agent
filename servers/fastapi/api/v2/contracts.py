@@ -8,6 +8,8 @@ execution-internal state.
 from __future__ import annotations
 
 from datetime import datetime
+from hashlib import sha256
+import json
 import re
 from typing import Any, Literal
 from urllib.parse import urlsplit
@@ -307,6 +309,197 @@ class PublicOperationErrorV2(PublicWireModel):
     retryable: bool = False
 
 
+class PublicRenderRuntimeIdentityV1(PublicWireModel):
+    schema_version: Literal["public-render-runtime-binding/v1"] = (
+        "public-render-runtime-binding/v1"
+    )
+    mode: Literal[
+        "owned-local-controller-observed",
+        "external-deployment-pinned",
+    ]
+    checkpoint_reuse_eligible: Literal[True]
+    release_eligible: Literal[False]
+    release_eligibility_reason: Literal[
+        "runtime-binding-is-not-release-authorization"
+    ]
+    worker_image_digest: str | None = Field(default=None, pattern=DIGEST_PATTERN)
+    font_inventory_digest: str | None = Field(default=None, pattern=DIGEST_PATTERN)
+    limitations: list[
+        Literal[
+            "controller-worker-colocation-required",
+            "system-font-inventory-unsealed",
+        ]
+    ] = Field(max_length=2)
+    binding_digest: str = Field(pattern=DIGEST_PATTERN)
+
+    @model_validator(mode="after")
+    def validate_runtime_binding(self) -> "PublicRenderRuntimeIdentityV1":
+        if self.mode == "owned-local-controller-observed":
+            if self.worker_image_digest is not None or self.font_inventory_digest is not None:
+                raise ValueError("owned-local runtime must not claim deployment pins")
+            if self.limitations != [
+                "controller-worker-colocation-required",
+                "system-font-inventory-unsealed",
+            ]:
+                raise ValueError("owned-local runtime limitations are incomplete")
+        elif (
+            self.worker_image_digest is None
+            or self.font_inventory_digest is None
+            or self.limitations
+            or self.worker_image_digest == "sha256:" + ("0" * 64)
+            or self.font_inventory_digest == "sha256:" + ("0" * 64)
+        ):
+            raise ValueError("external runtime requires non-zero deployment pins")
+
+        sealed = self.model_dump(
+            mode="json",
+            by_alias=True,
+            exclude={"binding_digest"},
+        )
+        expected_digest = "sha256:" + sha256(
+            json.dumps(
+                sealed,
+                ensure_ascii=True,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        if self.binding_digest != expected_digest:
+            raise ValueError("render runtime bindingDigest does not match its payload")
+        return self
+
+
+class PublicRenderRuntimeIdentityV2(PublicWireModel):
+    schema_version: Literal["public-render-runtime-binding/v2"] = (
+        "public-render-runtime-binding/v2"
+    )
+    mode: Literal[
+        "owned-local-controller-observed",
+        "external-deployment-pinned",
+    ]
+    checkpoint_reuse_eligible: bool
+    release_eligible: Literal[False]
+    release_eligibility_reason: Literal[
+        "runtime-binding-is-not-release-authorization"
+    ]
+    worker_image_digest: str | None = Field(default=None, pattern=DIGEST_PATTERN)
+    chrome_runtime_digest: str | None = Field(default=None, pattern=DIGEST_PATTERN)
+    font_inventory_digest: str = Field(pattern=DIGEST_PATTERN)
+    limitations: list[
+        Literal[
+            "controller-worker-colocation-required",
+            "worker-result-attestation-unavailable",
+        ]
+    ] = Field(max_length=1)
+    binding_digest: str = Field(pattern=DIGEST_PATTERN)
+
+    @model_validator(mode="after")
+    def validate_runtime_binding(self) -> "PublicRenderRuntimeIdentityV2":
+        zero_digest = "sha256:" + ("0" * 64)
+        if self.mode == "owned-local-controller-observed":
+            if (
+                self.worker_image_digest is not None
+                or self.chrome_runtime_digest in {None, zero_digest}
+                or self.font_inventory_digest == zero_digest
+                or self.checkpoint_reuse_eligible is not True
+                or self.limitations != ["controller-worker-colocation-required"]
+            ):
+                raise ValueError("owned-local runtime identity is incomplete")
+        elif (
+            self.worker_image_digest in {None, zero_digest}
+            or self.chrome_runtime_digest is not None
+            or self.font_inventory_digest == zero_digest
+            or self.checkpoint_reuse_eligible is not False
+            or self.limitations != ["worker-result-attestation-unavailable"]
+        ):
+            raise ValueError(
+                "external runtime requires pins and disables checkpoint reuse"
+            )
+
+        sealed = self.model_dump(
+            mode="json",
+            by_alias=True,
+            exclude={"binding_digest"},
+        )
+        expected_digest = "sha256:" + sha256(
+            json.dumps(
+                sealed,
+                ensure_ascii=True,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        if self.binding_digest != expected_digest:
+            raise ValueError("render runtime bindingDigest does not match its payload")
+        return self
+
+
+class PublicExportExecutionReceiptV1(PublicWireModel):
+    schema_version: Literal["public-export-execution-receipt/v1"] = (
+        "public-export-execution-receipt/v1"
+    )
+    slide_count: int = Field(ge=1, le=100)
+    render_concurrency_limit: int = Field(ge=1, le=8)
+    render_concurrency_peak: int = Field(ge=0, le=8)
+    render_gate_wait_millis: int = Field(ge=0)
+    render_scheduler_queue_wait_millis: int = Field(ge=0)
+    render_worker_cumulative_millis: int = Field(ge=0)
+    render_wall_millis: int = Field(ge=0)
+    artifact_stage_millis: int = Field(ge=0)
+    html_persist_millis: int = Field(ge=0)
+    export_worker_millis: int = Field(ge=0)
+    export_scheduler_queue_wait_millis: int = Field(ge=0)
+    operation_wall_millis: int = Field(ge=0)
+    render_execution_count: int = Field(ge=0, le=100)
+    render_batch_execution_count: int = Field(ge=0, le=100)
+    chromium_process_launch_count: int = Field(ge=0, le=100)
+    browser_reuse_count: int = Field(ge=0, le=100)
+    render_checkpoint_reuse_count: int = Field(ge=0, le=100)
+    render_singleflight_join_count: int = Field(ge=0, le=100)
+    render_runtime_identity: PublicRenderRuntimeIdentityV1 | PublicRenderRuntimeIdentityV2
+    deck_render_identity_digest: str = Field(pattern=DIGEST_PATTERN)
+
+    @model_validator(mode="after")
+    def validate_render_counts(self) -> "PublicExportExecutionReceiptV1":
+        if self.render_concurrency_peak > self.render_concurrency_limit:
+            raise ValueError("renderConcurrencyPeak cannot exceed its limit")
+        if (
+            self.render_execution_count
+            + self.render_checkpoint_reuse_count
+            + self.render_singleflight_join_count
+            > self.slide_count * 2
+        ):
+            raise ValueError("render accounting exceeds the bounded slide count")
+        if self.chromium_process_launch_count != self.render_batch_execution_count:
+            raise ValueError("each render batch must own exactly one Chromium process")
+        if (
+            self.browser_reuse_count
+            != self.render_execution_count - self.render_batch_execution_count
+        ):
+            raise ValueError("browser reuse count must match batched fresh slides")
+        return self
+
+
+class OperationExecutionReceiptV2(PublicWireModel):
+    schema_version: Literal["operation-execution-receipt/v2"] = (
+        "operation-execution-receipt/v2"
+    )
+    attempt_number: int = Field(ge=0)
+    retry_count: int = Field(ge=0)
+    max_attempts: int = Field(ge=1)
+    queue_position: int | None = Field(default=None, ge=1)
+    stage: OperationPhase | None = None
+    publication: Literal["pending", "published", "unavailable"]
+    export: Literal["not_requested", "pending", "running", "completed", "failed"]
+    timing: PublicExportExecutionReceiptV1 | None = None
+
+    @model_validator(mode="after")
+    def validate_attempts_and_timing(self) -> "OperationExecutionReceiptV2":
+        if self.export == "not_requested" and self.timing is not None:
+            raise ValueError("generation operations cannot carry export timing")
+        return self
+
+
 class OperationStatusV2(PublicWireModel):
     schema_version: Literal["operation-status/v2"] = "operation-status/v2"
     operation_id: str = Field(pattern=PUBLIC_ID_PATTERN)
@@ -321,6 +514,7 @@ class OperationStatusV2(PublicWireModel):
     absolute_deadline_at: AwareDatetime
     error: PublicOperationErrorV2 | None = None
     generation_timing_receipt: dict[str, Any] | None = None
+    execution_receipt: OperationExecutionReceiptV2 | None = None
     quality_receipt: QualityReceiptV3 | None = None
     release_readiness: Literal["ready", "blocked", "not_assessed"] = "not_assessed"
     artifacts: list[PublicArtifactV2] = Field(default_factory=list)

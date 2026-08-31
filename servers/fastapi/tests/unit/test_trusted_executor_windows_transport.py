@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -111,6 +112,7 @@ def test_windows_local_composition_rejects_production_even_with_local_policy(
 
 def test_windows_local_transport_runs_bounded_stdio_and_publishes_exact_output(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     owner_id = uuid.uuid4()
     operation_id = uuid.uuid4()
@@ -198,6 +200,7 @@ sys.stdout.write(sys.argv[4])
 
     async def run() -> None:
         try:
+            invocation_lower_bound = datetime.now(timezone.utc)
             decoded = await execute_isolated_worker_job(
                 job,
                 presentation_id=presentation_id,
@@ -226,6 +229,54 @@ sys.stdout.write(sys.argv[4])
                 isolation_attestation["controls"]["network-none"]["status"]
                 == "unsupported"
             )
+            from services.public_export_operation import _resource_summary
+            from services.trusted_executor.dispatch_evidence import (
+                DISPATCH_EVIDENCE_KEY, PRIVATE_DISPATCH_EVIDENCE_KEY, PRIVATE_DISPATCH_GAPS_KEY,
+                begin_supervised_invocation, validate_supervised_dispatch_evidence,
+            )
+            from services.workspace_operation_runner import sanitize_workspace_event_payload
+
+            evidence = decoded.resource_metrics[DISPATCH_EVIDENCE_KEY]
+            assert validate_supervised_dispatch_evidence(evidence) == evidence
+            start = datetime.fromisoformat(evidence["invocationStartedAtUtc"])
+            finish = datetime.fromisoformat(evidence["treeZeroConfirmedAtUtc"])
+            assert invocation_lower_bound <= start <= finish <= datetime.now(timezone.utc)
+            assert evidence["durationMillis"] > 0 and evidence["utcClockRegressed"] is False
+            assert evidence["operationId"] == str(operation_id)
+            assert evidence["role"] == job.role and evidence["fencingToken"] == job.fencing_token
+            assert evidence["attemptTokenSha256"] == result["attemptTokenSha256"]
+            assert evidence["inputDigest"] == input_digest and evidence["inputBytes"] == len(input_payload)
+            assert evidence["outputDigest"] == output_digest and evidence["outputBytes"] == len(output_payload)
+            assert evidence["outcome"] == "succeeded" and evidence["productionEligible"] is False
+            assert evidence["externalAttestationStatus"] == "not-collected"
+            assert evidence["workerRuntimeIdentity"]["executableSha256"] is not None
+            assert "peakHandleCount" not in evidence["resourceMetrics"]
+            assert "peakHandleCount" in evidence["resourceMetricGaps"]
+            serialized = json.dumps(evidence, sort_keys=True)
+            for forbidden in (
+                attempt_token, job.capability, tenant_id, str(owner_id), str(tmp_path),
+                input_reference.storage_key, output_reference.storage_key,
+                input_payload.decode(), output_payload.decode(), worker_code,
+                "PUBLIC_WORKER_CAPABILITY_KEY_FILE", "SYSTEMROOT",
+            ):
+                assert forbidden not in serialized
+            summary = _resource_summary([{"role": decoded.role, **decoded.resource_metrics}])
+            assert summary[PRIVATE_DISPATCH_EVIDENCE_KEY] == [evidence]
+            assert summary[PRIVATE_DISPATCH_GAPS_KEY] == []
+            public = sanitize_workspace_event_payload(summary, operation_kind="presentation.export")
+            assert PRIVATE_DISPATCH_EVIDENCE_KEY not in public and PRIVATE_DISPATCH_GAPS_KEY not in public
+            assert evidence["evidenceDigest"] not in json.dumps(public)
+            with pytest.raises(ValueError, match="worker_dispatch_evidence_invalid"):
+                validate_supervised_dispatch_evidence({**evidence, "outputDigest": "0" * 64})
+            with pytest.raises(ValueError, match="worker_dispatch_evidence_invalid"):
+                validate_supervised_dispatch_evidence({**evidence, "path": str(tmp_path)})
+            with monkeypatch.context() as scoped_patch:
+                def unavailable_executable(*_args, **_kwargs):
+                    raise PermissionError("private path must not escape")
+                scoped_patch.setattr(Path, "open", unavailable_executable)
+                unavailable = begin_supervised_invocation((sys.executable, "-m", "workers.public_render_worker"))
+            assert unavailable.runtime_identity["executableSha256"] is None
+            assert unavailable.runtime_identity["unavailable"] == ["executableSha256"]
         finally:
             await runtime.close()
 

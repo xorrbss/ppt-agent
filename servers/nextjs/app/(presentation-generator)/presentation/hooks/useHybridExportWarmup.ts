@@ -15,6 +15,20 @@ interface UseHybridExportWarmupOptions {
   isStreaming: boolean | null;
 }
 
+function presentationRevision(value: unknown): number | null {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    !("revision" in value) ||
+    typeof value.revision !== "number" ||
+    !Number.isSafeInteger(value.revision) ||
+    value.revision < 0
+  ) {
+    return null;
+  }
+  return value.revision;
+}
+
 export const useHybridExportWarmup = ({
   presentationId,
   title,
@@ -59,6 +73,12 @@ export const useHybridExportWarmup = ({
 
     const safeFileName = buildSafeExportFileName(current.title, "pptx");
     const safeTitle = safeFileName.replace(/\.pptx$/i, "");
+    const expectedPresentationRevision = presentationRevision(
+      current.presentationData,
+    );
+    // A speculative warmup must not escape the same optimistic-revision fence
+    // as a user-visible export.
+    if (expectedPresentationRevision === null) return;
 
     void fetch("/api/export-presentation", {
       method: "POST",
@@ -67,6 +87,7 @@ export const useHybridExportWarmup = ({
         id: current.presentationId,
         title: safeTitle,
         pptxMode: "hybrid",
+        expectedPresentationRevision,
       }),
     })
       .then((response) => {

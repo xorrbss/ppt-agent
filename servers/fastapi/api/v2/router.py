@@ -277,14 +277,21 @@ async def download_local_development_artifact(
             byte_range=_single_byte_range(range_header),
         )
     except ArtifactBindingError as error:
+        range_not_satisfiable = str(error) == "artifact.range_not_satisfiable"
         status_code = (
             status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE
-            if str(error) == "artifact.range_not_satisfiable"
+            if range_not_satisfiable
             else status.HTTP_404_NOT_FOUND
         )
         raise HTTPException(
             status_code=status_code,
-            detail={"reasonCode": "artifact_not_found"},
+            detail={
+                "reasonCode": (
+                    "artifact_range_not_satisfiable"
+                    if range_not_satisfiable
+                    else "artifact_not_found"
+                )
+            },
         ) from error
     except (ArtifactNotFound, ArtifactStoreError, RuntimeError) as error:
         raise HTTPException(

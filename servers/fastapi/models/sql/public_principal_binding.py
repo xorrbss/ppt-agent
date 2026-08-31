@@ -59,7 +59,7 @@ class PublicPrincipalBinding(SQLModel, table=True):
     user_id: uuid.UUID = Field(
         sa_column=Column(
             Uuid,
-            ForeignKey("users.id", ondelete="CASCADE"),
+            ForeignKey("user.id", ondelete="CASCADE"),
             nullable=False,
         )
     )

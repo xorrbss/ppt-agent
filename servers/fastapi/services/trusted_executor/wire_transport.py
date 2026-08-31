@@ -17,6 +17,8 @@ import threading
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
+from datetime import datetime, timezone
+import time
 from typing import BinaryIO, Protocol
 
 from services.isolated_worker_contracts import ArtifactRef, IsolatedWorkerJob
@@ -29,6 +31,11 @@ from services.trusted_executor.process_supervisor import (
     ProcessSupervisorError,
 )
 from services.trusted_executor.product_adapter import TrustedExecutorWorkItem
+from services.trusted_executor.dispatch_evidence import (
+    DISPATCH_EVIDENCE_KEY,
+    begin_supervised_invocation,
+    seal_supervised_dispatch_evidence,
+)
 from services.trusted_executor.worker_dispatcher import (
     TrustedWorkerWireError,
     TrustedWorkerWireResult,
@@ -199,7 +206,7 @@ class SupervisedStdioWireTransport:
             reference=job.input_artifact,
             destination=primary_path,
         )
-        references = _export_bundle_references(job, primary_path)
+        references = _input_bundle_references(job, primary_path)
         staged_paths = [primary_path]
         for reference in references:
             destination = object_root.joinpath(*reference.storage_key.split("/"))
@@ -248,14 +255,17 @@ class SupervisedStdioWireTransport:
                 await asyncio.to_thread(supervisor.close)
                 raise TrustedWorkerWireError("trusted_worker_transport_closed")
             self._active.add(supervisor)
-        try:
-            process = await asyncio.to_thread(
-                supervisor.launch,
-                spec,
-                cwd=spec.filesystem.sandbox_root,
-                environment=child_environment,
-                pipe_stdio=True,
+
+        def launch_observed():
+            observation = begin_supervised_invocation((str(spec.executable), *spec.arguments))
+            process = supervisor.launch(
+                spec, cwd=spec.filesystem.sandbox_root,
+                environment=child_environment, pipe_stdio=True,
             )
+            return process, observation
+
+        try:
+            process, invocation_observation = await asyncio.to_thread(launch_observed)
             communication = asyncio.create_task(
                 asyncio.to_thread(_communicate, process, payload)
             )
@@ -277,6 +287,8 @@ class SupervisedStdioWireTransport:
                     supervisor.cancel, zero_timeout=self._zero_timeout_seconds
                 )
                 raise TrustedWorkerWireError("trusted_worker_descendants_remained")
+            tree_zero_at = datetime.now(timezone.utc)
+            tree_zero_monotonic_ns = time.perf_counter_ns()
             for reference, staged_path in zip(
                 (job.input_artifact, *references), staged_paths, strict=True
             ):
@@ -328,10 +340,35 @@ class SupervisedStdioWireTransport:
                 raise TrustedWorkerWireError("trusted_worker_success_exit_mismatch")
             output_path = output_root.joinpath(*output_reference.storage_key.split("/"))
             _verify_artifact_file(output_reference, output_path)
+            render_outputs, render_runtime = _render_output_bundle_references(
+                job,
+                output_reference=output_reference,
+                path=output_path,
+            )
+            for render_output in render_outputs:
+                render_output_path = output_root.joinpath(
+                    *render_output.storage_key.split("/")
+                )
+                _verify_artifact_file(render_output, render_output_path)
+                await self._artifact_authority.publish(
+                    reference=render_output,
+                    source=render_output_path,
+                )
             await self._artifact_authority.publish(
                 reference=output_reference,
                 source=output_path,
             )
+            if render_runtime:
+                resource_metrics = {**resource_metrics, **render_runtime}
+            resource_metrics = {
+                **resource_metrics,
+                DISPATCH_EVIDENCE_KEY: seal_supervised_dispatch_evidence(
+                    observation=invocation_observation,
+                    tree_zero_at=tree_zero_at,
+                    tree_zero_monotonic_ns=tree_zero_monotonic_ns,
+                    job=job, output=output_reference, resource_metrics=resource_metrics,
+                ),
+            }
         return TrustedWorkerWireResult(
             stdout=captured.stdout,
             exit_code=captured.exit_code,
@@ -431,40 +468,118 @@ def _verify_artifact_file(reference: ArtifactRef, path: Path) -> None:
         raise TrustedWorkerWireError("trusted_worker_artifact_digest_mismatch")
 
 
-def _export_bundle_references(job: IsolatedWorkerJob, path: Path) -> tuple[ArtifactRef, ...]:
-    if job.role != "export":
+def _input_bundle_references(
+    job: IsolatedWorkerJob, path: Path
+) -> tuple[ArtifactRef, ...]:
+    if job.role == "render" and job.input_artifact.kind != "export-bundle":
+        return ()
+    if job.role not in {"render", "export"}:
         return ()
     if job.input_artifact.size_bytes > MAX_EXPORT_BUNDLE_BYTES:
-        raise TrustedWorkerWireError("trusted_worker_export_bundle_too_large")
+        raise TrustedWorkerWireError("trusted_worker_bundle_too_large")
     try:
         with path.open("rb") as stream:
             value = json.load(stream)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise TrustedWorkerWireError("trusted_worker_export_bundle_invalid") from error
+        raise TrustedWorkerWireError("trusted_worker_bundle_invalid") from error
     if not isinstance(value, Mapping) or not isinstance(value.get("slides"), list):
-        raise TrustedWorkerWireError("trusted_worker_export_bundle_invalid")
+        raise TrustedWorkerWireError("trusted_worker_bundle_invalid")
+    if job.role == "render" and value.get("schemaVersion") != "public-render-bundle/v1":
+        raise TrustedWorkerWireError("trusted_worker_render_bundle_invalid")
     result: list[ArtifactRef] = []
     for entry in value["slides"]:
         raw = entry.get("artifactRef") if isinstance(entry, Mapping) else None
         if raw is None:
             raw = entry
         if not isinstance(raw, Mapping):
-            raise TrustedWorkerWireError("trusted_worker_export_slide_ref_invalid")
+            raise TrustedWorkerWireError("trusted_worker_bundle_slide_ref_invalid")
         try:
             reference = ArtifactRef.from_wire(raw)
         except ValueError as error:
-            raise TrustedWorkerWireError("trusted_worker_export_slide_ref_invalid") from error
+            raise TrustedWorkerWireError("trusted_worker_bundle_slide_ref_invalid") from error
+        expected_kind = "slide-html" if job.role == "render" else "slide-png"
+        expected_media_type = "text/html" if job.role == "render" else "image/png"
         if (
             reference.owner_id != job.input_artifact.owner_id
             or reference.tenant_id != job.input_artifact.tenant_id
+            or reference.kind != expected_kind
+            or reference.media_type != expected_media_type
+            or (
+                job.role == "render"
+                and reference.created_by_operation_id != job.operation_id
+            )
+        ):
+            raise TrustedWorkerWireError("trusted_worker_bundle_slide_binding_mismatch")
+        result.append(reference)
+    if not 1 <= len(result) <= 100:
+        raise TrustedWorkerWireError("trusted_worker_bundle_slide_count_invalid")
+    return tuple(result)
+
+
+def _render_output_bundle_references(
+    job: IsolatedWorkerJob,
+    *,
+    output_reference: ArtifactRef,
+    path: Path,
+) -> tuple[tuple[ArtifactRef, ...], dict[str, object]]:
+    if job.role != "render" or output_reference.kind != "export-bundle":
+        return (), {}
+    if output_reference.media_type != "application/vnd.presenton.export-bundle+json":
+        raise TrustedWorkerWireError("trusted_worker_render_output_bundle_invalid")
+    try:
+        with path.open("rb") as stream:
+            value = json.load(stream)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise TrustedWorkerWireError(
+            "trusted_worker_render_output_bundle_invalid"
+        ) from error
+    if (
+        not isinstance(value, Mapping)
+        or set(value) != {"schemaVersion", "slides", "runtime"}
+        or value.get("schemaVersion") != "public-render-result-bundle/v1"
+        or not isinstance(value.get("slides"), list)
+        or not 1 <= len(value["slides"]) <= 100
+        or not isinstance(value.get("runtime"), Mapping)
+    ):
+        raise TrustedWorkerWireError("trusted_worker_render_output_bundle_invalid")
+    outputs: list[ArtifactRef] = []
+    for index, item in enumerate(value["slides"]):
+        if (
+            not isinstance(item, Mapping)
+            or set(item) != {"slideIndex", "artifactRef"}
+            or item.get("slideIndex") != index
+            or not isinstance(item.get("artifactRef"), Mapping)
+        ):
+            raise TrustedWorkerWireError("trusted_worker_render_output_slide_invalid")
+        try:
+            reference = ArtifactRef.from_wire(item["artifactRef"])
+        except ValueError as error:
+            raise TrustedWorkerWireError(
+                "trusted_worker_render_output_slide_invalid"
+            ) from error
+        if (
+            reference.owner_id != job.input_artifact.owner_id
+            or reference.tenant_id != job.input_artifact.tenant_id
+            or reference.created_by_operation_id != job.operation_id
             or reference.kind != "slide-png"
             or reference.media_type != "image/png"
         ):
-            raise TrustedWorkerWireError("trusted_worker_export_slide_binding_mismatch")
-        result.append(reference)
-    if not 1 <= len(result) <= 100:
-        raise TrustedWorkerWireError("trusted_worker_export_slide_count_invalid")
-    return tuple(result)
+            raise TrustedWorkerWireError(
+                "trusted_worker_render_output_slide_binding_mismatch"
+            )
+        outputs.append(reference)
+    runtime = value["runtime"]
+    expected_runtime = {
+        "chromiumProcessLaunchCount": 1,
+        "browserReuseCount": len(outputs) - 1,
+        "pageSessionCount": len(outputs),
+    }
+    if dict(runtime) != expected_runtime:
+        raise TrustedWorkerWireError("trusted_worker_render_runtime_invalid")
+    return tuple(outputs), {
+        "renderBatchSlideCount": len(outputs),
+        **expected_runtime,
+    }
 
 
 def _validated_success_output(payload: bytes, job: IsolatedWorkerJob) -> ArtifactRef | None:

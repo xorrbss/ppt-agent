@@ -123,6 +123,64 @@ async def start_stage(
         return checkpoint
 
 
+async def reserve_provider_attempt(
+    *,
+    job_id: uuid.UUID,
+    slide_index: int,
+    attempt_token: str,
+    ordinal: int,
+) -> AuthoredSlideCheckpoint:
+    """Durably consume one slide-local provider ordinal before call admission.
+
+    The job-row fence prevents a stale worker from advancing the counter after
+    lease takeover. Replaying the same ordinal is idempotent; skipping or
+    decreasing an ordinal fails closed. The counter lives in the existing JSON
+    checkpoint seam so this crash fence needs no schema migration.
+    """
+
+    if isinstance(ordinal, bool) or ordinal not in {1, 2}:
+        raise ValueError("authored_provider_attempt_ordinal_invalid")
+    async with async_session_maker() as session:
+        job = await _owned_job(session, job_id, attempt_token)
+        checkpoint = await _checkpoint(session, job_id, slide_index)
+        metadata = dict(checkpoint.error) if isinstance(checkpoint.error, Mapping) else {}
+        raw_current = metadata.get("provider_attempt_count", 0)
+        current = (
+            raw_current
+            if isinstance(raw_current, int) and not isinstance(raw_current, bool)
+            else 0
+        )
+        if current not in {0, 1, 2}:
+            await session.rollback()
+            raise AuthoredStageError(
+                slide_index=slide_index,
+                stage="author",
+                code="authored_provider_attempt_checkpoint_invalid",
+                retryable=False,
+            )
+        if ordinal < current or ordinal > current + 1:
+            await session.rollback()
+            raise AuthoredStageError(
+                slide_index=slide_index,
+                stage="author",
+                code="authored_provider_attempt_checkpoint_conflict",
+                retryable=False,
+                provider_attempt_count=current,
+            )
+        if ordinal == current:
+            return checkpoint
+        metadata["provider_attempt_count"] = ordinal
+        metadata["provider_attempt_state"] = "reserved"
+        checkpoint.error = metadata
+        checkpoint.attempt_token = attempt_token
+        checkpoint.updated_at = get_current_utc_datetime()
+        job.current_stage = "author"
+        job.updated_at = checkpoint.updated_at
+        session.add_all((checkpoint, job))
+        await session.commit()
+        return checkpoint
+
+
 async def complete_stage(
     *,
     job_id: uuid.UUID,
@@ -298,6 +356,7 @@ async def fail_stage(
         code=error.code,
         slide_number=slide_index + 1,
         retryable=error.retryable,
+        provider_attempt_count=error.provider_attempt_count,
     )
     return safe
 

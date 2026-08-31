@@ -660,13 +660,13 @@ def _body_parts(
     source = text.strip()
     candidates = [line.strip() for line in source.splitlines() if line.strip()]
     if len(candidates) < 2:
-        # Preserve inline sequence markers. This is the common path for Korean
-        # outlines such as ``1분기 진단 2분기 구축 ...`` that the earlier Scene
-        # compiler incorrectly reduced to two oversized boxes.
+        # Sequence markers start at a token boundary, never inside a decimal,
+        # comparison, or version (e.g. <=99.9, v3.0). Retain inline Korean
+        # sequences such as ``1분기 진단 2분기 구축 ...`` without changing copy.
         marked = [
             item.strip()
             for item in re.split(
-                r"(?=(?:[-•▪◦]\s+|(?:\(?\d{1,2}[.)]|[Qq][1-4]|[1-4]분기)\s*))",
+                r"(?<!\S)(?=(?:[-•▪◦]\s+|(?:\(?\d{1,2}[.)]|[Qq][1-4]|[1-4]분기)\s*))",
                 source,
             )
             if item.strip()

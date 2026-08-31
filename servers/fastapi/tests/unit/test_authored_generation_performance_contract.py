@@ -1,4 +1,7 @@
+import os
 from types import SimpleNamespace
+
+import pytest
 
 from models.presentation_outline_model import (
     PresentationOutlineModel,
@@ -9,13 +12,39 @@ from services.authored_generation_progress_poller import (
     describe_authored_progress,
 )
 from services.authored_presentation_generation import (
+    _artifact_bytes_metric,
     _gate_failure_signature,
     _outline_stage_started_at,
     _use_single_slide_header_fast_path,
+    _worker_handle_count_metric,
+    _worker_peak_memory_metric,
 )
 from services.presentation_generation_operation_handler import (
     _begin_upstream_outline_timing,
 )
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows process metrics only")
+def test_windows_worker_resource_metrics_use_valid_process_handle() -> None:
+    memory = _worker_peak_memory_metric()
+    handles = _worker_handle_count_metric()
+
+    assert memory["state"] == "observed"
+    assert int(memory["value"]) > 0
+    assert handles["state"] == "observed"
+    assert int(handles["value"]) > 0
+
+
+def test_artifact_bytes_metric_observes_source_and_fails_closed(tmp_path) -> None:
+    source_path = tmp_path / "export.pptx"
+    source_bytes = b"exact-export-bytes"
+    source_path.write_bytes(source_bytes)
+
+    observation = _artifact_bytes_metric(source_path)
+
+    assert observation == {"state": "observed", "value": len(source_bytes)}
+    with pytest.raises(RuntimeError, match="^artifact_bytes_collection_failed$"):
+        _artifact_bytes_metric(tmp_path / "missing.pptx")
 
 
 def test_progress_fast_path_and_terminal_signature_contracts() -> None:

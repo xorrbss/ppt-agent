@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -52,6 +53,11 @@ from services.workspace_quality_export_operation_handlers import (
     WorkspaceQualityReviewOperationHandler,
     register_workspace_quality_export_operation_handlers,
 )
+from services.workspace_quality_operation_handler import (
+    _requires_release_recheck_after_completed_task,
+    build_export_release_review_receipt,
+    validate_export_release_review_receipt,
+)
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
 
 TABLES = [
@@ -68,6 +74,122 @@ TABLES = [
     PublicOperationAdmission.__table__,
     AsyncPresentationGenerationTaskModel.__table__,
 ]
+
+
+def test_release_review_receipt_is_evidence_and_revision_bound() -> None:
+    review_operation_id = uuid.uuid4()
+    admission = SimpleNamespace(
+        id=uuid.uuid4(),
+        planned_request_limit=8,
+        retry_request_limit=2,
+        initial_request_count=2,
+        retry_request_count=1,
+        estimated_consumed_microunits=120,
+        actual_consumed_microunits=115,
+        actual_cost_unavailable_count=0,
+    )
+    measured = {
+        "reviewed_count": 2,
+        "remaining_issue_count": 0,
+        "incomplete_measurement_count": 0,
+        "unresolved_confirmed_issue_count": 0,
+        "fixed_count": 1,
+        "slide_results": [
+            {"slide_index": 0, "remaining_issues": []},
+            {"slide_index": 1, "remaining_issues": []},
+        ],
+    }
+    runtime_binding_digest = "sha256:" + "d" * 64
+    source_render_identity_digest = "sha256:" + "e" * 64
+    result_render_identity_digest = "sha256:" + "f" * 64
+    checker_policy_digest = "sha256:" + "1" * 64
+    post_review_gate = {
+        "schemaVersion": "export-release-post-review-gate/v2",
+        "profileId": "ordinary",
+        "baseDeckHtmlDigest": "sha256:" + "a" * 64,
+        "resultDeckHtmlDigest": "sha256:" + "c" * 64,
+        "renderRuntimeBindingDigest": runtime_binding_digest,
+        "sourceRenderIdentityDigest": source_render_identity_digest,
+        "resultRenderIdentityDigest": result_render_identity_digest,
+        "checkerPolicyDigest": checker_policy_digest,
+        "fixedCount": 1,
+        "slideCount": 2,
+        "issues": [],
+        "gatePassed": True,
+    }
+    post_review_gate["evidenceDigest"] = "sha256:" + hashlib.sha256(
+        json.dumps(
+            post_review_gate,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+    ).hexdigest()
+    receipt = build_export_release_review_receipt(
+        operation_id=review_operation_id,
+        source_revision=7,
+        result_revision=8,
+        slide_count=2,
+        review_result=measured,
+        admission=admission,
+        base_deck_html_digest="sha256:" + "a" * 64,
+        base_quality_receipt_digest="sha256:" + "b" * 64,
+        result_deck_html_digest="sha256:" + "c" * 64,
+        render_runtime_binding_digest=runtime_binding_digest,
+        source_render_identity_digest=source_render_identity_digest,
+        result_render_identity_digest=result_render_identity_digest,
+        checker_policy_digest=checker_policy_digest,
+        base_evidence_kind="generation-quality-v3",
+        base_evidence_operation_id=None,
+        post_review_gate=post_review_gate,
+    )
+    assert receipt["gatePassed"] is True
+    assert validate_export_release_review_receipt(
+        receipt,
+        operation_id=review_operation_id,
+        source_revision=7,
+        result_revision=8,
+    ) == receipt["receiptDigest"].removeprefix("sha256:")
+    safe_receipt = sanitize_workspace_event_payload(
+        {"release_review_receipt": receipt},
+        operation_kind="quality.review",
+    )["release_review_receipt"]
+    assert validate_export_release_review_receipt(
+        safe_receipt,
+        operation_id=review_operation_id,
+        source_revision=7,
+        result_revision=8,
+    ) == receipt["receiptDigest"].removeprefix("sha256:")
+
+    blocked = build_export_release_review_receipt(
+        operation_id=review_operation_id,
+        source_revision=7,
+        result_revision=7,
+        slide_count=2,
+        review_result={**measured, "incomplete_measurement_count": 1},
+        admission=admission,
+        base_deck_html_digest="sha256:" + "a" * 64,
+        base_quality_receipt_digest="sha256:" + "b" * 64,
+        result_deck_html_digest="sha256:" + "c" * 64,
+        render_runtime_binding_digest=runtime_binding_digest,
+        source_render_identity_digest=source_render_identity_digest,
+        result_render_identity_digest=result_render_identity_digest,
+        checker_policy_digest=checker_policy_digest,
+        base_evidence_kind="generation-quality-v3",
+        base_evidence_operation_id=None,
+        post_review_gate=post_review_gate,
+    )
+    assert blocked["gatePassed"] is False
+    with pytest.raises(
+        NonRetryableWorkspaceOperationError,
+        match="release_quality_review_blocked",
+    ):
+        validate_export_release_review_receipt(
+            blocked,
+            operation_id=review_operation_id,
+            source_revision=7,
+            result_revision=7,
+        )
 
 
 def test_authored_vnext_hybrid_routes_to_semantic_manifest_not_legacy_master() -> None:
@@ -292,6 +414,19 @@ def test_quality_review_registration_enables_automatic_crash_recovery():
     register_workspace_quality_export_operation_handlers(registry=registry)
 
     assert registry.recovery_policy("quality.review") == "automatic"
+
+
+def test_completed_fixed_release_review_requires_same_runtime_recheck():
+    assert _requires_release_recheck_after_completed_task(
+        release_policy="release-v1",
+        review_completed=True,
+        fixed_count=1,
+    )
+    assert not _requires_release_recheck_after_completed_task(
+        release_policy="release-v1",
+        review_completed=True,
+        fixed_count=0,
+    )
 
 
 def test_quality_review_result_sanitizer_keeps_only_user_visible_summary():

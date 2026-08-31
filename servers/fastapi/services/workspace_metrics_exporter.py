@@ -13,6 +13,8 @@ import logging
 import os
 
 from services.workspace_metrics import WORKSPACE_METRICS
+from services.database import async_session_maker
+from services.public_operation_admission import public_prometheus_metrics_text
 
 
 LOGGER = logging.getLogger(__name__)
@@ -74,7 +76,11 @@ async def _handle_request(
         if len(parts) != 3 or parts[0] != b"GET":
             payload = _response("405 Method Not Allowed", b"method not allowed\n", "text/plain")
         elif parts[1] == b"/metrics":
-            body = WORKSPACE_METRICS.prometheus_text().encode("utf-8")
+            async with async_session_maker() as session:
+                public_metrics = await public_prometheus_metrics_text(session)
+            body = (
+                WORKSPACE_METRICS.prometheus_text() + public_metrics
+            ).encode("utf-8")
             payload = _response(
                 "200 OK",
                 body,

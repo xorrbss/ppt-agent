@@ -146,6 +146,22 @@ async def start_stage(
     )
 
 
+async def reserve_provider_attempt(
+    *,
+    job_id: uuid.UUID,
+    slide_index: int,
+    attempt_token: str,
+    ordinal: int,
+) -> AuthoredSlideCheckpoint:
+    _sync_session_maker()
+    return await _state.reserve_provider_attempt(
+        job_id=job_id,
+        slide_index=slide_index,
+        attempt_token=attempt_token,
+        ordinal=ordinal,
+    )
+
+
 async def complete_stage(
     *,
     job_id: uuid.UUID,
@@ -228,6 +244,7 @@ __all__ = [
     "is_retryable_exception",
     "maybe_sweep_expired_checkpoint_artifacts",
     "progress_for_task",
+    "reserve_provider_attempt",
     "read_valid_render",
     "read_valid_evidence",
     "recover_unreferenced_evidence",

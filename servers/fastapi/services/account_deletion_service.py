@@ -4,11 +4,18 @@ import datetime
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import delete, inspect, select, update
+from sqlalchemy import delete, func, inspect, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sql.presentation import PresentationModel
+from models.sql.account_deletion_request import AccountDeletionRequest
 from models.sql.authored_vnext_repository import AuthoredVNextExportJob
+from models.sql.public_artifact import (
+    PublicArtifact,
+    PublicArtifactPublication,
+    PublicExportIdentity,
+    PublicSlideCheckpoint,
+)
 from models.sql.template_v2 import TemplateV2
 from models.sql.template_v2_local_state import TemplateV2LocalState
 from models.sql.user import User
@@ -39,6 +46,49 @@ class AccountDeletionMarker:
     user_id: uuid.UUID
     generation: int
     requested_at: datetime.datetime
+
+
+async def _ensure_account_deletion_request(
+    session: AsyncSession,
+    *,
+    marker: AccountDeletionMarker,
+) -> None:
+    values = {
+        "owner_id": marker.user_id,
+        "generation": marker.generation,
+        "state": "pending",
+        "available_at": marker.requested_at,
+        "requested_at": marker.requested_at,
+        "updated_at": marker.requested_at,
+    }
+    dialect = session.bind.dialect.name if session.bind is not None else ""
+    if dialect == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert as dialect_insert
+
+        statement = dialect_insert(AccountDeletionRequest).values(**values)
+        statement = statement.on_conflict_do_nothing(index_elements=["owner_id"])
+        await session.execute(statement)
+    elif dialect == "sqlite":
+        from sqlalchemy.dialects.sqlite import insert as dialect_insert
+
+        statement = dialect_insert(AccountDeletionRequest).values(**values)
+        statement = statement.on_conflict_do_nothing(index_elements=["owner_id"])
+        await session.execute(statement)
+    else:
+        existing = await session.get(AccountDeletionRequest, marker.user_id)
+        if existing is None:
+            session.add(AccountDeletionRequest(**values))
+            await session.flush()
+
+    request = await session.get(
+        AccountDeletionRequest,
+        marker.user_id,
+        populate_existing=True,
+    )
+    if request is None or request.generation != marker.generation:
+        raise AccountDeletionFenceConflict(
+            "account deletion request generation is inconsistent"
+        )
 
 
 def _marker_from_user(user: User) -> AccountDeletionMarker:
@@ -95,27 +145,30 @@ async def mark_account_deleting(
             .execution_options(synchronize_session=False)
         )
     ).one_or_none()
-    # This commit is intentionally independent of cleanup.  A crash or
-    # external-storage failure must not reactivate sessions or admit new work.
-    await session.commit()
-
     if marked is not None:
-        return AccountDeletionMarker(
+        marker = AccountDeletionMarker(
             user_id=marked.id,
             generation=marked.deletion_generation,
             requested_at=marked.deletion_requested_at,
         )
+    else:
+        user = await session.scalar(
+            select(User)
+            .where(User.id == user_id)
+            .execution_options(populate_existing=True)
+        )
+        if user is None:
+            raise AccountNotFoundError("account does not exist")
+        if user.is_superuser:
+            raise ProtectedAccountError("administrator accounts cannot be deleted")
+        marker = _marker_from_user(user)
 
-    user = await session.scalar(
-        select(User)
-        .where(User.id == user_id)
-        .execution_options(populate_existing=True)
-    )
-    if user is None:
-        raise AccountNotFoundError("account does not exist")
-    if user.is_superuser:
-        raise ProtectedAccountError("administrator accounts cannot be deleted")
-    return _marker_from_user(user)
+    # Account revocation and its controller outbox are one durable commit.  A
+    # crash or external-storage failure after this point cannot reactivate the
+    # user and cannot lose the deletion request.
+    await _ensure_account_deletion_request(session, marker=marker)
+    await session.commit()
+    return marker
 
 
 async def lock_account_deletion_marker(
@@ -259,6 +312,103 @@ async def cancel_authored_vnext_exports_for_account(
     return int(result.rowcount or 0)
 
 
+async def retire_public_artifacts_for_account(
+    session: AsyncSession,
+    *,
+    owner_id: uuid.UUID,
+) -> int:
+    """Fence public export reuse and tombstone every account-owned object.
+
+    Public artifact rows intentionally have no user foreign key because their
+    immutable object-store identity can outlive a request transaction.  Account
+    deletion must therefore remove publication/checkpoint references and mark
+    the remaining objects for the controller-owned retention worker before the
+    user cascade commits.  Physical object deletion stays asynchronous and
+    feature-gated; a disabled collector leaves an auditable tombstone rather
+    than silently losing deletion intent.
+    """
+
+    # The target owner normally differs from the authenticated administrator.
+    # FORCE RLS therefore makes this a cross-tenant/controller scan in public
+    # PostgreSQL profiles.  Never interpret an API-role zero-row result as a
+    # completed deletion.
+    from services.database import require_public_controller_database_authority
+
+    bind = session.bind
+    if bind is None:
+        raise AccountDeletionFenceConflict(
+            "account deletion database authority is unavailable"
+        )
+    await require_public_controller_database_authority(bind)
+
+    tables_exist = await session.run_sync(
+        lambda sync_session: {
+            table: inspect(sync_session.connection()).has_table(table)
+            for table in (
+                PublicArtifact.__tablename__,
+                PublicArtifactPublication.__tablename__,
+                PublicSlideCheckpoint.__tablename__,
+                PublicExportIdentity.__tablename__,
+            )
+        }
+    )
+    if not any(tables_exist.values()):
+        return 0
+    if not all(tables_exist.values()):
+        raise AccountDeletionFenceConflict(
+            "public artifact lifecycle schema is only partially applied"
+        )
+
+    now = get_current_utc_datetime()
+    owned_artifacts = select(PublicArtifact.id).where(
+        PublicArtifact.owner_id == owner_id
+    )
+    await session.execute(
+        delete(PublicArtifactPublication).where(
+            PublicArtifactPublication.artifact_id.in_(owned_artifacts)
+        )
+    )
+    await session.execute(
+        delete(PublicSlideCheckpoint).where(
+            PublicSlideCheckpoint.artifact_id.in_(owned_artifacts)
+        )
+    )
+    await session.execute(
+        update(PublicExportIdentity)
+        .where(
+            PublicExportIdentity.owner_id == owner_id,
+            PublicExportIdentity.state.in_(("running", "succeeded")),
+        )
+        .values(
+            state="failed",
+            result_artifact_id=None,
+            error_code="account_deletion_in_progress",
+            fencing_token=PublicExportIdentity.fencing_token + 1,
+            lease_expires_at=now,
+            completed_at=now,
+            updated_at=now,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    retired = await session.execute(
+        update(PublicArtifact)
+        .where(
+            PublicArtifact.owner_id == owner_id,
+            PublicArtifact.lifecycle_state.in_(("provisional", "committed")),
+        )
+        .values(
+            lifecycle_state="tombstoned",
+            refcount=0,
+            lifecycle_revision=PublicArtifact.lifecycle_revision + 1,
+            expires_at=now,
+            tombstoned_at=func.coalesce(PublicArtifact.tombstoned_at, now),
+            updated_at=now,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    return int(retired.rowcount or 0)
+
+
 async def require_active_account_generation(
     session: AsyncSession,
     *,
@@ -310,5 +460,6 @@ __all__ = [
     "cancel_authored_vnext_exports_for_account",
     "lock_account_deletion_marker",
     "mark_account_deleting",
+    "retire_public_artifacts_for_account",
     "require_active_account_generation",
 ]

@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "key": "public-worker.local-dispatch-evidence",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Persist content-free successful local dispatch observations privately; invocation timing and executable hashes are not external sandbox attestation.",
+  "scope": [
+    "public-worker",
+    "public-export",
+    "evidence"
+  ],
+  "invariants": [
+    "Observe actual supervisor launch invocation through tree-zero confirmation with UTC and monotonic duration.",
+    "Seal verified operation role fence input output and attempt digest; preserve only allowlisted measured resource values.",
+    "Persist successful dispatch receipts privately in operation result and remove them from public projections.",
+    "Unknown executable identity and missing resource metrics remain explicit gaps; failed cancelled and crash-lost invocations are not claimed covered."
+  ],
+  "forbidden": [
+    "Raw tokens capabilities URLs paths argv environment or content in receipt",
+    "Treating local observation as external image network-isolation attestation",
+    "Inventing missing metrics or timestamps"
+  ],
+  "evidence": [
+    "servers/fastapi/services/trusted_executor/dispatch_evidence.py",
+    "servers/fastapi/services/trusted_executor/wire_transport.py",
+    "servers/fastapi/tests/unit/test_trusted_executor_windows_transport.py::test_windows_local_transport_runs_bounded_stdio_and_publishes_exact_output"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-30T21:55:23.3773002+00:00"
+}

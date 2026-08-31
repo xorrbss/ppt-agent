@@ -13,6 +13,7 @@ from typing import Any
 import urllib.parse
 
 import aiohttp
+from utils.slide_capture_glyph_probe import probe_glyph_clipping_async
 
 SLIDE_W = 1280
 SLIDE_H = 720
@@ -182,10 +183,13 @@ async def render_html_in_reusable_chrome(  # noqa: ASYNC109
                             f"Chrome pixel probe has unexpected size {probe_image.size}"
                         )
                     metrics = enrich_contrast(metrics, image, probe_image)
-                if metrics is not None:
-                    cache_metrics(cache_html or html, metrics)
                 output = io.BytesIO()
                 image.save(output, format="PNG")
+                if metrics is not None:
+                    metrics = await probe_glyph_clipping_async(
+                        html, metrics, output.getvalue(), command=command, frame_id=frame_id,
+                    )
+                    cache_metrics(cache_html or html, metrics)
 
             close_url = f"{runtime.base_url}/json/close/{target_id}"
             for _attempt in range(2):

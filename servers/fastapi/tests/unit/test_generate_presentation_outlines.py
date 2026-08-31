@@ -116,6 +116,48 @@ def test_generate_ppt_outline_returns_http_exception_chunk_on_failure():
     assert chunks[0].status_code == 408
 
 
+def test_generate_ppt_outline_raises_non_http_control_failure():
+    class PublicControlFailure(RuntimeError):
+        code = "public_provider_pricing_unavailable"
+        retryable = False
+
+    failure = PublicControlFailure("public_provider_pricing_required")
+
+    async def failing_stream(_client, **_kwargs):
+        raise failure
+        yield  # pragma: no cover
+
+    with patch.object(outline_module, "get_model", return_value="fake-model"), patch.object(
+        outline_module, "get_client", return_value=object()
+    ), patch.object(
+        outline_module,
+        "get_llm_config",
+        return_value={},
+    ), patch.object(
+        outline_module,
+        "get_generate_kwargs",
+        side_effect=lambda **kwargs: kwargs,
+    ), patch.object(
+        outline_module,
+        "stream_generate_events",
+        side_effect=failing_stream,
+    ), patch.object(
+        outline_module,
+        "handle_llm_client_exceptions",
+        return_value=failure,
+    ):
+        with pytest.raises(
+            PublicControlFailure, match="public_provider_pricing_required"
+        ):
+            _collect_async_chunks(
+                outline_module.generate_ppt_outline(
+                    content="topic",
+                    n_slides=1,
+                    language="English",
+                )
+            )
+
+
 def test_presentation_outline_model_schema_validation_rejects_invalid_ai_payload():
     invalid_payload = {"slides": [{"not_content": "missing expected key"}]}
 

@@ -202,16 +202,26 @@ async def publish_authored_presentation(
     quality_gate_receipt: dict[str, object] | None = None,
 ) -> tuple[str, float]:
     persist_started = time.monotonic()
+    # Rollback expires ORM attributes even with expire_on_commit=False. Error
+    # reporting and compensation must not implicitly reload this job afterward.
+    generation_job_id = generation_job.id if generation_job is not None else None
+    generation_task_id = (
+        generation_job.task_id if generation_job is not None else None
+    )
+    generation_request_id = (
+        generation_job.request_id if generation_job is not None else None
+    )
+    workspace_operation_id = (
+        generation_job.workspace_operation_id if generation_job is not None else None
+    )
     images_ready = False
     images_started = False
     published_path = out_path
     workspace_artifact = None
     artifact_handed_to_publish = False
     image_publication_token = (
-        f"{generation_job.workspace_operation_id}:{attempt_token}"
-        if generation_job is not None
-        and generation_job.workspace_operation_id is not None
-        and attempt_token
+        f"{workspace_operation_id}:{attempt_token}"
+        if workspace_operation_id is not None and attempt_token
         else None
     )
     presentation = existing or PresentationModel(
@@ -265,14 +275,11 @@ async def publish_authored_presentation(
         # artifact intent uses an independent session; opening it after
         # begin_publish would deadlock SQLite's single writer and could commit
         # unrelated caller UoW state.
-        if (
-            generation_job is not None
-            and generation_job.workspace_operation_id is not None
-        ):
+        if workspace_operation_id is not None:
             workspace_artifact = await prepare_workspace_generation_artifact(
                 sql_session,
                 source_path=out_path,
-                operation_id=generation_job.workspace_operation_id,
+                operation_id=workspace_operation_id,
                 presentation_id=presentation_id,
                 source_revision=expected_revision + 1,
             )
@@ -291,10 +298,10 @@ async def publish_authored_presentation(
             )
         images_ready = True
 
-        if generation_job is not None and attempt_token:
+        if generation_job_id is not None and attempt_token:
             await begin_publish(
                 sql_session,
-                job_id=generation_job.id,
+                job_id=generation_job_id,
                 attempt_token=attempt_token,
             )
 
@@ -455,9 +462,8 @@ async def publish_authored_presentation(
         sql_session.add(presentation)
         sql_session.add_all(slides)
         operation_id = (
-            generation_job.workspace_operation_id
-            if generation_job is not None
-            and generation_job.workspace_operation_id is not None
+            workspace_operation_id
+            if workspace_operation_id is not None
             else uuid.uuid5(
                 uuid.NAMESPACE_URL,
                 f"presenton:authored:{presentation_id}:{expected_revision + 1}",
@@ -517,7 +523,7 @@ async def publish_authored_presentation(
                 expected_presentation_revision=expected_revision,
                 operation_id=operation_id,
                 generation_attempt_id=(
-                    generation_job.id if generation_job is not None else None
+                    generation_job_id
                 ),
                 slides=slides,
                 htmls=htmls,
@@ -619,7 +625,7 @@ async def publish_authored_presentation(
             )
             async_status = await sql_session.get(
                 AsyncPresentationGenerationTaskModel,
-                generation_job.task_id,
+                generation_task_id,
             )
             if async_status is None:
                 raise RuntimeError("presentation_generation_task_missing")
@@ -647,7 +653,7 @@ async def publish_authored_presentation(
             if workspace_artifact is None:
                 await complete_publish(
                     sql_session,
-                    job_id=generation_job.id,
+                    job_id=generation_job_id,
                     attempt_token=attempt_token,
                 )
         if workspace_artifact is not None:
@@ -728,14 +734,14 @@ async def publish_authored_presentation(
             code="authored_slide_persist_failed",
             cause=exc,
         )
-        if generation_job is not None and attempt_token:
+        if generation_job_id is not None and attempt_token:
             await fail_stage(
-                job_id=generation_job.id,
+                job_id=generation_job_id,
                 slide_index=error.slide_index,
                 stage="persist",
                 attempt_token=attempt_token,
                 error=error,
-                request_id=generation_job.request_id,
+                request_id=generation_request_id,
             )
         raise error from exc
     return published_path, time.monotonic() - persist_started

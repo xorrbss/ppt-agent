@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "key": "artifact.shared-cas-lifetime",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Completed exports use consumer-scoped refs; shared CAS registration and deletion require the same key guard and live-reference authority.",
+  "scope": [
+    "artifact-store",
+    "public-export",
+    "workspace-publication",
+    "artifact-lifecycle"
+  ],
+  "invariants": [
+    "Reuse preserves the producer and registers a consumer ref after exact committed metadata and bounded streaming SHA/length verification.",
+    "Only public-backed journals share CAS keys; local storage keys and export attempt IDs remain unique.",
+    "PostgreSQL registration, staging and lifecycle changes acquire the same nonblocking transaction key guard before row locks.",
+    "Busy writers roll back and retry; physical deletion requires fresh READ COMMITTED evidence and no live alias or pointer.",
+    "GC preserves sibling refcounts and retention windows; SQLite and unsupported snapshot authority defer physical deletion.",
+    "Cache-only reuse reports zero worker count/duration; operation duration includes ref verification. Lossy downgrade is rejected."
+  ],
+  "forbidden": [
+    "Changing the canonical producer to impersonate a consumer.",
+    "Deleting shared bytes while another alias, refcount or pointer remains live.",
+    "Replaying tombstoned, deleted or mismatched metadata.",
+    "Claiming real PostgreSQL concurrency or production readiness from isolated tests."
+  ],
+  "evidence": [
+    "servers/fastapi/services/artifact_store.py",
+    "servers/fastapi/services/artifact_lifecycle.py",
+    "servers/fastapi/services/workspace_artifact_publication_service.py",
+    "servers/fastapi/tests/unit/test_public_artifact_store.py",
+    "servers/fastapi/tests/unit/test_public_export_identity_contract.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-30T20:17:55.3467394+00:00"
+}

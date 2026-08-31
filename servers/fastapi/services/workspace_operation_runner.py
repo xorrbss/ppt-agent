@@ -438,6 +438,9 @@ _SAFE_RESULT_PAYLOAD_KEYS_BY_KIND: dict[str, frozenset[str]] = {
             "canvas_refresh_required",
             "canvas_refresh_slide_index",
             "canvas_refresh_status",
+            "release_review_receipt",
+            "release_recheck_required",
+            "release_recheck_base",
             "result",
         }
     ),
@@ -643,6 +646,60 @@ def sanitize_workspace_event_payload(
         elif operation_kind == "quality.review" and normalized == "stage_timings_ms":
             # This was normalized from approved aggregate telemetry above.
             safe[normalized] = _sanitize_quality_review_stage_timings(value)
+        elif (
+            operation_kind == "quality.review"
+            and normalized == "release_review_receipt"
+            and isinstance(value, Mapping)
+        ):
+            # Only the sealed, content-free receipt is public timeline state;
+            # detailed review/checker evidence remains on the internal task and
+            # provider admission rows.
+            safe[normalized] = {
+                key: value.get(key)
+                for key in (
+                    "schemaVersion",
+                    "operationId",
+                    "sourceRevision",
+                    "resultRevision",
+                    "baseDeckHtmlDigest",
+                    "baseQualityReceiptDigest",
+                    "resultDeckHtmlDigest",
+                    "renderRuntimeBindingDigest",
+                    "sourceRenderIdentityDigest",
+                    "resultRenderIdentityDigest",
+                    "checkerPolicyDigest",
+                    "baseEvidenceKind",
+                    "baseEvidenceOperationId",
+                    "postReviewGateDigest",
+                    "evidenceDigest",
+                    "gatePassed",
+                    "receiptDigest",
+                )
+            }
+        elif (
+            operation_kind == "quality.review"
+            and normalized == "release_recheck_base"
+            and isinstance(value, Mapping)
+        ):
+            safe[normalized] = {
+                key: value.get(key)
+                for key in (
+                    "schemaVersion",
+                    "operationId",
+                    "sourceRevision",
+                    "resultRevision",
+                    "baseDeckHtmlDigest",
+                    "baseQualityReceiptDigest",
+                    "resultDeckHtmlDigest",
+                    "renderRuntimeBindingDigest",
+                    "sourceRenderIdentityDigest",
+                    "checkerPolicyDigest",
+                    "fixedCount",
+                    "sourceReadbackReissueRequired",
+                    "recheckRequired",
+                    "receiptDigest",
+                )
+            }
         elif operation_kind == "quality.review" and normalized == "result" and isinstance(value, Mapping):
             # A nested result is emitted for live timeline projection.  Strip
             # another nested result to keep recursion bounded for hostile data.

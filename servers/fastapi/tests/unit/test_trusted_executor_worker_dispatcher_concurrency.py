@@ -95,7 +95,7 @@ def _dispatcher(tmp_path: Path, transport: _BlockingTransport, *, global_cap: in
                 node_cap=global_cap,
                 tenant_cap=global_cap,
                 owner_cap=global_cap,
-                presentation_cap=1,
+                presentation_cap=global_cap,
             )
         )
     )
@@ -165,7 +165,7 @@ async def _concurrent_dispatch(tmp_path: Path) -> None:
     ]
 
 
-def test_dispatcher_queues_concurrent_work_sharing_one_operation_generation(
+def test_dispatcher_runs_bounded_parallel_work_sharing_one_operation_generation(
     tmp_path: Path,
 ) -> None:
     asyncio.run(_same_operation_dispatch(tmp_path))
@@ -185,7 +185,7 @@ async def _same_operation_dispatch(tmp_path: Path) -> None:
     second_job = _job(
         owner_id=owner_id,
         operation_id=operation_id,
-        fencing_token=32,
+        fencing_token=31,
     )
 
     async def execute(job: IsolatedWorkerJob):
@@ -200,21 +200,26 @@ async def _same_operation_dispatch(tmp_path: Path) -> None:
     first = asyncio.create_task(execute(first_job))
     assert await transport.started.get() == operation_id
     second = asyncio.create_task(execute(second_job))
-    with pytest.raises(asyncio.TimeoutError):
-        await asyncio.wait_for(transport.started.get(), timeout=0.05)
-
-    transport.release(operation_id)
     assert await asyncio.wait_for(transport.started.get(), timeout=1) == operation_id
+    assert transport.maximum_active == 2
+    transport.release(operation_id)
     transport.release(operation_id)
     results = await asyncio.gather(first, second)
 
-    assert [result.stdout for result in results] == [b"fence-31", b"fence-32"]
+    assert [result.stdout for result in results] == [b"fence-31", b"fence-31"]
     assert [(operation, fence) for operation, fence, _ in transport.bindings] == [
         (operation_id, 31),
-        (operation_id, 32),
+        (operation_id, 31),
     ]
     assert transport.bindings[0][2].startswith("fence-31-")
-    assert transport.bindings[1][2].startswith("fence-32-")
+    assert transport.bindings[1][2].startswith("fence-31-")
+    assert transport.bindings[0][2] != transport.bindings[1][2]
+    dispatch_ids = [result.resource_metrics["trustedDispatchId"] for result in results]
+    assert len(set(dispatch_ids)) == 2
+    assert all(
+        result.resource_metrics["trustedSchedulerQueueWaitMs"] >= 0
+        for result in results
+    )
 
 
 def test_cancelling_a_cap_blocked_dispatch_removes_it_before_transport(

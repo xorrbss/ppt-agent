@@ -12,6 +12,7 @@ blocked preflight, never a fake PASS.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from hashlib import sha256
 import json
 import os
@@ -19,6 +20,7 @@ from pathlib import Path
 import time
 from typing import Any
 import uuid
+from urllib.parse import urlsplit
 
 import pytest
 import requests
@@ -37,6 +39,7 @@ _DATABASE_URL_ENV = "PUBLIC_V2_WINDOWS_PRODUCT_E2E_DATABASE_URL"
 _USERNAME_ENV = "PUBLIC_V2_WINDOWS_PRODUCT_E2E_USERNAME"
 _PASSWORD_ENV = "PUBLIC_V2_WINDOWS_PRODUCT_E2E_PASSWORD"
 _TIMEOUT_ENV = "PUBLIC_V2_WINDOWS_PRODUCT_E2E_TIMEOUT_SECONDS"
+_ARTIFACT_DIR_ENV = "PUBLIC_V2_WINDOWS_PRODUCT_E2E_ARTIFACT_DIR"
 
 
 def _required(name: str) -> str:
@@ -69,13 +72,17 @@ def _json(response: requests.Response) -> dict[str, Any]:
 def _http_evidence(response: requests.Response) -> dict[str, Any]:
     """Return safe method/path/status/body evidence for an RC route failure."""
 
-    try:
-        body: object = response.json()
-    except ValueError:
-        body = response.text[:2048]
+    parsed = urlsplit(response.url)
+    if parsed.query:
+        body: object = "signed_response_body_not_logged"
+    else:
+        try:
+            body = response.json()
+        except ValueError:
+            body = response.text[:2048]
     return {
         "method": response.request.method,
-        "url": response.url,
+        "path": parsed.path,
         "statusCode": response.status_code,
         "allow": response.headers.get("Allow"),
         "body": body,
@@ -216,9 +223,193 @@ def _assert_supervised_export_output(
     assert observed_size == size_bytes
 
 
+def _assert_publication_artifact(
+    database_url: str,
+    *,
+    operation: WorkspaceOperation,
+    artifact: dict[str, Any],
+) -> PublicArtifact:
+    engine = create_engine(database_url, pool_pre_ping=True)
+    try:
+        with Session(engine) as session:
+            publication = session.scalar(
+                select(PublicArtifactPublication).where(
+                    PublicArtifactPublication.operation_id == operation.id
+                )
+            )
+            assert publication is not None
+            assert publication.fencing_token == operation.fencing_token
+            public_artifact = session.get(PublicArtifact, publication.artifact_id)
+            assert public_artifact is not None
+            assert public_artifact.lifecycle_state == "committed"
+            assert f"sha256:{public_artifact.sha256}" == artifact["digest"]
+            assert public_artifact.size_bytes == artifact["sizeBytes"]
+            session.expunge(public_artifact)
+            return public_artifact
+    finally:
+        engine.dispose()
+
+
+def _download_published_artifact(
+    client: requests.Session,
+    *,
+    base_url: str,
+    artifact: dict[str, Any],
+    operation_id: str,
+) -> dict[str, Any]:
+    """Prove 303/206/full digest once and retain a COM-consumable artifact."""
+
+    artifact_root = Path(_required(_ARTIFACT_DIR_ENV))
+    assert artifact_root.is_absolute()
+    artifact_root.mkdir(parents=True, exist_ok=True)
+    suffix = ".pptx" if artifact["kind"] == "presentation-pptx" else ".pdf"
+    target = artifact_root / f"{operation_id}{suffix}"
+    assert not target.exists(), "live_product_path_artifact_target_already_exists"
+
+    started_at = datetime.now(timezone.utc).isoformat()
+    started = time.monotonic()
+    grant = client.get(
+        f"{base_url}{artifact['download']}", allow_redirects=False, timeout=30
+    )
+    _require_status(grant, 303)
+    redirected_at = datetime.now(timezone.utc).isoformat()
+    signed_url = grant.headers.get("Location")
+    assert signed_url and signed_url.startswith(("http://", "https://"))
+    ranged = requests.get(
+        signed_url,
+        headers={"Range": "bytes=0-1023"},
+        stream=True,
+        timeout=30,
+    )
+    _require_status(ranged, 206)
+    assert ranged.headers.get("Content-Range", "").startswith("bytes 0-")
+    range_body = b"".join(ranged.iter_content(chunk_size=64 * 1024))
+    assert len(range_body) == min(1024, artifact["sizeBytes"])
+    range_completed_at = datetime.now(timezone.utc).isoformat()
+
+    streamed = requests.get(signed_url, stream=True, timeout=30)
+    _require_status(streamed, 200)
+    digest = sha256()
+    size_bytes = 0
+    with target.open("xb") as output:
+        for chunk in streamed.iter_content(chunk_size=1024 * 1024):
+            if chunk:
+                output.write(chunk)
+                digest.update(chunk)
+                size_bytes += len(chunk)
+    assert f"sha256:{digest.hexdigest()}" == artifact["digest"]
+    assert size_bytes == artifact["sizeBytes"]
+    completed_at = datetime.now(timezone.utc).isoformat()
+    return {
+        "operationId": operation_id,
+        "artifactId": artifact["artifactId"],
+        "kind": artifact["kind"],
+        "digest": artifact["digest"],
+        "sizeBytes": artifact["sizeBytes"],
+        "path": str(target),
+        "downloadEvidence": {
+            "redirectStatus": grant.status_code,
+            "rangeStatus": ranged.status_code,
+            "fullStatus": streamed.status_code,
+            "startedAt": started_at,
+            "redirectedAt": redirected_at,
+            "rangeCompletedAt": range_completed_at,
+            "completedAt": completed_at,
+            "durationMillis": round((time.monotonic() - started) * 1000, 3),
+            "locationDigest": "sha256:" + sha256(signed_url.encode()).hexdigest(),
+            "contentRange": ranged.headers["Content-Range"],
+            "rangeBytes": len(range_body),
+            "rangeDigest": "sha256:" + sha256(range_body).hexdigest(),
+            "fullDigest": artifact["digest"],
+        },
+    }
+
+
+def _source_manifest_observation() -> dict[str, Any]:
+    """Bind listed source bytes at actual observation time, never retroactively."""
+    raw_path = os.getenv("PUBLIC_V2_RC_SOURCE_MANIFEST_PATH", "").strip()
+    if not raw_path:
+        return {"status": "not-collected"}
+    repo = Path(__file__).resolve().parents[4]
+    source_path = Path(raw_path).resolve(strict=True)
+    assert source_path.is_relative_to(repo / "artifacts")
+    encoded = source_path.read_bytes()
+    manifest = json.loads(encoded)
+    assert manifest["schemaVersion"] == "public-service-source-manifest/v1"
+    for item in manifest["files"]:
+        source = (repo / item["path"]).resolve(strict=True)
+        assert source.is_relative_to(repo)
+        assert "sha256:" + sha256(source.read_bytes()).hexdigest() == item["sha256"], item["path"]
+    return {
+        "status": "listed-source-bytes-verified",
+        "observedAt": datetime.now(timezone.utc).isoformat(),
+        "releaseCandidate": "sha256:" + sha256(encoded).hexdigest(),
+        "sourceCommit": manifest["sourceTreeCommit"],
+        "manifestPath": str(source_path),
+        "fileCount": len(manifest["files"]),
+    }
+
+
+def _terminal_database_observation(operation, admission, events) -> dict[str, Any]:
+    def instant(value):
+        return value.isoformat() if value is not None else None
+
+    return {
+        "observedAt": datetime.now(timezone.utc).isoformat(),
+        "operationId": str(operation.id), "state": operation.state,
+        "attemptNumber": operation.attempt_number, "fencingToken": operation.fencing_token,
+        "startedAt": instant(operation.started_at), "completedAt": instant(operation.completed_at),
+        "resultRevision": operation.result_revision, "admissionState": admission.state,
+        "events": [{"sequence": event.sequence, "type": event.event_type,
+                    "payloadDigest": "sha256:" + sha256(json.dumps(event.payload, sort_keys=True,
+                        ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode()).hexdigest()}
+                   for event in events],
+        "workerDispatchEvidence": (operation.result or {}).get("_worker_dispatch_evidence", []),
+        "workerDispatchEvidenceGaps": (operation.result or {}).get("_worker_dispatch_evidence_gaps", []),
+    }
+
+
+def _assert_verified_public_quality(status: dict[str, Any]) -> None:
+    """Require bound checker evidence, not merely a successful export state."""
+
+    quality = status.get("qualityReceipt")
+    assert isinstance(quality, dict), "live_product_path_quality_receipt_missing"
+    assert quality["schemaVersion"] == "quality-receipt/v3"
+    assert quality["operationId"] == status["operationId"]
+    assert quality["presentationId"] == status["presentationId"]
+    assert quality["sourceRevision"] == status["sourceRevision"]
+    assert len(status["artifacts"]) == 1
+    assert quality["artifactDigest"] == status["artifacts"][0]["digest"]
+    for name in (
+        "contentBrief", "authoring", "geometryFont", "imageContentIntegrity",
+        "visualReview", "performance", "nativeCoverageOoxml",
+    ):
+        domain = quality[name]
+        assert isinstance(domain["required"], bool)
+        if name in {"authoring", "geometryFont"}:
+            assert domain["required"] is True
+        if domain["required"]:
+            assert domain["status"] == "passed", {"domain": name, "result": domain}
+        if domain["status"] == "passed":
+            evidence = domain["evidence"]
+            assert evidence["checkerVersion"]
+            assert evidence["measurements"] and evidence["thresholds"]
+            for field in ("inputDigest", "outputDigest"):
+                digest = evidence[field]
+                assert isinstance(digest, str) and digest.startswith("sha256:")
+                assert len(digest) == 71
+                assert all(char in "0123456789abcdef" for char in digest[7:])
+    # This is the artifact's required-checker verdict, not operational release
+    # promotion, external isolation proof, or deployment authorization.
+    assert quality["releaseReadiness"] == "ready"
+    assert status["releaseReadiness"] == "ready"
+
+
 def test_live_http_generation_then_fidelity_export_reaches_artifact_publication() -> None:
     if os.getenv(_ENABLE_ENV, "").strip() != "1":
         pytest.skip(f"set {_ENABLE_ENV}=1 for the owned live RC stack")
+
+    source_before = _source_manifest_observation()
 
     # The launcher supplies random credentials through its child environment and
     # deliberately never emits either the password or the session cookie.
@@ -265,10 +456,10 @@ def test_live_http_generation_then_fidelity_export_reaches_artifact_publication(
         generation_operation, generation_admission, generation_events
     )
 
-    # v2 currently requires sourceRevision but its public operation projection
-    # does not expose it.  This harness reads the observed durable revision for
-    # its next HTTP request; a user-facing revision projection remains a
-    # separate public-contract gap and is not hidden by this assertion.
+    public_source_revision = generation_status.get("sourceRevision")
+    assert isinstance(public_source_revision, int)
+    assert public_source_revision >= 0
+    assert public_source_revision == presentation.revision
     _verify_export_method_contract(
         client, base_url=base_url, presentation_id=str(presentation.id)
     )
@@ -277,7 +468,7 @@ def test_live_http_generation_then_fidelity_export_reaches_artifact_publication(
         headers={"Idempotency-Key": "live-rc-export-001"},
         json={
             "schemaVersion": "presentation-export-request/v2",
-            "sourceRevision": presentation.revision,
+            "sourceRevision": public_source_revision,
             "output": {"format": "pptx", "mode": "fidelity-raster"},
             "qualityPolicy": "release-v1",
         },
@@ -292,83 +483,205 @@ def test_live_http_generation_then_fidelity_export_reaches_artifact_publication(
         timeout_seconds=timeout_seconds,
     )
     assert export_status["status"] == "succeeded", export_status.get("error")
-    assert export_status["releaseReadiness"] in {"blocked", "ready"}
+    _assert_verified_public_quality(export_status)
     assert len(export_status["artifacts"]) == 1
+    assert export_status["executionReceipt"]["publication"] == "published"
+    assert export_status["executionReceipt"]["export"] == "completed"
+    pptx_timing = export_status["executionReceipt"]["timing"]
+    assert pptx_timing["slideCount"] == 5
+    assert pptx_timing["renderExecutionCount"] == 5
+    assert pptx_timing["renderBatchExecutionCount"] == 1
+    assert pptx_timing["chromiumProcessLaunchCount"] == 1
+    assert pptx_timing["browserReuseCount"] == 4
     artifact = export_status["artifacts"][0]
 
-    export_operation, _presentation, export_admission, export_events = _database_state(
+    export_operation, reviewed_presentation, export_admission, export_events = _database_state(
         database_url, operation_id=export_operation_id
     )
     _assert_claim_and_terminal_evidence(export_operation, export_admission, export_events)
+    reviewed_source_revision = export_status.get("sourceRevision")
+    assert isinstance(reviewed_source_revision, int)
+    assert reviewed_source_revision == reviewed_presentation.revision
 
-    engine = create_engine(database_url, pool_pre_ping=True)
-    try:
-        with Session(engine) as session:
-            publication = session.scalar(
-                select(PublicArtifactPublication).where(
-                    PublicArtifactPublication.operation_id == export_operation.id
-                )
-            )
-            assert publication is not None
-            assert publication.fencing_token == export_operation.fencing_token
-            public_artifact = session.get(PublicArtifact, publication.artifact_id)
-            assert public_artifact is not None
-            assert public_artifact.lifecycle_state == "committed"
-            assert f"sha256:{public_artifact.sha256}" == artifact["digest"]
-            assert public_artifact.size_bytes == artifact["sizeBytes"]
-            storage_key = public_artifact.storage_key
-            output_digest = public_artifact.sha256
-            output_size = public_artifact.size_bytes
-    finally:
-        engine.dispose()
+    public_artifact = _assert_publication_artifact(
+        database_url,
+        operation=export_operation,
+        artifact=artifact,
+    )
 
     _assert_supervised_export_output(
         operation_id=export_operation_id,
-        storage_key=storage_key,
-        digest=output_digest,
-        size_bytes=output_size,
+        storage_key=public_artifact.storage_key,
+        digest=public_artifact.sha256,
+        size_bytes=public_artifact.size_bytes,
     )
 
-    # The v2 endpoint authorizes first and redirects to a short-lived MinIO/S3
-    # signed URL.  Both a bounded Range read and a streaming full digest prove
-    # that the published bytes, rather than a local compatibility path, won.
-    grant = client.get(
-        f"{base_url}{artifact['download']}", allow_redirects=False, timeout=30
+    # Each format proves one authorized 303, one bounded 206, and one full
+    # streaming digest. The full stream is retained for the independent
+    # PowerPoint/readback collector without exposing the signed URL.
+    pptx_evidence = _download_published_artifact(
+        client,
+        base_url=base_url,
+        artifact=artifact,
+        operation_id=export_operation_id,
     )
-    _require_status(grant, 303)
-    signed_url = grant.headers.get("Location")
-    assert signed_url and signed_url.startswith(("http://", "https://"))
-    ranged = requests.get(
-        signed_url,
-        headers={"Range": "bytes=0-1023"},
-        stream=True,
+    pptx_evidence["executionReceipt"] = export_status.get("executionReceipt")
+    pptx_evidence["sourceRevision"] = reviewed_source_revision
+    pptx_evidence["qualityReceipt"] = export_status["qualityReceipt"]
+
+    pdf_export = client.post(
+        f"{base_url}/api/v2/presentations/{presentation.id}/exports",
+        headers={"Idempotency-Key": "live-rc-export-pdf-001"},
+        json={
+            "schemaVersion": "presentation-export-request/v2",
+            "sourceRevision": reviewed_source_revision,
+            "output": {"format": "pdf", "mode": "fidelity-raster"},
+            "qualityPolicy": "release-v1",
+        },
         timeout=30,
     )
-    _require_status(ranged, 206)
-    assert ranged.headers.get("Content-Range", "").startswith("bytes 0-")
-    assert sum(len(chunk) for chunk in ranged.iter_content(chunk_size=64 * 1024)) > 0
+    _require_status(pdf_export, 202)
+    pdf_operation_id = _json(pdf_export)["operationId"]
+    pdf_status = _poll_terminal(
+        client,
+        base_url=base_url,
+        operation_id=pdf_operation_id,
+        timeout_seconds=timeout_seconds,
+    )
+    assert pdf_status["status"] == "succeeded", pdf_status.get("error")
+    _assert_verified_public_quality(pdf_status)
+    assert len(pdf_status["artifacts"]) == 1
+    assert pdf_status["executionReceipt"]["publication"] == "published"
+    assert pdf_status["executionReceipt"]["export"] == "completed"
+    pdf_timing = pdf_status["executionReceipt"]["timing"]
+    assert pdf_timing["slideCount"] == 5
+    assert pdf_timing["renderExecutionCount"] == 0
+    assert pdf_timing["renderBatchExecutionCount"] == 0
+    assert pdf_timing["chromiumProcessLaunchCount"] == 0
+    assert pdf_timing["browserReuseCount"] == 0
+    assert pdf_timing["renderCheckpointReuseCount"] == 5
+    pdf_artifact = pdf_status["artifacts"][0]
+    assert pdf_artifact["kind"] == "presentation-pdf"
+    pdf_operation, _pdf_presentation, pdf_admission, pdf_events = _database_state(
+        database_url, operation_id=pdf_operation_id
+    )
+    _assert_claim_and_terminal_evidence(
+        pdf_operation, pdf_admission, pdf_events
+    )
+    _assert_publication_artifact(
+        database_url,
+        operation=pdf_operation,
+        artifact=pdf_artifact,
+    )
+    pdf_evidence = _download_published_artifact(
+        client,
+        base_url=base_url,
+        artifact=pdf_artifact,
+        operation_id=pdf_operation_id,
+    )
+    pdf_evidence["executionReceipt"] = pdf_status.get("executionReceipt")
+    pdf_evidence["sourceRevision"] = pdf_status.get("sourceRevision")
+    pdf_evidence["qualityReceipt"] = pdf_status["qualityReceipt"]
 
-    streamed = requests.get(signed_url, stream=True, timeout=30)
-    _require_status(streamed, 200)
-    digest = sha256()
-    size_bytes = 0
-    for chunk in streamed.iter_content(chunk_size=1024 * 1024):
-        if chunk:
-            digest.update(chunk)
-            size_bytes += len(chunk)
-    assert f"sha256:{digest.hexdigest()}" == artifact["digest"]
-    assert size_bytes == artifact["sizeBytes"]
+    # A distinct operation must publish its own authorized ref while reusing
+    # the completed canonical PPTX bytes without another render/export worker.
+    repeated_export = client.post(
+        f"{base_url}/api/v2/presentations/{presentation.id}/exports",
+        headers={"Idempotency-Key": "live-rc-export-pptx-reuse-001"},
+        json={
+            "schemaVersion": "presentation-export-request/v2",
+            "sourceRevision": reviewed_source_revision,
+            "output": {"format": "pptx", "mode": "fidelity-raster"},
+            "qualityPolicy": "release-v1",
+        },
+        timeout=30,
+    )
+    _require_status(repeated_export, 202)
+    repeated_operation_id = _json(repeated_export)["operationId"]
+    assert repeated_operation_id != export_operation_id
+    repeated_status = _poll_terminal(
+        client,
+        base_url=base_url,
+        operation_id=repeated_operation_id,
+        timeout_seconds=timeout_seconds,
+    )
+    assert repeated_status["status"] == "succeeded", repeated_status.get("error")
+    assert repeated_status["sourceRevision"] == reviewed_source_revision
+    _assert_verified_public_quality(repeated_status)
+    assert repeated_status["executionReceipt"]["publication"] == "published"
+    assert repeated_status["executionReceipt"]["export"] == "completed"
+    repeated_timing = repeated_status["executionReceipt"]["timing"]
+    assert repeated_timing["slideCount"] == 5
+    assert repeated_timing["renderExecutionCount"] == 0
+    assert repeated_timing["renderBatchExecutionCount"] == 0
+    assert repeated_timing["chromiumProcessLaunchCount"] == 0
+    assert repeated_timing["renderCheckpointReuseCount"] == 5
+    assert repeated_timing["exportWorkerMillis"] == 0
+    assert len(repeated_status["artifacts"]) == 1
+    repeated_artifact = repeated_status["artifacts"][0]
+    assert repeated_artifact["artifactId"] != artifact["artifactId"]
+    assert repeated_artifact["digest"] == artifact["digest"]
+    assert repeated_artifact["sizeBytes"] == artifact["sizeBytes"]
+    repeated_operation, _, repeated_admission, repeated_events = _database_state(
+        database_url, operation_id=repeated_operation_id
+    )
+    _assert_claim_and_terminal_evidence(
+        repeated_operation, repeated_admission, repeated_events
+    )
+    assert repeated_operation.result["worker_execution_count"] == 0
+    repeated_public_artifact = _assert_publication_artifact(
+        database_url,
+        operation=repeated_operation,
+        artifact=repeated_artifact,
+    )
+    assert repeated_public_artifact.storage_key == public_artifact.storage_key
+    repeated_evidence = _download_published_artifact(
+        client,
+        base_url=base_url,
+        artifact=repeated_artifact,
+        operation_id=repeated_operation_id,
+    )
+    repeated_evidence["executionReceipt"] = repeated_status["executionReceipt"]
+    repeated_evidence["sourceRevision"] = reviewed_source_revision
+    repeated_evidence["reuseOfOperationId"] = export_operation_id
+    repeated_evidence["qualityReceipt"] = repeated_status["qualityReceipt"]
+    assert (repeated_status["qualityReceipt"]["authoring"]["evidence"]["inputDigest"]
+            != export_status["qualityReceipt"]["authoring"]["evidence"]["inputDigest"])
+    source_after = _source_manifest_observation()
+    assert source_after.get("releaseCandidate") == source_before.get("releaseCandidate")
 
-    streamed = requests.get(signed_url, stream=True, timeout=30)
-    _require_status(streamed, 200)
-    digest = sha256()
-    size_bytes = 0
-    for chunk in streamed.iter_content(chunk_size=1024 * 1024):
-        if chunk:
-            digest.update(chunk)
-            size_bytes += len(chunk)
-    assert f"sha256:{digest.hexdigest()}" == artifact["digest"]
-    assert size_bytes == artifact["sizeBytes"]
+    evidence_manifest = {
+        "schemaVersion": "public-fidelity-export-evidence/v1",
+        "generationOperationId": generation_operation_id,
+        "presentationId": str(presentation.id),
+        "generationSourceRevision": public_source_revision,
+        "generationExecutionReceipt": generation_status.get("executionReceipt"),
+        "sourceRevision": reviewed_source_revision,
+        "slideCount": 5,
+        "exports": [pptx_evidence, pdf_evidence, repeated_evidence],
+        "powerPointReadback": "pending-independent-collector",
+        "scope": "windows-local-supervised-development",
+        "promotionReady": False,
+        "deploymentAuthorized": False,
+        "sourceBefore": source_before,
+        "sourceAfter": source_after,
+        "databaseObservations": [
+            _terminal_database_observation(generation_operation, generation_admission, generation_events),
+            _terminal_database_observation(export_operation, export_admission, export_events),
+            _terminal_database_observation(pdf_operation, pdf_admission, pdf_events),
+            _terminal_database_observation(repeated_operation, repeated_admission, repeated_events),
+        ],
+    }
+    manifest_path = (
+        Path(_required(_ARTIFACT_DIR_ENV))
+        / f"manifest-{generation_operation_id}.json"
+    )
+    assert not manifest_path.exists(), "live_product_path_manifest_already_exists"
+    manifest_path.write_text(
+        json.dumps(evidence_manifest, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    print("public_v2_artifact_manifest=" + str(manifest_path))
 
 
 def test_live_http_fidelity_export_only_uses_existing_presentation() -> None:

@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "key": "artifact.shared-cas-lifetime",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Completed exports use consumer-scoped refs; shared CAS registration and deletion require the same key guard and live-reference authority.",
+  "scope": [
+    "artifact-store",
+    "public-export",
+    "workspace-publication",
+    "artifact-lifecycle"
+  ],
+  "invariants": [
+    "Reuse preserves the producer and registers a consumer ref after exact committed metadata and bounded streaming SHA/length verification.",
+    "Only public-backed journals share CAS keys; local storage keys and export attempt IDs remain unique.",
+    "PostgreSQL registration, staging and GC take one nonblocking transaction key guard before row locks; busy writers roll back and retry.",
+    "GC requires fresh READ COMMITTED evidence, no live alias or pointer, and expired retention; SQLite or unsupported authority defers deletion.",
+    "Cancellation drains local and S3 physical deletion before guard release; abrupt process loss and ambiguous remote processing are not covered.",
+    "Cache-only reuse reports zero worker count/duration; operation duration includes ref verification. Lossy downgrade is rejected."
+  ],
+  "forbidden": [
+    "Changing the canonical producer to impersonate a consumer.",
+    "Deleting shared bytes while another alias, refcount, pointer or retention window remains live.",
+    "Replaying tombstoned, deleted or mismatched metadata.",
+    "Releasing a GC key guard while canceled native deletion is still in flight.",
+    "Claiming real PostgreSQL concurrency or production readiness from isolated tests."
+  ],
+  "evidence": [
+    "servers/fastapi/services/artifact_store.py",
+    "servers/fastapi/services/artifact_lifecycle.py",
+    "servers/fastapi/services/workspace_artifact_publication_service.py",
+    "servers/fastapi/tests/unit/test_public_artifact_store.py",
+    "servers/fastapi/tests/unit/test_public_export_identity_contract.py"
+  ],
+  "supersedes": "artifact.shared-cas-lifetime@1",
+  "recordedAt": "2026-08-30T20:59:44.9078726+00:00"
+}

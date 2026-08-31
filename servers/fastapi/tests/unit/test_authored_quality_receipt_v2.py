@@ -174,6 +174,55 @@ def test_capacity_ignores_layout_wrapper_text_but_keeps_all_qids_unique() -> Non
         "image": True,
     }
 
+    # An owner can contain both its own text and another QID's text. Its
+    # rendered_text remains full readback evidence, not a capacity counter.
+    nested = [
+        {**_metrics()["elements"][0], "has_owned_text": True, "owned_text": "Title"},
+        {
+            **_metrics()["elements"][1],
+            "rendered_text": "Body text Child text",
+            "has_owned_text": True,
+            "owned_text": " Body  text\n",
+        },
+        {
+            **_metrics()["elements"][1],
+            "qid": "body.child",
+            "rendered_text": "Child text",
+            "hasOwnedText": True,
+            "ownedText": "Child text",
+        },
+    ]
+    tight = {**_capacity(), "maxVisibleTextChars": 24}
+    result = evaluate_capacity_browser_metrics(
+        {"elements": nested}, tight,
+        expected_title="Title", expected_body="Body text Child text",
+    )
+    assert all(result["checks"].values())
+    assert result["visibleText"] == "TitleBody textChild text"
+
+    legacy = [
+        {key: value for key, value in item.items() if key not in {"owned_text", "ownedText"}}
+        for item in nested
+    ]
+    assert evaluate_capacity_browser_metrics({"elements": legacy}, tight)["checks"]["text"] is False
+    for invalid in (None, 1, True, [], {}, "", "   "):
+        malformed = [dict(item) for item in nested]
+        malformed[1]["owned_text"] = invalid
+        result = evaluate_capacity_browser_metrics({"elements": malformed}, tight)
+        assert result["checks"]["text"] is False
+        assert "browser_owned_text_unverified:body" in result["violations"]
+    conflicting = [dict(item) for item in nested]
+    conflicting[1]["ownedText"] = "different owner text"
+    assert evaluate_capacity_browser_metrics({"elements": conflicting}, tight)["checks"]["text"] is False
+    clipped = [dict(item) for item in nested]
+    clipped[1]["glyph_clipped"] = True
+    assert evaluate_capacity_browser_metrics({"elements": clipped}, tight)["checks"]["text"] is False
+    unloaded = [dict(item) for item in nested]
+    unloaded[1]["font_loaded"] = False
+    assert evaluate_capacity_browser_metrics({"elements": unloaded}, tight)["checks"]["font"] is False
+    duplicate = [*nested, dict(nested[2])]
+    assert evaluate_capacity_browser_metrics({"elements": duplicate}, tight)["checks"]["qid"] is False
+
 
 def test_supporting_text_uses_legibility_floor_without_consuming_content_qids() -> None:
     metrics = _metrics()

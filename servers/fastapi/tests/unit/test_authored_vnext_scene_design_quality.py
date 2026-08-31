@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from io import BytesIO
 import json
+import os
+from pathlib import Path
 import re
 
 import pytest
@@ -30,6 +32,8 @@ from models.authored_vnext.master.operations import MasterRevisionResponse
 from models.authored_vnext.master.slide import SlideSpecV2
 from services.authored_vnext.generation.outline import OutlineItem, plan_outline
 from services.authored_vnext.generation.scene_compiler import (
+    SceneTextFitError,
+    _body_parts,
     _compose_stacked_cards,
     _require_readable_panel,
     compile_deck_scene,
@@ -808,6 +812,47 @@ def test_dense_stacked_cards_repartition_without_dropping_semantic_copy() -> Non
         )
     assert first == second
 
+    # A flattened dense body must not split digits inside comparison/version
+    # tokens, nor split the second digit of a multi-digit sequence marker.
+    literal_body = body + "\n- Keep ≤99.9, >=3.0, release-v2.1, 12.34 and 99) source tokens unchanged."
+    recovery_bodies = [literal_body]
+    retained_path = os.environ.get("AUTHORED_SCENE_RETAINED_REQUEST_JSON")
+    if retained_path:
+        # Optional read-only run15 input; no retained customer copy enters this
+        # test file or its output. It uses the existing pinned test geometry.
+        payload = json.loads(Path(retained_path).read_text(encoding="utf-8-sig"))
+        retained = payload["outline"]["items"][4]
+        assert retained["index"] == 4 and isinstance(retained["summary"], str)
+        recovery_bodies.append(retained["summary"])
+    for source in recovery_bodies:
+        dense_source = " ".join(source.split())
+        for maximum in range(4, 0, -1):
+            projected = _body_parts(dense_source, maximum=maximum)
+            assert _semantic_copy(" ".join(projected)) == _semantic_copy(source)
+            if source == literal_body:
+                assert " ".join(projected) == dense_source
+        if source == literal_body:
+            # Preserving numeric tokens does not make this overfull fixture fit.
+            # The unchanged 16pt/readable-panel gate must still reject it.
+            with pytest.raises(SceneTextFitError):
+                _compose_stacked_cards(
+                    slide_id="slide:dense-stacked-cards",
+                    body=source_body.model_copy(update={"text": source}),
+                    contract=contract,
+                )
+            continue
+        recovered = _compose_stacked_cards(
+            slide_id="slide:dense-stacked-cards",
+            body=source_body.model_copy(update={"text": source}),
+            contract=contract,
+        )
+        recovered_text = [item for item in recovered if isinstance(item, SceneTextElement)]
+        assert _semantic_copy(" ".join(item.text for item in recovered_text)) == _semantic_copy(source)
+        assert all(item.style is not None and item.style.font_size >= 16.0 for item in recovered_text)
+        assert len(recovered_text) < len(_body_parts(source, maximum=5))
+    assert len(_body_parts("1. First 12. Second 23. Third", maximum=5)) == 3
+    assert len(_body_parts("1분기 진단 2분기 구축 3분기 확산", maximum=5)) == 3
+
 
 def test_hybrid_build_seals_non_native_text_owner_with_shape_capability(
     monkeypatch,
@@ -888,6 +933,197 @@ def test_hybrid_build_seals_non_native_text_owner_with_shape_capability(
     assert decision.capability_id == "editable.raster-island-integrity.v1"
     assert decision.reason_code == "unsupported_representation"
     assert sealed.hybrid_export.raster_islands[0].source_owner_ids == ["body.owner"]
+
+
+def test_semantic_import_retry_reuses_only_identical_scene_and_retained_telemetry(
+    monkeypatch,
+) -> None:
+    import asyncio
+    from copy import deepcopy
+    from types import SimpleNamespace
+    import uuid
+
+    from models.authored_vnext.deck import MasterDigestPin, ValidatedSlideSpecV2
+    from models.authored_vnext.deck.checkpoint import SlideValidationCheckpoint
+    from models.generate_presentation_request import GeneratePresentationRequest
+    from models.presentation_outline_model import (
+        PresentationOutlineModel,
+        SlideOutlineModel,
+    )
+    from services import authored_presentation_generation as generation
+    from services.authored_vnext.generation.effective_style import (
+        resolve_authored_composition,
+    )
+    from services.authored_vnext.generation.errors import GenerationNotFoundError
+    from services.authored_vnext.generation.scene_envelope import (
+        seal_deck_scene_envelope,
+        seal_slide_scene_envelope,
+    )
+    from services.authored_vnext.master.errors import DeckAlreadyExistsError
+
+    owner_id, presentation_id = uuid.uuid4(), uuid.uuid4()
+    contract = _contract()
+    composition, _ = resolve_authored_composition(contract, style=None)
+    pin = MasterDigestPin(
+        master_id=contract.master_id,
+        master_revision=1,
+        master_digest=contract.digest,
+        layout_registry_digest=canonical_digest(
+            contract.layouts.model_dump(mode="json", by_alias=True)
+        ),
+        font_manifest_digest=contract.font_manifest.digest,
+    )
+    slide, plan, title_bounds = _slide_and_plan(
+        contract, title="Recovery", body="Retained body", slide_id="slide:retry"
+    )
+    planned_scene = compile_slide_scene(
+        slide=slide,
+        visual_plan=plan,
+        title_bounds=title_bounds,
+        contract=contract,
+    )
+    validated = ValidatedSlideSpecV2(
+        slide=slide,
+        scene=planned_scene,
+        checkpoint=SlideValidationCheckpoint(
+            master_digest=pin.master_digest,
+            layout_registry_digest=pin.layout_registry_digest,
+            font_manifest_digest=pin.font_manifest_digest,
+            source_digest=SOURCE_DIGEST,
+            composition=composition,
+            visual_plan_digest=plan.plan_digest,
+            scene_digest=planned_scene.slide_digest,
+            quality_policy_version="retry-test/v1",
+            layout_id=slide.layout_id,
+            body_slot_id=plan.body_slot_id,
+            validated_at="2026-08-31T00:00:00Z",
+        ),
+    )
+    base = generation._seal_deck(
+        deck_id=f"deck:legacy-{presentation_id.hex}",
+        revision=1,
+        parent=None,
+        pin=pin,
+        composition=composition,
+        source_digest=SOURCE_DIGEST,
+        slides=[validated],
+    )
+
+    class ImportedRepository:
+        current = None
+        append_count = 0
+
+        def get_deck(self, deck_id):
+            assert deck_id == f"deck:semantic-{presentation_id.hex}"
+            if self.current is None:
+                raise GenerationNotFoundError()
+            return self.current
+
+        def append_imported_deck(self, deck):
+            assert self.current is None
+            self.current = deck
+            self.append_count += 1
+
+    repository = ImportedRepository()
+    monkeypatch.setattr(
+        generation, "generation_repository_for_owner", lambda _owner: repository
+    )
+    monkeypatch.setattr(
+        generation,
+        "_generate_snapshot",
+        lambda **_kwargs: (
+            SimpleNamespace(
+                deck=base, operation_id=f"operation:legacy-{presentation_id.hex}"
+            ),
+            None,
+            composition,
+        ),
+    )
+
+    def reject_cache_lookup(_html):
+        raise AssertionError("retained telemetry must not consult process-local cache")
+
+    monkeypatch.setattr(
+        editable_scene_mod, "get_cached_browser_metrics", reject_cache_lookup
+    )
+    html = '<p data-qid="body.owner" data-semantic-role="body">Retained body</p>'
+    envelope = seal_deck_scene_envelope([seal_slide_scene_envelope(html, slide_index=0)])
+    metrics = {
+        "width": 1280,
+        "height": 720,
+        "fonts_ready": True,
+        "elements": [{
+            "qid": "body.owner",
+            "tag": "p",
+            "bbox": {"x": 80, "y": 180, "width": 1040, "height": 220},
+            "rendered_text": "Retained body",
+            "font_loaded": True,
+            "computed_style": {
+                "display": "block", "visibility": "visible", "opacity": "1",
+                "fontFamily": "Arial", "fontSize": "21.333px",
+                "lineHeight": "25.6px", "color": "#111827",
+                "backgroundColor": "#ffffff",
+            },
+        }],
+    }
+    png_buffer = BytesIO()
+    Image.new("RGB", (1280, 720), "white").save(png_buffer, format="PNG")
+    request = GeneratePresentationRequest(content="Retained body", n_slides=1)
+    request._authored_master_resolution = SimpleNamespace(pin=pin)
+    request._authored_composition_pin = composition
+    arguments = {
+        "request": request,
+        "presentation_id": presentation_id,
+        "outline": PresentationOutlineModel(
+            slides=[SlideOutlineModel(content="Retained body")]
+        ),
+        "owner_id": owner_id,
+        "style": SimpleNamespace(id="default"),
+        "htmls": [html],
+        "pngs": [png_buffer.getvalue()],
+        "semantic_components": list(envelope.semantic_components),
+        "scene_envelope": envelope,
+        "revision": 1,
+        "browser_metrics_by_slide": [metrics],
+    }
+
+    async def scenario():
+        monkeypatch.setattr(
+            "services.authored_vnext.generation.pipeline._now",
+            lambda: "2026-08-31T00:00:00Z",
+        )
+        first = await generation._persist_master_pinned_editable_scene_deck(**arguments)
+        stored = repository.current
+        stored_payload = stored.model_dump(mode="json", by_alias=True)
+        monkeypatch.setattr(
+            "services.authored_vnext.generation.pipeline._now",
+            lambda: "2026-08-31T01:00:00Z",
+        )
+        recovered = await generation._persist_master_pinned_editable_scene_deck(**arguments)
+        assert recovered == first == stored.scene
+        assert repository.current.model_dump(mode="json", by_alias=True) == stored_payload
+        assert repository.append_count == 1
+        assert recovered.slides[0].elements[0].bounds.x == 80
+
+        changed_metrics = deepcopy(metrics)
+        changed_metrics["elements"][0]["bbox"]["x"] = 100
+        with pytest.raises(DeckAlreadyExistsError):
+            await generation._persist_master_pinned_editable_scene_deck(
+                **{**arguments, "browser_metrics_by_slide": [changed_metrics]}
+            )
+        assert repository.current is stored
+
+        repository.current = stored.model_copy(update={"digest": "sha256:" + "0" * 64})
+        with pytest.raises(DeckAlreadyExistsError):
+            await generation._persist_master_pinned_editable_scene_deck(**arguments)
+        assert repository.append_count == 1
+
+        with pytest.raises(ValueError, match="browser telemetry count differs"):
+            await generation._persist_master_pinned_editable_scene_deck(
+                **{**arguments, "browser_metrics_by_slide": []}
+            )
+
+    asyncio.run(scenario())
 
 
 def test_three_step_process_uses_an_ascending_non_card_silhouette() -> None:

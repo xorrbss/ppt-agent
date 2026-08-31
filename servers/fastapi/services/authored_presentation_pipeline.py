@@ -19,6 +19,7 @@ from services.authored_checkpoint_service import (
     get_checkpoint,
     initialize_checkpoints,
     is_retryable_exception,
+    reserve_provider_attempt,
     should_inject_failure,
     start_stage,
 )
@@ -112,29 +113,51 @@ def _author_failure_retryable(error: BaseException) -> bool:
 
     if isinstance(error, AuthoredProviderBudgetExhausted):
         return False
+    if _terminal_provider_code(error) is not None:
+        return False
     explicit_retryable = getattr(error, "retryable", None)
     if isinstance(explicit_retryable, bool):
         return explicit_retryable
     return is_retryable_exception(error)
 
 
-def _author_stage_failure(slide_index: int, error: BaseException) -> AuthoredStageError:
+def _terminal_provider_code(error: BaseException) -> str | None:
+    """Recover a non-retryable public admission cause through safe wrappers."""
+
+    current: BaseException | None = error
+    visited: set[int] = set()
+    for _ in range(6):
+        if current is None or id(current) in visited:
+            break
+        visited.add(id(current))
+        code = getattr(current, "code", None)
+        if (
+            isinstance(code, str)
+            and code.startswith("public_provider_")
+            and getattr(current, "retryable", None) is False
+        ):
+            return code
+        nested = getattr(current, "cause", None) or getattr(current, "__cause__", None)
+        current = nested if isinstance(nested, BaseException) else None
+    return None
+
+
+def _author_stage_failure(
+    slide_index: int,
+    error: BaseException,
+    *,
+    provider_attempt_count: int | None = None,
+) -> AuthoredStageError:
     """Build the exact author-stage envelope consumed by operation retry policy."""
 
-    explicit_code = getattr(error, "code", None)
-    code = (
-        explicit_code
-        if isinstance(explicit_code, str)
-        and explicit_code.startswith("public_provider_")
-        and getattr(error, "retryable", None) is False
-        else "authored_slide_author_failed"
-    )
+    code = _terminal_provider_code(error) or "authored_slide_author_failed"
     return AuthoredStageError(
         slide_index=slide_index,
         stage="author",
         code=code,
         cause=error,
         retryable=_author_failure_retryable(error),
+        provider_attempt_count=provider_attempt_count,
     )
 
 
@@ -352,6 +375,15 @@ async def _author_illustrate_render_pipeline(
             if generation_job is not None
             else None
         )
+        prior_provider_attempt_count = 0
+        if checkpoint is not None and isinstance(checkpoint.error, Mapping):
+            raw_prior_attempts = checkpoint.error.get("provider_attempt_count")
+            if (
+                isinstance(raw_prior_attempts, int)
+                and not isinstance(raw_prior_attempts, bool)
+            ):
+                prior_provider_attempt_count = min(2, max(0, raw_prior_attempts))
+        author_provider_attempt_count = prior_provider_attempt_count
         durable_evidence = None
         if checkpoint is not None and checkpoint.render_status == "completed":
             try:
@@ -383,6 +415,24 @@ async def _author_illustrate_render_pipeline(
                 # ordinal. Never risk a third billable call after recovery.
                 author_provider_attempt_count = 2
             if not html or checkpoint.author_status != "completed":
+                if author_provider_attempt_count >= 2:
+                    prior_code = (
+                        str(checkpoint.error.get("code") or "")
+                        if checkpoint is not None
+                        and isinstance(checkpoint.error, Mapping)
+                        else ""
+                    )
+                    raise AuthoredStageError(
+                        slide_index=index,
+                        stage="author",
+                        code=(
+                            prior_code
+                            if prior_code.startswith("public_provider_")
+                            else "authored_provider_attempt_budget_exhausted"
+                        ),
+                        retryable=False,
+                        provider_attempt_count=author_provider_attempt_count,
+                    )
                 if checkpoint and should_inject_failure(
                     checkpoint, slide_index=index, stage="author"
                 ):
@@ -442,6 +492,29 @@ async def _author_illustrate_render_pipeline(
                                 author_kwargs["attempt_observer"] = (
                                     observe_author_attempt
                                 )
+                            if "provider_attempt_offset" in inspect.signature(
+                                author_planned_slide
+                            ).parameters:
+                                author_kwargs["provider_attempt_offset"] = (
+                                    prior_provider_attempt_count
+                                )
+                            if (
+                                generation_job is not None
+                                and "attempt_reserver" in inspect.signature(
+                                    author_planned_slide
+                                ).parameters
+                            ):
+                                async def reserve_author_attempt(ordinal: int) -> None:
+                                    await reserve_provider_attempt(
+                                        job_id=generation_job.id,
+                                        slide_index=index,
+                                        attempt_token=attempt_token,
+                                        ordinal=ordinal,
+                                    )
+
+                                author_kwargs["attempt_reserver"] = (
+                                    reserve_author_attempt
+                                )
                             html = await author_planned_slide(
                                 plan, index, **author_kwargs
                             )
@@ -454,7 +527,11 @@ async def _author_illustrate_render_pipeline(
                         retryable=False,
                     ) from exc
                 except Exception as exc:
-                    raise _author_stage_failure(index, exc) from exc
+                    raise _author_stage_failure(
+                        index,
+                        exc,
+                        provider_attempt_count=author_provider_attempt_count,
+                    ) from exc
                 finally:
                     author_work = time.monotonic() - author_started
                     await record_local_stage(latency_ms=author_work * 1000)

@@ -265,7 +265,7 @@ async def test_public_generation_without_persistence_port_is_blocked() -> None:
 
 
 @pytest.mark.anyio
-async def test_persisted_quality_gate_projects_only_verified_internal_receipts() -> None:
+async def test_persisted_quality_gate_projects_only_verified_internal_receipts(tmp_path) -> None:
     receipt_v2 = _receipt_v2()
     receipt_v3 = await create_generation_quality_receipt_v3(
         receipt_v2=receipt_v2,
@@ -325,6 +325,234 @@ async def test_persisted_quality_gate_projects_only_verified_internal_receipts()
             exporter_version="authored-ooxml/1",
             evaluated_at=datetime(2026, 8, 30, tzinfo=timezone.utc),
         )
+
+    # Exercise the actual persistence adapter across sessions, not a dict-only
+    # PASS projection. SQLite is the isolated transaction seam, not PG locking proof.
+    from copy import deepcopy
+    from types import SimpleNamespace
+    import uuid
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+    from sqlmodel import SQLModel
+    from models.sql.workspace import WorkspaceOperation, WorkspaceOperationEvent
+    from services.public_quality_receipt_v3_store import (
+        PostgresOperationQualityReceiptV3Port, append_public_review_evidence,
+        load_public_quality_evidence, quality_evidence_digest,
+    )
+    from services.workspace_quality_operation_handler import build_export_release_review_receipt
+    from services.workspace_operation_runner import sanitize_workspace_event_payload
+
+    owner, presentation, generation_id, review_id = (uuid.uuid4() for _ in range(4))
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'quality-evidence.db'}")
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with engine.begin() as connection:
+        await connection.run_sync(lambda sync: SQLModel.metadata.create_all(
+            sync, tables=[WorkspaceOperation.__table__, WorkspaceOperationEvent.__table__]))
+    common = dict(owner_id=owner, owner_scope=str(owner), presentation_id=presentation,
+                  conversation_id=uuid.uuid4(), anchor_position=1, state="running",
+                  idempotency_key_hash="a" * 64, request_hash="b" * 64,
+                  attempt_token="private-test-lease", fencing_token=1)
+    async with factory() as session:
+        session.add(WorkspaceOperation(id=generation_id, kind="presentation.generate",
+                                      expected_revision=1, result_revision=2, **common))
+        session.add(WorkspaceOperation(id=review_id, kind="quality.review",
+                                      expected_revision=2, result_revision=3, **{**common, "anchor_position": 2}))
+        await session.commit()
+        port = PostgresOperationQualityReceiptV3Port(session, operation_id=generation_id,
+                attempt_token="private-test-lease", fencing_token=1)
+        receipt_v3 = await create_generation_quality_receipt_v3(
+            receipt_v2=receipt_v2, job_id=None, slide_roles=("cover",),
+            provider_attempt_counts=(1,), repaired_slide_indices=(),
+            capacity_evidence={"browserObserved": True, "checks": {
+                key: True for key in ("text", "title", "body", "font", "qid", "image")}, "violations": []},
+            safety_evidence={"status": "passed", "residuals": []},
+            browser_metrics=({"capabilityRegistry": capability_metadata(consumer="chromium")},),
+            visual_review_passed=False, source_manifest=None, source_readback=None,
+            design_system_prompt=capability_metadata(consumer="prompt")["registryDigest"],
+            scene_envelope={"schemaVersion": "authored-deck-scene-envelope/v1",
+                "sceneDigest": "sha256:" + "1" * 64, "sourceDigest": "sha256:" + "2" * 64,
+                "qidDigest": "sha256:" + "3" * 64},
+            persistence_port=port, durability_profile="public")
+        (await session.get(WorkspaceOperation, generation_id)).state = "succeeded"
+        await session.commit()
+    gate = {**receipt_v2.to_dict(), "qualityReceiptV3": receipt_v3.to_dict()}
+    lookup = dict(owner_id=owner, owner_scope=str(owner), presentation_id=presentation,
+                  receipt_digest=receipt_v3.receipt_digest)
+    async with factory() as session:
+        generation = await load_public_quality_evidence(session, **lookup)
+        assert generation and generation["operationId"] == str(generation_id)
+        assert await load_public_quality_evidence(session, **{**lookup, "owner_id": uuid.uuid4()}) is None
+        assert await load_public_quality_evidence(session, **{**lookup, "owner_scope": "other"}) is None
+        assert await load_public_quality_evidence(session, **{**lookup, "presentation_id": uuid.uuid4()}) is None
+    runtime, render, policy = ("sha256:" + ch * 64 for ch in "678")
+    kwargs = dict(authored_quality_gate=gate, quality_receipt_id="quality:export",
+        operation_id="export:1", presentation_id=str(presentation),
+        artifact_digest="sha256:" + "3" * 64, source_revision=2,
+        scene_digest=receipt_v2.deck_html_digest, exporter_version="public-worker-protocol/v1",
+        evaluated_at=datetime(2026, 8, 30, tzinfo=timezone.utc),
+        generation_evidence_record=generation, render_runtime_binding_digest=runtime,
+        result_render_identity_digest=render, checker_policy_digest=policy)
+    before = project_persisted_authored_quality_receipt_v3(**kwargs)
+    assert before.authoring.status == before.geometry_font.status == "passed"
+    assert before.visual_review.required and before.visual_review.status == "failed"
+    assert before.release_readiness == "blocked"
+    stale = project_persisted_authored_quality_receipt_v3(**{**kwargs,
+        "source_revision": 3, "scene_digest": "sha256:" + "4" * 64})
+    assert stale.authoring.status == stale.geometry_font.status == "failed"
+    post = {"schemaVersion": "export-release-post-review-gate/v2", "profileId": "ordinary",
+        "baseDeckHtmlDigest": receipt_v2.deck_html_digest, "resultDeckHtmlDigest": "sha256:" + "4" * 64,
+        "renderRuntimeBindingDigest": runtime, "sourceRenderIdentityDigest": "sha256:" + "5" * 64,
+        "resultRenderIdentityDigest": render, "checkerPolicyDigest": policy,
+        "fixedCount": 1, "slideCount": 1, "issues": [], "gatePassed": True}
+    post["evidenceDigest"] = quality_evidence_digest(post)
+    checker_snapshot = {}
+    review_receipt = build_export_release_review_receipt(
+        operation_id=review_id, source_revision=2, result_revision=3, slide_count=1,
+        review_result={"reviewed_count": 1, "remaining_issue_count": 0,
+            "incomplete_measurement_count": 0, "unresolved_confirmed_issue_count": 0,
+            "fixed_count": 1, "slide_results": [{"slide_index": 0}]},
+        admission=SimpleNamespace(id=uuid.uuid4(), planned_request_limit=2, retry_request_limit=1,
+            initial_request_count=1, retry_request_count=0, estimated_consumed_microunits=1,
+            actual_consumed_microunits=1, actual_cost_unavailable_count=0),
+        base_deck_html_digest=receipt_v2.deck_html_digest,
+        base_quality_receipt_digest=receipt_v3.receipt_digest,
+        result_deck_html_digest=post["resultDeckHtmlDigest"],
+        render_runtime_binding_digest=runtime, source_render_identity_digest=post["sourceRenderIdentityDigest"],
+        result_render_identity_digest=render, checker_policy_digest=policy,
+        base_evidence_kind="generation-quality-v3", base_evidence_operation_id=None,
+        post_review_gate=post, evidence_sink=checker_snapshot)
+    async with factory() as session:
+        append = dict(operation_id=review_id, attempt_token="private-test-lease",
+                      fencing_token=1, receipt=review_receipt, evidence=checker_snapshot)
+        with pytest.raises(RuntimeError, match="operation_lease_lost"):
+            await append_public_review_evidence(session, **{**append, "fencing_token": 2})
+        await append_public_review_evidence(session, **append)
+        await append_public_review_evidence(session, **append)  # exact replay
+        op = await session.get(WorkspaceOperation, review_id)
+        op.state = "succeeded"
+        op.result = sanitize_workspace_event_payload({"release_review_receipt": review_receipt},
+                                                     operation_kind="quality.review")
+        assert "checkerEvidence" not in str(op.result)
+        await session.commit()
+    async with factory() as session:
+        reviewed = await load_public_quality_evidence(session, **{**lookup,
+            "receipt_digest": review_receipt["receiptDigest"], "operation_id": review_id})
+    kwargs.update(source_revision=3, scene_digest=post["resultDeckHtmlDigest"], review_evidence_record=reviewed)
+    after = project_persisted_authored_quality_receipt_v3(**kwargs)
+    assert after.release_readiness == "ready"
+    assert after.authoring.status == after.geometry_font.status == after.visual_review.status == "passed"
+    assert after.performance.status == "not_assessed" and after.native_coverage_ooxml.status == "pending"
+    changed_artifact = project_persisted_authored_quality_receipt_v3(**{**kwargs, "artifact_digest": "sha256:" + "9" * 64})
+    assert changed_artifact.authoring.evidence.input_digest != after.authoring.evidence.input_digest
+    for bad_kwargs in ({"render_runtime_binding_digest": "sha256:" + "0" * 64},
+                       {"source_revision": 4}, {"scene_digest": "sha256:" + "0" * 64}):
+        with pytest.raises(ValueError):
+            project_persisted_authored_quality_receipt_v3(**{**kwargs, **bad_kwargs})
+    corrupt = deepcopy(reviewed)
+    corrupt["evidence"]["postReviewGate"]["issues"] = [{"code": "overflow"}]
+    with pytest.raises(ValueError, match="checker_digest_mismatch"):
+        project_persisted_authored_quality_receipt_v3(**{**kwargs, "review_evidence_record": corrupt})
+    bad_generation = deepcopy(generation)
+    bad_generation["evidence"]["checkerPayloads"]["capacity"]["checks"]["font"] = False
+    with pytest.raises(ValueError, match="generation_evidence_invalid"):
+        project_persisted_authored_quality_receipt_v3(**{**kwargs, "generation_evidence_record": bad_generation})
+
+    def successor(parent, *, operation_id, base_kind="release-review-transition"):
+        unchanged_gate = {**post, "fixedCount": 0,
+                          "baseDeckHtmlDigest": post["resultDeckHtmlDigest"],
+                          "sourceRenderIdentityDigest": render}
+        unchanged_gate.pop("evidenceDigest")
+        unchanged_gate["evidenceDigest"] = quality_evidence_digest(unchanged_gate)
+        snapshot = {}
+        receipt = build_export_release_review_receipt(
+            operation_id=operation_id, source_revision=3, result_revision=3, slide_count=1,
+            review_result={"reviewed_count": 1, "remaining_issue_count": 0,
+                "incomplete_measurement_count": 0, "unresolved_confirmed_issue_count": 0,
+                "fixed_count": 0, "slide_results": [{"slide_index": 0}]},
+            admission=SimpleNamespace(id=uuid.uuid4(), planned_request_limit=2, retry_request_limit=1,
+                initial_request_count=1, retry_request_count=0, estimated_consumed_microunits=1,
+                actual_consumed_microunits=1, actual_cost_unavailable_count=0),
+            base_deck_html_digest=post["resultDeckHtmlDigest"],
+            base_quality_receipt_digest=parent["receipt"]["receiptDigest"],
+            result_deck_html_digest=post["resultDeckHtmlDigest"],
+            render_runtime_binding_digest=runtime, source_render_identity_digest=render,
+            result_render_identity_digest=render, checker_policy_digest=policy,
+            base_evidence_kind=base_kind, base_evidence_operation_id=parent["operationId"],
+            post_review_gate=unchanged_gate, evidence_sink=snapshot)
+        return receipt, snapshot
+
+    # A real H1 root followed by up to 31 unchanged, independently sealed
+    # full-deck reviews is reusable. No ancestor header boolean is a checker.
+    parent = reviewed
+    successors = []
+    async with factory() as session:
+        for offset in range(32):
+            child_id = uuid.uuid4()
+            child_receipt, child_snapshot = successor(parent, operation_id=child_id)
+            child_op = WorkspaceOperation(id=child_id, kind="quality.review",
+                expected_revision=3, result_revision=3,
+                **{**common, "anchor_position": offset + 3, "idempotency_key_hash": child_id.hex * 2})
+            session.add(child_op)
+            await session.flush()
+            await append_public_review_evidence(session, operation_id=child_id,
+                attempt_token="private-test-lease", fencing_token=1,
+                receipt=child_receipt, evidence=child_snapshot)
+            child_op.state = "succeeded"
+            child_op.result = {"release_review_receipt": child_receipt}
+            parent = {"operationId": str(child_id), "receipt": child_receipt}
+            successors.append(parent)
+        recheck_id = uuid.uuid4()
+        recheck_receipt, recheck_snapshot = successor(reviewed, operation_id=recheck_id,
+                                                     base_kind="release-recheck-transition")
+        recheck_op = WorkspaceOperation(id=recheck_id, kind="quality.review", expected_revision=3,
+            result_revision=3, **{**common, "anchor_position": 40, "idempotency_key_hash": recheck_id.hex * 2})
+        session.add(recheck_op)
+        await session.flush()
+        await append_public_review_evidence(session, operation_id=recheck_id,
+            attempt_token="private-test-lease", fencing_token=1, receipt=recheck_receipt, evidence=recheck_snapshot)
+        recheck_op.state = "succeeded"
+        recheck_op.result = {"release_review_receipt": recheck_receipt}
+        await session.commit()
+    async with factory() as session:
+        async def load_review(item, **extra):
+            return await load_public_quality_evidence(session, **{**lookup,
+                "receipt_digest": item["receipt"]["receiptDigest"],
+                "operation_id": uuid.UUID(item["operationId"]), **extra})
+        child = await load_review(successors[0])
+        chain = await load_review(successors[30])
+        with pytest.raises(ValueError, match="chain_too_deep"):
+            await load_review(successors[31])
+        with pytest.raises(ValueError, match="chain_cycle"):
+            await load_review(successors[0], _visited_operations=(uuid.UUID(successors[0]["operationId"]),))
+        recheck = await load_review({"operationId": str(recheck_id), "receipt": recheck_receipt})
+    followed = project_persisted_authored_quality_receipt_v3(**{**kwargs, "review_evidence_record": chain})
+    assert followed.release_readiness == "ready"
+    assert followed.authoring.evidence.output_digest == after.authoring.evidence.output_digest
+    assert followed.visual_review.evidence.output_digest == chain["receipt"]["evidenceDigest"]
+    rebound = project_persisted_authored_quality_receipt_v3(**{**kwargs, "operation_id": "export:successor",
+        "artifact_digest": "sha256:" + "0" * 64, "review_evidence_record": chain})
+    assert rebound.authoring.evidence.input_digest != followed.authoring.evidence.input_digest
+    for missing in ({**child, "baseEvidenceRecord": None}, recheck):
+        blocked = project_persisted_authored_quality_receipt_v3(**{**kwargs, "review_evidence_record": missing})
+        assert blocked.authoring.status == blocked.geometry_font.status == "failed"
+        assert blocked.visual_review.status == "passed" and blocked.release_readiness == "blocked"
+    for key, invalid in (("ownerId", str(uuid.uuid4())), ("ownerScope", "other"),
+                         ("presentationId", str(uuid.uuid4())), ("resultRevision", 2)):
+        corrupt = deepcopy(child)
+        corrupt["baseEvidenceRecord"][key] = invalid
+        with pytest.raises(ValueError, match="chain_binding_mismatch"):
+            project_persisted_authored_quality_receipt_v3(**{**kwargs, "review_evidence_record": corrupt})
+    corrupt = deepcopy(child)
+    corrupt["baseEvidenceRecord"]["evidence"]["postReviewGate"]["issues"] = [{"code": "clipped"}]
+    with pytest.raises(ValueError, match="checker_digest_mismatch"):
+        project_persisted_authored_quality_receipt_v3(**{**kwargs, "review_evidence_record": corrupt})
+    async with factory() as session:
+        (await session.get(WorkspaceOperation, review_id)).state = "failed"
+        await session.commit()
+        child_without_completed_root = await load_public_quality_evidence(session, **{**lookup,
+            "receipt_digest": successors[0]["receipt"]["receiptDigest"],
+            "operation_id": uuid.UUID(successors[0]["operationId"])})
+        assert child_without_completed_root["baseEvidenceRecord"] is None
+    await engine.dispose()
 
 
 def test_export_adapter_accepts_registry_bound_hybrid_readback() -> None:

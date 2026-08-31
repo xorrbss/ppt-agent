@@ -13,10 +13,15 @@ import html as html_lib
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
+from hashlib import sha256
 from html.parser import HTMLParser
 from typing import Any, Literal, Sequence
 
-from utils.authored_dom_quality import build_compact_dom_map, normalize_browser_metrics
+from utils.authored_dom_quality import (
+    build_compact_dom_map,
+    ensure_authored_qids,
+    normalize_browser_metrics,
+)
 
 
 CompositionProfileId = Literal["ordinary", "source-verbatim", "source-outline"]
@@ -31,6 +36,7 @@ _LOW_PRIORITY_OWNER_QID = re.compile(
     flags=re.IGNORECASE,
 )
 _OWNER_TEXT_REDUCER_MARKER = "authored-owner-text-capacity-reducer-v1"
+_OWNED_TEXT_PAINT_ORDER_MARKER = "authored-owned-text-paint-order-v1"
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,6 +158,14 @@ class SlideCapacity:
             if self.max_images
             else "Use no image slots"
         )
+        decoration_rule = (
+            " Decorative paint, including rings, glows, and corner outlines, must fit "
+            "fully inside the viewport and every clipping ancestor, including rounded corners. "
+            "Adjust decoration position or size without changing text or core content; "
+            "never rely on overflow clipping to crop decoration."
+            if profile.profile_id == "ordinary"
+            else ""
+        )
         return (
             "SERVER-FROZEN COMPOSITION ENVELOPE (do not negotiate): "
             "viewport 1280x720; keep every painted target inside the viewport; "
@@ -161,7 +175,7 @@ class SlideCapacity:
             "across title, body, and supporting owners <= "
             f"{self.max_visible_text_chars} chars; {image_rule}; "
             f"keep semantic targets <= {self.max_qids}; never use text below "
-            f"{self.min_font_px}px. {source_rule}"
+            f"{self.min_font_px}px. {source_rule}{decoration_rule}"
         )
 
 
@@ -332,12 +346,29 @@ def _normalized_rendered_text(item: dict[str, Any]) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()
 
 
+def _normalized_capacity_owned_text(item: dict[str, Any]) -> str | None:
+    """Count direct owners without changing full-text visual safety evidence."""
+
+    values = [item[key] for key in ("owned_text", "ownedText") if key in item]
+    if not values:
+        # Older telemetry can overcount nested owners, but never undercounts
+        # them. Preserve that conservative behavior without inventing evidence.
+        return _normalized_rendered_text(item)
+    if any(not isinstance(value, str) for value in values):
+        return None
+    normalized = [re.sub(r"\s+", " ", value).strip() for value in values]
+    if any(value != normalized[0] for value in normalized[1:]):
+        return None
+    return normalized[0]
+
+
 class _AuthoredStartTagCollector(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=False)
         self.tags: list[tuple[str, list[tuple[str, str | None]], str]] = []
         self.owns_text: list[bool] = []
         self.owned_text_parts: list[list[str]] = []
+        self.header_title_text_owners: set[int] = set()
         self._stack: list[tuple[str, int]] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
@@ -375,6 +406,14 @@ class _AuthoredStartTagCollector(HTMLParser):
             if _attribute_map(self.tags[index][1]).get("data-qid", "").strip():
                 self.owns_text[index] = True
                 self.owned_text_parts[index].append(data)
+                owner_seen = False
+                for _ancestor_tag, ancestor_index in reversed(self._stack):
+                    owner_seen |= ancestor_index == index
+                    part = _attribute_map(self.tags[ancestor_index][1]).get("data-header-part", "").strip().lower()
+                    if part:
+                        if part == "title" and owner_seen:
+                            self.header_title_text_owners.add(index)
+                        break
                 return
 
     def handle_entityref(self, name: str) -> None:
@@ -637,7 +676,7 @@ def ensure_authored_semantic_roles(html: str) -> str:
             owned_text = "".join(parser.owned_text_parts[tag_index])
             if tag == "img":
                 role = "image"
-            elif _is_primary_title_candidate(tag, attrs) and owns_text:
+            elif owns_text and (_is_primary_title_candidate(tag, attrs) or tag_index in parser.header_title_text_owners):
                 role = "title"
             elif _is_supporting_candidate(attrs, owned_text=owned_text):
                 role = "supporting"
@@ -662,72 +701,34 @@ def ensure_authored_semantic_roles(html: str) -> str:
     return "".join(parts)
 
 
+def canonicalize_authored_capacity_html(html: str) -> str:
+    """Use the render-bound owner namespace before counting or reducing text."""
+
+    return ensure_authored_semantic_roles(ensure_authored_qids(html))
+
+
 def aggregate_owner_capacity_violations(
     html: str,
     capacity: SlideCapacity,
 ) -> tuple[str, ...]:
-    """Reject aggregate semantic-owner excess before launching Chromium.
+    """Reject nearest-QID aggregate excess; Chromium still owns visual safety."""
 
-    This is a deliberately geometry-free admission check. Direct text belongs
-    to its nearest QID owner, so nested wrappers cannot double count the same
-    words. Chromium remains authoritative for visibility, clipping, font, and
-    measured geometry after this inexpensive provider-response boundary.
-    """
+    # Imported at the call boundary: the helper reuses this module's canonical
+    # owner parser without creating an import-time dependency cycle.
+    from services.authored_author_capacity_recovery import owner_capacity_measurements
 
-    normalized = ensure_authored_semantic_roles(html)
-    parser = _AuthoredStartTagCollector()
-    parser.feed(normalized)
-    parser.close()
-
-    content_targets = 0
-    title_chars = 0
-    body_chars = 0
-    visible_chars = 0
-    image_count = 0
-    for index, (tag, raw_attrs, _raw_tag) in enumerate(parser.tags):
-        attrs = _attribute_map(raw_attrs)
-        qid = attrs.get("data-qid", "").strip()
-        if not qid:
-            continue
-        role = attrs.get("data-semantic-role", "").strip().lower()
-        owned_text = re.sub(
-            r"\s+", " ", "".join(parser.owned_text_parts[index])
-        ).strip()
-        is_supporting = _is_supporting_role(role) or _is_supporting_candidate(
-            attrs,
-            owned_text=owned_text,
-            capacity_only=True,
-        )
-        if tag == "img":
-            image_count += 1
-            content_targets += 1
-            continue
-        if not owned_text or role == "decoration":
-            continue
-        visible_chars += len(owned_text)
-        if _is_title_role(role):
-            title_chars += len(owned_text)
-            if not is_supporting:
-                content_targets += 1
-        elif _is_body_role(role):
-            body_chars += len(owned_text)
-            if not is_supporting:
-                content_targets += 1
-
-    violations: list[str] = []
-    if content_targets > capacity.max_qids:
-        violations.append(f"owner_qids:{content_targets}>{capacity.max_qids}")
-    if title_chars > capacity.title_max_chars:
-        violations.append(f"owner_title:{title_chars}>{capacity.title_max_chars}")
-    if body_chars > capacity.body_max_chars:
-        violations.append(f"owner_body:{body_chars}>{capacity.body_max_chars}")
-    if visible_chars > capacity.max_visible_text_chars:
-        violations.append(
-            f"owner_visible_text:{visible_chars}>{capacity.max_visible_text_chars}"
-        )
-    if image_count > capacity.max_images:
-        violations.append(f"owner_images:{image_count}>{capacity.max_images}")
-    return tuple(violations)
+    _normalized, measured, _owners = owner_capacity_measurements(html)
+    return tuple(
+        f"{key}:{measured[key]}>{limit}"
+        for key, limit in {
+            "owner_qids": capacity.max_qids,
+            "owner_title": capacity.title_max_chars,
+            "owner_body": capacity.body_max_chars,
+            "owner_visible_text": capacity.max_visible_text_chars,
+            "owner_images": capacity.max_images,
+        }.items()
+        if measured[key] > limit
+    )
 
 
 def semantic_repair_boundary_violations(
@@ -934,7 +935,7 @@ def reduce_authored_owner_text_capacity(
         or "data-source-block-id" in html.lower()
     ):
         return html
-    normalized = ensure_authored_semantic_roles(html)
+    normalized = canonicalize_authored_capacity_html(html)
     violations = aggregate_owner_capacity_violations(normalized, capacity)
     measured: dict[str, tuple[int, int]] = {}
     for violation in violations:
@@ -1281,6 +1282,13 @@ def capacity_violations(
             tag = str(item.get("tag", "")).lower()
             rendered = _normalized_rendered_text(item)
             owned_value = item.get("has_owned_text", item.get("hasOwnedText"))
+            owned_capacity_text = _normalized_capacity_owned_text(item)
+            if owned_capacity_text is None or (
+                ("owned_text" in item or "ownedText" in item)
+                and owned_value is True
+                and not owned_capacity_text
+            ):
+                violations.append(f"browser_owned_text_unverified:{qid or 'unknown'}")
             owns_text = (
                 owned_value is True
                 if isinstance(owned_value, bool)
@@ -1299,8 +1307,8 @@ def capacity_violations(
             )
             is_decoration = role == "decoration"
             owns_content_text = owns_text and not is_decoration
-            if owns_content_text and rendered:
-                browser_visible_text_parts.append(rendered)
+            if owns_content_text and owned_capacity_text:
+                browser_visible_text_parts.append(owned_capacity_text)
             if (
                 owns_content_text
                 and role_bucket in {"title", "body"}
@@ -1411,10 +1419,10 @@ def capacity_violations(
         ):
             violations.append("browser_body_role_missing")
         browser_title_chars = sum(
-            len(_normalized_rendered_text(item)) for item in role_nodes["title"]
+            len(_normalized_capacity_owned_text(item) or "") for item in role_nodes["title"]
         )
         browser_body_chars = sum(
-            len(_normalized_rendered_text(item)) for item in role_nodes["body"]
+            len(_normalized_capacity_owned_text(item) or "") for item in role_nodes["body"]
         )
         if browser_title_chars > capacity.title_max_chars:
             violations.append(
@@ -1470,6 +1478,13 @@ def bounded_capacity_repair_eligible(
         return False
     if capacity.role.strip().upper() != "CLOSING":
         return False
+    if reduce_authored_owner_text_capacity(
+        html,
+        capacity,
+        profile_id="ordinary",
+        allow_summarization=True,
+    ) != html:
+        return True
     return any(
         reducer(
             html,
@@ -1838,6 +1853,242 @@ def repair_authored_layout_alignment(html: str, *, role: str) -> str:
     return repaired[: insertion.start()] + marker + repaired[insertion.start() :]
 
 
+def repair_authored_owned_text_paint_order(
+    html: str, browser_metrics: Any, *, profile_id: str = "ordinary"
+) -> str:
+    """Lift one measured text-only flex/grid item above empty sibling paint.
+
+    A static flex/grid item's z-index changes paint order without introducing a
+    containing block or touching geometry. This is only a repair candidate: the
+    caller must recapture and run the unchanged quality/semantic admission.
+    """
+
+    if (
+        profile_id != "ordinary"
+        or not isinstance(html, str)
+        or _OWNED_TEXT_PAINT_ORDER_MARKER in html
+        or "data-source-" in html.lower()
+        or not isinstance(browser_metrics, Mapping)
+        or browser_metrics.get("dom_metrics_version") != "authored-dom-metrics-v16-owned-text"
+        or browser_metrics.get("width") != 1280 or browser_metrics.get("height") != 720
+        or browser_metrics.get("fonts_ready") is not True
+        or browser_metrics.get("source_digest") != "sha256:" + sha256(html.encode("utf-8")).hexdigest()
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", str(browser_metrics.get("render_digest", ""))) is None
+        or re.search(
+            r"<(?:script|link|iframe|object|embed)\b|::?(?:before|after|first-letter|first-line)\b|"
+            r"@import\b|(?:^|[;{])\s*(?:animation[\w-]*|transition[\w-]*|content|contain|isolation|perspective|will-change)\s*:",
+            html, re.IGNORECASE,
+        )
+    ):
+        return html
+
+    class DirectParents(_AuthoredStartTagCollector):
+        def __init__(self) -> None:
+            super().__init__()
+            self.parents: list[int | None] = []
+            self.valid = True
+
+        def handle_starttag(self, tag, attrs) -> None:
+            self.parents.append(self._stack[-1][1] if self._stack else None)
+            names = [name.lower() for name, _value in attrs]
+            self.valid &= len(names) == len(set(names)) and not any(name.startswith("on") for name in names)
+            super().handle_starttag(tag, attrs)
+
+        def handle_startendtag(self, tag, attrs) -> None:
+            self.parents.append(self._stack[-1][1] if self._stack else None)
+            names = [name.lower() for name, _value in attrs]
+            self.valid &= len(names) == len(set(names)) and not any(name.startswith("on") for name in names)
+            super().handle_startendtag(tag, attrs)
+
+        def handle_endtag(self, tag) -> None:
+            self.valid &= bool(self._stack and self._stack[-1][0] == tag.lower())
+            super().handle_endtag(tag)
+
+    parser = DirectParents()
+    try:
+        parser.feed(html)
+        parser.close()
+    except (TypeError, ValueError):
+        return html
+    if not parser.valid or parser._stack:
+        return html
+    declared = [(_attribute_map(attrs).get("data-qid", ""), index) for index, (_tag, attrs, _raw) in enumerate(parser.tags)]
+    qids = [qid for qid, _index in declared if qid]
+    elements = browser_metrics.get("elements")
+    if (
+        len(qids) != len(set(qids))
+        or any(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}", qid) is None for qid in qids)
+        or not isinstance(elements, list)
+        or any(not isinstance(item, Mapping) or item.get("source_block_id") not in (None, "") for item in elements)
+    ):
+        return html
+    measured_qids = [item.get("qid") for item in elements]
+    if any(not isinstance(qid, str) for qid in measured_qids) or len(measured_qids) != len(set(measured_qids)) or set(measured_qids) != set(qids):
+        return html
+    metrics = {item["qid"]: item for item in elements}
+    indices = {qid: index for qid, index in declared if qid}
+
+    def number(value):
+        try:
+            return float(value) if type(value) in (int, float) and math.isfinite(value) else None
+        except OverflowError:
+            return None
+
+    def box(value):
+        if not isinstance(value, Mapping):
+            return None
+        values = tuple(number(value.get(key)) for key in ("x", "y", "width", "height"))
+        return values if all(v is not None for v in values) and values[2] > 0 and values[3] > 0 else None
+
+    def intersects(a, b):
+        return min(a[0] + a[2], b[0] + b[2]) > max(a[0], b[0]) and min(a[1] + a[3], b[1] + b[3]) > max(a[1], b[1])
+
+    def stable(item):
+        style, effects, measured = item.get("computed_style"), item.get("visual_effects"), item.get("measurement")
+        return (
+            all(isinstance(value, Mapping) for value in (style, effects, measured))
+            and all(measured.get(key) is True for key in ("geometry", "stacking", "transform", "visual_effects"))
+            and item.get("css_visible") is True and number(item.get("effective_opacity")) == 1
+            and style.get("opacity") == "1" and style.get("visibility") == "visible" and style.get("zIndex") == "auto"
+            and style.get("backgroundBlendMode") == "normal"
+            and all(effects.get(key) == value for key, value in (("filter", "none"), ("backdropFilter", "none"), ("clipPath", "none"), ("maskImage", "none"), ("mixBlendMode", "normal")))
+            and item.get("intentional") is False and item.get("allow_overlap", False) is False
+        )
+
+    candidates: list[tuple[str, str]] = []
+    for qid in qids:
+        target = metrics[qid]
+        evidence = target.get("occlusion_measurement_evidence")
+        fraction = number(target.get("continuous_occluded_fraction"))
+        if fraction is None or not 0.12 < fraction <= 1:
+            continue
+        index = indices[qid]
+        parent_index = parser.parents[index]
+        if parent_index is None or parent_index in (index,):
+            return html
+        parent_attrs = _attribute_map(parser.tags[parent_index][1])
+        parent_qid = parent_attrs.get("data-qid", "")
+        parent = metrics.get(parent_qid)
+        attrs = _attribute_map(parser.tags[index][1])
+        owned_text = re.sub(r"\s+", " ", "".join(parser.owned_text_parts[index])).strip()
+        occluders = target.get("occlusion_occluder_qids")
+        probe = target.get("static_translation_probe")
+        target_box = box(target.get("bbox"))
+        parent_box = box(parent.get("bbox")) if parent is not None else None
+        if (
+            parent is None or target_box is None or parent_box is None
+            or not stable(target) or not stable(parent)
+            or parser.tags[index][0] not in {"div", "p"} or index in parser.parents
+            or not owned_text or target.get("has_owned_text") is not True or target.get("has_owned_paint") is not True
+            or "owned_text" not in target or _normalized_capacity_owned_text(target) != owned_text
+            or not isinstance(target.get("rendered_text"), str)
+            or re.sub(r"\s+", " ", target["rendered_text"]).strip() != owned_text
+            or attrs.get("data-semantic-role") not in {"body", "supporting", "title"}
+            or target.get("semantic_role") != attrs.get("data-semantic-role")
+            or target.get("tag") != parser.tags[index][0] or parent.get("tag") != parser.tags[parent_index][0]
+            or target.get("parent_qid") != parent_qid
+            or parent["computed_style"].get("display") not in {"flex", "inline-flex", "grid", "inline-grid"}
+            or parent["computed_style"].get("position") != "relative"
+            or parent["computed_style"].get("transform") != "none"
+            or target["computed_style"].get("position") != "static"
+            or target["computed_style"].get("display") != "block"
+            or target["computed_style"].get("backgroundImage") != "none"
+            or target["computed_style"].get("transform") != "none"
+            or any(target["computed_style"].get(edge) != "auto" for edge in ("top", "right", "bottom", "left"))
+            or not isinstance(probe, Mapping) or probe.get("source") != "chrome"
+            or any(probe.get(key) is not True for key in ("telemetryComplete", "layoutIsolation", "stackingStable", "transformComposable"))
+            or probe.get("unsupportedReason") is not None
+            or any(number(probe.get(key)) != 0 for key in ("flowImpactPx", "maxSiblingDeltaPx", "translationErrorPx"))
+            or box(probe.get("targetBoundsPx")) != target_box or box(probe.get("parentBoundsPx")) != parent_box
+            or not isinstance(evidence, Mapping) or evidence.get("status") != "measured"
+            or evidence.get("stage") != "chrome.owned_paint_sampling" or evidence.get("metric") != "occlusion" or evidence.get("qid") != qid
+            or evidence.get("reason") is not None or target.get("occlusion_measurement_error") is not None
+            or evidence.get("render_digest") != browser_metrics.get("render_digest") or evidence.get("source_digest") != browser_metrics.get("render_digest")
+            or target["measurement"].get("occlusion") is not True
+            or target["measurement"].get("clipping") is not True
+            or any(target.get(key) is not False for key in ("clipped", "glyph_clipped", "line_box_clipped"))
+            or number(target.get("occlusion_unknown_fraction")) != 0 or number(target.get("occlusion_unbound_count")) != 0
+            or not isinstance(occluders, list) or not 1 <= len(occluders) <= 4
+            or any(not isinstance(value, str) for value in occluders) or len(set(occluders)) != len(occluders)
+            or not (parent_box[0] <= target_box[0] and parent_box[1] <= target_box[1] and target_box[0] + target_box[2] <= parent_box[0] + parent_box[2] and target_box[1] + target_box[3] <= parent_box[1] + parent_box[3])
+        ):
+            return html
+        known, covered = number(evidence.get("known")), number(evidence.get("covered"))
+        occluded = number(target.get("occluded_fraction"))
+        fragments = target.get("text_fragments")
+        if (
+            known is None or known <= 0 or covered is None or not 0 < covered <= known
+            or any(type(evidence.get(key)) is not int for key in ("known", "covered", "sampled"))
+            or number(evidence.get("sampled")) != known or number(target.get("occlusion_known_sample_count")) != known
+            or number(target.get("occlusion_sample_count")) != known or number(target.get("occlusion_confirmed_covered_sample_count")) != covered
+            or occluded is None or not fraction <= occluded <= 1 or abs(occluded - covered / known) > 1e-9
+            or number(evidence.get("known_occluded_fraction")) != occluded
+            or target.get("occlusion_probe_version") != "owned-paint-v3"
+            or target.get("occlusion_sensor_version") != "owned-paint-v5-inset-retry"
+            or evidence.get("sensor_version") != target.get("occlusion_sensor_version")
+            or not isinstance(fragments, list) or not fragments or any(box(fragment) is None for fragment in fragments)
+            or re.search(r"(?:^|;)\s*z-index\s*:[^;]*!important", attrs.get("style", ""), re.IGNORECASE)
+        ):
+            return html
+        if any(not (target_box[0] <= fragment[0] and target_box[1] <= fragment[1] and fragment[0] + fragment[2] <= target_box[0] + target_box[2] and fragment[1] + fragment[3] <= target_box[1] + target_box[3]) for fragment in (box(value) for value in fragments)):
+            return html
+        for item_qid in (qid, *occluders):
+            item = metrics.get(item_qid)
+            item_index = indices.get(item_qid)
+            proof = item.get("containing_block_proof") if item is not None else None
+            if (
+                item is None or item_index is None or parser.parents[item_index] != parent_index
+                or not isinstance(proof, Mapping) or proof.get("source") != "chrome"
+                or proof.get("telemetryComplete") is not True or proof.get("exactBoundOffsetParent") is not True
+                or proof.get("offsetParentQid") != parent_qid or item.get("offset_parent_qid") != parent_qid
+                or proof.get("offsetParentTag") != parser.tags[parent_index][0] or box(proof.get("offsetParentBoundsPx")) != parent_box
+            ):
+                return html
+            if item_qid == qid:
+                continue
+            shape_attrs = _attribute_map(parser.tags[item_index][1])
+            shape_box = box(item.get("bbox"))
+            shape_style = item.get("computed_style", {})
+            if not isinstance(shape_style, Mapping):
+                return html
+            transform = str(shape_style.get("transform", ""))
+            matrix = transform[7:-1].split(",") if transform.startswith("matrix(") and transform.endswith(")") else []
+            try:
+                safe_transform = transform == "none" or len(matrix) == 6 and all(math.isfinite(float(value)) for value in matrix)
+            except ValueError:
+                safe_transform = False
+            if (
+                not stable(item) or parser.tags[item_index][0] != "div" or item.get("tag") != "div" or item_index in parser.parents
+                or item.get("parent_qid") != parent_qid or item.get("has_owned_text") is not False or item.get("has_owned_paint") is not True
+                or parser.owns_text[item_index] or item.get("owned_text") != "" or item.get("rendered_text") != "" or item.get("text_fragments") != []
+                or shape_attrs.get("data-semantic-role") not in {"supporting", "decoration"} or item.get("semantic_role") != shape_attrs.get("data-semantic-role")
+                or re.search(r"chart|table|graph|plot|sparkline|axis|legend", " ".join(shape_attrs.values()), re.IGNORECASE)
+                or any(name.startswith("data-image-") or name in {"aria-label", "role", "alt"} for name in shape_attrs)
+                or shape_style.get("position") != "absolute" or shape_style.get("display") != "block" or shape_style.get("backgroundImage") != "none" or not safe_transform
+                or shape_box is None or not intersects(target_box, shape_box)
+                or number(item.get("effective_z_index")) is None or number(target.get("effective_z_index")) is None or item["effective_z_index"] <= target["effective_z_index"]
+            ):
+                return html
+        ancestors = set()
+        cursor = parent_index
+        while cursor is not None:
+            ancestors.add(cursor)
+            cursor = parser.parents[cursor]
+        for other_qid, other in metrics.items():
+            if other_qid in {qid, *occluders} or indices[other_qid] in ancestors:
+                continue
+            other_box = box(other.get("bbox"))
+            if other_box is None or intersects(target_box, other_box):
+                return html
+        candidates.append((parent_qid, qid))
+    insertion = re.search(r"</head\s*>", html, flags=re.IGNORECASE)
+    if len(candidates) != 1 or insertion is None:
+        return html
+    parent_qid, qid = candidates[0]
+    rule = f'<style>/* {_OWNED_TEXT_PAINT_ORDER_MARKER} */[data-qid="{parent_qid}"]>[data-qid="{qid}"]{{z-index:1!important}}</style>'
+    return html[:insertion.start()] + rule + html[insertion.start():]
+
+
 def blocking_safety_issues(report: Any) -> tuple[Any, ...]:
     """Return only binary publication-safety defects from a DOM report.
 
@@ -1864,12 +2115,14 @@ __all__ = [
     "build_authored_capacity_plan",
     "blocking_safety_issues",
     "aggregate_owner_capacity_violations",
+    "canonicalize_authored_capacity_html",
     "capacity_overflow",
     "capacity_repair_instructions",
     "capacity_violations",
     "bounded_capacity_repair_eligible",
     "ensure_authored_semantic_roles",
     "repair_authored_layout_alignment",
+    "repair_authored_owned_text_paint_order",
     "reduce_authored_owner_text_capacity",
     "semantic_repair_boundary_violations",
     "reduce_authored_closing_capacity",

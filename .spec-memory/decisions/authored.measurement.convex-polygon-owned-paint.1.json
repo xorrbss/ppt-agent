@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.measurement.convex-polygon-owned-paint",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Measure bounded convex polygon paint without erasing ancestor clipping, real occluders, or antialias uncertainty.",
+  "scope": [
+    "authored",
+    "measurement",
+    "quality"
+  ],
+  "invariants": [
+    "Only childless text-free unique-QID XHTML DIVs with strictly convex four-vertex border-box polygons and axis-aligned mapping are supported.",
+    "Exclude only own-polygon exterior points beyond a one-CSS-pixel band; never exclude points using ancestor clipping.",
+    "Keep hit-stack occluder checks, boundary uncertainty, and the existing five-percent unknown threshold unchanged.",
+    "Use fresh source/render evidence and jointly revised DOM, measurement-cache, and sensor versions."
+  ],
+  "forbidden": [
+    "Never relabel unknown or covered samples as success without paint-domain proof.",
+    "Do not infer path, URL, fill-rule, concave, transformed, text-bearing, or descendant-paint domains."
+  ],
+  "evidence": [
+    "servers/fastapi/utils/slide_capture_polygon_paint.py",
+    "servers/fastapi/utils/slide_capture.py",
+    "servers/fastapi/tests/unit/test_authored_browser_metrics.py",
+    "output/public-v2-local-rc-20260831.md"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-31T04:09:31.8732724+00:00"
+}

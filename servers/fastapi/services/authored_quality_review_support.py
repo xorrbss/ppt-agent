@@ -1,5 +1,7 @@
 # ruff: noqa: B905
 
+from sqlalchemy import inspect
+
 from services import authored_quality_review_service as _service
 
 
@@ -103,9 +105,30 @@ async def _set_status(
     data: dict | None = None,
     error: dict | None = None,
 ) -> None:
+    task_state = inspect(task)
+    if task_state.persistent and "data" in task_state.expired_attributes:
+        # An importer rollback expires this task too, even with
+        # expire_on_commit=False. Reload its durable checkpoint explicitly.
+        await session.refresh(task, attribute_names=["data"])
+    # The workspace release-review handler seeds a private, digest-only
+    # pre-review checkpoint in task.data. Quality review status updates commit
+    # independently and historically replaced the entire mapping, which made a
+    # crash after slide fixes unable to prove which original HTML the V2 receipt
+    # covered. Preserve only this explicitly namespaced checkpoint.
+    release_review_base = (
+        task.data.get("_workspace_release_review_base")
+        if isinstance(task.data, dict)
+        else None
+    )
     task.status = status
     task.message = message
-    task.data = data
+    if release_review_base is not None:
+        task.data = {
+            **(data if isinstance(data, dict) else {}),
+            "_workspace_release_review_base": release_review_base,
+        }
+    else:
+        task.data = data
     task.error = error
     task.updated_at = _service.get_current_utc_datetime()
     session.add(task)

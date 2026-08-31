@@ -82,6 +82,12 @@ export function authoredHybridUnavailableReason(
     if (projection.degradedFidelityOnly) return "semantic source가 Fidelity 전용으로 강등되었습니다.";
     if (projection.canonicalMode !== "bundleGraph") return "legacy HTML revision은 Hybrid admission을 제공하지 않습니다.";
     if (!projection.canonicalDigest || !projection.manifestDigest) return "immutable manifest binding digest가 없습니다.";
+    if (
+      readiness.version === "v3" &&
+      readiness.projection.releaseProfile.nativeSubsetStatus === "notApplicable"
+    ) {
+      return "이 릴리스 프로필은 native Hybrid를 지원하지 않습니다. Fidelity 출력만 사용할 수 있습니다.";
+    }
     return undefined;
   }
   const projection = readiness.projection;

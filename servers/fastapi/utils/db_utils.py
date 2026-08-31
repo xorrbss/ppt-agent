@@ -1,8 +1,70 @@
 import os
 import tempfile
-from utils.get_env import get_app_data_directory_env, get_database_url_env
+from utils.get_env import get_app_data_directory_env
 from urllib.parse import urlsplit, urlunsplit, parse_qsl
 import ssl
+from collections.abc import Mapping
+
+
+_LOCAL_ENVIRONMENTS = {"local", "development", "dev", "test"}
+_PUBLIC_DATABASE_ROLES = {"api", "controller", "migration"}
+
+
+def _truthy(value: str | None) -> bool:
+    return (value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def resolve_runtime_database_url(
+    source: Mapping[str, str] | None = None,
+) -> str | None:
+    """Select one least-privilege DSN without copying the other role's secret.
+
+    Local/self-hosted compatibility continues to use ``DATABASE_URL``.  A
+    public non-local process must declare its environment and role, receive
+    exactly one role-specific DSN, and leave schema migration to a separate
+    deployment authority.  Error messages deliberately never contain URLs.
+    """
+
+    environment = os.environ if source is None else source
+    tier_raw = (environment.get("ENVIRONMENT") or "").strip().lower()
+    process_role = (
+        environment.get("PUBLIC_DATABASE_PROCESS_ROLE") or ""
+    ).strip().lower()
+    public_configured = bool(
+        process_role
+        or (environment.get("PUBLIC_API_DATABASE_URL") or "").strip()
+        or (environment.get("PUBLIC_CONTROLLER_DATABASE_URL") or "").strip()
+        or (environment.get("PPT_PUBLIC_OIDC_ISSUER") or "").strip()
+        or (environment.get("PUBLIC_V2_INTEGRATION_PROFILE") or "").strip()
+        == "postgresql-strict"
+    )
+    if public_configured and not tier_raw:
+        raise RuntimeError("public_environment_required")
+    if not public_configured or tier_raw in _LOCAL_ENVIRONMENTS:
+        return (environment.get("DATABASE_URL") or "").strip() or None
+    if process_role not in _PUBLIC_DATABASE_ROLES:
+        raise RuntimeError("public_database_process_role_required")
+    if (environment.get("DATABASE_URL") or "").strip():
+        raise RuntimeError("public_generic_database_url_forbidden")
+    if _truthy(environment.get("MIGRATE_DATABASE_ON_STARTUP")):
+        raise RuntimeError("public_runtime_database_migrations_forbidden")
+
+    selected_name = {
+        "api": "PUBLIC_API_DATABASE_URL",
+        "controller": "PUBLIC_CONTROLLER_DATABASE_URL",
+        "migration": "PUBLIC_MIGRATION_DATABASE_URL",
+    }[process_role]
+    opposite_names = {
+        "api": ("PUBLIC_CONTROLLER_DATABASE_URL", "PUBLIC_MIGRATION_DATABASE_URL"),
+        "controller": ("PUBLIC_API_DATABASE_URL", "PUBLIC_MIGRATION_DATABASE_URL"),
+        "migration": ("PUBLIC_API_DATABASE_URL", "PUBLIC_CONTROLLER_DATABASE_URL"),
+    }[process_role]
+    selected = (environment.get(selected_name) or "").strip()
+    if not selected:
+        raise RuntimeError("public_role_database_url_required")
+    if any((environment.get(name) or "").strip() for name in opposite_names):
+        raise RuntimeError("public_opposite_role_database_url_forbidden")
+    return selected
 
 
 def _ensure_sqlite_parent_dir(database_url: str) -> None:
@@ -56,7 +118,7 @@ def get_pool_kwargs() -> dict:
 
 
 def get_database_url_and_connect_args() -> tuple[str, dict]:
-    database_url = get_database_url_env() or "sqlite:///" + os.path.join(
+    database_url = resolve_runtime_database_url() or "sqlite:///" + os.path.join(
         get_app_data_directory_env()
         or os.path.join(tempfile.gettempdir(), "presenton"),
         "fastapi.db",

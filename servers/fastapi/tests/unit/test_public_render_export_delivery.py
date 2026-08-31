@@ -1,0 +1,173 @@
+from __future__ import annotations
+
+import ast
+from datetime import datetime, timedelta, timezone
+import inspect
+import textwrap
+import uuid
+
+from api.v2.contracts import PublicArtifactV2
+from models.sql.public_admission import PublicOperationAdmission
+from models.sql.workspace import WorkspaceOperation
+from services.public_export_operation import (
+    PUBLIC_RENDER_WORKER_PROTOCOL_VERSION,
+    public_render_runtime_binding_digest,
+    render_and_export_authored_htmls,
+)
+from services.public_v2_orchestrator import SqlPublicV2Orchestrator
+
+
+def test_public_status_projects_bounded_export_execution_and_publication_receipt() -> None:
+    from services import workspace_quality_export_operation_handlers as handlers
+
+    # These two producer fields must follow the actual canonical exporter,
+    # rather than independently pinning a protocol version in public evidence.
+    execute = ast.parse(textwrap.dedent(inspect.getsource(handlers.WorkspaceExportOperationHandler.execute)))
+    runtime_versions = [
+        value
+        for node in ast.walk(execute)
+        if isinstance(node, ast.Dict) and any(
+            isinstance(key, ast.Constant) and key.value == "compiler"
+            and isinstance(value, ast.Constant) and value.value == "public-isolated-export"
+            for key, value in zip(node.keys, node.values)
+        )
+        for key, value in zip(node.keys, node.values)
+        if isinstance(key, ast.Constant) and key.value == "runtime_version"
+    ]
+    receipt_versions = [
+        keyword.value
+        for node in ast.walk(execute)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+        and node.func.id == "project_persisted_authored_quality_receipt_v3"
+        for keyword in node.keywords if keyword.arg == "exporter_version"
+    ]
+    assert len(runtime_versions) == len(receipt_versions) == 1
+    for version in [*runtime_versions, *receipt_versions]:
+        assert isinstance(version, ast.Name)
+        assert version.id == "PUBLIC_RENDER_WORKER_PROTOCOL_VERSION"
+    assert handlers.PUBLIC_RENDER_WORKER_PROTOCOL_VERSION == PUBLIC_RENDER_WORKER_PROTOCOL_VERSION
+
+    assert callable(render_and_export_authored_htmls)
+    now = datetime(2026, 8, 31, tzinfo=timezone.utc)
+    owner_id = uuid.uuid4()
+    operation_id = uuid.uuid4()
+    presentation_id = uuid.uuid4()
+    runtime_binding = {
+        "schemaVersion": "public-render-runtime-binding/v2",
+        "mode": "owned-local-controller-observed",
+        "checkpointReuseEligible": True,
+        "releaseEligible": False,
+        "releaseEligibilityReason": "runtime-binding-is-not-release-authorization",
+        "workerImageDigest": None,
+        "chromeRuntimeDigest": "sha256:" + "6" * 64,
+        "fontInventoryDigest": "sha256:" + "7" * 64,
+        "limitations": [
+            "controller-worker-colocation-required",
+        ],
+    }
+    runtime_identity = {
+        **runtime_binding,
+        "bindingDigest": public_render_runtime_binding_digest(runtime_binding),
+    }
+    timing = {
+        "schemaVersion": "public-export-execution-receipt/v1",
+        "slideCount": 5,
+        "renderConcurrencyLimit": 4,
+        "renderConcurrencyPeak": 2,
+        "renderGateWaitMillis": 18,
+        "renderSchedulerQueueWaitMillis": 9,
+        "renderWorkerCumulativeMillis": 420,
+        "renderWallMillis": 240,
+        "artifactStageMillis": 32,
+        "htmlPersistMillis": 7,
+        "exportWorkerMillis": 80,
+        "exportSchedulerQueueWaitMillis": 3,
+        "operationWallMillis": 370,
+        "renderExecutionCount": 5,
+        "renderBatchExecutionCount": 1,
+        "chromiumProcessLaunchCount": 1,
+        "browserReuseCount": 4,
+        "renderCheckpointReuseCount": 0,
+        "renderSingleflightJoinCount": 0,
+        "renderRuntimeIdentity": runtime_identity,
+        "deckRenderIdentityDigest": "sha256:" + "8" * 64,
+    }
+    operation = WorkspaceOperation(
+        id=operation_id,
+        owner_id=owner_id,
+        owner_scope=str(owner_id),
+        conversation_id=uuid.uuid4(),
+        presentation_id=presentation_id,
+        anchor_position=1,
+        kind="export.pptx",
+        state="succeeded",
+        idempotency_key_hash="1" * 64,
+        request_hash="2" * 64,
+        attempt_number=2,
+        retry_count=1,
+        max_attempts=3,
+        progress={"stage": "export_completed", "queue_position": 3},
+        result={"public_export_execution_receipt": timing},
+        result_revision=9,
+        created_at=now,
+        updated_at=now + timedelta(seconds=1),
+    )
+    admission = PublicOperationAdmission(
+        operation_id=operation_id,
+        policy_version="public-test/v1",
+        owner_id=owner_id,
+        tenant_id="tenant-test",
+        trace_id_hash="3" * 64,
+        operation_kind="export",
+        resource_units=5,
+        policy_digest="4" * 64,
+        deadline_at=now + timedelta(minutes=5),
+        planned_request_limit=0,
+        retry_request_limit=0,
+        estimated_cost_limit_microunits=0,
+        actual_cost_limit_microunits=0,
+    )
+    artifact = PublicArtifactV2(
+        artifact_id="artifact_1",
+        operation_id=str(operation_id),
+        presentation_id=str(presentation_id),
+        kind="presentation-pptx",
+        digest="sha256:" + "5" * 64,
+        size_bytes=4096,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        ),
+        download="/api/v2/artifacts/artifact_1/download",
+    )
+
+    projected = SqlPublicV2Orchestrator._status(operation, admission, [artifact])
+
+    assert projected.status == "succeeded"
+    assert projected.phase == "packaging"
+    assert projected.execution_receipt is not None
+    assert projected.execution_receipt.queue_position == 3
+    assert projected.execution_receipt.retry_count == 1
+    assert projected.execution_receipt.publication == "published"
+    assert projected.execution_receipt.export == "completed"
+    assert projected.execution_receipt.timing is not None
+    assert projected.execution_receipt.timing.render_concurrency_peak == 2
+    assert projected.execution_receipt.timing.render_scheduler_queue_wait_millis == 9
+    assert projected.execution_receipt.timing.render_wall_millis == 240
+    public_status = projected.model_dump(mode="json", by_alias=True)
+    assert (
+        public_status["executionReceipt"]["timing"]["renderRuntimeIdentity"]
+        == runtime_identity
+    )
+
+    operation.result = {
+        "public_export_execution_receipt": {
+            **timing,
+            "renderRuntimeIdentity": {
+                **runtime_identity,
+                "bindingDigest": "sha256:" + ("0" * 64),
+            },
+        }
+    }
+    rejected = SqlPublicV2Orchestrator._status(operation, admission, [artifact])
+    assert rejected.execution_receipt is not None
+    assert rejected.execution_receipt.timing is None

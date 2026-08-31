@@ -1,13 +1,11 @@
-import asyncio
 import logging
 import os
-from pathlib import Path
 import uuid
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from pydantic import BaseModel, SecretStr
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.auth.schemas import (
@@ -21,23 +19,12 @@ from api.v1.auth.users import (
     read_user_from_cookie,
     serialize_user,
 )
-from models.sql.key_value import KeyValueSqlModel
 from models.sql.user import User
 from models.sql.provider_credential_reference import ProviderCredentialReference
 from services.account_deletion_service import (
     AccountNotFoundError,
     ProtectedAccountError,
-    delete_account_restricted_dependents,
-    cancel_authored_vnext_exports_for_account,
-    lock_account_deletion_marker,
     mark_account_deleting,
-)
-from services.authored_vnext.generation.account_lifecycle import (
-    cancel_authored_vnext_generation_operations_for_account,
-)
-from services.authored_vnext.master.assets import quarantine_owner_master_assets
-from services.authored_vnext.ooxml.account_lifecycle import (
-    fence_authored_vnext_ooxml_packages_for_account,
 )
 from services.database import get_async_session
 from services.provider_settings import (
@@ -56,7 +43,6 @@ from services.provider_egress_policy import (
 )
 from services.provider_credential_reference_service import (
     revoke_provider_credential,
-    revoke_account_provider_credentials,
     rotate_provider_credential,
 )
 from services.provider_credential_vault import (
@@ -72,10 +58,8 @@ from utils.available_models import list_available_openai_compatible_models
 from services.workspace_cleanup_journal_service import (
     account_cleanup_tombstone_exists,
     redrive_workspace_cleanup_dead_letter,
-    snapshot_account_workspace_cleanup_targets,
 )
 from utils.get_env import (
-    get_app_data_directory_env,
     get_can_change_keys_env,
     is_disable_auth_enabled,
 )
@@ -335,7 +319,7 @@ async def reset_user_password(
     return serialize_user(user)
 
 
-@API_V1_ADMIN_ROUTER.delete("/users/{user_id}", status_code=204)
+@API_V1_ADMIN_ROUTER.delete("/users/{user_id}", status_code=status.HTTP_202_ACCEPTED)
 async def delete_user(
     user_id: uuid.UUID,
     admin: User = Depends(get_current_admin),
@@ -354,10 +338,10 @@ async def delete_user(
         marker = await mark_account_deleting(session, user_id=user_id)
     except AccountNotFoundError as exc:
         if await account_cleanup_tombstone_exists(session, owner_id=user_id):
-            # The user FK cascade and its durable cleanup snapshot committed,
-            # but the caller may have lost the 204 response.  Replay success
-            # only for UUIDs proven by an account-owned cleanup tombstone.
-            return None
+            return {
+                "status": "completed",
+                "user_id": str(user_id),
+            }
         raise HTTPException(status_code=404, detail="User not found") from exc
     except ProtectedAccountError as exc:
         raise HTTPException(
@@ -365,56 +349,11 @@ async def delete_user(
             detail="The primary administrator account cannot be deleted",
         ) from exc
 
-    try:
-        user = await lock_account_deletion_marker(session, marker=marker)
-        if user is None:
-            # A concurrent idempotent finalizer already completed the cascade.
-            return None
-
-        # Snapshot once, flush its durable intents, then rescan before the FK
-        # cascade.  Admission/publication fences use deletion_generation, while
-        # the rescan closes work that committed immediately before phase one.
-        await snapshot_account_workspace_cleanup_targets(session, owner_id=user.id)
-        await session.flush()
-        await snapshot_account_workspace_cleanup_targets(session, owner_id=user.id)
-        await cancel_authored_vnext_generation_operations_for_account(
-            session, owner_id=user.id
-        )
-        await cancel_authored_vnext_exports_for_account(session, owner_id=user.id)
-        app_data_directory = (get_app_data_directory_env() or "").strip()
-        if app_data_directory:
-            await asyncio.to_thread(
-                quarantine_owner_master_assets,
-                Path(app_data_directory),
-                owner_id=str(user.id),
-                expected_generation=marker.generation,
-            )
-            await asyncio.to_thread(
-                fence_authored_vnext_ooxml_packages_for_account,
-                Path(app_data_directory),
-                owner_id=str(user.id),
-                expected_generation=marker.generation,
-            )
-        elif any(
-            os.getenv(flag, "false").lower() in {"1", "true", "yes", "on"}
-            for flag in (
-                "AUTHORED_VNEXT_OOXML_PACKAGE_ENABLED",
-                "AUTHORED_VNEXT_MASTER_ENABLED",
-            )
-        ):
-            raise RuntimeError("authored_vnext_ooxml_storage_unavailable")
-        await revoke_account_provider_credentials(session, owner_id=user.id)
-        await delete_account_restricted_dependents(session, owner_id=user.id)
-        await session.execute(
-            delete(KeyValueSqlModel).where(
-                KeyValueSqlModel.key == f"presentation_custom_themes:{user.id}"
-            )
-        )
-        await session.delete(user)
-        await session.commit()
-    except Exception:
-        await session.rollback()
-        raise
+    return {
+        "status": "accepted",
+        "user_id": str(marker.user_id),
+        "deletion_generation": marker.generation,
+    }
 
 
 @API_V1_ADMIN_ROUTER.post(

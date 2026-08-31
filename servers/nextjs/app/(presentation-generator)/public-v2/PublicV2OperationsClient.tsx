@@ -8,7 +8,6 @@ import {
 } from "@/lib/public-v2";
 
 type ExportFormat = "pptx" | "pdf";
-type QualityPolicy = "interactive-v1" | "release-v1";
 
 type DisplayArtifact = {
   artifactId: string;
@@ -48,7 +47,6 @@ const EMPTY_FORM = {
   content: "",
   instructions: "",
   slideCount: "",
-  qualityPolicy: "interactive-v1" as QualityPolicy,
 };
 
 function receiptValue(
@@ -119,7 +117,13 @@ function statusTone(status?: string): string {
   return "border-blue-200 bg-blue-50 text-blue-900";
 }
 
-function readableStatus(status?: string): string {
+function readableStatus(
+  status?: string,
+  releaseReadiness?: string,
+): string {
+  if (status === "succeeded" && releaseReadiness !== "ready") {
+    return "릴리스 검토 미완료";
+  }
   switch (status) {
     case "queued": return "대기 중";
     case "running": return "처리 중";
@@ -128,6 +132,7 @@ function readableStatus(status?: string): string {
     case "cancelled": return "취소됨";
     case "ready": return "준비 완료";
     case "blocked": return "차단됨";
+    case "not_assessed": return "평가 안 됨";
     default: return status ?? "아직 작업 없음";
   }
 }
@@ -169,7 +174,7 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
   const isCancelled = current.phase === "cancelled" || current.status === "cancelled";
   const isFailed = current.phase === "failed" || current.status === "failed";
   const hasOperation = Boolean(current.operationId && current.presentationId);
-  const qualityBlocked = current.quality?.releaseReadiness === "blocked";
+  const releaseReviewIncomplete = current.quality?.releaseReadiness !== "ready";
   const pendingExport = snapshot.pendingAdmission && snapshot.kind === "presentation.export";
 
   const submitGeneration = async (event: FormEvent<HTMLFormElement>) => {
@@ -179,14 +184,24 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
       setRequestError("generation_content_required");
       return;
     }
+    const requestedSlideCount = form.slideCount ? Number(form.slideCount) : undefined;
+    if (
+      requestedSlideCount !== undefined &&
+      (!Number.isSafeInteger(requestedSlideCount) ||
+        requestedSlideCount < 1 ||
+        requestedSlideCount > 30)
+    ) {
+      setRequestError("public_v2_slide_count_must_be_between_1_and_30");
+      return;
+    }
     setRequestError(null);
     setRequestedDownloadId(null);
     try {
       await submitGenerationRequest({
         content,
         ...(form.instructions.trim() ? { instructions: form.instructions.trim() } : {}),
-        ...(form.slideCount ? { slideCount: Number(form.slideCount) } : {}),
-        qualityPolicy: form.qualityPolicy,
+        ...(requestedSlideCount === undefined ? {} : { slideCount: requestedSlideCount }),
+        qualityPolicy: "interactive-v1",
       });
     } catch (error) {
       setRequestError(requestFailure(error));
@@ -206,7 +221,7 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
     try {
       await submitExport(current.presentationId, {
         sourceRevision: confirmedSourceRevision,
-        qualityPolicy: form.qualityPolicy,
+        qualityPolicy: "release-v1",
         output: {
           format,
           mode: "fidelity-raster",
@@ -248,7 +263,7 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
         <p className="text-sm font-semibold tracking-wide text-indigo-700">PUBLIC V2</p>
         <h1 className="mt-1 text-2xl font-bold tracking-tight">프레젠테이션 생성과 Fidelity 다운로드</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-          생성 작업은 브라우저를 새로 열어도 같은 idempotency 키와 이벤트 cursor로 이어집니다. 진행 상태와 품질 결과를 확인한 뒤 파일을 요청하세요.
+          생성은 development 초안으로, 파일 준비는 release 품질 프로필로 분리됩니다. 브라우저를 새로 열어도 같은 idempotency 키와 이벤트 cursor로 이어집니다.
         </p>
       </header>
 
@@ -275,14 +290,7 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block text-sm font-medium text-slate-800" htmlFor="public-v2-slide-count">
                 슬라이드 수 <span className="font-normal text-slate-500">(선택)</span>
-                <input id="public-v2-slide-count" min={1} max={100} inputMode="numeric" type="number" value={form.slideCount} onChange={(event) => setForm((value) => ({ ...value, slideCount: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100" />
-              </label>
-              <label className="block text-sm font-medium text-slate-800" htmlFor="public-v2-quality-policy">
-                품질 정책
-                <select id="public-v2-quality-policy" value={form.qualityPolicy} onChange={(event) => setForm((value) => ({ ...value, qualityPolicy: event.target.value as QualityPolicy }))} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100">
-                  <option value="interactive-v1">대화형 검토</option>
-                  <option value="release-v1">릴리스 검토</option>
-                </select>
+                <input id="public-v2-slide-count" min={1} max={30} inputMode="numeric" type="number" value={form.slideCount} onChange={(event) => setForm((value) => ({ ...value, slideCount: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100" />
               </label>
             </div>
             <button type="submit" disabled={pendingExport || current.phase === "submitting" || current.phase === "monitoring"} className="rounded-xl bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-50">
@@ -294,10 +302,10 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
         <aside className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5 shadow-sm" aria-label="Fidelity 지원 범위">
           <h2 className="font-bold text-indigo-950">Fidelity 출력만 제공</h2>
           <p className="mt-2 text-sm leading-6 text-indigo-900">
-            PPTX와 PDF는 화면 모양을 보존하는 형식입니다. 슬라이드 안의 개체는 개별 편집할 수 없습니다.
+             PPTX와 PDF는 1280×720 화면을 raster로 보존합니다. 슬라이드 안의 개체와 접근 가능한 텍스트는 개별 편집할 수 없습니다.
           </p>
           <p className="mt-3 text-xs leading-5 text-indigo-800">
-            이 경로에서는 지원되지 않은 Editable Hybrid 선택지를 노출하지 않습니다.
+             CJK 글자 크기·내용 밀도, overflow, occlusion은 release receipt가 통과해야 최종 완료로 표시됩니다. 이 경로에서는 Editable Hybrid를 지원하거나 노출하지 않습니다.
           </p>
         </aside>
       </div>
@@ -308,7 +316,7 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
             <h2 id="operation-title" className="text-lg font-bold">작업 상태</h2>
             {current.operationId && <p className="mt-1 break-all font-mono text-xs text-slate-500">operationId: {current.operationId}</p>}
           </div>
-          <span className={`rounded-full border px-3 py-1 text-sm font-semibold ${statusTone(current.status ?? current.phase)}`}>{readableStatus(current.status ?? current.phase)}</span>
+          <span className={`rounded-full border px-3 py-1 text-sm font-semibold ${statusTone(current.status ?? current.phase)}`}>{readableStatus(current.status ?? current.phase, current.quality?.releaseReadiness)}</span>
         </div>
 
         {!hasOperation && <p className="mt-4 text-sm text-slate-600">생성을 시작하면 이곳에서 resume 가능한 작업과 품질 상태를 확인합니다.</p>}
@@ -324,11 +332,11 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
           </div>
         )}
 
-        {current.quality && <section className={`mt-4 rounded-xl border p-4 ${statusTone(current.quality.releaseReadiness)}`} aria-label="품질 준비 상태"><h3 className="font-semibold">품질 준비 상태: {readableStatus(current.quality.releaseReadiness)}</h3>{current.quality.releaseReadiness === "blocked" && <p className="mt-1 text-sm">필수 품질 검토가 준비되지 않았거나 통과하지 못해 릴리스 준비 상태가 차단되었습니다.</p>}{checks.length > 0 && <ul className="mt-3 space-y-2 text-sm">{checks.map((check) => <li key={check.label} className="rounded-lg bg-white/60 px-3 py-2"><span className="font-medium">{check.label}</span>: {readableStatus(check.status)}{check.required ? " · 필수" : ""}{check.reasonCode ? ` · ${check.reasonCode}` : ""}</li>)}</ul>}</section>}
+        {current.quality && <section className={`mt-4 rounded-xl border p-4 ${statusTone(current.quality.releaseReadiness)}`} aria-label="품질 준비 상태"><h3 className="font-semibold">품질 준비 상태: {readableStatus(current.quality.releaseReadiness)}</h3>{current.quality.releaseReadiness !== "ready" && <p className="mt-1 text-sm">{current.quality.releaseReadiness === "not_assessed" ? "visual, performance, native coverage 검토가 아직 평가되지 않아 최종 완료 또는 릴리스 파일로 표시하지 않습니다." : "필수 품질 검토가 준비되지 않았거나 통과하지 못해 릴리스 준비 상태가 차단되었습니다."}</p>}{checks.length > 0 && <ul className="mt-3 space-y-2 text-sm">{checks.map((check) => <li key={check.label} className="rounded-lg bg-white/60 px-3 py-2"><span className="font-medium">{check.label}</span>: {readableStatus(check.status)}{check.required ? " · 필수" : ""}{check.reasonCode ? ` · ${check.reasonCode}` : ""}</li>)}</ul>}</section>}
 
-        {current.status === "succeeded" && current.presentationId && current.artifacts?.length === 0 && <section className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 p-4"><h3 className="font-semibold text-indigo-950">Fidelity 파일 만들기</h3><p className="mt-1 text-sm text-indigo-900">화면 보존형 출력만 선택할 수 있습니다. 개체 편집은 지원하지 않습니다.</p>{qualityBlocked && <p className="mt-2 text-sm font-medium text-red-800">필수 품질 검토가 차단되어 파일 준비를 시작할 수 없습니다.</p>}<div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={qualityBlocked} onClick={() => void requestExport("pptx")} className="rounded-lg bg-indigo-700 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-50">Fidelity PPTX 준비</button><button type="button" disabled={qualityBlocked} onClick={() => void requestExport("pdf")} className="rounded-lg border border-indigo-300 px-3 py-2 text-sm font-semibold text-indigo-900 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50">Fidelity PDF 준비</button></div></section>}
+        {current.status === "succeeded" && current.presentationId && current.artifacts?.length === 0 && <section className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 p-4"><h3 className="font-semibold text-indigo-950">Fidelity 파일 만들기</h3><p className="mt-1 text-sm text-indigo-900">화면 보존형 출력만 선택할 수 있습니다. 개체 편집은 지원하지 않습니다.</p>{releaseReviewIncomplete && <p className="mt-2 text-sm font-medium text-indigo-900">development 생성은 최종 품질 완료가 아닙니다. Fidelity export가 별도의 release 검토를 시작합니다.</p>}<div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => void requestExport("pptx")} className="rounded-lg bg-indigo-700 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-800">Fidelity PPTX 준비</button><button type="button" onClick={() => void requestExport("pdf")} className="rounded-lg border border-indigo-300 px-3 py-2 text-sm font-semibold text-indigo-900 hover:bg-indigo-100">Fidelity PDF 준비</button></div></section>}
 
-        {current.artifacts && current.artifacts.length > 0 && <section className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4" aria-label="다운로드 가능한 Fidelity 파일"><h3 className="font-semibold text-emerald-950">다운로드 준비됨</h3><p className="mt-1 text-sm text-emerald-900">모든 파일은 화면 보존형이며 개체 편집을 지원하지 않습니다.</p><ul className="mt-3 space-y-2">{current.artifacts.map((artifact) => <li key={artifact.artifactId} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white px-3 py-2"><div><p className="text-sm font-semibold text-slate-900">{artifact.kind === "presentation-pdf" ? "Fidelity PDF" : "Fidelity PPTX"}</p><p className="text-xs text-slate-500">{formatBytes(artifact.sizeBytes) ?? "파일 크기 확인 중"}</p></div><a href={artifact.download} download onClick={() => setRequestedDownloadId(artifact.artifactId)} className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-800">다운로드</a></li>)}</ul>{requestedDownloadId && <p className="mt-3 text-xs text-emerald-900" role="status">다운로드를 요청했습니다. 브라우저의 다운로드 상태를 확인하세요.</p>}{current.downloadStatus && <p className="mt-2 text-xs text-emerald-900">다운로드 상태: {readableStatus(current.downloadStatus)}</p>}</section>}
+        {current.artifacts && current.artifacts.length > 0 && <section className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4" aria-label="다운로드 가능한 Fidelity 파일"><h3 className="font-semibold text-emerald-950">{releaseReviewIncomplete ? "다운로드 가능 · 릴리스 검토 미완료" : "다운로드 준비됨"}</h3><p className="mt-1 text-sm text-emerald-900">모든 파일은 1280×720 화면 보존형 raster이며 개체 편집·접근 가능한 텍스트를 지원하지 않습니다.</p><ul className="mt-3 space-y-2">{current.artifacts.map((artifact) => <li key={artifact.artifactId} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white px-3 py-2"><div><p className="text-sm font-semibold text-slate-900">{artifact.kind === "presentation-pdf" ? "Fidelity PDF" : "Fidelity PPTX"}</p><p className="text-xs text-slate-500">{formatBytes(artifact.sizeBytes) ?? "파일 크기 확인 중"}</p></div><a href={artifact.download} download onClick={() => setRequestedDownloadId(artifact.artifactId)} className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-800">다운로드</a></li>)}</ul>{requestedDownloadId && <p className="mt-3 text-xs text-emerald-900" role="status">다운로드를 요청했습니다. 브라우저의 다운로드 상태를 확인하세요.</p>}{current.downloadStatus && <p className="mt-2 text-xs text-emerald-900">다운로드 상태: {readableStatus(current.downloadStatus)}</p>}</section>}
         {requestError && <p className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-900" role="alert">요청을 완료하지 못했습니다: {requestError}</p>}
       </section>
     </main>

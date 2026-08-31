@@ -39,6 +39,7 @@ from models.sql.presentation_export_receipt_models import (
     ExportEvidenceSidecarPointer,
     ExportUnifiedReleaseReceipt,
 )
+from models.sql.presentation_export_render_scene import ExportRenderSceneProvenance
 from utils.datetime_utils import get_current_utc_datetime
 from utils.owner_context import get_current_owner_id
 
@@ -1145,6 +1146,7 @@ class PresentationExportAttemptProvenance(BaseModel):
     asset_digests: dict[str, str] = PydanticField(default_factory=dict)
     compiler_runtime: ExportCompilerRuntimeProvenance
     freshness: ExportFreshnessProvenance
+    render_scene: ExportRenderSceneProvenance | None = None
     coverage_manifest: PresentationExportCoverageManifest | None = None
     quality_sidecar: dict[str, Any] | None = None
     atomic_binding: ExportAtomicBinding | None = None

@@ -99,6 +99,7 @@ from services.authored_vnext.generation.legacy_pin import (
     generation_repository_for_owner,
     resolve_legacy_master_pin,
 )
+from services.authored_vnext.generation.scene_compiler import SceneTextFitError
 from services.authored_vnext.master.digests import canonical_digest
 from services.concurrent_service import CONCURRENT_SERVICE
 from services.source_content.errors import SourceContentError
@@ -493,6 +494,27 @@ def _source_content_http_exception(error: SourceContentError) -> HTTPException:
         detail={"code": error.code, **error.detail},
     )
     exception.code = error.code
+    exception.retryable = False
+    return exception
+
+
+def _authored_vnext_generation_http_exception(
+    error: BaseException,
+) -> HTTPException | None:
+    """Preserve known deterministic rejections without exposing authored copy."""
+    if isinstance(error, SceneTextFitError):
+        code = SceneTextFitError.code
+    elif type(error) is ValueError and error.args == (
+        "authored_vnext_structural_delimiter_projection_changed_source_copy",
+    ):
+        code = "authored_vnext_structural_delimiter_projection_changed_source_copy"
+    else:
+        return None
+    exception = HTTPException(
+        status_code=422,
+        detail={"code": code, "retryable": False},
+    )
+    exception.code = code
     exception.retryable = False
     return exception
 
@@ -1816,10 +1838,12 @@ async def generate_presentation_handler(
                 safe_exception, request_id=request._request_id
             ).model_dump(mode="json")
         elif not isinstance(e, HTTPException):
-            traceback.print_exc()
-            safe_exception = HTTPException(
-                status_code=500, detail="Presentation generation failed"
-            )
+            safe_exception = _authored_vnext_generation_http_exception(e)
+            if safe_exception is None:
+                traceback.print_exc()
+                safe_exception = HTTPException(
+                    status_code=500, detail="Presentation generation failed"
+                )
             api_error_payload = APIErrorModel.from_exception(
                 safe_exception, request_id=request._request_id
             ).model_dump(mode="json")

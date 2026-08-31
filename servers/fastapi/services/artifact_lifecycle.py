@@ -8,13 +8,14 @@ or process memory are never accepted as lifecycle authority.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import datetime
 import os
 from typing import Literal, Protocol
 import uuid
 
-from sqlalchemy import exists, or_, select, update
+from sqlalchemy import and_, exists, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sql.public_artifact import (
@@ -24,10 +25,13 @@ from models.sql.public_artifact import (
     PublicExportIdentity,
     PublicSlideCheckpoint,
 )
+from models.sql.workspace import WorkspaceArtifact
 from services.artifact_store import (
     ArtifactObjectStore,
     ArtifactStoreError,
+    _await_physical_delete_completion,
     configured_public_artifact_service,
+    try_artifact_key_guard,
 )
 from utils.datetime_utils import get_current_utc_datetime
 
@@ -98,8 +102,34 @@ class ArtifactLifecycleAuthority(Protocol):
         limit: int,
     ) -> list[ArtifactLifecycleRecord]: ...
 
-    # Implementations must exclude any artifact referenced by a publication,
-    # checkpoint, or active/succeeded export identity in the same DB snapshot.
+    async def claim_gc_candidate(
+        self,
+        record: ArtifactLifecycleRecord,
+        *,
+        older_than: datetime,
+    ) -> ArtifactLifecycleRecord | None: ...
+
+    # Claims must guard the shared storage key through deletion and commit,
+    # freshly exclude every live sibling/pointer, and preserve sibling grace.
+
+
+def _live_artifact_pointer():
+    return or_(
+        exists().where(PublicArtifactPublication.artifact_id == PublicArtifact.id),
+        exists().where(PublicSlideCheckpoint.artifact_id == PublicArtifact.id),
+        exists().where(
+            PublicExportIdentity.result_artifact_id == PublicArtifact.id,
+            PublicExportIdentity.state.in_(("running", "succeeded")),
+        ),
+        exists().where(
+            PublicExportIdentity.source_artifact_id == PublicArtifact.id,
+            PublicExportIdentity.state.in_(("running", "succeeded")),
+        ),
+        exists().where(
+            WorkspaceArtifact.public_artifact_id == PublicArtifact.id,
+            WorkspaceArtifact.status.in_(("staging", "ready")),
+        ),
+    )
 
 
 class SqlArtifactLifecycleAuthority:
@@ -131,9 +161,42 @@ class SqlArtifactLifecycleAuthority:
     ) -> ArtifactLifecycleRecord | None:
         if ref_count_delta not in {-1, 0, 1}:
             raise ValueError("artifact lifecycle refcount delta is invalid")
+        # Candidate discovery never holds row locks before the per-key guard.
+        # This also applies to expiry: the runtime expires and collects in one
+        # outer transaction, so an expiry row lock otherwise reverses ordering.
+        hint = await self._session.scalar(
+            select(PublicArtifact)
+            .where(PublicArtifact.id == artifact_id)
+            .execution_options(autoflush=False)
+        )
+        if hint is None:
+            return None
+        reference = hint.to_ref()
+        if not await try_artifact_key_guard(self._session, reference):
+            return None
+        fresh = await self._session.scalar(
+            select(PublicArtifact)
+            .where(
+                PublicArtifact.id == artifact_id,
+                PublicArtifact.owner_id == reference.owner_id,
+                PublicArtifact.tenant_id == reference.tenant_id,
+                PublicArtifact.storage_key == reference.storage_key,
+                PublicArtifact.sha256 == reference.sha256,
+                PublicArtifact.lifecycle_state == expected_state,
+                PublicArtifact.lifecycle_revision == expected_revision,
+            )
+            .with_for_update(skip_locked=True)
+            .execution_options(populate_existing=True, autoflush=False)
+        )
+        if fresh is None or fresh.to_ref() != reference:
+            return None
         now = get_current_utc_datetime()
         predicates = [
             PublicArtifact.id == artifact_id,
+            PublicArtifact.owner_id == reference.owner_id,
+            PublicArtifact.tenant_id == reference.tenant_id,
+            PublicArtifact.storage_key == reference.storage_key,
+            PublicArtifact.sha256 == reference.sha256,
             PublicArtifact.lifecycle_state == expected_state,
             PublicArtifact.lifecycle_revision == expected_revision,
         ]
@@ -141,6 +204,7 @@ class SqlArtifactLifecycleAuthority:
             predicates.append(PublicArtifact.refcount >= -ref_count_delta)
         if next_state in {"tombstoned", "deleted"}:
             predicates.append(PublicArtifact.refcount == 0)
+            predicates.append(~_live_artifact_pointer())
         values: dict[str, object] = {
             "lifecycle_state": next_state,
             "refcount": PublicArtifact.refcount + ref_count_delta,
@@ -168,6 +232,68 @@ class SqlArtifactLifecycleAuthority:
             raise ArtifactStoreError("artifact.lifecycle_row_disappeared")
         return self._record(row)
 
+    async def claim_gc_candidate(
+        self,
+        record: ArtifactLifecycleRecord,
+        *,
+        older_than: datetime,
+    ) -> ArtifactLifecycleRecord | None:
+        reference = record.artifact
+        if not await try_artifact_key_guard(
+            self._session, reference, for_physical_delete=True,
+        ):
+            return None
+        fresh = await self._session.scalar(
+            select(PublicArtifact)
+            .where(
+                PublicArtifact.id == reference.artifact_id,
+                PublicArtifact.owner_id == reference.owner_id,
+                PublicArtifact.tenant_id == reference.tenant_id,
+                PublicArtifact.storage_key == reference.storage_key,
+                PublicArtifact.sha256 == reference.sha256,
+                PublicArtifact.lifecycle_state == "tombstoned",
+                PublicArtifact.lifecycle_revision == record.state_revision,
+                PublicArtifact.refcount == 0,
+                PublicArtifact.updated_at <= older_than,
+                or_(PublicArtifact.expires_at.is_(None), PublicArtifact.expires_at <= older_than),
+                ~_live_artifact_pointer(),
+            )
+            .with_for_update(skip_locked=True)
+            .execution_options(populate_existing=True, autoflush=False)
+        )
+        if fresh is None or fresh.to_ref() != reference:
+            return None
+        # The byte key is shared across artifact IDs, kinds and operations.
+        # Even an unreferenced tombstone keeps its own expiry/grace window.
+        protected_sibling = await self._session.scalar(
+            select(PublicArtifact.id)
+            .where(
+                PublicArtifact.storage_key == reference.storage_key,
+                or_(
+                    _live_artifact_pointer(),
+                    PublicArtifact.refcount > 0,
+                    PublicArtifact.lifecycle_state.not_in(("tombstoned", "deleted")),
+                    and_(
+                        PublicArtifact.lifecycle_state != "deleted",
+                        or_(
+                            PublicArtifact.updated_at > older_than,
+                            PublicArtifact.expires_at > older_than,
+                        ),
+                    ),
+                ),
+            )
+            .limit(1)
+            .execution_options(autoflush=False)
+        )
+        if protected_sibling is not None:
+            return None
+        return await self.compare_and_set(
+            artifact_id=reference.artifact_id,
+            expected_state="tombstoned",
+            expected_revision=record.state_revision,
+            next_state="tombstoned",
+        )
+
     async def list_gc_candidates(
         self,
         *,
@@ -187,24 +313,11 @@ class SqlArtifactLifecycleAuthority:
                         PublicArtifact.expires_at.is_(None),
                         PublicArtifact.expires_at <= older_than,
                     ),
-                    ~exists().where(
-                        PublicArtifactPublication.artifact_id == PublicArtifact.id
-                    ),
-                    ~exists().where(
-                        PublicSlideCheckpoint.artifact_id == PublicArtifact.id
-                    ),
-                    ~exists().where(
-                        PublicExportIdentity.result_artifact_id == PublicArtifact.id,
-                        PublicExportIdentity.state.in_(("running", "succeeded")),
-                    ),
-                    ~exists().where(
-                        PublicExportIdentity.source_artifact_id == PublicArtifact.id,
-                        PublicExportIdentity.state.in_(("running", "succeeded")),
-                    ),
+                    ~_live_artifact_pointer(),
                 )
                 .order_by(PublicArtifact.updated_at, PublicArtifact.id)
                 .limit(limit)
-                .with_for_update(skip_locked=True)
+                .execution_options(autoflush=False)
             )
         ).all()
         return [self._record(row) for row in rows]
@@ -225,24 +338,11 @@ class SqlArtifactLifecycleAuthority:
                     PublicArtifact.refcount == 0,
                     PublicArtifact.expires_at.is_not(None),
                     PublicArtifact.expires_at <= expires_at_or_before,
-                    ~exists().where(
-                        PublicArtifactPublication.artifact_id == PublicArtifact.id
-                    ),
-                    ~exists().where(
-                        PublicSlideCheckpoint.artifact_id == PublicArtifact.id
-                    ),
-                    ~exists().where(
-                        PublicExportIdentity.result_artifact_id == PublicArtifact.id,
-                        PublicExportIdentity.state.in_(("running", "succeeded")),
-                    ),
-                    ~exists().where(
-                        PublicExportIdentity.source_artifact_id == PublicArtifact.id,
-                        PublicExportIdentity.state.in_(("running", "succeeded")),
-                    ),
+                    ~_live_artifact_pointer(),
                 )
                 .order_by(PublicArtifact.expires_at, PublicArtifact.id)
                 .limit(limit)
-                .with_for_update(skip_locked=True)
+                .execution_options(autoflush=False)
             )
         ).all()
         return [self._record(row) for row in rows]
@@ -256,6 +356,21 @@ def validate_lifecycle_transition(
         raise ArtifactStoreError("artifact.lifecycle_transition_invalid")
     if next_state in {"tombstoned", "deleted"} and record.ref_count != 0:
         raise ArtifactStoreError("artifact.lifecycle_references_remain")
+
+
+async def _delete_before_guard_unwinds(
+    object_store: ArtifactObjectStore, reference: ArtifactRef,
+) -> None:
+    """Drain an owned physical delete before cancellation releases its DB guard.
+
+    Local/S3 adapters can have blocking work running in a thread. Shielding once
+    is insufficient: the caller must retain its transaction until that work has
+    settled, even when cancellation is requested repeatedly. This protects task
+    cancellation, not process loss or an independently pending remote request.
+    """
+
+    deletion = asyncio.create_task(object_store.delete(reference))
+    await _await_physical_delete_completion(deletion)
 
 
 class ArtifactLifecycleService:
@@ -337,17 +452,15 @@ class ArtifactLifecycleService:
                 continue
             if record.delete_after is not None and record.delete_after > older_than:
                 continue
-            claimed = await self._authority.compare_and_set(
-                artifact_id=record.artifact.artifact_id,
-                expected_state="tombstoned",
-                expected_revision=record.state_revision,
-                next_state="tombstoned",
-            )
+            claim = getattr(self._authority, "claim_gc_candidate", None)
+            if claim is None:
+                raise ArtifactStoreError("artifact.gc_shared_key_authority_required")
+            claimed = await claim(record, older_than=older_than)
             if claimed is None:
                 continue
             if claimed.ref_count != 0:
                 raise ArtifactStoreError("artifact.gc_candidate_invalid")
-            await self._object_store.delete(record.artifact)
+            await _delete_before_guard_unwinds(self._object_store, record.artifact)
             updated = await self._authority.compare_and_set(
                 artifact_id=record.artifact.artifact_id,
                 expected_state="tombstoned",

@@ -90,18 +90,18 @@ class TrustedExecutorProductAdapter:
         self._work_items: dict[str, TrustedExecutorWorkItem] = {}
 
     def submit(self, work_item: TrustedExecutorWorkItem) -> None:
-        operation_id = work_item.scheduling.operation_id
-        if operation_id in self._work_items:
+        scheduling_key = work_item.scheduling.scheduling_key
+        if scheduling_key in self._work_items:
             raise ProductAdapterError("product work item is already registered")
         self._scheduler.submit(work_item.scheduling)
-        self._work_items[operation_id] = work_item
+        self._work_items[scheduling_key] = work_item
 
-    def cancel_pending(self, operation_id: str) -> bool:
+    def cancel_pending(self, scheduling_key: str) -> bool:
         """Remove only queued work; launched process cancellation is launcher-owned."""
 
-        cancelled = self._scheduler.cancel_pending(operation_id)
+        cancelled = self._scheduler.cancel_pending(scheduling_key)
         if cancelled:
-            self._work_items.pop(operation_id, None)
+            self._work_items.pop(scheduling_key, None)
         return cancelled
 
     async def execute_next(
@@ -113,8 +113,8 @@ class TrustedExecutorProductAdapter:
         reservation = self._scheduler.reserve_next()
         if reservation is None:
             return None
-        operation_id = reservation.operation.operation_id
-        work_item = self._work_items.pop(operation_id, None)
+        scheduling_key = reservation.operation.scheduling_key
+        work_item = self._work_items.pop(scheduling_key, None)
         if work_item is None:
             self._scheduler.release(reservation)
             raise ProductWorkItemNotFound("scheduled product work item was not registered")

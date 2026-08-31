@@ -25,6 +25,10 @@ from services.artifact_lifecycle_runtime import (
     start_public_artifact_lifecycle_runtime,
     stop_public_artifact_lifecycle_runtime,
 )
+from services.account_deletion_controller import (
+    start_account_deletion_controller,
+    stop_account_deletion_controller,
+)
 from services.isolated_worker_process import install_trusted_worker_dispatcher
 from services.presentation_deletion_operation_handler import (
     register_presentation_deletion_operation_handler,
@@ -65,6 +69,10 @@ from services.workspace_metrics_exporter import (
 from services.workspace_quality_export_operation_handlers import (
     EXPORT_OPERATION_KINDS,
     register_workspace_quality_export_operation_handlers,
+)
+from services.workspace_quality_operation_handler import (
+    QUALITY_REVIEW_OPERATION_KIND,
+    WorkspaceQualityReviewOperationHandler,
 )
 from services.workspace_page_remake_operation_handler import (
     register_workspace_page_remake_operation_handler,
@@ -144,7 +152,9 @@ def external_workspace_operation_kinds(profile_role: str) -> tuple[str, ...]:
     if profile_role == "generation":
         if controller not in {"", "generation"}:
             raise RuntimeError("workspace_operation_external_controller_invalid")
-        return (PRESENTATION_GENERATION_OPERATION_KIND,)
+        # Release review owns bounded provider critique/repair calls and is
+        # admitted as generation work, not as sessionless export conversion.
+        return (PRESENTATION_GENERATION_OPERATION_KIND, QUALITY_REVIEW_OPERATION_KIND)
     if profile_role == "ppt-core" and controller == EXPORT_CONTROLLER:
         return EXPORT_OPERATION_KINDS
     raise RuntimeError("workspace_operation_external_controller_required")
@@ -194,11 +204,18 @@ async def run_external_worker(stop: asyncio.Event | None = None) -> None:
     event_retention_started = False
     metrics_exporter = None
     artifact_lifecycle_started = False
+    account_deletion_controller_started = False
     if trusted_worker_runtime is not None:
         install_trusted_worker_dispatcher(trusted_worker_runtime.dispatcher)
     try:
         if profile.role == "generation":
             register_presentation_generation_operation_handler(replace=True)
+            workspace_operation_handler_registry.register(
+                QUALITY_REVIEW_OPERATION_KIND,
+                WorkspaceQualityReviewOperationHandler(),
+                replace=True,
+                recovery_policy="automatic",
+            )
         else:
             register_workspace_quality_export_operation_handlers(replace=True)
         metrics_exporter = await start_workspace_worker_metrics_exporter()
@@ -207,6 +224,11 @@ async def run_external_worker(stop: asyncio.Event | None = None) -> None:
         if profile.role == "ppt-core":
             await start_public_artifact_lifecycle_runtime()
             artifact_lifecycle_started = True
+            await start_account_deletion_controller(
+                worker_id=(os.getenv("PUBLIC_WORKER_NODE_ID") or "").strip()
+                + ":account-deletion",
+            )
+            account_deletion_controller_started = True
         await start_workspace_cleanup_maintenance()
         cleanup_maintenance_started = True
         await start_workspace_asset_maintenance()
@@ -233,23 +255,27 @@ async def run_external_worker(stop: asyncio.Event | None = None) -> None:
                             await stop_workspace_cleanup_maintenance()
                     finally:
                         try:
-                            if artifact_lifecycle_started:
-                                await stop_public_artifact_lifecycle_runtime()
+                            if account_deletion_controller_started:
+                                await stop_account_deletion_controller()
                         finally:
                             try:
-                                if runner_started:
-                                    await stop_workspace_operation_runner()
+                                if artifact_lifecycle_started:
+                                    await stop_public_artifact_lifecycle_runtime()
                             finally:
                                 try:
-                                    if metrics_exporter is not None:
-                                        await metrics_exporter.close()
+                                    if runner_started:
+                                        await stop_workspace_operation_runner()
                                 finally:
                                     try:
-                                        if trusted_worker_runtime is not None:
-                                            install_trusted_worker_dispatcher(None)
-                                            await trusted_worker_runtime.close()
+                                        if metrics_exporter is not None:
+                                            await metrics_exporter.close()
                                     finally:
-                                        await dispose_engines()
+                                        try:
+                                            if trusted_worker_runtime is not None:
+                                                install_trusted_worker_dispatcher(None)
+                                                await trusted_worker_runtime.close()
+                                        finally:
+                                            await dispose_engines()
 
 
 def main() -> None:

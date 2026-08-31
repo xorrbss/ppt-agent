@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.measurement.glyph-clipping",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Resolve Range clipping suspects only with exact current/unclipped glyph masks and invariant source font geometry; incomplete evidence stays blocked.",
+  "scope": [
+    "authored",
+    "rendering",
+    "quality",
+    "clipping"
+  ],
+  "invariants": [
+    "A DOM Range rectangle is a clipping suspect, not proof of glyph ink loss.",
+    "Only bounded supported leaf-text suspects may be cleared by nonempty exactly equal current/reference ink masks with all-QID geometry and font invariance.",
+    "Preserve original HTML and original PNG bytes; keep raw Range diagnostics and bind fresh probe epoch source render and exact srcdoc.",
+    "Unknown unsupported failed missing or geometry-changing probes remain fail-closed; genuine ink loss remains clipped.",
+    "Internal measurement documents preserve source CSP network blocking and CSP-bypass=false; never reuse stale global proof.",
+    "Measurement and DOM cache/runtime versions change with the sensor to invalidate prior checkpoint observations."
+  ],
+  "forbidden": [
+    "Capacity font or geometry relaxation to make a checker pass",
+    "Treating clipped contrast pixels alone as proof of complete glyphs",
+    "Claiming local sensor evidence proves external worker isolation"
+  ],
+  "evidence": [
+    "servers/fastapi/utils/slide_capture_glyph_probe.py",
+    "servers/fastapi/utils/slide_capture.py",
+    "servers/fastapi/tests/unit/test_authored_browser_metrics.py::test_render_collects_dom_metrics_in_the_same_browser_invocation"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-30T22:19:14.2743394+00:00"
+}

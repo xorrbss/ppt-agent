@@ -40,6 +40,11 @@ _FAILURE_CODES = {
     "authored_slide_persist_failed",
     "authored_slide_render_failed",
     "authored_unexpected_failure",
+    "authored_slide_capacity_exceeded",
+    "authored_composition_safety_gate_failed",
+    "authored_provider_attempt_budget_exhausted",
+    "public_provider_request_limit_exceeded",
+    "public_provider_retry_limit_exceeded",
 }
 _SWEEP_OUTCOMES = {"success", "failure"}
 _STALLED_STATES = {"running", "staging"}
@@ -95,6 +100,7 @@ def build_authored_generation_observation(
     errors: int | None = None,
     recovered_jobs: int | None = None,
     prior_state: str | None = None,
+    provider_attempt_count: int | None = None,
 ) -> dict[str, Any]:
     """Build one validated, low-cardinality authored metric event."""
 
@@ -124,6 +130,16 @@ def build_authored_generation_observation(
             slide_number=slide,
             retryable=retryable,
         )
+        if provider_attempt_count is not None:
+            event.update(
+                provider_attempt_count=_bounded_int(
+                    "provider_attempt_count", provider_attempt_count, maximum=2
+                ),
+                retry_reason=(
+                    "retryable_failure" if retryable else "terminal_failure"
+                ),
+                stage_reason=code,
+            )
     elif name == "resume":
         if attempt_number is None or completed_slides is None or total_slides is None:
             raise ValueError("resume counts are required")
@@ -213,6 +229,7 @@ def log_authored_slide_failure_observation(
     slide_number: int,
     retryable: bool,
     logger: logging.Logger = LOGGER,
+    provider_attempt_count: int | None = None,
 ) -> dict[str, Any]:
     """Log a slide failure without letting a new code break recovery.
 
@@ -229,6 +246,7 @@ def log_authored_slide_failure_observation(
         code=safe_code,
         slide_number=slide_number,
         retryable=retryable,
+        provider_attempt_count=provider_attempt_count,
     )
 
 

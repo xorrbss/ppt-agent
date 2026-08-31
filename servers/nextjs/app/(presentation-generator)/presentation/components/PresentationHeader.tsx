@@ -242,7 +242,7 @@ const PresentationHeader = ({
       return;
     if (pptxMode === "hybrid" && hybridDisabledReason !== undefined) return;
     try {
-      const option = pptxMode === "hybrid" ? "편집 가능한 요소를 분리해 " : "";
+      const option = pptxMode === "hybrid" ? "Hybrid 진단 " : "";
       const requestedFontEmbedding = pptxMode === "hybrid" && fontEmbedding !== false;
       const fontOption = requestedFontEmbedding ? "(글꼴 포함 요청) " : "";
       await onWorkspaceCommand(`${option}${fontOption}PPTX로 내보내기`, {

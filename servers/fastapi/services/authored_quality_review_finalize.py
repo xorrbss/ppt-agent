@@ -221,6 +221,7 @@ async def finalize_legacy_review(ctx):
             "presentation_id": str(ctx.presentation_id),
             "mode": ctx.request.mode,
             "scope": ctx.request.scope,
+            "review_policy": dict(ctx.review_metadata),
             "reviewed_count": len(ctx.targets),
             "issue_slide_count": len(ctx.initial_issues),
             "issues": ctx.initial_issues,

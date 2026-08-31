@@ -22,12 +22,17 @@ def _playwright_headless_shell_candidates() -> List[pathlib.Path]:
     local_app_data = os.getenv("LOCALAPPDATA")
     if local_app_data:
         roots.append(pathlib.Path(local_app_data) / "ms-playwright")
-    roots.extend(
-        [
-            pathlib.Path.home() / ".cache" / "ms-playwright",
-            pathlib.Path.home() / "Library" / "Caches" / "ms-playwright",
-        ]
-    )
+    try:
+        user_home = pathlib.Path.home()
+    except RuntimeError:
+        # Sessionless workers deliberately omit home/profile environment keys.
+        # Optional home caches must not prevent LOCALAPPDATA or fixed discovery.
+        user_home = None
+    if user_home is not None:
+        roots.extend([
+            user_home / ".cache" / "ms-playwright",
+            user_home / "Library" / "Caches" / "ms-playwright",
+        ])
 
     found: List[pathlib.Path] = []
     seen = set()

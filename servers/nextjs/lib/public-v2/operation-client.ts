@@ -118,6 +118,10 @@ export const PUBLIC_V2_FIDELITY_CAPABILITY = {
   supportsPdf: true,
   /** Fidelity artifacts preserve the rendered screen, not editable objects. */
   editableObjects: false,
+  canvas: { width: 1280, height: 720 },
+  accessibility: "raster-only" as const,
+  cjkSafety: "release-receipt-required" as const,
+  visualSafety: "overflow-and-occlusion-receipt-required" as const,
 } as const;
 
 export class PublicV2ApiError extends Error {
@@ -443,7 +447,7 @@ function persistedExportRequest(value: unknown): PublicV2ExportRequest {
     || typeof source.sourceRevision !== "number"
     || !Number.isSafeInteger(source.sourceRevision)
     || source.sourceRevision < 0
-    || (source.qualityPolicy !== "interactive-v1" && source.qualityPolicy !== "release-v1")
+    || source.qualityPolicy !== "release-v1"
     || (output.format !== "pptx" && output.format !== "pdf")
     || output.mode !== "fidelity-raster"
     || output.fontEmbedding !== "none"
@@ -464,7 +468,7 @@ function persistedExportRequest(value: unknown): PublicV2ExportRequest {
   return {
     schemaVersion: "presentation-export-request/v2",
     sourceRevision: source.sourceRevision,
-    qualityPolicy: source.qualityPolicy,
+    qualityPolicy: "release-v1",
     output: {
       format: output.format,
       mode: "fidelity-raster",
@@ -571,10 +575,10 @@ export class PublicV2OperationClient {
       presentationId: null,
       path: "/api/v2/presentations/generations",
       request: {
+        ...request,
         schemaVersion: "presentation-generation-request/v2",
         engine: "authored",
         qualityPolicy: "interactive-v1",
-        ...request,
       },
     });
   }
@@ -591,9 +595,9 @@ export class PublicV2OperationClient {
       presentationId,
       path: `/api/v2/presentations/${encodeURIComponent(presentationId)}/exports`,
       request: {
-        schemaVersion: "presentation-export-request/v2",
-        qualityPolicy: "interactive-v1",
         ...request,
+        schemaVersion: "presentation-export-request/v2",
+        qualityPolicy: "release-v1",
         output: {
           ...request.output,
           mode: "fidelity-raster",

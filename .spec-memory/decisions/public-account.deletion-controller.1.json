@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "key": "public-account.deletion-controller",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Account deletion revokes access with a durable request, then a dedicated generation-fenced controller performs retryable cleanup and final deletion.",
+  "scope": [
+    "account-deletion",
+    "public-db",
+    "controller"
+  ],
+  "invariants": [
+    "Deletion admission atomically deactivates the account, advances authentication/deletion generations and persists an idempotent deletion request.",
+    "The request returns accepted status without waiting for external cleanup; a restart-safe controller claims pending or expired requests.",
+    "Controller work requires dedicated database authority, owner/generation identity and claim fencing; PostgreSQL claims use SKIP LOCKED.",
+    "External cleanup failure is retryable and cannot be reported as completed deletion.",
+    "Final cleanup preserves the account deletion generation fence and durable cleanup journal boundaries."
+  ],
+  "forbidden": [
+    "Treating an API 202 response as completed deletion.",
+    "Completing deletion after failed credential or artifact cleanup.",
+    "Treating a cancelled asyncio.to_thread wait as proof that its filesystem thread stopped."
+  ],
+  "evidence": [
+    "servers/fastapi/models/sql/account_deletion_request.py",
+    "servers/fastapi/services/account_deletion_service.py",
+    "servers/fastapi/services/account_deletion_controller.py",
+    "servers/fastapi/tests/unit/test_account_deletion_service.py",
+    "servers/fastapi/tests/unit/test_account_deletion_migration.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-30T19:59:11.6742124+00:00"
+}

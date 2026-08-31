@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import uuid
 
 import pytest
-from sqlalchemy import event, select
+from sqlalchemy import event, inspect, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
@@ -36,6 +36,7 @@ from services.presentation_generation_operation_handler import (
     PresentationGenerationOperationHandler,
 )
 from services.workspace_operation_handler_registry import (
+    NonRetryableWorkspaceOperationError,
     WorkspaceOperationCancelled,
     WorkspaceOperationClaim,
     WorkspaceOperationHandlerRegistry,
@@ -358,12 +359,68 @@ async def _generation_handler_terminalizes_cancelled_job(tmp_path: Path, monkeyp
         await engine.dispose()
 
 
-def test_non_retryable_generation_failure_disables_resume(tmp_path: Path, monkeypatch):
-    asyncio.run(_non_retryable_generation_failure_disables_resume(tmp_path, monkeypatch))
+@pytest.mark.parametrize(
+    "failure_code",
+    [
+        "authored_slide_capacity_exceeded",
+        "authored_vnext_text_fit_rejected",
+        "authored_vnext_structural_delimiter_projection_changed_source_copy",
+    ],
+)
+def test_non_retryable_generation_failure_disables_resume(
+    tmp_path: Path, monkeypatch, failure_code: str
+):
+    from fastapi import HTTPException
+
+    from api.v1.ppt.endpoints.presentation_generate import (
+        _authored_vnext_generation_http_exception,
+    )
+    from models.api_error_model import APIErrorModel
+    from services.authored_vnext.generation.scene_compiler import SceneTextFitError
+    from services.presentation_generation_operation_handler import _safe_failure
+
+    if failure_code == "authored_slide_capacity_exceeded":
+        error = RuntimeError(failure_code)
+        error.code = failure_code
+        error.retryable = False
+    else:
+        source_error = (
+            SceneTextFitError("private authored copy and template diagnostics")
+            if failure_code == "authored_vnext_text_fit_rejected"
+            else ValueError(failure_code)
+        )
+        error = _authored_vnext_generation_http_exception(source_error)
+        assert error is not None and error.status_code == 422
+        assert error.code == failure_code and error.retryable is False
+        payload = APIErrorModel.from_exception(error).model_dump(mode="json")
+        assert payload["code"] == failure_code and payload["retryable"] is False
+        assert payload["detail"] == {"code": failure_code, "retryable": False}
+        assert "private authored copy" not in json.dumps(payload)
+        assert _safe_failure(payload) == (failure_code, False)
+
+    structural_code = "authored_vnext_structural_delimiter_projection_changed_source_copy"
+    for unknown in (
+        ValueError("authored_vnext_unknown_failure"),
+        ValueError(structural_code + ": private authored copy"),
+        RuntimeError(structural_code),
+        asyncio.CancelledError(),
+    ):
+        assert _authored_vnext_generation_http_exception(unknown) is None
+    for status_code in (429, 500):
+        transient = HTTPException(status_code, detail="Presentation generation failed")
+        assert _authored_vnext_generation_http_exception(transient) is None
+        assert _safe_failure(APIErrorModel.from_exception(transient).model_dump()) == (
+            f"http_error_{status_code}", True
+        )
+    asyncio.run(
+        _non_retryable_generation_failure_disables_resume(
+            tmp_path, monkeypatch, error, failure_code
+        )
+    )
 
 
 async def _non_retryable_generation_failure_disables_resume(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch, pipeline_error: Exception, failure_code: str
 ):
     engine, maker = await _database(tmp_path / "generation-non-retryable.db", monkeypatch)
     try:
@@ -375,10 +432,7 @@ async def _non_retryable_generation_failure_disables_resume(
             return {}
 
         async def non_retryable_pipeline(*_args):
-            error = RuntimeError("authored_slide_capacity_exceeded")
-            error.code = "authored_slide_capacity_exceeded"
-            error.retryable = False
-            raise error
+            raise pipeline_error
 
         handler = PresentationGenerationOperationHandler(
             session_factory=maker,
@@ -407,7 +461,7 @@ async def _non_retryable_generation_failure_disables_resume(
         assert job.resume_allowed is False
         assert task is not None and task.status == "error"
         assert task.error is not None
-        assert task.error["code"] == "authored_slide_capacity_exceeded"
+        assert task.error["code"] == failure_code
     finally:
         await engine.dispose()
 
@@ -847,24 +901,47 @@ def test_authored_master_admission_allows_unpinned_full_canvas():
     assert request._authored_composition_pin is None
 
 
+@pytest.mark.parametrize("failure_mode", (None, "returned", "raised", "projection"))
 def test_default_pipeline_merges_published_artifact_metadata(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch, failure_mode
 ):
-    asyncio.run(_default_pipeline_merges_publication_result(tmp_path, monkeypatch))
+    asyncio.run(
+        _default_pipeline_merges_publication_result(
+            tmp_path, monkeypatch, failure_mode=failure_mode
+        )
+    )
 
 
-async def _default_pipeline_merges_publication_result(tmp_path: Path, monkeypatch):
+async def _default_pipeline_merges_publication_result(
+    tmp_path: Path, monkeypatch, *, failure_mode: str | None
+):
     engine, maker = await _database(tmp_path / "publication-result.db", monkeypatch)
     try:
         presentation_id, operation_id, task_id, job_id = (
             await _seed_linked_generation(maker, owner_id=OWNER_ID)
         )
         from api.v1.ppt.endpoints import presentation_generate as endpoint
+        from services import presentation_generation_operation_handler as adapter
+        from services.authored_checkpoint_service import AuthoredStageError
+        from services.authored_generation_timing_receipt import (
+            load_generation_attempt_timing_receipts,
+        )
+
+        monkeypatch.setenv("AUTHORED_QUALITY_RECEIPT_DIRECTORY", str(tmp_path))
+        terminal_error = AuthoredStageError(
+            slide_index=0,
+            stage="quality",
+            code="authored_quality_receipt_gate_failed",
+            retryable=False,
+        )
+        generation_calls = 0
 
         monkeypatch.setattr(
             endpoint,
             "_request_from_durable_payload",
-            lambda _payload: SimpleNamespace(),
+            lambda _payload: SimpleNamespace(
+                template="authored" if failure_mode else "test"
+            ),
         )
         monkeypatch.setattr(
             endpoint, "_validate_authored_exact_admission", lambda _request: None
@@ -889,9 +966,29 @@ async def _default_pipeline_merges_publication_result(tmp_path: Path, monkeypatc
             progress_reporter,
             sql_session,
         ):
+            nonlocal generation_calls
+            generation_calls += 1
             assert export_cookie_header is None
             assert generation_job.id == job_id
             assert progress_reporter == context.progress
+            if failure_mode:
+                _request._authored_timing_stage = "quality"
+                _request._authored_generation_timing_recorder.record_stage_ms(
+                    "quality", 23
+                )
+                # Match the real endpoint: rollback expires both ORM rows;
+                # a handled failure then commits only the task-status error.
+                await sql_session.rollback()
+                assert "id" in inspect(generation_job).expired_attributes
+                assert "error" in inspect(async_status).expired_attributes
+                if failure_mode == "raised":
+                    raise terminal_error
+                async_status.status = "failed"
+                async_status.error = terminal_error.as_safe_dict(attempt_number=1)
+                sql_session.add(async_status)
+                await sql_session.commit()
+                assert "id" in inspect(generation_job).expired_attributes
+                return
             async_status.status = "completed"
             presentation = await sql_session.get(
                 PresentationModel, presentation_id
@@ -924,15 +1021,60 @@ async def _default_pipeline_merges_publication_result(tmp_path: Path, monkeypatc
             fencing_token=1,
         )
         context = _PipelineContext(claim)
+        if failure_mode:
+            async with maker() as session, session.begin():
+                operation = await session.get(WorkspaceOperation, operation_id)
+                operation.state = "running"
+                operation.attempt_number = claim.attempt_number
+                operation.attempt_token = claim.attempt_token
+                operation.fencing_token = claim.fencing_token
+            if failure_mode == "projection":
+                async def fail_timing_projection(*, session, **_kwargs):
+                    await session.rollback()
+                    raise RuntimeError("injected_timing_projection_failure")
+
+                monkeypatch.setattr(
+                    adapter, "_project_failed_attempt_timing", fail_timing_projection
+                )
         handler = PresentationGenerationOperationHandler(
             session_factory=maker,
             internal_header_provider=lambda: {},  # not used by this direct call
         )
         owner_token = set_current_owner_id(OWNER_ID)
         try:
-            result = await handler._run_existing_pipeline(
-                job_id, task_id, None, context
-            )
+            if failure_mode:
+                expected_error = (
+                    AuthoredStageError
+                    if failure_mode == "raised"
+                    else NonRetryableWorkspaceOperationError
+                )
+                with pytest.raises(expected_error) as caught:
+                    await handler._run_existing_pipeline(
+                        job_id, task_id, None, context
+                    )
+                assert caught.value.code == terminal_error.code
+                assert caught.value.retryable is False
+                if failure_mode == "raised":
+                    assert caught.value is terminal_error
+                assert generation_calls == 1
+                receipts = load_generation_attempt_timing_receipts(job_id)
+                assert len(receipts) == 1
+                receipt = receipts[0]
+                assert receipt.outcome == "failed"
+                assert receipt.failure_stage == "quality"
+                assert dict(receipt.stage_timings_ms)["quality"] >= 23
+                assert dict(receipt.causes)["retryReason"] == "terminal_failure"
+                assert dict(receipt.causes)["stageReason"] == terminal_error.code
+                async with maker() as session:
+                    operation = await session.get(WorkspaceOperation, operation_id)
+                    if failure_mode == "projection":
+                        assert not operation.result
+                    else:
+                        assert operation.result["generation_timing_receipt"] == (
+                            receipt.to_dict()
+                        )
+                return
+            result = await handler._run_existing_pipeline(job_id, task_id, None, context)
         finally:
             reset_current_owner_id(owner_token)
         assert result.result_revision == 1

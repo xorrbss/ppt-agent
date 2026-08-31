@@ -453,6 +453,7 @@ def test_phase2_sqlite_lifecycle_is_contract_only(monkeypatch, tmp_path: Path) -
                 assert replay.id == admitted.id
                 assert replay.deadline_at == admitted.deadline_at == fixed_deadline
                 assert admitted.fence == 1
+                assert admitted.retry_request_limit == 2
 
             lease_hash = "c" * 64
             async with maker() as session, session.begin():

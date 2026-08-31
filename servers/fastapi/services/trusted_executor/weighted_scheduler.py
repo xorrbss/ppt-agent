@@ -109,6 +109,7 @@ class ScheduledOperation:
     owner_id: str
     presentation_id: str
     weight: int = 1
+    dispatch_id: str | None = None
 
     def __post_init__(self) -> None:
         for field_name in (
@@ -120,6 +121,20 @@ class ScheduledOperation:
         ):
             _identifier(getattr(self, field_name), field_name)
         _positive(self.weight, "weight")
+        if self.dispatch_id is not None:
+            _identifier(self.dispatch_id, "dispatch_id")
+
+    @property
+    def scheduling_key(self) -> str:
+        """Return the process-local launch identity.
+
+        A durable operation may contain several independent slide jobs.  Those
+        jobs retain one authority ``operation_id`` while using distinct
+        ``dispatch_id`` values so the volatile scheduler can reserve them in
+        parallel without weakening the upstream operation fence.
+        """
+
+        return self.dispatch_id or self.operation_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -176,11 +191,12 @@ class WeightedScheduler:
         self._dispatch_order = 0
 
     def submit(self, operation: ScheduledOperation) -> None:
-        """Queue one operation; operation identifiers cannot be concurrently reused."""
+        """Queue one launch; process-local dispatch identifiers are unique."""
         with self._lock:
-            if operation.operation_id in self._pending or operation.operation_id in self._active:
-                raise ValueError(f"operation is already scheduled: {operation.operation_id}")
-            self._pending[operation.operation_id] = (
+            scheduling_key = operation.scheduling_key
+            if scheduling_key in self._pending or scheduling_key in self._active:
+                raise ValueError(f"operation is already scheduled: {scheduling_key}")
+            self._pending[scheduling_key] = (
                 operation,
                 self._enqueue_order,
                 self._dispatch_order,
@@ -217,15 +233,16 @@ class WeightedScheduler:
                 )
 
             operation, _, _ = chosen
-            del self._pending[operation.operation_id]
-            self._generation_by_operation[operation.operation_id] += 1
+            scheduling_key = operation.scheduling_key
+            del self._pending[scheduling_key]
+            self._generation_by_operation[scheduling_key] += 1
             self._dispatch_order += 1
             reservation = Reservation(
                 operation=operation,
-                generation=self._generation_by_operation[operation.operation_id],
+                generation=self._generation_by_operation[scheduling_key],
                 dispatch_order=self._dispatch_order,
             )
-            self._active[operation.operation_id] = reservation
+            self._active[scheduling_key] = reservation
             self._increment_counts(operation)
             self._increment_served(operation)
             return reservation
@@ -233,10 +250,11 @@ class WeightedScheduler:
     def release(self, reservation: Reservation) -> bool:
         """Release exactly the active generation.  A stale token cannot release new work."""
         with self._lock:
-            active = self._active.get(reservation.operation.operation_id)
+            scheduling_key = reservation.operation.scheduling_key
+            active = self._active.get(scheduling_key)
             if active != reservation:
                 return False
-            del self._active[reservation.operation.operation_id]
+            del self._active[scheduling_key]
             self._decrement_counts(reservation.operation)
             return True
 

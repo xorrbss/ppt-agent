@@ -467,7 +467,13 @@ class WorkspaceActionReceipt(SQLModel, table=True):
 class WorkspaceArtifact(SQLModel, table=True):
     __tablename__ = "workspace_artifacts"
     __table_args__ = (
-        UniqueConstraint("storage_key", name="uq_workspace_artifacts_storage_key"),
+        Index(
+            "uq_workspace_artifacts_local_storage_key",
+            "storage_key",
+            unique=True,
+            postgresql_where=text("public_artifact_id IS NULL"),
+            sqlite_where=text("public_artifact_id IS NULL"),
+        ),
         UniqueConstraint(
             "export_attempt_id",
             name="uq_workspace_artifacts_export_attempt_id",

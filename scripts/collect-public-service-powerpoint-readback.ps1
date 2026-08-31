@@ -356,7 +356,8 @@ $resolvedArtifacts = @($manifest.artifacts | ForEach-Object {
   Resolve-ManifestArtifact $_ $repositoryRoot
 })
 $availableDeckIds = @($resolvedArtifacts.deckId | Sort-Object -Unique)
-$selectedDeckIds = if ($DeckId.Count -gt 0) { @($DeckId | Sort-Object -Unique) } else {
+# Capture the whole conditional: branch-local @() is unrolled by the pipeline.
+$selectedDeckIds = @(if ($DeckId.Count -gt 0) { @($DeckId | Sort-Object -Unique) } else {
   @($availableDeckIds | Where-Object {
     $candidate = $_
     @($resolvedArtifacts | Where-Object {
@@ -366,7 +367,7 @@ $selectedDeckIds = if ($DeckId.Count -gt 0) { @($DeckId | Sort-Object -Unique) }
       $_.deckId -eq $candidate -and $_.mediaType -eq 'application/pdf'
     }).Count -eq 1
   })
-}
+})
 if ($selectedDeckIds.Count -lt 1) {
   throw 'no-complete-pptx-pdf-product-artifact-pair'
 }
@@ -431,11 +432,11 @@ foreach ($pair in $pairs) {
   $powerPointReport = if (Test-Path -LiteralPath $powerPointReportPath -PathType Leaf) {
     Get-Content -LiteralPath $powerPointReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
   } else { $null }
-  $powerPointPresentation = if ($null -ne $powerPointReport) {
+  $powerPointPresentation = @(if ($null -ne $powerPointReport) {
     @($powerPointReport.Presentations | Where-Object {
       [IO.Path]::GetFullPath([string]$_.Path) -eq [IO.Path]::GetFullPath($pair.pptx.path)
     })
-  } else { @() }
+  } else { @() })
   $powerPointPassed =
     $powerPointInvocation.exitCode -eq 0 -and
     $powerPointPresentation.Count -eq 1 -and
@@ -457,9 +458,9 @@ foreach ($pair in $pairs) {
   $libreOfficeReport = if (Test-Path -LiteralPath $libreOfficeReportPath -PathType Leaf) {
     Get-Content -LiteralPath $libreOfficeReportPath -Raw -Encoding UTF8 | ConvertFrom-Json
   } else { $null }
-  $libreOfficeEngine = if ($null -ne $libreOfficeReport) {
+  $libreOfficeEngine = @(if ($null -ne $libreOfficeReport) {
     @($libreOfficeReport.engines | Where-Object { $_.engine -eq 'LibreOffice' })
-  } else { @() }
+  } else { @() })
   $libreOfficePassed =
     $libreOfficeInvocation.exitCode -eq 0 -and
     $null -ne $libreOfficeReport -and

@@ -21,6 +21,16 @@ def _stub_runtime_settings_coordinator(monkeypatch):
         "stop_runtime_settings_coordinator",
         AsyncMock(),
     )
+    monkeypatch.setattr(
+        lifespan,
+        "start_account_deletion_controller",
+        AsyncMock(),
+    )
+    monkeypatch.setattr(
+        lifespan,
+        "stop_account_deletion_controller",
+        AsyncMock(),
+    )
 
 
 def test_managed_database_guard_precedes_schema_mutation(monkeypatch):
@@ -114,6 +124,16 @@ def test_unsupported_sql_runtime_precedes_schema_mutation(monkeypatch):
 
 def test_database_admin_bootstrap_runs_during_startup(monkeypatch, tmp_path):
     bootstrap_admin = AsyncMock()
+    monkeypatch.setenv("ENVIRONMENT", "local")
+    monkeypatch.setenv("WORKSPACE_OPERATION_WORKER_MODE", "embedded")
+    monkeypatch.setattr(
+        lifespan,
+        "sql_engine",
+        SimpleNamespace(
+            url="sqlite+aiosqlite:///local-lifespan.db",
+            dialect=SimpleNamespace(name="sqlite"),
+        ),
+    )
     async_steps = (
             "migrate_database_on_startup",
             "create_db_and_tables",
@@ -167,6 +187,21 @@ def test_database_admin_bootstrap_runs_during_startup(monkeypatch, tmp_path):
     lifespan.stop_workspace_cleanup_maintenance.assert_awaited_once_with()
     lifespan.start_runtime_settings_coordinator.assert_awaited_once_with()
     lifespan.stop_runtime_settings_coordinator.assert_awaited_once_with()
+    lifespan.start_account_deletion_controller.assert_awaited_once_with(
+        worker_id="embedded-local:account-deletion"
+    )
+    lifespan.stop_account_deletion_controller.assert_awaited_once_with()
+
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setattr(
+        lifespan,
+        "sql_engine",
+        SimpleNamespace(
+            url="postgresql+asyncpg://api@db/presenton",
+            dialect=SimpleNamespace(name="postgresql"),
+        ),
+    )
+    assert lifespan._should_start_local_account_deletion_controller() is False
 
 
 def test_export_only_validation_skips_provider_availability(monkeypatch, tmp_path):

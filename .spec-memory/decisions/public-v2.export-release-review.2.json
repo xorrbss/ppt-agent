@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "key": "public-v2.export-release-review",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Release review seals exact source/result HTML, runtime and checker identities; mutations and recovered commits require verified post-review gates.",
+  "scope": [
+    "public-v2",
+    "workspace-quality",
+    "workspace-export",
+    "public-workers"
+  ],
+  "invariants": [
+    "Review provider calls and costs remain fenced by their own public admission; the generation worker owns quality.review.",
+    "Export may use only the reviewed source revision or the review result revision under the same owner and tenant.",
+    "A PASS is derived only from complete full-deck review evidence bound to source/result HTML, render runtime, assets and checker policy.",
+    "Mutating review results require deterministic post-review capacity, QID and browser safety validation; source-reflow requires renewed source readback.",
+    "A recovered completed mutating task may publish its result revision but cannot manufacture PASS; a sealed recheck transition requires a subsequent full review.",
+    "Stale or invalid completed review receipts cannot suppress a replacement review."
+  ],
+  "forbidden": [
+    "Bypass blocked review with the development QualityReceiptV3.",
+    "Synthesize or relax a quality PASS.",
+    "Treat local Windows runtime evidence as production isolation or deployment authorization."
+  ],
+  "evidence": [
+    "servers/fastapi/services/public_v2_orchestrator.py",
+    "servers/fastapi/services/workspace_quality_operation_handler.py",
+    "servers/fastapi/services/workspace_quality_export_operation_handlers.py",
+    "servers/fastapi/services/workspace_operation_worker.py",
+    "servers/fastapi/tests/unit/test_workspace_quality_export_operations.py"
+  ],
+  "supersedes": "public-v2.export-release-review@1",
+  "recordedAt": "2026-08-30T19:59:09.9458340+00:00"
+}

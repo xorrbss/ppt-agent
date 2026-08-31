@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.measurement.rounded-owned-paint",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Occlusion samples exclude provably unpainted rounded surface corners while retaining owned text samples and strict unknown/coverage gates.",
+  "scope": [
+    "authored",
+    "measurement",
+    "occlusion"
+  ],
+  "invariants": [
+    "Only supported childless HTML surfaces use CSS-normalized per-corner px/percent radii and a conservative antialias boundary band.",
+    "Surface domains are local to each leaf; owned text fragments remain independent and contribute to the coarse union and all text seeds.",
+    "Complex paint or mapping effects retain the prior rectangle/unknown behavior; excluded samples are never counted as visible or known.",
+    "The 5 percent unknown limit, nonempty known evidence, actual cover detection, original HTML/PNG and QID geometry remain unchanged.",
+    "Occlusion, DOM and measurement cache identities change together; retained evidence is remeasured instead of relabeled."
+  ],
+  "forbidden": [
+    "Unknown-to-pass substitution, threshold weakening, exclusion of owned text or inherited parent clipping domains.",
+    "Removing unsupported paint evidence or mutating authored content to obtain a sensor pass."
+  ],
+  "evidence": [
+    "servers/fastapi/utils/slide_capture_rounded_paint.py",
+    "servers/fastapi/utils/slide_capture.py",
+    "servers/fastapi/tests/unit/test_authored_browser_metrics.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-30T23:08:19.7337413+00:00"
+}

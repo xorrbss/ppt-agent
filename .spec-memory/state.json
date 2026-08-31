@@ -2,44 +2,32 @@
   "schemaVersion": 2,
   "active": true,
   "projectName": "ppt-agent",
-  "activeTask": "Integrate and validate the remaining public PPT generation and export architecture across bounded multi-session lanes",
+  "activeTask": "PPT 생성·Fidelity 익스포트·웹 서비스의 확인된 P0/P1 문제를 구현으로 해결하고 최신 코드 기준 실제 제품 경로와 필요한 릴리스 증거를 확보한다",
   "taskContext": {
     "paths": [
-      "servers/fastapi/services",
-      "servers/fastapi/workers",
-      "servers/fastapi/api/v2",
+      "servers/nextjs/lib/authored-hybrid/export.ts",
       "servers/fastapi/services/public_operation_admission.py",
-      "servers/fastapi/services/artifact_store.py",
+      "servers/fastapi/services/authored_presentation_generation.py",
       "servers/fastapi/services/trusted_executor",
-      "servers/fastapi/services/authored_quality_receipt_v2.py",
-      "servers/nextjs/app/api/v2"
+      "servers/fastapi/services/artifact_store.py",
+      "servers/fastapi/api"
     ],
     "scopes": [
-      "service-boundary",
-      "worker-isolation",
-      "artifact-authority",
-      "public-admission",
-      "release-evidence",
-      "public-generation-export",
-      "api",
-      "control-plane",
-      "artifact",
-      "executor",
-      "quality",
-      "hybrid",
-      "release-readiness"
+      "public-v2",
+      "authored-generation",
+      "fidelity-export",
+      "trusted-execution",
+      "database-authority",
+      "retention",
+      "observability"
     ],
     "includeKeys": [
-      "service.boundary.external-platform",
-      "service.architecture.modular-worker-boundary",
-      "artifact.public-content-authority",
-      "service.public-admission-budget-boundary",
-      "public-generation-export.execution-orchestration",
+      "authored.author-provider-call-budget",
+      "public-v2.fidelity-only-browser-export",
+      "public-v2.browser-operation-lifecycle",
       "public-export.runtime.no-docker",
-      "authored.release-export-atomic-binding",
-      "authored.quality-composition-first",
-      "authored.hybrid-release-native-coverage-gate",
-      "source-content.template-restyle-contract"
+      "public-db.controller-authority",
+      "public-export.fidelity-performance-contract"
     ]
   },
   "bindingPolicy": {
@@ -99,21 +87,30 @@
     "public-export.runtime.no-docker": "decisions/public-export.runtime.no-docker.1.json",
     "public-service.remediation.multi-session-workflow": "decisions/public-service.remediation.multi-session-workflow.1.json",
     "public-release.evidence-gating": "decisions/public-release.evidence-gating.1.json",
-    "public-generation.failed-attempt-timing": "decisions/public-generation.failed-attempt-timing.2.json",
+    "public-generation.failed-attempt-timing": "decisions/public-generation.failed-attempt-timing.3.json",
     "public-export.fidelity-performance-contract": "decisions/public-export.fidelity-performance-contract.2.json",
     "public-v2.fidelity-only-browser-export": "decisions/public-v2.fidelity-only-browser-export.1.json",
     "public-v2.browser-operation-lifecycle": "decisions/public-v2.browser-operation-lifecycle.1.json",
     "public-worker.windows-attestation-boundary": "decisions/public-worker.windows-attestation-boundary.1.json",
     "public-auth.external-issuer-tenant-boundary": "decisions/public-auth.external-issuer-tenant-boundary.2.json",
     "public-worker.provenance-attestation": "decisions/public-worker.provenance-attestation.1.json",
-    "public-db.controller-authority": "decisions/public-db.controller-authority.1.json"
+    "public-db.controller-authority": "decisions/public-db.controller-authority.1.json",
+    "public-v2.export-release-review": "decisions/public-v2.export-release-review.2.json",
+    "public-account.deletion-controller": "decisions/public-account.deletion-controller.1.json",
+    "artifact.shared-cas-lifetime": "decisions/artifact.shared-cas-lifetime.2.json",
+    "authored.recovery.owned-text-paint-order": "decisions/authored.recovery.owned-text-paint-order.1.json",
+    "authored.author.dynamic-title-recovery": "decisions/authored.author.dynamic-title-recovery.2.json",
+    "public-quality.v3-evidence-projection": "decisions/public-quality.v3-evidence-projection.1.json",
+    "public-worker.local-dispatch-evidence": "decisions/public-worker.local-dispatch-evidence.1.json",
+    "authored.measurement.glyph-clipping": "decisions/authored.measurement.glyph-clipping.1.json",
+    "authored.measurement.rounded-owned-paint": "decisions/authored.measurement.rounded-owned-paint.3.json",
+    "authored.measurement.thin-viewport-edge": "decisions/authored.measurement.thin-viewport-edge.1.json",
+    "authored.generation.decoration-containment": "decisions/authored.generation.decoration-containment.1.json",
+    "authored.semantic.header-title-owner": "decisions/authored.semantic.header-title-owner.1.json",
+    "authored.measurement.convex-polygon-owned-paint": "decisions/authored.measurement.convex-polygon-owned-paint.1.json"
   },
   "readFirst": [
-    "AGENTS.md",
-    "docs/public-generation-export-target-design-handoff-20260830.md",
-    "docs/public-generation-artifact-export-durability-contract-20260830.md",
-    "docs/public-generation-export-phase6-quality-contract-session-e-20260830.md",
-    "docs/public-generation-export-phase8-phase9-readiness-manifest-20260830.md"
+    "AGENTS.md"
   ],
-  "updatedAt": "2026-08-30T14:42:26.4840369+00:00"
+  "updatedAt": "2026-08-31T04:09:31.9096746+00:00"
 }

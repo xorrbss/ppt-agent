@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.recovery.owned-text-paint-order",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Measured text occlusion by empty sibling paint may use z-index-only local repair; changed candidates require fresh strict admission.",
+  "scope": [
+    "authored",
+    "recovery",
+    "render"
+  ],
+  "invariants": [
+    "Allow only ordinary source-free HTML with exact raw HTML digest, complete v16 telemetry and a unique directly bound QID inventory.",
+    "Require measured known text occlusion, a shared directly proven flex/grid parent, stable stacking and zero geometry movement proof.",
+    "Raise only a static owned-text leaf above empty supporting or decorative sibling paint using scoped z-index; preserve text and geometry.",
+    "Reject source bindings, unknown evidence, complex content occluders, descendants, incompatible styles and other intersecting owners.",
+    "Separate changed local candidates from original strict review; bind fresh HTML PNG metrics and apply semantic, capacity and safety admission.",
+    "Preserve provider and repair budgets, other checkpoints and terminal residual behavior; the repair grants no extra provider call."
+  ],
+  "forbidden": [
+    "Changing safety thresholds or marking an obstruction intentional.",
+    "Removing or hiding painted elements or rewriting text, QIDs, roles or dimensions.",
+    "Publishing a changed candidate with stale pixels or telemetry."
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_composition_policy.py",
+    "servers/fastapi/services/authored_presentation_generation.py",
+    "servers/fastapi/tests/unit/test_authored_composition_policy.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-30T20:59:46.2968496+00:00"
+}

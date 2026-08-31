@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import asyncio
 import base64
+from contextvars import copy_context
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from functools import partial
 from hashlib import sha256
 import hmac
 import io
@@ -25,7 +27,7 @@ from typing import Any, BinaryIO, Iterator, Literal, Protocol
 from urllib.parse import urlencode, urlsplit
 import uuid
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -53,6 +55,86 @@ class ArtifactBindingError(ArtifactStoreError):
 
 class ArtifactNotFound(ArtifactStoreError):
     pass
+
+
+class ArtifactKeyBusy(ArtifactStoreError):
+    """The caller must roll back the owning transaction before retrying."""
+
+    code = "artifact.cas_key_busy"
+    retryable = True
+
+    def __init__(self) -> None:
+        super().__init__(self.code)
+
+
+async def try_artifact_key_guard(
+    session: AsyncSession,
+    reference: ArtifactRef,
+    *,
+    for_physical_delete: bool = False,
+) -> bool:
+    """Hold a cluster-wide CAS-key guard until the outer transaction ends.
+
+    Never wait while holding another key: one transaction can register multiple
+    objects in any order. A busy writer must unwind its entire transaction.
+    SQLite is metadata-only development support, never physical-GC authority.
+    """
+
+    dialect = session.get_bind().dialect.name
+    if dialect == "sqlite":
+        if (os.getenv("ENVIRONMENT") or "").strip().lower() not in {
+            "local", "development", "test",
+        }:
+            raise ArtifactStoreError("artifact.cas_guard_sqlite_not_development")
+        return not for_physical_delete
+    if dialect != "postgresql":
+        raise ArtifactStoreError("artifact.cas_guard_authority_unavailable")
+    with session.no_autoflush:
+        isolation = await session.scalar(text("SELECT current_setting('transaction_isolation')"))
+        if isolation != "read committed":
+            if for_physical_delete:
+                return False
+            raise ArtifactStoreError("artifact.cas_guard_requires_read_committed")
+        key = int.from_bytes(
+            sha256(("public-artifact-cas/v1\0" + reference.storage_key).encode()).digest()[:8],
+            byteorder="big",
+            signed=True,
+        )
+        return await session.scalar(
+            text("SELECT pg_try_advisory_xact_lock(:artifact_cas_key)"),
+            {"artifact_cas_key": key},
+        ) is True
+
+
+async def require_artifact_key_guard(session: AsyncSession, reference: ArtifactRef) -> None:
+    if not await try_artifact_key_guard(session, reference):
+        raise ArtifactKeyBusy()
+
+
+async def _await_physical_delete_completion(completion: asyncio.Future[Any]) -> None:
+    """Drain owned deletion work before cancellation can release its DB guard.
+
+    The raw executor Future must stay shielded too: event-loop shutdown can
+    independently cancel a delete Task while its native thread is still busy.
+    This covers task cancellation, not process loss or ambiguous remote I/O.
+    """
+
+    cancellation: asyncio.CancelledError | None = None
+    while not completion.done():
+        try:
+            await asyncio.shield(completion)
+        except asyncio.CancelledError as error:
+            if cancellation is None:
+                cancellation = error
+        except BaseException:
+            if cancellation is None:
+                raise
+            break
+    if cancellation is not None:
+        if not completion.cancelled():
+            completion.exception()
+        raise cancellation
+    completion.result()
 
 
 class ExportIdentityConflict(ArtifactStoreError):
@@ -601,7 +683,11 @@ class LocalDevelopmentArtifactObjectStore:
             return False
 
     async def delete(self, artifact: ArtifactRef) -> None:
-        await asyncio.to_thread(self._path(artifact).unlink, missing_ok=True)
+        completion = asyncio.get_running_loop().run_in_executor(
+            None, copy_context().run,
+            partial(self._path(artifact).unlink, missing_ok=True),
+        )
+        await _await_physical_delete_completion(completion)
 
     async def create_signed_download(
         self, artifact: ArtifactRef, *, expires_seconds: int
@@ -1226,11 +1312,15 @@ class S3ArtifactObjectStore:
 
     async def delete(self, artifact: ArtifactRef) -> None:
         try:
-            await asyncio.to_thread(
-                self._client.delete_object,
-                Bucket=self._bucket,
-                Key=self._key(artifact),
+            completion = asyncio.get_running_loop().run_in_executor(
+                None, copy_context().run,
+                partial(
+                    self._client.delete_object,
+                    Bucket=self._bucket,
+                    Key=self._key(artifact),
+                ),
             )
+            await _await_physical_delete_completion(completion)
         except Exception as exc:
             raise ArtifactStoreError("artifact.object_store_delete_failed") from exc
 
@@ -1424,6 +1514,7 @@ class DurableArtifactService:
     ) -> ArtifactRef:
         """Register worker-produced immutable bytes after object readback."""
 
+        await require_artifact_key_guard(session, reference)
         if not await self._object_store.exists(reference):
             raise ArtifactNotFound("artifact.worker_output_missing")
         row = PublicArtifact(
@@ -1460,10 +1551,15 @@ class DurableArtifactService:
                     PublicArtifact.created_by_operation_id
                     == reference.created_by_operation_id,
                     PublicArtifact.retention_class == reference.retention_class,
-                )
+                ).execution_options(populate_existing=True)
             )
             if existing is None:
                 raise ArtifactStoreError("artifact.metadata_deduplication_failed")
+            if existing.lifecycle_state != "committed" or (
+                existing.to_ref().model_dump(exclude={"artifact_id"})
+                != reference.model_dump(exclude={"artifact_id"})
+            ):
+                raise ArtifactBindingError("artifact.metadata_deduplication_not_committed_or_exact")
             log_public_operation_correlation(
                 operation_id=reference.created_by_operation_id,
                 component="upload",
@@ -1471,6 +1567,53 @@ class DurableArtifactService:
                 outcome="replayed",
             )
             return existing.to_ref()
+
+    async def register_consumer_ref(
+        self,
+        session: AsyncSession,
+        producer_ref: ArtifactRef,
+        *,
+        created_by_operation_id: uuid.UUID,
+    ) -> ArtifactRef:
+        """Bind an exact committed producer's CAS bytes to another operation."""
+
+        await require_artifact_key_guard(session, producer_ref)
+        producer = await session.scalar(
+            select(PublicArtifact)
+            .where(
+                PublicArtifact.id == producer_ref.artifact_id,
+                PublicArtifact.owner_id == producer_ref.owner_id,
+                PublicArtifact.tenant_id == producer_ref.tenant_id,
+                PublicArtifact.storage_key == producer_ref.storage_key,
+                PublicArtifact.sha256 == producer_ref.sha256,
+                PublicArtifact.lifecycle_state == "committed",
+            )
+            .execution_options(populate_existing=True)
+        )
+        if producer is None or producer.to_ref() != producer_ref:
+            raise ArtifactBindingError("artifact.consumer_producer_not_committed_or_exact")
+        opened = await self.open_read_stream(producer_ref)
+
+        def verify_producer_bytes() -> None:
+            digest = sha256()
+            size = 0
+            try:
+                for chunk in opened.iter_chunks(chunk_size=1024 * 1024):
+                    size += len(chunk)
+                    if size > producer_ref.size_bytes:
+                        raise ArtifactBindingError("artifact.consumer_producer_bytes_mismatch")
+                    digest.update(chunk)
+                if size != producer_ref.size_bytes or digest.hexdigest() != producer_ref.sha256:
+                    raise ArtifactBindingError("artifact.consumer_producer_bytes_mismatch")
+            finally:
+                opened.close()
+
+        await asyncio.to_thread(verify_producer_bytes)
+        consumer_ref = producer_ref.model_copy(update={
+            "artifact_id": uuid.uuid4(),
+            "created_by_operation_id": created_by_operation_id,
+        })
+        return await self.register_ref(session, consumer_ref)
 
     async def stage_ref_to_path(
         self,
@@ -1648,6 +1791,7 @@ class DurableArtifactService:
         provisional = ProvisionalArtifactRef.create(reference)
         try:
             await self._object_store.put_provisional_stream(provisional, source)
+            await require_artifact_key_guard(session, reference)
             await self._object_store.commit_provisional(provisional)
         except BaseException:
             try:

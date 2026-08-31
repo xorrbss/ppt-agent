@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.measurement.thin-viewport-edge",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Retry thin viewport-edge hit tests only inside proven plain opaque paint; preserve real clipping, unknown measurements, and sample counts.",
+  "scope": [
+    "authored",
+    "measurement",
+    "release-review"
+  ],
+  "invariants": [
+    "Only childless opaque HTML DIV surfaces <=1px at viewport edges qualify after original owner hit tests fail.",
+    "At most two interior probes remain strictly inside original paint, viewport, and clipping bounds; original sample must be inside clip.",
+    "Ancestor mapping, paint, border/radius overflow clips, containment, visibility, and clip margin exclusions remain fail-closed.",
+    "Reprobes use actual hit stacks and unchanged occluder logic; no sample, denominator, unknown threshold, or safety gate is dropped.",
+    "Original HTML, PNG, owner geometry and style remain unchanged; DOM, measurement and occlusion cache versions advance together."
+  ],
+  "forbidden": [
+    "Do not infer visible paint from geometry alone or treat unsupported clipping and missing owner hits as measured clear.",
+    "Do not expand to text, replaced elements, transparent or complex paint without separately proven support."
+  ],
+  "evidence": [
+    "servers/fastapi/utils/slide_capture_hit_test.py",
+    "servers/fastapi/utils/slide_capture.py",
+    "servers/fastapi/tests/unit/test_authored_browser_metrics.py::test_render_collects_dom_metrics_in_the_same_browser_invocation"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-30T23:36:54.6636325+00:00"
+}

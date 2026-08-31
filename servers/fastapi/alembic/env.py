@@ -69,6 +69,7 @@ from models.sql.workspace import (  # noqa: F401, E402
     WorkspaceOutbox,
 )
 from models.sql.user import User  # noqa: F401, E402
+from models.sql.account_deletion_request import AccountDeletionRequest  # noqa: F401, E402
 from models.sql.access_token import AccessToken  # noqa: F401, E402
 from models.sql.provider_settings import ProviderSettings  # noqa: F401, E402
 from models.sql.reference_snapshot import ReferenceSnapshot  # noqa: F401, E402

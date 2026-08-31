@@ -39,7 +39,7 @@ LEGACY_GENERATION_TIMING_STAGES = (
 )
 GENERATION_OBSERVABILITY_METRICS = (
     "queueWait", "queuePosition", "outlineDuration", "authorDuration",
-    "illustrationDuration", "renderDuration", "qualityDuration",
+    "illustrationDuration", "renderDuration", "qualityDuration", "repairDuration",
     "checkpointDuration", "publicationDuration", "exportDuration",
     "providerInitialCalls", "providerRetryCalls", "providerLogicalOrdinal",
     "estimatedTokens", "actualTokens", "estimatedCost", "actualCost",
@@ -49,9 +49,14 @@ GENERATION_OBSERVABILITY_METRICS = (
     "workerPeakHandles", "artifactBytes", "cacheHit", "cacheMiss",
     "cacheEviction", "objectStoreLatency", "finalOutcome",
 )
-LEGACY_GENERATION_OBSERVABILITY_METRICS = tuple(
+PRE_REPAIR_GENERATION_OBSERVABILITY_METRICS = tuple(
     name
     for name in GENERATION_OBSERVABILITY_METRICS
+    if name != "repairDuration"
+)
+LEGACY_GENERATION_OBSERVABILITY_METRICS = tuple(
+    name
+    for name in PRE_REPAIR_GENERATION_OBSERVABILITY_METRICS
     if name not in {"stageRetryCalls", "stageEstimatedCost", "stageActualCost"}
 )
 _TEXT_METRICS = frozenset(("fencingOutcome", "finalOutcome"))
@@ -119,6 +124,28 @@ _PROVIDER_USAGE_COUNTERS = (
     "actualCostMicrounits",
     "estimatedCostMicrounits",
 )
+_ATTEMPT_CAUSE_KEYS = ("queueReason", "stageReason", "retryReason")
+
+
+def _attempt_causes(value: object | None) -> tuple[tuple[str, str], ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, Mapping) or set(value) != set(_ATTEMPT_CAUSE_KEYS):
+        raise ValueError("generation_attempt_causes_invalid")
+    output: list[tuple[str, str]] = []
+    for key in _ATTEMPT_CAUSE_KEYS:
+        reason = str(value.get(key) or "").strip().lower()
+        if (
+            not reason
+            or len(reason) > 64
+            or any(
+                character not in "abcdefghijklmnopqrstuvwxyz0123456789._-"
+                for character in reason
+            )
+        ):
+            raise ValueError("generation_attempt_causes_invalid")
+        output.append((key, reason))
+    return tuple(output)
 
 
 def _stage_metric_values(value: object, field_name: str) -> dict[str, int]:
@@ -184,12 +211,19 @@ def _stage_timings(value: object) -> tuple[tuple[str, int], ...]:
 def _observability_metrics(value: object) -> tuple[tuple[str, dict[str, object]], ...]:
     if not isinstance(value, Mapping):
         raise ValueError("generation_observability_metrics_invalid")
-    metric_names = (
-        GENERATION_OBSERVABILITY_METRICS
-        if set(value) == set(GENERATION_OBSERVABILITY_METRICS)
-        else LEGACY_GENERATION_OBSERVABILITY_METRICS
-        if set(value) == set(LEGACY_GENERATION_OBSERVABILITY_METRICS)
-        else None
+    # Keep the two previously sealed shapes readable without filling missing
+    # metrics. Every supported profile still requires its exact complete set.
+    metric_names = next(
+        (
+            names
+            for names in (
+                GENERATION_OBSERVABILITY_METRICS,
+                PRE_REPAIR_GENERATION_OBSERVABILITY_METRICS,
+                LEGACY_GENERATION_OBSERVABILITY_METRICS,
+            )
+            if set(value) == set(names)
+        ),
+        None,
     )
     if metric_names is None:
         raise ValueError("generation_observability_metrics_invalid")
@@ -573,6 +607,7 @@ class GenerationAttemptTimingReceipt:
     quality_receipt_digest: str | None = None
     provider_usage: dict[str, object] | None = None
     checkpoint_signals: tuple[dict[str, object], ...] = ()
+    causes: tuple[tuple[str, str], ...] = ()
     receipt_digest: str = ""
 
     def to_dict(self) -> dict[str, object]:
@@ -593,6 +628,8 @@ class GenerationAttemptTimingReceipt:
             payload["providerUsage"] = self.provider_usage
         if self.checkpoint_signals:
             payload["checkpointSignals"] = list(self.checkpoint_signals)
+        if self.causes:
+            payload["causes"] = dict(self.causes)
         return payload
 
 
@@ -649,6 +686,7 @@ def _attempt_receipt_from_dict(value: object) -> GenerationAttemptTimingReceipt:
         ),
         provider_usage=_provider_usage(value.get("providerUsage")),
         checkpoint_signals=_checkpoint_signals(value.get("checkpointSignals", ())),
+        causes=_attempt_causes(value.get("causes")),
         receipt_digest=_required_sha256(value.get("receiptDigest"), "receipt_digest"),
     )
     if receipt.receipt_digest != _attempt_receipt_digest(receipt):
@@ -726,6 +764,7 @@ def create_generation_attempt_timing_receipt(
     quality_receipt: QualityReceiptV2 | None = None,
     provider_usage: Mapping[str, object] | None = None,
     checkpoint_signals: Sequence[Mapping[str, object]] = (),
+    causes: Mapping[str, object] | None = None,
 ) -> GenerationAttemptTimingReceipt:
     """Atomically append one immutable success or failure attempt receipt."""
 
@@ -764,6 +803,7 @@ def create_generation_attempt_timing_receipt(
         quality_receipt_digest=quality_digest,
         provider_usage=_provider_usage(provider_usage),
         checkpoint_signals=_checkpoint_signals(checkpoint_signals),
+        causes=_attempt_causes(causes),
     )
     receipt = replace(receipt, receipt_digest=_attempt_receipt_digest(receipt))
     path = generation_attempt_timing_receipt_path(job_id)
@@ -834,7 +874,11 @@ class GenerationTimingRecorder:
         self._checkpoint_signals.append(dict(_checkpoint_signals((signal,))[0]))
 
     def snapshot_stage_timings_ms(self) -> dict[str, int]:
-        return dict(self._stage_timings_ms)
+        # Attempt receipts must never expose null/missing core stage timing.
+        return {
+            stage: self._stage_timings_ms.get(stage, 0)
+            for stage in (*GENERATION_TIMING_STAGES, "provider")
+        }
 
     def checkpoint_signals(self) -> tuple[dict[str, object], ...]:
         return tuple(dict(signal) for signal in self._checkpoint_signals)

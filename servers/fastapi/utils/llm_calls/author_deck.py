@@ -11,7 +11,7 @@ import re
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Any, Callable, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Awaitable, Callable, List, Mapping, Optional, Sequence, Tuple
 
 from models.authored_chapter_plan import AuthoredChapterPlan
 from models.authored_header_contract import AuthoredHeaderContract
@@ -30,7 +30,16 @@ from services.authored_composition_policy import (
     SlideCapacity,
     aggregate_owner_capacity_violations,
     build_authored_capacity_plan,
+    canonicalize_authored_capacity_html,
     reduce_authored_owner_text_capacity,
+)
+from services.authored_generation_planner import AuthoredTextPlan, plan_authored_text
+from services.authored_author_capacity_recovery import (
+    authored_owner_capacity_diagnostic,
+    title_capacity_recovery_boundary,
+    title_capacity_recovery_diagnostic,
+    title_capacity_recovery_hint,
+    title_capacity_recovery_qids,
 )
 from utils.llm_calls.author_slide import (
     EXACT_RECONSTRUCTION,
@@ -101,6 +110,9 @@ class AuthoredDeckPlan:
     # Server-frozen text/image envelope.  ``None`` keeps stand-in plans used by
     # older remake/checkpoint callers source-compatible.
     capacity_plan: AuthoredCapacityPlan | None = None
+    # Exact title/body/visible-text accounting produced before provider work.
+    # It shares the capacity authority above and never mutates source content.
+    text_plan: AuthoredTextPlan | None = None
 
 
 # Concurrency is bounded PROCESS-WIDE inside author_slide_html (the AUTHOR_CONCURRENCY-sized
@@ -418,22 +430,35 @@ class AuthoredProviderBudgetExhausted(ValueError):
         detail: object,
         *,
         rejected_html: str | None = None,
+        owner_capacity_diagnostic: dict[str, Any] | None = None,
+        title_token_diagnostic: dict[str, Any] | None = None,
     ) -> None:
         self.code = code
         self.detail = str(detail)
         self.rejected_html = rejected_html
+        self.owner_capacity_diagnostic = owner_capacity_diagnostic
+        self.title_token_diagnostic = title_token_diagnostic
         super().__init__(f"{code}:{self.detail}")
 
 
 class AuthoredAggregateOwnerCapacityExhausted(AuthoredProviderBudgetExhausted):
     """The aggregate owner envelope still failed after both author calls."""
 
-    def __init__(self, violations: Sequence[str], *, rejected_html: str) -> None:
+    def __init__(
+        self, violations: Sequence[str], *, rejected_html: str,
+        capacity: SlideCapacity | None = None, title_recovery_qids: Sequence[str] = (),
+    ) -> None:
         self.violations = tuple(str(value) for value in violations)
+        self.title_recovery_qids = tuple(title_recovery_qids)
+        self.capacity = capacity
         super().__init__(
             "authored_aggregate_owner_capacity_exhausted",
             ",".join(self.violations),
             rejected_html=rejected_html,
+            owner_capacity_diagnostic=(
+                authored_owner_capacity_diagnostic(rejected_html, capacity)
+                if capacity is not None else None
+            ),
         )
 
 
@@ -448,6 +473,14 @@ def _classify_author_validation_error(
     if isinstance(error, AuthoredAggregateOwnerCapacityExhausted) or (
         "authored_aggregate_owner_capacity_exceeded:" in message
     ):
+        if isinstance(error, AuthoredAggregateOwnerCapacityExhausted) and error.title_recovery_qids:
+            return _AuthorValidationCorrection(
+                "aggregate_owner_title_capacity",
+                title_capacity_recovery_hint(
+                    error.violations, error.title_recovery_qids,
+                    rejected_html=error.rejected_html, capacity=error.capacity,
+                ),
+            )
         violations = (
             ",".join(error.violations)
             if isinstance(error, AuthoredAggregateOwnerCapacityExhausted)
@@ -803,7 +836,10 @@ async def _author_one_resilient(
     capacity_brief: str | None = None,
     capacity: SlideCapacity | None = None,
     allow_deterministic_owner_reduction: bool = False,
+    allow_title_capacity_recovery: bool = False,
     attempt_observer: Callable[[int], None] | None = None,
+    provider_attempt_offset: int = 0,
+    attempt_reserver: Callable[[int], Awaitable[None]] | None = None,
 ) -> str:
     """Author one slide with one explicit correction and a branded fallback.
 
@@ -823,21 +859,29 @@ async def _author_one_resilient(
         )
     source_image_ids = tuple(candidate.asset_id for candidate in source_images)
     last_error: object = "invalid HTML"
+    if isinstance(provider_attempt_offset, bool) or provider_attempt_offset not in {0, 1}:
+        raise ValueError("authored provider attempt offset must be 0 or 1")
     attempts_made = 0
     header_reject: str | None = None
     correction_hint: str | None = None
     rejected_html: str | None = None
-    while attempts_made < _MAX_AUTHOR_CALLS_PER_SLIDE:
+    title_recovery: tuple[str, tuple[str, ...]] | None = None
+    while provider_attempt_offset + attempts_made < _MAX_AUTHOR_CALLS_PER_SLIDE:
         attempts_made += 1
+        provider_attempt_ordinal = provider_attempt_offset + attempts_made
+        if attempt_reserver is not None:
+            # This durable reservation precedes every provider/admission await.
+            # Cancellation or process death after it cannot reopen the ordinal.
+            await attempt_reserver(provider_attempt_ordinal)
         if attempt_observer is not None:
-            attempt_observer(attempts_made)
+            attempt_observer(provider_attempt_ordinal)
         local_correction: _AuthorValidationCorrection | None = None
         try:
             kwargs: dict[str, Any] = {
                 "receipt_retry_class": (
-                    "initial" if attempts_made == 1 else "recovery"
+                    "initial" if provider_attempt_ordinal == 1 else "recovery"
                 ),
-                "receipt_attempt_ordinal": attempts_made,
+                "receipt_attempt_ordinal": provider_attempt_ordinal,
                 # author_deck owns the complete two-call budget. An inner
                 # multimodal -> text-only provider retry would make it unauditable.
                 "allow_provider_fallback": False,
@@ -872,7 +916,28 @@ async def _author_one_resilient(
                 **kwargs,
             )
             if is_valid_slide_html(html):
+                if title_recovery is not None:
+                    boundary = title_capacity_recovery_boundary(
+                        title_recovery[0], html, title_recovery[1]
+                    )
+                    if boundary:
+                        raise AuthoredProviderBudgetExhausted(
+                            "authored_title_recovery_boundary_exhausted", ",".join(boundary),
+                            rejected_html=html,
+                            owner_capacity_diagnostic=(
+                                authored_owner_capacity_diagnostic(html, capacity)
+                                if capacity is not None else None
+                            ),
+                            title_token_diagnostic=(
+                                title_capacity_recovery_diagnostic(title_recovery[0], html, title_recovery[1])
+                                if boundary == ("title_protected_token_change",) else None
+                            ),
+                        )
                 constrained = _constrain_structured_zone_html(html, structured_context)
+                if capacity is not None:
+                    # Header targets may not yet have QIDs. Count and reduce
+                    # the same owner namespace that the render pipeline seals.
+                    constrained = canonicalize_authored_capacity_html(constrained)
                 violations = (
                     validate_header_contract(
                         constrained,
@@ -913,6 +978,14 @@ async def _author_one_resilient(
                     capacity_error = AuthoredAggregateOwnerCapacityExhausted(
                         owner_violations,
                         rejected_html=constrained,
+                        capacity=capacity,
+                        title_recovery_qids=(
+                            title_capacity_recovery_qids(constrained, instructions=instructions)
+                            if allow_title_capacity_recovery and not source_images
+                            and reference_mode != EXACT_RECONSTRUCTION and structured_context is None
+                            and any(item.startswith("owner_title:") for item in owner_violations)
+                            else ()
+                        ),
                     )
                     raise capacity_error
                 header_reject = constrained
@@ -935,6 +1008,10 @@ async def _author_one_resilient(
                 rejected_html = None
         except Exception as e:  # noqa: BLE001 — resilience boundary, recorded below
             last_error = e
+            # Admission hard limits are terminal operation contracts. Spending
+            # the same slide's correction after rejection obscures the cause.
+            if getattr(e, "retryable", None) is False:
+                raise
             local_correction = _classify_author_validation_error(
                 e,
                 source_image_ids=source_image_ids,
@@ -943,6 +1020,14 @@ async def _author_one_resilient(
                 correction_hint = local_correction.hint
                 candidate = getattr(e, "rejected_html", None)
                 rejected_html = candidate if isinstance(candidate, str) else None
+                qids = getattr(e, "title_recovery_qids", ())
+                title_recovery = (
+                    (rejected_html, qids)
+                    if isinstance(e, AuthoredAggregateOwnerCapacityExhausted)
+                    and rejected_html is not None
+                    and any(item.startswith("owner_title:") for item in e.violations)
+                    else None
+                )
             else:
                 correction_hint = _author_retry_correction(
                     e,
@@ -1133,6 +1218,7 @@ def prepare_authored_deck(
         "ordinary", "authored", True, True, 1
     )
     capacity_plan = build_authored_capacity_plan(contents, roles, profile)
+    text_plan = plan_authored_text(contents, capacity_plan)
     # Exact reconstruction reproduces a source slide verbatim, so imposing a
     # header design on it would contradict the mode.
     #
@@ -1188,6 +1274,7 @@ def prepare_authored_deck(
         instructions=instructions,
         visual_plan=visual_plan,
         capacity_plan=capacity_plan,
+        text_plan=text_plan,
     )
 
 
@@ -1199,6 +1286,8 @@ async def author_planned_slide(
     source_images: Sequence[SourceImageCandidate] = (),
     require_all_source_images: bool = False,
     attempt_observer: Callable[[int], None] | None = None,
+    provider_attempt_offset: int = 0,
+    attempt_reserver: Callable[[int], Awaitable[None]] | None = None,
 ) -> str:
     """Author one planned slide; safe to compose with illustration/render stages.
 
@@ -1216,6 +1305,11 @@ async def author_planned_slide(
     if capacity_plan is not None:
         capacity = capacity_plan.at(index).with_source_images(len(source_images))
         capacity_brief = capacity.prompt_brief(capacity_plan.profile)
+        text_plan = getattr(plan, "text_plan", None)
+        if text_plan is not None:
+            capacity_brief += " " + text_plan.at(
+                index, capacity=capacity
+            ).prompt_brief()
     return await _author_one_resilient(
         plan.contents[index],
         plan.design_system,
@@ -1247,7 +1341,14 @@ async def author_planned_slide(
             and capacity_plan.profile.allow_summarization
             and not source_images
         ),
+        allow_title_capacity_recovery=bool(
+            capacity_plan is not None
+            and capacity_plan.profile.profile_id == "ordinary"
+            and capacity_plan.profile.allow_summarization
+        ),
         attempt_observer=attempt_observer,
+        provider_attempt_offset=provider_attempt_offset,
+        attempt_reserver=attempt_reserver,
     )
 
 

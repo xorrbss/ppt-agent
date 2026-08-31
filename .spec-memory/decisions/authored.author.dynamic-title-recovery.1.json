@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.author.dynamic-title-recovery",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Ordinary authored titles may be shortened only in the second provider response with protected text and structural boundaries preserved.",
+  "scope": [
+    "authored",
+    "generation",
+    "capacity"
+  ],
+  "invariants": [
+    "At most two author provider calls; no local title truncation or larger capacity limits.",
+    "Only ordinary non-source dynamic title text is eligible; fixed/source/header chrome and non-target text remain unchanged.",
+    "QID role CSS geometry font and structure remain unchanged; preserve checkable numbers named tokens negations and qualifiers.",
+    "Failure diagnostics persist only bounded content-free owner counts and SHA256 digests; semantic equivalence is not mechanically guaranteed."
+  ],
+  "forbidden": [
+    "Third provider recovery call",
+    "Weakening capacity or reclassifying roles",
+    "Logging rejected HTML text raw QIDs or credentials"
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_author_capacity_recovery.py",
+    "servers/fastapi/utils/llm_calls/author_deck.py",
+    "servers/fastapi/tests/unit/test_authored_pipeline.py::test_author_aggregate_capacity_fails_after_two_calls_before_render"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-30T21:53:06.8095362+00:00"
+}

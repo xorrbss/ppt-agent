@@ -23,7 +23,7 @@ from collections import OrderedDict
 from dataclasses import dataclass, replace
 from threading import RLock
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
 
 def _sha256(value: bytes) -> str:
@@ -36,6 +36,18 @@ def digest_html(html: str) -> str:
     if not isinstance(html, str):
         raise TypeError("html must be a string")
     return _sha256(html.encode("utf-8"))
+
+
+def digest_deck_htmls(htmls: Iterable[str]) -> str:
+    """Return the order-sensitive identity used by quality receipt v2.
+
+    Keeping this as the single implementation lets later review/export stages
+    prove that the receipt was minted for the exact persisted slide HTML rather
+    than comparing the evidence-ledger revision to an unrelated presentation
+    revision.
+    """
+
+    return _digest_deck_html_digests(digest_html(html) for html in htmls)
 
 
 def digest_png(png: bytes) -> str:
@@ -70,6 +82,10 @@ def _canonical_json(value: Any) -> bytes:
         ensure_ascii=False,
         default=str,
     ).encode("utf-8")
+
+
+def _digest_deck_html_digests(html_digests: Iterable[str]) -> str:
+    return _sha256(_canonical_json(list(html_digests)))
 
 
 def digest_browser_metrics(metrics: Mapping[str, Any] | None) -> str | None:
@@ -524,7 +540,9 @@ class DeckEvidenceLedger:
     def deck_html_digest(self, attempt_id: str) -> str:
         """Order-sensitive digest of every slide's exact HTML identity."""
 
-        return _sha256(_canonical_json([item.html_digest for item in self.slides(attempt_id)]))
+        return _digest_deck_html_digests(
+            item.html_digest for item in self.slides(attempt_id)
+        )
 
     def revision(self, attempt_id: str) -> int:
         with self._lock:
@@ -660,6 +678,7 @@ __all__ = [
     "SlideEvidence",
     "capture_slide_evidence",
     "digest_browser_metrics",
+    "digest_deck_htmls",
     "digest_html",
     "digest_png",
     "digest_slide_evidence",

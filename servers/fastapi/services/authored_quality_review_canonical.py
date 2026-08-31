@@ -84,6 +84,12 @@ def _merge_slidespec_review_data(
 ) -> dict[str, _service.Any]:
     """Merge disjoint per-slide owners without changing the legacy contract."""
     result = dict(legacy or {})
+    canonical_policy = canonical.get("review_policy")
+    if canonical_policy is not None:
+        if (not isinstance(canonical_policy, _service.Mapping)
+            or ("review_policy" in result and result["review_policy"] != canonical_policy)):
+            raise ValueError("authored_review_checker_policy_conflict")
+        result["review_policy"] = dict(canonical_policy)
     result.setdefault("presentation_id", str(presentation_id))
     result.setdefault("mode", request.mode)
     result.setdefault("scope", request.scope)
@@ -153,6 +159,14 @@ def _merge_slidespec_review_data(
     result["metrics"] = metrics
     result["slide_results"] = sorted(result["slide_results"], key=lambda item: int(item.get("slide_index", 0)))
     return result
+
+
+def _bind_canonical_review_policy(data, observed_policy):
+    """Keep the pre-execution checker identity, never a post-hoc PASS."""
+    existing = data.get("review_policy")
+    if existing is not None and existing != observed_policy:
+        raise ValueError("authored_review_checker_policy_conflict")
+    return {**data, "review_policy": dict(observed_policy)}
 
 
 def _unclaimed_slidespec_review_data(
@@ -256,12 +270,20 @@ async def _run_authored_quality_review_unlocked(
     from services.slidespec_artifact_store import ACTIVE_POINTER_KEY
     from services.slidespec_authored_importer import ensure_authored_slidespec_imports
 
+    # Canonical repair acceptance uses paired style comparison, not the legacy
+    # standalone critique. Capture its configuration before any importer or
+    # executor work; the release consumer still rejects missing/stale identity.
+    review_policy = dict(_service._style_comparison_observation_metadata())
+
+    # Import publication can roll back and expire the presentation in this
+    # session. Keep the already-inspected owner identity for both stages.
+    review_owner_id = getattr(presentation, "owner_id", None)
     imported = await ensure_authored_slidespec_imports(
         presentation_id=presentation_id,
         slides=slides,
         positions=positions,
         opt_in=True,
-        owner_id=getattr(presentation, "owner_id", None),
+        owner_id=review_owner_id,
         session=session,
     )
     slides = list(imported.slides)
@@ -286,7 +308,7 @@ async def _run_authored_quality_review_unlocked(
             task,
             status="completed",
             message="검수는 완료되었지만 자동 수정으로 확정된 변경은 없습니다.",
-            data=data,
+            data=_bind_canonical_review_policy(data, review_policy),
         )
         return
     from services.slidespec_authored_executor import execute_slidespec_authored_review
@@ -296,7 +318,7 @@ async def _run_authored_quality_review_unlocked(
         slides=slides,
         positions=sorted(claimed_hint),
         opt_in=True,
-        owner_id=getattr(presentation, "owner_id", None),
+        owner_id=review_owner_id,
         session=session,
     )
     claimed = set(canonical.claimed_positions)
@@ -316,5 +338,5 @@ async def _run_authored_quality_review_unlocked(
         message=f"검수가 완료되었습니다. {data['fixed_count']}개 슬라이드를 수정했습니다."
         if data["fixed_count"]
         else "검수는 완료되었지만 자동 수정으로 확정된 변경은 없습니다.",
-        data=data,
+        data=_bind_canonical_review_policy(data, review_policy),
     )

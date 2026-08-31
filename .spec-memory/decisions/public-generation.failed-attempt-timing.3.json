@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "key": "public-generation.failed-attempt-timing",
+  "revision": 3,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Handled failures retain original terminal semantics and safe timing; fenced PostgreSQL projection is best-effort and never masks the error.",
+  "scope": [
+    "public-generation",
+    "observability",
+    "reliability"
+  ],
+  "invariants": [
+    "Failure recording uses a primitive job ID and copied loaded error payload, never implicit reads of rollback-expired ORM attributes.",
+    "The local attempt ledger stores digest-bound, content-free timing; public timing requires a successful fenced PostgreSQL projection.",
+    "Timing persistence and projection are best-effort; missing evidence remains missing instead of becoming a fabricated success.",
+    "Original error code and explicit retryability survive recording failures; a hard worker or host crash can remain unmeasured.",
+    "Missing Chromium metrics, font, QID, visible-text or capacity authority cannot enable provider repair.",
+    "Flagged-slide recovery preserves other completed checkpoints; deterministic terminal residuals do not retry the whole deck."
+  ],
+  "forbidden": [
+    "Masking the original terminal error with a telemetry failure.",
+    "Claiming timing for a hard crash before durable evidence exists.",
+    "Provider recovery before exact HTML PNG Chromium preflight authority."
+  ],
+  "evidence": [
+    "servers/fastapi/services/presentation_generation_operation_handler.py",
+    "servers/fastapi/services/workspace_generation_timing_attachment.py",
+    "servers/fastapi/services/authored_generation_preflight.py",
+    "servers/fastapi/tests/unit/test_presentation_generation_operation_handler.py",
+    "servers/fastapi/tests/unit/test_authored_generation_timing_receipt.py",
+    "servers/fastapi/tests/unit/test_authored_generation_preflight.py"
+  ],
+  "supersedes": "public-generation.failed-attempt-timing@2",
+  "recordedAt": "2026-08-30T20:59:45.6292180+00:00"
+}

@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "key": "public-quality.v3-evidence-projection",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Public V3 quality passes only from current owner-scoped fenced persisted checker evidence; artifact quality ready never authorizes deployment.",
+  "scope": [
+    "public-quality",
+    "public-export",
+    "quality-receipt-v3"
+  ],
+  "invariants": [
+    "Persist actual checker snapshots privately under operation fence and bind the exact V2-to-V3 versionTransition digest.",
+    "Read only completed owner/scope/presentation/receipt matches; reject stale missing ambiguous or tampered evidence.",
+    "Bind required PASS to source revision HTML runtime checker and current operation artifact; reuse rebinds the consumer operation.",
+    "Optional unobserved performance and native OOXML remain unassessed; artifact quality readiness is distinct from promotion and deployment."
+  ],
+  "forbidden": [
+    "Hardcoded quality PASS",
+    "Retroactive repair of old evidence hashes without execution",
+    "Public raw checker content or confidential worker data"
+  ],
+  "evidence": [
+    "servers/fastapi/services/public_quality_receipt_v3_store.py",
+    "servers/fastapi/services/public_quality_receipt_v3_projection.py",
+    "servers/fastapi/tests/unit/test_authored_quality_receipt_v3_pipeline.py::test_persisted_quality_gate_projects_only_verified_internal_receipts"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-30T21:53:07.4867470+00:00"
+}

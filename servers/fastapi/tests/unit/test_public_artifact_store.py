@@ -5,6 +5,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import io
+import os
 from pathlib import Path
 import uuid
 
@@ -319,7 +320,19 @@ def test_worker_object_port_streams_exact_stage_and_publish(tmp_path: Path) -> N
     _run(scenario())
 
 
-def test_feature_lifecycle_refcount_expiry_and_gc_fail_closed(tmp_path: Path) -> None:
+def test_feature_lifecycle_refcount_expiry_and_gc_fail_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+
+    from sqlalchemy.dialects import postgresql
+
+    from services.artifact_lifecycle import SqlArtifactLifecycleAuthority
+    from services.artifact_store import (
+        ArtifactKeyBusy, require_artifact_key_guard, try_artifact_key_guard,
+    )
+
     payload = b"checkpoint"
     owner_id = uuid.uuid4()
     digest = sha256(payload).hexdigest()
@@ -349,6 +362,7 @@ def test_feature_lifecycle_refcount_expiry_and_gc_fail_closed(tmp_path: Path) ->
 
     class MemoryAuthority:
         def __init__(self) -> None:
+            self.shared_key_protected = False
             self.record = ArtifactLifecycleRecord(
                 artifact=reference,
                 state="provisional",
@@ -398,6 +412,43 @@ def test_feature_lifecycle_refcount_expiry_and_gc_fail_closed(tmp_path: Path) ->
                 return [self.record]
             return []
 
+        async def claim_gc_candidate(self, record, *, older_than):
+            if self.shared_key_protected:
+                return None
+            return await self.compare_and_set(
+                artifact_id=record.artifact.artifact_id,
+                expected_state="tombstoned",
+                expected_revision=record.state_revision,
+                next_state="tombstoned",
+            )
+
+    class GuardSession:
+        """SQL-boundary double, not a PostgreSQL concurrency proof."""
+
+        def __init__(self, *, dialect="postgresql", isolation="read committed", acquired=True):
+            self.dialect = dialect
+            self.isolation = isolation
+            self.acquired = acquired
+            self.no_autoflush = nullcontext()
+            self.calls = []
+            self.rows = []
+
+        def get_bind(self):
+            return SimpleNamespace(dialect=SimpleNamespace(name=self.dialect))
+
+        async def scalar(self, statement, params=None):
+            sql = str(statement.compile(dialect=postgresql.dialect()))
+            self.calls.append((sql, params))
+            if "transaction_isolation" in sql:
+                return self.isolation
+            if "pg_try_advisory_xact_lock" in sql:
+                return self.acquired
+            return self.rows.pop(0)
+
+        async def scalars(self, statement):
+            self.calls.append((str(statement.compile(dialect=postgresql.dialect())), None))
+            return SimpleNamespace(all=lambda: [])
+
     async def scenario() -> None:
         store = TrackingLocalStore(tmp_path / "objects")
         await store.put_stream(reference, io.BytesIO(payload))
@@ -430,6 +481,13 @@ def test_feature_lifecycle_refcount_expiry_and_gc_fail_closed(tmp_path: Path) ->
         ) == 0
         authority.record = replace(authority.record, delete_after=started)
         events.clear()
+        # A live alias or a competing key transaction prevents physical delete.
+        authority.shared_key_protected = True
+        assert await lifecycle.collect_once(
+            older_than=datetime.now(timezone.utc) + timedelta(seconds=1), limit=1,
+        ) == 0
+        assert events == [] and await store.exists(reference)
+        authority.shared_key_protected = False
         assert await lifecycle.collect_once(
             older_than=datetime.now(timezone.utc) + timedelta(seconds=1),
             limit=1,
@@ -443,7 +501,455 @@ def test_feature_lifecycle_refcount_expiry_and_gc_fail_closed(tmp_path: Path) ->
         assert authority.record.state == "deleted"
         assert await store.exists(reference) is False
 
+        guard = GuardSession()
+        await require_artifact_key_guard(guard, reference)
+        alias = reference.model_copy(update={
+            "artifact_id": uuid.uuid4(), "created_by_operation_id": uuid.uuid4(),
+        })
+        await require_artifact_key_guard(guard, alias)
+        assert guard.calls[1][1] == guard.calls[3][1]
+        assert all("pg_advisory_xact_lock(" not in sql for sql, _ in guard.calls)
+
+        busy = GuardSession(acquired=False)
+        with pytest.raises(ArtifactKeyBusy, match="artifact.cas_key_busy") as caught:
+            # No metadata or object read may happen after a failed key claim.
+            await DurableArtifactService(store).register_ref(busy, reference)
+        assert caught.value.retryable and len(busy.calls) == 2
+
+        stale_snapshot = GuardSession(isolation="repeatable read")
+        assert not await try_artifact_key_guard(stale_snapshot, reference, for_physical_delete=True)
+        assert len(stale_snapshot.calls) == 1
+        monkeypatch.setenv("ENVIRONMENT", "test")
+        sqlite = GuardSession(dialect="sqlite")
+        await require_artifact_key_guard(sqlite, reference)
+        assert not await try_artifact_key_guard(sqlite, reference, for_physical_delete=True)
+        assert sqlite.calls == []
+        monkeypatch.setenv("ENVIRONMENT", "production")
+        with pytest.raises(ArtifactStoreError, match="sqlite_not_development"):
+            await require_artifact_key_guard(sqlite, reference)
+
+        # The SQL authority's post-guard snapshot includes all same-key aliases
+        # and every pointer family, independent of alias operation/kind/ID.
+        fresh = PublicArtifact(
+            id=reference.artifact_id,
+            **reference.model_dump(exclude={"artifact_id"}),
+            lifecycle_state="tombstoned", lifecycle_revision=4, refcount=0,
+            updated_at=started, expires_at=started,
+        )
+        record = ArtifactLifecycleRecord(
+            artifact=reference, state="tombstoned", ref_count=0,
+            state_revision=4, updated_at=started, expires_at=started,
+        )
+        sql_session = GuardSession()
+        sql_session.rows = [fresh, alias.artifact_id]
+        sql_authority = SqlArtifactLifecycleAuthority(sql_session)
+        assert await sql_authority.claim_gc_candidate(record, older_than=started) is None
+        assert "pg_try_advisory_xact_lock" in sql_session.calls[1][0]
+        assert "FOR UPDATE SKIP LOCKED" in sql_session.calls[2][0]
+        sibling_sql = sql_session.calls[3][0]
+        for column in (
+            "public_artifacts.storage_key", "public_artifacts.refcount",
+            "public_artifacts.lifecycle_state", "public_artifacts.updated_at",
+            "public_artifacts.expires_at", "public_artifact_publications.artifact_id",
+            "public_slide_checkpoints.artifact_id", "public_export_identities.result_artifact_id",
+            "public_export_identities.source_artifact_id", "workspace_artifacts.public_artifact_id",
+            "workspace_artifacts.status",
+        ):
+            assert column in sibling_sql
+        assert "created_by_operation_id =" not in sibling_sql and "kind =" not in sibling_sql
+
+        sql_session.calls.clear()
+        await sql_authority.list_gc_candidates(older_than=started, limit=1)
+        await sql_authority.list_expired_candidates(expires_at_or_before=started, limit=1)
+        assert len(sql_session.calls) == 2
+        assert all("FOR UPDATE" not in sql for sql, _ in sql_session.calls)
+
+        no_guard = SimpleNamespace(list_gc_candidates=authority.list_gc_candidates)
+        authority.record = record
+        with pytest.raises(ArtifactStoreError, match="gc_shared_key_authority_required"):
+            await ArtifactLifecycleService(
+                authority=no_guard, object_store=store, enabled=True,
+            ).collect_once(older_than=started, limit=1)
+
+        async def physical_delete_ordering(*, backend, delete_fails, cancel):
+            from threading import Event
+
+            # Exercise the real adapters' executor boundary, without filesystem
+            # or S3 deletion. The guard is an explicit transaction-boundary double.
+            loop = asyncio.get_running_loop()
+            physical_started = asyncio.Event()
+            physical_release = Event()
+            physical_exists = True
+            guard_held = True
+            ordered = []
+            delete_task = None
+
+            def physical_delete(**_kwargs):
+                nonlocal physical_exists
+                ordered.append("physical_started")
+                loop.call_soon_threadsafe(physical_started.set)
+                if not physical_release.wait(timeout=5):
+                    raise AssertionError("controlled delete was not released")
+                if delete_fails:
+                    ordered.append("physical_failed")
+                    raise ArtifactStoreError("controlled_physical_delete_failed")
+                physical_exists = False
+                ordered.append("physical_finished")
+
+            class ControlledLocal(LocalDevelopmentArtifactObjectStore):
+                def _path(self, _reference):
+                    return SimpleNamespace(unlink=physical_delete)
+
+                async def delete(self, artifact):
+                    nonlocal delete_task
+                    delete_task = asyncio.current_task()
+                    await super().delete(artifact)
+
+            class ControlledS3(S3ArtifactObjectStore):
+                async def delete(self, artifact):
+                    nonlocal delete_task
+                    delete_task = asyncio.current_task()
+                    await super().delete(artifact)
+
+            controlled = (
+                ControlledLocal(tmp_path / "never-deleted")
+                if backend == "local"
+                else ControlledS3(
+                    bucket="unit-test-only",
+                    client=SimpleNamespace(delete_object=physical_delete),
+                )
+            )
+            cancel_authority = MemoryAuthority()
+            cancel_authority.record = record
+            first_event = len(events)
+
+            async def guarded_transaction():
+                nonlocal guard_held
+                try:
+                    return await ArtifactLifecycleService(
+                        authority=cancel_authority, object_store=controlled, enabled=True,
+                    ).collect_once(older_than=started, limit=1)
+                finally:
+                    guard_held = False
+                    ordered.append("guard_released")
+
+            gc_task = asyncio.create_task(guarded_transaction())
+            try:
+                await asyncio.wait_for(physical_started.wait(), timeout=2)
+                if cancel:
+                    gc_task.cancel("original-gc-cancel")
+                    await asyncio.sleep(0)
+                    gc_task.cancel("repeated-gc-cancel")
+                    # Loop shutdown cancels inner Tasks independently. The raw
+                    # executor Future must still drain before either Task exits.
+                    delete_task.cancel("inner-delete-cancel")
+                    await asyncio.sleep(0)
+                    delete_task.cancel("repeated-inner-delete-cancel")
+                    await asyncio.sleep(0)
+                    assert not gc_task.done() and not delete_task.done()
+                assert guard_held and physical_exists
+                with pytest.raises(ArtifactKeyBusy):
+                    await require_artifact_key_guard(
+                        GuardSession(acquired=not guard_held), alias,
+                    )
+                physical_release.set()
+                if cancel:
+                    with pytest.raises(asyncio.CancelledError) as cancelled:
+                        await gc_task
+                    assert cancelled.value.args == ("original-gc-cancel",)
+                else:
+                    with pytest.raises(ArtifactStoreError):
+                        await gc_task
+                assert cancel_authority.record.state == "tombstoned"
+                assert "cas:tombstoned->deleted" not in events[first_event:]
+                assert ordered == [
+                    "physical_started",
+                    "physical_failed" if delete_fails else "physical_finished",
+                    "guard_released",
+                ]
+                await require_artifact_key_guard(
+                    GuardSession(acquired=not guard_held), alias,
+                )
+                physical_exists = True
+                ordered.append("new_alias_write")
+                assert physical_exists and ordered[-2:] == ["guard_released", "new_alias_write"]
+            finally:
+                physical_release.set()
+                if not gc_task.done():
+                    try:
+                        await gc_task
+                    except BaseException:
+                        pass
+
+        for backend in ("local", "s3"):
+            for delete_fails, cancel in ((False, True), (True, True), (True, False)):
+                await physical_delete_ordering(
+                    backend=backend, delete_fails=delete_fails, cancel=cancel,
+                )
+
     _run(scenario())
+
+    # Explicitly opt in only to the owned, empty local PostgreSQL race database.
+    # The default unit case above is not evidence of cluster coordination.
+    configured_url = os.getenv("PPT_AGENT_ARTIFACT_RACE_TEST_URL")
+    if not configured_url:
+        return
+
+    async def postgresql_race() -> None:
+        from threading import Event
+
+        from sqlalchemy import select, text
+        from sqlalchemy.engine import make_url
+        from sqlalchemy.ext.asyncio import AsyncSession
+
+        from models.sql.presentation import PresentationModel
+        from models.sql.presentation_export_attempt import PresentationExportAttempt
+        from models.sql.public_artifact import PublicArtifactPublication, PublicSlideCheckpoint
+        from models.sql.user import User
+        from models.sql.workspace import WorkspaceArtifact, WorkspaceConversation, WorkspaceOperation
+        from services import workspace_artifact_publication_service as publication
+        from utils.owner_context import reset_current_owner_id, set_current_owner_id
+
+        parsed = make_url(configured_url)
+        assert parsed.get_backend_name() == "postgresql"
+        assert parsed.host == "127.0.0.1" and parsed.port == 21001
+        assert parsed.database == "cas_guard_race_test"
+        engine = create_async_engine(
+            parsed.set(drivername="postgresql+asyncpg"),
+            isolation_level="READ COMMITTED",
+            connect_args={"server_settings": {
+                "application_name": "cas-key-race-test",
+                "statement_timeout": "5000", "lock_timeout": "1000",
+            }},
+        )
+        maker = async_sessionmaker(engine, expire_on_commit=False)
+        loop = asyncio.get_running_loop()
+        physical_started = asyncio.Event()
+        physical_release = Event()
+        ordered = []
+        deletion_task = None
+        gc_task = None
+        stage_task = None
+        stage_release = asyncio.Event()
+        backend_pids = set()
+        store_root = tmp_path / "postgres-race-objects"
+        plain_store = LocalDevelopmentArtifactObjectStore(store_root)
+
+        class GatedLocalStore(LocalDevelopmentArtifactObjectStore):
+            deleting = False
+
+            def _path(self, artifact):
+                path = super()._path(artifact)
+                if not self.deleting:
+                    return path
+
+                def unlink(**kwargs):
+                    ordered.append("physical_started")
+                    loop.call_soon_threadsafe(physical_started.set)
+                    if not physical_release.wait(timeout=10):
+                        raise AssertionError("native delete gate was not released")
+                    path.unlink(**kwargs)
+                    ordered.append("physical_finished")
+
+                return SimpleNamespace(unlink=unlink)
+
+            async def delete(self, artifact):
+                nonlocal deletion_task
+                deletion_task = asyncio.current_task()
+                self.deleting = True
+                try:
+                    await super().delete(artifact)
+                finally:
+                    self.deleting = False
+
+        object_store = GatedLocalStore(store_root)
+        service = DurableArtifactService(object_store)
+        race_ref = reference.model_copy(update={
+            "kind": "presentation-pptx", "retention_class": "published",
+            "media_type": PPTX_MEDIA_TYPE,
+        })
+        contender_ref = race_ref.model_copy(update={
+            "artifact_id": uuid.uuid4(), "created_by_operation_id": uuid.uuid4(),
+        })
+        owner_token = set_current_owner_id(owner_id)
+        try:
+            tables = [model.__table__ for model in (
+                User, PresentationModel, WorkspaceConversation, WorkspaceOperation,
+                PresentationExportAttempt, PublicArtifact, WorkspaceArtifact,
+                PublicArtifactPublication, PublicSlideCheckpoint, PublicExportIdentity,
+            )]
+            async with engine.begin() as connection:
+                assert await connection.scalar(text("SELECT current_setting('port')")) == "21001"
+                assert await connection.scalar(text(
+                    "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'"
+                )) == 0, "race database must be empty; never reset a populated schema"
+                await connection.run_sync(
+                    lambda sync: SQLModel.metadata.create_all(sync, tables=tables)
+                )
+            await plain_store.put_stream(race_ref, io.BytesIO(payload))
+            async with maker() as session, session.begin():
+                await service.register_ref(session, race_ref)
+                authority = SqlArtifactLifecycleAuthority(session)
+                assert await authority.compare_and_set(
+                    artifact_id=race_ref.artifact_id, expected_state="committed",
+                    expected_revision=1, next_state="tombstoned",
+                ) is not None
+            cutoff = datetime.now(timezone.utc) + timedelta(seconds=30)
+            async with maker() as session:
+                stale_record, = await SqlArtifactLifecycleAuthority(session).list_gc_candidates(
+                    older_than=cutoff, limit=1,
+                )
+
+            async def collecting_transaction():
+                try:
+                    async with maker() as session, session.begin():
+                        backend_pids.add(await session.scalar(text("SELECT pg_backend_pid()")))
+                        return await ArtifactLifecycleService(
+                            authority=SqlArtifactLifecycleAuthority(session),
+                            object_store=object_store, enabled=True,
+                        ).collect_once(older_than=cutoff, limit=1)
+                finally:
+                    ordered.append("transaction_ended")
+
+            gc_task = asyncio.create_task(collecting_transaction())
+            await asyncio.wait_for(physical_started.wait(), timeout=5)
+            gc_task.cancel("original-pg-gc-cancel")
+            await asyncio.sleep(0)
+            gc_task.cancel("repeated-pg-gc-cancel")
+            assert deletion_task is not None
+            deletion_task.cancel("inner-pg-delete-cancel")
+            await asyncio.sleep(0)
+            deletion_task.cancel("repeated-inner-pg-delete-cancel")
+            await asyncio.sleep(0)
+            assert not gc_task.done() and not deletion_task.done()
+            async with maker() as contender:
+                backend_pids.add(await contender.scalar(text("SELECT pg_backend_pid()")))
+                with pytest.raises(ArtifactKeyBusy):
+                    await service.register_ref(contender, contender_ref)
+                await contender.rollback()
+                with pytest.raises(ArtifactKeyBusy):
+                    await service.persist_stream(
+                        contender, owner_id=owner_id, tenant_id=race_ref.tenant_id,
+                        kind=race_ref.kind, source=io.BytesIO(payload),
+                        expected_digest=digest, size_bytes=len(payload),
+                        media_type=PPTX_MEDIA_TYPE, retention_class="published",
+                        created_by_operation_id=uuid.uuid4(),
+                    )
+                await contender.rollback()
+            assert len(backend_pids) == 2
+            assert await plain_store.read_bytes(race_ref) == payload
+            assert ordered == ["physical_started"]
+            physical_release.set()
+            with pytest.raises(asyncio.CancelledError) as cancelled:
+                await asyncio.wait_for(gc_task, timeout=5)
+            assert cancelled.value.args == ("original-pg-gc-cancel",)
+            assert ordered == ["physical_started", "physical_finished", "transaction_ended"]
+            assert not await plain_store.exists(race_ref)
+            async with maker() as session:
+                with pytest.raises(ArtifactNotFound):
+                    await service.register_ref(session, contender_ref)
+                await session.rollback()
+                fresh_ref = await service.persist_stream(
+                    session, owner_id=owner_id, tenant_id=race_ref.tenant_id,
+                    kind=race_ref.kind, source=io.BytesIO(payload),
+                    expected_digest=digest, size_bytes=len(payload),
+                    media_type=PPTX_MEDIA_TYPE, retention_class="published",
+                    created_by_operation_id=uuid.uuid4(),
+                )
+                await session.commit()
+            async with maker() as writer, writer.begin():
+                consumer_ref = await service.register_consumer_ref(
+                    writer, fresh_ref, created_by_operation_id=uuid.uuid4(),
+                )
+                async with maker() as contender:
+                    assert await SqlArtifactLifecycleAuthority(contender).claim_gc_candidate(
+                        stale_record, older_than=cutoff,
+                    ) is None
+            async with maker() as session, session.begin():
+                session.add(User(id=owner_id, username=f"cas-race-{owner_id.hex}", hashed_password="test-only"))
+                await session.flush()
+                presentation = PresentationModel(content="CAS race", n_slides=1, language="en", revision=3)
+                session.add(presentation)
+                await session.flush()
+                conversation = WorkspaceConversation(presentation_id=presentation.id)
+                session.add(conversation)
+                await session.flush()
+                operation = WorkspaceOperation(
+                    id=consumer_ref.created_by_operation_id,
+                    conversation_id=conversation.id, presentation_id=presentation.id,
+                    anchor_position=1, kind="presentation.export", state="running",
+                    idempotency_key_hash="c" * 64, request_hash="d" * 64,
+                    request_payload={}, expected_revision=3,
+                )
+                session.add(operation)
+                await session.flush()
+                attempt = PresentationExportAttempt(
+                    presentation_id=presentation.id, workspace_operation_id=operation.id,
+                    format="pptx", state="running", source_revision=3,
+                    source_snapshot_sha256="e" * 64, request_hash="f" * 64,
+                    idempotency_key_hash="a" * 64, requested_adapter="general",
+                    provenance={}, started_at=datetime.now(timezone.utc),
+                )
+                session.add(attempt)
+                await session.flush()
+                presentation_id, attempt_id = presentation.id, attempt.id
+
+            stage_started = asyncio.Event()
+
+            class GatedIntentSession(AsyncSession):
+                async def commit(self):
+                    stage_started.set()
+                    await asyncio.wait_for(stage_release.wait(), timeout=10)
+                    await super().commit()
+
+            with monkeypatch.context() as scoped_patch:
+                scoped_patch.setattr(publication, "_new_independent_session", lambda session: GatedIntentSession(
+                    bind=session.bind, expire_on_commit=False, autoflush=False,
+                ))
+                async with maker() as caller:
+                    stage_task = asyncio.create_task(publication.prepare_workspace_export_artifact_ref(
+                        caller, reference=consumer_ref,
+                        operation_id=consumer_ref.created_by_operation_id,
+                        presentation_id=presentation_id, source_revision=3,
+                        kind="export.pptx", export_attempt_id=attempt_id,
+                    ))
+                    await asyncio.wait_for(stage_started.wait(), timeout=5)
+                    async with maker() as contender:
+                        with pytest.raises(ArtifactKeyBusy):
+                            await service.register_ref(contender, contender_ref)
+                        await contender.rollback()
+                    stage_release.set()
+                    prepared = await asyncio.wait_for(stage_task, timeout=5)
+            async with maker() as session, session.begin():
+                staged = await session.get(WorkspaceArtifact, prepared.artifact_id)
+                assert staged.status == "staging" and staged.public_artifact_id == consumer_ref.artifact_id
+                authority = SqlArtifactLifecycleAuthority(session)
+                # Staging prevents tombstoning even when the refcount is zero.
+                assert await authority.compare_and_set(
+                    artifact_id=consumer_ref.artifact_id, expected_state="committed",
+                    expected_revision=1, next_state="tombstoned",
+                ) is None
+                assert await authority.claim_gc_candidate(stale_record, older_than=cutoff) is None
+                assert await ArtifactLifecycleService(
+                    authority=authority, object_store=object_store, enabled=True,
+                ).collect_once(older_than=cutoff, limit=10) == 0
+                assert await session.scalar(select(PresentationModel.revision).where(
+                    PresentationModel.id == presentation_id,
+                )) == 3
+            assert await plain_store.read_bytes(consumer_ref) == payload
+            assert ordered.count("physical_started") == 1
+            print("local PostgreSQL CAS race: two connections; repeated-cancel drain; busy register/persist; "
+                  "fresh alias; staging guard/pointer; stale GC denied; bytes exact; external S3 not exercised")
+        finally:
+            physical_release.set()
+            stage_release.set()
+            for pending in (gc_task, stage_task):
+                if pending is not None:
+                    await asyncio.gather(pending, return_exceptions=True)
+            reset_current_owner_id(owner_token)
+            await engine.dispose()
+
+    _run(postgresql_race())
 
 
 def test_durable_artifacts_are_owner_bound_and_export_is_cluster_single_flight(

@@ -38,7 +38,10 @@ def default_trusted_worker_scheduler_policy() -> SchedulerPolicy:
             node_cap=4,
             tenant_cap=2,
             owner_cap=2,
-            presentation_cap=1,
+            # One public export operation can contain independent slide jobs.
+            # Two-way presentation concurrency removes accidental operation-id
+            # serialization while retaining bounded per-owner memory/process use.
+            presentation_cap=2,
         )
     )
 

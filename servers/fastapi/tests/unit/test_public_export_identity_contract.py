@@ -6,19 +6,30 @@ from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import json
 from pathlib import Path
+import runpy
 import uuid
 
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 import pytest
+from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
 import services.public_export_operation as public_export_operation
+from migration_revision_contract import (
+    HEAD_REVISION,
+    REVISION_ACCOUNT_DELETION_OUTBOX,
+    REVISION_PUBLIC_ARTIFACT_JOURNAL_REUSE,
+)
+from models.sql.presentation_export_attempt import PresentationExportAttempt
 from models.sql.public_artifact import (
     PublicArtifact,
     PublicExportIdentity,
     PublicSlideCheckpoint,
 )
-from models.sql.workspace import WorkspaceOperation
+from models.sql.workspace import WorkspaceArtifact, WorkspaceOperation
 from services.artifact_store import DurableArtifactService, LocalDevelopmentArtifactObjectStore
 from services.public_export_identity import (
     CanonicalExportIdentity,
@@ -41,6 +52,11 @@ from services.public_export_operation import (
     resume_canonical_export_execution,
 )
 from services.workspace_operation_handler_registry import WorkspaceOperationClaim
+from services.workspace_artifact_publication_service import (
+    WorkspaceArtifactPublicationError,
+    prepare_workspace_export_artifact_ref,
+)
+from utils.owner_context import reset_current_owner_id, set_current_owner_id
 
 
 PPTX_MEDIA_TYPE = (
@@ -64,7 +80,7 @@ def _operation_claim(
     return WorkspaceOperationClaim(
         operation_id=operation_id,
         owner_id=owner_id,
-        owner_scope="owner",
+        owner_scope=str(owner_id),
         conversation_id=uuid.uuid4(),
         presentation_id=presentation_id,
         kind="export.pptx",
@@ -93,6 +109,8 @@ def test_canonical_export_identity_is_feature_gated_digest_bound_and_fenced(
                         PublicArtifact.__table__,
                         PublicExportIdentity.__table__,
                         PublicSlideCheckpoint.__table__,
+                        PresentationExportAttempt.__table__,
+                        WorkspaceArtifact.__table__,
                     ],
                 )
             )
@@ -529,6 +547,172 @@ def test_canonical_export_identity_is_feature_gated_digest_bound_and_fenced(
             assert reused.reused_singleflight_result is True
             assert reused.artifact == durable_result
             reused.validate_for_claim(consumer_operation)
+            await session.commit()
+
+            monkeypatch.setattr(
+                public_export_operation,
+                "configured_public_artifact_service",
+                lambda: artifacts,
+            )
+
+            async def forbid_worker(*_args, **_kwargs):
+                raise AssertionError("completed export reuse must not execute a worker")
+
+            monkeypatch.setattr(
+                public_export_operation, "execute_isolated_export_operation", forbid_worker
+            )
+            consumer_result = await public_export_operation.execute_canonical_export_execution(
+                consumer_operation, execution=completed, session_factory=sessions
+            )
+            consumer_ref = consumer_result.artifact
+            assert consumer_ref.artifact_id != durable_result.artifact_id
+            assert consumer_ref.created_by_operation_id == consumer_operation.operation_id
+            assert consumer_ref.model_copy(
+                update={
+                    "artifact_id": durable_result.artifact_id,
+                    "created_by_operation_id": durable_result.created_by_operation_id,
+                }
+            ) == durable_result
+            assert consumer_result.resource_metrics == {}
+            repeated = await public_export_operation.execute_canonical_export_execution(
+                consumer_operation, execution=completed, session_factory=sessions
+            )
+            assert repeated.artifact == consumer_ref
+            with pytest.raises(PublicExportFenceRejected):
+                await public_export_operation.execute_canonical_export_execution(
+                    replace(consumer_operation, fencing_token=14),
+                    execution=completed,
+                    session_factory=sessions,
+                )
+
+            # Exercise the actual strict staging seam, including its genuine
+            # export attempt and both journals sharing the immutable CAS key.
+            attempts = {}
+            for operation in (recovered_operation, consumer_operation):
+                session.add(
+                    WorkspaceOperation(
+                        id=operation.operation_id,
+                        owner_id=owner_id,
+                        owner_scope=str(owner_id),
+                        conversation_id=operation.conversation_id,
+                        presentation_id=presentation_id,
+                        anchor_position=1,
+                        kind=operation.kind,
+                        state="running",
+                        idempotency_key_hash=_digest(str(operation.operation_id)),
+                        request_hash=_digest("consumer-reuse-request"),
+                        request_payload={},
+                        expected_revision=7,
+                        attempt_number=operation.attempt_number,
+                        attempt_token=operation.attempt_token,
+                        fencing_token=operation.fencing_token,
+                    )
+                )
+                attempt = PresentationExportAttempt(
+                    owner_id=owner_id,
+                    owner_scope=str(owner_id),
+                    presentation_id=presentation_id,
+                    workspace_operation_id=operation.operation_id,
+                    format="pptx",
+                    state="running",
+                    source_revision=7,
+                    source_snapshot_sha256=identity.evidence.semantic_digest,
+                    request_hash=_digest("consumer-reuse-request"),
+                    idempotency_key_hash=_digest(str(operation.operation_id)),
+                    requested_adapter="general",
+                    provenance={},
+                    started_at=datetime.now(timezone.utc),
+                )
+                session.add(attempt)
+                attempts[operation.operation_id] = attempt.id
+            await session.commit()
+
+            async def prepare(reference, operation):
+                owner_token = set_current_owner_id(owner_id)
+                try:
+                    async with sessions() as staging_session:
+                        return await prepare_workspace_export_artifact_ref(
+                            staging_session,
+                            reference=reference,
+                            operation_id=operation.operation_id,
+                            presentation_id=presentation_id,
+                            source_revision=7,
+                            kind="export.pptx",
+                            export_attempt_id=attempts[operation.operation_id],
+                        )
+                finally:
+                    reset_current_owner_id(owner_token)
+
+            producer_journal = await prepare(durable_result, recovered_operation)
+            with pytest.raises(
+                WorkspaceArtifactPublicationError,
+                match="workspace_public_artifact_binding_invalid",
+            ):
+                await prepare(durable_result, consumer_operation)
+            consumer_journal = await prepare(consumer_ref, consumer_operation)
+            assert producer_journal.artifact_id != consumer_journal.artifact_id
+            assert producer_journal.storage_key == consumer_journal.storage_key
+            assert consumer_journal.export_attempt_id == attempts[consumer_operation.operation_id]
+            assert consumer_journal.public_artifact_id == consumer_ref.artifact_id
+            producer_row = await session.get(PublicArtifact, durable_result.artifact_id)
+            assert producer_row.to_ref() == durable_result
+            identity_row = await session.get(PublicExportIdentity, completed.singleflight.identity_id)
+            assert identity_row.result_artifact_id == durable_result.artifact_id
+            assert identity_row.claimed_by_operation_id == recovered_operation.operation_id
+            journals = list(
+                (await session.scalars(select(WorkspaceArtifact))).all()
+            )
+            assert len(journals) == 2
+
+            local_values = dict(
+                owner_id=owner_id,
+                operation_id=consumer_operation.operation_id,
+                presentation_id=presentation_id,
+                kind="export.pptx",
+                status="staging",
+                storage_key="workspace-artifacts/local-reuse-test.pptx",
+                sha256=consumer_ref.sha256,
+                size_bytes=consumer_ref.size_bytes,
+                source_revision=7,
+            )
+            session.add(WorkspaceArtifact(**local_values))
+            await session.flush()
+            with pytest.raises(IntegrityError):
+                async with session.begin_nested():
+                    session.add(WorkspaceArtifact(**local_values))
+                    await session.flush()
+            await session.rollback()
+            await session.execute(
+                update(PublicArtifact)
+                .where(PublicArtifact.id == consumer_ref.artifact_id)
+                .values(lifecycle_state="tombstoned")
+            )
+            await session.commit()
+            with pytest.raises(
+                WorkspaceArtifactPublicationError,
+                match="workspace_public_artifact_binding_invalid",
+            ):
+                await prepare(consumer_ref, consumer_operation)
+
+        migration = runpy.run_path(
+            str(
+                Path(__file__).resolve().parents[2]
+                / "alembic/versions/a1e5f8c2d7b0_scope_workspace_artifact_storage_uniqueness.py"
+            )
+        )
+        assert migration["revision"] == HEAD_REVISION == REVISION_PUBLIC_ARTIFACT_JOURNAL_REUSE
+        assert migration["down_revision"] == REVISION_ACCOUNT_DELETION_OUTBOX
+
+        def reject_lossy_downgrade(connection):
+            with Operations.context(MigrationContext.configure(connection)):
+                with pytest.raises(
+                    RuntimeError,
+                    match="workspace_artifact_shared_keys_prevent_downgrade",
+                ):
+                    migration["downgrade"]()
+
+        async with engine.begin() as connection:
+            await connection.run_sync(reject_lossy_downgrade)
 
         await engine.dispose()
 

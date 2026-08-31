@@ -18,6 +18,8 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
+from services.authored_composition_policy import _normalized_capacity_owned_text
+
 
 def quality_receipt_root() -> Path:
     """Return the durable root for QualityReceipt v2 manifests.
@@ -651,6 +653,14 @@ def evaluate_capacity_browser_metrics(
         is_image_element = str(item.get("tag", "")).lower() == "img" or isinstance(item.get("image"), Mapping)
         text = str(item.get("rendered_text", item.get("renderedText", "")) or "").strip()
         owned_value = item.get("has_owned_text", item.get("hasOwnedText"))
+        capacity_text = _normalized_capacity_owned_text(dict(item))
+        if capacity_text is None or (
+            ("owned_text" in item or "ownedText" in item)
+            and owned_value is True
+            and not capacity_text
+        ):
+            text_ok = False
+            violations.append(f"browser_owned_text_unverified:{qid or 'unknown'}")
         owns_text = owned_value is True if isinstance(owned_value, bool) else bool(text)
         if is_image_element:
             image = item.get("image") if isinstance(item.get("image"), Mapping) else item
@@ -682,7 +692,11 @@ def evaluate_capacity_browser_metrics(
         )
         clipped = item.get("clipped", item.get("glyph_clipped", item.get("glyphClipped", False))) is True
         if owns_text and text and visible and not clipped:
-            visible_text.append(text)
+            # Capacity counts each measured owner once, exactly as the author
+            # gate does. Keep descendant-inclusive text for visual safety and
+            # semantic-role readback below; it is not a numeric capacity run.
+            if capacity_text:
+                visible_text.append(capacity_text)
             if is_title_role:
                 role_text["title"].append(text)
             elif is_body_role:

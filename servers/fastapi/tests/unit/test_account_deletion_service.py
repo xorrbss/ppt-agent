@@ -1,16 +1,26 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta, timezone
+import hashlib
 import uuid
 from pathlib import Path
 
 import pytest
-from fastapi import HTTPException
-from sqlalchemy import event, select
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 import api.v1.admin.router as admin_router
+import services.account_deletion_controller as deletion_controller
 from models.sql.key_value import KeyValueSqlModel
+from models.sql.account_deletion_request import AccountDeletionRequest
+from models.sql.public_artifact import (
+    PublicArtifact,
+    PublicArtifactPublication,
+    PublicExportIdentity,
+    PublicSlideCheckpoint,
+    artifact_storage_key,
+)
 from models.sql.user import User
 from models.sql.workspace import WorkspaceCleanupJournal
 from services.account_deletion_service import (
@@ -19,12 +29,12 @@ from services.account_deletion_service import (
     AccountDeletionFenceConflict,
     ProtectedAccountError,
     mark_account_deleting,
+    retire_public_artifacts_for_account,
     require_active_account_generation,
 )
-from services.workspace_cleanup_journal_service import (
-    account_cleanup_tombstone_exists,
-    account_owned_tree_cleanup_target,
-    enqueue_workspace_cleanup_targets,
+from services.account_deletion_controller import (
+    claim_account_deletion_request,
+    finalize_account_deletion_claim,
 )
 
 
@@ -39,6 +49,7 @@ async def _database(path: Path):
 
     async with engine.begin() as connection:
         await connection.run_sync(User.__table__.create)
+        await connection.run_sync(AccountDeletionRequest.__table__.create)
         await connection.run_sync(KeyValueSqlModel.__table__.create)
         await connection.run_sync(WorkspaceCleanupJournal.__table__.create)
     return engine, async_sessionmaker(engine, expire_on_commit=False)
@@ -63,9 +74,220 @@ def _user(
     )
 
 
-async def _async_zero(owner_id: uuid.UUID, expected_owner_id: uuid.UUID) -> int:
-    assert owner_id == expected_owner_id
-    return 0
+def test_api_outbox_and_controller_claim_finalize_account_deletion(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    asyncio.run(_api_outbox_and_controller_finalize(tmp_path, monkeypatch))
+
+
+async def _api_outbox_and_controller_finalize(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    engine, maker = await _database(tmp_path / "account-controller-finalize.db")
+    administrator = _user("controller-admin", superuser=True)
+    target = _user("controller-target", auth_version=4)
+    digest = hashlib.sha256(b"controller-owned-artifact").hexdigest()
+    artifact = PublicArtifact(
+        id=uuid.uuid4(),
+        owner_id=target.id,
+        tenant_id="tenant-controller-delete",
+        kind="checkpoint",
+        sha256=digest,
+        size_bytes=25,
+        media_type="application/json",
+        storage_key=artifact_storage_key(
+            owner_id=target.id,
+            tenant_id="tenant-controller-delete",
+            digest=digest,
+        ),
+        created_by_operation_id=uuid.uuid4(),
+        retention_class="checkpoint",
+        lifecycle_state="committed",
+        refcount=0,
+    )
+
+    async def noop(_session, *, owner_id):
+        assert owner_id == target.id
+        return 0
+
+    monkeypatch.setattr(
+        deletion_controller,
+        "snapshot_account_workspace_cleanup_targets",
+        noop,
+    )
+    monkeypatch.setattr(
+        deletion_controller,
+        "cancel_authored_vnext_generation_operations_for_account",
+        noop,
+    )
+    monkeypatch.setattr(
+        deletion_controller,
+        "cancel_authored_vnext_exports_for_account",
+        noop,
+    )
+    monkeypatch.setattr(
+        deletion_controller,
+        "revoke_account_provider_credentials",
+        noop,
+    )
+    monkeypatch.setattr(
+        deletion_controller,
+        "delete_account_restricted_dependents",
+        noop,
+    )
+
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(PublicArtifact.__table__.create)
+            await connection.run_sync(PublicExportIdentity.__table__.create)
+            await connection.exec_driver_sql(
+                "CREATE TABLE workspace_operations (id CHAR(32) PRIMARY KEY)"
+            )
+            await connection.run_sync(PublicArtifactPublication.__table__.create)
+            await connection.run_sync(PublicSlideCheckpoint.__table__.create)
+        async with maker() as session:
+            session.add_all([administrator, target, artifact])
+            await session.commit()
+
+        async with maker() as session:
+            accepted = await admin_router.delete_user(
+                target.id,
+                admin=administrator,
+                session=session,
+            )
+        assert accepted == {
+            "status": "accepted",
+            "user_id": str(target.id),
+            "deletion_generation": 1,
+        }
+
+        async with maker() as session:
+            persisted = await session.get(User, target.id)
+            request = await session.get(AccountDeletionRequest, target.id)
+            assert persisted is not None and persisted.is_active is False
+            assert persisted.auth_version == 5
+            assert persisted.deletion_state == ACCOUNT_DELETION_DELETING
+            assert request is not None and request.state == "pending"
+            assert request.generation == persisted.deletion_generation == 1
+
+        async with maker() as session:
+            claim = await claim_account_deletion_request(
+                session,
+                worker_id="controller-test",
+            )
+        assert claim is not None and claim.claim_fence == 1
+        async with maker() as session:
+            assert (
+                await claim_account_deletion_request(
+                    session,
+                    worker_id="controller-other",
+                )
+                is None
+            )
+
+        async with maker() as session:
+            assert await finalize_account_deletion_claim(session, claim=claim) is True
+
+        async with maker() as session:
+            assert await session.get(User, target.id) is None
+            assert await session.get(AccountDeletionRequest, target.id) is None
+            retired = await session.get(PublicArtifact, artifact.id)
+            assert retired is not None
+            assert retired.lifecycle_state == "tombstoned"
+            assert retired.refcount == 0
+    finally:
+        await engine.dispose()
+
+
+def test_account_deletion_fences_export_reuse_and_tombstones_public_artifacts(
+    tmp_path: Path,
+):
+    asyncio.run(_account_deletion_retires_public_artifacts(tmp_path))
+
+
+async def _account_deletion_retires_public_artifacts(tmp_path: Path) -> None:
+    engine, maker = await _database(tmp_path / "account-public-artifacts.db")
+    owner_id = uuid.uuid4()
+    operation_id = uuid.uuid4()
+    digest = hashlib.sha256(b"account-owned-artifact").hexdigest()
+    artifact = PublicArtifact(
+        id=uuid.uuid4(),
+        owner_id=owner_id,
+        tenant_id="tenant-account-delete",
+        kind="checkpoint",
+        sha256=digest,
+        size_bytes=22,
+        media_type="application/json",
+        storage_key=artifact_storage_key(
+            owner_id=owner_id,
+            tenant_id="tenant-account-delete",
+            digest=digest,
+        ),
+        created_by_operation_id=operation_id,
+        retention_class="checkpoint",
+        lifecycle_state="committed",
+        refcount=1,
+    )
+    now = datetime.now(timezone.utc)
+    identity = PublicExportIdentity(
+        id=uuid.uuid4(),
+        owner_id=owner_id,
+        tenant_id="tenant-account-delete",
+        presentation_id=uuid.uuid4(),
+        revision=1,
+        canonical_digest="1" * 64,
+        scene_digest="2" * 64,
+        semantic_digest="3" * 64,
+        quality_digest="4" * 64,
+        exporter_digest="5" * 64,
+        export_mode="pptx",
+        output_mode="fidelity-raster",
+        font_manifest_digest="6" * 64,
+        exporter_version="test",
+        render_adapter="test",
+        source_artifact_id=artifact.id,
+        state="running",
+        claimed_by_operation_id=operation_id,
+        worker_id="worker-test",
+        attempt_token_hash="sha256:" + "7" * 64,
+        fencing_token=7,
+        attempt_count=1,
+        lease_expires_at=now + timedelta(minutes=5),
+    )
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(PublicArtifact.__table__.create)
+            await connection.run_sync(PublicExportIdentity.__table__.create)
+            await connection.exec_driver_sql(
+                "CREATE TABLE workspace_operations (id CHAR(32) PRIMARY KEY)"
+            )
+            await connection.run_sync(PublicArtifactPublication.__table__.create)
+            await connection.run_sync(PublicSlideCheckpoint.__table__.create)
+        async with maker() as session:
+            session.add_all([artifact, identity])
+            await session.commit()
+            assert await retire_public_artifacts_for_account(
+                session,
+                owner_id=owner_id,
+            ) == 1
+            await session.commit()
+
+        async with maker() as session:
+            retired = await session.get(PublicArtifact, artifact.id)
+            fenced = await session.get(PublicExportIdentity, identity.id)
+            assert retired is not None
+            assert retired.lifecycle_state == "tombstoned"
+            assert retired.refcount == 0
+            assert retired.lifecycle_revision == 2
+            assert retired.expires_at is not None
+            assert fenced is not None
+            assert fenced.state == "failed"
+            assert fenced.fencing_token == 8
+            assert fenced.error_code == "account_deletion_in_progress"
+    finally:
+        await engine.dispose()
 
 
 def test_duplicate_workers_share_one_durable_deletion_generation(tmp_path: Path):
@@ -198,170 +420,62 @@ async def _protected_account_is_never_marked(tmp_path: Path):
         await engine.dispose()
 
 
-def test_admin_delete_commits_marker_before_rescan_and_cascade(
-    tmp_path: Path, monkeypatch
-):
-    asyncio.run(
-        _admin_delete_commits_marker_before_rescan_and_cascade(tmp_path, monkeypatch)
+def test_account_deletion_controller_bounds_external_io_and_shutdown(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    asyncio.run(_account_deletion_controller_bounds_external_io_and_shutdown(
+        tmp_path,
+        monkeypatch,
+    ))
+
+
+def test_account_deletion_controller_interval_defaults_and_clamps(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv(
+        "ACCOUNT_DELETION_CONTROLLER_INTERVAL_SECONDS",
+        "invalid",
     )
+    assert deletion_controller._account_deletion_controller_interval_seconds() == 5
+
+    monkeypatch.setenv("ACCOUNT_DELETION_CONTROLLER_INTERVAL_SECONDS", "0")
+    assert deletion_controller._account_deletion_controller_interval_seconds() == 1
 
 
-async def _admin_delete_commits_marker_before_rescan_and_cascade(
-    tmp_path: Path, monkeypatch
-):
-    engine, maker = await _database(tmp_path / "admin-delete.db")
-    administrator = _user("delete-admin", superuser=True)
-    target = _user("delete-target", auth_version=3)
-    theme_key = f"presentation_custom_themes:{target.id}"
-    observed: list[tuple[str, int, int, bool]] = []
-    try:
-        async with maker() as session:
-            session.add_all(
-                [
-                    administrator,
-                    target,
-                    KeyValueSqlModel(key=theme_key, value={"theme": "private"}),
-                ]
-            )
-            await session.commit()
+async def _account_deletion_controller_bounds_external_io_and_shutdown(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    async def stalled_to_thread(*_args, **_kwargs):
+        await asyncio.Event().wait()
 
-        async def snapshot_after_committed_marker(_session, *, owner_id):
-            assert owner_id == target.id
-            # An independent transaction must see phase one before either
-            # snapshot pass starts.
-            async with maker() as observer:
-                persisted = await observer.get(User, owner_id)
-                assert persisted is not None
-                observed.append(
-                    (
-                        persisted.deletion_state,
-                        persisted.deletion_generation,
-                        persisted.auth_version,
-                        persisted.is_active,
-                    )
-                )
-            return 0
-
-        monkeypatch.setattr(
-            admin_router,
-            "snapshot_account_workspace_cleanup_targets",
-            snapshot_after_committed_marker,
-        )
-        monkeypatch.setattr(
-            admin_router,
-            "delete_account_restricted_dependents",
-            lambda _session, *, owner_id: _async_zero(owner_id, target.id),
-        )
-        async with maker() as session:
-            await admin_router.delete_user(
-                target.id,
-                admin=administrator,
-                session=session,
-            )
-
-        assert observed == [
-            (ACCOUNT_DELETION_DELETING, 1, 4, False),
-            (ACCOUNT_DELETION_DELETING, 1, 4, False),
-        ]
-        async with maker() as session:
-            assert await session.get(User, target.id) is None
-            assert (
-                await session.scalar(
-                    select(KeyValueSqlModel.id).where(
-                        KeyValueSqlModel.key == theme_key
-                    )
-                )
-                is None
-            )
-    finally:
-        await engine.dispose()
-
-
-def test_admin_delete_resumes_after_snapshot_failure_without_generation_bump(
-    tmp_path: Path, monkeypatch
-):
-    asyncio.run(
-        _admin_delete_resumes_after_snapshot_failure_without_generation_bump(
-            tmp_path, monkeypatch
-        )
+    monkeypatch.setattr(
+        deletion_controller,
+        "get_app_data_directory_env",
+        lambda: str(tmp_path),
     )
-
-
-async def _admin_delete_resumes_after_snapshot_failure_without_generation_bump(
-    tmp_path: Path, monkeypatch
-):
-    engine, maker = await _database(tmp_path / "admin-delete-resume.db")
-    administrator = _user("resume-admin", superuser=True)
-    target = _user("resume-target", auth_version=5)
-    try:
-        async with maker() as session:
-            session.add_all([administrator, target])
-            await session.commit()
-
-        async def fail_snapshot(_session, *, owner_id):
-            assert owner_id == target.id
-            raise OSError("simulated cleanup snapshot failure")
-
-        monkeypatch.setattr(
-            admin_router,
-            "snapshot_account_workspace_cleanup_targets",
-            fail_snapshot,
+    monkeypatch.setattr(deletion_controller.asyncio, "to_thread", stalled_to_thread)
+    monkeypatch.setattr(deletion_controller, "_EXTERNAL_IO_TIMEOUT_SECONDS", 0.01)
+    with pytest.raises(TimeoutError):
+        await asyncio.wait_for(
+            deletion_controller._run_external_account_deletion_io(
+                object(),
+                owner_id=uuid.uuid4(),
+                generation=1,
+            ),
+            timeout=0.5,
         )
-        async with maker() as session:
-            with pytest.raises(OSError, match="simulated cleanup snapshot failure"):
-                await admin_router.delete_user(
-                    target.id,
-                    admin=administrator,
-                    session=session,
-                )
 
-        async with maker() as session:
-            persisted = await session.get(User, target.id)
-            assert persisted is not None
-            requested_at = persisted.deletion_requested_at
-            assert requested_at is not None
-            assert persisted.deletion_state == ACCOUNT_DELETION_DELETING
-            assert persisted.deletion_generation == 1
-            assert persisted.auth_version == 6
-            assert persisted.is_active is False
-
-        resumed: list[tuple[int, int, object]] = []
-
-        async def successful_rescan(_session, *, owner_id):
-            async with maker() as observer:
-                persisted = await observer.get(User, owner_id)
-                assert persisted is not None
-                resumed.append(
-                    (
-                        persisted.deletion_generation,
-                        persisted.auth_version,
-                        persisted.deletion_requested_at,
-                    )
-                )
-            return 0
-
-        monkeypatch.setattr(
-            admin_router,
-            "snapshot_account_workspace_cleanup_targets",
-            successful_rescan,
-        )
-        monkeypatch.setattr(
-            admin_router,
-            "delete_account_restricted_dependents",
-            lambda _session, *, owner_id: _async_zero(owner_id, target.id),
-        )
-        async with maker() as session:
-            await admin_router.delete_user(
-                target.id,
-                admin=administrator,
-                session=session,
-            )
-
-        assert resumed == [(1, 6, requested_at), (1, 6, requested_at)]
-        async with maker() as session:
-            assert await session.get(User, target.id) is None
-    finally:
-        await engine.dispose()
+    runtime = deletion_controller.AccountDeletionControllerRuntime(
+        worker_id="bounded-shutdown-test"
+    )
+    task = asyncio.create_task(asyncio.Event().wait())
+    runtime._task = task
+    monkeypatch.setattr(deletion_controller, "_SHUTDOWN_TIMEOUT_SECONDS", 0.01)
+    await asyncio.wait_for(runtime.close(), timeout=0.5)
+    await asyncio.sleep(0)
+    assert task.cancelled()
 
 
 def test_cleanup_redrive_route_requires_admin_dependency():
@@ -376,82 +490,3 @@ def test_cleanup_redrive_route_requires_admin_dependency():
     assert admin_router.get_current_admin in {
         dependency.call for dependency in route.dependant.dependencies
     }
-
-
-def test_admin_delete_replays_success_after_lost_response(tmp_path: Path, monkeypatch):
-    asyncio.run(
-        _admin_delete_replays_success_after_lost_response(tmp_path, monkeypatch)
-    )
-
-
-async def _admin_delete_replays_success_after_lost_response(
-    tmp_path: Path,
-    monkeypatch,
-):
-    engine, maker = await _database(tmp_path / "admin-delete-replay.db")
-    administrator = _user("replay-admin", superuser=True)
-    target = _user("replay-target")
-    cleanup_target = account_owned_tree_cleanup_target(
-        owner_id=target.id,
-        root_kind="temp",
-        root=tmp_path / "account-tree",
-    )
-    try:
-        async with maker() as session:
-            session.add_all([administrator, target])
-            await session.commit()
-
-        async def durable_snapshot(session, *, owner_id):
-            assert owner_id == target.id
-            return await enqueue_workspace_cleanup_targets(
-                session,
-                targets=[cleanup_target],
-            )
-
-        monkeypatch.setattr(
-            admin_router,
-            "snapshot_account_workspace_cleanup_targets",
-            durable_snapshot,
-        )
-        monkeypatch.setattr(
-            admin_router,
-            "delete_account_restricted_dependents",
-            lambda _session, *, owner_id: _async_zero(owner_id, target.id),
-        )
-
-        # The first request commits successfully; model a lost HTTP response by
-        # discarding its return value and issuing the exact same DELETE again.
-        async with maker() as session:
-            await admin_router.delete_user(
-                target.id,
-                admin=administrator,
-                session=session,
-            )
-        async with maker() as session:
-            assert await session.get(User, target.id) is None
-            assert await account_cleanup_tombstone_exists(
-                session,
-                owner_id=target.id,
-            )
-
-        async with maker() as session:
-            assert (
-                await admin_router.delete_user(
-                    target.id,
-                    admin=administrator,
-                    session=session,
-                )
-                is None
-            )
-
-        # An arbitrary UUID remains distinguishable from a completed deletion.
-        async with maker() as session:
-            with pytest.raises(HTTPException) as raised:
-                await admin_router.delete_user(
-                    uuid.uuid4(),
-                    admin=administrator,
-                    session=session,
-                )
-            assert raised.value.status_code == 404
-    finally:
-        await engine.dispose()

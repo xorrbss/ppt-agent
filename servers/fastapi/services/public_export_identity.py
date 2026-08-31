@@ -206,6 +206,7 @@ async def run_slide_render_singleflight(
     *,
     max_in_flight: int,
     wait_seconds: float,
+    on_follower_wait: Callable[[], None] | None = None,
 ) -> tuple[ArtifactRef, bool]:
     """Run or join one bounded, cancellation-safe in-process render flight.
 
@@ -234,6 +235,8 @@ async def run_slide_render_singleflight(
         return await producer(), False
     assert shared is not None
     if not leader:
+        if on_follower_wait is not None:
+            on_follower_wait()
         try:
             return (
                 await asyncio.wait_for(
@@ -292,6 +295,7 @@ async def acquire_slide_render_authority(
     *,
     identity: CanonicalSlideRenderIdentity,
     wait_seconds: float,
+    on_authority_wait: Callable[[], None] | None = None,
 ) -> AsyncIterator[str]:
     """Acquire the cross-process render authority before producing PNG bytes.
 
@@ -318,6 +322,7 @@ async def acquire_slide_render_authority(
     advisory_key = _slide_render_advisory_key(identity)
     loop = asyncio.get_running_loop()
     deadline = loop.time() + wait_seconds
+    wait_notified = False
     while True:
         async with session.begin():
             acquired = await session.scalar(
@@ -327,6 +332,10 @@ async def acquire_slide_render_authority(
             if acquired is True:
                 yield "postgresql-advisory-xact"
                 return
+        if not wait_notified:
+            wait_notified = True
+            if on_authority_wait is not None:
+                on_authority_wait()
         remaining = deadline - loop.time()
         if remaining <= 0:
             raise PublicSlideRenderSingleflightError(

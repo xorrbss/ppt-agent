@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.generation.decoration-containment",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Generated decorative elements must remain inside their visible area by position or size correction; text, core content and quality gates stay unchanged.",
+  "scope": [
+    "authored",
+    "generation",
+    "geometry",
+    "quality"
+  ],
+  "invariants": [
+    "Correct decoration position or size during generation so decorative paint is not clipped outside its containing area.",
+    "Preserve all text and core content, source-locked material, and existing quality and measurement thresholds.",
+    "Re-render changed generated HTML and retain actual validation evidence before publication; do not relabel unknown as passed."
+  ],
+  "forbidden": [
+    "Accepting intentional decoration clipping as normal or lowering quality gates to bypass publication blockers.",
+    "Changing text or core meaning as a side effect of decoration containment."
+  ],
+  "evidence": [],
+  "supersedes": null,
+  "recordedAt": "2026-08-31T00:25:15.5611531+00:00"
+}

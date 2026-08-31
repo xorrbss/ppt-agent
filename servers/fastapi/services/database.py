@@ -52,6 +52,7 @@ from models.sql.workspace import (
     WorkspaceOutbox,
 )
 from models.sql.user import User
+from models.sql.account_deletion_request import AccountDeletionRequest
 from models.sql.access_token import AccessToken
 from models.sql.public_principal_binding import PublicPrincipalBinding
 from models.sql.provider_settings import ProviderSettings
@@ -83,7 +84,10 @@ from templates.v2.catalog import get_template_v2_default_template_id
 from services.presentation_profile_persistence import stamp_presentation_profile
 from utils.owner_context import get_current_owner_id, get_current_tenant_id
 from utils.get_env import get_migrate_database_on_startup_env
-from utils.db_utils import get_database_url_and_connect_args, get_pool_kwargs
+from utils.db_utils import (
+    get_database_url_and_connect_args,
+    get_pool_kwargs,
+)
 
 
 database_url, connect_args = get_database_url_and_connect_args()
@@ -147,10 +151,20 @@ async_session_maker = async_sessionmaker(sql_engine, expire_on_commit=False)
 
 
 PUBLIC_CONTROLLER_DATABASE_ROLE = "presenton_public_controller"
+PUBLIC_API_DATABASE_ROLE = "presenton_public_api"
 
 
 def _local_development_environment() -> bool:
-    return (os.getenv("ENVIRONMENT") or "development").strip().lower() in {
+    configured_public_runtime = bool(
+        (os.getenv("PUBLIC_DATABASE_PROCESS_ROLE") or "").strip()
+        or (os.getenv("PPT_PUBLIC_OIDC_ISSUER") or "").strip()
+        or (os.getenv("PUBLIC_V2_INTEGRATION_PROFILE") or "").strip()
+        == "postgresql-strict"
+    )
+    raw_environment = (os.getenv("ENVIRONMENT") or "").strip().lower()
+    if configured_public_runtime and not raw_environment:
+        raise RuntimeError("public_environment_required")
+    return (raw_environment or "development") in {
         "local",
         "development",
         "dev",
@@ -163,13 +177,37 @@ async def _postgres_role_authority(engine: AsyncEngine) -> dict[str, object]:
         row = (
             await connection.execute(
                 text(
-                    "SELECT current_user AS role_name, role.rolsuper AS is_superuser, "
+                    "SELECT current_user AS role_name, session_user AS session_role_name, "
+                    "role.rolsuper AS is_superuser, "
                     "role.rolbypassrls AS bypass_rls, "
+                    "role.rolinherit AS inherits_role_privileges, "
+                    "(SELECT rolsuper FROM pg_roles WHERE rolname = session_user) "
+                    "AS session_is_superuser, "
+                    "(SELECT rolbypassrls FROM pg_roles WHERE rolname = session_user) "
+                    "AS session_bypass_rls, "
+                    "(SELECT rolinherit FROM pg_roles WHERE rolname = session_user) "
+                    "AS session_inherits_role_privileges, "
+                    "(SELECT rolsuper FROM pg_roles WHERE rolname = :controller_role) "
+                    "AS controller_group_is_superuser, "
+                    "(SELECT rolbypassrls FROM pg_roles WHERE rolname = :controller_role) "
+                    "AS controller_group_bypass_rls, "
+                    "(SELECT rolcanlogin FROM pg_roles WHERE rolname = :controller_role) "
+                    "AS controller_group_can_login, "
+                    "(SELECT rolsuper FROM pg_roles WHERE rolname = :api_role) "
+                    "AS api_group_is_superuser, "
+                    "(SELECT rolbypassrls FROM pg_roles WHERE rolname = :api_role) "
+                    "AS api_group_bypass_rls, "
+                    "(SELECT rolcanlogin FROM pg_roles WHERE rolname = :api_role) "
+                    "AS api_group_can_login, "
                     "pg_has_role(current_user, :controller_role, 'member') "
-                    "AS is_controller "
+                    "AS is_controller, "
+                    "pg_has_role(current_user, :api_role, 'member') AS is_api "
                     "FROM pg_roles AS role WHERE role.rolname = current_user"
                 ),
-                {"controller_role": PUBLIC_CONTROLLER_DATABASE_ROLE},
+                {
+                    "controller_role": PUBLIC_CONTROLLER_DATABASE_ROLE,
+                    "api_role": PUBLIC_API_DATABASE_ROLE,
+                },
             )
         ).mappings().one()
     return dict(row)
@@ -180,13 +218,38 @@ def validate_public_database_authority(
 ) -> None:
     """Reject shared/over-privileged roles at the public process boundary."""
 
-    if authority.get("is_superuser") is True or authority.get("bypass_rls") is True:
+    bypass_keys = (
+        "is_superuser",
+        "bypass_rls",
+        "session_is_superuser",
+        "session_bypass_rls",
+        "controller_group_is_superuser",
+        "controller_group_bypass_rls",
+        "api_group_is_superuser",
+        "api_group_bypass_rls",
+    )
+    if any(authority.get(key) is True for key in bypass_keys):
         raise RuntimeError("public_database_role_bypasses_rls")
+    if (
+        authority.get("inherits_role_privileges") is False
+        or authority.get("session_inherits_role_privileges") is False
+    ):
+        raise RuntimeError("public_database_role_must_inherit")
+    if (
+        authority.get("controller_group_can_login") is True
+        or authority.get("api_group_can_login") is True
+    ):
+        raise RuntimeError("public_database_group_role_must_not_login")
     is_controller = authority.get("is_controller") is True
+    is_api = authority.get("is_api") is True
     if controller and not is_controller:
         raise RuntimeError("public_controller_database_role_required")
+    if controller and is_api:
+        raise RuntimeError("public_controller_database_role_must_not_be_api")
     if not controller and is_controller:
         raise RuntimeError("public_api_database_role_must_not_be_controller")
+    if not controller and not is_api:
+        raise RuntimeError("public_api_database_role_required")
 
 
 async def require_public_controller_database_authority(
@@ -194,8 +257,13 @@ async def require_public_controller_database_authority(
 ) -> None:
     """Require the dedicated cross-tenant queue role for a controller process."""
 
+    local_development = _local_development_environment()
+    if not local_development and (
+        os.getenv("PUBLIC_DATABASE_PROCESS_ROLE") or ""
+    ).strip().lower() != "controller":
+        raise RuntimeError("public_controller_database_process_role_required")
     if engine.dialect.name != "postgresql":
-        if _local_development_environment() and engine.dialect.name == "sqlite":
+        if local_development and engine.dialect.name == "sqlite":
             return
         raise RuntimeError("public_controller_postgresql_required")
     validate_public_database_authority(
@@ -209,10 +277,21 @@ async def require_public_api_database_authority(
 ) -> None:
     """Ensure a remote public API cannot inherit controller or BYPASSRLS power."""
 
-    if _local_development_environment() or not (
-        os.getenv("PPT_PUBLIC_OIDC_ISSUER") or ""
-    ).strip():
+    local_development = _local_development_environment()
+    public_runtime = bool(
+        (os.getenv("PUBLIC_DATABASE_PROCESS_ROLE") or "").strip()
+        or (os.getenv("PPT_PUBLIC_OIDC_ISSUER") or "").strip()
+        or (os.getenv("PUBLIC_V2_INTEGRATION_PROFILE") or "").strip()
+        == "postgresql-strict"
+    )
+    if local_development and (
+        engine.dialect.name == "sqlite" or not public_runtime
+    ):
         return
+    if not public_runtime:
+        return
+    if (os.getenv("PUBLIC_DATABASE_PROCESS_ROLE") or "").strip().lower() != "api":
+        raise RuntimeError("public_api_database_process_role_required")
     if engine.dialect.name != "postgresql":
         raise RuntimeError("public_api_postgresql_required")
     validate_public_database_authority(
@@ -419,6 +498,7 @@ async def create_db_and_tables():
                         AsyncPresentationGenerationTaskModel.__table__,
                         OllamaPullStatus.__table__,
                         User.__table__,
+                        AccountDeletionRequest.__table__,
                         AccessToken.__table__,
                         ProviderSettings.__table__,
                         ReferenceSnapshot.__table__,

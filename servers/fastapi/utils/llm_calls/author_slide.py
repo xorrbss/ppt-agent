@@ -875,6 +875,20 @@ def _authoring_output_profile(
     return AUTHOR_MAX_TOKENS, "low"
 
 
+def authored_provider_semantic_slot(
+    *,
+    receipt_retry_class: str | None,
+    receipt_attempt_ordinal: int | None,
+) -> str:
+    """Return the stable public logical-call slot for one slide attempt."""
+
+    return (
+        "author.recovery"
+        if receipt_attempt_ordinal == 2 or receipt_retry_class == "recovery"
+        else "author.initial"
+    )
+
+
 async def author_slide_html(
     content: str,
     design_system: str,
@@ -1031,7 +1045,18 @@ async def author_slide_html(
         or receipt_attempt_ordinal not in {1, 2}
     ):
         raise ValueError("receipt_attempt_ordinal must be 1 or 2 when provided")
+    if (
+        receipt_retry_class is not None
+        and receipt_attempt_ordinal is not None
+        and receipt_retry_class
+        != ("initial" if receipt_attempt_ordinal == 1 else "recovery")
+    ):
+        raise ValueError("receipt retry class and attempt ordinal must agree")
     initial_provider_attempt = receipt_attempt_ordinal or 1
+    author_semantic_slot = authored_provider_semantic_slot(
+        receipt_retry_class=receipt_retry_class,
+        receipt_attempt_ordinal=receipt_attempt_ordinal,
+    )
     try:
         provider = str(get_llm_provider().value)
     except Exception:
@@ -1093,7 +1118,7 @@ async def author_slide_html(
             )
 
     try:
-        response = await generate(kwargs, semantic_slot="author.primary")
+        response = await generate(kwargs, semantic_slot=author_semantic_slot)
     except Exception as error:
         # Public admission limits are durable, non-retryable control-plane
         # decisions.  Do not reclassify them as generic provider HTTP errors.
@@ -1117,7 +1142,7 @@ async def author_slide_html(
         try:
             response = await generate(
                 fallback_kwargs,
-                semantic_slot="author.text-fallback",
+                semantic_slot=f"{author_semantic_slot}.text-fallback",
             )
         except Exception as fallback_error:
             raise handle_llm_client_exceptions(fallback_error)

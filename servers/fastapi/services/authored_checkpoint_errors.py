@@ -43,6 +43,7 @@ class AuthoredStageError(RuntimeError):
         cause: BaseException | None = None,
         retryable: bool = True,
         message: str | None = None,
+        provider_attempt_count: int | None = None,
     ) -> None:
         self.slide_index = slide_index
         self.stage = stage
@@ -50,6 +51,13 @@ class AuthoredStageError(RuntimeError):
         self.cause = cause
         self.retryable = retryable
         self.safe_message = message or _default_message(code, stage)
+        self.provider_attempt_count = (
+            provider_attempt_count
+            if isinstance(provider_attempt_count, int)
+            and not isinstance(provider_attempt_count, bool)
+            and 0 <= provider_attempt_count <= 2
+            else None
+        )
         super().__init__(self.safe_message)
 
     def as_safe_dict(
@@ -79,6 +87,22 @@ class AuthoredStageError(RuntimeError):
             value["request_id"] = request_id
         if attempt_number is not None:
             value["attempt_number"] = attempt_number
+        if self.provider_attempt_count is not None:
+            value["provider_attempt_count"] = self.provider_attempt_count
+        from services.authored_author_capacity_recovery import safe_owner_capacity_diagnostic
+
+        diagnostic = safe_owner_capacity_diagnostic(
+            getattr(cause, "owner_capacity_diagnostic", None)
+        )
+        if diagnostic is not None:
+            value["owner_capacity_diagnostic"] = diagnostic
+        from services.authored_title_recovery_contract import safe_title_token_diagnostic
+
+        token_diagnostic = safe_title_token_diagnostic(
+            getattr(cause, "title_token_diagnostic", None)
+        )
+        if token_diagnostic is not None:
+            value["title_token_diagnostic"] = token_diagnostic
         return value
 
 

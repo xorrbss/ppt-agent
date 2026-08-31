@@ -25,11 +25,18 @@ import urllib.parse
 import urllib.request
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 import aiohttp
 
+from services.authored_vnext.capability_registry import (
+    CAPABILITY_REGISTRY_DIGEST,
+    capability_metadata,
+)
 from utils.authored_dom_quality import ensure_authored_qids
+from utils.slide_capture_hit_test import THIN_VIEWPORT_HIT_TEST_JS
+from utils.slide_capture_polygon_paint import POLYGON_PAINT_DOMAIN_JS
+from utils.slide_capture_rounded_paint import ROUNDED_PAINT_DOMAIN_JS
 from utils.renderer_internal_capability import issue_internal_render_capability
 from utils.renderer_isolation import (
     MAX_RESPONSE_BYTES,
@@ -70,8 +77,8 @@ _BLOCKED_RENDERER_URL_PATTERNS = [
 # pixels (or the accompanying geometry measurements) is identical.  HTML alone
 # is insufficient: local font/image/CSS files and the resolved Chromium binary
 # may change without changing the authored Scene payload.
-CACHE_IDENTITY_VERSION = "authored-render-cache-identity/v1"
-MEASUREMENT_CACHE_VERSION = "authored-measurement/v1"
+CACHE_IDENTITY_VERSION = "authored-render-cache-identity/v2-capability-registry"
+MEASUREMENT_CACHE_VERSION = "authored-measurement/v11-polygon-normal-hit"
 _SCENE_DIGEST_PATTERN = re.compile(
     r'(?:data-scene-digest|data-scene-hash|name\s*=\s*["\']scene-digest["\'])'
     r'\s*=\s*["\']([^"\']+)["\']',
@@ -201,7 +208,8 @@ def _render_cache_identity(html: str) -> _RenderCacheIdentity:
     chrome_digest = chrome_runtime_digest()
     asset_digest = _asset_fingerprint(html)
     payload = "\0".join(
-        (CACHE_IDENTITY_VERSION, source_digest, scene_digest, chrome_digest, asset_digest, MEASUREMENT_CACHE_VERSION)
+        (CACHE_IDENTITY_VERSION, source_digest, scene_digest, chrome_digest, asset_digest,
+         MEASUREMENT_CACHE_VERSION, CAPABILITY_REGISTRY_DIGEST)
     )
     return _RenderCacheIdentity(
         source_digest=source_digest,
@@ -332,6 +340,7 @@ def _metric_evidence_cache_key_from_digests(
             MEASUREMENT_CACHE_VERSION,
             DOM_METRICS_VERSION,
             OCCLUSION_SENSOR_VERSION,
+            CAPABILITY_REGISTRY_DIGEST,
             cache_identity,
             qid,
             metric,
@@ -367,6 +376,9 @@ def _instrument_authored_html(
         return enriched, key
     nonce_attribute = (
         f' nonce="{html_lib.escape(script_nonce, quote=True)}"' if script_nonce else ""
+    )
+    registry_metadata = json.dumps(
+        capability_metadata(consumer="chromium"), sort_keys=True, separators=(",", ":")
     )
     script = rf"""<script data-codex-dom-probe{nonce_attribute}>
 (() => {{
@@ -448,15 +460,16 @@ def _instrument_authored_html(
         visibleColor(style[`border${{side}}Color`])
       );
     }};
+    {ROUNDED_PAINT_DOMAIN_JS}
+    {POLYGON_PAINT_DOMAIN_JS}
     const ownedSurfaceRectCache = new WeakMap();
     const ownedSurfaceRects = (node) => {{
       const cached = ownedSurfaceRectCache.get(node);
       if (cached) return cached;
       const rects = [node, ...Array.from(node.querySelectorAll('*'))]
         .filter((candidate) => candidate.closest('[data-qid]') === node && ownsSurfacePaint(candidate))
-        .map((candidate) => candidate.getBoundingClientRect())
-        .filter((rect) => rect.width > 0 && rect.height > 0)
-        .map((rect) => ({{x: rect.x, y: rect.y, width: rect.width, height: rect.height}}));
+        .map(candidate => polygonSurfaceRect(candidate, roundedSurfaceRect(candidate)))
+        .filter((rect) => rect.width > 0 && rect.height > 0);
       ownedSurfaceRectCache.set(node, rects);
       return rects;
     }};
@@ -506,6 +519,20 @@ def _instrument_authored_html(
       }} catch (_) {{}}
       try {{
         const style = getComputedStyle(node);
+        let identityMapping = node.namespaceURI === 'http://www.w3.org/1999/xhtml' &&
+          node.getClientRects().length === 1 &&
+          [rect.left, rect.top, rect.right, rect.bottom, rect.width, rect.height].every(Number.isFinite);
+        for (let ancestor = node; identityMapping && ancestor; ancestor = ancestor.parentElement) {{
+          const css = getComputedStyle(ancestor);
+          identityMapping = ancestor.namespaceURI === 'http://www.w3.org/1999/xhtml' &&
+            css.transform === 'none' && css.translate === 'none' && css.rotate === 'none' &&
+            css.scale === 'none' && css.perspective === 'none' && css.offsetPath === 'none' &&
+            ['normal', '1'].includes(css.zoom);
+        }}
+        if (identityMapping) return {{points: [
+          {{x: rect.left, y: rect.top}}, {{x: rect.right, y: rect.top}},
+          {{x: rect.right, y: rect.bottom}}, {{x: rect.left, y: rect.bottom}}
+        ], measured: true}};
         const matrix = new DOMMatrixReadOnly(style.transform === 'none' ? undefined : style.transform);
         const width = node.offsetWidth || rect.width, height = node.offsetHeight || rect.height;
         const local = [new DOMPoint(0, 0), new DOMPoint(width, 0), new DOMPoint(width, height), new DOMPoint(0, height)]
@@ -633,6 +660,7 @@ def _instrument_authored_html(
       }}
       return inside;
     }};
+    {THIN_VIEWPORT_HIT_TEST_JS}
     const occlusion = (node, rect, points, textRects, surfaceRects) => {{
       const qid = node.getAttribute('data-qid');
       const sensorVersion = '{OCCLUSION_SENSOR_VERSION}';
@@ -640,8 +668,18 @@ def _instrument_authored_html(
         qid, metric: 'occlusion', sensor_version: sensorVersion,
         source_digest: '{source_digest}', render_digest: '{render_digest}',
         cache_key: [qid, 'occlusion', sensorVersion, '{source_digest}', '{render_digest}'].join('\u0000'),
-        stage: 'chrome.owned_paint_sampling', status, reason, ...details
+        stage: 'chrome.owned_paint_sampling', status, reason, ...details,
+        rounded_domain_excluded_samples: roundedExcluded,
+        rounded_domain_supported_rects: surfaceRects.filter(r => r.rounded_domain?.status === 'supported').length,
+        rounded_domain_unsupported_rects: surfaceRects.filter(r => r.rounded_domain?.status === 'unsupported').length,
+        polygon_domain_excluded_samples: polygonExcluded,
+        polygon_domain_supported_rects: surfaceRects.filter(r => r.polygon_domain?.status === 'supported').length,
+        polygon_domain_unsupported_rects: surfaceRects.filter(r => r.polygon_domain?.status === 'unsupported').length,
+        polygon_edge_retry_count: polygonEdgeRetries, polygon_edge_recovered_samples: polygonEdgeRecovered,
+        thin_edge_retry_count: thinEdgeRetries, thin_edge_recovered_samples: thinEdgeRecovered
       }});
+      let roundedExcluded = 0, polygonExcluded = 0, polygonEdgeRetries = 0, polygonEdgeRecovered = 0;
+      let thinEdgeRetries = 0, thinEdgeRecovered = 0;
       const empty = (values, status, reason) => ({{
         fraction: values.fraction, continuous: values.continuous,
         step: values.step, unknown: values.unknown,
@@ -667,7 +705,12 @@ def _instrument_authored_html(
       const rows = Math.max(5, Math.min(40, Math.ceil(rect.height / 4)));
       const cells = Array.from({{length: rows}}, () => Array(cols).fill(-1));
       const samples = [];
-      const addSample = (x, y, group, origin) => {{
+      const addSample = (x, y, group, origin, surfaceDomain = null) => {{
+        if (surfaceDomain && !pointInOwnedPaintSurface(x, y, surfaceDomain)) {{
+          if (!pointInPolygonSurface(x, y, surfaceDomain)) polygonExcluded += 1;
+          else roundedExcluded += 1;
+          return false;
+        }}
         if (!pointInPolygon(x, y, points)) return false;
         const row = Math.max(0, Math.min(rows - 1, Math.floor((y - rect.top) / rect.height * rows)));
         const col = Math.max(0, Math.min(cols - 1, Math.floor((x - rect.left) / rect.width * cols)));
@@ -677,7 +720,13 @@ def _instrument_authored_html(
       for (let row = 0; row < rows; row++) for (let col = 0; col < cols; col++) {{
         const x = rect.left + rect.width * (col + .5) / cols;
         const y = rect.top + rect.height * (row + .5) / rows;
-        if (!ownedPaintRects.some((item) => pointInRect(x, y, item.paintRect))) continue;
+        if (!ownedPaintRects.some((item) => pointInOwnedPaintSurface(x, y, item.paintRect))) {{
+          if (ownedPaintRects.some(item => pointInRect(x, y, item.paintRect))) {{
+            if (ownedPaintRects.some(item => pointInRect(x, y, item.paintRect) && !pointInPolygonSurface(x, y, item.paintRect))) polygonExcluded += 1;
+            else roundedExcluded += 1;
+          }}
+          continue;
+        }}
         addSample(x, y, null, 'coarse');
       }}
       for (const {{paintRect, group}} of ownedPaintRects) {{
@@ -687,7 +736,7 @@ def _instrument_authored_html(
         for (let row = 0; row < localRows; row++) for (let col = 0; col < localCols; col++) {{
           const x = paintRect.x + paintRect.width * (col + .5) / localCols;
           const y = paintRect.y + paintRect.height * (row + .5) / localRows;
-          added = addSample(x, y, group, 'owned-rect') || added;
+          added = addSample(x, y, group, 'owned-rect', (paintRect.rounded_domain || paintRect.polygon_domain) ? paintRect : null) || added;
         }}
         // Rotated fragment bounding boxes can put every local grid point just
         // outside the owner quad.  Try the physical rect center explicitly and
@@ -695,7 +744,7 @@ def _instrument_authored_html(
         if (!added) addSample(
           paintRect.x + paintRect.width / 2,
           paintRect.y + paintRect.height / 2,
-          group, 'owned-rect-center');
+          group, 'owned-rect-center', (paintRect.rounded_domain || paintRect.polygon_domain) ? paintRect : null);
       }}
       let covered = 0, unknown = 0, unbound = 0;
       const occluderQids = new Set();
@@ -710,18 +759,32 @@ def _instrument_authored_html(
         let hitX = x, hitY = y;
         let stack = document.elementsFromPoint(hitX, hitY);
         let owner = stack.findIndex((candidate) => candidate === node || node.contains(candidate));
-        // Anti-aliased glyph/border edge samples can miss the owner by a
-        // subpixel even though the adjacent owned paint is measurable. Retry
-        // two bounded points toward the target centre before declaring an
-        // unknown atom; the normal occlusion threshold remains unchanged.
+        // A proven exterior polygon-AA sample retries along its single
+        // violated edge's inward unit normal. Other glyph/border misses keep
+        // the existing centre-directed retries. Both use the same .5/1 steps
+        // and actual hit stack; the unknown threshold is unchanged.
         if (owner < 0) {{
-          for (const inset of [.5, 1]) {{
-            hitX = x + Math.sign(rect.left + rect.width / 2 - x) * inset;
-            hitY = y + Math.sign(rect.top + rect.height / 2 - y) * inset;
+          const polygonSamples = polygonAAInteriorSamples(node, x, y, textRects, surfaceRects, stack);
+          const retrySamples = polygonSamples ?? [.5, 1].map(inset => [
+            x + Math.sign(rect.left + rect.width / 2 - x) * inset,
+            y + Math.sign(rect.top + rect.height / 2 - y) * inset
+          ]);
+          for (const [cx, cy] of retrySamples) {{
+            hitX = cx; hitY = cy;
+            if (polygonSamples !== null) polygonEdgeRetries += 1;
             stack = document.elementsFromPoint(hitX, hitY);
             owner = stack.findIndex((candidate) => candidate === node || node.contains(candidate));
-            if (owner >= 0) break;
+            if (owner >= 0) {{
+              if (polygonSamples !== null) polygonEdgeRecovered += 1;
+              break;
+            }}
           }}
+        }}
+        if (owner < 0) for (const [cx, cy] of thinViewportInteriorSamples(node, rect, points, textRects, surfaceRects, x, y)) {{
+          thinEdgeRetries += 1; hitX = cx; hitY = cy;
+          stack = document.elementsFromPoint(hitX, hitY);
+          owner = stack.findIndex(candidate => candidate === node || node.contains(candidate));
+          if (owner >= 0) {{ thinEdgeRecovered += 1; break; }}
         }}
         if (owner < 0) {{
           sample.state = -2; if (cells[row][col] === -1) cells[row][col] = -2;
@@ -837,6 +900,7 @@ def _instrument_authored_html(
         clientWidth: node.clientWidth, clientHeight: node.clientHeight,
         scrollWidth: node.scrollWidth, scrollHeight: node.scrollHeight,
         rendered_text: node.innerText || node.textContent || '',
+        owned_text: ownedTextNodes(node).map((text) => text.textContent || '').join(''),
         parent_qid: node.parentElement?.closest('[data-qid]')?.getAttribute('data-qid') || null,
         offset_parent_qid: offsetParentQid,
         containing_block_proof: {{
@@ -852,6 +916,7 @@ def _instrument_authored_html(
         clipped: glyph.glyph || (['hidden', 'clip'].includes(style.overflowX) && node.scrollWidth > node.clientWidth + 1) ||
           (['hidden', 'clip'].includes(style.overflowY) && node.scrollHeight > node.clientHeight + 1),
         glyph_clipped: glyph.glyph, line_box_clipped: glyph.line,
+        range_clip_suspect: glyph.glyph, range_clip_cause: glyph.cause,
         glyph_clip_cause: glyph.cause,
         has_owned_text: textRects.length > 0,
         has_owned_paint: surfaceRects.length > 0 || textRects.length > 0,
@@ -889,6 +954,18 @@ def _instrument_authored_html(
         computed_style: {{
           color: style.color, backgroundColor: style.backgroundColor,
           backgroundImage: style.backgroundImage, backgroundBlendMode: style.backgroundBlendMode,
+          borderTopWidth: style.borderTopWidth, borderRightWidth: style.borderRightWidth,
+          borderBottomWidth: style.borderBottomWidth, borderLeftWidth: style.borderLeftWidth,
+          borderTopStyle: style.borderTopStyle, borderRightStyle: style.borderRightStyle,
+          borderBottomStyle: style.borderBottomStyle, borderLeftStyle: style.borderLeftStyle,
+          borderTopLeftRadius: style.borderTopLeftRadius, borderTopRightRadius: style.borderTopRightRadius,
+          borderBottomRightRadius: style.borderBottomRightRadius, borderBottomLeftRadius: style.borderBottomLeftRadius,
+          borderImageSource: style.borderImageSource, boxShadow: style.boxShadow,
+          textShadow: style.textShadow, clipPath: style.clipPath, maskImage: style.maskImage,
+          outlineWidth: style.outlineWidth, outlineStyle: style.outlineStyle, outlineOffset: style.outlineOffset,
+          overflowClipMargin: style.overflowClipMargin, contain: style.contain,
+          contentVisibility: style.contentVisibility, perspective: style.perspective,
+          translate: style.translate, rotate: style.rotate, scale: style.scale, zoom: style.zoom,
           mixBlendMode: style.mixBlendMode, filter: style.filter,
           backdropFilter: style.backdropFilter, fontSize: style.fontSize,
           fontFamily: style.fontFamily, fontWeight: style.fontWeight, lineHeight: style.lineHeight,
@@ -916,6 +993,7 @@ def _instrument_authored_html(
     const payload = {{
       width: window.innerWidth, height: window.innerHeight,
       fonts_ready: !document.fonts || document.fonts.status === 'loaded',
+      capabilityRegistry: {registry_metadata},
       source_digest: '{source_digest}', render_digest: '{render_digest}',
       dom_metrics_version: '{DOM_METRICS_VERSION}', metrics_cache_key: '{key}', elements
     }};
@@ -969,6 +1047,10 @@ from utils.slide_capture_pixel_probe import (
     _pixel_probe_document,
     _pixel_ratio,
     _relative_luminance,
+)
+from utils.slide_capture_glyph_probe import (
+    GLYPH_CLIPPING_SENSOR_VERSION,
+    probe_glyph_clipping_file,
 )
 
 
@@ -1327,6 +1409,8 @@ def get_render_runtime_snapshot() -> dict[str, Any]:
             "measurement": MEASUREMENT_CACHE_VERSION,
             "domMetrics": DOM_METRICS_VERSION,
             "occlusionSensor": OCCLUSION_SENSOR_VERSION,
+            "clippingSensor": GLYPH_CLIPPING_SENSOR_VERSION,
+            "capabilityRegistryDigest": CAPABILITY_REGISTRY_DIGEST,
             "chromeReuseEnabled": CHROME_REUSE_ENABLED,
         },
         "counters": get_render_runtime_counters(),
@@ -1566,6 +1650,24 @@ def _render_admitted_html_over_pipe(
     )
 
 
+def _render_admitted_htmls_over_pipe(
+    admitted_htmls: Sequence[AdmittedHtml], timeout: int
+) -> list[tuple[bytes, Mapping[str, Any] | None]]:
+    """Worker-only operation batch using one Chrome pipe and fresh targets."""
+
+    from utils.slide_capture_pipe_render import render_admitted_htmls_over_pipe
+
+    return render_admitted_htmls_over_pipe(
+        admitted_htmls,
+        timeout,
+        blocked_urls=_BLOCKED_RENDERER_URL_PATTERNS,
+        chrome_pipe=_ChromePipe,
+        find_chrome=find_chrome,
+        instrument_html=_instrument_authored_html,
+        runtime_value=_runtime_value,
+    )
+
+
 async def _render_html_in_reusable_chrome(
     html: str, timeout: int, *, script_nonce: str | None = None,
     cache_html: str | None = None,
@@ -1708,9 +1810,15 @@ async def _render_html_to_png_subprocess(
                         # the measurement flag false so hard readability checks are
                         # unknown/fail-closed rather than accepting guessed pixels.
                         LOGGER.warning("authored pixel contrast probe failed: %s", error)
-                _cache_browser_metrics(cache_html or html, metrics)
             buf = io.BytesIO()
             img.save(buf, format="PNG")
+            if metrics is not None:
+                metrics = await probe_glyph_clipping_file(
+                    html, metrics, buf.getvalue(), directory=td, screenshot_args=args,
+                    timeout=timeout, count_runtime=_count_runtime,
+                    run_screenshot=_run_chrome_screenshot, wait_for_output=_wait_for_output,
+                )
+                _cache_browser_metrics(cache_html or html, metrics)
             return buf.getvalue()
 
 
@@ -1883,8 +1991,8 @@ CAPTURE_CACHE_BYTE_BUDGET = _env_nonnegative_int(
 )
 _capture_cache: "OrderedDict[tuple[str, str, str], RenderCapture]" = OrderedDict()
 OCCLUSION_PROBE_CONTRACT_VERSION = "owned-paint-v3"
-OCCLUSION_SENSOR_VERSION = "owned-paint-v5-inset-retry"
-DOM_METRICS_VERSION = "authored-dom-metrics-v15-source-block-visibility"
+OCCLUSION_SENSOR_VERSION = "owned-paint-v12-polygon-normal-hit"
+DOM_METRICS_VERSION = "authored-dom-metrics-v25-polygon-normal-hit"
 DOM_METRICS_CACHE_SIZE = max(1, RENDER_CACHE_SIZE)
 DOM_METRICS_CACHE_BYTE_BUDGET = _env_nonnegative_int(
     "AUTHORED_DOM_METRICS_CACHE_BYTE_BUDGET", 32 * 1024 * 1024

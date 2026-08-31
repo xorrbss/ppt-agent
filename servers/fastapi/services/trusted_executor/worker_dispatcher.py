@@ -71,6 +71,7 @@ class _PendingDispatch:
     payload: bytes
     environment: Mapping[str, str]
     result: asyncio.Future[TrustedWorkerWireResult]
+    enqueued_monotonic: float
     runner: asyncio.Task[object] | None = None
     submitted: bool = False
 
@@ -108,11 +109,18 @@ class TrustedWorkerDispatcher:
         if not command or not Path(command[0]).is_absolute():
             raise TrustedWorkerWireError("trusted worker executable must be absolute")
         attempt_scope = hashlib.sha256(job.attempt_token.encode("utf-8")).hexdigest()[:16]
+        dispatch_scope = hashlib.sha256(
+            (
+                f"{job.operation_id}:{job.role}:{job.fencing_token}:"
+                f"{attempt_scope}:{job.input_artifact.artifact_id}:"
+                f"{job.input_digest}"
+            ).encode("utf-8")
+        ).hexdigest()[:24]
         operation_root = (
             self._staging_root
             / str(job.operation_id)
             / job.role
-            / f"fence-{job.fencing_token}-{attempt_scope}"
+            / f"fence-{job.fencing_token}-{attempt_scope}-{dispatch_scope}"
         )
         input_root = operation_root / "input"
         temporary_root = operation_root / "tmp"
@@ -151,19 +159,21 @@ class TrustedWorkerDispatcher:
                 tenant_id=job.input_artifact.tenant_id,
                 owner_id=str(job.input_artifact.owner_id),
                 presentation_id=str(presentation_id),
+                dispatch_id=f"{job.operation_id}:{dispatch_scope}",
             ),
             launch_spec=launch_spec,
         )
-        operation_id = work_item.scheduling.operation_id
+        scheduling_key = work_item.scheduling.scheduling_key
         dispatch = _PendingDispatch(
             work_item=work_item,
             job=job,
             payload=payload,
             environment=dict(environment),
             result=asyncio.get_running_loop().create_future(),
+            enqueued_monotonic=time.monotonic(),
         )
         async with self._dispatch_lock:
-            queue = self._pending.setdefault(operation_id, deque())
+            queue = self._pending.setdefault(scheduling_key, deque())
             queue.append(dispatch)
             if len(queue) == 1:
                 self._submit_locked(dispatch)
@@ -171,7 +181,7 @@ class TrustedWorkerDispatcher:
             await asyncio.shield(self._pump())
             return await asyncio.shield(dispatch.result)
         except asyncio.CancelledError:
-            await self._cancel(operation_id, dispatch)
+            await self._cancel(scheduling_key, dispatch)
             raise
 
     async def _pump(self) -> None:
@@ -195,19 +205,36 @@ class TrustedWorkerDispatcher:
 
         async def run(work_item: TrustedExecutorWorkItem) -> ProductExecutionResult:
             nonlocal release_lock_owned, selected_dispatch, selected_wire_result
-            operation_id = work_item.scheduling.operation_id
-            queue = self._pending.get(operation_id)
+            scheduling_key = work_item.scheduling.scheduling_key
+            queue = self._pending.get(scheduling_key)
             selected_dispatch = queue[0] if queue else None
             if selected_dispatch is None or selected_dispatch.work_item is not work_item:
                 raise TrustedWorkerWireError("trusted worker dispatch identity mismatch")
             selected.set_result(selected_dispatch)
             await transport_gate.wait()
             try:
-                selected_wire_result = await self._transport.execute(
+                wire_result = await self._transport.execute(
                     work_item=work_item,
                     job=selected_dispatch.job,
                     payload=selected_dispatch.payload,
                     environment=selected_dispatch.environment,
+                )
+                selected_wire_result = TrustedWorkerWireResult(
+                    stdout=wire_result.stdout,
+                    exit_code=wire_result.exit_code,
+                    resource_metrics={
+                        **wire_result.resource_metrics,
+                        "trustedDispatchId": work_item.scheduling.scheduling_key,
+                        "trustedSchedulerQueueWaitMs": round(
+                            max(
+                                0.0,
+                                time.monotonic()
+                                - selected_dispatch.enqueued_monotonic,
+                            )
+                            * 1000,
+                            3,
+                        ),
+                    },
                 )
                 return ProductExecutionResult(
                     status="completed",
@@ -241,14 +268,16 @@ class TrustedWorkerDispatcher:
             finally:
                 if release_lock_owned:
                     if selected_dispatch is not None:
-                        operation_id = selected_dispatch.work_item.scheduling.operation_id
-                        queue = self._pending.get(operation_id)
+                        scheduling_key = (
+                            selected_dispatch.work_item.scheduling.scheduling_key
+                        )
+                        queue = self._pending.get(scheduling_key)
                         if queue and queue[0] is selected_dispatch:
                             queue.popleft()
                             if queue:
                                 self._submit_locked(queue[0])
                             else:
-                                self._pending.pop(operation_id, None)
+                                self._pending.pop(scheduling_key, None)
                     self._dispatch_lock.release()
                     await self._pump()
 
@@ -276,18 +305,18 @@ class TrustedWorkerDispatcher:
 
     async def _cancel(
         self,
-        operation_id: str,
+        scheduling_key: str,
         dispatch: _PendingDispatch,
     ) -> None:
         runner: asyncio.Task[object] | None = None
         async with self._dispatch_lock:
-            queue = self._pending.get(operation_id)
+            queue = self._pending.get(scheduling_key)
             if queue is None or dispatch not in queue:
                 return
             runner = dispatch.runner
             if runner is None:
                 if dispatch.submitted:
-                    if not self._adapter.cancel_pending(operation_id):
+                    if not self._adapter.cancel_pending(scheduling_key):
                         raise TrustedWorkerWireError(
                             "trusted worker pending cancellation failed"
                         )
@@ -301,7 +330,7 @@ class TrustedWorkerDispatcher:
                 else:
                     queue.remove(dispatch)
                 if not queue:
-                    self._pending.pop(operation_id, None)
+                    self._pending.pop(scheduling_key, None)
                 dispatch.result.cancel()
             else:
                 runner.cancel()

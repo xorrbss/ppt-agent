@@ -11,6 +11,7 @@ import uuid
 import zipfile
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from PIL import Image
@@ -30,6 +31,13 @@ from services.isolated_worker_process import (
     execute_isolated_worker_job,
     worker_environment,
 )
+from services.trusted_executor.contracts import (
+    ExecutionIdentity,
+    ResourceLimits,
+    SandboxLaunchSpec,
+    SandboxPolicy,
+)
+from workers import public_worker_runtime
 from workers.public_export_worker import (
     EXPORT_CHECKPOINT_BUNDLE_SCHEMA,
     execute_export,
@@ -117,7 +125,55 @@ def test_capability_is_attempt_digest_scoped_and_one_shot() -> None:
         )
 
 
-def test_worker_environment_is_allowlisted_and_requires_network_none() -> None:
+def test_worker_environment_is_allowlisted_and_requires_network_none(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import shutil
+    import subprocess
+
+    pwsh = shutil.which("pwsh")
+    if pwsh is None:
+        pytest.skip("PowerShell 7 is required for the launcher limit contract")
+    launcher = Path(__file__).resolve().parents[4] / "scripts" / "start-public-v2-rc.ps1"
+    defaults = {
+        "PUBLIC_WORKER_ARTIFACT_CACHE_MAX_BYTES": "1073741824",
+        "PUBLIC_WORKER_ARTIFACT_CACHE_TTL_SECONDS": "900",
+        "PPT_WORKER_OUTPUT_LIMIT_BYTES": "536870912",
+    }
+    custom = dict(zip(defaults, ("8192", "0750", " 4096 "), strict=True))
+    cases = [{}, custom, *[
+        {key: value} for key in defaults for value in ("", " ", "invalid", "0", "-1", "1.5")
+    ]]
+    # Evaluate only the pure function's AST, never the launcher's side effects.
+    probe = r"""
+$ErrorActionPreference = 'Stop'
+$payload = [Console]::In.ReadToEnd() | ConvertFrom-Json -AsHashtable
+$tokens = $null; $parseErrors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile($payload.launcher, [ref]$tokens, [ref]$parseErrors)
+if ($parseErrors.Count) { throw 'launcher parse failed' }
+$definition = $ast.Find({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Resolve-WorkerRuntimeLimits' }, $true)
+if ($null -eq $definition) { throw 'limit helper missing' }
+. ([scriptblock]::Create($definition.Extent.Text))
+$results = @(foreach ($source in $payload.cases) {
+    try { @{ ok = $true; limits = (Resolve-WorkerRuntimeLimits $source) } }
+    catch { @{ ok = $false } }
+})
+ConvertTo-Json -InputObject $results -Depth 5 -Compress
+"""
+    completed = subprocess.run(
+        [pwsh, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", probe],
+        input=json.dumps({"launcher": str(launcher), "cases": cases}),
+        capture_output=True, text=True, timeout=20, check=True,
+    )
+    limit_results = json.loads(completed.stdout)
+    assert limit_results[0] == {"ok": True, "limits": defaults}
+    assert limit_results[1] == {"ok": True, "limits": custom}
+    assert all(result == {"ok": False} for result in limit_results[2:])
+    launcher_source = launcher.read_text(encoding="utf-8")
+    assert launcher_source.index("$workerRuntimeLimits = Resolve-WorkerRuntimeLimits") < launcher_source.index("$runId =")
+    for key in defaults:
+        assert f'"{key}" = $workerRuntimeLimits["{key}"]' in launcher_source
+
     source = {
         "PATH": "C:/runtime",
         "PUBLIC_WORKER_OS_ISOLATION": NETWORK_NONE_ATTESTATION,
@@ -137,6 +193,132 @@ def test_worker_environment_is_allowlisted_and_requires_network_none() -> None:
     render_environment = worker_environment("render", source)
     assert render_environment["AUTHORED_RENDERER_WORKER"] == "1"
     assert "OPENAI_API_KEY" not in render_environment
+
+    operation_id = uuid.uuid4()
+    payload = b"bounded worker input"
+    reference = _artifact(
+        operation_id=operation_id,
+        payload=payload,
+        storage_key="tenant/owner/input.html",
+        kind="slide-html",
+        media_type="text/html",
+    )
+    input_root, output_root = tmp_path / "input", tmp_path / "output"
+    _store_payload(input_root, reference, payload)
+    signing_key = b"k" * 32
+    key_file = tmp_path / "capability.key"
+    key_file.write_bytes(signing_key)
+    policy_environment = {
+        "PPT_WORKER_NETWORK_MODE": "none",
+        "PPT_WORKER_ROOT_FILESYSTEM": "read-only",
+        "PPT_WORKER_SCRATCH": "tmpfs",
+        "PPT_WORKER_RUN_AS_NON_ROOT": "true",
+        "PPT_WORKER_SECCOMP_PROFILE": "default",
+        "PPT_WORKER_REPLICAS": "1",
+        "PPT_WORKER_MEMORY_LIMIT_BYTES": "536870912",
+        "PPT_WORKER_CPU_MILLIS": "600000",
+        "PPT_WORKER_PID_LIMIT": "64",
+        "PPT_WORKER_OPEN_FILE_LIMIT": "512",
+        "PPT_WORKER_WALL_CLOCK_SECONDS": "600",
+        **limit_results[0]["limits"],
+    }
+    spec = SandboxLaunchSpec(
+        identity=ExecutionIdentity(
+            operation_id=operation_id,
+            tenant_id=reference.tenant_id,
+            owner_id=reference.owner_id,
+            presentation_id=uuid.uuid4(),
+        ),
+        role="render",
+        executable=Path(sys.executable),
+        arguments=("-m", "workers.public_render_worker"),
+        limits=ResourceLimits(
+            memory_bytes=536870912, process_limit=64, deadline_seconds=600,
+        ),
+        policy=SandboxPolicy(),
+    )
+    executions: list[uuid.UUID] = []
+
+    async def execute(job, store):
+        executions.append(job.operation_id)
+        assert store.read(job.input_artifact) == payload
+        return store.put(
+            b"bounded output",
+            source=job.input_artifact,
+            operation_id=job.operation_id,
+            kind="slide-png",
+            media_type="image/png",
+        )
+
+    def invoke(environment):
+        job = IsolatedWorkerJob(
+            role="render", operation_id=operation_id,
+            attempt_token="attempt-token-1234567890", fencing_token=3,
+            input_digest=reference.sha256, input_artifact=reference,
+            capability="pending", deadline_epoch_seconds=int(time.time()) + 300,
+        )
+        job = replace(job, capability=issue_worker_capability(
+            job, signing_key=signing_key, ttl_seconds=120,
+        ))
+        stdin = io.BytesIO(json.dumps(job.to_wire()).encode("utf-8"))
+        stdout = io.BytesIO()
+        with monkeypatch.context() as patch:
+            patch.setattr(os, "environ", dict(environment))
+            patch.setattr(public_worker_runtime, "sys", SimpleNamespace(
+                stdin=SimpleNamespace(buffer=stdin),
+                stdout=SimpleNamespace(buffer=stdout),
+            ))
+            patch.setattr(public_worker_runtime, "_REPLAY_GUARD", CapabilityReplayGuard())
+            exit_code = asyncio.run(public_worker_runtime.run_worker("render", execute))
+        return exit_code, stdin.tell(), stdout.getvalue()
+
+    for local_development in (True, False):
+        incoming = {
+            **source, **policy_environment,
+            **limit_results[0 if local_development else 1]["limits"],
+            "PUBLIC_WORKER_CAPABILITY_KEY_FILE": str(key_file),
+            "PUBLIC_WORKER_INPUT_STORE_ROOT": str(input_root),
+            "PUBLIC_WORKER_OUTPUT_STORE_ROOT": str(output_root),
+            "SESSION": "must-not-cross",
+            "PUBLIC_WORKER_SESSION_COOKIE": "must-not-cross",
+            "PPT_WORKER_UNRECOGNIZED": "must-not-cross",
+        }
+        if local_development:
+            incoming["PUBLIC_TRUSTED_WORKER_LOCAL_POLICY"] = "development"
+        child_environment = spec.environment(worker_environment(
+            "render", incoming, trusted_dispatch=local_development,
+        ))
+        assert child_environment["TRUSTED_EXECUTOR_SESSIONLESS"] == "1"
+        assert all(child_environment[key] == incoming[key] for key in policy_environment)
+        for forbidden in (
+            "SESSION", "PUBLIC_WORKER_SESSION_COOKIE", "OPENAI_API_KEY",
+            "DATABASE_URL", "COOKIE", "PPT_WORKER_UNRECOGNIZED",
+        ):
+            assert forbidden not in child_environment
+        exit_code, consumed_bytes, stdout = invoke(child_environment)
+        assert exit_code == 0 and consumed_bytes > 0
+        result = json.loads(stdout)
+        assert result["ok"] is True and result["errorCode"] is None
+        assert result["operationId"] == str(operation_id)
+        assert result["fencingToken"] == 3 and result["inputDigest"] == reference.sha256
+        output = ArtifactRef.from_wire(result["outputArtifact"])
+        assert output.created_by_operation_id == operation_id
+        assert output.owner_id == reference.owner_id and output.tenant_id == reference.tenant_id
+        assert (output_root / output.storage_key).read_bytes() == b"bounded output"
+
+        for name, value in (
+            ("TRUSTED_EXECUTOR_SESSIONLESS", "0"),
+            ("TRUSTED_EXECUTOR_SESSIONLESS", "true"),
+            ("TRUSTED_EXECUTOR_SESSIONLESS", " 1"),
+            ("TRUSTED_EXECUTOR_SESSIONLESS_COOKIE", "1"),
+            ("SESSION", "forbidden"),
+            ("OPENAI_API_KEY", "forbidden"),
+        ):
+            execution_count = len(executions)
+            exit_code, consumed_bytes, stdout = invoke({**child_environment, name: value})
+            assert (exit_code, consumed_bytes, stdout) == (1, 0, b"")
+            assert len(executions) == execution_count
+    assert executions == [operation_id, operation_id]
 
 
 def test_export_worker_builds_digest_verified_pptx_from_artifact_refs(

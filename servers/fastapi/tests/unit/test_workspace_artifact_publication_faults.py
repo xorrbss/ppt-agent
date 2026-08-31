@@ -22,6 +22,7 @@ from models.sql.async_presentation_generation_status import (
 )
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.presentation_export_attempt import PresentationExportAttempt
+from models.sql.public_artifact import PublicArtifact
 from models.sql.slide import SlideModel
 from models.sql.user import User
 from models.sql.workspace import (
@@ -47,6 +48,7 @@ TABLES = [
     WorkspaceOperationEvent.__table__,
     WorkspaceOutbox.__table__,
     PresentationExportAttempt.__table__,
+    PublicArtifact.__table__,
     WorkspaceArtifact.__table__,
     AsyncPresentationGenerationTaskModel.__table__,
     PresentationGenerationJob.__table__,
@@ -87,6 +89,7 @@ async def _seed_running_operation(maker, *, owner_id: uuid.UUID | None = None):
             content="artifact fault injection",
             n_slides=1,
             language="en",
+            mode="authored",
             lifecycle_status=PRESENTATION_LIFECYCLE_STAGING,
             revision=0,
         )
@@ -846,6 +849,26 @@ def test_ambiguous_commit_ack_reconciles_complete_publication_without_deleting_f
         monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
         try:
             presentation_id, operation_id = await _seed_running_operation(maker)
+            async with maker() as claim_session, claim_session.begin():
+                await claim_session.execute(
+                    update(WorkspaceOperation)
+                    .where(WorkspaceOperation.id == operation_id)
+                    .values(fencing_token=17, attempt_number=3)
+                )
+            original_append_event = workspace_operation_runner.append_operation_event
+            event_claims = []
+
+            async def append_with_captured_claim(*args, **kwargs):
+                event_claims.append(
+                    (kwargs["fencing_token"], kwargs["public_admission_attempt"])
+                )
+                return await original_append_event(*args, **kwargs)
+
+            monkeypatch.setattr(
+                workspace_operation_runner,
+                "append_operation_event",
+                append_with_captured_claim,
+            )
             async with maker() as prepare_session:
                 artifact = await publication.prepare_workspace_generation_artifact(
                     prepare_session,
@@ -870,6 +893,7 @@ def test_ambiguous_commit_ack_reconciles_complete_publication_without_deleting_f
                 )
 
             assert revision == 1
+            assert event_claims == [(17, 3)]
             assert artifact.absolute_path.read_bytes() == b"committed immutable bytes"
             async with maker() as session:
                 presentation = await session.get(PresentationModel, presentation_id)
@@ -1069,9 +1093,11 @@ def test_failed_compensation_records_cleanup_pending_in_independent_transaction(
     asyncio.run(scenario())
 
 
+@pytest.mark.parametrize("terminal_fault", ["failure", "fence_changed"])
 def test_terminal_event_or_outbox_failure_rolls_back_every_publication_projection(
     tmp_path: Path,
     monkeypatch,
+    terminal_fault: str,
 ):
     async def scenario():
         engine, maker = await _database(tmp_path / "terminal-event-failure.db")
@@ -1091,8 +1117,18 @@ def test_terminal_event_or_outbox_failure_rolls_back_every_publication_projectio
                     source_revision=1,
                 )
 
-            async def fail_terminal_event(*_args, **_kwargs):
-                raise RuntimeError("injected terminal event/outbox failure")
+            original_append_event = workspace_operation_runner.append_operation_event
+
+            async def fail_terminal_event(session, **kwargs):
+                assert kwargs["fencing_token"] == 0
+                if terminal_fault == "failure":
+                    raise RuntimeError("injected terminal event/outbox failure")
+                await session.execute(
+                    update(WorkspaceOperation)
+                    .where(WorkspaceOperation.id == operation_id)
+                    .values(fencing_token=1)
+                )
+                return await original_append_event(session, **kwargs)
 
             monkeypatch.setattr(
                 workspace_operation_runner,
@@ -1101,7 +1137,12 @@ def test_terminal_event_or_outbox_failure_rolls_back_every_publication_projectio
             )
             async with maker() as session:
                 with pytest.raises(
-                    RuntimeError, match="injected terminal event/outbox failure"
+                    RuntimeError,
+                    match=(
+                        "injected terminal event/outbox failure"
+                        if terminal_fault == "failure"
+                        else "workspace_publication_event_conflict"
+                    ),
                 ):
                     await publication.publish_workspace_generation_artifact(
                         session,
@@ -1139,6 +1180,101 @@ def test_terminal_event_or_outbox_failure_rolls_back_every_publication_projectio
                 assert (await session.execute(select(WorkspaceOperationEvent))).all() == []
                 assert (await session.execute(select(WorkspaceOutbox))).all() == []
         finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_authored_publication_failure_reports_snapshotted_job_after_rollback(
+    tmp_path: Path,
+    monkeypatch,
+):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from sqlalchemy import inspect as inspect_orm
+
+    from models.generate_presentation_request import GeneratePresentationRequest
+    from models.presentation_outline_model import (
+        PresentationOutlineModel,
+        SlideOutlineModel,
+    )
+    from services import authored_presentation_publication as authored_publication
+    from services.authored_checkpoint_service import AuthoredStageError
+    from utils.llm_calls.author_slide import Brand
+
+    async def scenario():
+        engine, maker = await _database(tmp_path / "authored-rollback-report.db")
+        owner_id = uuid.uuid4()
+        owner_token = set_current_owner_id(owner_id)
+        injected = RuntimeError("injected publication failure before commit")
+        report_failure = AsyncMock()
+        monkeypatch.setattr(
+            authored_publication,
+            "prepare_workspace_generation_artifact",
+            AsyncMock(side_effect=injected),
+        )
+        monkeypatch.setattr(authored_publication, "fail_stage", report_failure)
+        try:
+            presentation_id, operation_id = await _seed_running_operation(
+                maker, owner_id=owner_id
+            )
+            async with maker() as session:
+                presentation = await session.get(PresentationModel, presentation_id)
+                job = (
+                    await session.execute(
+                        select(PresentationGenerationJob).where(
+                            PresentationGenerationJob.workspace_operation_id
+                            == operation_id
+                        )
+                    )
+                ).scalar_one()
+                job.request_id = "publication-error-correlation"
+                await session.commit()
+                await session.refresh(job)
+                job_id = job.id
+                with pytest.raises(AuthoredStageError) as caught:
+                    await authored_publication.publish_authored_presentation(
+                        request=GeneratePresentationRequest(
+                            content="Rollback reporting",
+                            n_slides=1,
+                            template="authored",
+                        ),
+                        presentation_id=presentation_id,
+                        outline=PresentationOutlineModel(
+                            slides=[SlideOutlineModel(content="Rollback reporting")]
+                        ),
+                        language="English",
+                        sql_session=session,
+                        generation_job=job,
+                        existing=presentation,
+                        title="Rollback reporting",
+                        brand=Brand(topic="Rollback reporting", language="English"),
+                        style=SimpleNamespace(id="default"),
+                        roles=["COVER"],
+                        exact_provenance=None,
+                        htmls=["<html><body>Rollback reporting</body></html>"],
+                        semantic_components=[{}],
+                        pngs=[b"unused-png"],
+                        out_path=str(tmp_path / "unused.pptx"),
+                        attempt_token="attempt-1",
+                    )
+                assert caught.value.code == "authored_slide_persist_failed"
+                assert caught.value.__cause__ is injected
+                assert {"id", "request_id"}.issubset(
+                    inspect_orm(job).expired_attributes
+                )
+                report_failure.assert_awaited_once()
+                assert report_failure.call_args.kwargs == {
+                    "job_id": job_id,
+                    "slide_index": 0,
+                    "stage": "persist",
+                    "attempt_token": "attempt-1",
+                    "error": caught.value,
+                    "request_id": "publication-error-correlation",
+                }
+        finally:
+            reset_current_owner_id(owner_token)
             await engine.dispose()
 
     asyncio.run(scenario())

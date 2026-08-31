@@ -1050,6 +1050,9 @@ def test_hybrid_atomic_binding_rejects_cross_presentation_sidecar() -> None:
 def test_fidelity_begin_persists_renderer_binding_without_hybrid_evidence(
     tmp_path: Path,
 ) -> None:
+    from services.authored_evidence_ledger import digest_deck_htmls
+    from services.public_export_operation import PUBLIC_RENDER_WORKER_PROTOCOL_VERSION
+
     async def scenario() -> None:
         engine, maker = await _database(tmp_path / "fidelity-attempt.db")
         try:
@@ -1065,6 +1068,108 @@ def test_fidelity_begin_persists_renderer_binding_without_hybrid_evidence(
             assert attempt.provenance["capability_evidence"]["export_mode"] == "fidelity"
             assert attempt.provenance["freshness"]["renderer_source_sha256"] == "b" * 64
             assert evidence["canonical_source_digest"] == attempt.source_snapshot_sha256
+            assert (
+                validate_export_attempt_provenance(attempt.provenance)["render_scene"]
+                is None
+            )
+
+            htmls = [f"<section>Slide {index}</section>" for index in range(5)]
+            source_snapshot_sha256 = sha256(
+                json.dumps(htmls, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            ).hexdigest()
+            render_scene = {
+                "schema_version": "authored-html-render-scene/v1",
+                "scene_digest": digest_deck_htmls(htmls),
+                "ordered_slide_count": len(htmls),
+            }
+            for export_format in ("pptx", "pdf"):
+                # Match the public isolated producer, including its pre-worker flags.
+                public_provenance = {
+                    "schema_version": 1,
+                    "adapter_chain": ["general"],
+                    "capability_evidence": {
+                        "selected_adapter": "general",
+                        "execution_profile": "isolated_raster_v1",
+                        "network_none_worker": False,
+                        "isolation_attestations": [],
+                        "sessionless_capability": True,
+                        "pptx_mode": "fidelity" if export_format == "pptx" else None,
+                    },
+                    "fallback_reason": None,
+                    "asset_digests": {},
+                    "compiler_runtime": {
+                        "compiler": "public-isolated-export",
+                        "compiler_version": "1",
+                        "runtime": "render-export-worker",
+                        "runtime_version": PUBLIC_RENDER_WORKER_PROTOCOL_VERSION,
+                    },
+                    "freshness": {
+                        "source_revision": 4,
+                        "source_snapshot_sha256": source_snapshot_sha256,
+                        "package_sha256": None,
+                        "asset_digests_match": True,
+                        "package_digest_match": False,
+                    },
+                    "render_scene": render_scene,
+                }
+                async with maker() as session:
+                    public_attempt = await begin_export_attempt(
+                        session,
+                        presentation_id=presentation_id,
+                        owner_id=None,
+                        owner_scope="anonymous",
+                        workspace_operation_id=None,
+                        export_format=export_format,
+                        source_revision=4,
+                        source_snapshot_sha256=source_snapshot_sha256,
+                        request_hash="d" * 64,
+                        idempotency_key_hash="f" * 64,
+                        requested_adapter="general",
+                        provenance=public_provenance,
+                    )
+                    public_attempt_id = public_attempt.id
+                async with maker() as session:
+                    persisted = await session.get(PresentationExportAttempt, public_attempt_id)
+                    assert persisted is not None
+                    sealed = validate_export_attempt_provenance(persisted.provenance)
+                    assert sealed["render_scene"] == render_scene
+                    assert sealed["coverage_manifest"] is None
+                    assert sealed["atomic_binding"] is None
+                    assert sealed["capability_evidence"]["network_none_worker"] is False
+                    assert sealed["freshness"]["package_digest_match"] is False
+                    completed = {
+                        **sealed,
+                        "freshness": {
+                            **sealed["freshness"],
+                            "package_sha256": "e" * 64,
+                            "package_digest_match": True,
+                        },
+                    }
+                    assert (
+                        validate_export_attempt_provenance(completed)["render_scene"]
+                        == render_scene
+                    )
+
+            invalid_scenes = [
+                {**render_scene, "schema_version": "authored-html-render-scene/v2"},
+                {**render_scene, "scene_digest": "a" * 64},
+                {**render_scene, "scene_digest": "sha256:" + "g" * 64},
+                {**render_scene, "scene_digest": "sha256:" + "A" * 64},
+                {**render_scene, "scene_digest": render_scene["scene_digest"] + "\n"},
+                {**render_scene, "secret": True},
+                {key: value for key, value in render_scene.items() if key != "scene_digest"},
+                *(
+                    {**render_scene, "ordered_slide_count": count}
+                    for count in (0, -1, True, 5.0, "5")
+                ),
+            ]
+            for invalid_scene in invalid_scenes:
+                with pytest.raises(ValueError):
+                    validate_export_attempt_provenance(
+                        {**public_provenance, "render_scene": invalid_scene}
+                    )
+            with pytest.raises(ValueError):
+                validate_export_attempt_provenance({**public_provenance, "secret": True})
         finally:
             await engine.dispose()
 

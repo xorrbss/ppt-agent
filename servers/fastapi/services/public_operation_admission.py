@@ -846,7 +846,14 @@ async def admit_public_operation_v2(
         if request_plan.slide_count > policy.max_slides:
             raise PublicAdmissionRejected("public_slide_limit_exceeded")
         request_limit = request_plan.initial_request_limit
-        retry_limit = policy.retry_request_limit
+        # Keep the strict PostgreSQL path aligned with the deterministic
+        # generation plan.  The per-slide correction allowance is planned
+        # before admission; the policy allowance is only the additional
+        # bounded transient/schema recovery budget.  Dropping the planned
+        # portion here caused valid multi-slide author corrections to exhaust
+        # the durable retry cap even though the same plan is accepted by the
+        # compatible admission path above.
+        retry_limit = request_plan.retry_request_limit + policy.retry_request_limit
         estimated_limit = min(
             policy.estimated_cost_limit_microunits,
             estimated_cost_limit_microunits
@@ -2480,7 +2487,30 @@ async def public_operation_observability_metrics(
 
 
 async def public_prometheus_metrics_text(session: AsyncSession) -> str:
-    """Render aggregate-only public queue and budget metrics without identities."""
+    """Render cross-tenant aggregates only under controller DB authority.
+
+    FORCE RLS intentionally makes an API-role aggregate incomplete.  Returning
+    an explicit unavailable gauge before querying is safer than publishing a
+    tenant-shaped count as global operational health.
+    """
+
+    from services.database import require_public_controller_database_authority
+
+    bind = session.bind
+    if bind is None:
+        return "presenton_public_metrics_available 0\n"
+    try:
+        await require_public_controller_database_authority(bind)
+    except RuntimeError as error:
+        if str(error) in {
+            "public_controller_database_process_role_required",
+            "public_controller_database_role_required",
+            "public_database_role_bypasses_rls",
+            "public_controller_postgresql_required",
+            "public_environment_required",
+        }:
+            return "presenton_public_metrics_available 0\n"
+        raise
 
     try:
         rows = list((await session.execute(select(PublicOperationAdmission))).scalars())

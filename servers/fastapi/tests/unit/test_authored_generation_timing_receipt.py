@@ -19,6 +19,7 @@ from services.authored_generation_timing_receipt import (
     load_generation_attempt_timing_receipts,
     load_generation_timing_receipt,
 )
+from services.authored_presentation_generation import _PERFORMANCE_STAGE_NAMES
 from services.public_v2_orchestrator import SqlPublicV2Orchestrator
 from services.authored_deck_plan_checkpoint import (
     resolve_with_authored_deck_plan_checkpoint_signal,
@@ -100,7 +101,15 @@ def test_generation_timing_receipt_is_durable_bounded_and_runner_projected(
             else {"state": "observed", "value": 1}
         )
         for name in GENERATION_OBSERVABILITY_METRICS
+        if not name.endswith("Duration")
     }
+    observability.update(
+        {
+            f"{stage}Duration": {"state": "observed", "value": stages[stage]}
+            for stage in _PERFORMANCE_STAGE_NAMES
+        }
+    )
+    assert set(observability) == set(GENERATION_OBSERVABILITY_METRICS)
 
     first = create_generation_timing_receipt(
         job_id=job_id,
@@ -152,6 +161,44 @@ def test_generation_timing_receipt_is_durable_bounded_and_runner_projected(
         "schemaVersion": "generation-observability/v1",
         "metrics": observability,
     }
+    assert safe["generation_timing_receipt"]["observability"]["metrics"][
+        "repairDuration"
+    ] == {"state": "observed", "value": stages["repair"]}
+
+    for excluded_names in (
+        {"repairDuration"},
+        {"repairDuration", "stageRetryCalls", "stageEstimatedCost", "stageActualCost"},
+    ):
+        legacy_job_id = uuid.uuid4()
+        legacy_metrics = {
+            name: metric
+            for name, metric in observability.items()
+            if name not in excluded_names
+        }
+        legacy = create_generation_timing_receipt(
+            job_id=legacy_job_id,
+            quality_receipt=_quality_receipt(legacy_job_id),
+            attempt_number=2,
+            stage_timings_ms=stages,
+            total_ms=250,
+            observability_metrics=legacy_metrics,
+        )
+        assert load_generation_timing_receipt(legacy_job_id) == legacy
+        assert dict(legacy.observability_metrics) == legacy_metrics
+
+    for invalid_metrics in (
+        {**observability, "unknownMetric": {"state": "observed", "value": 1}},
+        {name: metric for name, metric in observability.items() if name != "authorDuration"},
+    ):
+        with pytest.raises(ValueError, match="^generation_observability_metrics_invalid$"):
+            create_generation_timing_receipt(
+                job_id=job_id,
+                quality_receipt=quality_receipt,
+                attempt_number=2,
+                stage_timings_ms=stages,
+                total_ms=250,
+                observability_metrics=invalid_metrics,
+            )
 
     with pytest.raises(ValueError, match="binding_changed"):
         create_generation_timing_receipt(
@@ -204,8 +251,8 @@ def test_failed_attempt_timing_is_attached_and_exposed_by_public_v2_status(
     persisted = asyncio.run(
         _persist_failed_attempt_timing(
             request=request,
-            job=SimpleNamespace(id=job_id),
-            status=SimpleNamespace(error={"detail": {"stage": "render"}}),
+            job_id=job_id,
+            status_error={"detail": {"stage": "render"}},
             context=context,
             error=RuntimeError("authored_slide_capacity_exceeded"),
             recorder=recorder,

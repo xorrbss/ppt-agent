@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from api.v2.contracts import (
     AuthorizedDownloadGrant,
     CancelOperationReceiptV2,
+    OperationExecutionReceiptV2,
     OperationEventPageV2,
     OperationEventV2,
     OperationLinksV2,
@@ -29,6 +30,7 @@ from api.v2.contracts import (
     PresentationExportRequestV2,
     PresentationGenerationRequestV2,
     PublicArtifactV2,
+    PublicExportExecutionReceiptV1,
     PublicOperationErrorV2,
     QualityReceiptV3,
 )
@@ -47,6 +49,7 @@ from models.sql.presentation import (
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.public_admission import PublicOperationAdmission
 from models.sql.public_artifact import PublicArtifact, PublicArtifactPublication
+from models.sql.slide import SlideModel
 from models.sql.workspace import (
     WorkspaceConversation,
     WorkspaceOperation,
@@ -74,6 +77,12 @@ from services.public_operation_admission import (
     plan_provider_requests,
     plan_weighted_resources,
 )
+from services.public_export_operation import (
+    PublicExportOperationError,
+    public_release_review_deck_render_identity_digest,
+    public_release_review_runtime_binding,
+    public_render_runtime_binding_digest,
+)
 from services.references.service import (
     ReferenceProviderError,
     admit_reference_snapshots,
@@ -83,6 +92,14 @@ from services.workspace_operation_runner import (
     append_operation_event,
     request_workspace_operation_cancellation,
     wake_workspace_operation_runner,
+)
+from services.workspace_operation_handler_registry import (
+    NonRetryableWorkspaceOperationError,
+)
+from services.workspace_quality_operation_handler import (
+    release_review_checker_policy_digest,
+    validate_export_release_review_receipt,
+    validate_release_review_base_receipts,
 )
 from services.workspace_db_adapter import reserve_conversation_positions
 from services.workspace_service import (
@@ -131,6 +148,60 @@ def _canonical_hash(payload: Mapping[str, Any]) -> str:
         default=str,
     ).encode("utf-8")
     return sha256(encoded).hexdigest()
+
+
+def _release_review_receipt_reusable(
+    operation: WorkspaceOperation,
+    *,
+    theme: object,
+    runtime_binding_digest: str,
+    current_render_identity_digest: str,
+    checker_policy_digest: str,
+    match_result_revision: bool,
+) -> bool:
+    """Validate a succeeded review before it can suppress a replacement."""
+
+    if (
+        operation.state != "succeeded"
+        or not isinstance(operation.expected_revision, int)
+        or isinstance(operation.expected_revision, bool)
+        or not isinstance(operation.result_revision, int)
+        or isinstance(operation.result_revision, bool)
+        or not isinstance(operation.result, Mapping)
+    ):
+        return False
+    receipt = operation.result.get("release_review_receipt")
+    if not isinstance(receipt, Mapping):
+        return False
+    try:
+        validate_export_release_review_receipt(
+            receipt,
+            operation_id=operation.id,
+            source_revision=operation.expected_revision,
+            result_revision=operation.result_revision,
+        )
+        if receipt.get("baseEvidenceKind") == "generation-quality-v3":
+            validate_release_review_base_receipts(
+                theme,
+                expected_deck_html_digest=str(
+                    receipt.get("baseDeckHtmlDigest", "")
+                ),
+                expected_quality_receipt_digest=str(
+                    receipt.get("baseQualityReceiptDigest", "")
+                ),
+            )
+    except NonRetryableWorkspaceOperationError:
+        return False
+    identity_field = (
+        "resultRenderIdentityDigest"
+        if match_result_revision
+        else "sourceRenderIdentityDigest"
+    )
+    return bool(
+        receipt.get("renderRuntimeBindingDigest") == runtime_binding_digest
+        and receipt.get("checkerPolicyDigest") == checker_policy_digest
+        and receipt.get(identity_field) == current_render_identity_digest
+    )
 
 
 def _idempotency_hash(
@@ -593,6 +664,31 @@ class SqlPublicV2Orchestrator:
                 raise _public_error(404, "presentation_not_found")
             if presentation.revision != request.source_revision:
                 raise _public_error(409, "stale_revision")
+            review_runtime_binding_digest: str | None = None
+            current_review_render_identity_digest: str | None = None
+            review_checker_policy_digest: str | None = None
+            if request.quality_policy == "release-v1":
+                slide_html_rows = await session.execute(
+                    select(SlideModel.html_content)
+                    .where(SlideModel.presentation == target_id)
+                    .order_by(SlideModel.index, SlideModel.id)
+                )
+                source_htmls = list(slide_html_rows.scalars())
+                try:
+                    review_runtime_binding = public_release_review_runtime_binding()
+                    review_runtime_binding_digest = (
+                        public_render_runtime_binding_digest(review_runtime_binding)
+                    )
+                    current_review_render_identity_digest = (
+                        public_release_review_deck_render_identity_digest(
+                            source_htmls
+                        )
+                    )
+                    review_checker_policy_digest = (
+                        release_review_checker_policy_digest()
+                    )
+                except PublicExportOperationError as error:
+                    raise _public_error(503, str(error)) from error
             conversation = await session.scalar(
                 select(WorkspaceConversation).where(
                     WorkspaceConversation.owner_id == actor.owner_id,
@@ -607,43 +703,384 @@ class SqlPublicV2Orchestrator:
                 )
                 session.add(conversation)
                 await session.flush()
+            now = get_current_utc_datetime()
+            export_operation_id = uuid.uuid4()
+            review_operation: WorkspaceOperation | None = None
+            review_created = False
+            review_reused_by_result = False
+            review_key_hash: str | None = None
+            review_payload: dict[str, Any] | None = None
+            review_request_hash: str | None = None
+            if request.quality_policy == "release-v1":
+                assert review_runtime_binding_digest is not None
+                assert current_review_render_identity_digest is not None
+                assert review_checker_policy_digest is not None
+                # PPTX and PDF from the same immutable revision consume one
+                # sealed full-deck review. Keeping this identity format-neutral
+                # also keeps the quality digest stable across both containers.
+                review_identity = {
+                    "schemaVersion": "public-export-release-review-identity/v2",
+                    "tenantId": actor.tenant_id,
+                    "ownerId": str(actor.owner_id),
+                    "presentationId": str(target_id),
+                    "sourceRevision": request.source_revision,
+                    "qualityPolicy": request.quality_policy,
+                    "renderRuntimeBindingDigest": review_runtime_binding_digest,
+                    "sourceRenderIdentityDigest": (
+                        current_review_render_identity_digest
+                    ),
+                    "checkerPolicyDigest": review_checker_policy_digest,
+                }
+                review_key_hash = _canonical_hash(review_identity)
+                review_payload = {
+                    "schema_version": "public-export-release-review/v2",
+                    "command": "Run release quality review before export",
+                    "command_type": "quality.review",
+                    "source_revision": request.source_revision,
+                    "context": {
+                        "mode": "analyze_and_fix",
+                        "scope": "all",
+                        "slide_indices": [],
+                        "slidespec_opt_in": True,
+                        "release_policy": request.quality_policy,
+                        "render_runtime_binding_digest": (
+                            review_runtime_binding_digest
+                        ),
+                        "source_render_identity_digest": (
+                            current_review_render_identity_digest
+                        ),
+                        "checker_policy_digest": review_checker_policy_digest,
+                    },
+                }
+                review_request_hash = _canonical_hash(review_payload)
+                review_operation = await session.scalar(
+                    select(WorkspaceOperation).where(
+                        WorkspaceOperation.owner_id == actor.owner_id,
+                        WorkspaceOperation.presentation_id == target_id,
+                        WorkspaceOperation.kind == "quality.review",
+                        WorkspaceOperation.idempotency_key_hash == review_key_hash,
+                    )
+                )
+                reusable_review_states = {
+                    "queued",
+                    "waiting_for_assets",
+                    "blocked",
+                    "running",
+                    "approval_required",
+                    "awaiting_approval",
+                    "cancelling",
+                    "succeeded",
+                }
+                terminal_review: WorkspaceOperation | None = None
+                if review_operation is not None:
+                    direct_context = review_operation.request_payload.get("context")
+                    review_admission = await session.scalar(
+                        select(PublicOperationAdmission).where(
+                            PublicOperationAdmission.operation_id
+                            == review_operation.id,
+                            PublicOperationAdmission.owner_id == actor.owner_id,
+                            PublicOperationAdmission.tenant_id == actor.tenant_id,
+                            PublicOperationAdmission.operation_kind == "generation",
+                        )
+                    )
+                    if review_admission is None:
+                        raise _public_error(503, "operation_authority_unavailable")
+                    if (
+                        review_operation.state == "succeeded"
+                        and review_admission.state
+                        not in {"queued", "active", "succeeded"}
+                    ) or (
+                        review_operation.state in reusable_review_states - {"succeeded"}
+                        and review_admission.state not in {"queued", "active"}
+                    ):
+                        raise _public_error(503, "operation_authority_unavailable")
+                    if review_operation.state not in reusable_review_states:
+                        terminal_review = review_operation
+                        review_operation = None
+                    elif (
+                        not isinstance(direct_context, Mapping)
+                        or direct_context.get("release_policy")
+                        != request.quality_policy
+                        or direct_context.get("render_runtime_binding_digest")
+                        != review_runtime_binding_digest
+                        or direct_context.get("source_render_identity_digest")
+                        != current_review_render_identity_digest
+                        or direct_context.get("checker_policy_digest")
+                        != review_checker_policy_digest
+                    ):
+                        terminal_review = review_operation
+                        review_operation = None
+                    elif review_operation.state == "succeeded" and not (
+                        _release_review_receipt_reusable(
+                            review_operation,
+                            theme=presentation.theme,
+                            runtime_binding_digest=review_runtime_binding_digest,
+                            current_render_identity_digest=(
+                                current_review_render_identity_digest
+                            ),
+                            checker_policy_digest=review_checker_policy_digest,
+                            match_result_revision=False,
+                        )
+                    ):
+                        terminal_review = review_operation
+                        review_operation = None
+                if review_operation is None:
+                    # Recompute the newest terminal link from the ordered set;
+                    # this advances a replacement chain after more than one
+                    # failed execution instead of reusing the first hash.
+                    direct_terminal_review = terminal_review
+                    terminal_review = None
+                    candidates = list(
+                        (
+                            await session.scalars(
+                                select(WorkspaceOperation)
+                                .where(
+                                    WorkspaceOperation.owner_id == actor.owner_id,
+                                    WorkspaceOperation.presentation_id == target_id,
+                                    WorkspaceOperation.kind == "quality.review",
+                                )
+                                .order_by(
+                                    WorkspaceOperation.completed_at.desc(),
+                                    WorkspaceOperation.created_at.desc(),
+                                )
+                                .limit(32)
+                            )
+                        ).all()
+                    )
+                    tenant_candidates: list[
+                        tuple[WorkspaceOperation, PublicOperationAdmission]
+                    ] = []
+                    for candidate in candidates:
+                        candidate_context = candidate.request_payload.get("context")
+                        candidate_admission = await session.scalar(
+                            select(PublicOperationAdmission).where(
+                                PublicOperationAdmission.operation_id == candidate.id,
+                                PublicOperationAdmission.owner_id == actor.owner_id,
+                                PublicOperationAdmission.tenant_id == actor.tenant_id,
+                                PublicOperationAdmission.operation_kind == "generation",
+                            )
+                        )
+                        context_runtime_matches = bool(
+                            candidate_admission is not None
+                            and isinstance(candidate_context, Mapping)
+                            and candidate_context.get("release_policy")
+                            == request.quality_policy
+                            and candidate_context.get(
+                                "render_runtime_binding_digest"
+                            )
+                            == review_runtime_binding_digest
+                            and candidate_context.get("checker_policy_digest")
+                            == review_checker_policy_digest
+                            and isinstance(candidate.expected_revision, int)
+                            and not isinstance(candidate.expected_revision, bool)
+                        )
+                        if context_runtime_matches:
+                            assert candidate_admission is not None
+                            assert isinstance(candidate_context, Mapping)
+                            tenant_candidates.append((candidate, candidate_admission))
+                            exact_source_identity = bool(
+                                candidate.expected_revision == request.source_revision
+                                and candidate_context.get(
+                                    "source_render_identity_digest"
+                                )
+                                == current_review_render_identity_digest
+                            )
+                            if exact_source_identity and candidate.state in reusable_review_states:
+                                succeeded_reusable = bool(
+                                    candidate.state == "succeeded"
+                                    and candidate_admission.state
+                                    in {"active", "succeeded"}
+                                    and _release_review_receipt_reusable(
+                                        candidate,
+                                        theme=presentation.theme,
+                                        runtime_binding_digest=(
+                                            review_runtime_binding_digest
+                                        ),
+                                        current_render_identity_digest=(
+                                            current_review_render_identity_digest
+                                        ),
+                                        checker_policy_digest=(
+                                            review_checker_policy_digest
+                                        ),
+                                        match_result_revision=False,
+                                    )
+                                )
+                                pending_reusable = bool(
+                                    candidate.state != "succeeded"
+                                    and candidate_admission.state
+                                    in {"queued", "active"}
+                                )
+                                if succeeded_reusable or pending_reusable:
+                                    review_operation = candidate
+                                    break
+                                if terminal_review is None:
+                                    terminal_review = candidate
+                            if (
+                                terminal_review is None
+                                and exact_source_identity
+                                and candidate.state not in reusable_review_states
+                            ):
+                                terminal_review = candidate
+                    if terminal_review is None:
+                        terminal_review = direct_terminal_review
+                    if review_operation is None:
+                        for candidate, candidate_admission in tenant_candidates:
+                            if (
+                                candidate.state == "succeeded"
+                                and candidate_admission.state
+                                in {"active", "succeeded"}
+                                and candidate.result_revision
+                                == request.source_revision
+                                and _release_review_receipt_reusable(
+                                    candidate,
+                                    theme=presentation.theme,
+                                    runtime_binding_digest=(
+                                        review_runtime_binding_digest
+                                    ),
+                                    current_render_identity_digest=(
+                                        current_review_render_identity_digest
+                                    ),
+                                    checker_policy_digest=(
+                                        review_checker_policy_digest
+                                    ),
+                                    match_result_revision=True,
+                                )
+                            ):
+                                review_operation = candidate
+                                review_reused_by_result = True
+                                break
+                    if review_operation is None and terminal_review is not None:
+                        # A terminal execution/admission cannot be reactivated.
+                        # Chain a deterministic replacement from the newest
+                        # failed review; the locked presentation serializes
+                        # concurrent submitters onto the same replacement.
+                        review_key_hash = _canonical_hash(
+                            {
+                                **review_identity,
+                                "replacesOperationId": str(terminal_review.id),
+                            }
+                        )
+                review_created = review_operation is None
             reservation = await reserve_conversation_positions(
                 session,
                 conversation.id,
-                1,
+                2 if review_created else 1,
             )
+            if request.quality_policy == "release-v1" and review_operation is None:
+                assert review_payload is not None
+                assert review_request_hash is not None
+                assert review_key_hash is not None
+                review_operation = WorkspaceOperation(
+                    owner_id=actor.owner_id,
+                    owner_scope=str(actor.owner_id),
+                    conversation_id=conversation.id,
+                    presentation_id=target_id,
+                    anchor_position=reservation.start,
+                    kind="quality.review",
+                    state="queued",
+                    idempotency_key_hash=review_key_hash,
+                    request_hash=review_request_hash,
+                    request_payload=review_payload,
+                    expected_revision=request.source_revision,
+                    next_attempt_at=now,
+                )
+            elif request.quality_policy == "release-v1" and (
+                review_operation is None
+                or review_request_hash is None
+                or review_operation.owner_scope != str(actor.owner_id)
+                or (
+                    not review_reused_by_result
+                    and (
+                        review_operation.expected_revision != request.source_revision
+                        or review_operation.request_hash != review_request_hash
+                    )
+                )
+            ):
+                raise _public_error(409, "idempotency_conflict")
+            export_payload: dict[str, Any] = {
+                "schema_version": "public-export-operation/v2",
+                "command": f"Export presentation as {export_format}",
+                "command_type": kind,
+                "source_revision": request.source_revision,
+                "quality_policy": request.quality_policy,
+                "context": {
+                    "pptx_mode": (
+                        "hybrid"
+                        if request.output.mode == "editable-hybrid"
+                        else "fidelity"
+                    ),
+                    "font_embedding": request.output.font_embedding == "subset",
+                    "fallback_policy": request.output.fallback_policy,
+                    "required_capabilities": request.output.required_capabilities,
+                },
+            }
+            if review_operation is not None:
+                export_payload.update(
+                    release_review_operation_id=str(review_operation.id),
+                    reviewed_source_revision=review_operation.expected_revision,
+                )
             operation = WorkspaceOperation(
+                id=export_operation_id,
                 owner_id=actor.owner_id,
                 owner_scope=str(actor.owner_id),
                 conversation_id=conversation.id,
                 presentation_id=target_id,
-                anchor_position=reservation.start,
+                anchor_position=reservation.start + (1 if review_created else 0),
                 kind=kind,
                 state="queued",
                 idempotency_key_hash=key_hash,
                 request_hash=request_hash,
-                request_payload={
-                    "schema_version": "public-export-operation/v2",
-                    "command": f"Export presentation as {export_format}",
-                    "command_type": kind,
-                    "source_revision": request.source_revision,
-                    "quality_policy": request.quality_policy,
-                    "context": {
-                        "pptx_mode": (
-                            "hybrid"
-                            if request.output.mode == "editable-hybrid"
-                            else "fidelity"
-                        ),
-                        "font_embedding": request.output.font_embedding == "subset",
-                        "fallback_policy": request.output.fallback_policy,
-                        "required_capabilities": request.output.required_capabilities,
-                    },
-                },
+                request_payload=export_payload,
                 expected_revision=request.source_revision,
-                next_attempt_at=get_current_utc_datetime(),
+                # The review is the durable predecessor. Its earlier anchor and
+                # immediate readiness normally claim first; this short delay is
+                # only a starvation guard for workers that observed both rows
+                # in the same scheduling tick.
+                next_attempt_at=(
+                    now + timedelta(seconds=1)
+                    if review_operation is not None
+                    else now
+                ),
             )
+            if review_created:
+                assert review_operation is not None
+                session.add(review_operation)
             session.add(operation)
             await session.flush()
+            if review_created:
+                assert review_operation is not None
+                await self._admit(
+                    session,
+                    actor=actor,
+                    operation=review_operation,
+                    # The predecessor performs bounded provider critique/VQA
+                    # calls, so its admission must use the provider-bearing
+                    # generation class.  The child export keeps the separate
+                    # export/Chromium resource admission below.
+                    operation_kind="generation",
+                    request_plan=plan_provider_requests(
+                        slide_count=max(1, presentation.n_slides),
+                        image_budget=0,
+                        repair_budget=max(1, presentation.n_slides),
+                        vqa_budget=max(1, presentation.n_slides),
+                    ),
+                    resource_plan=self._resource_plan(
+                        slide_count=max(1, presentation.n_slides),
+                        fidelity_mode="fidelity",
+                    ),
+                )
+                await append_operation_event(
+                    session,
+                    operation_id=review_operation.id,
+                    event_type="queued",
+                    payload={
+                        "state": "queued",
+                        "phase": "release_quality_review",
+                        "parent_operation_id": str(operation.id),
+                    },
+                    operation_kind="quality.review",
+                    allowed_states=("queued",),
+                )
             admission = await self._admit(
                 session,
                 actor=actor,
@@ -1104,6 +1541,7 @@ class SqlPublicV2Orchestrator:
             else None
         )
         quality: QualityReceiptV3 | None = None
+        export_timing: PublicExportExecutionReceiptV1 | None = None
         generation_timing_receipt: dict[str, object] | None = None
         if isinstance(operation.result, Mapping):
             if operation.kind == _GENERATION_KIND:
@@ -1127,7 +1565,60 @@ class SqlPublicV2Orchestrator:
                         quality = candidate
                 except ValueError:
                     quality = None
+            raw_export_timing = operation.result.get(
+                "public_export_execution_receipt"
+            )
+            if isinstance(raw_export_timing, Mapping):
+                try:
+                    export_timing = PublicExportExecutionReceiptV1.model_validate(
+                        raw_export_timing
+                    )
+                except ValueError:
+                    export_timing = None
         readiness = quality.release_readiness if quality is not None else "not_assessed"
+        phase = _phase(
+            kind=operation.kind,
+            state=operation.state,
+            progress=operation.progress,
+        )
+        progress = operation.progress if isinstance(operation.progress, Mapping) else {}
+        raw_queue_position = progress.get("queue_position")
+        queue_position = (
+            raw_queue_position
+            if isinstance(raw_queue_position, int)
+            and not isinstance(raw_queue_position, bool)
+            and raw_queue_position >= 1
+            else None
+        )
+        if operation.kind == _GENERATION_KIND:
+            export_state = "not_requested"
+        elif public_status == "succeeded":
+            export_state = "completed"
+        elif public_status in {"failed", "cancelled"}:
+            export_state = "failed"
+        elif public_status == "running":
+            export_state = "running"
+        else:
+            export_state = "pending"
+        publication_state = (
+            "published"
+            if artifacts
+            else (
+                "unavailable"
+                if public_status in {"failed", "cancelled"}
+                else "pending"
+            )
+        )
+        execution_receipt = OperationExecutionReceiptV2(
+            attempt_number=max(0, int(operation.attempt_number)),
+            retry_count=max(0, int(operation.retry_count)),
+            max_attempts=max(1, int(operation.max_attempts)),
+            queue_position=queue_position,
+            stage=phase,
+            publication=publication_state,
+            export=export_state,
+            timing=export_timing,
+        )
         return OperationStatusV2(
             operation_id=str(operation.id),
             presentation_id=str(operation.presentation_id),
@@ -1137,11 +1628,7 @@ class SqlPublicV2Orchestrator:
                 else "presentation.export"
             ),
             status=public_status,
-            phase=_phase(
-                kind=operation.kind,
-                state=operation.state,
-                progress=operation.progress,
-            ),
+            phase=phase,
             progress_percent=_progress_percent(operation.progress),
             source_revision=(
                 int(operation.result_revision)
@@ -1154,6 +1641,7 @@ class SqlPublicV2Orchestrator:
             absolute_deadline_at=_aware(admission.deadline_at),
             error=error,
             generation_timing_receipt=generation_timing_receipt,
+            execution_receipt=execution_receipt,
             quality_receipt=quality,
             release_readiness=readiness,
             artifacts=artifacts,

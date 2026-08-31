@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.semantic.header-title-owner",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Before rendering, stamp title on the actual text owner within the nearest explicit header title region; preserve content and bound evidence.",
+  "scope": [
+    "authored",
+    "semantic",
+    "capacity",
+    "header"
+  ],
+  "invariants": [
+    "The nearest explicit data-header-part must be title on the text owner or its ancestor; a nested other header part stops inheritance.",
+    "Only the nearest QID owner of actual nonempty text receives title; an empty title wrapper remains decoration.",
+    "Canonical stamping is idempotent and precedes rendering so source, pixels and browser metrics retain their correct distinct digest bindings.",
+    "An inner no-QID title caption does not promote an outer mixed-body owner.",
+    "Text, QIDs, layout, non-target roles, title limits and quality gates remain unchanged."
+  ],
+  "forbidden": [
+    "Promoting arbitrary *.title card or pillar subtitles.",
+    "Relabeling retained browser evidence without rendering the canonical source.",
+    "Treating the HTML render digest as a PNG digest or lowering capacity limits to bypass missing title roles."
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_composition_policy.py",
+    "servers/fastapi/tests/unit/test_authored_composition_policy.py::test_semantic_roles_bind_header_title_to_the_text_owner",
+    "output/public-v2-local-rc-20260831.md"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-31T02:51:44.1083333+00:00"
+}

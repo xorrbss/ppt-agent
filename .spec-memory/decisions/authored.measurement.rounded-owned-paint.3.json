@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.measurement.rounded-owned-paint",
+  "revision": 3,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Exclude only provably unpainted rounded corners; one or two independently owned child DIVs retain separate paint measurements and unchanged quality gates.",
+  "scope": [
+    "authored",
+    "measurement",
+    "occlusion"
+  ],
+  "invariants": [
+    "Supported childless HTML surfaces use CSS-normalized per-corner px/percent radii and a conservative antialias boundary band.",
+    "A parent DIV with no owned text may have one or two leaf XHTML DIV children only when the parent and every child have valid distinct globally unique QIDs.",
+    "Surface domains remain owner-local; closest-QID separation preserves every child paint/text/transform probe and independent quality gate.",
+    "Complex paint or mapping keeps prior rectangle/unknown behavior; excluded points are never counted as visible or known.",
+    "The 5 percent unknown limit, nonempty known evidence, actual cover detection, original HTML/PNG and QID geometry remain unchanged.",
+    "Occlusion, DOM and measurement cache identities change together; retained evidence is remeasured instead of relabeled."
+  ],
+  "forbidden": [
+    "Unknown-to-pass substitution, threshold weakening, exclusion of owned text, or inherited parent clipping domains.",
+    "Removing unsupported paint evidence, mutating authored content, or generalizing beyond two independently owned leaf children."
+  ],
+  "evidence": [
+    "servers/fastapi/utils/slide_capture_rounded_paint.py",
+    "servers/fastapi/utils/slide_capture.py",
+    "servers/fastapi/tests/unit/test_authored_browser_metrics.py::test_render_collects_dom_metrics_in_the_same_browser_invocation",
+    "output/public-v2-local-rc-20260831.md"
+  ],
+  "supersedes": "authored.measurement.rounded-owned-paint@2",
+  "recordedAt": "2026-08-31T02:51:08.5950122+00:00"
+}

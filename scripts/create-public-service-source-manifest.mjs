@@ -11,11 +11,15 @@ const SCHEMA_VERSION = "public-service-source-manifest/v1";
 const EXCLUDED_PREFIXES = [
   "app_data/",
   "artifacts/",
+  "output/",
   ".tmp/",
   "servers/nextjs/.next",
 ];
 const REQUIRED_SOURCE_PATHS = Object.freeze([
   "scripts/create-public-service-source-manifest.mjs",
+  "scripts/collect-public-service-powerpoint-readback.ps1",
+  "servers/nextjs/scripts/qa-powerpoint-desktop.ps1",
+  "docs/experiments/authored-vnext/03-ooxml-roundtrip/tools/windows-reopen.ps1",
   "servers/fastapi/scripts/public_service_malicious_corpus_evidence.py",
   "servers/fastapi/services/isolated_worker_contracts.py",
   "servers/fastapi/services/isolated_worker_process.py",
@@ -71,13 +75,15 @@ export function mergeChangedSourcePaths({ unstaged = [], staged = [], untracked 
 }
 
 function changedSourcePaths(outputRelativePath) {
-  const lines = (value) => value.split(/\r?\n/u).filter(Boolean);
+  // Git quotes non-ASCII/whitespace paths in line-oriented output. NUL mode
+  // preserves their exact names before runtime-prefix filtering and hashing.
+  const paths = (value) => value.split("\0").filter(Boolean);
   return mergeChangedSourcePaths({
-    unstaged: lines(git("diff", "--name-only", "--diff-filter=ACMRTUXB")),
-    staged: lines(git("diff", "--cached", "--name-only", "--diff-filter=ACMRTUXB")),
-    untracked: lines(git("ls-files", "--others", "--exclude-standard")),
-    deletedUnstaged: lines(git("diff", "--name-only", "--diff-filter=D")),
-    deletedStaged: lines(git("diff", "--cached", "--name-only", "--diff-filter=D")),
+    unstaged: paths(git("diff", "--name-only", "-z", "--diff-filter=ACMRTUXB")),
+    staged: paths(git("diff", "--cached", "--name-only", "-z", "--diff-filter=ACMRTUXB")),
+    untracked: paths(git("ls-files", "--others", "--exclude-standard", "-z")),
+    deletedUnstaged: paths(git("diff", "--name-only", "-z", "--diff-filter=D")),
+    deletedStaged: paths(git("diff", "--cached", "--name-only", "-z", "--diff-filter=D")),
     outputRelativePath,
   });
 }

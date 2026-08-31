@@ -98,6 +98,184 @@ def test_author_aggregate_capacity_fails_after_two_calls_before_render(monkeypat
     assert calls == [1, 2]
     assert caught.value.code == "authored_aggregate_owner_capacity_exhausted"
 
+    # Ordinary dynamic titles use only the existing second call, with the same
+    # frozen combined title budget. This is not a reconstruction of run12's lost HTML.
+    title = "IBM의 20% 개선 목표는 모든 고객 데이터에 대해 외부로 전송하지 않는 정책을 유지하는 범위에서만 추진합니다"
+    shorter = "IBM 20% 개선 목표: 모든 고객 데이터 외부 전송하지 않는 정책 유지"
+    candidate = (
+        "<!DOCTYPE html><html><head><style>h1{font-size:34px;left:48px}</style></head><body>"
+        '<p data-qid="header.eyebrow" data-header-part="eyebrow" data-semantic-role="supporting">고정 문구</p>'
+        f'<h1 data-qid="customer.alice.title" data-header-part="title" data-semantic-role="title">{title}</h1>'
+        '<h2 data-qid="card.one.title" data-semantic-role="title">검증 절차</h2>'
+        '<h2 data-qid="card.two.title" data-semantic-role="title">운영 전환</h2>'
+        '<p data-qid="customer.alice.body" data-semantic-role="body">고객 이름은 원문에만 존재합니다.</p>'
+        "</body></html>"
+    )
+    candidate = author_deck_mod.canonicalize_authored_capacity_html(candidate)
+    replacement = candidate.replace(title, shorter)
+    capacity = SlideCapacity(2, "PILLARS", 58, 90, 200, 0, 10)
+    assert any(item.startswith("owner_title:") for item in aggregate_owner_capacity_violations(candidate, capacity))
+    assert aggregate_owner_capacity_violations(replacement, capacity) == ()
+
+    async def exercise(original, correction, **options):
+        calls.clear()
+        kwargs_seen = []
+
+        async def fake_title_author(*args, **kwargs):
+            calls.append(kwargs["receipt_attempt_ordinal"])
+            kwargs_seen.append(kwargs)
+            return original if len(calls) == 1 else correction
+
+        monkeypatch.setattr(author_deck_mod, "author_slide_html", fake_title_author)
+        try:
+            result = await author_deck_mod._author_one_resilient(
+                "content", "design", _brand(), "PILLARS", 2, 5, (),
+                raise_on_failure=True, capacity=options.pop("capacity", capacity),
+                allow_title_capacity_recovery=True, **options,
+            )
+            return result, kwargs_seen
+        except author_deck_mod.AuthoredProviderBudgetExhausted as error:
+            return error, kwargs_seen
+
+    result, kwargs_seen = _run(exercise(candidate, replacement))
+    assert result == replacement
+    assert calls == [1, 2]
+    assert kwargs_seen[1]["rejected_html"] == candidate
+    assert "Only shorten authored title text" in kwargs_seen[1]["correction_hint"]
+    for expected in ("named_word [IBM x1]", "number_unit [20% x1]", "korean_qualifier [모든 x1, 목표 x1, 않 x1]"):
+        assert expected in kwargs_seen[1]["correction_hint"]
+    assert all(kwargs["allow_provider_fallback"] is False for kwargs in kwargs_seen)
+
+    # Capitalized-word selection must not mistake the same lowercase word for
+    # deletion. This synthetic case is not evidence of run14's unknown token diff.
+    english_title = "Trusted PPT Exports with dependable processing evidence and useful guidance"
+    english_shorter = "Trusted PPT exports with dependable evidence"
+    english = candidate.replace(title, english_title)
+    english_corrected = english.replace(english_title, english_shorter)
+    result, _kwargs_seen = _run(exercise(english, english_corrected))
+    assert result == english_corrected
+    assert calls == [1, 2]
+
+    # Every class is enumerated from the same occurrences used by the guard;
+    # multi-word qualifier spelling is retained rather than rendered as 'upto'.
+    qualified_title = "PPT may achieve up to 20% improvement only without quality loss in the complete delivery process"
+    qualified_shorter = "PPT may gain up to 20% only without quality loss"
+    qualified = candidate.replace(title, qualified_title)
+    qualified_corrected = qualified.replace(qualified_title, qualified_shorter)
+    result, kwargs_seen = _run(exercise(qualified, qualified_corrected))
+    assert result == qualified_corrected and calls == [1, 2]
+    for expected in ("named_word [PPT x1]", "number_unit [20% x1]", "english_qualifier [may x1, only x1, up to x1, without x1]"):
+        assert expected in kwargs_seen[1]["correction_hint"]
+    result, _kwargs_seen = _run(exercise(qualified, qualified_corrected.replace("only ", "")))
+    assert result.code == "authored_title_recovery_boundary_exhausted" and calls == [1, 2]
+    assert result.title_token_diagnostic["differenceCount"] == 1
+    assert result.title_token_diagnostic["differences"][0]["tokenClass"] == "english_qualifier"
+    result, kwargs_seen = _run(exercise(
+        candidate.replace(title, english_title + " Review review"),
+        english_corrected.replace(english_shorter, english_shorter + " Review review"),
+        capacity=SlideCapacity(2, "PILLARS", 80, 90, 200, 0, 10),
+    ))
+    assert isinstance(result, str) and calls == [1, 2]
+    assert "Review x2" in kwargs_seen[1]["correction_hint"]
+
+    token_error = None
+    for label, changed in {
+        "number": replacement.replace("20%", "30%"),
+        "subject": replacement.replace("IBM", "ABC"),
+        "subject_deleted": replacement.replace("IBM ", ""),
+        "subject_added": replacement.replace("IBM", "IBM ABC"),
+        "negation": replacement.replace("않는", "하는"),
+        "qualifier": replacement.replace("모든 ", ""),
+        "fixed_header": replacement.replace("고정 문구", "짧은 문구"),
+        "qid": replacement.replace("customer.alice.title", "customer.other.title"),
+        "role": replacement.replace('data-semantic-role="title"', 'data-semantic-role="body"', 1),
+        "font": replacement.replace("font-size:34px", "font-size:30px"),
+        "geometry": replacement.replace("left:48px", "left:40px"),
+        "body": replacement.replace("고객 이름은 원문에만 존재합니다.", "본문 변경"),
+    }.items():
+        result, _kwargs_seen = _run(exercise(candidate, changed))
+        assert isinstance(result, author_deck_mod.AuthoredProviderBudgetExhausted), label
+        assert result.code == "authored_title_recovery_boundary_exhausted", label
+        assert calls == [1, 2], label
+        if label == "subject":
+            token_error = result
+
+    safe_tokens = authored_pipeline_mod._author_stage_failure(2, token_error).as_safe_dict()
+    diagnostic = safe_tokens["title_token_diagnostic"]
+    assert diagnostic["differenceCount"] == 2
+    assert diagnostic["beforeHtmlDigest"] == hashlib.sha256(candidate.encode()).hexdigest()
+    assert all(item["tokenClass"] == "named_word" for item in diagnostic["differences"])
+    assert {(item["beforeCount"], item["afterCount"]) for item in diagnostic["differences"]} == {(1, 0), (0, 1)}
+    for private in ("IBM", "ABC", "customer.alice", title, shorter):
+        assert private not in str(safe_tokens)
+    token_error.title_token_diagnostic["differences"][0]["token"] = "private"
+    assert "title_token_diagnostic" not in authored_pipeline_mod._author_stage_failure(2, token_error).as_safe_dict()
+
+    # Exact aggregate shape observed in run14, with synthetic wording: title
+    # 15+64=79, non-title 270+62=332, visible411. Fixed limits imply title<=48.
+    long_title = "PPT supports dependable delivery through simple automated checks"
+    joint_candidate = (
+        '<!doctype html><html><head></head><body>'
+        '<div data-qid="brand.title" data-semantic-role="title">Trusted Exports</div>'
+        f'<h2 data-qid="long.title" data-semantic-role="title">{long_title}</h2>'
+        '<p data-qid="content.body" data-semantic-role="body">' + "Details " * 33 + "Proof!</p>"
+        '<p data-qid="content.supporting" data-semantic-role="supporting">' + "Support " * 7 + "Notes.</p>"
+        '</body></html>'
+    )
+    result, kwargs_seen = _run(exercise(joint_candidate, joint_candidate, capacity=SlideCapacity(2, "PILLARS", 58, 290, 380, 0, 32)))
+    assert isinstance(result, author_deck_mod.AuthoredAggregateOwnerCapacityExhausted)
+    assert calls == [1, 2]
+    hint = kwargs_seen[1]["correction_hint"]
+    for expected in (
+        "jointTitleBudget=48", "fixedTitleChars=0", "nonTitleVisibleChars=332",
+        "availableEligibleChars=48", "requiredReduction=31",
+        "brand.title: currentChars=15, suggestedTargetChars=15",
+        "long.title: currentChars=64, suggestedTargetChars=33",
+    ):
+        assert expected in hint
+    fixed = joint_candidate.replace('data-qid="brand.title"', 'data-text-fixed="true" data-qid="brand.title"')
+    result, kwargs_seen = _run(exercise(fixed, fixed, capacity=SlideCapacity(2, "PILLARS", 58, 290, 380, 0, 32)))
+    hint = kwargs_seen[1]["correction_hint"]
+    assert "fixedTitleChars=15" in hint and "availableEligibleChars=33" in hint
+    assert "requiredReduction=31" in hint and "brand.title: currentChars" not in hint
+
+    for marker in ('data-source-block-id="source.1"', 'data-text-fixed="true"'):
+        protected = candidate.replace('data-qid="customer.alice.title"', f'{marker} data-qid="customer.alice.title"')
+        result, kwargs_seen = _run(exercise(protected, protected.replace(title, shorter)))
+        assert result.code == "authored_title_recovery_boundary_exhausted"
+        assert "customer.alice.title" not in kwargs_seen[1]["correction_hint"]
+        assert calls == [1, 2]
+    result, _kwargs_seen = _run(exercise(candidate, replacement, instructions="제목 원문 그대로 유지"))
+    assert result.code == "authored_title_recovery_boundary_exhausted"
+
+    result, _kwargs_seen = _run(exercise(candidate, candidate, provider_attempt_offset=1))
+    assert isinstance(result, author_deck_mod.AuthoredAggregateOwnerCapacityExhausted)
+    assert calls == [2]  # A resumed second ordinal never receives a third call.
+    stage_error = authored_pipeline_mod._author_stage_failure(2, result, provider_attempt_count=2)
+    safe = stage_error.as_safe_dict()
+    evidence = safe["owner_capacity_diagnostic"]
+    assert safe["retryable"] is False and safe["provider_attempt_count"] == 2
+    assert evidence["measured"]["owner_title"] == len(title) + len("검증 절차") + len("운영 전환")
+    assert evidence["limits"]["owner_title"] == 58
+    assert evidence["htmlDigest"] == hashlib.sha256(candidate.encode()).hexdigest()
+    assert evidence["owners"][0]["qidDigest"] == hashlib.sha256(b"customer.alice.title").hexdigest()
+    assert evidence["owners"][0]["textDigest"] == hashlib.sha256(title.encode()).hexdigest()
+    for private_text in (candidate, title, "customer.alice", "고객 이름", "고정 문구"):
+        assert private_text not in str(safe)
+
+    many_owners = candidate.replace("</body>", "".join(
+        f'<p data-qid="private.owner.{index}" data-semantic-role="body">내용</p>'
+        for index in range(40)
+    ) + "</body>")
+    error = author_deck_mod.AuthoredAggregateOwnerCapacityExhausted(
+        ("owner_title:73>58",), rejected_html=many_owners, capacity=capacity,
+    )
+    safe = authored_pipeline_mod._author_stage_failure(2, error).as_safe_dict()
+    assert safe["owner_capacity_diagnostic"]["truncated"] is True
+    assert len(safe["owner_capacity_diagnostic"]["owners"]) == 32
+    error.owner_capacity_diagnostic["owners"][0]["role"] = title
+    assert "owner_capacity_diagnostic" not in authored_pipeline_mod._author_stage_failure(2, error).as_safe_dict()
+
 
 def test_author_budget_exhaustion_is_non_retryable_but_transport_stays_retryable():
     deterministic = author_deck_mod.AuthoredProviderBudgetExhausted(
@@ -2659,6 +2837,17 @@ def test_ninety_slide_pipeline_keeps_worker_concurrency_bounded(monkeypatch):
 
 
 def test_find_chrome_prefers_playwright_headless_shell(monkeypatch, tmp_path):
+    import json
+    import os
+    from pathlib import Path
+    import subprocess
+    import sys
+
+    from services.isolated_worker_process import worker_environment
+    from services.trusted_executor.contracts import (
+        ExecutionIdentity, ResourceLimits, SandboxLaunchSpec, SandboxPolicy,
+    )
+
     for name in ("CHROME_PATH", "PUPPETEER_EXECUTABLE_PATH", "CHROMIUM_PATH"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
@@ -2673,6 +2862,46 @@ def test_find_chrome_prefers_playwright_headless_shell(monkeypatch, tmp_path):
     shell.write_bytes(b"browser")
 
     assert slide_capture.find_chrome() == str(shell)
+    monkeypatch.delenv("PLAYWRIGHT_BROWSERS_PATH", raising=False)
+
+    def home_unavailable(cls):
+        raise RuntimeError("Could not determine home directory.")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "home", classmethod(home_unavailable))
+        assert slide_capture.find_chrome() == str(shell)
+        explicit = tmp_path / "explicit-chrome.exe"
+        explicit.write_bytes(b"explicit browser")
+        patch.setenv("CHROME_PATH", str(explicit))
+        assert slide_capture.find_chrome() == str(explicit)
+        patch.delenv("CHROME_PATH")
+        patch.setenv("LOCALAPPDATA", str(tmp_path / "absent"))
+        fixed = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+        patch.setattr(os.path, "isfile", lambda value: value == fixed)
+        assert slide_capture.find_chrome() == fixed
+        patch.setattr(os.path, "isfile", lambda value: False)
+        assert slide_capture.find_chrome() is None
+
+    # Run only discovery in a real child with the product's two env filters.
+    # The fixture executable is never started; no browser/profile is created.
+    source = {**os.environ, "PUBLIC_TRUSTED_WORKER_LOCAL_POLICY": "development"}
+    spec = SandboxLaunchSpec(
+        identity=ExecutionIdentity(
+            operation_id=uuid.uuid4(), tenant_id="discovery-test",
+            owner_id=uuid.uuid4(), presentation_id=uuid.uuid4(),
+        ),
+        role="render", executable=Path(sys.executable), arguments=("-c", "discovery"),
+        limits=ResourceLimits(memory_bytes=536870912, process_limit=32, deadline_seconds=30),
+        policy=SandboxPolicy(),
+    )
+    environment = spec.environment(worker_environment("render", source, trusted_dispatch=True))
+    assert all(key not in environment for key in ("HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH"))
+    completed = subprocess.run(
+        [sys.executable, "-c", "import json; from utils.slide_capture_chrome_discovery import find_chrome; print(json.dumps(find_chrome()))"],
+        env=environment, capture_output=True, text=True, timeout=20, check=True,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+    assert json.loads(completed.stdout) == str(shell)
 
 
 def test_render_html_cache_reuses_successful_identical_render(monkeypatch):

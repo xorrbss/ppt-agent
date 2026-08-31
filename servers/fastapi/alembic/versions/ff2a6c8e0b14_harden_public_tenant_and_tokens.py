@@ -106,7 +106,7 @@ def _create_external_principal_bindings() -> None:
             server_default=sa.func.now(),
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["user_id"], ["user.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("binding_digest"),
         sa.UniqueConstraint(
             "issuer_digest",

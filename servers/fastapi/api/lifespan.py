@@ -6,6 +6,10 @@ from fastapi import FastAPI
 
 from api.v1.auth.bootstrap import bootstrap_database_admin
 from migrations import migrate_database_on_startup
+from services.account_deletion_controller import (
+    start_account_deletion_controller,
+    stop_account_deletion_controller,
+)
 from services.database import (
     create_db_and_tables,
     dispose_engines,
@@ -106,6 +110,7 @@ from utils.model_availability import (
 )
 
 logger = logging.getLogger(__name__)
+_LOCAL_ENVIRONMENTS = {"local", "development", "dev", "test"}
 
 
 def _configure_application_logging() -> None:
@@ -118,6 +123,17 @@ def _configure_application_logging() -> None:
     # logger already has handlers (pytest caplog, an operator-supplied --log-config).
     logging.basicConfig(level=level)
     logging.getLogger().setLevel(level)
+
+
+def _should_start_local_account_deletion_controller() -> bool:
+    """Keep cross-owner deletion work out of every public PostgreSQL API."""
+
+    environment = (os.getenv("ENVIRONMENT") or "development").strip().lower()
+    return (
+        environment in _LOCAL_ENVIRONMENTS
+        and sql_engine.dialect.name == "sqlite"
+        and get_workspace_operation_worker_mode() == "embedded"
+    )
 
 
 @asynccontextmanager
@@ -168,6 +184,7 @@ async def app_lifespan(_: FastAPI):
     workspace_asset_maintenance_started = False
     workspace_cleanup_maintenance_started = False
     workspace_event_retention_started = False
+    account_deletion_controller_started = False
     trusted_worker_runtime = None
     artifact_lifecycle_started = False
     try:
@@ -212,6 +229,12 @@ async def app_lifespan(_: FastAPI):
                 allowed_kinds=embedded_workspace_operation_kinds()
             )
             workspace_operation_runner_started = True
+        if _should_start_local_account_deletion_controller():
+            node_id = (os.getenv("PUBLIC_WORKER_NODE_ID") or "").strip()
+            await start_account_deletion_controller(
+                worker_id=f"{node_id or 'embedded-local'}:account-deletion"
+            )
+            account_deletion_controller_started = True
         if should_start_embedded_workspace_operation_worker():
             await start_workspace_asset_maintenance()
             workspace_asset_maintenance_started = True
@@ -234,6 +257,10 @@ async def app_lifespan(_: FastAPI):
         yield
     finally:
         cleanup_steps = (
+            (
+                account_deletion_controller_started,
+                stop_account_deletion_controller,
+            ),
             (runtime_settings_coordinator_started, stop_runtime_settings_coordinator),
             (workspace_event_retention_started, stop_workspace_event_retention),
             (workspace_cleanup_maintenance_started, stop_workspace_cleanup_maintenance),

@@ -343,6 +343,10 @@ async def run_worker(role: WorkerRole, executor: WorkerExecutor) -> int:
             name
             for name in os.environ
             if name != "PUBLIC_WORKER_SESSIONLESS"
+            if not (
+                name == "TRUSTED_EXECUTOR_SESSIONLESS"
+                and os.environ[name] == "1"
+            )
             if any(
                 marker in name.upper()
                 for marker in (
