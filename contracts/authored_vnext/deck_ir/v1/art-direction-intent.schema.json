@@ -1,0 +1,231 @@
+{
+  "$defs": {
+    "FocalAnchorV1": {
+      "additionalProperties": false,
+      "properties": {
+        "strength": {
+          "enum": [
+            "subtle",
+            "medium",
+            "strong"
+          ],
+          "title": "Strength",
+          "type": "string"
+        },
+        "zoneKey": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+          "title": "Zonekey",
+          "type": "string"
+        }
+      },
+      "required": [
+        "zoneKey",
+        "strength"
+      ],
+      "title": "FocalAnchorV1",
+      "type": "object"
+    },
+    "NegativeSpaceV1": {
+      "additionalProperties": false,
+      "properties": {
+        "amount": {
+          "enum": [
+            "compact",
+            "balanced",
+            "generous"
+          ],
+          "title": "Amount",
+          "type": "string"
+        },
+        "bias": {
+          "enum": [
+            "left",
+            "right",
+            "top",
+            "bottom",
+            "balanced",
+            "center"
+          ],
+          "title": "Bias",
+          "type": "string"
+        }
+      },
+      "required": [
+        "bias",
+        "amount"
+      ],
+      "title": "NegativeSpaceV1",
+      "type": "object"
+    },
+    "OverlapPolicyV1": {
+      "additionalProperties": false,
+      "properties": {
+        "allowedZonePairs": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+                "type": "string"
+              },
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+                "type": "string"
+              }
+            ],
+            "type": "array"
+          },
+          "maxItems": 16,
+          "title": "Allowedzonepairs",
+          "type": "array"
+        },
+        "mode": {
+          "enum": [
+            "none",
+            "decorative-layering",
+            "background-layering"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "sourceOcclusion": {
+          "const": "forbidden",
+          "title": "Sourceocclusion",
+          "type": "string"
+        },
+        "textOcclusion": {
+          "const": "forbidden",
+          "title": "Textocclusion",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode",
+        "textOcclusion",
+        "sourceOcclusion"
+      ],
+      "title": "OverlapPolicyV1",
+      "type": "object"
+    }
+  },
+  "$id": "urn:presenton:authored-vnext:deck-ir:art-direction-intent.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "asymmetry": {
+      "enum": [
+        "none",
+        "subtle",
+        "moderate",
+        "strong"
+      ],
+      "title": "Asymmetry",
+      "type": "string"
+    },
+    "compositionIntentGraphDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Compositionintentgraphdigest",
+      "type": "string"
+    },
+    "cropIntent": {
+      "enum": [
+        "none",
+        "subject-emphasis",
+        "context-preserving",
+        "dramatic"
+      ],
+      "title": "Cropintent",
+      "type": "string"
+    },
+    "depthIntent": {
+      "enum": [
+        "flat",
+        "layered",
+        "stage"
+      ],
+      "title": "Depthintent",
+      "type": "string"
+    },
+    "focalAnchor": {
+      "$ref": "#/$defs/FocalAnchorV1"
+    },
+    "imageTreatment": {
+      "enum": [
+        "contained",
+        "edge-crop",
+        "full-bleed",
+        "framed",
+        "masked"
+      ],
+      "title": "Imagetreatment",
+      "type": "string"
+    },
+    "intentDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Intentdigest",
+      "type": "string"
+    },
+    "negativeSpace": {
+      "$ref": "#/$defs/NegativeSpaceV1"
+    },
+    "overlapPolicy": {
+      "$ref": "#/$defs/OverlapPolicyV1"
+    },
+    "schemaVersion": {
+      "const": "art-direction-intent/v1",
+      "title": "Schemaversion",
+      "type": "string"
+    },
+    "slideKey": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+      "title": "Slidekey",
+      "type": "string"
+    },
+    "typographyRhythm": {
+      "enum": [
+        "steady",
+        "editorial-contrast",
+        "metric-led",
+        "narrative"
+      ],
+      "title": "Typographyrhythm",
+      "type": "string"
+    },
+    "visualEnergy": {
+      "enum": [
+        "calm",
+        "credible",
+        "progressive",
+        "dynamic"
+      ],
+      "title": "Visualenergy",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "slideKey",
+    "compositionIntentGraphDigest",
+    "focalAnchor",
+    "negativeSpace",
+    "asymmetry",
+    "overlapPolicy",
+    "imageTreatment",
+    "cropIntent",
+    "typographyRhythm",
+    "depthIntent",
+    "visualEnergy",
+    "intentDigest"
+  ],
+  "title": "ArtDirectionIntentV1",
+  "type": "object"
+}

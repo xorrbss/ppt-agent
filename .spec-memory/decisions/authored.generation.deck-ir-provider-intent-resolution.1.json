@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.generation.deck-ir-provider-intent-resolution",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Resolve provider ArtDirection with compiler-owned overlap capabilities and fixed K6 local candidates; retain original/resolved/selected digests.",
+  "scope": [
+    "authored-generation",
+    "deck-ir",
+    "visual-quality"
+  ],
+  "invariants": [
+    "Provider role names and overlap pairs never grant compiler safety authority.",
+    "Exclusive content cannot overlap; ambient paint cannot occlude content; overlays and annotations require compiler-owned hosts and safety evidence.",
+    "Keep the original IR immutable and bind provider, resolved intent, candidate decisions and final measured selection with digests.",
+    "Try only the fixed K6 local candidate set without additional provider calls. Reject unsafe candidates and terminate on exhaustion.",
+    "Schema, reference, security and digest integrity errors remain immediately terminal.",
+    "Do not drop structured content or substitute empty components to pass quality checks. Unsupported renderers must fail closed."
+  ],
+  "forbidden": [
+    "Treating provider overlap proposals as permission",
+    "Relabeling content as decoration to bypass safety",
+    "Claiming document quality from a smoke test"
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_vnext/deck_ir/intent_resolution.py",
+    "servers/fastapi/services/authored_vnext/deck_ir/browser_closure.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-31T18:23:57.5538267+00:00"
+}

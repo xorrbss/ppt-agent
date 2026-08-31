@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.generation.deck-ir-constraint-compiler",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Deck IR 생성은 source coverage, edit lineage, browser measurement closure, 분리 receipt와 bounded batch/recovery 계약을 따른다.",
+  "scope": [
+    "authored-generation",
+    "public-v2",
+    "fidelity",
+    "hybrid"
+  ],
+  "invariants": [
+    "RequirementGraph와 SourceBinding으로 required coverage와 의도적 반복을 계산한다.",
+    "Deck IR는 생성 intent provenance이며 Workbench edit current truth가 아니다.",
+    "balanced-quality 5장은 global plan과 3+2 병렬 Slide IR batch, shared recovery 최대 1회를 사용한다.",
+    "compiler/browser는 최대 2회 deterministic measurement closure 후 fail-closed한다.",
+    "critic은 content/source/QID/priority를 변경하지 않는 visual patch만 제안한다.",
+    "generation, artifact, service promotion, deployment authority와 receipt를 분리하고 전체 operation SLO를 유지한다."
+  ],
+  "forbidden": [
+    "모델 raw HTML/CSS/JavaScript 생성",
+    "Deck IR를 Workbench current canonical truth로 사용",
+    "source/title/QID/content priority를 바꾸는 critic patch",
+    "blocking gate 완화 또는 promotionReady 수동 override",
+    "D6 이후 존재하지 않는 legacy author로 무조건 rollback"
+  ],
+  "evidence": [
+    "docs/deck-ir-constraint-compiler-architecture-20260831.md"
+  ],
+  "supersedes": "authored.generation.deck-ir-constraint-compiler@1",
+  "recordedAt": "2026-08-31T10:16:24.7672206+00:00"
+}

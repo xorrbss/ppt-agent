@@ -1,0 +1,156 @@
+{
+  "$id": "urn:presenton:authored-vnext:deck-ir:constraint-compile-receipt.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artDirectionIntentDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Artdirectionintentdigest",
+      "type": "string"
+    },
+    "browserMeasurementDigest": {
+      "anyOf": [
+        {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Browsermeasurementdigest"
+    },
+    "candidateSelectionReceiptDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Candidateselectionreceiptdigest",
+      "type": "string"
+    },
+    "chosenLayoutId": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9]*(?:[._/-][a-z0-9]+)*$",
+      "title": "Chosenlayoutid",
+      "type": "string"
+    },
+    "compilerVersion": {
+      "const": "constraint-compiler/v1",
+      "title": "Compilerversion",
+      "type": "string"
+    },
+    "compositionIntentGraphDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Compositionintentgraphdigest",
+      "type": "string"
+    },
+    "deckIrDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Deckirdigest",
+      "type": "string"
+    },
+    "grammarDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Grammardigest",
+      "type": "string"
+    },
+    "hardConstraintStatus": {
+      "enum": [
+        "passed",
+        "failed"
+      ],
+      "title": "Hardconstraintstatus",
+      "type": "string"
+    },
+    "htmlDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Htmldigest",
+      "type": "string"
+    },
+    "measurementClosureRevision": {
+      "maximum": 2,
+      "minimum": 0,
+      "title": "Measurementclosurerevision",
+      "type": "integer"
+    },
+    "operationId": {
+      "format": "uuid",
+      "title": "Operationid",
+      "type": "string"
+    },
+    "qidRegistryDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Qidregistrydigest",
+      "type": "string"
+    },
+    "receiptDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Receiptdigest",
+      "type": "string"
+    },
+    "recoverySteps": {
+      "items": {
+        "maxLength": 128,
+        "minLength": 1,
+        "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+        "type": "string"
+      },
+      "maxItems": 8,
+      "title": "Recoverysteps",
+      "type": "array"
+    },
+    "schemaVersion": {
+      "const": "constraint-compile-receipt/v1",
+      "title": "Schemaversion",
+      "type": "string"
+    },
+    "semanticDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Semanticdigest",
+      "type": "string"
+    },
+    "slideIrDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Slideirdigest",
+      "type": "string"
+    },
+    "slideKey": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+      "title": "Slidekey",
+      "type": "string"
+    },
+    "softScore": {
+      "title": "Softscore",
+      "type": "number"
+    },
+    "strategyDecisionDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Strategydecisiondigest",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "operationId",
+    "slideKey",
+    "strategyDecisionDigest",
+    "deckIrDigest",
+    "slideIrDigest",
+    "compositionIntentGraphDigest",
+    "artDirectionIntentDigest",
+    "candidateSelectionReceiptDigest",
+    "grammarDigest",
+    "compilerVersion",
+    "chosenLayoutId",
+    "qidRegistryDigest",
+    "htmlDigest",
+    "semanticDigest",
+    "hardConstraintStatus",
+    "softScore",
+    "measurementClosureRevision",
+    "browserMeasurementDigest",
+    "receiptDigest"
+  ],
+  "title": "ConstraintCompileReceiptV1",
+  "type": "object"
+}

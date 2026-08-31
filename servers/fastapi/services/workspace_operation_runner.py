@@ -381,6 +381,10 @@ _SAFE_RESULT_PAYLOAD_KEYS_BY_KIND: dict[str, frozenset[str]] = {
             "stage_timings_ms",
             "total_ms",
             "generation_timing_receipt",
+            "deckIr",
+            "generationQualityReceipt",
+            "requirementCoverageReceipt",
+            "publication",
         }
     ),
     "quality.review": frozenset(
@@ -707,6 +711,84 @@ def sanitize_workspace_event_payload(
                 {key: item for key, item in value.items() if key != "result"},
                 operation_kind=operation_kind,
             )
+        elif (
+            operation_kind == "presentation.generate"
+            and normalized == "deckIr"
+            and isinstance(value, Mapping)
+        ):
+            safe[normalized] = {
+                key: value.get(key)
+                for key in (
+                    "strategy",
+                    "strategyReceiptDigest",
+                    "deckIrDigest",
+                    "detachedCheckpointDigest",
+                    "providerLogicalCalls",
+                    "grammarDigest",
+                    "compilerVersion",
+                    "candidateSelectionReceiptDigest",
+                    "executionEvidenceDigest",
+                    "slideCount",
+                )
+                if value.get(key) is None
+                or isinstance(value.get(key), (str, int, float, bool))
+            }
+            closure_digests = value.get("browserClosureReceiptDigests")
+            if isinstance(closure_digests, Sequence) and not isinstance(
+                closure_digests, (str, bytes, bytearray)
+            ):
+                safe[normalized]["browserClosureReceiptDigests"] = [
+                    item for item in closure_digests[:30] if isinstance(item, str)
+                ]
+        elif (
+            operation_kind == "presentation.generate"
+            and normalized == "generationQualityReceipt"
+            and isinstance(value, Mapping)
+        ):
+            safe[normalized] = {
+                key: value.get(key)
+                for key in (
+                    "schemaVersion", "p0Count", "p1Count", "p2Count",
+                    "passed", "receiptDigest",
+                )
+                if value.get(key) is None
+                or isinstance(value.get(key), (str, int, float, bool))
+            }
+            for stage in ("static", "browser", "deck"):
+                stage_value = value.get(stage)
+                if isinstance(stage_value, Mapping):
+                    safe[normalized][stage] = {
+                        key: stage_value.get(key)
+                        for key in ("passed", "p0Count", "p1Count", "receiptDigest")
+                        if stage_value.get(key) is None
+                        or isinstance(stage_value.get(key), (str, int, float, bool))
+                    }
+        elif (
+            operation_kind == "presentation.generate"
+            and normalized == "requirementCoverageReceipt"
+            and isinstance(value, Mapping)
+        ):
+            safe[normalized] = {
+                key: value.get(key)
+                for key in (
+                    "schemaVersion", "requirementGraphDigest", "deckIrDigest",
+                    "requiredTotal", "requiredCovered", "optionalTotal",
+                    "optionalCovered", "status", "receiptDigest",
+                )
+                if value.get(key) is None
+                or isinstance(value.get(key), (str, int, float, bool))
+            }
+        elif (
+            operation_kind == "presentation.generate"
+            and normalized == "publication"
+            and isinstance(value, Mapping)
+        ):
+            safe[normalized] = {
+                key: value.get(key)
+                for key in ("manifestDigest", "revision", "bundleCount")
+                if value.get(key) is None
+                or isinstance(value.get(key), (str, int, float, bool))
+            }
         elif operation_kind == BATCH_KIND and isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
             safe[normalized] = sanitize_batch_value(normalized, value)
         elif normalized == "worker_resource_samples" and isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):

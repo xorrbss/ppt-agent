@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable, Mapping
 from copy import deepcopy
+from datetime import datetime, timezone
 import logging
 import time
 from typing import Any
@@ -33,7 +34,7 @@ from services.authored_generation_progress_poller import (
 from services.authored_generation_timing_receipt import (
     GENERATION_ATTEMPT_TIMING_STAGES,
     GenerationTimingRecorder,
-    create_generation_attempt_timing_receipt,
+    create_generation_attempt_timing_receipt_v2,
 )
 from services.database import async_session_maker
 from services.presentation_generation_job_service import (
@@ -134,6 +135,100 @@ def _attempt_failure_stage(
     return "author"
 
 
+def _queue_wait_ms(operation: WorkspaceOperation | None) -> int:
+    if operation is None or not isinstance(operation.created_at, datetime):
+        return 0
+    started_at = operation.started_at
+    if not isinstance(started_at, datetime):
+        return 0
+    created_at = operation.created_at
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+    if started_at.tzinfo is None:
+        started_at = started_at.replace(tzinfo=timezone.utc)
+    return max(0, round((started_at - created_at).total_seconds() * 1000))
+
+
+def _public_executed_stages(
+    recorder: GenerationTimingRecorder,
+    *,
+    logical_calls: int,
+    require_terminal_success_stages: bool,
+) -> tuple[str, ...]:
+    mapping = {
+        "outline": "outline",
+        "provider": "provider",
+        "author": "authoring",
+        "repair": "repair",
+        "render": "chromiumReview",
+        "quality": "chromiumReview",
+        "publication": "publication",
+    }
+    executed = {
+        mapping[name]
+        for name in recorder.stage_observations()
+        if name in mapping
+    }
+    if logical_calls > 0:
+        executed.add("provider")
+    if require_terminal_success_stages:
+        executed.update(
+            {"outline", "authoring", "chromiumReview", "publication"}
+        )
+    return tuple(sorted(executed))
+
+
+async def _persist_terminal_attempt_timing(
+    *,
+    job_id: uuid.UUID,
+    context: WorkspaceOperationExecutionContext,
+    recorder: GenerationTimingRecorder,
+    provider_usage: object,
+    queue_wait_ms: object,
+    outcome: str,
+    retry_reason: str | None,
+    terminal_error: str | None,
+) -> dict[str, object] | None:
+    usage_snapshot = provider_usage.snapshot()
+    totals = usage_snapshot.get("totals", {})
+    logical_calls = (
+        int(totals.get("logicalCalls", 0)) if isinstance(totals, Mapping) else 0
+    )
+    if logical_calls > 0:
+        latency_ms = totals.get("latencyMs") if isinstance(totals, Mapping) else None
+        if isinstance(latency_ms, (int, float)) and not isinstance(latency_ms, bool):
+            recorder.record_stage_ms("provider", latency_ms)
+    try:
+        receipt = await asyncio.to_thread(
+            create_generation_attempt_timing_receipt_v2,
+            job_id=job_id,
+            attempt_id=context.claim.attempt_token,
+            attempt_number=context.claim.attempt_number,
+            revision=max(0, int(context.claim.expected_revision or 0)),
+            outcome=outcome,
+            stage_observations=recorder.stage_observations(),
+            executed_stages=_public_executed_stages(
+                recorder,
+                logical_calls=logical_calls,
+                require_terminal_success_stages=outcome == "succeeded",
+            ),
+            queue_wait_ms=queue_wait_ms,
+            wall_ms=recorder.elapsed_ms,
+            provider_usage=usage_snapshot,
+            retry_reason=retry_reason,
+            worker="workspace-generation-worker",
+            terminal_error=terminal_error,
+        )
+        return receipt.to_dict()
+    except (OSError, TypeError, ValueError):
+        logger.warning(
+            "Failed to persist generation attempt timing for job %s",
+            job_id,
+            exc_info=True,
+        )
+        return None
+
+
 async def _persist_failed_attempt_timing(
     *,
     request: object,
@@ -143,6 +238,7 @@ async def _persist_failed_attempt_timing(
     error: BaseException,
     recorder: GenerationTimingRecorder,
     provider_usage: object,
+    queue_wait_ms: object = 0,
 ) -> dict[str, object] | None:
     if str(getattr(request, "template", "")).lower() != "authored":
         return None
@@ -168,16 +264,14 @@ async def _persist_failed_attempt_timing(
                 round((time.monotonic() - stage_started_at) * 1000),
             ),
         )
-    usage_snapshot = provider_usage.snapshot()
-    totals = usage_snapshot.get("totals", {})
-    recorder.record_stage_ms(
-        "provider",
-        totals.get("latencyMs", 0) if isinstance(totals, Mapping) else 0,
-    )
     failure_code, retryable = _safe_failure(status_error)
     explicit_code = getattr(error, "code", None)
     if isinstance(explicit_code, str) and explicit_code:
         failure_code = explicit_code
+    elif failure_code == "presentation_generation_failed":
+        error_code = str(error).strip()
+        if error_code:
+            failure_code = error_code[:128]
     explicit_retryable = getattr(error, "retryable", None)
     if isinstance(explicit_retryable, bool):
         retryable = explicit_retryable
@@ -187,41 +281,18 @@ async def _persist_failed_attempt_timing(
         else "_"
         for character in failure_code.strip().lower()
     )[:64].strip("_") or "presentation_generation_failed"
-    try:
-        receipt = await asyncio.to_thread(
-            create_generation_attempt_timing_receipt,
-            job_id=job_id,
-            attempt_id=context.claim.attempt_token,
-            attempt_number=context.claim.attempt_number,
-            revision=max(0, int(context.claim.expected_revision or 0)),
-            outcome=(
-                "cancelled" if isinstance(error, asyncio.CancelledError) else "failed"
-            ),
-            failure_stage=failure_stage,
-            stage_timings_ms=recorder.snapshot_stage_timings_ms(),
-            total_ms=recorder.elapsed_ms,
-            provider_usage=usage_snapshot,
-            checkpoint_signals=recorder.checkpoint_signals(),
-            causes={
-                "queueReason": (
-                    "workspace_retry"
-                    if context.claim.attempt_number > 1
-                    else "initial_dispatch"
-                ),
-                "stageReason": normalized_stage_reason,
-                "retryReason": (
-                    "retryable_failure" if retryable else "terminal_failure"
-                ),
-            },
-        )
-        return receipt.to_dict()
-    except (OSError, TypeError, ValueError):
-        logger.warning(
-            "Failed to persist generation attempt timing for job %s",
-            job_id,
-            exc_info=True,
-        )
-        return None
+    return await _persist_terminal_attempt_timing(
+        job_id=job_id,
+        context=context,
+        recorder=recorder,
+        provider_usage=provider_usage,
+        queue_wait_ms=queue_wait_ms,
+        outcome=(
+            "cancelled" if isinstance(error, asyncio.CancelledError) else "failed"
+        ),
+        retry_reason=("retryable_failure" if retryable else "terminal_failure"),
+        terminal_error=normalized_stage_reason,
+    )
 
 
 async def _project_failed_attempt_timing(
@@ -352,6 +423,10 @@ class PresentationGenerationOperationHandler:
             status = await session.get(
                 AsyncPresentationGenerationTaskModel, task_id
             )
+            operation_timing = await session.get(
+                WorkspaceOperation, context.claim.operation_id
+            )
+            operation_queue_wait_ms = _queue_wait_ms(operation_timing)
             if job is None:
                 raise RetryableWorkspaceOperationError(
                     "presentation_generation_job_missing"
@@ -365,8 +440,6 @@ class PresentationGenerationOperationHandler:
             _begin_upstream_outline_timing(request)
             request._request_id = job.request_id
             timing_recorder = GenerationTimingRecorder()
-            for stage in GENERATION_ATTEMPT_TIMING_STAGES:
-                timing_recorder.record_stage_ms(stage, 0)
             object.__setattr__(
                 request,
                 "_authored_generation_timing_recorder",
@@ -378,6 +451,178 @@ class PresentationGenerationOperationHandler:
                 "_authored_timing_stage_started_at",
                 getattr(request, "_authored_outline_started_at", time.monotonic()),
             )
+            operation_payload = (
+                operation_timing.request_payload
+                if isinstance(operation_timing, WorkspaceOperation)
+                and isinstance(operation_timing.request_payload, Mapping)
+                else {}
+            )
+            strategy_receipt = operation_payload.get("generation_strategy")
+            if isinstance(strategy_receipt, Mapping):
+                from services.authored_vnext.deck_ir.integration import (
+                    DeckIrIntegrationError,
+                    ensure_product_deck_ir_execution_adapter,
+                    run_deck_ir_generation,
+                )
+                from services.authored_vnext.deck_ir.strategy import (
+                    GenerationStrategyCapabilityError,
+                    validate_sealed_generation_strategy,
+                )
+                from services.authored_vnext.deck_ir.grammar import DeckIrGrammarError
+
+                try:
+                    selected_strategy = validate_sealed_generation_strategy(
+                        strategy_receipt,
+                        operation_id=str(context.claim.operation_id),
+                    )
+                except GenerationStrategyCapabilityError as error:
+                    raise NonRetryableWorkspaceOperationError(error.code) from error
+                if selected_strategy == "reject":
+                    raise NonRetryableWorkspaceOperationError(
+                        "generation_strategy_capability_missing"
+                    )
+                if selected_strategy == "deck-ir":
+                    status_error = _snapshot_status_error(status)
+                    with provider_operation_usage_scope() as provider_usage:
+                        try:
+                            from services.generation_provider_admission import (
+                                generation_provider_capabilities,
+                                server_generation_profile_identity,
+                            )
+                            from services.presentation_profiles import (
+                                resolve_presentation_profile,
+                            )
+                            from services.provider_usage_instrumentation import (
+                                public_operation_scope,
+                            )
+                            from utils.llm_provider import generation_provider_policy
+
+                            # Workers can run in a different process than public
+                            # admission; install the same no-I/O composition root
+                            # before resolving the sealed operation strategy.
+                            ensure_product_deck_ir_execution_adapter()
+                            persisted = await session.get(
+                                PresentationModel, context.claim.presentation_id
+                            )
+                            identity = server_generation_profile_identity(
+                                request, persisted
+                            )
+                            profile = resolve_presentation_profile(identity)
+                            required_capabilities = generation_provider_capabilities(
+                                request, profile.driver_id
+                            )
+                            with public_operation_scope(
+                                context.claim.operation_id,
+                                attempt_token=context.claim.attempt_token,
+                                fencing_token=context.claim.fencing_token,
+                            ):
+                                with generation_provider_policy(
+                                    identity,
+                                    required_capabilities=required_capabilities,
+                                ):
+                                    deck_result = await run_deck_ir_generation(
+                                        request=request,
+                                        generation_job=job,
+                                        context=context,
+                                        strategy_receipt=strategy_receipt,
+                                    )
+                        except BaseException as error:
+                            status_error = _snapshot_status_error(status, status_error)
+                            try:
+                                receipt_payload = await _persist_failed_attempt_timing(
+                                    request=request,
+                                    job_id=job_id,
+                                    status_error=status_error,
+                                    context=context,
+                                    error=error,
+                                    recorder=timing_recorder,
+                                    provider_usage=provider_usage,
+                                    queue_wait_ms=operation_queue_wait_ms,
+                                )
+                                if receipt_payload is not None:
+                                    await session.rollback()
+                                    await _project_failed_attempt_timing(
+                                        session=session,
+                                        context=context,
+                                        receipt_payload=receipt_payload,
+                                    )
+                            except Exception:
+                                await session.rollback()
+                                logger.warning(
+                                    "Failed to record Deck IR attempt timing for job %s",
+                                    job_id,
+                                    exc_info=True,
+                                )
+                            if isinstance(
+                                error,
+                                (
+                                    DeckIrIntegrationError,
+                                    GenerationStrategyCapabilityError,
+                                    DeckIrGrammarError,
+                                ),
+                            ):
+                                raise NonRetryableWorkspaceOperationError(
+                                    error.code
+                                ) from error
+                            raise
+                    publication = deck_result.get("publication")
+                    if not isinstance(publication, Mapping):
+                        raise NonRetryableWorkspaceOperationError(
+                            "authored_manifest_publication_failed"
+                        )
+                    success_receipt_payload = await _persist_terminal_attempt_timing(
+                        job_id=job_id,
+                        context=context,
+                        recorder=timing_recorder,
+                        provider_usage=provider_usage,
+                        queue_wait_ms=operation_queue_wait_ms,
+                        outcome="succeeded",
+                        retry_reason=(
+                            "workspace_retry"
+                            if context.claim.attempt_number > 1
+                            else None
+                        ),
+                        terminal_error=None,
+                    )
+                    if success_receipt_payload is None:
+                        raise NonRetryableWorkspaceOperationError(
+                            "generation_timing_receipt_persistence_failed"
+                        )
+                    success_timing_projection = generation_timing_result_projection(
+                        success_receipt_payload
+                    )
+                    if not success_timing_projection:
+                        raise NonRetryableWorkspaceOperationError(
+                            "generation_timing_receipt_projection_invalid"
+                        )
+                    # The injected publisher has already performed the fenced
+                    # immutable manifest CAS.  This compatibility task row is
+                    # updated only after that success and never becomes the
+                    # publication authority.
+                    status.status = "completed"
+                    status.message = "Deck IR generation completed"
+                    status.data = {
+                        **dict(deck_result),
+                        **success_timing_projection,
+                    }
+                    session.add(status)
+                    await session.commit()
+                    raw_revision = publication.get("revision")
+                    return WorkspaceOperationResult(
+                        payload={
+                            "status": "completed",
+                            "task_id": task_id,
+                            "job_id": str(job_id),
+                            **dict(deck_result),
+                            **success_timing_projection,
+                        },
+                        result_revision=(
+                            raw_revision
+                            if isinstance(raw_revision, int)
+                            and not isinstance(raw_revision, bool)
+                            else None
+                        ),
+                    )
             status_error = _snapshot_status_error(status)
             with provider_operation_usage_scope() as provider_usage:
                 try:
@@ -422,6 +667,7 @@ class PresentationGenerationOperationHandler:
                             error=error,
                             recorder=timing_recorder,
                             provider_usage=provider_usage,
+                            queue_wait_ms=operation_queue_wait_ms,
                         )
                         if receipt_payload is not None:
                             # Discard any partial generation transaction before
@@ -454,6 +700,7 @@ class PresentationGenerationOperationHandler:
                         error=projected_error,
                         recorder=timing_recorder,
                         provider_usage=provider_usage,
+                        queue_wait_ms=operation_queue_wait_ms,
                     )
                     if receipt_payload is not None:
                         await _project_failed_attempt_timing(
@@ -474,6 +721,30 @@ class PresentationGenerationOperationHandler:
                     else NonRetryableWorkspaceOperationError
                 )
                 raise error_type(code)
+
+            success_receipt_payload = await _persist_terminal_attempt_timing(
+                job_id=job_id,
+                context=context,
+                recorder=timing_recorder,
+                provider_usage=provider_usage,
+                queue_wait_ms=operation_queue_wait_ms,
+                outcome="succeeded",
+                retry_reason=(
+                    "workspace_retry" if context.claim.attempt_number > 1 else None
+                ),
+                terminal_error=None,
+            )
+            if success_receipt_payload is None:
+                raise NonRetryableWorkspaceOperationError(
+                    "generation_timing_receipt_persistence_failed"
+                )
+            success_timing_projection = generation_timing_result_projection(
+                success_receipt_payload
+            )
+            if not success_timing_projection:
+                raise NonRetryableWorkspaceOperationError(
+                    "generation_timing_receipt_projection_invalid"
+                )
 
             operation_projection = (
                 await session.execute(
@@ -508,6 +779,7 @@ class PresentationGenerationOperationHandler:
                     "task_id": task_id,
                     "job_id": str(job_id),
                     **publication_result,
+                    **success_timing_projection,
                 },
                 result_revision=(
                     int(result_revision) if result_revision is not None else None

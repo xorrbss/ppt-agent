@@ -40,6 +40,9 @@ _USERNAME_ENV = "PUBLIC_V2_WINDOWS_PRODUCT_E2E_USERNAME"
 _PASSWORD_ENV = "PUBLIC_V2_WINDOWS_PRODUCT_E2E_PASSWORD"
 _TIMEOUT_ENV = "PUBLIC_V2_WINDOWS_PRODUCT_E2E_TIMEOUT_SECONDS"
 _ARTIFACT_DIR_ENV = "PUBLIC_V2_WINDOWS_PRODUCT_E2E_ARTIFACT_DIR"
+_GENERATION_QUALITY_POLICY_ENV = (
+    "PUBLIC_V2_WINDOWS_PRODUCT_E2E_GENERATION_QUALITY_POLICY"
+)
 
 
 def _required(name: str) -> str:
@@ -434,7 +437,10 @@ def test_live_http_generation_then_fidelity_export_reaches_artifact_publication(
             ),
             "slideCount": 5,
             "language": "English",
-            "qualityPolicy": "release-v1",
+            "qualityPolicy": os.getenv(
+                _GENERATION_QUALITY_POLICY_ENV, "release-v1"
+            ).strip()
+            or "release-v1",
         },
         timeout=30,
     )
@@ -448,6 +454,8 @@ def test_live_http_generation_then_fidelity_export_reaches_artifact_publication(
         timeout_seconds=timeout_seconds,
     )
     assert generation_status["status"] == "succeeded", generation_status.get("error")
+    assert generation_status.get("promotionReady") is False
+    assert generation_status.get("deploymentAuthorized") is False
 
     generation_operation, presentation, generation_admission, generation_events = _database_state(
         database_url, operation_id=generation_operation_id
@@ -455,6 +463,32 @@ def test_live_http_generation_then_fidelity_export_reaches_artifact_publication(
     _assert_claim_and_terminal_evidence(
         generation_operation, generation_admission, generation_events
     )
+    generation_result = (
+        generation_operation.result
+        if isinstance(generation_operation.result, dict)
+        else {}
+    )
+    if os.getenv("DECK_IR_GENERATION_ENABLED", "").strip().lower() in {
+        "1", "true", "yes", "on"
+    }:
+        deck_ir_evidence = generation_result.get("deckIr")
+        assert isinstance(deck_ir_evidence, dict), "deck_ir_product_evidence_missing"
+        assert deck_ir_evidence.get("strategy") == "deck-ir"
+        assert deck_ir_evidence.get("slideCount") == 5
+        assert 1 <= deck_ir_evidence.get("providerLogicalCalls", 0) <= 4
+        for key in (
+            "strategyReceiptDigest",
+            "deckIrDigest",
+            "detachedCheckpointDigest",
+            "grammarDigest",
+            "candidateSelectionReceiptDigest",
+        ):
+            value = deck_ir_evidence.get(key)
+            assert isinstance(value, str) and value.startswith("sha256:"), key
+        assert len(deck_ir_evidence.get("browserClosureReceiptDigests", [])) == 5
+        assert isinstance(
+            generation_result.get("generation_timing_receipt"), dict
+        ), "deck_ir_generation_timing_receipt_missing"
 
     public_source_revision = generation_status.get("sourceRevision")
     assert isinstance(public_source_revision, int)
@@ -656,6 +690,16 @@ def test_live_http_generation_then_fidelity_export_reaches_artifact_publication(
         "presentationId": str(presentation.id),
         "generationSourceRevision": public_source_revision,
         "generationExecutionReceipt": generation_status.get("executionReceipt"),
+        "generationTimingReceipt": generation_result.get(
+            "generation_timing_receipt"
+        ),
+        "generationDeckIr": generation_result.get("deckIr"),
+        "generationQualityReceipt": generation_result.get(
+            "generationQualityReceipt"
+        ),
+        "requirementCoverageReceipt": generation_result.get(
+            "requirementCoverageReceipt"
+        ),
         "sourceRevision": reviewed_source_revision,
         "slideCount": 5,
         "exports": [pptx_evidence, pdf_evidence, repeated_evidence],

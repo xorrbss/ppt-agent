@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.generation.deck-ir-constraint-compiler",
+  "revision": 3,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Deck IR v1.2는 선언형 구성 의도, 작업 단위 capability routing, 블라인드 시각 비열등성 게이트로 품질 저하를 차단한다.",
+  "scope": [
+    "authored-generation",
+    "deck-ir",
+    "quality-gate"
+  ],
+  "invariants": [
+    "CompositionIntentGraph는 zone, 관계, bounded span, visual weight만 허용하고 raw 좌표와 CSS를 금지한다.",
+    "Director와 critic 전에 capability preflight가 operation 전체를 deck-ir, legacy-authored, reject 중 하나로 봉인한다.",
+    "slide별 경로 혼합, generic template 강등, raster-only 성공 처리를 금지한다.",
+    "시각 비열등성은 coverage 100%, P0/P1 0, blind preferred-or-tied 90% 이상과 strata, worst-decile, diversity floor를 모두 만족한다.",
+    "Legacy author D6 retirement는 동일 policy에서 2개 연속 frozen RC가 VisualNonRegressionGate를 통과해야 한다.",
+    "Requirement/source, lineage, browser closure, generation/artifact/promotion authority 분리는 유지한다."
+  ],
+  "forbidden": [
+    "raw x/y/px/CSS를 model layout contract로 허용",
+    "한 operation에서 legacy와 Deck IR slide 또는 candidate 혼합",
+    "좋은 strata 평균으로 실패 strata나 worst-decile 상쇄",
+    "2개 연속 frozen RC 통과 전 D6 retirement",
+    "Deck IR 구현만으로 Public v2 promotionReady literal 변경"
+  ],
+  "evidence": [
+    "docs/deck-ir-constraint-compiler-architecture-20260831.md"
+  ],
+  "supersedes": "authored.generation.deck-ir-constraint-compiler@2",
+  "recordedAt": "2026-08-31T10:40:10.3165170+00:00"
+}

@@ -1,0 +1,79 @@
+{
+  "$id": "urn:presenton:authored-vnext:deck-ir:source-binding.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "allowedTransform": {
+      "enum": [
+        "none",
+        "typed-structure",
+        "meaning-preserving-summary",
+        "reference"
+      ],
+      "title": "Allowedtransform",
+      "type": "string"
+    },
+    "blockId": {
+      "maxLength": 512,
+      "minLength": 1,
+      "title": "Blockid",
+      "type": "string"
+    },
+    "contentDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Contentdigest",
+      "type": "string"
+    },
+    "normalizationPolicy": {
+      "const": "unicode-nfc-whitespace-v1",
+      "title": "Normalizationpolicy",
+      "type": "string"
+    },
+    "requiredOccurrences": {
+      "maximum": 30,
+      "minimum": 0,
+      "title": "Requiredoccurrences",
+      "type": "integer"
+    },
+    "schemaVersion": {
+      "const": "source-binding/v1",
+      "title": "Schemaversion",
+      "type": "string"
+    },
+    "snapshotDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Snapshotdigest",
+      "type": "string"
+    },
+    "sourceBindingId": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+      "title": "Sourcebindingid",
+      "type": "string"
+    },
+    "useMode": {
+      "enum": [
+        "verbatim",
+        "structured-data",
+        "paraphrase",
+        "reference-only"
+      ],
+      "title": "Usemode",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "sourceBindingId",
+    "snapshotDigest",
+    "blockId",
+    "contentDigest",
+    "useMode",
+    "allowedTransform",
+    "requiredOccurrences",
+    "normalizationPolicy"
+  ],
+  "title": "SourceBindingV1",
+  "type": "object"
+}

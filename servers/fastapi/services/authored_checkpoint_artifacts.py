@@ -106,6 +106,102 @@ def render_artifact_path(
     return _job_directory(job_id) / f"slide-{slide_index}-{attempt_suffix}.png"
 
 
+def _deck_ir_checkpoint_path(job_id: uuid.UUID, attempt_token: str) -> Path:
+    """Return an attempt-scoped detached Deck IR checkpoint path."""
+
+    if not attempt_token:
+        raise ValueError("deck_ir_checkpoint_attempt_missing")
+    attempt_id = hashlib.sha256(attempt_token.encode("utf-8")).hexdigest()[:12]
+    return _job_directory(job_id) / f"deck-ir-{attempt_id}.checkpoint.json"
+
+
+def write_detached_deck_ir_checkpoint(
+    *,
+    job_id: uuid.UUID,
+    attempt_token: str,
+    fencing_token: int,
+    payload: Mapping[str, object],
+) -> dict[str, object]:
+    """Atomically persist a content-addressed, attempt/fence-bound IR record."""
+
+    if fencing_token < 1:
+        raise ValueError("deck_ir_checkpoint_fence_invalid")
+    canonical = json.dumps(
+        dict(payload), ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    document = {
+        "schemaVersion": "deck-ir-detached-checkpoint/v1",
+        "attemptId": hashlib.sha256(attempt_token.encode("utf-8")).hexdigest(),
+        "fencingToken": fencing_token,
+        "payload": json.loads(canonical.decode("utf-8")),
+        "payloadDigest": "sha256:" + hashlib.sha256(canonical).hexdigest(),
+    }
+    unsigned = json.dumps(
+        document, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    document["checkpointDigest"] = "sha256:" + hashlib.sha256(unsigned).hexdigest()
+    atomic_write(
+        _deck_ir_checkpoint_path(job_id, attempt_token),
+        json.dumps(
+            document, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8"),
+    )
+    # Local paths must not enter operation receipts or public event streams.
+    return {
+        "schemaVersion": document["schemaVersion"],
+        "payloadDigest": document["payloadDigest"],
+        "checkpointDigest": document["checkpointDigest"],
+        "fencingToken": fencing_token,
+    }
+
+
+def write_deck_ir_execution_evidence(*, job_id: uuid.UUID, attempt_token: str, fencing_token: int,
+                                     payload: Mapping[str, object]) -> dict[str, object]:
+    """Retain success/exhaustion lineage separately from the original IR checkpoint."""
+    if fencing_token < 1:
+        raise ValueError("deck_ir_checkpoint_fence_invalid")
+    document = {"schemaVersion": "deck-ir-execution-evidence/v1",
+                "attemptId": hashlib.sha256(attempt_token.encode("utf-8")).hexdigest(),
+                "fencingToken": fencing_token, "payload": dict(payload)}
+    encoded = json.dumps(document, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    fingerprint = hashlib.sha256(encoded).hexdigest()
+    document["evidenceDigest"] = "sha256:" + fingerprint
+    checkpoint = _deck_ir_checkpoint_path(job_id, attempt_token)
+    path = checkpoint.with_name(f"{checkpoint.stem}.execution-{fingerprint}.json")
+    atomic_write(path, json.dumps(document, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+    return {"evidenceDigest": document["evidenceDigest"], "fencingToken": fencing_token}
+
+
+def read_detached_deck_ir_checkpoint(
+    *, job_id: uuid.UUID, attempt_token: str, fencing_token: int
+) -> dict[str, object] | None:
+    """Read only a matching fenced checkpoint; corruption is fail-closed."""
+
+    path = _deck_ir_checkpoint_path(job_id, attempt_token)
+    if not path.exists():
+        return None
+    try:
+        raw = json.loads(path.read_text("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise SlideCheckpointCorrupt("deck_ir_checkpoint_unreadable") from exc
+    if not isinstance(raw, Mapping):
+        raise SlideCheckpointCorrupt("deck_ir_checkpoint_invalid")
+    supplied = raw.get("checkpointDigest")
+    unsigned = {key: value for key, value in raw.items() if key != "checkpointDigest"}
+    encoded = json.dumps(
+        unsigned, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    if (
+        raw.get("schemaVersion") != "deck-ir-detached-checkpoint/v1"
+        or raw.get("fencingToken") != fencing_token
+        or not isinstance(supplied, str)
+        or supplied != "sha256:" + hashlib.sha256(encoded).hexdigest()
+        or not isinstance(raw.get("payload"), Mapping)
+    ):
+        raise SlideCheckpointCorrupt("deck_ir_checkpoint_binding_invalid")
+    return dict(raw)
+
+
 def atomic_write(path: Path, content: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)

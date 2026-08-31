@@ -2,6 +2,10 @@
 param(
     [ValidateSet("generation-export", "export-only")]
     [string]$Mode = "generation-export",
+    [ValidateRange(1024, 65535)]
+    [int]$ApiPort = 8010,
+    # Bounded product-path verification without starting/reusing Next or proxy.
+    [switch]$ApiOnly,
     # Pre-existing operator-owned migration/runtime authorities. This launcher
     # never creates or changes external login roles.
     [string]$DatabaseUrl = $env:PUBLIC_V2_RC_DATABASE_URL,
@@ -269,7 +273,9 @@ if ($Mode -eq "export-only") {
         if (-not (Test-Path -LiteralPath $ExportSnapshotPath -PathType Leaf)) { throw "public-v2 RC preflight blocked: export snapshot is unavailable" }
     }
 }
-foreach ($port in 8010, 3010, 5110) { Assert-PortFree $port }
+$testBaseUrl = if ($ApiOnly) { "http://127.0.0.1:$ApiPort" } else { "http://127.0.0.1:5110" }
+$requiredPorts = if ($ApiOnly) { @($ApiPort) } else { @($ApiPort, 3010, 5110) }
+foreach ($port in $requiredPorts) { Assert-PortFree $port }
 
 $runId = "public-v2-rc-$PID-$(Get-Date -Format 'yyyyMMddHHmmss')"
 $runtimeRoot = Join-Path ([System.IO.Path]::GetTempPath()) $runId
@@ -311,7 +317,7 @@ $sharedEnvironment = @{
     "PUBLIC_WORKER_ARTIFACT_CACHE_TTL_SECONDS" = $workerRuntimeLimits["PUBLIC_WORKER_ARTIFACT_CACHE_TTL_SECONDS"]
     "PPT_WORKER_OUTPUT_LIMIT_BYTES" = $workerRuntimeLimits["PPT_WORKER_OUTPUT_LIMIT_BYTES"]
     "PUBLIC_EXPORT_IDENTITY_V2_ENABLED" = "true"; "PUBLIC_RENDER_MAX_CONCURRENCY" = "2"
-    "PUBLIC_V2_WINDOWS_PRODUCT_E2E" = "1"; "PUBLIC_V2_WINDOWS_PRODUCT_E2E_BASE_URL" = "http://127.0.0.1:5110"; "PUBLIC_V2_WINDOWS_PRODUCT_E2E_DATABASE_URL" = $observationDatabaseUrl
+    "PUBLIC_V2_WINDOWS_PRODUCT_E2E" = "1"; "PUBLIC_V2_WINDOWS_PRODUCT_E2E_BASE_URL" = $testBaseUrl; "PUBLIC_V2_WINDOWS_PRODUCT_E2E_DATABASE_URL" = $observationDatabaseUrl
     "PUBLIC_V2_WINDOWS_PRODUCT_E2E_USERNAME" = "rc-admin"; "PUBLIC_V2_WINDOWS_PRODUCT_E2E_PASSWORD" = $authPassword; "PUBLIC_V2_WINDOWS_PRODUCT_E2E_TIMEOUT_SECONDS" = "900"
     "PUBLIC_V2_WINDOWS_PRODUCT_E2E_ARTIFACT_DIR" = $productEvidence
     "AUTH_USERNAME" = "rc-admin"; "AUTH_PASSWORD" = $authPassword; "AUTH_OVERRIDE_FROM_ENV" = "true"
@@ -319,6 +325,11 @@ $sharedEnvironment = @{
     # Bootstrap/migrate before the DB-backed provider sync. The generation
     # controller below overrides this and performs the actual provider check.
     "PRESENTON_SKIP_PROVIDER_AVAILABILITY_CHECK" = "true"
+}
+# Propagate only production gates, never the development fixture adapter.
+foreach ($key in @("DECK_IR_GENERATION_ENABLED", "PUBLIC_V2_WINDOWS_PRODUCT_E2E_GENERATION_QUALITY_POLICY")) {
+    $value = [Environment]::GetEnvironmentVariable($key)
+    if (-not [string]::IsNullOrWhiteSpace($value)) { $sharedEnvironment[$key] = $value }
 }
 if ($null -ne $providerPricing) {
     # Explicitly bind the validated immutable pricing snapshot into every child
@@ -345,7 +356,7 @@ if ($artifactBackend -eq "local-development") {
     $sharedEnvironment["ENVIRONMENT"] = "local"
     $sharedEnvironment["PUBLIC_WORKER_OBJECT_STORE_ROOT"] = $ArtifactRoot
     $sharedEnvironment["PUBLIC_LOCAL_ARTIFACT_DOWNLOAD_SIGNING_KEY"] = $localDownloadSigningKey
-    $sharedEnvironment["PUBLIC_LOCAL_ARTIFACT_DOWNLOAD_ORIGIN"] = "http://127.0.0.1:8010"
+    $sharedEnvironment["PUBLIC_LOCAL_ARTIFACT_DOWNLOAD_ORIGIN"] = "http://127.0.0.1:$ApiPort"
 }
 foreach ($key in @("PUBLIC_ARTIFACT_S3_BUCKET", "PUBLIC_ARTIFACT_S3_PREFIX", "PUBLIC_ARTIFACT_S3_ENDPOINT_URL", "PUBLIC_ARTIFACT_S3_REGION", "PUBLIC_ARTIFACT_S3_ADDRESSING_STYLE", "PUBLIC_ARTIFACT_S3_TLS_VERIFY", "PUBLIC_ARTIFACT_S3_SERVER_SIDE_ENCRYPTION", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_DEFAULT_REGION", "AWS_ENDPOINT_URL")) {
     $value = [Environment]::GetEnvironmentVariable($key)
@@ -385,8 +396,8 @@ try {
         $sharedEnvironment["PUBLIC_V2_WINDOWS_PRODUCT_E2E_DATABASE_URL"] = $observationDatabaseUrl
     }
 
-    $api = Start-LoggedProcess -FilePath $python -ArgumentList @("server.py", "--port", "8010", "--reload", "false") -WorkingDirectory $fastApi -Environment $sharedEnvironment -StdoutPath (Join-Path $logs "fastapi.stdout.log") -StderrPath (Join-Path $logs "fastapi.stderr.log")
-    $startedPids.Add($api.Id); Wait-Http200 "http://127.0.0.1:8010/api/v1/auth/status" $startedPids.ToArray() 8010
+    $api = Start-LoggedProcess -FilePath $python -ArgumentList @("server.py", "--port", "$ApiPort", "--reload", "false") -WorkingDirectory $fastApi -Environment $sharedEnvironment -StdoutPath (Join-Path $logs "fastapi.stdout.log") -StderrPath (Join-Path $logs "fastapi.stderr.log")
+    $startedPids.Add($api.Id); Wait-Http200 "http://127.0.0.1:$ApiPort/api/v1/auth/status" $startedPids.ToArray() $ApiPort
 
     if ($ProviderConfigPath) {
         $syncEnvironment = $sharedEnvironment.Clone(); $syncEnvironment["USER_CONFIG_PATH"] = $ProviderConfigPath
@@ -428,17 +439,19 @@ try {
         $generation = Start-LoggedProcess -FilePath $python -ArgumentList @("-m", "services.workspace_operation_worker") -WorkingDirectory $fastApi -Environment $generationEnvironment -StdoutPath (Join-Path $logs "generation-controller.stdout.log") -StderrPath (Join-Path $logs "generation-controller.stderr.log")
         $startedPids.Add($generation.Id)
     }
+    if (-not $ApiOnly) {
     $nextEnvironment = @{
-        "FAST_API_INTERNAL_URL" = "http://127.0.0.1:8010"
+        "FAST_API_INTERNAL_URL" = "http://127.0.0.1:$ApiPort"
         "USER_CONFIG_PATH" = (Join-Path $appData "userConfig.json")
         "PUBLIC_V2_WEB_CANARY_ENABLED" = "true"
     }
     $next = Start-LoggedProcess -FilePath "npm.cmd" -ArgumentList @("run", "dev", "--", "-p", "3010") -WorkingDirectory $nextJs -Environment $nextEnvironment -StdoutPath (Join-Path $logs "next.stdout.log") -StderrPath (Join-Path $logs "next.stderr.log")
     $startedPids.Add($next.Id)
-    $proxyEnvironment = @{ "FASTAPI_PORT" = "8010"; "NEXT_PORT" = "3010"; "PROXY_PORT" = "5110" }
+    $proxyEnvironment = @{ "FASTAPI_PORT" = "$ApiPort"; "NEXT_PORT" = "3010"; "PROXY_PORT" = "5110" }
     $proxy = Start-LoggedProcess -FilePath "node.exe" -ArgumentList @("scripts/presenton-local-proxy.mjs") -WorkingDirectory $repo -Environment $proxyEnvironment -StdoutPath (Join-Path $logs "proxy.stdout.log") -StderrPath (Join-Path $logs "proxy.stderr.log")
     $startedPids.Add($proxy.Id)
     Wait-Http200 "http://127.0.0.1:3010" $startedPids.ToArray() 3010; Wait-Http200 "http://127.0.0.1:5110" $startedPids.ToArray() 5110
+    }
 
     if ($Mode -eq "export-only") {
         $testEnvironment = $sharedEnvironment.Clone(); $testEnvironment["PUBLIC_V2_WINDOWS_PRODUCT_E2E_EXPORT_ONLY"] = "1"; $testEnvironment["PUBLIC_V2_WINDOWS_PRODUCT_E2E_EXISTING_PRESENTATION_ID"] = $ExistingPresentationId; $testEnvironment["PUBLIC_V2_WINDOWS_PRODUCT_E2E_EXISTING_SOURCE_REVISION"] = "$ExistingSourceRevision"

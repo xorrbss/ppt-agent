@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.generation.deck-ir-constraint-compiler",
+  "revision": 4,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Deck IR v1.3은 안전한 ArtDirection, K 후보 Pareto 선택, 절대·통계 품질 gate와 post-D6 drift rollback을 요구한다.",
+  "scope": [
+    "authored-generation",
+    "deck-ir",
+    "visual-quality",
+    "quality-governance"
+  ],
+  "invariants": [
+    "ArtDirectionIntent는 여백, 초점, 비대칭, 안전한 overlap, 이미지와 타이포 리듬의 versioned enum만 허용한다.",
+    "balanced-quality는 slide별 K=6 deterministic 후보와 deck Pareto selection을 local에서 수행하며 provider call을 추가하지 않는다.",
+    "release candidate는 baseline과 무관한 overall 4.0, required dimension 3.75, worst-decile 3.5 lower-bound floor와 P0/P1 0을 만족한다.",
+    "blind evaluation은 preregistered sample/power/CI/Holm 정책, pair당 reviewer 3명과 Krippendorff alpha 0.67 이상을 요구한다.",
+    "D6 retirement는 동일 policy의 2개 연속 frozen RC가 absolute, statistical-validity, non-regression gate를 모두 통과해야 한다.",
+    "D6 이후 품질 영향 digest 변경은 새 RC이며 shadow와 1/5/25 percent canary, drift stop, previous-qualified rollback을 거친다."
+  ],
+  "forbidden": [
+    "raw CSS나 좌표를 ArtDirection 계약으로 허용",
+    "hard-failure 후보를 평균 점수로 선택",
+    "낮은 baseline으로 absolute quality failure 상쇄",
+    "평가 신뢰도 미달을 candidate pass 또는 fail로 처리",
+    "mutable model alias나 수동 override로 post-D6 quality gate 우회"
+  ],
+  "evidence": [
+    "docs/deck-ir-constraint-compiler-architecture-20260831.md"
+  ],
+  "supersedes": "authored.generation.deck-ir-constraint-compiler@3",
+  "recordedAt": "2026-08-31T11:01:04.2097323+00:00"
+}

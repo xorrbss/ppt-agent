@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.generation.deck-ir-constraint-compiler",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "신규 PPT 생성은 Deck Director의 strict Deck IR을 server Constraint Compiler가 HTML과 semantic source로 컴파일한다.",
+  "scope": [
+    "authored-generation",
+    "public-v2",
+    "fidelity",
+    "hybrid"
+  ],
+  "invariants": [
+    "모델은 신규 기본 경로에서 raw HTML/CSS/JavaScript를 생성하지 않는다.",
+    "게시 후 visual authority는 authoredHtml, semantic authority는 semanticSource, deck authority는 immutable manifest다.",
+    "QID는 검증된 slideKey와 elementKey에서 compiler가 결정론적으로 생성한다.",
+    "결정론적 QA 후 필요한 경우에만 bounded critic patch를 최대 1회 허용한다.",
+    "Fidelity, native editability, promotion, deployment readiness는 분리한다."
+  ],
+  "forbidden": [
+    "두 번째 canonical truth 생성",
+    "source/title/QID를 바꾸는 critic patch",
+    "blocking gate 완화 또는 promotionReady 수동 override"
+  ],
+  "evidence": [
+    "docs/deck-ir-constraint-compiler-architecture-20260831.md"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-31T10:01:17.0190552+00:00"
+}
