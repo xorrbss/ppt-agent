@@ -439,6 +439,8 @@ async def _require_phase2_provider_contract(
     admission: PublicOperationAdmission,
     *,
     allow_terminal_reconcile: bool = False,
+    expected_attempt_token: str | None = None,
+    expected_fencing_token: int | None = None,
 ) -> None:
     """Bind detached provider I/O to the PostgreSQL operation authority.
 
@@ -469,6 +471,17 @@ async def _require_phase2_provider_contract(
         .where(workspace_model.id == admission.operation_id)
         .with_for_update()
     )
+    if operation is not None and (
+        (
+            expected_attempt_token is not None
+            and operation.attempt_token != expected_attempt_token
+        )
+        or (
+            expected_fencing_token is not None
+            and operation.fencing_token != expected_fencing_token
+        )
+    ):
+        raise PublicAdmissionRejected("public_provider_stale_attempt")
     allowed_phases = (
         {"active", "budget_exhausted"}
         if allow_terminal_reconcile
@@ -2163,26 +2176,6 @@ async def reserve_public_provider_call_detached(
         admission_id = admission.id
         await lookup_session.rollback()
     async with async_session_maker() as session:
-        if expected_attempt_token is not None or expected_fencing_token is not None:
-            fencing_conditions = [
-                WorkspaceOperation.id == operation_id,
-                WorkspaceOperation.state == "running",
-            ]
-            if expected_attempt_token is not None:
-                fencing_conditions.append(
-                    WorkspaceOperation.attempt_token == expected_attempt_token
-                )
-            if expected_fencing_token is not None:
-                fencing_conditions.append(
-                    WorkspaceOperation.fencing_token == expected_fencing_token
-                )
-            fenced = await session.execute(
-                update(WorkspaceOperation).where(
-                    *fencing_conditions
-                ).values(version=WorkspaceOperation.version)
-            )
-            if fenced.rowcount != 1:
-                raise PublicAdmissionRejected("public_provider_stale_attempt")
         admission = await session.scalar(
             select(PublicOperationAdmission)
             .where(PublicOperationAdmission.id == admission_id)
@@ -2190,7 +2183,12 @@ async def reserve_public_provider_call_detached(
         )
         if admission is None:
             raise PublicAdmissionRejected("public_provider_admission_missing")
-        await _require_phase2_provider_contract(session, admission)
+        await _require_phase2_provider_contract(
+            session,
+            admission,
+            expected_attempt_token=expected_attempt_token,
+            expected_fencing_token=expected_fencing_token,
+        )
         reserved_result = await reserve_public_provider_call(
             session,
             admission_id=admission_id,

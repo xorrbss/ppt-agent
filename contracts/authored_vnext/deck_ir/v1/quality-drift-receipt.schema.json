@@ -1,0 +1,248 @@
+{
+  "$defs": {
+    "CanaryWindowV1": {
+      "additionalProperties": false,
+      "properties": {
+        "cohortPercent": {
+          "enum": [
+            1,
+            5,
+            25,
+            100
+          ],
+          "title": "Cohortpercent",
+          "type": "integer"
+        },
+        "minimumHours": {
+          "minimum": 0,
+          "title": "Minimumhours",
+          "type": "integer"
+        },
+        "minimumOperations": {
+          "minimum": 0,
+          "title": "Minimumoperations",
+          "type": "integer"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "passed",
+            "failed"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cohortPercent",
+        "minimumOperations",
+        "minimumHours",
+        "status"
+      ],
+      "title": "CanaryWindowV1",
+      "type": "object"
+    },
+    "ChangedDigestsV1": {
+      "additionalProperties": false,
+      "properties": {
+        "asset": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Asset"
+        },
+        "candidatePolicy": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Candidatepolicy"
+        },
+        "compiler": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Compiler",
+          "type": "string"
+        },
+        "evaluationPolicy": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evaluationpolicy"
+        },
+        "font": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Font"
+        },
+        "grammar": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Grammar",
+          "type": "string"
+        },
+        "modelFingerprint": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Modelfingerprint",
+          "type": "string"
+        }
+      },
+      "required": [
+        "grammar",
+        "compiler",
+        "modelFingerprint"
+      ],
+      "title": "ChangedDigestsV1",
+      "type": "object"
+    },
+    "ObservedDriftV1": {
+      "additionalProperties": false,
+      "properties": {
+        "compositionEntropyDelta": {
+          "default": 0,
+          "title": "Compositionentropydelta",
+          "type": "number"
+        },
+        "generationFailureRateDeltaPoints": {
+          "default": 0,
+          "title": "Generationfailureratedeltapoints",
+          "type": "number"
+        },
+        "p0": {
+          "minimum": 0,
+          "title": "P0",
+          "type": "integer"
+        },
+        "p1": {
+          "minimum": 0,
+          "title": "P1",
+          "type": "integer"
+        },
+        "p95LatencyDeltaMs": {
+          "title": "P95Latencydeltams",
+          "type": "integer"
+        },
+        "repeatRateDelta": {
+          "title": "Repeatratedelta",
+          "type": "number"
+        }
+      },
+      "required": [
+        "p0",
+        "p1",
+        "repeatRateDelta",
+        "p95LatencyDeltaMs"
+      ],
+      "title": "ObservedDriftV1",
+      "type": "object"
+    }
+  },
+  "$id": "urn:presenton:authored-vnext:deck-ir:quality-drift-receipt.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "action": {
+      "enum": [
+        "advance-canary",
+        "hold-canary",
+        "pause-and-rollback",
+        "qualified"
+      ],
+      "title": "Action",
+      "type": "string"
+    },
+    "canaryWindows": {
+      "items": {
+        "$ref": "#/$defs/CanaryWindowV1"
+      },
+      "maxItems": 4,
+      "title": "Canarywindows",
+      "type": "array"
+    },
+    "candidateRcDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Candidatercdigest",
+      "type": "string"
+    },
+    "changedDigests": {
+      "$ref": "#/$defs/ChangedDigestsV1"
+    },
+    "observedDrift": {
+      "$ref": "#/$defs/ObservedDriftV1"
+    },
+    "previousQualifiedRcDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Previousqualifiedrcdigest",
+      "type": "string"
+    },
+    "receiptDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Receiptdigest",
+      "type": "string"
+    },
+    "rollbackTargetRcDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Rollbacktargetrcdigest",
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": "quality-drift-receipt/v1",
+      "title": "Schemaversion",
+      "type": "string"
+    },
+    "shadowVisualReportDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Shadowvisualreportdigest",
+      "type": "string"
+    },
+    "triggeredRules": {
+      "items": {
+        "maxLength": 128,
+        "minLength": 1,
+        "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+        "type": "string"
+      },
+      "title": "Triggeredrules",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "candidateRcDigest",
+    "previousQualifiedRcDigest",
+    "changedDigests",
+    "shadowVisualReportDigest",
+    "observedDrift",
+    "action",
+    "rollbackTargetRcDigest",
+    "receiptDigest"
+  ],
+  "title": "QualityDriftReceiptV1",
+  "type": "object"
+}

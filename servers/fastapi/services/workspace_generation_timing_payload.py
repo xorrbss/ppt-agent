@@ -64,6 +64,15 @@ def sanitize_generation_stage_timings(value: Any) -> dict[str, int]:
 def sanitize_generation_timing_receipt(value: Any) -> dict[str, object]:
     if not isinstance(value, Mapping):
         return {}
+    if value.get("schemaVersion") == "generation-attempt-timing-receipt/v2":
+        try:
+            from services.authored_generation_timing_receipt import (
+                _attempt_receipt_v2_from_dict,
+            )
+
+            return _attempt_receipt_v2_from_dict(value).to_dict()
+        except (TypeError, ValueError):
+            return {}
     if value.get("schemaVersion") == "generation-attempt-timing-receipt/v1":
         try:
             from services.authored_generation_timing_receipt import (
@@ -168,6 +177,11 @@ def generation_timing_result_projection(value: Any) -> dict[str, object]:
     receipt = sanitize_generation_timing_receipt(value)
     if not receipt:
         return {}
+    if receipt.get("schemaVersion") == "generation-attempt-timing-receipt/v2":
+        return {
+            "total_ms": receipt["wallMillis"],
+            "generation_timing_receipt": receipt,
+        }
     return {
         "stage_timings_ms": dict(receipt["stagesMs"]),
         "total_ms": receipt["totalMs"],
@@ -187,8 +201,11 @@ def sanitize_generation_timing_result(payload: Mapping[str, Any]) -> dict[str, o
     )
     if receipt:
         safe["generation_timing_receipt"] = receipt
-        safe["stage_timings_ms"] = dict(receipt["stagesMs"])
-        safe["total_ms"] = receipt["totalMs"]
+        if receipt.get("schemaVersion") == "generation-attempt-timing-receipt/v2":
+            safe["total_ms"] = receipt["wallMillis"]
+        else:
+            safe["stage_timings_ms"] = dict(receipt["stagesMs"])
+            safe["total_ms"] = receipt["totalMs"]
     return safe
 
 

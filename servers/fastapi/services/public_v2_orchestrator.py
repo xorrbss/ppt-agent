@@ -431,6 +431,32 @@ class SqlPublicV2Orchestrator:
                 reference_snapshot_ids=reference_ids,
                 authored_style=request.authored_style,
             )
+            # This has no provider side effect.  It must remain ahead of the
+            # durable admission/reservation below so an operation is sealed as
+            # deck-ir, legacy-authored, or reject before billable work exists.
+            from services.authored_vnext.deck_ir.strategy import (
+                capability_preflight,
+                seal_generation_strategy_decision,
+                server_owned_requirement_graph,
+            )
+            from services.authored_vnext.deck_ir.integration import (
+                deck_ir_execution_adapter_configured,
+                ensure_product_deck_ir_execution_adapter,
+            )
+
+            ensure_product_deck_ir_execution_adapter()
+            strategy_preflight = capability_preflight(
+                request=internal_request,
+                available_capabilities=(
+                    (
+                        "structured-deck-ir",
+                        "constraint-compiler",
+                        "fidelity-html-semantic",
+                    )
+                    if deck_ir_execution_adapter_configured()
+                    else ()
+                ),
+            )
             generation_payload = _durable_request_payload(internal_request)
             presentation_id = uuid.uuid5(
                 uuid.NAMESPACE_URL,
@@ -477,6 +503,15 @@ class SqlPublicV2Orchestrator:
                     actor=actor,
                     request_hash=request_hash,
                 )
+            requirement_graph = server_owned_requirement_graph(internal_request.content)
+            strategy_receipt = seal_generation_strategy_decision(
+                operation_id=str(operation.id),
+                requirement_graph_digest=str(requirement_graph["graphDigest"]),
+                requested_profile="balanced-quality-v1",
+                preflight=strategy_preflight,
+            )
+            if strategy_receipt["selectedStrategy"] == "reject":
+                raise _public_error(422, "generation_strategy_capability_missing")
             await claim_reference_snapshots(
                 session,
                 snapshot_ids=reference_ids,
@@ -508,6 +543,7 @@ class SqlPublicV2Orchestrator:
                 "task_id": async_status.id,
                 "job_id": str(job.id),
                 "quality_policy": request.quality_policy,
+                "generation_strategy": strategy_receipt,
             }
             operation.expected_revision = presentation.revision
             operation.next_attempt_at = get_current_utc_datetime()
@@ -1576,6 +1612,7 @@ class SqlPublicV2Orchestrator:
                 except ValueError:
                     export_timing = None
         readiness = quality.release_readiness if quality is not None else "not_assessed"
+        fidelity_artifact_ready = bool(readiness == "ready" and artifacts)
         phase = _phase(
             kind=operation.kind,
             state=operation.state,
@@ -1644,6 +1681,11 @@ class SqlPublicV2Orchestrator:
             execution_receipt=execution_receipt,
             quality_receipt=quality,
             release_readiness=readiness,
+            readiness_scope="artifact:fidelity",
+            fidelity_artifact_ready=fidelity_artifact_ready,
+            native_editability_ready=False,
+            promotion_ready=False,
+            deployment_authorized=False,
             artifacts=artifacts,
         )
 

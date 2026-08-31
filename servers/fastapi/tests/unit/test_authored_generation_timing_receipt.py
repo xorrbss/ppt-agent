@@ -13,6 +13,7 @@ from services.authored_generation_timing_receipt import (
     GENERATION_OBSERVABILITY_METRICS,
     GenerationTimingRecorder,
     create_generation_attempt_timing_receipt,
+    create_generation_attempt_timing_receipt_v2,
     create_generation_timing_receipt,
     generation_attempt_timing_receipt_path,
     generation_timing_receipt_path,
@@ -20,7 +21,10 @@ from services.authored_generation_timing_receipt import (
     load_generation_timing_receipt,
 )
 from services.authored_presentation_generation import _PERFORMANCE_STAGE_NAMES
-from services.public_v2_orchestrator import SqlPublicV2Orchestrator
+from services.public_v2_orchestrator import (
+    SqlPublicV2Orchestrator,
+    _public_generation_timing,
+)
 from services.authored_deck_plan_checkpoint import (
     resolve_with_authored_deck_plan_checkpoint_signal,
 )
@@ -33,6 +37,9 @@ from services.workspace_operation_runner import (
     _attach_durable_generation_timing,
     sanitize_workspace_event_payload,
 )
+from services.workspace_generation_timing_payload import (
+    generation_timing_result_projection,
+)
 from services.provider_usage_instrumentation import (
     ProviderOperationUsage,
     provider_call_admission,
@@ -42,6 +49,7 @@ from services.provider_usage_instrumentation import (
 )
 from services.presentation_generation_operation_handler import (
     _persist_failed_attempt_timing,
+    _persist_terminal_attempt_timing,
     _project_failed_attempt_timing,
 )
 
@@ -165,6 +173,49 @@ def test_generation_timing_receipt_is_durable_bounded_and_runner_projected(
         "repairDuration"
     ] == {"state": "observed", "value": stages["repair"]}
 
+    now = datetime.now(UTC)
+    public_status = SqlPublicV2Orchestrator._status(
+        SimpleNamespace(
+            id=uuid.uuid4(),
+            presentation_id=uuid.uuid4(),
+            kind="presentation.generate",
+            state="succeeded",
+            error_code=None,
+            error_detail=None,
+            result={
+                "generation_timing_receipt": first.to_dict(),
+            },
+            result_revision=3,
+            progress={"percent": 100},
+            attempt_number=2,
+            retry_count=1,
+            max_attempts=3,
+            started_at=now + timedelta(milliseconds=5),
+            completed_at=now + timedelta(milliseconds=255),
+            created_at=now,
+            updated_at=now + timedelta(milliseconds=255),
+        ),
+        SimpleNamespace(deadline_at=now + timedelta(minutes=5)),
+        [],
+    )
+    timing = public_status.generation_timing
+    assert timing is not None
+    assert timing.outcome == "succeeded"
+    assert timing.queue_wait_millis == 5
+    assert timing.wall_millis == 250
+    assert timing.logical_calls == 2
+    assert timing.retry_reason == "retry_reason_unavailable"
+    assert timing.stages.outline.duration_millis == 11
+    assert timing.stages.provider == "not_started"
+    assert timing.stages.authoring.duration_millis == 22
+    assert timing.stages.repair.duration_millis == 33
+    assert timing.stages.chromium_review.duration_millis == 49
+    assert timing.stages.publication.duration_millis == 66
+    assert timing.usage_availability.tokens == "available"
+    assert timing.usage_availability.cost == "available"
+    assert timing.worker.status == "observed"
+    assert timing.terminal_error is None
+
     for excluded_names in (
         {"repairDuration"},
         {"repairDuration", "stageRetryCalls", "stageEstimatedCost", "stageActualCost"},
@@ -226,6 +277,173 @@ def test_generation_timing_projection_drops_invalid_or_incomplete_values() -> No
     assert safe == {}
 
 
+def test_terminal_v2_timing_is_durable_for_success_failure_and_rc_invalid(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("AUTHORED_QUALITY_RECEIPT_DIRECTORY", str(tmp_path))
+    usage = {
+        "totals": {
+            "logicalCalls": 1,
+            "physicalCalls": 1,
+            "retryCalls": 0,
+            "reportedUsageCalls": 1,
+            "unavailableUsageCalls": 0,
+            "pricedCalls": 0,
+            "latencyMs": 13,
+            "inputTokens": 3,
+            "outputTokens": 4,
+            "actualCostMicrounits": 0,
+            "estimatedCostMicrounits": 7,
+        },
+        "stages": {},
+    }
+    provider_usage = SimpleNamespace(snapshot=lambda: usage)
+    context = SimpleNamespace(
+        claim=SimpleNamespace(
+            operation_id=uuid.uuid4(),
+            attempt_token="private-v2-success-attempt",
+            attempt_number=1,
+            expected_revision=4,
+            fencing_token=3,
+        )
+    )
+    success_job_id = uuid.uuid4()
+    success_recorder = GenerationTimingRecorder()
+    for stage, duration in (
+        ("outline", 5),
+        ("author", 7),
+        ("repair", 0),
+        ("render", 11),
+        ("quality", 3),
+        ("publication", 2),
+    ):
+        success_recorder.record_stage_ms(stage, duration)
+    success = asyncio.run(
+        _persist_terminal_attempt_timing(
+            job_id=success_job_id,
+            context=context,
+            recorder=success_recorder,
+            provider_usage=provider_usage,
+            queue_wait_ms=9,
+            outcome="succeeded",
+            retry_reason=None,
+            terminal_error=None,
+        )
+    )
+    assert success is not None
+    assert success["schemaVersion"] == "generation-attempt-timing-receipt/v2"
+    assert success["validity"] == "valid"
+    assert success["queueWaitMillis"] == 9
+    assert success["logicalCalls"] == 1
+    assert success["tokenAvailability"] == "available"
+    assert success["costAvailability"] == "partial"
+    assert success["terminalError"] is None
+    assert success["stages"]["provider"]["durationMillis"] == 13
+    assert success["stages"]["chromiumReview"]["durationMillis"] == 14
+    assert set(success["stages"]) == {
+        "outline",
+        "provider",
+        "authoring",
+        "repair",
+        "chromiumReview",
+        "publication",
+    }
+    persisted_success = load_generation_attempt_timing_receipts(success_job_id)[-1]
+    assert persisted_success.to_dict() == success
+    projected_success = _public_generation_timing(
+        SimpleNamespace(
+            kind="presentation.generate",
+            state="succeeded",
+            attempt_number=1,
+            retry_count=0,
+            created_at=datetime.now(UTC) - timedelta(seconds=1),
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            error_detail=None,
+            error_code=None,
+            progress={},
+            result={"generation_timing_receipt": success},
+        ),
+        success,
+    )
+    assert projected_success is not None
+    assert projected_success.stages.provider.duration_millis == 13
+    assert projected_success.stages.chromium_review.duration_millis == 14
+    assert projected_success.queue_wait_millis == 9
+    assert projected_success.logical_calls == 1
+    assert generation_timing_result_projection(success) == {
+        "total_ms": success["wallMillis"],
+        "generation_timing_receipt": success,
+    }
+
+    failure_job_id = uuid.uuid4()
+    failure_recorder = GenerationTimingRecorder()
+    failure_recorder.record_stage_ms("outline", 4)
+    request = SimpleNamespace(
+        template="authored",
+        _authored_timing_stage="author",
+        _authored_timing_stage_started_at=failure_recorder.started_at,
+    )
+    failure = asyncio.run(
+        _persist_failed_attempt_timing(
+            request=request,
+            job_id=failure_job_id,
+            status_error={"detail": {"stage": "author"}},
+            context=context,
+            error=RuntimeError("authored_slide_capacity_exceeded"),
+            recorder=failure_recorder,
+            provider_usage=provider_usage,
+            queue_wait_ms=6,
+        )
+    )
+    assert failure is not None
+    assert failure["outcome"] == "failed"
+    assert failure["terminalError"] == "authored_slide_capacity_exceeded"
+    assert failure["stages"]["authoring"]["state"] == "observed"
+    assert failure["stages"]["repair"] == {"state": "not_started"}
+    assert failure["stages"]["publication"] == {"state": "not_started"}
+    assert generation_timing_result_projection(failure)[
+        "generation_timing_receipt"
+    ] == failure
+
+    invalid_job_id = uuid.uuid4()
+    invalid = create_generation_attempt_timing_receipt_v2(
+        job_id=invalid_job_id,
+        attempt_id="private-v2-invalid-attempt",
+        attempt_number=1,
+        revision=1,
+        outcome="succeeded",
+        stage_observations={
+            "outline": {
+                "startMillis": 0,
+                "endMillis": 5,
+                "durationMillis": 5,
+            }
+        },
+        executed_stages=(
+            "outline",
+            "provider",
+            "authoring",
+            "repair",
+            "chromiumReview",
+            "publication",
+        ),
+        queue_wait_ms=1,
+        wall_ms=5,
+        provider_usage=usage,
+        retry_reason=None,
+        worker="workspace-generation-worker",
+        terminal_error=None,
+    ).to_dict()
+    assert invalid["validity"] == "rc_invalid"
+    assert invalid["stages"]["provider"] == {
+        "state": "invalid",
+        "reason": "executed_duration_missing",
+    }
+    assert "provider:executed_duration_missing" in invalid["invalidReasons"]
+
+
 def test_failed_attempt_timing_is_attached_and_exposed_by_public_v2_status(
     tmp_path, monkeypatch
 ) -> None:
@@ -285,6 +503,9 @@ def test_failed_attempt_timing_is_attached_and_exposed_by_public_v2_status(
             error_detail={"retryable": False},
             result=attached,
             progress={"percent": 80},
+            attempt_number=1,
+            retry_count=0,
+            max_attempts=3,
             created_at=now,
             updated_at=now,
         ),
@@ -295,6 +516,25 @@ def test_failed_attempt_timing_is_attached_and_exposed_by_public_v2_status(
     assert status.generation_timing_receipt["providerUsage"]["totals"][
         "logicalCalls"
     ] == 0
+    assert status.generation_timing is not None
+    assert status.generation_timing.attempt_number == 1
+    assert status.generation_timing.outcome == "failed"
+    assert status.generation_timing.stages.outline.duration_millis >= 0
+    assert status.generation_timing.stages.provider.duration_millis >= 0
+    assert status.generation_timing.stages.authoring.duration_millis >= 0
+    assert status.generation_timing.stages.repair.duration_millis >= 0
+    assert status.generation_timing.stages.chromium_review.duration_millis >= 0
+    assert status.generation_timing.stages.publication.duration_millis >= 0
+    assert status.generation_timing.logical_calls == 0
+    assert status.generation_timing.usage_availability.tokens == "not_started"
+    assert status.generation_timing.usage_availability.cost == "not_started"
+    assert status.generation_timing.worker.status == "unavailable"
+    assert status.generation_timing.terminal_error == "authored_slide_capacity_exceeded"
+    assert status.readiness_scope == "artifact:fidelity"
+    assert status.fidelity_artifact_ready is False
+    assert status.native_editability_ready is False
+    assert status.promotion_ready is False
+    assert status.deployment_authorized is False
 
     # PostgreSQL projection is authoritative after a handled failure; the
     # local sidecar may disappear before a later runner/status read.

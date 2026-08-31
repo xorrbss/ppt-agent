@@ -517,6 +517,11 @@ class OperationStatusV2(PublicWireModel):
     execution_receipt: OperationExecutionReceiptV2 | None = None
     quality_receipt: QualityReceiptV3 | None = None
     release_readiness: Literal["ready", "blocked", "not_assessed"] = "not_assessed"
+    readiness_scope: Literal["artifact:fidelity"] = "artifact:fidelity"
+    fidelity_artifact_ready: bool = False
+    native_editability_ready: Literal[False] = False
+    promotion_ready: Literal[False] = False
+    deployment_authorized: Literal[False] = False
     artifacts: list[PublicArtifactV2] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -536,6 +541,18 @@ class OperationStatusV2(PublicWireModel):
             or self.quality_receipt.release_readiness != "ready"
         ):
             raise ValueError("ready operation requires a ready QualityReceiptV3")
+        if self.release_readiness == "ready" and not self.fidelity_artifact_ready:
+            raise ValueError(
+                "ready artifact:fidelity status requires fidelityArtifactReady"
+            )
+        if self.fidelity_artifact_ready and (
+            self.status != "succeeded"
+            or self.release_readiness != "ready"
+            or not self.artifacts
+        ):
+            raise ValueError(
+                "fidelityArtifactReady requires one succeeded ready artifact result"
+            )
         if any(
             artifact.operation_id != self.operation_id
             or artifact.presentation_id != self.presentation_id

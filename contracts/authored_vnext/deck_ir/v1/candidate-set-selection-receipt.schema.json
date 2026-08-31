@@ -1,0 +1,259 @@
+{
+  "$defs": {
+    "CandidateQualityVectorV1": {
+      "additionalProperties": false,
+      "properties": {
+        "artDirectionAlignment": {
+          "default": 0,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Artdirectionalignment",
+          "type": "number"
+        },
+        "density": {
+          "default": 0,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Density",
+          "type": "number"
+        },
+        "hierarchy": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Hierarchy",
+          "type": "number"
+        },
+        "roleFitness": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Rolefitness",
+          "type": "number"
+        },
+        "whitespace": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Whitespace",
+          "type": "number"
+        }
+      },
+      "required": [
+        "hierarchy",
+        "whitespace",
+        "roleFitness"
+      ],
+      "title": "CandidateQualityVectorV1",
+      "type": "object"
+    },
+    "CandidateV1": {
+      "additionalProperties": false,
+      "properties": {
+        "candidateDigest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Candidatedigest",
+          "type": "string"
+        },
+        "candidateId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+          "title": "Candidateid",
+          "type": "string"
+        },
+        "diversitySignature": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Diversitysignature",
+          "type": "string"
+        },
+        "hardConstraintStatus": {
+          "enum": [
+            "passed",
+            "failed"
+          ],
+          "title": "Hardconstraintstatus",
+          "type": "string"
+        },
+        "layoutId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9]*(?:[._/-][a-z0-9]+)*$",
+          "title": "Layoutid",
+          "type": "string"
+        },
+        "qualityVector": {
+          "$ref": "#/$defs/CandidateQualityVectorV1"
+        }
+      },
+      "required": [
+        "candidateId",
+        "layoutId",
+        "hardConstraintStatus",
+        "qualityVector",
+        "diversitySignature",
+        "candidateDigest"
+      ],
+      "title": "CandidateV1",
+      "type": "object"
+    },
+    "DeckSelectionV1": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "pareto-beam-v1",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "beamWidth": {
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Beamwidth",
+          "type": "integer"
+        },
+        "objectivePolicyDigest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Objectivepolicydigest",
+          "type": "string"
+        },
+        "selectedCombinationDigest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Selectedcombinationdigest",
+          "type": "string"
+        }
+      },
+      "required": [
+        "algorithm",
+        "beamWidth",
+        "objectivePolicyDigest",
+        "selectedCombinationDigest"
+      ],
+      "title": "DeckSelectionV1",
+      "type": "object"
+    },
+    "SlideCandidateSelectionV1": {
+      "additionalProperties": false,
+      "properties": {
+        "candidates": {
+          "items": {
+            "$ref": "#/$defs/CandidateV1"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Candidates",
+          "type": "array"
+        },
+        "enumeratedCount": {
+          "maximum": 8,
+          "minimum": 0,
+          "title": "Enumeratedcount",
+          "type": "integer"
+        },
+        "feasibleCount": {
+          "maximum": 8,
+          "minimum": 0,
+          "title": "Feasiblecount",
+          "type": "integer"
+        },
+        "requestedK": {
+          "maximum": 8,
+          "minimum": 2,
+          "title": "Requestedk",
+          "type": "integer"
+        },
+        "selectedCandidateId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+          "title": "Selectedcandidateid",
+          "type": "string"
+        },
+        "slideKey": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+          "title": "Slidekey",
+          "type": "string"
+        }
+      },
+      "required": [
+        "slideKey",
+        "requestedK",
+        "enumeratedCount",
+        "feasibleCount",
+        "candidates",
+        "selectedCandidateId"
+      ],
+      "title": "SlideCandidateSelectionV1",
+      "type": "object"
+    }
+  },
+  "$id": "urn:presenton:authored-vnext:deck-ir:candidate-set-selection-receipt.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "candidatePolicyDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Candidatepolicydigest",
+      "type": "string"
+    },
+    "compilerVersion": {
+      "const": "constraint-compiler/v1",
+      "title": "Compilerversion",
+      "type": "string"
+    },
+    "deckIrDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Deckirdigest",
+      "type": "string"
+    },
+    "deckSelection": {
+      "$ref": "#/$defs/DeckSelectionV1"
+    },
+    "grammarDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Grammardigest",
+      "type": "string"
+    },
+    "operationId": {
+      "format": "uuid",
+      "title": "Operationid",
+      "type": "string"
+    },
+    "providerCallsAdded": {
+      "const": 0,
+      "title": "Providercallsadded",
+      "type": "integer"
+    },
+    "receiptDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Receiptdigest",
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": "candidate-set-selection-receipt/v1",
+      "title": "Schemaversion",
+      "type": "string"
+    },
+    "slides": {
+      "items": {
+        "$ref": "#/$defs/SlideCandidateSelectionV1"
+      },
+      "maxItems": 30,
+      "minItems": 1,
+      "title": "Slides",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "operationId",
+    "deckIrDigest",
+    "grammarDigest",
+    "compilerVersion",
+    "candidatePolicyDigest",
+    "slides",
+    "deckSelection",
+    "providerCallsAdded",
+    "receiptDigest"
+  ],
+  "title": "CandidateSetSelectionReceiptV1",
+  "type": "object"
+}

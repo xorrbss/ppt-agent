@@ -111,6 +111,14 @@ GENERATION_ATTEMPT_OUTCOMES = frozenset(
 GENERATION_ATTEMPT_TIMING_STAGES = frozenset(
     (*GENERATION_TIMING_STAGES, "provider")
 )
+PUBLIC_GENERATION_TIMING_STAGES = (
+    "outline",
+    "provider",
+    "authoring",
+    "repair",
+    "chromiumReview",
+    "publication",
+)
 _PROVIDER_USAGE_COUNTERS = (
     "logicalCalls",
     "physicalCalls",
@@ -633,6 +641,52 @@ class GenerationAttemptTimingReceipt:
         return payload
 
 
+@dataclass(frozen=True, slots=True)
+class GenerationAttemptTimingReceiptV2:
+    """Content-free terminal attempt receipt with explicit stage validity."""
+
+    schema_version: str
+    attempt_id: str
+    attempt_number: int
+    revision: int
+    outcome: str
+    stages: tuple[tuple[str, dict[str, object]], ...]
+    queue_wait_ms: int
+    wall_ms: int
+    logical_calls: int
+    retry_reason: str | None
+    token_availability: str
+    cost_availability: str
+    worker: str
+    terminal_error: str | None
+    validity: str
+    invalid_reasons: tuple[str, ...] = ()
+    provider_usage: dict[str, object] | None = None
+    receipt_digest: str = ""
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schemaVersion": self.schema_version,
+            "attemptId": self.attempt_id,
+            "attemptNumber": self.attempt_number,
+            "revision": self.revision,
+            "outcome": self.outcome,
+            "stages": dict(self.stages),
+            "queueWaitMillis": self.queue_wait_ms,
+            "wallMillis": self.wall_ms,
+            "logicalCalls": self.logical_calls,
+            "retryReason": self.retry_reason,
+            "tokenAvailability": self.token_availability,
+            "costAvailability": self.cost_availability,
+            "worker": self.worker,
+            "terminalError": self.terminal_error,
+            "validity": self.validity,
+            "invalidReasons": list(self.invalid_reasons),
+            "providerUsage": self.provider_usage,
+            "receiptDigest": self.receipt_digest,
+        }
+
+
 def _attempt_receipt_digest(receipt: GenerationAttemptTimingReceipt) -> str:
     payload = receipt.to_dict()
     payload.pop("receiptDigest", None)
@@ -644,6 +698,140 @@ def _attempt_receipt_digest(receipt: GenerationAttemptTimingReceipt) -> str:
             ensure_ascii=False,
         ).encode("utf-8")
     ).hexdigest()
+
+
+def _attempt_receipt_v2_digest(receipt: GenerationAttemptTimingReceiptV2) -> str:
+    payload = receipt.to_dict()
+    payload.pop("receiptDigest", None)
+    return "sha256:" + hashlib.sha256(
+        json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def _public_stage_receipts(
+    value: object,
+) -> tuple[tuple[str, dict[str, object]], ...]:
+    if not isinstance(value, Mapping) or set(value) != set(PUBLIC_GENERATION_TIMING_STAGES):
+        raise ValueError("generation_attempt_v2_stages_invalid")
+    output: list[tuple[str, dict[str, object]]] = []
+    for name in PUBLIC_GENERATION_TIMING_STAGES:
+        raw = value.get(name)
+        if not isinstance(raw, Mapping):
+            raise ValueError("generation_attempt_v2_stages_invalid")
+        state = raw.get("state")
+        if state == "observed":
+            if set(raw) != {"state", "startMillis", "endMillis", "durationMillis"}:
+                raise ValueError("generation_attempt_v2_stages_invalid")
+            start = _bounded_timing_ms(raw.get("startMillis"), f"{name}_start")
+            end = _bounded_timing_ms(raw.get("endMillis"), f"{name}_end")
+            duration = _bounded_timing_ms(raw.get("durationMillis"), name)
+            if end < start:
+                raise ValueError("generation_attempt_v2_stages_invalid")
+            normalized = {
+                "state": "observed",
+                "startMillis": start,
+                "endMillis": end,
+                "durationMillis": duration,
+            }
+        elif state == "not_started" and set(raw) == {"state"}:
+            normalized = {"state": "not_started"}
+        elif (
+            state == "invalid"
+            and set(raw) == {"state", "reason"}
+            and raw.get("reason") == "executed_duration_missing"
+        ):
+            normalized = {
+                "state": "invalid",
+                "reason": "executed_duration_missing",
+            }
+        else:
+            raise ValueError("generation_attempt_v2_stages_invalid")
+        output.append((name, normalized))
+    return tuple(output)
+
+
+def _availability(value: object, field_name: str) -> str:
+    if value not in {"available", "partial", "unavailable", "not_started"}:
+        raise ValueError(f"generation_attempt_v2_{field_name}_invalid")
+    return str(value)
+
+
+def _optional_reason(value: object, field_name: str) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip() or len(value.strip()) > 160:
+        raise ValueError(f"generation_attempt_v2_{field_name}_invalid")
+    return value.strip()
+
+
+def _attempt_receipt_v2_from_dict(
+    value: object,
+) -> GenerationAttemptTimingReceiptV2:
+    if not isinstance(value, Mapping):
+        raise ValueError("generation_attempt_timing_receipt_v2_invalid")
+    attempt_number = value.get("attemptNumber")
+    revision = value.get("revision")
+    outcome = value.get("outcome")
+    validity = value.get("validity")
+    invalid_reasons = value.get("invalidReasons")
+    if (
+        value.get("schemaVersion") != "generation-attempt-timing-receipt/v2"
+        or isinstance(attempt_number, bool)
+        or not isinstance(attempt_number, int)
+        or attempt_number < 0
+        or isinstance(revision, bool)
+        or not isinstance(revision, int)
+        or revision < 0
+        or outcome not in GENERATION_ATTEMPT_OUTCOMES
+        or validity not in {"valid", "rc_invalid"}
+        or not isinstance(invalid_reasons, Sequence)
+        or isinstance(invalid_reasons, (str, bytes))
+        or any(not isinstance(item, str) or not item for item in invalid_reasons)
+    ):
+        raise ValueError("generation_attempt_timing_receipt_v2_invalid")
+    stages = _public_stage_receipts(value.get("stages"))
+    derived_reasons = tuple(
+        f"{name}:executed_duration_missing"
+        for name, stage in stages
+        if stage["state"] == "invalid"
+    )
+    reasons = tuple(str(item) for item in invalid_reasons)
+    if reasons != derived_reasons or (validity == "valid") != (not reasons):
+        raise ValueError("generation_attempt_timing_receipt_v2_invalid")
+    terminal_error = _optional_reason(value.get("terminalError"), "terminal_error")
+    if (outcome == "succeeded") != (terminal_error is None):
+        raise ValueError("generation_attempt_timing_receipt_v2_invalid")
+    worker = _optional_reason(value.get("worker"), "worker")
+    if worker is None:
+        raise ValueError("generation_attempt_timing_receipt_v2_invalid")
+    receipt = GenerationAttemptTimingReceiptV2(
+        schema_version="generation-attempt-timing-receipt/v2",
+        attempt_id=public_attempt_id(value.get("attemptId")),
+        attempt_number=attempt_number,
+        revision=revision,
+        outcome=str(outcome),
+        stages=stages,
+        queue_wait_ms=_bounded_timing_ms(value.get("queueWaitMillis"), "queue_wait"),
+        wall_ms=_bounded_timing_ms(value.get("wallMillis"), "wall"),
+        logical_calls=_bounded_timing_ms(value.get("logicalCalls"), "logical_calls"),
+        retry_reason=_optional_reason(value.get("retryReason"), "retry_reason"),
+        token_availability=_availability(value.get("tokenAvailability"), "tokens"),
+        cost_availability=_availability(value.get("costAvailability"), "cost"),
+        worker=worker,
+        terminal_error=terminal_error,
+        validity=str(validity),
+        invalid_reasons=reasons,
+        provider_usage=_provider_usage(value.get("providerUsage")),
+        receipt_digest=_required_sha256(value.get("receiptDigest"), "receipt_digest"),
+    )
+    if receipt.receipt_digest != _attempt_receipt_v2_digest(receipt):
+        raise ValueError("generation_attempt_timing_receipt_v2_digest_mismatch")
+    return receipt
 
 
 def _attempt_receipt_from_dict(value: object) -> GenerationAttemptTimingReceipt:
@@ -694,7 +882,12 @@ def _attempt_receipt_from_dict(value: object) -> GenerationAttemptTimingReceipt:
     return receipt
 
 
-def _load_attempt_records(path: Path) -> dict[str, GenerationAttemptTimingReceipt]:
+GenerationAttemptTimingReceiptAny = (
+    GenerationAttemptTimingReceipt | GenerationAttemptTimingReceiptV2
+)
+
+
+def _load_attempt_records(path: Path) -> dict[str, GenerationAttemptTimingReceiptAny]:
     if not path.is_file():
         return {}
     try:
@@ -709,12 +902,17 @@ def _load_attempt_records(path: Path) -> dict[str, GenerationAttemptTimingReceip
         or payload.get("manifestDigest") != _manifest_digest(records)
     ):
         raise ValueError("generation_attempt_timing_manifest_corrupt")
-    parsed: dict[str, GenerationAttemptTimingReceipt] = {}
+    parsed: dict[str, GenerationAttemptTimingReceiptAny] = {}
     for key, item in records.items():
-        receipt = _attempt_receipt_from_dict(item)
-        expected = (
-            f"{receipt.attempt_id}#{receipt.attempt_number}#{receipt.revision}"
+        receipt = (
+            _attempt_receipt_v2_from_dict(item)
+            if isinstance(item, Mapping)
+            and item.get("schemaVersion") == "generation-attempt-timing-receipt/v2"
+            else _attempt_receipt_from_dict(item)
         )
+        expected = f"{receipt.attempt_id}#{receipt.attempt_number}#{receipt.revision}"
+        if isinstance(receipt, GenerationAttemptTimingReceiptV2):
+            expected += "#v2"
         if key != expected:
             raise ValueError("generation_attempt_timing_manifest_key_invalid")
         parsed[key] = receipt
@@ -722,7 +920,7 @@ def _load_attempt_records(path: Path) -> dict[str, GenerationAttemptTimingReceip
 
 
 def _persist_attempt_records(
-    path: Path, records: Mapping[str, GenerationAttemptTimingReceipt]
+    path: Path, records: Mapping[str, GenerationAttemptTimingReceiptAny]
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     serialized = {key: receipt.to_dict() for key, receipt in sorted(records.items())}
@@ -820,9 +1018,156 @@ def create_generation_attempt_timing_receipt(
     return receipt
 
 
+def create_generation_attempt_timing_receipt_v2(
+    *,
+    job_id: object,
+    attempt_id: object,
+    attempt_number: int,
+    revision: int,
+    outcome: str,
+    stage_observations: Mapping[str, Mapping[str, object]],
+    executed_stages: Sequence[str],
+    queue_wait_ms: object,
+    wall_ms: object,
+    provider_usage: Mapping[str, object],
+    retry_reason: str | None,
+    worker: str,
+    terminal_error: str | None,
+) -> GenerationAttemptTimingReceiptV2:
+    """Seal one v2 terminal receipt without prompt, content, or provider traces."""
+
+    if (
+        isinstance(attempt_number, bool)
+        or not isinstance(attempt_number, int)
+        or attempt_number < 0
+        or isinstance(revision, bool)
+        or not isinstance(revision, int)
+        or revision < 0
+        or outcome not in GENERATION_ATTEMPT_OUTCOMES
+    ):
+        raise ValueError("generation_attempt_timing_receipt_v2_invalid")
+    executed = frozenset(executed_stages)
+    if not executed.issubset(PUBLIC_GENERATION_TIMING_STAGES):
+        raise ValueError("generation_attempt_v2_executed_stages_invalid")
+    normalized_observations: dict[str, dict[str, int]] = {}
+    for raw_name, raw_observation in stage_observations.items():
+        name = str(raw_name)
+        if name not in GENERATION_ATTEMPT_TIMING_STAGES:
+            raise ValueError("generation_attempt_v2_stage_observation_invalid")
+        if not isinstance(raw_observation, Mapping):
+            raise ValueError("generation_attempt_v2_stage_observation_invalid")
+        start = _bounded_timing_ms(raw_observation.get("startMillis"), f"{name}_start")
+        end = _bounded_timing_ms(raw_observation.get("endMillis"), f"{name}_end")
+        duration = _bounded_timing_ms(raw_observation.get("durationMillis"), name)
+        if end < start:
+            raise ValueError("generation_attempt_v2_stage_observation_invalid")
+        normalized_observations[name] = {
+            "startMillis": start,
+            "endMillis": end,
+            "durationMillis": duration,
+        }
+
+    public_sources = {
+        "outline": ("outline",),
+        "provider": ("provider",),
+        "authoring": ("author",),
+        "repair": ("repair",),
+        "chromiumReview": ("render", "quality"),
+        "publication": ("publication",),
+    }
+    public_stages: dict[str, dict[str, object]] = {}
+    invalid_reasons: list[str] = []
+    for public_name in PUBLIC_GENERATION_TIMING_STAGES:
+        observations = [
+            normalized_observations[source_name]
+            for source_name in public_sources[public_name]
+            if source_name in normalized_observations
+        ]
+        if observations:
+            public_stages[public_name] = {
+                "state": "observed",
+                "startMillis": min(item["startMillis"] for item in observations),
+                "endMillis": max(item["endMillis"] for item in observations),
+                "durationMillis": sum(item["durationMillis"] for item in observations),
+            }
+        elif public_name in executed:
+            public_stages[public_name] = {
+                "state": "invalid",
+                "reason": "executed_duration_missing",
+            }
+            invalid_reasons.append(f"{public_name}:executed_duration_missing")
+        else:
+            public_stages[public_name] = {"state": "not_started"}
+
+    safe_usage = _provider_usage(provider_usage)
+    if safe_usage is None:
+        raise ValueError("generation_attempt_provider_usage_invalid")
+    totals = safe_usage["totals"]
+    assert isinstance(totals, Mapping)
+    logical_calls = int(totals["logicalCalls"])
+    reported_calls = int(totals["reportedUsageCalls"])
+    unavailable_calls = int(totals["unavailableUsageCalls"])
+    priced_calls = int(totals["pricedCalls"])
+    estimated_cost = int(totals["estimatedCostMicrounits"])
+    if logical_calls == 0:
+        token_availability = "not_started"
+        cost_availability = "not_started"
+    else:
+        token_availability = (
+            "available"
+            if reported_calls >= logical_calls and unavailable_calls == 0
+            else "partial"
+            if reported_calls > 0
+            else "unavailable"
+        )
+        cost_availability = (
+            "available"
+            if priced_calls >= logical_calls
+            else "partial"
+            if priced_calls > 0 or estimated_cost > 0
+            else "unavailable"
+        )
+
+    receipt = GenerationAttemptTimingReceiptV2(
+        schema_version="generation-attempt-timing-receipt/v2",
+        attempt_id=public_attempt_id(attempt_id),
+        attempt_number=attempt_number,
+        revision=revision,
+        outcome=outcome,
+        stages=_public_stage_receipts(public_stages),
+        queue_wait_ms=_bounded_timing_ms(queue_wait_ms, "queue_wait"),
+        wall_ms=_bounded_timing_ms(wall_ms, "wall"),
+        logical_calls=logical_calls,
+        retry_reason=_optional_reason(retry_reason, "retry_reason"),
+        token_availability=token_availability,
+        cost_availability=cost_availability,
+        worker=_optional_reason(worker, "worker") or "workspace-generation-worker",
+        terminal_error=_optional_reason(terminal_error, "terminal_error"),
+        validity="rc_invalid" if invalid_reasons else "valid",
+        invalid_reasons=tuple(invalid_reasons),
+        provider_usage=safe_usage,
+    )
+    if (outcome == "succeeded") != (receipt.terminal_error is None):
+        raise ValueError("generation_attempt_timing_receipt_v2_invalid")
+    receipt = replace(receipt, receipt_digest=_attempt_receipt_v2_digest(receipt))
+    path = generation_attempt_timing_receipt_path(job_id)
+    with _manifest_lock(path):
+        records = _load_attempt_records(path)
+        key = f"{receipt.attempt_id}#{receipt.attempt_number}#{receipt.revision}#v2"
+        existing = records.get(key)
+        if existing is not None:
+            if existing != receipt:
+                raise ValueError("generation_attempt_timing_receipt_binding_changed")
+            assert isinstance(existing, GenerationAttemptTimingReceiptV2)
+            return existing
+        records[key] = receipt
+        _persist_attempt_records(path, records)
+    return receipt
+
+
 def load_generation_attempt_timing_receipts(
     job_id: object,
-) -> tuple[GenerationAttemptTimingReceipt, ...]:
+) -> tuple[GenerationAttemptTimingReceiptAny, ...]:
     """Load every verified attempt receipt in deterministic attempt order."""
 
     path = generation_attempt_timing_receipt_path(job_id)
@@ -846,6 +1191,7 @@ class GenerationTimingRecorder:
 
     started_at: float = field(default_factory=monotonic)
     _stage_timings_ms: dict[str, int] = field(default_factory=dict)
+    _stage_observations: dict[str, dict[str, int]] = field(default_factory=dict)
     _checkpoint_signals: list[dict[str, object]] = field(default_factory=list)
 
     @contextmanager
@@ -853,31 +1199,57 @@ class GenerationTimingRecorder:
         if name not in GENERATION_ATTEMPT_TIMING_STAGES:
             raise ValueError("generation_attempt_timing_stage_invalid")
         started = monotonic()
+        start_ms = _bounded_timing_ms(
+            (started - self.started_at) * 1000,
+            f"{name}_start",
+        )
         try:
             yield
         finally:
+            ended = monotonic()
             elapsed = _bounded_timing_ms(
-                (monotonic() - started) * 1000,
+                (ended - started) * 1000,
                 name,
             )
             self._stage_timings_ms[name] = min(
                 MAX_GENERATION_STAGE_TIMING_MS,
                 self._stage_timings_ms.get(name, 0) + elapsed,
             )
+            previous = self._stage_observations.get(name)
+            self._stage_observations[name] = {
+                "startMillis": min(
+                    start_ms,
+                    previous["startMillis"] if previous is not None else start_ms,
+                ),
+                "endMillis": _bounded_timing_ms(
+                    (ended - self.started_at) * 1000,
+                    f"{name}_end",
+                ),
+                "durationMillis": self._stage_timings_ms[name],
+            }
 
     def record_stage_ms(self, name: str, value: object) -> None:
         if name not in GENERATION_ATTEMPT_TIMING_STAGES:
             raise ValueError("generation_attempt_timing_stage_invalid")
-        self._stage_timings_ms[name] = _bounded_timing_ms(value, name)
+        duration = _bounded_timing_ms(value, name)
+        end_ms = self.elapsed_ms
+        self._stage_timings_ms[name] = duration
+        self._stage_observations[name] = {
+            "startMillis": max(0, end_ms - duration),
+            "endMillis": end_ms,
+            "durationMillis": duration,
+        }
 
     def record_checkpoint_signal(self, signal: Mapping[str, object]) -> None:
         self._checkpoint_signals.append(dict(_checkpoint_signals((signal,))[0]))
 
     def snapshot_stage_timings_ms(self) -> dict[str, int]:
-        # Attempt receipts must never expose null/missing core stage timing.
+        return dict(self._stage_timings_ms)
+
+    def stage_observations(self) -> dict[str, dict[str, int]]:
         return {
-            stage: self._stage_timings_ms.get(stage, 0)
-            for stage in (*GENERATION_TIMING_STAGES, "provider")
+            name: dict(observation)
+            for name, observation in self._stage_observations.items()
         }
 
     def checkpoint_signals(self) -> tuple[dict[str, object], ...]:
@@ -895,9 +1267,11 @@ __all__ = [
     "GENERATION_ATTEMPT_OUTCOMES",
     "GENERATION_ATTEMPT_TIMING_STAGES",
     "GenerationAttemptTimingReceipt",
+    "GenerationAttemptTimingReceiptV2",
     "GenerationTimingRecorder",
     "GenerationTimingReceipt",
     "create_generation_attempt_timing_receipt",
+    "create_generation_attempt_timing_receipt_v2",
     "create_generation_timing_receipt",
     "generation_attempt_timing_receipt_path",
     "generation_timing_receipt_path",
