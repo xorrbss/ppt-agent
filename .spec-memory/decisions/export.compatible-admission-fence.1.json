@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "key": "export.compatible-admission-fence",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "호환 admission은 fence 0을 유지하고 작업 attempt fence로 CAS하며, public-operation v2만 admission과 attempt fence를 동일하게 강제한다.",
+  "scope": [
+    "export",
+    "public-control-plane",
+    "artifact-checkpoint"
+  ],
+  "invariants": [
+    "workspace operation attempt token and fence remain exact for all pointer writes",
+    "public-operation v2 admission fence must equal the workspace attempt fence"
+  ],
+  "forbidden": [
+    "treating a compatible fence-0 admission as public-operation v2"
+  ],
+  "evidence": [
+    "servers/fastapi/services/artifact_store.py",
+    "servers/fastapi/alembic/versions/b7c4e2d91f60_allow_compatible_export_checkpoint_fences.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-01T04:01:24.8694647+00:00"
+}

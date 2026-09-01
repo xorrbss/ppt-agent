@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "key": "presentation.devax-si-visual-contract",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "DevAX SI 구축 제안서는 전용 authored 스타일로 생성하고 시각 시스템 유사도 90% 이상을 제품 경로에서 검증한다.",
+  "scope": [
+    "presentation",
+    "authored-style",
+    "visual-quality"
+  ],
+  "invariants": [
+    "retained DevAX reference is style evidence, not a generated-output baseline",
+    "visual-system similarity threshold is at least 90 percent"
+  ],
+  "forbidden": [
+    "substituting the generic default blueprint for DevAX SI requests"
+  ],
+  "evidence": [
+    "servers/fastapi/authored_styles/devax-si-proposal.yaml",
+    "output/devax-si-fidelity-20260901/final/visual-system-similarity.json"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-01T04:01:24.1630669+00:00"
+}

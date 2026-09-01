@@ -2512,11 +2512,14 @@ async def _locked_current_operation(
             PublicOperationAdmission.tenant_id == tenant_id,
             PublicOperationAdmission.operation_kind == "export",
             PublicOperationAdmission.state == "active",
-            PublicOperationAdmission.fence == fencing_token,
         )
         .with_for_update()
     )
-    return operation if admission is not None else None
+    if admission is None:
+        return None
+    if operation.contract_version == "public-operation/v2":
+        return operation if admission.fence == fencing_token else None
+    return operation if admission.fence == 0 else None
 
 
 async def _locked_committed_artifact(
