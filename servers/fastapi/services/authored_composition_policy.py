@@ -112,21 +112,14 @@ class SlideCapacity:
     min_font_px: int = 15
     source_image_count: int = 0
 
-    def with_source_images(
-        self, count: int, *, preserve_text_budget: bool = False
-    ) -> "SlideCapacity":
+    def with_source_images(self, count: int) -> "SlideCapacity":
         """Return the same plan after binding the already-admitted image offer."""
 
         count = max(0, int(count))
         # Source pages may legitimately contain several screenshots.  Once the
         # offer is known, reserve a bounded gallery and reduce text budget rather
         # than letting the author discover the collision after rendering.
-        # A source-verbatim page has already passed immutable source admission
-        # as one page.  Its exact text and exact image occurrences are a single
-        # composition unit, so charging the images against the text envelope a
-        # second time would reject a page that the source itself proves can be
-        # composed.  Chromium owned-text geometry remains the hard fit gate.
-        if count <= 1 or preserve_text_budget:
+        if count <= 1:
             body = self.body_max_chars
             visible = self.max_visible_text_chars
         else:

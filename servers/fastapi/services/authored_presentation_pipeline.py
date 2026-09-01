@@ -282,10 +282,7 @@ async def _author_illustrate_render_pipeline(
                 profile=capacity_plan.profile,
                 slides=tuple(
                     capacity_plan.at(index).with_source_images(
-                        len(slide_source_images[index]),
-                        preserve_text_budget=(
-                            capacity_plan.profile.profile_id == "source-verbatim"
-                        ),
+                        len(slide_source_images[index])
                     )
                     for index in range(len(capacity_plan.slides))
                 ),

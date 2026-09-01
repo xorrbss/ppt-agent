@@ -2085,10 +2085,7 @@ async def _generate_authored_presentation(
     capacity_briefs = [
         capacity_plan.at(index)
         .with_source_images(
-            len(offered_for_review[index]) if offered_for_review is not None else 0,
-            preserve_text_budget=(
-                capacity_plan.profile.profile_id == "source-verbatim"
-            ),
+            len(offered_for_review[index]) if offered_for_review is not None else 0
         )
         .prompt_brief(composition_profile)
         for index in range(len(contents))
