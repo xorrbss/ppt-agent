@@ -39,6 +39,14 @@ OperationPhase = Literal[
     "publishing",
 ]
 QualityPolicy = Literal["interactive-v1", "release-v1"]
+GenerationMode = Literal[
+    "auto",
+    "registered-template",
+    "brand-style",
+    "free-design",
+    "fidelity-first",
+    "editable-first",
+]
 JsonScalar = str | int | float | bool
 
 
@@ -51,12 +59,56 @@ class PublicWireModel(BaseModel):
     )
 
 
+class DesignPackPinV1(PublicWireModel):
+    design_pack_id: str = Field(pattern=PUBLIC_ID_PATTERN)
+    version: int = Field(ge=1)
+    digest: str = Field(pattern=DIGEST_PATTERN)
+
+
+class GenerationRouteReceiptV1(PublicWireModel):
+    schema_version: Literal["generation-route-receipt/v1"] = (
+        "generation-route-receipt/v1"
+    )
+    requested_mode: GenerationMode
+    selected_route: Literal["source-native", "authored-fallback"]
+    design_pack_pin: DesignPackPinV1 | None = None
+    narrative_ir_digest: str | None = Field(default=None, pattern=DIGEST_PATTERN)
+    fallback_reason: str | None = Field(default=None, min_length=1, max_length=160)
+    output_capability: Literal["fidelity"] = "fidelity"
+    receipt_digest: str = Field(pattern=DIGEST_PATTERN)
+
+    @model_validator(mode="after")
+    def validate_route_receipt(self) -> "GenerationRouteReceiptV1":
+        if self.selected_route == "source-native" and self.design_pack_pin is None:
+            raise ValueError("source-native requires designPackPin")
+        if self.selected_route == "source-native" and self.fallback_reason is not None:
+            raise ValueError("source-native cannot expose fallbackReason")
+        sealed = self.model_dump(
+            mode="json",
+            by_alias=True,
+            exclude={"receipt_digest"},
+        )
+        expected_digest = "sha256:" + sha256(
+            json.dumps(
+                sealed,
+                ensure_ascii=True,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        if self.receipt_digest != expected_digest:
+            raise ValueError("receiptDigest does not match generation route payload")
+        return self
+
+
 class PresentationGenerationRequestV2(PublicWireModel):
     schema_version: Literal["presentation-generation-request/v2"] = (
         "presentation-generation-request/v2"
     )
     engine: Literal["authored"] = "authored"
-    generation_engine: Literal["authored", "deck-ir"] = "authored"
+    generation_mode: GenerationMode = "auto"
+    design_pack_pin: DesignPackPinV1 | None = None
+    generation_engine: Literal["authored", "deck-ir"] | None = "authored"
     content: str = Field(min_length=1, max_length=200_000)
     slides_markdown: list[str] | None = Field(default=None, max_length=100)
     instructions: str | None = Field(default=None, max_length=20_000)
@@ -65,6 +117,22 @@ class PresentationGenerationRequestV2(PublicWireModel):
     authored_style: str | None = Field(default=None, min_length=1, max_length=160)
     reference_snapshot_ids: list[str] = Field(default_factory=list, max_length=16)
     quality_policy: QualityPolicy = "interactive-v1"
+
+    @model_validator(mode="after")
+    def validate_generation_mode(self) -> "PresentationGenerationRequestV2":
+        if self.generation_mode == "editable-first":
+            raise ValueError("capability_not_supported: editable-first")
+        if (
+            self.generation_mode == "registered-template"
+            and self.design_pack_pin is None
+        ):
+            raise ValueError("design_pack_pin_required")
+        if (
+            self.design_pack_pin is not None
+            and self.generation_mode != "registered-template"
+        ):
+            raise ValueError("design_pack_pin_requires_registered_template")
+        return self
 
     @field_validator("content", "instructions", "language", "authored_style")
     @classmethod
@@ -514,6 +582,7 @@ class OperationStatusV2(PublicWireModel):
     updated_at: AwareDatetime
     absolute_deadline_at: AwareDatetime
     error: PublicOperationErrorV2 | None = None
+    generation_route_receipt: GenerationRouteReceiptV1 | None = None
     generation_timing_receipt: dict[str, Any] | None = None
     execution_receipt: OperationExecutionReceiptV2 | None = None
     quality_receipt: QualityReceiptV3 | None = None

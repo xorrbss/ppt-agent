@@ -23,6 +23,17 @@ test("public v2 UI only offers fidelity export and separates terminal states", a
   assert.match(source, /sourceRevision: snapshot\.sourceRevision/);
   assert.match(source, /접수 결과를 복구해야 합니다/);
   assert.match(source, /recoverPendingExport/);
+  assert.match(source, /value="registered-template">등록 템플릿 그대로/);
+  assert.match(source, /value="brand-style">브랜드 스타일 적용/);
+  assert.match(source, /value="free-design">자유 디자인/);
+  assert.match(source, /value="fidelity-first">Fidelity 우선/);
+  assert.match(source, /value="editable-first" disabled/);
+  assert.match(source, /편집 가능성 우선은 Public v2의 Fidelity-only 출력 계약에서 사용할 수 없습니다/);
+  assert.match(source, /generationMode: form\.generationMode/);
+  assert.match(source, /designPackPin/);
+  assert.match(source, /generationRouteReceipt/);
+  assert.doesNotMatch(source, /public-v2-generation-engine/);
+  assert.doesNotMatch(source, /hyundai-culture-center/);
 
   const hook = await readFile(hookPath, "utf8");
   assert.match(hook, /visibilitychange/);

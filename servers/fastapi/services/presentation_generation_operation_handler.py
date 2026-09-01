@@ -457,6 +457,144 @@ class PresentationGenerationOperationHandler:
                 and isinstance(operation_timing.request_payload, Mapping)
                 else {}
             )
+            generation_route_receipt = operation_payload.get(
+                "generation_route_receipt"
+            )
+            if (
+                isinstance(generation_route_receipt, Mapping)
+                and generation_route_receipt.get("selectedRoute")
+                == "source-native"
+            ):
+                from services.authored_vnext.source_native_generation import (
+                    SourceNativeGenerationError,
+                    run_source_native_generation,
+                )
+                from services.generation_provider_admission import (
+                    generation_provider_capabilities,
+                    server_generation_profile_identity,
+                )
+                from services.presentation_profiles import resolve_presentation_profile
+                from services.provider_usage_instrumentation import (
+                    public_operation_scope,
+                )
+                from utils.llm_provider import generation_provider_policy
+
+                status_error = _snapshot_status_error(status)
+                with provider_operation_usage_scope() as provider_usage:
+                    try:
+                        persisted = await session.get(
+                            PresentationModel, context.claim.presentation_id
+                        )
+                        identity = server_generation_profile_identity(
+                            request, persisted
+                        )
+                        profile = resolve_presentation_profile(identity)
+                        required_capabilities = generation_provider_capabilities(
+                            request, profile.driver_id
+                        )
+                        with public_operation_scope(
+                            context.claim.operation_id,
+                            attempt_token=context.claim.attempt_token,
+                            fencing_token=context.claim.fencing_token,
+                        ):
+                            with generation_provider_policy(
+                                identity,
+                                required_capabilities=required_capabilities,
+                            ):
+                                source_native_result = (
+                                    await run_source_native_generation(
+                                        request=request,
+                                        generation_job=job,
+                                        context=context,
+                                        route_receipt=generation_route_receipt,
+                                    )
+                                )
+                    except BaseException as error:
+                        status_error = _snapshot_status_error(status, status_error)
+                        try:
+                            receipt_payload = await _persist_failed_attempt_timing(
+                                request=request,
+                                job_id=job_id,
+                                status_error=status_error,
+                                context=context,
+                                error=error,
+                                recorder=timing_recorder,
+                                provider_usage=provider_usage,
+                                queue_wait_ms=operation_queue_wait_ms,
+                            )
+                            if receipt_payload is not None:
+                                await session.rollback()
+                                await _project_failed_attempt_timing(
+                                    session=session,
+                                    context=context,
+                                    receipt_payload=receipt_payload,
+                                )
+                        except Exception:
+                            await session.rollback()
+                            logger.warning(
+                                "Failed to record source-native attempt timing for job %s",
+                                job_id,
+                                exc_info=True,
+                            )
+                        if isinstance(error, SourceNativeGenerationError):
+                            raise NonRetryableWorkspaceOperationError(
+                                error.code
+                            ) from error
+                        raise
+                publication = source_native_result.get("publication")
+                if not isinstance(publication, Mapping):
+                    raise NonRetryableWorkspaceOperationError(
+                        "authored_manifest_publication_failed"
+                    )
+                success_receipt_payload = await _persist_terminal_attempt_timing(
+                    job_id=job_id,
+                    context=context,
+                    recorder=timing_recorder,
+                    provider_usage=provider_usage,
+                    queue_wait_ms=operation_queue_wait_ms,
+                    outcome="succeeded",
+                    retry_reason=(
+                        "workspace_retry"
+                        if context.claim.attempt_number > 1
+                        else None
+                    ),
+                    terminal_error=None,
+                )
+                if success_receipt_payload is None:
+                    raise NonRetryableWorkspaceOperationError(
+                        "generation_timing_receipt_persistence_failed"
+                    )
+                success_timing_projection = generation_timing_result_projection(
+                    success_receipt_payload
+                )
+                if not success_timing_projection:
+                    raise NonRetryableWorkspaceOperationError(
+                        "generation_timing_receipt_projection_invalid"
+                    )
+                status.status = "completed"
+                status.message = "Source-native Design Pack generation completed"
+                status.data = {
+                    **dict(source_native_result),
+                    **success_timing_projection,
+                }
+                session.add(status)
+                await session.commit()
+                raw_revision = publication.get("revision")
+                return WorkspaceOperationResult(
+                    payload={
+                        "status": "completed",
+                        "task_id": task_id,
+                        "job_id": str(job_id),
+                        **dict(source_native_result),
+                        **success_timing_projection,
+                    },
+                    result_revision=(
+                        raw_revision
+                        if isinstance(raw_revision, int)
+                        and not isinstance(raw_revision, bool)
+                        else None
+                    ),
+                )
             strategy_receipt = operation_payload.get("generation_strategy")
             if isinstance(strategy_receipt, Mapping):
                 from services.authored_vnext.deck_ir.integration import (

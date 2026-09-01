@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://presenton.local/contracts/authored-vnext/narrative-ir/v1/frame-selection-receipt.schema.json",
+  "title": "Frame Selection Receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "operationId", "designPackId", "designPackVersion", "designPackManifestDigest", "frameRegistryDigest", "searchReceiptDigest", "narrativeDigest", "selectionPolicyDigest", "slides", "receiptDigest"],
+  "properties": {
+    "schemaVersion": {"const": "frame-selection-receipt/v1"},
+    "operationId": {"type": "string", "format": "uuid"},
+    "designPackId": {"type": "string"},
+    "designPackVersion": {"type": "integer", "minimum": 1},
+    "designPackManifestDigest": {"$ref": "#/$defs/digest"},
+    "frameRegistryDigest": {"$ref": "#/$defs/digest"},
+    "searchReceiptDigest": {"$ref": "#/$defs/digest"},
+    "narrativeDigest": {"$ref": "#/$defs/digest"},
+    "selectionPolicyDigest": {"$ref": "#/$defs/digest"},
+    "slides": {"type": "array", "minItems": 1, "maxItems": 100, "items": {"$ref": "#/$defs/slide"}},
+    "receiptDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "vector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["roleFitness", "contentCapacity", "sourceCompatibility", "semanticFit"],
+      "properties": {
+        "roleFitness": {"type": "number", "minimum": 0, "maximum": 1},
+        "contentCapacity": {"type": "number", "minimum": 0, "maximum": 1},
+        "sourceCompatibility": {"type": "number", "minimum": 0, "maximum": 1},
+        "semanticFit": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
+    "slide": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slideKey", "sequenceIndex", "selectedCandidateId", "selectedFrameId", "selectedFrameDigest", "selectedSourcePartDigest", "qualityVector", "tieBreakDigest"],
+      "properties": {
+        "slideKey": {"type": "string"},
+        "sequenceIndex": {"type": "integer", "minimum": 0},
+        "selectedCandidateId": {"type": "string"},
+        "selectedFrameId": {"type": "string"},
+        "selectedFrameDigest": {"$ref": "#/$defs/digest"},
+        "selectedSourcePartDigest": {"$ref": "#/$defs/digest"},
+        "qualityVector": {"$ref": "#/$defs/vector"},
+        "tieBreakDigest": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

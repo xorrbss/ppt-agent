@@ -3,6 +3,8 @@
 import { FormEvent, useMemo, useState } from "react";
 
 import {
+  type PublicV2DesignPackPin,
+  type PublicV2GenerationMode,
   type PublicV2OperationSnapshot,
   usePublicV2Operation,
 } from "@/lib/public-v2";
@@ -37,6 +39,7 @@ type DisplaySnapshot = {
     sourceRevision?: number;
     checks?: Record<string, { status?: string; reasonCode?: string; required?: boolean }>;
   } | null;
+  generationRouteReceipt: PublicV2OperationSnapshot["generationRouteReceipt"];
   readiness: PublicV2OperationSnapshot["readiness"];
   generationTiming: PublicV2OperationSnapshot["generationTiming"];
   artifacts?: DisplayArtifact[];
@@ -49,8 +52,21 @@ const EMPTY_FORM = {
   content: "",
   instructions: "",
   slideCount: "",
-  generationEngine: "authored" as "authored" | "deck-ir",
-  authoredStyle: "hyundai-culture-center",
+  generationMode: "auto" as PublicV2GenerationMode,
+  designPackId: "",
+  designPackVersion: "",
+  designPackDigest: "",
+};
+
+const SHA256_DIGEST = /^sha256:[0-9a-f]{64}$/;
+
+const GENERATION_MODE_LABELS: Record<PublicV2GenerationMode, string> = {
+  auto: "자동 선택",
+  "registered-template": "등록 템플릿 그대로",
+  "brand-style": "브랜드 스타일 적용",
+  "free-design": "자유 디자인",
+  "fidelity-first": "Fidelity 우선",
+  "editable-first": "편집 가능성 우선",
 };
 
 function receiptValue(
@@ -101,6 +117,7 @@ function displaySnapshot(snapshot: PublicV2OperationSnapshot): DisplaySnapshot {
       ...(typeof sourceRevision === "number" ? { sourceRevision } : {}),
       checks,
     },
+    generationRouteReceipt: snapshot.generationRouteReceipt,
     readiness: snapshot.readiness,
     generationTiming: snapshot.generationTiming,
     artifacts: [...snapshot.artifacts],
@@ -220,6 +237,22 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
       setRequestError("public_v2_slide_count_must_be_between_1_and_30");
       return;
     }
+    let designPackPin: PublicV2DesignPackPin | undefined;
+    if (form.generationMode === "registered-template") {
+      const designPackId = form.designPackId.trim();
+      const version = Number(form.designPackVersion);
+      const digest = form.designPackDigest.trim();
+      if (
+        !designPackId
+        || !Number.isSafeInteger(version)
+        || version < 1
+        || !SHA256_DIGEST.test(digest)
+      ) {
+        setRequestError("public_v2_registered_template_pin_required");
+        return;
+      }
+      designPackPin = { designPackId, version, digest };
+    }
     setRequestError(null);
     setRequestedDownloadId(null);
     try {
@@ -227,8 +260,8 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
         content,
         ...(form.instructions.trim() ? { instructions: form.instructions.trim() } : {}),
         ...(requestedSlideCount === undefined ? {} : { slideCount: requestedSlideCount }),
-        generationEngine: form.generationEngine,
-        authoredStyle: form.authoredStyle,
+        generationMode: form.generationMode,
+        ...(designPackPin ? { designPackPin } : {}),
         qualityPolicy: "interactive-v1",
       });
     } catch (error) {
@@ -316,25 +349,24 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
               <input id="public-v2-instructions" value={form.instructions} onChange={(event) => setForm((value) => ({ ...value, instructions: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100" placeholder="대상, 톤, 강조할 항목" />
             </label>
             <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block text-sm font-medium text-slate-800" htmlFor="public-v2-generation-engine">
-                생성 엔진
-                <select id="public-v2-generation-engine" value={form.generationEngine} onChange={(event) => setForm((value) => ({ ...value, generationEngine: event.target.value as typeof value.generationEngine }))} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100">
-                  <option value="authored">Authored (기존 생성)</option>
-                  <option value="deck-ir">Deck IR (구조화 생성)</option>
+              <label className="block text-sm font-medium text-slate-800" htmlFor="public-v2-generation-mode">
+                디자인 방식 <span className="font-normal text-slate-500">(문서마다 새로 선택)</span>
+                <select id="public-v2-generation-mode" value={form.generationMode} onChange={(event) => setForm((value) => ({ ...value, generationMode: event.target.value as PublicV2GenerationMode }))} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100">
+                  <option value="auto">자동 선택</option>
+                  <option value="registered-template">등록 템플릿 그대로</option>
+                  <option value="brand-style">브랜드 스타일 적용</option>
+                  <option value="free-design">자유 디자인</option>
+                  <option value="fidelity-first">Fidelity 우선</option>
+                  <option value="editable-first" disabled>편집 가능성 우선 (현재 지원 안 됨)</option>
                 </select>
+                <span className="mt-1 block text-xs font-normal text-slate-500">편집 가능성 우선은 Public v2의 Fidelity-only 출력 계약에서 사용할 수 없습니다.</span>
               </label>
               <label className="block text-sm font-medium text-slate-800" htmlFor="public-v2-slide-count">
                 슬라이드 수 <span className="font-normal text-slate-500">(선택)</span>
                 <input id="public-v2-slide-count" min={1} max={30} inputMode="numeric" type="number" value={form.slideCount} onChange={(event) => setForm((value) => ({ ...value, slideCount: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100" />
               </label>
             </div>
-            <label className="block text-sm font-medium text-slate-800" htmlFor="public-v2-authored-style">
-              서버 스타일 프로필
-              <select id="public-v2-authored-style" value={form.authoredStyle} onChange={(event) => setForm((value) => ({ ...value, authoredStyle: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100">
-                <option value="hyundai-culture-center">제안서 에메랄드·네이비 레퍼런스</option>
-                <option value="enterprise-modular">기본 엔터프라이즈</option>
-              </select>
-            </label>
+            {form.generationMode === "registered-template" && <fieldset className="rounded-xl border border-slate-200 bg-slate-50 p-4"><legend className="px-1 text-sm font-semibold text-slate-800">등록 템플릿 고정 정보</legend><div className="grid gap-3 sm:grid-cols-3"><label className="text-xs font-medium text-slate-700" htmlFor="public-v2-design-pack-id">Design Pack ID<input id="public-v2-design-pack-id" required value={form.designPackId} onChange={(event) => setForm((value) => ({ ...value, designPackId: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" /></label><label className="text-xs font-medium text-slate-700" htmlFor="public-v2-design-pack-version">버전<input id="public-v2-design-pack-version" required min={1} inputMode="numeric" type="number" value={form.designPackVersion} onChange={(event) => setForm((value) => ({ ...value, designPackVersion: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" /></label><label className="text-xs font-medium text-slate-700" htmlFor="public-v2-design-pack-digest">Digest<input id="public-v2-design-pack-digest" required pattern="sha256:[0-9a-f]{64}" value={form.designPackDigest} onChange={(event) => setForm((value) => ({ ...value, designPackDigest: event.target.value }))} placeholder="sha256:…" className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm" /></label></div></fieldset>}
             <button type="submit" disabled={pendingExport || current.phase === "submitting" || current.phase === "monitoring"} className="rounded-xl bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-50">
               {pendingExport ? "파일 접수 복구 필요" : current.pendingAdmission ? "접수 복구 재시도" : "생성 시작"}
             </button>
@@ -371,6 +403,7 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
             {!terminal && current.canCancel && <button type="button" onClick={() => void requestCancel()} className="rounded-lg border border-red-300 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">이 작업 취소</button>}
             {isCancelled && <div className="rounded-xl border border-slate-300 bg-slate-50 p-4 text-sm text-slate-800" role="status"><p className="font-semibold">작업이 취소되었습니다.</p><p className="mt-1">{current.failure?.reasonCode ? `취소 사유: ${current.failure.reasonCode}` : "생성 실패와 별개로 취소 요청이 처리되었습니다."}</p></div>}
             {isFailed && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900" role="alert"><p className="font-semibold">작업이 실패했습니다.</p><p className="mt-1">실패 사유: {current.failure?.reasonCode ?? "실패 사유를 확인할 수 없습니다."}</p><p className="mt-1 text-xs">{current.failure?.retryable ? "이 오류는 재시도할 수 있습니다." : "새 요청을 만들기 전에 입력과 품질 상태를 확인하세요."}</p></div>}
+            {current.generationRouteReceipt && <section className="rounded-xl border border-slate-200 bg-white p-4" aria-label="서버 실행 경로 영수증"><h3 className="font-semibold text-slate-900">선택된 생성 방식</h3><dl className="mt-2 grid gap-2 text-sm sm:grid-cols-2"><div><dt className="text-slate-500">요청 방식</dt><dd>{GENERATION_MODE_LABELS[current.generationRouteReceipt.requestedMode]}</dd></div><div><dt className="text-slate-500">서버 선택</dt><dd>{current.generationRouteReceipt.selectedRoute === "source-native" ? "등록 원본 구조 사용" : "자유 디자인 대체 경로"}</dd></div><div><dt className="text-slate-500">출력 역량</dt><dd>{current.generationRouteReceipt.outputCapability === "editable" ? "편집 가능" : "Fidelity"}</dd></div>{current.generationRouteReceipt.designPackPin && <div><dt className="text-slate-500">등록 템플릿</dt><dd>{current.generationRouteReceipt.designPackPin.designPackId} · v{current.generationRouteReceipt.designPackPin.version}</dd></div>}</dl>{current.generationRouteReceipt.fallbackReason && <p className="mt-2 text-xs text-amber-800">대체 경로 사유: {current.generationRouteReceipt.fallbackReason}</p>}</section>}
           </div>
         )}
 

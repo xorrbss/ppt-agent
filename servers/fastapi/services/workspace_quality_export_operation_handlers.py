@@ -84,8 +84,12 @@ LOGGER = logging.getLogger(__name__)
 QUALITY_REVIEW_PROGRESS_INTERVAL_SECONDS = 30.0
 
 
-def _validated_authored_quality_receipt_digest(theme: object) -> str:
-    """Return the sealed V3 digest; absent or synthetic PASS evidence blocks export."""
+def _validated_authored_quality_receipt_digest(
+    theme: object,
+    *,
+    allow_visual_review_pending: bool = False,
+) -> tuple[str, bool]:
+    """Return a sealed V3 digest and whether only human visual review remains."""
 
     if not isinstance(theme, Mapping):
         raise NonRetryableWorkspaceOperationError("quality_receipt_v3_required")
@@ -93,10 +97,14 @@ def _validated_authored_quality_receipt_digest(theme: object) -> str:
     receipt = gate.get("qualityReceiptV3") if isinstance(gate, Mapping) else None
     if not isinstance(receipt, Mapping):
         raise NonRetryableWorkspaceOperationError("quality_receipt_v3_required")
-    if (
-        receipt.get("schemaVersion") != "quality-receipt/v3"
-        or receipt.get("gatePassed") is not True
-        or receipt.get("qualityStatus") != "passed"
+    blockers = receipt.get("blockers")
+    visual_review_pending = (
+        allow_visual_review_pending
+        and receipt.get("gatePassed") is False
+        and blockers == ["visualReview.required_failed"]
+    )
+    if receipt.get("schemaVersion") != "quality-receipt/v3" or not (
+        receipt.get("gatePassed") is True or visual_review_pending
     ):
         raise NonRetryableWorkspaceOperationError("quality_receipt_v3_blocked")
     receipt_digest = receipt.get("receiptDigest")
@@ -135,7 +143,7 @@ def _validated_authored_quality_receipt_digest(theme: object) -> str:
     ).hexdigest()
     if actual != receipt_digest:
         raise NonRetryableWorkspaceOperationError("quality_receipt_v3_digest_invalid")
-    return receipt_digest.removeprefix("sha256:")
+    return receipt_digest.removeprefix("sha256:"), visual_review_pending
 
 
 def _legacy_fidelity_quality_digest(scene_digest: str) -> str:
@@ -162,15 +170,19 @@ def _resolved_authored_quality_digest(
     *,
     scene_digest: str,
     pptx_mode: str,
-) -> tuple[str, bool]:
+) -> tuple[str, str | None]:
     """Resolve strict evidence, or the narrow legacy Fidelity compatibility binding."""
 
     try:
-        return _validated_authored_quality_receipt_digest(theme), False
+        digest, visual_review_pending = _validated_authored_quality_receipt_digest(
+            theme,
+            allow_visual_review_pending=pptx_mode == "fidelity",
+        )
+        return digest, "visual-review-pending" if visual_review_pending else None
     except NonRetryableWorkspaceOperationError as error:
         if error.code != "quality_receipt_v3_required" or pptx_mode != "fidelity":
             raise
-        return _legacy_fidelity_quality_digest(scene_digest), True
+        return _legacy_fidelity_quality_digest(scene_digest), "legacy"
 
 
 def _legacy_fidelity_public_quality_receipt(
@@ -605,7 +617,7 @@ class WorkspaceExportOperationHandler:
         authored_quality_gate: object | None = None
         authored_scene_digest: str | None = None
         public_quality_receipt: dict[str, object] | None = None
-        legacy_fidelity_quality_compatibility = False
+        fidelity_quality_compatibility: str | None = None
         try:
             if authored_vnext_export_path == "legacy-native":
                 if not isinstance(authored_vnext_projection, dict):
@@ -751,7 +763,7 @@ class WorkspaceExportOperationHandler:
                     )
                 authored_scene_digest = digest_deck_htmls(cast(list[str], htmls))
                 if release_review_receipt_digest is None:
-                    quality_receipt_digest, legacy_fidelity_quality_compatibility = (
+                    quality_receipt_digest, fidelity_quality_compatibility = (
                         _resolved_authored_quality_digest(
                             presentation.theme,
                             scene_digest=authored_scene_digest,
@@ -804,11 +816,14 @@ class WorkspaceExportOperationHandler:
                         "sessionless_capability": True,
                         "pptx_mode": "fidelity" if export_format == "pptx" else None,
                         "legacy_quality_compatibility": (
-                            legacy_fidelity_quality_compatibility
+                            fidelity_quality_compatibility == "legacy"
+                        ),
+                        "visual_review_pending": (
+                            fidelity_quality_compatibility == "visual-review-pending"
                         ),
                         "release_readiness": (
                             "blocked"
-                            if legacy_fidelity_quality_compatibility
+                            if fidelity_quality_compatibility is not None
                             else "evidence_bound"
                         ),
                     },
@@ -898,7 +913,7 @@ class WorkspaceExportOperationHandler:
                     raise NonRetryableWorkspaceOperationError(
                         "public_quality_projection_inputs_missing"
                     )
-                if legacy_fidelity_quality_compatibility:
+                if fidelity_quality_compatibility == "legacy":
                     public_quality_receipt = _legacy_fidelity_public_quality_receipt(
                         quality_receipt_id=(
                             f"quality:{claim.operation_id}:{public_ref.artifact_id}"
