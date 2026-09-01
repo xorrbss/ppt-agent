@@ -175,13 +175,44 @@ def _capacity_envelope(
         font_size = max(8.0, float(item.get("font_size") or 18.0))
     except (TypeError, ValueError):
         font_size = 18.0
-    maximum_lines = max(1, int(height / (font_size * 1.25)))
+    computed = item.get("computed_style")
+    computed = computed if isinstance(computed, Mapping) else {}
+
+    def px(name: str, default: float = 0.0) -> float:
+        raw = str(computed.get(name) or "").strip().lower()
+        try:
+            return float(raw[:-2]) if raw.endswith("px") else float(raw)
+        except (TypeError, ValueError):
+            return default
+
+    inner_width = max(
+        1.0,
+        width
+        - px("paddingLeft")
+        - px("paddingRight")
+        - px("borderLeftWidth")
+        - px("borderRightWidth"),
+    )
+    inner_height = max(
+        1.0,
+        height
+        - px("paddingTop")
+        - px("paddingBottom")
+        - px("borderTopWidth")
+        - px("borderBottomWidth"),
+    )
+    line_height = max(1.0, px("lineHeight", font_size * 1.25))
+    maximum_lines = max(1, int(inner_height / line_height))
+    # Korean glyphs commonly consume close to one em. A Latin-oriented 0.55em
+    # estimate admitted text that reflowed beyond the measured slot. Preserve
+    # the Chromium-observed inner box and use a conservative mixed-script width.
+    characters_per_line = max(1, int(inner_width / (font_size * 0.9)))
     maximum_characters = max(
-        8, min(100000, maximum_lines * max(4, int(width / (font_size * 0.55))))
+        4, min(100000, maximum_lines * characters_per_line)
     )
     envelope: dict[str, object] = {
         "measurementBasis": "chromium-observed",
-        "contentArea": width * height,
+        "contentArea": inner_width * inner_height,
     }
     if kind == "text":
         envelope.update(
