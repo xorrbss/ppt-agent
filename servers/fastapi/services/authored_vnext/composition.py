@@ -377,7 +377,18 @@ def build_composition_plan(
     assigned: dict[str, list[SealedContentUnit]] = {item["slotId"]: [] for item in slots}
     assignments: list[dict[str, Any]] = []
     unmapped: list[str] = []
-    for unit in units:
+    unit_order = {
+        unit.content_unit_id: index for index, unit in enumerate(units)
+    }
+    placement_order = sorted(
+        units,
+        key=lambda unit: (
+            -len(_unit_text(unit)),
+            unit_order[unit.content_unit_id],
+            unit.content_unit_id,
+        ),
+    )
+    for unit in placement_order:
         eligible = [item for item in slots if _fits(item, assigned[item["slotId"]], unit)]
         eligible.sort(
             key=lambda item: (
@@ -406,6 +417,11 @@ def build_composition_plan(
                 "sourceUnitIndex": unit.source_unit_index,
             }
         )
+    assignments.sort(
+        key=lambda item: unit_order[str(item["contentUnitId"])]
+    )
+    for values in assigned.values():
+        values.sort(key=lambda item: unit_order[item.content_unit_id])
     mapped_ids = [item["contentUnitId"] for item in assignments]
     duplicates = sorted({item for item in mapped_ids if mapped_ids.count(item) > 1})
     required_ids = {item.content_unit_id for item in units if item.required}
