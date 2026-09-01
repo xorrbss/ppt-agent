@@ -35,10 +35,11 @@ _LAYOUT_RELS = """<?xml version="1.0" encoding="UTF-8"?>
 """
 
 
-def _shape(shape_id: int, text: str, *, placeholder: str = "title") -> str:
+def _shape(shape_id: int, text: str, *, placeholder: str | None = "title") -> str:
+    placeholder_xml = f'<p:ph type="{placeholder}"/>' if placeholder else ""
     return f"""
     <p:sp>
-      <p:nvSpPr><p:cNvPr id="{shape_id}" name="{placeholder.title()} {shape_id}"/><p:cNvSpPr/><p:nvPr><p:ph type="{placeholder}"/></p:nvPr></p:nvSpPr>
+      <p:nvSpPr><p:cNvPr id="{shape_id}" name="{(placeholder or 'Decoration').title()} {shape_id}"/><p:cNvSpPr/><p:nvPr>{placeholder_xml}</p:nvPr></p:nvSpPr>
       <p:spPr><a:xfrm><a:off x="685800" y="685800"/><a:ext cx="5486400" cy="914400"/></a:xfrm><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:ln w="12700"><a:solidFill><a:srgbClr val="2563EB"/></a:solidFill></a:ln></p:spPr>
       <p:txBody><a:bodyPr lIns="91440" tIns="45720" rIns="91440" bIns="45720"/><a:lstStyle/><a:p><a:pPr algn="l"/><a:r><a:rPr sz="3200" b="1"><a:solidFill><a:srgbClr val="0F172A"/></a:solidFill><a:latin typeface="Noto Sans KR"/><a:ea typeface="Noto Sans KR"/></a:rPr><a:t>{text}</a:t></a:r></a:p></p:txBody>
     </p:sp>
@@ -50,7 +51,7 @@ def _slide(text: str) -> str:
 <p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
  xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
- <p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>{_shape(2, text)}</p:spTree></p:cSld>
+ <p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>{_shape(2, text)}{_shape(3, "Protected brand", placeholder=None)}</p:spTree></p:cSld>
 </p:sld>
 """
 
@@ -104,7 +105,21 @@ def test_source_native_design_pack_register_reload_and_seal(tmp_path: Path) -> N
     assert registered.structure.frames[0].slots[0].semantic_role == "title"
     assert registered.structure.frames[0].slots[0].accepted_kinds == ("text",)
     assert registered.structure.frames[0].slots[0].constraints
+    assert registered.structure.frames[0].slots[0].required is True
+    assert registered.structure.frames[0].slots[0].capacity_envelope is not None
+    assert registered.structure.frames[0].slots[0].patch_handle is not None
+    assert registered.structure.frames[0].slots[0].patch_handle.kind == "pptx-shape"
+    assert registered.structure.frames[0].slots[0].extraction_confidence == 1.0
     assert registered.structure.frames[0].chrome
+    assert all(
+        element.protected and not element.editable
+        for element in registered.structure.frames[0].chrome
+    )
+    assert any(
+        element.source_part == "ppt/slides/slide1.xml"
+        and element.element_id.endswith("-3")
+        for element in registered.structure.frames[0].chrome
+    )
     assert registered.structure.representative_renders[0].evidence_level == "structural"
 
     authored_manifest = ingest_design_pack(
@@ -122,7 +137,33 @@ def test_source_native_design_pack_register_reload_and_seal(tmp_path: Path) -> N
                             "kind": "text",
                             "semanticRole": "title",
                             "editable": True,
+                            "slotApproved": True,
+                            "slotId": "slot:cover-headline",
+                            "required": True,
+                            "containerId": "scene:cover",
+                            "extractionConfidence": 1.0,
                             "bounds": {"x": 80, "y": 90, "width": 720, "height": 120},
+                        },
+                        {
+                            "id": "brand-lockup",
+                            "kind": "text",
+                            "semanticRole": "logo",
+                            "editable": True,
+                            "bounds": {"x": 980, "y": 40, "width": 220, "height": 60},
+                        }
+                    ],
+                },
+                {
+                    "id": "closing",
+                    "type": "html",
+                    "role": "closing",
+                    "elements": [
+                        {
+                            "id": "protected-footer",
+                            "kind": "text",
+                            "semanticRole": "logo",
+                            "editable": True,
+                            "bounds": {"x": 80, "y": 640, "width": 1120, "height": 32},
                         }
                     ],
                 }
@@ -138,3 +179,12 @@ def test_source_native_design_pack_register_reload_and_seal(tmp_path: Path) -> N
     assert authored.manifest.package_digest == authored_manifest.package_digest
     assert authored.structure.frames[0].frame_type == "scene"
     assert authored.structure.frames[0].slots[0].selector == "scene:cover#headline"
+    assert authored.structure.frames[0].slots[0].patch_handle is not None
+    assert authored.structure.frames[0].slots[0].patch_handle.kind == "scene-element"
+    assert authored.structure.frames[0].slots[0].hide_policy == "never"
+    assert len(authored.structure.frames[0].chrome) == 1
+    assert authored.structure.frames[0].chrome[0].protected is True
+    assert authored.structure.frames[0].chrome[0].editable is False
+    assert authored.structure.frames[1].slots == ()
+    assert authored.structure.frames[1].editability == "fidelity-only"
+    assert authored.structure.frames[1].chrome[0].protected is True

@@ -26,6 +26,12 @@ SEARCH_POLICY = {
         "data-representation",
         "density",
         "content-capacity",
+        "chromium-line-capacity",
+        "content-area-capacity",
+        "table-shape-capacity",
+        "numeric-card-capacity",
+        "image-aspect-capacity",
+        "required-slot-coverage",
         "frame-semantics",
     ],
     "ranking": "pareto-layers-then-canonical-digest",
@@ -76,6 +82,8 @@ class SourceNativeFrameV1(StrictModel):
     frame_semantics: list[Key] = Field(default_factory=list, max_length=100)
     max_supporting_points: int = Field(ge=0, le=1000)
     supports_source_owned_content: bool = False
+    slot_contracts: list[dict[str, Any]] = Field(default_factory=list, max_length=128)
+    executable: bool = True
 
 
 class DesignPackSnapshotV1(StrictModel):
@@ -120,12 +128,95 @@ def _pack(value: Mapping[str, Any] | object) -> DesignPackSnapshotV1:
         raise FrameSearchError("design_pack_snapshot_invalid") from error
 
 
+def _slot_envelope(slot: Mapping[str, Any]) -> Mapping[str, Any]:
+    value = slot.get("capacityEnvelope", slot.get("capacity_envelope", {}))
+    return value if isinstance(value, Mapping) else {}
+
+
+def _capacity(slide: object, frame: SourceNativeFrameV1) -> tuple[float, list[str]]:
+    text_values = [str(getattr(slide, "key_message"))]
+    text_values.extend(str(item) for item in getattr(slide, "supporting_points"))
+    characters = sum(len(" ".join(item.split())) for item in text_values)
+    data = list(getattr(slide, "data"))
+    numeric_items = sum(
+        1
+        for item in data
+        if str(getattr(item, "kind", "")).lower() in {"metric", "number", "numeric"}
+    )
+    table_rows = 0
+    table_columns = 0
+    image_aspects: list[float] = []
+    for item in data:
+        payload = getattr(item, "value", None)
+        if isinstance(payload, Sequence) and not isinstance(payload, (str, bytes)):
+            table_rows += len(payload)
+            table_columns = max(
+                table_columns,
+                max(
+                    (
+                        len(row)
+                        for row in payload
+                        if isinstance(row, Sequence) and not isinstance(row, (str, bytes))
+                    ),
+                    default=0,
+                ),
+            )
+        if isinstance(payload, Mapping):
+            aspect = payload.get("aspectRatio", payload.get("aspect_ratio"))
+            try:
+                if aspect is not None:
+                    image_aspects.append(float(aspect))
+            except (TypeError, ValueError):
+                pass
+    if not frame.slot_contracts:
+        point_count = len(getattr(slide, "supporting_points"))
+        legacy = 1.0 if point_count == 0 else min(1.0, frame.max_supporting_points / point_count)
+        return legacy, []
+    envelopes = [_slot_envelope(item) for item in frame.slot_contracts]
+    max_characters = sum(int(item.get("maxCharacters", item.get("max_characters", 0)) or 0) for item in envelopes)
+    max_lines = sum(int(item.get("maxLines", item.get("max_lines", 0)) or 0) for item in envelopes)
+    content_area = sum(float(item.get("contentArea", item.get("content_area", 0)) or 0) for item in envelopes)
+    max_rows = sum(int(item.get("maxTableRows", item.get("max_table_rows", 0)) or 0) for item in envelopes)
+    max_columns = max((int(item.get("maxTableColumns", item.get("max_table_columns", 0)) or 0) for item in envelopes), default=0)
+    max_numeric = sum(int(item.get("maxNumericItems", item.get("max_numeric_items", 0)) or 0) for item in envelopes)
+    estimated_lines = sum(max(1, (len(item) + 39) // 40) for item in text_values if item)
+    estimated_area = characters * 150
+    reasons: list[str] = []
+    if characters and max_characters < characters:
+        reasons.append("content-character-capacity-exceeded")
+    if estimated_lines and max_lines < estimated_lines:
+        reasons.append("chromium-line-capacity-exceeded")
+    if estimated_area and content_area < estimated_area:
+        reasons.append("content-area-capacity-exceeded")
+    if table_rows > max_rows or table_columns > max_columns:
+        reasons.append("table-shape-capacity-exceeded")
+    if numeric_items > max_numeric:
+        reasons.append("numeric-card-capacity-exceeded")
+    for aspect in image_aspects:
+        if not any(
+            float(item.get("aspectRatioMin", item.get("aspect_ratio_min", 0)) or 0)
+            <= aspect
+            <= float(item.get("aspectRatioMax", item.get("aspect_ratio_max", 1000)) or 1000)
+            for item in envelopes
+        ):
+            reasons.append("image-aspect-capacity-exceeded")
+            break
+    required_slots = [item for item in frame.slot_contracts if item.get("required") is True]
+    if len(required_slots) > 1 + len(getattr(slide, "supporting_points")) + len(data):
+        reasons.append("required-slot-coverage-missing")
+    ratios = [
+        (max_characters / characters) if characters else 1.0,
+        (max_lines / estimated_lines) if estimated_lines else 1.0,
+        (content_area / estimated_area) if estimated_area else 1.0,
+    ]
+    return min(1.0, *ratios), reasons
+
+
 def _quality(slide: object, frame: SourceNativeFrameV1) -> dict[str, float]:
     semantics = set(getattr(slide, "frame_semantics"))
     supported = set(frame.frame_semantics)
     semantic_fit = 1.0 if not semantics else len(semantics & supported) / len(semantics)
-    point_count = len(getattr(slide, "supporting_points"))
-    capacity = 1.0 if point_count == 0 else min(1.0, frame.max_supporting_points / point_count)
+    capacity, _ = _capacity(slide, frame)
     owns_source = bool(getattr(slide, "source_ownership"))
     return {
         "roleFitness": 1.0 if getattr(slide, "role") in frame.roles else 0.0,
@@ -139,6 +230,8 @@ def _quality(slide: object, frame: SourceNativeFrameV1) -> dict[str, float]:
 
 def _rejections(slide: object, frame: SourceNativeFrameV1) -> list[str]:
     reasons: list[str] = []
+    if not frame.executable:
+        reasons.append("frame-fidelity-only")
     if getattr(slide, "role") not in frame.roles:
         reasons.append("role-unsupported")
     if getattr(slide, "data_representation") not in frame.data_representations:
@@ -147,6 +240,8 @@ def _rejections(slide: object, frame: SourceNativeFrameV1) -> list[str]:
         reasons.append("density-unsupported")
     if len(getattr(slide, "supporting_points")) > frame.max_supporting_points:
         reasons.append("content-capacity-exceeded")
+    _, capacity_reasons = _capacity(slide, frame)
+    reasons.extend(capacity_reasons)
     if getattr(slide, "source_ownership") and not frame.supports_source_owned_content:
         reasons.append("source-ownership-unsupported")
     if not set(getattr(slide, "frame_semantics")).issubset(frame.frame_semantics):

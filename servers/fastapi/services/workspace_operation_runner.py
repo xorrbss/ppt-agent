@@ -384,6 +384,7 @@ _SAFE_RESULT_PAYLOAD_KEYS_BY_KIND: dict[str, frozenset[str]] = {
             "deckIr",
             "generationDeckIr",
             "generationQualityReceipt",
+            "contentIntegrityReceipt",
             "requirementCoverageReceipt",
             "publication",
         }
@@ -755,6 +756,25 @@ def sanitize_workspace_event_payload(
                 safe[normalized]["compileReceiptDigests"] = [
                     item for item in compile_digests[:30] if isinstance(item, str)
                 ]
+        elif (
+            operation_kind == "presentation.generate"
+            and normalized == "contentIntegrityReceipt"
+            and isinstance(value, Mapping)
+        ):
+            try:
+                from services.authored_vnext.narrative_ir.content_graph import (
+                    validate_content_integrity_receipt,
+                )
+                from services.authored_vnext.narrative_ir.contracts import (
+                    model_payload,
+                )
+
+                safe[normalized] = model_payload(
+                    validate_content_integrity_receipt(value)
+                )
+            except Exception:
+                # An invalid integrity receipt is never durable success state.
+                continue
         elif (
             operation_kind == "presentation.generate"
             and normalized == "generationQualityReceipt"
@@ -1969,6 +1989,31 @@ async def finalize_workspace_operation_success(
 ) -> bool:
     now = _utc_now()
     result_payload = await _attach_durable_generation_timing(claim, result.payload)
+    if claim.kind == "presentation.generate":
+        request_payload = (
+            claim.request_payload
+            if isinstance(claim.request_payload, Mapping)
+            else {}
+        )
+        route = request_payload.get("generation_route_receipt")
+        selected_route = (
+            route.get("selectedRoute") or route.get("selected_route")
+            if isinstance(route, Mapping)
+            else None
+        )
+        if selected_route == "source-native":
+            try:
+                from services.authored_vnext.narrative_ir.content_graph import (
+                    validate_content_integrity_receipt,
+                )
+
+                validate_content_integrity_receipt(
+                    result_payload.get("contentIntegrityReceipt")
+                )
+            except Exception as error:
+                raise NonRetryableWorkspaceOperationError(
+                    "content_integrity_receipt_invalid"
+                ) from error
     safe_result = sanitize_workspace_event_payload(
         result_payload,
         operation_kind=claim.kind,

@@ -546,6 +546,18 @@ class PresentationGenerationOperationHandler:
                     raise NonRetryableWorkspaceOperationError(
                         "authored_manifest_publication_failed"
                     )
+                try:
+                    from services.authored_vnext.narrative_ir.content_graph import (
+                        validate_content_integrity_receipt,
+                    )
+
+                    validate_content_integrity_receipt(
+                        source_native_result.get("contentIntegrityReceipt")
+                    )
+                except Exception as error:
+                    raise NonRetryableWorkspaceOperationError(
+                        "content_integrity_receipt_invalid"
+                    ) from error
                 success_receipt_payload = await _persist_terminal_attempt_timing(
                     job_id=job_id,
                     context=context,

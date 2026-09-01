@@ -10,9 +10,11 @@ from uuid import UUID
 from pydantic import ValidationError
 
 from .contracts import (
+    ContentGraphV1,
     NarrativeIRV1,
     ProviderCallBudgetV1,
     ProviderCallReservationV1,
+    model_payload,
 )
 from .validation import NarrativeIRValidationError, seal_narrative_ir
 
@@ -76,6 +78,7 @@ async def run_narrative_director(
     slide_count: int,
     language: str | None,
     source_unit_ids: Sequence[str] = (),
+    content_graph: ContentGraphV1 | Mapping[str, Any] | None = None,
     provider: NarrativeProvider,
     reserve: Reservation,
 ) -> NarrativeDirectorResult:
@@ -88,8 +91,17 @@ async def run_narrative_director(
 
     if not 1 <= slide_count <= 100:
         raise NarrativeDirectorError("narrative_ir_slide_count_unsupported")
-    if source_unit_ids and len(source_unit_ids) != slide_count:
-        raise NarrativeDirectorError("narrative_ir_source_unit_cardinality_mismatch")
+    graph: ContentGraphV1 | None = None
+    if content_graph is not None:
+        from .content_graph import validate_content_graph
+
+        graph = validate_content_graph(content_graph)
+        if graph.generation_lane != "new-authoring":
+            raise NarrativeDirectorError("narrative_ir_generation_lane_invalid")
+        graph_source_ids = tuple(item.source_unit_id for item in graph.source_unit_order)
+        if source_unit_ids and tuple(source_unit_ids) != graph_source_ids:
+            raise NarrativeDirectorError("narrative_ir_source_unit_order_mismatch")
+        source_unit_ids = graph_source_ids
     if getattr(provider, "single_physical_call", None) is not True:
         raise NarrativeDirectorError("narrative_provider_physical_call_contract_missing")
 
@@ -110,7 +122,13 @@ async def run_narrative_director(
             "slideCount": slide_count,
             "language": language,
             "sourceUnitIds": list(source_unit_ids),
+            "admittedContentGraph": model_payload(graph) if graph is not None else None,
             "outputContract": "narrative-ir-draft/v1",
+            "contentUnitPolicy": {
+                "allContentUnitIdsExactlyOnce": True,
+                "rewriteOrSummarizeAfterSeal": False,
+                "splitOrMergeAfterSeal": False,
+            },
             "forbiddenOutputAuthorities": [
                 "html",
                 "css",
@@ -139,6 +157,7 @@ async def run_narrative_director(
                     operation_id=operation_id,
                     admitted_slide_count=slide_count,
                     expected_source_unit_ids=source_unit_ids,
+                    content_graph=graph,
                 )
             except NarrativeIRValidationError as error:
                 last_validation_error = error

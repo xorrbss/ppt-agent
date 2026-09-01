@@ -584,6 +584,7 @@ class OperationStatusV2(PublicWireModel):
     error: PublicOperationErrorV2 | None = None
     generation_route_receipt: GenerationRouteReceiptV1 | None = None
     generation_timing_receipt: dict[str, Any] | None = None
+    content_integrity_receipt: dict[str, Any] | None = None
     execution_receipt: OperationExecutionReceiptV2 | None = None
     quality_receipt: QualityReceiptV3 | None = None
     release_readiness: Literal["ready", "blocked", "not_assessed"] = "not_assessed"
@@ -606,6 +607,22 @@ class OperationStatusV2(PublicWireModel):
             raise ValueError("only failed or cancelled operation may expose error")
         if self.status == "succeeded" and self.source_revision is None:
             raise ValueError("succeeded operation requires sourceRevision")
+        if (
+            self.kind == "presentation.generate"
+            and self.status == "succeeded"
+            and self.generation_route_receipt is not None
+            and self.generation_route_receipt.selected_route == "source-native"
+            and self.content_integrity_receipt is None
+        ):
+            raise ValueError(
+                "registered-template success requires contentIntegrityReceipt"
+            )
+        if self.content_integrity_receipt is not None and (
+            self.content_integrity_receipt.get("schemaVersion")
+            != "content-integrity-receipt/v1"
+            or self.content_integrity_receipt.get("status") != "passed"
+        ):
+            raise ValueError("contentIntegrityReceipt must be a passed v1 receipt")
         if self.release_readiness == "ready" and (
             self.quality_receipt is None
             or self.quality_receipt.release_readiness != "ready"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Mapping
+import copy
 import hashlib
 import json
 import re
@@ -23,6 +24,20 @@ from services.authored_vnext.deck_ir.product_adapter import (
     ProductDeckIrExecutionAdapter,
 )
 from services.authored_vnext.design_pack import RegisteredDesignPack
+from services.authored_vnext.composition import (
+    CompositionError,
+    SealedContentUnit,
+    assert_composition_plan,
+    build_content_integrity_page,
+    build_composition_plan,
+    canonical_digest,
+    sealed_units_for_slide,
+)
+from services.authored_vnext.narrative_ir.content_graph import (
+    ContentGraphValidationError,
+    seal_content_integrity_receipt,
+    validate_content_integrity_receipt,
+)
 from services.authored_vnext.generation_route import (
     GenerationRouteError,
     load_pinned_design_pack,
@@ -161,11 +176,19 @@ def _pack_snapshot(package: RegisteredDesignPack) -> DesignPackSnapshotV1:
                 "sourcePartDigest": frame.source_digest,
                 "sourceNative": True,
                 "roles": [frame.role],
-                "dataRepresentations": ["none"],
+                "dataRepresentations": [
+                    "none", "metric", "table", "chart", "timeline",
+                    "process", "comparison", "image", "quote",
+                ],
                 "densities": [density],
                 "frameSemantics": [_frame_semantic(frame.source_index)],
-                "maxSupportingPoints": 24,
-                "supportsSourceOwnedContent": False,
+                "maxSupportingPoints": 1000,
+                "supportsSourceOwnedContent": True,
+                "slotContracts": [
+                    slot.model_dump(mode="json", by_alias=True)
+                    for slot in frame.slots
+                ],
+                "executable": getattr(frame, "editability", "source-native") == "source-native",
             }
         )
     return DesignPackSnapshotV1(
@@ -264,6 +287,9 @@ class _StructuredNarrativeProvider:
                     if index < len(self._slides_markdown)
                     else f"핵심 메시지 {index + 1}"
                 )
+            data_representation = item.get("dataRepresentation") or item.get("data_representation") or "none"
+            data = item.get("data") or []
+            source_ownership = item.get("sourceOwnership") or item.get("source_ownership") or []
             normalized_slides.append(
                 {
                     "slideKey": f"slide-{index + 1:03d}",
@@ -271,9 +297,9 @@ class _StructuredNarrativeProvider:
                     "role": frame.role,
                     "keyMessage": key_message.strip()[:4000],
                     "supportingPoints": [str(value).strip()[:4000] for value in supporting[:24] if str(value).strip()],
-                    "dataRepresentation": "none",
-                    "data": [],
-                    "sourceOwnership": [],
+                    "dataRepresentation": data_representation,
+                    "data": data if isinstance(data, list) else [],
+                    "sourceOwnership": source_ownership if isinstance(source_ownership, list) else [],
                     "frameSemantics": [_frame_semantic(index)],
                     "density": density,
                 }
@@ -283,70 +309,165 @@ class _StructuredNarrativeProvider:
             "title": str(raw.get("title") or "Presentation")[:4000],
             "language": str(raw.get("language") or request.get("language") or "ko-KR")[:64],
             "slides": normalized_slides,
-            "sourceUnitOrder": [],
+            "sourceUnitOrder": raw.get("sourceUnitOrder") or raw.get("source_unit_order") or [],
         }
 
 
-def _text_chunks(slide: object) -> list[str]:
-    chunks = [str(getattr(slide, "key_message"))]
-    chunks.extend(str(item) for item in getattr(slide, "supporting_points"))
-    return [" ".join(item.split())[:240] for item in chunks if item.strip()]
+def _protected_dom_digest(document: object, editable_qids: set[str]) -> str:
+    protected: list[dict[str, str]] = []
+    for node in document.xpath("//*[@data-qid]"):
+        qid = str(node.get("data-qid") or "").strip()
+        if qid and qid not in editable_qids:
+            clone = copy.deepcopy(node)
+            for editable in clone.xpath(".//*[@data-qid]"):
+                editable_qid = str(editable.get("data-qid") or "").strip()
+                if editable_qid not in editable_qids:
+                    continue
+                sentinel = lxml_html.Element("source-native-editable-slot")
+                sentinel.set("data-qid", editable_qid)
+                sentinel.tail = editable.tail
+                parent = editable.getparent()
+                if parent is not None:
+                    parent.replace(editable, sentinel)
+            protected.append(
+                {
+                    "qid": qid,
+                    "html": lxml_html.tostring(clone, encoding="unicode", method="html"),
+                }
+            )
+    return canonical_digest(protected)
 
 
-def _replace_frame_text(raw_html: str, slide: object) -> tuple[str, list[dict[str, object]]]:
+def _unit_render_text(unit: SealedContentUnit) -> str:
+    if unit.text.strip():
+        return " ".join(unit.text.split())
+    if unit.data not in (None, [], {}):
+        return json.dumps(unit.data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return ""
+
+
+def _patch_exact_slot(node: object, units: list[SealedContentUnit]) -> None:
+    if node.xpath(".//*[@data-qid]"):
+        raise SourceNativeGenerationError("design_pack_patch_handle_not_leaf")
+    texts = [_unit_render_text(item) for item in units]
+    rendered = "\n".join(item for item in texts if item)
+    # Preserve the editable element tree. Only owned text nodes inside the exact
+    # patch handle are changed; child elements are never removed.
+    if any(
+        (child.text and child.text.strip()) or (child.tail and child.tail.strip())
+        for child in node.iterdescendants()
+    ):
+        raise SourceNativeGenerationError("design_pack_patch_handle_contains_unowned_text")
+    node.text = rendered
+    node.set("data-content-unit-ids", "|".join(item.content_unit_id for item in units))
+    node.set("data-content-unit-digests", "|".join(item.content_digest for item in units))
+
+
+def _apply_composition_plan(
+    raw_html: str,
+    *,
+    plan: Mapping[str, object],
+    units: list[SealedContentUnit],
+    slots: list[dict[str, object]],
+) -> tuple[str, list[dict[str, object]], str, str]:
     try:
         document = lxml_html.document_fromstring(raw_html)
     except (ValueError, TypeError) as error:
         raise SourceNativeGenerationError("design_pack_html_invalid") from error
-    nodes = document.xpath(
-        "//*[@data-qid and not(.//*[@data-qid]) and "
-        "(self::div or self::p or self::span or self::h1 or self::h2 or self::h3 or self::li)]"
-    )
-    chunks = _text_chunks(slide)
-    text_index = 0
-    for node in nodes:
-        original = " ".join(node.text_content().split())
-        if not original:
+    by_id = {item.content_unit_id: item for item in units}
+    by_slot: dict[str, list[SealedContentUnit]] = {}
+    for assignment in plan.get("assignments", ()):
+        if not isinstance(assignment, Mapping):
             continue
-        for child in list(node):
-            node.remove(child)
-        node.text = chunks[text_index] if text_index < len(chunks) else ""
-        text_index += 1
-    if text_index < len(chunks):
-        body = document.find("body")
-        if body is None:
-            raise SourceNativeGenerationError("design_pack_html_body_missing")
-        overlay = lxml_html.Element("section")
-        overlay.set("data-qid", f"{getattr(slide, 'slide_key')}-narrative")
-        overlay.set("aria-label", "narrative content")
-        overlay.set(
-            "style",
-            "position:absolute;left:64px;right:64px;bottom:44px;padding:18px 24px;"
-            "background:rgba(255,255,255,.94);color:#0f172a;border-left:8px solid #2563eb;"
-            "font-family:'Malgun Gothic',sans-serif;font-size:22px;line-height:1.35;z-index:9999",
-        )
-        overlay.text = " · ".join(chunks[text_index:])
-        body.append(overlay)
-    serialized = lxml_html.tostring(document, encoding="unicode", method="html")
+        unit = by_id.get(str(assignment.get("contentUnitId") or ""))
+        if unit is not None:
+            by_slot.setdefault(str(assignment.get("slotId") or ""), []).append(unit)
+    editable_qids = {
+        str(slot.get("patchHandle", {}).get("elementId") or "")
+        for slot in slots
+        if isinstance(slot.get("patchHandle"), Mapping)
+    }
+    editable_qids.discard("")
+    protected_before = _protected_dom_digest(document, editable_qids)
     semantic: list[dict[str, object]] = []
-    seen: set[str] = set()
-    for node in document.xpath("//*[@data-qid]"):
-        qid = str(node.get("data-qid") or "").strip()
-        if not qid or qid in seen:
+    for slot in slots:
+        slot_id = str(slot.get("slotId") or "")
+        assigned = by_slot.get(slot_id, [])
+        if not assigned:
             continue
-        seen.add(qid)
-        text = " ".join(node.text_content().split())[:4000]
+        handle = slot.get("patchHandle")
+        if not isinstance(handle, Mapping) or handle.get("kind") not in {"authored-qid", "scene-element"}:
+            raise SourceNativeGenerationError("design_pack_patch_handle_invalid")
+        qid = str(handle.get("elementId") or "")
+        nodes = document.xpath("//*[@data-qid=$qid]", qid=qid)
+        if len(nodes) != 1:
+            raise SourceNativeGenerationError("design_pack_patch_handle_not_exact")
+        _patch_exact_slot(nodes[0], assigned)
         semantic.append(
             {
                 "qid": qid,
-                "kind": "text" if text else "shape",
-                "semanticRole": "title" if not semantic else "body",
-                "text": text,
+                "kind": "text" if all(item.kind in {"text", "title", "body", "quote"} for item in assigned) else assigned[0].kind,
+                "semanticRole": slot.get("semanticRole"),
+                "text": "\n".join(_unit_render_text(item) for item in assigned),
+                "contentUnitIds": [item.content_unit_id for item in assigned],
+                "contentDigests": [item.content_digest for item in assigned],
+                "slotId": slot_id,
             }
         )
+    serialized = lxml_html.tostring(document, encoding="unicode", method="html")
+    protected_after = _protected_dom_digest(document, editable_qids)
+    if protected_before != protected_after:
+        raise SourceNativeGenerationError("source_native_protected_element_changed")
     if not semantic:
-        raise SourceNativeGenerationError("design_pack_qid_missing")
-    return serialized, semantic
+        raise SourceNativeGenerationError("source_native_composition_empty")
+    return serialized, semantic, protected_before, protected_after
+
+
+def _replace_frame_text(
+    raw_html: str,
+    slide: object,
+    *,
+    frame: object | None = None,
+    narrative: object | None = None,
+) -> tuple[str, list[dict[str, object]]]:
+    """Compatibility wrapper using semantic qid handles, never DOM ordering."""
+
+    if frame is None:
+        document = lxml_html.document_fromstring(raw_html)
+        qids = [str(node.get("data-qid")) for node in document.xpath("//*[@data-qid]")]
+        slots = []
+        for qid in qids:
+            role = "title" if any(token in qid.lower() for token in ("title", "headline", "heading")) else "body"
+            slots.append(
+                {
+                    "slotId": f"compat:{qid}",
+                    "semanticRole": role,
+                    "acceptedKinds": ["text"],
+                    "required": False,
+                    "capacityEnvelope": {"maxCharacters": 10000, "maxLines": 1000, "contentArea": 10_000_000},
+                    "patchHandle": {"kind": "authored-qid", "elementId": qid},
+                    "extractionConfidence": 1.0,
+                    "bounds": {"width": 1000, "height": 500},
+                }
+            )
+        class _CompatFrame:
+            frame_id = "compat-frame"
+            source_digest = canonical_digest(raw_html)
+            pass
+        _CompatFrame.slots = slots
+        frame = _CompatFrame()
+    if narrative is None:
+        class _CompatNarrative:
+            sealed_content_units: tuple[object, ...] = ()
+            content_graph_digest = canonical_digest(str(getattr(slide, "slide_key", "slide")))
+        narrative = _CompatNarrative()
+    plan, units, slots = build_composition_plan(narrative=narrative, slide=slide, frame=frame)
+    try:
+        assert_composition_plan(plan)
+    except CompositionError as error:
+        raise SourceNativeGenerationError(error.code) from error
+    html, semantic, _, _ = _apply_composition_plan(raw_html, plan=plan, units=units, slots=slots)
+    return html, semantic
 
 
 class _SourceNativeExecutor:
@@ -374,27 +495,72 @@ class _SourceNativeExecutor:
             for item in source.get("frames", [])
             if isinstance(item, Mapping) and item.get("id")
         }
+        frame_contracts = {
+            item.frame_id: item for item in self._package.structure.frames
+        }
         captures: dict[str, object] = {}
         compiled: list[dict[str, object]] = []
         page_evidence: list[dict[str, object]] = []
+        composition_plans: list[dict[str, object]] = []
+        integrity_pages: list[dict[str, object]] = []
         selected_slides = getattr(selection, "slides")
         for narrative_slide, selected in zip(narrative.slides, selected_slides, strict=True):
             frame = source_frames.get(selected.selected_frame_id)
-            if not isinstance(frame, Mapping) or not isinstance(frame.get("html"), str):
+            frame_contract = frame_contracts.get(selected.selected_frame_id)
+            if (
+                not isinstance(frame, Mapping)
+                or not isinstance(frame.get("html"), str)
+                or frame_contract is None
+            ):
                 raise SourceNativeGenerationError("source_native_frame_payload_missing")
-            html, semantic = _replace_frame_text(str(frame["html"]), narrative_slide)
+            try:
+                plan, units, slots = build_composition_plan(
+                    narrative=narrative,
+                    slide=narrative_slide,
+                    frame=frame_contract,
+                )
+                assert_composition_plan(plan)
+            except CompositionError as error:
+                raise SourceNativeGenerationError(error.code) from error
+            html, semantic, protected_before, protected_after = _apply_composition_plan(
+                str(frame["html"]),
+                plan=plan,
+                units=units,
+                slots=slots,
+            )
             capture = await render_html_to_png_with_metrics(html)
             normalized = normalize_browser_metrics(dict(capture.browser_metrics or {}))
+            integrity_page = build_content_integrity_page(
+                plan=plan,
+                units=units,
+                rendered_html=html,
+                browser_metrics=normalized,
+                protected_digest_before=protected_before,
+                protected_digest_after=protected_after,
+            )
+            if (
+                integrity_page["unmappedRequiredUnits"]
+                or integrity_page["duplicateRequiredUnits"]
+                or integrity_page["transformedRequiredUnits"]
+                or integrity_page["hiddenRequiredUnits"]
+                or integrity_page["offCanvasRequiredUnits"]
+                or integrity_page["pageOrderError"]
+                or integrity_page["expectedContentUnitIds"] != integrity_page["boundContentUnitIds"]
+                or integrity_page["expectedContentUnitIds"] != integrity_page["renderedContentUnitIds"]
+                or integrity_page["expectedDigest"] != integrity_page["boundDigest"]
+                or integrity_page["expectedDigest"] != integrity_page["renderedDigest"]
+                or integrity_page["expectedAssetOccurrences"] != integrity_page["renderedAssetOccurrences"]
+            ):
+                raise SourceNativeGenerationError("content_integrity_failed")
             report = inspect_authored_dom(
                 html,
                 dict(capture.browser_metrics or {}),
                 reference_mode=EXACT_RECONSTRUCTION,
                 strict_structural_off_canvas=True,
             )
-            # A source-native frame preserves the registered source's visual
-            # treatment. Contrast remains review evidence, but cannot reject
-            # the frame merely because the source intentionally used muted or
-            # decorative text. Structural and content defects remain blocking.
+            # Visual evaluation is strictly downstream from content integrity.
+            # Muted source contrast is retained as review evidence, while
+            # structural and content defects remain blocking.
             blocking = [
                 issue
                 for issue in report.issues
@@ -410,12 +576,15 @@ class _SourceNativeExecutor:
             ):
                 raise SourceNativeGenerationError("source_native_browser_quality_failed")
             captures[narrative_slide.slide_key] = capture
+            composition_plans.append(plan)
+            integrity_pages.append(integrity_page)
             compiled.append(
                 {
                     "slideKey": narrative_slide.slide_key,
                     "html": html,
                     "semantic": {"elements": semantic},
                     "sourceFrameDigest": selected.selected_frame_digest,
+                    "compositionPlanDigest": plan["planDigest"],
                 }
             )
             page_evidence.append(
@@ -428,6 +597,28 @@ class _SourceNativeExecutor:
                     "blockingIssueCount": 0,
                 }
             )
+        content_graph_digest = str(
+            getattr(narrative, "content_graph_digest", None)
+            or _digest(
+                [
+                    item.payload()
+                    for slide in narrative.slides
+                    for item in sealed_units_for_slide(narrative, slide)
+                ]
+            )
+        )
+        try:
+            integrity_model = seal_content_integrity_receipt(
+                operation_id=narrative.operation_id,
+                generation_lane=narrative.generation_lane,
+                content_graph_digest=content_graph_digest,
+                narrative_digest=narrative.narrative_digest,
+                pages=integrity_pages,
+            )
+            integrity_model = validate_content_integrity_receipt(integrity_model)
+        except ContentGraphValidationError as error:
+            raise SourceNativeGenerationError(error.code) from error
+        integrity = model_payload(integrity_model)
         deck_ir = {
             "schemaVersion": "source-native-publication-deck/v1",
             "title": narrative.title,
@@ -454,6 +645,8 @@ class _SourceNativeExecutor:
                 for slide in narrative.slides
             ],
         }
+        # Content integrity is validated above. Visual quality is deliberately
+        # downstream and can never turn a failed content receipt into success.
         quality = {
             "schemaVersion": "source-native-generation-quality-receipt/v1",
             "status": "passed",
@@ -466,6 +659,8 @@ class _SourceNativeExecutor:
             "compiledSlides": compiled,
             "deckIr": deck_ir,
             "generationQualityReceipt": quality,
+            "contentIntegrityReceipt": integrity,
+            "compositionPlans": composition_plans,
             "strategyReceipt": dict(self._public_route_receipt),
             "styleProfileDigest": self._package.structure.structure_digest,
             "retainedReferenceDigest": self._package.manifest.source_digest,
@@ -489,6 +684,7 @@ class _SourceNativeExecutor:
         return {
             "publication": dict(publication),
             "generationQualityReceipt": quality,
+            "contentIntegrityReceipt": integrity,
             "narrativeIrDigest": narrative.narrative_digest,
             "frameSelectionReceiptDigest": getattr(selection, "receipt_digest"),
         }
