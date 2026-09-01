@@ -123,6 +123,25 @@ class ProviderUsageScope:
         digest = sha256(normalized.encode("utf-8")).digest()
         return (int.from_bytes(digest[:4], "big") & 0x7FFF_FFFF) or 1
 
+    def public_logical_call_key(self, semantic_slot: str) -> str:
+        """Return a stable base slot and a bounded replacement on resume.
+
+        A terminal provider receipt cannot be reopened when the provider has no
+        idempotency support.  A later workspace attempt therefore receives one
+        attempt-scoped replacement slot; the public retry/request budgets still
+        cap amplification across the durable job.
+        """
+
+        normalized = _normalize_semantic_slot(semantic_slot)
+        if self.attempt_number <= 1:
+            return normalized
+        suffix = f".resume-{self.attempt_number}"
+        if len(normalized) + len(suffix) <= 128:
+            return normalized + suffix
+        digest = sha256(normalized.encode("utf-8")).hexdigest()[:12]
+        suffix = f".{digest}{suffix}"
+        return normalized[: 128 - len(suffix)] + suffix
+
 
 @dataclass(frozen=True, slots=True)
 class PublicOperationFence:
@@ -547,7 +566,9 @@ async def provider_call_admission(
                 stage=public_stage,
                 slide_index=scope.slide_index,
                 logical_call_ordinal=None,
-                logical_call_key=normalized_semantic_slot,
+                logical_call_key=scope.public_logical_call_key(
+                    normalized_semantic_slot
+                ),
                 retry_class=(
                     "retry"
                     if is_retry

@@ -64,6 +64,10 @@ from services.public_operation_admission import (
     finish_public_operation_v2,
     requeue_public_operation_v2,
 )
+from services.public_generation_worker_lifecycle import (
+    clamp_retry_to_public_deadline,
+    recovery_retry_transition,
+)
 from services.account_deletion_service import (
     AccountDeletionFenceConflict,
     require_active_account_generation,
@@ -1627,6 +1631,19 @@ async def _transition_claim_failure(
                 now=now,
                 retryable=retryable,
             )
+            decision, deadline_missed = clamp_retry_to_public_deadline(
+                deadline_at=(
+                    admission.deadline_at
+                    if admission is not None and _is_public_v2_admission(admission)
+                    else None
+                ),
+                decision=decision,
+                current_retry_count=operation.retry_count,
+                commit_reserve_seconds=_PUBLIC_COMMIT_RESERVE_SECONDS,
+            )
+            if deadline_missed:
+                code = "public_deadline_exceeded"
+                retryable = False
         error_detail = sanitize_workspace_event_payload(detail)
         error_detail.update(
             {
@@ -2996,43 +3013,20 @@ async def recover_expired_workspace_operations(
                     now=now,
                     retryable=True,
                 )
+                decision, recovery_deadline_exceeded = clamp_retry_to_public_deadline(
+                    deadline_at=(admission.deadline_at if public_v2 else None),
+                    decision=decision,
+                    current_retry_count=stale["retry_count"],
+                    commit_reserve_seconds=_PUBLIC_COMMIT_RESERVE_SECONDS,
+                )
                 next_state = decision.state
                 event_type = "operation.error"
-                payload = {
-                    "state": next_state,
-                    "error_code": "operation_recovery_required",
-                    "attempt_number": stale["attempt_number"],
-                    "fencing_token": stale["fencing_token"],
-                    **(
-                        {
-                            "reclaimed_attempt_token_sha256": sha256(
-                                str(stale["attempt_token"]).encode("utf-8")
-                            ).hexdigest()
-                        }
-                        if stale["attempt_token"] is not None
-                        else {}
-                    ),
-                    "retryable": True,
-                    "retry_count": decision.retry_count,
-                    "max_attempts": stale["max_attempts"],
-                    "backoff_seconds": decision.backoff_seconds,
-                    "next_attempt_at": decision.next_attempt_at,
-                }
-                projection = {
-                    "state": next_state,
-                    "retry_count": decision.retry_count,
-                    "backoff_seconds": decision.backoff_seconds,
-                    "next_attempt_at": decision.next_attempt_at,
-                    "attempt_token": None,
-                    "lease_expires_at": None,
-                    "heartbeat_at": now,
-                    "error_code": "operation_recovery_required",
-                    "error_detail": {
-                        "error_code": "operation_recovery_required",
-                        "retryable": True,
-                    },
-                    "completed_at": now if next_state in {"failed", "dead_letter"} else None,
-                }
+                payload, projection = recovery_retry_transition(
+                    stale=stale,
+                    decision=decision,
+                    deadline_exceeded=recovery_deadline_exceeded,
+                    now=now,
+                )
                 observed_retry_count = decision.retry_count
             else:
                 # An expired lease proves that the prior worker's completion

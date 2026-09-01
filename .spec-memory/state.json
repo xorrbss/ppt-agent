@@ -119,10 +119,14 @@
     "public-export.legacy-fidelity-quality-compatibility": "decisions/public-export.legacy-fidelity-quality-compatibility.1.json",
     "ppt.hyundai-reference-visual-benchmark": "decisions/ppt.hyundai-reference-visual-benchmark.1.json",
     "authored.generation.explicit-deck-ir-product-path": "decisions/authored.generation.explicit-deck-ir-product-path.1.json",
-    "authored.generation.dual-engine-comparison": "decisions/authored.generation.dual-engine-comparison.1.json"
+    "authored.generation.dual-engine-comparison": "decisions/authored.generation.dual-engine-comparison.1.json",
+    "public-v2.policy-slide-limit": "decisions/public-v2.policy-slide-limit.1.json",
+    "authored.provider-outcome-contract": "decisions/authored.provider-outcome-contract.1.json",
+    "public-v2.generation-worker-lifecycle": "decisions/public-v2.generation-worker-lifecycle.1.json",
+    "public-v2.provider-resume-call-fencing": "decisions/public-v2.provider-resume-call-fencing.1.json"
   },
   "readFirst": [
     "AGENTS.md"
   ],
-  "updatedAt": "2026-09-01T06:31:24.8710577+00:00"
+  "updatedAt": "2026-09-01T12:45:05.9354630+00:00"
 }

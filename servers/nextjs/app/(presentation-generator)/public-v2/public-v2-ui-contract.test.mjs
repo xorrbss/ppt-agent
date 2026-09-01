@@ -34,6 +34,10 @@ test("public v2 UI only offers fidelity export and separates terminal states", a
   assert.match(source, /generationRouteReceipt/);
   assert.doesNotMatch(source, /public-v2-generation-engine/);
   assert.doesNotMatch(source, /hyundai-culture-center/);
+  assert.match(source, /requestedSlideCount > 100/);
+  assert.match(source, /public_v2_slide_count_must_be_between_1_and_100/);
+  assert.match(source, /max=\{100\}/);
+  assert.doesNotMatch(source, /between_1_and_30|max=\{30\}/);
 
   const hook = await readFile(hookPath, "utf8");
   assert.match(hook, /visibilitychange/);

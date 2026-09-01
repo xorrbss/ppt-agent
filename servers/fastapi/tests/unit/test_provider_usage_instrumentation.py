@@ -159,6 +159,11 @@ def test_public_logical_call_identity_is_stable_across_worker_attempts() -> None
     assert first.public_logical_call_ordinal("author.primary") == (
         recovered.public_logical_call_ordinal("author.primary")
     )
+    assert first.public_logical_call_key("author.primary") == "author.primary"
+    assert (
+        recovered.public_logical_call_key("author.primary")
+        == "author.primary.resume-9"
+    )
     assert first.next_runtime_request_id("author.primary") != (
         recovered.next_runtime_request_id("author.primary")
     )

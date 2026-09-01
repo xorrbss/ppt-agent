@@ -67,20 +67,28 @@ def title_recovery_budget(
     non_title = measured["owner_visible_text"] - measured["owner_title"]
     joint = min(limits["owner_title"], limits["owner_visible_text"] - non_title)
     available = joint - fixed_chars
-    reduction = max(0, eligible_chars - available)
+    # Provider rewrites are approximate. Asking for the exact hard ceiling left
+    # no tolerance for a one-character miss and exhausted the only recovery
+    # call. Keep the frozen admission limit authoritative, but guide recovery
+    # toward a small bounded headroom whenever every title can stay non-empty.
+    recovery_guard = min(4, max(0, available - len(counts)))
+    recovery_available = available - recovery_guard
+    recovery_target = joint - recovery_guard
+    reduction = max(0, eligible_chars - recovery_available)
     targets = dict(counts)
     remaining = reduction
     # Guidance only: preserve short topic/brand labels where possible. The
     # admission authority remains the joint caps, not these per-QID targets.
-    feasible = available >= len(counts) and all(count > 0 for _qid, count in counts)
+    feasible = recovery_available >= len(counts) and all(count > 0 for _qid, count in counts)
     if feasible:
         for qid, count in sorted(counts, key=lambda value: -value[1]):
             cut = min(remaining, count - 1)
             targets[qid] -= cut
             remaining -= cut
     return {
-        "jointTitleBudget": joint, "fixedTitleChars": fixed_chars,
-        "nonTitleVisibleChars": non_title, "availableEligibleChars": available,
+        "jointTitleBudget": joint, "recoveryTargetBudget": recovery_target,
+        "recoveryGuardChars": recovery_guard, "fixedTitleChars": fixed_chars,
+        "nonTitleVisibleChars": non_title, "availableEligibleChars": recovery_available,
         "requiredReduction": reduction, "feasible": feasible,
         "owners": [
             {"qid": qid, "currentChars": count, "suggestedTargetChars": targets[qid] if feasible else None}
@@ -108,6 +116,8 @@ def title_budget_prompt(plan: Mapping[str, Any], eligible: Sequence[tuple[str, s
     )
     return (
         f"Exact frozen accounting: jointTitleBudget={plan['jointTitleBudget']}; "
+        f"recoveryTargetBudget={plan['recoveryTargetBudget']}; "
+        f"recoveryGuardChars={plan['recoveryGuardChars']}; "
         f"fixedTitleChars={plan['fixedTitleChars']}; nonTitleVisibleChars={plan['nonTitleVisibleChars']}; "
         f"availableEligibleChars={plan['availableEligibleChars']}; requiredReduction={plan['requiredReduction']}. "
         f"Eligible owners [{owners}]. These nonempty per-owner targets are guidance, not new limits; "

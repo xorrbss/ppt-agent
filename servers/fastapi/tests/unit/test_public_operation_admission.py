@@ -21,6 +21,8 @@ from models.sql.public_admission import (
 from models.sql.user import User
 from models.sql.workspace import WorkspaceConversation, WorkspaceOperation
 from services.public_operation_admission import (
+    PUBLIC_DEFAULT_MAX_SLIDES,
+    PUBLIC_DEFAULT_POLICY_VERSION,
     PrincipalContext,
     PublicAdmissionRejected,
     WeightedResourcePlan,
@@ -59,6 +61,9 @@ def test_weighted_resource_plan_is_deterministic_and_mode_weighted() -> None:
     assert hybrid.resource_units > fidelity.resource_units
     with pytest.raises(ValueError, match="public_fidelity_mode_invalid"):
         WeightedResourcePlan(**base, fidelity_mode="unknown").resource_units
+
+    assert PUBLIC_DEFAULT_POLICY_VERSION == "public-default/v2"
+    assert PUBLIC_DEFAULT_MAX_SLIDES == 100
 
 
 TABLES = [
@@ -105,8 +110,8 @@ def test_public_admission_enforces_principal_quota_and_provider_hard_caps(
                         User(id=owner_a, username="owner-a", hashed_password="test"),
                         User(id=owner_b, username="owner-b", hashed_password="test"),
                         PublicPolicyProfile(
-                            version="public-default/v1",
-                            max_slides=30,
+                            version="public-default/v2",
+                            max_slides=100,
                             global_active_generation=4,
                             global_queued_generation=8,
                             owner_active_generation=1,
@@ -186,6 +191,22 @@ def test_public_admission_enforces_principal_quota_and_provider_hard_caps(
             assert five_slide_plan.retry_request_limit == 5
 
             async with maker() as session, session.begin():
+                with pytest.raises(
+                    PublicAdmissionRejected,
+                    match="public_slide_limit_exceeded",
+                ):
+                    await admit_public_operation(
+                        session,
+                        principal=principal_a,
+                        operation_id=uuid.uuid4(),
+                        operation_kind="generation",
+                        request_plan=plan_provider_requests(
+                            slide_count=101,
+                            image_budget=0,
+                            repair_budget=0,
+                            vqa_budget=0,
+                        ),
+                    )
                 first = await admit_public_operation(
                     session,
                     principal=principal_a,
@@ -195,6 +216,7 @@ def test_public_admission_enforces_principal_quota_and_provider_hard_caps(
                 )
                 assert first.planned_request_limit == 9
                 assert first.retry_request_limit == 3
+                assert first.policy_version == "public-default/v2"
                 with pytest.raises(PublicAdmissionRejected) as rejected:
                     await admit_public_operation(
                         session,
@@ -358,8 +380,8 @@ def test_phase2_sqlite_lifecycle_is_contract_only(monkeypatch, tmp_path: Path) -
                 session.add(User(id=owner_id, username="phase2-owner", hashed_password="test"))
                 session.add(
                     PublicPolicyProfile(
-                        version="public-default/v1",
-                        max_slides=30,
+                        version="public-default/v2",
+                        max_slides=100,
                         global_active_generation=2,
                         global_queued_generation=4,
                         owner_active_generation=1,

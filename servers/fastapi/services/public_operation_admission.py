@@ -39,7 +39,8 @@ from utils.owner_context import (
 )
 
 
-PUBLIC_DEFAULT_POLICY_VERSION = "public-default/v1"
+PUBLIC_DEFAULT_POLICY_VERSION = "public-default/v2"
+PUBLIC_DEFAULT_MAX_SLIDES = 100
 PUBLIC_PROVIDER_STAGES = frozenset(
     {
         "outline",
@@ -511,6 +512,13 @@ async def load_public_policy(
     row = await session.get(PublicPolicyProfile, version)
     if row is None or not row.enabled:
         raise PublicAdmissionRejected("public_policy_unavailable")
+    if (
+        version == PUBLIC_DEFAULT_POLICY_VERSION
+        and row.max_slides != PUBLIC_DEFAULT_MAX_SLIDES
+    ):
+        # Keep the wire request limit and durable policy limit identical.  A
+        # stale or partially migrated default profile must fail closed.
+        raise PublicAdmissionRejected("public_policy_contract_mismatch")
     return row
 
 
@@ -2559,6 +2567,7 @@ async def public_prometheus_metrics_text(session: AsyncSession) -> str:
 
 
 __all__ = [
+    "PUBLIC_DEFAULT_MAX_SLIDES",
     "PUBLIC_DEFAULT_POLICY_VERSION",
     "PUBLIC_PROVIDER_STAGES",
     "PrincipalContext",

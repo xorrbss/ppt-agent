@@ -1635,12 +1635,21 @@ class SqlPublicV2Orchestrator:
         operation: WorkspaceOperation,
         admission: PublicOperationAdmission,
     ) -> bool:
+        if operation.state == "queued":
+            states_match = admission.state == "queued"
+        elif operation.state in {"running", "cancelling"}:
+            states_match = admission.state == "active"
+        elif operation.state in {"failed", "dead_letter"}:
+            states_match = admission.state in {"failed", "budget_exhausted"}
+        else:
+            states_match = admission.state == operation.state
         return (
             operation.contract_version == _PUBLIC_CONTRACT
             and operation.execution_profile_version == _PUBLIC_PROFILE
             and operation.deadline_at is not None
             and operation.fencing_token == admission.fence
             and _aware(operation.deadline_at) == _aware(admission.deadline_at)
+            and states_match
         )
 
     @staticmethod

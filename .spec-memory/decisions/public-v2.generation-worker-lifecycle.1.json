@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "key": "public-v2.generation-worker-lifecycle",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Keep one public generation claim through capacity wait; reject unwitnessed success and retries that cannot meet the immutable deadline.",
+  "scope": [
+    "public-v2",
+    "generation-worker"
+  ],
+  "invariants": [
+    "Capacity waiting preserves the active admission fence and attempt.",
+    "Public success requires the durable publication projection.",
+    "Retry eligibility must leave the commit reserve before the immutable deadline."
+  ],
+  "forbidden": [
+    "Do not convert provider failure into completed generation.",
+    "Do not requeue solely to reacquire the legacy authored capacity projection."
+  ],
+  "evidence": [
+    "servers/fastapi/services/public_generation_worker_lifecycle.py",
+    "servers/fastapi/services/presentation_generation_operation_handler.py",
+    "servers/fastapi/services/workspace_operation_runner.py",
+    "servers/fastapi/tests/unit/test_public_v2_generation_worker_lifecycle.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-01T12:18:08.0181910+00:00"
+}

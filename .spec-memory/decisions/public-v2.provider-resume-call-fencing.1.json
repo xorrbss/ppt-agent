@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "key": "public-v2.provider-resume-call-fencing",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Public v2 provider resumes use attempt-scoped replacement call keys under one durable job budget; terminal receipts are never reopened as success.",
+  "scope": [
+    "public-v2",
+    "provider",
+    "retry-resume",
+    "workspace-operation"
+  ],
+  "invariants": [
+    "Initial semantic call keys stay stable within attempt 1.",
+    "Each later workspace attempt gets one attempt-scoped replacement key.",
+    "Job-wide request, retry, cost, deadline, and fence budgets remain authoritative.",
+    "Non-retryable provider control errors preserve their code and terminate."
+  ],
+  "forbidden": [
+    "Reopening a terminal provider receipt as success.",
+    "Resetting the durable provider budget on workspace retry."
+  ],
+  "evidence": [
+    "servers/fastapi/services/provider_usage_instrumentation.py",
+    "servers/fastapi/api/v1/ppt/endpoints/presentation_generate.py",
+    "servers/fastapi/tests/unit/test_provider_usage_instrumentation.py",
+    "servers/fastapi/tests/unit/test_presentation_generation_operation_handler.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-01T12:45:05.9044439+00:00"
+}

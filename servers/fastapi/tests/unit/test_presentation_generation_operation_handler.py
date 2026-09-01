@@ -419,6 +419,26 @@ def test_non_retryable_generation_failure_disables_resume(
     )
 
 
+def test_public_provider_control_error_keeps_terminal_retryability() -> None:
+    from api.v1.ppt.endpoints.presentation_generate import (
+        _durable_generation_control_http_exception,
+    )
+    from models.api_error_model import APIErrorModel
+    from services.presentation_generation_operation_handler import _safe_failure
+    from services.public_operation_admission import PublicAdmissionRejected
+
+    normalized = _durable_generation_control_http_exception(
+        PublicAdmissionRejected("public_provider_terminal_replay_unsupported")
+    )
+
+    assert normalized is not None and normalized.status_code == 422
+    payload = APIErrorModel.from_exception(normalized).model_dump(mode="json")
+    assert _safe_failure(payload) == (
+        "public_provider_terminal_replay_unsupported",
+        False,
+    )
+
+
 async def _non_retryable_generation_failure_disables_resume(
     tmp_path: Path, monkeypatch, pipeline_error: Exception, failure_code: str
 ):

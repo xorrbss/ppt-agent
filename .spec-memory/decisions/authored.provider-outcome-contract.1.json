@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.provider-outcome-contract",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Classify failed, incomplete, empty, and bridge outcomes; permit at most one explicit slide recovery and no internal multimodal fallback.",
+  "scope": [
+    "authored",
+    "provider"
+  ],
+  "invariants": [
+    "One initial logical provider call per slide",
+    "At most one explicit in-slide recovery",
+    "Durable provider outcomes do not replay the outer operation"
+  ],
+  "forbidden": [
+    "Internal multimodal-to-text provider fallback",
+    "Third provider call for one slide",
+    "Collapsing terminal provider outcomes into attempt-budget exhaustion"
+  ],
+  "evidence": [
+    "servers/fastapi/utils/provider_idempotency.py",
+    "servers/fastapi/utils/llm_calls/author_slide.py",
+    "servers/fastapi/utils/llm_calls/author_deck.py",
+    "servers/fastapi/tests/unit/test_authored_provider_outcomes.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-01T12:13:46.1184777+00:00"
+}

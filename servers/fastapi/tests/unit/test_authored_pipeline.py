@@ -227,17 +227,18 @@ def test_author_aggregate_capacity_fails_after_two_calls_before_render(monkeypat
     assert calls == [1, 2]
     hint = kwargs_seen[1]["correction_hint"]
     for expected in (
-        "jointTitleBudget=48", "fixedTitleChars=0", "nonTitleVisibleChars=332",
-        "availableEligibleChars=48", "requiredReduction=31",
+        "jointTitleBudget=48", "recoveryTargetBudget=44", "recoveryGuardChars=4",
+        "fixedTitleChars=0", "nonTitleVisibleChars=332",
+        "availableEligibleChars=44", "requiredReduction=35",
         "brand.title: currentChars=15, suggestedTargetChars=15",
-        "long.title: currentChars=64, suggestedTargetChars=33",
+        "long.title: currentChars=64, suggestedTargetChars=29",
     ):
         assert expected in hint
     fixed = joint_candidate.replace('data-qid="brand.title"', 'data-text-fixed="true" data-qid="brand.title"')
     result, kwargs_seen = _run(exercise(fixed, fixed, capacity=SlideCapacity(2, "PILLARS", 58, 290, 380, 0, 32)))
     hint = kwargs_seen[1]["correction_hint"]
-    assert "fixedTitleChars=15" in hint and "availableEligibleChars=33" in hint
-    assert "requiredReduction=31" in hint and "brand.title: currentChars" not in hint
+    assert "fixedTitleChars=15" in hint and "availableEligibleChars=29" in hint
+    assert "requiredReduction=35" in hint and "brand.title: currentChars" not in hint
 
     for marker in ('data-source-block-id="source.1"', 'data-text-fixed="true"'):
         protected = candidate.replace('data-qid="customer.alice.title"', f'{marker} data-qid="customer.alice.title"')

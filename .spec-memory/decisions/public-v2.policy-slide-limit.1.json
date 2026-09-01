@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "key": "public-v2.policy-slide-limit",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Public v2 policy is public-default/v2 with max_slides 100; v1 compatibility policy is raised to 100 at Alembic head.",
+  "scope": [
+    "public-v2",
+    "database",
+    "migration"
+  ],
+  "invariants": [
+    "v2 clones the complete current v1 policy shape before its slide cap is raised",
+    "v1 remains present for compatibility and is also capped at 100",
+    "runtime HEAD_REVISION equals the final slide-limit migration"
+  ],
+  "forbidden": [
+    "Do not change existing pinned policy rows other than the v1 compatibility slide cap"
+  ],
+  "evidence": [
+    "servers/fastapi/alembic/versions/c8d5f3a20b71_raise_public_slide_limit_to_100.py",
+    "servers/fastapi/alembic/versions/d4b7f9a1c2e6_raise_v1_public_slide_limit_to_100.py",
+    "servers/fastapi/tests/unit/test_public_slide_limit_migration.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-01T12:12:45.4074694+00:00"
+}
