@@ -324,6 +324,46 @@ def _semantic_score(unit: SealedContentUnit, slot: Mapping[str, Any]) -> int:
     return 1
 
 
+def _capacity_slack_score(
+    slot: Mapping[str, Any],
+    assigned: Sequence[SealedContentUnit],
+    unit: SealedContentUnit,
+) -> float:
+    """Prefer the tightest fitting slot so large envelopes remain available."""
+
+    combined = [*assigned, unit]
+    envelope = slot["capacityEnvelope"]
+    texts = [_unit_text(item) for item in combined]
+    characters = sum(len(item) for item in texts) + max(0, len(texts) - 1)
+    max_characters = int(
+        envelope.get("maxCharacters", envelope.get("characters", 10000)) or 10000
+    )
+    bounds = slot.get("bounds") or {}
+    width = float(bounds.get("width", 0) or 0)
+    chars_per_line = max(
+        4,
+        int(
+            envelope.get(
+                "charactersPerLine", max(4, width / 11 if width else 40)
+            )
+        ),
+    )
+    observed_lines = sum(
+        max(1, math.ceil(len(item) / chars_per_line)) for item in texts if item
+    )
+    max_lines = int(envelope.get("maxLines", 1000) or 1000)
+    character_slack = (max_characters - characters) / max(1, max_characters)
+    line_slack = (max_lines - observed_lines) / max(1, max_lines)
+    content_area = float(envelope.get("contentArea", 0) or 0)
+    area_slack = 0.0
+    if content_area > 0:
+        estimated_area = characters * float(
+            envelope.get("characterArea", 150) or 150
+        )
+        area_slack = (content_area - estimated_area) / content_area
+    return character_slack + line_slack + area_slack
+
+
 def build_composition_plan(
     *,
     narrative: object,
@@ -339,7 +379,17 @@ def build_composition_plan(
     unmapped: list[str] = []
     for unit in units:
         eligible = [item for item in slots if _fits(item, assigned[item["slotId"]], unit)]
-        eligible.sort(key=lambda item: (_semantic_score(unit, item), -item["extractionConfidence"], item["slotId"]))
+        eligible.sort(
+            key=lambda item: (
+                _semantic_score(unit, item),
+                not (item["required"] and not assigned[item["slotId"]]),
+                _capacity_slack_score(
+                    item, assigned[item["slotId"]], unit
+                ),
+                -item["extractionConfidence"],
+                item["slotId"],
+            )
+        )
         if not eligible:
             unmapped.append(unit.content_unit_id)
             continue

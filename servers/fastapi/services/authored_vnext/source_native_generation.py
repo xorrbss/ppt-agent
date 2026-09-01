@@ -35,6 +35,7 @@ from services.authored_vnext.composition import (
 )
 from services.authored_vnext.narrative_ir.content_graph import (
     ContentGraphValidationError,
+    seal_content_graph,
     seal_content_integrity_receipt,
     validate_content_integrity_receipt,
 )
@@ -213,6 +214,59 @@ class _StructuredNarrativeProvider:
         self._frames = list(package.structure.frames)
 
     async def generate(self, request: Mapping[str, object]) -> Mapping[str, object]:
+        admitted_graph = request.get("admittedContentGraph")
+        if isinstance(admitted_graph, Mapping):
+            pages = admitted_graph.get("pages")
+            if isinstance(pages, list) and len(pages) == len(self._frames):
+                slides: list[dict[str, object]] = []
+                for index, (page, frame) in enumerate(
+                    zip(pages, self._frames, strict=True)
+                ):
+                    if not isinstance(page, Mapping):
+                        return {}
+                    units = page.get("contentUnits")
+                    if not isinstance(units, list) or not units:
+                        return {}
+                    texts = [
+                        str((item.get("payload") or {}).get("text") or "").strip()
+                        for item in units
+                        if isinstance(item, Mapping)
+                        and isinstance(item.get("payload"), Mapping)
+                    ]
+                    texts = [item for item in texts if item]
+                    if not texts:
+                        return {}
+                    density = {
+                        "low": "sparse",
+                        "medium": "medium",
+                        "high": "dense",
+                    }[frame.density]
+                    slides.append(
+                        {
+                            "slideKey": f"slide-{index + 1:03d}",
+                            "sequenceIndex": index,
+                            "role": frame.role,
+                            "keyMessage": texts[0],
+                            "supportingPoints": texts[1:25],
+                            "dataRepresentation": "none",
+                            "data": [],
+                            "sourceOwnership": [],
+                            "frameSemantics": [_frame_semantic(index)],
+                            "density": density,
+                            "contentUnitIds": [],
+                        }
+                    )
+                source_order = admitted_graph.get("sourceUnitOrder")
+                return {
+                    "schemaVersion": "narrative-ir-draft/v1",
+                    "title": slides[0]["keyMessage"],
+                    "language": str(request.get("language") or "ko-KR")[:64],
+                    "slides": slides,
+                    "sourceUnitOrder": (
+                        source_order if isinstance(source_order, list) else []
+                    ),
+                }
+
         from llmai import get_client
         from llmai.shared import JSONSchemaResponse, SystemMessage, UserMessage
         from utils.llm_config import enforce_llm_egress_policy, get_llm_config
@@ -313,11 +367,183 @@ class _StructuredNarrativeProvider:
         }
 
 
+_SOURCE_PAGE_PATTERN = re.compile(
+    r"(?m)^\[SOURCE PAGE (?P<number>[1-9][0-9]{0,2})\]\s*"
+)
+
+
+def _text_slot_capacity(slot: object) -> int | None:
+    accepted = {
+        str(item)
+        for item in (getattr(slot, "accepted_kinds", None) or ("text",))
+    }
+    handle = getattr(slot, "patch_handle", None)
+    if "text" not in accepted or getattr(handle, "kind", None) not in {
+        "authored-qid",
+        "scene-element",
+    }:
+        return None
+    envelope = getattr(slot, "capacity_envelope", None)
+    bounds = getattr(slot, "bounds", None)
+    if envelope is None:
+        return None
+    maximums = [int(getattr(envelope, "max_characters", 0) or 0)]
+    width = float(getattr(bounds, "width", 0) or 0)
+    characters_per_line = max(
+        4,
+        int(getattr(envelope, "characters_per_line", 0) or (width / 11 if width else 40)),
+    )
+    maximums.append(
+        int(getattr(envelope, "max_lines", 0) or 0) * characters_per_line
+    )
+    content_area = float(getattr(envelope, "content_area", 0) or 0)
+    character_area = float(getattr(envelope, "character_area", 150) or 150)
+    if content_area > 0:
+        maximums.append(int(content_area / character_area))
+    positive = [item for item in maximums if item > 0]
+    return max(1, min(positive)) if positive else None
+
+
+def _frame_text_capacity_limits(frame: object, *, maximum_units: int) -> list[int]:
+    required_title: list[int] = []
+    required_other: list[int] = []
+    optional: list[int] = []
+    for slot in getattr(frame, "slots", ()) or ():
+        capacity = _text_slot_capacity(slot)
+        if capacity is None:
+            continue
+        required = bool(getattr(slot, "required", False))
+        role = str(getattr(slot, "semantic_role", "body") or "body").lower()
+        if required and any(token in role for token in ("title", "headline", "heading")):
+            required_title.append(capacity)
+        elif required:
+            required_other.append(capacity)
+        else:
+            optional.append(capacity)
+    required = sorted(required_title) + sorted(required_other)
+    if len(required) > maximum_units:
+        return []
+    optional_budget = maximum_units - len(required)
+    selected_optional = sorted(optional, reverse=True)[:optional_budget]
+    if required_title:
+        first_title = min(required_title)
+        remaining_required = list(required)
+        remaining_required.remove(first_title)
+        return [first_title, *sorted(remaining_required + selected_optional)]
+    return sorted(required + selected_optional)
+
+
+def _split_source_page_text(
+    value: str,
+    *,
+    maximum_units: int = 24,
+    capacity_limits: list[int] | None = None,
+) -> list[str]:
+    normalized = " ".join(value.split())
+    if not normalized:
+        return []
+    if capacity_limits:
+        words = normalized.split(" ")
+        pieces: list[str] = []
+        cursor = 0
+        for capacity in capacity_limits:
+            current = ""
+            while cursor < len(words):
+                candidate = words[cursor] if not current else f"{current} {words[cursor]}"
+                if len(candidate) > capacity:
+                    break
+                current = candidate
+                cursor += 1
+            if current:
+                pieces.append(current)
+            if cursor == len(words):
+                return pieces
+        return []
+    target = max(
+        18,
+        int(((len(normalized) + maximum_units - 1) // maximum_units) * 1.2),
+    )
+    pieces: list[str] = []
+    current = ""
+    for word in normalized.split(" "):
+        candidate = word if not current else f"{current} {word}"
+        if current and len(candidate) > target:
+            pieces.append(current)
+            current = word
+        else:
+            current = candidate
+    if current:
+        pieces.append(current)
+    if len(pieces) > maximum_units:
+        head = pieces[: maximum_units - 1]
+        head.append(" ".join(pieces[maximum_units - 1 :]))
+        pieces = head
+    return [item for item in pieces if item]
+
+
+def _content_graph_from_source_pages(
+    *, brief: str, slide_count: int, frames: object | None = None
+) -> object | None:
+    matches = list(_SOURCE_PAGE_PATTERN.finditer(brief))
+    if len(matches) != slide_count:
+        return None
+    pages: list[dict[str, object]] = []
+    for index, match in enumerate(matches):
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(brief)
+        text = brief[match.end() : end].strip()
+        frame = (
+            list(frames)[index]
+            if frames is not None and index < len(list(frames))
+            else None
+        )
+        capacity_limits = (
+            _frame_text_capacity_limits(frame, maximum_units=24)
+            if frame is not None
+            else None
+        )
+        chunks = _split_source_page_text(text, capacity_limits=capacity_limits)
+        if not chunks:
+            raise SourceNativeGenerationError("source_native_composition_unavailable")
+        page_key = f"source-page-{index + 1:03d}"
+        units: list[dict[str, object]] = []
+        for unit_index, chunk in enumerate(chunks):
+            binding_id = f"{page_key}:text-{unit_index + 1:03d}"
+            source_digest = _digest(chunk)
+            units.append(
+                {
+                    "contentUnitId": binding_id,
+                    "kind": "text",
+                    "payload": {"text": chunk, "data": []},
+                    "required": True,
+                    "sourceOwnership": [
+                        {
+                            "sourceBindingId": binding_id,
+                            "sourceContentDigest": source_digest,
+                            "useMode": "verbatim",
+                            "required": True,
+                        }
+                    ],
+                }
+            )
+        pages.append(
+            {
+                "pageId": page_key,
+                "sourceUnitId": page_key,
+                "contentUnits": units,
+            }
+        )
+    return seal_content_graph(pages, generation_lane="new-authoring")
+
+
 def _protected_dom_digest(document: object, editable_qids: set[str]) -> str:
     protected: list[dict[str, str]] = []
     for node in document.xpath("//*[@data-qid]"):
         qid = str(node.get("data-qid") or "").strip()
-        if qid and qid not in editable_qids:
+        inside_editable_scope = any(
+            str(ancestor.get("data-qid") or "").strip() in editable_qids
+            for ancestor in node.iterancestors()
+        )
+        if qid and qid not in editable_qids and not inside_editable_scope:
             clone = copy.deepcopy(node)
             for editable in clone.xpath(".//*[@data-qid]"):
                 editable_qid = str(editable.get("data-qid") or "").strip()
@@ -347,17 +573,14 @@ def _unit_render_text(unit: SealedContentUnit) -> str:
 
 
 def _patch_exact_slot(node: object, units: list[SealedContentUnit]) -> None:
-    if node.xpath(".//*[@data-qid]"):
-        raise SourceNativeGenerationError("design_pack_patch_handle_not_leaf")
     texts = [_unit_render_text(item) for item in units]
     rendered = "\n".join(item for item in texts if item)
-    # Preserve the editable element tree. Only owned text nodes inside the exact
-    # patch handle are changed; child elements are never removed.
-    if any(
-        (child.text and child.text.strip()) or (child.tail and child.tail.strip())
-        for child in node.iterdescendants()
-    ):
-        raise SourceNativeGenerationError("design_pack_patch_handle_contains_unowned_text")
+    # Preserve the editable element tree while clearing all template copy in
+    # that exact content scope. Nested slots are applied parent-first later.
+    node.text = None
+    for child in node.iterdescendants():
+        child.text = None
+        child.tail = None
     node.text = rendered
     node.set("data-content-unit-ids", "|".join(item.content_unit_id for item in units))
     node.set("data-content-unit-digests", "|".join(item.content_digest for item in units))
@@ -390,11 +613,10 @@ def _apply_composition_plan(
     editable_qids.discard("")
     protected_before = _protected_dom_digest(document, editable_qids)
     semantic: list[dict[str, object]] = []
+    targets: list[tuple[int, str, Mapping[str, object], object, list[SealedContentUnit]]] = []
     for slot in slots:
         slot_id = str(slot.get("slotId") or "")
         assigned = by_slot.get(slot_id, [])
-        if not assigned:
-            continue
         handle = slot.get("patchHandle")
         if not isinstance(handle, Mapping) or handle.get("kind") not in {"authored-qid", "scene-element"}:
             raise SourceNativeGenerationError("design_pack_patch_handle_invalid")
@@ -402,7 +624,16 @@ def _apply_composition_plan(
         nodes = document.xpath("//*[@data-qid=$qid]", qid=qid)
         if len(nodes) != 1:
             raise SourceNativeGenerationError("design_pack_patch_handle_not_exact")
-        _patch_exact_slot(nodes[0], assigned)
+        depth = sum(1 for _ in nodes[0].iterancestors())
+        targets.append((depth, slot_id, slot, nodes[0], assigned))
+    for _, slot_id, slot, node, assigned in sorted(
+        targets, key=lambda item: (item[0], item[1])
+    ):
+        _patch_exact_slot(node, assigned)
+        if not assigned:
+            continue
+        handle = slot["patchHandle"]
+        qid = str(handle.get("elementId") or "")
         semantic.append(
             {
                 "qid": qid,
@@ -755,6 +986,20 @@ async def run_source_native_generation(
         context=context,
         public_route_receipt=route_receipt,
     )
+    brief = str(getattr(request, "content", "") or "")
+    admitted_content_graph = _content_graph_from_source_pages(
+        brief=brief,
+        slide_count=slide_count,
+        frames=package.structure.frames,
+    )
+    source_unit_ids = (
+        tuple(
+            item.source_unit_id
+            for item in getattr(admitted_content_graph, "source_unit_order", ())
+        )
+        if admitted_content_graph is not None
+        else ()
+    )
     try:
         result = await run_narrative_ir_operation(
             operation_id=operation_id,
@@ -762,9 +1007,11 @@ async def run_source_native_generation(
             attempt_token=attempt_token,
             fencing_token=fencing_token,
             strategy_receipt_digest=str(route_receipt.get("receiptDigest")),
-            brief=str(getattr(request, "content", "") or ""),
+            brief=brief,
             slide_count=slide_count,
             language=getattr(request, "language", None),
+            source_unit_ids=source_unit_ids,
+            content_graph=admitted_content_graph,
             provider=_StructuredNarrativeProvider(
                 slides_markdown=getattr(request, "slides_markdown", None),
                 package=package,

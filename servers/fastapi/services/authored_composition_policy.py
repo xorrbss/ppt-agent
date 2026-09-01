@@ -238,8 +238,10 @@ def build_authored_capacity_plan(
         elif profile.profile_id == "source-verbatim":
             # Verbatim has no summarization escape hatch.  Its larger envelope is
             # still finite so an impossible source page is rejected before LLM.
-            body = int(body * 1.55)
-            visible = int(visible * 1.55)
+            # Keep this deterministic preflight broad enough for dense proposal
+            # pages; Chromium owned-text geometry remains the hard fit authority.
+            body = int(body * 4.0)
+            visible = int(visible * 4.0)
         slides.append(
             SlideCapacity(
                 slide_index=index,

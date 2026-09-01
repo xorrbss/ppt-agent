@@ -173,8 +173,26 @@ def _capacity(slide: object, frame: SourceNativeFrameV1) -> tuple[float, list[st
         legacy = 1.0 if point_count == 0 else min(1.0, frame.max_supporting_points / point_count)
         return legacy, []
     envelopes = [_slot_envelope(item) for item in frame.slot_contracts]
-    max_characters = sum(int(item.get("maxCharacters", item.get("max_characters", 0)) or 0) for item in envelopes)
-    max_lines = sum(int(item.get("maxLines", item.get("max_lines", 0)) or 0) for item in envelopes)
+    character_limits = [
+        item.get("maxCharacters", item.get("max_characters")) for item in envelopes
+    ]
+    line_limits = [item.get("maxLines", item.get("max_lines")) for item in envelopes]
+    line_widths = [
+        item.get("charactersPerLine", item.get("characters_per_line"))
+        for item in envelopes
+    ]
+    max_characters = (
+        sum(int(item) for item in character_limits)
+        if character_limits and all(item is not None for item in character_limits)
+        else None
+    )
+    max_lines = (
+        sum(int(item) for item in line_limits)
+        if line_limits
+        and all(item is not None for item in line_limits)
+        and all(item is not None for item in line_widths)
+        else None
+    )
     content_area = sum(float(item.get("contentArea", item.get("content_area", 0)) or 0) for item in envelopes)
     max_rows = sum(int(item.get("maxTableRows", item.get("max_table_rows", 0)) or 0) for item in envelopes)
     max_columns = max((int(item.get("maxTableColumns", item.get("max_table_columns", 0)) or 0) for item in envelopes), default=0)
@@ -182,9 +200,9 @@ def _capacity(slide: object, frame: SourceNativeFrameV1) -> tuple[float, list[st
     estimated_lines = sum(max(1, (len(item) + 39) // 40) for item in text_values if item)
     estimated_area = characters * 150
     reasons: list[str] = []
-    if characters and max_characters < characters:
+    if characters and max_characters is not None and max_characters < characters:
         reasons.append("content-character-capacity-exceeded")
-    if estimated_lines and max_lines < estimated_lines:
+    if estimated_lines and max_lines is not None and max_lines < estimated_lines:
         reasons.append("chromium-line-capacity-exceeded")
     if estimated_area and content_area < estimated_area:
         reasons.append("content-area-capacity-exceeded")
@@ -204,11 +222,11 @@ def _capacity(slide: object, frame: SourceNativeFrameV1) -> tuple[float, list[st
     required_slots = [item for item in frame.slot_contracts if item.get("required") is True]
     if len(required_slots) > 1 + len(getattr(slide, "supporting_points")) + len(data):
         reasons.append("required-slot-coverage-missing")
-    ratios = [
-        (max_characters / characters) if characters else 1.0,
-        (max_lines / estimated_lines) if estimated_lines else 1.0,
-        (content_area / estimated_area) if estimated_area else 1.0,
-    ]
+    ratios = [(content_area / estimated_area) if estimated_area else 1.0]
+    if max_characters is not None:
+        ratios.append((max_characters / characters) if characters else 1.0)
+    if max_lines is not None:
+        ratios.append((max_lines / estimated_lines) if estimated_lines else 1.0)
     return min(1.0, *ratios), reasons
 
 

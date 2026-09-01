@@ -83,6 +83,15 @@ class GenerationCapacityUnavailable(RuntimeError):
 def _is_authored_payload(payload: dict[str, Any] | None) -> bool:
     if not isinstance(payload, dict):
         return False
+    # Registered Design Pack generation patches server-compiled slots and does
+    # not run the per-slide authored provider pipeline.  Treating it as authored
+    # would let an unrelated long-form deck consume its only cluster slot and
+    # strand this deterministic source-native route until the public deadline.
+    if (
+        payload.get("generation_mode") == "registered-template"
+        and isinstance(payload.get("design_pack_pin"), dict)
+    ):
+        return False
     return payload.get("strategy") == "authored" or str(
         payload.get("template", "")
     ).lower() == "authored"
