@@ -113,15 +113,115 @@ def _role(index: int, total: int, requested: list[str] | None) -> str:
 
 
 def _kind_and_role(item: Mapping[str, object]) -> tuple[str, str]:
-    qid = str(item.get("qid") or "").casefold()
     tag = str(item.get("tag") or "").casefold()
-    if tag == "img" or "image" in qid or "visual" in qid:
-        return "image", "visual"
-    if "title" in qid or "heading" in qid:
-        return "text", "title"
-    if "metric" in qid or "value" in qid:
-        return "text", "metric"
-    return "text", "body"
+    semantic_role = str(
+        item.get("semantic_role") or item.get("semanticRole") or ""
+    ).strip().casefold()
+    owned_text = str(item.get("owned_text") or item.get("rendered_text") or "").strip()
+    if tag == "img":
+        return "image", semantic_role or "visual"
+    if tag == "table":
+        return "table", semantic_role or "data"
+    if tag in {"canvas"} and semantic_role in {"chart", "data", "metric"}:
+        return "chart", semantic_role
+    if owned_text:
+        # Exact owned text on the qid itself is executable evidence.  Infer only
+        # the coarse semantic role from the native HTML element; never promote a
+        # container merely because descendant text happened to render inside it.
+        inferred_role = {
+            "h1": "title",
+            "h2": "heading",
+            "h3": "heading",
+            "li": "supporting",
+        }.get(tag, "body")
+        return "text", semantic_role or inferred_role
+    return "shape", semantic_role or "decoration"
+
+
+def _approved_slot(
+    item: Mapping[str, object], *, kind: str, semantic_role: str
+) -> bool:
+    if kind not in {"text", "image", "table", "chart"}:
+        return False
+    if not semantic_role or semantic_role in {
+        "background",
+        "chrome",
+        "connector",
+        "decoration",
+        "logo",
+        "shape",
+    }:
+        return False
+    if item.get("css_visible") is False:
+        return False
+    if kind == "text":
+        owned_text = str(
+            item.get("owned_text") or item.get("rendered_text") or ""
+        ).strip()
+        if not owned_text or item.get("has_owned_text") is not True:
+            return False
+    try:
+        opacity = float(item.get("effective_opacity", 1.0))
+        visible_share = float(item.get("viewport_intersection_ratio", 1.0))
+    except (TypeError, ValueError):
+        return False
+    return opacity >= 0.99 and visible_share >= 0.95
+
+
+def _capacity_envelope(
+    item: Mapping[str, object], *, kind: str, width: float, height: float
+) -> dict[str, object]:
+    try:
+        font_size = max(8.0, float(item.get("font_size") or 18.0))
+    except (TypeError, ValueError):
+        font_size = 18.0
+    computed = item.get("computed_style")
+    computed = computed if isinstance(computed, Mapping) else {}
+
+    def px(name: str, default: float = 0.0) -> float:
+        raw = str(computed.get(name) or "").strip().lower()
+        try:
+            return float(raw[:-2]) if raw.endswith("px") else float(raw)
+        except (TypeError, ValueError):
+            return default
+
+    inner_width = max(
+        1.0,
+        width
+        - px("paddingLeft")
+        - px("paddingRight")
+        - px("borderLeftWidth")
+        - px("borderRightWidth"),
+    )
+    inner_height = max(
+        1.0,
+        height
+        - px("paddingTop")
+        - px("paddingBottom")
+        - px("borderTopWidth")
+        - px("borderBottomWidth"),
+    )
+    line_height = max(1.0, px("lineHeight", font_size * 1.25))
+    maximum_lines = max(1, int(inner_height / line_height))
+    # Korean glyphs commonly consume close to one em. A Latin-oriented 0.55em
+    # estimate admitted text that reflowed beyond the measured slot. Preserve
+    # the Chromium-observed inner box and use a conservative mixed-script width.
+    characters_per_line = max(1, int(inner_width / (font_size * 0.9)))
+    maximum_characters = max(
+        4, min(100000, maximum_lines * characters_per_line)
+    )
+    envelope: dict[str, object] = {
+        "measurementBasis": "chromium-observed",
+        "contentArea": inner_width * inner_height,
+    }
+    if kind == "text":
+        envelope.update(
+            {"maxCharacters": maximum_characters, "maxLines": maximum_lines}
+        )
+    if kind == "image":
+        ratio = width / height
+        envelope.update({"aspectRatioMin": ratio, "aspectRatioMax": ratio})
+    return envelope
 
 
 async def _authored_frame(
@@ -156,28 +256,35 @@ async def _authored_frame(
         if width <= 0 or height <= 0:
             continue
         kind, semantic_role = _kind_and_role(item)
+        approved = _approved_slot(item, kind=kind, semantic_role=semantic_role)
+        required = approved and semantic_role in {"title", "heading"}
+        parent_qid = str(
+            item.get("parent_qid") or item.get("parentQid") or ""
+        ).strip()
         elements.append(
             {
                 "id": qid[:180] or f"element-{ordinal}",
                 "kind": kind,
-                "editable": True,
+                "editable": approved,
+                "slotApproved": approved,
+                "slotId": f"slot:slide-{sequence_index + 1}-{qid[:180]}",
                 "semanticRole": semantic_role,
                 "bounds": {"x": x, "y": y, "width": width, "height": height},
+                "required": required,
+                "capacityEnvelope": _capacity_envelope(
+                    item, kind=kind, width=width, height=height
+                ),
+                "containerId": (
+                    f"html:slide-{sequence_index + 1}#{parent_qid}"
+                    if parent_qid
+                    else f"html:slide-{sequence_index + 1}"
+                ),
+                "extractionConfidence": 1.0 if approved else 0.0,
             }
         )
         seen.add(qid)
         if len(elements) >= 128:
             break
-    if not elements:
-        elements = [
-            {
-                "id": "narrative-body",
-                "kind": "text",
-                "editable": True,
-                "semanticRole": "body",
-                "bounds": {"x": 64, "y": 64, "width": 1152, "height": 592},
-            }
-        ]
     return {
         "id": f"slide-{sequence_index + 1}",
         "type": "html",

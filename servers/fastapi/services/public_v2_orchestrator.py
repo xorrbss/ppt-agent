@@ -359,6 +359,44 @@ def _public_error(
     )
 
 
+def require_generation_content_integrity_for_export(
+    operation: WorkspaceOperation,
+    *,
+    source_revision: int,
+) -> None:
+    """Fail closed when a registered-template revision lacks its integrity seal."""
+
+    request_payload = (
+        operation.request_payload
+        if isinstance(operation.request_payload, Mapping)
+        else {}
+    )
+    route = request_payload.get("generation_route_receipt")
+    selected_route = (
+        route.get("selectedRoute") or route.get("selected_route")
+        if isinstance(route, Mapping)
+        else None
+    )
+    if selected_route != "source-native":
+        return
+    if (
+        operation.state != "succeeded"
+        or operation.result_revision != source_revision
+        or not isinstance(operation.result, Mapping)
+    ):
+        raise _public_error(409, "content_integrity_receipt_required")
+    try:
+        from services.authored_vnext.narrative_ir.content_graph import (
+            validate_content_integrity_receipt,
+        )
+
+        validate_content_integrity_receipt(
+            operation.result.get("contentIntegrityReceipt")
+        )
+    except Exception as error:
+        raise _public_error(409, "content_integrity_receipt_required") from error
+
+
 def _translate_admission(error: PublicAdmissionRejected) -> PublicV2OrchestrationError:
     unavailable = {
         "public_postgresql_authority_required",
@@ -560,6 +598,20 @@ class SqlPublicV2Orchestrator:
                 visionQa=request.quality_policy == "release-v1",
                 reference_snapshot_ids=reference_ids,
                 authored_style=request.authored_style,
+                sourceMode=request.source_mode,
+                sourceContentManifestPin=(
+                    request.source_content_manifest_pin.model_dump(
+                        mode="json",
+                        by_alias=True,
+                    )
+                    if request.source_content_manifest_pin is not None
+                    else None
+                ),
+                contentPolicy=(
+                    request.content_policy.model_dump(mode="json", by_alias=True)
+                    if request.content_policy is not None
+                    else None
+                ),
                 generationMode=request.generation_mode,
                 designPackPin=(
                     request.design_pack_pin.model_dump(mode="json", by_alias=True)
@@ -628,6 +680,23 @@ class SqlPublicV2Orchestrator:
                         "reference_snapshot_ids": [str(value) for value in reference_ids],
                         "quality_policy": request.quality_policy,
                         "authored_style": request.authored_style,
+                        "source_mode": request.source_mode,
+                        "source_content_manifest_pin": (
+                            request.source_content_manifest_pin.model_dump(
+                                mode="json",
+                                by_alias=True,
+                            )
+                            if request.source_content_manifest_pin is not None
+                            else None
+                        ),
+                        "content_policy": (
+                            request.content_policy.model_dump(
+                                mode="json",
+                                by_alias=True,
+                            )
+                            if request.content_policy is not None
+                            else None
+                        ),
                         "generation_mode": request.generation_mode,
                         "design_pack_pin": (
                             request.design_pack_pin.model_dump(
@@ -832,24 +901,31 @@ class SqlPublicV2Orchestrator:
             # legacy tables can be migrated without widening non-public flows,
             # the immutable public generation admission is the tenant binding
             # for a presentation entering the public export path.
-            source_authority = await session.scalar(
-                select(PublicOperationAdmission.id)
+            source_operation = await session.scalar(
+                select(WorkspaceOperation)
                 .join(
-                    WorkspaceOperation,
-                    WorkspaceOperation.id == PublicOperationAdmission.operation_id,
+                    PublicOperationAdmission,
+                    PublicOperationAdmission.operation_id == WorkspaceOperation.id,
                 )
                 .where(
                     WorkspaceOperation.presentation_id == target_id,
                     WorkspaceOperation.owner_id == actor.owner_id,
                     WorkspaceOperation.kind == "presentation.generate",
+                    WorkspaceOperation.state == "succeeded",
+                    WorkspaceOperation.result_revision == request.source_revision,
                     PublicOperationAdmission.owner_id == actor.owner_id,
                     PublicOperationAdmission.tenant_id == actor.tenant_id,
                     PublicOperationAdmission.operation_kind == "generation",
                 )
+                .order_by(WorkspaceOperation.updated_at.desc())
                 .limit(1)
             )
-            if source_authority is None:
+            if source_operation is None:
                 raise _public_error(404, "presentation_not_found")
+            require_generation_content_integrity_for_export(
+                source_operation,
+                source_revision=request.source_revision,
+            )
             presentation = await session.scalar(
                 select(PresentationModel)
                 .where(
@@ -1751,6 +1827,7 @@ class SqlPublicV2Orchestrator:
         export_timing: PublicExportExecutionReceiptV1 | None = None
         generation_route_receipt: GenerationRouteReceiptV1 | None = None
         generation_timing_receipt: dict[str, object] | None = None
+        content_integrity_receipt: dict[str, object] | None = None
         if operation.kind == _GENERATION_KIND and isinstance(
             operation.request_payload, Mapping
         ):
@@ -1776,6 +1853,19 @@ class SqlPublicV2Orchestrator:
                     )
                     or None
                 )
+                raw_content_integrity = operation.result.get(
+                    "contentIntegrityReceipt"
+                )
+                if isinstance(raw_content_integrity, Mapping):
+                    try:
+                        from services.authored_vnext.narrative_ir.content_graph import (
+                            validate_content_integrity_receipt,
+                        )
+
+                        validate_content_integrity_receipt(raw_content_integrity)
+                        content_integrity_receipt = dict(raw_content_integrity)
+                    except Exception:
+                        content_integrity_receipt = None
             raw_quality = operation.result.get("quality_receipt") or operation.result.get(
                 "qualityReceipt"
             )
@@ -1864,6 +1954,7 @@ class SqlPublicV2Orchestrator:
             error=error,
             generation_route_receipt=generation_route_receipt,
             generation_timing_receipt=generation_timing_receipt,
+            content_integrity_receipt=content_integrity_receipt,
             execution_receipt=execution_receipt,
             quality_receipt=quality,
             release_readiness=readiness,

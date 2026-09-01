@@ -16,6 +16,7 @@ from .checkpoint import (
     validate_checkpoint,
 )
 from .contracts import (
+    ContentGraphV1,
     FrameSearchReceiptV1,
     FrameSelectionReceiptV1,
     NarrativeCheckpointV1,
@@ -185,9 +186,13 @@ async def run_narrative_ir_operation(
     source_native_executor: SourceNativeExecutor,
     authored_scene_fallback_executor: AuthoredSceneFallbackExecutor,
     checkpoint_repository: NarrativeCheckpointRepository,
+    generation_lane: str = "new-authoring",
+    content_graph: ContentGraphV1 | Mapping[str, Any] | None = None,
 ) -> NarrativeOperationResult:
-    """Resolve and execute exactly one route for every slide in the operation."""
+    """Resolve the new-authoring lane; preserve-source must bypass Narrative/LLM."""
 
+    if generation_lane != "new-authoring":
+        raise NarrativeOrchestrationError("preserve_source_narrative_provider_forbidden")
     _validate_executors(source_native_executor, authored_scene_fallback_executor)
     existing = await checkpoint_repository.load(operation_id)
     if existing is not None:
@@ -224,6 +229,7 @@ async def run_narrative_ir_operation(
         slide_count=slide_count,
         language=language,
         source_unit_ids=source_unit_ids,
+        content_graph=content_graph,
         provider=provider,
         reserve=reserve,
     )

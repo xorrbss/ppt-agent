@@ -17,6 +17,7 @@ import xml.etree.ElementTree as ET
 from zipfile import BadZipFile, ZipFile
 
 from .models import (
+    CapacityEnvelope,
     Canvas,
     DesignFrame,
     DesignPackStructure,
@@ -25,6 +26,7 @@ from .models import (
     FallbackPolicy,
     NativeElement,
     Paint,
+    PatchHandle,
     Rect,
     RepresentativeRenderRef,
     SlotConstraint,
@@ -334,6 +336,47 @@ def _capacity(bounds: Rect, style: TextStyle | None, kind: str) -> tuple[int, st
     )
 
 
+def _capacity_envelope(
+    bounds: Rect,
+    style: TextStyle | None,
+    kind: str,
+    *,
+    measurement_basis: str = "source-geometry",
+    element: ET.Element | None = None,
+) -> CapacityEnvelope:
+    capacity, _, constraints = _capacity(bounds, style, kind)
+    maximum_lines = next(
+        (
+            int(constraint.value)
+            for constraint in constraints
+            if constraint.kind == "maximum-lines"
+        ),
+        None,
+    )
+    rows = columns = numeric_items = None
+    if element is not None and kind == "table":
+        rows = len(element.findall(".//a:tr", _NS)) or None
+        columns = len(element.findall(".//a:tblGrid/a:gridCol", _NS)) or None
+    if element is not None and kind == "chart":
+        numeric_items = len(
+            element.findall(
+                ".//{http://schemas.openxmlformats.org/drawingml/2006/chart}pt"
+            )
+        ) or None
+    ratio = bounds.width / bounds.height if kind == "image" else None
+    return CapacityEnvelope(
+        measurement_basis=measurement_basis,
+        content_area=bounds.width * bounds.height,
+        max_characters=capacity if kind == "text" else None,
+        max_lines=maximum_lines,
+        max_table_rows=rows,
+        max_table_columns=columns,
+        max_numeric_items=numeric_items,
+        aspect_ratio_min=ratio,
+        aspect_ratio_max=ratio,
+    )
+
+
 def _shape_nodes(root: ET.Element) -> list[ET.Element]:
     tree = root.find(".//p:spTree", _NS)
     if tree is None:
@@ -379,30 +422,65 @@ def _slots(root: ET.Element, part: str) -> tuple[EditableSlot, ...]:
             continue
         shape_id = _shape_id(element, ordinal)
         placeholder = _placeholder(element)
+        # A text/image shape without an OOXML placeholder is authored content,
+        # not evidence that the shape is a template variable.  Tables and charts
+        # are exact typed objects and can be patched through their shape handle.
+        if kind in {"text", "image"} and placeholder is None:
+            continue
         style = _text_style(element)
         capacity, density, constraints = _capacity(bounds, style, kind)
         selector = f"pptx:{part}#shape-{shape_id}"
         if placeholder:
             selector += f"[placeholder={placeholder}]"
+        source_digest = _digest_bytes(ET.tostring(element, encoding="utf-8"))
+        semantic_role = _semantic_role(kind, placeholder, _shape_name(element))
+        required = semantic_role == "title"
         result.append(
             EditableSlot(
                 slot_id=f"slot:{PurePosixPath(part).stem}-{shape_id}",
-                semantic_role=_semantic_role(
-                    kind, placeholder, _shape_name(element)
-                ),
+                semantic_role=semantic_role,
                 selector=selector,
                 bounds=bounds,
                 accepted_kinds=(kind,),
                 source_shape_id=shape_id,
-                source_xml_digest=_digest_bytes(ET.tostring(element, encoding="utf-8")),
+                source_xml_digest=source_digest,
                 text_style=style,
                 spacing=_spacing(element),
                 paint=_paint(element),
                 capacity_units=capacity,
                 density=density,
                 constraints=constraints,
+                required=required,
+                capacity_envelope=_capacity_envelope(
+                    bounds, style, kind, element=element
+                ),
+                patch_handle=PatchHandle(
+                    kind="pptx-shape",
+                    source_part=part,
+                    element_id=shape_id,
+                    selector=selector,
+                    source_digest=source_digest,
+                ),
+                container_id=f"pptx:{part}",
+                hide_policy="never" if required else "when-optional-empty",
+                fallback_policy="reject-frame",
+                extraction_confidence=1.0,
             )
         )
+    return tuple(result)
+
+
+def _slide_chrome(
+    root: ET.Element, part: str, slots: tuple[EditableSlot, ...]
+) -> tuple[NativeElement, ...]:
+    slot_shape_ids = {slot.source_shape_id for slot in slots}
+    result: list[NativeElement] = []
+    for ordinal, element in enumerate(_shape_nodes(root), start=1):
+        if _shape_id(element, ordinal) in slot_shape_ids:
+            continue
+        native = _native_element(element, part, ordinal, editable=False)
+        if native is not None:
+            result.append(native)
     return tuple(result)
 
 
@@ -580,7 +658,8 @@ def compile_pptx_design_source(path: Path | str) -> CompiledDesignSource:
                 background=Paint(fill=_color(slide.find("p:cSld/p:bg", _NS))),
                 density=_frame_density(slots, canvas),
                 slots=slots,
-                chrome=_chrome(archive, (master_part, layout_part)),
+                chrome=_slide_chrome(slide, slide_part, slots)
+                + _chrome(archive, (master_part, layout_part)),
                 unsupported=_unsupported(slide, slide_part),
                 constraints=(
                     SlotConstraint(
@@ -590,6 +669,7 @@ def compile_pptx_design_source(path: Path | str) -> CompiledDesignSource:
                     ),
                 ),
                 representative_render_ref=f"representative/slide-{index + 1}.svg",
+                editability="source-native" if slots else "fidelity-only",
             )
             frames.append(frame)
             for slot in slots:
@@ -710,23 +790,77 @@ def compile_authored_design_source(source: Mapping[str, Any]) -> CompiledDesignS
             kind = str(element_value.get("kind") or "unsupported")
             bounds_value = element_value.get("bounds")
             bounds = _authored_rect(bounds_value) if isinstance(bounds_value, Mapping) else None
-            editable = element_value.get("editable") is True
+            editable = (
+                element_value.get("editable") is True
+                and element_value.get("slotApproved") is True
+            )
             selector = f"{frame_type}:{frame_id}#{element_id}"
             element_bytes = _canonical_bytes(element_value)
             if editable and kind in {"text", "image", "table", "chart"} and bounds is not None:
                 capacity, density, constraints = _capacity(bounds, None, kind)
+                semantic_role = str(element_value.get("semanticRole") or "").strip()
+                slot_id = str(element_value.get("slotId") or "").strip()
+                confidence_value = element_value.get("extractionConfidence")
+                try:
+                    confidence = float(confidence_value)
+                except (TypeError, ValueError):
+                    confidence = 0.0
+                if not semantic_role or not slot_id or confidence < 0.95:
+                    raise DesignPackCompileError(
+                        "design_pack_authored_slot_approval_invalid"
+                    )
+                source_digest = _digest_bytes(element_bytes)
+                envelope_value = element_value.get("capacityEnvelope")
+                try:
+                    envelope = (
+                        CapacityEnvelope.model_validate(envelope_value)
+                        if isinstance(envelope_value, Mapping)
+                        else _capacity_envelope(
+                            bounds,
+                            None,
+                            kind,
+                            measurement_basis="chromium-observed",
+                        )
+                    )
+                except ValueError as error:
+                    raise DesignPackCompileError(
+                        "design_pack_authored_capacity_invalid"
+                    ) from error
+                required = element_value.get("required") is True
                 slots.append(
                     EditableSlot(
-                        slot_id=f"slot:{frame_id}-{element_id}",
-                        semantic_role=str(element_value.get("semanticRole") or ("data" if kind in {"table", "chart"} else "visual" if kind == "image" else "body")),
+                        slot_id=slot_id,
+                        semantic_role=semantic_role,
                         selector=selector,
                         bounds=bounds,
                         accepted_kinds=(kind,),
                         source_shape_id=element_id,
-                        source_xml_digest=_digest_bytes(element_bytes),
+                        source_xml_digest=source_digest,
                         capacity_units=capacity,
                         density=density,
                         constraints=constraints,
+                        required=required,
+                        capacity_envelope=envelope,
+                        patch_handle=PatchHandle(
+                            kind=(
+                                "authored-qid"
+                                if frame_type == "html"
+                                else "scene-element"
+                            ),
+                            source_part=f"authored/{frame_id}",
+                            element_id=element_id,
+                            selector=selector,
+                            source_digest=source_digest,
+                        ),
+                        container_id=str(
+                            element_value.get("containerId")
+                            or f"{frame_type}:{frame_id}"
+                        ),
+                        hide_policy=(
+                            "never" if required else "when-optional-empty"
+                        ),
+                        fallback_policy="reject-frame",
+                        extraction_confidence=confidence,
                     )
                 )
             elif kind in {"text", "image", "table", "chart", "shape", "group", "connector", "background"}:
@@ -769,6 +903,7 @@ def compile_authored_design_source(source: Mapping[str, Any]) -> CompiledDesignS
                     ),
                 ),
                 representative_render_ref=f"representative/frame-{index + 1}.svg",
+                editability="source-native" if slots else "fidelity-only",
             )
         )
     if not frames or len(frames) > _MAX_SLIDES:

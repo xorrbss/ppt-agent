@@ -45,6 +45,23 @@ from services.workspace_artifact_publication_service import (
 )
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
 
+
+def test_chat_first_public_admission_derives_count_from_reviewed_slides():
+    request = GeneratePresentationRequest(
+        presentation_id=uuid.uuid4(),
+        content="Reviewed outline",
+        slides_markdown=["# One", "# Two", "# Three"],
+        n_slides=None,
+    )
+
+    admission_slide_count = presentation_generate._generation_admission_slide_count(
+        request,
+        SimpleNamespace(n_slides=30),
+    )
+
+    assert admission_slide_count == 3
+
+
 OWNER_A = uuid.UUID("11111111-1111-4111-8111-111111111111")
 OWNER_B = uuid.UUID("22222222-2222-4222-8222-222222222222")
 TABLES = [

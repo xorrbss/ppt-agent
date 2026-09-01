@@ -49,8 +49,20 @@ async def bootstrap_database_admin() -> None:
     """Migrate the old single-admin account or initialize it from environment."""
     async with async_session_maker() as session:
         admin = await session.scalar(
-            select(User).where(User.is_superuser.is_(True)).limit(1)
+            select(User)
+            .where(
+                User.is_superuser.is_(True),
+                User.admin_slot == "primary",
+            )
+            .limit(1)
         )
+        if admin is None:
+            admin = await session.scalar(
+                select(User)
+                .where(User.is_superuser.is_(True))
+                .order_by(User.created_at, User.id)
+                .limit(1)
+            )
         reset_requested = _truthy(os.getenv("RESET_AUTH"))
         override_requested = _truthy(os.getenv("AUTH_OVERRIDE_FROM_ENV"))
         env_username = (os.getenv("AUTH_USERNAME") or "").strip()

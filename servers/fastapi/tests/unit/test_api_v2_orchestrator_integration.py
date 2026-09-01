@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 import uuid
 
 from fastapi import FastAPI
@@ -43,9 +44,14 @@ from services.public_v2_orchestrator import (
     PUBLIC_V2_POSTGRESQL_STRICT_PROFILE,
     SqlPublicV2Orchestrator,
     create_public_v2_orchestrator,
+    require_generation_content_integrity_for_export,
     resolve_public_v2_integration_profile,
 )
 from services.artifact_store import SignedArtifactDownload
+from services.authored_vnext.narrative_ir.content_graph import (
+    seal_content_integrity_receipt,
+)
+from services.authored_vnext.narrative_ir.contracts import model_payload
 
 
 def test_public_v2_requires_explicit_strict_postgresql_profile() -> None:
@@ -876,3 +882,49 @@ def test_public_export_requires_generation_authority_in_the_actor_tenant(
         await engine.dispose()
 
     asyncio.run(scenario())
+
+
+def test_registered_template_export_requires_passed_content_integrity() -> None:
+    operation_id = uuid.uuid4()
+    digest = "sha256:" + "a" * 64
+    receipt = seal_content_integrity_receipt(
+        operation_id=operation_id,
+        generation_lane="new-authoring",
+        content_graph_digest=digest,
+        narrative_digest="sha256:" + "b" * 64,
+        pages=[
+            {
+                "pageIndex": 0,
+                "expectedContentUnitIds": ["unit-1"],
+                "boundContentUnitIds": ["unit-1"],
+                "renderedContentUnitIds": ["unit-1"],
+                "expectedDigest": digest,
+                "boundDigest": digest,
+                "renderedDigest": digest,
+                "sourceOwnershipDigest": "sha256:" + "c" * 64,
+            }
+        ],
+    )
+    route_payload = {
+        "generation_route_receipt": {"selectedRoute": "source-native"}
+    }
+    missing = SimpleNamespace(
+        request_payload=route_payload,
+        state="succeeded",
+        result_revision=2,
+        result={},
+    )
+    with pytest.raises(PublicV2OrchestrationError) as rejected:
+        require_generation_content_integrity_for_export(
+            missing,
+            source_revision=2,
+        )
+    assert rejected.value.reason_code == "content_integrity_receipt_required"
+
+    passed = SimpleNamespace(
+        request_payload=route_payload,
+        state="succeeded",
+        result_revision=2,
+        result={"contentIntegrityReceipt": model_payload(receipt)},
+    )
+    require_generation_content_integrity_for_export(passed, source_revision=2)

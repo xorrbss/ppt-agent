@@ -24,6 +24,11 @@ from pydantic import (
 )
 from pydantic.alias_generators import to_camel
 
+from models.generate_presentation_request import (
+    SourceContentManifestPinInput,
+    SourceContentPolicy,
+)
+
 
 PUBLIC_ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
 DIGEST_PATTERN = r"^sha256:[0-9a-f]{64}$"
@@ -116,6 +121,9 @@ class PresentationGenerationRequestV2(PublicWireModel):
     language: str | None = Field(default=None, min_length=1, max_length=64)
     authored_style: str | None = Field(default=None, min_length=1, max_length=160)
     reference_snapshot_ids: list[str] = Field(default_factory=list, max_length=16)
+    source_mode: Literal["source_content_restyle"] | None = None
+    source_content_manifest_pin: SourceContentManifestPinInput | None = None
+    content_policy: SourceContentPolicy | None = None
     quality_policy: QualityPolicy = "interactive-v1"
 
     @model_validator(mode="after")
@@ -132,6 +140,23 @@ class PresentationGenerationRequestV2(PublicWireModel):
             and self.generation_mode != "registered-template"
         ):
             raise ValueError("design_pack_pin_requires_registered_template")
+        if self.source_mode is None:
+            if (
+                self.source_content_manifest_pin is not None
+                or self.content_policy is not None
+            ):
+                raise ValueError("source_content_mode_required")
+            return self
+        if self.source_content_manifest_pin is None:
+            raise ValueError("source_content_manifest_pin_required")
+        if self.content_policy is None:
+            raise ValueError("source_content_policy_required")
+        if self.generation_mode == "registered-template" or self.design_pack_pin:
+            raise ValueError("generation_strategy_conflict")
+        if not self.authored_style:
+            raise ValueError("source_content_template_required")
+        if self.slides_markdown is not None or self.quality_policy == "release-v1":
+            raise ValueError("source_content_generation_option_conflict")
         return self
 
     @field_validator("content", "instructions", "language", "authored_style")
@@ -584,6 +609,7 @@ class OperationStatusV2(PublicWireModel):
     error: PublicOperationErrorV2 | None = None
     generation_route_receipt: GenerationRouteReceiptV1 | None = None
     generation_timing_receipt: dict[str, Any] | None = None
+    content_integrity_receipt: dict[str, Any] | None = None
     execution_receipt: OperationExecutionReceiptV2 | None = None
     quality_receipt: QualityReceiptV3 | None = None
     release_readiness: Literal["ready", "blocked", "not_assessed"] = "not_assessed"
@@ -606,6 +632,22 @@ class OperationStatusV2(PublicWireModel):
             raise ValueError("only failed or cancelled operation may expose error")
         if self.status == "succeeded" and self.source_revision is None:
             raise ValueError("succeeded operation requires sourceRevision")
+        if (
+            self.kind == "presentation.generate"
+            and self.status == "succeeded"
+            and self.generation_route_receipt is not None
+            and self.generation_route_receipt.selected_route == "source-native"
+            and self.content_integrity_receipt is None
+        ):
+            raise ValueError(
+                "registered-template success requires contentIntegrityReceipt"
+            )
+        if self.content_integrity_receipt is not None and (
+            self.content_integrity_receipt.get("schemaVersion")
+            != "content-integrity-receipt/v1"
+            or self.content_integrity_receipt.get("status") != "passed"
+        ):
+            raise ValueError("contentIntegrityReceipt must be a passed v1 receipt")
         if self.release_readiness == "ready" and (
             self.quality_receipt is None
             or self.quality_receipt.release_readiness != "ready"

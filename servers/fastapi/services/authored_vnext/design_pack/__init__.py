@@ -8,7 +8,13 @@ from .compiler import (
     compile_pptx_design_source,
 )
 from .ingestion import DesignPackIngestionError, ingest_design_pack
-from .models import DesignPackManifest, DesignPackStructure
+from .models import (
+    CapacityEnvelope,
+    DesignPackManifest,
+    DesignPackStructure,
+    EditableSlot,
+    PatchHandle,
+)
 from .registry import (
     DesignPackRegistry,
     DesignPackRegistryError,
@@ -17,12 +23,15 @@ from .registry import (
 
 __all__ = [
     "CompiledDesignSource",
+    "CapacityEnvelope",
     "DesignPackCompileError",
     "DesignPackIngestionError",
     "DesignPackManifest",
     "DesignPackRegistry",
     "DesignPackRegistryError",
     "DesignPackStructure",
+    "EditableSlot",
+    "PatchHandle",
     "RegisteredDesignPack",
     "compile_authored_design_source",
     "compile_design_source",

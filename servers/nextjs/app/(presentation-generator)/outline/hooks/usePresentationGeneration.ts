@@ -9,6 +9,7 @@ import { LoadingState } from "../types/index";
 import { LanguageType } from "../../upload/type";
 import {
   ApiError,
+  isPresentationGenerationSlideLimitError,
   isRetryablePresentationGenerationError,
 } from "../../services/api/api-error-handler";
 import { useTranslations } from "next-intl";
@@ -188,6 +189,13 @@ export const usePresentationGeneration = (
           : "Structured-template presentation generation did not complete.",
         error
       );
+      if (isPresentationGenerationSlideLimitError(error)) {
+        notify.error(
+          t("slideLimitTitle"),
+          t("slideLimitDescription")
+        );
+        return;
+      }
       if (isRetryableGenerationStartError(error)) {
         // Only authored jobs resume from server-side checkpoints on a same-key
         // re-POST, so only they can truthfully promise saved progress.

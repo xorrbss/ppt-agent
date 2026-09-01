@@ -93,6 +93,40 @@ class SlotConstraint(PackModel):
 EditableKind = Literal["text", "image", "table", "chart"]
 
 
+class CapacityEnvelope(PackModel):
+    """Measured or source-derived hard limits for one executable slot."""
+
+    measurement_basis: Literal["source-geometry", "chromium-observed"]
+    content_area: float = Field(gt=0)
+    max_characters: int | None = Field(default=None, ge=1, le=100000)
+    max_lines: int | None = Field(default=None, ge=1, le=10000)
+    max_table_rows: int | None = Field(default=None, ge=1, le=10000)
+    max_table_columns: int | None = Field(default=None, ge=1, le=1000)
+    max_numeric_items: int | None = Field(default=None, ge=1, le=10000)
+    aspect_ratio_min: float | None = Field(default=None, gt=0, le=1000)
+    aspect_ratio_max: float | None = Field(default=None, gt=0, le=1000)
+
+    @model_validator(mode="after")
+    def _ordered_aspect_ratio(self) -> "CapacityEnvelope":
+        if (
+            self.aspect_ratio_min is not None
+            and self.aspect_ratio_max is not None
+            and self.aspect_ratio_min > self.aspect_ratio_max
+        ):
+            raise ValueError("design_pack_capacity_aspect_ratio_invalid")
+        return self
+
+
+class PatchHandle(PackModel):
+    """Exact source-native target; selectors alone are not patch authority."""
+
+    kind: Literal["pptx-shape", "authored-qid", "scene-element"]
+    source_part: str = Field(min_length=1, max_length=500)
+    element_id: str = Field(min_length=1, max_length=240)
+    selector: str = Field(min_length=1, max_length=500)
+    source_digest: Digest = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+
+
 class EditableSlot(PackModel):
     slot_id: str = Field(min_length=1, max_length=240)
     semantic_role: str = Field(min_length=1, max_length=120)
@@ -109,6 +143,27 @@ class EditableSlot(PackModel):
     capacity_units: int = Field(default=1, ge=1, le=10000)
     density: Literal["low", "medium", "high"] = "medium"
     constraints: tuple[SlotConstraint, ...] = Field(default=(), max_length=32)
+    required: bool = False
+    capacity_envelope: CapacityEnvelope | None = None
+    patch_handle: PatchHandle | None = None
+    container_id: str | None = Field(default=None, min_length=1, max_length=500)
+    hide_policy: Literal["never", "when-optional-empty"] = "never"
+    fallback_policy: Literal["reject-frame", "fidelity-only"] = "reject-frame"
+    extraction_confidence: float | None = Field(default=None, ge=0, le=1)
+
+    @model_validator(mode="after")
+    def _executable_handle_consistent(self) -> "EditableSlot":
+        if self.required and self.hide_policy != "never":
+            raise ValueError("design_pack_required_slot_hide_policy_invalid")
+        if self.patch_handle is not None:
+            if self.patch_handle.selector != self.selector:
+                raise ValueError("design_pack_patch_selector_mismatch")
+            if (
+                self.source_xml_digest is not None
+                and self.patch_handle.source_digest != self.source_xml_digest
+            ):
+                raise ValueError("design_pack_patch_digest_mismatch")
+        return self
 
 
 class NativeElement(PackModel):
@@ -132,7 +187,14 @@ class NativeElement(PackModel):
     spacing: Spacing | None = None
     paint: Paint | None = None
     editable: bool = False
+    protected: bool = True
     fallback: Literal["native", "raster", "omit", "reject"] = "native"
+
+    @model_validator(mode="after")
+    def _protected_by_default(self) -> "NativeElement":
+        if self.editable or not self.protected:
+            raise ValueError("design_pack_native_element_must_be_protected")
+        return self
 
 
 class UnsupportedElement(PackModel):
@@ -174,6 +236,7 @@ class DesignFrame(PackModel):
     unsupported: tuple[UnsupportedElement, ...] = Field(default=(), max_length=4096)
     constraints: tuple[SlotConstraint, ...] = Field(default=(), max_length=128)
     representative_render_ref: str | None = Field(default=None, max_length=500)
+    editability: Literal["source-native", "fidelity-only"] = "source-native"
 
 
 class DesignTokenSummary(PackModel):
@@ -191,8 +254,11 @@ class FallbackPolicy(PackModel):
 
 
 class DesignPackStructure(PackModel):
-    schema_version: Literal["source-native-design-structure/v1"] = (
-        "source-native-design-structure/v1"
+    schema_version: Literal[
+        "source-native-design-structure/v1",
+        "source-native-design-structure/v2",
+    ] = (
+        "source-native-design-structure/v2"
     )
     source_kind: Literal["pptx", "authored"]
     source_digest: Digest = Field(pattern=r"^sha256:[0-9a-f]{64}$")
@@ -220,9 +286,46 @@ class DesignPackStructure(PackModel):
             if frame.representative_render_ref is not None
         ):
             raise ValueError("design_pack_render_reference_invalid")
-        payload = self.model_dump(
-            mode="json", by_alias=True, exclude={"structure_digest"}
-        )
+        if self.schema_version == "source-native-design-structure/v2":
+            slot_ids: list[str] = []
+            patch_targets: list[tuple[str, str]] = []
+            for frame in self.frames:
+                if frame.editability == "source-native" and not frame.slots:
+                    raise ValueError("design_pack_source_native_slots_missing")
+                if frame.editability == "fidelity-only" and frame.slots:
+                    raise ValueError("design_pack_fidelity_only_slots_present")
+                for element in frame.chrome:
+                    if element.editable or not element.protected:
+                        raise ValueError("design_pack_native_element_must_be_protected")
+                for slot in frame.slots:
+                    if (
+                        slot.patch_handle is None
+                        or slot.capacity_envelope is None
+                        or slot.container_id is None
+                        or slot.extraction_confidence is None
+                        or slot.extraction_confidence < 0.95
+                    ):
+                        raise ValueError("design_pack_slot_not_executable")
+                    slot_ids.append(slot.slot_id)
+                    patch_targets.append(
+                        (slot.patch_handle.source_part, slot.patch_handle.element_id)
+                    )
+            if len(slot_ids) != len(set(slot_ids)):
+                raise ValueError("design_pack_slot_id_duplicate")
+            if len(patch_targets) != len(set(patch_targets)):
+                raise ValueError("design_pack_patch_target_duplicate")
+            payload = self.model_dump(
+                mode="json", by_alias=True, exclude={"structure_digest"}
+            )
+        else:
+            # v1 packages predate executable-slot fields.  Preserve their original
+            # digest surface while allowing them to be read as legacy/fidelity data.
+            payload = self.model_dump(
+                mode="json",
+                by_alias=True,
+                exclude={"structure_digest"},
+                exclude_unset=True,
+            )
         if self.structure_digest != canonical_digest(payload):
             raise ValueError("design_pack_structure_digest_mismatch")
         return self
@@ -300,6 +403,7 @@ def seal_manifest(**values: Any) -> DesignPackManifest:
 
 
 __all__ = [
+    "CapacityEnvelope",
     "Canvas",
     "DesignFrame",
     "DesignPackManifest",
@@ -310,6 +414,7 @@ __all__ = [
     "NativeElement",
     "PackageFile",
     "Paint",
+    "PatchHandle",
     "Rect",
     "RepresentativeRenderRef",
     "SlotConstraint",

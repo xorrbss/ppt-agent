@@ -45,6 +45,10 @@ GLOBAL_ATTRIBUTES = {
     # block to Chromium DOM geometry/readback evidence. The isolation parser
     # still applies its ordinary size, NUL, traversal, and duplicate checks.
     "data-source-block-id",
+    # Inert, server-stamped Content Graph bindings. They contain only local
+    # content-unit ids and sha256 digests and are read back after Chromium to
+    # prove exact placement; clients and providers cannot authorize them.
+    "data-content-unit-ids", "data-content-unit-digests",
     # Inert export-planning hint occasionally emitted by Authored.  It carries
     # no URL or executable value; Hybrid still derives authoritative coverage
     # from the admitted DOM instead of trusting this hint.
