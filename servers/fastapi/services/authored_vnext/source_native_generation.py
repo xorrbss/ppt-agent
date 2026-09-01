@@ -654,6 +654,71 @@ def _apply_composition_plan(
     return serialized, semantic, protected_before, protected_after
 
 
+def _complete_semantic_elements(
+    assigned: list[dict[str, object]],
+    browser_metrics: Mapping[str, object],
+) -> list[dict[str, object]]:
+    """Bind every declared QID while retaining Content Graph meaning."""
+
+    assigned_by_qid = {
+        str(item.get("qid") or ""): item for item in assigned if item.get("qid")
+    }
+    elements = browser_metrics.get("elements")
+    if not isinstance(elements, list):
+        raise SourceNativeGenerationError("source_native_browser_metrics_invalid")
+    complete: list[dict[str, object]] = []
+    observed: set[str] = set()
+    for item in elements:
+        if not isinstance(item, Mapping):
+            continue
+        qid = str(item.get("qid") or "").strip()
+        if not qid or qid in observed:
+            continue
+        observed.add(qid)
+        bound = assigned_by_qid.get(qid)
+        if bound is not None:
+            complete.append(dict(bound))
+            continue
+        owned_text = " ".join(str(item.get("owned_text") or "").split())
+        semantic_role = str(item.get("semantic_role") or "").strip()
+        tag = str(item.get("tag") or "").lower()
+        if tag in {"html", "body", "script", "style"}:
+            # Renderer instrumentation is injected under body during capture;
+            # it is neither authored visible copy nor semantic content.
+            owned_text = ""
+        if owned_text:
+            if not semantic_role:
+                semantic_role = (
+                    "title" if tag in {"h1", "h2", "h3", "h4"} else "body"
+                )
+            complete.append(
+                {
+                    "qid": qid,
+                    "kind": "text",
+                    "semanticRole": semantic_role,
+                    "text": owned_text,
+                    "contentUnitIds": [],
+                    "contentDigests": [],
+                    "slotId": None,
+                }
+            )
+        else:
+            complete.append(
+                {
+                    "qid": qid,
+                    "kind": "shape",
+                    "semanticRole": semantic_role or "decoration",
+                    "text": "",
+                    "contentUnitIds": [],
+                    "contentDigests": [],
+                    "slotId": None,
+                }
+            )
+    if set(assigned_by_qid) - observed or not complete:
+        raise SourceNativeGenerationError("authored_semantic_qid_mismatch")
+    return complete
+
+
 def _replace_frame_text(
     raw_html: str,
     slide: object,
@@ -806,6 +871,9 @@ class _SourceNativeExecutor:
                 or blocking
             ):
                 raise SourceNativeGenerationError("source_native_browser_quality_failed")
+            semantic = _complete_semantic_elements(
+                semantic, dict(capture.browser_metrics or {})
+            )
             captures[narrative_slide.slide_key] = capture
             composition_plans.append(plan)
             integrity_pages.append(integrity_page)
