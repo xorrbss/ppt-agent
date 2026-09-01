@@ -53,6 +53,7 @@ GLOBAL_ATTRIBUTES = {
     # immutable owner-scoped content. They contain local ids, indexes, digests,
     # or an empty-slot flag; none can load resources or execute behaviour.
     "data-source-flow-unit-id", "data-source-boundary-kind", "data-source-native-empty",
+    "data-quality-unintentional",
     "data-asset-digest", "data-source-occurrence-index",
     "data-asset-occurrence-ids",
     # Inert export-planning hint occasionally emitted by Authored.  It carries

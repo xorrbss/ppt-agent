@@ -69,10 +69,12 @@ def test_semantic_role_attribute_is_admitted_as_inert_readback_metadata() -> Non
 def test_source_boundary_kind_is_admitted_as_inert_readback_metadata() -> None:
     admitted = renderer_isolation.admit_authored_html(
         '<p data-qid="source-flow:u1" data-source-flow-unit-id="u1" '
-        'data-source-boundary-kind="paragraph">Source text</p>'
+        'data-source-boundary-kind="paragraph" '
+        'data-quality-unintentional="true">Source text</p>'
     )
 
     assert 'data-source-boundary-kind="paragraph"' in admitted.html
+    assert 'data-quality-unintentional="true"' in admitted.html
 
 
 def test_tabular_numerals_are_admitted() -> None:
