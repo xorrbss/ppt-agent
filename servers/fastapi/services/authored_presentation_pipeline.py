@@ -63,6 +63,7 @@ from utils.authored_illustrations import (
     validate_bound_source_images,
     validate_visible_source_images,
 )
+from utils.authored_font_policy import enforce_authored_font_floor
 from utils.authored_dom_quality import ensure_authored_qids, inspect_authored_dom
 from utils.llm_calls.author_deck import (
     AuthoredProviderBudgetExhausted,
@@ -655,6 +656,17 @@ async def _author_illustrate_render_pipeline(
                         retryable=False,
                         message=exc.detail,
                     ) from exc
+
+            # Provider output sometimes declares a smaller font even though the
+            # frozen capacity brief forbids it. Clamp that explicit CSS before
+            # the first Chromium render so the same 15px floor governs authoring,
+            # preview, quality admission, and export instead of failing only at
+            # the terminal post-render gate.
+            if capacity_plan is not None and plan_reference_mode != EXACT_RECONSTRUCTION:
+                illustrated_html = enforce_authored_font_floor(
+                    illustrated_html,
+                    minimum_px=capacity_plan.at(index).min_font_px,
+                )
 
             # Canonicalize semantic ids before the first render.  The renderer
             # instruments the same ids internally, so doing this here keeps the

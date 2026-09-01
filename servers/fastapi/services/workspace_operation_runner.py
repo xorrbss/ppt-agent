@@ -382,6 +382,7 @@ _SAFE_RESULT_PAYLOAD_KEYS_BY_KIND: dict[str, frozenset[str]] = {
             "total_ms",
             "generation_timing_receipt",
             "deckIr",
+            "generationDeckIr",
             "generationQualityReceipt",
             "requirementCoverageReceipt",
             "publication",
@@ -713,7 +714,7 @@ def sanitize_workspace_event_payload(
             )
         elif (
             operation_kind == "presentation.generate"
-            and normalized == "deckIr"
+            and normalized in {"deckIr", "generationDeckIr"}
             and isinstance(value, Mapping)
         ):
             safe[normalized] = {
@@ -724,7 +725,14 @@ def sanitize_workspace_event_payload(
                     "deckIrDigest",
                     "detachedCheckpointDigest",
                     "providerLogicalCalls",
+                    "providerOutputMode",
+                    "providerHtmlAuthoringCalls",
+                    "legacyProviderHtmlExecuted",
+                    "candidateSearchK",
+                    "candidateProviderCallsAdded",
                     "grammarDigest",
+                    "styleProfileDigest",
+                    "retainedReferenceDigest",
                     "compilerVersion",
                     "candidateSelectionReceiptDigest",
                     "executionEvidenceDigest",
@@ -739,6 +747,13 @@ def sanitize_workspace_event_payload(
             ):
                 safe[normalized]["browserClosureReceiptDigests"] = [
                     item for item in closure_digests[:30] if isinstance(item, str)
+                ]
+            compile_digests = value.get("compileReceiptDigests")
+            if isinstance(compile_digests, Sequence) and not isinstance(
+                compile_digests, (str, bytes, bytearray)
+            ):
+                safe[normalized]["compileReceiptDigests"] = [
+                    item for item in compile_digests[:30] if isinstance(item, str)
                 ]
         elif (
             operation_kind == "presentation.generate"
@@ -785,7 +800,10 @@ def sanitize_workspace_event_payload(
         ):
             safe[normalized] = {
                 key: value.get(key)
-                for key in ("manifestDigest", "revision", "bundleCount")
+                for key in (
+                    "manifestDigest", "revision", "bundleCount",
+                    "styleProfileDigest", "retainedReferenceDigest",
+                )
                 if value.get(key) is None
                 or isinstance(value.get(key), (str, int, float, bool))
             }

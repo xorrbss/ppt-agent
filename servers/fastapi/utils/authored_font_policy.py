@@ -37,15 +37,16 @@ _FONT_SIZE_RE = re.compile(
 )
 
 
-def _clamp_css_font_sizes(css: str) -> str:
+def _clamp_css_font_sizes(
+    css: str,
+    *,
+    minimum_px: float = MIN_AUTHORED_FONT_SIZE_PX,
+    minimum_pt: float = MIN_AUTHORED_FONT_SIZE_PT,
+) -> str:
     def replace(match: re.Match[str]) -> str:
         value = float(match.group("value"))
         unit = match.group("unit")
-        floor = (
-            MIN_AUTHORED_FONT_SIZE_PX
-            if unit.lower() == "px"
-            else MIN_AUTHORED_FONT_SIZE_PT
-        )
+        floor = minimum_px if unit.lower() == "px" else minimum_pt
         # Zero is commonly used on non-text layout wrappers. It is not visible text,
         # so changing it could introduce whitespace or disturb icon-only constructs.
         if value <= 0 or value >= floor:
@@ -56,7 +57,12 @@ def _clamp_css_font_sizes(css: str) -> str:
     return _FONT_SIZE_RE.sub(replace, css)
 
 
-def _clamp_markup_fragment(fragment: str) -> str:
+def _clamp_markup_fragment(
+    fragment: str,
+    *,
+    minimum_px: float,
+    minimum_pt: float,
+) -> str:
     """Clamp style blocks and inline style attributes without parsing HTML text."""
     output: list[str] = []
     cursor = 0
@@ -66,7 +72,7 @@ def _clamp_markup_fragment(fragment: str) -> str:
             _INLINE_STYLE_RE.sub(
                 lambda item: (
                     f'{item.group("prefix")}{item.group("quote")}'
-                    f'{_clamp_css_font_sizes(item.group("css"))}'
+                    f'{_clamp_css_font_sizes(item.group("css"), minimum_px=minimum_px, minimum_pt=minimum_pt)}'
                     f'{item.group("quote")}'
                 ),
                 before,
@@ -74,7 +80,7 @@ def _clamp_markup_fragment(fragment: str) -> str:
         )
         output.append(
             f'{match.group("open")}'
-            f'{_clamp_css_font_sizes(match.group("css"))}'
+            f'{_clamp_css_font_sizes(match.group("css"), minimum_px=minimum_px, minimum_pt=minimum_pt)}'
             f'{match.group("close")}'
         )
         cursor = match.end()
@@ -83,7 +89,7 @@ def _clamp_markup_fragment(fragment: str) -> str:
         _INLINE_STYLE_RE.sub(
             lambda item: (
                 f'{item.group("prefix")}{item.group("quote")}'
-                f'{_clamp_css_font_sizes(item.group("css"))}'
+                f'{_clamp_css_font_sizes(item.group("css"), minimum_px=minimum_px, minimum_pt=minimum_pt)}'
                 f'{item.group("quote")}'
             ),
             fragment[cursor:],
@@ -92,17 +98,32 @@ def _clamp_markup_fragment(fragment: str) -> str:
     return "".join(output)
 
 
-def enforce_authored_font_floor(html: str) -> str:
-    """Raise explicit positive CSS font sizes below 12px/9pt.
+def enforce_authored_font_floor(
+    html: str,
+    *,
+    minimum_px: float = MIN_AUTHORED_FONT_SIZE_PX,
+) -> str:
+    """Raise explicit positive CSS font sizes below the requested floor.
 
     Script bodies are preserved byte-for-byte so CSS-looking strings in JavaScript
-    are never rewritten. The transformation is deterministic and idempotent.
+    are never rewritten. The default remains the 12px/9pt capability floor;
+    generation may pass a stricter frozen slide-capacity floor before Chromium.
+    The transformation is deterministic and idempotent.
     """
     if not html:
         return html
 
+    minimum_px = max(float(minimum_px), MIN_AUTHORED_FONT_SIZE_PX)
+    minimum_pt = max(MIN_AUTHORED_FONT_SIZE_PT, minimum_px * 0.75)
+
     parts = _SCRIPT_BLOCK_RE.split(html)
     return "".join(
-        part if index % 2 else _clamp_markup_fragment(part)
+        part
+        if index % 2
+        else _clamp_markup_fragment(
+            part,
+            minimum_px=minimum_px,
+            minimum_pt=minimum_pt,
+        )
         for index, part in enumerate(parts)
     )

@@ -662,6 +662,54 @@ def test_nested_parent_and_child_boxes_are_not_reported_as_colliding():
     assert not any(issue.category == "overlap" for issue in report.issues)
 
 
+def test_adjacent_inline_cjk_title_lines_do_not_trigger_glyph_box_overlap():
+    html = (
+        '<h1 data-qid="planned.title"><span data-qid="title.line1">첫 줄 제목</span>'
+        '<br><span data-qid="title.line2">둘째 줄 제목</span></h1>'
+    )
+    shared_style = {"fontSize": "66px", "lineHeight": "76.56px"}
+    report = inspect_authored_dom(
+        html,
+        {
+            "elements": [
+                {
+                    "qid": "planned.title",
+                    "bbox": {"x": 72, "y": 202, "width": 400, "height": 173},
+                    "rendered_text": "첫 줄 제목 둘째 줄 제목",
+                },
+                {
+                    "qid": "title.line1",
+                    "parent_qid": "planned.title",
+                    "tag": "span",
+                    "bbox": {"x": 72, "y": 202, "width": 327, "height": 96},
+                    "text_fragments": [{"x": 72, "y": 202, "width": 327, "height": 96}],
+                    "computed_style": shared_style,
+                    "rendered_text": "첫 줄 제목",
+                    "has_owned_text": True,
+                    "clipped": False,
+                    "glyph_clipped": False,
+                    "line_box_clipped": False,
+                },
+                {
+                    "qid": "title.line2",
+                    "parent_qid": "planned.title",
+                    "tag": "span",
+                    "bbox": {"x": 72, "y": 278.56, "width": 321, "height": 96},
+                    "text_fragments": [{"x": 72, "y": 278.56, "width": 321, "height": 96}],
+                    "computed_style": shared_style,
+                    "rendered_text": "둘째 줄 제목",
+                    "has_owned_text": True,
+                    "clipped": False,
+                    "glyph_clipped": False,
+                    "line_box_clipped": False,
+                },
+            ]
+        },
+    )
+
+    assert not any(issue.category == "overlap" for issue in report.issues)
+
+
 def test_nested_collision_is_coalesced_to_visible_sibling_layout_branches():
     html = (
         '<main data-qid="platform"><div data-qid="flow">'

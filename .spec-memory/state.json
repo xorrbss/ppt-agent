@@ -115,10 +115,14 @@
     "authored.generation.deck-ir-editorial-composition": "decisions/authored.generation.deck-ir-editorial-composition.1.json",
     "presentation.generation-submission-integrity": "decisions/presentation.generation-submission-integrity.1.json",
     "presentation.devax-si-visual-contract": "decisions/presentation.devax-si-visual-contract.1.json",
-    "export.compatible-admission-fence": "decisions/export.compatible-admission-fence.1.json"
+    "export.compatible-admission-fence": "decisions/export.compatible-admission-fence.1.json",
+    "public-export.legacy-fidelity-quality-compatibility": "decisions/public-export.legacy-fidelity-quality-compatibility.1.json",
+    "ppt.hyundai-reference-visual-benchmark": "decisions/ppt.hyundai-reference-visual-benchmark.1.json",
+    "authored.generation.explicit-deck-ir-product-path": "decisions/authored.generation.explicit-deck-ir-product-path.1.json",
+    "authored.generation.dual-engine-comparison": "decisions/authored.generation.dual-engine-comparison.1.json"
   },
   "readFirst": [
     "AGENTS.md"
   ],
-  "updatedAt": "2026-09-01T04:01:24.8938929+00:00"
+  "updatedAt": "2026-09-01T06:31:24.8710577+00:00"
 }

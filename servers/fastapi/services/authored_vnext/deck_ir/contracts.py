@@ -613,6 +613,7 @@ class ConstraintCompileReceiptV2(ConstraintCompileReceiptV1):
     content_text_digest: Digest
     initial_candidate_selection_receipt_digest: Digest | None = None
     reference_frame: dict[str, Any] | None = None
+    style_profile_digest: Digest | None = None
 
 
 class CriticOperationV1(StrictModel):

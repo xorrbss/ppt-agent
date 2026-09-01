@@ -49,6 +49,8 @@ from services.workspace_operation_runner import (
 )
 from services.workspace_quality_export_operation_handlers import (
     _authored_vnext_export_path,
+    _legacy_fidelity_public_quality_receipt,
+    _resolved_authored_quality_digest,
     WorkspaceExportOperationHandler,
     WorkspaceQualityReviewOperationHandler,
     register_workspace_quality_export_operation_handlers,
@@ -1771,9 +1773,43 @@ def test_stale_export_publication_compensates_external_file(
     asyncio.run(scenario())
 
 
-def test_export_without_public_admission_fails_before_artifact_prepare(
+def test_legacy_fidelity_compatibility_and_nonretryable_export_error(
     tmp_path: Path, monkeypatch
 ):
+    scene_digest = "sha256:" + "c" * 64
+    quality_digest, compatibility = _resolved_authored_quality_digest(
+        {},
+        scene_digest=scene_digest,
+        pptx_mode="fidelity",
+    )
+    assert compatibility is True
+    assert len(quality_digest) == 64
+    receipt = _legacy_fidelity_public_quality_receipt(
+        quality_receipt_id="quality:operation:artifact",
+        operation_id="operation",
+        presentation_id="presentation",
+        artifact_digest="sha256:" + "d" * 64,
+        source_revision=7,
+        scene_digest=scene_digest,
+        evaluated_at=datetime.now(UTC),
+    )
+    assert receipt["releaseReadiness"] == "blocked"
+    assert receipt["authoring"] == {
+        "required": True,
+        "status": "failed",
+        "evidence": None,
+        "reasonCode": "legacy_authoring_evidence_missing",
+    }
+    with pytest.raises(
+        NonRetryableWorkspaceOperationError,
+        match="quality_receipt_v3_required",
+    ):
+        _resolved_authored_quality_digest(
+            {},
+            scene_digest=scene_digest,
+            pptx_mode="hybrid",
+        )
+
     async def scenario():
         engine, maker = await _database(tmp_path / "cancel.db")
         app_data = tmp_path / "app-data-cancel"
@@ -1819,8 +1855,8 @@ def test_export_without_public_admission_fails_before_artifact_prepare(
                     return None
 
             with pytest.raises(
-                RetryableWorkspaceOperationError,
-                match="presentation_export_failed",
+                NonRetryableWorkspaceOperationError,
+                match="public_export_admission_required",
             ):
                 await WorkspaceExportOperationHandler(
                     session_factory=maker,

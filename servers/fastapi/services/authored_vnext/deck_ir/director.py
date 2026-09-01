@@ -1,4 +1,4 @@
-"""Structured Deck Director adapters with a bounded 5-slide call plan."""
+"""Structured Deck Director adapters with a bounded 10-slide call plan."""
 
 from __future__ import annotations
 
@@ -236,11 +236,17 @@ class ProductionStructuredDeckDirector:
 
 
 def _batch_ranges(slide_count: int) -> tuple[tuple[int, ...], ...]:
-    if not 1 <= slide_count <= 8:
+    if not 1 <= slide_count <= 10:
         raise DeckDirectorBudgetExhausted("deck_ir_balanced_slide_count_unsupported")
     if slide_count <= 3:
         return (tuple(range(slide_count)),)
-    return (tuple(range(0, min(3, slide_count))), tuple(range(3, slide_count)))
+    if slide_count <= 8:
+        return (tuple(range(0, 3)), tuple(range(3, slide_count)))
+    return (
+        tuple(range(0, 3)),
+        tuple(range(3, 6)),
+        tuple(range(6, slide_count)),
+    )
 
 
 async def run_balanced_deck_director(
@@ -254,7 +260,7 @@ async def run_balanced_deck_director(
     requirement_graph: Mapping[str, object] | None = None,
     recovery: Callable[[Mapping[str, object]], Awaitable[Mapping[str, object]]] | None = None,
 ) -> dict[str, object]:
-    """Run global plan then 3/2 parallel Slide IR batches (max four calls).
+    """Run global plan then up to three parallel Slide IR batches (max four calls).
 
     `reserve` is intentionally awaited immediately before every provider call.
     A recovery is optional but consumes the one shared fourth-call budget; the

@@ -15,6 +15,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from api.v1.auth.internal import authenticated_internal_request_headers
+from api.v2.contracts import QualityReceiptV3 as PublicQualityReceiptV3
 from models.sql.presentation import PresentationModel
 from models.sql.public_admission import PublicOperationAdmission
 from models.sql.slide import SlideModel
@@ -29,6 +30,7 @@ from services.authored_vnext.generation.legacy_bridge import (
 from services.authored_vnext.generation.legacy_pin import (
     canonical_legacy_master_pin_identity,
 )
+from services.authored_vnext.capability_registry import CAPABILITY_REGISTRY_DIGEST
 from services.database import async_session_maker
 from services.presentation_export_attempt_service import (
     begin_export_attempt,
@@ -61,6 +63,7 @@ from services.workspace_operation_handler_registry import (
     RetryableWorkspaceOperationError,
     WorkspaceOperationCancelled,
     WorkspaceOperationDeferred,
+    WorkspaceOperationExecutionError,
     WorkspaceOperationExecutionContext,
     WorkspaceOperationHandlerRegistry,
     WorkspaceOperationLeaseLost,
@@ -133,6 +136,94 @@ def _validated_authored_quality_receipt_digest(theme: object) -> str:
     if actual != receipt_digest:
         raise NonRetryableWorkspaceOperationError("quality_receipt_v3_digest_invalid")
     return receipt_digest.removeprefix("sha256:")
+
+
+def _legacy_fidelity_quality_digest(scene_digest: str) -> str:
+    """Bind legacy Fidelity reuse to the exact deck without claiming a quality pass."""
+
+    payload = {
+        "schemaVersion": "legacy-authored-fidelity-quality/v1",
+        "sceneDigest": scene_digest,
+        "releaseReadiness": "blocked",
+        "reasonCode": "quality_receipt_v3_required",
+    }
+    return hashlib.sha256(
+        json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def _resolved_authored_quality_digest(
+    theme: object,
+    *,
+    scene_digest: str,
+    pptx_mode: str,
+) -> tuple[str, bool]:
+    """Resolve strict evidence, or the narrow legacy Fidelity compatibility binding."""
+
+    try:
+        return _validated_authored_quality_receipt_digest(theme), False
+    except NonRetryableWorkspaceOperationError as error:
+        if error.code != "quality_receipt_v3_required" or pptx_mode != "fidelity":
+            raise
+        return _legacy_fidelity_quality_digest(scene_digest), True
+
+
+def _legacy_fidelity_public_quality_receipt(
+    *,
+    quality_receipt_id: str,
+    operation_id: str,
+    presentation_id: str,
+    artifact_digest: str,
+    source_revision: int,
+    scene_digest: str,
+    evaluated_at: datetime,
+) -> dict[str, object]:
+    """Describe absent legacy checker evidence truthfully while allowing Fidelity delivery."""
+
+    return PublicQualityReceiptV3(
+        quality_receipt_id=quality_receipt_id,
+        operation_id=operation_id,
+        presentation_id=presentation_id,
+        artifact_digest=artifact_digest,
+        source_revision=source_revision,
+        scene_digest=scene_digest,
+        capability_registry_digest=CAPABILITY_REGISTRY_DIGEST,
+        exporter_version=PUBLIC_RENDER_WORKER_PROTOCOL_VERSION,
+        evaluated_at=evaluated_at,
+        content_brief={"required": False, "status": "not_required"},
+        authoring={
+            "required": True,
+            "status": "failed",
+            "reasonCode": "legacy_authoring_evidence_missing",
+        },
+        geometry_font={
+            "required": True,
+            "status": "failed",
+            "reasonCode": "legacy_geometry_font_evidence_missing",
+        },
+        image_content_integrity={"required": False, "status": "not_required"},
+        visual_review={
+            "required": False,
+            "status": "unavailable",
+            "reasonCode": "legacy_visual_review_evidence_missing",
+        },
+        performance={
+            "required": False,
+            "status": "not_assessed",
+            "reasonCode": "legacy_performance_evidence_missing",
+        },
+        native_coverage_ooxml={
+            "required": False,
+            "status": "pending",
+            "reasonCode": "ooxml_checker_evidence_not_persisted",
+        },
+        release_readiness="blocked",
+    ).model_dump(mode="json", by_alias=True)
 
 
 def _context(claim_payload: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -514,6 +605,7 @@ class WorkspaceExportOperationHandler:
         authored_quality_gate: object | None = None
         authored_scene_digest: str | None = None
         public_quality_receipt: dict[str, object] | None = None
+        legacy_fidelity_quality_compatibility = False
         try:
             if authored_vnext_export_path == "legacy-native":
                 if not isinstance(authored_vnext_projection, dict):
@@ -637,6 +729,9 @@ class WorkspaceExportOperationHandler:
                             "public_export_admission_required"
                         )
                     public_tenant_id = admission.tenant_id
+                    authored_quality_gate = presentation.theme.get(
+                        "authoredQualityGate"
+                    )
                     if release_review_receipt_digest is not None:
                         if release_review_base_receipt_digest is None:
                             raise NonRetryableWorkspaceOperationError(
@@ -649,17 +744,20 @@ class WorkspaceExportOperationHandler:
                                 + release_review_receipt_digest
                             ).encode("ascii")
                         ).hexdigest()
-                    else:
-                        quality_receipt_digest = _validated_authored_quality_receipt_digest(
-                            presentation.theme
-                        )
-                    authored_quality_gate = presentation.theme.get("authoredQualityGate")
                 htmls = [slide.html_content for slide in slides]
                 if not htmls or any(not isinstance(html, str) or not html for html in htmls):
                     raise NonRetryableWorkspaceOperationError(
                         "public_isolated_authored_html_required"
                     )
                 authored_scene_digest = digest_deck_htmls(cast(list[str], htmls))
+                if release_review_receipt_digest is None:
+                    quality_receipt_digest, legacy_fidelity_quality_compatibility = (
+                        _resolved_authored_quality_digest(
+                            presentation.theme,
+                            scene_digest=authored_scene_digest,
+                            pptx_mode=pptx_mode,
+                        )
+                    )
                 if (
                     release_review_result_deck_html_digest is not None
                     and authored_scene_digest
@@ -705,6 +803,14 @@ class WorkspaceExportOperationHandler:
                         "isolation_attestations": [],
                         "sessionless_capability": True,
                         "pptx_mode": "fidelity" if export_format == "pptx" else None,
+                        "legacy_quality_compatibility": (
+                            legacy_fidelity_quality_compatibility
+                        ),
+                        "release_readiness": (
+                            "blocked"
+                            if legacy_fidelity_quality_compatibility
+                            else "evidence_bound"
+                        ),
                     },
                     "fallback_reason": None,
                     "asset_digests": {},
@@ -786,48 +892,80 @@ class WorkspaceExportOperationHandler:
                     },
                 }
                 if (
-                    authored_quality_gate is None
-                    or authored_scene_digest is None
+                    authored_scene_digest is None
                     or not authored_scene_digest.startswith("sha256:")
                 ):
                     raise NonRetryableWorkspaceOperationError(
                         "public_quality_projection_inputs_missing"
                     )
-                generation_receipt = (
-                    authored_quality_gate.get("qualityReceiptV3")
-                    if isinstance(authored_quality_gate, Mapping) else None
-                )
-                async with self._session_factory() as evidence_session:
-                    generation_evidence_record = await load_public_quality_evidence(
-                        evidence_session, owner_id=claim.owner_id, owner_scope=claim.owner_scope,
-                        presentation_id=claim.presentation_id,
-                        receipt_digest=str(generation_receipt.get("receiptDigest", ""))
-                        if isinstance(generation_receipt, Mapping) else "",
+                if legacy_fidelity_quality_compatibility:
+                    public_quality_receipt = _legacy_fidelity_public_quality_receipt(
+                        quality_receipt_id=(
+                            f"quality:{claim.operation_id}:{public_ref.artifact_id}"
+                        ),
+                        operation_id=str(claim.operation_id),
+                        presentation_id=str(claim.presentation_id),
+                        artifact_digest=f"sha256:{public_ref.sha256}",
+                        source_revision=effective_revision,
+                        scene_digest=authored_scene_digest,
+                        evaluated_at=datetime.now(timezone.utc),
                     )
-                    review_evidence_record = (
-                        await load_public_quality_evidence(
-                            evidence_session, owner_id=claim.owner_id, owner_scope=claim.owner_scope,
+                else:
+                    if authored_quality_gate is None:
+                        raise NonRetryableWorkspaceOperationError(
+                            "public_quality_projection_inputs_missing"
+                        )
+                    generation_receipt = (
+                        authored_quality_gate.get("qualityReceiptV3")
+                        if isinstance(authored_quality_gate, Mapping) else None
+                    )
+                    async with self._session_factory() as evidence_session:
+                        generation_evidence_record = await load_public_quality_evidence(
+                            evidence_session,
+                            owner_id=claim.owner_id,
+                            owner_scope=claim.owner_scope,
                             presentation_id=claim.presentation_id,
-                            receipt_digest=f"sha256:{release_review_receipt_digest}",
-                            operation_id=review_evidence_operation_id,
-                        ) if review_evidence_operation_id is not None else None
+                            receipt_digest=(
+                                str(generation_receipt.get("receiptDigest", ""))
+                                if isinstance(generation_receipt, Mapping) else ""
+                            ),
+                        )
+                        review_evidence_record = (
+                            await load_public_quality_evidence(
+                                evidence_session,
+                                owner_id=claim.owner_id,
+                                owner_scope=claim.owner_scope,
+                                presentation_id=claim.presentation_id,
+                                receipt_digest=f"sha256:{release_review_receipt_digest}",
+                                operation_id=review_evidence_operation_id,
+                            ) if review_evidence_operation_id is not None else None
+                        )
+                    public_quality_receipt = (
+                        project_persisted_authored_quality_receipt_v3(
+                            authored_quality_gate=authored_quality_gate,
+                            quality_receipt_id=(
+                                f"quality:{claim.operation_id}:{public_ref.artifact_id}"
+                            ),
+                            operation_id=str(claim.operation_id),
+                            presentation_id=str(claim.presentation_id),
+                            artifact_digest=f"sha256:{public_ref.sha256}",
+                            source_revision=effective_revision,
+                            scene_digest=authored_scene_digest,
+                            exporter_version=PUBLIC_RENDER_WORKER_PROTOCOL_VERSION,
+                            evaluated_at=datetime.now(timezone.utc),
+                            generation_evidence_record=generation_evidence_record,
+                            review_evidence_record=review_evidence_record,
+                            render_runtime_binding_digest=(
+                                release_review_runtime_binding_digest
+                            ),
+                            result_render_identity_digest=(
+                                release_review_result_render_identity_digest
+                            ),
+                            checker_policy_digest=(
+                                sealed_release_review_checker_policy_digest
+                            ),
+                        ).model_dump(mode="json", by_alias=True)
                     )
-                public_quality_receipt = project_persisted_authored_quality_receipt_v3(
-                    authored_quality_gate=authored_quality_gate,
-                    quality_receipt_id=f"quality:{claim.operation_id}:{public_ref.artifact_id}",
-                    operation_id=str(claim.operation_id),
-                    presentation_id=str(claim.presentation_id),
-                    artifact_digest=f"sha256:{public_ref.sha256}",
-                    source_revision=effective_revision,
-                    scene_digest=authored_scene_digest,
-                    exporter_version=PUBLIC_RENDER_WORKER_PROTOCOL_VERSION,
-                    evaluated_at=datetime.now(timezone.utc),
-                    generation_evidence_record=generation_evidence_record,
-                    review_evidence_record=review_evidence_record,
-                    render_runtime_binding_digest=release_review_runtime_binding_digest,
-                    result_render_identity_digest=release_review_result_render_identity_digest,
-                    checker_policy_digest=sealed_release_review_checker_policy_digest,
-                ).model_dump(mode="json", by_alias=True)
             if public_ref is None and artifact_sha256 != hashlib.sha256(
                 export_path.read_bytes()
             ).hexdigest():
@@ -1006,6 +1144,33 @@ class WorkspaceExportOperationHandler:
                         selected_adapter=(direct_export_selected_adapter or "native_reconstructed"),
                     )
             raise NonRetryableWorkspaceOperationError(error.code) from error
+        except WorkspaceOperationExecutionError as error:
+            if execution is not None:
+                async with self._session_factory() as session:
+                    await terminalize_export_attempt_failed(
+                        session,
+                        attempt_id=execution.attempt_id,
+                        expected_owner_id=execution.owner_id,
+                        expected_owner_scope=execution.owner_scope,
+                        expected_workspace_operation_id=(execution.workspace_operation_id),
+                        failure_code=error.code,
+                        failure_path=None,
+                    )
+            elif native_export_attempt_id is not None:
+                async with self._session_factory() as session:
+                    await terminalize_export_attempt_failed(
+                        session,
+                        attempt_id=native_export_attempt_id,
+                        expected_owner_id=claim.owner_id,
+                        expected_owner_scope=claim.owner_scope,
+                        expected_workspace_operation_id=claim.operation_id,
+                        failure_code=error.code,
+                        failure_path=None,
+                        selected_adapter=(
+                            direct_export_selected_adapter or "native_reconstructed"
+                        ),
+                    )
+            raise
         except Exception as error:
             LOGGER.exception(
                 "Workspace presentation export failed after execution",

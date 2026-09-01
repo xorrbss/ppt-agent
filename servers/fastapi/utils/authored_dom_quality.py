@@ -1092,7 +1092,10 @@ def inspect_authored_dom(
 
         if str(item.get("computed_style", {}).get("position", "")) != "absolute":
             return False
-        if browser_proves_owned_content(item):
+        if browser_proves_owned_content(item) and (
+            "has_owned_text" in item
+            or bool(_normal_text(item.get("rendered_text", ""), limit=2000))
+        ):
             return False
         box = _coerce_bbox(item.get("bbox"))
         if box is None:
@@ -1166,6 +1169,67 @@ def inspect_authored_dom(
             )
         )
     boxes: list[tuple[str, BoundingBox, dict[str, Any]]] = []
+
+    def adjacent_inline_text_lines(
+        first: Mapping[str, Any], second: Mapping[str, Any]
+    ) -> bool:
+        """Ignore glyph-box overlap between consecutive inline title lines.
+
+        Chromium text ranges can be taller than the CSS line advance for large
+        CJK headings.  Two ``span`` lines separated by ``br`` then have
+        intersecting range rectangles even though their painted glyphs are on
+        distinct baselines.  This exemption is deliberately narrow: same
+        parent, same x origin/font metrics, one fragment each, a full line
+        advance between origins, and no clipping signal.
+        """
+
+        if (
+            str(first.get("tag", "")).lower() != "span"
+            or str(second.get("tag", "")).lower() != "span"
+            or not first.get("parent_qid")
+            or first.get("parent_qid") != second.get("parent_qid")
+            or first.get("has_owned_text") is not True
+            or second.get("has_owned_text") is not True
+            or any(
+                item.get(key) is True
+                for item in (first, second)
+                for key in ("clipped", "glyph_clipped", "line_box_clipped")
+            )
+        ):
+            return False
+        first_box = _coerce_bbox(first.get("bbox"))
+        second_box = _coerce_bbox(second.get("bbox"))
+        if first_box is None or second_box is None:
+            return False
+        first_style = first.get("computed_style", {})
+        second_style = second.get("computed_style", {})
+        if not isinstance(first_style, Mapping) or not isinstance(second_style, Mapping):
+            return False
+        first_font = _coerce_number(first.get("font_size")) or _css_pixel_value(
+            first_style.get("fontSize", first_style.get("font_size"))
+        )
+        second_font = _coerce_number(second.get("font_size")) or _css_pixel_value(
+            second_style.get("fontSize", second_style.get("font_size"))
+        )
+        first_line = _css_pixel_value(
+            first_style.get("lineHeight", first_style.get("line_height"))
+        )
+        second_line = _css_pixel_value(
+            second_style.get("lineHeight", second_style.get("line_height"))
+        )
+        fragments = (first.get("text_fragments"), second.get("text_fragments"))
+        vertical_advance = abs(first_box.y - second_box.y)
+        return bool(
+            first_font > 0
+            and abs(first_font - second_font) <= 0.5
+            and first_line > 0
+            and abs(first_line - second_line) <= 0.5
+            and abs(first_box.x - second_box.x) <= 2
+            and vertical_advance >= first_line - 1
+            and vertical_advance < min(first_box.height, second_box.height)
+            and all(isinstance(value, list) and len(value) == 1 for value in fragments)
+        )
+
     for item in elements:
         qid = item["qid"]
         box = _coerce_bbox(item.get("bbox")) or BoundingBox(0, 0, 0, 0)
@@ -1352,9 +1416,21 @@ def inspect_authored_dom(
         occluded_fraction = item.get("occluded_fraction")
         continuous_occluded_fraction = item.get("continuous_occluded_fraction")
         title_edge_occluded = title_edge_occlusion_is_proven(item)
+        occluder_qids = item.get("occlusion_occluder_qids", ())
+        inline_line_box_only = bool(
+            isinstance(occluder_qids, Sequence)
+            and not isinstance(occluder_qids, (str, bytes))
+            and occluder_qids
+            and all(
+                (occluder := item_by_qid.get(str(qid))) is not None
+                and adjacent_inline_text_lines(item, occluder)
+                for qid in occluder_qids
+            )
+        )
         if (
             owned_geometry_is_actionable
             and not intentional
+            and not inline_line_box_only
             and (pixel_occlusion_is_proven(item) or title_edge_occluded)
             and (
                 title_edge_occluded
@@ -1586,6 +1662,8 @@ def inspect_authored_dom(
                 continue
             # Containment is the normal DOM layout relationship, not a collision.
             if related_by_ancestry(qid, other_qid):
+                continue
+            if adjacent_inline_text_lines(item, other_item):
                 continue
             area = _intersection_area(box, other_box)
             smallest = min(box.width * box.height, other_box.width * other_box.height)

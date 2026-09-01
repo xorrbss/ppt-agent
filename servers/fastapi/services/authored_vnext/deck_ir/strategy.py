@@ -146,7 +146,7 @@ def capability_preflight(
         missing.add("slide-count")
     # The first real product adapter uses the bounded global + 3/2 batch plan.
     # Do not admit a larger operation only to fail after durable assignment.
-    elif slide_count < 1 or slide_count > 8:
+    elif slide_count < 1 or slide_count > 10:
         missing.add("slide-count")
     template = str(getattr(request, "template", "")).strip().lower()
     if template != "authored":
@@ -163,10 +163,26 @@ def capability_preflight(
     output = _mapping(getattr(request, "output", None))
     if str(output.get("mode", "")).strip().lower() == "editable-hybrid":
         missing.add("editable-hybrid")
+    style_profile_digest: str | None = None
+    retained_reference_digest: str | None = None
+    try:
+        from services.authored_vnext.deck_ir.style_profiles import (
+            design_grammar_for_style,
+            resolve_style_profile,
+        )
+
+        style_profile = resolve_style_profile(getattr(request, "authored_style", None))
+        style_profile_digest = style_profile.profile_digest
+        retained_reference_digest = style_profile.retained_reference_digest
+        grammar_capability_digest = design_grammar_for_style(style_profile).manifest_digest
+    except (ImportError, ValueError):
+        missing.add("style-profile")
     payload: dict[str, object] = {
         "schemaVersion": "generation-strategy-preflight/v1",
         "grammarCapabilityDigest": grammar_capability_digest,
         "compilerCapabilityDigest": compiler_capability_digest,
+        "styleProfileDigest": style_profile_digest,
+        "retainedReferenceDigest": retained_reference_digest,
         "requestedCapabilities": list(requested),
         "availableCapabilities": sorted(available),
         "missingCapabilities": sorted(missing),
@@ -225,6 +241,7 @@ def seal_generation_strategy_decision(
     preflight: Mapping[str, object],
     rollout_phase: str = "D0",
     force_strategy: GenerationStrategy | None = None,
+    requested_generation_engine: str = "auto",
 ) -> dict[str, object]:
     """Seal a single route choice.  The receipt is safe to put in operation JSON."""
 
@@ -237,7 +254,11 @@ def seal_generation_strategy_decision(
     phase = rollout_phase.strip().upper() or "D0"
     if force_strategy is not None:
         selected = force_strategy
-        reason = "explicit-admission-policy"
+        reason = (
+            "explicit-capability-missing"
+            if force_strategy == "reject" and missing_list
+            else "explicit-admission-policy"
+        )
     elif not deck_ir_generation_enabled():
         selected = "legacy-authored"
         reason = "deck-ir-generation-disabled"
@@ -254,8 +275,17 @@ def seal_generation_strategy_decision(
         "operationId": operation_id,
         "requirementGraphDigest": requirement_graph_digest,
         "requestedProfile": requested_profile,
+        "requestedGenerationEngine": requested_generation_engine,
         "grammarCapabilityDigest": preflight.get("grammarCapabilityDigest"),
         "compilerCapabilityDigest": preflight.get("compilerCapabilityDigest"),
+        "styleProfileDigest": preflight.get("styleProfileDigest"),
+        "retainedReferenceDigest": preflight.get("retainedReferenceDigest"),
+        "providerCallPlan": {
+            "globalPlanCalls": 1,
+            "maximumSlideBatchCalls": 3,
+            "maximumLogicalCalls": 4,
+            "candidateProviderCallsAdded": 0,
+        },
         "rolloutPhase": phase,
         "selectedStrategy": selected,
         "missingCapabilities": missing_list,

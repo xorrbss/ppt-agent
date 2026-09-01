@@ -34,6 +34,7 @@ export type PublicV2Lifecycle =
 export type PublicV2GenerationRequest = {
   schemaVersion?: "presentation-generation-request/v2";
   engine?: "authored";
+  generationEngine?: "authored" | "deck-ir";
   content: string;
   slidesMarkdown?: string[];
   instructions?: string;

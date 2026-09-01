@@ -37,6 +37,8 @@ type DisplaySnapshot = {
     sourceRevision?: number;
     checks?: Record<string, { status?: string; reasonCode?: string; required?: boolean }>;
   } | null;
+  readiness: PublicV2OperationSnapshot["readiness"];
+  generationTiming: PublicV2OperationSnapshot["generationTiming"];
   artifacts?: DisplayArtifact[];
   downloadStatus?: string;
   canCancel?: boolean;
@@ -47,6 +49,8 @@ const EMPTY_FORM = {
   content: "",
   instructions: "",
   slideCount: "",
+  generationEngine: "authored" as "authored" | "deck-ir",
+  authoredStyle: "hyundai-culture-center",
 };
 
 function receiptValue(
@@ -97,6 +101,8 @@ function displaySnapshot(snapshot: PublicV2OperationSnapshot): DisplaySnapshot {
       ...(typeof sourceRevision === "number" ? { sourceRevision } : {}),
       checks,
     },
+    readiness: snapshot.readiness,
+    generationTiming: snapshot.generationTiming,
     artifacts: [...snapshot.artifacts],
     downloadStatus: snapshot.downloadStatus,
     canCancel: snapshot.canCancel,
@@ -109,6 +115,23 @@ function formatBytes(value?: number): string | null {
   if (value < 1024) return `${value} B`;
   return `${(value / 1024 / 1024).toFixed(1)} MB`;
 }
+
+function formatMillis(value: number | "not_started"): string {
+  return value === "not_started" ? "시작 안 됨" : `${value.toLocaleString()} ms`;
+}
+
+function formatCounter(value: number | "not_started"): string {
+  return value === "not_started" ? "시작 안 됨" : value.toLocaleString();
+}
+
+const TIMING_STAGE_LABELS = {
+  outline: "Outline",
+  provider: "Provider",
+  authoring: "Authoring",
+  repair: "Repair",
+  chromiumReview: "Chromium review",
+  publication: "Publication",
+} as const;
 
 function statusTone(status?: string): string {
   if (status === "succeeded" || status === "ready") return "border-emerald-200 bg-emerald-50 text-emerald-900";
@@ -176,6 +199,9 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
   const hasOperation = Boolean(current.operationId && current.presentationId);
   const releaseReviewIncomplete = current.quality?.releaseReadiness !== "ready";
   const pendingExport = snapshot.pendingAdmission && snapshot.kind === "presentation.export";
+  const hasPptxArtifact = current.artifacts?.some((artifact) => artifact.kind === "presentation-pptx") ?? false;
+  const hasPdfArtifact = current.artifacts?.some((artifact) => artifact.kind === "presentation-pdf") ?? false;
+  const canPrepareAnotherFidelity = current.status === "succeeded" && current.presentationId && (!hasPptxArtifact || !hasPdfArtifact);
 
   const submitGeneration = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -201,6 +227,8 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
         content,
         ...(form.instructions.trim() ? { instructions: form.instructions.trim() } : {}),
         ...(requestedSlideCount === undefined ? {} : { slideCount: requestedSlideCount }),
+        generationEngine: form.generationEngine,
+        authoredStyle: form.authoredStyle,
         qualityPolicy: "interactive-v1",
       });
     } catch (error) {
@@ -288,11 +316,25 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
               <input id="public-v2-instructions" value={form.instructions} onChange={(event) => setForm((value) => ({ ...value, instructions: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100" placeholder="대상, 톤, 강조할 항목" />
             </label>
             <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm font-medium text-slate-800" htmlFor="public-v2-generation-engine">
+                생성 엔진
+                <select id="public-v2-generation-engine" value={form.generationEngine} onChange={(event) => setForm((value) => ({ ...value, generationEngine: event.target.value as typeof value.generationEngine }))} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100">
+                  <option value="authored">Authored (기존 생성)</option>
+                  <option value="deck-ir">Deck IR (구조화 생성)</option>
+                </select>
+              </label>
               <label className="block text-sm font-medium text-slate-800" htmlFor="public-v2-slide-count">
                 슬라이드 수 <span className="font-normal text-slate-500">(선택)</span>
                 <input id="public-v2-slide-count" min={1} max={30} inputMode="numeric" type="number" value={form.slideCount} onChange={(event) => setForm((value) => ({ ...value, slideCount: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100" />
               </label>
             </div>
+            <label className="block text-sm font-medium text-slate-800" htmlFor="public-v2-authored-style">
+              서버 스타일 프로필
+              <select id="public-v2-authored-style" value={form.authoredStyle} onChange={(event) => setForm((value) => ({ ...value, authoredStyle: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100">
+                <option value="hyundai-culture-center">제안서 에메랄드·네이비 레퍼런스</option>
+                <option value="enterprise-modular">기본 엔터프라이즈</option>
+              </select>
+            </label>
             <button type="submit" disabled={pendingExport || current.phase === "submitting" || current.phase === "monitoring"} className="rounded-xl bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-50">
               {pendingExport ? "파일 접수 복구 필요" : current.pendingAdmission ? "접수 복구 재시도" : "생성 시작"}
             </button>
@@ -334,7 +376,20 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
 
         {current.quality && <section className={`mt-4 rounded-xl border p-4 ${statusTone(current.quality.releaseReadiness)}`} aria-label="품질 준비 상태"><h3 className="font-semibold">품질 준비 상태: {readableStatus(current.quality.releaseReadiness)}</h3>{current.quality.releaseReadiness !== "ready" && <p className="mt-1 text-sm">{current.quality.releaseReadiness === "not_assessed" ? "visual, performance, native coverage 검토가 아직 평가되지 않아 최종 완료 또는 릴리스 파일로 표시하지 않습니다." : "필수 품질 검토가 준비되지 않았거나 통과하지 못해 릴리스 준비 상태가 차단되었습니다."}</p>}{checks.length > 0 && <ul className="mt-3 space-y-2 text-sm">{checks.map((check) => <li key={check.label} className="rounded-lg bg-white/60 px-3 py-2"><span className="font-medium">{check.label}</span>: {readableStatus(check.status)}{check.required ? " · 필수" : ""}{check.reasonCode ? ` · ${check.reasonCode}` : ""}</li>)}</ul>}</section>}
 
-        {current.status === "succeeded" && current.presentationId && current.artifacts?.length === 0 && <section className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 p-4"><h3 className="font-semibold text-indigo-950">Fidelity 파일 만들기</h3><p className="mt-1 text-sm text-indigo-900">화면 보존형 출력만 선택할 수 있습니다. 개체 편집은 지원하지 않습니다.</p>{releaseReviewIncomplete && <p className="mt-2 text-sm font-medium text-indigo-900">development 생성은 최종 품질 완료가 아닙니다. Fidelity export가 별도의 release 검토를 시작합니다.</p>}<div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => void requestExport("pptx")} className="rounded-lg bg-indigo-700 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-800">Fidelity PPTX 준비</button><button type="button" onClick={() => void requestExport("pdf")} className="rounded-lg border border-indigo-300 px-3 py-2 text-sm font-semibold text-indigo-900 hover:bg-indigo-100">Fidelity PDF 준비</button></div></section>}
+        <section className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4" aria-label="독립 준비 상태">
+          <h3 className="font-semibold text-slate-900">독립 준비 상태</h3>
+          <p className="mt-1 text-xs text-slate-600">범위: {current.readiness.scope}. Fidelity 파일 준비는 승격·배포·네이티브 편집 가능성을 의미하지 않습니다.</p>
+          <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+            <div className="rounded-lg bg-white px-3 py-2"><dt className="font-medium">Fidelity artifact</dt><dd>{current.readiness.fidelityArtifactReady ? "준비됨" : "준비 안 됨"}</dd></div>
+            <div className="rounded-lg bg-white px-3 py-2"><dt className="font-medium">Native editability</dt><dd>{current.readiness.nativeEditabilityReady ? "준비됨" : "준비 안 됨"}</dd></div>
+            <div className="rounded-lg bg-white px-3 py-2"><dt className="font-medium">Promotion</dt><dd>{current.readiness.promotionReady ? "준비됨" : "승격 안 됨"}</dd></div>
+            <div className="rounded-lg bg-white px-3 py-2"><dt className="font-medium">Deployment authorization</dt><dd>{current.readiness.deploymentAuthorized ? "승인됨" : "승인 안 됨"}</dd></div>
+          </dl>
+        </section>
+
+        {current.generationTiming && <section className="mt-4 rounded-xl border border-slate-200 bg-white p-4" aria-label="생성 단계 timing"><h3 className="font-semibold text-slate-900">생성 단계 timing</h3><p className="mt-1 text-xs text-slate-600">시도 {current.generationTiming.attemptNumber} · queue wait {formatMillis(current.generationTiming.queueWaitMillis)} · wall {formatMillis(current.generationTiming.wallMillis)} · logical calls {formatCounter(current.generationTiming.logicalCalls)}</p><dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">{Object.entries(TIMING_STAGE_LABELS).map(([stage, label]) => { const timing = current.generationTiming?.stages[stage as keyof typeof TIMING_STAGE_LABELS]; return <div key={stage} className="rounded-lg bg-slate-50 px-3 py-2"><dt className="font-medium">{label}</dt><dd>{timing === "not_started" ? "시작 안 됨" : formatMillis(timing?.durationMillis ?? "not_started")}</dd></div>; })}</dl><p className="mt-3 text-xs text-slate-600">Token: {current.generationTiming.usageAvailability.tokens} · Cost: {current.generationTiming.usageAvailability.cost} · Worker: {current.generationTiming.worker.status}</p>{current.generationTiming.retryReason && <p className="mt-1 text-xs text-slate-700">Retry reason: {current.generationTiming.retryReason}</p>}{current.generationTiming.terminalError && <p className="mt-1 text-xs text-red-700">Terminal error: {current.generationTiming.terminalError}</p>}</section>}
+
+        {canPrepareAnotherFidelity && <section className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 p-4"><h3 className="font-semibold text-indigo-950">Fidelity 파일 만들기</h3><p className="mt-1 text-sm text-indigo-900">화면 보존형 출력만 선택할 수 있습니다. 개체 편집은 지원하지 않습니다.</p>{releaseReviewIncomplete && <p className="mt-2 text-sm font-medium text-indigo-900">development 생성은 최종 품질 완료가 아닙니다. Fidelity export가 별도의 release 검토를 시작합니다.</p>}<div className="mt-3 flex flex-wrap gap-2">{!hasPptxArtifact && <button type="button" onClick={() => void requestExport("pptx")} className="rounded-lg bg-indigo-700 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-800">Fidelity PPTX 준비</button>}{!hasPdfArtifact && <button type="button" onClick={() => void requestExport("pdf")} className="rounded-lg border border-indigo-300 px-3 py-2 text-sm font-semibold text-indigo-900 hover:bg-indigo-100">Fidelity PDF 준비</button>}</div></section>}
 
         {current.artifacts && current.artifacts.length > 0 && <section className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4" aria-label="다운로드 가능한 Fidelity 파일"><h3 className="font-semibold text-emerald-950">{releaseReviewIncomplete ? "다운로드 가능 · 릴리스 검토 미완료" : "다운로드 준비됨"}</h3><p className="mt-1 text-sm text-emerald-900">모든 파일은 1280×720 화면 보존형 raster이며 개체 편집·접근 가능한 텍스트를 지원하지 않습니다.</p><ul className="mt-3 space-y-2">{current.artifacts.map((artifact) => <li key={artifact.artifactId} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white px-3 py-2"><div><p className="text-sm font-semibold text-slate-900">{artifact.kind === "presentation-pdf" ? "Fidelity PDF" : "Fidelity PPTX"}</p><p className="text-xs text-slate-500">{formatBytes(artifact.sizeBytes) ?? "파일 크기 확인 중"}</p></div><a href={artifact.download} download onClick={() => setRequestedDownloadId(artifact.artifactId)} className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-800">다운로드</a></li>)}</ul>{requestedDownloadId && <p className="mt-3 text-xs text-emerald-900" role="status">다운로드를 요청했습니다. 브라우저의 다운로드 상태를 확인하세요.</p>}{current.downloadStatus && <p className="mt-2 text-xs text-emerald-900">다운로드 상태: {readableStatus(current.downloadStatus)}</p>}</section>}
         {requestError && <p className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-900" role="alert">요청을 완료하지 못했습니다: {requestError}</p>}

@@ -47,7 +47,7 @@ def assert_html_semantic_alignment(html: str, semantic: Mapping[str, Any]) -> No
         raise DeckIrGrammarError("compiled_semantic_mismatch") from error
 
 
-def compile_slide(*, operation_id: str, deck_ir: Mapping[str, Any], slide: Mapping[str, Any], grammar: DesignGrammarManifest, candidate: Candidate, selection_receipt: Mapping[str, Any], closure_revision: int = 0, browser_measurement_digest: str | None = None, strategy_decision_digest: str | None = None, authored_style: str | None = None) -> CompileResult:
+def compile_slide(*, operation_id: str, deck_ir: Mapping[str, Any], slide: Mapping[str, Any], grammar: DesignGrammarManifest, candidate: Candidate, selection_receipt: Mapping[str, Any], closure_revision: int = 0, browser_measurement_digest: str | None = None, strategy_decision_digest: str | None = None, authored_style: str | None = None, style_profile_digest: str | None = None) -> CompileResult:
     """Compile from a selected feasible candidate; no provider/network call exists here."""
 
     deck_ir = contract_mapping(deck_ir)
@@ -86,7 +86,23 @@ def compile_slide(*, operation_id: str, deck_ir: Mapping[str, Any], slide: Mappi
     root_qid = _qid(slide_key, "root")
     furniture_items = _reference_furniture(slide_key, profile) if reference_frame else []
     furniture = ''.join(item["html"] for item in furniture_items)
-    html = f'<!doctype html><html><head><meta charset="utf-8"><style>{stylesheet}</style></head><body><main class="dir-slide composition-{profile} dir-variant-{candidate.variant_id} layout-family-{escape(layout_family, quote=True)} layout-{escape(candidate.layout_id, quote=True).replace("/", "-")}" data-qid="{root_qid}" data-semantic-role="decoration" aria-label="slide">{furniture}{body}</main></body></html>'
+    deck_slides = deck_ir.get("slides")
+    slide_index = (
+        next(
+            (index for index, item in enumerate(deck_slides) if isinstance(item, Mapping) and item.get("slideKey") == slide_key),
+            -1,
+        )
+        if isinstance(deck_slides, list)
+        else -1
+    )
+    position_class = (
+        " slide-first"
+        if slide_index == 0
+        else " slide-last"
+        if isinstance(deck_slides, list) and slide_index == len(deck_slides) - 1
+        else ""
+    )
+    html = f'<!doctype html><html><head><meta charset="utf-8"><style>{stylesheet}</style></head><body><main class="dir-slide composition-{profile} dir-variant-{candidate.variant_id} layout-family-{escape(layout_family, quote=True)} layout-{escape(candidate.layout_id, quote=True).replace("/", "-")}{position_class}" data-qid="{root_qid}" data-semantic-role="decoration" aria-label="slide">{furniture}{body}</main></body></html>'
     if reference_frame and profile == "chart":
         # The release-review preinspection canonicalizes this coordinate-bearing
         # wrapper to explicit zero offsets. Emit the same stable form up front
@@ -132,6 +148,7 @@ def compile_slide(*, operation_id: str, deck_ir: Mapping[str, Any], slide: Mappi
         "compositionRelations": ([] if reference_frame else candidate.composition["relations"]),
         "connectorContracts": connector_contracts,
         "contentTextDigest": digest([(item["qid"], item["text"]) for item in semantic["elements"] if item["kind"] == "text"]),
+        "styleProfileDigest": style_profile_digest,
     }
     if reference_frame:
         receipt["referenceFrame"] = {key: value for key, value in reference_frame.items() if key != "css"}

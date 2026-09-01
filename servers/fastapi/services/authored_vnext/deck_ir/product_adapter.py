@@ -47,7 +47,10 @@ from services.authored_vnext.deck_ir.integration import (
     ConstraintCompilerDeckIrExecutionAdapter,
     DeckIrIntegrationError,
 )
-from services.authored_vnext.deck_ir.grammar import default_design_grammar
+from services.authored_vnext.deck_ir.style_profiles import (
+    design_grammar_for_style,
+    resolve_style_profile,
+)
 from services.authored_vnext.deck_ir.quality import evaluate_deck_quality
 from services.authored_vnext.semantic.publication import (
     SemanticContractError,
@@ -619,8 +622,10 @@ async def observe_compiled_slide(compiled: Mapping[str, object]):
     return observation, capture
 
 
-def _normalized_language_tag(value: object) -> str:
+def _normalized_language_tag(value: object, *, brief: object = None) -> str:
     raw = str(value or "").strip()
+    if not raw:
+        raw = "ko-KR" if re.search(r"[\uac00-\ud7a3]", str(brief or "")) else "en-US"
     aliases = {
         "english": "en-US",
         "korean": "ko-KR",
@@ -666,11 +671,9 @@ class ProductDeckIrExecutionAdapter:
         ) != "deck-ir":
             raise DeckIrIntegrationError("deck_ir_strategy_not_selected")
         slide_count = getattr(request, "n_slides", None)
-        if not isinstance(slide_count, int) or not 1 <= slide_count <= 8:
+        if not isinstance(slide_count, int) or not 1 <= slide_count <= 10:
             raise DeckIrIntegrationError("deck_ir_balanced_slide_count_unsupported")
         authored_style = getattr(request, "authored_style", None)
-        if authored_style not in {None, "legacy-reference-current-v1"}:
-            raise DeckIrIntegrationError("deck_ir_authored_style_unsupported")
         # This source-free requirement graph binds the request by digest only;
         # the raw brief remains ephemeral provider input and is never placed in
         # an operation, checkpoint, receipt, or log body.
@@ -679,9 +682,16 @@ class ProductDeckIrExecutionAdapter:
         )
         if strategy_receipt.get("requirementGraphDigest") != requirement_graph.get("graphDigest"):
             raise DeckIrIntegrationError("deck_ir_requirement_graph_binding_invalid")
+        try:
+            style_profile = resolve_style_profile(authored_style)
+        except ValueError as error:
+            raise DeckIrIntegrationError(str(error)) from error
+        if strategy_receipt.get("styleProfileDigest") != style_profile.profile_digest:
+            raise DeckIrIntegrationError("deck_ir_style_profile_binding_invalid")
         schemas = _director_schemas()
         normalized_language = _normalized_language_tag(
-            getattr(request, "language", None)
+            getattr(request, "language", None),
+            brief=getattr(request, "content", None),
         )
         director = ProductionStructuredDeckDirector(
             client=get_client(config=get_llm_config()),
@@ -743,7 +753,7 @@ class ProductDeckIrExecutionAdapter:
 
         adapter = ConstraintCompilerDeckIrExecutionAdapter(
             director=director,
-            grammar=default_design_grammar(),
+            grammar=design_grammar_for_style(style_profile),
             reserve_provider=reserve,
             observe=observe,
             generation_quality=generation_quality,
@@ -751,6 +761,7 @@ class ProductDeckIrExecutionAdapter:
             requirement_graph=requirement_graph,
             language=normalized_language,
             authored_style=authored_style,
+            style_profile=style_profile,
         )
         return await adapter.run(
             request=request,
@@ -894,6 +905,8 @@ class ProductDeckIrExecutionAdapter:
                     # this subject; export/readback owns that later receipt.
                     master_contract_digest=canonical_digest({
                         "strategyReceiptDigest": _as_digest(payload.get("strategyReceipt")),
+                        "styleProfileDigest": payload.get("styleProfileDigest"),
+                        "retainedReferenceDigest": payload.get("retainedReferenceDigest"),
                         "generationQualityReceipt": payload.get("generationQualityReceipt"),
                         "requirementCoverageReceipt": payload.get("requirementCoverageReceipt"),
                         "executionEvidence": payload.get("executionEvidence"),
@@ -919,6 +932,13 @@ class ProductDeckIrExecutionAdapter:
                 evidence=quality_v3_evidence,
             )
             next_theme = dict(presentation.theme or {})
+            next_theme["generationDeckIr"] = {
+                "strategy": "deck-ir",
+                "styleProfileDigest": payload.get("styleProfileDigest"),
+                "retainedReferenceDigest": payload.get("retainedReferenceDigest"),
+                "manifestDigest": manifest.canonical_digest,
+                "slideCount": len(ordered),
+            }
             next_theme["authoredQualityGate"] = {
                 **quality_v2.to_dict(),
                 "qualityReceiptV3": quality_v3.to_dict(),
@@ -950,6 +970,8 @@ class ProductDeckIrExecutionAdapter:
             "manifestDigest": manifest.canonical_digest,
             "revision": expected_revision + 1,
             "bundleCount": len(ordered),
+            "styleProfileDigest": payload.get("styleProfileDigest"),
+            "retainedReferenceDigest": payload.get("retainedReferenceDigest"),
         }
 
 
