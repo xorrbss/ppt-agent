@@ -4,49 +4,22 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-import hashlib
-import json
-import math
 from typing import Any
+
+from .composition_capacity import (
+    _mapping,
+    _value,
+    allocate_units,
+    canonical_digest,
+    executable_slots,
+    source_flow_slots,
+)
 
 
 class CompositionError(ValueError):
     def __init__(self, code: str) -> None:
         super().__init__(code)
         self.code = code
-
-
-def canonical_digest(value: object) -> str:
-    encoded = json.dumps(
-        value,
-        ensure_ascii=False,
-        allow_nan=False,
-        separators=(",", ":"),
-        sort_keys=True,
-        default=str,
-    ).encode("utf-8")
-    return "sha256:" + hashlib.sha256(encoded).hexdigest()
-
-
-def _value(value: object, *names: str, default: object = None) -> object:
-    if isinstance(value, Mapping):
-        for name in names:
-            if name in value:
-                return value[name]
-        return default
-    for name in names:
-        if hasattr(value, name):
-            return getattr(value, name)
-    return default
-
-
-def _mapping(value: object) -> dict[str, Any]:
-    if isinstance(value, Mapping):
-        return dict(value)
-    dump = getattr(value, "model_dump", None)
-    if callable(dump):
-        return dict(dump(mode="json", by_alias=True))
-    return {}
 
 
 @dataclass(frozen=True)
@@ -216,154 +189,6 @@ def sealed_units_for_slide(narrative: object, slide: object) -> list[SealedConte
     return units
 
 
-def _slot_contract(slot: object) -> dict[str, Any]:
-    raw = _mapping(slot)
-    constraints = _value(slot, "constraints", default=())
-    envelope = _mapping(_value(slot, "capacity_envelope", "capacityEnvelope", default={}))
-    for constraint in constraints if isinstance(constraints, Sequence) else ():
-        kind = str(_value(constraint, "kind", default=""))
-        value = _value(constraint, "value")
-        if kind == "maximum-characters":
-            envelope.setdefault("maxCharacters", value)
-        elif kind == "maximum-lines":
-            envelope.setdefault("maxLines", value)
-    envelope.setdefault("maxCharacters", int(_value(slot, "capacity_units", "capacityUnits", default=1) or 1))
-    bounds = _mapping(_value(slot, "bounds", default={}))
-    width = float(bounds.get("width", 0) or 0)
-    height = float(bounds.get("height", 0) or 0)
-    envelope.setdefault("contentArea", max(0.0, width * height))
-    handle = _mapping(_value(slot, "patch_handle", "patchHandle", default={}))
-    if not handle:
-        source_shape_id = str(_value(slot, "source_shape_id", "sourceShapeId", default="") or "")
-        if source_shape_id:
-            handle = {
-                "kind": "authored-qid",
-                "elementId": source_shape_id,
-                "selector": f"[data-qid='{source_shape_id}']",
-                "sourceDigest": _value(slot, "source_xml_digest", "sourceXmlDigest"),
-            }
-    return {
-        "slotId": str(_value(slot, "slot_id", "slotId", default="") or ""),
-        "semanticRole": str(_value(slot, "semantic_role", "semanticRole", default="body") or "body"),
-        "acceptedKinds": [str(item) for item in (_value(slot, "accepted_kinds", "acceptedKinds", default=("text",)) or ())],
-        "required": bool(_value(slot, "required", default=False)),
-        "capacityEnvelope": envelope,
-        "patchHandle": handle,
-        "containerId": _value(slot, "container_id", "containerId"),
-        "hidePolicy": _value(slot, "hide_policy", "hidePolicy", default="reject"),
-        "fallbackPolicy": _value(slot, "fallback_policy", "fallbackPolicy", default="reject"),
-        "extractionConfidence": float(_value(slot, "extraction_confidence", "extractionConfidence", default=1.0) or 0.0),
-        "bounds": bounds,
-        "raw": raw,
-    }
-
-
-def _unit_text(unit: SealedContentUnit) -> str:
-    if unit.text.strip():
-        return " ".join(unit.text.split())
-    if unit.data not in (None, [], {}):
-        return json.dumps(unit.data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return ""
-
-
-def _fits(slot: Mapping[str, Any], assigned: Sequence[SealedContentUnit], unit: SealedContentUnit) -> bool:
-    accepted = set(slot["acceptedKinds"])
-    kind = "text" if unit.kind in {"text", "title", "body", "quote"} else unit.kind
-    if kind not in accepted and not (kind in {"metric", "data", "number"} and accepted & {"text", "table", "chart"}):
-        return False
-    combined = [*assigned, unit]
-    envelope = slot["capacityEnvelope"]
-    texts = [_unit_text(item) for item in combined]
-    characters = sum(len(item) for item in texts) + max(0, len(texts) - 1)
-    max_characters = int(envelope.get("maxCharacters", envelope.get("characters", 10000)) or 10000)
-    if characters > max_characters:
-        return False
-    bounds = slot.get("bounds") or {}
-    width = float(bounds.get("width", 0) or 0)
-    chars_per_line = max(4, int(envelope.get("charactersPerLine", max(4, width / 11 if width else 40))))
-    observed_lines = sum(max(1, math.ceil(len(item) / chars_per_line)) for item in texts if item)
-    max_lines = int(envelope.get("maxLines", 1000) or 1000)
-    if observed_lines > max_lines:
-        return False
-    content_area = float(envelope.get("contentArea", 0) or 0)
-    estimated_area = characters * float(envelope.get("characterArea", 150) or 150)
-    if content_area > 0 and estimated_area > content_area:
-        return False
-    rows = sum(len(item.data) if item.kind == "table" and isinstance(item.data, Sequence) else 0 for item in combined)
-    columns = max(
-        (len(row) for item in combined if item.kind == "table" and isinstance(item.data, Sequence) for row in item.data if isinstance(row, Sequence)),
-        default=0,
-    )
-    if rows > int(envelope.get("maxTableRows", 10000) or 10000) or columns > int(envelope.get("maxTableColumns", 10000) or 10000):
-        return False
-    numeric_cards = sum(1 for item in combined if item.kind in {"metric", "number"})
-    if numeric_cards > int(envelope.get("maxNumericCards", 10000) or 10000):
-        return False
-    images = [item for item in combined if item.kind == "image"]
-    if len(images) > int(envelope.get("maxImages", 10000) or 10000):
-        return False
-    for image in images:
-        data = image.data if isinstance(image.data, Mapping) else {}
-        aspect = float(data.get("aspectRatio", data.get("aspect_ratio", 0)) or 0)
-        if aspect and not float(envelope.get("minImageAspectRatio", 0) or 0) <= aspect <= float(envelope.get("maxImageAspectRatio", 1000) or 1000):
-            return False
-    return True
-
-
-def _semantic_score(unit: SealedContentUnit, slot: Mapping[str, Any]) -> int:
-    role = str(slot["semanticRole"]).lower()
-    wanted = unit.semantic_role.lower()
-    if wanted == role:
-        return 0
-    if wanted == "title" and any(token in role for token in ("title", "headline", "heading")):
-        return 0
-    if wanted == "body" and any(token in role for token in ("body", "content", "description", "bullet")):
-        return 0
-    if wanted == "data" and any(token in role for token in ("data", "metric", "table", "chart")):
-        return 0
-    return 1
-
-
-def _capacity_slack_score(
-    slot: Mapping[str, Any],
-    assigned: Sequence[SealedContentUnit],
-    unit: SealedContentUnit,
-) -> float:
-    """Prefer the tightest fitting slot so large envelopes remain available."""
-
-    combined = [*assigned, unit]
-    envelope = slot["capacityEnvelope"]
-    texts = [_unit_text(item) for item in combined]
-    characters = sum(len(item) for item in texts) + max(0, len(texts) - 1)
-    max_characters = int(
-        envelope.get("maxCharacters", envelope.get("characters", 10000)) or 10000
-    )
-    bounds = slot.get("bounds") or {}
-    width = float(bounds.get("width", 0) or 0)
-    chars_per_line = max(
-        4,
-        int(
-            envelope.get(
-                "charactersPerLine", max(4, width / 11 if width else 40)
-            )
-        ),
-    )
-    observed_lines = sum(
-        max(1, math.ceil(len(item) / chars_per_line)) for item in texts if item
-    )
-    max_lines = int(envelope.get("maxLines", 1000) or 1000)
-    character_slack = (max_characters - characters) / max(1, max_characters)
-    line_slack = (max_lines - observed_lines) / max(1, max_lines)
-    content_area = float(envelope.get("contentArea", 0) or 0)
-    area_slack = 0.0
-    if content_area > 0:
-        estimated_area = characters * float(
-            envelope.get("characterArea", 150) or 150
-        )
-        area_slack = (content_area - estimated_area) / content_area
-    return character_slack + line_slack + area_slack
-
-
 def build_composition_plan(
     *,
     narrative: object,
@@ -371,57 +196,15 @@ def build_composition_plan(
     frame: object,
 ) -> tuple[dict[str, Any], list[SealedContentUnit], list[dict[str, Any]]]:
     units = sealed_units_for_slide(narrative, slide)
-    slots = [_slot_contract(item) for item in (_value(frame, "slots", default=()) or ())]
-    slots = [item for item in slots if item["slotId"] and item["patchHandle"].get("kind") in {"authored-qid", "scene-element"}]
-    slots.sort(key=lambda item: item["slotId"])
-    assigned: dict[str, list[SealedContentUnit]] = {item["slotId"]: [] for item in slots}
-    assignments: list[dict[str, Any]] = []
-    unmapped: list[str] = []
+    source_verbatim = bool(units) and all(
+        any(str(item.get("useMode") or item.get("use_mode") or "") == "verbatim" for item in unit.source_ownership)
+        for unit in units
+    )
+    slots = source_flow_slots(frame) if source_verbatim else executable_slots(frame)
     unit_order = {
         unit.content_unit_id: index for index, unit in enumerate(units)
     }
-    placement_order = sorted(
-        units,
-        key=lambda unit: (
-            -len(_unit_text(unit)),
-            unit_order[unit.content_unit_id],
-            unit.content_unit_id,
-        ),
-    )
-    for unit in placement_order:
-        eligible = [item for item in slots if _fits(item, assigned[item["slotId"]], unit)]
-        eligible.sort(
-            key=lambda item: (
-                _semantic_score(unit, item),
-                not (item["required"] and not assigned[item["slotId"]]),
-                _capacity_slack_score(
-                    item, assigned[item["slotId"]], unit
-                ),
-                -item["extractionConfidence"],
-                item["slotId"],
-            )
-        )
-        if not eligible:
-            unmapped.append(unit.content_unit_id)
-            continue
-        selected = eligible[0]
-        assigned[selected["slotId"]].append(unit)
-        assignments.append(
-            {
-                "contentUnitId": unit.content_unit_id,
-                "contentDigest": unit.content_digest,
-                "slotId": selected["slotId"],
-                "patchHandle": selected["patchHandle"],
-                "required": unit.required,
-                "sourcePageIndex": unit.source_page_index,
-                "sourceUnitIndex": unit.source_unit_index,
-            }
-        )
-    assignments.sort(
-        key=lambda item: unit_order[str(item["contentUnitId"])]
-    )
-    for values in assigned.values():
-        values.sort(key=lambda item: unit_order[item.content_unit_id])
+    assigned, assignments, unmapped = allocate_units(units, slots)
     mapped_ids = [item["contentUnitId"] for item in assignments]
     duplicates = sorted({item for item in mapped_ids if mapped_ids.count(item) > 1})
     required_ids = {item.content_unit_id for item in units if item.required}
@@ -434,8 +217,39 @@ def build_composition_plan(
         for item in (_value(frame, "chrome", default=()) or ())
         if _value(item, "source_xml_digest", "sourceXmlDigest", default="")
     )
+    flow_regions = [
+        {
+            "sourceFlowGroupId": item.get("sourceFlowGroupId"),
+            "slotId": item.get("slotId"),
+            "patchHandle": item.get("patchHandle"),
+            "containerId": item.get("containerId"),
+            "sourceFlowLayout": item.get("sourceFlowLayout"),
+            "sourceFlowRole": item.get("sourceFlowRole"),
+            "bounds": item.get("bounds"),
+            "canvasBounds": item.get("canvasBounds"),
+            "capacityEnvelope": item.get("capacityEnvelope"),
+            "textStyle": item.get("textStyle"),
+            "spacing": item.get("spacing"),
+            "layoutHints": item.get("layoutHints"),
+            "sourceFlowMemberSlotIds": item.get("sourceFlowMemberSlotIds"),
+            "protectedRegionDigests": sorted(
+                str(region.get("sourceDigest") or "")
+                for region in item.get("protectedRegions", ())
+                if isinstance(region, Mapping) and region.get("sourceDigest")
+            ),
+        }
+        for item in slots
+        if item.get("sourceFlowLayout")
+    ]
+    flow_regions.sort(
+        key=lambda item: (
+            str(item.get("sourceFlowGroupId") or ""),
+            str(item.get("slotId") or ""),
+        )
+    )
     unsigned = {
-        "schemaVersion": "deterministic-composition-plan/v1",
+        "schemaVersion": "deterministic-composition-plan/v2" if source_verbatim else "deterministic-composition-plan/v1",
+        "layoutMode": "source-flow" if source_verbatim else "exact-slots",
         "slideKey": str(_value(slide, "slide_key", "slideKey", default="")),
         "sequenceIndex": int(_value(slide, "sequence_index", "sequenceIndex", default=0) or 0),
         "contentGraphDigest": str(_value(narrative, "content_graph_digest", "contentGraphDigest", default="") or canonical_digest([item.payload() for item in units])),
@@ -443,6 +257,8 @@ def build_composition_plan(
         "frameDigest": str(_value(frame, "source_digest", "sourceDigest", default="")),
         "protectedElementDigests": protected_element_digests,
         "protectedDigest": canonical_digest(protected_element_digests),
+        "flowRegions": flow_regions,
+        "flowLayoutDigest": canonical_digest(flow_regions),
         "assignments": assignments,
         "unmappedContentUnits": sorted(unmapped),
         "unmappedRequiredUnits": unmapped_required,
@@ -561,6 +377,28 @@ def build_content_integrity_page(
                 }
                 for item in units
             ]
+        ),
+        "expectedProtectedChromeDigest": protected_digest_before,
+        "observedProtectedChromeDigest": protected_digest_after,
+        "browserReadbackDigest": canonical_digest(
+            {
+                "viewport": browser_metrics.get("viewport"),
+                "fontsReady": browser_metrics.get("fonts_ready"),
+                "elements": [
+                    metric_by_qid.get(
+                        str(
+                            (
+                                assignment.get("patchHandle")
+                                if isinstance(assignment, Mapping)
+                                else {}
+                            ).get("elementId")
+                            or ""
+                        ),
+                        {},
+                    )
+                    for assignment in plan.get("assignments", ())
+                ],
+            }
         ),
         "pageOrderError": any(item.source_page_index != sequence_index for item in units),
     }

@@ -6,6 +6,7 @@ legacy generation-job row remains a compatibility projection.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
@@ -27,6 +28,13 @@ from services.workspace_operation_retry_policy import WorkspaceOperationRetryDec
 
 
 PUBLIC_OPERATION_CONTRACT_VERSION = "public-operation/v2"
+PUBLIC_CAPACITY_COMMIT_RESERVE_SECONDS = 10.0
+_TERMINAL_PROVIDER_FAILURE_CODES = frozenset(
+    {
+        "retry_requires_an_initial_request",
+        "retry_amplification_ceiling_exceeded",
+    }
+)
 LinkedClaimCallable = Callable[
     [uuid.UUID, str, int],
     Awaitable[tuple[uuid.UUID, str] | None],
@@ -170,9 +178,43 @@ def durable_generation_failure(error: BaseException) -> tuple[str, bool]:
         else "_"
         for character in durable_code.strip().lower()
     )[:128].strip("_")
-    return normalized_code or "presentation_generation_failed", durable_retryable
+    normalized_code = normalized_code or "presentation_generation_failed"
+    if normalized_code in _TERMINAL_PROVIDER_FAILURE_CODES:
+        # The provider runtime has already cancelled this logical job.  Retrying
+        # the durable operation cannot create the missing initial request and
+        # would otherwise keep its lease/heartbeat alive until recovery.
+        return normalized_code, False
+    return normalized_code, durable_retryable
 
 
+async def public_generation_deadline(
+    session_factory: async_sessionmaker[AsyncSession],
+    context: WorkspaceOperationExecutionContext,
+) -> datetime | None:
+    claim = context.claim
+    async with session_factory() as session:
+        operation = await session.get(WorkspaceOperation, claim.operation_id)
+        if (
+            operation is None
+            or operation.state != "running"
+            or operation.attempt_token != claim.attempt_token
+            or operation.fencing_token != claim.fencing_token
+        ):
+            raise WorkspaceOperationLeaseLost(
+                "presentation_generation_lifecycle_fenced"
+            )
+        if operation.contract_version != PUBLIC_OPERATION_CONTRACT_VERSION:
+            return None
+        deadline = operation.deadline_at
+        if deadline is None:
+            raise NonRetryableWorkspaceOperationError(
+                "public_operation_deadline_missing"
+            )
+        return (
+            deadline
+            if deadline.tzinfo is not None
+            else deadline.replace(tzinfo=timezone.utc)
+        )
 async def claim_linked_generation_job(
     *,
     session_factory: async_sessionmaker[AsyncSession],
@@ -182,12 +224,37 @@ async def claim_linked_generation_job(
     """Use the compatibility projection already joined to operation claim."""
 
     claim = context.claim
+    public_deadline = await public_generation_deadline(session_factory, context)
     try:
-        linked_claim = await claim_linked(
-            claim.operation_id,
-            claim.attempt_token,
-            claim.attempt_number,
-        )
+        if public_deadline is None:
+            linked_claim = await claim_linked(
+                claim.operation_id,
+                claim.attempt_token,
+                claim.attempt_number,
+            )
+        else:
+            claim_window = (
+                public_deadline
+                - datetime.now(timezone.utc)
+                - timedelta(seconds=PUBLIC_CAPACITY_COMMIT_RESERVE_SECONDS)
+            ).total_seconds()
+            if claim_window <= 0:
+                raise NonRetryableWorkspaceOperationError(
+                    "public_deadline_exceeded",
+                    detail={"error_code": "public_deadline_exceeded"},
+                )
+            try:
+                async with asyncio.timeout(claim_window):
+                    linked_claim = await claim_linked(
+                        claim.operation_id,
+                        claim.attempt_token,
+                        claim.attempt_number,
+                    )
+            except TimeoutError as error:
+                raise NonRetryableWorkspaceOperationError(
+                    "public_deadline_exceeded",
+                    detail={"error_code": "public_deadline_exceeded"},
+                ) from error
     except WorkspaceLinkedGenerationProjectionPoisoned as error:
         raise NonRetryableWorkspaceOperationError(error.code) from error
     if linked_claim is None:

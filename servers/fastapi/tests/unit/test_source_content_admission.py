@@ -11,6 +11,7 @@ import pytest
 from pptx import Presentation
 from pptx.chart.data import ChartData
 from pptx.enum.chart import XL_CHART_TYPE
+from pptx.oxml.xmlchemy import OxmlElement
 from pptx.util import Inches
 
 from api.v1.ppt.endpoints.source_content import SOURCE_CONTENT_ROUTER
@@ -39,6 +40,13 @@ def _fixture_pptx(path: Path) -> None:
     text = slide.shapes.add_textbox(Inches(0.5), Inches(0.5), Inches(5), Inches(1))
     paragraph = text.text_frame.paragraphs[0]
     paragraph.add_run().text = "원본 문구 2026"
+    bullet = text.text_frame.add_paragraph()
+    bullet.text = "원본 불릿 문구"
+    bullet.level = 1
+    bullet_properties = bullet._p.get_or_add_pPr()
+    bullet_character = OxmlElement("a:buChar")
+    bullet_character.set("char", "•")
+    bullet_properties.insert(0, bullet_character)
     table = slide.shapes.add_table(2, 2, Inches(0.5), Inches(2), Inches(5), Inches(2)).table
     table.cell(0, 0).text = "항목"
     table.cell(0, 1).text = "값"
@@ -152,6 +160,13 @@ def test_pptx_manifest_is_deterministic_and_external_relationship_fails_closed(
         if block.kind == "text"
     )
     assert "".join(text_block.payload["runs"]) == text_block.payload["text"]
+    assert text_block.payload["paragraphs"][1] == {
+        "runs": ["원본 불릿 문구"],
+        "text": "원본 불릿 문구",
+        "bullet": True,
+        "bulletKind": "character",
+        "level": 1,
+    }
     table = next(
         block
         for unit in first.manifest.units

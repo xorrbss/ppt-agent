@@ -257,17 +257,27 @@ class PageContentIntegrityV1(StrictModel):
     expected_asset_occurrences: tuple[Key, ...] = ()
     rendered_asset_occurrences: tuple[Key, ...] = ()
     source_ownership_digest: Digest
+    expected_protected_chrome_digest: Digest
+    observed_protected_chrome_digest: Digest
+    browser_readback_digest: Digest
     page_order_error: bool = False
 
 
-class ContentIntegrityReceiptV1(StrictModel):
-    schema_version: Literal["content-integrity-receipt/v1"] = (
-        "content-integrity-receipt/v1"
+class ContentIntegrityReceiptV2(StrictModel):
+    schema_version: Literal["content-integrity-receipt/v2"] = (
+        "content-integrity-receipt/v2"
     )
     operation_id: UUID
+    attempt_binding_digest: Digest
+    source_revision: int = Field(ge=0)
+    result_revision: int = Field(ge=0)
     generation_lane: Literal["preserve-source", "new-authoring"]
     content_graph_digest: Digest
+    route_strategy_receipt_digest: Digest
     narrative_digest: Digest | None = None
+    preserve_source_input_digest: Digest | None = None
+    provider_call_budget: ProviderCallBudgetV1
+    provider_call_budget_digest: Digest
     pages: tuple[PageContentIntegrityV1, ...] = Field(min_length=1, max_length=100)
     required_coverage: Literal[1.0]
     duplicate_required_count: Literal[0]
@@ -276,6 +286,27 @@ class ContentIntegrityReceiptV1(StrictModel):
     page_order_error_count: Literal[0]
     status: Literal["passed"]
     receipt_digest: Digest
+
+    @model_validator(mode="after")
+    def _lane_and_revision_lineage_is_valid(self) -> "ContentIntegrityReceiptV2":
+        if self.result_revision < self.source_revision:
+            raise ValueError("content_integrity_revision_lineage_invalid")
+        if self.generation_lane == "preserve-source":
+            if self.narrative_digest is not None:
+                raise ValueError("preserve_source_narrative_digest_forbidden")
+            if self.preserve_source_input_digest is None:
+                raise ValueError("preserve_source_input_digest_required")
+            if (
+                self.provider_call_budget.actual_logical_calls != 0
+                or self.provider_call_budget.actual_physical_calls != 0
+            ):
+                raise ValueError("preserve_source_provider_calls_forbidden")
+        else:
+            if self.narrative_digest is None:
+                raise ValueError("new_authoring_narrative_digest_required")
+            if self.preserve_source_input_digest is not None:
+                raise ValueError("new_authoring_preserve_source_input_forbidden")
+        return self
 
 
 class ProviderCallReservationV1(StrictModel):
@@ -443,7 +474,7 @@ def model_payload(value: StrictModel) -> dict[str, Any]:
 
 __all__ = [
     "ContentGraphV1",
-    "ContentIntegrityReceiptV1",
+    "ContentIntegrityReceiptV2",
     "ContentUnitPayloadV1",
     "ContentUnitV1",
     "Digest",

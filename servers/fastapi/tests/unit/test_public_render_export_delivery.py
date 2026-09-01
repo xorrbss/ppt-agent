@@ -6,6 +6,8 @@ import inspect
 import textwrap
 import uuid
 
+import pytest
+
 from api.v2.contracts import PublicArtifactV2
 from models.sql.public_admission import PublicOperationAdmission
 from models.sql.workspace import WorkspaceOperation
@@ -171,3 +173,48 @@ def test_public_status_projects_bounded_export_execution_and_publication_receipt
     rejected = SqlPublicV2Orchestrator._status(operation, admission, [artifact])
     assert rejected.execution_receipt is not None
     assert rejected.execution_receipt.timing is None
+
+
+def test_export_quality_projection_uses_validated_actual_worker_render_identity() -> None:
+    from services.workspace_quality_export_operation_handlers import (
+        NonRetryableWorkspaceOperationError,
+        _validated_public_export_render_identity,
+    )
+
+    runtime_binding = {
+        "schemaVersion": "public-render-runtime-binding/v2",
+        "mode": "owned-local-controller-observed",
+        "checkpointReuseEligible": True,
+        "releaseEligible": False,
+        "releaseEligibilityReason": "runtime-binding-is-not-release-authorization",
+        "workerImageDigest": None,
+        "chromeRuntimeDigest": "sha256:" + "6" * 64,
+        "fontInventoryDigest": "sha256:" + "7" * 64,
+        "limitations": ["controller-worker-colocation-required"],
+    }
+    runtime_digest = public_render_runtime_binding_digest(runtime_binding)
+    deck_digest = "sha256:" + "8" * 64
+    metrics = {
+        "public_export_execution_receipt": {
+            "schemaVersion": "public-export-execution-receipt/v1",
+            "renderRuntimeIdentity": {
+                **runtime_binding,
+                "bindingDigest": runtime_digest,
+            },
+            "deckRenderIdentityDigest": deck_digest,
+        }
+    }
+
+    assert _validated_public_export_render_identity(metrics) == (
+        runtime_digest,
+        deck_digest,
+    )
+
+    metrics["public_export_execution_receipt"]["renderRuntimeIdentity"][
+        "bindingDigest"
+    ] = "sha256:" + "0" * 64
+    with pytest.raises(
+        NonRetryableWorkspaceOperationError,
+        match="public_export_render_identity_invalid",
+    ):
+        _validated_public_export_render_identity(metrics)

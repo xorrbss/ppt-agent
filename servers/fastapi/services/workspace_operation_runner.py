@@ -1052,6 +1052,47 @@ def _is_public_v2_workspace_operation(operation: WorkspaceOperation) -> bool:
     return operation.contract_version == _PUBLIC_OPERATION_CONTRACT_VERSION
 
 
+def _is_public_phase1_partial_admission(
+    operation: WorkspaceOperation,
+    admission: PublicOperationAdmission,
+) -> bool:
+    """Recognize only the known Phase-1 row shape without deriving identity.
+
+    The compatibility admission wrote a durable policy/deadline but did not
+    stamp the workspace execution contract or create a shared fence.  Recovery
+    is intentionally limited to generation rows whose independently persisted
+    owner ids agree; it must never reconstruct an owner or tenant from legacy
+    presentation data.
+    """
+
+    return bool(
+        operation.kind == "presentation.generate"
+        and admission.operation_kind == "generation"
+        and operation.owner_id is not None
+        and admission.owner_id == operation.owner_id
+        and bool(admission.tenant_id)
+        and bool(getattr(admission, "policy_digest", None))
+        and getattr(admission, "deadline_at", None) is not None
+        and int(getattr(admission, "fence", 0)) == 0
+        and operation.contract_version is None
+        and operation.execution_profile_version is None
+        and operation.phase is None
+        and operation.deadline_at is None
+    )
+
+
+def _public_phase1_partial_deadline_expired(
+    operation: WorkspaceOperation,
+    admission: PublicOperationAdmission,
+    *,
+    now: datetime,
+) -> bool:
+    if not _is_public_phase1_partial_admission(operation, admission):
+        return False
+    deadline = _coerce_aware(admission.deadline_at)
+    return deadline is not None and deadline <= now
+
+
 def _require_public_v2_workspace_contract(
     operation: WorkspaceOperation,
     admission: PublicOperationAdmission,
@@ -1610,6 +1651,21 @@ async def claim_next_workspace_operation(
                 and not _is_public_v2_admission(admission)
             ):
                 raise PublicAdmissionRejected("public_phase2_admission_invalid")
+            if _public_phase1_partial_deadline_expired(
+                queued_candidate,
+                admission,
+                now=now,
+            ):
+                if not await _terminalize_queued_public_deadline(
+                    session,
+                    queued_candidate,
+                    admission,
+                    now=now,
+                ):
+                    await session.rollback()
+                    continue
+                await session.commit()
+                continue
             if _is_public_v2_admission(admission):
                 _require_public_v2_workspace_contract(queued_candidate, admission)
                 admission_fence = int(admission.fence)
@@ -2315,11 +2371,139 @@ async def finalize_workspace_operation_success(
         if selected_route == "source-native":
             try:
                 from services.authored_vnext.narrative_ir.content_graph import (
-                    validate_content_integrity_receipt,
+                    validate_content_integrity_receipt_binding,
+                )
+                async with session_factory() as authority_session:
+                    authority_operation = await authority_session.get(
+                        WorkspaceOperation, claim.operation_id
+                    )
+                    if (
+                        authority_operation is None
+                        or authority_operation.state != "running"
+                        or authority_operation.fencing_token != claim.fencing_token
+                        or authority_operation.expected_revision
+                        != claim.expected_revision
+                    ):
+                        raise ValueError("content_integrity_binding_authority_stale")
+                    authority_payload = (
+                        authority_operation.request_payload
+                        if isinstance(authority_operation.request_payload, Mapping)
+                        else {}
+                    )
+                authority_route = authority_payload.get("generation_route_receipt")
+                preserve_checkpoint = authority_payload.get(
+                    "preserve_source_checkpoint"
+                )
+                checkpoint = preserve_checkpoint or authority_payload.get(
+                    "narrative_checkpoint"
+                )
+                narrative = (
+                    checkpoint.get("narrative")
+                    if isinstance(checkpoint, Mapping)
+                    else None
+                )
+                checkpoint_operation_id = (
+                    checkpoint.get("operationId") or checkpoint.get("operation_id")
+                    if isinstance(checkpoint, Mapping)
+                    else None
+                )
+                if isinstance(preserve_checkpoint, Mapping):
+                    preserve_input = preserve_checkpoint.get("preserveSourceInput")
+                    preserve_graph = (
+                        preserve_input.get("contentGraph")
+                        if isinstance(preserve_input, Mapping)
+                        else None
+                    )
+                    content_graph_digest = (
+                        preserve_graph.get("contentGraphDigest")
+                        if isinstance(preserve_graph, Mapping)
+                        else None
+                    )
+                    generation_lane = "preserve-source"
+                    attempt_binding_digest = preserve_checkpoint.get(
+                        "attemptBindingDigest"
+                    )
+                    preserve_source_input_digest = (
+                        preserve_input.get("inputDigest")
+                        if isinstance(preserve_input, Mapping)
+                        else None
+                    )
+                    narrative_digest = None
+                else:
+                    content_graph_digest = (
+                        narrative.get("contentGraphDigest")
+                        or narrative.get("content_graph_digest")
+                        if isinstance(narrative, Mapping)
+                        else None
+                    )
+                    generation_lane = "new-authoring"
+                    from services.authored_vnext.narrative_ir.validation import (
+                        canonical_digest,
+                    )
+
+                    attempt_binding_digest = canonical_digest(
+                        {
+                            "operationId": str(checkpoint_operation_id),
+                            "jobId": str(checkpoint.get("jobId") or ""),
+                            "attemptId": str(checkpoint.get("attemptId") or ""),
+                            "fencingToken": checkpoint.get("fencingToken"),
+                        }
+                    )
+                    narrative_digest = (
+                        narrative.get("narrativeDigest")
+                        if isinstance(narrative, Mapping)
+                        else None
+                    )
+                    preserve_source_input_digest = None
+                provider_call_budget = (
+                    checkpoint.get("providerCallBudget")
+                    if isinstance(checkpoint, Mapping)
+                    else None
+                )
+                if not isinstance(provider_call_budget, Mapping):
+                    raise ValueError("content_integrity_provider_budget_missing")
+                from services.authored_vnext.narrative_ir.validation import (
+                    canonical_digest,
                 )
 
-                validate_content_integrity_receipt(
-                    result_payload.get("contentIntegrityReceipt")
+                provider_call_budget_digest = canonical_digest(
+                    dict(provider_call_budget)
+                )
+                route_receipt_digest = (
+                    authority_route.get("receiptDigest")
+                    or authority_route.get("receipt_digest")
+                    if isinstance(authority_route, Mapping)
+                    else None
+                )
+                authority_selected_route = (
+                    authority_route.get("selectedRoute")
+                    or authority_route.get("selected_route")
+                    if isinstance(authority_route, Mapping)
+                    else None
+                )
+                if (
+                    claim.expected_revision is None
+                    or result.result_revision is None
+                    or authority_selected_route != "source-native"
+                    or str(checkpoint_operation_id) != str(claim.operation_id)
+                    or not isinstance(content_graph_digest, str)
+                    or not content_graph_digest
+                    or not isinstance(route_receipt_digest, str)
+                    or not route_receipt_digest
+                ):
+                    raise ValueError("content_integrity_binding_authority_missing")
+                validate_content_integrity_receipt_binding(
+                    result_payload.get("contentIntegrityReceipt"),
+                    operation_id=claim.operation_id,
+                    source_revision=int(claim.expected_revision),
+                    result_revision=int(result.result_revision),
+                    generation_lane=generation_lane,
+                    content_graph_digest=content_graph_digest,
+                    route_strategy_receipt_digest=route_receipt_digest,
+                    attempt_binding_digest=str(attempt_binding_digest),
+                    narrative_digest=narrative_digest,
+                    preserve_source_input_digest=preserve_source_input_digest,
+                    provider_call_budget_digest=provider_call_budget_digest,
                 )
             except Exception as error:
                 raise NonRetryableWorkspaceOperationError(
@@ -3249,10 +3433,30 @@ async def recover_expired_workspace_operations(
     session_factory: async_sessionmaker[AsyncSession] = async_session_maker,
     registry: WorkspaceOperationHandlerRegistry = workspace_operation_handler_registry,
 ) -> int:
-    """Recover expired leases with a token/lease CAS against heartbeats."""
+    """Recover expired leases and terminalize expired Phase-1 admissions."""
 
     now = _utc_now()
     recovered = 0
+    expired_phase1_partial = and_(
+        WorkspaceOperation.kind == "presentation.generate",
+        WorkspaceOperation.state.in_(("queued", "running")),
+        WorkspaceOperation.contract_version.is_(None),
+        WorkspaceOperation.execution_profile_version.is_(None),
+        WorkspaceOperation.phase.is_(None),
+        WorkspaceOperation.deadline_at.is_(None),
+        exists(
+            select(PublicOperationAdmission.id).where(
+                PublicOperationAdmission.operation_id == WorkspaceOperation.id,
+                PublicOperationAdmission.operation_kind == "generation",
+                PublicOperationAdmission.owner_id == WorkspaceOperation.owner_id,
+                PublicOperationAdmission.tenant_id != "",
+                PublicOperationAdmission.policy_digest != "",
+                PublicOperationAdmission.deadline_at <= now,
+                PublicOperationAdmission.fence == 0,
+                PublicOperationAdmission.state.in_(("queued", "active")),
+            )
+        ),
+    )
     async with session_factory() as session:
         rows = (
             (
@@ -3278,11 +3482,18 @@ async def recover_expired_workspace_operations(
                         WorkspaceOperation.created_at,
                         WorkspaceOperation.updated_at,
                     )
-                    .where(WorkspaceOperation.state.in_(tuple(_RUNNING_STATES)))
                     .where(
                         or_(
-                            WorkspaceOperation.lease_expires_at.is_(None),
-                            WorkspaceOperation.lease_expires_at <= now,
+                            and_(
+                                WorkspaceOperation.state.in_(
+                                    tuple(_RUNNING_STATES)
+                                ),
+                                or_(
+                                    WorkspaceOperation.lease_expires_at.is_(None),
+                                    WorkspaceOperation.lease_expires_at <= now,
+                                ),
+                            ),
+                            expired_phase1_partial,
                         )
                     )
                     .order_by(WorkspaceOperation.updated_at)
@@ -3294,10 +3505,24 @@ async def recover_expired_workspace_operations(
 
     for stale in rows:
         async with session_factory() as session:
-            operation_authority = await session.get(WorkspaceOperation, stale["id"])
             admission = await _public_admission_for_operation(session, stale["id"])
+            operation_authority = await session.scalar(
+                select(WorkspaceOperation)
+                .where(WorkspaceOperation.id == stale["id"])
+                .with_for_update()
+            )
             public_v2 = bool(
                 admission is not None and _is_public_v2_admission(admission)
+            )
+            phase1_partial_deadline_expired = bool(
+                operation_authority is not None
+                and admission is not None
+                and admission.state in {"queued", "active"}
+                and _public_phase1_partial_deadline_expired(
+                    operation_authority,
+                    admission,
+                    now=now,
+                )
             )
             if (
                 operation_authority is not None
@@ -3316,6 +3541,16 @@ async def recover_expired_workspace_operations(
                     admission,
                     allowed_phases=("active",),
                 )
+            if (
+                stale["state"] not in _RUNNING_STATES
+                and not phase1_partial_deadline_expired
+            ):
+                # Queued rows are admitted to this sweep only by the strict
+                # partial-deadline predicate.  If live authority no longer
+                # proves that predicate, leave the row untouched instead of
+                # treating it as an expired workspace lease.
+                await session.rollback()
+                continue
             lease_condition = (
                 WorkspaceOperation.lease_expires_at.is_(None)
                 if stale["lease_expires_at"] is None
@@ -3328,6 +3563,11 @@ async def recover_expired_workspace_operations(
                 WorkspaceOperation.attempt_token.is_(None)
                 if stale["attempt_token"] is None
                 else WorkspaceOperation.attempt_token == stale["attempt_token"]
+            )
+            recovery_conditions = (
+                (token_condition,)
+                if phase1_partial_deadline_expired
+                else (lease_condition, token_condition)
             )
             committed_delete_result: dict[str, Any] | None = None
             if stale["kind"] == "presentation.delete":
@@ -3423,7 +3663,9 @@ async def recover_expired_workspace_operations(
                     "completed_at": now,
                 }
                 observed_retry_count = stale["retry_count"]
-            elif public_v2 and _public_deadline_unavailable(admission, now=now):
+            elif phase1_partial_deadline_expired or (
+                public_v2 and _public_deadline_unavailable(admission, now=now)
+            ):
                 next_state = "deadline_exceeded"
                 event_type = "operation.error"
                 payload = {
@@ -3616,7 +3858,7 @@ async def recover_expired_workspace_operations(
                 allowed_states=(stale["state"],),
                 expected_version=stale["version"],
                 projection_values=projection,
-                additional_conditions=(lease_condition, token_condition),
+                additional_conditions=recovery_conditions,
                 fencing_token=event_fencing_token,
                 public_admission_fence=stale["fencing_token"],
                 public_admission_attempt=stale["attempt_number"],
@@ -3631,6 +3873,7 @@ async def recover_expired_workspace_operations(
                     operation,
                     state=next_state,
                     error_code=recovery_error_code,
+                    resume_allowed=next_state != "deadline_exceeded",
                 ):
                     await session.rollback()
                     continue

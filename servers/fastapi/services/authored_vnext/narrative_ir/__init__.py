@@ -2,7 +2,7 @@
 
 from .contracts import (
     ContentGraphV1,
-    ContentIntegrityReceiptV1,
+    ContentIntegrityReceiptV2,
     ContentUnitV1,
     FrameSearchReceiptV1,
     FrameSelectionReceiptV1,
@@ -17,12 +17,13 @@ from .content_graph import (
     seal_preserve_source_input,
     validate_content_graph,
     validate_content_integrity_receipt,
+    validate_content_integrity_receipt_binding,
 )
 from .orchestration import run_narrative_ir_operation
 
 __all__ = [
     "ContentGraphV1",
-    "ContentIntegrityReceiptV1",
+    "ContentIntegrityReceiptV2",
     "ContentUnitV1",
     "FrameSearchReceiptV1",
     "FrameSelectionReceiptV1",
@@ -36,4 +37,5 @@ __all__ = [
     "run_narrative_ir_operation",
     "validate_content_graph",
     "validate_content_integrity_receipt",
+    "validate_content_integrity_receipt_binding",
 ]

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone
+from hashlib import sha256
+import json
 from pathlib import Path
 from types import SimpleNamespace
 import uuid
@@ -887,10 +889,34 @@ def test_public_export_requires_generation_authority_in_the_actor_tenant(
 def test_registered_template_export_requires_passed_content_integrity() -> None:
     operation_id = uuid.uuid4()
     digest = "sha256:" + "a" * 64
+    route_unsigned = {
+        "schemaVersion": "generation-route-receipt/v1",
+        "requestedMode": "registered-template",
+        "selectedRoute": "source-native",
+        "designPackPin": {
+            "designPackId": "test-pack",
+            "version": 1,
+            "digest": "sha256:" + "d" * 64,
+        },
+        "narrativeIrDigest": None,
+        "fallbackReason": None,
+        "outputCapability": "fidelity",
+    }
+    route_digest = "sha256:" + sha256(
+        json.dumps(
+            route_unsigned,
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
     receipt = seal_content_integrity_receipt(
         operation_id=operation_id,
+        source_revision=1,
+        result_revision=2,
         generation_lane="new-authoring",
         content_graph_digest=digest,
+        route_strategy_receipt_digest=route_digest,
         narrative_digest="sha256:" + "b" * 64,
         pages=[
             {
@@ -906,11 +932,20 @@ def test_registered_template_export_requires_passed_content_integrity() -> None:
         ],
     )
     route_payload = {
-        "generation_route_receipt": {"selectedRoute": "source-native"}
+        "generation_route_receipt": {
+            **route_unsigned,
+            "receiptDigest": route_digest,
+        },
+        "narrative_checkpoint": {
+            "operationId": str(operation_id),
+            "narrative": {"contentGraphDigest": digest},
+        },
     }
     missing = SimpleNamespace(
+        id=operation_id,
         request_payload=route_payload,
         state="succeeded",
+        expected_revision=1,
         result_revision=2,
         result={},
     )
@@ -922,8 +957,10 @@ def test_registered_template_export_requires_passed_content_integrity() -> None:
     assert rejected.value.reason_code == "content_integrity_receipt_required"
 
     passed = SimpleNamespace(
+        id=operation_id,
         request_payload=route_payload,
         state="succeeded",
+        expected_revision=1,
         result_revision=2,
         result={"contentIntegrityReceipt": model_payload(receipt)},
     )

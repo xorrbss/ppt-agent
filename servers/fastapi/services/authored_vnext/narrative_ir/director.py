@@ -16,7 +16,7 @@ from .contracts import (
     ProviderCallReservationV1,
     model_payload,
 )
-from .validation import NarrativeIRValidationError, seal_narrative_ir
+from .validation import NarrativeIRValidationError, canonical_digest, seal_narrative_ir
 
 
 class NarrativeDirectorError(RuntimeError):
@@ -46,6 +46,134 @@ Reservation = Callable[
 class NarrativeDirectorResult:
     narrative: NarrativeIRV1
     provider_call_budget: ProviderCallBudgetV1
+
+
+def _generated_content_graph(
+    narrative: NarrativeIRV1,
+    *,
+    source_unit_ids: Sequence[str],
+) -> ContentGraphV1:
+    """Seal provider-authored meaning before any composition can consume it."""
+
+    from .content_graph import seal_content_graph
+
+    if source_unit_ids and len(source_unit_ids) != len(narrative.slides):
+        raise NarrativeIRValidationError("narrative_ir_source_unit_order_mismatch")
+    pages: list[dict[str, object]] = []
+    for slide_index, slide in enumerate(narrative.slides):
+        page_number = slide_index + 1
+        page_id = f"generated-page-{page_number:03d}"
+        source_unit_id = (
+            str(source_unit_ids[slide_index])
+            if source_unit_ids
+            else f"generated-source-{page_number:03d}"
+        )
+        units: list[dict[str, object]] = []
+
+        def append_unit(
+            *,
+            unit_id: str,
+            kind: str,
+            text: str,
+            data: Sequence[object] = (),
+            inherited_ownership: Sequence[object] = (),
+        ) -> None:
+            payload = {
+                "text": text,
+                "data": [model_payload(item) for item in data],
+            }
+            generated_binding_id = unit_id.replace(
+                "generated:", "generated-binding:", 1
+            )
+            ownership = [
+                {
+                    "sourceBindingId": generated_binding_id,
+                    "sourceContentDigest": canonical_digest(payload),
+                    "useMode": "meaning-preserving",
+                    "required": True,
+                }
+            ]
+            ownership.extend(model_payload(item) for item in inherited_ownership)
+            units.append(
+                {
+                    "contentUnitId": unit_id,
+                    "kind": kind,
+                    "payload": payload,
+                    "required": True,
+                    "sourceOwnership": ownership,
+                }
+            )
+
+        append_unit(
+            unit_id=f"generated:{page_number:03d}:key-message",
+            kind="text",
+            text=slide.key_message,
+        )
+        for point_index, point in enumerate(slide.supporting_points, start=1):
+            append_unit(
+                unit_id=f"generated:{page_number:03d}:supporting:{point_index:03d}",
+                kind="text",
+                text=point,
+            )
+        ownership_by_id = {
+            item.source_binding_id: item for item in slide.source_ownership
+        }
+        for datum_index, datum in enumerate(slide.data, start=1):
+            inherited = (
+                (ownership_by_id[datum.source_binding_id],)
+                if datum.source_binding_id in ownership_by_id
+                else ()
+            )
+            suffix = f" {datum.unit}" if datum.unit else ""
+            append_unit(
+                unit_id=f"generated:{page_number:03d}:datum:{datum_index:03d}",
+                kind=(
+                    "number"
+                    if isinstance(datum.value, (int, float))
+                    and not isinstance(datum.value, bool)
+                    else "text"
+                ),
+                text=f"{datum.label}: {datum.value}{suffix}",
+                data=(datum,),
+                inherited_ownership=inherited,
+            )
+        pages.append(
+            {
+                "pageId": page_id,
+                "sourceUnitId": source_unit_id,
+                "contentUnits": units,
+            }
+        )
+    return seal_content_graph(pages, generation_lane="new-authoring")
+
+
+def _draft_payload_bound_to_graph(
+    narrative: NarrativeIRV1,
+    graph: ContentGraphV1,
+) -> dict[str, object]:
+    payload = model_payload(narrative)
+    for key in (
+        "operationId",
+        "generationLane",
+        "contentGraphDigest",
+        "narrativeDigest",
+    ):
+        payload.pop(key, None)
+    payload["schemaVersion"] = "narrative-ir-draft/v1"
+    slides = payload.get("slides")
+    if not isinstance(slides, list) or len(slides) != len(graph.pages):
+        raise NarrativeIRValidationError("narrative_ir_slide_count_mismatch")
+    for slide, page in zip(slides, graph.pages, strict=True):
+        if not isinstance(slide, dict):
+            raise NarrativeIRValidationError("narrative_ir_schema_invalid")
+        slide.pop("sealedContentUnits", None)
+        slide["contentUnitIds"] = [
+            unit.content_unit_id for unit in page.content_units
+        ]
+    payload["sourceUnitOrder"] = [
+        model_payload(item) for item in graph.source_unit_order
+    ]
+    return payload
 
 
 def _reservation(
@@ -152,13 +280,37 @@ async def run_narrative_director(
             )
         else:
             try:
-                narrative = seal_narrative_ir(
-                    raw,
-                    operation_id=operation_id,
-                    admitted_slide_count=slide_count,
-                    expected_source_unit_ids=source_unit_ids,
-                    content_graph=graph,
-                )
+                if graph is None:
+                    validated_draft = seal_narrative_ir(
+                        raw,
+                        operation_id=operation_id,
+                        admitted_slide_count=slide_count,
+                        expected_source_unit_ids=source_unit_ids,
+                    )
+                    generated_graph = _generated_content_graph(
+                        validated_draft,
+                        source_unit_ids=source_unit_ids,
+                    )
+                    narrative = seal_narrative_ir(
+                        _draft_payload_bound_to_graph(
+                            validated_draft, generated_graph
+                        ),
+                        operation_id=operation_id,
+                        admitted_slide_count=slide_count,
+                        expected_source_unit_ids=tuple(
+                            item.source_unit_id
+                            for item in generated_graph.source_unit_order
+                        ),
+                        content_graph=generated_graph,
+                    )
+                else:
+                    narrative = seal_narrative_ir(
+                        raw,
+                        operation_id=operation_id,
+                        admitted_slide_count=slide_count,
+                        expected_source_unit_ids=source_unit_ids,
+                        content_graph=graph,
+                    )
             except NarrativeIRValidationError as error:
                 last_validation_error = error
             else:

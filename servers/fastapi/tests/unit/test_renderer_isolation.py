@@ -66,6 +66,15 @@ def test_semantic_role_attribute_is_admitted_as_inert_readback_metadata() -> Non
     assert 'data-semantic-role="title"' in admitted.html
 
 
+def test_source_boundary_kind_is_admitted_as_inert_readback_metadata() -> None:
+    admitted = renderer_isolation.admit_authored_html(
+        '<p data-qid="source-flow:u1" data-source-flow-unit-id="u1" '
+        'data-source-boundary-kind="paragraph">Source text</p>'
+    )
+
+    assert 'data-source-boundary-kind="paragraph"' in admitted.html
+
+
 def test_tabular_numerals_are_admitted() -> None:
     """Authored slides line digits up in tables and chips; the property is inert."""
     source = (
@@ -521,6 +530,7 @@ def test_layout_properties_a_real_deck_needs_are_admitted() -> None:
         "aspect-ratio: 16 / 9",
         "float: left",
         "column-count: 2",
+        "break-inside: avoid",
         "list-style-type: none",
         "margin-inline: auto",
         "inline-size: 50%",

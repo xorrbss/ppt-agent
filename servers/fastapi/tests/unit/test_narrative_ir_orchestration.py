@@ -17,6 +17,7 @@ from services.authored_vnext.narrative_ir.checkpoint import (
 from services.authored_vnext.narrative_ir.orchestration import (
     run_narrative_ir_operation,
 )
+from services.authored_vnext.narrative_ir.director import run_narrative_director
 from services.authored_vnext.narrative_ir.validation import (
     NarrativeIRValidationError,
     canonical_digest,
@@ -58,6 +59,81 @@ def _content_page(page_index: int, *, image: bool = False) -> dict[str, object]:
             }
         ],
     }
+
+
+def test_narrative_director_seals_generated_content_graph_exactly_once() -> None:
+    operation_id = UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+    provider_payload = {
+        "schemaVersion": "narrative-ir-draft/v1",
+        "title": "신규 사업 제안",
+        "language": "ko-KR",
+        "slides": [
+            {
+                "slideKey": "slide-001",
+                "sequenceIndex": 0,
+                "role": "content",
+                "keyMessage": "AI 전환의 실행 기반을 마련합니다",
+                "supportingPoints": ["표준 개발 체계", "품질 자동화"],
+                "dataRepresentation": "metric",
+                "data": [
+                    {"datumKey": "lead-time", "label": "리드타임", "value": 30, "unit": "%"},
+                    {"datumKey": "coverage", "label": "자동화 범위", "value": "전 과정"},
+                ],
+                "sourceOwnership": [],
+                "frameSemantics": ["body"],
+                "density": "medium",
+            },
+            {
+                "slideKey": "slide-002",
+                "sequenceIndex": 1,
+                "role": "closing",
+                "keyMessage": "단계적으로 성과를 확장합니다",
+                "supportingPoints": ["진단부터 확산까지 연결"],
+                "dataRepresentation": "none",
+                "data": [],
+                "sourceOwnership": [],
+                "frameSemantics": ["body"],
+                "density": "medium",
+            },
+        ],
+        "sourceUnitOrder": [],
+    }
+
+    class Provider:
+        single_physical_call = True
+
+        async def generate(self, request):
+            assert request["admittedContentGraph"] is None
+            return provider_payload
+
+    async def reserve(purpose: str, logical_ordinal: int, physical_ordinal: int):
+        return {
+            "reservationId": f"reservation-{physical_ordinal}",
+            "purpose": purpose,
+            "logicalOrdinal": logical_ordinal,
+            "physicalOrdinal": physical_ordinal,
+        }
+
+    result = asyncio.run(
+        run_narrative_director(
+            operation_id=operation_id,
+            brief="신규 콘텐츠로 2장 제안서를 작성",
+            slide_count=2,
+            language="ko-KR",
+            provider=Provider(),
+            reserve=reserve,
+        )
+    )
+    narrative = result.narrative
+    units = [
+        unit for slide in narrative.slides for unit in slide.sealed_content_units
+    ]
+    assert narrative.content_graph_digest is not None
+    assert [
+        unit_id for slide in narrative.slides for unit_id in slide.content_unit_ids
+    ] == [unit.content_unit_id for unit in units]
+    assert len(units) == len({unit.content_unit_id for unit in units}) == 7
+    assert all(unit.source_ownership for unit in units)
 
 
 def test_content_graph_dual_lane_seals_every_unit_and_fails_closed() -> None:
@@ -185,8 +261,11 @@ def test_content_graph_dual_lane_seals_every_unit_and_fails_closed() -> None:
         )
     receipt = seal_content_integrity_receipt(
         operation_id=operation_id,
+        source_revision=1,
+        result_revision=2,
         generation_lane="new-authoring",
         content_graph_digest=graph.content_graph_digest,
+        route_strategy_receipt_digest="sha256:" + "4" * 64,
         narrative_digest=narrative.narrative_digest,
         pages=integrity_pages,
     )
@@ -199,8 +278,11 @@ def test_content_graph_dual_lane_seals_every_unit_and_fails_closed() -> None:
     ):
         seal_content_integrity_receipt(
             operation_id=operation_id,
+            source_revision=1,
+            result_revision=2,
             generation_lane="new-authoring",
             content_graph_digest=graph.content_graph_digest,
+            route_strategy_receipt_digest="sha256:" + "4" * 64,
             narrative_digest=narrative.narrative_digest,
             pages=[failed_page, integrity_pages[1]],
         )

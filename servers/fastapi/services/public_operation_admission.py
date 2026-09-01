@@ -42,6 +42,7 @@ from utils.owner_context import (
 
 PUBLIC_DEFAULT_POLICY_VERSION = "public-default/v2"
 PUBLIC_DEFAULT_MAX_SLIDES = 100
+PUBLIC_PHASE2_DEFAULT_POLICY_VERSION = "public-default/v2"
 PUBLIC_PROVIDER_STAGES = frozenset(
     {
         "outline",
@@ -71,6 +72,8 @@ _PHASE2_ADMISSION_FIELDS = frozenset(
     {"resource_units", "deadline_at", "policy_digest", "fence"}
 )
 _PHASE2_COMMIT_RESERVE_SECONDS = 10
+_PUBLIC_OPERATION_CONTRACT_VERSION = "public-operation/v2"
+_PUBLIC_OPERATION_EXECUTION_PROFILE_VERSION = "public-generation-export/v2"
 
 
 @dataclass(frozen=True, slots=True)
@@ -346,8 +349,25 @@ async def _require_phase2_authority(session: AsyncSession) -> type[object]:
     return lease_model
 
 
-async def _resolved_phase2_authority(session: AsyncSession) -> type[object]:
-    """Resolve the async authority guard while retaining isolated test seams."""
+async def _resolved_phase2_authority(
+    session: AsyncSession,
+    *,
+    allow_sqlite_compat: bool = True,
+) -> type[object]:
+    """Resolve strict cluster authority or the single-node compatibility seam.
+
+    Canonical public-v2 admission passes ``allow_sqlite_compat=False`` and
+    therefore remains PostgreSQL-only.  The v1 browser compatibility route
+    explicitly opts into the SQLite branch; its later claim/heartbeat/finish
+    calls arrive through this shared resolver and must see the same three
+    resource leases that were created at admission.
+    """
+
+    if allow_sqlite_compat and session.get_bind().dialect.name == "sqlite":
+        lease_model = _phase2_resource_lease_model()
+        if not _phase2_available() or lease_model is None:
+            raise PublicAdmissionRejected("public_phase2_schema_unavailable")
+        return lease_model
 
     authority = _require_phase2_authority(session)
     if isawaitable(authority):
@@ -444,12 +464,13 @@ async def _require_phase2_provider_contract(
     expected_attempt_token: str | None = None,
     expected_fencing_token: int | None = None,
 ) -> None:
-    """Bind detached provider I/O to the PostgreSQL operation authority.
+    """Bind detached provider I/O to the operation's complete v2 authority.
 
-    A public admission row alone is insufficient: Phase-1 rows and SQLite
-    fixtures do not carry the immutable deadline/fence contract required to
-    authorize external provider work. Reconciliation remains allowed after a
-    budget terminal transition so already-started calls cannot strand counters.
+    A public admission row alone is insufficient: Phase-1 rows and incomplete
+    SQLite fixtures do not carry the immutable deadline/fence/resource contract
+    required to authorize external provider work. Reconciliation remains
+    allowed after a budget terminal transition so already-started calls cannot
+    strand counters.
     """
 
     await _resolved_phase2_authority(session)
@@ -784,7 +805,7 @@ async def admit_public_operation(
     return row
 
 
-async def admit_public_operation_v2(
+async def _admit_public_operation_v2(
     session: AsyncSession,
     *,
     principal: PrincipalContext,
@@ -794,21 +815,25 @@ async def admit_public_operation_v2(
     resource_plan: WeightedResourcePlan,
     auth_expires_at: datetime | None = None,
     server_hard_deadline_at: datetime | None = None,
-    policy_version: str = PUBLIC_DEFAULT_POLICY_VERSION,
+    policy_version: str = PUBLIC_PHASE2_DEFAULT_POLICY_VERSION,
     estimated_cost_limit_microunits: int | None = None,
     actual_cost_limit_microunits: int | None = None,
+    _allow_sqlite_compat: bool = False,
 ) -> PublicOperationAdmission:
-    """Phase-2 control-plane admission in one PostgreSQL transaction.
+    """Shared v2 admission core selected only by the two explicit wrappers.
 
-    This is intentionally separate from the Phase-1 entry point: callers that
-    opt in cannot accidentally receive a local/SQLite or incomplete-schema
-    admission.  The caller owns commit and must return a receipt only after it.
+    The public wrapper always selects PostgreSQL authority. The browser
+    compatibility wrapper may select the complete single-node SQLite resource
+    contract. The caller owns commit and must return a receipt only after it.
     """
 
     principal = _principal(principal)
     if operation_kind not in {"generation", "export"}:
         raise ValueError("public_operation_kind_invalid")
-    lease_model = await _resolved_phase2_authority(session)
+    lease_model = await _resolved_phase2_authority(
+        session,
+        allow_sqlite_compat=_allow_sqlite_compat,
+    )
     workspace_model = _require_phase2_workspace_model()
     operation = await session.scalar(
         select(workspace_model)
@@ -851,8 +876,8 @@ async def admit_public_operation_v2(
     existing_deadline = getattr(operation, "deadline_at", None)
     if existing_deadline is not None and _utc(existing_deadline, "operation_deadline_at") != deadline:
         raise PublicAdmissionRejected("public_operation_deadline_conflict")
-    contract = "public-operation/v2"
-    profile = "public-generation-export/v2"
+    contract = _PUBLIC_OPERATION_CONTRACT_VERSION
+    profile = _PUBLIC_OPERATION_EXECUTION_PROFILE_VERSION
     for field, value in (
         ("contract_version", contract),
         ("execution_profile_version", profile),
@@ -973,6 +998,137 @@ async def admit_public_operation_v2(
         )
     await session.flush()
     return row
+
+
+async def admit_public_operation_v2(
+    session: AsyncSession,
+    *,
+    principal: PrincipalContext,
+    operation_id: uuid.UUID,
+    operation_kind: str,
+    request_plan: ProviderRequestPlan | None,
+    resource_plan: WeightedResourcePlan,
+    auth_expires_at: datetime | None = None,
+    server_hard_deadline_at: datetime | None = None,
+    policy_version: str = PUBLIC_PHASE2_DEFAULT_POLICY_VERSION,
+    estimated_cost_limit_microunits: int | None = None,
+    actual_cost_limit_microunits: int | None = None,
+) -> PublicOperationAdmission:
+    """Admit only against the strict PostgreSQL public control plane."""
+
+    return await _admit_public_operation_v2(
+        session,
+        principal=principal,
+        operation_id=operation_id,
+        operation_kind=operation_kind,
+        request_plan=request_plan,
+        resource_plan=resource_plan,
+        auth_expires_at=auth_expires_at,
+        server_hard_deadline_at=server_hard_deadline_at,
+        policy_version=policy_version,
+        estimated_cost_limit_microunits=estimated_cost_limit_microunits,
+        actual_cost_limit_microunits=actual_cost_limit_microunits,
+        _allow_sqlite_compat=False,
+    )
+
+
+async def admit_public_operation_compatible_v2(
+    session: AsyncSession,
+    *,
+    principal: PrincipalContext,
+    operation_id: uuid.UUID,
+    operation_kind: str,
+    request_plan: ProviderRequestPlan | None,
+    resource_plan: WeightedResourcePlan,
+    auth_expires_at: datetime | None = None,
+    server_hard_deadline_at: datetime | None = None,
+    policy_version: str = PUBLIC_PHASE2_DEFAULT_POLICY_VERSION,
+    estimated_cost_limit_microunits: int | None = None,
+    actual_cost_limit_microunits: int | None = None,
+) -> PublicOperationAdmission:
+    """Admit the deprecated v1 browser request under the complete v2 contract.
+
+    PostgreSQL still uses the strict public control-plane authority. Local
+    SQLite uses the same immutable workspace/deadline/fence shape plus all
+    three quota counters and resource leases, but without claiming distributed
+    locking semantics. The caller owns the surrounding transaction and commit.
+    """
+
+    principal = _principal(principal)
+    sqlite_compat = session.get_bind().dialect.name == "sqlite"
+    expected_resource_units = resource_plan.resource_units
+    operation = await session.scalar(
+        select(WorkspaceOperation)
+        .where(WorkspaceOperation.id == operation_id)
+        .with_for_update()
+    )
+    existing = await session.scalar(
+        select(PublicOperationAdmission)
+        .where(PublicOperationAdmission.operation_id == operation_id)
+        .with_for_update()
+    )
+    if existing is not None:
+        expected_slide_count = (
+            request_plan.slide_count
+            if operation_kind == "generation" and request_plan is not None
+            else 0
+        )
+        allowed_phases = (
+            {"admitted", "queued"}
+            if existing.state == "queued"
+            else {"active"}
+            if existing.state == "active"
+            else {existing.state}
+        )
+        linked = bool(
+            operation is not None
+            and operation.owner_id == principal.owner_id
+            and existing.owner_id == principal.owner_id
+            and existing.tenant_id == principal.tenant_id
+            and existing.operation_kind == operation_kind
+            and existing.policy_version == policy_version
+            and existing.slide_count == expected_slide_count
+            and existing.resource_units == expected_resource_units
+            and existing.policy_digest
+            and existing.deadline_at is not None
+            and existing.fence >= 1
+            and operation.contract_version
+            == _PUBLIC_OPERATION_CONTRACT_VERSION
+            and operation.execution_profile_version
+            == _PUBLIC_OPERATION_EXECUTION_PROFILE_VERSION
+            and operation.phase in allowed_phases
+            and operation.fencing_token == existing.fence
+            and operation.deadline_at is not None
+            and _utc(operation.deadline_at, "operation_deadline_at")
+            == _utc(existing.deadline_at, "admission_deadline_at")
+        )
+        if linked:
+            lease_model = await _resolved_phase2_authority(
+                session,
+                allow_sqlite_compat=sqlite_compat,
+            )
+            await _locked_phase2_leases(
+                session,
+                lease_model=lease_model,
+                admission=existing,
+            )
+            return existing
+        raise PublicAdmissionRejected("public_operation_identity_conflict")
+
+    return await _admit_public_operation_v2(
+        session,
+        principal=principal,
+        operation_id=operation_id,
+        operation_kind=operation_kind,
+        request_plan=request_plan,
+        resource_plan=resource_plan,
+        auth_expires_at=auth_expires_at,
+        server_hard_deadline_at=server_hard_deadline_at,
+        policy_version=policy_version,
+        estimated_cost_limit_microunits=estimated_cost_limit_microunits,
+        actual_cost_limit_microunits=actual_cost_limit_microunits,
+        _allow_sqlite_compat=sqlite_compat,
+    )
 
 
 async def _locked_phase2_leases(
@@ -2695,6 +2851,7 @@ async def public_prometheus_metrics_text(session: AsyncSession) -> str:
 __all__ = [
     "PUBLIC_DEFAULT_MAX_SLIDES",
     "PUBLIC_DEFAULT_POLICY_VERSION",
+    "PUBLIC_PHASE2_DEFAULT_POLICY_VERSION",
     "PUBLIC_PROVIDER_STAGES",
     "PrincipalContext",
     "ProviderRequestPlan",
@@ -2704,6 +2861,7 @@ __all__ = [
     "activate_public_operation",
     "activate_public_operation_v2",
     "admit_public_operation",
+    "admit_public_operation_compatible_v2",
     "admit_public_operation_v2",
     "claim_next_public_operation",
     "current_principal_context",

@@ -10,6 +10,10 @@ from api.v2.contracts import QualityReceiptV3 as PublicQualityReceiptV3
 from services.authored_quality_receipt_v2 import validate_current_quality_receipt_payload, validate_quality_receipt_v3_payload
 from services.authored_quality_receipt_v3_pipeline import _mapping, _capacity_checks_pass, _prefixed_sha256
 from services.authored_vnext.master.digests import canonical_digest
+from services.authored_vnext.slide_quality_acceptance import (
+    SCHEMA_VERSION as SLIDE_QUALITY_SCHEMA_VERSION,
+    validate_slide_quality_acceptance_receipt,
+)
 from services.public_quality_receipt_v3_store import quality_evidence_digest
 
 
@@ -107,6 +111,10 @@ def project_persisted_authored_quality_receipt_v3(
         payloads = _mapping(evidence.get("checkerPayloads")) or {}
         capacity = _mapping(payloads.get("capacity")) or {}
         safety = _mapping(payloads.get("safety")) or {}
+        visual = _mapping(payloads.get("visual")) or {}
+        source_readback = _mapping(payloads.get("sourceReadback")) or {}
+        slide_quality = _mapping(payloads.get("slideDocumentQualityReceipt"))
+        source_content = _mapping(payloads.get("sourceContent"))
         deterministic = _mapping(evidence.get("deterministic")) or {}
         statuses = dict(internal_v3.capability_consumer_statuses)
         current_generation = (
@@ -132,11 +140,86 @@ def project_persisted_authored_quality_receipt_v3(
                        output_digest=internal_v3.evidence_digest,
                        measurements={"blockingIssueCount": 0, "checkerCount": len(check_names)},
                        thresholds={"maximumBlockingIssueCount": 0, "allChecksObserved": True})
+        readback_check = _mapping(deterministic.get("readback")) or {}
+        source_inventory_current = (
+            source_content is not None
+            and source_content == _mapping(evidence.get("sourceContent"))
+            and source_content.get("status") == "passed"
+            and source_content.get("required") is True
+            and source_content.get("sourceMode") == "text-image"
+            and source_content.get("sourceCompleteClaim") is False
+            and isinstance(source_content.get("occurrenceInventoryDigest"), str)
+        )
         if (current_generation and internal_v2.require_source_readback
-            and internal_v2.source_readback_status == "passed" and statuses.get("readback") == "passed"):
+            and internal_v2.source_readback_status == "passed"
+            and statuses.get("readback") == "passed"
+            and source_readback.get("status") == "passed"
+            and source_readback.get("required") is True
+            and source_readback.get("requiredCoverage") == 1.0
+            and readback_check.get("status") == "passed"
+            and readback_check.get("observed") is True
+            and readback_check.get("evidenceDigest") == canonical_digest(dict(source_readback))
+            and source_inventory_current):
             passed("image_content_integrity", version="source-content-readback/v1",
                    input_digest=scene_digest, output_digest=internal_v3.evidence_digest,
-                   measurements={"sourceReadbackVerified": True}, thresholds={"sourceReadbackRequired": True})
+                   measurements={
+                       "sourceReadbackVerified": True,
+                       "textOccurrenceCount": source_content.get("textOccurrenceCount"),
+                       "imageOccurrenceCount": source_content.get("imageOccurrenceCount"),
+                   }, thresholds={"sourceReadbackRequired": True, "requiredCoverage": 1.0})
+
+        visual_check = _mapping(deterministic.get("visual")) or {}
+        slide_results = slide_quality.get("slides") if slide_quality is not None else None
+        visual_generation_current = (
+            slide_quality is not None
+            and slide_quality.get("schemaVersion") == SLIDE_QUALITY_SCHEMA_VERSION
+            and validate_slide_quality_acceptance_receipt(slide_quality)
+            and slide_quality.get("documentQualityPassed") is True
+            and slide_quality.get("failingSlideIndexes") == []
+            and slide_quality.get("blockerCodes") == []
+            and isinstance(slide_results, list)
+            and len(slide_results) > 0
+            and slide_quality.get("observedSlideCount") == len(slide_results)
+            and slide_quality.get("expectedSlideCount") == len(slide_results)
+            and all(
+                isinstance(item, Mapping)
+                and item.get("passed") is True
+                and isinstance(item.get("score"), (int, float))
+                and not isinstance(item.get("score"), bool)
+                and float(item["score"]) >= 90.0
+                for item in slide_results
+            )
+            and visual.get("status") == "passed"
+            and visual.get("fullDeck") is True
+            and visual.get("reviewedCount") == len(slide_results)
+            and visual.get("threshold") == slide_quality.get("slideScoreThreshold")
+            and visual.get("minimumSlideScore") == slide_quality.get("minimumSlideScore")
+            and visual.get("receiptDigest") == slide_quality.get("receiptDigest")
+            and visual_check.get("status") == "passed"
+            and visual_check.get("observed") is True
+            and visual_check.get("evidenceDigest") == canonical_digest(dict(visual))
+        )
+        if (
+            current_generation
+            and internal_v2.visual_review_status == "passed"
+            and visual_generation_current
+        ):
+            passed(
+                "visual_review",
+                version="slide-document-quality-acceptance/v1",
+                input_digest=scene_digest,
+                output_digest=internal_v3.evidence_digest,
+                measurements={
+                    "reviewedCount": len(slide_results),
+                    "minimumSlideScore": slide_quality.get("minimumSlideScore"),
+                    "failingSlideCount": 0,
+                },
+                thresholds={
+                    "requiredSlideCount": len(slide_results),
+                    "minimumSlideScore": 90.0,
+                    "everySlideMustPass": True,
+                },
+            )
 
     review = _mapping(review_evidence_record)
     if review is not None:

@@ -47,6 +47,7 @@ from services.public_quality_receipt_v3_store import (
 from services.public_generation_worker_lifecycle import (
     claim_linked_generation_job,
     durable_generation_failure,
+    public_generation_deadline,
     require_public_generation_publication,
 )
 from services.provider_usage_instrumentation import provider_operation_usage_scope
@@ -477,7 +478,18 @@ class PresentationGenerationOperationHandler:
                 from services.provider_usage_instrumentation import (
                     public_operation_scope,
                 )
+                from services.source_content.pipeline import (
+                    SOURCE_MODE as SOURCE_CONTENT_RESTYLE_MODE,
+                    admit_source_content_request,
+                )
                 from utils.llm_provider import generation_provider_policy
+
+                if request.source_mode == SOURCE_CONTENT_RESTYLE_MODE:
+                    await admit_source_content_request(
+                        request,
+                        sql_session=session,
+                        owner_id=str(context.claim.owner_id),
+                    )
 
                 status_error = _snapshot_status_error(status)
                 with provider_operation_usage_scope() as provider_usage:
@@ -510,6 +522,10 @@ class PresentationGenerationOperationHandler:
                                     )
                                 )
                     except BaseException as error:
+                        logger.exception(
+                            "Source-native generation attempt failed for operation %s",
+                            context.claim.operation_id,
+                        )
                         status_error = _snapshot_status_error(status, status_error)
                         try:
                             receipt_payload = await _persist_failed_attempt_timing(
@@ -931,6 +947,28 @@ class PresentationGenerationOperationHandler:
 
     async def execute(
         self, context: WorkspaceOperationExecutionContext
+    ) -> WorkspaceOperationResult:
+        """Run public work under its immutable operation deadline."""
+
+        deadline = await public_generation_deadline(self._session_factory, context)
+        if deadline is None:
+            return await self._execute_without_deadline(context)
+        remaining_seconds = (deadline - datetime.now(timezone.utc)).total_seconds()
+        if remaining_seconds <= 0:
+            raise NonRetryableWorkspaceOperationError("public_deadline_exceeded")
+        try:
+            async with asyncio.timeout(remaining_seconds):
+                return await self._execute_without_deadline(context)
+        except TimeoutError:
+            if datetime.now(timezone.utc) >= deadline:
+                raise NonRetryableWorkspaceOperationError(
+                    "public_deadline_exceeded"
+                ) from None
+            raise
+
+    async def _execute_without_deadline(
+        self,
+        context: WorkspaceOperationExecutionContext,
     ) -> WorkspaceOperationResult:
         claim = context.claim
         await context.raise_if_cancelled()
