@@ -598,6 +598,20 @@ class SqlPublicV2Orchestrator:
                 visionQa=request.quality_policy == "release-v1",
                 reference_snapshot_ids=reference_ids,
                 authored_style=request.authored_style,
+                sourceMode=request.source_mode,
+                sourceContentManifestPin=(
+                    request.source_content_manifest_pin.model_dump(
+                        mode="json",
+                        by_alias=True,
+                    )
+                    if request.source_content_manifest_pin is not None
+                    else None
+                ),
+                contentPolicy=(
+                    request.content_policy.model_dump(mode="json", by_alias=True)
+                    if request.content_policy is not None
+                    else None
+                ),
                 generationMode=request.generation_mode,
                 designPackPin=(
                     request.design_pack_pin.model_dump(mode="json", by_alias=True)
@@ -666,6 +680,23 @@ class SqlPublicV2Orchestrator:
                         "reference_snapshot_ids": [str(value) for value in reference_ids],
                         "quality_policy": request.quality_policy,
                         "authored_style": request.authored_style,
+                        "source_mode": request.source_mode,
+                        "source_content_manifest_pin": (
+                            request.source_content_manifest_pin.model_dump(
+                                mode="json",
+                                by_alias=True,
+                            )
+                            if request.source_content_manifest_pin is not None
+                            else None
+                        ),
+                        "content_policy": (
+                            request.content_policy.model_dump(
+                                mode="json",
+                                by_alias=True,
+                            )
+                            if request.content_policy is not None
+                            else None
+                        ),
                         "generation_mode": request.generation_mode,
                         "design_pack_pin": (
                             request.design_pack_pin.model_dump(
