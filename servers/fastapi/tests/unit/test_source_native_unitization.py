@@ -5,7 +5,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from services.authored_vnext.composition import SealedContentUnit
+from services.authored_vnext.composition import (
+    SealedContentUnit,
+    assert_composition_plan,
+    build_composition_plan,
+)
 from services.authored_vnext.source_native_generation import (
     _StructuredNarrativeProvider,
     _apply_composition_plan,
@@ -60,6 +64,135 @@ def _frame(frame_id: str, source_index: int) -> SimpleNamespace:
 
 def _digest(char: str) -> str:
     return "sha256:" + char * 64
+
+
+def test_new_authoring_uses_adaptive_source_flow_without_template_branch() -> None:
+    def slot(
+        slot_id: str,
+        role: str,
+        *,
+        required: bool,
+        maximum_characters: int,
+        bounds: dict[str, float],
+        container_id: str,
+    ) -> dict[str, object]:
+        return {
+            "slotId": slot_id,
+            "semanticRole": role,
+            "acceptedKinds": ["text"],
+            "required": required,
+            "capacityUnits": maximum_characters,
+            "capacityEnvelope": {
+                "maxCharacters": maximum_characters,
+                "maxLines": 2,
+                "maxNumericItems": 0,
+                "contentArea": bounds["width"] * bounds["height"],
+                "characterArea": 150,
+            },
+            "patchHandle": {
+                "kind": "authored-qid",
+                "elementId": slot_id,
+                "selector": f"[data-qid='{slot_id}']",
+                "sourceDigest": _digest("a"),
+            },
+            "containerId": container_id,
+            "extractionConfidence": 1.0,
+            "bounds": bounds,
+        }
+
+    frame = SimpleNamespace(
+        frame_id="frame:generic-cover",
+        source_digest=_digest("b"),
+        canvas={"x": 0, "y": 0, "width": 1280, "height": 720},
+        chrome=(),
+        slots=(
+            slot(
+                "cover.title",
+                "title",
+                required=True,
+                maximum_characters=20,
+                bounds={"x": 80, "y": 70, "width": 800, "height": 60},
+                container_id="cover-heading",
+            ),
+            slot(
+                "cover.thesis",
+                "body",
+                required=False,
+                maximum_characters=120,
+                bounds={"x": 80, "y": 180, "width": 800, "height": 180},
+                container_id="cover-content",
+            ),
+            slot(
+                "cover.metric",
+                "body",
+                required=False,
+                maximum_characters=40,
+                bounds={"x": 80, "y": 390, "width": 380, "height": 100},
+                container_id="cover-content",
+            ),
+        ),
+    )
+    units = (
+        SealedContentUnit(
+            content_unit_id="generated:001:key-message",
+            content_digest=_digest("c"),
+            kind="text",
+            required=True,
+            text="가" * 40,
+            data=(),
+            source_page_index=0,
+            source_unit_index=0,
+            asset_occurrence_id=None,
+            asset_digest=None,
+            source_ownership=(),
+            semantic_role="title",
+        ),
+        SealedContentUnit(
+            content_unit_id="generated:001:datum:001",
+            content_digest=_digest("d"),
+            kind="number",
+            required=True,
+            text="리드타임: 30 %",
+            data={"value": 30},
+            source_page_index=0,
+            source_unit_index=1,
+            asset_occurrence_id=None,
+            asset_digest=None,
+            source_ownership=(),
+            semantic_role="data",
+        ),
+    )
+    narrative = SimpleNamespace(
+        generation_lane="new-authoring",
+        content_graph_digest=_digest("e"),
+    )
+    slide = SimpleNamespace(
+        slide_key="slide-001",
+        sequence_index=0,
+        sealed_content_units=units,
+        content_unit_ids=tuple(item.content_unit_id for item in units),
+    )
+
+    plan, bound_units, slots = build_composition_plan(
+        narrative=narrative,
+        slide=slide,
+        frame=frame,
+    )
+
+    assert_composition_plan(plan)
+    assert plan["layoutMode"] == "source-flow"
+    assert len(bound_units) == 2
+    assert {item["contentUnitId"] for item in plan["assignments"]} == {
+        "generated:001:key-message",
+        "generated:001:datum:001",
+    }
+    title_assignment = next(
+        item
+        for item in plan["assignments"]
+        if item["contentUnitId"] == "generated:001:key-message"
+    )
+    assert title_assignment["slotId"] == "cover.title"
+    assert any(item.get("sourceFlowLayout") for item in slots)
 
 
 def test_source_native_unitization_preserves_structure_reuses_frames_and_hides_empty_slots() -> None:

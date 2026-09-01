@@ -769,6 +769,58 @@ def _append_flow_text_units(
         index += 1
 
 
+def _append_fixed_text_columns(
+    parent: object,
+    units: list[SealedContentUnit],
+    *,
+    slot: Mapping[str, object],
+    adaptive_scale: float,
+    role: str,
+    columns_count: int,
+    column_gap: float,
+) -> None:
+    """Keep atomic source units inside an explicit, bounded column grid."""
+
+    blocks: list[list[SealedContentUnit]] = []
+    index = 0
+    while index < len(units):
+        end = index + 1
+        if _unit_boundary_kind(units[index]) == "table-cell":
+            while end < len(units) and _unit_boundary_kind(units[end]) == "table-cell":
+                end += 1
+        blocks.append(units[index:end])
+        index = end
+    resolved_columns = max(1, min(columns_count, len(blocks)))
+    parent.set(
+        "style",
+        "display:grid!important;width:100%;height:100%;min-width:0;min-height:0;"
+        f"grid-template-columns:repeat({resolved_columns},minmax(0,1fr));"
+        f"column-gap:{column_gap:.3f}px;overflow:hidden",
+    )
+    minimum, extra = divmod(len(blocks), resolved_columns)
+    cursor = 0
+    parent_qid = str(parent.get("data-qid") or "source-flow-columns")
+    for column_index in range(resolved_columns):
+        block_count = minimum + (1 if column_index < extra else 0)
+        selected_blocks = blocks[cursor : cursor + block_count]
+        cursor += block_count
+        column = lxml_html.Element("div")
+        column.set("data-qid", f"{parent_qid}--column-{column_index + 1:02d}")
+        column.set(
+            "style",
+            "display:flex!important;flex-direction:column;min-width:0;min-height:0;"
+            "overflow:hidden",
+        )
+        _append_flow_text_units(
+            column,
+            [unit for block in selected_blocks for unit in block],
+            slot=slot,
+            adaptive_scale=adaptive_scale,
+            role=role,
+        )
+        parent.append(column)
+
+
 def _patch_exact_slot(
     node: object,
     units: list[SealedContentUnit],
@@ -819,18 +871,15 @@ def _patch_exact_slot(
         )
         hints = _flow_mapping(slot, "layoutHints")
         text_columns = max(1, min(2, int(_flow_number(hints.get("columnCount"), 1))))
-        text_panel.set(
-            "style",
-            f"column-count:{text_columns};column-gap:14px;column-fill:auto;"
-            "height:100%;min-width:0;min-height:0;overflow:hidden",
-        )
         role = _flow_role(slot)
-        _append_flow_text_units(
+        _append_fixed_text_columns(
             text_panel,
             text_units,
             slot=slot,
             adaptive_scale=adaptive_scale,
             role=role,
+            columns_count=text_columns,
+            column_gap=14.0,
         )
         image_panel = lxml_html.Element("div")
         image_panel.set(
@@ -978,17 +1027,14 @@ def _patch_exact_slot(
         columns = lxml_html.Element("div")
         flow_qid = str(node.get("data-qid") or "source-flow")
         columns.set("data-qid", f"{flow_qid}--columns")
-        columns.set(
-            "style",
-            f"column-count:{columns_count};column-gap:{column_gap:.3f}px;"
-            "column-fill:auto;height:100%;min-width:0;min-height:0;overflow:hidden",
-        )
-        _append_flow_text_units(
+        _append_fixed_text_columns(
             columns,
             units,
             slot=slot,
             adaptive_scale=adaptive_scale,
             role=role,
+            columns_count=columns_count,
+            column_gap=column_gap,
         )
         node.append(columns)
     else:

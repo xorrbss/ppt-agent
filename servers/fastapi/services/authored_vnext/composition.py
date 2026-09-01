@@ -200,7 +200,12 @@ def build_composition_plan(
         any(str(item.get("useMode") or item.get("use_mode") or "") == "verbatim" for item in unit.source_ownership)
         for unit in units
     )
-    slots = source_flow_slots(frame) if source_verbatim else executable_slots(frame)
+    generation_lane = str(
+        _value(narrative, "generation_lane", "generationLane", default="") or ""
+    )
+    new_authoring_adaptive = generation_lane == "new-authoring"
+    uses_source_flow = source_verbatim or new_authoring_adaptive
+    slots = source_flow_slots(frame) if uses_source_flow else executable_slots(frame)
     unit_order = {
         unit.content_unit_id: index for index, unit in enumerate(units)
     }
@@ -248,8 +253,8 @@ def build_composition_plan(
         )
     )
     unsigned = {
-        "schemaVersion": "deterministic-composition-plan/v2" if source_verbatim else "deterministic-composition-plan/v1",
-        "layoutMode": "source-flow" if source_verbatim else "exact-slots",
+        "schemaVersion": "deterministic-composition-plan/v2" if uses_source_flow else "deterministic-composition-plan/v1",
+        "layoutMode": "source-flow" if uses_source_flow else "exact-slots",
         "slideKey": str(_value(slide, "slide_key", "slideKey", default="")),
         "sequenceIndex": int(_value(slide, "sequence_index", "sequenceIndex", default=0) or 0),
         "contentGraphDigest": str(_value(narrative, "content_graph_digest", "contentGraphDigest", default="") or canonical_digest([item.payload() for item in units])),

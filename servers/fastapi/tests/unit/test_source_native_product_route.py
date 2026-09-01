@@ -6,8 +6,10 @@ from datetime import datetime, timezone
 import uuid
 
 import pytest
+from lxml import html as lxml_html
 
 from services.authored_vnext.composition import (
+    SealedContentUnit,
     assert_composition_plan,
     build_composition_plan,
     build_content_integrity_page,
@@ -24,6 +26,7 @@ from services.authored_vnext.narrative_ir.content_graph import (
     seal_content_integrity_receipt,
 )
 from services.authored_vnext.source_native_generation import (
+    _append_fixed_text_columns,
     _apply_composition_plan,
     _build_slide_quality_observation,
     _flow_text_css,
@@ -41,6 +44,55 @@ from services.public_quality_receipt_v3_projection import (
     project_persisted_authored_quality_receipt_v3,
 )
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
+
+
+def test_source_native_fixed_columns_preserve_atomic_order_without_overflow_columns() -> None:
+    units = [
+        SealedContentUnit(
+            content_unit_id=(
+                "page:title-candidate-001"
+                if index == 0
+                else f"page:paragraph-{index:03d}"
+            ),
+            content_digest="sha256:" + f"{index + 1:064x}",
+            kind="text",
+            required=True,
+            text=f"원문 단락 {index:02d}",
+            data=(),
+            source_page_index=0,
+            source_unit_index=index,
+            asset_occurrence_id=None,
+            asset_digest=None,
+            source_ownership=(),
+            semantic_role="title" if index == 0 else "body",
+        )
+        for index in range(21)
+    ]
+    parent = lxml_html.Element("div")
+    parent.set("data-qid", "flow--columns")
+
+    _append_fixed_text_columns(
+        parent,
+        units,
+        slot={"textStyle": {"fontSize": 16}},
+        adaptive_scale=1.0,
+        role="body",
+        columns_count=4,
+        column_gap=18.0,
+    )
+
+    style = str(parent.get("style") or "")
+    columns = list(parent)
+    assert "column-count" not in style
+    assert "grid-template-columns:repeat(4,minmax(0,1fr))" in style
+    assert "width:100%" in style and "overflow:hidden" in style
+    assert len(columns) == 4
+    assert [len(column.xpath(".//*[@data-source-flow-unit-id]")) for column in columns] == [6, 5, 5, 5]
+    assert [
+        str(node.get("data-source-flow-unit-id"))
+        for column in columns
+        for node in column.xpath(".//*[@data-source-flow-unit-id]")
+    ] == [unit.content_unit_id for unit in units]
 
 
 def test_source_native_flow_text_inherits_container_color_without_pack_override() -> None:
