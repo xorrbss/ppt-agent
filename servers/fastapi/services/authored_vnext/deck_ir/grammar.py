@@ -18,8 +18,8 @@ from typing import Any, Mapping, Sequence
 
 GRAMMAR_SCHEMA_VERSION = "design-grammar-manifest/v1"
 COMPILER_VERSION = "constraint-compiler/v1"
-RENDERER_ABI_VERSION = "design-component-renderer/v3-complete-qids"
-SOLVER_ABI_VERSION = "constraint-solver/v3-zone-connectors"
+RENDERER_ABI_VERSION = "design-component-renderer/v4-editorial-composition"
+SOLVER_ABI_VERSION = "constraint-solver/v4-structural-candidates"
 BALANCED_QUALITY_K = 6
 MAX_PARETO_BEAM_WIDTH = 8
 
@@ -45,13 +45,13 @@ _SERVER_STYLE_TOKENS = MappingProxyType({
     "safeAreaX": "64px",
     "safeAreaY": "48px",
     "gridGap": "20px",
-    "titleSize": "42px",
-    "titleLineHeight": "1.4",
-    "bodySize": "18px",
+    "titleSize": "44px",
+    "titleLineHeight": "1.24",
+    "bodySize": "20px",
     "minimumFontSize": "15px",
     "metricSize": "38px",
-    "surface": "#F8FAFC",
-    "ink": "#102A43",
+    "surface": "#FFFFFF",
+    "ink": "#101B30",
     "muted": "#52677D",
     "accent": "#1463FF",
     "line": "#C9D6E2",
@@ -186,11 +186,11 @@ def default_design_grammar() -> DesignGrammarManifest:
     unsigned = {
         "schemaVersion": GRAMMAR_SCHEMA_VERSION,
         "grammarId": "enterprise-modular",
-        "version": 2,
+        "version": 3,
         "primitives": [{"primitiveId": item.primitive_id, "family": item.family, "variants": list(item.variants)} for item in primitives],
         "componentKinds": sorted(_SOURCE_FREE_COMPONENTS),
         "artDirection": {key: sorted(value) for key, value in sorted(_SAFE_ART_DIRECTION.items())},
-        "candidatePolicy": {"balancedQualityK": BALANCED_QUALITY_K, "beamWidthMaximum": MAX_PARETO_BEAM_WIDTH, "candidateObservationsMaximum": BALANCED_QUALITY_K, "perCandidateRecompilesMaximum": 2, "intentResolver": "owned-overlap-capabilities/v1", "payloadProfile": "source-free-bar-connector/v1"},
+        "candidatePolicy": {"balancedQualityK": BALANCED_QUALITY_K, "beamWidthMaximum": MAX_PARETO_BEAM_WIDTH, "candidateObservationsMaximum": BALANCED_QUALITY_K, "perCandidateRecompilesMaximum": 2, "intentResolver": "owned-overlap-capabilities/v1", "payloadProfile": "source-free-bar-connector/v1", "rankingBasis": "solver-structural-fitness/v1", "compositionProfile": "editorial-typed-content/v1"},
         "serverStyleTokenDigest": digest(dict(_SERVER_STYLE_TOKENS)),
         "rendererAbiVersion": RENDERER_ABI_VERSION,
         "solverAbiVersion": SOLVER_ABI_VERSION,
@@ -199,7 +199,7 @@ def default_design_grammar() -> DesignGrammarManifest:
     policy_digest = digest(unsigned.pop("candidatePolicy"))
     unsigned["candidatePolicyDigest"] = policy_digest
     return DesignGrammarManifest(
-        grammar_id="enterprise-modular", version=2, primitives=primitives, component_kinds=_SOURCE_FREE_COMPONENTS,
+        grammar_id="enterprise-modular", version=3, primitives=primitives, component_kinds=_SOURCE_FREE_COMPONENTS,
         art_direction=_SAFE_ART_DIRECTION, candidate_policy_digest=policy_digest, manifest_digest=digest(unsigned),
         style_tokens=_SERVER_STYLE_TOKENS,
     )
@@ -285,12 +285,12 @@ def server_owned_stylesheet(grammar: DesignGrammarManifest, *, layout_id: str) -
         ".dir-component{min-width:0;min-height:0;overflow:visible;overflow-wrap:anywhere;word-break:keep-all;position:relative;}"
         f".dir-role-title{{font-size:{token['titleSize']};font-weight:750;line-height:{token['titleLineHeight']};letter-spacing:-0.02em;grid-column:1/-1;max-height:3.6em;}}"
         f".dir-role-body,.dir-role-evidence{{font-size:{token['bodySize']};color:{token['ink']};}}"
-        f".dir-metric{{font-size:{token['metricSize']};font-weight:750;color:{token['accent']};display:grid;place-items:center;min-height:120px;border:1px solid {token['line']};border-radius:16px;background:#FFF;}}"
-        f".dir-card,.dir-process{{font-size:{token['bodySize']};border:1px solid {token['line']};border-radius:16px;padding:20px;background:#FFF;}}"
+        f".dir-metric{{font-size:{token['metricSize']};font-weight:750;color:{token['accent']};min-height:120px;}}"
+        f".dir-card,.dir-process{{font-size:{token['bodySize']};}}"
         f".dir-image{{min-height:160px;border:1px solid {token['line']};border-radius:16px;background:#E8F0FE;color:{token['muted']};display:grid;place-items:center;}}"
         f".dir-slide .dir-component:not(.dir-role-title){{font-size:max({token['minimumFontSize']},{token['bodySize']});}}"
         ".dir-slide.layout-family-split .dir-component:nth-child(odd),.dir-slide.layout-family-rail .dir-component:nth-child(odd){grid-column:1;}.dir-slide.layout-family-split .dir-component:nth-child(even),.dir-slide.layout-family-rail .dir-component:nth-child(even){grid-column:2;}"
-        ".dir-slide.layout-family-stage .dir-role-title{align-self:end;}.dir-slide.layout-family-cluster .dir-component{align-self:stretch;}.dir-slide.layout-family-flow .dir-component{min-height:120px;}"
+        ".dir-slide.layout-family-stage .dir-role-title{align-self:end;}.dir-slide.layout-family-cluster .dir-component{align-self:stretch;}"
     )
 
 

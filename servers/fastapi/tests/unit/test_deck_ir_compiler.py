@@ -43,7 +43,7 @@ def test_deterministic_k6_compiler_closure_and_hybrid_admission_stay_bounded() -
     assert closure.result.receipt["browserMeasurementDigest"]
     assert "width:1280px" in closure.result.html
     assert "height:720px" in closure.result.html
-    assert "font-size:max(15px,18px)" in closure.result.html
+    assert "font-size:max(15px,20px)" in closure.result.html
     assert f'layout-family-{selected.layout_id.split("/", 1)[0]}' in closure.result.html
     assert "data-renderer-owned" not in closure.result.html
     assert "data-slide-key" not in closure.result.html

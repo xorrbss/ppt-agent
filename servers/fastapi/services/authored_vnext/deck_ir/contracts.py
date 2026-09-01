@@ -579,6 +579,8 @@ class CandidateSetSelectionReceiptV2(StrictModel):
     slides: list[LocalSlideSelectionV2] = Field(min_length=1, max_length=30)
     deck_selection: LocalDeckSelectionV2
     initial_selection_receipt_digest: Digest | None = None
+    # Deterministic composition ranking, never a measured aesthetic score.
+    scoring_basis: Literal["solver-structural-fitness/v1"] | None = None
     provider_calls_added: Literal[0]
     receipt_digest: Digest
 
@@ -610,6 +612,7 @@ class ConstraintCompileReceiptV2(ConstraintCompileReceiptV1):
     connector_contracts: list[ConnectorContractV2] = Field(default_factory=list, max_length=12)
     content_text_digest: Digest
     initial_candidate_selection_receipt_digest: Digest | None = None
+    reference_frame: dict[str, Any] | None = None
 
 
 class CriticOperationV1(StrictModel):

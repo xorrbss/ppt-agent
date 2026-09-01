@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.generation.original-level-visual-acceptance",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Require at least 90 percent visual fidelity to the supplied template; general design scores and generation success do not establish acceptance.",
+  "scope": [
+    "authored-generation",
+    "deck-ir",
+    "visual-quality",
+    "architecture"
+  ],
+  "invariants": [
+    "Use the supplied original template as the fidelity target. Preserve its composition, element geometry, typography, colors and spacing.",
+    "The minimum visual template fidelity is 90 percent. Do not replace this with general presentation quality or a subjective 1-5 score.",
+    "Establish source-to-output slide correspondence and auditable comparison evidence. Do not invent a percentage or claim unmeasured fidelity.",
+    "Use the actual product-output renders and preserve content correctness, safety and provenance. Code and architecture may change to meet the target."
+  ],
+  "forbidden": [
+    "Declaring completion on generation or download success alone",
+    "Treating the rejected 4.08/5 artifact as accepted or 90 percent template fidelity",
+    "Rebuilding only similar colors or generic cards while discarding original structure",
+    "Relaxing safety or fabricating visual comparison evidence"
+  ],
+  "evidence": [
+    "User feedback 2026-09-01: 아직 많이 부족해 지금 준 템플릿은 간단한거야 이정도는 90프로 이상 맞춰야해",
+    "output/original-level-20260901/product-03/verification-report.md",
+    "output/original-level-20260901/review/final-visual-review.json"
+  ],
+  "supersedes": "authored.generation.original-level-visual-acceptance@1",
+  "recordedAt": "2026-08-31T20:53:13.8676140+00:00"
+}

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.generation.deck-ir-editorial-composition",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Use server-owned editorial components and structural candidate fitness; retain separate original-reference visual review and release authorization.",
+  "scope": [
+    "authored-generation",
+    "deck-ir",
+    "visual-quality",
+    "architecture"
+  ],
+  "invariants": [
+    "Provider emits typed content and bounded intent. Editorial typography, charts, timelines and flow geometry are server-owned.",
+    "K=6 scores use solver-structural-fitness/v1, not human visual grades. Candidate selection and browser closure add no provider calls.",
+    "Preserve Deck IR content, ownership, digest binding and existing fail-closed gates. Inspect the exact downloaded deck against the original reference.",
+    "Development acceptance is separate from promotion, deployment, native editability and PowerPoint readback."
+  ],
+  "forbidden": [
+    "Treating structural qualityVector values as human design scores",
+    "Using fixture replay images as final product-download evidence",
+    "Relaxing content, provenance or safety gates to pass visual generation"
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_vnext/deck_ir/candidates.py",
+    "servers/fastapi/services/authored_vnext/deck_ir/compiler.py",
+    "servers/fastapi/services/authored_vnext/deck_ir/component_renderer.py",
+    "output/original-level-20260901/product-03/product-evidence.json",
+    "output/original-level-20260901/product-03/execution-evidence.json",
+    "output/original-level-20260901/review/source-provenance.json"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-31T20:43:03.1441701+00:00"
+}

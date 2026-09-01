@@ -43,13 +43,15 @@ _RAW_INTENT_MODELS = (
 
 
 class DeckIRContractError(ValueError):
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, *, rule: str | None = None) -> None:
         super().__init__(code)
         self.code = code
+        # Static validator rule only; never attach provider text or graph data.
+        self.rule = rule
 
 
-def _fail(code: str) -> None:
-    raise DeckIRContractError(code)
+def _fail(code: str, *, rule: str | None = None) -> None:
+    raise DeckIRContractError(code, rule=rule)
 
 
 def _scan_safe_intent(value: Any, *, path: tuple[str, ...] = ()) -> None:
@@ -100,7 +102,7 @@ def _assert_acyclic(nodes: set[str], edges: list[tuple[str, str]]) -> None:
     indegree = {node: 0 for node in nodes}
     for source, target in edges:
         if source == target:
-            _fail("composition_intent_graph_invalid")
+            _fail("composition_intent_graph_invalid", rule="composition.self-edge")
         adjacency[source].append(target)
         indegree[target] += 1
     pending = sorted(node for node, count in indegree.items() if count == 0)
@@ -114,7 +116,7 @@ def _assert_acyclic(nodes: set[str], edges: list[tuple[str, str]]) -> None:
                 pending.append(target)
                 pending.sort()
     if visited != len(nodes):
-        _fail("composition_intent_graph_invalid")
+        _fail("composition_intent_graph_invalid", rule="composition.order-cycle")
 
 
 def _validate_composition(deck: DeckIRV1, graph: CompositionIntentGraphV1) -> None:
@@ -123,14 +125,14 @@ def _validate_composition(deck: DeckIRV1, graph: CompositionIntentGraphV1) -> No
         _fail("deck_ir_composition_digest_mismatch")
     zone_keys = [zone.zone_key for zone in graph.zones]
     if len(zone_keys) != len(set(zone_keys)) or set(graph.reading_order) != set(zone_keys):
-        _fail("composition_intent_graph_invalid")
+        _fail("composition_intent_graph_invalid", rule="composition.zone-order-identity")
     if len(graph.reading_order) != len(set(graph.reading_order)):
-        _fail("composition_intent_graph_invalid")
+        _fail("composition_intent_graph_invalid", rule="composition.duplicate-order")
     nodes = set(zone_keys)
     edges: list[tuple[str, str]] = []
     for relation in graph.relations:
         if relation.from_ not in nodes or relation.to not in nodes:
-            _fail("composition_intent_graph_invalid")
+            _fail("composition_intent_graph_invalid", rule="composition.unknown-endpoint")
         if relation.strength == "hard" and relation.relation in {"leftOf", "above"}:
             edges.append((relation.from_, relation.to))
         elif relation.strength == "hard" and relation.relation in {"rightOf", "below"}:

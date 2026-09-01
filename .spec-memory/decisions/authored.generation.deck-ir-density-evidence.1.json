@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.generation.deck-ir-density-evidence",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Density labels are composition intent; gate capacity with observed Chromium readability checks and retain detailed quality failure evidence.",
+  "scope": [
+    "authored-generation",
+    "deck-ir",
+    "visual-quality"
+  ],
+  "invariants": [
+    "Allow low, medium and high density intents in one deck when every slide passes measured capacity and readability checks.",
+    "Missing or failed Chromium capacity, readability or observation-binding checks remain fail-closed.",
+    "Keep original provider content and density intent immutable; do not force label uniformity to obtain a pass.",
+    "Retain detailed generation quality receipts in attempt/fence-bound execution evidence, separate from the original IR checkpoint."
+  ],
+  "forbidden": [
+    "Using density label variety alone as a visual-quality defect",
+    "Treating one product-path success as a general aesthetic or production-readiness guarantee"
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_vnext/deck_ir/product_adapter.py",
+    "servers/fastapi/services/authored_vnext/deck_ir/integration.py",
+    "output/enterprise-ai-agent-success-20260901/product-path.log",
+    "output/enterprise-ai-agent-success-20260901/execution-evidence.json"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-31T19:49:57.6503234+00:00"
+}

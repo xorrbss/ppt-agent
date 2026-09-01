@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.generation.original-level-visual-acceptance",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Require original-authored-level visual quality from the real product pipeline; redesign architecture when needed, not just pass generation.",
+  "scope": [
+    "authored-generation",
+    "deck-ir",
+    "visual-quality",
+    "architecture"
+  ],
+  "invariants": [
+    "Visual quality must be evaluated against the actual original authored reference, not the rejected simplistic generated deck.",
+    "Generation, download and deterministic safety checks alone do not establish visual-quality acceptance.",
+    "Product design and architecture may be changed as needed to reach reference-level composition, typography and information visualization.",
+    "Preserve content correctness, safety, provenance and honest artifact evidence while improving design quality."
+  ],
+  "forbidden": [
+    "Declaring completion on PPTX generation success alone",
+    "Replacing the original reference with an easier generated fixture",
+    "Passing quality through hardcoded scores or unobserved evidence"
+  ],
+  "evidence": [
+    "User request in task 01a05781-1697-7443-92db-f671996e27b3: redesign and architecture changes allowed until original-level quality"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-31T19:56:44.9932228+00:00"
+}

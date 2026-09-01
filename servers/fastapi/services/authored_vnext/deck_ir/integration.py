@@ -36,10 +36,15 @@ class DeckIrIntegrationError(RuntimeError):
     code = "deck_ir_execution_adapter_unavailable"
     retryable = False
 
-    def __init__(self, code: str | None = None) -> None:
+    def __init__(
+        self, code: str | None = None, *, quality_receipt: Mapping[str, object] | None = None
+    ) -> None:
         resolved = code or self.code
         super().__init__(resolved)
         self.code = resolved
+        # Private, checker-produced evidence only. Public errors retain the
+        # stable reason code; raw input and local paths never enter this receipt.
+        self.quality_receipt = dict(quality_receipt) if quality_receipt is not None else None
 
 
 class DeckIrExecutionAdapter(Protocol):
@@ -337,6 +342,7 @@ def _validate_deck_ir(
             or [{
                 "loc": "cross-contract",
                 "type": str(stable_code or type(error).__name__)[:96],
+                "rule": getattr(error, "rule", None) or "unspecified",
             }],
         )
         raise DeckIrIntegrationError(
@@ -361,6 +367,7 @@ class ConstraintCompilerDeckIrExecutionAdapter:
     publisher: Callable[[Mapping[str, object]], Awaitable[Mapping[str, object]]]
     requirement_graph: Mapping[str, object] | None = None
     language: str | None = None
+    authored_style: str | None = None
 
     async def run(
         self,
@@ -491,6 +498,7 @@ class ConstraintCompilerDeckIrExecutionAdapter:
                     closure_revision=closure_revision,
                     browser_measurement_digest=measurement_digest,
                     strategy_decision_digest=str(strategy_receipt.get("receiptDigest") or ""),
+                    authored_style=self.authored_style,
                 )
 
             async def observe_candidate(result: object) -> Mapping[str, object]:
@@ -580,14 +588,26 @@ class ConstraintCompilerDeckIrExecutionAdapter:
             "observations": observations,
         }
         quality_started_at = time.monotonic()
-        generation_quality = _as_mapping(
-            await self.generation_quality(quality_input), code="generation_quality_receipt_invalid"
-        )
-        _record_stage_timing(request, "quality", quality_started_at)
+        try:
+            generation_quality = _as_mapping(
+                await self.generation_quality(quality_input), code="generation_quality_receipt_invalid"
+            )
+        except DeckIrIntegrationError as error:
+            if error.quality_receipt is not None:
+                retain_execution({
+                    **execution_evidence,
+                    "status": "quality_failed",
+                    "generationQualityReceipt": error.quality_receipt,
+                })
+            raise
+        finally:
+            _record_stage_timing(request, "quality", quality_started_at)
         if generation_quality.get("schemaVersion") not in {
             "generation-quality-receipt/v1", "generation-quality-receipt/v3"
         }:
             raise DeckIrIntegrationError("generation_quality_receipt_invalid")
+        execution_evidence = {**execution_evidence, "generationQualityReceipt": generation_quality}
+        retained_execution = retain_execution(execution_evidence)
         await _progress(context, stage="packaging", percent=92, message="Staging immutable bundle")
         publication_started_at = time.monotonic()
         publication = _as_mapping(

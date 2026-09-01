@@ -490,6 +490,26 @@ def _evaluate_generation_quality(payload: Mapping[str, object]) -> dict[str, obj
     design = deck.get("designLanguage") if isinstance(deck.get("designLanguage"), Mapping) else {}
     arc = {str(item) for item in story.get("arc", [])} if isinstance(story.get("arc", []), list) else set()
     roles = {str(item.get("role")) for item in slides}
+    # Density labels are provider composition intent, not measured defects.
+    # A sparse opening, dense table and medium-density process are compatible.
+    # Gate each slide's capacity/readability using the existing Chromium probes;
+    # do not invent a uniformity or pixel-occupancy threshold for mixed content.
+    # Missing/misaligned observations must never pass via an empty all().
+    density_checks = (
+        "viewportContainment", "overflow", "clipping", "overlap",
+        "minimumFont", "contrast", "fontLoad", "quiescence",
+        "pngObservationBinding",
+    )
+    density_within_capacity = (
+        bool(slides)
+        and len(observations) == len(slides) == len(compiled)
+        and all(
+            isinstance(item, Mapping)
+            and isinstance(item.get("checks"), Mapping)
+            and all(item["checks"].get(name) is True for name in density_checks)
+            for item in observations
+        )
+    )
     static_checks = {
         "schema": bool(slides) and len(slides) == len(compiled),
         "qid": all(len({str(element.get("qid")) for element in item.get("semantic", {}).get("elements", []) if isinstance(element, Mapping)}) == len(item.get("semantic", {}).get("elements", [])) for item in compiled if isinstance(item, Mapping)),
@@ -508,7 +528,7 @@ def _evaluate_generation_quality(payload: Mapping[str, object]) -> dict[str, obj
         "furnitureConsistency": bool(design.get("grammarId")),
         "paletteConsistency": bool(design.get("paletteId")),
         "typeScaleConsistency": bool(design.get("typeScaleId")),
-        "densityOutliers": len({str(item.get("layoutIntent", {}).get("density", "")) for item in slides}) <= 2,
+        "densityOutliers": density_within_capacity,
         "repeatedContent": len(claims) == len(set(claims)),
         "openingCompleteness": bool(slides and slides[0].get("claim") and slides[0].get("components")),
         "closingCompleteness": bool(slides and slides[-1].get("claim") and slides[-1].get("components")),
@@ -519,7 +539,7 @@ def _evaluate_generation_quality(payload: Mapping[str, object]) -> dict[str, obj
         deck_evidence={"checks": deck_checks},
     ).to_dict()
     if receipt.get("passed") is not True:
-        raise DeckIrIntegrationError("deck_visual_quality_failed")
+        raise DeckIrIntegrationError("deck_visual_quality_failed", quality_receipt=receipt)
     # The Deck gate has its own receipt schema.  The product boundary wraps the
     # same evidence under the generation-quality contract expected by the
     # orchestrator, so set the envelope version after expanding the inner
@@ -648,6 +668,9 @@ class ProductDeckIrExecutionAdapter:
         slide_count = getattr(request, "n_slides", None)
         if not isinstance(slide_count, int) or not 1 <= slide_count <= 8:
             raise DeckIrIntegrationError("deck_ir_balanced_slide_count_unsupported")
+        authored_style = getattr(request, "authored_style", None)
+        if authored_style not in {None, "legacy-reference-current-v1"}:
+            raise DeckIrIntegrationError("deck_ir_authored_style_unsupported")
         # This source-free requirement graph binds the request by digest only;
         # the raw brief remains ephemeral provider input and is never placed in
         # an operation, checkpoint, receipt, or log body.
@@ -727,6 +750,7 @@ class ProductDeckIrExecutionAdapter:
             publisher=publisher,
             requirement_graph=requirement_graph,
             language=normalized_language,
+            authored_style=authored_style,
         )
         return await adapter.run(
             request=request,

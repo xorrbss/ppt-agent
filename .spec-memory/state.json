@@ -109,10 +109,13 @@
     "authored.semantic.header-title-owner": "decisions/authored.semantic.header-title-owner.1.json",
     "authored.measurement.convex-polygon-owned-paint": "decisions/authored.measurement.convex-polygon-owned-paint.1.json",
     "authored.generation.deck-ir-constraint-compiler": "decisions/authored.generation.deck-ir-constraint-compiler.4.json",
-    "authored.generation.deck-ir-provider-intent-resolution": "decisions/authored.generation.deck-ir-provider-intent-resolution.1.json"
+    "authored.generation.deck-ir-provider-intent-resolution": "decisions/authored.generation.deck-ir-provider-intent-resolution.1.json",
+    "authored.generation.deck-ir-density-evidence": "decisions/authored.generation.deck-ir-density-evidence.1.json",
+    "authored.generation.original-level-visual-acceptance": "decisions/authored.generation.original-level-visual-acceptance.2.json",
+    "authored.generation.deck-ir-editorial-composition": "decisions/authored.generation.deck-ir-editorial-composition.1.json"
   },
   "readFirst": [
     "AGENTS.md"
   ],
-  "updatedAt": "2026-08-31T04:09:31.9096746+00:00"
+  "updatedAt": "2026-08-31T20:53:13.8868080+00:00"
 }
