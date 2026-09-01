@@ -185,6 +185,7 @@ export function getApiErrorDisplayMessage(
  */
 export function isRetryablePresentationGenerationError(error: unknown): boolean {
   const apiError = error instanceof ApiError ? error : undefined;
+  if (isPresentationGenerationSlideLimitError(error)) return false;
   if (typeof apiError?.retryable === "boolean") return apiError.retryable;
   const status = apiError?.status;
   const code = apiError?.code?.toLowerCase() || "";
@@ -200,6 +201,16 @@ export function isRetryablePresentationGenerationError(error: unknown): boolean 
     code.includes("overload") ||
     message.includes("overload") ||
     message.includes("temporarily unavailable")
+  );
+}
+
+export function isPresentationGenerationSlideLimitError(error: unknown): boolean {
+  if (!(error instanceof ApiError)) return false;
+  const code = error.code?.trim().toLowerCase();
+  const message = error.message.trim().toLowerCase();
+  return (
+    code === "public_slide_limit_exceeded" ||
+    message === "public_slide_limit_exceeded"
   );
 }
 

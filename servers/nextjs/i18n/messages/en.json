@@ -2892,6 +2892,8 @@
     "interruptedTitle": "Presentation generation was interrupted",
     "interruptedDescription": "The connection was interrupted before generation started. You can safely retry.",
     "resumeProgress": "Slides {completed}/{total} were saved. Retry to resume generation.",
+    "slideLimitTitle": "Slide limit exceeded",
+    "slideLimitDescription": "This request exceeds the current service policy. If the original page count must be preserved, the service limit must be adjusted.",
     "retry": "Retry",
     "errorTitle": "Generation error",
     "errorDescription": "A problem occurred while starting presentation generation.",

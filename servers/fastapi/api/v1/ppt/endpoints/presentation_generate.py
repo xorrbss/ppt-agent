@@ -2272,6 +2272,27 @@ async def _bootstrap_generation_workspace(
     return presentation_id
 
 
+def _generation_admission_slide_count(
+    request: GeneratePresentationRequest,
+    presentation: PresentationModel,
+) -> int:
+    """Resolve the count the worker will actually generate."""
+
+    slide_count = (
+        len(request.slides_markdown)
+        if request.slides_markdown
+        else request.n_slides
+    )
+    if slide_count is None:
+        slide_count = presentation.n_slides
+    if slide_count is None or slide_count < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="generation_slide_count_required",
+        )
+    return slide_count
+
+
 async def queue_presentation_generation(
     request: GeneratePresentationRequest,
     background_tasks: BackgroundTasks,
@@ -2409,6 +2430,15 @@ async def queue_presentation_generation(
                 status_code=409,
                 detail="chat_first_bootstrap_operation_not_found",
             )
+        # The outline UI sends the reviewed slides instead of duplicating their
+        # count in ``n_slides``.  Admission must charge and enforce the count the
+        # worker will actually use (the worker also derives it from
+        # ``slides_markdown``), with the durable presentation as the fallback for
+        # source-content requests that intentionally carry no slide markdown.
+        admission_slide_count = _generation_admission_slide_count(
+            request,
+            admitted_presentation,
+        )
         try:
             await admit_public_operation(
                 sql_session,
@@ -2416,10 +2446,10 @@ async def queue_presentation_generation(
                 operation_id=workspace_operation.id,
                 operation_kind="generation",
                 request_plan=plan_provider_requests(
-                    slide_count=request.n_slides,
-                    image_budget=request.n_slides,
-                    repair_budget=request.n_slides,
-                    vqa_budget=request.n_slides if request.vision_qa else 0,
+                    slide_count=admission_slide_count,
+                    image_budget=admission_slide_count,
+                    repair_budget=admission_slide_count,
+                    vqa_budget=admission_slide_count if request.vision_qa else 0,
                 ),
             )
         except PublicAdmissionRejected as error:

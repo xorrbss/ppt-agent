@@ -2892,6 +2892,8 @@
     "interruptedTitle": "발표자료 생성이 일시 중단되었습니다",
     "interruptedDescription": "생성을 시작하기 전에 연결이 끊겼습니다. 안전하게 다시 시도할 수 있습니다.",
     "resumeProgress": "슬라이드 {completed}/{total}까지 저장되었습니다. 다시 시도하면 이어서 생성됩니다.",
+    "slideLimitTitle": "슬라이드 수 제한을 초과했습니다",
+    "slideLimitDescription": "현재 서비스 정책이 허용하는 슬라이드 수를 초과했습니다. 원본 페이지 수를 유지해야 한다면 서비스 한도를 조정해야 합니다.",
     "retry": "다시 시도",
     "errorTitle": "생성 오류",
     "errorDescription": "발표자료 생성을 시작하는 중 문제가 발생했습니다.",

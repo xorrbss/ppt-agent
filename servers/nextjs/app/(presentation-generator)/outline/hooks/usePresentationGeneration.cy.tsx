@@ -4,11 +4,13 @@ import { NextIntlClientProvider } from "next-intl";
 import { Provider } from "react-redux";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 
+import { notify } from "@/components/ui/sonner";
 import koMessages from "@/i18n/messages/ko.json";
 import { setPptGenUploadState } from "@/store/slices/presentationGenUpload";
 import { store } from "@/store/store";
 
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
+import { ApiError } from "../../services/api/api-error-handler";
 import { usePresentationGeneration } from "./usePresentationGeneration";
 
 const router = {
@@ -81,5 +83,31 @@ describe("usePresentationGeneration authored-only generation", () => {
       }),
     );
     cy.get("@templateV2Generate").should("not.have.been.called");
+  });
+
+  it("reports a public slide-policy rejection without offering a transport retry", () => {
+    cy.stub(PresentationGenerationApi, "generateAuthoredAsync").rejects(
+      new ApiError("public_slide_limit_exceeded", {
+        status: 429,
+      }),
+    );
+    cy.stub(notify, "error").as("notifyError");
+
+    mount(
+      <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="UTC">
+        <AppRouterContext.Provider value={router as any}>
+          <Provider store={store}>
+            <GenerationHarness />
+          </Provider>
+        </AppRouterContext.Provider>
+      </NextIntlClientProvider>,
+    );
+
+    cy.contains("button", "Generate").click();
+    cy.get("@notifyError").should(
+      "have.been.calledOnceWith",
+      "슬라이드 수 제한을 초과했습니다",
+      "현재 서비스 정책이 허용하는 슬라이드 수를 초과했습니다. 원본 페이지 수를 유지해야 한다면 서비스 한도를 조정해야 합니다.",
+    );
   });
 });
