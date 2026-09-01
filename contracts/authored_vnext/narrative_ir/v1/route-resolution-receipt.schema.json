@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://presenton.local/contracts/authored-vnext/narrative-ir/v1/route-resolution-receipt.schema.json",
+  "title": "Narrative Route Resolution Receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "operationId", "narrativeDigest", "providerCallBudget", "finalRoute", "wholeOperation", "legacyProviderHtmlAllowed", "receiptDigest"],
+  "properties": {
+    "schemaVersion": {"const": "narrative-route-resolution-receipt/v1"},
+    "operationId": {"type": "string", "format": "uuid"},
+    "narrativeDigest": {"$ref": "#/$defs/digest"},
+    "designPackId": {"type": ["string", "null"]},
+    "designPackVersion": {"type": ["integer", "null"], "minimum": 1},
+    "designPackManifestDigest": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
+    "frameRegistryDigest": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
+    "frameSearchReceiptDigest": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
+    "frameSelectionReceiptDigest": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
+    "providerCallBudget": {"$ref": "#/$defs/callBudget"},
+    "finalRoute": {"enum": ["source-native", "authored-scene-fallback", "reject"]},
+    "fallbackReason": {"enum": ["design-pack-unavailable", "no-compatible-frame", null]},
+    "wholeOperation": {"const": true},
+    "legacyProviderHtmlAllowed": {"const": false},
+    "receiptDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "reservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reservationId", "purpose", "logicalOrdinal", "physicalOrdinal"],
+      "properties": {
+        "reservationId": {"type": "string", "minLength": 1, "maxLength": 256},
+        "purpose": {"enum": ["narrative.initial", "narrative.recovery"]},
+        "logicalOrdinal": {"type": "integer", "minimum": 1, "maximum": 2},
+        "physicalOrdinal": {"type": "integer", "minimum": 1, "maximum": 2}
+      }
+    },
+    "callBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "maximumLogicalCalls", "maximumPhysicalCalls", "actualLogicalCalls", "actualPhysicalCalls", "reservations"],
+      "properties": {
+        "schemaVersion": {"const": "narrative-provider-call-budget/v1"},
+        "maximumLogicalCalls": {"const": 2},
+        "maximumPhysicalCalls": {"const": 2},
+        "actualLogicalCalls": {"type": "integer", "minimum": 0, "maximum": 2},
+        "actualPhysicalCalls": {"type": "integer", "minimum": 0, "maximum": 2},
+        "reservations": {"type": "array", "maxItems": 2, "items": {"$ref": "#/$defs/reservation"}}
+      }
+    }
+  }
+}

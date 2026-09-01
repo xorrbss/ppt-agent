@@ -1782,7 +1782,7 @@ def test_legacy_fidelity_compatibility_and_nonretryable_export_error(
         scene_digest=scene_digest,
         pptx_mode="fidelity",
     )
-    assert compatibility is True
+    assert compatibility == "legacy"
     assert len(quality_digest) == 64
     receipt = _legacy_fidelity_public_quality_receipt(
         quality_receipt_id="quality:operation:artifact",
@@ -1809,6 +1809,43 @@ def test_legacy_fidelity_compatibility_and_nonretryable_export_error(
             scene_digest=scene_digest,
             pptx_mode="hybrid",
         )
+
+    sealed = {
+        "schemaVersion": "quality-receipt/v3",
+        "attemptId": "attempt-source-native",
+        "revision": 1,
+        "sequence": 0,
+        "eventType": "evaluation",
+        "evidenceDigest": "sha256:" + "1" * 64,
+        "capabilityRegistryDigest": "sha256:" + "2" * 64,
+        "capabilityConsumerStatuses": {"chromium": "passed"},
+        "qualityTier": "T1",
+        "t1Triggers": ["slide:0:boundary"],
+        "blockers": ["visualReview.required_failed"],
+        "gatePassed": False,
+        "previousSchemaVersion": "quality-receipt/v2",
+        "previousVersionReceiptDigest": "sha256:" + "3" * 64,
+        "previousReceiptDigest": None,
+    }
+    pending_digest = "sha256:" + hashlib.sha256(
+        json.dumps(
+            sealed,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+    ).hexdigest()
+    pending_quality, pending_compatibility = _resolved_authored_quality_digest(
+        {
+            "authoredQualityGate": {
+                "qualityReceiptV3": {**sealed, "receiptDigest": pending_digest}
+            }
+        },
+        scene_digest=scene_digest,
+        pptx_mode="fidelity",
+    )
+    assert pending_quality == pending_digest.removeprefix("sha256:")
+    assert pending_compatibility == "visual-review-pending"
 
     async def scenario():
         engine, maker = await _database(tmp_path / "cancel.db")

@@ -824,8 +824,14 @@ class ProductDeckIrExecutionAdapter:
             if not isinstance(png, bytes):
                 raise DeckIrIntegrationError("browser_observation_failed")
             pngs.append(png)
+        publication_route = str(payload.get("publicationRoute") or "deck-ir")
+        if publication_route not in {"deck-ir", "source-native"}:
+            raise DeckIrIntegrationError("authored_manifest_publication_failed")
         image_refs = await asyncio.to_thread(
-            _save_slide_pngs, presentation_id, pngs, f"deck-ir:{attempt_token}"
+            _save_slide_pngs,
+            presentation_id,
+            pngs,
+            f"{publication_route}:{attempt_token}",
         )
         font_manifest, resolved_font_bytes, font_family, font_face = (
             await _publication_font_materials()
@@ -870,9 +876,9 @@ class ProductDeckIrExecutionAdapter:
                     owner_id=owner_id,
                     presentation=presentation_id,
                     layout_group="authored",
-                    layout=f"authored:deck-ir:{item['slideKey']}",
+                    layout=f"authored:{publication_route}:{item['slideKey']}",
                     index=index,
-                    content={"__authored__": True, "image": image_refs[index], "role": "deck-ir"},
+                    content={"__authored__": True, "image": image_refs[index], "role": publication_route},
                     html_content=str(item["html"]),
                     properties={"image": image_refs[index]},
                 )
@@ -932,8 +938,13 @@ class ProductDeckIrExecutionAdapter:
                 evidence=quality_v3_evidence,
             )
             next_theme = dict(presentation.theme or {})
-            next_theme["generationDeckIr"] = {
-                "strategy": "deck-ir",
+            generation_theme_key = (
+                "generationDesignPack"
+                if publication_route == "source-native"
+                else "generationDeckIr"
+            )
+            next_theme[generation_theme_key] = {
+                "strategy": publication_route,
                 "styleProfileDigest": payload.get("styleProfileDigest"),
                 "retainedReferenceDigest": payload.get("retainedReferenceDigest"),
                 "manifestDigest": manifest.canonical_digest,
@@ -972,6 +983,7 @@ class ProductDeckIrExecutionAdapter:
             "bundleCount": len(ordered),
             "styleProfileDigest": payload.get("styleProfileDigest"),
             "retainedReferenceDigest": payload.get("retainedReferenceDigest"),
+            "generationRoute": publication_route,
         }
 
 

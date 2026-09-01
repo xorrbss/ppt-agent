@@ -31,18 +31,42 @@ export type PublicV2Lifecycle =
   | "failed"
   | "cancelled";
 
+export type PublicV2GenerationMode =
+  | "auto"
+  | "registered-template"
+  | "brand-style"
+  | "free-design"
+  | "fidelity-first"
+  | "editable-first";
+
+export type PublicV2DesignPackPin = {
+  designPackId: string;
+  version: number;
+  digest: string;
+};
+
 export type PublicV2GenerationRequest = {
   schemaVersion?: "presentation-generation-request/v2";
-  engine?: "authored";
-  generationEngine?: "authored" | "deck-ir";
+  generationMode?: PublicV2GenerationMode;
+  designPackPin?: PublicV2DesignPackPin;
   content: string;
   slidesMarkdown?: string[];
   instructions?: string;
   slideCount?: number;
   language?: string;
-  authoredStyle?: string;
   referenceSnapshotIds?: string[];
   qualityPolicy?: "interactive-v1" | "release-v1";
+};
+
+export type PublicV2GenerationRouteReceipt = {
+  schemaVersion: "generation-route-receipt/v1";
+  requestedMode: PublicV2GenerationMode;
+  selectedRoute: "source-native" | "authored-fallback";
+  designPackPin: PublicV2DesignPackPin | null;
+  narrativeIrDigest: string | null;
+  fallbackReason: string | null;
+  outputCapability: "fidelity" | "editable";
+  receiptDigest: string;
 };
 
 export type PublicV2ExportRequest = {
@@ -107,6 +131,8 @@ export type PublicV2OperationSnapshot = {
   pendingAdmission: boolean;
   cancellationRequested: boolean;
   quality: PublicV2Quality;
+  /** Server-resolved routing evidence; never used to choose a client route. */
+  generationRouteReceipt: PublicV2GenerationRouteReceipt | null;
   artifacts: readonly PublicV2Artifact[];
   /** Artifact availability, intentionally separate from quality/readiness. */
   downloadStatus: "unavailable" | "ready";
@@ -168,6 +194,7 @@ type PublicV2Status = {
   sourceRevision: number | null;
   error: PublicV2OperationFailure | null;
   quality: PublicV2Quality;
+  generationRouteReceipt: PublicV2GenerationRouteReceipt | null;
   artifacts: PublicV2Artifact[];
 };
 
@@ -202,6 +229,15 @@ const PHASES = new Set<PublicV2OperationPhase>([
   "packaging",
   "publishing",
 ]);
+const GENERATION_MODES = new Set<PublicV2GenerationMode>([
+  "auto",
+  "registered-template",
+  "brand-style",
+  "free-design",
+  "fidelity-first",
+  "editable-first",
+]);
+const SHA256_DIGEST = /^sha256:[0-9a-f]{64}$/;
 
 const EMPTY_SNAPSHOT: PublicV2OperationSnapshot = {
   lifecycle: "idle",
@@ -219,6 +255,7 @@ const EMPTY_SNAPSHOT: PublicV2OperationSnapshot = {
   pendingAdmission: false,
   cancellationRequested: false,
   quality: { releaseReadiness: "not_assessed", receipt: null },
+  generationRouteReceipt: null,
   artifacts: [],
   downloadStatus: "unavailable",
   canCancel: false,
@@ -325,6 +362,75 @@ function parseReceipt(value: unknown): PublicV2Receipt {
   };
 }
 
+function designPackPin(value: unknown): PublicV2DesignPackPin {
+  const source = record(value);
+  if (
+    typeof source.designPackId !== "string"
+    || !PUBLIC_ID.test(source.designPackId)
+    || typeof source.version !== "number"
+    || !Number.isSafeInteger(source.version)
+    || source.version < 1
+    || typeof source.digest !== "string"
+    || !SHA256_DIGEST.test(source.digest)
+  ) {
+    throw new PublicV2ApiError(502, "public_v2_invalid_design_pack_pin");
+  }
+  return {
+    designPackId: source.designPackId,
+    version: source.version,
+    digest: source.digest,
+  };
+}
+
+function generationRouteReceipt(
+  value: unknown,
+): PublicV2GenerationRouteReceipt | null {
+  if (value === null || value === undefined) return null;
+  const source = record(value);
+  if (source.schemaVersion !== "generation-route-receipt/v1") {
+    throw new PublicV2ApiError(502, "public_v2_invalid_generation_route_receipt");
+  }
+  const requestedMode = source.requestedMode;
+  const selectedRoute = source.selectedRoute;
+  const outputCapability = source.outputCapability;
+  if (
+    typeof requestedMode !== "string"
+    || !GENERATION_MODES.has(requestedMode as PublicV2GenerationMode)
+    || (selectedRoute !== "source-native" && selectedRoute !== "authored-fallback")
+    || (outputCapability !== "fidelity" && outputCapability !== "editable")
+    || typeof source.receiptDigest !== "string"
+    || !SHA256_DIGEST.test(source.receiptDigest)
+    || (
+      source.narrativeIrDigest !== null
+      && source.narrativeIrDigest !== undefined
+      && (typeof source.narrativeIrDigest !== "string" || !SHA256_DIGEST.test(source.narrativeIrDigest))
+    )
+    || (
+      source.fallbackReason !== null
+      && source.fallbackReason !== undefined
+      && typeof source.fallbackReason !== "string"
+    )
+  ) {
+    throw new PublicV2ApiError(502, "public_v2_invalid_generation_route_receipt");
+  }
+  return {
+    schemaVersion: "generation-route-receipt/v1",
+    requestedMode: requestedMode as PublicV2GenerationMode,
+    selectedRoute,
+    designPackPin: source.designPackPin === null || source.designPackPin === undefined
+      ? null
+      : designPackPin(source.designPackPin),
+    narrativeIrDigest: typeof source.narrativeIrDigest === "string"
+      ? source.narrativeIrDigest
+      : null,
+    fallbackReason: typeof source.fallbackReason === "string"
+      ? source.fallbackReason
+      : null,
+    outputCapability,
+    receiptDigest: source.receiptDigest,
+  };
+}
+
 function parseStatus(value: unknown): PublicV2Status {
   const source = record(value);
   if (source.schemaVersion !== "operation-status/v2") {
@@ -361,6 +467,7 @@ function parseStatus(value: unknown): PublicV2Status {
         ? null
         : record(source.qualityReceipt),
     },
+    generationRouteReceipt: generationRouteReceipt(source.generationRouteReceipt),
     artifacts,
   };
 }
@@ -793,6 +900,7 @@ export class PublicV2OperationClient {
       pendingAdmission: false,
       cancellationRequested: this.snapshotValue.cancellationRequested && (status.status === "queued" || status.status === "running"),
       quality: status.quality,
+      generationRouteReceipt: status.generationRouteReceipt,
       artifacts: status.artifacts,
       downloadStatus: status.artifacts.length ? "ready" : "unavailable",
       canCancel: status.status === "queued" || status.status === "running",

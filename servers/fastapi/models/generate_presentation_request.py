@@ -15,6 +15,16 @@ from enums.verbosity import Verbosity
 from models.authored_vnext.master.base import Digest, MasterId, StrictCamelModel
 
 
+GenerationMode = Literal[
+    "auto",
+    "registered-template",
+    "brand-style",
+    "free-design",
+    "fidelity-first",
+    "editable-first",
+]
+
+
 class AuthoredMasterPinInput(StrictCamelModel):
     """Small public pin accepted by the existing presentation flow.
 
@@ -49,6 +59,14 @@ class SourceContentPolicy(StrictCamelModel):
 
 class SourceContentManifestPinInput(StrictCamelModel):
     manifest_id: str = Field(min_length=5, max_length=200)
+    digest: Digest
+
+
+class DesignPackPinInput(StrictCamelModel):
+    design_pack_id: str = Field(
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    )
+    version: int = Field(ge=1)
     digest: Digest
 
 
@@ -123,13 +141,21 @@ class GeneratePresentationRequest(BaseModel):
             "Explicit generation strategy. Omit to use the authored source."
         ),
     )
-    generation_engine: Literal["authored", "deck-ir"] = Field(
+    generation_mode: GenerationMode = Field(
+        default="auto",
+        alias="generationMode",
+        description="Public product routing intent; the server owns route resolution.",
+    )
+    design_pack_pin: Optional[DesignPackPinInput] = Field(
+        default=None,
+        alias="designPackPin",
+    )
+    generation_engine: Optional[Literal["authored", "deck-ir"]] = Field(
         default="authored",
         alias="generationEngine",
         description=(
-            "Public generation engine selection. Authored preserves the existing "
-            "provider-HTML path; explicit deck-ir is fail-closed "
-            "when any required capability is unavailable."
+            "Compatibility-only internal engine input. Product routing is owned "
+            "by generationMode and its durable route receipt."
         ),
     )
     source_mode: Optional[Literal["source_content_restyle"]] = Field(
@@ -226,6 +252,22 @@ class GeneratePresentationRequest(BaseModel):
             "resolves layout/font manifest digests after validating the published head."
         ),
     )
+
+    @model_validator(mode="after")
+    def validate_generation_mode(self) -> "GeneratePresentationRequest":
+        if self.generation_mode == "editable-first":
+            raise ValueError("capability_not_supported: editable-first")
+        if (
+            self.generation_mode == "registered-template"
+            and self.design_pack_pin is None
+        ):
+            raise ValueError("design_pack_pin_required")
+        if (
+            self.design_pack_pin is not None
+            and self.generation_mode != "registered-template"
+        ):
+            raise ValueError("design_pack_pin_requires_registered_template")
+        return self
 
     @model_validator(mode="after")
     def validate_source_content_mode(self) -> "GeneratePresentationRequest":

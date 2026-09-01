@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://presenton.local/contracts/authored-vnext/narrative-ir/v1/frame-search-receipt.schema.json",
+  "title": "Frame Search Receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "operationId", "designPackId", "designPackVersion", "designPackManifestDigest", "frameRegistryDigest", "searchPolicyDigest", "narrativeDigest", "slides", "status", "receiptDigest"],
+  "properties": {
+    "schemaVersion": {"const": "frame-search-receipt/v1"},
+    "operationId": {"type": "string", "format": "uuid"},
+    "designPackId": {"type": "string"},
+    "designPackVersion": {"type": "integer", "minimum": 1},
+    "designPackManifestDigest": {"$ref": "#/$defs/digest"},
+    "frameRegistryDigest": {"$ref": "#/$defs/digest"},
+    "searchPolicyDigest": {"$ref": "#/$defs/digest"},
+    "narrativeDigest": {"$ref": "#/$defs/digest"},
+    "slides": {"type": "array", "minItems": 1, "maxItems": 100, "items": {"$ref": "#/$defs/slide"}},
+    "status": {"enum": ["passed", "no-compatible-frame"]},
+    "receiptDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "vector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["roleFitness", "contentCapacity", "sourceCompatibility", "semanticFit"],
+      "properties": {
+        "roleFitness": {"type": "number", "minimum": 0, "maximum": 1},
+        "contentCapacity": {"type": "number", "minimum": 0, "maximum": 1},
+        "sourceCompatibility": {"type": "number", "minimum": 0, "maximum": 1},
+        "semanticFit": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidateId", "frameId", "frameDigest", "sourcePartDigest", "hardConstraintStatus", "rejectionReasons", "qualityVector", "paretoLayer", "rank", "candidateDigest"],
+      "properties": {
+        "candidateId": {"type": "string"},
+        "frameId": {"type": "string"},
+        "frameDigest": {"$ref": "#/$defs/digest"},
+        "sourcePartDigest": {"$ref": "#/$defs/digest"},
+        "hardConstraintStatus": {"enum": ["passed", "failed"]},
+        "rejectionReasons": {"type": "array", "maxItems": 16, "items": {"type": "string"}},
+        "qualityVector": {"$ref": "#/$defs/vector"},
+        "paretoLayer": {"type": "integer", "minimum": 0},
+        "rank": {"type": "integer", "minimum": 1},
+        "candidateDigest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "slide": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slideKey", "sequenceIndex", "candidates", "eligibleCount"],
+      "properties": {
+        "slideKey": {"type": "string"},
+        "sequenceIndex": {"type": "integer", "minimum": 0},
+        "candidates": {"type": "array", "minItems": 1, "maxItems": 1000, "items": {"$ref": "#/$defs/candidate"}},
+        "eligibleCount": {"type": "integer", "minimum": 0, "maximum": 1000}
+      }
+    }
+  }
+}

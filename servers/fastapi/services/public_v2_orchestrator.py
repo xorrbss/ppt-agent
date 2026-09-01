@@ -10,6 +10,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
+import inspect
 import json
 from typing import Any, Iterator
 import uuid
@@ -21,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from api.v2.contracts import (
     AuthorizedDownloadGrant,
     CancelOperationReceiptV2,
+    GenerationRouteReceiptV1,
     OperationExecutionReceiptV2,
     OperationEventPageV2,
     OperationEventV2,
@@ -120,6 +122,12 @@ from utils.owner_context import (
 AdmissionCallable = Callable[..., Awaitable[PublicOperationAdmission]]
 CancelCallable = Callable[..., Awaitable[bool]]
 ArtifactServiceFactory = Callable[[], DurableArtifactService]
+GenerationRouteResolver = Callable[
+    ...,
+    Awaitable[Mapping[str, Any] | GenerationRouteReceiptV1]
+    | Mapping[str, Any]
+    | GenerationRouteReceiptV1,
+]
 
 PUBLIC_V2_POSTGRESQL_STRICT_PROFILE = "postgresql-strict"
 PUBLIC_V2_INTEGRATION_PROFILE_ENV = "PUBLIC_V2_INTEGRATION_PROFILE"
@@ -148,6 +156,116 @@ def _canonical_hash(payload: Mapping[str, Any]) -> str:
         default=str,
     ).encode("utf-8")
     return sha256(encoded).hexdigest()
+
+
+def _generation_request_hash_payload(
+    request: PresentationGenerationRequestV2,
+) -> dict[str, Any]:
+    payload = request.model_dump(mode="json", by_alias=True)
+    if "generation_mode" not in request.model_fields_set:
+        payload.pop("generationMode", None)
+        payload.pop("designPackPin", None)
+    return payload
+
+
+def _generation_route_digest(payload: Mapping[str, Any]) -> str:
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return "sha256:" + sha256(encoded).hexdigest()
+
+
+def _installed_generation_route_resolver() -> GenerationRouteResolver | None:
+    try:
+        from services.authored_vnext.generation_route import (
+            resolve_generation_route,
+        )
+    except ModuleNotFoundError as error:
+        if error.name == "services.authored_vnext.generation_route":
+            return None
+        raise
+    return resolve_generation_route
+
+
+async def _resolve_generation_route_receipt(
+    request: PresentationGenerationRequestV2,
+    *,
+    slide_count: int,
+    resolver: GenerationRouteResolver | None,
+) -> GenerationRouteReceiptV1:
+    active_resolver = resolver or _installed_generation_route_resolver()
+    if active_resolver is None:
+        resolution: Mapping[str, Any] = {
+            "selectedRoute": "authored-fallback",
+            "narrativeIrDigest": None,
+            "fallbackReason": "route_resolver_unavailable",
+        }
+    else:
+        try:
+            raw_resolution = active_resolver(
+                generation_mode=request.generation_mode,
+                design_pack_pin=(
+                    request.design_pack_pin.model_dump(mode="json", by_alias=True)
+                    if request.design_pack_pin is not None
+                    else None
+                ),
+                slide_count=slide_count,
+            )
+            if inspect.isawaitable(raw_resolution):
+                raw_resolution = await raw_resolution
+        except Exception as error:
+            raise _public_error(503, "generation_route_resolver_unavailable") from error
+        if isinstance(raw_resolution, GenerationRouteReceiptV1):
+            resolution = raw_resolution.model_dump(mode="json", by_alias=True)
+        elif isinstance(raw_resolution, Mapping):
+            resolution = raw_resolution
+        else:
+            raise _public_error(503, "generation_route_resolution_invalid")
+
+    selected_route = resolution.get("selectedRoute") or resolution.get(
+        "selected_route"
+    )
+    narrative_ir_digest = resolution.get("narrativeIrDigest") or resolution.get(
+        "narrative_ir_digest"
+    )
+    fallback_reason = resolution.get("fallbackReason") or resolution.get(
+        "fallback_reason"
+    )
+    if selected_route == "authored-fallback" and not fallback_reason:
+        fallback_reason = "resolver_selected_authored_fallback"
+    receipt_payload: dict[str, Any] = {
+        "schemaVersion": "generation-route-receipt/v1",
+        "requestedMode": request.generation_mode,
+        "selectedRoute": selected_route,
+        "designPackPin": (
+            request.design_pack_pin.model_dump(mode="json", by_alias=True)
+            if request.design_pack_pin is not None
+            else None
+        ),
+        "narrativeIrDigest": narrative_ir_digest,
+        "fallbackReason": fallback_reason,
+        "outputCapability": "fidelity",
+    }
+    try:
+        return GenerationRouteReceiptV1.model_validate(
+            {
+                **receipt_payload,
+                "receiptDigest": _generation_route_digest(receipt_payload),
+            }
+        )
+    except ValueError as error:
+        raise _public_error(503, "generation_route_resolution_invalid") from error
+
+
+def _effective_generation_engine(
+    request: PresentationGenerationRequestV2,
+) -> str:
+    if "generation_mode" in request.model_fields_set:
+        return "deck-ir"
+    return request.generation_engine or "authored"
 
 
 def _release_review_receipt_reusable(
@@ -333,11 +451,13 @@ class SqlPublicV2Orchestrator:
         admission: AdmissionCallable = admit_public_operation_v2,
         cancel: CancelCallable = request_workspace_operation_cancellation,
         artifact_service_factory: ArtifactServiceFactory = configured_public_artifact_service,
+        generation_route_resolver: GenerationRouteResolver | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._admission = admission
         self._cancel = cancel
         self._artifact_service_factory = artifact_service_factory
+        self._generation_route_resolver = generation_route_resolver
 
     async def submit_generation(
         self,
@@ -379,7 +499,7 @@ class SqlPublicV2Orchestrator:
     ) -> OperationReceiptV2:
         kind = _GENERATION_KIND
         key_hash = _idempotency_hash(actor, kind=kind, key=idempotency_key)
-        request_payload = request.model_dump(mode="json", by_alias=True)
+        request_payload = _generation_request_hash_payload(request)
         request_hash = _canonical_hash(request_payload)
         async with self._session_factory() as session:
             existing = await self._operation_for_key(
@@ -416,6 +536,16 @@ class SqlPublicV2Orchestrator:
             slide_count = request.slide_count or (
                 len(request.slides_markdown) if request.slides_markdown else 10
             )
+            generation_route_receipt = await _resolve_generation_route_receipt(
+                request,
+                slide_count=slide_count,
+                resolver=self._generation_route_resolver,
+            )
+            route_payload = generation_route_receipt.model_dump(
+                mode="json",
+                by_alias=True,
+            )
+            effective_generation_engine = _effective_generation_engine(request)
             internal_request = GeneratePresentationRequest(
                 content=request.content,
                 slides_markdown=request.slides_markdown,
@@ -430,7 +560,13 @@ class SqlPublicV2Orchestrator:
                 visionQa=request.quality_policy == "release-v1",
                 reference_snapshot_ids=reference_ids,
                 authored_style=request.authored_style,
-                generationEngine=request.generation_engine,
+                generationMode=request.generation_mode,
+                designPackPin=(
+                    request.design_pack_pin.model_dump(mode="json", by_alias=True)
+                    if request.design_pack_pin is not None
+                    else None
+                ),
+                generationEngine=effective_generation_engine,
             )
             # This has no provider side effect.  It must remain ahead of the
             # durable admission/reservation below so an operation is sealed as
@@ -446,7 +582,7 @@ class SqlPublicV2Orchestrator:
             )
 
             ensure_product_deck_ir_execution_adapter(
-                explicit=request.generation_engine == "deck-ir"
+                explicit=effective_generation_engine == "deck-ir"
             )
             strategy_preflight = capability_preflight(
                 request=internal_request,
@@ -461,6 +597,7 @@ class SqlPublicV2Orchestrator:
                 ),
             )
             generation_payload = _durable_request_payload(internal_request)
+            generation_payload["generation_route_receipt"] = route_payload
             presentation_id = uuid.uuid5(
                 uuid.NAMESPACE_URL,
                 f"presenton:public-v2:{actor.owner_id}:{key_hash}",
@@ -491,7 +628,16 @@ class SqlPublicV2Orchestrator:
                         "reference_snapshot_ids": [str(value) for value in reference_ids],
                         "quality_policy": request.quality_policy,
                         "authored_style": request.authored_style,
-                        "generation_engine": request.generation_engine,
+                        "generation_mode": request.generation_mode,
+                        "design_pack_pin": (
+                            request.design_pack_pin.model_dump(
+                                mode="json",
+                                by_alias=True,
+                            )
+                            if request.design_pack_pin is not None
+                            else None
+                        ),
+                        "generation_engine": effective_generation_engine,
                     },
                     asset_ids=asset_ids,
                     operation_type=kind,
@@ -515,15 +661,15 @@ class SqlPublicV2Orchestrator:
                 preflight=strategy_preflight,
                 force_strategy=(
                     "reject"
-                    if request.generation_engine == "deck-ir"
+                    if effective_generation_engine == "deck-ir"
                     and strategy_preflight.get("missingCapabilities")
                     else "deck-ir"
-                    if request.generation_engine == "deck-ir"
+                    if effective_generation_engine == "deck-ir"
                     else "legacy-authored"
-                    if request.generation_engine == "authored"
+                    if effective_generation_engine == "authored"
                     else None
                 ),
-                requested_generation_engine=request.generation_engine,
+                requested_generation_engine=effective_generation_engine,
             )
             if strategy_receipt["selectedStrategy"] == "reject":
                 raise _public_error(422, "generation_strategy_capability_missing")
@@ -559,6 +705,7 @@ class SqlPublicV2Orchestrator:
                 "job_id": str(job.id),
                 "quality_policy": request.quality_policy,
                 "generation_strategy": strategy_receipt,
+                "generation_route_receipt": route_payload,
             }
             operation.expected_revision = presentation.revision
             operation.next_attempt_at = get_current_utc_datetime()
@@ -597,7 +744,7 @@ class SqlPublicV2Orchestrator:
             kind=_GENERATION_KIND,
             key=idempotency_key,
         )
-        request_hash = _canonical_hash(request.model_dump(mode="json", by_alias=True))
+        request_hash = _canonical_hash(_generation_request_hash_payload(request))
         async with self._session_factory() as session:
             operation = await self._operation_for_key(
                 session,
@@ -1593,7 +1740,21 @@ class SqlPublicV2Orchestrator:
         )
         quality: QualityReceiptV3 | None = None
         export_timing: PublicExportExecutionReceiptV1 | None = None
+        generation_route_receipt: GenerationRouteReceiptV1 | None = None
         generation_timing_receipt: dict[str, object] | None = None
+        if operation.kind == _GENERATION_KIND and isinstance(
+            operation.request_payload, Mapping
+        ):
+            raw_generation_route = operation.request_payload.get(
+                "generation_route_receipt"
+            )
+            if isinstance(raw_generation_route, Mapping):
+                try:
+                    generation_route_receipt = (
+                        GenerationRouteReceiptV1.model_validate(raw_generation_route)
+                    )
+                except ValueError:
+                    generation_route_receipt = None
         if isinstance(operation.result, Mapping):
             if operation.kind == _GENERATION_KIND:
                 from services.workspace_generation_timing_payload import (
@@ -1692,6 +1853,7 @@ class SqlPublicV2Orchestrator:
             updated_at=_aware(operation.updated_at),
             absolute_deadline_at=_aware(admission.deadline_at),
             error=error,
+            generation_route_receipt=generation_route_receipt,
             generation_timing_receipt=generation_timing_receipt,
             execution_receipt=execution_receipt,
             quality_receipt=quality,
