@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "key": "release.public-service-improvement-order",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Clean RC 5장 경로, 제목 복구, LibreOffice 동일 파일, 단계 관측, 상태 분리, Hybrid 별도, 운영 매트릭스 순서를 따른다.",
+  "scope": [
+    "public-service",
+    "release",
+    "quality",
+    "performance"
+  ],
+  "invariants": [
+    "broad matrix runs only after the new RC single path and same-file LibreOffice pass",
+    "quality readiness promotion and deployment states remain separate"
+  ],
+  "forbidden": [
+    "reusing evidence from a different source commit",
+    "weakening protected title token or numeric gates",
+    "mixing Fidelity readiness with Hybrid readiness"
+  ],
+  "evidence": [
+    "docs/public-service-workstation-128g-performance-design-20260831.md",
+    "servers/fastapi/services/public_v2_orchestrator.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-31T07:55:50.8618801+00:00"
+}

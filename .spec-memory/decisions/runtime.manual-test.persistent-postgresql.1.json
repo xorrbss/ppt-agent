@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "key": "runtime.manual-test.persistent-postgresql",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "사용자 수동 테스트는 지속 보관 PostgreSQL과 종료하지 않는 서버를 사용하며 일회성 자동 테스트 서버로 대체하지 않는다.",
+  "scope": [
+    "runtime",
+    "local-testing",
+    "postgresql"
+  ],
+  "invariants": [
+    "Restart reuses the same PostgreSQL data directory and existing account credentials.",
+    "Manual serving does not automatically run tests or stop after a test.",
+    "Original SQLite remains preserved; account-only import is not full document migration."
+  ],
+  "forbidden": [
+    "Presenting a disposable test harness as the persistent user test server.",
+    "Claiming full SQLite migration from account import alone."
+  ],
+  "evidence": [
+    "scripts/start-public-v2-local.ps1",
+    "scripts/start-public-v2-rc.ps1",
+    "scripts/stop-public-v2-local.ps1"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-31T17:58:15.6350115+00:00"
+}

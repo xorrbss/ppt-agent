@@ -219,6 +219,15 @@ class GeneratePresentationRequest(BaseModel):
     )
 
     @model_validator(mode="after")
+    def freeze_fixed_outline_slide_count(self) -> "GeneratePresentationRequest":
+        # A supplied outline already fixes the deck cardinality. Normalize it
+        # before queue admission and request fingerprinting; the generation
+        # worker historically did this later, after capacity planning.
+        if self.slides_markdown:
+            self.n_slides = len(self.slides_markdown)
+        return self
+
+    @model_validator(mode="after")
     def validate_source_content_mode(self) -> "GeneratePresentationRequest":
         if self.source_mode is None:
             if self.source_content_manifest_pin is not None or self.content_policy is not None:

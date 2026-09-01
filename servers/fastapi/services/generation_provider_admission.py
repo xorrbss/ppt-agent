@@ -108,13 +108,34 @@ def generation_provider_admitted(
         public_attempt_token = getattr(generation_job, "attempt_token", None)
         public_fencing_token = None
         if public_operation_id is not None:
-            public_fencing_token = await sql_session.scalar(
-                select(WorkspaceOperation.fencing_token)
-                .where(WorkspaceOperation.id == public_operation_id)
-                .where(WorkspaceOperation.state == "running")
-                .where(WorkspaceOperation.attempt_token == public_attempt_token)
-                .execution_options(skip_owner_scope=True)
-            )
+            authority = (
+                await sql_session.execute(
+                    select(
+                        WorkspaceOperation.contract_version,
+                        WorkspaceOperation.state,
+                        WorkspaceOperation.attempt_token,
+                        WorkspaceOperation.fencing_token,
+                    )
+                    .where(WorkspaceOperation.id == public_operation_id)
+                    .execution_options(skip_owner_scope=True)
+                )
+            ).one_or_none()
+            if authority is None or authority.contract_version != "public-operation/v2":
+                # The existing v1 web flow has a Phase-1 queue admission but
+                # no Phase-2 provider-spend contract. Do not mislabel it as a
+                # Phase-2 fence: detached reservation correctly fails closed
+                # whenever a real v2 operation supplies an invalid authority.
+                public_operation_id = None
+                public_attempt_token = None
+            elif (
+                authority.state == "running"
+                and authority.attempt_token == public_attempt_token
+            ):
+                public_fencing_token = authority.fencing_token
+            else:
+                # Preserve the v2 identity with an unusable fence so the SDK
+                # boundary rejects a stale or unclaimed operation.
+                public_fencing_token = None
         persisted = await sql_session.get(PresentationModel, presentation_id)
         try:
             identity = server_generation_profile_identity(request, persisted)

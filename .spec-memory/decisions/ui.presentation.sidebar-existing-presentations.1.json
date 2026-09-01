@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "key": "ui.presentation.sidebar-existing-presentations",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "사이드바의 슬라이드 영역에는 기존에 만들어진 발표자료 정보를 표시한다.",
+  "scope": [
+    "frontend",
+    "presentation-ui"
+  ],
+  "invariants": [
+    "단순 최근 발표자료 이동 링크만 두지 않고 실제 기존 발표자료 정보를 해당 영역에 표시한다."
+  ],
+  "forbidden": [],
+  "evidence": [
+    "servers/nextjs/app/(presentation-generator)/components/DevaxWorkspaceShell.tsx"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-31T19:24:36.3601931+00:00"
+}

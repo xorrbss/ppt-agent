@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "key": "runtime.public-service-workstation-admission-contract",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "workstation-128g/v1 clamps admission to policy, executable, provider, pressure, and DB budgets; every tier increase requires same-RC evidence.",
+  "scope": [
+    "public-service",
+    "runtime",
+    "capacity",
+    "admission"
+  ],
+  "invariants": [
+    "verification tier is 4 slots after >=120 GiB physical-memory preflight",
+    "admission capacity is the minimum of configured policy, executable slots, provider cap, and live pressure cap",
+    "C5, C10, and C16 evidence digests must match the active release-candidate digest",
+    "C16 additionally requires a recovery evidence digest and at least 86400 seconds",
+    "owner generation remains 1 active and 3 queued",
+    "PowerPoint COM remains one concurrent operation"
+  ],
+  "forbidden": [
+    "activating 8, 12, or 16 slots without matching same-RC evidence",
+    "advertising configured slots that have no executable worker capacity",
+    "raising single-node sustained generation above 16"
+  ],
+  "evidence": [
+    "scripts/start-public-v2-rc.ps1",
+    "servers/fastapi/services/public_workstation_runtime_profile.py",
+    "servers/fastapi/services/public_operation_admission.py",
+    "servers/fastapi/services/public_render_batching.py",
+    "servers/fastapi/tests/unit/test_public_workstation_runtime_profile.py"
+  ],
+  "supersedes": "runtime.public-service-workstation-admission-contract@1",
+  "recordedAt": "2026-08-31T08:25:42.5857752+00:00"
+}

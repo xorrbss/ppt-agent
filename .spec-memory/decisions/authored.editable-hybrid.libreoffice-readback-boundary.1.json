@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.editable-hybrid.libreoffice-readback-boundary",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Editable Hybrid LibreOffice readback is a separate same-RC capability and never falls back into the public Fidelity flow.",
+  "scope": [
+    "authored-vnext",
+    "editable-hybrid",
+    "release-evidence"
+  ],
+  "invariants": [
+    "Require one fresh seal binding source, profile, policy, worker, provider, font, and exporter digests.",
+    "Require known-good control then exact RC PPTX readback with an invocation-owned LibreOffice profile.",
+    "Classify environment_unavailable, invocation_failed, and document_invalid separately."
+  ],
+  "forbidden": [
+    "Do not treat Fidelity evidence or a PowerPoint save-copy as Editable Hybrid LibreOffice evidence.",
+    "Do not enable public flow from this capability before its gates pass."
+  ],
+  "evidence": [
+    "contracts/authored_vnext/semantic/editable-hybrid-libreoffice-readback.v1.schema.json",
+    "servers/fastapi/services/authored_vnext/semantic/editable_hybrid_libreoffice_readback.py",
+    "servers/fastapi/tests/unit/test_editable_hybrid_libreoffice_readback.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-31T08:11:51.2470674+00:00"
+}

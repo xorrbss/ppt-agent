@@ -6,6 +6,7 @@ import uuid
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
+import pytest
 
 from api.v2.contracts import (
     AuthorizedDownloadGrant,
@@ -398,6 +399,28 @@ def test_public_v2_contract_delegates_async_surfaces_and_fails_closed_quality() 
     quality_payload["releaseReadiness"] = "ready"
     ready_with_optional_unavailable = QualityReceiptV3.model_validate(quality_payload)
     assert ready_with_optional_unavailable.release_readiness == "ready"
+    ready_status_payload = bound_status.model_dump()
+    ready_status_payload.update(
+        quality_receipt=ready_with_optional_unavailable,
+        release_readiness="ready",
+        readiness_scope="artifact:fidelity",
+        fidelity_artifact_ready=True,
+        native_editability_ready=False,
+        promotion_ready=False,
+        deployment_authorized=False,
+    )
+    ready_status = OperationStatusV2.model_validate(ready_status_payload)
+    assert ready_status.fidelity_artifact_ready is True
+    assert ready_status.readiness_scope == "artifact:fidelity"
+    for forbidden in (
+        "native_editability_ready",
+        "promotion_ready",
+        "deployment_authorized",
+    ):
+        invalid_ready_status = dict(ready_status_payload)
+        invalid_ready_status[forbidden] = True
+        with pytest.raises(ValidationError):
+            OperationStatusV2.model_validate(invalid_ready_status)
 
     quality_payload["contentBrief"] = {
         "required": True,

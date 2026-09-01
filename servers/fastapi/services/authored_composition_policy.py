@@ -916,7 +916,44 @@ def _shorten_at_sentence_or_word_boundary(text: str, maximum: int) -> str:
     word_break = prefix.rfind(" ", 1, maximum + 1)
     if word_break > 0:
         return normalized[:word_break].rstrip(" ,;:，；：")
+    first_word_end = normalized.find(" ")
+    if first_word_end > 0:
+        return normalized[:first_word_end].rstrip(" ,;:，；：")
     return normalized
+
+
+def _rewrite_owner_segment_text(segment: str, shortened: str) -> str | None:
+    """Keep inline markup while retaining the shortened owned-text prefix."""
+
+    inner_start = segment.find(">") + 1
+    inner_end = segment.rfind("<")
+    if inner_start <= 0 or inner_end < inner_start:
+        return None
+    inner = segment[inner_start:inner_end]
+    if re.search(r"<(?:script|style|template)\b", inner, flags=re.IGNORECASE):
+        return None
+
+    remaining_words = shortened.split()
+    parts = re.split(r"(<[^>]+>)", inner)
+    rewritten: list[str] = []
+    for part in parts:
+        if not part:
+            continue
+        if part.startswith("<") and part.endswith(">"):
+            rewritten.append(part)
+            continue
+        words = re.sub(r"\s+", " ", html_lib.unescape(part)).strip().split()
+        keep = min(len(words), len(remaining_words))
+        if keep:
+            if words[:keep] != remaining_words[:keep]:
+                return None
+            rewritten.append(html_lib.escape(" ".join(words[:keep]), quote=False))
+            del remaining_words[:keep]
+        else:
+            rewritten.append("")
+    if remaining_words:
+        return None
+    return segment[:inner_start] + "".join(rewritten) + segment[inner_end:]
 
 
 def reduce_authored_owner_text_capacity(
@@ -988,7 +1025,9 @@ def reduce_authored_owner_text_capacity(
             or _is_title_role(role)
             or node.attrs.get("data-header-part")
             or node.attrs.get("data-source-block-id")
-            or segment.count("<") != 2
+            or re.search(
+                r"<(?:script|style|template)\b", segment, flags=re.IGNORECASE
+            )
         ):
             continue
         candidates.append((node, text, is_body, is_supporting))
@@ -1028,11 +1067,10 @@ def reduce_authored_owner_text_capacity(
         selected, key=lambda item: item[0].start, reverse=True
     ):
         segment = reduced[node.start : node.end]
-        inner_start = segment.find(">") + 1
-        inner_end = segment.rfind("<")
-        replacement = html_lib.escape(shortened, quote=False)
-        segment = segment[:inner_start] + replacement + segment[inner_end:]
-        reduced = reduced[: node.start] + segment + reduced[node.end :]
+        replacement = _rewrite_owner_segment_text(segment, shortened)
+        if replacement is None:
+            return html
+        reduced = reduced[: node.start] + replacement + reduced[node.end :]
     insertion = re.search(r"</head\s*>", reduced, flags=re.IGNORECASE)
     if insertion is None:
         return html

@@ -124,7 +124,7 @@ async def admit_source_content_request(
     # Freeze a lossless page outline at admission.  It is an identity/read
     # order projection; payloads remain sourced from the immutable manifest.
     try:
-        request._source_document_outline = SourceDocumentOutlineBuilder().build(
+        outline = SourceDocumentOutlineBuilder().build(
             manifest=manifest,
             manifest_pin=SourceContentManifestPin(
                 manifest_id=pin.manifest_id,
@@ -136,6 +136,11 @@ async def admit_source_content_request(
         if not code.startswith("source_content_"):
             code = "source_content_manifest_invalid"
         raise _source_error(code, status_code=409) from error
+    request._source_document_outline = outline
+    # Source-content requests intentionally omit a caller-selected slide count.
+    # Freeze the manifest-derived cardinality during admission so capacity
+    # planning receives the same positive count that the worker will execute.
+    request.n_slides = outline.source_slide_count
     return manifest
 
 

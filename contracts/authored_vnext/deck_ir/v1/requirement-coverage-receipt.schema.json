@@ -1,0 +1,190 @@
+{
+  "$defs": {
+    "CoverageOccurrenceV1": {
+      "additionalProperties": false,
+      "properties": {
+        "elementKey": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+          "title": "Elementkey",
+          "type": "string"
+        },
+        "requirementId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+          "title": "Requirementid",
+          "type": "string"
+        },
+        "slideKey": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+          "title": "Slidekey",
+          "type": "string"
+        },
+        "sourceBindingId": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sourcebindingid"
+        },
+        "visibility": {
+          "default": "visible",
+          "enum": [
+            "visible",
+            "hidden"
+          ],
+          "title": "Visibility",
+          "type": "string"
+        }
+      },
+      "required": [
+        "requirementId",
+        "slideKey",
+        "elementKey"
+      ],
+      "title": "CoverageOccurrenceV1",
+      "type": "object"
+    },
+    "DuplicateViolationV1": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "enum": [
+            "maximum-occurrences-exceeded",
+            "unintentional-normalized-duplicate"
+          ],
+          "title": "Reason",
+          "type": "string"
+        },
+        "requirementId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+          "title": "Requirementid",
+          "type": "string"
+        },
+        "slideKeys": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+            "type": "string"
+          },
+          "maxItems": 30,
+          "minItems": 1,
+          "title": "Slidekeys",
+          "type": "array"
+        }
+      },
+      "required": [
+        "requirementId",
+        "slideKeys",
+        "reason"
+      ],
+      "title": "DuplicateViolationV1",
+      "type": "object"
+    }
+  },
+  "$id": "urn:presenton:authored-vnext:deck-ir:requirement-coverage-receipt.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "deckIrDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Deckirdigest",
+      "type": "string"
+    },
+    "duplicateViolations": {
+      "items": {
+        "$ref": "#/$defs/DuplicateViolationV1"
+      },
+      "title": "Duplicateviolations",
+      "type": "array"
+    },
+    "occurrences": {
+      "items": {
+        "$ref": "#/$defs/CoverageOccurrenceV1"
+      },
+      "title": "Occurrences",
+      "type": "array"
+    },
+    "optionalCovered": {
+      "minimum": 0,
+      "title": "Optionalcovered",
+      "type": "integer"
+    },
+    "optionalTotal": {
+      "minimum": 0,
+      "title": "Optionaltotal",
+      "type": "integer"
+    },
+    "receiptDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Receiptdigest",
+      "type": "string"
+    },
+    "requiredCovered": {
+      "minimum": 0,
+      "title": "Requiredcovered",
+      "type": "integer"
+    },
+    "requiredTotal": {
+      "minimum": 0,
+      "title": "Requiredtotal",
+      "type": "integer"
+    },
+    "requirementGraphDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Requirementgraphdigest",
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": "requirement-coverage-receipt/v1",
+      "title": "Schemaversion",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "passed",
+        "failed"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "uncoveredRequirementIds": {
+      "items": {
+        "maxLength": 128,
+        "minLength": 1,
+        "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+        "type": "string"
+      },
+      "title": "Uncoveredrequirementids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "requirementGraphDigest",
+    "deckIrDigest",
+    "requiredTotal",
+    "requiredCovered",
+    "optionalTotal",
+    "optionalCovered",
+    "status",
+    "receiptDigest"
+  ],
+  "title": "RequirementCoverageReceiptV1",
+  "type": "object"
+}

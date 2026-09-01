@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "key": "runtime.public-service-workstation-baseline",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "실서비스 기준은 RAM 128GB 고성능 워크스테이션이며 개발 및 동시성 설정은 이 하드웨어 프로필을 기준으로 한다.",
+  "scope": [
+    "public-service",
+    "runtime",
+    "capacity"
+  ],
+  "invariants": [
+    "production baseline RAM is 128GB"
+  ],
+  "forbidden": [],
+  "evidence": [],
+  "supersedes": null,
+  "recordedAt": "2026-08-31T07:37:22.3577290+00:00"
+}

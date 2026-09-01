@@ -107,10 +107,22 @@
     "authored.measurement.thin-viewport-edge": "decisions/authored.measurement.thin-viewport-edge.1.json",
     "authored.generation.decoration-containment": "decisions/authored.generation.decoration-containment.1.json",
     "authored.semantic.header-title-owner": "decisions/authored.semantic.header-title-owner.1.json",
-    "authored.measurement.convex-polygon-owned-paint": "decisions/authored.measurement.convex-polygon-owned-paint.1.json"
+    "authored.measurement.convex-polygon-owned-paint": "decisions/authored.measurement.convex-polygon-owned-paint.1.json",
+    "runtime.public-service-workstation-baseline": "decisions/runtime.public-service-workstation-baseline.1.json",
+    "runtime.public-service-generation-capacity-tiers": "decisions/runtime.public-service-generation-capacity-tiers.1.json",
+    "release.public-service-improvement-order": "decisions/release.public-service-improvement-order.1.json",
+    "runtime.public-service-workstation-admission-contract": "decisions/runtime.public-service-workstation-admission-contract.2.json",
+    "authored.editable-hybrid.libreoffice-readback-boundary": "decisions/authored.editable-hybrid.libreoffice-readback-boundary.1.json",
+    "authored.generation.deck-ir-constraint-compiler": "decisions/authored.generation.deck-ir-constraint-compiler.4.json",
+    "runtime.manual-test.persistent-postgresql": "decisions/runtime.manual-test.persistent-postgresql.2.json",
+    "authored.generation.deck-ir-provider-intent-resolution": "decisions/authored.generation.deck-ir-provider-intent-resolution.1.json",
+    "ui.presentation.devax-slide-reference": "decisions/ui.presentation.devax-slide-reference.1.json",
+    "ui.presentation.white-icon-actions": "decisions/ui.presentation.white-icon-actions.1.json",
+    "ui.presentation.sidebar-existing-presentations": "decisions/ui.presentation.sidebar-existing-presentations.1.json",
+    "ui.presentation.header-new-slide-action": "decisions/ui.presentation.header-new-slide-action.1.json"
   },
   "readFirst": [
     "AGENTS.md"
   ],
-  "updatedAt": "2026-08-31T04:09:31.9096746+00:00"
+  "updatedAt": "2026-08-31T19:28:41.8236501+00:00"
 }

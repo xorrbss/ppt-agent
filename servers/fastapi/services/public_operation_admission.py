@@ -59,6 +59,10 @@ from services.provider_pricing import (
     calculate_actual_usage_cost,
 )
 from services.public_operation_correlation import log_public_operation_correlation
+from services.public_workstation_runtime_profile import (
+    PublicWorkstationProfileError,
+    resolve_enabled_workstation_runtime_profile,
+)
 _TERMINAL_STATES = frozenset(
     {"succeeded", "failed", "cancelled", "budget_exhausted", "deadline_exceeded"}
 )
@@ -439,6 +443,8 @@ async def _require_phase2_provider_contract(
     admission: PublicOperationAdmission,
     *,
     allow_terminal_reconcile: bool = False,
+    expected_attempt_token: str | None = None,
+    expected_fencing_token: int | None = None,
 ) -> None:
     """Bind detached provider I/O to the PostgreSQL operation authority.
 
@@ -469,6 +475,17 @@ async def _require_phase2_provider_contract(
         .where(workspace_model.id == admission.operation_id)
         .with_for_update()
     )
+    if operation is not None and (
+        (
+            expected_attempt_token is not None
+            and operation.attempt_token != expected_attempt_token
+        )
+        or (
+            expected_fencing_token is not None
+            and operation.fencing_token != expected_fencing_token
+        )
+    ):
+        raise PublicAdmissionRejected("public_provider_stale_attempt")
     allowed_phases = (
         {"active", "budget_exhausted"}
         if allow_terminal_reconcile
@@ -525,6 +542,68 @@ def _resource_limits(
     return (
         int(getattr(policy, f"{prefix}queued_resource_units")),
         int(getattr(policy, f"{prefix}active_resource_units")),
+    )
+
+
+def _effective_runtime_quota_limits(
+    policy: PublicPolicyProfile, *, scope_type: str, operation_kind: str
+) -> tuple[int, int]:
+    """Never let a persisted policy over-admit the selected workstation.
+
+    The profile is opt-in while rollout wiring is incomplete.  Once selected,
+    invalid evidence, a missing provider cap, or hard host pressure fails
+    closed instead of falling back to the historical policy row.
+    """
+
+    active, queued = _quota_limits(
+        policy, scope_type=scope_type, operation_kind=operation_kind
+    )
+    try:
+        profile = resolve_enabled_workstation_runtime_profile()
+    except PublicWorkstationProfileError as error:
+        raise PublicAdmissionRejected(str(error), retry_after_seconds=15) from error
+    if profile is None:
+        return active, queued
+    capacity = profile.admission_capacity(operation_kind)
+    if scope_type == "owner":
+        profile_active = (
+            profile.owner_generation_active
+            if operation_kind == "generation"
+            else profile.owner_export_active
+        )
+        profile_queued = (
+            profile.owner_generation_queued
+            if operation_kind == "generation"
+            else profile.owner_export_queued
+        )
+    else:
+        profile_active = (
+            capacity.generation_active_slots
+            if operation_kind == "generation"
+            else capacity.render_export_active_slots
+        )
+        # Queue counts remain a secondary anti-amplification guard. Resource
+        # units below are authoritative for slide-weighted work.
+        profile_queued = capacity.generation_queue_units
+    return min(active, profile_active), min(queued, profile_queued)
+
+
+def _effective_runtime_resource_limits(
+    policy: PublicPolicyProfile, *, scope_type: str, operation_kind: str
+) -> tuple[int, int]:
+    queued, active = _resource_limits(policy, scope_type=scope_type)
+    try:
+        profile = resolve_enabled_workstation_runtime_profile()
+    except PublicWorkstationProfileError as error:
+        raise PublicAdmissionRejected(str(error), retry_after_seconds=15) from error
+    if profile is None or scope_type == "owner":
+        return queued, active
+    capacity = profile.admission_capacity(operation_kind)
+    # Queue units are five-slide equivalents.  The same bounded unit budget
+    # is used for claims so a large deck cannot bypass the active-slot cap by
+    # being admitted while all executable capacity is under pressure.
+    return min(queued, capacity.generation_queue_units), min(
+        active, capacity.generation_queue_units
     )
 
 
@@ -883,10 +962,12 @@ async def admit_public_operation_v2(
     )
     for scope_type in ("global", "tenant", "owner"):
         counter = counters[scope_type]
-        _, queued_count_limit = _quota_limits(
+        _, queued_count_limit = _effective_runtime_quota_limits(
             policy, scope_type=scope_type, operation_kind=operation_kind
         )
-        queued_resource_limit, _ = _resource_limits(policy, scope_type=scope_type)
+        queued_resource_limit, _ = _effective_runtime_resource_limits(
+            policy, scope_type=scope_type, operation_kind=operation_kind
+        )
         if counter.queued_count >= queued_count_limit:
             raise PublicAdmissionRejected(
                 f"public_{scope_type}_queue_limit_exceeded", retry_after_seconds=15
@@ -1031,10 +1112,12 @@ async def activate_public_operation_v2(
     leases = await _locked_phase2_leases(session, lease_model=lease_model, admission=admission)
     for scope_type in ("global", "tenant", "owner"):
         counter = counters[scope_type]
-        active_count_limit, _ = _quota_limits(
+        active_count_limit, _ = _effective_runtime_quota_limits(
             policy, scope_type=scope_type, operation_kind=admission.operation_kind
         )
-        _, active_resource_limit = _resource_limits(policy, scope_type=scope_type)
+        _, active_resource_limit = _effective_runtime_resource_limits(
+            policy, scope_type=scope_type, operation_kind=admission.operation_kind
+        )
         if counter.active_count >= active_count_limit:
             raise PublicAdmissionRejected(f"public_{scope_type}_active_limit_exceeded")
         if counter.active_resource_units + admission.resource_units > active_resource_limit:
@@ -2163,26 +2246,6 @@ async def reserve_public_provider_call_detached(
         admission_id = admission.id
         await lookup_session.rollback()
     async with async_session_maker() as session:
-        if expected_attempt_token is not None or expected_fencing_token is not None:
-            fencing_conditions = [
-                WorkspaceOperation.id == operation_id,
-                WorkspaceOperation.state == "running",
-            ]
-            if expected_attempt_token is not None:
-                fencing_conditions.append(
-                    WorkspaceOperation.attempt_token == expected_attempt_token
-                )
-            if expected_fencing_token is not None:
-                fencing_conditions.append(
-                    WorkspaceOperation.fencing_token == expected_fencing_token
-                )
-            fenced = await session.execute(
-                update(WorkspaceOperation).where(
-                    *fencing_conditions
-                ).values(version=WorkspaceOperation.version)
-            )
-            if fenced.rowcount != 1:
-                raise PublicAdmissionRejected("public_provider_stale_attempt")
         admission = await session.scalar(
             select(PublicOperationAdmission)
             .where(PublicOperationAdmission.id == admission_id)
@@ -2190,7 +2253,12 @@ async def reserve_public_provider_call_detached(
         )
         if admission is None:
             raise PublicAdmissionRejected("public_provider_admission_missing")
-        await _require_phase2_provider_contract(session, admission)
+        await _require_phase2_provider_contract(
+            session,
+            admission,
+            expected_attempt_token=expected_attempt_token,
+            expected_fencing_token=expected_fencing_token,
+        )
         reserved_result = await reserve_public_provider_call(
             session,
             admission_id=admission_id,

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "key": "ui.presentation.white-icon-actions",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "PPT UI의 그라데이션 및 주요 작업 버튼은 흰 배경, 얇은 테두리, 왼쪽 아이콘 형태로 통일한다.",
+  "scope": [
+    "frontend",
+    "presentation-ui"
+  ],
+  "invariants": [
+    "버튼 클릭 동작과 로딩 및 비활성 조건을 유지한다."
+  ],
+  "forbidden": [],
+  "evidence": [
+    "servers/nextjs/components/ui/button.tsx",
+    "servers/nextjs/app/(presentation-generator)/presentation/components/header/ExportMenu.tsx",
+    "servers/nextjs/app/(presentation-generator)/upload/components/UploadPage.tsx"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-31T19:18:50.7021481+00:00"
+}

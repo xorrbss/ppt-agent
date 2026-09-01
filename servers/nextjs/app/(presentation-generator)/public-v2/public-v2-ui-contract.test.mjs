@@ -23,6 +23,18 @@ test("public v2 UI only offers fidelity export and separates terminal states", a
   assert.match(source, /sourceRevision: snapshot\.sourceRevision/);
   assert.match(source, /접수 결과를 복구해야 합니다/);
   assert.match(source, /recoverPendingExport/);
+  assert.match(source, /current\.readiness\.scope/);
+  assert.match(source, /Fidelity artifact/);
+  assert.match(source, /Native editability/);
+  assert.match(source, /Promotion/);
+  assert.match(source, /Deployment authorization/);
+  assert.match(source, /Outline/);
+  assert.match(source, /Provider/);
+  assert.match(source, /Authoring/);
+  assert.match(source, /Repair/);
+  assert.match(source, /Chromium review/);
+  assert.match(source, /Publication/);
+  assert.match(source, /timing === "not_started"/);
 
   const hook = await readFile(hookPath, "utf8");
   assert.match(hook, /visibilitychange/);

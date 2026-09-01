@@ -1,0 +1,788 @@
+{
+  "$defs": {
+    "ChartSeriesV1": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "values": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 100,
+          "minItems": 1,
+          "title": "Values",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "values"
+      ],
+      "title": "ChartSeriesV1",
+      "type": "object"
+    },
+    "ComponentPayloadV1": {
+      "additionalProperties": false,
+      "properties": {
+        "altText": {
+          "anyOf": [
+            {
+              "maxLength": 1000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Alttext"
+        },
+        "assetSlot": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assetslot"
+        },
+        "attribution": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attribution"
+        },
+        "axisLabel": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Axislabel"
+        },
+        "badge": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Badge"
+        },
+        "body": {
+          "anyOf": [
+            {
+              "maxLength": 3000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Body"
+        },
+        "caption": {
+          "anyOf": [
+            {
+              "maxLength": 1000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Caption"
+        },
+        "categories": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 100,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Categories"
+        },
+        "chartType": {
+          "anyOf": [
+            {
+              "enum": [
+                "bar",
+                "line",
+                "area",
+                "donut",
+                "scatter"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Charttype"
+        },
+        "childElementKeys": {
+          "anyOf": [
+            {
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+                "type": "string"
+              },
+              "maxItems": 50,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Childelementkeys"
+        },
+        "columns": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 30,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Columns"
+        },
+        "events": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/TimelineEventV1"
+              },
+              "maxItems": 30,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Events"
+        },
+        "fromElementKey": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fromelementkey"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "leftItems": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 30,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Leftitems"
+        },
+        "motif": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Motif"
+        },
+        "quote": {
+          "anyOf": [
+            {
+              "maxLength": 3000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quote"
+        },
+        "rightItems": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 30,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rightitems"
+        },
+        "rows": {
+          "anyOf": [
+            {
+              "items": {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              "maxItems": 100,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rows"
+        },
+        "series": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ChartSeriesV1"
+              },
+              "maxItems": 30,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Series"
+        },
+        "shapeKind": {
+          "anyOf": [
+            {
+              "enum": [
+                "rectangle",
+                "circle",
+                "pill",
+                "line",
+                "arrow"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shapekind"
+        },
+        "sourceContentDigest": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sourcecontentdigest"
+        },
+        "steps": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ProcessStepV1"
+              },
+              "maxItems": 30,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Steps"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "toElementKey": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Toelementkey"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "title": "ComponentPayloadV1",
+      "type": "object"
+    },
+    "LayoutIntentV1": {
+      "additionalProperties": false,
+      "properties": {
+        "composition": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+          "title": "Composition",
+          "type": "string"
+        },
+        "density": {
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "title": "Density",
+          "type": "string"
+        },
+        "emphasis": {
+          "enum": [
+            "left",
+            "right",
+            "center",
+            "balanced",
+            "none"
+          ],
+          "title": "Emphasis",
+          "type": "string"
+        },
+        "readingOrder": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+          "title": "Readingorder",
+          "type": "string"
+        }
+      },
+      "required": [
+        "composition",
+        "emphasis",
+        "readingOrder",
+        "density"
+      ],
+      "title": "LayoutIntentV1",
+      "type": "object"
+    },
+    "ProcessStepV1": {
+      "additionalProperties": false,
+      "properties": {
+        "detail": {
+          "anyOf": [
+            {
+              "maxLength": 1000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Detail"
+        },
+        "label": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "title": "ProcessStepV1",
+      "type": "object"
+    },
+    "SlideComponentV1": {
+      "additionalProperties": false,
+      "properties": {
+        "contentPriority": {
+          "enum": [
+            "must-keep",
+            "supporting",
+            "optional"
+          ],
+          "title": "Contentpriority",
+          "type": "string"
+        },
+        "elementKey": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+          "title": "Elementkey",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "text",
+            "metric",
+            "card",
+            "comparison",
+            "process",
+            "timeline",
+            "image",
+            "quote",
+            "table",
+            "chart",
+            "shape",
+            "connector",
+            "group",
+            "decoration"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "layoutSlot": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+          "title": "Layoutslot",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ComponentPayloadV1"
+        },
+        "requirementIds": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+            "type": "string"
+          },
+          "maxItems": 128,
+          "title": "Requirementids",
+          "type": "array"
+        },
+        "semanticRole": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+          "title": "Semanticrole",
+          "type": "string"
+        },
+        "sourceBindingId": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sourcebindingid"
+        },
+        "variant": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+          "title": "Variant",
+          "type": "string"
+        }
+      },
+      "required": [
+        "elementKey",
+        "kind",
+        "semanticRole",
+        "contentPriority",
+        "layoutSlot",
+        "variant",
+        "payload"
+      ],
+      "title": "SlideComponentV1",
+      "type": "object"
+    },
+    "TimelineEventV1": {
+      "additionalProperties": false,
+      "properties": {
+        "detail": {
+          "anyOf": [
+            {
+              "maxLength": 1000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Detail"
+        },
+        "label": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "time": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "time"
+      ],
+      "title": "TimelineEventV1",
+      "type": "object"
+    }
+  },
+  "$id": "urn:presenton:authored-vnext:deck-ir:slide-ir.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artDirectionIntentDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Artdirectionintentdigest",
+      "type": "string"
+    },
+    "claim": {
+      "maxLength": 2000,
+      "minLength": 1,
+      "title": "Claim",
+      "type": "string"
+    },
+    "components": {
+      "items": {
+        "$ref": "#/$defs/SlideComponentV1"
+      },
+      "maxItems": 128,
+      "minItems": 1,
+      "title": "Components",
+      "type": "array"
+    },
+    "compositionIntentGraphDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Compositionintentgraphdigest",
+      "type": "string"
+    },
+    "evidence": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 64,
+      "title": "Evidence",
+      "type": "array"
+    },
+    "layoutIntent": {
+      "$ref": "#/$defs/LayoutIntentV1"
+    },
+    "repetitionPurpose": {
+      "enum": [
+        "none",
+        "recap",
+        "continuity",
+        "comparison"
+      ],
+      "title": "Repetitionpurpose",
+      "type": "string"
+    },
+    "requirementIds": {
+      "items": {
+        "maxLength": 128,
+        "minLength": 1,
+        "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+        "type": "string"
+      },
+      "maxItems": 128,
+      "title": "Requirementids",
+      "type": "array"
+    },
+    "role": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+      "title": "Role",
+      "type": "string"
+    },
+    "slideKey": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+      "title": "Slidekey",
+      "type": "string"
+    },
+    "sourceBindingIds": {
+      "items": {
+        "maxLength": 128,
+        "minLength": 1,
+        "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+        "type": "string"
+      },
+      "maxItems": 128,
+      "title": "Sourcebindingids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "slideKey",
+    "role",
+    "claim",
+    "compositionIntentGraphDigest",
+    "artDirectionIntentDigest",
+    "repetitionPurpose",
+    "layoutIntent",
+    "components"
+  ],
+  "title": "SlideIRV1",
+  "type": "object"
+}

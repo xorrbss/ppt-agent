@@ -98,8 +98,56 @@ def test_author_aggregate_capacity_fails_after_two_calls_before_render(monkeypat
     assert calls == [1, 2]
     assert caught.value.code == "authored_aggregate_owner_capacity_exhausted"
 
-    # Ordinary dynamic titles use only the existing second call, with the same
-    # frozen combined title budget. This is not a reconstruction of run12's lost HTML.
+    # Title capacity is contracted before ordinal one and resolved locally. It
+    # never consumes the existing provider correction reserved for non-title
+    # validation failures.
+    title = "IBM 20% information technology architecture and implementation management"
+    title_candidate = (
+        "<!doctype html><html><head></head><body>"
+        f'<h1 data-qid="hero.title" data-semantic-role="title">{title}</h1>'
+        "</body></html>"
+    )
+    title_calls = []
+
+    async def fake_title_author(*args, **kwargs):
+        title_calls.append(kwargs)
+        return title_candidate
+
+    monkeypatch.setattr(author_deck_mod, "author_slide_html", fake_title_author)
+    resolved = _run(author_deck_mod._author_one_resilient(
+        title + "\nBody", "design", _brand(), "PILLARS", 0, 1, (),
+        raise_on_failure=True,
+        capacity=SlideCapacity(0, "PILLARS", 48, 90, 100, 0, 4),
+        allow_title_capacity_recovery=True,
+    ))
+    assert len(title_calls) == 1
+    assert "PRE-PROVIDER TITLE CONTRACT" in title_calls[0]["capacity_brief"]
+    assert "jointTitleBudget=48" in title_calls[0]["capacity_brief"]
+    assert "planned.title" in title_calls[0]["capacity_brief"]
+    assert "IBM 20% info tech arch and impl management" in resolved
+
+    terminal_title = "IBM 20% immutable claim"
+    terminal_candidate = title_candidate.replace(title, terminal_title)
+    title_calls.clear()
+
+    async def fake_terminal_title_author(*args, **kwargs):
+        title_calls.append(kwargs)
+        return terminal_candidate
+
+    monkeypatch.setattr(author_deck_mod, "author_slide_html", fake_terminal_title_author)
+    with pytest.raises(author_deck_mod.AuthoredTitleCapacityUnresolvable) as terminal:
+        _run(author_deck_mod._author_one_resilient(
+            terminal_title + "\nBody", "design", _brand(), "PILLARS", 0, 1, (),
+            raise_on_failure=True,
+            capacity=SlideCapacity(0, "PILLARS", 12, 90, 100, 0, 4),
+            allow_title_capacity_recovery=True,
+        ))
+    assert len(title_calls) == 1
+    assert terminal.value.code == "authored_title_capacity_unresolvable"
+    assert terminal.value.title_recovery_receipt["gateRelaxed"] is False
+    assert terminal.value.title_recovery_receipt["probabilisticCallCount"] == 0
+    # Direct boundary coverage retains the former provider-rewrite regression
+    # matrix without spending a probabilistic title call.
     title = "IBM의 20% 개선 목표는 모든 고객 데이터에 대해 외부로 전송하지 않는 정책을 유지하는 범위에서만 추진합니다"
     shorter = "IBM 20% 개선 목표: 모든 고객 데이터 외부 전송하지 않는 정책 유지"
     candidate = (
@@ -117,34 +165,15 @@ def test_author_aggregate_capacity_fails_after_two_calls_before_render(monkeypat
     assert any(item.startswith("owner_title:") for item in aggregate_owner_capacity_violations(candidate, capacity))
     assert aggregate_owner_capacity_violations(replacement, capacity) == ()
 
-    async def exercise(original, correction, **options):
-        calls.clear()
-        kwargs_seen = []
-
-        async def fake_title_author(*args, **kwargs):
-            calls.append(kwargs["receipt_attempt_ordinal"])
-            kwargs_seen.append(kwargs)
-            return original if len(calls) == 1 else correction
-
-        monkeypatch.setattr(author_deck_mod, "author_slide_html", fake_title_author)
-        try:
-            result = await author_deck_mod._author_one_resilient(
-                "content", "design", _brand(), "PILLARS", 2, 5, (),
-                raise_on_failure=True, capacity=options.pop("capacity", capacity),
-                allow_title_capacity_recovery=True, **options,
-            )
-            return result, kwargs_seen
-        except author_deck_mod.AuthoredProviderBudgetExhausted as error:
-            return error, kwargs_seen
-
-    result, kwargs_seen = _run(exercise(candidate, replacement))
-    assert result == replacement
-    assert calls == [1, 2]
-    assert kwargs_seen[1]["rejected_html"] == candidate
-    assert "Only shorten authored title text" in kwargs_seen[1]["correction_hint"]
+    qids = author_deck_mod.title_capacity_recovery_qids(candidate)
+    assert qids == ("customer.alice.title", "card.one.title", "card.two.title")
+    assert author_deck_mod.title_capacity_recovery_boundary(candidate, replacement, qids) == ()
+    hint = author_deck_mod.title_capacity_recovery_hint(
+        aggregate_owner_capacity_violations(candidate, capacity), qids,
+        rejected_html=candidate, capacity=capacity,
+    )
     for expected in ("named_word [IBM x1]", "number_unit [20% x1]", "korean_qualifier [모든 x1, 목표 x1, 않 x1]"):
-        assert expected in kwargs_seen[1]["correction_hint"]
-    assert all(kwargs["allow_provider_fallback"] is False for kwargs in kwargs_seen)
+        assert expected in hint
 
     # Capitalized-word selection must not mistake the same lowercase word for
     # deletion. This synthetic case is not evidence of run14's unknown token diff.
@@ -152,9 +181,7 @@ def test_author_aggregate_capacity_fails_after_two_calls_before_render(monkeypat
     english_shorter = "Trusted PPT exports with dependable evidence"
     english = candidate.replace(title, english_title)
     english_corrected = english.replace(english_title, english_shorter)
-    result, _kwargs_seen = _run(exercise(english, english_corrected))
-    assert result == english_corrected
-    assert calls == [1, 2]
+    assert author_deck_mod.title_capacity_recovery_boundary(english, english_corrected, qids) == ()
 
     # Every class is enumerated from the same occurrences used by the guard;
     # multi-word qualifier spelling is retained rather than rendered as 'upto'.
@@ -162,21 +189,28 @@ def test_author_aggregate_capacity_fails_after_two_calls_before_render(monkeypat
     qualified_shorter = "PPT may gain up to 20% only without quality loss"
     qualified = candidate.replace(title, qualified_title)
     qualified_corrected = qualified.replace(qualified_title, qualified_shorter)
-    result, kwargs_seen = _run(exercise(qualified, qualified_corrected))
-    assert result == qualified_corrected and calls == [1, 2]
+    assert author_deck_mod.title_capacity_recovery_boundary(qualified, qualified_corrected, qids) == ()
+    qualified_hint = author_deck_mod.title_capacity_recovery_hint(
+        aggregate_owner_capacity_violations(qualified, capacity), qids,
+        rejected_html=qualified, capacity=capacity,
+    )
     for expected in ("named_word [PPT x1]", "number_unit [20% x1]", "english_qualifier [may x1, only x1, up to x1, without x1]"):
-        assert expected in kwargs_seen[1]["correction_hint"]
-    result, _kwargs_seen = _run(exercise(qualified, qualified_corrected.replace("only ", "")))
-    assert result.code == "authored_title_recovery_boundary_exhausted" and calls == [1, 2]
-    assert result.title_token_diagnostic["differenceCount"] == 1
-    assert result.title_token_diagnostic["differences"][0]["tokenClass"] == "english_qualifier"
-    result, kwargs_seen = _run(exercise(
-        candidate.replace(title, english_title + " Review review"),
-        english_corrected.replace(english_shorter, english_shorter + " Review review"),
-        capacity=SlideCapacity(2, "PILLARS", 80, 90, 200, 0, 10),
-    ))
-    assert isinstance(result, str) and calls == [1, 2]
-    assert "Review x2" in kwargs_seen[1]["correction_hint"]
+        assert expected in qualified_hint
+    unsafe_qualified = qualified_corrected.replace("only ", "")
+    assert author_deck_mod.title_capacity_recovery_boundary(
+        qualified, unsafe_qualified, qids,
+    ) == ("title_protected_token_change",)
+    qualifier_diagnostic = author_deck_mod.title_capacity_recovery_diagnostic(
+        qualified, unsafe_qualified, qids,
+    )
+    assert qualifier_diagnostic["differenceCount"] == 1
+    assert qualifier_diagnostic["differences"][0]["tokenClass"] == "english_qualifier"
+    repeated = candidate.replace(title, english_title + " Review review")
+    repeated_hint = author_deck_mod.title_capacity_recovery_hint(
+        aggregate_owner_capacity_violations(repeated, SlideCapacity(2, "PILLARS", 80, 90, 200, 0, 10)),
+        qids, rejected_html=repeated, capacity=SlideCapacity(2, "PILLARS", 80, 90, 200, 0, 10),
+    )
+    assert "Review x2" in repeated_hint
 
     token_error = None
     for label, changed in {
@@ -193,12 +227,16 @@ def test_author_aggregate_capacity_fails_after_two_calls_before_render(monkeypat
         "geometry": replacement.replace("left:48px", "left:40px"),
         "body": replacement.replace("고객 이름은 원문에만 존재합니다.", "본문 변경"),
     }.items():
-        result, _kwargs_seen = _run(exercise(candidate, changed))
-        assert isinstance(result, author_deck_mod.AuthoredProviderBudgetExhausted), label
-        assert result.code == "authored_title_recovery_boundary_exhausted", label
-        assert calls == [1, 2], label
+        boundary = author_deck_mod.title_capacity_recovery_boundary(candidate, changed, qids)
+        assert boundary, label
         if label == "subject":
-            token_error = result
+            token_error = author_deck_mod.AuthoredProviderBudgetExhausted(
+                "authored_title_recovery_boundary_exhausted", ",".join(boundary),
+                rejected_html=changed,
+                title_token_diagnostic=author_deck_mod.title_capacity_recovery_diagnostic(
+                    candidate, changed, qids,
+                ),
+            )
 
     safe_tokens = authored_pipeline_mod._author_stage_failure(2, token_error).as_safe_dict()
     diagnostic = safe_tokens["title_token_diagnostic"]
@@ -222,10 +260,12 @@ def test_author_aggregate_capacity_fails_after_two_calls_before_render(monkeypat
         '<p data-qid="content.supporting" data-semantic-role="supporting">' + "Support " * 7 + "Notes.</p>"
         '</body></html>'
     )
-    result, kwargs_seen = _run(exercise(joint_candidate, joint_candidate, capacity=SlideCapacity(2, "PILLARS", 58, 290, 380, 0, 32)))
-    assert isinstance(result, author_deck_mod.AuthoredAggregateOwnerCapacityExhausted)
-    assert calls == [1, 2]
-    hint = kwargs_seen[1]["correction_hint"]
+    joint_capacity = SlideCapacity(2, "PILLARS", 58, 290, 380, 0, 32)
+    joint_qids = author_deck_mod.title_capacity_recovery_qids(joint_candidate)
+    hint = author_deck_mod.title_capacity_recovery_hint(
+        aggregate_owner_capacity_violations(joint_candidate, joint_capacity), joint_qids,
+        rejected_html=joint_candidate, capacity=joint_capacity,
+    )
     for expected in (
         "jointTitleBudget=48", "fixedTitleChars=0", "nonTitleVisibleChars=332",
         "availableEligibleChars=48", "requiredReduction=31",
@@ -234,24 +274,40 @@ def test_author_aggregate_capacity_fails_after_two_calls_before_render(monkeypat
     ):
         assert expected in hint
     fixed = joint_candidate.replace('data-qid="brand.title"', 'data-text-fixed="true" data-qid="brand.title"')
-    result, kwargs_seen = _run(exercise(fixed, fixed, capacity=SlideCapacity(2, "PILLARS", 58, 290, 380, 0, 32)))
-    hint = kwargs_seen[1]["correction_hint"]
+    fixed_qids = author_deck_mod.title_capacity_recovery_qids(fixed)
+    hint = author_deck_mod.title_capacity_recovery_hint(
+        aggregate_owner_capacity_violations(fixed, joint_capacity), fixed_qids,
+        rejected_html=fixed, capacity=joint_capacity,
+    )
     assert "fixedTitleChars=15" in hint and "availableEligibleChars=33" in hint
     assert "requiredReduction=31" in hint and "brand.title: currentChars" not in hint
 
     for marker in ('data-source-block-id="source.1"', 'data-text-fixed="true"'):
         protected = candidate.replace('data-qid="customer.alice.title"', f'{marker} data-qid="customer.alice.title"')
-        result, kwargs_seen = _run(exercise(protected, protected.replace(title, shorter)))
-        assert result.code == "authored_title_recovery_boundary_exhausted"
-        assert "customer.alice.title" not in kwargs_seen[1]["correction_hint"]
-        assert calls == [1, 2]
-    result, _kwargs_seen = _run(exercise(candidate, replacement, instructions="제목 원문 그대로 유지"))
-    assert result.code == "authored_title_recovery_boundary_exhausted"
+        protected_qids = author_deck_mod.title_capacity_recovery_qids(protected)
+        assert "customer.alice.title" not in protected_qids
+        protected_hint = author_deck_mod.title_capacity_recovery_hint(
+            aggregate_owner_capacity_violations(protected, capacity), protected_qids,
+            rejected_html=protected, capacity=capacity,
+        )
+        assert "customer.alice.title" not in protected_hint
+    assert author_deck_mod.title_capacity_recovery_qids(
+        candidate, instructions="제목 원문 그대로 유지",
+    ) == ()
 
-    result, _kwargs_seen = _run(exercise(candidate, candidate, provider_attempt_offset=1))
-    assert isinstance(result, author_deck_mod.AuthoredAggregateOwnerCapacityExhausted)
+    calls.clear()
+    async def resumed_title_author(*args, **kwargs):
+        calls.append(kwargs["receipt_attempt_ordinal"])
+        return candidate
+    monkeypatch.setattr(author_deck_mod, "author_slide_html", resumed_title_author)
+    with pytest.raises(author_deck_mod.AuthoredTitleCapacityUnresolvable) as resumed:
+        _run(author_deck_mod._author_one_resilient(
+            "content", "design", _brand(), "PILLARS", 2, 5, (),
+            raise_on_failure=True, capacity=capacity,
+            allow_title_capacity_recovery=True, provider_attempt_offset=1,
+        ))
     assert calls == [2]  # A resumed second ordinal never receives a third call.
-    stage_error = authored_pipeline_mod._author_stage_failure(2, result, provider_attempt_count=2)
+    stage_error = authored_pipeline_mod._author_stage_failure(2, resumed.value, provider_attempt_count=2)
     safe = stage_error.as_safe_dict()
     evidence = safe["owner_capacity_diagnostic"]
     assert safe["retryable"] is False and safe["provider_attempt_count"] == 2

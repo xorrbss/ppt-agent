@@ -1119,45 +1119,65 @@ async def stream_generate_events(
     inactivity_timeout_seconds: Optional[float] = None,
     **kwargs: Any,
 ) -> AsyncGenerator[Any, None]:
-    """Admit exactly one provider stream before its first network byte."""
+    """Admit a bounded provider stream, retrying only before its first event."""
 
-    timer = ProviderCallTimer()
-    completion: object | None = None
     provider = _provider_receipt_identity()
     model = str(kwargs.get("model") or "unknown")
-    entered_provider_boundary = False
-    outcome = "succeeded"
-    try:
-        async with provider_call_admission(
-            semantic_slot="stream.primary",
-            provider=provider,
-            model=model,
-            provider_idempotency_capable=supports_provider_idempotency(
-                client, provider_id=provider
-            ),
-        ):
-            entered_provider_boundary = True
-            async for event in _stream_generate_events_unadmitted(
-                client,
-                disconnect_checker=disconnect_checker,
-                inactivity_timeout_seconds=inactivity_timeout_seconds,
-                **kwargs,
-            ):
-                if isinstance(event, ResponseStreamCompletionChunk):
-                    completion = event
-                    continue
-                yield event
-    except BaseException as error:
-        outcome = "cancelled" if isinstance(error, asyncio.CancelledError) else "failed"
-        raise
-    finally:
-        if entered_provider_boundary:
-            await record_provider_call(
+    for attempt in range(1, TRANSIENT_LLM_MAX_ATTEMPTS + 1):
+        timer = ProviderCallTimer()
+        completion: object | None = None
+        entered_provider_boundary = False
+        emitted_event = False
+        outcome = "succeeded"
+        retry_transient = False
+        try:
+            async with provider_call_admission(
+                is_retry=attempt > 1,
+                semantic_slot=f"stream.primary.attempt-{attempt}",
                 provider=provider,
                 model=model,
-                response=completion,
-                latency_ms=timer.elapsed_ms,
-                outcome=outcome,
+                provider_idempotency_capable=supports_provider_idempotency(
+                    client, provider_id=provider
+                ),
+            ):
+                entered_provider_boundary = True
+                async for event in _stream_generate_events_unadmitted(
+                    client,
+                    disconnect_checker=disconnect_checker,
+                    inactivity_timeout_seconds=inactivity_timeout_seconds,
+                    **kwargs,
+                ):
+                    if isinstance(event, ResponseStreamCompletionChunk):
+                        completion = event
+                        continue
+                    emitted_event = True
+                    yield event
+        except BaseException as error:
+            outcome = (
+                "cancelled"
+                if isinstance(error, asyncio.CancelledError)
+                else "failed"
             )
-    if completion is not None:
-        yield completion
+            retry_transient = bool(
+                not emitted_event
+                and attempt < TRANSIENT_LLM_MAX_ATTEMPTS
+                and _exception_status_code(error) in TRANSIENT_LLM_STATUS_CODES
+            )
+            if not retry_transient:
+                raise
+        finally:
+            if entered_provider_boundary:
+                await record_provider_call(
+                    provider=provider,
+                    model=model,
+                    response=completion,
+                    latency_ms=timer.elapsed_ms,
+                    retry_class="retry" if attempt > 1 else "initial",
+                    outcome=outcome,
+                )
+        if retry_transient:
+            await asyncio.sleep(0.5 * attempt)
+            continue
+        if completion is not None:
+            yield completion
+        return

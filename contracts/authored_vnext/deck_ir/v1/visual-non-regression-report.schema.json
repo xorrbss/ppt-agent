@@ -1,0 +1,198 @@
+{
+  "$id": "urn:presenton:authored-vnext:deck-ir:visual-non-regression-report.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "absoluteOverallMeanLowerBound": {
+      "title": "Absoluteoverallmeanlowerbound",
+      "type": "number"
+    },
+    "absoluteQualityStatus": {
+      "enum": [
+        "passed",
+        "failed",
+        "evaluation-invalid"
+      ],
+      "title": "Absolutequalitystatus",
+      "type": "string"
+    },
+    "absoluteRequiredDimensionMinimumLowerBound": {
+      "title": "Absoluterequireddimensionminimumlowerbound",
+      "type": "number"
+    },
+    "absoluteWorstDecileMeanLowerBound": {
+      "title": "Absoluteworstdecilemeanlowerbound",
+      "type": "number"
+    },
+    "baselineRcDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Baselinercdigest",
+      "type": "string"
+    },
+    "blindAssignmentDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Blindassignmentdigest",
+      "type": "string"
+    },
+    "candidatePreferredOrTiedRatio": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Candidatepreferredortiedratio",
+      "type": "number"
+    },
+    "candidateRcDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Candidatercdigest",
+      "type": "string"
+    },
+    "compositionEntropyDelta": {
+      "title": "Compositionentropydelta",
+      "type": "number"
+    },
+    "consecutiveRepeatRateDelta": {
+      "title": "Consecutiverepeatratedelta",
+      "type": "number"
+    },
+    "corpusDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Corpusdigest",
+      "type": "string"
+    },
+    "evaluationPolicyDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Evaluationpolicydigest",
+      "type": "string"
+    },
+    "evaluationValidity": {
+      "enum": [
+        "valid",
+        "invalid"
+      ],
+      "title": "Evaluationvalidity",
+      "type": "string"
+    },
+    "failedStrata": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Failedstrata",
+      "type": "array"
+    },
+    "minimumMarginalStratumPairCount": {
+      "minimum": 0,
+      "title": "Minimummarginalstratumpaircount",
+      "type": "integer"
+    },
+    "nonInferiorityLowerBound": {
+      "title": "Noninferioritylowerbound",
+      "type": "number"
+    },
+    "nonInferiorityStatus": {
+      "enum": [
+        "passed",
+        "failed",
+        "evaluation-invalid"
+      ],
+      "title": "Noninferioritystatus",
+      "type": "string"
+    },
+    "overallPairCount": {
+      "minimum": 0,
+      "title": "Overallpaircount",
+      "type": "integer"
+    },
+    "p0Count": {
+      "minimum": 0,
+      "title": "P0Count",
+      "type": "integer"
+    },
+    "p1Count": {
+      "minimum": 0,
+      "title": "P1Count",
+      "type": "integer"
+    },
+    "reportDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Reportdigest",
+      "type": "string"
+    },
+    "requiredCoverageRatio": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Requiredcoverageratio",
+      "type": "number"
+    },
+    "reviewerAgreement": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Revieweragreement",
+      "type": "number"
+    },
+    "reviewerReceiptDigests": {
+      "items": {
+        "pattern": "^sha256:[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "minItems": 3,
+      "title": "Reviewerreceiptdigests",
+      "type": "array"
+    },
+    "schemaVersion": {
+      "const": "visual-non-regression-report/v1",
+      "title": "Schemaversion",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "passed",
+        "failed",
+        "evaluation-invalid"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "strata": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Strata",
+      "type": "array"
+    },
+    "worstDecileRatingDelta": {
+      "title": "Worstdecileratingdelta",
+      "type": "number"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "baselineRcDigest",
+    "candidateRcDigest",
+    "corpusDigest",
+    "evaluationPolicyDigest",
+    "strata",
+    "blindAssignmentDigest",
+    "reviewerReceiptDigests",
+    "evaluationValidity",
+    "overallPairCount",
+    "minimumMarginalStratumPairCount",
+    "reviewerAgreement",
+    "requiredCoverageRatio",
+    "p0Count",
+    "p1Count",
+    "absoluteOverallMeanLowerBound",
+    "absoluteRequiredDimensionMinimumLowerBound",
+    "absoluteWorstDecileMeanLowerBound",
+    "candidatePreferredOrTiedRatio",
+    "nonInferiorityLowerBound",
+    "worstDecileRatingDelta",
+    "compositionEntropyDelta",
+    "consecutiveRepeatRateDelta",
+    "absoluteQualityStatus",
+    "nonInferiorityStatus",
+    "status",
+    "reportDigest"
+  ],
+  "title": "VisualNonRegressionReportV1",
+  "type": "object"
+}

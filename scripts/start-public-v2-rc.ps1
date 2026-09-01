@@ -2,6 +2,11 @@
 param(
     [ValidateSet("generation-export", "export-only")]
     [string]$Mode = "generation-export",
+    [ValidateRange(1024, 65535)]
+    [int]$ApiPort = 8010,
+    # Isolated API/worker acceptance without a second Next dev lock or proxy.
+    # Existing frontend listeners are neither reused nor stopped.
+    [switch]$ApiOnly,
     # Pre-existing operator-owned migration/runtime authorities. This launcher
     # never creates or changes external login roles.
     [string]$DatabaseUrl = $env:PUBLIC_V2_RC_DATABASE_URL,
@@ -15,7 +20,11 @@ param(
     [string]$ExistingPresentationId,
     [int]$ExistingSourceRevision = -1,
     [string]$ExportSnapshotPath,
-    [switch]$KeepStack
+    [switch]$KeepStack,
+    # Manual testing keeps one local database and never launches pytest.
+    [switch]$Serve,
+    [string]$PersistentRoot,
+    [string]$AppDataDirectory
 )
 
 Set-StrictMode -Version Latest
@@ -152,22 +161,57 @@ function Find-FreeLoopbackPort {
     throw "public-v2 RC preflight blocked: no owned PostgreSQL port is available"
 }
 
+function Wait-PostgresReady([string]$BinDirectory, [int]$Port) {
+    $probe = Join-Path $BinDirectory 'pg_isready.exe'
+    if (-not (Test-Path -LiteralPath $probe -PathType Leaf)) {
+        throw 'PostgreSQL readiness probe is unavailable.'
+    }
+    # PostgreSQL opens its socket before crash recovery completes. A listener
+    # alone is insufficient for running migrations or starting API workers.
+    $deadline = [DateTime]::UtcNow.AddSeconds(60)
+    while ([DateTime]::UtcNow -lt $deadline) {
+        & $probe -h 127.0.0.1 -p $Port -U presenton_rc -d postgres -t 2 -q
+        if ($LASTEXITCODE -eq 0) { return }
+        Start-Sleep -Milliseconds 500
+    }
+    throw 'PostgreSQL did not become ready to accept connections.'
+}
+
 function Start-OwnedPostgres {
     param(
         [Parameter(Mandatory = $true)][string]$DataDirectory,
         [Parameter(Mandatory = $true)][string]$LogPath,
         [Parameter(Mandatory = $true)][string]$PasswordFile,
-        [Parameter(Mandatory = $true)][string]$Password
+        [Parameter(Mandatory = $true)][string]$Password,
+        [switch]$Reuse,
+        [int]$FixedPort = 21000
     )
     $bin = "C:\Program Files\PostgreSQL\15\bin"
     $initdb = Join-Path $bin "initdb.exe"; $pgCtl = Join-Path $bin "pg_ctl.exe"; $postgres = Join-Path $bin "postgres.exe"
     if (-not (Test-Path -LiteralPath $initdb -PathType Leaf) -or -not (Test-Path -LiteralPath $pgCtl -PathType Leaf) -or -not (Test-Path -LiteralPath $postgres -PathType Leaf)) {
         throw "public-v2 RC preflight blocked: PostgreSQL 15 initdb/pg_ctl are unavailable"
     }
-    $port = Find-FreeLoopbackPort
-    [System.IO.File]::WriteAllText($PasswordFile, $Password, [System.Text.UTF8Encoding]::new($false))
-    & $initdb -D $DataDirectory -U presenton_rc --auth=scram-sha-256 --pwfile=$PasswordFile --encoding=UTF8 --no-locale | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "public-v2 RC owned PostgreSQL initdb failed" }
+    $port = if ($Reuse) { $FixedPort } else { Find-FreeLoopbackPort }
+    if ($Reuse) {
+        $existing = Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($null -ne $existing) {
+            $owner = Get-CimInstance Win32_Process -Filter "ProcessId=$($existing.OwningProcess)"
+            if ($owner.Name -ne 'postgres.exe' -or $owner.CommandLine.Replace('\', '/') -notlike "*$($DataDirectory.Replace('\', '/'))*") {
+                throw "Persistent PostgreSQL port $port is owned by a different process."
+            }
+            Wait-PostgresReady $bin $port
+            return @{ Port = $port; PgCtl = $pgCtl; DataDirectory = $DataDirectory; ProcessId = [int]$existing.OwningProcess }
+        }
+    }
+    if (-not ($Reuse -and (Test-Path -LiteralPath (Join-Path $DataDirectory 'PG_VERSION')))) {
+        [System.IO.File]::WriteAllText($PasswordFile, $Password, [System.Text.UTF8Encoding]::new($false))
+        try {
+            & $initdb -D $DataDirectory -U presenton_rc --auth=scram-sha-256 --pwfile=$PasswordFile --encoding=UTF8 --no-locale | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "public-v2 RC owned PostgreSQL initdb failed" }
+        } finally {
+            if ($Reuse) { Remove-Item -LiteralPath $PasswordFile -ErrorAction SilentlyContinue }
+        }
+    }
     # Start postgres directly. pg_ctl's Windows daemon child can retain its
     # console/pipeline handle and prevent the launcher from progressing after
     # readiness; direct ownership gives this launcher an auditable root PID.
@@ -192,6 +236,11 @@ function Start-OwnedPostgres {
         [void](Start-Process -FilePath $pgCtl -ArgumentList @("-D", $DataDirectory, "-w", "-t", "30", "stop", "-m", "fast") -PassThru -Wait -WindowStyle Hidden)
         throw "public-v2 RC owned PostgreSQL process ownership proof failed"
     }
+    try { Wait-PostgresReady $bin $port }
+    catch {
+        [void](Start-Process -FilePath $pgCtl -ArgumentList @('-D', $DataDirectory, '-w', '-t', '30', 'stop', '-m', 'fast') -PassThru -Wait -WindowStyle Hidden)
+        throw
+    }
     return @{ Port = $port; PgCtl = $pgCtl; DataDirectory = $DataDirectory; ProcessId = [int]$listener.OwningProcess }
 }
 
@@ -206,11 +255,30 @@ $workerRuntimeLimits = Resolve-WorkerRuntimeLimits @{
     "PUBLIC_WORKER_ARTIFACT_CACHE_TTL_SECONDS" = [Environment]::GetEnvironmentVariable("PUBLIC_WORKER_ARTIFACT_CACHE_TTL_SECONDS")
     "PPT_WORKER_OUTPUT_LIMIT_BYTES" = [Environment]::GetEnvironmentVariable("PPT_WORKER_OUTPUT_LIMIT_BYTES")
 }
+$computerSystem = Get-CimInstance Win32_ComputerSystem
+$operatingSystem = Get-CimInstance Win32_OperatingSystem
+$logicalDisk = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$($env:SystemDrive)'"
+$processorLoad = @(Get-CimInstance Win32_Processor | Where-Object { $null -ne $_.LoadPercentage } | ForEach-Object { [int]$_.LoadPercentage })
+$physicalMemoryBytes = [System.Numerics.BigInteger]$computerSystem.TotalPhysicalMemory
+$availableMemoryBytes = [System.Numerics.BigInteger]$operatingSystem.FreePhysicalMemory * 1024
+$systemVolumeFreeBytes = [System.Numerics.BigInteger]$logicalDisk.FreeSpace
+$systemVolumeSizeBytes = [System.Numerics.BigInteger]$logicalDisk.Size
+$systemVolumeFreePercent = if ($systemVolumeSizeBytes -gt 0) { [int](100 * $systemVolumeFreeBytes / $systemVolumeSizeBytes) } else { 0 }
+$cpuPercent = if ($processorLoad.Count -gt 0) { [int](($processorLoad | Measure-Object -Average).Average) } else { 0 }
 $externalDatabaseValues = @($DatabaseUrl, $ApiDatabaseUrl, $ControllerDatabaseUrl, $ObservationDatabaseUrl)
 $externalDatabaseValueCount = @($externalDatabaseValues | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count
 if ($UseOwnedPostgres -and $externalDatabaseValueCount -gt 0) { throw "public-v2 RC preflight blocked: owned PostgreSQL cannot be combined with external database URLs" }
 if ($externalDatabaseValueCount -notin 0, 4) { throw "public-v2 RC preflight blocked: migration, API, controller, and observation database URLs are required together" }
 $usingOwnedPostgres = $UseOwnedPostgres -or $externalDatabaseValueCount -eq 0
+if ($Serve -and (-not $usingOwnedPostgres -or $Mode -ne 'generation-export')) {
+    throw 'Manual serving requires the owned local PostgreSQL generation-export profile.'
+}
+if ($PersistentRoot -and -not $Serve) { throw 'PersistentRoot requires -Serve.' }
+if ($AppDataDirectory -and -not $Serve) { throw 'AppDataDirectory requires -Serve.' }
+$workstationProfileEnabled = -not $usingOwnedPostgres
+if ($workstationProfileEnabled -and $physicalMemoryBytes -lt ([System.Numerics.BigInteger]120 * 1024 * 1024 * 1024)) {
+    throw "public-v2 RC preflight blocked: workstation-128g/v1 requires at least 120 GiB reported physical memory"
+}
 $migrationDatabaseUrl = $null; $databaseUrl = $null; $observationDatabaseUrl = $null
 if (-not $usingOwnedPostgres) {
     $migrationDatabaseUrl = Require-PostgresUrl "PUBLIC_V2_RC_DATABASE_URL" $DatabaseUrl "asyncpg"
@@ -269,12 +337,61 @@ if ($Mode -eq "export-only") {
         if (-not (Test-Path -LiteralPath $ExportSnapshotPath -PathType Leaf)) { throw "public-v2 RC preflight blocked: export snapshot is unavailable" }
     }
 }
-foreach ($port in 8010, 3010, 5110) { Assert-PortFree $port }
+if ($ApiOnly -and $Serve) { throw "public-v2 RC ApiOnly is for bounded product-path runs, not Serve" }
+$testBaseUrl = if ($ApiOnly) { "http://127.0.0.1:$ApiPort" } else { "http://127.0.0.1:5110" }
+$requiredPorts = if ($ApiOnly) { @($ApiPort) } else { @($ApiPort, 3010, 5110) }
+foreach ($port in $requiredPorts) { Assert-PortFree $port }
 
 $runId = "public-v2-rc-$PID-$(Get-Date -Format 'yyyyMMddHHmmss')"
 $runtimeRoot = Join-Path ([System.IO.Path]::GetTempPath()) $runId
+if ($Serve) {
+    $runtimeRoot = if ($PersistentRoot) { [System.IO.Path]::GetFullPath($PersistentRoot, $repo) } else { Join-Path $repo 'app_data\public-v2-local' }
+    $runId = 'public-v2-local'
+    if (Test-Path -LiteralPath (Join-Path $runtimeRoot 'migration.lock')) {
+        throw 'Full data migration is in progress. Finish the cutover before starting the manual server.'
+    }
+}
 $appData = Join-Path $runtimeRoot "app-data"; $logs = Join-Path $runtimeRoot "logs"; $staging = Join-Path $runtimeRoot "trusted-staging"; $productEvidence = Join-Path $runtimeRoot "product-evidence"
+$userConfigPath = Join-Path $appData 'userConfig.json'
+if ($Serve -and $AppDataDirectory) {
+    # Data migration may retain the original file root to preserve immutable
+    # paths/digests. Credentials remain in the protected persistent runtime.
+    $appData = [System.IO.Path]::GetFullPath($AppDataDirectory, $repo)
+    if (-not (Test-Path -LiteralPath $appData -PathType Container)) { throw 'Existing app data directory is unavailable.' }
+}
+if ($Serve) { $logs = Join-Path $runtimeRoot "logs\session-$PID" }
 New-Item -ItemType Directory -Force -Path $appData, $logs, $staging, $productEvidence | Out-Null
+if ($Serve) {
+    # Restrict persisted credentials and database files to this Windows user.
+    $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+    & icacls.exe $runtimeRoot /inheritance:r /grant:r "${identity}:(OI)(CI)F" 'SYSTEM:(OI)(CI)F' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to protect persistent local runtime directory.' }
+    $secretsPath = Join-Path $runtimeRoot 'secrets.dpapi.xml'
+    if (Test-Path -LiteralPath $secretsPath) {
+        $persistentSecrets = Import-Clixml -LiteralPath $secretsPath
+    } else {
+        $persistentSecrets = @{}
+        foreach ($name in @('database', 'api', 'controller', 'download')) {
+            $bytes = New-Object byte[] 32
+            [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+            $plain = [Convert]::ToHexString($bytes).ToLowerInvariant()
+            if ($name -eq 'database' -and (Test-Path -LiteralPath (Join-Path $runtimeRoot 'postgres.password'))) {
+                $plain = [System.IO.File]::ReadAllText((Join-Path $runtimeRoot 'postgres.password')).Trim()
+            }
+            $persistentSecrets[$name] = ConvertTo-SecureString $plain -AsPlainText -Force
+        }
+        if ((Test-Path -LiteralPath (Join-Path $runtimeRoot 'postgres-data\PG_VERSION')) -and -not (Test-Path -LiteralPath (Join-Path $runtimeRoot 'postgres.password'))) {
+            throw 'Existing PostgreSQL requires its retained bootstrap credentials; refusing to replace them.'
+        }
+        $persistentSecrets | Export-Clixml -LiteralPath $secretsPath
+    }
+    function Read-PersistentSecret([string]$Name) {
+        return [System.Net.NetworkCredential]::new('', $persistentSecrets[$Name]).Password
+    }
+    if ($ProviderConfigPath -and -not (Test-Path -LiteralPath $userConfigPath)) {
+        Copy-Item -LiteralPath $ProviderConfigPath -Destination $userConfigPath
+    }
+}
 if ($artifactBackend -eq "local-development" -and [string]::IsNullOrWhiteSpace($ArtifactRoot)) {
     $ArtifactRoot = Join-Path $runtimeRoot "local-artifact-authority"
 }
@@ -286,7 +403,8 @@ $ownedControllerDatabasePassword = $null
 if ($usingOwnedPostgres) {
     $databasePasswordBytes = New-Object byte[] 24; [System.Security.Cryptography.RandomNumberGenerator]::Fill($databasePasswordBytes)
     $databasePassword = [Convert]::ToHexString($databasePasswordBytes).ToLowerInvariant()
-    $ownedPostgres = Start-OwnedPostgres -DataDirectory (Join-Path $runtimeRoot "postgres-data") -LogPath (Join-Path $logs "postgres.log") -PasswordFile (Join-Path $runtimeRoot "postgres.password") -Password $databasePassword
+    if ($Serve) { $databasePassword = Read-PersistentSecret 'database' }
+    $ownedPostgres = Start-OwnedPostgres -DataDirectory (Join-Path $runtimeRoot "postgres-data") -LogPath (Join-Path $logs "postgres.log") -PasswordFile (Join-Path $runtimeRoot "postgres.password") -Password $databasePassword -Reuse:$Serve
     $migrationDatabaseUrl = "postgresql+asyncpg://presenton_rc:${databasePassword}@127.0.0.1:$($ownedPostgres.Port)/postgres"
     $databaseUrl = $migrationDatabaseUrl
     $observationDatabaseUrl = "postgresql+psycopg://presenton_rc:${databasePassword}@127.0.0.1:$($ownedPostgres.Port)/postgres"
@@ -294,24 +412,30 @@ if ($usingOwnedPostgres) {
     $controllerPasswordBytes = New-Object byte[] 24; [System.Security.Cryptography.RandomNumberGenerator]::Fill($controllerPasswordBytes)
     $ownedApiDatabasePassword = [Convert]::ToHexString($apiPasswordBytes).ToLowerInvariant()
     $ownedControllerDatabasePassword = [Convert]::ToHexString($controllerPasswordBytes).ToLowerInvariant()
+    if ($Serve) {
+        $ownedApiDatabasePassword = Read-PersistentSecret 'api'
+        $ownedControllerDatabasePassword = Read-PersistentSecret 'controller'
+    }
 }
 $capabilityBytes = New-Object byte[] 32; [System.Security.Cryptography.RandomNumberGenerator]::Fill($capabilityBytes)
-$capabilityFile = Join-Path $runtimeRoot "worker-capability.key"; [System.IO.File]::WriteAllBytes($capabilityFile, $capabilityBytes)
+$capabilityFile = Join-Path $runtimeRoot "worker-capability.key"
+if (-not ($Serve -and (Test-Path -LiteralPath $capabilityFile))) { [System.IO.File]::WriteAllBytes($capabilityFile, $capabilityBytes) }
 $localDownloadSigningKeyBytes = New-Object byte[] 32; [System.Security.Cryptography.RandomNumberGenerator]::Fill($localDownloadSigningKeyBytes)
 $localDownloadSigningKey = [Convert]::ToHexString($localDownloadSigningKeyBytes).ToLowerInvariant()
+if ($Serve) { $localDownloadSigningKey = Read-PersistentSecret 'download' }
 $renderWorkerCommand = @($python, "-m", "workers.public_render_worker") | ConvertTo-Json -Compress
 $exportWorkerCommand = @($python, "-m", "workers.public_export_worker") | ConvertTo-Json -Compress
 
 $sharedEnvironment = @{
-    "DATABASE_URL" = $databaseUrl; "APP_DATA_DIRECTORY" = $appData; "USER_CONFIG_PATH" = (Join-Path $appData "userConfig.json")
+    "DATABASE_URL" = $databaseUrl; "APP_DATA_DIRECTORY" = $appData; "USER_CONFIG_PATH" = $userConfigPath
     "MIGRATE_DATABASE_ON_STARTUP" = "true"; "PUBLIC_V2_INTEGRATION_PROFILE" = "postgresql-strict"; "PUBLIC_ARTIFACT_STORE_BACKEND" = $artifactBackend
     "PUBLIC_TRUSTED_WORKER_SANDBOX_BACKEND" = "windows-local"; "PUBLIC_TRUSTED_WORKER_LOCAL_POLICY" = "development"; "PUBLIC_TRUSTED_WORKER_STAGING_ROOT" = $staging; "PUBLIC_WORKER_NODE_ID" = "$runId-export"
     "PUBLIC_WORKER_CAPABILITY_KEY_FILE" = $capabilityFile; "PUBLIC_RENDER_WORKER_COMMAND_JSON" = $renderWorkerCommand; "PUBLIC_EXPORT_WORKER_COMMAND_JSON" = $exportWorkerCommand
     "PUBLIC_WORKER_ARTIFACT_CACHE_MAX_BYTES" = $workerRuntimeLimits["PUBLIC_WORKER_ARTIFACT_CACHE_MAX_BYTES"]
     "PUBLIC_WORKER_ARTIFACT_CACHE_TTL_SECONDS" = $workerRuntimeLimits["PUBLIC_WORKER_ARTIFACT_CACHE_TTL_SECONDS"]
     "PPT_WORKER_OUTPUT_LIMIT_BYTES" = $workerRuntimeLimits["PPT_WORKER_OUTPUT_LIMIT_BYTES"]
-    "PUBLIC_EXPORT_IDENTITY_V2_ENABLED" = "true"; "PUBLIC_RENDER_MAX_CONCURRENCY" = "2"
-    "PUBLIC_V2_WINDOWS_PRODUCT_E2E" = "1"; "PUBLIC_V2_WINDOWS_PRODUCT_E2E_BASE_URL" = "http://127.0.0.1:5110"; "PUBLIC_V2_WINDOWS_PRODUCT_E2E_DATABASE_URL" = $observationDatabaseUrl
+    "PUBLIC_EXPORT_IDENTITY_V2_ENABLED" = "true"; "PUBLIC_RENDER_MAX_CONCURRENCY" = "4"
+    "PUBLIC_V2_WINDOWS_PRODUCT_E2E" = "1"; "PUBLIC_V2_WINDOWS_PRODUCT_E2E_BASE_URL" = $testBaseUrl; "PUBLIC_V2_WINDOWS_PRODUCT_E2E_DATABASE_URL" = $observationDatabaseUrl
     "PUBLIC_V2_WINDOWS_PRODUCT_E2E_USERNAME" = "rc-admin"; "PUBLIC_V2_WINDOWS_PRODUCT_E2E_PASSWORD" = $authPassword; "PUBLIC_V2_WINDOWS_PRODUCT_E2E_TIMEOUT_SECONDS" = "900"
     "PUBLIC_V2_WINDOWS_PRODUCT_E2E_ARTIFACT_DIR" = $productEvidence
     "AUTH_USERNAME" = "rc-admin"; "AUTH_PASSWORD" = $authPassword; "AUTH_OVERRIDE_FROM_ENV" = "true"
@@ -319,6 +443,44 @@ $sharedEnvironment = @{
     # Bootstrap/migrate before the DB-backed provider sync. The generation
     # controller below overrides this and performs the actual provider check.
     "PRESENTON_SKIP_PROVIDER_AVAILABILITY_CHECK" = "true"
+}
+# Deck IR remains explicit and process-wide.  Propagate only the production
+if ($Serve) {
+    foreach ($key in @($sharedEnvironment.Keys | Where-Object { $_ -like 'PUBLIC_V2_WINDOWS_PRODUCT_E2E*' })) { $sharedEnvironment.Remove($key) }
+    $sharedEnvironment['AUTH_USERNAME'] = ''
+    $sharedEnvironment['AUTH_PASSWORD'] = ''
+    $sharedEnvironment['AUTH_OVERRIDE_FROM_ENV'] = 'false'
+    $sharedEnvironment['RESET_AUTH'] = 'false'
+    $sharedEnvironment['CAN_CHANGE_KEYS'] = 'true'
+}
+# feature gate and the live-test generation policy; never propagate the
+# development fixture adapter switch into an RC product-path run.
+foreach ($key in @(
+    "DECK_IR_GENERATION_ENABLED",
+    "PUBLIC_V2_WINDOWS_PRODUCT_E2E_GENERATION_QUALITY_POLICY"
+)) {
+    $value = [Environment]::GetEnvironmentVariable($key)
+    if (-not [string]::IsNullOrWhiteSpace($value)) {
+        $sharedEnvironment[$key] = $value
+    }
+}
+if ($workstationProfileEnabled) {
+    $sharedEnvironment["PUBLIC_RUNTIME_PROFILE"] = "workstation-128g/v1"
+    $sharedEnvironment["PUBLIC_RUNTIME_CAPACITY_TIER"] = "verification"
+    $sharedEnvironment["PPT_RUNTIME_PHYSICAL_MEMORY_BYTES"] = "$physicalMemoryBytes"
+    $sharedEnvironment["PPT_RUNTIME_AVAILABLE_MEMORY_BYTES"] = "$availableMemoryBytes"
+    $sharedEnvironment["PPT_RUNTIME_CPU_PERCENT"] = "$cpuPercent"
+    $sharedEnvironment["PPT_RUNTIME_SYSTEM_VOLUME_FREE_PERCENT"] = "$systemVolumeFreePercent"
+    $sharedEnvironment["PPT_RUNTIME_SYSTEM_VOLUME_FREE_BYTES"] = "$systemVolumeFreeBytes"
+    $sharedEnvironment["PUBLIC_EXECUTABLE_GENERATION_SLOTS"] = "4"
+    $sharedEnvironment["PUBLIC_EXECUTABLE_EXPORT_SLOTS"] = "4"
+    $sharedEnvironment["PUBLIC_PROVIDER_GENERATION_CONCURRENCY_CAP"] = "4"
+    $sharedEnvironment["PUBLIC_PROVIDER_EXPORT_CONCURRENCY_CAP"] = "4"
+} else {
+    # Local disposable PostgreSQL is the development proof path. Keep the
+    # workstation release profile opt-in even if the parent shell has it set.
+    $sharedEnvironment["PUBLIC_RUNTIME_PROFILE"] = ""
+    $sharedEnvironment["PUBLIC_RUNTIME_CAPACITY_TIER"] = ""
 }
 if ($null -ne $providerPricing) {
     # Explicitly bind the validated immutable pricing snapshot into every child
@@ -345,7 +507,7 @@ if ($artifactBackend -eq "local-development") {
     $sharedEnvironment["ENVIRONMENT"] = "local"
     $sharedEnvironment["PUBLIC_WORKER_OBJECT_STORE_ROOT"] = $ArtifactRoot
     $sharedEnvironment["PUBLIC_LOCAL_ARTIFACT_DOWNLOAD_SIGNING_KEY"] = $localDownloadSigningKey
-    $sharedEnvironment["PUBLIC_LOCAL_ARTIFACT_DOWNLOAD_ORIGIN"] = "http://127.0.0.1:8010"
+    $sharedEnvironment["PUBLIC_LOCAL_ARTIFACT_DOWNLOAD_ORIGIN"] = "http://127.0.0.1:$ApiPort"
 }
 foreach ($key in @("PUBLIC_ARTIFACT_S3_BUCKET", "PUBLIC_ARTIFACT_S3_PREFIX", "PUBLIC_ARTIFACT_S3_ENDPOINT_URL", "PUBLIC_ARTIFACT_S3_REGION", "PUBLIC_ARTIFACT_S3_ADDRESSING_STYLE", "PUBLIC_ARTIFACT_S3_TLS_VERIFY", "PUBLIC_ARTIFACT_S3_SERVER_SIDE_ENCRYPTION", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_DEFAULT_REGION", "AWS_ENDPOINT_URL")) {
     $value = [Environment]::GetEnvironmentVariable($key)
@@ -375,6 +537,10 @@ try {
         $provision = Start-LoggedProcess -FilePath $python -ArgumentList @("-m", "scripts.provision_public_v2_local_db_roles") -WorkingDirectory $fastApi -Environment $provisionEnvironment -StdoutPath (Join-Path $logs "database-role-provision.stdout.log") -StderrPath (Join-Path $logs "database-role-provision.stderr.log")
         $provision.WaitForExit()
         if ($provision.ExitCode -ne 0) { throw "public-v2 RC database role provisioning failed; see retained evidence logs" }
+        if ($Serve -and (Test-Path -LiteralPath (Join-Path $runtimeRoot 'postgres.password'))) {
+            # Provisioning succeeded using the DPAPI-backed secret.
+            Remove-Item -LiteralPath (Join-Path $runtimeRoot 'postgres.password')
+        }
 
         $databaseUrl = "postgresql+asyncpg://presenton_public_api_login:${ownedApiDatabasePassword}@127.0.0.1:$($ownedPostgres.Port)/postgres"
         $controllerDatabaseUrl = "postgresql+asyncpg://presenton_public_controller_login:${ownedControllerDatabasePassword}@127.0.0.1:$($ownedPostgres.Port)/postgres"
@@ -385,8 +551,8 @@ try {
         $sharedEnvironment["PUBLIC_V2_WINDOWS_PRODUCT_E2E_DATABASE_URL"] = $observationDatabaseUrl
     }
 
-    $api = Start-LoggedProcess -FilePath $python -ArgumentList @("server.py", "--port", "8010", "--reload", "false") -WorkingDirectory $fastApi -Environment $sharedEnvironment -StdoutPath (Join-Path $logs "fastapi.stdout.log") -StderrPath (Join-Path $logs "fastapi.stderr.log")
-    $startedPids.Add($api.Id); Wait-Http200 "http://127.0.0.1:8010/api/v1/auth/status" $startedPids.ToArray() 8010
+    $api = Start-LoggedProcess -FilePath $python -ArgumentList @("server.py", "--port", "$ApiPort", "--reload", "false") -WorkingDirectory $fastApi -Environment $sharedEnvironment -StdoutPath (Join-Path $logs "fastapi.stdout.log") -StderrPath (Join-Path $logs "fastapi.stderr.log")
+    $startedPids.Add($api.Id); Wait-Http200 "http://127.0.0.1:$ApiPort/api/v1/auth/status" $startedPids.ToArray() $ApiPort
 
     if ($ProviderConfigPath) {
         $syncEnvironment = $sharedEnvironment.Clone(); $syncEnvironment["USER_CONFIG_PATH"] = $ProviderConfigPath
@@ -428,18 +594,38 @@ try {
         $generation = Start-LoggedProcess -FilePath $python -ArgumentList @("-m", "services.workspace_operation_worker") -WorkingDirectory $fastApi -Environment $generationEnvironment -StdoutPath (Join-Path $logs "generation-controller.stdout.log") -StderrPath (Join-Path $logs "generation-controller.stderr.log")
         $startedPids.Add($generation.Id)
     }
+    if (-not $ApiOnly) {
     $nextEnvironment = @{
-        "FAST_API_INTERNAL_URL" = "http://127.0.0.1:8010"
-        "USER_CONFIG_PATH" = (Join-Path $appData "userConfig.json")
+        "FAST_API_INTERNAL_URL" = "http://127.0.0.1:$ApiPort"
+        "USER_CONFIG_PATH" = $userConfigPath
         "PUBLIC_V2_WEB_CANARY_ENABLED" = "true"
+    }
+    if ($Serve) {
+        $nextEnvironment['APP_DATA_DIRECTORY'] = $appData
+        $nextEnvironment['NEXT_INTERNAL_URL'] = 'http://127.0.0.1:5110'
+        $nextEnvironment['CAN_CHANGE_KEYS'] = 'true'
     }
     $next = Start-LoggedProcess -FilePath "npm.cmd" -ArgumentList @("run", "dev", "--", "-p", "3010") -WorkingDirectory $nextJs -Environment $nextEnvironment -StdoutPath (Join-Path $logs "next.stdout.log") -StderrPath (Join-Path $logs "next.stderr.log")
     $startedPids.Add($next.Id)
-    $proxyEnvironment = @{ "FASTAPI_PORT" = "8010"; "NEXT_PORT" = "3010"; "PROXY_PORT" = "5110" }
+    $proxyEnvironment = @{ "FASTAPI_PORT" = "$ApiPort"; "NEXT_PORT" = "3010"; "PROXY_PORT" = "5110" }
     $proxy = Start-LoggedProcess -FilePath "node.exe" -ArgumentList @("scripts/presenton-local-proxy.mjs") -WorkingDirectory $repo -Environment $proxyEnvironment -StdoutPath (Join-Path $logs "proxy.stdout.log") -StderrPath (Join-Path $logs "proxy.stderr.log")
     $startedPids.Add($proxy.Id)
     Wait-Http200 "http://127.0.0.1:3010" $startedPids.ToArray() 3010; Wait-Http200 "http://127.0.0.1:5110" $startedPids.ToArray() 5110
+    }
 
+    if ($Serve) {
+        # A successful launch leaves the detached processes running. The next
+        # launch reuses the same DB, signing keys, and user accounts.
+        $processes = @(foreach ($id in $startedPids) {
+            $process = Get-CimInstance Win32_Process -Filter "ProcessId=$id"
+            if ($null -ne $process) { @{id = $id; startedAt = $process.CreationDate.ToUniversalTime().ToString('o')} }
+        })
+        $manifest = [ordered]@{schemaVersion = 1; runtimeRoot = $runtimeRoot; appDataDirectory = $appData; url = 'http://localhost:5110'; databasePort = $ownedPostgres.Port; postgresPid = $ownedPostgres.ProcessId; processIds = $startedPids.ToArray(); processes = $processes; logs = $logs; startedAt = [DateTime]::UtcNow.ToString('o'); mode = 'manual'}
+        $manifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $runtimeRoot 'runtime.json') -Encoding utf8
+        $KeepStack = $true
+        Write-Output "Manual PostgreSQL server ready: http://localhost:5110 ; data: $runtimeRoot ; automatic tests: disabled"
+        return
+    }
     if ($Mode -eq "export-only") {
         $testEnvironment = $sharedEnvironment.Clone(); $testEnvironment["PUBLIC_V2_WINDOWS_PRODUCT_E2E_EXPORT_ONLY"] = "1"; $testEnvironment["PUBLIC_V2_WINDOWS_PRODUCT_E2E_EXISTING_PRESENTATION_ID"] = $ExistingPresentationId; $testEnvironment["PUBLIC_V2_WINDOWS_PRODUCT_E2E_EXISTING_SOURCE_REVISION"] = "$ExistingSourceRevision"
         $test = Start-LoggedProcess -FilePath $python -ArgumentList @("-m", "pytest", "-q", "tests/integration/test_public_generation_export_windows_product_path.py", "-k", "export_only") -WorkingDirectory $fastApi -Environment $testEnvironment -StdoutPath (Join-Path $logs "product-path.stdout.log") -StderrPath (Join-Path $logs "product-path.stderr.log")

@@ -36,6 +36,8 @@ from services.authored_composition_policy import (
 from services.authored_generation_planner import AuthoredTextPlan, plan_authored_text
 from services.authored_author_capacity_recovery import (
     authored_owner_capacity_diagnostic,
+    preauthor_title_recovery_contract_prompt,
+    resolve_authored_title_capacity_html,
     title_capacity_recovery_boundary,
     title_capacity_recovery_diagnostic,
     title_capacity_recovery_hint,
@@ -432,13 +434,36 @@ class AuthoredProviderBudgetExhausted(ValueError):
         rejected_html: str | None = None,
         owner_capacity_diagnostic: dict[str, Any] | None = None,
         title_token_diagnostic: dict[str, Any] | None = None,
+        title_recovery_receipt: dict[str, Any] | None = None,
     ) -> None:
         self.code = code
         self.detail = str(detail)
         self.rejected_html = rejected_html
         self.owner_capacity_diagnostic = owner_capacity_diagnostic
         self.title_token_diagnostic = title_token_diagnostic
+        self.title_recovery_receipt = title_recovery_receipt
         super().__init__(f"{code}:{self.detail}")
+
+
+class AuthoredTitleCapacityUnresolvable(AuthoredProviderBudgetExhausted):
+    """Closed title path: no gate relaxation and no second provider call."""
+
+    retryable = False
+
+    def __init__(
+        self, *, rejected_html: str, capacity: SlideCapacity | None,
+        receipt: dict[str, Any] | None,
+    ) -> None:
+        super().__init__(
+            "authored_title_capacity_unresolvable",
+            "compatible layout and deterministic abbreviation exhausted",
+            rejected_html=rejected_html,
+            owner_capacity_diagnostic=(
+                authored_owner_capacity_diagnostic(rejected_html, capacity)
+                if capacity is not None else None
+            ),
+            title_recovery_receipt=receipt,
+        )
 
 
 class AuthoredAggregateOwnerCapacityExhausted(AuthoredProviderBudgetExhausted):
@@ -866,6 +891,12 @@ async def _author_one_resilient(
     correction_hint: str | None = None
     rejected_html: str | None = None
     title_recovery: tuple[str, tuple[str, ...]] | None = None
+    effective_capacity_brief = capacity_brief
+    if allow_title_capacity_recovery and capacity is not None:
+        title_contract = preauthor_title_recovery_contract_prompt(content, capacity)
+        effective_capacity_brief = (
+            f"{capacity_brief} {title_contract}" if capacity_brief else title_contract
+        )
     while provider_attempt_offset + attempts_made < _MAX_AUTHOR_CALLS_PER_SLIDE:
         attempts_made += 1
         provider_attempt_ordinal = provider_attempt_offset + attempts_made
@@ -912,7 +943,7 @@ async def _author_one_resilient(
                 instructions=instructions,
                 illustration_allowed=illustration_allowed,
                 visual_intent=visual_intent,
-                capacity_brief=capacity_brief,
+                capacity_brief=effective_capacity_brief,
                 **kwargs,
             )
             if is_valid_slide_html(html):
@@ -975,17 +1006,43 @@ async def _author_one_resilient(
                         if reduced != constrained:
                             constrained = reduced
                             owner_violations = reduced_violations
+                    title_qids = (
+                        title_capacity_recovery_qids(constrained, instructions=instructions)
+                        if allow_title_capacity_recovery and not source_images
+                        and reference_mode != EXACT_RECONSTRUCTION and structured_context is None
+                        and any(item.startswith("owner_title:") for item in owner_violations)
+                        else ()
+                    )
+                    if title_qids and capacity is not None:
+                        title_result = resolve_authored_title_capacity_html(
+                            constrained, capacity, title_qids,
+                        )
+                        if title_result["status"] == "terminal":
+                            raise AuthoredTitleCapacityUnresolvable(
+                                rejected_html=constrained,
+                                capacity=capacity,
+                                receipt=title_result.get("receipt"),
+                            )
+                        constrained = title_result["html"]
+                        owner_violations = aggregate_owner_capacity_violations(
+                            constrained, capacity,
+                        )
+                        if not owner_violations:
+                            return constrained
+                        if any(item.startswith("owner_title:") for item in owner_violations):
+                            raise AuthoredTitleCapacityUnresolvable(
+                                rejected_html=constrained,
+                                capacity=capacity,
+                                receipt=title_result.get("receipt"),
+                            )
+                        # A mixed rejection may still spend the existing single
+                        # non-title correction, but title recovery never does.
+                        title_qids = ()
                     capacity_error = AuthoredAggregateOwnerCapacityExhausted(
                         owner_violations,
                         rejected_html=constrained,
                         capacity=capacity,
-                        title_recovery_qids=(
-                            title_capacity_recovery_qids(constrained, instructions=instructions)
-                            if allow_title_capacity_recovery and not source_images
-                            and reference_mode != EXACT_RECONSTRUCTION and structured_context is None
-                            and any(item.startswith("owner_title:") for item in owner_violations)
-                            else ()
-                        ),
+                        title_recovery_qids=title_qids,
                     )
                     raise capacity_error
                 header_reject = constrained

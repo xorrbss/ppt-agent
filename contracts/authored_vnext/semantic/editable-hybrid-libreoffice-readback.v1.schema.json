@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://presenton.local/contracts/authored_vnext/semantic/editable-hybrid-libreoffice-readback.v1.schema.json",
+  "title": "Editable Hybrid LibreOffice same-file readback RC seal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "rc", "artifact", "hybrid"],
+  "properties": {
+    "schemaVersion": {"const": "authored-editable-hybrid-libreoffice-readback-seal/v1"},
+    "rc": {"$ref": "#/$defs/rc"},
+    "artifact": {"$ref": "#/$defs/artifact"},
+    "hybrid": {"$ref": "#/$defs/hybrid"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "rc": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "sealedAt", "sourceDigest", "profileDigest", "policyDigest", "workerDigest", "providerDigest", "fontDigest", "exporterDigest"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1}, "sealedAt": {"type": "string", "format": "date-time"},
+        "sourceDigest": {"$ref": "#/$defs/sha256"}, "profileDigest": {"$ref": "#/$defs/sha256"}, "policyDigest": {"$ref": "#/$defs/sha256"},
+        "workerDigest": {"$ref": "#/$defs/sha256"}, "providerDigest": {"$ref": "#/$defs/sha256"}, "fontDigest": {"$ref": "#/$defs/sha256"}, "exporterDigest": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "artifact": {
+      "type": "object", "additionalProperties": false, "required": ["sha256", "slideCount"],
+      "properties": {"sha256": {"$ref": "#/$defs/sha256"}, "slideCount": {"type": "integer", "minimum": 1}}
+    },
+    "hybrid": {
+      "type": "object", "additionalProperties": false,
+      "required": ["profile", "capabilityId", "nativeQids", "rasterIslandQids", "readingOrderQids", "fallback", "fonts", "repair"],
+      "properties": {
+        "profile": {"const": "editable_hybrid"}, "capabilityId": {"const": "editable.hybrid.libreoffice-readback.v1"},
+        "nativeQids": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$"}},
+        "rasterIslandQids": {"type": "array", "items": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$"}},
+        "readingOrderQids": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$"}},
+        "fallback": {"type": "object", "additionalProperties": false, "required": ["policyDigest", "status"], "properties": {"policyDigest": {"$ref": "#/$defs/sha256"}, "status": {"const": "required"}}},
+        "fonts": {"type": "object", "additionalProperties": false, "required": ["fontDigest", "status"], "properties": {"fontDigest": {"$ref": "#/$defs/sha256"}, "status": {"const": "verified"}}},
+        "repair": {"type": "object", "additionalProperties": false, "required": ["policyDigest", "status"], "properties": {"policyDigest": {"$ref": "#/$defs/sha256"}, "status": {"const": "clean"}}}
+      }
+    }
+  }
+}

@@ -22,6 +22,7 @@ from models.sql.source_content import (
 )
 from services.source_content import manifest_store
 from services.source_content.errors import SECURITY_REJECTED, SourceContentError
+from services.source_content.pipeline import admit_source_content_request
 from services.source_content.pptx import extract_pptx_source_content
 
 
@@ -218,6 +219,57 @@ def test_pptx_manifest_accepts_standard_non_slide_metadata(tmp_path: Path) -> No
         ]
         == "supported_relationship"
     )
+
+
+def test_source_content_admission_freezes_manifest_slide_count(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source.pptx"
+    _fixture_pptx(source)
+    extracted = extract_pptx_source_content(
+        source,
+        owner_id="owner-a",
+        reference_snapshot_id="11111111-1111-1111-1111-111111111111",
+    )
+    manifest = extracted.manifest
+
+    async def admit_manifest(_session, *, owner_id, manifest_id, digest):
+        assert owner_id == "owner-a"
+        assert manifest_id == manifest.manifest_id
+        assert digest == manifest.manifest_digest
+        return manifest
+
+    monkeypatch.setattr(
+        manifest_store,
+        "admit_source_content_manifest_pin",
+        admit_manifest,
+    )
+    request = SimpleNamespace(
+        source_mode="source_content_restyle",
+        source_content_manifest_pin=SimpleNamespace(
+            manifest_id=manifest.manifest_id,
+            digest=manifest.manifest_digest,
+        ),
+        instructions=None,
+        web_search=False,
+        vision_qa=False,
+        export_as="pptx",
+        reference_snapshot_ids=[],
+        n_slides=None,
+    )
+
+    admitted = asyncio.run(
+        admit_source_content_request(
+            request,
+            sql_session=object(),
+            owner_id="owner-a",
+        )
+    )
+
+    assert admitted is manifest
+    assert request.n_slides == len(manifest.units)
+    assert request._source_document_outline.source_slide_count == request.n_slides
 
 
 def test_manifest_parent_is_flushed_before_assets(

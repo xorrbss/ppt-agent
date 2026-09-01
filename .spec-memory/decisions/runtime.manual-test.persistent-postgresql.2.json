@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "key": "runtime.manual-test.persistent-postgresql",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Manual tests use persistent PostgreSQL with all legacy accounts, presentations, revisions, assets and related data migrated; account-only import is incomplete.",
+  "scope": [
+    "runtime",
+    "database",
+    "migration"
+  ],
+  "invariants": [
+    "Preserve original SQLite and pre-migration PostgreSQL backups.",
+    "Preserve ownership, credentials, presentation lifecycle and file digests; verify full migration before switching the runtime.",
+    "Restart the same durable database and file storage; do not replace manual testing with disposable RC fixtures."
+  ],
+  "forbidden": [
+    "Declaring migration complete after copying accounts alone.",
+    "Deleting source data or overwriting unrelated existing destination data."
+  ],
+  "evidence": [
+    "scripts/PUBLIC-V2-LOCAL.md",
+    "servers/fastapi/scripts/migrate_local_sqlite_to_postgres.py",
+    "servers/fastapi/scripts/finalize_local_sqlite_migration.py"
+  ],
+  "supersedes": "runtime.manual-test.persistent-postgresql@1",
+  "recordedAt": "2026-08-31T18:45:39.0180450+00:00"
+}

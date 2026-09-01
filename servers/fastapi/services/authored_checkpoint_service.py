@@ -28,7 +28,9 @@ from services.authored_checkpoint_artifacts import (
     recover_unreferenced_evidence,
     write_valid_evidence,
     evidence_attempt_id,
+    read_detached_deck_ir_checkpoint,
     render_artifact_path,
+    write_detached_deck_ir_checkpoint,
 )
 from services.authored_checkpoint_errors import (
     AuthoredStageError,
@@ -249,7 +251,9 @@ __all__ = [
     "read_valid_evidence",
     "recover_unreferenced_evidence",
     "write_valid_evidence",
+    "write_detached_deck_ir_checkpoint",
     "evidence_attempt_id",
+    "read_detached_deck_ir_checkpoint",
     "render_artifact_path",
     "sanitize_exception_message",
     "should_inject_failure",

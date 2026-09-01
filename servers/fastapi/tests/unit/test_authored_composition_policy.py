@@ -364,6 +364,40 @@ def test_owner_text_reducer_fixes_actual_355_427_shape_without_owner_drift(monke
     assert 'data-qid="content.note"' in admitted
 
 
+def test_owner_text_reducer_preserves_nested_inline_markup() -> None:
+    title = "Nested markup capacity"
+    body_one = ("alpha " * 29) + "alpha"
+    body_two = ("beta " * 29) + "beta"
+    original = (
+        "<html><head></head><body>"
+        f'<h1 data-qid="slide.title" data-semantic-role="title">{title}</h1>'
+        '<p data-qid="content.primary" data-semantic-role="body">'
+        f'<span class="lead">{body_one}</span></p>'
+        '<p data-qid="content.secondary" data-semantic-role="body">'
+        f'<strong>{body_two}</strong></p>'
+        "</body></html>"
+    )
+    capacity = SlideCapacity(2, "PILLARS", 64, 128, 150, 0, 30)
+
+    reduced = reduce_authored_owner_text_capacity(
+        original,
+        capacity,
+        profile_id="ordinary",
+        allow_summarization=True,
+    )
+
+    assert reduced != original
+    assert aggregate_owner_capacity_violations(reduced, capacity) == ()
+    canonical_original = canonicalize_authored_capacity_html(original)
+    assert semantic_repair_boundary_violations(
+        canonical_original,
+        reduced,
+        allow_bounded_body_shortening=True,
+    ) == ()
+    assert '<span class="lead"' in reduced
+    assert "<strong " in reduced
+
+
 def test_composition_profile_defaults_to_development_quality_gates() -> None:
     profile = resolve_composition_profile(SimpleNamespace())
 

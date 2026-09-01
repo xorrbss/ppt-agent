@@ -122,7 +122,7 @@ def _author_failure_retryable(error: BaseException) -> bool:
 
 
 def _terminal_provider_code(error: BaseException) -> str | None:
-    """Recover a non-retryable public admission cause through safe wrappers."""
+    """Recover a content-free terminal code through safe wrappers."""
 
     current: BaseException | None = error
     visited: set[int] = set()
@@ -131,12 +131,15 @@ def _terminal_provider_code(error: BaseException) -> str | None:
             break
         visited.add(id(current))
         code = getattr(current, "code", None)
-        if (
-            isinstance(code, str)
-            and code.startswith("public_provider_")
-            and getattr(current, "retryable", None) is False
-        ):
-            return code
+        if isinstance(code, str):
+            if code.startswith("public_provider_") and getattr(
+                current, "retryable", None
+            ) is False:
+                return code
+            if code.startswith("authored_") and isinstance(
+                current, AuthoredProviderBudgetExhausted
+            ):
+                return code
         nested = getattr(current, "cause", None) or getattr(current, "__cause__", None)
         current = nested if isinstance(nested, BaseException) else None
     return None

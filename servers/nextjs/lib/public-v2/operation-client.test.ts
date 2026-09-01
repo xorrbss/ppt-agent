@@ -43,6 +43,31 @@ function status(state: "queued" | "running" | "succeeded" | "failed" | "cancelle
       ? { reasonCode: "operation_cancelled", retryable: false }
       : null,
     releaseReadiness: "not_assessed",
+    readinessScope: "artifact:fidelity",
+    fidelityArtifactReady: false,
+    nativeEditabilityReady: false,
+    promotionReady: false,
+    deploymentAuthorized: false,
+    generationTiming: state === "queued" || state === "running" ? null : {
+      schemaVersion: "public-generation-timing/v1",
+      attemptNumber: 1,
+      outcome: state === "succeeded" ? "succeeded" : state,
+      stages: {
+        outline: { durationMillis: 10 },
+        provider: { durationMillis: 20 },
+        authoring: { durationMillis: 30 },
+        repair: "not_started",
+        chromiumReview: { durationMillis: 40 },
+        publication: { durationMillis: 5 },
+      },
+      queueWaitMillis: 2,
+      wallMillis: 107,
+      logicalCalls: 1,
+      retryReason: null,
+      usageAvailability: { tokens: "available", cost: "unavailable" },
+      worker: { status: "unavailable", worker: null, peakMemory: null, peakHandles: null },
+      terminalError: state === "succeeded" ? null : "operation_cancelled",
+    },
     artifacts: [],
   };
 }
@@ -230,6 +255,11 @@ test("generation source revision drives fidelity export status and authorized do
         absoluteDeadlineAt: "2026-08-30T00:05:00Z",
         error: null,
         releaseReadiness: "not_assessed",
+        readinessScope: "artifact:fidelity",
+        fidelityArtifactReady: false,
+        nativeEditabilityReady: false,
+        promotionReady: false,
+        deploymentAuthorized: false,
         artifacts: [{
           artifactId,
           operationId: exportOperationId,
@@ -257,6 +287,13 @@ test("generation source revision drives fidelity export status and authorized do
   const client = createPublicV2OperationClient(options(storage, fetchImpl));
   await client.submitGeneration({ content: "public generation" });
   assert.equal(client.snapshot.sourceRevision, 7);
+  assert.equal(client.snapshot.readiness.scope, "artifact:fidelity");
+  assert.equal(client.snapshot.readiness.fidelityArtifactReady, false);
+  assert.equal(client.snapshot.readiness.nativeEditabilityReady, false);
+  assert.equal(client.snapshot.readiness.promotionReady, false);
+  assert.equal(client.snapshot.readiness.deploymentAuthorized, false);
+  assert.deepEqual(client.snapshot.generationTiming?.stages.repair, "not_started");
+  assert.equal(client.snapshot.generationTiming?.stages.chromiumReview === "not_started" ? null : client.snapshot.generationTiming?.stages.chromiumReview.durationMillis, 40);
   await assert.rejects(client.submitExport(presentationId, {
     sourceRevision: client.snapshot.sourceRevision ?? -1,
     output: { format: "pptx", mode: "fidelity-raster" },

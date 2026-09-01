@@ -1,0 +1,196 @@
+{
+  "$defs": {
+    "CompositionRelationV1": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+          "title": "From",
+          "type": "string"
+        },
+        "relation": {
+          "enum": [
+            "leftOf",
+            "rightOf",
+            "above",
+            "below",
+            "alignTop",
+            "alignCenter",
+            "equalWidth",
+            "emphasis",
+            "flow"
+          ],
+          "title": "Relation",
+          "type": "string"
+        },
+        "strength": {
+          "enum": [
+            "hard",
+            "soft"
+          ],
+          "title": "Strength",
+          "type": "string"
+        },
+        "to": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+          "title": "To",
+          "type": "string"
+        }
+      },
+      "required": [
+        "from",
+        "relation",
+        "to",
+        "strength"
+      ],
+      "title": "CompositionRelationV1",
+      "type": "object"
+    },
+    "CompositionZoneV1": {
+      "additionalProperties": false,
+      "properties": {
+        "contentRefs": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+            "type": "string"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "title": "Contentrefs",
+          "type": "array"
+        },
+        "flow": {
+          "enum": [
+            "vertical",
+            "horizontal",
+            "cluster",
+            "stack",
+            "flow"
+          ],
+          "title": "Flow",
+          "type": "string"
+        },
+        "maximumColumnSpan": {
+          "maximum": 24,
+          "minimum": 1,
+          "title": "Maximumcolumnspan",
+          "type": "integer"
+        },
+        "minimumColumnSpan": {
+          "maximum": 24,
+          "minimum": 1,
+          "title": "Minimumcolumnspan",
+          "type": "integer"
+        },
+        "preferredColumnSpan": {
+          "maximum": 24,
+          "minimum": 1,
+          "title": "Preferredcolumnspan",
+          "type": "integer"
+        },
+        "semanticRole": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+          "title": "Semanticrole",
+          "type": "string"
+        },
+        "visualWeight": {
+          "enum": [
+            "dominant",
+            "primary",
+            "supporting",
+            "ambient"
+          ],
+          "title": "Visualweight",
+          "type": "string"
+        },
+        "zoneKey": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+          "title": "Zonekey",
+          "type": "string"
+        }
+      },
+      "required": [
+        "zoneKey",
+        "semanticRole",
+        "contentRefs",
+        "preferredColumnSpan",
+        "minimumColumnSpan",
+        "maximumColumnSpan",
+        "visualWeight",
+        "flow"
+      ],
+      "title": "CompositionZoneV1",
+      "type": "object"
+    }
+  },
+  "$id": "urn:presenton:authored-vnext:deck-ir:composition-intent-graph.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "graphDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Graphdigest",
+      "type": "string"
+    },
+    "readingOrder": {
+      "items": {
+        "maxLength": 128,
+        "minLength": 1,
+        "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+        "type": "string"
+      },
+      "maxItems": 32,
+      "minItems": 1,
+      "title": "Readingorder",
+      "type": "array"
+    },
+    "relations": {
+      "items": {
+        "$ref": "#/$defs/CompositionRelationV1"
+      },
+      "maxItems": 128,
+      "title": "Relations",
+      "type": "array"
+    },
+    "schemaVersion": {
+      "const": "composition-intent-graph/v1",
+      "title": "Schemaversion",
+      "type": "string"
+    },
+    "slideKey": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+      "title": "Slidekey",
+      "type": "string"
+    },
+    "zones": {
+      "items": {
+        "$ref": "#/$defs/CompositionZoneV1"
+      },
+      "maxItems": 32,
+      "minItems": 1,
+      "title": "Zones",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "slideKey",
+    "zones",
+    "readingOrder",
+    "graphDigest"
+  ],
+  "title": "CompositionIntentGraphV1",
+  "type": "object"
+}

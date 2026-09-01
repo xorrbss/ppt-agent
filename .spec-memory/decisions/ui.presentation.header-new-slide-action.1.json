@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "key": "ui.presentation.header-new-slide-action",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "편집기 헤더의 생성정보 버튼은 새 발표자료 작성 화면으로 이동하는 버튼으로 대체한다. 버튼명은 짧게 정한다.",
+  "scope": [
+    "frontend",
+    "presentation-ui"
+  ],
+  "invariants": [
+    "해당 헤더 버튼은 생성정보 대화상자가 아니라 신규 슬라이드 작성 화면을 연다."
+  ],
+  "forbidden": [],
+  "evidence": [
+    "servers/nextjs/app/(presentation-generator)/presentation/components/header/NewSlideButton.tsx"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-31T19:28:41.7817736+00:00"
+}

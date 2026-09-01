@@ -1,3 +1,4 @@
+import logging
 import os
 import uuid
 from typing import Optional, Union
@@ -6,6 +7,9 @@ from fastapi import HTTPException
 
 from utils.owner_context import get_current_owner_id
 from utils.get_env import get_temp_directory_env
+
+
+logger = logging.getLogger(__name__)
 
 
 class TempFileService:
@@ -158,16 +162,28 @@ class TempFileService:
         os.remove(file_path)
 
     @staticmethod
-    def _delete_resolved_dir_files(dir_path: str):
+    def _delete_resolved_dir_files(dir_path: str, *, best_effort: bool = False):
+        def remove(path: str, operation) -> None:
+            try:
+                operation(path)
+            except OSError as error:
+                if not best_effort:
+                    raise
+                logger.warning(
+                    "temp_startup_cleanup_skipped path=%s error=%s",
+                    path,
+                    error,
+                )
+
         for root, dirs, files in os.walk(dir_path, topdown=False):
             for name in files:
-                os.remove(os.path.join(root, name))
+                remove(os.path.join(root, name), os.remove)
             for name in dirs:
                 child_dir = os.path.join(root, name)
                 if os.path.islink(child_dir):
-                    os.unlink(child_dir)
+                    remove(child_dir, os.unlink)
                 else:
-                    os.rmdir(child_dir)
+                    remove(child_dir, os.rmdir)
 
     def _delete_dir_files(self, dir_path: str):
         dir_path = self.resolve_temp_path(dir_path, must_exist=True)
@@ -190,7 +206,11 @@ class TempFileService:
         # owner's subdirectory.
         base_dir = self._base_dir_realpath()
         os.makedirs(base_dir, exist_ok=True)
-        self._delete_resolved_dir_files(base_dir)
+        # A previous worker or antivirus can transiently hold one Windows temp
+        # entry open. Startup cleanup is hygiene, not an availability gate: keep
+        # strict cleanup semantics for explicit calls, but skip locked stale
+        # entries here so every generation controller can still start.
+        self._delete_resolved_dir_files(base_dir, best_effort=True)
 
 
 TEMP_FILE_SERVICE = TempFileService()

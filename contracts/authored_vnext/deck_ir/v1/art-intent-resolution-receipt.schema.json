@@ -1,0 +1,137 @@
+{
+  "$defs": {
+    "OverlapPairDecisionV1": {
+      "additionalProperties": false,
+      "properties": {
+        "decision": {
+          "const": "separate",
+          "title": "Decision",
+          "type": "string"
+        },
+        "reason": {
+          "enum": [
+            "exclusive_content_overlap_forbidden",
+            "compiler_owned_overlay_evidence_unavailable"
+          ],
+          "title": "Reason",
+          "type": "string"
+        },
+        "zonePair": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+              "type": "string"
+            },
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+              "type": "string"
+            }
+          ],
+          "title": "Zonepair",
+          "type": "array"
+        }
+      },
+      "required": [
+        "zonePair",
+        "decision",
+        "reason"
+      ],
+      "title": "OverlapPairDecisionV1",
+      "type": "object"
+    }
+  },
+  "$id": "urn:presenton:authored-vnext:deck-ir:art-intent-resolution-receipt.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "compositionDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Compositiondigest",
+      "type": "string"
+    },
+    "contentPreserved": {
+      "const": true,
+      "title": "Contentpreserved",
+      "type": "boolean"
+    },
+    "grammarDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Grammardigest",
+      "type": "string"
+    },
+    "layoutId": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9]*(?:[._/-][a-z0-9]+)*$",
+      "title": "Layoutid",
+      "type": "string"
+    },
+    "pairDecisions": {
+      "items": {
+        "$ref": "#/$defs/OverlapPairDecisionV1"
+      },
+      "maxItems": 16,
+      "title": "Pairdecisions",
+      "type": "array"
+    },
+    "providerCallsAdded": {
+      "const": 0,
+      "title": "Providercallsadded",
+      "type": "integer"
+    },
+    "providerIntentDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Providerintentdigest",
+      "type": "string"
+    },
+    "receiptDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Receiptdigest",
+      "type": "string"
+    },
+    "resolvedIntentDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Resolvedintentdigest",
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": "art-intent-resolution-receipt/v1",
+      "title": "Schemaversion",
+      "type": "string"
+    },
+    "slideDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Slidedigest",
+      "type": "string"
+    },
+    "slideKey": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+      "title": "Slidekey",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "slideKey",
+    "providerIntentDigest",
+    "resolvedIntentDigest",
+    "slideDigest",
+    "compositionDigest",
+    "grammarDigest",
+    "layoutId",
+    "pairDecisions",
+    "contentPreserved",
+    "providerCallsAdded",
+    "receiptDigest"
+  ],
+  "title": "ArtIntentResolutionReceiptV1",
+  "type": "object"
+}

@@ -1,0 +1,107 @@
+{
+  "$id": "urn:presenton:authored-vnext:deck-ir:generation-strategy-decision-receipt.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "compilerCapabilityDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Compilercapabilitydigest",
+      "type": "string"
+    },
+    "decisionReason": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+      "title": "Decisionreason",
+      "type": "string"
+    },
+    "grammarCapabilityDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Grammarcapabilitydigest",
+      "type": "string"
+    },
+    "missingCapabilities": {
+      "items": {
+        "maxLength": 128,
+        "minLength": 1,
+        "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+        "type": "string"
+      },
+      "title": "Missingcapabilities",
+      "type": "array"
+    },
+    "operationId": {
+      "format": "uuid",
+      "title": "Operationid",
+      "type": "string"
+    },
+    "receiptDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Receiptdigest",
+      "type": "string"
+    },
+    "requestedProfile": {
+      "enum": [
+        "balanced-quality-v1",
+        "fast-preview-v1",
+        "release-v1"
+      ],
+      "title": "Requestedprofile",
+      "type": "string"
+    },
+    "requirementGraphDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Requirementgraphdigest",
+      "type": "string"
+    },
+    "rolloutPhase": {
+      "enum": [
+        "D0",
+        "D1",
+        "D2",
+        "D3",
+        "D4",
+        "D5",
+        "D6",
+        "D7",
+        "D8"
+      ],
+      "title": "Rolloutphase",
+      "type": "string"
+    },
+    "routingPolicyDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Routingpolicydigest",
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": "generation-strategy-decision-receipt/v1",
+      "title": "Schemaversion",
+      "type": "string"
+    },
+    "selectedStrategy": {
+      "enum": [
+        "deck-ir",
+        "legacy-authored",
+        "reject"
+      ],
+      "title": "Selectedstrategy",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "operationId",
+    "requirementGraphDigest",
+    "requestedProfile",
+    "grammarCapabilityDigest",
+    "compilerCapabilityDigest",
+    "rolloutPhase",
+    "selectedStrategy",
+    "decisionReason",
+    "routingPolicyDigest",
+    "receiptDigest"
+  ],
+  "title": "GenerationStrategyDecisionReceiptV1",
+  "type": "object"
+}

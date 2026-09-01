@@ -34,6 +34,15 @@ def _configure_invalid_runtime(monkeypatch, module, database_url):
     monkeypatch.setattr(module, "sql_engine", SimpleNamespace(url=database_url))
 
 
+def test_fixed_outline_freezes_slide_count_before_runtime_admission():
+    request = GeneratePresentationRequest(
+        content="fixed outline",
+        slides_markdown=["# First", "# Second", "# Third"],
+    )
+
+    assert request.n_slides == 3
+
+
 @pytest.mark.parametrize(
     ("database_url", "reason", "status_code"),
     _INVALID_RUNTIME_CASES,

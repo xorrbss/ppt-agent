@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "key": "ui.presentation.devax-slide-reference",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "슬라이드 생성·편집 UI는 사용자가 제공한 slide (1).zip의 DevAX 디자인을 기준으로 한다.",
+  "scope": [
+    "frontend",
+    "presentation-ui"
+  ],
+  "invariants": [],
+  "forbidden": [],
+  "evidence": [
+    "servers/nextjs/app/(presentation-generator)/components/DevaxWorkspaceShell.tsx",
+    "servers/nextjs/app/(presentation-generator)/upload/components/UploadDesignGallery.tsx",
+    "servers/nextjs/public/devax-slide-ui"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-31T18:41:57.2557136+00:00"
+}

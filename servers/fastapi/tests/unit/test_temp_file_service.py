@@ -150,6 +150,31 @@ def test_temp_file_service_init_cleans_children_without_removing_base_directory(
     assert list(base_dir.iterdir()) == []
 
 
+def test_temp_file_service_init_skips_locked_stale_entries(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    base_dir = tmp_path / "temp-root"
+    locked_dir = base_dir / "locked"
+    locked_dir.mkdir(parents=True)
+    locked_file = locked_dir / "in-use.bin"
+    locked_file.write_bytes(b"active")
+    original_remove = os.remove
+
+    def guarded_remove(path: str) -> None:
+        if os.path.realpath(path) == os.path.realpath(locked_file):
+            raise PermissionError(5, "Access is denied")
+        original_remove(path)
+
+    monkeypatch.setattr(os, "remove", guarded_remove)
+
+    service = TempFileService(str(base_dir))
+    usable_file = Path(service.create_temp_file("new.bin", b"ready"))
+
+    assert locked_file.read_bytes() == b"active"
+    assert usable_file.read_bytes() == b"ready"
+
+
 def test_temp_file_service_can_initialize_while_request_owner_is_active(
     tmp_path: Path,
 ) -> None:

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "key": "runtime.public-service-generation-capacity-tiers",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "128GB 워크스테이션 생성 용량은 검증 4, 서비스 8, 정상 12, 검증 burst 16으로 단계화하고 16 초과 지속부하는 worker를 분리한다.",
+  "scope": [
+    "public-service",
+    "runtime",
+    "capacity"
+  ],
+  "invariants": [
+    "owner generation active remains 1",
+    "PowerPoint COM concurrency remains 1"
+  ],
+  "forbidden": [
+    "treating 4 active generations as the production ceiling",
+    "raising sustained single-node generation above 16 without separate worker capacity"
+  ],
+  "evidence": [
+    "docs/public-service-workstation-128g-performance-design-20260831.md"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-31T07:55:49.5413847+00:00"
+}

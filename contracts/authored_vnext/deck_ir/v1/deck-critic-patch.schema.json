@@ -1,0 +1,103 @@
+{
+  "$defs": {
+    "CriticOperationV1": {
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "enum": [
+            "replaceLayoutVariant",
+            "setDensity",
+            "setEmphasis",
+            "setComponentVariant",
+            "setAssetCropIntent",
+            "setReadingOrderVariant",
+            "setFocalStrength",
+            "setNegativeSpaceIntent",
+            "setAsymmetryIntent",
+            "setImageTreatment",
+            "setTypographyRhythm"
+          ],
+          "title": "Op",
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9]*(?:[._/-][a-z0-9]+)*$",
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "op",
+        "value"
+      ],
+      "title": "CriticOperationV1",
+      "type": "object"
+    },
+    "CriticTargetV1": {
+      "additionalProperties": false,
+      "properties": {
+        "allowedOperations": {
+          "items": {
+            "$ref": "#/$defs/CriticOperationV1"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Allowedoperations",
+          "type": "array"
+        },
+        "slideKey": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+          "title": "Slidekey",
+          "type": "string"
+        }
+      },
+      "required": [
+        "slideKey",
+        "allowedOperations"
+      ],
+      "title": "CriticTargetV1",
+      "type": "object"
+    }
+  },
+  "$id": "urn:presenton:authored-vnext:deck-ir:deck-critic-patch.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "deckIrDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Deckirdigest",
+      "type": "string"
+    },
+    "observationDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Observationdigest",
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": "deck-critic-patch/v1",
+      "title": "Schemaversion",
+      "type": "string"
+    },
+    "targets": {
+      "items": {
+        "$ref": "#/$defs/CriticTargetV1"
+      },
+      "maxItems": 30,
+      "minItems": 1,
+      "title": "Targets",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "deckIrDigest",
+    "observationDigest",
+    "targets"
+  ],
+  "title": "DeckCriticPatchV1",
+  "type": "object"
+}

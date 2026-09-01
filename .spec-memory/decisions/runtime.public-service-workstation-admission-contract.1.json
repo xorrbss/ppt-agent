@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "key": "runtime.public-service-workstation-admission-contract",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "workstation-128g/v1 clamps public admission to policy, executable slots, provider caps, pressure, and DB pool budget.",
+  "scope": [
+    "public-service",
+    "runtime",
+    "capacity",
+    "admission"
+  ],
+  "invariants": [
+    "C5 evidence gates 8 slots",
+    "C10 evidence gates 12 slots",
+    "C16 plus 86400-second recovery gates 16 slots",
+    "owner generation remains 1 active and 3 queued",
+    "PowerPoint COM remains one concurrent operation"
+  ],
+  "forbidden": [
+    "activating 8, 12, or 16 slots without required evidence",
+    "raising single-node sustained generation above 16"
+  ],
+  "evidence": [
+    "servers/fastapi/services/public_workstation_runtime_profile.py",
+    "servers/fastapi/services/public_operation_admission.py",
+    "servers/fastapi/services/public_render_batching.py",
+    "servers/fastapi/tests/unit/test_public_workstation_runtime_profile.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-08-31T08:10:33.9301255+00:00"
+}
