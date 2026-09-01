@@ -10,6 +10,7 @@ back by the renewals that follow.
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 import uuid
 
 import pytest
@@ -23,6 +24,7 @@ from services.workspace_operation_handler_registry import (
 from services import workspace_operation_lease as lease_module
 from services.workspace_operation_lease import (
     WORKSPACE_OPERATION_MAX_LEASE_SECONDS,
+    _deadline_reached,
     extend_workspace_operation_lease,
     run_attempt_heartbeat_loop,
 )
@@ -54,6 +56,19 @@ def _cancel_after(count: int, calls: list[int]):
         return len(calls) > count
 
     return probe
+
+
+def test_sqlite_naive_public_deadline_is_compared_as_utc():
+    persisted = datetime(2026, 9, 1, 23, 36, 52)
+
+    assert not _deadline_reached(
+        persisted,
+        now=datetime(2026, 9, 1, 23, 36, 51, tzinfo=timezone.utc),
+    )
+    assert _deadline_reached(
+        persisted,
+        now=datetime(2026, 9, 1, 23, 36, 52, tzinfo=timezone.utc),
+    )
 
 
 def test_a_locked_out_heartbeat_keeps_the_attempt(monkeypatch):
