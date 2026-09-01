@@ -9,7 +9,7 @@ import pytest
 from fastapi import HTTPException
 
 from services.presentation_generation_job_service import (
-    GenerationCapacityUnavailable,
+    WorkspaceLinkedGenerationProjectionPoisoned,
 )
 from services.public_generation_worker_lifecycle import (
     PUBLIC_OPERATION_CONTRACT_VERSION,
@@ -22,6 +22,7 @@ from services.public_v2_orchestrator import SqlPublicV2Orchestrator
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
 )
+from services.workspace_operation_runner import _public_retry_budget_error
 from services.workspace_operation_retry_policy import WorkspaceOperationRetryDecision
 
 
@@ -84,7 +85,7 @@ def _operation(claim, *, state: str = "running", result_revision=None, result=No
     )
 
 
-def test_public_capacity_wait_keeps_one_attempt_and_fence(monkeypatch):
+def test_public_linked_claim_uses_projection_once_without_capacity_polling():
     async def scenario():
         claim = _claim()
         context = _Context(claim)
@@ -93,20 +94,8 @@ def test_public_capacity_wait_keeps_one_attempt_and_fence(monkeypatch):
 
         async def claim_linked(operation_id, attempt_token, attempt_number):
             observed.append((operation_id, attempt_token, attempt_number))
-            if len(observed) == 1:
-                raise GenerationCapacityUnavailable(
-                    retry_after_seconds=0.1,
-                    queue_position=2,
-                )
             return uuid.uuid4(), "task-id"
 
-        async def no_sleep(_seconds):
-            return None
-
-        monkeypatch.setattr(
-            "services.public_generation_worker_lifecycle.asyncio.sleep",
-            no_sleep,
-        )
         linked = await claim_linked_generation_job(
             session_factory=_SessionFactory(operation),
             context=context,
@@ -115,9 +104,42 @@ def test_public_capacity_wait_keeps_one_attempt_and_fence(monkeypatch):
         assert linked[1] == "task-id"
         assert observed == [
             (claim.operation_id, claim.attempt_token, claim.attempt_number),
-            (claim.operation_id, claim.attempt_token, claim.attempt_number),
         ]
-        assert context.progress_stages == ["waiting_for_capacity"]
+        assert context.progress_stages == []
+
+    asyncio.run(scenario())
+
+
+def test_poisoned_projection_signals_generic_terminal_path_without_blocking_next_job():
+    async def scenario():
+        first_claim = _claim()
+        first_context = _Context(first_claim)
+
+        async def poisoned(*_args):
+            raise WorkspaceLinkedGenerationProjectionPoisoned(
+                "authored_slide_capacity_exceeded"
+            )
+
+        with pytest.raises(NonRetryableWorkspaceOperationError) as failure:
+            await claim_linked_generation_job(
+                session_factory=_SessionFactory(_operation(first_claim)),
+                context=first_context,
+                claim_linked=poisoned,
+            )
+        assert failure.value.code == "authored_slide_capacity_exceeded"
+
+        next_claim = _claim()
+        next_context = _Context(next_claim)
+        next_job_id = uuid.uuid4()
+
+        async def healthy(*_args):
+            return next_job_id, "next-task"
+
+        assert await claim_linked_generation_job(
+            session_factory=_SessionFactory(_operation(next_claim)),
+            context=next_context,
+            claim_linked=healthy,
+        ) == (next_job_id, "next-task")
 
     asyncio.run(scenario())
 
@@ -186,6 +208,26 @@ def test_retry_that_cannot_meet_absolute_deadline_terminalizes_now():
     )
     assert missed is True
     assert terminal.state == "deadline_exceeded"
+
+
+def test_retry_request_budget_terminalizes_before_requeue():
+    admission = SimpleNamespace(
+        state="active",
+        operation_kind="generation",
+        initial_request_count=3,
+        planned_request_limit=3,
+        retry_request_count=2,
+        retry_request_limit=2,
+        estimated_consumed_microunits=10,
+        estimated_reserved_microunits=0,
+        estimated_cost_limit_microunits=100,
+        actual_consumed_microunits=10,
+        actual_reserved_microunits=0,
+        actual_cost_limit_microunits=100,
+    )
+    assert _public_retry_budget_error(admission) == (
+        "public_provider_retry_limit_exceeded"
+    )
 
 
 def test_public_projection_rejects_split_operation_and_admission_states():

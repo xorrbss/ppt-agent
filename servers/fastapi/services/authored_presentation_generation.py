@@ -1347,12 +1347,14 @@ async def _checkpoint_source_reflow_vqa_repairs(
 
     if generation_job is None or not generation_job.attempt_token:
         return
+    fencing_token = getattr(generation_job, "_workspace_fencing_token", None)
     for index in error.fixed:
         await _complete_stage_after_external_success(
             job_id=generation_job.id,
             slide_index=index,
             stage="illustrate",
             attempt_token=generation_job.attempt_token,
+            fencing_token=fencing_token,
             html=error.htmls[index],
         )
         await _complete_stage_after_external_success(
@@ -1360,6 +1362,7 @@ async def _checkpoint_source_reflow_vqa_repairs(
             slide_index=index,
             stage="render",
             attempt_token=generation_job.attempt_token,
+            fencing_token=fencing_token,
             html=error.htmls[index],
             png=error.pngs[index],
             # An unavailable probe is still persisted as an explicit empty
@@ -2981,6 +2984,9 @@ async def _generate_authored_presentation(
                 attempt_token=attempt_token,
                 error=error,
                 request_id=export_generation_request_id,
+                fencing_token=getattr(
+                    generation_job, "_workspace_fencing_token", None
+                ),
             )
         raise error from exc
     export_elapsed = time.monotonic() - export_started

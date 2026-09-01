@@ -9,7 +9,7 @@ import uuid
 from types import SimpleNamespace
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
@@ -18,6 +18,7 @@ from models.sql.async_presentation_generation_status import (
 )
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from models.sql.presentation_generation_job import PresentationGenerationJob
+from models.sql.workspace import WorkspaceOperation
 from models.presentation_outline_model import (
     PresentationOutlineModel,
     SlideOutlineModel,
@@ -39,6 +40,7 @@ async def _checkpoint_database(tmp_path, monkeypatch):
                 AsyncPresentationGenerationTaskModel.__table__,
                 PresentationGenerationJob.__table__,
                 AuthoredSlideCheckpoint.__table__,
+                WorkspaceOperation.__table__,
             ],
         )
     maker = async_sessionmaker(engine, expire_on_commit=False)
@@ -270,6 +272,140 @@ def test_final_publish_is_attempt_fenced_and_terminal_in_one_transaction(
                 assert stored.attempt_token is None
                 assert stored.current_stage == "completed"
                 assert stored.resume_allowed is False
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_linked_workspace_checkpoint_and_publication_require_matching_fence(
+    tmp_path, monkeypatch
+):
+    async def scenario():
+        engine, maker = await _checkpoint_database(tmp_path, monkeypatch)
+        try:
+            _, job = await _running_authored_job(maker)
+            async with maker() as session:
+                operation = WorkspaceOperation(
+                    conversation_id=uuid.uuid4(),
+                    presentation_id=job.presentation_id,
+                    anchor_position=1,
+                    kind="presentation.generate",
+                    state="running",
+                    idempotency_key_hash="d" * 64,
+                    request_hash="e" * 64,
+                    request_payload={},
+                    attempt_token="workspace-attempt",
+                    fencing_token=9,
+                )
+                session.add(operation)
+                await session.flush()
+                job.workspace_operation_id = operation.id
+                job.attempt_token = "workspace-attempt"
+                session.add(job)
+                await session.commit()
+
+            with pytest.raises(checkpoints.AuthoredStageError) as missing:
+                await checkpoints.initialize_checkpoints(
+                    job_id=job.id,
+                    attempt_token="workspace-attempt",
+                    roles=["title"],
+                )
+            assert missing.value.code == "authored_workspace_operation_fencing_token_required"
+
+            with pytest.raises(checkpoints.AuthoredStageError) as stale:
+                await checkpoints.initialize_checkpoints(
+                    job_id=job.id,
+                    attempt_token="workspace-attempt",
+                    fencing_token=8,
+                    roles=["title"],
+                )
+            assert stale.value.code == "authored_workspace_operation_fence_lost"
+
+            await checkpoints.initialize_checkpoints(
+                job_id=job.id,
+                attempt_token="workspace-attempt",
+                fencing_token=9,
+                roles=["title"],
+            )
+            await checkpoints.start_stage(
+                job_id=job.id,
+                slide_index=0,
+                stage="author",
+                attempt_token="workspace-attempt",
+                fencing_token=9,
+            )
+            await checkpoints.start_stage(
+                job_id=job.id,
+                slide_index=0,
+                stage="render",
+                attempt_token="workspace-attempt",
+                fencing_token=9,
+            )
+
+            async def take_over_before_pointer(*_args, **_kwargs):
+                async with maker() as takeover_session:
+                    await takeover_session.execute(
+                        update(WorkspaceOperation)
+                        .where(WorkspaceOperation.id == operation.id)
+                        .values(attempt_token="newer-attempt", fencing_token=10)
+                    )
+                    await takeover_session.commit()
+                return None
+
+            monkeypatch.setattr(
+                checkpoints._state,
+                "_public_checkpoint_binding",
+                take_over_before_pointer,
+            )
+            with pytest.raises(checkpoints.AuthoredStageError) as late_write:
+                await checkpoints.complete_stage(
+                    job_id=job.id,
+                    slide_index=0,
+                    stage="render",
+                    attempt_token="workspace-attempt",
+                    fencing_token=9,
+                    html="<section>late render</section>",
+                    png=b"late-render",
+                    browser_metrics={"visible": True},
+                )
+            assert late_write.value.code == "authored_workspace_operation_fence_lost"
+
+            async with maker() as session:
+                checkpoint = (
+                    await session.execute(
+                        select(AuthoredSlideCheckpoint).where(
+                            AuthoredSlideCheckpoint.job_id == job.id,
+                            AuthoredSlideCheckpoint.slide_index == 0,
+                        )
+                    )
+                ).scalar_one()
+                assert checkpoint is not None
+                assert checkpoint.render_path is None
+                assert checkpoint.artifact_refs is None
+            assert list((tmp_path / "render-artifacts" / str(job.id)).glob("*.png"))
+
+            unfenced = await checkpoints.get_checkpoint(job.id, 0)
+            assert unfenced.render_path is None
+            assert unfenced.artifact_refs is None
+            newer_attempt = await checkpoints.get_checkpoint(
+                job.id,
+                0,
+                attempt_token="newer-attempt",
+                fencing_token=10,
+            )
+            assert newer_attempt.render_path is None
+            assert newer_attempt.artifact_refs is None
+
+            async with maker() as session:
+                with pytest.raises(checkpoints.AuthoredStageError) as publish_stale:
+                    await checkpoints.begin_publish(
+                        session,
+                        job_id=job.id,
+                        attempt_token="workspace-attempt",
+                        fencing_token=8,
+                )
+                assert publish_stale.value.code == "authored_workspace_operation_fence_lost"
         finally:
             await engine.dispose()
 

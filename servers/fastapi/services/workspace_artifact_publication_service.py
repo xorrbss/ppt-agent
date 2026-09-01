@@ -20,7 +20,7 @@ from pathlib import Path, PurePosixPath
 from typing import BinaryIO, Mapping
 
 from sqlalchemy import and_, or_, select, text, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from models.sql.presentation import (
@@ -31,6 +31,7 @@ from models.sql.presentation import (
 )
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.presentation_export_attempt import PresentationExportAttempt
+from models.sql.public_admission import PublicOperationAdmission
 from models.sql.public_artifact import ArtifactRef, PublicArtifact
 from models.sql.workspace import (
     WorkspaceArtifact,
@@ -2075,6 +2076,16 @@ async def _fence_artifact_publication_account(
         ) from error
 
 
+async def fence_workspace_generation_publication(
+    session: AsyncSession,
+    *,
+    artifact: PreparedWorkspaceArtifact,
+) -> None:
+    """Acquire the account fence before admission/operation/job publication locks."""
+
+    await _fence_artifact_publication_account(session, artifact=artifact)
+
+
 async def _raise_publication_revision_error(
     session: AsyncSession,
     *,
@@ -2336,6 +2347,46 @@ async def publish_workspace_generation_artifact(
         # presentation projection is mutated. Account deletion takes the same
         # serialization point before its durable cleanup snapshot and cascade.
         await _fence_artifact_publication_account(session, artifact=artifact)
+        # Public-v2 transactions have one global lock order:
+        # admission -> operation -> linked generation job.  Publication used
+        # to acquire these rows in reverse order, which could deadlock against
+        # heartbeat/retry while a terminal receipt was being committed.
+        try:
+            async with session.begin_nested():
+                public_admission = await session.scalar(
+                    select(PublicOperationAdmission)
+                    .where(
+                        PublicOperationAdmission.operation_id
+                        == artifact.operation_id
+                    )
+                    .with_for_update()
+                )
+        except OperationalError:
+            public_admission = None
+        operation_authority = await session.scalar(
+            select(WorkspaceOperation)
+            .where(
+                WorkspaceOperation.id == artifact.operation_id,
+                WorkspaceOperation.presentation_id == artifact.presentation_id,
+                WorkspaceOperation.owner_id == artifact.owner_id,
+                WorkspaceOperation.owner_scope == get_workspace_owner_scope(),
+                WorkspaceOperation.state == "running",
+                WorkspaceOperation.attempt_token == attempt_token,
+                WorkspaceOperation.fencing_token == fencing_token,
+                WorkspaceOperation.attempt_number == attempt_number,
+                WorkspaceOperation.expected_revision == expected_revision,
+            )
+            .with_for_update()
+        )
+        if operation_authority is None:
+            raise WorkspaceArtifactPublicationError("operation_lease_lost")
+        if operation_authority.contract_version == "public-operation/v2" and (
+            public_admission is None
+            or public_admission.operation_kind != "generation"
+            or public_admission.state != "active"
+            or public_admission.fence != fencing_token
+        ):
+            raise WorkspaceArtifactPublicationError("operation_lease_lost")
         linked_job_result = await session.execute(
             update(PresentationGenerationJob)
             .where(

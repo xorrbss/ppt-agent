@@ -11,6 +11,7 @@ from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
 from models.sql.presentation_generation_job import PresentationGenerationJob
+from models.sql.workspace import WorkspaceOperation
 from services import presentation_generation_job_service as jobs
 from utils.owner_context import (
     reset_current_owner_id,
@@ -32,6 +33,7 @@ async def _job_database(tmp_path, monkeypatch):
             tables=[
                 AsyncPresentationGenerationTaskModel.__table__,
                 PresentationGenerationJob.__table__,
+                WorkspaceOperation.__table__,
             ],
         )
     maker = async_sessionmaker(engine, expire_on_commit=False)
@@ -126,6 +128,173 @@ def test_job_claim_is_atomic_and_success_finalization_is_token_guarded(
             assert stored_job.published_at is not None
             assert stored_status is not None
             assert stored_status.status == "running"
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_linked_claim_is_operation_projection_and_does_not_consume_legacy_quota(
+    tmp_path, monkeypatch
+):
+    async def scenario():
+        engine, maker = await _job_database(tmp_path, monkeypatch)
+        try:
+            now = jobs.utc_now()
+            operation_id = uuid.uuid4()
+            attempt_token = "operation-attempt"
+            presentation_id = uuid.uuid4()
+            status = AsyncPresentationGenerationTaskModel(status="pending")
+            linked = PresentationGenerationJob(
+                task_id=status.id,
+                presentation_id=presentation_id,
+                workspace_operation_id=operation_id,
+                request_sha256="d" * 64,
+                request_payload={"strategy": "authored"},
+            )
+            operation = WorkspaceOperation(
+                id=operation_id,
+                conversation_id=uuid.uuid4(),
+                presentation_id=presentation_id,
+                anchor_position=1,
+                kind="presentation.generate",
+                state="running",
+                idempotency_key_hash="e" * 64,
+                request_hash="f" * 64,
+                attempt_number=2,
+                attempt_token=attempt_token,
+                fencing_token=9,
+                heartbeat_at=now,
+                lease_expires_at=now + timedelta(minutes=5),
+                started_at=now,
+            )
+            legacy_status = AsyncPresentationGenerationTaskModel(status="pending")
+            legacy = PresentationGenerationJob(
+                task_id=legacy_status.id,
+                presentation_id=uuid.uuid4(),
+                request_sha256="1" * 64,
+                request_payload={"strategy": "authored"},
+            )
+            async with maker() as session:
+                session.add_all((operation, status, linked, legacy_status, legacy))
+                await session.commit()
+
+            monkeypatch.setattr(jobs, "AUTHORED_CLUSTER_JOB_CONCURRENCY", 1)
+            async with maker() as session:
+                projected = await jobs.project_workspace_linked_generation_claim(
+                    session,
+                    operation_id,
+                    expected_job_id=linked.id,
+                    attempt_token=attempt_token,
+                    attempt_number=2,
+                    fencing_token=9,
+                )
+                assert projected == (linked.id, status.id)
+                assert linked.workspace_operation_id is not None
+                assert await jobs._authored_capacity_available(
+                    session,
+                    target_job_id=legacy.id,
+                    now=now,
+                )
+                await session.rollback()
+
+            async with maker() as session:
+                stored_linked = await session.get(
+                    PresentationGenerationJob, linked.id
+                )
+                assert stored_linked is not None
+                assert stored_linked.state == "queued"
+                assert stored_linked.attempt_token is None
+
+            async with maker() as session:
+                assert await jobs.project_workspace_linked_generation_claim(
+                    session,
+                    operation_id,
+                    expected_job_id=linked.id,
+                    attempt_token=attempt_token,
+                    attempt_number=2,
+                    fencing_token=9,
+                ) == (linked.id, status.id)
+                await session.commit()
+
+            assert await jobs.claim_workspace_linked_generation_job(
+                operation_id,
+                attempt_token,
+                2,
+            ) == (linked.id, status.id)
+
+            async with maker() as session:
+                assert await jobs.project_workspace_linked_generation_succeeded(
+                    session,
+                    operation_id,
+                    expected_job_id=linked.id,
+                    expected_attempt_token=attempt_token,
+                )
+                await session.commit()
+            async with maker() as session:
+                stored_linked = await session.get(
+                    PresentationGenerationJob, linked.id
+                )
+                stored_status = await session.get(
+                    AsyncPresentationGenerationTaskModel, status.id
+                )
+                assert stored_linked is not None
+                assert stored_linked.state == "published"
+                assert stored_linked.attempt_token is None
+                assert stored_status is not None
+                assert stored_status.status == "completed"
+
+            poison_operation_id = uuid.uuid4()
+            poison_presentation_id = uuid.uuid4()
+            poison_status = AsyncPresentationGenerationTaskModel(status="pending")
+            poison_job = PresentationGenerationJob(
+                task_id=poison_status.id,
+                presentation_id=poison_presentation_id,
+                workspace_operation_id=poison_operation_id,
+                request_sha256="2" * 64,
+                request_payload={"strategy": "authored"},
+                last_error={
+                    "code": "authored_slide_capacity_exceeded",
+                    "retryable": False,
+                },
+            )
+            poison_operation = WorkspaceOperation(
+                id=poison_operation_id,
+                conversation_id=uuid.uuid4(),
+                presentation_id=poison_presentation_id,
+                anchor_position=1,
+                kind="presentation.generate",
+                state="running",
+                idempotency_key_hash="3" * 64,
+                request_hash="4" * 64,
+                attempt_number=1,
+                attempt_token="poison-attempt",
+                fencing_token=1,
+                heartbeat_at=now,
+                lease_expires_at=now + timedelta(minutes=5),
+                started_at=now,
+            )
+            async with maker() as session:
+                session.add_all((poison_operation, poison_status, poison_job))
+                await session.commit()
+            async with maker() as session:
+                with pytest.raises(
+                    jobs.WorkspaceLinkedGenerationProjectionPoisoned,
+                    match="authored_slide_capacity_exceeded",
+                ):
+                    await jobs.project_workspace_linked_generation_claim(
+                        session,
+                        poison_operation_id,
+                        expected_job_id=poison_job.id,
+                        attempt_token="poison-attempt",
+                        attempt_number=1,
+                        fencing_token=1,
+                    )
+                await session.rollback()
+            assert await jobs.claim_generation_job(
+                legacy.id,
+                allow_auth_resume=False,
+            ) is not None
         finally:
             await engine.dispose()
 

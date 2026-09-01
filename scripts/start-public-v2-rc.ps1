@@ -401,11 +401,11 @@ try {
 
     if ($ProviderConfigPath) {
         $syncEnvironment = $sharedEnvironment.Clone(); $syncEnvironment["USER_CONFIG_PATH"] = $ProviderConfigPath
-        $sync = Start-LoggedProcess -FilePath $python -ArgumentList @("scripts\sync_existing_provider_settings.py") -WorkingDirectory $fastApi -Environment $syncEnvironment -StdoutPath (Join-Path $logs "provider-settings-sync.stdout.log") -StderrPath (Join-Path $logs "provider-settings-sync.stderr.log")
+        $sync = Start-LoggedProcess -FilePath $python -ArgumentList @("-m", "scripts.sync_existing_provider_settings") -WorkingDirectory $fastApi -Environment $syncEnvironment -StdoutPath (Join-Path $logs "provider-settings-sync.stdout.log") -StderrPath (Join-Path $logs "provider-settings-sync.stderr.log")
         $sync.WaitForExit(); if ($sync.ExitCode -ne 0) { throw "public-v2 RC provider settings sync failed; see retained evidence logs" }
     }
     if ($Mode -eq "export-only" -and $ExportSnapshotPath) {
-        $seed = Start-LoggedProcess -FilePath $python -ArgumentList @("scripts\seed_public_v2_export_snapshot.py", "--snapshot", $ExportSnapshotPath, "--username", "rc-admin") -WorkingDirectory $fastApi -Environment $sharedEnvironment -StdoutPath (Join-Path $logs "export-snapshot-seed.stdout.log") -StderrPath (Join-Path $logs "export-snapshot-seed.stderr.log")
+        $seed = Start-LoggedProcess -FilePath $python -ArgumentList @("-m", "scripts.seed_public_v2_export_snapshot", "--snapshot", $ExportSnapshotPath, "--username", "rc-admin") -WorkingDirectory $fastApi -Environment $sharedEnvironment -StdoutPath (Join-Path $logs "export-snapshot-seed.stdout.log") -StderrPath (Join-Path $logs "export-snapshot-seed.stderr.log")
         $seed.WaitForExit(); if ($seed.ExitCode -ne 0) { throw "public-v2 RC export snapshot seed failed; see retained evidence logs" }
         $seedReceipt = Get-Content -Raw -LiteralPath (Join-Path $logs "export-snapshot-seed.stdout.log") | ConvertFrom-Json
         $ExistingPresentationId = [string]$seedReceipt.presentationId; $ExistingSourceRevision = [int]$seedReceipt.sourceRevision

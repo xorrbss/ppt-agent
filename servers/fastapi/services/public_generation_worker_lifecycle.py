@@ -6,7 +6,6 @@ legacy generation-job row remains a compatibility projection.
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
@@ -16,11 +15,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from models.sql.workspace import WorkspaceOperation
 from services.presentation_generation_job_service import (
-    GenerationCapacityUnavailable,
+    WorkspaceLinkedGenerationProjectionPoisoned,
 )
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
-    WorkspaceOperationDeferred,
     WorkspaceOperationExecutionContext,
     WorkspaceOperationExecutionError,
     WorkspaceOperationLeaseLost,
@@ -29,8 +27,6 @@ from services.workspace_operation_retry_policy import WorkspaceOperationRetryDec
 
 
 PUBLIC_OPERATION_CONTRACT_VERSION = "public-operation/v2"
-PUBLIC_CAPACITY_COMMIT_RESERVE_SECONDS = 10.0
-
 LinkedClaimCallable = Callable[
     [uuid.UUID, str, int],
     Awaitable[tuple[uuid.UUID, str] | None],
@@ -177,103 +173,28 @@ def durable_generation_failure(error: BaseException) -> tuple[str, bool]:
     return normalized_code or "presentation_generation_failed", durable_retryable
 
 
-async def _public_claim_deadline(
-    session_factory: async_sessionmaker[AsyncSession],
-    context: WorkspaceOperationExecutionContext,
-) -> datetime | None:
-    claim = context.claim
-    async with session_factory() as session:
-        operation = await session.get(WorkspaceOperation, claim.operation_id)
-        if (
-            operation is None
-            or operation.state != "running"
-            or operation.attempt_token != claim.attempt_token
-            or operation.fencing_token != claim.fencing_token
-        ):
-            raise WorkspaceOperationLeaseLost(
-                "presentation_generation_lifecycle_fenced"
-            )
-        if operation.contract_version != PUBLIC_OPERATION_CONTRACT_VERSION:
-            return None
-        deadline = operation.deadline_at
-        if deadline is None:
-            raise NonRetryableWorkspaceOperationError(
-                "public_operation_deadline_missing"
-            )
-        return (
-            deadline
-            if deadline.tzinfo is not None
-            else deadline.replace(tzinfo=timezone.utc)
-        )
-
-
 async def claim_linked_generation_job(
     *,
     session_factory: async_sessionmaker[AsyncSession],
     context: WorkspaceOperationExecutionContext,
     claim_linked: LinkedClaimCallable,
 ) -> tuple[uuid.UUID, str]:
-    """Acquire the compatibility fence without churning a public v2 lease."""
+    """Use the compatibility projection already joined to operation claim."""
 
     claim = context.claim
-    unreported = object()
-    reported_queue_position: object = unreported
-    while True:
-        try:
-            linked_claim = await claim_linked(
-                claim.operation_id,
-                claim.attempt_token,
-                claim.attempt_number,
-            )
-        except GenerationCapacityUnavailable as error:
-            deadline = await _public_claim_deadline(session_factory, context)
-            if deadline is None:
-                raise WorkspaceOperationDeferred(
-                    error.code,
-                    retry_after_seconds=error.retry_after_seconds,
-                    detail=(
-                        {"queue_position": error.queue_position}
-                        if error.queue_position is not None
-                        else None
-                    ),
-                ) from error
-            now = datetime.now(timezone.utc)
-            retry_after = max(0.1, float(error.retry_after_seconds))
-            if deadline <= now + timedelta(
-                seconds=retry_after + PUBLIC_CAPACITY_COMMIT_RESERVE_SECONDS
-            ):
-                raise NonRetryableWorkspaceOperationError(
-                    "public_deadline_exceeded",
-                    detail={"error_code": "public_deadline_exceeded"},
-                ) from error
-            if reported_queue_position != error.queue_position:
-                if not await context.progress(stage="waiting_for_capacity"):
-                    raise WorkspaceOperationLeaseLost(
-                        "presentation_generation_lifecycle_fenced"
-                    )
-                reported_queue_position = error.queue_position
-            await asyncio.sleep(
-                min(
-                    retry_after,
-                    max(
-                        0.1,
-                        (
-                            deadline
-                            - now
-                            - timedelta(
-                                seconds=PUBLIC_CAPACITY_COMMIT_RESERVE_SECONDS
-                            )
-                        ).total_seconds(),
-                    ),
-                )
-            )
-            await context.raise_if_cancelled()
-            continue
-        if linked_claim is None:
-            raise WorkspaceOperationLeaseLost(
-                "presentation_generation_compatibility_claim_lost"
-            )
-        return linked_claim
+    try:
+        linked_claim = await claim_linked(
+            claim.operation_id,
+            claim.attempt_token,
+            claim.attempt_number,
+        )
+    except WorkspaceLinkedGenerationProjectionPoisoned as error:
+        raise NonRetryableWorkspaceOperationError(error.code) from error
+    if linked_claim is None:
+        raise WorkspaceOperationLeaseLost(
+            "presentation_generation_compatibility_claim_lost"
+        )
+    return linked_claim
 
 
 async def require_public_generation_publication(

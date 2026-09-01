@@ -10,7 +10,7 @@ import secrets
 from typing import Any
 import uuid
 
-from sqlalchemy import exists, or_, select, text, update
+from sqlalchemy import or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sql.async_presentation_generation_status import (
@@ -80,6 +80,15 @@ class GenerationCapacityUnavailable(RuntimeError):
         )
 
 
+class WorkspaceLinkedGenerationProjectionPoisoned(RuntimeError):
+    """Signal a terminal legacy projection to the generic operation owner."""
+
+    def __init__(self, code: str) -> None:
+        normalized = str(code or "presentation_generation_failed")[:128]
+        super().__init__(normalized)
+        self.code = normalized
+
+
 def _is_authored_payload(payload: dict[str, Any] | None) -> bool:
     if not isinstance(payload, dict):
         return False
@@ -147,6 +156,7 @@ async def _authored_capacity_available(
     active_payloads = await session.scalars(
         select(PresentationGenerationJob.request_payload)
         .where(PresentationGenerationJob.id != target_job_id)
+        .where(PresentationGenerationJob.workspace_operation_id.is_(None))
         .where(PresentationGenerationJob.state.in_(("running", "staging")))
         .where(PresentationGenerationJob.attempt_token.is_not(None))
         .where(PresentationGenerationJob.lease_expires_at >= now)
@@ -432,15 +442,8 @@ async def claim_workspace_linked_generation_job(
     attempt_token: str,
     attempt_number: int,
 ) -> tuple[uuid.UUID, str] | None:
-    """Project a generic operation claim onto its legacy generation row.
+    """Validate and return an already-projected generic operation claim."""
 
-    Authored checkpoints still fence on ``PresentationGenerationJob``.  The
-    workspace operation remains the canonical lease; this compatibility claim
-    mirrors its token so the existing checkpoint/publish path can be reused
-    without allowing the legacy dispatcher to run a parallel attempt.
-    """
-
-    now = utc_now()
     async with async_session_maker() as session:
         target = (
             await session.execute(
@@ -450,88 +453,95 @@ async def claim_workspace_linked_generation_job(
                 )
             )
         ).scalar_one_or_none()
-        authored_target = target is not None and _is_authored_payload(
-            target.request_payload
-        )
-        quota_is_serialized = False
-        if authored_target:
-            await session.rollback()
-            quota_is_serialized = await _serialize_cluster_claims(session)
-            target = (
-                await session.execute(
-                    select(PresentationGenerationJob).where(
-                        PresentationGenerationJob.workspace_operation_id
-                        == workspace_operation_id
-                    )
-                )
-            ).scalar_one_or_none()
-        if target is None or target.state == "published":
-            await session.rollback()
+        if target is None:
             return None
-
+        last_error = target.last_error if isinstance(target.last_error, dict) else {}
+        if target.state == "queued" and last_error.get("retryable") is False:
+            raise WorkspaceLinkedGenerationProjectionPoisoned(
+                str(last_error.get("code") or "presentation_generation_failed")
+            )
         live_operation = await session.scalar(
             select(WorkspaceOperation.id)
             .where(WorkspaceOperation.id == workspace_operation_id)
             .where(WorkspaceOperation.state == "running")
             .where(WorkspaceOperation.attempt_token == attempt_token)
+            .where(WorkspaceOperation.attempt_number == attempt_number)
         )
-        if live_operation is None:
-            await session.rollback()
-            return None
         if (
-            quota_is_serialized
-            and authored_target
-            and not await _authored_capacity_available(
-                session,
-                target_job_id=target.id,
-                now=now,
-            )
+            live_operation is None
+            or target.state not in {"running", "staging"}
+            or target.attempt_token != attempt_token
+            or target.attempt_number != attempt_number
         ):
-            queue_position = await _workspace_linked_generation_queue_position(
-                session,
-                target=target,
-            )
-            await session.rollback()
-            raise GenerationCapacityUnavailable(
-                queue_position=queue_position,
-            )
-
-        result = await session.execute(
-            update(PresentationGenerationJob)
-            .where(PresentationGenerationJob.id == target.id)
-            .where(
-                PresentationGenerationJob.workspace_operation_id
-                == workspace_operation_id
-            )
-            .where(PresentationGenerationJob.state != "published")
-            .values(
-                state="running",
-                attempt_number=attempt_number,
-                attempt_token=attempt_token,
-                lease_expires_at=now
-                + timedelta(seconds=GENERATION_JOB_LEASE_SECONDS),
-                heartbeat_at=now,
-                last_started_at=now,
-                failed_at=None,
-                updated_at=now,
-            )
-        )
-        if result.rowcount != 1:
-            await session.rollback()
             return None
-        task = await session.get(
-            AsyncPresentationGenerationTaskModel, target.task_id
-        )
-        if task is None:
-            await session.rollback()
-            return None
-        task.status = "running"
-        task.message = "Generating presentation"
-        task.error = None
-        task.updated_at = now
-        session.add(task)
-        await session.commit()
         return target.id, target.task_id
+
+
+async def project_workspace_linked_generation_claim(
+    session: AsyncSession,
+    workspace_operation_id: uuid.UUID,
+    *,
+    expected_job_id: uuid.UUID | None = None,
+    attempt_token: str,
+    attempt_number: int,
+    fencing_token: int,
+) -> tuple[uuid.UUID, str] | None:
+    """Mirror an authoritative operation claim without owning or committing it."""
+
+    operation = (
+        await session.execute(
+            select(WorkspaceOperation)
+            .where(WorkspaceOperation.id == workspace_operation_id)
+            .where(WorkspaceOperation.state == "running")
+            .where(WorkspaceOperation.attempt_token == attempt_token)
+            .where(WorkspaceOperation.attempt_number == attempt_number)
+            .where(WorkspaceOperation.fencing_token == fencing_token)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if operation is None:
+        return None
+    statement = (
+        select(PresentationGenerationJob)
+        .where(
+            PresentationGenerationJob.workspace_operation_id
+            == workspace_operation_id
+        )
+        .with_for_update()
+    )
+    if expected_job_id is not None:
+        statement = statement.where(PresentationGenerationJob.id == expected_job_id)
+    job = (await session.execute(statement)).scalar_one_or_none()
+    if job is None or job.state == "published":
+        return None
+    last_error = job.last_error if isinstance(job.last_error, dict) else {}
+    if job.state == "queued" and last_error.get("retryable") is False:
+        raise WorkspaceLinkedGenerationProjectionPoisoned(
+            str(last_error.get("code") or "presentation_generation_failed")
+        )
+    task = await session.get(
+        AsyncPresentationGenerationTaskModel,
+        job.task_id,
+        with_for_update=True,
+    )
+    if task is None:
+        return None
+
+    now = utc_now()
+    job.state = "running"
+    job.attempt_number = attempt_number
+    job.attempt_token = attempt_token
+    job.lease_expires_at = operation.lease_expires_at
+    job.heartbeat_at = operation.heartbeat_at or now
+    job.last_started_at = operation.started_at or now
+    job.failed_at = None
+    job.updated_at = now
+    task.status = "running"
+    task.message = "Generating presentation"
+    task.error = None
+    task.updated_at = now
+    session.add_all((job, task))
+    return job.id, job.task_id
 
 
 async def heartbeat_workspace_linked_generation_job(
@@ -539,33 +549,9 @@ async def heartbeat_workspace_linked_generation_job(
     workspace_operation_id: uuid.UUID,
     attempt_token: str,
 ) -> bool:
-    now = utc_now()
-    async with async_session_maker() as session:
-        live_operation = exists(
-            select(WorkspaceOperation.id)
-            .where(WorkspaceOperation.id == workspace_operation_id)
-            .where(WorkspaceOperation.state == "running")
-            .where(WorkspaceOperation.attempt_token == attempt_token)
-        )
-        result = await session.execute(
-            update(PresentationGenerationJob)
-            .where(PresentationGenerationJob.id == job_id)
-            .where(
-                PresentationGenerationJob.workspace_operation_id
-                == workspace_operation_id
-            )
-            .where(PresentationGenerationJob.attempt_token == attempt_token)
-            .where(PresentationGenerationJob.state.in_(("running", "staging")))
-            .where(live_operation)
-            .values(
-                heartbeat_at=now,
-                lease_expires_at=now
-                + timedelta(seconds=GENERATION_JOB_LEASE_SECONDS),
-                updated_at=now,
-            )
-        )
-        await session.commit()
-        return result.rowcount == 1
+    """Deprecated: linked jobs mirror the generic operation heartbeat."""
+
+    return False
 
 
 async def release_workspace_linked_generation_job(
@@ -573,47 +559,9 @@ async def release_workspace_linked_generation_job(
     workspace_operation_id: uuid.UUID,
     attempt_token: str,
 ) -> bool:
-    """Release only the compatibility projection after interruption."""
+    """Deprecated: generic operation recovery owns the linked projection."""
 
-    now = utc_now()
-    async with async_session_maker() as session:
-        job = (
-            await session.execute(
-                select(PresentationGenerationJob)
-                .where(PresentationGenerationJob.id == job_id)
-                .where(
-                    PresentationGenerationJob.workspace_operation_id
-                    == workspace_operation_id
-                )
-                .where(PresentationGenerationJob.attempt_token == attempt_token)
-                .where(
-                    PresentationGenerationJob.state.in_(("running", "staging"))
-                )
-            )
-        ).scalar_one_or_none()
-        if job is None:
-            await session.rollback()
-            return False
-        job.state = "awaiting_resume" if job.export_cookie_required else "queued"
-        job.attempt_token = None
-        job.lease_expires_at = None
-        job.heartbeat_at = now
-        job.updated_at = now
-        task = await session.get(
-            AsyncPresentationGenerationTaskModel, job.task_id
-        )
-        if task is not None and task.status not in {"completed", "error"}:
-            task.status = "pending"
-            task.message = (
-                "Authentication required to resume generation"
-                if job.export_cookie_required
-                else "Interrupted; queued for workspace recovery"
-            )
-            task.updated_at = now
-            session.add(task)
-        session.add(job)
-        await session.commit()
-        return True
+    return False
 
 
 async def project_workspace_linked_generation_cancelled(
@@ -865,45 +813,65 @@ async def fail_workspace_linked_generation_job(
     *,
     error_code: str,
 ) -> bool:
-    """Record a safe terminal compatibility projection for a failed attempt."""
+    """Deprecated: generic operation failure owns the linked projection."""
+
+    return False
+
+
+async def project_workspace_linked_generation_succeeded(
+    session: AsyncSession,
+    workspace_operation_id: uuid.UUID,
+    *,
+    expected_job_id: uuid.UUID | None = None,
+    expected_attempt_token: str | None = None,
+) -> bool:
+    """Project generic-operation success without committing its transaction."""
+
+    statement = (
+        select(PresentationGenerationJob)
+        .where(
+            PresentationGenerationJob.workspace_operation_id
+            == workspace_operation_id
+        )
+        .with_for_update()
+    )
+    if expected_job_id is not None:
+        statement = statement.where(PresentationGenerationJob.id == expected_job_id)
+    job = (await session.execute(statement)).scalar_one_or_none()
+    if job is None:
+        return False
+    if job.state == "published" and job.attempt_token is None:
+        return True
+    if (
+        job.state not in {"running", "staging"}
+        or expected_attempt_token is None
+        or job.attempt_token != expected_attempt_token
+    ):
+        return False
+    task = await session.get(
+        AsyncPresentationGenerationTaskModel,
+        job.task_id,
+        with_for_update=True,
+    )
+    if task is None:
+        return False
 
     now = utc_now()
-    async with async_session_maker() as session:
-        # An authored stage failure has already recorded which slide and which
-        # stage failed. Replacing that with a bare code strips the only detail
-        # that tells a user where to look, so keep the richer record when the
-        # attempt left one behind.
-        recorded = await session.scalar(
-            select(PresentationGenerationJob.last_error).where(
-                PresentationGenerationJob.id == job_id
-            )
-        )
-        safe_error = (
-            recorded
-            if isinstance(recorded, dict) and recorded.get("code")
-            else {"code": error_code}
-        )
-        result = await session.execute(
-            update(PresentationGenerationJob)
-            .where(PresentationGenerationJob.id == job_id)
-            .where(
-                PresentationGenerationJob.workspace_operation_id
-                == workspace_operation_id
-            )
-            .where(PresentationGenerationJob.attempt_token == attempt_token)
-            .where(PresentationGenerationJob.state.in_(("running", "staging")))
-            .values(
-                state="failed",
-                attempt_token=None,
-                lease_expires_at=None,
-                heartbeat_at=now,
-                failed_at=now,
-                last_error=safe_error,
-                updated_at=now,
-            )
-        )
-        await session.commit()
-        return result.rowcount == 1
+    job.state = "published"
+    job.attempt_token = None
+    job.lease_expires_at = None
+    job.heartbeat_at = now
+    job.current_stage = "completed"
+    job.last_error = None
+    job.resume_allowed = False
+    job.published_at = job.published_at or now
+    job.updated_at = now
+    task.status = "completed"
+    task.message = "Presentation generation completed"
+    task.error = None
+    task.updated_at = now
+    session.add_all((job, task))
+    return True
 
 
 async def complete_workspace_linked_generation_job(
@@ -911,41 +879,9 @@ async def complete_workspace_linked_generation_job(
     workspace_operation_id: uuid.UUID,
     attempt_token: str,
 ) -> bool:
-    """Finish the legacy projection, accepting authored atomic publication."""
+    """Deprecated: generic operation success owns the linked projection."""
 
-    now = utc_now()
-    async with async_session_maker() as session:
-        job = await session.get(PresentationGenerationJob, job_id)
-        if (
-            job is not None
-            and job.workspace_operation_id == workspace_operation_id
-            and job.state == "published"
-        ):
-            await session.rollback()
-            return True
-        result = await session.execute(
-            update(PresentationGenerationJob)
-            .where(PresentationGenerationJob.id == job_id)
-            .where(
-                PresentationGenerationJob.workspace_operation_id
-                == workspace_operation_id
-            )
-            .where(PresentationGenerationJob.attempt_token == attempt_token)
-            .where(PresentationGenerationJob.state.in_(("running", "staging")))
-            .values(
-                state="published",
-                attempt_token=None,
-                lease_expires_at=None,
-                heartbeat_at=now,
-                current_stage="completed",
-                last_error=None,
-                resume_allowed=False,
-                published_at=now,
-                updated_at=now,
-            )
-        )
-        await session.commit()
-        return result.rowcount == 1
+    return False
 
 
 async def heartbeat_generation_job(job_id: uuid.UUID, token: str) -> bool:

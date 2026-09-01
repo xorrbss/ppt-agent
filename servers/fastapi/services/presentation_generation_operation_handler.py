@@ -40,10 +40,6 @@ from services.database import async_session_maker
 from services.presentation_generation_job_service import (
     GENERATION_JOB_HEARTBEAT_SECONDS,
     claim_workspace_linked_generation_job,
-    complete_workspace_linked_generation_job,
-    fail_workspace_linked_generation_job,
-    heartbeat_workspace_linked_generation_job,
-    release_workspace_linked_generation_job,
 )
 from services.public_quality_receipt_v3_store import (
     PostgresOperationQualityReceiptV3Port,
@@ -386,24 +382,6 @@ class PresentationGenerationOperationHandler:
             )
         return job
 
-    async def _legacy_heartbeat_loop(
-        self,
-        *,
-        job_id: uuid.UUID,
-        operation_id: uuid.UUID,
-        attempt_token: str,
-    ) -> None:
-        while True:
-            await asyncio.sleep(self._heartbeat_seconds)
-            alive = await heartbeat_workspace_linked_generation_job(
-                job_id, operation_id, attempt_token
-            )
-            if not alive:
-                # Authored publication atomically marks this projection
-                # published and clears its token before the handler returns.
-                # The generic operation heartbeat remains authoritative.
-                return
-
     async def _run_existing_pipeline(
         self,
         job_id: uuid.UUID,
@@ -439,7 +417,26 @@ class PresentationGenerationOperationHandler:
                     "presentation_generation_task_missing"
                 )
 
+            # The generic operation claim is authoritative.  Keep its
+            # provenance available to checkpoint/publication callers without
+            # creating a second job lease or heartbeat lifecycle.
+            job.attempt_token = context.claim.attempt_token
+            object.__setattr__(
+                job,
+                "_workspace_fencing_token",
+                context.claim.fencing_token,
+            )
             request = _request_from_durable_payload(job.request_payload)
+            object.__setattr__(
+                request,
+                "_workspace_operation_attempt_token",
+                context.claim.attempt_token,
+            )
+            object.__setattr__(
+                request,
+                "_workspace_operation_fencing_token",
+                context.claim.fencing_token,
+            )
             _begin_upstream_outline_timing(request)
             request._request_id = job.request_id
             timing_recorder = GenerationTimingRecorder()
@@ -965,13 +962,6 @@ class PresentationGenerationOperationHandler:
                     raise WorkspaceOperationLeaseLost(
                         "presentation_generation_checkpoint_reuse_event_fenced"
                     )
-        heartbeat = asyncio.create_task(
-            self._legacy_heartbeat_loop(
-                job_id=job_id,
-                operation_id=claim.operation_id,
-                attempt_token=claim.attempt_token,
-            )
-        )
         # Authored generation has no reporter seam of its own; this turns the
         # per-slide checkpoints it already writes into timeline progress.
         stop_authored_progress = start_authored_generation_progress_polling(
@@ -1001,43 +991,17 @@ class PresentationGenerationOperationHandler:
             result = await self._pipeline(
                 job_id, task_id, export_cookie_header, context
             )
-            if not await complete_workspace_linked_generation_job(
-                job_id, claim.operation_id, claim.attempt_token
-            ):
-                raise WorkspaceOperationLeaseLost(
-                    "presentation_generation_compatibility_finalize_lost"
-                )
             return result
         except asyncio.CancelledError:
-            await asyncio.shield(
-                release_workspace_linked_generation_job(
-                    job_id, claim.operation_id, claim.attempt_token
-                )
-            )
             raise
         except WorkspaceOperationCancelled:
-            await release_workspace_linked_generation_job(
-                job_id, claim.operation_id, claim.attempt_token
-            )
             raise
-        except WorkspaceOperationExecutionError as error:
-            await fail_workspace_linked_generation_job(
-                job_id,
-                claim.operation_id,
-                claim.attempt_token,
-                error_code=error.code,
-            )
+        except WorkspaceOperationExecutionError:
             raise
         except WorkspaceOperationLeaseLost:
             raise
         except Exception as error:
             code, retryable = durable_generation_failure(error)
-            await fail_workspace_linked_generation_job(
-                job_id,
-                claim.operation_id,
-                claim.attempt_token,
-                error_code=code,
-            )
             error_type = (
                 RetryableWorkspaceOperationError
                 if retryable
@@ -1046,8 +1010,6 @@ class PresentationGenerationOperationHandler:
             raise error_type(code) from error
         finally:
             await stop_authored_progress()
-            heartbeat.cancel()
-            await asyncio.gather(heartbeat, return_exceptions=True)
 
 
 def register_presentation_generation_operation_handler(

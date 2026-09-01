@@ -27,7 +27,9 @@ import requests
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
+from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from models.sql.presentation import PresentationModel
+from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.public_artifact import PublicArtifact, PublicArtifactPublication
 from models.sql.public_admission import PublicOperationAdmission
 from models.sql.workspace import WorkspaceOperation, WorkspaceOperationEvent
@@ -200,6 +202,7 @@ def _assert_claim_and_terminal_evidence(
     assert operation.started_at is not None
     assert operation.completed_at is not None
     assert admission.state == "succeeded"
+    assert admission.fence == operation.fencing_token
     assert any(event.event_type == "operation.progress" for event in events)
     assert any(event.event_type == "operation.result" for event in events)
 
@@ -230,8 +233,20 @@ def _assert_publication_artifact(
     database_url: str,
     *,
     operation: WorkspaceOperation,
+    presentation: PresentationModel,
     artifact: dict[str, Any],
 ) -> PublicArtifact:
+    theme = presentation.theme if isinstance(presentation.theme, dict) else {}
+    quality_gate = theme.get("authoredQualityGate")
+    receipt = (
+        quality_gate.get("qualityReceiptV3")
+        if isinstance(quality_gate, dict)
+        else None
+    )
+    assert isinstance(receipt, dict), "live_product_path_quality_receipt_missing"
+    receipt_digest = receipt.get("receiptDigest")
+    assert isinstance(receipt_digest, str) and receipt_digest.startswith("sha256:")
+    assert len(receipt_digest) == 71
     engine = create_engine(database_url, pool_pre_ping=True)
     try:
         with Session(engine) as session:
@@ -242,6 +257,7 @@ def _assert_publication_artifact(
             )
             assert publication is not None
             assert publication.fencing_token == operation.fencing_token
+            assert publication.quality_digest == receipt_digest.removeprefix("sha256:")
             public_artifact = session.get(PublicArtifact, publication.artifact_id)
             assert public_artifact is not None
             assert public_artifact.lifecycle_state == "committed"
@@ -249,6 +265,55 @@ def _assert_publication_artifact(
             assert public_artifact.size_bytes == artifact["sizeBytes"]
             session.expunge(public_artifact)
             return public_artifact
+    finally:
+        engine.dispose()
+
+
+def _assert_generation_checkpoint_binding(
+    database_url: str,
+    *,
+    operation: WorkspaceOperation,
+    presentation: PresentationModel,
+) -> None:
+    """Observe the durable authored job/checkpoint ownership after terminal publication."""
+    engine = create_engine(database_url, pool_pre_ping=True)
+    try:
+        with Session(engine) as session:
+            jobs = list(
+                session.scalars(
+                    select(PresentationGenerationJob).where(
+                        PresentationGenerationJob.workspace_operation_id == operation.id,
+                        PresentationGenerationJob.presentation_id == presentation.id,
+                    )
+                )
+            )
+            assert len(jobs) == 1, "live_product_path_generation_job_binding_missing"
+            job = jobs[0]
+            assert job.workspace_operation_id == operation.id
+            assert job.presentation_id == presentation.id
+            assert job.state == "published"
+            assert job.attempt_number == operation.attempt_number
+            # Terminal publication intentionally clears the job's raw lease token.
+            assert job.attempt_token is None
+
+            checkpoints = list(
+                session.scalars(
+                    select(AuthoredSlideCheckpoint)
+                    .where(AuthoredSlideCheckpoint.job_id == job.id)
+                    .order_by(AuthoredSlideCheckpoint.slide_index)
+                )
+            )
+            assert len(checkpoints) == presentation.n_slides
+            assert [checkpoint.slide_index for checkpoint in checkpoints] == list(
+                range(presentation.n_slides)
+            )
+            assert all(
+                checkpoint.render_status == "completed"
+                and checkpoint.persist_status == "completed"
+                for checkpoint in checkpoints
+            )
+            checkpoint_tokens = {checkpoint.attempt_token for checkpoint in checkpoints}
+            assert None not in checkpoint_tokens and len(checkpoint_tokens) == 1
     finally:
         engine.dispose()
 
@@ -463,6 +528,11 @@ def test_live_http_generation_then_fidelity_export_reaches_artifact_publication(
     _assert_claim_and_terminal_evidence(
         generation_operation, generation_admission, generation_events
     )
+    _assert_generation_checkpoint_binding(
+        database_url,
+        operation=generation_operation,
+        presentation=presentation,
+    )
     generation_result = (
         generation_operation.result
         if isinstance(generation_operation.result, dict)
@@ -540,6 +610,7 @@ def test_live_http_generation_then_fidelity_export_reaches_artifact_publication(
     public_artifact = _assert_publication_artifact(
         database_url,
         operation=export_operation,
+        presentation=reviewed_presentation,
         artifact=artifact,
     )
 
@@ -596,7 +667,7 @@ def test_live_http_generation_then_fidelity_export_reaches_artifact_publication(
     assert pdf_timing["renderCheckpointReuseCount"] == 5
     pdf_artifact = pdf_status["artifacts"][0]
     assert pdf_artifact["kind"] == "presentation-pdf"
-    pdf_operation, _pdf_presentation, pdf_admission, pdf_events = _database_state(
+    pdf_operation, pdf_presentation, pdf_admission, pdf_events = _database_state(
         database_url, operation_id=pdf_operation_id
     )
     _assert_claim_and_terminal_evidence(
@@ -605,6 +676,7 @@ def test_live_http_generation_then_fidelity_export_reaches_artifact_publication(
     _assert_publication_artifact(
         database_url,
         operation=pdf_operation,
+        presentation=pdf_presentation,
         artifact=pdf_artifact,
     )
     pdf_evidence = _download_published_artifact(
@@ -656,7 +728,7 @@ def test_live_http_generation_then_fidelity_export_reaches_artifact_publication(
     assert repeated_artifact["artifactId"] != artifact["artifactId"]
     assert repeated_artifact["digest"] == artifact["digest"]
     assert repeated_artifact["sizeBytes"] == artifact["sizeBytes"]
-    repeated_operation, _, repeated_admission, repeated_events = _database_state(
+    repeated_operation, repeated_presentation, repeated_admission, repeated_events = _database_state(
         database_url, operation_id=repeated_operation_id
     )
     _assert_claim_and_terminal_evidence(
@@ -666,6 +738,7 @@ def test_live_http_generation_then_fidelity_export_reaches_artifact_publication(
     repeated_public_artifact = _assert_publication_artifact(
         database_url,
         operation=repeated_operation,
+        presentation=repeated_presentation,
         artifact=repeated_artifact,
     )
     assert repeated_public_artifact.storage_key == public_artifact.storage_key

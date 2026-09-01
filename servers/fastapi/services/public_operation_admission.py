@@ -14,10 +14,11 @@ from inspect import isawaitable
 import re
 import uuid
 
-from sqlalchemy import and_, or_, text, update
+from sqlalchemy import and_, case, exists, func, or_, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 from sqlmodel import select
 
 from models.sql import public_admission as public_admission_models
@@ -626,6 +627,7 @@ async def _locked_phase2_counters(
     owner_id: uuid.UUID,
     tenant_id: str,
     operation_kind: str,
+    create_missing: bool = True,
 ) -> dict[str, PublicQuotaCounter]:
     """Create and lock all scheduler axes in the only permitted order."""
 
@@ -634,14 +636,15 @@ async def _locked_phase2_counters(
         ("tenant", tenant_id),
         ("owner", str(owner_id)),
     )
-    for scope_type, scope_key in identities:
-        await _ensure_counter(
-            session,
-            policy_version=policy_version,
-            scope_type=scope_type,
-            scope_key=scope_key,
-            operation_kind=operation_kind,
-        )
+    if create_missing:
+        for scope_type, scope_key in identities:
+            await _ensure_counter(
+                session,
+                policy_version=policy_version,
+                scope_type=scope_type,
+                scope_key=scope_key,
+                operation_kind=operation_kind,
+            )
     locked: dict[str, PublicQuotaCounter] = {}
     for scope_type, scope_key in identities:
         row = await session.scalar(
@@ -975,11 +978,18 @@ async def admit_public_operation_v2(
 async def _locked_phase2_leases(
     session: AsyncSession, *, lease_model: type[object], admission: PublicOperationAdmission
 ) -> list[object]:
+    scope_order = case(
+        (lease_model.scope_type == "global", 0),
+        (lease_model.scope_type == "tenant", 1),
+        (lease_model.scope_type == "owner", 2),
+        else_=3,
+    )
     leases = list(
         (
             await session.execute(
                 select(lease_model)
                 .where(lease_model.admission_id == admission.id)
+                .order_by(scope_order, lease_model.id)
                 .with_for_update()
             )
         ).scalars()
@@ -994,6 +1004,94 @@ async def _locked_phase2_leases(
     ):
         raise PublicAdmissionRejected("public_resource_lease_conflict")
     return leases
+
+
+async def lock_public_v2_claim_candidates(
+    session: AsyncSession,
+    *,
+    now: datetime,
+    allowed_workspace_kinds: tuple[str, ...] | None = None,
+    limit: int = 256,
+) -> list[PublicOperationAdmission]:
+    """Lock ready public-v2 admissions before any workspace operation row.
+
+    The workspace runner owns the canonical claim decision.  This lower ledger
+    only supplies admission rows locked with ``SKIP LOCKED``; the caller must
+    next lock the matching workspace operation, then activate the three
+    global/tenant/owner resource leases and commit every projection/event in
+    the same transaction.
+    """
+
+    await _resolved_phase2_authority(session)
+    workspace_model = _require_phase2_workspace_model()
+    executing = aliased(workspace_model)
+    owner_activity = aliased(workspace_model)
+    owner_history = aliased(workspace_model)
+    owner_active_count = (
+        select(func.count(owner_activity.id))
+        .where(owner_activity.owner_scope == workspace_model.owner_scope)
+        .where(owner_activity.state.in_(("running", "cancelling")))
+        .correlate(workspace_model)
+        .scalar_subquery()
+    )
+    owner_last_served_at = (
+        select(
+            func.max(
+                func.coalesce(
+                    owner_history.heartbeat_at,
+                    owner_history.started_at,
+                )
+            )
+        )
+        .where(owner_history.owner_scope == workspace_model.owner_scope)
+        .correlate(workspace_model)
+        .scalar_subquery()
+    )
+    statement = (
+        select(PublicOperationAdmission)
+        .join(
+            workspace_model,
+            workspace_model.id == PublicOperationAdmission.operation_id,
+        )
+        .where(
+            PublicOperationAdmission.state == "queued",
+            PublicOperationAdmission.policy_digest.is_not(None),
+            PublicOperationAdmission.deadline_at.is_not(None),
+            PublicOperationAdmission.fence >= 1,
+            workspace_model.contract_version == "public-operation/v2",
+            workspace_model.execution_profile_version
+            == "public-generation-export/v2",
+            workspace_model.state == "queued",
+            workspace_model.cancel_requested_at.is_(None),
+            or_(
+                workspace_model.next_attempt_at.is_(None),
+                workspace_model.next_attempt_at <= now,
+            ),
+            ~exists(
+                select(executing.id).where(
+                    executing.presentation_id == workspace_model.presentation_id,
+                    executing.state.in_(("running", "cancelling")),
+                )
+            ),
+        )
+        .order_by(
+            owner_active_count,
+            case((owner_last_served_at.is_(None), 0), else_=1),
+            owner_last_served_at,
+            PublicOperationAdmission.queued_at,
+            PublicOperationAdmission.id,
+        )
+        .limit(max(1, min(int(limit), 256)))
+        .with_for_update(of=PublicOperationAdmission, skip_locked=True)
+        .execution_options(skip_owner_scope=True)
+    )
+    if allowed_workspace_kinds is not None:
+        if not allowed_workspace_kinds:
+            return []
+        statement = statement.where(
+            workspace_model.kind.in_(allowed_workspace_kinds)
+        )
+    return list((await session.execute(statement)).scalars())
 
 
 async def activate_public_operation_v2(
@@ -1048,8 +1146,16 @@ async def activate_public_operation_v2(
         owner_id=admission.owner_id,
         tenant_id=admission.tenant_id,
         operation_kind=admission.operation_kind,
+        create_missing=False,
     )
     leases = await _locked_phase2_leases(session, lease_model=lease_model, admission=admission)
+    requested_attempt = (
+        _nonnegative(attempt, "attempt") if attempt is not None else None
+    )
+    # Admission rejection must be observationally read-only.  Validate all
+    # three counters and all three leases before changing the first row; a
+    # later-scope capacity failure must not autoflush partial activation when
+    # the caller inspects another queued candidate in the same transaction.
     for scope_type in ("global", "tenant", "owner"):
         counter = counters[scope_type]
         active_count_limit, _ = _quota_limits(
@@ -1065,6 +1171,14 @@ async def activate_public_operation_v2(
             or counter.queued_resource_units < admission.resource_units
         ):
             raise PublicAdmissionRejected("public_quota_counter_underflow")
+    for lease in leases:
+        if lease.state != "queued" or lease.fence != admission.fence:
+            raise PublicAdmissionRejected("public_resource_lease_conflict")
+        next_attempt = requested_attempt if requested_attempt is not None else lease.attempt + 1
+        if next_attempt < 1:
+            raise PublicAdmissionRejected("public_resource_lease_attempt_invalid")
+    for scope_type in ("global", "tenant", "owner"):
+        counter = counters[scope_type]
         counter.queued_count -= 1
         counter.queued_resource_units -= admission.resource_units
         counter.active_count += 1
@@ -1077,14 +1191,10 @@ async def activate_public_operation_v2(
         _utc(now, "activation_now") + timedelta(seconds=duration),
     )
     for lease in leases:
-        if lease.state != "queued" or lease.fence != admission.fence:
-            raise PublicAdmissionRejected("public_resource_lease_conflict")
         lease.state = "leased"
         lease.attempt = (
-            _nonnegative(attempt, "attempt") if attempt is not None else lease.attempt + 1
+            requested_attempt if requested_attempt is not None else lease.attempt + 1
         )
-        if lease.attempt < 1:
-            raise PublicAdmissionRejected("public_resource_lease_attempt_invalid")
         lease.lease_owner_hash = lease_owner_hash
         lease.leased_at = now
         lease.heartbeat_at = now
@@ -1136,6 +1246,7 @@ async def requeue_public_operation_v2(
         owner_id=admission.owner_id,
         tenant_id=admission.tenant_id,
         operation_kind=admission.operation_kind,
+        create_missing=False,
     )
     leases = await _locked_phase2_leases(session, lease_model=lease_model, admission=admission)
     next_fence = admission.fence + 1
@@ -1212,6 +1323,19 @@ async def finish_public_operation_v2(
             expected_fence, "expected_fence"
         ):
             raise PublicAdmissionRejected("public_operation_fence_conflict")
+        if (
+            state == "succeeded"
+            and admission.operation_kind == "generation"
+            and admission.actual_consumed_microunits
+            + admission.actual_reserved_microunits
+            > admission.actual_cost_limit_microunits
+        ):
+            # The provider ledger reports the breach; only the canonical
+            # workspace operation transaction may decide/commit its terminal
+            # state and matching event/outbox/compatibility projections.
+            raise PublicAdmissionRejected(
+                "public_budget_terminalization_pending_canonical_operation"
+            )
         source_count, source_resource = "active_count", "active_resource_units"
         expected_lease_state = "leased"
     else:
@@ -1229,6 +1353,7 @@ async def finish_public_operation_v2(
         owner_id=admission.owner_id,
         tenant_id=admission.tenant_id,
         operation_kind=admission.operation_kind,
+        create_missing=False,
     )
     leases = await _locked_phase2_leases(session, lease_model=lease_model, admission=admission)
     for scope_type in ("global", "tenant", "owner"):
@@ -1408,6 +1533,9 @@ async def claim_next_public_operation(
                 .where(
                     PublicOperationAdmission.operation_kind == operation_kind,
                     PublicOperationAdmission.state == "queued",
+                    # Strict v2 admissions are subordinate ledgers and may only
+                    # be claimed by the workspace runner's atomic transaction.
+                    PublicOperationAdmission.fence == 0,
                 )
                 .order_by(
                     PublicOperationAdmission.queued_at,
@@ -1800,18 +1928,16 @@ async def reconcile_public_provider_call(
         > admission.actual_cost_limit_microunits
         and admission.state == "active"
     ):
-        if (
+        strict_public_v2 = bool(
             getattr(admission, "policy_digest", None)
             and getattr(admission, "deadline_at", None) is not None
             and int(getattr(admission, "fence", 0)) >= 1
-        ):
-            await finish_public_operation_v2(
-                session,
-                admission_id=admission.id,
-                state="budget_exhausted",
-                expected_fence=admission.fence,
-            )
-        else:
+        )
+        # Public v2 has one canonical state machine: WorkspaceOperation.  Its
+        # exact overrun stays in this subordinate ledger until the fenced
+        # runner commits every terminal projection/event together.  Phase-1
+        # compatibility retains its historical direct ledger transition.
+        if not strict_public_v2:
             await finish_public_operation(
                 session,
                 admission.id,
@@ -2586,6 +2712,7 @@ __all__ = [
     "enrich_public_provider_usage_detached",
     "finish_public_operation",
     "load_public_policy",
+    "lock_public_v2_claim_candidates",
     "plan_provider_requests",
     "plan_weighted_resources",
     "public_operation_metrics",

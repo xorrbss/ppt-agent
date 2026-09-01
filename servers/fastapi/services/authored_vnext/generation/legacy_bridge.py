@@ -313,9 +313,11 @@ async def _checkpoint_generated_slides(
     attempt_token = generation_job.attempt_token
     if not attempt_token:
         raise RuntimeError("authored_attempt_lost")
+    fencing_token = getattr(generation_job, "_workspace_fencing_token", None)
     await initialize_checkpoints(
         job_id=generation_job.id,
         attempt_token=attempt_token,
+        fencing_token=fencing_token,
         roles=layout_ids,
     )
     for index, (html, png) in enumerate(zip(htmls, pngs, strict=True)):
@@ -324,12 +326,14 @@ async def _checkpoint_generated_slides(
             slide_index=index,
             stage="author",
             attempt_token=attempt_token,
+            fencing_token=fencing_token,
         )
         await complete_stage(
             job_id=generation_job.id,
             slide_index=index,
             stage="author",
             attempt_token=attempt_token,
+            fencing_token=fencing_token,
             html=html,
         )
         await start_stage(
@@ -337,12 +341,14 @@ async def _checkpoint_generated_slides(
             slide_index=index,
             stage="illustrate",
             attempt_token=attempt_token,
+            fencing_token=fencing_token,
         )
         await complete_stage(
             job_id=generation_job.id,
             slide_index=index,
             stage="illustrate",
             attempt_token=attempt_token,
+            fencing_token=fencing_token,
             html=html,
             skipped=True,
         )
@@ -351,12 +357,14 @@ async def _checkpoint_generated_slides(
             slide_index=index,
             stage="render",
             attempt_token=attempt_token,
+            fencing_token=fencing_token,
         )
         await complete_stage(
             job_id=generation_job.id,
             slide_index=index,
             stage="render",
             attempt_token=attempt_token,
+            fencing_token=fencing_token,
             png=png,
         )
         await start_stage(
@@ -364,12 +372,14 @@ async def _checkpoint_generated_slides(
             slide_index=index,
             stage="persist",
             attempt_token=attempt_token,
+            fencing_token=fencing_token,
         )
         await complete_stage(
             job_id=generation_job.id,
             slide_index=index,
             stage="persist",
             attempt_token=attempt_token,
+            fencing_token=fencing_token,
         )
 
 

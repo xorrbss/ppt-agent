@@ -703,11 +703,13 @@ class ProductDeckIrExecutionAdapter:
         )
         job_id = getattr(generation_job, "id", None)
         attempt_token = getattr(getattr(context, "claim"), "attempt_token", None)
+        fencing_token = getattr(getattr(context, "claim"), "fencing_token", None)
         if not isinstance(job_id, uuid.UUID) or not isinstance(attempt_token, str) or not attempt_token:
             raise DeckIrIntegrationError("deck_ir_operation_binding_invalid")
         await initialize_checkpoints(
             job_id=job_id,
             attempt_token=attempt_token,
+            fencing_token=fencing_token,
             roles=["deck-ir"] * slide_count,
         )
         reservation_count = 0
@@ -729,6 +731,7 @@ class ProductDeckIrExecutionAdapter:
                 job_id=job_id,
                 slide_index=index,
                 attempt_token=attempt_token,
+                fencing_token=fencing_token,
                 ordinal=ordinal,
             )
 

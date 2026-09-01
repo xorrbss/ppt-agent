@@ -105,6 +105,7 @@ async def illustrate_slide(
             slide_index=index,
             stage="illustrate",
             attempt_token=attempt_token,
+            fencing_token=getattr(generation_job, "_workspace_fencing_token", None),
         )
     illustration_work = 0.0
     # A slide the deck excluded loses its slot through the same removal every
@@ -197,6 +198,7 @@ async def illustrate_slide(
             slide_index=index,
             stage="illustrate",
             attempt_token=attempt_token,
+            fencing_token=getattr(generation_job, "_workspace_fencing_token", None),
             html=illustrated_html,
             skipped=skipped,
         )

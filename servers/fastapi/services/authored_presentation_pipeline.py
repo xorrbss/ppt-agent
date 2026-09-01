@@ -323,6 +323,7 @@ async def _author_illustrate_render_pipeline(
         else None
     )
     attempt_token = generation_job.attempt_token if generation_job else None
+    fencing_token = getattr(generation_job, "_workspace_fencing_token", None)
     if generation_job is not None:
         if not attempt_token:
             raise AuthoredStageError(
@@ -333,6 +334,7 @@ async def _author_illustrate_render_pipeline(
         await initialize_checkpoints(
             job_id=generation_job.id,
             attempt_token=attempt_token,
+            fencing_token=fencing_token,
             roles=roles,
         )
 
@@ -372,7 +374,12 @@ async def _author_illustrate_render_pipeline(
             slide_source_images[index] if slide_source_images is not None else None
         )
         checkpoint = (
-            await get_checkpoint(generation_job.id, index)
+            await get_checkpoint(
+                generation_job.id,
+                index,
+                attempt_token=attempt_token,
+                fencing_token=fencing_token,
+            )
             if generation_job is not None
             else None
         )
@@ -448,6 +455,7 @@ async def _author_illustrate_render_pipeline(
                         slide_index=index,
                         stage="author",
                         attempt_token=attempt_token,
+                        fencing_token=fencing_token,
                     )
                 author_started = time.monotonic()
                 try:
@@ -511,6 +519,7 @@ async def _author_illustrate_render_pipeline(
                                         slide_index=index,
                                         attempt_token=attempt_token,
                                         ordinal=ordinal,
+                                        fencing_token=fencing_token,
                                     )
 
                                 author_kwargs["attempt_reserver"] = (
@@ -566,6 +575,7 @@ async def _author_illustrate_render_pipeline(
                         slide_index=index,
                         stage="author",
                         attempt_token=attempt_token,
+                        fencing_token=fencing_token,
                         html=html,
                     )
             else:
@@ -737,6 +747,7 @@ async def _author_illustrate_render_pipeline(
                         slide_index=index,
                         stage="render",
                         attempt_token=attempt_token,
+                        fencing_token=fencing_token,
                     )
                 render_started = time.monotonic()
                 try:
@@ -830,6 +841,7 @@ async def _author_illustrate_render_pipeline(
                     html=illustrated_html,
                     png=png,
                     browser_metrics=browser_metrics,
+                    fencing_token=fencing_token,
                 )
 
             if generation_job is not None and checkpoint.persist_status != "completed":
@@ -847,12 +859,14 @@ async def _author_illustrate_render_pipeline(
                             slide_index=index,
                             stage="persist",
                             attempt_token=attempt_token,
+                            fencing_token=fencing_token,
                         )
                         await _complete_stage_after_external_success(
                             job_id=generation_job.id,
                             slide_index=index,
                             stage="persist",
                             attempt_token=attempt_token,
+                            fencing_token=fencing_token,
                         )
                     finally:
                         await record_local_stage(
@@ -905,6 +919,7 @@ async def _author_illustrate_render_pipeline(
                     attempt_token=attempt_token,
                     error=exc,
                     request_id=generation_job.request_id,
+                    fencing_token=fencing_token,
                 )
             raise
 

@@ -38,6 +38,7 @@ from services.authored_presentation_contracts import AUTHORED_TEMPLATE
 from services.workspace_artifact_publication_service import (
     WorkspaceArtifactPublicationError,
     compensate_workspace_artifact,
+    fence_workspace_generation_publication,
     prepare_workspace_generation_artifact,
     publish_workspace_generation_artifact,
 )
@@ -214,6 +215,9 @@ async def publish_authored_presentation(
     workspace_operation_id = (
         generation_job.workspace_operation_id if generation_job is not None else None
     )
+    workspace_fencing_token = getattr(
+        generation_job, "_workspace_fencing_token", None
+    )
     images_ready = False
     images_started = False
     published_path = out_path
@@ -284,6 +288,13 @@ async def publish_authored_presentation(
                 source_revision=expected_revision + 1,
             )
             published_path = workspace_artifact.public_path
+            # Account deletion owns the outermost publication fence.  Acquire
+            # it before begin_publish takes admission/operation/job locks so
+            # every linked public terminal transaction has one global order.
+            await fence_workspace_generation_publication(
+                sql_session,
+                artifact=workspace_artifact,
+            )
 
         images_started = True
         if image_publication_token is None:
@@ -303,6 +314,7 @@ async def publish_authored_presentation(
                 sql_session,
                 job_id=generation_job_id,
                 attempt_token=attempt_token,
+                fencing_token=workspace_fencing_token,
             )
 
         presentation.content = request.content
@@ -655,6 +667,7 @@ async def publish_authored_presentation(
                     sql_session,
                     job_id=generation_job_id,
                     attempt_token=attempt_token,
+                    fencing_token=workspace_fencing_token,
                 )
         if workspace_artifact is not None:
             try:
@@ -742,6 +755,7 @@ async def publish_authored_presentation(
                 attempt_token=attempt_token,
                 error=error,
                 request_id=generation_request_id,
+                fencing_token=workspace_fencing_token,
             )
         raise error from exc
     return published_path, time.monotonic() - persist_started

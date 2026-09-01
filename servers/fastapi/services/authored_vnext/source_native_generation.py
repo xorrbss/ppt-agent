@@ -534,6 +534,7 @@ async def run_source_native_generation(
     await initialize_checkpoints(
         job_id=job_id,
         attempt_token=attempt_token,
+        fencing_token=fencing_token,
         roles=["narrative"] * slide_count,
     )
 
@@ -543,6 +544,7 @@ async def run_source_native_generation(
             job_id=job_id,
             slide_index=0,
             attempt_token=attempt_token,
+            fencing_token=fencing_token,
             ordinal=logical,
         )
         return ProviderCallReservationV1(
