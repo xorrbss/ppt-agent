@@ -400,7 +400,11 @@ try {
     $startedPids.Add($api.Id); Wait-Http200 "http://127.0.0.1:$ApiPort/api/v1/auth/status" $startedPids.ToArray() $ApiPort
 
     if ($ProviderConfigPath) {
-        $syncEnvironment = $sharedEnvironment.Clone(); $syncEnvironment["USER_CONFIG_PATH"] = $ProviderConfigPath
+        $syncEnvironment = $sharedEnvironment.Clone()
+        # Keep the RC-local compatibility mirror as USER_CONFIG_PATH. The
+        # one-shot sync process alone may read the approved import file, and
+        # must never mirror runtime/auth state back into that source file.
+        $syncEnvironment["PRESENTON_PROVIDER_CONFIG_IMPORT_PATH"] = $ProviderConfigPath
         $sync = Start-LoggedProcess -FilePath $python -ArgumentList @("-m", "scripts.sync_existing_provider_settings") -WorkingDirectory $fastApi -Environment $syncEnvironment -StdoutPath (Join-Path $logs "provider-settings-sync.stdout.log") -StderrPath (Join-Path $logs "provider-settings-sync.stderr.log")
         $sync.WaitForExit(); if ($sync.ExitCode -ne 0) { throw "public-v2 RC provider settings sync failed; see retained evidence logs" }
     }

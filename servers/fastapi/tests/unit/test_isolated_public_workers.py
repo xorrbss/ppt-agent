@@ -173,6 +173,11 @@ ConvertTo-Json -InputObject $results -Depth 5 -Compress
     assert launcher_source.index("$workerRuntimeLimits = Resolve-WorkerRuntimeLimits") < launcher_source.index("$runId =")
     for key in defaults:
         assert f'"{key}" = $workerRuntimeLimits["{key}"]' in launcher_source
+    assert (
+        '$syncEnvironment["PRESENTON_PROVIDER_CONFIG_IMPORT_PATH"] = '
+        "$ProviderConfigPath"
+    ) in launcher_source
+    assert '$syncEnvironment["USER_CONFIG_PATH"] = $ProviderConfigPath' not in launcher_source
 
     source = {
         "PATH": "C:/runtime",

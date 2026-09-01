@@ -298,6 +298,37 @@ def test_incomplete_count_dedupes_one_missing_occlusion_sample_across_consumers(
     ]
 
 
+def test_structural_decoration_without_owned_content_does_not_require_occlusion():
+    report = DomQualityReport(
+        STYLE_REFERENCE,
+        (),
+        (),
+        1,
+        telemetry_status="available",
+    )
+    evidence = _dom_evidence(
+        report,
+        {"metric.decoration": "sem:metric-decoration"},
+        browser_metrics={
+            "viewport": {"width": 1280, "height": 720},
+            "elements": [
+                {
+                    "qid": "metric.decoration",
+                    "tag": "div",
+                    "has_owned_text": False,
+                    "bbox": {"x": 80, "y": 80, "width": 120, "height": 12},
+                    "occluded_fraction": None,
+                    "continuous_occluded_fraction": None,
+                    "occlusion_unknown_reason": "no_sample_on_owned_paint",
+                }
+            ],
+        },
+    )
+
+    assert evidence.telemetry_complete is True
+    assert evidence.incomplete_measurement_count == 0
+
+
 def test_exact_bundle_nested_findings_are_one_physical_issue_with_raw_atoms():
     evidence = _evidence()
 

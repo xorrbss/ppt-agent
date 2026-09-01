@@ -686,6 +686,19 @@ def _dom_evidence(
             occluded = metric.get("occluded_fraction")
             continuous = metric.get("continuous_occluded_fraction")
             if occluded is None and continuous is None:
+                # The owned-paint Chrome probe intentionally omits occlusion
+                # samples for structural decoration that owns neither text nor
+                # media. Treat that measurement as not applicable, matching
+                # authored_dom_quality, while older payloads without ownership
+                # telemetry remain conservative.
+                owns_occlusion_relevant_content = (
+                    "has_owned_text" not in metric
+                    or bool(metric.get("has_owned_text"))
+                    or str(metric.get("tag", "")).lower()
+                    in {"img", "picture", "svg", "video"}
+                )
+                if not owns_occlusion_relevant_content:
+                    continue
                 reason = str(
                     metric.get("occlusion_unknown_reason")
                     or metric.get("occlusion_reason")

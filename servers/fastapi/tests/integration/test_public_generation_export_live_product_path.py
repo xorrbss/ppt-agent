@@ -33,6 +33,9 @@ from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.public_artifact import PublicArtifact, PublicArtifactPublication
 from models.sql.public_admission import PublicOperationAdmission
 from models.sql.workspace import WorkspaceOperation, WorkspaceOperationEvent
+from services.workspace_quality_operation_handler import (
+    validate_export_release_review_receipt,
+)
 
 
 _ENABLE_ENV = "PUBLIC_V2_WINDOWS_PRODUCT_E2E"
@@ -257,7 +260,47 @@ def _assert_publication_artifact(
             )
             assert publication is not None
             assert publication.fencing_token == operation.fencing_token
-            assert publication.quality_digest == receipt_digest.removeprefix("sha256:")
+            request_payload = (
+                operation.request_payload
+                if isinstance(operation.request_payload, dict)
+                else {}
+            )
+            review_operation_id = uuid.UUID(
+                str(request_payload.get("release_review_operation_id"))
+            )
+            review_operation = session.get(WorkspaceOperation, review_operation_id)
+            assert review_operation is not None, "live_product_path_review_missing"
+            review_result = (
+                review_operation.result
+                if isinstance(review_operation.result, dict)
+                else {}
+            )
+            review_receipt = review_result.get("release_review_receipt")
+            assert isinstance(
+                review_receipt, dict
+            ), "live_product_path_review_receipt_missing"
+            review_digest = validate_export_release_review_receipt(
+                review_receipt,
+                operation_id=review_operation.id,
+                source_revision=int(review_operation.expected_revision),
+                result_revision=int(review_operation.result_revision),
+            )
+            base_quality_digest = review_receipt.get("baseQualityReceiptDigest")
+            assert (
+                isinstance(base_quality_digest, str)
+                and base_quality_digest.startswith("sha256:")
+                and len(base_quality_digest) == 71
+            )
+            if review_receipt.get("baseEvidenceKind") == "generation":
+                assert base_quality_digest == receipt_digest
+            expected_publication_digest = sha256(
+                (
+                    base_quality_digest.removeprefix("sha256:")
+                    + ":"
+                    + review_digest
+                ).encode("ascii")
+            ).hexdigest()
+            assert publication.quality_digest == expected_publication_digest
             public_artifact = session.get(PublicArtifact, publication.artifact_id)
             assert public_artifact is not None
             assert public_artifact.lifecycle_state == "committed"
@@ -496,9 +539,9 @@ def test_live_http_generation_then_fidelity_export_reaches_artifact_publication(
             "schemaVersion": "presentation-generation-request/v2",
             "content": (
                 "Create exactly 5 slides about trusted PPT exports. "
-                "Each slide has one short title, exactly three bullets of at most five words, "
+                "Each slide has exactly one title of at most 30 characters, exactly three bullets of at most five words, "
                 "and one short numeric fact. Use no tables, charts, diagrams, footnotes, "
-                "or extra prose."
+                "subtitles, hero copy, or extra prose."
             ),
             "slideCount": 5,
             "language": "English",
