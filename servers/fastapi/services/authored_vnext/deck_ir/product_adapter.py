@@ -41,6 +41,10 @@ from services.authored_quality_receipt_v2 import (
     create_quality_receipt_v3_from_v2,
 )
 from services.authored_vnext.capability_registry import CAPABILITY_REGISTRY_DIGEST
+from services.authored_vnext.slide_quality_acceptance import (
+    SCHEMA_VERSION as SLIDE_QUALITY_SCHEMA_VERSION,
+    validate_slide_quality_acceptance_receipt,
+)
 from services.authored_presentation_artifacts import _save_slide_pngs
 from services.authored_vnext.deck_ir.director import ProductionStructuredDeckDirector
 from services.authored_vnext.deck_ir.integration import (
@@ -343,11 +347,43 @@ def _generation_release_quality_receipts(
     htmls: list[str],
     deck_ir: Mapping[str, object],
     generation_quality: Mapping[str, object],
+    content_integrity: Mapping[str, object] | None = None,
+    source_content_quality_evidence: Mapping[str, object] | None = None,
     execution_evidence: Mapping[str, object] | None = None,
 ) -> tuple[QualityReceiptV2, QualityReceiptV3, Mapping[str, object]]:
     """Bridge measured Deck IR generation into the existing release-review base."""
 
     deck_html_digest = digest_deck_htmls(htmls)
+    source_document_quality = (
+        generation_quality.get("schemaVersion") == SLIDE_QUALITY_SCHEMA_VERSION
+    )
+    if source_document_quality:
+        slides_payload = generation_quality.get("slides")
+        if (
+            generation_quality.get("documentQualityPassed") is not True
+            or generation_quality.get("observedSlideCount") != len(htmls)
+            or generation_quality.get("expectedSlideCount") != len(htmls)
+            or not isinstance(slides_payload, list)
+            or len(slides_payload) != len(htmls)
+            or any(
+                not isinstance(item, Mapping)
+                or item.get("passed") is not True
+                or not isinstance(item.get("score"), (int, float))
+                or isinstance(item.get("score"), bool)
+                or float(item["score"]) < 90.0
+                for item in slides_payload
+            )
+            or not validate_slide_quality_acceptance_receipt(generation_quality)
+        ):
+            raise DeckIrIntegrationError("source_native_document_quality_failed")
+        if (
+            not isinstance(content_integrity, Mapping)
+            or content_integrity.get("status") != "passed"
+            or content_integrity.get("requiredCoverage") != 1.0
+            or not isinstance(source_content_quality_evidence, Mapping)
+            or source_content_quality_evidence.get("status") != "passed"
+        ):
+            raise DeckIrIntegrationError("content_integrity_failed")
     capacity = {
         "status": "passed",
         "browserObserved": True,
@@ -357,6 +393,34 @@ def _generation_release_quality_receipts(
         },
     }
     safety = {"status": "passed", "residuals": [], "issues": []}
+    visual = (
+        {
+            "status": "passed",
+            "fullDeck": True,
+            "reviewedCount": len(htmls),
+            "minimumSlideScore": generation_quality.get("minimumSlideScore"),
+            "threshold": generation_quality.get("slideScoreThreshold"),
+            "receiptDigest": generation_quality.get("receiptDigest"),
+        }
+        if source_document_quality
+        else {"status": "not_assessed", "fullDeck": False}
+    )
+    source_readback = (
+        {
+            "status": "passed",
+            "required": True,
+            "verified": True,
+            "passed": True,
+            "failures": [],
+            "failedBlocks": [],
+            "clipped": False,
+            "occluded": False,
+            "receiptDigest": content_integrity.get("receiptDigest"),
+            "requiredCoverage": content_integrity.get("requiredCoverage"),
+        }
+        if source_document_quality and isinstance(content_integrity, Mapping)
+        else {"status": "not_applicable", "required": False}
+    )
     v2 = create_quality_receipt_v2(
         {},
         attempt_id=attempt_token,
@@ -372,19 +436,37 @@ def _generation_release_quality_receipts(
         evidence={
             "safety": safety,
             "capacity": capacity,
-            "sourceReadback": {"status": "not_applicable", "required": False},
-            "visualReview": {"status": "not_assessed"},
+            "sourceReadback": source_readback,
+            "visualReview": visual,
             "performance": {"status": "not_assessed"},
             "publication": {"status": "published"},
         },
         requested_release_profile="release",
-        pre_export_evaluation_profile="default",
+        pre_export_evaluation_profile=(
+            "source_native_generation"
+            if source_document_quality
+            else "default"
+        ),
     )
-    slides = [
-        {"role": str(item.get("role") or "content"), "repairApplied": False}
-        for item in deck_ir.get("slides", [])
-        if isinstance(item, Mapping)
+    deck_slides = [
+        item for item in deck_ir.get("slides", []) if isinstance(item, Mapping)
     ]
+    quality_slides = generation_quality.get("slides")
+    quality_slides = quality_slides if isinstance(quality_slides, list) else []
+    slides = []
+    for index, item in enumerate(deck_slides):
+        quality_slide = quality_slides[index] if index < len(quality_slides) and isinstance(quality_slides[index], Mapping) else {}
+        slides.append(
+            {
+                "role": str(item.get("role") or "content"),
+                "repairApplied": False,
+                "layoutCapacity": (
+                    max(0.0, min(1.0, float(quality_slide.get("score", 100.0)) / 100.0))
+                    if source_document_quality
+                    else 0.0
+                ),
+            }
+        )
     registry_consumers = {
         name: {
             "status": "passed",
@@ -399,6 +481,12 @@ def _generation_release_quality_receipts(
             for name in ("ooxml", "readback")
         }
     )
+    if source_document_quality:
+        registry_consumers["readback"] = {
+            "status": "passed",
+            "required": True,
+            "digest": CAPABILITY_REGISTRY_DIGEST,
+        }
     evidence: dict[str, object] = {
         "qualityTier": "T1",
         "capabilityRegistry": {
@@ -421,16 +509,40 @@ def _generation_release_quality_receipts(
                 "observed": True,
                 "evidenceDigest": quality_canonical_digest(safety),
             },
+            "visual": {
+                "status": "passed" if source_document_quality else "not_required",
+                "observed": bool(source_document_quality),
+                "evidenceDigest": quality_canonical_digest(visual),
+            },
+            "readback": {
+                "status": "passed" if source_document_quality else "not_required",
+                "observed": bool(source_document_quality),
+                "evidenceDigest": quality_canonical_digest(source_readback),
+            },
         },
         "providerCalls": {
+            "mode": (
+                "source-native-provider-free"
+                if source_document_quality
+                else "authored-provider"
+            ),
             "slides": [
-                {"slideIndex": index, "initial": 1, "recovery": 0, "total": 1}
+                {
+                    "slideIndex": index,
+                    "initial": 0 if source_document_quality else 1,
+                    "recovery": 0,
+                    "total": 0 if source_document_quality else 1,
+                }
                 for index in range(len(slides))
             ]
         },
-        "sourceContent": {"status": "not_required", "required": False},
+        "sourceContent": (
+            dict(source_content_quality_evidence)
+            if source_document_quality and isinstance(source_content_quality_evidence, Mapping)
+            else {"status": "not_required", "required": False}
+        ),
         "slides": slides,
-        "visualReview": {"status": "unavailable", "fullDeck": False},
+        "visualReview": visual,
         "persistence": {
             "status": "passed",
             "required": True,
@@ -441,6 +553,17 @@ def _generation_release_quality_receipts(
             "deckHtmlDigest": deck_html_digest,
             "capacity": capacity,
             "safety": safety,
+            "visual": visual,
+            "sourceReadback": source_readback,
+            "slideDocumentQualityReceipt": (
+                dict(generation_quality) if source_document_quality else None
+            ),
+            "sourceContent": (
+                dict(source_content_quality_evidence)
+                if source_document_quality
+                and isinstance(source_content_quality_evidence, Mapping)
+                else None
+            ),
         },
     }
     evidence["versionTransition"] = {
@@ -453,7 +576,9 @@ def _generation_release_quality_receipts(
     v3 = create_quality_receipt_v3_from_v2(
         QualityReceiptV3Ledger(), receipt_v2=v2, evidence=evidence
     )
-    unresolved = set(v3.blockers) - {"visualReview.required_failed"}
+    unresolved = set(v3.blockers)
+    if not source_document_quality:
+        unresolved.discard("visualReview.required_failed")
     if not v2.gate_passed or unresolved:
         raise DeckIrIntegrationError("quality_receipt_v3_blocked")
     return v2, v3, evidence
@@ -847,6 +972,16 @@ class ProductDeckIrExecutionAdapter:
                 htmls=htmls,
                 deck_ir=deck_ir,
                 generation_quality=generation_quality,
+                content_integrity=(
+                    payload.get("contentIntegrityReceipt")
+                    if isinstance(payload.get("contentIntegrityReceipt"), Mapping)
+                    else None
+                ),
+                source_content_quality_evidence=(
+                    payload.get("sourceContentQualityEvidence")
+                    if isinstance(payload.get("sourceContentQualityEvidence"), Mapping)
+                    else None
+                ),
                 execution_evidence=payload.get("executionEvidence"),
             )
         )
@@ -914,6 +1049,8 @@ class ProductDeckIrExecutionAdapter:
                         "styleProfileDigest": payload.get("styleProfileDigest"),
                         "retainedReferenceDigest": payload.get("retainedReferenceDigest"),
                         "generationQualityReceipt": payload.get("generationQualityReceipt"),
+                        "contentIntegrityReceipt": payload.get("contentIntegrityReceipt"),
+                        "sourceContentQualityEvidence": payload.get("sourceContentQualityEvidence"),
                         "requirementCoverageReceipt": payload.get("requirementCoverageReceipt"),
                         "executionEvidence": payload.get("executionEvidence"),
                     }),

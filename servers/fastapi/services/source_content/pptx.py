@@ -240,6 +240,23 @@ def _paragraph_payload(element: etree._Element) -> tuple[list[dict[str, Any]], s
     paragraphs: list[dict[str, Any]] = []
     flat: list[str] = []
     for paragraph in element.findall(".//a:p", namespaces=NS):
+        paragraph_properties = paragraph.find("a:pPr", namespaces=NS)
+        bullet_kind: str | None = None
+        bullet_level = 0
+        if paragraph_properties is not None:
+            try:
+                bullet_level = max(0, int(paragraph_properties.get("lvl", "0")))
+            except ValueError:
+                bullet_level = 0
+            if paragraph_properties.find("a:buNone", namespaces=NS) is None:
+                for element_name, resolved_kind in (
+                    ("a:buChar", "character"),
+                    ("a:buAutoNum", "auto-number"),
+                    ("a:buBlip", "picture"),
+                ):
+                    if paragraph_properties.find(element_name, namespaces=NS) is not None:
+                        bullet_kind = resolved_kind
+                        break
         runs: list[str] = []
         for child in paragraph:
             if child.tag in {f"{{{A_NS}}}r", f"{{{A_NS}}}fld"}:
@@ -248,7 +265,15 @@ def _paragraph_payload(element: etree._Element) -> tuple[list[dict[str, Any]], s
             elif child.tag == f"{{{A_NS}}}br":
                 runs.append("\n")
         paragraph_text = "".join(runs)
-        paragraphs.append({"runs": runs, "text": paragraph_text})
+        paragraphs.append(
+            {
+                "runs": runs,
+                "text": paragraph_text,
+                "bullet": bullet_kind is not None,
+                "bulletKind": bullet_kind,
+                "level": bullet_level,
+            }
+        )
         flat.append(paragraph_text)
     return paragraphs, "\n".join(flat)
 

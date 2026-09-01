@@ -28,6 +28,30 @@ def canonical_digest(value: Any) -> str:
     return f"sha256:{hashlib.sha256(payload).hexdigest()}"
 
 
+def _legacy_v2_payload(value: dict[str, Any]) -> dict[str, Any]:
+    """Remove additive compiler metadata when validating a pre-capability v2 pack."""
+
+    payload = json.loads(json.dumps(value, ensure_ascii=False))
+    for frame in payload.get("frames", []):
+        frame.pop("capabilities", None)
+        for element in frame.get("chrome", []):
+            element.pop("containerId", None)
+        for element in (*frame.get("slots", []), *frame.get("chrome", [])):
+            style = element.get("textStyle")
+            if isinstance(style, dict):
+                for field in (
+                    "italic",
+                    "underline",
+                    "letterSpacing",
+                    "verticalAlignment",
+                ):
+                    style.pop(field, None)
+            envelope = element.get("capacityEnvelope")
+            if isinstance(envelope, dict):
+                envelope.pop("maxImages", None)
+    return payload
+
+
 class PackModel(BaseModel):
     model_config = ConfigDict(
         alias_generator=_camel,
@@ -55,8 +79,12 @@ class TextStyle(PackModel):
     east_asian_font: str | None = Field(default=None, max_length=200)
     font_size: float | None = Field(default=None, gt=0, le=1000)
     font_weight: int | None = Field(default=None, ge=100, le=1000)
+    italic: bool | None = None
+    underline: bool | None = None
+    letter_spacing: float | None = None
     color: str | None = Field(default=None, pattern=r"^(#[0-9A-Fa-f]{6}|scheme:[A-Za-z0-9_-]+)$")
     alignment: Literal["left", "center", "right", "justify", "unknown"] = "unknown"
+    vertical_alignment: Literal["top", "middle", "bottom", "unknown"] = "unknown"
 
 
 class Spacing(PackModel):
@@ -103,6 +131,7 @@ class CapacityEnvelope(PackModel):
     max_table_rows: int | None = Field(default=None, ge=1, le=10000)
     max_table_columns: int | None = Field(default=None, ge=1, le=1000)
     max_numeric_items: int | None = Field(default=None, ge=1, le=10000)
+    max_images: int | None = Field(default=None, ge=1, le=1000)
     aspect_ratio_min: float | None = Field(default=None, gt=0, le=1000)
     aspect_ratio_max: float | None = Field(default=None, gt=0, le=1000)
 
@@ -115,6 +144,34 @@ class CapacityEnvelope(PackModel):
         ):
             raise ValueError("design_pack_capacity_aspect_ratio_invalid")
         return self
+
+
+class FrameCapabilities(PackModel):
+    """Compiler-derived frame inventory used for template-neutral selection."""
+
+    semantic_roles: tuple[str, ...] = Field(default=(), max_length=128)
+    accepted_kinds: tuple[EditableKind, ...] = Field(default=(), max_length=4)
+    slot_count: int = Field(default=0, ge=0, le=128)
+    text_slot_count: int = Field(default=0, ge=0, le=128)
+    image_slot_count: int = Field(default=0, ge=0, le=128)
+    data_slot_count: int = Field(default=0, ge=0, le=128)
+    max_text_characters: int | None = Field(default=None, ge=1, le=10000000)
+    max_text_lines: int | None = Field(default=None, ge=1, le=1000000)
+    max_images: int | None = Field(default=None, ge=1, le=1000)
+    max_table_rows: int | None = Field(default=None, ge=1, le=1000000)
+    max_table_columns: int | None = Field(default=None, ge=1, le=100000)
+    max_numeric_items: int | None = Field(default=None, ge=1, le=10000000)
+    content_area_share: float = Field(default=0, ge=0, le=1)
+    layout_pattern: Literal[
+        "none",
+        "title-only",
+        "single-region",
+        "horizontal-split",
+        "vertical-stack",
+        "grid",
+    ] = "none"
+    supports_mixed_content: bool = False
+    supports_comparison: bool = False
 
 
 class PatchHandle(PackModel):
@@ -186,6 +243,7 @@ class NativeElement(PackModel):
     text_style: TextStyle | None = None
     spacing: Spacing | None = None
     paint: Paint | None = None
+    container_id: str | None = Field(default=None, min_length=1, max_length=500)
     editable: bool = False
     protected: bool = True
     fallback: Literal["native", "raster", "omit", "reject"] = "native"
@@ -231,6 +289,7 @@ class DesignFrame(PackModel):
     source_digest: Digest = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     background: Paint = Paint()
     density: Literal["low", "medium", "high"]
+    capabilities: FrameCapabilities = FrameCapabilities()
     slots: tuple[EditableSlot, ...] = Field(default=(), max_length=128)
     chrome: tuple[NativeElement, ...] = Field(default=(), max_length=4096)
     unsupported: tuple[UnsupportedElement, ...] = Field(default=(), max_length=4096)
@@ -327,7 +386,11 @@ class DesignPackStructure(PackModel):
                 exclude_unset=True,
             )
         if self.structure_digest != canonical_digest(payload):
-            raise ValueError("design_pack_structure_digest_mismatch")
+            if not (
+                self.schema_version == "source-native-design-structure/v2"
+                and self.structure_digest == canonical_digest(_legacy_v2_payload(payload))
+            ):
+                raise ValueError("design_pack_structure_digest_mismatch")
         return self
 
 
@@ -411,6 +474,7 @@ __all__ = [
     "DesignTokenSummary",
     "EditableSlot",
     "FallbackPolicy",
+    "FrameCapabilities",
     "NativeElement",
     "PackageFile",
     "Paint",

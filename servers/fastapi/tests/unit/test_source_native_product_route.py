@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
+from datetime import datetime, timezone
 import uuid
 
 import pytest
@@ -22,8 +23,101 @@ from services.authored_vnext.narrative_ir.content_graph import (
     seal_content_graph,
     seal_content_integrity_receipt,
 )
-from services.authored_vnext.source_native_generation import _apply_composition_plan
+from services.authored_vnext.source_native_generation import (
+    _apply_composition_plan,
+    _build_slide_quality_observation,
+    _flow_text_css,
+)
+from services.authored_vnext.deck_ir.product_adapter import (
+    _generation_release_quality_receipts,
+)
+from services.authored_vnext.master.digests import canonical_digest as quality_digest
+from services.authored_vnext.slide_quality_acceptance import (
+    canonical_digest as slide_quality_digest,
+    seal_slide_quality_acceptance,
+)
+from services.authored_evidence_ledger import digest_deck_htmls
+from services.public_quality_receipt_v3_projection import (
+    project_persisted_authored_quality_receipt_v3,
+)
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
+
+
+def test_source_native_flow_text_inherits_container_color_without_pack_override() -> None:
+    inherited = _flow_text_css(
+        {"textStyle": {"fontSize": 24}}, role="body", adaptive_scale=1.0
+    )
+    declared = _flow_text_css(
+        {"textStyle": {"fontSize": 24, "color": "#F8FAFC"}},
+        role="body",
+        adaptive_scale=1.0,
+    )
+
+    assert "color:inherit" in inherited
+    assert "color:#F8FAFC" in declared
+
+
+def test_source_native_quality_observation_uses_occupied_flow_regions_and_actionable_dom_issues() -> None:
+    slots = [
+        {
+            "sourceFlowLayout": "text",
+            "acceptedKinds": ["text", "image"],
+            "patchHandle": {"elementId": "flow"},
+            "bounds": {"x": 10, "y": 10, "width": 600, "height": 500},
+        },
+        {
+            "sourceFlowLayout": "text",
+            "acceptedKinds": ["text"],
+            "patchHandle": {"elementId": "empty"},
+            "bounds": {"x": 700, "y": 10, "width": 400, "height": 500},
+        },
+    ]
+    common = {
+        "contrast_ratio": 4.5,
+        "occluded_fraction": 1.0,
+        "clipped": True,
+        "glyph_clipped": True,
+        "line_box_clipped": True,
+        "viewport_intersection_ratio": 0.5,
+    }
+    metrics = {
+        "viewport": {"width": 1280, "height": 720},
+        "elements": [
+            {"qid": "flow", "css_visible": True, "bbox": {"x": 10, "y": 10, "width": 600, "height": 500}},
+            {"qid": "empty", "css_visible": False, "bbox": {"x": 0, "y": 0, "width": 0, "height": 0}},
+            {**common, "qid": "source-flow:page:title-candidate-001", "parent_qid": "flow--columns", "font_size": 40, "bbox": {"x": 20, "y": 20, "width": 240, "height": 52}},
+            {**common, "qid": "source-flow:page:paragraph-001", "parent_qid": "flow--columns", "font_size": 16, "bbox": {"x": 330, "y": 20, "width": 240, "height": 120}},
+            {"qid": "flow--mixed-images", "bbox": {"x": 310, "y": 100, "width": 300, "height": 300}},
+            {
+                "qid": "source-flow-image:occ-1",
+                "parent_qid": "flow--mixed-images",
+                "source_block_id": "occ-1",
+                "viewport_intersection_ratio": 1.0,
+                "bbox": {"x": 310, "y": 120, "width": 300, "height": 280},
+                "image": {"complete": True, "naturalWidth": 1200, "naturalHeight": 800},
+            },
+        ],
+    }
+
+    observation = _build_slide_quality_observation(
+        slide_index=0,
+        slide_digest="sha256:" + "1" * 64,
+        normalized_metrics=metrics,
+        slots=slots,
+        report=SimpleNamespace(issues=()),
+        frame_role="content",
+        expected_protected_digest="sha256:" + "2" * 64,
+        observed_protected_digest="sha256:" + "2" * 64,
+    )
+
+    assert observation["readabilityScore"] == 1.0
+    assert observation["titleBodyHierarchyScore"] == 1.0
+    assert observation["clippedElementCount"] == 0
+    assert observation["offCanvasElementCount"] == 0
+    assert observation["meaningfulImageSizeScore"] == 1.0
+    assert observation["undersizedMeaningfulImageCount"] == 0
+    assert observation["templateSlotFidelityScore"] == 1.0
+    assert observation["templateGeometryFidelityScore"] == 1.0
 
 
 def test_source_native_composition_is_exact_protected_capacity_gated_and_fail_closed(
@@ -103,6 +197,11 @@ def test_source_native_composition_is_exact_protected_capacity_gated_and_fail_cl
         )
         assert resolution == {
             "selectedRoute": "source-native",
+            "designPackPin": {
+                "designPackId": manifest.pack_id,
+                "version": 1,
+                "digest": manifest.package_digest,
+            },
             "narrativeIrDigest": None,
             "fallbackReason": None,
         }
@@ -186,6 +285,8 @@ def test_source_native_composition_is_exact_protected_capacity_gated_and_fail_cl
         assert "data-qid=\"logo\">DEVAX" in compiled
         assert "aria-hidden=\"true\"" in compiled
         assert "OLD" not in compiled
+        assert 'data-quality-unintentional="true"' in compiled
+        assert "overflow-wrap:break-word" in compiled
         assert [item["qid"] for item in semantic] == ["body", "title"]
 
         metrics = {
@@ -210,9 +311,22 @@ def test_source_native_composition_is_exact_protected_capacity_gated_and_fail_cl
         )
         receipt = seal_content_integrity_receipt(
             operation_id=uuid.uuid4(),
+            attempt_binding_digest="sha256:" + "5" * 64,
+            source_revision=1,
+            result_revision=2,
             generation_lane="new-authoring",
             content_graph_digest=graph.content_graph_digest,
+            route_strategy_receipt_digest="sha256:" + "4" * 64,
             narrative_digest="sha256:" + "2" * 64,
+            preserve_source_input_digest=None,
+            provider_call_budget={
+                "schemaVersion": "narrative-provider-call-budget/v1",
+                "maximumLogicalCalls": 2,
+                "maximumPhysicalCalls": 2,
+                "actualLogicalCalls": 0,
+                "actualPhysicalCalls": 0,
+                "reservations": [],
+            },
             pages=[page],
         )
         assert receipt.status == "passed"
@@ -223,7 +337,7 @@ def test_source_native_composition_is_exact_protected_capacity_gated_and_fail_cl
                 **slide.__dict__,
                 "content_unit_ids": (),
                 "sealed_content_units": (),
-                "supporting_points": ["가" * 500],
+                "supporting_points": ["가" * 1000],
             }
         )
         rejected, _, _ = build_composition_plan(
@@ -258,9 +372,22 @@ def test_source_native_composition_is_exact_protected_capacity_gated_and_fail_cl
         ):
             seal_content_integrity_receipt(
                 operation_id=uuid.uuid4(),
+                attempt_binding_digest="sha256:" + "5" * 64,
+                source_revision=1,
+                result_revision=2,
                 generation_lane="new-authoring",
                 content_graph_digest=graph.content_graph_digest,
+                route_strategy_receipt_digest="sha256:" + "4" * 64,
                 narrative_digest="sha256:" + "2" * 64,
+                preserve_source_input_digest=None,
+                provider_call_budget={
+                    "schemaVersion": "narrative-provider-call-budget/v1",
+                    "maximumLogicalCalls": 2,
+                    "maximumPhysicalCalls": 2,
+                    "actualLogicalCalls": 0,
+                    "actualPhysicalCalls": 0,
+                    "reservations": [],
+                },
                 pages=[hidden_page],
             )
 
@@ -276,3 +403,114 @@ def test_source_native_composition_is_exact_protected_capacity_gated_and_fail_cl
             )
     finally:
         reset_current_owner_id(token)
+
+
+def test_source_native_provider_free_slide_quality_reaches_public_release_projection() -> None:
+    protected_digest = slide_quality_digest({"protected": "chrome"})
+    observations = [
+        {
+            "slideIndex": index,
+            "slideDigest": slide_quality_digest({"slide": index}),
+            "browserObserved": True,
+            "browserEngine": "chromium",
+            "viewport": {"width": 1600, "height": 900},
+            "readabilityScore": 0.98,
+            "titleBodyHierarchyScore": 0.98,
+            "bodyTextElementCount": 2,
+            "minimumBodyFontPt": 18.0,
+            "templateMinimumBodyFontPt": 16.0,
+            "wrappingViolationCount": 0,
+            "clippedElementCount": 0,
+            "prohibitedOverlapCount": 0,
+            "offCanvasElementCount": 0,
+            "balanceScore": 0.98,
+            "whitespaceScore": 0.98,
+            "meaningfulImageCount": 1,
+            "meaningfulImageSizeScore": 0.98,
+            "imageCropFidelityScore": 0.98,
+            "undersizedMeaningfulImageCount": 0,
+            "badImageCropCount": 0,
+            "templateSlotFidelityScore": 0.98,
+            "templateGeometryFidelityScore": 0.98,
+            "expectedProtectedChromeDigest": protected_digest,
+            "observedProtectedChromeDigest": protected_digest,
+        }
+        for index in range(2)
+    ]
+    slide_quality = seal_slide_quality_acceptance(
+        subject_digest=slide_quality_digest({"subject": "source-native"}),
+        browser_observations=observations,
+        expected_slide_count=2,
+    ).to_dict()
+    inventory = {
+        "schemaVersion": "source-content-text-image-inventory/v1",
+        "sourceMode": "text-image",
+        "sourceCompleteClaim": False,
+        "preserved": ["text", "image-occurrences"],
+        "excluded": ["tables", "charts", "original-layout"],
+        "excludedSourceObjectCounts": {"tables": 0, "charts": 0, "original-layout": 2},
+        "textOccurrences": [
+            {"sourceBlockId": "text-1", "contentDigest": "sha256:" + "1" * 64},
+            {"sourceBlockId": "text-2", "contentDigest": "sha256:" + "2" * 64},
+        ],
+        "imageOccurrences": [
+            {"sourceBlockId": "image-1", "contentDigest": "sha256:" + "3" * 64}
+        ],
+    }
+    source_content = {
+        **inventory,
+        "textOccurrenceCount": 2,
+        "imageOccurrenceCount": 1,
+        "occurrenceInventoryDigest": quality_digest(inventory),
+        "status": "passed",
+        "required": True,
+    }
+    htmls = ["<html><body>one</body></html>", "<html><body>two</body></html>"]
+    v2, v3, evidence = _generation_release_quality_receipts(
+        attempt_token="source-native-attempt",
+        revision=2,
+        htmls=htmls,
+        deck_ir={
+            "slides": [
+                {"role": "content", "components": []},
+                {"role": "content", "components": []},
+            ]
+        },
+        generation_quality=slide_quality,
+        content_integrity={
+            "status": "passed",
+            "requiredCoverage": 1.0,
+            "receiptDigest": "sha256:" + "4" * 64,
+        },
+        source_content_quality_evidence=source_content,
+    )
+
+    scene_digest = digest_deck_htmls(htmls)
+    presentation_id = str(uuid.uuid4())
+    projected = project_persisted_authored_quality_receipt_v3(
+        authored_quality_gate={**v2.to_dict(), "qualityReceiptV3": v3.to_dict()},
+        quality_receipt_id="quality-source-native",
+        operation_id=str(uuid.uuid4()),
+        presentation_id=presentation_id,
+        artifact_digest="sha256:" + "5" * 64,
+        source_revision=2,
+        scene_digest=scene_digest,
+        exporter_version="fidelity-test/v1",
+        evaluated_at=datetime.now(timezone.utc),
+        generation_evidence_record={
+            "schemaVersion": "quality-receipt-event/v3",
+            "presentationId": presentation_id,
+            "resultRevision": 2,
+            "receipt": v3.to_dict(),
+            "evidence": evidence,
+        },
+        render_runtime_binding_digest="sha256:" + "6" * 64,
+        result_render_identity_digest="sha256:" + "7" * 64,
+    )
+
+    assert v2.require_source_readback is True
+    assert v2.require_visual_review is True
+    assert not v3.blockers
+    assert projected.image_content_integrity.status == "passed"
+    assert projected.visual_review.status == "passed"
+    assert projected.release_readiness == "ready"

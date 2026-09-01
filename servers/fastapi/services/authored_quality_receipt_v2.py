@@ -204,9 +204,11 @@ def release_quality_policy(profile: object = None) -> ReleaseQualityPolicy:
         name = "development"
     elif name == "":
         name = "default"
+    source_native_generation = name == "source_native_generation"
     release_named = name in {"release", "strict", "production", "release_strict"}
     if not release_named and name not in {
-        "default", "development", "custom", "visual", "visual_review", "performance", "perf"
+        "default", "development", "custom", "visual", "visual_review", "performance", "perf",
+        "source_native_generation",
     }:
         raise ValueError("quality_receipt_release_profile_unknown")
 
@@ -215,8 +217,8 @@ def release_quality_policy(profile: object = None) -> ReleaseQualityPolicy:
             return _coerce_bool(values.get(camel, values.get(snake)), camel)
         return default
 
-    require_source = release_named or flag("requireSourceReadback", "require_source_readback")
-    require_visual = release_named or name in {"visual", "visual_review"} or flag(
+    require_source = release_named or source_native_generation or flag("requireSourceReadback", "require_source_readback")
+    require_visual = release_named or source_native_generation or name in {"visual", "visual_review"} or flag(
         "requireVisualReview", "require_visual_review"
     )
     require_performance = release_named or name in {"performance", "perf"} or flag(
@@ -1906,6 +1908,21 @@ def _v3_provider_call_blockers(evidence: Mapping[str, object]) -> tuple[str, ...
     provider = _mapping(evidence.get("providerCalls"))
     if provider is None:
         return ("providerCalls.evidence_missing",)
+    provider_mode = provider.get("mode")
+    source = _mapping(evidence.get("sourceContent"))
+    provider_free = provider_mode == "source-native-provider-free"
+    provider_free_allowed = (
+        provider_free
+        and source is not None
+        and source.get("status") == "passed"
+        and source.get("required") is True
+        and source.get("sourceMode", source.get("mode")) == "text-image"
+        and source.get("sourceCompleteClaim") is False
+    )
+    if provider_mode not in {None, "authored-provider", "source-native-provider-free"}:
+        _append(blockers, "providerCalls.mode_invalid")
+    if provider_free and not provider_free_allowed:
+        _append(blockers, "providerCalls.provider_free_evidence_invalid")
     calls = provider.get("slides")
     if calls is None:
         # Scalar counts are retained only for an explicit V2 transition.  New
@@ -1937,13 +1954,15 @@ def _v3_provider_call_blockers(evidence: Mapping[str, object]) -> tuple[str, ...
             continue
         observed_indices.add(slide_index)
         initial, recovery, declared_total = call.get("initial"), call.get("recovery"), call.get("total")
+        expected_initial = 0 if provider_free_allowed else 1
+        allowed_recovery = (0,) if provider_free_allowed else (0, 1)
         if (
             not isinstance(initial, int)
             or isinstance(initial, bool)
-            or initial != 1
+            or initial != expected_initial
             or not isinstance(recovery, int)
             or isinstance(recovery, bool)
-            or recovery not in (0, 1)
+            or recovery not in allowed_recovery
         ):
             _append(blockers, f"providerCalls.slide_budget_invalid:{slide_index}")
         if (

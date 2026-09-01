@@ -76,6 +76,8 @@ def test_generation_mode_contract_and_server_owned_route_receipt(
     assert captured == {
         "generation_mode": "registered-template",
         "design_pack_pin": pin,
+        "source_mode": None,
+        "authored_style": None,
         "slide_count": 10,
     }
     assert receipt.selected_route == "source-native"
@@ -123,6 +125,59 @@ def test_generation_mode_contract_and_server_owned_route_receipt(
     ).model_dump(mode="json", by_alias=True)
     assert durable["generationMode"] == "registered-template"
     assert durable["designPackPin"] == pin
+
+
+def test_source_restyle_resolves_private_design_pack_without_public_pin() -> None:
+    internal_pin = {
+        "designPackId": "devax-first-ten",
+        "version": 1,
+        "digest": "sha256:" + ("3" * 64),
+    }
+    request = PresentationGenerationRequestV2(
+        content="Preserve the source document",
+        sourceMode="source_content_restyle",
+        sourceContentManifestPin={
+            "manifestId": str(uuid.uuid4()),
+            "digest": "sha256:" + ("4" * 64),
+        },
+        contentPolicy={
+            "text": "verbatim",
+            "preserveAllTableCells": False,
+            "preserveAllChartValues": False,
+            "preserveAllImageOccurrences": True,
+            "preserveSourceOrder": True,
+            "preserveSourceSlideCount": True,
+            "allowSlideExpansion": False,
+            "allowSummarization": False,
+            "overflowPolicy": "same_page_recompose_or_fail",
+        },
+        authoredStyle="devax-first-ten",
+        slideCount=43,
+    )
+    captured: dict[str, object] = {}
+
+    def resolve(**kwargs: object) -> dict[str, object]:
+        captured.update(kwargs)
+        return {
+            "selectedRoute": "source-native",
+            "designPackPin": internal_pin,
+            "narrativeIrDigest": None,
+        }
+
+    receipt = asyncio.run(
+        public_v2_orchestrator._resolve_generation_route_receipt(
+            request,
+            slide_count=43,
+            resolver=resolve,
+        )
+    )
+    assert request.design_pack_pin is None
+    assert captured["source_mode"] == "source_content_restyle"
+    assert captured["authored_style"] == "devax-first-ten"
+    assert receipt.design_pack_pin is not None
+    assert receipt.design_pack_pin.model_dump(mode="json", by_alias=True) == internal_pin
+
+
 def test_public_generation_route_is_v2_202_and_bounded_to_100_slides() -> None:
     now = datetime(2026, 9, 1, tzinfo=timezone.utc)
     actor = PublicRequestActor(

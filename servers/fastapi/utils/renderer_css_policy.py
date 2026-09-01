@@ -67,6 +67,7 @@ ALLOWED_CSS_PROPERTIES: frozenset[str] = frozenset({
     "z-index",
     # Box, flow and multi-column layout.
     "aspect-ratio", "float", "clear", "order", "isolation", "visibility",
+    "break-inside",
     "columns", "column-count", "column-width", "column-fill", "column-span",
     "column-rule", "column-rule-color", "column-rule-style", "column-rule-width",
     # Logical (writing-mode relative) box model. The physical forms are already

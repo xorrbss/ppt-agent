@@ -30,6 +30,12 @@ from services.workspace_operation_retry_policy import WorkspaceOperationRetryDec
 
 PUBLIC_OPERATION_CONTRACT_VERSION = "public-operation/v2"
 PUBLIC_CAPACITY_COMMIT_RESERVE_SECONDS = 10.0
+_TERMINAL_PROVIDER_FAILURE_CODES = frozenset(
+    {
+        "retry_requires_an_initial_request",
+        "retry_amplification_ceiling_exceeded",
+    }
+)
 
 LinkedClaimCallable = Callable[
     [uuid.UUID, str, int],
@@ -174,10 +180,16 @@ def durable_generation_failure(error: BaseException) -> tuple[str, bool]:
         else "_"
         for character in durable_code.strip().lower()
     )[:128].strip("_")
-    return normalized_code or "presentation_generation_failed", durable_retryable
+    normalized_code = normalized_code or "presentation_generation_failed"
+    if normalized_code in _TERMINAL_PROVIDER_FAILURE_CODES:
+        # The provider runtime has already cancelled this logical job.  Retrying
+        # the durable operation cannot create the missing initial request and
+        # would otherwise keep its lease/heartbeat alive until recovery.
+        return normalized_code, False
+    return normalized_code, durable_retryable
 
 
-async def _public_claim_deadline(
+async def public_generation_deadline(
     session_factory: async_sessionmaker[AsyncSession],
     context: WorkspaceOperationExecutionContext,
 ) -> datetime | None:
@@ -216,17 +228,42 @@ async def claim_linked_generation_job(
     """Acquire the compatibility fence without churning a public v2 lease."""
 
     claim = context.claim
+    public_deadline = await public_generation_deadline(session_factory, context)
     unreported = object()
     reported_queue_position: object = unreported
     while True:
         try:
-            linked_claim = await claim_linked(
-                claim.operation_id,
-                claim.attempt_token,
-                claim.attempt_number,
-            )
+            if public_deadline is None:
+                linked_claim = await claim_linked(
+                    claim.operation_id,
+                    claim.attempt_token,
+                    claim.attempt_number,
+                )
+            else:
+                claim_window = (
+                    public_deadline
+                    - datetime.now(timezone.utc)
+                    - timedelta(seconds=PUBLIC_CAPACITY_COMMIT_RESERVE_SECONDS)
+                ).total_seconds()
+                if claim_window <= 0:
+                    raise NonRetryableWorkspaceOperationError(
+                        "public_deadline_exceeded",
+                        detail={"error_code": "public_deadline_exceeded"},
+                    )
+                try:
+                    async with asyncio.timeout(claim_window):
+                        linked_claim = await claim_linked(
+                            claim.operation_id,
+                            claim.attempt_token,
+                            claim.attempt_number,
+                        )
+                except TimeoutError as error:
+                    raise NonRetryableWorkspaceOperationError(
+                        "public_deadline_exceeded",
+                        detail={"error_code": "public_deadline_exceeded"},
+                    ) from error
         except GenerationCapacityUnavailable as error:
-            deadline = await _public_claim_deadline(session_factory, context)
+            deadline = await public_generation_deadline(session_factory, context)
             if deadline is None:
                 raise WorkspaceOperationDeferred(
                     error.code,

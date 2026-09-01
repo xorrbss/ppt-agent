@@ -103,11 +103,36 @@ def load_pinned_design_pack(
     return matches[0]
 
 
+def resolve_internal_design_pack_pin(
+    *, owner_id: uuid.UUID | str, authored_style: str
+) -> dict[str, object]:
+    """Resolve a public style choice to one exact private package authority."""
+
+    style_id = str(authored_style or "").strip()
+    if not style_id:
+        raise GenerationRouteError("source_content_template_required")
+    try:
+        packages = DesignPackRegistry(design_pack_storage_root(owner_id)).list()
+    except DesignPackRegistryError as error:
+        raise GenerationRouteError(str(error)) from error
+    matches = [package for package in packages if package.manifest.pack_id == style_id]
+    if len(matches) != 1:
+        raise GenerationRouteError("source_content_design_pack_unavailable")
+    package = matches[0]
+    return {
+        "designPackId": package.manifest.pack_id,
+        "version": int(package.manifest.package_version.split(".", 1)[0]),
+        "digest": package.manifest.package_digest,
+    }
+
+
 def resolve_generation_route(
     *,
     requested_mode: str | None = None,
     generation_mode: str | None = None,
     design_pack_pin: object | None,
+    source_mode: str | None = None,
+    authored_style: str | None = None,
     owner_id: uuid.UUID | str | None = None,
     operation_id: uuid.UUID | str | None = None,
     **_: Any,
@@ -127,13 +152,22 @@ def resolve_generation_route(
         raise GenerationRouteError("generation_mode_invalid")
     if mode == "editable-first":
         raise GenerationRouteError("capability_not_supported")
-    if mode == "registered-template" and design_pack_pin is None:
+    if (
+        mode == "registered-template"
+        and design_pack_pin is None
+        and source_mode != "source_content_restyle"
+    ):
         raise GenerationRouteError("design_pack_pin_required")
 
     resolved_owner = owner_id or get_current_owner_id()
     if resolved_owner is None:
         raise GenerationRouteError("design_pack_owner_invalid")
     pin: dict[str, object] | None = None
+    if source_mode == "source_content_restyle" and design_pack_pin is None:
+        design_pack_pin = resolve_internal_design_pack_pin(
+            owner_id=resolved_owner,
+            authored_style=str(authored_style or ""),
+        )
     if design_pack_pin is not None:
         package = load_pinned_design_pack(
             owner_id=resolved_owner, design_pack_pin=design_pack_pin
@@ -152,6 +186,7 @@ def resolve_generation_route(
     del operation_id
     unsigned: dict[str, object] = {
         "selectedRoute": selected,
+        "designPackPin": pin,
         "narrativeIrDigest": None,
         "fallbackReason": fallback_reason,
     }
@@ -163,5 +198,6 @@ __all__ = [
     "design_pack_storage_root",
     "load_pinned_design_pack",
     "normalize_design_pack_pin",
+    "resolve_internal_design_pack_pin",
     "resolve_generation_route",
 ]

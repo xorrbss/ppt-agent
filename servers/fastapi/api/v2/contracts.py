@@ -28,6 +28,9 @@ from models.generate_presentation_request import (
     SourceContentManifestPinInput,
     SourceContentPolicy,
 )
+from services.authored_vnext.narrative_ir.contracts import (
+    ContentIntegrityReceiptV2,
+)
 
 
 PUBLIC_ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
@@ -133,6 +136,7 @@ class PresentationGenerationRequestV2(PublicWireModel):
         if (
             self.generation_mode == "registered-template"
             and self.design_pack_pin is None
+            and self.source_mode is None
         ):
             raise ValueError("design_pack_pin_required")
         if (
@@ -151,8 +155,6 @@ class PresentationGenerationRequestV2(PublicWireModel):
             raise ValueError("source_content_manifest_pin_required")
         if self.content_policy is None:
             raise ValueError("source_content_policy_required")
-        if self.generation_mode == "registered-template" or self.design_pack_pin:
-            raise ValueError("generation_strategy_conflict")
         if not self.authored_style:
             raise ValueError("source_content_template_required")
         if self.slides_markdown is not None or self.quality_policy == "release-v1":
@@ -609,7 +611,7 @@ class OperationStatusV2(PublicWireModel):
     error: PublicOperationErrorV2 | None = None
     generation_route_receipt: GenerationRouteReceiptV1 | None = None
     generation_timing_receipt: dict[str, Any] | None = None
-    content_integrity_receipt: dict[str, Any] | None = None
+    content_integrity_receipt: ContentIntegrityReceiptV2 | None = None
     execution_receipt: OperationExecutionReceiptV2 | None = None
     quality_receipt: QualityReceiptV3 | None = None
     release_readiness: Literal["ready", "blocked", "not_assessed"] = "not_assessed"
@@ -642,12 +644,32 @@ class OperationStatusV2(PublicWireModel):
             raise ValueError(
                 "registered-template success requires contentIntegrityReceipt"
             )
-        if self.content_integrity_receipt is not None and (
-            self.content_integrity_receipt.get("schemaVersion")
-            != "content-integrity-receipt/v1"
-            or self.content_integrity_receipt.get("status") != "passed"
-        ):
-            raise ValueError("contentIntegrityReceipt must be a passed v1 receipt")
+        if self.content_integrity_receipt is not None:
+            receipt = self.content_integrity_receipt
+            if (
+                self.kind != "presentation.generate"
+                or self.status != "succeeded"
+                or self.generation_route_receipt is None
+                or self.source_revision is None
+            ):
+                raise ValueError(
+                    "contentIntegrityReceipt requires succeeded generation lineage"
+                )
+            if str(receipt.operation_id) != self.operation_id:
+                raise ValueError(
+                    "contentIntegrityReceipt must match the status operationId"
+                )
+            if receipt.result_revision != self.source_revision:
+                raise ValueError(
+                    "contentIntegrityReceipt resultRevision must match sourceRevision"
+                )
+            if (
+                receipt.route_strategy_receipt_digest
+                != self.generation_route_receipt.receipt_digest
+            ):
+                raise ValueError(
+                    "contentIntegrityReceipt route receipt binding mismatch"
+                )
         if self.release_readiness == "ready" and (
             self.quality_receipt is None
             or self.quality_receipt.release_readiness != "ready"

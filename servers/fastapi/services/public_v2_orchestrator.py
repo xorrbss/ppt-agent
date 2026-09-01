@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping
 from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from hashlib import sha256
 import inspect
 import json
@@ -85,6 +85,15 @@ from services.public_export_operation import (
     public_release_review_runtime_binding,
     public_render_runtime_binding_digest,
 )
+from services.public_v2_operation_lifecycle import (
+    PUBLIC_GENERATION_KIND as _GENERATION_KIND,
+    PUBLIC_TERMINAL_STATES as _TERMINAL_STATES,
+    aware_datetime as _aware,
+    is_public_operation_authority,
+    public_operation_phase as _phase,
+    public_operation_status as _operation_status,
+    public_progress_percent as _progress_percent,
+)
 from services.references.service import (
     ReferenceProviderError,
     admit_reference_snapshots,
@@ -131,22 +140,6 @@ GenerationRouteResolver = Callable[
 
 PUBLIC_V2_POSTGRESQL_STRICT_PROFILE = "postgresql-strict"
 PUBLIC_V2_INTEGRATION_PROFILE_ENV = "PUBLIC_V2_INTEGRATION_PROFILE"
-_PUBLIC_CONTRACT = "public-operation/v2"
-_PUBLIC_PROFILE = "public-generation-export/v2"
-_GENERATION_KIND = "presentation.generate"
-_TERMINAL_STATES = {
-    "succeeded",
-    "failed",
-    "cancelled",
-    "deadline_exceeded",
-    "dead_letter",
-}
-
-
-def _aware(value: datetime) -> datetime:
-    return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
-
-
 def _canonical_hash(payload: Mapping[str, Any]) -> str:
     encoded = json.dumps(
         payload,
@@ -212,6 +205,8 @@ async def _resolve_generation_route_receipt(
                     if request.design_pack_pin is not None
                     else None
                 ),
+                source_mode=request.source_mode,
+                authored_style=request.authored_style,
                 slide_count=slide_count,
             )
             if inspect.isawaitable(raw_resolution):
@@ -234,6 +229,9 @@ async def _resolve_generation_route_receipt(
     fallback_reason = resolution.get("fallbackReason") or resolution.get(
         "fallback_reason"
     )
+    resolved_design_pack_pin = resolution.get("designPackPin") or resolution.get(
+        "design_pack_pin"
+    )
     if selected_route == "authored-fallback" and not fallback_reason:
         fallback_reason = "resolver_selected_authored_fallback"
     receipt_payload: dict[str, Any] = {
@@ -241,7 +239,9 @@ async def _resolve_generation_route_receipt(
         "requestedMode": request.generation_mode,
         "selectedRoute": selected_route,
         "designPackPin": (
-            request.design_pack_pin.model_dump(mode="json", by_alias=True)
+            resolved_design_pack_pin
+            if isinstance(resolved_design_pack_pin, Mapping)
+            else request.design_pack_pin.model_dump(mode="json", by_alias=True)
             if request.design_pack_pin is not None
             else None
         ),
@@ -263,6 +263,12 @@ async def _resolve_generation_route_receipt(
 def _effective_generation_engine(
     request: PresentationGenerationRequestV2,
 ) -> str:
+    if request.generation_mode == "registered-template":
+        # The design-pack route receipt and source-native handler own this
+        # operation.  Sending it through bounded Deck IR preflight would reject
+        # valid packs with more than ten requested output pages before the
+        # provider-free capacity admission can run.
+        return "authored"
     if "generation_mode" in request.model_fields_set:
         return "deck-ir"
     return request.generation_engine or "authored"
@@ -359,6 +365,87 @@ def _public_error(
     )
 
 
+def _checkpoint_content_graph_authority(
+    operation: WorkspaceOperation,
+) -> dict[str, str | None]:
+    request_payload = (
+        operation.request_payload
+        if isinstance(operation.request_payload, Mapping)
+        else {}
+    )
+    preserve_checkpoint = request_payload.get(
+        "preserve_source_checkpoint"
+    ) or request_payload.get("preserveSourceCheckpoint")
+    checkpoint = preserve_checkpoint or request_payload.get(
+        "narrative_checkpoint"
+    ) or request_payload.get("narrativeCheckpoint")
+    if not isinstance(checkpoint, Mapping):
+        raise ValueError("content_integrity_checkpoint_missing")
+    checkpoint_operation_id = checkpoint.get("operationId") or checkpoint.get(
+        "operation_id"
+    )
+    if str(checkpoint_operation_id or "") != str(operation.id):
+        raise ValueError("content_integrity_checkpoint_operation_mismatch")
+    if preserve_checkpoint is not None:
+        preserve_input = checkpoint.get("preserveSourceInput")
+        content_graph = (
+            preserve_input.get("contentGraph")
+            if isinstance(preserve_input, Mapping)
+            else None
+        )
+        content_graph_digest = (
+            content_graph.get("contentGraphDigest")
+            if isinstance(content_graph, Mapping)
+            else None
+        )
+        generation_lane = "preserve-source"
+        attempt_binding_digest = checkpoint.get("attemptBindingDigest")
+        preserve_source_input_digest = (
+            preserve_input.get("inputDigest")
+            if isinstance(preserve_input, Mapping)
+            else None
+        )
+        narrative_digest = None
+    else:
+        narrative = checkpoint.get("narrative")
+        if not isinstance(narrative, Mapping):
+            raise ValueError("content_integrity_checkpoint_narrative_missing")
+        content_graph_digest = narrative.get("contentGraphDigest") or narrative.get(
+            "content_graph_digest"
+        )
+        generation_lane = "new-authoring"
+        from services.authored_vnext.narrative_ir.validation import canonical_digest
+
+        attempt_binding_digest = canonical_digest(
+            {
+                "operationId": str(checkpoint_operation_id),
+                "jobId": str(checkpoint.get("jobId") or ""),
+                "attemptId": str(checkpoint.get("attemptId") or ""),
+                "fencingToken": checkpoint.get("fencingToken"),
+            }
+        )
+        narrative_digest = narrative.get("narrativeDigest")
+        preserve_source_input_digest = None
+    if not isinstance(content_graph_digest, str) or not content_graph_digest:
+        raise ValueError("content_integrity_checkpoint_graph_missing")
+    provider_call_budget = checkpoint.get("providerCallBudget")
+    if not isinstance(provider_call_budget, Mapping):
+        raise ValueError("content_integrity_provider_budget_missing")
+    from services.authored_vnext.narrative_ir.validation import canonical_digest
+
+    provider_call_budget_digest = canonical_digest(dict(provider_call_budget))
+    if not isinstance(attempt_binding_digest, str) or not attempt_binding_digest:
+        raise ValueError("content_integrity_attempt_binding_missing")
+    return {
+        "generationLane": generation_lane,
+        "contentGraphDigest": content_graph_digest,
+        "attemptBindingDigest": attempt_binding_digest,
+        "narrativeDigest": narrative_digest,
+        "preserveSourceInputDigest": preserve_source_input_digest,
+        "providerCallBudgetDigest": provider_call_budget_digest,
+    }
+
+
 def require_generation_content_integrity_for_export(
     operation: WorkspaceOperation,
     *,
@@ -387,11 +474,29 @@ def require_generation_content_integrity_for_export(
         raise _public_error(409, "content_integrity_receipt_required")
     try:
         from services.authored_vnext.narrative_ir.content_graph import (
-            validate_content_integrity_receipt,
+            validate_content_integrity_receipt_binding,
         )
 
-        validate_content_integrity_receipt(
-            operation.result.get("contentIntegrityReceipt")
+        route_receipt = GenerationRouteReceiptV1.model_validate(route)
+        raw_receipt = operation.result.get("contentIntegrityReceipt")
+        authority = _checkpoint_content_graph_authority(operation)
+        if (
+            operation.expected_revision is None
+            or operation.result_revision is None
+        ):
+            raise ValueError("content_integrity_binding_unavailable")
+        validate_content_integrity_receipt_binding(
+            raw_receipt,
+            operation_id=operation.id,
+            source_revision=int(operation.expected_revision),
+            result_revision=int(operation.result_revision),
+            generation_lane=str(authority["generationLane"]),
+            content_graph_digest=str(authority["contentGraphDigest"]),
+            route_strategy_receipt_digest=route_receipt.receipt_digest,
+            attempt_binding_digest=str(authority["attemptBindingDigest"]),
+            narrative_digest=authority["narrativeDigest"],
+            preserve_source_input_digest=authority["preserveSourceInputDigest"],
+            provider_call_budget_digest=str(authority["providerCallBudgetDigest"]),
         )
     except Exception as error:
         raise _public_error(409, "content_integrity_receipt_required") from error
@@ -433,50 +538,6 @@ def _operation_uuid(value: str, *, reason: str) -> uuid.UUID:
         return uuid.UUID(value)
     except (TypeError, ValueError, AttributeError) as error:
         raise _public_error(404, reason) from error
-
-
-def _operation_status(value: str) -> str:
-    if value in {"queued", "waiting_for_assets", "awaiting_approval", "approval_required"}:
-        return "queued"
-    if value in {"running", "cancelling", "blocked"}:
-        return "running"
-    if value == "succeeded":
-        return "succeeded"
-    if value == "cancelled":
-        return "cancelled"
-    return "failed"
-
-
-def _phase(*, kind: str, state: str, progress: object) -> str | None:
-    stage = ""
-    if isinstance(progress, Mapping):
-        stage = str(progress.get("stage") or progress.get("phase") or "").lower()
-    if "publish" in stage:
-        return "publishing"
-    if "package" in stage or "export_completed" in stage:
-        return "packaging"
-    if "render" in stage or "export" in stage:
-        return "rendering"
-    if "valid" in stage or "quality" in stage:
-        return "validating"
-    if "author" in stage or "outline" in stage or "generation" in stage:
-        return "authoring"
-    if state == "queued":
-        return "admission"
-    if kind.startswith("export.") and state in {"running", "cancelling"}:
-        return "rendering"
-    if kind == _GENERATION_KIND and state in {"running", "cancelling"}:
-        return "authoring"
-    return None
-
-
-def _progress_percent(progress: object) -> int | None:
-    if not isinstance(progress, Mapping):
-        return None
-    raw = progress.get("percent")
-    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
-        return None
-    return max(0, min(100, int(raw)))
 
 
 class SqlPublicV2Orchestrator:
@@ -583,7 +644,24 @@ class SqlPublicV2Orchestrator:
                 mode="json",
                 by_alias=True,
             )
-            effective_generation_engine = _effective_generation_engine(request)
+            source_native_route = (
+                generation_route_receipt.selected_route == "source-native"
+            )
+            effective_generation_engine = (
+                "authored" if source_native_route else _effective_generation_engine(request)
+            )
+            internal_generation_mode = (
+                "registered-template"
+                if source_native_route
+                else request.generation_mode
+            )
+            internal_design_pack_pin = (
+                generation_route_receipt.design_pack_pin.model_dump(
+                    mode="json", by_alias=True
+                )
+                if generation_route_receipt.design_pack_pin is not None
+                else None
+            )
             internal_request = GeneratePresentationRequest(
                 content=request.content,
                 slides_markdown=request.slides_markdown,
@@ -612,12 +690,8 @@ class SqlPublicV2Orchestrator:
                     if request.content_policy is not None
                     else None
                 ),
-                generationMode=request.generation_mode,
-                designPackPin=(
-                    request.design_pack_pin.model_dump(mode="json", by_alias=True)
-                    if request.design_pack_pin is not None
-                    else None
-                ),
+                generationMode=internal_generation_mode,
+                designPackPin=internal_design_pack_pin,
                 generationEngine=effective_generation_engine,
             )
             # This has no provider side effect.  It must remain ahead of the
@@ -697,15 +771,8 @@ class SqlPublicV2Orchestrator:
                             if request.content_policy is not None
                             else None
                         ),
-                        "generation_mode": request.generation_mode,
-                        "design_pack_pin": (
-                            request.design_pack_pin.model_dump(
-                                mode="json",
-                                by_alias=True,
-                            )
-                            if request.design_pack_pin is not None
-                            else None
-                        ),
+                        "generation_mode": internal_generation_mode,
+                        "design_pack_pin": internal_design_pack_pin,
                         "generation_engine": effective_generation_engine,
                     },
                     asset_ids=asset_ids,
@@ -1674,7 +1741,7 @@ class SqlPublicV2Orchestrator:
                 PublicOperationAdmission.tenant_id == actor.tenant_id,
             )
         )
-        if admission is None or not self._is_public_authority(operation, admission):
+        if admission is None or not is_public_operation_authority(operation, admission):
             raise _public_error(503, "operation_authority_unavailable")
         return self._receipt(operation, admission, duplicate=True)
 
@@ -1702,31 +1769,9 @@ class SqlPublicV2Orchestrator:
                 PublicOperationAdmission.tenant_id == actor.tenant_id,
             )
         )
-        if admission is None or not self._is_public_authority(operation, admission):
+        if admission is None or not is_public_operation_authority(operation, admission):
             raise _public_error(503, "operation_authority_unavailable")
         return operation, admission
-
-    @staticmethod
-    def _is_public_authority(
-        operation: WorkspaceOperation,
-        admission: PublicOperationAdmission,
-    ) -> bool:
-        if operation.state == "queued":
-            states_match = admission.state == "queued"
-        elif operation.state in {"running", "cancelling"}:
-            states_match = admission.state == "active"
-        elif operation.state in {"failed", "dead_letter"}:
-            states_match = admission.state in {"failed", "budget_exhausted"}
-        else:
-            states_match = admission.state == operation.state
-        return (
-            operation.contract_version == _PUBLIC_CONTRACT
-            and operation.execution_profile_version == _PUBLIC_PROFILE
-            and operation.deadline_at is not None
-            and operation.fencing_token == admission.fence
-            and _aware(operation.deadline_at) == _aware(admission.deadline_at)
-            and states_match
-        )
 
     @staticmethod
     def _receipt(
@@ -1859,10 +1904,38 @@ class SqlPublicV2Orchestrator:
                 if isinstance(raw_content_integrity, Mapping):
                     try:
                         from services.authored_vnext.narrative_ir.content_graph import (
-                            validate_content_integrity_receipt,
+                            validate_content_integrity_receipt_binding,
                         )
 
-                        validate_content_integrity_receipt(raw_content_integrity)
+                        if (
+                            generation_route_receipt is None
+                            or generation_route_receipt.selected_route != "source-native"
+                            or operation.expected_revision is None
+                            or operation.result_revision is None
+                        ):
+                            raise ValueError("content_integrity_binding_unavailable")
+                        authority = _checkpoint_content_graph_authority(operation)
+                        validate_content_integrity_receipt_binding(
+                            raw_content_integrity,
+                            operation_id=operation.id,
+                            source_revision=int(operation.expected_revision),
+                            result_revision=int(operation.result_revision),
+                            generation_lane=str(authority["generationLane"]),
+                            content_graph_digest=str(authority["contentGraphDigest"]),
+                            route_strategy_receipt_digest=(
+                                generation_route_receipt.receipt_digest
+                            ),
+                            attempt_binding_digest=str(
+                                authority["attemptBindingDigest"]
+                            ),
+                            narrative_digest=authority["narrativeDigest"],
+                            preserve_source_input_digest=authority[
+                                "preserveSourceInputDigest"
+                            ],
+                            provider_call_budget_digest=str(
+                                authority["providerCallBudgetDigest"]
+                            ),
+                        )
                         content_integrity_receipt = dict(raw_content_integrity)
                     except Exception:
                         content_integrity_receipt = None

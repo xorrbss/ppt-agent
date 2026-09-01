@@ -10,11 +10,12 @@ from pydantic import ValidationError
 
 from .contracts import (
     ContentGraphV1,
-    ContentIntegrityReceiptV1,
+    ContentIntegrityReceiptV2,
     ContentUnitV1,
     PageContentIntegrityV1,
     PageContentSnapshotV1,
     PreserveSourceInputV1,
+    ProviderCallBudgetV1,
     SourceUnitOrderV1,
     model_payload,
 )
@@ -190,26 +191,27 @@ def seal_preserve_source_input(
         raise ContentGraphValidationError("preserve_source_input_invalid") from error
 
 
-def seal_content_integrity_receipt(
-    *,
-    operation_id: UUID,
-    generation_lane: Literal["preserve-source", "new-authoring"],
-    content_graph_digest: str,
-    narrative_digest: str | None,
-    pages: Sequence[Mapping[str, Any] | PageContentIntegrityV1],
-) -> ContentIntegrityReceiptV1:
-    """Seal only publication-safe evidence; any content defect fails closed."""
-
-    try:
-        page_models = tuple(
-            item if isinstance(item, PageContentIntegrityV1) else PageContentIntegrityV1.model_validate(item)
-            for item in pages
-        )
-    except ValidationError as error:
-        raise ContentGraphValidationError("content_integrity_page_invalid") from error
-    if [item.page_index for item in page_models] != list(range(len(page_models))):
+def _validate_content_integrity_pages(
+    pages: Sequence[PageContentIntegrityV1],
+) -> None:
+    if [item.page_index for item in pages] != list(range(len(pages))):
         raise ContentGraphValidationError("content_integrity_page_order_error")
-    for page in page_models:
+    all_content_unit_ids: list[str] = []
+    all_asset_occurrences: list[str] = []
+    for page in pages:
+        expected_ids = list(page.expected_content_unit_ids)
+        expected_assets = list(page.expected_asset_occurrences)
+        if (
+            len(expected_ids) != len(set(expected_ids))
+            or len(expected_assets) != len(set(expected_assets))
+        ):
+            raise ContentGraphValidationError(
+                "content_integrity_expected_identity_duplicate"
+            )
+        if page.expected_protected_chrome_digest != page.observed_protected_chrome_digest:
+            raise ContentGraphValidationError(
+                "content_integrity_protected_chrome_mismatch"
+            )
         if (
             page.unmapped_required_units
             or page.duplicate_required_units
@@ -223,13 +225,63 @@ def seal_content_integrity_receipt(
             or page.expected_digest != page.rendered_digest
             or page.expected_asset_occurrences != page.rendered_asset_occurrences
         ):
-            raise ContentGraphValidationError("content_integrity_required_coverage_failed")
+            raise ContentGraphValidationError(
+                "content_integrity_required_coverage_failed"
+            )
+        all_content_unit_ids.extend(expected_ids)
+        all_asset_occurrences.extend(expected_assets)
+    if (
+        len(all_content_unit_ids) != len(set(all_content_unit_ids))
+        or len(all_asset_occurrences) != len(set(all_asset_occurrences))
+    ):
+        raise ContentGraphValidationError(
+            "content_integrity_cross_page_identity_duplicate"
+        )
+
+
+def seal_content_integrity_receipt(
+    *,
+    operation_id: UUID,
+    attempt_binding_digest: str,
+    source_revision: int,
+    result_revision: int,
+    generation_lane: Literal["preserve-source", "new-authoring"],
+    content_graph_digest: str,
+    route_strategy_receipt_digest: str,
+    narrative_digest: str | None,
+    preserve_source_input_digest: str | None,
+    provider_call_budget: Mapping[str, Any] | ProviderCallBudgetV1,
+    pages: Sequence[Mapping[str, Any] | PageContentIntegrityV1],
+) -> ContentIntegrityReceiptV2:
+    """Seal only publication-safe evidence; any content defect fails closed."""
+
+    try:
+        budget_model = (
+            provider_call_budget
+            if isinstance(provider_call_budget, ProviderCallBudgetV1)
+            else ProviderCallBudgetV1.model_validate(provider_call_budget)
+        )
+        page_models = tuple(
+            item if isinstance(item, PageContentIntegrityV1) else PageContentIntegrityV1.model_validate(item)
+            for item in pages
+        )
+    except ValidationError as error:
+        raise ContentGraphValidationError("content_integrity_page_invalid") from error
+    _validate_content_integrity_pages(page_models)
+    budget_payload = model_payload(budget_model)
     unsigned = {
-        "schemaVersion": "content-integrity-receipt/v1",
+        "schemaVersion": "content-integrity-receipt/v2",
         "operationId": str(operation_id),
+        "attemptBindingDigest": attempt_binding_digest,
+        "sourceRevision": source_revision,
+        "resultRevision": result_revision,
         "generationLane": generation_lane,
         "contentGraphDigest": content_graph_digest,
+        "routeStrategyReceiptDigest": route_strategy_receipt_digest,
         "narrativeDigest": narrative_digest,
+        "preserveSourceInputDigest": preserve_source_input_digest,
+        "providerCallBudget": budget_payload,
+        "providerCallBudgetDigest": canonical_digest(budget_payload),
         "pages": [model_payload(page) for page in page_models],
         "requiredCoverage": 1.0,
         "duplicateRequiredCount": 0,
@@ -239,7 +291,7 @@ def seal_content_integrity_receipt(
         "status": "passed",
     }
     try:
-        receipt = ContentIntegrityReceiptV1.model_validate(
+        receipt = ContentIntegrityReceiptV2.model_validate(
             {**unsigned, "receiptDigest": canonical_digest(unsigned)}
         )
     except ValidationError as error:
@@ -248,20 +300,76 @@ def seal_content_integrity_receipt(
 
 
 def validate_content_integrity_receipt(
-    value: ContentIntegrityReceiptV1 | Mapping[str, Any],
-) -> ContentIntegrityReceiptV1:
+    value: ContentIntegrityReceiptV2 | Mapping[str, Any],
+) -> ContentIntegrityReceiptV2:
     try:
         receipt = (
             value
-            if isinstance(value, ContentIntegrityReceiptV1)
-            else ContentIntegrityReceiptV1.model_validate(value)
+            if isinstance(value, ContentIntegrityReceiptV2)
+            else ContentIntegrityReceiptV2.model_validate(value)
         )
     except ValidationError as error:
         raise ContentGraphValidationError("content_integrity_receipt_invalid") from error
+    _validate_content_integrity_pages(receipt.pages)
+    if receipt.provider_call_budget_digest != canonical_digest(
+        model_payload(receipt.provider_call_budget)
+    ):
+        raise ContentGraphValidationError(
+            "content_integrity_provider_call_budget_digest_mismatch"
+        )
     payload = model_payload(receipt)
     supplied = payload.pop("receiptDigest")
     if supplied != canonical_digest(payload):
         raise ContentGraphValidationError("content_integrity_receipt_digest_mismatch")
+    return receipt
+
+
+def validate_content_integrity_receipt_binding(
+    value: ContentIntegrityReceiptV2 | Mapping[str, Any],
+    *,
+    operation_id: UUID,
+    attempt_binding_digest: str,
+    source_revision: int,
+    result_revision: int,
+    generation_lane: Literal["preserve-source", "new-authoring"],
+    content_graph_digest: str,
+    route_strategy_receipt_digest: str,
+    narrative_digest: str | None,
+    preserve_source_input_digest: str | None,
+    provider_call_budget_digest: str,
+) -> ContentIntegrityReceiptV2:
+    """Validate a receipt against the exact operation lineage that consumes it."""
+
+    receipt = validate_content_integrity_receipt(value)
+    expected = (
+        ("operation", receipt.operation_id, operation_id),
+        ("attempt", receipt.attempt_binding_digest, attempt_binding_digest),
+        ("source_revision", receipt.source_revision, source_revision),
+        ("result_revision", receipt.result_revision, result_revision),
+        ("generation_lane", receipt.generation_lane, generation_lane),
+        ("content_graph", receipt.content_graph_digest, content_graph_digest),
+        (
+            "route_strategy_receipt",
+            receipt.route_strategy_receipt_digest,
+            route_strategy_receipt_digest,
+        ),
+        ("narrative", receipt.narrative_digest, narrative_digest),
+        (
+            "preserve_source_input",
+            receipt.preserve_source_input_digest,
+            preserve_source_input_digest,
+        ),
+        (
+            "provider_call_budget",
+            receipt.provider_call_budget_digest,
+            provider_call_budget_digest,
+        ),
+    )
+    for binding, actual, required in expected:
+        if actual != required:
+            raise ContentGraphValidationError(
+                f"content_integrity_{binding}_binding_mismatch"
+            )
     return receipt
 
 
@@ -272,4 +380,5 @@ __all__ = [
     "seal_preserve_source_input",
     "validate_content_graph",
     "validate_content_integrity_receipt",
+    "validate_content_integrity_receipt_binding",
 ]

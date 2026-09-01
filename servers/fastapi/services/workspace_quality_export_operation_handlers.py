@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 import uuid
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import replace
@@ -82,6 +83,58 @@ EXPORT_OPERATION_KINDS = ("export.pptx", "export.pdf")
 InternalHeaderProvider = Callable[[], Awaitable[dict[str, str]]]
 LOGGER = logging.getLogger(__name__)
 QUALITY_REVIEW_PROGRESS_INTERVAL_SECONDS = 30.0
+
+
+def _validated_public_export_render_identity(
+    resource_metrics: Mapping[str, object],
+    *,
+    expected_runtime_binding_digest: str | None = None,
+    expected_deck_render_identity_digest: str | None = None,
+) -> tuple[str, str]:
+    receipt = resource_metrics.get("public_export_execution_receipt")
+    if not isinstance(receipt, Mapping) or receipt.get("schemaVersion") != "public-export-execution-receipt/v1":
+        raise NonRetryableWorkspaceOperationError(
+            "public_export_execution_receipt_invalid"
+        )
+    runtime_identity = receipt.get("renderRuntimeIdentity")
+    if not isinstance(runtime_identity, Mapping):
+        raise NonRetryableWorkspaceOperationError(
+            "public_export_render_runtime_identity_invalid"
+        )
+    supplied_runtime_digest = runtime_identity.get("bindingDigest")
+    unsigned_runtime_identity = dict(runtime_identity)
+    unsigned_runtime_identity.pop("bindingDigest", None)
+    try:
+        recomputed_runtime_digest = public_render_runtime_binding_digest(
+            unsigned_runtime_identity
+        )
+    except PublicExportOperationError as error:
+        raise NonRetryableWorkspaceOperationError(str(error)) from error
+    deck_render_identity_digest = receipt.get("deckRenderIdentityDigest")
+    if (
+        not isinstance(supplied_runtime_digest, str)
+        or supplied_runtime_digest != recomputed_runtime_digest
+        or not isinstance(deck_render_identity_digest, str)
+        or not re.fullmatch(r"sha256:[0-9a-f]{64}", deck_render_identity_digest)
+    ):
+        raise NonRetryableWorkspaceOperationError(
+            "public_export_render_identity_invalid"
+        )
+    if (
+        expected_runtime_binding_digest is not None
+        and supplied_runtime_digest != expected_runtime_binding_digest
+    ):
+        raise NonRetryableWorkspaceOperationError(
+            "release_quality_review_runtime_changed"
+        )
+    if (
+        expected_deck_render_identity_digest is not None
+        and deck_render_identity_digest != expected_deck_render_identity_digest
+    ):
+        raise NonRetryableWorkspaceOperationError(
+            "release_quality_review_render_identity_changed"
+        )
+    return supplied_runtime_digest, deck_render_identity_digest
 
 
 def _validated_authored_quality_receipt_digest(
@@ -883,6 +936,18 @@ class WorkspaceExportOperationHandler:
                 )
                 public_ref = public_execution.artifact
                 worker_resource_metrics = public_execution.resource_metrics
+                (
+                    actual_render_runtime_binding_digest,
+                    actual_deck_render_identity_digest,
+                ) = _validated_public_export_render_identity(
+                    worker_resource_metrics,
+                    expected_runtime_binding_digest=(
+                        release_review_runtime_binding_digest
+                    ),
+                    expected_deck_render_identity_digest=(
+                        release_review_result_render_identity_digest
+                    ),
+                )
                 public_artifact_id = public_ref.artifact_id
                 artifact_sha256 = public_ref.sha256
                 artifact_size_bytes = public_ref.size_bytes
@@ -971,10 +1036,10 @@ class WorkspaceExportOperationHandler:
                             generation_evidence_record=generation_evidence_record,
                             review_evidence_record=review_evidence_record,
                             render_runtime_binding_digest=(
-                                release_review_runtime_binding_digest
+                                actual_render_runtime_binding_digest
                             ),
                             result_render_identity_digest=(
-                                release_review_result_render_identity_digest
+                                actual_deck_render_identity_digest
                             ),
                             checker_policy_digest=(
                                 sealed_release_review_checker_policy_digest

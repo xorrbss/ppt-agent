@@ -49,6 +49,12 @@ GLOBAL_ATTRIBUTES = {
     # content-unit ids and sha256 digests and are read back after Chromium to
     # prove exact placement; clients and providers cannot authorize them.
     "data-content-unit-ids", "data-content-unit-digests",
+    # Inert source-flow/readback markers stamped only after admission has bound
+    # immutable owner-scoped content. They contain local ids, indexes, digests,
+    # or an empty-slot flag; none can load resources or execute behaviour.
+    "data-source-flow-unit-id", "data-source-boundary-kind", "data-source-native-empty",
+    "data-asset-digest", "data-source-occurrence-index",
+    "data-asset-occurrence-ids",
     # Inert export-planning hint occasionally emitted by Authored.  It carries
     # no URL or executable value; Hybrid still derives authoritative coverage
     # from the admitted DOM instead of trusting this hint.
