@@ -1,0 +1,85 @@
+id: devax-si-proposal
+name: DevAX SI 구축 제안서
+description: DevAX 원본 제안서의 화이트·코발트·네이비 기업 인포그래픽 문법을 따르는 SI 구축 제안 스타일입니다.
+category: business
+tags:
+  - DevAX
+  - SI 구축
+  - 기술 제안서
+  - 기업 인포그래픽
+use_cases:
+  - SI 구축 및 전환 제안
+  - AI·빅데이터·에이전트 플랫폼 제안
+  - 기술 아키텍처와 단계별 도입 계획
+preview:
+  bg: "#F7F9FC"
+  accent: "#1677E8"
+  palette:
+    - "#FFFFFF"
+    - "#F2F6FA"
+    - "#102A52"
+    - "#1677E8"
+    - "#64B5F6"
+    - "#7157E8"
+  variant: devax-enterprise-proposal
+  image: devax-si-proposal/cover.png
+design_tokens:
+  primary: "#1677E8"
+  background: "#F7F9FC"
+  heading_font: Pretendard
+  body_font: Pretendard
+  mono_font: IBM Plex Mono
+illustration:
+  style_prompt: >-
+    premium Korean enterprise technology proposal infographic, white and ice-gray
+    canvas, cobalt blue and deep navy information hierarchy, restrained violet
+    stage accents, precise process arrows, compact business charts, clean system
+    architecture, occasional professional people or enterprise workspace cutout,
+    crisp editorial composition, no readable text inside generated images, no
+    watermark, no cartoon robot, no generic SaaS dashboard, no decorative 3D
+reference_images:
+  cover:
+    - devax-si-proposal/cover.png
+  content:
+    - devax-si-proposal/content.png
+  data:
+    - devax-si-proposal/data.png
+  timeline:
+    - devax-si-proposal/timeline.png
+  architecture:
+    - devax-si-proposal/architecture.png
+  closing:
+    - devax-si-proposal/closing.png
+brief: |-
+  PURPOSE
+  Create a Korean enterprise SI proposal that visibly belongs to the retained DevAX proposal family. The reference images are the authoritative visual grammar only. Write new audience-facing content for the current request; never copy reference wording, project claims, client names, or measurements unless they are supplied in the request.
+
+  VISUAL IDENTITY
+  Use a near-white canvas with cool gray architectural corner planes, cobalt blue as the primary signal, deep navy for evidence rails and conclusions, sky blue for supporting structure, and violet only for numbered stages. The deck should feel like a polished Korean B2B proposal: information-rich but ordered, formal but visually active.
+
+  TYPOGRAPHY
+  Use Pretendard or Noto Sans KR. Titles are compact and decisive, generally 30–42px, with one cobalt keyword when useful. Body copy is 16–22px with short lines. Use small English eyebrow labels such as “DevAX | AI Transformation” only as recurring navigation chrome. Keep all meaningful text editable HTML.
+
+  RECURRING CHROME
+  Content slides use a small top-left DevAX/section eyebrow and a thin cobalt horizontal rule. Add a restrained footer or page marker only when it helps continuity. Several slides may use a dark navy evidence rail occupying roughly 18–24% of the right edge, but do not force it onto every slide. Cover and section slides may use translucent cool-gray corner planes derived from the reference family.
+
+  LAYOUT SYSTEM
+  Work on a disciplined 16:9 grid with 48–64px safe margins. Favor broad business-infographic compositions over generic card dashboards. Use one dominant composition per slide: a left-to-right process, a 60/40 explanation and evidence split, a central architecture with bounded domains, a comparison with a dark evidence rail, or a staged implementation matrix. Align every label, connector, and panel to a visible grid.
+
+  COVER
+  Keep the cover spacious. Place a concise DevAX SI proposal title in the central-left field, one short business outcome line below it, and a restrained client/date line near the bottom. Preserve the reference family’s cool-gray corner geometry and cobalt/navy emphasis without reproducing source text.
+
+  CONTENT
+  Use compact numbered sections, strong cobalt directional bands, and white/light-gray content zones. For dense slides, combine one main infographic with one evidence column rather than repeating equal cards. Use thin lines and small shadows; avoid oversized rounded tiles.
+
+  ARCHITECTURE AND PROCESS
+  Draw editable process rails and architecture using native HTML/SVG. Use cobalt arrows, navy labels, pale-blue group zones, and violet stage dots. Connectors must visibly terminate at their nodes and stay behind labels. Limit the primary flow to five stages and the architecture to one hub plus four domains.
+
+  DATA AND TABLES
+  Tables and charts should look proposal-authored rather than application UI: compact headers, clear units, direct labels, pale-blue row grouping, and one dark navy conclusion strip. Highlight only the figures that support the slide’s claim. Never invent metrics.
+
+  IMAGERY
+  Favor credible enterprise workspace, infrastructure, or professional cutouts and restrained system diagrams. Do not use cute robot mascots, glossy 3D objects, generic browser-window piles, or full-bleed stock photography. Images must support the proposal claim and remain subordinate to the information hierarchy.
+
+  AVOID
+  Avoid the generic default-blueprint look, sparse title-and-four-card pages, detached UI widgets, large empty white fields without purpose, thick borders, excessive rounded rectangles, gradients used as decoration, tiny Korean copy, copied source wording, and claims of template fidelity without comparing a newly generated product result.
