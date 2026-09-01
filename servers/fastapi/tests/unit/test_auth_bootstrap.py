@@ -161,6 +161,55 @@ def test_reset_auth_recovers_admin_without_replacing_account(
     assert_private_config_file(tmp_path / "userConfig.json.bak")
 
 
+def test_bootstrap_prefers_existing_primary_admin(monkeypatch, tmp_path):
+    monkeypatch.setenv("USER_CONFIG_PATH", str(tmp_path / "userConfig.json"))
+    monkeypatch.delenv("RESET_AUTH", raising=False)
+    monkeypatch.delenv("AUTH_OVERRIDE_FROM_ENV", raising=False)
+
+    async def runner():
+        engine, session_maker = await _create_auth_database(
+            tmp_path / "primary-admin.db"
+        )
+        selected_admin_ids = []
+        try:
+            async with session_maker() as session:
+                legacy_admin = User(
+                    username="legacy-admin",
+                    hashed_password="legacy-hash",
+                    is_active=True,
+                    is_verified=True,
+                    is_superuser=True,
+                )
+                primary_admin = User(
+                    username="primary-admin",
+                    hashed_password="primary-hash",
+                    is_active=True,
+                    is_verified=True,
+                    is_superuser=True,
+                    admin_slot="primary",
+                )
+                session.add_all([legacy_admin, primary_admin])
+                await session.commit()
+                primary_admin_id = primary_admin.id
+
+            async def record_ownership_backfill(_session, admin):
+                selected_admin_ids.append(admin.id)
+
+            monkeypatch.setattr(bootstrap, "async_session_maker", session_maker)
+            monkeypatch.setattr(
+                bootstrap,
+                "_backfill_legacy_ownership",
+                record_ownership_backfill,
+            )
+            await bootstrap.bootstrap_database_admin()
+
+            assert selected_admin_ids == [primary_admin_id]
+        finally:
+            await engine.dispose()
+
+    asyncio.run(runner())
+
+
 def test_reset_auth_without_password_refuses_to_delete_or_replace_admin(
     monkeypatch, tmp_path
 ):
