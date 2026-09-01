@@ -23,6 +23,10 @@ test("public v2 UI only offers fidelity export and separates terminal states", a
   assert.match(source, /sourceRevision: snapshot\.sourceRevision/);
   assert.match(source, /접수 결과를 복구해야 합니다/);
   assert.match(source, /recoverPendingExport/);
+  assert.match(source, /requestedSlideCount > 100/);
+  assert.match(source, /public_v2_slide_count_must_be_between_1_and_100/);
+  assert.match(source, /max=\{100\}/);
+  assert.doesNotMatch(source, /between_1_and_30|max=\{30\}/);
 
   const hook = await readFile(hookPath, "utf8");
   assert.match(hook, /visibilitychange/);

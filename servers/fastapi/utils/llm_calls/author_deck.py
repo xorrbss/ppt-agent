@@ -1010,7 +1010,14 @@ async def _author_one_resilient(
             last_error = e
             # Admission hard limits are terminal operation contracts. Spending
             # the same slide's correction after rejection obscures the cause.
-            if getattr(e, "retryable", None) is False:
+            recovery_allowed = getattr(e, "recovery_allowed", False) is True
+            recovery_remaining = (
+                provider_attempt_offset + attempts_made
+                < _MAX_AUTHOR_CALLS_PER_SLIDE
+            )
+            if getattr(e, "retryable", None) is False and not (
+                recovery_allowed and recovery_remaining
+            ):
                 raise
             local_correction = _classify_author_validation_error(
                 e,

@@ -215,9 +215,9 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
       requestedSlideCount !== undefined &&
       (!Number.isSafeInteger(requestedSlideCount) ||
         requestedSlideCount < 1 ||
-        requestedSlideCount > 30)
+        requestedSlideCount > 100)
     ) {
-      setRequestError("public_v2_slide_count_must_be_between_1_and_30");
+      setRequestError("public_v2_slide_count_must_be_between_1_and_100");
       return;
     }
     setRequestError(null);
@@ -325,7 +325,7 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
               </label>
               <label className="block text-sm font-medium text-slate-800" htmlFor="public-v2-slide-count">
                 슬라이드 수 <span className="font-normal text-slate-500">(선택)</span>
-                <input id="public-v2-slide-count" min={1} max={30} inputMode="numeric" type="number" value={form.slideCount} onChange={(event) => setForm((value) => ({ ...value, slideCount: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100" />
+                <input id="public-v2-slide-count" min={1} max={100} inputMode="numeric" type="number" value={form.slideCount} onChange={(event) => setForm((value) => ({ ...value, slideCount: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100" />
               </label>
             </div>
             <label className="block text-sm font-medium text-slate-800" htmlFor="public-v2-authored-style">
