@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from inspect import Parameter, signature
 import logging
@@ -57,6 +57,16 @@ WORKSPACE_OPERATION_MAX_LEASE_SECONDS = 7200
 TERMINAL_OPERATION_STATES = frozenset(
     {"succeeded", "failed", "cancelled", "dead_letter", "deadline_exceeded"}
 )
+
+
+def _deadline_reached(deadline_at: datetime, *, now: datetime) -> bool:
+    """Compare persisted deadlines consistently across SQLite and PostgreSQL."""
+
+    if deadline_at.tzinfo is None:
+        deadline_at = deadline_at.replace(tzinfo=timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    return deadline_at <= now
 
 
 def _supports_fencing_token(callback: Callable[..., object]) -> bool:
@@ -105,7 +115,7 @@ async def heartbeat_workspace_operation(
             if (
                 public_admission.state != "active"
                 or public_admission.fence != fencing_token
-                or public_admission.deadline_at <= now
+                or _deadline_reached(public_admission.deadline_at, now=now)
             ):
                 await session.rollback()
                 return False
