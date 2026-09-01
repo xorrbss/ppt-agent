@@ -41,6 +41,7 @@ from utils.owner_context import (
 
 PUBLIC_DEFAULT_POLICY_VERSION = "public-default/v2"
 PUBLIC_DEFAULT_MAX_SLIDES = 100
+PUBLIC_PHASE2_DEFAULT_POLICY_VERSION = "public-default/v2"
 PUBLIC_PROVIDER_STAGES = frozenset(
     {
         "outline",
@@ -791,7 +792,7 @@ async def admit_public_operation_v2(
     resource_plan: WeightedResourcePlan,
     auth_expires_at: datetime | None = None,
     server_hard_deadline_at: datetime | None = None,
-    policy_version: str = PUBLIC_DEFAULT_POLICY_VERSION,
+    policy_version: str = PUBLIC_PHASE2_DEFAULT_POLICY_VERSION,
     estimated_cost_limit_microunits: int | None = None,
     actual_cost_limit_microunits: int | None = None,
 ) -> PublicOperationAdmission:
@@ -2569,6 +2570,7 @@ async def public_prometheus_metrics_text(session: AsyncSession) -> str:
 __all__ = [
     "PUBLIC_DEFAULT_MAX_SLIDES",
     "PUBLIC_DEFAULT_POLICY_VERSION",
+    "PUBLIC_PHASE2_DEFAULT_POLICY_VERSION",
     "PUBLIC_PROVIDER_STAGES",
     "PrincipalContext",
     "ProviderRequestPlan",
