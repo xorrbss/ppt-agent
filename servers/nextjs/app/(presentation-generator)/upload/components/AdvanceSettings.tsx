@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { Pencil, SlidersHorizontal, X } from 'lucide-react';
+import { Pencil, Save, SlidersHorizontal, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import React, { useEffect, useState } from 'react';
 import { PresentationConfig, ToneType, VerbosityType } from '../type';
@@ -155,12 +155,11 @@ const AdvanceSettings = ({
                                 <Button
                                     type="button"
                                     onClick={handleSaveAdvanced}
-                                    style={{
-                                        background:
-                                            'linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)',
-                                    }}
-                                    className=" rounded-full px-[28px]  py-[10px] font-syne text-xs font-semibold text-[#1E1D2B] shadow-none hover:opacity-95"
+                                    variant="toolbar"
+                                    size="toolbar"
+                                    className="px-5 font-syne"
                                 >
+                                    <Save className="h-4 w-4" aria-hidden="true" />
                                     {t('save')}
                                 </Button>
                             </div>

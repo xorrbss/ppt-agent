@@ -35,7 +35,7 @@ export function PromptInput({ value, onChange, onSubmit, label, placeholder }: P
 
   return (
     <div>
-      {label ? <label className="mb-1 block px-1 text-sm font-semibold text-[#242629]">{label}</label> : null}
+      {label ? <label className="mb-1 block px-1 text-sm font-semibold text-[#27251E]">{label}</label> : null}
       <Textarea
       ref={textareaRef}
       value={value}
@@ -46,7 +46,7 @@ export function PromptInput({ value, onChange, onSubmit, label, placeholder }: P
       onKeyDown={handleKeyDown}
       placeholder={placeholder ?? t("promptPlaceholder")}
       data-testid="prompt-input"
-      className="custom_scrollbar min-h-[76px] max-h-[184px] resize-none overflow-y-auto border-0 bg-transparent px-1 py-1 font-syne text-base font-medium leading-7 text-[#242629] shadow-none placeholder:font-normal placeholder:text-[#909499] focus-visible:ring-0 focus-visible:ring-offset-0 md:text-[17px]"
+      className="custom_scrollbar min-h-[76px] max-h-[184px] resize-none overflow-y-auto border-0 bg-transparent px-1 py-1 text-base font-normal leading-7 text-[#27251E] shadow-none placeholder:font-normal placeholder:text-[#9B9BA1] focus-visible:ring-0 focus-visible:ring-offset-0 md:text-[17px]"
       />
     </div>
   );

@@ -17,11 +17,11 @@ const TemplateSelection: React.FC = memo(function TemplateSelection() {
       <div className="mb-4">
         <h2
           id="authored-style-heading"
-          className="font-syne text-base font-bold text-gray-900"
+          className="text-base font-semibold text-[#27251E]"
         >
           AI 저작 스타일
         </h2>
-        <p className="mt-1 break-words text-sm leading-6 text-gray-600">
+        <p className="mt-1 break-words text-sm leading-6 text-[#6B6B73]">
           회사표준과 독립적으로 적용되며, 생성 시 하나의 구성으로 고정됩니다.
         </p>
       </div>

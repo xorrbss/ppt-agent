@@ -7,7 +7,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUp, LayoutTemplate, Sparkles } from "lucide-react";
+import { ArrowUp, LayoutList, LayoutTemplate } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useDispatch, useSelector } from "react-redux";
 
@@ -40,6 +40,7 @@ import SupportingDoc, { MAX_SUPPORTED_FILES } from "./SupportingDoc";
 import { abortDocumentProcessing } from "./upload-page/abortDocumentProcessing";
 import { useSupportingFiles } from "./upload-page/useSupportingFiles";
 import { useUploadPageState } from "./upload-page/useUploadPageState";
+import UploadDesignGallery from "./UploadDesignGallery";
 
 const masterClient = new AuthoredVnextMasterClient();
 const LAST_AI_MASTER_ANALYSIS_KEY = "presenton.authored-vnext.ai-master-analysis.v1";
@@ -53,6 +54,7 @@ const UploadPage = ({
   masterFeatureEnabled = isAuthoredVnextMasterEnabled(),
 }: UploadPageProps = {}) => {
   const t = useTranslations("upload");
+  const workspaceT = useTranslations("slideWorkspace");
   const uploadLimits = useUploadLimits();
   const dispatch = useDispatch();
   const selectedThemeId = useSelector(
@@ -218,7 +220,7 @@ const UploadPage = ({
   }, [dispatch]);
 
   return (
-    <Wrapper className="max-w-none pb-20">
+    <Wrapper className="max-w-none pb-16">
       <OverlayLoader
         show={loadingState.isLoading}
         text={loadingState.message}
@@ -234,26 +236,19 @@ const UploadPage = ({
         }
       />
 
-      <main className="px-4 sm:px-6 lg:px-8">
+      <main className="px-4 sm:px-6 lg:px-10">
         <section
-          className="flex flex-col items-center pt-10 md:pt-16"
+          className="flex flex-col items-center pt-10 md:pt-20"
           aria-labelledby="upload-hero-title"
         >
           <div className="w-full max-w-[760px] text-center">
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#E7E8EB] bg-[#FAFAFB] px-3 py-1.5 text-xs font-semibold text-[#5E626A]">
-              <Sparkles
-                className="h-3.5 w-3.5 text-[#6B5CE7]"
-                aria-hidden="true"
-              />
-              {t("eyebrow")}
-            </div>
             <h1
               id="upload-hero-title"
-              className="font-syne text-[28px] font-bold leading-tight tracking-[-0.035em] text-[#242629] md:text-[36px] md:leading-[1.3]"
+              className="text-[28px] font-semibold leading-tight tracking-[-0.035em] text-[#27251E] md:text-[34px] md:leading-[1.3]"
             >
-              {t("heroTitle")}
+              {workspaceT("heroTitle")}
             </h1>
-            <p className="mx-auto mt-2 max-w-xl font-syne text-sm leading-6 text-[#737780] md:text-[15px]">
+            <p className="sr-only">
               {t("heroDescription")}
             </p>
           </div>
@@ -262,13 +257,13 @@ const UploadPage = ({
             className={cn(
               "mt-6 rounded-2xl border bg-white p-4 transition-colors md:p-5",
               isDragOver
-                ? "border-[#5141E5] ring-2 ring-[#5141E5]/20"
-                : "border-[#E4E6E9]"
+                ? "border-[#6194F4] ring-2 ring-[#6194F4]/20"
+                : "border-[#EBEBEC]"
             )}
             style={{
               inlineSize: "min(760px, 100%)",
               minBlockSize: 114,
-              boxShadow: "0 6px 30px rgb(0 0 0 / 8%)",
+              boxShadow: "0 3px 8px rgb(97 148 244 / 10%)",
             }}
             onDragOver={handleCardDragOver}
             onDragLeave={handleCardDragLeave}
@@ -280,7 +275,7 @@ const UploadPage = ({
               onChange={(value) => handleConfigChange("prompt", value)}
               onSubmit={handlePrimaryGenerate}
               label={sourceContentMode ? "추가 디자인 지시" : undefined}
-              placeholder={sourceContentMode ? "레이아웃·강조·밀도만 지시할 수 있습니다." : undefined}
+              placeholder={sourceContentMode ? "레이아웃·강조·밀도만 지시할 수 있습니다." : workspaceT("promptPlaceholder")}
             />
 
             <div className="mt-2">
@@ -335,21 +330,26 @@ const UploadPage = ({
               </div>
               {!sourceContentMode ? <Button
                 type="button"
-                variant="outline"
+                variant="toolbar"
+                size="toolbar"
                 onClick={handleReviewThenGenerate}
                 disabled={generationBusy}
                 data-testid="review-outline-button"
                 className="h-11 shrink-0 rounded-full px-5 font-syne text-sm font-semibold"
               >
+                <LayoutList className="h-4 w-4" aria-hidden="true" />
                 {t("reviewOutline")}
               </Button> : null}
               <Button
                 type="button"
+                variant="toolbar"
+                size="toolbar"
                 onClick={handlePrimaryGenerate}
                 disabled={generationBusy}
                 data-testid="generate-presentation-button"
-                className="h-11 shrink-0 rounded-full bg-[#242629] px-5 font-syne text-sm font-semibold text-white shadow-[0_6px_16px_rgba(36,38,41,0.18)] transition hover:bg-[#111214] disabled:cursor-not-allowed disabled:opacity-60"
+                className="h-11 shrink-0 px-5 disabled:cursor-not-allowed"
               >
+                <ArrowUp className="h-4 w-4" aria-hidden="true" />
                 <span>
                   {loadingState.isLoading
                     ? t("generating")
@@ -357,7 +357,6 @@ const UploadPage = ({
                       ? (sourceContentReady ? "선택한 템플릿으로 재디자인" : "원본 콘텐츠 분석")
                       : t("generate")}
                 </span>
-                <ArrowUp className="ml-2 h-4 w-4" aria-hidden="true" />
               </Button>
             </div>
 
@@ -382,15 +381,16 @@ const UploadPage = ({
           </div>
         </section>
 
+        <UploadDesignGallery>
         {masterFeatureEnabled ? (
           <section
-            className="mx-auto mt-6 max-w-[760px]"
+            className="mx-auto mt-6 max-w-[1180px]"
             aria-labelledby="upload-master-title"
             data-testid="upload-master-selection"
           >
             <div className="flex flex-col gap-3 rounded-2xl border border-[#E5E7EA] bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-start gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-700">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#F5F9FE] text-[#6194F4]">
                   <LayoutTemplate className="h-4 w-4" aria-hidden="true" />
                 </span>
                 <div className="min-w-0">
@@ -426,9 +426,10 @@ const UploadPage = ({
           </section>
         ) : null}
 
-        <section className="mx-auto mt-10 max-w-[1180px]">
+        <section className="mx-auto mt-8 max-w-[1180px]">
           <TemplateSelection />
         </section>
+        </UploadDesignGallery>
         {masterFeatureEnabled ? (
           <MasterCatalogDialog
             analysisSourceFile={analysisSourceFile}

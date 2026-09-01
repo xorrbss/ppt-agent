@@ -161,7 +161,7 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
 
   return (
     <div>
-      <div className="rounded-[22px] border border-[#E7E7EC] bg-[#FAFAFC] p-4 sm:p-5">
+      <div className="rounded-xl border border-[#EBEBEC] bg-[#F9FAFB] p-4">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#676973]">
@@ -186,7 +186,7 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="이름, 태그, 추천 용도 검색"
               data-testid="authored-style-search"
-              className="h-11 w-full rounded-xl border border-[#8A8C95] bg-white py-2 pl-10 pr-10 text-sm text-[#20212A] outline-none placeholder:text-[#686A73] focus:border-[#7A5AF8] focus:ring-2 focus:ring-[#7A5AF8]/20"
+              className="h-10 w-full rounded-lg border border-[#EBEBEC] bg-white py-2 pl-10 pr-10 text-sm text-[#27251E] outline-none placeholder:text-[#9B9BA1] focus:border-[#6194F4] focus:ring-2 focus:ring-[#6194F4]/20"
             />
             {searchQuery && (
               <button
@@ -215,8 +215,8 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
             className={cn(
               "flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8] focus-visible:ring-offset-2",
               category === "all"
-                ? "border-[#7A5AF8] bg-[#F4F3FF] text-[#4F3CC9]"
-                : "border-[#DCDDDF] bg-white text-[#555761] hover:border-[#BDB3F6]"
+                ? "border-[#EBEBEC] bg-[#EEEFF1] text-[#27251E]"
+                : "border-transparent bg-transparent text-[#6B6B73] hover:bg-[#F3F4F6]"
             )}
           >
             전체
@@ -234,8 +234,8 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
               className={cn(
                 "flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8] focus-visible:ring-offset-2",
                 category === categoryId
-                  ? "border-[#7A5AF8] bg-[#F4F3FF] text-[#4F3CC9]"
-                  : "border-[#DCDDDF] bg-white text-[#555761] hover:border-[#BDB3F6]"
+                  ? "border-[#EBEBEC] bg-[#EEEFF1] text-[#27251E]"
+                  : "border-transparent bg-transparent text-[#6B6B73] hover:bg-[#F3F4F6]"
               )}
             >
               {CATEGORY_LABELS[categoryId]}
@@ -265,7 +265,7 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
           aria-label="AI 저작 스타일"
           aria-busy={loadStatus === "loading"}
           data-testid="authored-style-grid"
-          className="mt-3 grid max-h-[720px] grid-cols-1 gap-4 overflow-y-auto pr-1 sm:grid-cols-2 lg:max-h-[820px] lg:grid-cols-3 xl:grid-cols-4"
+          className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(min(100%,250px),1fr))] gap-5"
         >
           {visibleStyles.map((style) => (
             <AuthoredStyleCard
