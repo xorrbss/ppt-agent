@@ -119,10 +119,11 @@
     "ui.presentation.devax-slide-reference": "decisions/ui.presentation.devax-slide-reference.1.json",
     "ui.presentation.white-icon-actions": "decisions/ui.presentation.white-icon-actions.1.json",
     "ui.presentation.sidebar-existing-presentations": "decisions/ui.presentation.sidebar-existing-presentations.1.json",
-    "ui.presentation.header-new-slide-action": "decisions/ui.presentation.header-new-slide-action.1.json"
+    "ui.presentation.header-new-slide-action": "decisions/ui.presentation.header-new-slide-action.1.json",
+    "presentation.generation-submission-integrity": "decisions/presentation.generation-submission-integrity.1.json"
   },
   "readFirst": [
     "AGENTS.md"
   ],
-  "updatedAt": "2026-08-31T19:28:41.8236501+00:00"
+  "updatedAt": "2026-09-01T02:18:32.4837022+00:00"
 }

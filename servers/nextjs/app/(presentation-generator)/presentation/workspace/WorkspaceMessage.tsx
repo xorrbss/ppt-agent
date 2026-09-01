@@ -105,6 +105,7 @@ export function WorkspaceMessage({
 }: WorkspaceMessageProps) {
   const settings = visibleSettings(message.generationSettings);
   const isUser = message.role === "user";
+  const isInitialGenerationRequest = settings.length > 0;
   return (
     <article
       className={`max-w-[92%] rounded-2xl border px-4 py-3 text-sm shadow-sm ${
@@ -112,8 +113,19 @@ export function WorkspaceMessage({
           ? "ml-auto border-blue-200 bg-blue-50"
           : "mr-auto border-slate-200 bg-white"
       }`}
-      aria-label={isUser ? "사용자 메시지" : "도우미 메시지"}
+      aria-label={
+        isInitialGenerationRequest
+          ? "초기 생성 요청"
+          : isUser
+            ? "사용자 메시지"
+            : "도우미 메시지"
+      }
     >
+      {isInitialGenerationRequest && (
+        <p className="mb-1 text-xs font-semibold text-blue-700">
+          초기 생성 요청 · 실제 생성에는 아래 설정이 적용됩니다.
+        </p>
+      )}
       <p className="whitespace-pre-wrap break-words text-slate-900">
         {message.content}
       </p>

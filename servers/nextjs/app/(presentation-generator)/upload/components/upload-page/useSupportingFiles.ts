@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { notify } from "@/components/ui/sonner";
 import { useUploadLimits } from "@/lib/use-upload-limits";
 import {
@@ -25,6 +25,10 @@ export const useSupportingFiles = ({
   const uploadLimits = useUploadLimits();
 
   const [files, setFiles] = useState<File[]>([]);
+  // Keep the accepted selection available synchronously. React state can still
+  // be one render behind when an automation (or a fast keyboard flow) chooses a
+  // file and immediately submits the composer.
+  const filesRef = useRef<File[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
 
   const replaceFiles = (nextFiles: File[]) => {
@@ -38,6 +42,7 @@ export const useSupportingFiles = ({
       );
       return false;
     }
+    filesRef.current = nextFiles;
     setFiles(nextFiles);
     onFilesChange?.(nextFiles);
     return true;
@@ -100,6 +105,7 @@ export const useSupportingFiles = ({
 
   return {
     files,
+    filesRef,
     replaceFiles,
     isDragOver,
     handleCardDragOver,

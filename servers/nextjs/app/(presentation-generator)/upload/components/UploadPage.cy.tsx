@@ -8,6 +8,7 @@ import koMessages from "@/i18n/messages/ko.json";
 import { Toaster } from "@/components/ui/sonner";
 import { makeStore } from "@/store/store";
 import UploadPage from "./UploadPage";
+import { useSupportingFiles } from "./upload-page/useSupportingFiles";
 
 import "@/app/globals.css";
 
@@ -18,6 +19,32 @@ const router = {
   refresh: () => undefined,
   replace: () => undefined,
   prefetch: () => Promise.resolve(),
+};
+
+const ImmediateFileSelectionHarness = () => {
+  const { files, filesRef, replaceFiles } = useSupportingFiles();
+  const [submittedCount, setSubmittedCount] = React.useState(0);
+
+  return (
+    <>
+      <button
+        type="button"
+        data-testid="select-and-submit"
+        onClick={() => {
+          replaceFiles([
+            new File(["pptx"], "source.pptx", {
+              type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            }),
+          ]);
+          setSubmittedCount(filesRef.current.length);
+        }}
+      >
+        즉시 제출
+      </button>
+      <span data-testid="rendered-file-count">{files.length}</span>
+      <span data-testid="submitted-file-count">{submittedCount}</span>
+    </>
+  );
 };
 
 describe("<UploadPage /> authored-only creation", () => {
@@ -45,6 +72,14 @@ describe("<UploadPage /> authored-only creation", () => {
     cy.contains("Template V2").should("not.exist");
     cy.contains("레이아웃 템플릿").should("not.exist");
     cy.get('[data-testid="generate-presentation-button"]').should("be.visible");
+  });
+
+  it("keeps a newly accepted attachment available to an immediate submit", () => {
+    mount(<ImmediateFileSelectionHarness />);
+
+    cy.get('[data-testid="select-and-submit"]').click();
+    cy.get('[data-testid="submitted-file-count"]').should("have.text", "1");
+    cy.get('[data-testid="rendered-file-count"]').should("have.text", "1");
   });
 
   it("starts without a company standard and discards a stale browser preference", () => {

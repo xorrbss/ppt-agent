@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import { clearOutlines, setPresentationId } from "@/store/slices/presentationGeneration";
@@ -56,6 +56,7 @@ type SourceContentAdmission = {
 
 interface UseUploadPageStateArgs {
   files: File[];
+  filesRef?: RefObject<File[]>;
   selectedThemeId: string | null;
   masterFeatureEnabled?: boolean;
   onMasterRequired?: () => void;
@@ -67,6 +68,7 @@ interface UseUploadPageStateArgs {
  */
 export const useUploadPageState = ({
   files,
+  filesRef,
   selectedThemeId,
   masterFeatureEnabled = isAuthoredVnextMasterEnabled(),
   onMasterRequired,
@@ -257,17 +259,21 @@ export const useUploadPageState = ({
     });
   };
 
-  const getUploadSnapshotProps = () => {
+  const getUploadSnapshotProps = (
+    selectedFiles: File[] = filesRef?.current ?? files,
+  ) => {
     const trimmedPrompt = config.prompt.trim();
     const trimmedInstructions = (config.instructions || "").trim();
-    const attachmentCategories = Array.from(new Set(files.map(getFileCategory))).sort();
+    const attachmentCategories = Array.from(
+      new Set(selectedFiles.map(getFileCategory)),
+    ).sort();
     const imageGenerationEnabled = !llmConfig?.DISABLE_IMAGE_GENERATION;
     const parsedSlides =
       config.slides && /^\d+$/.test(config.slides) ? Number(config.slides) : null;
 
     return {
       pathname,
-      generation_path: files.length > 0 ? "documents" : "prompt_only",
+      generation_path: selectedFiles.length > 0 ? "documents" : "prompt_only",
       slides_selected: parsedSlides,
       slides_mode: config.slides ? "selected" : "auto",
       language: config.language || "",
@@ -281,8 +287,8 @@ export const useUploadPageState = ({
       prompt_word_count: trimmedPrompt ? trimmedPrompt.split(/\s+/).filter(Boolean).length : 0,
       has_instructions: Boolean(trimmedInstructions),
       instructions_char_count: trimmedInstructions.length,
-      has_attachments: files.length > 0,
-      attachments_count: files.length,
+      has_attachments: selectedFiles.length > 0,
+      attachments_count: selectedFiles.length,
       attachment_categories: attachmentCategories.join(","),
       text_provider: llmConfig?.LLM || "",
       text_model: getSelectedTextModel(llmConfig),
@@ -338,9 +344,9 @@ export const useUploadPageState = ({
    * Validates the current configuration and files
    * @returns boolean indicating if the configuration is valid
    */
-  const validateConfiguration = (): boolean => {
+  const validateConfiguration = (selectedFiles: File[]): boolean => {
     if (sourceContentMode) {
-      const sourceContentError = validateSourceContentFiles(files);
+      const sourceContentError = validateSourceContentFiles(selectedFiles);
       if (sourceContentError) {
         trackUploadValidationFailure(sourceContentError);
         notify.warning(
@@ -357,13 +363,13 @@ export const useUploadPageState = ({
       return false;
     }
 
-    if (files.length > 0 && config.language === LanguageType.Auto) {
+    if (selectedFiles.length > 0 && config.language === LanguageType.Auto) {
       trackUploadValidationFailure("language_auto_with_documents");
       notify.warning("언어를 선택해 주세요", "업로드한 문서를 처리하기 전에 언어를 선택해 주세요.");
       return false;
     }
 
-    if (!config.prompt.trim() && files.length === 0) {
+    if (!config.prompt.trim() && selectedFiles.length === 0) {
       trackUploadValidationFailure("prompt_or_document_missing");
       notify.warning("입력이 필요합니다", "프롬프트를 입력하거나 문서를 하나 이상 업로드해 주세요.");
       return false;
@@ -371,8 +377,10 @@ export const useUploadPageState = ({
     return true;
   };
 
-  const analyzeSourceContent = async (): Promise<SourceContentAdmission | null> => {
-    const validation = validateSourceContentFiles(files);
+  const analyzeSourceContent = async (
+    selectedFiles: File[],
+  ): Promise<SourceContentAdmission | null> => {
+    const validation = validateSourceContentFiles(selectedFiles);
     if (validation) {
       trackUploadValidationFailure(validation);
       notify.warning("원본 콘텐츠 유지 파일 제한", sourceContentSelectionErrorMessage(validation));
@@ -390,7 +398,7 @@ export const useUploadPageState = ({
     setIsSourceContentAnalyzing(true);
     let documentAdmission: DocumentUploadAdmission | null = null;
     try {
-      documentAdmission = await PresentationGenerationApi.uploadDoc(files, pendingPresentationId);
+      documentAdmission = await PresentationGenerationApi.uploadDoc(selectedFiles, pendingPresentationId);
       const analysis = await SourceContentApiV1.analyze({
         referenceSnapshotId: documentAdmission.referenceSnapshotId,
         idempotencyKey: `source-content-analyze:${pendingPresentationId}:${documentAdmission.referenceSnapshotId}`,
@@ -403,7 +411,13 @@ export const useUploadPageState = ({
       ) {
         throw new Error("source_content_manifest_invalid");
       }
-      const admitted = { analysis, documentAdmission, fileIdentity: sourceContentFileIdentity };
+      const admitted = {
+        analysis,
+        documentAdmission,
+        fileIdentity: selectedFiles
+          .map((file) => `${file.name}:${file.size}:${file.lastModified}`)
+          .join("|"),
+      };
       setSourceContentAdmission(admitted);
       setSourceContentSummary(analysis.summary);
       setLoadingState({ isLoading: false, message: "", duration: 0, showProgress: false, progress: 100 });
@@ -440,14 +454,18 @@ export const useUploadPageState = ({
    */
   const startPresentation = async (auto: boolean) => {
     if (startInFlightRef.current) return;
-    if (!validateConfiguration()) return;
+    const selectedFiles = filesRef?.current ?? files;
+    const selectedFileIdentity = selectedFiles
+      .map((file) => `${file.name}:${file.size}:${file.lastModified}`)
+      .join("|");
+    if (!validateConfiguration(selectedFiles)) return;
     startInFlightRef.current = true;
     if (sourceContentMode && (
       !sourceContentAdmission ||
-      sourceContentAdmission.fileIdentity !== sourceContentFileIdentity
+      sourceContentAdmission.fileIdentity !== selectedFileIdentity
     )) {
       try {
-        await analyzeSourceContent();
+        await analyzeSourceContent(selectedFiles);
       } catch (error) {
         handleGenerationError(error);
       } finally {
@@ -464,7 +482,10 @@ export const useUploadPageState = ({
       startInFlightRef.current = false;
       return;
     }
-    trackEvent(MixpanelEvent.Upload_Generation_Started, getUploadSnapshotProps());
+    trackEvent(
+      MixpanelEvent.Upload_Generation_Started,
+      getUploadSnapshotProps(selectedFiles),
+    );
 
 
     const isStockProviderReady = sourceContentMode || await ensureStockImageProviderReady();
@@ -475,10 +496,11 @@ export const useUploadPageState = ({
     }
 
     try {
-      const hasUploadedAssets = files.length > 0;
+      const hasUploadedAssets = selectedFiles.length > 0;
 
       if (hasUploadedAssets) {
         await handleDocumentProcessing(
+          selectedFiles,
           auto,
           resolvedMaster,
           sourceContentMode ? sourceContentAdmission : null,
@@ -500,6 +522,7 @@ export const useUploadPageState = ({
    * Handles document processing
    */
   const handleDocumentProcessing = async (
+    selectedFiles: File[],
     auto: boolean,
     resolvedMaster: CompanyStandardSelection | undefined,
     admittedSourceContent: SourceContentAdmission | null = null,
@@ -510,15 +533,15 @@ export const useUploadPageState = ({
       showProgress: true,
       duration: 90,
       progress: 0,
-      progressLabel: `0/${files.length}`,
-      extra_info: files.length > 0 ? "용량이 큰 문서는 몇 분 정도 걸릴 수 있습니다." : "",
+      progressLabel: `0/${selectedFiles.length}`,
+      extra_info: selectedFiles.length > 0 ? "용량이 큰 문서는 몇 분 정도 걸릴 수 있습니다." : "",
     });
 
     let documentAdmission: DocumentUploadAdmission | null = admittedSourceContent?.documentAdmission ?? null;
 
-    if (files.length > 0 && !documentAdmission) {
+    if (selectedFiles.length > 0 && !documentAdmission) {
       documentAdmission = await PresentationGenerationApi.uploadDoc(
-        files,
+        selectedFiles,
         pendingPresentationId,
       );
     }
@@ -610,7 +633,7 @@ export const useUploadPageState = ({
       ? `/outline?auto=1&id=${encodeURIComponent(createResponse.id)}`
       : `/outline?id=${encodeURIComponent(createResponse.id)}`;
     trackEvent(MixpanelEvent.Upload_Documents_Processed, {
-      ...getUploadSnapshotProps(),
+      ...getUploadSnapshotProps(selectedFiles),
       uploaded_documents_count: documentAdmission?.assetIds.length ?? 0,
       decompose_job_count: responses.length,
       presentation_id: createResponse.id,
