@@ -191,9 +191,11 @@ from services.workspace_runtime_profile import (
 )
 from services.public_operation_admission import (
     PublicAdmissionRejected,
-    admit_public_operation,
+    admit_public_operation_compatible_v2,
     current_principal_context,
+    finish_public_operation_v2,
     plan_provider_requests,
+    plan_weighted_resources,
 )
 from services.provider_usage_instrumentation import provider_usage_scope
 from services.workspace_service import (
@@ -288,22 +290,12 @@ def _require_local_sync_generation(database_url_or_dialect: Any) -> None:
 
 
 def _require_local_legacy_async_generation(database_url_or_dialect: Any) -> None:
-    """Keep phase-1 async admission out of PostgreSQL/public runtimes."""
+    """Allow the compatibility route only on supported workspace stores."""
 
-    profile = resolve_workspace_runtime_profile(database_url_or_dialect)
-    if profile.kind == WorkspaceRuntimeKind.SQLITE_LOCAL:
-        return
-    raise HTTPException(
-        status_code=410,
-        detail={
-            "reasonCode": "public_v2_generation_required",
-            "replacement": "/api/v2/presentations/generations",
-        },
-        headers={
-            "Deprecation": "true",
-            "Link": '</api/v2/presentations/generations>; rel="successor-version"',
-        },
-    )
+    try:
+        require_supported_workspace_runtime(database_url_or_dialect)
+    except UnsupportedWorkspaceRuntimeError as error:
+        raise HTTPException(status_code=501, detail=error.code) from error
 
 
 PRESENTATION_GENERATE_ROUTER = APIRouter(
@@ -877,6 +869,7 @@ async def _record_chat_first_generation_admission_failure(
     request: GeneratePresentationRequest,
     fingerprint: str,
     key_hash: str | None,
+    public_admission_id: uuid.UUID,
     error: Exception,
 ) -> bool:
     """Atomically link and project a bootstrap admission failure.
@@ -941,6 +934,11 @@ async def _record_chat_first_generation_admission_failure(
     sql_session.add(status)
     sql_session.add(job)
     try:
+        await finish_public_operation_v2(
+            sql_session,
+            admission_id=public_admission_id,
+            state="failed",
+        )
         # ``append_operation_event`` executes SQL and may autoflush the pending
         # linked job before commit. Keep both that flush and the final commit
         # inside the uniqueness-race guard.
@@ -2293,6 +2291,49 @@ def _generation_admission_slide_count(
     return slide_count
 
 
+async def _admit_generation_operation_v2_compatible(
+    sql_session: AsyncSession,
+    *,
+    request: GeneratePresentationRequest,
+    presentation: PresentationModel,
+    operation: WorkspaceOperation,
+) -> uuid.UUID:
+    """Bind the browser-compatible request to one complete v2 admission."""
+
+    slide_count = _generation_admission_slide_count(request, presentation)
+    try:
+        admission = await admit_public_operation_compatible_v2(
+            sql_session,
+            principal=current_principal_context(),
+            operation_id=operation.id,
+            operation_kind="generation",
+            request_plan=plan_provider_requests(
+                slide_count=slide_count,
+                image_budget=slide_count,
+                repair_budget=slide_count,
+                vqa_budget=slide_count if request.vision_qa else 0,
+            ),
+            resource_plan=plan_weighted_resources(
+                pixel_count=slide_count * 1_920 * 1_080,
+                device_pixel_ratio_milli=1_000,
+                dom_node_count=slide_count * 500,
+                font_count=4,
+                svg_complexity=0,
+                estimated_memory_mib=512,
+                fidelity_mode="standard",
+            ),
+        )
+    except PublicAdmissionRejected as error:
+        raise HTTPException(
+            status_code=429,
+            detail=error.code,
+            headers={
+                "Retry-After": str(error.retry_after_seconds or 15),
+            },
+        ) from error
+    return admission.id
+
+
 async def queue_presentation_generation(
     request: GeneratePresentationRequest,
     background_tasks: BackgroundTasks,
@@ -2386,6 +2427,22 @@ async def queue_presentation_generation(
                     detail="idempotency_record_incomplete",
                 )
             if existing.workspace_operation_id is not None:
+                existing_presentation = await sql_session.get(
+                    PresentationModel,
+                    existing.presentation_id,
+                )
+                if operation is None or existing_presentation is None:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="idempotency_record_incomplete",
+                    )
+                await _admit_generation_operation_v2_compatible(
+                    sql_session,
+                    request=request,
+                    presentation=existing_presentation,
+                    operation=operation,
+                )
+                await sql_session.commit()
                 wake_workspace_operation_runner()
                 return existing_status
             resumed = await _resume_failed_authored_job(
@@ -2430,36 +2487,15 @@ async def queue_presentation_generation(
                 status_code=409,
                 detail="chat_first_bootstrap_operation_not_found",
             )
-        # The outline UI sends the reviewed slides instead of duplicating their
-        # count in ``n_slides``.  Admission must charge and enforce the count the
-        # worker will actually use (the worker also derives it from
-        # ``slides_markdown``), with the durable presentation as the fallback for
-        # source-content requests that intentionally carry no slide markdown.
-        admission_slide_count = _generation_admission_slide_count(
-            request,
-            admitted_presentation,
+        # The outline UI sends reviewed slides instead of duplicating their
+        # count in ``n_slides``. Bind the count the worker will actually use to
+        # the strict v2 deadline/fence contract before any 202 can be returned.
+        public_admission_id = await _admit_generation_operation_v2_compatible(
+            sql_session,
+            request=request,
+            presentation=admitted_presentation,
+            operation=workspace_operation,
         )
-        try:
-            await admit_public_operation(
-                sql_session,
-                principal=current_principal_context(),
-                operation_id=workspace_operation.id,
-                operation_kind="generation",
-                request_plan=plan_provider_requests(
-                    slide_count=admission_slide_count,
-                    image_budget=admission_slide_count,
-                    repair_budget=admission_slide_count,
-                    vqa_budget=admission_slide_count if request.vision_qa else 0,
-                ),
-            )
-        except PublicAdmissionRejected as error:
-            raise HTTPException(
-                status_code=429,
-                detail=error.code,
-                headers={
-                    "Retry-After": str(error.retry_after_seconds or 15),
-                },
-            ) from error
         existing_for_presentation = (
             await sql_session.execute(
                 select(PresentationGenerationJob)
@@ -2489,6 +2525,7 @@ async def queue_presentation_generation(
                     status_code=409,
                     detail="idempotency_record_incomplete",
                 )
+            await sql_session.commit()
             wake_workspace_operation_runner()
             return existing_status
 
@@ -2539,6 +2576,7 @@ async def queue_presentation_generation(
                     request=admitted_request,
                     fingerprint=fingerprint,
                     key_hash=key_hash,
+                    public_admission_id=public_admission_id,
                     error=error,
                 )
             )
@@ -2667,6 +2705,26 @@ async def queue_presentation_generation(
                     status_code=409,
                     detail="idempotency_record_incomplete",
                 )
+            operation = await sql_session.get(
+                WorkspaceOperation,
+                existing.workspace_operation_id,
+            )
+            existing_presentation = await sql_session.get(
+                PresentationModel,
+                existing.presentation_id,
+            )
+            if operation is None or existing_presentation is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail="idempotency_record_incomplete",
+                )
+            await _admit_generation_operation_v2_compatible(
+                sql_session,
+                request=request,
+                presentation=existing_presentation,
+                operation=operation,
+            )
+            await sql_session.commit()
             wake_workspace_operation_runner()
             return existing_status
         existing = (
@@ -2702,6 +2760,22 @@ async def queue_presentation_generation(
                     status_code=404,
                     detail="idempotency_record_not_found",
                 )
+            existing_presentation = await sql_session.get(
+                PresentationModel,
+                existing.presentation_id,
+            )
+            if existing_presentation is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail="idempotency_record_incomplete",
+                )
+            await _admit_generation_operation_v2_compatible(
+                sql_session,
+                request=request,
+                presentation=existing_presentation,
+                operation=operation,
+            )
+            await sql_session.commit()
             wake_workspace_operation_runner()
             return existing_status
         resumed = await _resume_failed_authored_job(
@@ -2742,10 +2816,9 @@ async def generate_presentation_async(
     ),
     sql_session: AsyncSession = Depends(get_async_session),
 ):
-    # Public/cluster generation is admitted only through the canonical v2
-    # route, which commits a strict durable operation before returning 202.
-    # The richer v1 request remains available solely for local SQLite
-    # compatibility and must never create a phase-1 public admission row.
+    # Keep the richer browser payload and response shape while binding both
+    # PostgreSQL and local SQLite to the v2 deadline/fence contract. The
+    # canonical v2 route remains the preferred public API.
     _require_local_legacy_async_generation(sql_session.get_bind())
     request._request_id = getattr(request_http.state, "request_id", None)
     try:

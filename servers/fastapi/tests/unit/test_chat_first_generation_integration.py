@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from pathlib import Path
 from types import SimpleNamespace
@@ -26,6 +27,12 @@ from models.sql.presentation import (
 )
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.presentation_export_attempt import PresentationExportAttempt
+from models.sql.public_admission import (
+    PublicOperationAdmission,
+    PublicPolicyProfile,
+    PublicQuotaCounter,
+    PublicResourceLease,
+)
 from models.sql.user import User
 from models.sql.workspace import (
     WorkspaceArtifact,
@@ -37,7 +44,7 @@ from models.sql.workspace import (
     WorkspaceOperationEvent,
     WorkspaceOutbox,
 )
-from services import workspace_asset_service, workspace_legacy_write_gate
+from services import workspace_asset_service, workspace_legacy_write_gate, workspace_operation_runner
 from services.workspace_artifact_publication_service import (
     WorkspaceArtifactPublicationError,
     prepare_workspace_generation_artifact,
@@ -62,10 +69,283 @@ def test_chat_first_public_admission_derives_count_from_reviewed_slides():
     assert admission_slide_count == 3
 
 
+def test_v1_async_generation_uses_strict_v2_admission_before_claim(
+    tmp_path: Path,
+    monkeypatch,
+):
+    """The browser-compatible v1 route must stamp the v2 operation contract."""
+
+    async def scenario():
+        engine, maker = await _database(tmp_path / "v1-v2-admission.db")
+        async with maker() as session, session.begin():
+            session.add(User(id=OWNER_A, username="owner-a", hashed_password="x"))
+        owner_token = set_current_owner_id(OWNER_A)
+        observed: dict[str, object] = {}
+        try:
+            monkeypatch.setattr(
+                presentation_crud,
+                "_chat_first_create_enabled",
+                lambda: True,
+            )
+            monkeypatch.setattr(
+                presentation_generate,
+                "_chat_first_generation_enabled",
+                lambda: True,
+            )
+
+            async def strict_admit(session, **kwargs):
+                observed.update(kwargs)
+                operation = await session.get(WorkspaceOperation, kwargs["operation_id"])
+                assert operation is not None
+                deadline = operation.created_at.replace(microsecond=0)
+                # This is the minimum durable projection promised by v2.  The
+                # production admission service computes the real deadline.
+                from datetime import timedelta
+
+                operation.contract_version = "public-operation/v2"
+                operation.execution_profile_version = "public-generation-export/v2"
+                operation.phase = "admitted"
+                operation.deadline_at = deadline + timedelta(minutes=5)
+                operation.fencing_token = 1
+                return SimpleNamespace(
+                    id=uuid.uuid4(),
+                    fence=1,
+                    deadline_at=operation.deadline_at,
+                )
+
+            monkeypatch.setattr(
+                presentation_generate,
+                "admit_public_operation_compatible_v2",
+                strict_admit,
+            )
+            monkeypatch.setattr(
+                presentation_generate,
+                "check_if_api_request_is_valid",
+                lambda *_args, **_kwargs: _async_return((None,)),
+            )
+            monkeypatch.setattr(
+                presentation_generate,
+                "_require_local_legacy_async_generation",
+                lambda *_args, **_kwargs: None,
+            )
+
+            presentation_id = uuid.uuid4()
+            async with maker() as session:
+                await _create(
+                    session,
+                    presentation_id=presentation_id,
+                    idempotency_key=f"presentation-create:{presentation_id}",
+                )
+            request = GeneratePresentationRequest(
+                presentation_id=presentation_id,
+                content="Browser v1 generation must use v2 admission",
+                n_slides=3,
+                language="en",
+                strategy="authored",
+            )
+            async with maker() as session:
+                request_http = Request(
+                    {
+                        "type": "http",
+                        "http_version": "1.1",
+                        "method": "POST",
+                        "scheme": "http",
+                        "path": "/api/v1/ppt/presentation/generate/async",
+                        "raw_path": b"/api/v1/ppt/presentation/generate/async",
+                        "query_string": b"",
+                        "headers": [],
+                        "client": ("test", 1234),
+                        "server": ("test", 80),
+                    }
+                )
+                request_http.state.request_id = "v1-v2-admission"
+                queued = await presentation_generate.generate_presentation_async(
+                    request_http,
+                    request,
+                    BackgroundTasks(),
+                    idempotency_key=f"presentation-generate:{presentation_id}",
+                    sql_session=session,
+                )
+                operation = await session.scalar(
+                    select(WorkspaceOperation).where(
+                        WorkspaceOperation.presentation_id == presentation_id,
+                        WorkspaceOperation.kind == "presentation.generate",
+                    )
+                )
+                assert queued.status == "pending"
+                assert observed["operation_id"] == operation.id
+                assert operation.contract_version == "public-operation/v2"
+                assert operation.execution_profile_version == "public-generation-export/v2"
+                assert operation.phase == "active"
+                assert operation.deadline_at is not None
+                assert operation.fencing_token == 1
+                assert observed["operation_kind"] == "generation"
+        finally:
+            reset_current_owner_id(owner_token)
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+async def _async_return(value):
+    return value
+
+
+def test_recovery_expires_phase1_partial_before_lease_and_releases_quota(
+    tmp_path: Path,
+    monkeypatch,
+):
+    """An expired partial admission must not remain claimable or hold quota."""
+
+    async def scenario():
+        engine, maker = await _database(tmp_path / "partial-admission-recovery.db")
+        async with maker() as session, session.begin():
+            session.add(User(id=OWNER_A, username="owner-a", hashed_password="x"))
+        owner_token = set_current_owner_id(OWNER_A)
+        now = datetime(2026, 9, 2, 3, 0, tzinfo=timezone.utc)
+        try:
+            monkeypatch.setattr(workspace_operation_runner, "_utc_now", lambda: now)
+            presentation_id = uuid.uuid4()
+            policy_version = "partial-test/v1"
+            expired = now - timedelta(minutes=1)
+            future_lease = now + timedelta(minutes=10)
+            async with maker() as session:
+                await _create(
+                    session,
+                    presentation_id=presentation_id,
+                    idempotency_key=f"presentation-create:{presentation_id}",
+                )
+                operation = await session.scalar(
+                    select(WorkspaceOperation).where(
+                        WorkspaceOperation.presentation_id == presentation_id,
+                        WorkspaceOperation.kind == "presentation.generate",
+                    )
+                )
+                assert operation is not None
+                operation.state = "running"
+                operation.attempt_number = 1
+                operation.attempt_token = "stuck-attempt"
+                operation.fencing_token = 0
+                operation.lease_expires_at = future_lease
+                operation.heartbeat_at = future_lease
+                operation.deadline_at = None
+
+                task = AsyncPresentationGenerationTaskModel(
+                    status="processing",
+                    message="stuck",
+                    owner_id=OWNER_A,
+                )
+                job = PresentationGenerationJob(
+                    task_id=task.id,
+                    presentation_id=presentation_id,
+                    workspace_operation_id=operation.id,
+                    request_sha256="a" * 64,
+                    request_payload={"content": "stuck"},
+                    state="running",
+                    resume_allowed=True,
+                )
+                operation.request_payload = {"job_id": str(job.id)}
+                policy = PublicPolicyProfile(
+                    version=policy_version,
+                    max_slides=100,
+                    global_active_generation=10,
+                    global_queued_generation=10,
+                    owner_active_generation=10,
+                    owner_queued_generation=10,
+                    tenant_active_generation=10,
+                    tenant_queued_generation=10,
+                    global_active_export=10,
+                    global_queued_export=10,
+                    owner_active_export=10,
+                    owner_queued_export=10,
+                    tenant_active_export=10,
+                    tenant_queued_export=10,
+                    global_active_resource_units=100,
+                    global_queued_resource_units=100,
+                    tenant_active_resource_units=100,
+                    tenant_queued_resource_units=100,
+                    owner_active_resource_units=100,
+                    owner_queued_resource_units=100,
+                    retry_request_limit=1,
+                    estimated_cost_limit_microunits=1,
+                    actual_cost_limit_microunits=1,
+                    generation_deadline_seconds=60,
+                    export_deadline_seconds=60,
+                )
+                admission = PublicOperationAdmission(
+                    operation_id=operation.id,
+                    policy_version=policy_version,
+                    owner_id=OWNER_A,
+                    tenant_id="default",
+                    trace_id_hash="b" * 64,
+                    operation_kind="generation",
+                    resource_units=1,
+                    policy_digest="c" * 64,
+                    deadline_at=expired,
+                    fence=0,
+                    state="active",
+                    planned_request_limit=1,
+                    retry_request_limit=1,
+                    estimated_cost_limit_microunits=1,
+                    actual_cost_limit_microunits=1,
+                )
+                counters = [
+                    PublicQuotaCounter(
+                        policy_version=policy_version,
+                        scope_type=scope,
+                        scope_key=key,
+                        operation_kind="generation",
+                        active_count=1,
+                        active_resource_units=1,
+                    )
+                    for scope, key in (
+                        ("tenant", "default"),
+                        ("owner", str(OWNER_A)),
+                    )
+                ]
+                session.add(policy)
+                await session.flush()
+                session.add_all([task, job, admission, *counters])
+                await session.commit()
+
+            recovered = await workspace_operation_runner.recover_expired_workspace_operations(
+                session_factory=maker
+            )
+            assert recovered == 1
+            async with maker() as session:
+                operation = await session.get(WorkspaceOperation, operation.id)
+                admission = await session.get(PublicOperationAdmission, admission.id)
+                job = await session.get(PresentationGenerationJob, job.id)
+                task = await session.get(AsyncPresentationGenerationTaskModel, task.id)
+                assert operation.state == "deadline_exceeded"
+                assert admission.state == "deadline_exceeded"
+                assert job.state == "failed"
+                assert job.resume_allowed is False
+                assert task.status == "error"
+                assert task.error["code"] == "public_deadline_exceeded"
+                counts = (
+                    await session.execute(
+                        select(PublicQuotaCounter).where(
+                            PublicQuotaCounter.policy_version == policy_version
+                        )
+                    )
+                ).scalars()
+                assert all(row.active_count == 0 for row in counts)
+        finally:
+            reset_current_owner_id(owner_token)
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
 OWNER_A = uuid.UUID("11111111-1111-4111-8111-111111111111")
 OWNER_B = uuid.UUID("22222222-2222-4222-8222-222222222222")
 TABLES = [
     User.__table__,
+    PublicPolicyProfile.__table__,
+    PublicQuotaCounter.__table__,
+    PublicOperationAdmission.__table__,
+    PublicResourceLease.__table__,
     PresentationModel.__table__,
     WorkspaceConversation.__table__,
     WorkspaceMessage.__table__,
