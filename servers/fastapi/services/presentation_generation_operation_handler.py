@@ -500,7 +500,7 @@ class PresentationGenerationOperationHandler:
                             # Workers can run in a different process than public
                             # admission; install the same no-I/O composition root
                             # before resolving the sealed operation strategy.
-                            ensure_product_deck_ir_execution_adapter()
+                            ensure_product_deck_ir_execution_adapter(explicit=True)
                             persisted = await session.get(
                                 PresentationModel, context.claim.presentation_id
                             )

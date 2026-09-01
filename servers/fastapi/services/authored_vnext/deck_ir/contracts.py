@@ -610,6 +610,7 @@ class ConstraintCompileReceiptV2(ConstraintCompileReceiptV1):
     connector_contracts: list[ConnectorContractV2] = Field(default_factory=list, max_length=12)
     content_text_digest: Digest
     initial_candidate_selection_receipt_digest: Digest | None = None
+    style_profile_digest: Digest | None = None
 
 
 class CriticOperationV1(StrictModel):

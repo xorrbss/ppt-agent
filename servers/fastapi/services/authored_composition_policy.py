@@ -199,20 +199,25 @@ _ROLE_BUDGETS: dict[str, tuple[int, int, int, int]] = {
     "COVER": (58, 220, 280, 22),
     # Closing slides combine the final claim, release rule, and audit/operations
     # copy. Chromium geometry remains the hard overflow authority.
-    "CLOSING": (62, 270, 350, 20),
+    # Dense Korean proposal styles use many short editable labels rather than
+    # a few long paragraphs.  Keep the 15px/Chromium geometry gates as the
+    # visual authority, but do not reject those legitimate semantic owners
+    # before the first render merely because the generic prose envelope was
+    # tuned for sparse keynote layouts.
+    "CLOSING": (62, 380, 460, 36),
     "SECTION": (46, 150, 220, 12),
-    "AGENDA": (58, 300, 380, 28),
-    "PROBLEM": (64, 310, 400, 28),
-    "PILLARS": (58, 290, 380, 32),
-    "OUTCOMES": (54, 260, 340, 26),
-    "ROADMAP": (56, 285, 370, 30),
-    "ARCHITECTURE": (54, 280, 370, 34),
+    "AGENDA": (58, 330, 420, 36),
+    "PROBLEM": (64, 380, 460, 40),
+    "PILLARS": (58, 380, 460, 40),
+    "OUTCOMES": (54, 340, 420, 36),
+    "ROADMAP": (56, 360, 450, 40),
+    "ARCHITECTURE": (54, 390, 460, 48),
 }
 
 
 def _role_budget(role: str) -> tuple[int, int, int, int]:
     normalized = (role or "").strip().upper()
-    return _ROLE_BUDGETS.get(normalized, (60, 300, 390, 30))
+    return _ROLE_BUDGETS.get(normalized, (60, 380, 460, 40))
 
 
 def build_authored_capacity_plan(
@@ -705,6 +710,36 @@ def canonicalize_authored_capacity_html(html: str) -> str:
     """Use the render-bound owner namespace before counting or reducing text."""
 
     return ensure_authored_semantic_roles(ensure_authored_qids(html))
+
+
+def project_authored_owned_text(html: str) -> tuple[str | None, tuple[str, ...]]:
+    """Project direct text owners from the exact Chromium-bound HTML.
+
+    The first title owner becomes the compatibility title. Every other visible
+    text owner is retained in DOM order as compatibility body text.
+    """
+
+    normalized = ensure_authored_semantic_roles(html)
+    parser = _AuthoredStartTagCollector()
+    parser.feed(normalized)
+    parser.close()
+    title: str | None = None
+    body: list[str] = []
+    for index, (_tag, raw_attrs, _raw_tag) in enumerate(parser.tags):
+        attrs = _attribute_map(raw_attrs)
+        if not attrs.get("data-qid", "").strip() or not parser.owns_text[index]:
+            continue
+        text = re.sub(
+            r"\s+", " ", "".join(parser.owned_text_parts[index])
+        ).strip()
+        if not text:
+            continue
+        role = attrs.get("data-semantic-role", "").strip().lower()
+        if role == "title" and title is None:
+            title = text
+        elif role not in {"decoration", "image"}:
+            body.append(text)
+    return title, tuple(body)
 
 
 def aggregate_owner_capacity_violations(
@@ -1767,14 +1802,81 @@ def repair_authored_layout_alignment(html: str, *, role: str) -> str:
     """
 
     normalized_role = role.strip().upper()
-    if (
-        normalized_role not in {"PROBLEM", "CLOSING"}
-        or "data-source-block-id" in html.lower()
-    ):
+    if "data-source-block-id" in html.lower():
         return html
 
     repaired = html
     applied: list[str] = []
+    body_root = re.search(
+        r"<(?P<tag>div|main|section)\b(?P<attrs>[^>]*\bdata-header-part\s*=\s*(?P<quote>['\"])body(?P=quote)[^>]*)>"
+        r"(?P<gap>\s*)<(?P<child_tag>div|main|section)\b(?P<child_attrs>[^>]*\bdata-qid\s*=\s*['\"]body\.layout['\"][^>]*)>",
+        repaired,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if body_root is not None:
+        root_style = re.search(
+            r"\bstyle\s*=\s*(?P<quote>['\"])(?P<style>.*?)(?P=quote)",
+            body_root.group("attrs"),
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        child_class = re.search(
+            r"\bclass\s*=\s*(?P<quote>['\"])(?P<classes>.*?)(?P=quote)",
+            body_root.group("child_attrs"),
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        root_top = (
+            re.search(r"(?:^|;)\s*top\s*:\s*(\d+)px\s*(?:;|$)", root_style.group("style"), re.IGNORECASE)
+            if root_style is not None
+            else None
+        )
+        root_height = (
+            re.search(r"(?:^|;)\s*height\s*:\s*(\d+)px\s*(?:;|$)", root_style.group("style"), re.IGNORECASE)
+            if root_style is not None
+            else None
+        )
+        if root_top is not None and root_height is not None and child_class is not None:
+            classes = child_class.group("classes").split()
+            if len(classes) == 1:
+                selector = re.escape(classes[0])
+                child_rule = re.search(
+                    rf"(?P<prefix>\.{selector}\s*\{{)(?P<body>[^}}]*)\}}",
+                    repaired,
+                    flags=re.IGNORECASE | re.DOTALL,
+                )
+                if child_rule is not None:
+                    child_top = re.search(
+                        r"(?:^|;)\s*top\s*:\s*(\d+)px\s*(?:;|$)",
+                        child_rule.group("body"),
+                        flags=re.IGNORECASE,
+                    )
+                    child_height = re.search(
+                        r"(?:^|;)\s*height\s*:\s*(\d+)px\s*(?:;|$)",
+                        child_rule.group("body"),
+                        flags=re.IGNORECASE,
+                    )
+                    if (
+                        child_top is not None
+                        and child_height is not None
+                        and child_top.group(1) == root_top.group(1)
+                        and child_height.group(1) == root_height.group(1)
+                    ):
+                        declarations = child_rule.group("body")
+                        declarations = re.sub(
+                            r"(?P<prefix>(?:^|;)\s*top\s*:)\s*\d+px",
+                            r"\g<prefix>0px",
+                            declarations,
+                            count=1,
+                            flags=re.IGNORECASE,
+                        )
+                        repaired = (
+                            repaired[: child_rule.start()]
+                            + child_rule.group("prefix")
+                            + declarations
+                            + "}"
+                            + repaired[child_rule.end() :]
+                        )
+                        applied.append("nested-body-origin")
+
     if normalized_role == "PROBLEM":
         eyebrow_rule = re.search(
             r"(?P<prefix>\.eyebrow\s*\{)(?P<body>[^}]*)\}",
@@ -2159,6 +2261,7 @@ __all__ = [
     "capacity_violations",
     "bounded_capacity_repair_eligible",
     "ensure_authored_semantic_roles",
+    "project_authored_owned_text",
     "repair_authored_layout_alignment",
     "repair_authored_owned_text_paint_order",
     "reduce_authored_owner_text_capacity",

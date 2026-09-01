@@ -13,6 +13,7 @@ from services.authored_composition_policy import (
     SlideCapacity,
     _is_supporting_candidate,
     aggregate_owner_capacity_violations,
+    build_authored_capacity_plan,
     canonicalize_authored_capacity_html,
     capacity_violations,
     ensure_authored_semantic_roles,
@@ -396,6 +397,21 @@ def test_owner_text_reducer_preserves_nested_inline_markup() -> None:
     ) == ()
     assert '<span class="lead"' in reduced
     assert "<strong " in reduced
+
+
+def test_dense_proposal_roles_admit_short_editable_label_systems() -> None:
+    profile = CompositionProfile("ordinary", "authored", True, True, 1)
+    plan = build_authored_capacity_plan(
+        ["architecture", "pillars", "closing", "generic"],
+        ["ARCHITECTURE", "PILLARS", "CLOSING", "CONTENT"],
+        profile,
+    )
+
+    assert (plan.at(0).body_max_chars, plan.at(0).max_visible_text_chars, plan.at(0).max_qids) == (390, 460, 48)
+    assert (plan.at(1).body_max_chars, plan.at(1).max_visible_text_chars, plan.at(1).max_qids) == (380, 460, 40)
+    assert (plan.at(2).body_max_chars, plan.at(2).max_visible_text_chars, plan.at(2).max_qids) == (380, 460, 36)
+    assert (plan.at(3).body_max_chars, plan.at(3).max_visible_text_chars, plan.at(3).max_qids) == (380, 460, 40)
+    assert all(slide.min_font_px == 15 for slide in plan.slides)
 
 
 def test_composition_profile_defaults_to_development_quality_gates() -> None:
@@ -1193,6 +1209,21 @@ def test_layout_alignment_repair_restores_header_inset_and_symmetric_body_margin
         closing.replace("<body>", '<body data-source-block-id="source:1">'),
         role="CLOSING",
     ) == closing.replace("<body>", '<body data-source-block-id="source:1">')
+
+
+def test_layout_alignment_repair_removes_nested_duplicate_body_offset():
+    html = """<!doctype html><html><head><style>
+    .body-wrap{position:absolute;left:56px;right:56px;top:116px;height:518px}
+    </style></head><body>
+    <main data-header-part="body" style="position:absolute;top:116px;left:0;right:0;height:518px;">
+      <div data-qid="body.layout" class="body-wrap">본문</div>
+    </main></body></html>"""
+
+    repaired = repair_authored_layout_alignment(html, role="ROADMAP")
+
+    assert "authored-layout-alignment-repair-v1:nested-body-origin" in repaired
+    assert ".body-wrap{position:absolute;left:56px;right:56px;top:0px;height:518px}" in repaired
+    assert repair_authored_layout_alignment(repaired, role="ROADMAP") == repaired
 
 
 def test_layout_alignment_repair_keeps_rotated_arrow_tip_inside_connector_gutter():

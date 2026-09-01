@@ -72,14 +72,14 @@ def deck_ir_execution_adapter_configured() -> bool:
     return _configured_execution_adapter is not None
 
 
-def ensure_product_deck_ir_execution_adapter() -> bool:
+def ensure_product_deck_ir_execution_adapter(*, explicit: bool = False) -> bool:
     """Install the real composition root for an explicitly opted-in process.
 
     Construction performs no provider request.  Admission still seals strategy
     before the adapter can reserve a provider call.
     """
 
-    if not os.getenv("DECK_IR_GENERATION_ENABLED", "").strip().lower() in {
+    if not explicit and not os.getenv("DECK_IR_GENERATION_ENABLED", "").strip().lower() in {
         "1", "true", "yes", "on"
     }:
         return False
@@ -361,6 +361,7 @@ class ConstraintCompilerDeckIrExecutionAdapter:
     publisher: Callable[[Mapping[str, object]], Awaitable[Mapping[str, object]]]
     requirement_graph: Mapping[str, object] | None = None
     language: str | None = None
+    style_profile: object | None = None
 
     async def run(
         self,
@@ -393,8 +394,31 @@ class ConstraintCompilerDeckIrExecutionAdapter:
         _record_stage_timing(request, "outline", outline_started_at)
         author_started_at = time.monotonic()
         compositions, art_directions = _intent_documents(director_run)
+        raw_deck_ir = _deck_ir_from_director(director_run)
+        style_profile_digest = None
+        retained_reference_digest = None
+        if self.style_profile is not None:
+            from services.authored_vnext.deck_ir.style_profiles import (
+                DeckIrStyleProfile,
+                apply_server_style_profile,
+            )
+
+            if not isinstance(self.style_profile, DeckIrStyleProfile):
+                raise DeckIrIntegrationError("deck_ir_style_profile_unsupported")
+            style_profile_digest = self.style_profile.profile_digest
+            retained_reference_digest = self.style_profile.retained_reference_digest
+            if strategy_receipt.get("styleProfileDigest") != style_profile_digest:
+                raise DeckIrIntegrationError("deck_ir_style_profile_binding_invalid")
+            try:
+                raw_deck_ir, art_directions = apply_server_style_profile(
+                    deck_ir=raw_deck_ir,
+                    art_directions=art_directions,
+                    profile=self.style_profile,
+                )
+            except ValueError as error:
+                raise DeckIrIntegrationError(str(error)) from error
         deck_ir, compositions, art_directions, coverage = _validate_deck_ir(
-            _deck_ir_from_director(director_run),
+            raw_deck_ir,
             compositions=compositions,
             art_directions=art_directions,
             slide_count=slide_count,
@@ -408,6 +432,8 @@ class ConstraintCompilerDeckIrExecutionAdapter:
             payload={
                 "operationId": operation_id,
                 "strategyReceiptDigest": strategy_receipt.get("receiptDigest"),
+                "styleProfileDigest": style_profile_digest,
+                "retainedReferenceDigest": retained_reference_digest,
                 "deckIr": deck_ir,
                 "directorRun": director_run,
                 "requirementCoverageReceipt": coverage,
@@ -491,6 +517,7 @@ class ConstraintCompilerDeckIrExecutionAdapter:
                     closure_revision=closure_revision,
                     browser_measurement_digest=measurement_digest,
                     strategy_decision_digest=str(strategy_receipt.get("receiptDigest") or ""),
+                    style_profile_digest=style_profile_digest,
                 )
 
             async def observe_candidate(result: object) -> Mapping[str, object]:
@@ -571,6 +598,7 @@ class ConstraintCompilerDeckIrExecutionAdapter:
             "schemaVersion": "generation-quality-input/deck-ir-v1",
             "operationId": operation_id,
             "strategyReceiptDigest": strategy_receipt.get("receiptDigest"),
+            "styleProfileDigest": style_profile_digest,
             "deckIrDigest": _digest(deck_ir),
             "deckIr": deck_ir,
             "checkpointDigest": checkpoint["checkpointDigest"],
@@ -598,6 +626,8 @@ class ConstraintCompilerDeckIrExecutionAdapter:
                     "attemptToken": getattr(getattr(context, "claim"), "attempt_token"),
                     "fencingToken": getattr(getattr(context, "claim"), "fencing_token"),
                     "strategyReceipt": dict(strategy_receipt),
+                    "styleProfileDigest": style_profile_digest,
+                    "retainedReferenceDigest": retained_reference_digest,
                     "deckIr": deck_ir,
                     "compiledSlides": compiled,
                     "executionEvidence": execution_evidence,
@@ -611,14 +641,20 @@ class ConstraintCompilerDeckIrExecutionAdapter:
         if not isinstance(publication.get("manifestDigest"), str):
             raise DeckIrIntegrationError("authored_manifest_publication_failed")
         await _progress(context, stage="publishing", percent=100, message="Published")
-        return {
-            "deckIr": {
+        generation_deck_ir = {
                 "strategy": "deck-ir",
                 "strategyReceiptDigest": strategy_receipt.get("receiptDigest"),
                 "deckIrDigest": _digest(deck_ir),
                 "detachedCheckpointDigest": checkpoint["checkpointDigest"],
                 "providerLogicalCalls": director_run["logicalCalls"],
+                "providerOutputMode": "structured-deck-ir-json",
+                "providerHtmlAuthoringCalls": 0,
+                "legacyProviderHtmlExecuted": False,
+                "candidateSearchK": 6,
+                "candidateProviderCallsAdded": 0,
                 "grammarDigest": grammar.manifest_digest,
+                "styleProfileDigest": style_profile_digest,
+                "retainedReferenceDigest": retained_reference_digest,
                 "compilerVersion": "constraint-compiler/v1",
                 "candidateSelectionReceiptDigest": selection_receipt.get("receiptDigest"),
                 "executionEvidenceDigest": retained_execution["evidenceDigest"],
@@ -627,8 +663,18 @@ class ConstraintCompilerDeckIrExecutionAdapter:
                     for item in compiled
                     if isinstance(item.get("browserClosureReceipt"), Mapping)
                 ],
+                "compileReceiptDigests": [
+                    item["compileReceipt"].get("receiptDigest")
+                    for item in compiled
+                    if isinstance(item.get("compileReceipt"), Mapping)
+                ],
                 "slideCount": len(compiled),
-            },
+            }
+        return {
+            "generationDeckIr": generation_deck_ir,
+            # Compatibility alias for existing event/status consumers.  New
+            # acceptance evidence is projected from generationDeckIr.
+            "deckIr": generation_deck_ir,
             "generationQualityReceipt": generation_quality,
             "requirementCoverageReceipt": coverage,
             "publication": publication,

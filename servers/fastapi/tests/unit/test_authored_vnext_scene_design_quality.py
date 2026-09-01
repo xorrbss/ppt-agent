@@ -943,8 +943,7 @@ def test_semantic_import_retry_reuses_only_identical_scene_and_retained_telemetr
     from types import SimpleNamespace
     import uuid
 
-    from models.authored_vnext.deck import MasterDigestPin, ValidatedSlideSpecV2
-    from models.authored_vnext.deck.checkpoint import SlideValidationCheckpoint
+    from models.authored_vnext.deck import MasterDigestPin
     from models.generate_presentation_request import GeneratePresentationRequest
     from models.presentation_outline_model import (
         PresentationOutlineModel,
@@ -973,42 +972,6 @@ def test_semantic_import_retry_reuses_only_identical_scene_and_retained_telemetr
         ),
         font_manifest_digest=contract.font_manifest.digest,
     )
-    slide, plan, title_bounds = _slide_and_plan(
-        contract, title="Recovery", body="Retained body", slide_id="slide:retry"
-    )
-    planned_scene = compile_slide_scene(
-        slide=slide,
-        visual_plan=plan,
-        title_bounds=title_bounds,
-        contract=contract,
-    )
-    validated = ValidatedSlideSpecV2(
-        slide=slide,
-        scene=planned_scene,
-        checkpoint=SlideValidationCheckpoint(
-            master_digest=pin.master_digest,
-            layout_registry_digest=pin.layout_registry_digest,
-            font_manifest_digest=pin.font_manifest_digest,
-            source_digest=SOURCE_DIGEST,
-            composition=composition,
-            visual_plan_digest=plan.plan_digest,
-            scene_digest=planned_scene.slide_digest,
-            quality_policy_version="retry-test/v1",
-            layout_id=slide.layout_id,
-            body_slot_id=plan.body_slot_id,
-            validated_at="2026-08-31T00:00:00Z",
-        ),
-    )
-    base = generation._seal_deck(
-        deck_id=f"deck:legacy-{presentation_id.hex}",
-        revision=1,
-        parent=None,
-        pin=pin,
-        composition=composition,
-        source_digest=SOURCE_DIGEST,
-        slides=[validated],
-    )
-
     class ImportedRepository:
         current = None
         append_count = 0
@@ -1018,6 +981,11 @@ def test_semantic_import_retry_reuses_only_identical_scene_and_retained_telemetr
             if self.current is None:
                 raise GenerationNotFoundError()
             return self.current
+
+        def get_master(self, master_id, revision):
+            assert master_id == contract.master_id
+            assert revision == 1
+            return SimpleNamespace(contract=contract, visual_direction=None)
 
         def append_imported_deck(self, deck):
             assert self.current is None
@@ -1031,13 +999,10 @@ def test_semantic_import_retry_reuses_only_identical_scene_and_retained_telemetr
     monkeypatch.setattr(
         generation,
         "_generate_snapshot",
-        lambda **_kwargs: (
-            SimpleNamespace(
-                deck=base, operation_id=f"operation:legacy-{presentation_id.hex}"
-            ),
-            None,
-            composition,
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("semantic import must not compile the outline twice")
         ),
+        raising=False,
     )
 
     def reject_cache_lookup(_html):
@@ -1046,36 +1011,55 @@ def test_semantic_import_retry_reuses_only_identical_scene_and_retained_telemetr
     monkeypatch.setattr(
         editable_scene_mod, "get_cached_browser_metrics", reject_cache_lookup
     )
-    html = '<p data-qid="body.owner" data-semantic-role="body">Retained body</p>'
+    html = (
+        '<h1 data-qid="title.owner" data-semantic-role="title">Recovery</h1>'
+        '<p data-qid="body.owner" data-semantic-role="body">Retained body</p>'
+    )
     envelope = seal_deck_scene_envelope([seal_slide_scene_envelope(html, slide_index=0)])
     metrics = {
         "width": 1280,
         "height": 720,
         "fonts_ready": True,
-        "elements": [{
-            "qid": "body.owner",
-            "tag": "p",
-            "bbox": {"x": 80, "y": 180, "width": 1040, "height": 220},
-            "rendered_text": "Retained body",
-            "font_loaded": True,
-            "computed_style": {
-                "display": "block", "visibility": "visible", "opacity": "1",
-                "fontFamily": "Arial", "fontSize": "21.333px",
-                "lineHeight": "25.6px", "color": "#111827",
-                "backgroundColor": "#ffffff",
+        "elements": [
+            {
+                "qid": "title.owner",
+                "tag": "h1",
+                "bbox": {"x": 80, "y": 60, "width": 1040, "height": 80},
+                "rendered_text": "Recovery",
+                "font_loaded": True,
+                "computed_style": {
+                    "display": "block", "visibility": "visible", "opacity": "1",
+                    "fontFamily": "Arial", "fontSize": "42.667px",
+                    "lineHeight": "51.2px", "color": "#111827",
+                    "backgroundColor": "#ffffff",
+                },
             },
-        }],
+            {
+                "qid": "body.owner",
+                "tag": "p",
+                "bbox": {"x": 80, "y": 180, "width": 1040, "height": 220},
+                "rendered_text": "Retained body",
+                "font_loaded": True,
+                "computed_style": {
+                    "display": "block", "visibility": "visible", "opacity": "1",
+                    "fontFamily": "Arial", "fontSize": "21.333px",
+                    "lineHeight": "25.6px", "color": "#111827",
+                    "backgroundColor": "#ffffff",
+                },
+            },
+        ],
     }
     png_buffer = BytesIO()
     Image.new("RGB", (1280, 720), "white").save(png_buffer, format="PNG")
-    request = GeneratePresentationRequest(content="Retained body", n_slides=1)
+    oversized_outline = "## Recovery\n" + ("duplicated raw outline body " * 300)
+    request = GeneratePresentationRequest(content=oversized_outline, n_slides=1)
     request._authored_master_resolution = SimpleNamespace(pin=pin)
     request._authored_composition_pin = composition
     arguments = {
         "request": request,
         "presentation_id": presentation_id,
         "outline": PresentationOutlineModel(
-            slides=[SlideOutlineModel(content="Retained body")]
+            slides=[SlideOutlineModel(content=oversized_outline)]
         ),
         "owner_id": owner_id,
         "style": SimpleNamespace(id="default"),

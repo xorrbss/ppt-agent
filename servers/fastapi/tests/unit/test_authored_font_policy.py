@@ -34,3 +34,18 @@ def test_enforce_authored_font_floor_preserves_script_bodies_and_is_idempotent()
     assert "const template = '<p style=\"font-size:8px\">x</p>';" in once
     assert ".label{font-size:12px}" in once
     assert twice == once
+
+
+def test_enforce_authored_font_floor_accepts_frozen_capacity_floor():
+    html = """<html><head><style>
+.body{font-size:13px}.caption{font-size:10pt}.valid{font-size:16px}
+</style></head><body><p style="font-size:14px">Body</p></body></html>"""
+
+    once = enforce_authored_font_floor(html, minimum_px=15)
+    twice = enforce_authored_font_floor(once, minimum_px=15)
+
+    assert ".body{font-size:15px}" in once
+    assert ".caption{font-size:11.25pt}" in once
+    assert ".valid{font-size:16px}" in once
+    assert 'style="font-size:15px"' in once
+    assert twice == once

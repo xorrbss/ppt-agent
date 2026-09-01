@@ -56,6 +56,7 @@ class PresentationGenerationRequestV2(PublicWireModel):
         "presentation-generation-request/v2"
     )
     engine: Literal["authored"] = "authored"
+    generation_engine: Literal["authored", "deck-ir"] = "authored"
     content: str = Field(min_length=1, max_length=200_000)
     slides_markdown: list[str] | None = Field(default=None, max_length=100)
     instructions: str | None = Field(default=None, max_length=20_000)

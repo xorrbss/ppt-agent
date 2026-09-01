@@ -123,6 +123,15 @@ class GeneratePresentationRequest(BaseModel):
             "Explicit generation strategy. Omit to use the authored source."
         ),
     )
+    generation_engine: Literal["authored", "deck-ir"] = Field(
+        default="authored",
+        alias="generationEngine",
+        description=(
+            "Public generation engine selection. Authored preserves the existing "
+            "provider-HTML path; explicit deck-ir is fail-closed "
+            "when any required capability is unavailable."
+        ),
+    )
     source_mode: Optional[Literal["source_content_restyle"]] = Field(
         default=None,
         alias="sourceMode",

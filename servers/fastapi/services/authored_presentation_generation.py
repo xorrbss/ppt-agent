@@ -11,6 +11,7 @@ import time
 import traceback
 import uuid
 from collections.abc import Mapping
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import func, or_, select
@@ -67,10 +68,22 @@ from services.authored_header_contract_service import (
 from services.authored_presentation_pipeline import _author_illustrate_render_pipeline
 from services.authored_presentation_publication import publish_authored_presentation
 from services.authored_generation_progress_poller import mark_authored_generation_stage
-from models.authored_vnext.deck import DeckGenerationSnapshot, DeckSceneIR, ValidatedSlideSpecV2
-from services.authored_vnext.generation.ai_text_zones import AITextZoneContext
+from models.authored_vnext.deck import (
+    DeckGenerationSnapshot,
+    DeckSceneIR,
+    SlideValidationCheckpoint,
+    ValidatedSlideSpecV2,
+)
+from models.authored_vnext.master.slide import (
+    ExplicitTitle,
+    SlideSpecV2,
+    TitleFitResult,
+)
 from services.authored_vnext.generation.errors import GenerationNotFoundError
-from services.authored_vnext.generation.legacy_bridge import _generate_snapshot
+from services.authored_vnext.generation.effective_style import (
+    materialize_authored_composition,
+    resolve_authored_composition,
+)
 from services.authored_vnext.generation.legacy_pin import generation_repository_for_owner
 from services.authored_vnext.generation.internal_authored_composition import (
     build_internal_authored_composition,
@@ -103,6 +116,7 @@ from services.authored_composition_policy import (
     capacity_repair_instructions,
     capacity_violations,
     ensure_authored_semantic_roles,
+    project_authored_owned_text,
     reduce_authored_owner_text_capacity,
     reduce_authored_closing_capacity,
     reduce_authored_closing_title_punctuation,
@@ -1379,11 +1393,16 @@ def _persist_or_reuse_identical_semantic_deck(
     candidate_payload = deck.model_dump(
         mode="json", by_alias=True, exclude={"digest"}
     )
-    # _seal_deck includes its wall-clock creation time in the digest. All other
-    # payload fields (including the complete Scene, assets and checkpoints) must
-    # still match; a new source, head revision or measured geometry is not a retry.
+    # _seal_deck and slide checkpoints include wall-clock timestamps. All other
+    # payload fields (including the complete Scene, assets and checkpoint
+    # digests) must still match; a new source, revision or geometry is not a retry.
     stored_payload.pop("createdAt")
     candidate_payload.pop("createdAt")
+    for payload in (stored_payload, candidate_payload):
+        for item in payload.get("slides", []):
+            checkpoint = item.get("checkpoint")
+            if isinstance(checkpoint, dict):
+                checkpoint.pop("validatedAt", None)
     if current.scene is None or stored_payload != candidate_payload:
         raise DeckAlreadyExistsError()
     return current.scene
@@ -1405,9 +1424,9 @@ async def _persist_master_pinned_editable_scene_deck(
 ):
     """Bridge normal Authored output into the vNext durable CAS deck log.
 
-    The pinned-master planner contributes only its sealed master/composition and
-    compatibility slide container. Authored HTML plus browser telemetry remains
-    the sole visual/semantic authority for the canonical Scene.
+    Authored HTML plus browser telemetry is the sole visual/semantic authority.
+    The pinned master contributes provenance and compatibility metadata only;
+    raw outline text is never compiled into a second, competing Scene.
     """
 
     if tuple(htmls) != scene_envelope.html_projections:
@@ -1428,32 +1447,20 @@ async def _persist_master_pinned_editable_scene_deck(
         repository.append_imported_master(internal.master)
         resolved = internal.resolved
         composition_pin = internal.composition
-    source_semantic_snapshot = request._authored_source_semantic_snapshot
-    result, _master, composition = await asyncio.to_thread(
-        _generate_snapshot,
-        owner_id=owner_id,
-        presentation_id=presentation_id,
-        outline=outline,
-        resolved=resolved,
-        authored_style=style,
-        composition_pin=composition_pin,
-        ai_text_context=AITextZoneContext(
-            materials=tuple(slide.content for slide in outline.slides)
-        ),
-        source_semantic_snapshot=(
-            source_semantic_snapshot
-            if isinstance(source_semantic_snapshot, dict)
-            else None
-        ),
+    master = repository.get_master(
+        resolved.pin.master_id, resolved.pin.master_revision
     )
-    base = result.deck
+    if composition_pin is None:
+        composition, _effective_contract = resolve_authored_composition(
+            master.contract,
+            style=style,
+            visual_direction=master.visual_direction,
+        )
+    else:
+        materialize_authored_composition(master.contract, composition_pin)
+        composition = composition_pin
     if revision != 1:
         raise ValueError("normal Authored semantic deck must start at revision 1")
-    if (
-        result.operation_id != f"operation:legacy-{presentation_id.hex}"
-        or base.deck_id != f"deck:legacy-{presentation_id.hex}"
-    ):
-        raise ValueError("authored_semantic_generation_identity_mismatch")
     # Author/render checkpoints survive process restarts, while the DOM metrics
     # cache is intentionally process-local.  Recollect the exact instrumented
     # HTML before Scene compilation so a retry cannot publish every owner as
@@ -1466,11 +1473,12 @@ async def _persist_master_pinned_editable_scene_deck(
     if any(metrics is None for metrics in telemetry):
         raise ValueError("editable Hybrid Scene browser telemetry is unavailable")
     deck_id = f"deck:semantic-{presentation_id.hex}"
+    slide_ids = [f"slide:legacy-{index + 1}" for index in range(len(htmls))]
     scene = build_editable_hybrid_scene(
         presentation_id=str(presentation_id),
         revision=revision,
         slides=None,
-        slide_ids=[item.slide.slide_id for item in base.slides],
+        slide_ids=slide_ids,
         deck_id=deck_id,
         htmls=htmls,
         pngs=pngs,
@@ -1480,22 +1488,81 @@ async def _persist_master_pinned_editable_scene_deck(
         browser_metrics_by_slide=telemetry,
     )
     sealed_slides: list[ValidatedSlideSpecV2] = []
-    for item, scene_slide in zip(base.slides, scene.slides, strict=True):
-        slide_values = item.slide.model_dump(mode="json", by_alias=False)
-        slide_values["revision"] = revision
-        slide_values.pop("spec_digest", None)
-        digest_payload = item.slide.model_dump(mode="json", by_alias=True)
-        digest_payload["revision"] = revision
-        digest_payload.pop("specDigest", None)
-        slide_values["spec_digest"] = canonical_digest(digest_payload)
+    for index, (html, scene_slide) in enumerate(
+        zip(htmls, scene.slides, strict=True)
+    ):
+        projected_title, projected_body = project_authored_owned_text(html)
+        fallback = " ".join(outline.slides[index].content.split()).strip()
+        title_text = projected_title or fallback or f"Slide {index + 1}"
+        body_text = "\n".join(projected_body).strip() or fallback or title_text
+        layout = (
+            master.contract.layouts.cover
+            if index == 0
+            else master.contract.layouts.standard
+        )
+        body_slot = next(
+            (slot for slot in layout.slots if slot.role == "body"), None
+        )
+        title = ExplicitTitle(text=title_text, lines=[title_text])
+        title_fit = TitleFitResult(
+            layout_id=layout.id,
+            explicit_lines=title.lines,
+            font_family=master.contract.font_manifest.windows_fallback,
+            font_manifest_digest=resolved.pin.font_manifest_digest,
+            chosen_font_pt=master.contract.semantic_styles.title.font_pt,
+            margins=master.contract.semantic_styles.title.margins,
+            clipped=False,
+        )
+        content_digest = canonical_digest(
+            {
+                "title": title.model_dump(mode="json", by_alias=True),
+                "body": body_text,
+            }
+        )
+        slide_payload = {
+            "schemaVersion": "slidespec/v2",
+            "slideId": scene_slide.slide_id,
+            "revision": revision,
+            "layoutId": layout.id,
+            "title": title.model_dump(mode="json", by_alias=True),
+            "body": body_text,
+            "ownership": {"locked": False, "modelWritable": True},
+            "masterDigest": resolved.pin.master_digest,
+            "titleFit": title_fit.model_dump(mode="json", by_alias=True),
+            "contentDigest": content_digest,
+        }
+        slide = SlideSpecV2(
+            **slide_payload,
+            specDigest=canonical_digest(slide_payload),
+        )
+        visual_plan_digest = canonical_digest(
+            {
+                "schemaVersion": "authored-semantic-import-plan/v1",
+                "slideId": scene_slide.slide_id,
+                "sourceDigest": scene.source_digest,
+                "sceneDigest": scene_slide.slide_digest,
+                "ownedTextDigest": content_digest,
+            }
+        )
         sealed_slides.append(
             ValidatedSlideSpecV2(
-                slide=type(item.slide).model_validate(slide_values),
-                checkpoint=item.checkpoint.model_copy(
-                    update={
-                        "source_digest": scene.source_digest,
-                        "scene_digest": scene_slide.slide_digest,
-                    }
+                slide=slide,
+                checkpoint=SlideValidationCheckpoint(
+                    master_digest=resolved.pin.master_digest,
+                    layout_registry_digest=resolved.pin.layout_registry_digest,
+                    font_manifest_digest=resolved.pin.font_manifest_digest,
+                    source_digest=scene.source_digest,
+                    composition=composition,
+                    visual_plan_digest=visual_plan_digest,
+                    scene_digest=scene_slide.slide_digest,
+                    quality_policy_version="authored-semantic-browser/v1",
+                    layout_id=layout.id,
+                    body_slot_id=(
+                        body_slot.id if body_slot is not None else "slot:semantic-body"
+                    ),
+                    validated_at=datetime.now(timezone.utc)
+                    .isoformat(timespec="seconds")
+                    .replace("+00:00", "Z"),
                 ),
                 scene=scene_slide,
             )
@@ -1504,7 +1571,7 @@ async def _persist_master_pinned_editable_scene_deck(
         deck_id=deck_id,
         revision=revision,
         parent=None,
-        pin=base.master,
+        pin=resolved.pin,
         composition=composition,
         source_digest=scene.source_digest,
         slides=sealed_slides,
@@ -2187,6 +2254,16 @@ async def _generate_authored_presentation(
                     retryable=True,
                     message="Chromium telemetry is unavailable before repair preflight",
                 )
+            deterministic = containment_plans[absolute_index].candidate if absolute_index in containment_plans else _deterministic_repair_candidate(
+                html=original_html,
+                browser_metrics=metrics,
+                capacity=capacity_plan.at(absolute_index),
+                header_contract=header_contract,
+                role=roles[absolute_index],
+                profile_id=composition_profile.profile_id,
+                allow_immutable_checkpoint_geometry=(capture_policy == "hydrated"),
+            )
+            deterministic_changed = digest_html(deterministic) != digest_html(original_html)
             preflight = preflight_authored_provider_repair(
                 slide_index=absolute_index,
                 artifact=AuthoredSlideArtifact(
@@ -2207,6 +2284,7 @@ async def _generate_authored_presentation(
             )
             if (
                 preflight.terminal
+                and not deterministic_changed
                 and preflight.code != "authored_composition_safety_gate_failed"
             ):
                 LOGGER.warning(
@@ -2228,17 +2306,8 @@ async def _generate_authored_presentation(
                         + ", ".join(preflight.violations)
                     ),
                 )
-            deterministic = containment_plans[absolute_index].candidate if absolute_index in containment_plans else _deterministic_repair_candidate(
-                html=original_html,
-                browser_metrics=metrics,
-                capacity=capacity_plan.at(absolute_index),
-                header_contract=header_contract,
-                role=roles[absolute_index],
-                profile_id=composition_profile.profile_id,
-                allow_immutable_checkpoint_geometry=(capture_policy == "hydrated"),
-            )
             deterministic_gate_candidates[absolute_index] = deterministic
-            if digest_html(deterministic) != digest_html(original_html):
+            if deterministic_changed:
                 # A deterministic local candidate needs only the one bound
                 # Chromium recapture below, not a provider recovery.
                 provider_recovery_allowed[local_index] = False

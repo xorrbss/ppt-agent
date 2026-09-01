@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.generation.dual-engine-comparison",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Keep authored and Deck IR generation available together and compare matched outputs before any default-engine transition.",
+  "scope": [
+    "authored-generation",
+    "deck-ir",
+    "public-api",
+    "visual-quality"
+  ],
+  "invariants": [
+    "Authored and Deck IR remain explicit first-class generation choices.",
+    "Generate independent operations and artifacts under matched input, reference, slide-count, language, and quality conditions.",
+    "Keep strategy receipts, provider usage, timings, quality receipts, and artifact digests separate by engine.",
+    "Use the authored visual result as the authored baseline, not as Deck IR evidence.",
+    "Decide default routing or promotion only after matched A/B comparison evidence."
+  ],
+  "forbidden": [
+    "Removing authored before comparison",
+    "Changing the default engine before a separate decision",
+    "Reclassifying authored output as Deck IR",
+    "Mixing evidence between engine operations"
+  ],
+  "evidence": [
+    "User decision in task 01a05781-1697-7443-92db-f671996e27b3: both engines must work for comparison before transition"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-01T06:31:24.8368361+00:00"
+}

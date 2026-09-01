@@ -732,6 +732,7 @@ class SqlPublicV2Orchestrator:
                 visionQa=request.quality_policy == "release-v1",
                 reference_snapshot_ids=reference_ids,
                 authored_style=request.authored_style,
+                generationEngine=request.generation_engine,
             )
             # This has no provider side effect.  It must remain ahead of the
             # durable admission/reservation below so an operation is sealed as
@@ -746,7 +747,9 @@ class SqlPublicV2Orchestrator:
                 ensure_product_deck_ir_execution_adapter,
             )
 
-            ensure_product_deck_ir_execution_adapter()
+            ensure_product_deck_ir_execution_adapter(
+                explicit=request.generation_engine == "deck-ir"
+            )
             strategy_preflight = capability_preflight(
                 request=internal_request,
                 available_capabilities=(
@@ -790,6 +793,7 @@ class SqlPublicV2Orchestrator:
                         "reference_snapshot_ids": [str(value) for value in reference_ids],
                         "quality_policy": request.quality_policy,
                         "authored_style": request.authored_style,
+                        "generation_engine": request.generation_engine,
                     },
                     asset_ids=asset_ids,
                     operation_type=kind,
@@ -811,6 +815,17 @@ class SqlPublicV2Orchestrator:
                 requirement_graph_digest=str(requirement_graph["graphDigest"]),
                 requested_profile="balanced-quality-v1",
                 preflight=strategy_preflight,
+                force_strategy=(
+                    "reject"
+                    if request.generation_engine == "deck-ir"
+                    and strategy_preflight.get("missingCapabilities")
+                    else "deck-ir"
+                    if request.generation_engine == "deck-ir"
+                    else "legacy-authored"
+                    if request.generation_engine == "authored"
+                    else None
+                ),
+                requested_generation_engine=request.generation_engine,
             )
             if strategy_receipt["selectedStrategy"] == "reject":
                 raise _public_error(422, "generation_strategy_capability_missing")

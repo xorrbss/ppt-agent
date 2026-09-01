@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "key": "public-export.legacy-fidelity-quality-compatibility",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Legacy Authored decks missing V3 evidence may export Fidelity with a blocked public quality receipt; strict invalid evidence remains blocked.",
+  "scope": [
+    "public-export",
+    "fidelity",
+    "quality-receipt"
+  ],
+  "invariants": [
+    "Compatibility applies only when qualityReceiptV3 is absent and the requested mode is Fidelity.",
+    "The public QualityReceiptV3 remains releaseReadiness blocked and records missing checker evidence."
+  ],
+  "forbidden": [
+    "Do not bypass a present but blocked or digest-invalid V3 receipt.",
+    "Do not treat compatibility export as release, promotion, or deployment readiness."
+  ],
+  "evidence": [
+    "servers/fastapi/services/workspace_quality_export_operation_handlers.py",
+    "servers/fastapi/tests/unit/test_workspace_quality_export_operations.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-01T05:48:23.8774985+00:00"
+}

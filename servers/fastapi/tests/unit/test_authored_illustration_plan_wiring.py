@@ -25,6 +25,7 @@ from models.presentation_outline_model import (
 )
 from models.sql.presentation import PresentationModel
 from services import authored_deck_plans as deck_plans_mod
+from services import authored_illustration_stage as illustration_stage_mod
 from services import authored_presentation_pipeline as pipeline_mod
 from services import authored_presentation_service as authored_service
 from services.authored_deck_illustration_plan import load_illustration_plan
@@ -212,6 +213,47 @@ def test_a_deck_without_a_plan_illustrates_exactly_as_before(monkeypatch, tmp_pa
 
     assert len(service.prompts) == 3
     assert all("data:image" in html for html in result.deck.htmls)
+
+
+def test_optional_generated_image_failure_removes_slot_and_keeps_slide(monkeypatch):
+    async def fail_optional_generation(*_args, **_kwargs):
+        raise TimeoutError("optional image provider unavailable")
+
+    monkeypatch.setattr(
+        illustration_stage_mod,
+        "apply_authored_illustration",
+        fail_optional_generation,
+    )
+
+    html = _slide_html(0, slot=True)
+    finalized, checkpoint, _elapsed = _run(
+        illustration_stage_mod.illustrate_slide(
+            html=html,
+            checkpoint=None,
+            index=0,
+            style=_illustrating_style(),
+            image_service=object(),
+            slide_content="선택적 이미지가 없어도 유지할 본문",
+            illustration_allowed=True,
+            generation_job=None,
+            attempt_token=None,
+            source_images=None,
+        )
+    )
+
+    assert checkpoint is None
+    assert "<h1>slide-0</h1>" in finalized
+    assert "<img" not in finalized
+    assert "data-illust-prompt" not in finalized
+
+
+def test_explicit_slide_count_disables_chapter_expansion():
+    request = GeneratePresentationRequest(content="topic", n_slides=10)
+
+    assert deck_plans_mod._chapter_plan_applies(
+        request,
+        SimpleNamespace(reference_mode="style_reference"),
+    ) is False
 
 
 def test_the_plan_round_trips_through_the_persisted_theme(

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.generation.explicit-deck-ir-product-path",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Explicit Deck IR requests must run the sealed Deck IR path; authored publication does not permit legacy generation.",
+  "scope": [
+    "authored-generation",
+    "deck-ir",
+    "public-api",
+    "visual-quality"
+  ],
+  "invariants": [
+    "Authored may be the output driver while the verified generation strategy is deck-ir.",
+    "Explicit Deck IR requests seal deck-ir and run structured IR through compiler and browser closure.",
+    "If a required Deck IR capability is unavailable, reject instead of selecting legacy-authored.",
+    "Reference style enters Deck IR as a server-owned, digest-bound grammar or style profile.",
+    "Completion requires Deck IR evidence and the requested ten-slide visual comparison."
+  ],
+  "forbidden": [
+    "Calling authored-style-only output Deck IR",
+    "Using driver=authored as generation-engine proof",
+    "Reusing authored-only similarity as Deck IR acceptance"
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_vnext/deck_ir/strategy.py",
+    "servers/fastapi/services/public_v2_orchestrator.py",
+    "servers/fastapi/services/presentation_generation_operation_handler.py",
+    "servers/fastapi/services/authored_vnext/deck_ir/product_adapter.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-01T06:13:11.2088301+00:00"
+}

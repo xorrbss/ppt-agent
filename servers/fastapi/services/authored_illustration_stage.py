@@ -169,13 +169,23 @@ async def illustrate_slide(
                     **illustration_kwargs,
                 )
             except Exception as exc:
-                raise AuthoredStageError(
-                    slide_index=index,
-                    stage="illustrate",
-                    code="authored_slide_illustrate_failed",
-                    cause=exc,
-                    retryable=is_retryable_exception(exc),
-                ) from exc
+                if generating and not substituting:
+                    # Generated artwork is an optional enhancement. A provider
+                    # outage must not discard an otherwise valid authored
+                    # slide; remove the unresolved slot and publish the
+                    # text/diagram composition. Source-image substitution is
+                    # intentionally excluded because its validation is part of
+                    # the caller-owned source contract and must stay fail-closed.
+                    illustrated_html = strip_illustration_slots(html)
+                    skipped = True
+                else:
+                    raise AuthoredStageError(
+                        slide_index=index,
+                        stage="illustrate",
+                        code="authored_slide_illustrate_failed",
+                        cause=exc,
+                        retryable=is_retryable_exception(exc),
+                    ) from exc
             finally:
                 illustration_work = time.monotonic() - illustration_started
                 await record_local_stage(latency_ms=illustration_work * 1000)

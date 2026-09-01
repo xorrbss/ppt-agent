@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "key": "ppt.hyundai-reference-visual-benchmark",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "DevAX SI 제안서 시각 기준은 발표자료 12618ac4-134f-493c-a961-223cba97036f의 앞 10장이며, 사전 고정 지표 90점 이상을 통과해야 한다.",
+  "scope": [
+    "authored-presentation",
+    "visual-quality",
+    "devax-si"
+  ],
+  "invariants": [
+    "기준 발표자료의 문구·고객명·수치·로고는 복사하지 않는다.",
+    "약 10장 결과는 사전 고정한 시각 시스템 지표 90점 이상이어야 한다."
+  ],
+  "forbidden": [
+    "이전 템플릿 등록 원본을 이 기준 발표자료 대신 사용하지 않는다."
+  ],
+  "evidence": [
+    "output/hyundai-reference-90plus-20260901/evaluate_visual_system.py",
+    "output/hyundai-reference-90plus-20260901/candidate-montage.png",
+    "servers/fastapi/authored_styles/hyundai-culture-center.yaml"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-01T06:11:24.5663267+00:00"
+}

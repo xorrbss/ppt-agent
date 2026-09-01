@@ -44,7 +44,7 @@ def _chapter_plan_applies(request: GeneratePresentationRequest, style) -> bool:
     arrive. A selected company standard no longer changes this decision because
     Authored HTML, not the independent Scene compiler, owns the user deck body.
     """
-    if request.slides_markdown:
+    if request.slides_markdown or getattr(request, "n_slides", None) is not None:
         return False
     return _reference_mode(style) != EXACT_RECONSTRUCTION
 
