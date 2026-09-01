@@ -232,9 +232,9 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
       requestedSlideCount !== undefined &&
       (!Number.isSafeInteger(requestedSlideCount) ||
         requestedSlideCount < 1 ||
-        requestedSlideCount > 30)
+        requestedSlideCount > 100)
     ) {
-      setRequestError("public_v2_slide_count_must_be_between_1_and_30");
+      setRequestError("public_v2_slide_count_must_be_between_1_and_100");
       return;
     }
     let designPackPin: PublicV2DesignPackPin | undefined;
@@ -363,7 +363,7 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
               </label>
               <label className="block text-sm font-medium text-slate-800" htmlFor="public-v2-slide-count">
                 슬라이드 수 <span className="font-normal text-slate-500">(선택)</span>
-                <input id="public-v2-slide-count" min={1} max={30} inputMode="numeric" type="number" value={form.slideCount} onChange={(event) => setForm((value) => ({ ...value, slideCount: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100" />
+                <input id="public-v2-slide-count" min={1} max={100} inputMode="numeric" type="number" value={form.slideCount} onChange={(event) => setForm((value) => ({ ...value, slideCount: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100" />
               </label>
             </div>
             {form.generationMode === "registered-template" && <fieldset className="rounded-xl border border-slate-200 bg-slate-50 p-4"><legend className="px-1 text-sm font-semibold text-slate-800">등록 템플릿 고정 정보</legend><div className="grid gap-3 sm:grid-cols-3"><label className="text-xs font-medium text-slate-700" htmlFor="public-v2-design-pack-id">Design Pack ID<input id="public-v2-design-pack-id" required value={form.designPackId} onChange={(event) => setForm((value) => ({ ...value, designPackId: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" /></label><label className="text-xs font-medium text-slate-700" htmlFor="public-v2-design-pack-version">버전<input id="public-v2-design-pack-version" required min={1} inputMode="numeric" type="number" value={form.designPackVersion} onChange={(event) => setForm((value) => ({ ...value, designPackVersion: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" /></label><label className="text-xs font-medium text-slate-700" htmlFor="public-v2-design-pack-digest">Digest<input id="public-v2-design-pack-digest" required pattern="sha256:[0-9a-f]{64}" value={form.designPackDigest} onChange={(event) => setForm((value) => ({ ...value, designPackDigest: event.target.value }))} placeholder="sha256:…" className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm" /></label></div></fieldset>}

@@ -61,6 +61,7 @@ from services.provider_usage_instrumentation import (
     record_provider_call,
 )
 from utils.provider_idempotency import (
+    ProviderOutcomeError,
     provider_generate_call,
     supports_provider_idempotency,
 )
@@ -1091,6 +1092,7 @@ async def author_slide_html(
                     provider_id=provider,
                     kwargs=generate_kwargs,
                     idempotency_key=current_provider_idempotency_key(),
+                    outcome_scope="authored",
                 )
                 response = await loop.run_in_executor(
                     _AUTHOR_EXECUTOR,
@@ -1122,7 +1124,7 @@ async def author_slide_html(
     except Exception as error:
         # Public admission limits are durable, non-retryable control-plane
         # decisions.  Do not reclassify them as generic provider HTTP errors.
-        if isinstance(error, PublicAdmissionRejected):
+        if isinstance(error, (PublicAdmissionRejected, ProviderOutcomeError)):
             raise
         if not allow_provider_fallback or not image_parts or mode == EXACT_RECONSTRUCTION:
             raise handle_llm_client_exceptions(error)

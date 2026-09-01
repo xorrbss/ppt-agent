@@ -286,6 +286,26 @@ def _require_local_sync_generation(database_url_or_dialect: Any) -> None:
         },
     )
 
+
+def _require_local_legacy_async_generation(database_url_or_dialect: Any) -> None:
+    """Keep phase-1 async admission out of PostgreSQL/public runtimes."""
+
+    profile = resolve_workspace_runtime_profile(database_url_or_dialect)
+    if profile.kind == WorkspaceRuntimeKind.SQLITE_LOCAL:
+        return
+    raise HTTPException(
+        status_code=410,
+        detail={
+            "reasonCode": "public_v2_generation_required",
+            "replacement": "/api/v2/presentations/generations",
+        },
+        headers={
+            "Deprecation": "true",
+            "Link": '</api/v2/presentations/generations>; rel="successor-version"',
+        },
+    )
+
+
 PRESENTATION_GENERATE_ROUTER = APIRouter(
     prefix="/presentation", tags=["Presentation"]
 )
@@ -516,6 +536,24 @@ def _authored_vnext_generation_http_exception(
     )
     exception.code = code
     exception.retryable = False
+    return exception
+
+
+def _durable_generation_control_http_exception(
+    error: BaseException,
+) -> HTTPException | None:
+    """Preserve content-free control errors for the durable worker decision."""
+
+    code = getattr(error, "code", None)
+    retryable = getattr(error, "retryable", None)
+    if not isinstance(code, str) or not code or not isinstance(retryable, bool):
+        return None
+    exception = HTTPException(
+        status_code=503 if retryable else 422,
+        detail={"code": code, "retryable": retryable},
+    )
+    exception.code = code
+    exception.retryable = retryable
     return exception
 
 
@@ -1578,7 +1616,13 @@ async def generate_presentation_handler(
                 if error.status_code == 429:
                     raise
                 traceback.print_exc()
-            except Exception:
+            except Exception as error:
+                # A content brief is optional only for ordinary provider or
+                # parsing failures. Durable budget/admission decisions must
+                # retain their terminal retryability instead of falling through
+                # to outline generation and becoming a generic HTTP 500.
+                if getattr(error, "retryable", None) is False:
+                    raise
                 traceback.print_exc()
 
             # Finding number of slides to generate by considering table of contents
@@ -1834,6 +1878,12 @@ async def generate_presentation_handler(
             ).model_dump(mode="json")
         elif isinstance(e, SourceContentError):
             safe_exception = _source_content_http_exception(e)
+            api_error_payload = APIErrorModel.from_exception(
+                safe_exception, request_id=request._request_id
+            ).model_dump(mode="json")
+        elif (
+            safe_exception := _durable_generation_control_http_exception(e)
+        ) is not None:
             api_error_payload = APIErrorModel.from_exception(
                 safe_exception, request_id=request._request_id
             ).model_dump(mode="json")
@@ -2650,6 +2700,7 @@ async def queue_presentation_generation(
     "/generate/async",
     response_model=AsyncPresentationGenerationAdmissionResponse,
     status_code=202,
+    deprecated=True,
 )
 async def generate_presentation_async(
     request_http: Request,
@@ -2661,6 +2712,11 @@ async def generate_presentation_async(
     ),
     sql_session: AsyncSession = Depends(get_async_session),
 ):
+    # Public/cluster generation is admitted only through the canonical v2
+    # route, which commits a strict durable operation before returning 202.
+    # The richer v1 request remains available solely for local SQLite
+    # compatibility and must never create a phase-1 public admission row.
+    _require_local_legacy_async_generation(sql_session.get_bind())
     request._request_id = getattr(request_http.state, "request_id", None)
     try:
         queued = await queue_presentation_generation(

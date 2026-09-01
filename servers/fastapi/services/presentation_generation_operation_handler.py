@@ -39,7 +39,6 @@ from services.authored_generation_timing_receipt import (
 from services.database import async_session_maker
 from services.presentation_generation_job_service import (
     GENERATION_JOB_HEARTBEAT_SECONDS,
-    GenerationCapacityUnavailable,
     claim_workspace_linked_generation_job,
     complete_workspace_linked_generation_job,
     fail_workspace_linked_generation_job,
@@ -49,11 +48,15 @@ from services.presentation_generation_job_service import (
 from services.public_quality_receipt_v3_store import (
     PostgresOperationQualityReceiptV3Port,
 )
+from services.public_generation_worker_lifecycle import (
+    claim_linked_generation_job,
+    durable_generation_failure,
+    require_public_generation_publication,
+)
 from services.provider_usage_instrumentation import provider_operation_usage_scope
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
     RetryableWorkspaceOperationError,
-    WorkspaceOperationDeferred,
     WorkspaceOperationExecutionContext,
     WorkspaceOperationExecutionError,
     WorkspaceOperationCancelled,
@@ -720,6 +723,10 @@ class PresentationGenerationOperationHandler:
                         raise NonRetryableWorkspaceOperationError(
                             "authored_manifest_publication_failed"
                         )
+                    await require_public_generation_publication(
+                        session=session,
+                        context=context,
+                    )
                     success_receipt_payload = await _persist_terminal_attempt_timing(
                         job_id=job_id,
                         context=context,
@@ -872,6 +879,10 @@ class PresentationGenerationOperationHandler:
                 )
                 raise error_type(code)
 
+            operation_projection_row = await require_public_generation_publication(
+                session=session,
+                context=context,
+            )
             success_receipt_payload = await _persist_terminal_attempt_timing(
                 job_id=job_id,
                 context=context,
@@ -896,21 +907,7 @@ class PresentationGenerationOperationHandler:
                     "generation_timing_receipt_projection_invalid"
                 )
 
-            operation_projection = (
-                await session.execute(
-                    select(
-                        WorkspaceOperation.result_revision,
-                        WorkspaceOperation.result,
-                    ).where(
-                        WorkspaceOperation.id == context.claim.operation_id
-                    )
-                )
-            ).one_or_none()
-            result_revision = (
-                operation_projection.result_revision
-                if operation_projection is not None
-                else None
-            )
+            result_revision = operation_projection_row.result_revision
             if result_revision is None:
                 result_revision = await session.scalar(
                     select(PresentationModel.revision).where(
@@ -918,9 +915,8 @@ class PresentationGenerationOperationHandler:
                     )
                 )
             publication_result = (
-                operation_projection.result
-                if operation_projection is not None
-                and isinstance(operation_projection.result, Mapping)
+                operation_projection_row.result
+                if isinstance(operation_projection_row.result, Mapping)
                 else {}
             )
             return WorkspaceOperationResult(
@@ -948,31 +944,11 @@ class PresentationGenerationOperationHandler:
         # service Cookie through the generation stack.  Keep the compatibility
         # pipeline argument during the staged rollout, but pin it to ``None``.
         export_cookie_header = None
-        try:
-            linked_claim = await claim_workspace_linked_generation_job(
-                claim.operation_id,
-                claim.attempt_token,
-                claim.attempt_number,
-            )
-        except GenerationCapacityUnavailable as error:
-            # Capacity is a durable scheduling condition, not a failed
-            # generation attempt.  The runner returns its generic lease and
-            # requeues this operation without consuming its error budget.
-            raise WorkspaceOperationDeferred(
-                error.code,
-                retry_after_seconds=error.retry_after_seconds,
-                detail=(
-                    {"queue_position": error.queue_position}
-                    if error.queue_position is not None
-                    else None
-                ),
-            ) from error
-        if linked_claim is None:
-            raise WorkspaceOperationLeaseLost(
-                "presentation_generation_compatibility_claim_lost"
-            )
-
-        job_id, task_id = linked_claim
+        job_id, task_id = await claim_linked_generation_job(
+            session_factory=self._session_factory,
+            context=context,
+            claim_linked=claim_workspace_linked_generation_job,
+        )
         if claim.attempt_number > 1:
             async with self._session_factory() as session:
                 checkpoint_reuse_count = int(
@@ -1067,8 +1043,7 @@ class PresentationGenerationOperationHandler:
         except WorkspaceOperationLeaseLost:
             raise
         except Exception as error:
-            code = str(getattr(error, "code", "presentation_generation_failed"))
-            retryable = bool(getattr(error, "retryable", True))
+            code, retryable = durable_generation_failure(error)
             await fail_workspace_linked_generation_job(
                 job_id,
                 claim.operation_id,
