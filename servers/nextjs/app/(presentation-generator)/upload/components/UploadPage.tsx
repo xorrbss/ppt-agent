@@ -95,6 +95,7 @@ const UploadPage = ({
 
   const {
     files,
+    filesRef,
     replaceFiles,
     isDragOver,
     handleCardDragOver,
@@ -128,6 +129,7 @@ const UploadPage = ({
     sourceContentReady,
   } = useUploadPageState({
     files,
+    filesRef,
     selectedThemeId,
     masterFeatureEnabled,
     onMasterRequired: () => {

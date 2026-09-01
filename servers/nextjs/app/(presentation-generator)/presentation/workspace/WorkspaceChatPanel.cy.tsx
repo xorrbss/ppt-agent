@@ -736,7 +736,7 @@ describe("WorkspaceChatPanel", () => {
       .and("not.contain.text", "provider credential");
   });
 
-  it("keeps the durable first user message, attachments, and safe generation settings visible", () => {
+  it("labels the durable bootstrap as an initial generation request and keeps its inputs visible", () => {
     installWorkspaceApi({
       items: [firstUserMessage, operation()],
       event_high_watermark: "cursor-2",
@@ -747,9 +747,10 @@ describe("WorkspaceChatPanel", () => {
     cy.mount(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
     cy.wait("@timeline");
 
-    cy.get('[aria-label="사용자 메시지"]')
+    cy.get('[aria-label="초기 생성 요청"]')
       .contains(firstUserMessage.content)
       .should("be.visible");
+    cy.contains("실제 생성에는 아래 설정이 적용됩니다.").should("be.visible");
     cy.get('[aria-label="첨부 파일"]').within(() => {
       cy.contains("현황 분석.pdf").should("be.visible");
       cy.contains("준비됨").should("be.visible");

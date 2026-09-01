@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "key": "presentation.generation-submission-integrity",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "UI slide count is authoritative; label bootstrap separately from user chat and never drop an accepted attachment on immediate submit.",
+  "scope": [
+    "presentation-generation",
+    "workspace-timeline",
+    "attachments"
+  ],
+  "invariants": [
+    "Accepted attachments are read from the synchronous submission snapshot.",
+    "Bootstrap creation requests are visibly distinct from later user chat."
+  ],
+  "forbidden": [
+    "Falling back to prompt-only generation after a file has been accepted."
+  ],
+  "evidence": [
+    "servers/nextjs/app/(presentation-generator)/upload/components/upload-page/useSupportingFiles.ts",
+    "servers/nextjs/app/(presentation-generator)/upload/components/upload-page/useUploadPageState.ts",
+    "servers/nextjs/app/(presentation-generator)/presentation/workspace/WorkspaceMessage.tsx"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-01T02:18:32.4495587+00:00"
+}
