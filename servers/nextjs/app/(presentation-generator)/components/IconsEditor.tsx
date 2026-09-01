@@ -16,7 +16,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
-import { Search, ChevronRight, Info } from "lucide-react";
+import { Search, Replace, Info } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -459,15 +459,13 @@ const IconsEditor = ({
                   e.stopPropagation();
                   handleReplaceIcons();
                 }}
-                style={{
-                  background:
-                    "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
-                }}
+                variant="toolbar"
+                size="toolbar"
                 disabled={!selectedIconUrl && !currentIconUrl}
-                className="h-10 rounded-full  px-4 text-sm font-semibold text-[#101323] shadow-none hover:bg-[#F2DDAA] disabled:cursor-not-allowed disabled:opacity-50"
+                className="h-10 disabled:cursor-not-allowed"
               >
+                <Replace className="h-4 w-4" aria-hidden="true" />
                 {t("replace")}
-                <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
           </div>

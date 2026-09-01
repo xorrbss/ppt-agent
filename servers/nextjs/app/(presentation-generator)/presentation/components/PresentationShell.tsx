@@ -60,7 +60,7 @@ export default function PresentationShell({
         <div
           id="presentation-slides-wrapper"
           style={{ background }}
-          className="relative flex h-full w-full min-w-0 max-w-full flex-col overflow-clip"
+          className="devax-presentation-canvas relative flex h-full w-full min-w-0 max-w-full flex-col overflow-clip"
         >
           {children}
         </div>

@@ -1,13 +1,15 @@
 'use client'
 
 import React, { useState, useEffect, useRef } from 'react'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import {
   Loader2,
   SquarePen,
   RefreshCcw,
   ChevronRight,
+  Palette,
+  Save,
   Plus
 } from 'lucide-react'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
@@ -989,42 +991,33 @@ const ThemePanel: React.FC = () => {
             pathname,
             source: "theme_page_header",
           })}
-          className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-black text-sm font-semibold font-syne shadow-sm hover:shadow-md"
+          className={buttonVariants({ variant: "toolbar", size: "toolbar", className: "font-syne" })}
           aria-label="새 테마 만들기"
-          style={{
-            borderRadius: "48px",
-            background: "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
-          }}
         >
-
+          <Plus className="h-4 w-4" aria-hidden="true" />
           <span className="hidden md:inline">새 테마</span>
           <span className="md:hidden">새 테마</span>
-          <ChevronRight className="w-4 h-4" />
         </Link>
       </div>
       {/* Tabs */}
       <div className='p-1 rounded-[40px] bg-[#F7F6F9] w-fit border border-[#F4F4F4] flex items-center justify-center '>
-        <button className='px-5  py-2 text-xs font-medium text-[#3A3A3A] rounded-[70px]'
+        <button className={`inline-flex items-center gap-2 rounded-full border bg-white px-5 py-2 text-xs font-medium text-[#101323] ${tab === 'custom' ? 'border-[#CFC9E8] shadow-sm' : 'border-transparent'}`}
+          aria-pressed={tab === 'custom'}
           onClick={() => {
             trackEvent(MixpanelEvent.Theme_Tab_Switched, { pathname, tab: 'custom' })
             setTab('custom')
           }}
-          style={{
-            background: tab === 'custom' ? 'linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)' : 'transparent'
-          }}
-        >커스텀</button>
+        ><SquarePen className="h-4 w-4" aria-hidden="true" />커스텀</button>
         <svg xmlns="http://www.w3.org/2000/svg" className='mx-1' width="2" height="17" viewBox="0 0 2 17" fill="none">
           <path d="M1 0V16.5" stroke="#EDECEC" strokeWidth="2" />
         </svg>
-        <button className='px-5  py-2 text-xs font-medium text-[#3A3A3A] rounded-[70px]'
+        <button className={`inline-flex items-center gap-2 rounded-full border bg-white px-5 py-2 text-xs font-medium text-[#101323] ${tab === 'default' ? 'border-[#CFC9E8] shadow-sm' : 'border-transparent'}`}
+          aria-pressed={tab === 'default'}
           onClick={() => {
             trackEvent(MixpanelEvent.Theme_Tab_Switched, { pathname, tab: 'default' })
             setTab('default')
           }}
-          style={{
-            background: tab === 'default' ? 'linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)' : 'transparent'
-          }}
-        >기본 제공</button>
+        ><Palette className="h-4 w-4" aria-hidden="true" />기본 제공</button>
       </div>
       {/* Built-in Themes */}
 
@@ -1098,7 +1091,7 @@ const ThemePanel: React.FC = () => {
                         onClick={() => setCurrentStep(currentStep - 1)}
                       >뒤로</button>}
 
-                      <button className='px-7 py-2.5 flex items-center gap-1 rounded-[48px] text-xs font-semibold text-[#101323] '
+                      <button className={buttonVariants({ variant: "toolbar", size: "toolbar", className: "px-5" })}
 
                         onClick={() => {
                           if (currentStep === 4) {
@@ -1118,12 +1111,9 @@ const ThemePanel: React.FC = () => {
                             setCurrentStep(currentStep + 1)
                           }
                         }}
-                        style={{
-                          background: 'linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)'
-                        }}
                       >
+                        {currentStep === 4 ? <Save className="h-4 w-4" aria-hidden="true" /> : <ChevronRight className="h-4 w-4" aria-hidden="true" />}
                         {currentStep === 1 ? '테마 팔레트 생성' : currentStep === 2 ? '폰트로 계속' : currentStep === 3 ? '디자인으로 계속' : '커스텀 테마로 저장'}
-                        <ChevronRight className='w-4 h-4' />
                       </button>
                     </div>
                   </div>

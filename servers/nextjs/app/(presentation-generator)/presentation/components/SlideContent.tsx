@@ -10,6 +10,7 @@ import { SendHorizontal } from "lucide-react";
 import { notify } from "@/components/ui/sonner";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import ToolTip from "@/components/ToolTip";
+import { buttonVariants } from "@/components/ui/button";
 import { RootState } from "@/store/store";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -228,14 +229,10 @@ const SlideContent = ({
                     <button
                       disabled={isUpdating}
                       type="submit"
-                      className={`ml-auto flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#9034EA] to-[#5146E5] px-4 py-2 text-sm font-medium text-white transition-opacity ${
-                        isUpdating
-                          ? "cursor-not-allowed opacity-70"
-                          : "hover:opacity-90"
-                      }`}
+                      className={buttonVariants({ variant: "toolbar", size: "toolbar", className: "ml-auto disabled:cursor-not-allowed" })}
                     >
+                      <SendHorizontal className="h-4 w-4" aria-hidden="true" />
                       {isUpdating ? "수정 중..." : "수정"}
-                      <SendHorizontal className="h-4 w-4" />
                     </button>
                   </form>
                 </PopoverContent>
@@ -249,15 +246,7 @@ const SlideContent = ({
                     <button
                       type="button"
                       aria-label={slide?.speaker_note ? "발표자 노트 편집" : "발표자 노트 추가"}
-                      style={{
-                        background:
-                          "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
-                      }}
-                      className={`flex px-4 py-2.5 items-center justify-center rounded-full border font-syne focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6D28D9] ${
-                        slide?.speaker_note
-                          ? "border-violet-200 bg-violet-50 text-violet-700"
-                          : "border-gray-200 bg-white text-gray-600"
-                      }`}
+                      className={buttonVariants({ variant: "toolbar", size: "toolbar", className: slide?.speaker_note ? "border-violet-300 font-syne" : "font-syne" })}
                     >
                       <ToolTip content={slide?.speaker_note ? "발표자 노트 편집" : "발표자 노트 추가"}>
                         <svg

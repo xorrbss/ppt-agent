@@ -14,7 +14,7 @@ import {
 } from "@/store/slices/presentationGeneration";
 import { clearHistory } from "@/store/slices/undoRedoSlice";
 import type { PresentationExportQualityReport } from "@/lib/presentation-export-quality";
-import GenerationInfoDialog from "./GenerationInfoDialog";
+import NewSlideButton from "./header/NewSlideButton";
 import { cn } from "@/lib/utils";
 import { KeyboardShortcutsDialog } from "./KeyboardShortcutsDialog";
 import AuthoredHeaderActions from "./header/AuthoredHeaderActions";
@@ -360,7 +360,7 @@ const PresentationHeader = ({
 
   return (
     <>
-      <div className="sticky top-0 z-50 flex w-full min-w-0 items-center justify-between gap-2 bg-white px-3 py-[18px] font-syne shadow-sm sm:gap-4 sm:px-4">
+      <div className="devax-editor-header sticky top-0 z-50 flex min-h-14 w-full min-w-0 items-center justify-between gap-2 border-b border-[#EBEBEC] bg-white px-3 py-2 font-syne shadow-none sm:gap-4 sm:px-4">
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <DashboardNavigationButton onNavigate={() => router.push("/dashboard")} />
           {mutationsEnabled &&
@@ -430,10 +430,7 @@ const PresentationHeader = ({
           />
 
           {presentationData && (
-            <GenerationInfoDialog
-              presentationId={presentation_id}
-              disabled={isStreaming === true}
-            />
+            <NewSlideButton disabled={isStreaming === true} />
           )}
 
           {resolvedHeaderFeatures.exportActions && (

@@ -3,10 +3,10 @@
 import Wrapper from "@/components/Wrapper";
 import React from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { ArrowLeft } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 const PATHS_WITH_HEADER_BACK = [
   "/upload",
@@ -20,6 +20,7 @@ function pathMatches(pathname: string | null, base: string) {
 }
 
 const Header = () => {
+  const t = useTranslations("slideWorkspace");
   const pathname = usePathname();
   const showHeaderBack = PATHS_WITH_HEADER_BACK.some((p) => pathMatches(pathname, p));
 
@@ -35,30 +36,19 @@ const Header = () => {
       : "뒤로";
 
   return (
-    <div className="w-full   sticky top-0 z-50 py-7 "
-      style={{
-        background: "linear-gradient(180deg, #FFF 0%, rgba(255, 255, 255, 0.00) 110.67%)",
-
-      }}
-    >
-      <Wrapper className="px-5 sm:px-10 lg:px-20">
-        <div className="flex items-center justify-between py-1">
-          <div className="flex items-center gap-3">
-            <Link href="/dashboard" onClick={() => trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/dashboard" })}>
-              <Image
-                src="/logo-with-bg.png"
-                alt="발표자료 로고"
-                width={40}
-                height={40}
-                className="h-[40px] w-[40px]"
-              />
-            </Link>
+    <div className="sticky top-0 z-50 w-full border-b border-[#EBEBEC] bg-white/90 backdrop-blur">
+      <Wrapper className="px-4 sm:px-6 lg:px-8">
+        <div className="flex h-14 items-center justify-between">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-[#27251E]">
+              {pathMatches(pathname, "/upload") ? t("newSlide") : t("workspace")}
+            </p>
           </div>
           <div className="flex items-center">
             {showHeaderBack ? (
               <Link
                 href={backHref}
-                className="text-[#333333] text-xs font-syne font-semibold flex items-center gap-2"
+                className="flex h-9 items-center gap-2 rounded-md border border-[#EBEBEC] bg-white px-3 text-xs font-medium text-[#27251E] transition hover:bg-[#F3F4F6]"
                 onClick={() =>
                   trackEvent(MixpanelEvent.Navigation, { from: pathname, to: backHref })
                 }

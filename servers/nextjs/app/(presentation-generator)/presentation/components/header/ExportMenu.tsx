@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRightFromLine, ArrowUpRight } from "lucide-react";
+import { Download, ArrowUpRight } from "lucide-react";
 import { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
@@ -77,9 +77,9 @@ const ExportMenu = ({
   );
 
   return <Popover open={open} onOpenChange={setOpen}>
-    <PopoverTrigger asChild><button ref={exportTriggerRef} type="button" className="flex h-[38px] items-center gap-[7px] rounded-full px-[18px] text-sm font-semibold text-[#101323] disabled:opacity-50" style={{ background: "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)" }} disabled={exportDisabled} data-testid="export-trigger" aria-label={workspaceCommandsEnabled ? t("triggerAria") : t("triggerDisabledAria")}>
-      {t("trigger")} <ArrowRightFromLine className="h-3.5 w-3.5" />
-    </button></PopoverTrigger>
+    <PopoverTrigger asChild><Button ref={exportTriggerRef} type="button" variant="toolbar" size="toolbar" disabled={exportDisabled} data-testid="export-trigger" aria-label={workspaceCommandsEnabled ? t("triggerAria") : t("triggerDisabledAria")}>
+      <Download className="h-4 w-4" aria-hidden="true" /> {t("trigger")}
+    </Button></PopoverTrigger>
     <PopoverContent align="end" className="w-[min(22rem,calc(100vw-2rem))] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-[18px] space-y-2 p-0"><ExportOptions mobile={false} /></PopoverContent>
   </Popover>;
 };

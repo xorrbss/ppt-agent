@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Eye,
   Heart,
+  Plus,
   Search,
 } from "lucide-react";
 
@@ -21,6 +22,7 @@ import {
 } from "@/app/(presentation-generator)/services/api/community";
 import CommunityPresentationFilters from "@/app/(presentation-generator)/upload/components/CommunityPresentationFilters";
 import { notify } from "@/components/ui/sonner";
+import { buttonVariants } from "@/components/ui/button";
 import CommunityDesignPreviewDialog from "./CommunityDesignPreviewDialog";
 
 const PAGE_SIZE = 20;
@@ -120,10 +122,10 @@ export default function CommunityPage() {
         </h1>
         <Link
           href="/upload"
-          className="inline-flex h-10 items-center gap-2 rounded-full bg-[linear-gradient(270deg,#D5CAFC_2.4%,#E3D2EB_27.88%,#F4DCD3_69.23%,#FDE4C2_100%)] px-4 font-syne text-sm font-medium text-[#191919] shadow-sm transition hover:shadow-md"
+          className={buttonVariants({ variant: "toolbar", size: "toolbar", className: "h-10 font-syne" })}
         >
+          <Plus className="h-4 w-4" aria-hidden="true" />
           {t("newPresentation")}
-          <ChevronRight className="h-4 w-4" />
         </Link>
       </header>
 

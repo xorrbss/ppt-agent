@@ -1,5 +1,6 @@
 import React from "react";
-import { Loader2, ChevronRight } from "lucide-react";
+import { Loader2, Save } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { ButtonState } from "./types";
 
 interface SaveConfigButtonProps {
@@ -9,29 +10,22 @@ interface SaveConfigButtonProps {
 
 const SaveConfigButton = ({ buttonState, onSave }: SaveConfigButtonProps) => (
   <div className=" mx-auto fixed bottom-20 right-5 ">
-    <button
+    <Button
       onClick={onSave}
       disabled={buttonState.isDisabled}
-      style={{
-        background:
-          "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
-        color: "#101323",
-      }}
-      className={`w-full font-syne font-semibold flex items-center justify-center gap-2 py-3 px-5 rounded-[58px] transition-all duration-500 ${buttonState.isDisabled
-        ? "bg-gray-400 cursor-not-allowed"
-        : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:ring-4 focus:ring-blue-200"
-        } text-white`}
+      variant="toolbar"
+      size="toolbar"
+      className="h-11 w-full px-5 font-syne disabled:cursor-not-allowed"
     >
       {buttonState.isLoading ? (
         <div className="flex items-center justify-center gap-2">
-          <Loader2 className="w-4 h-4 animate-spin" />
+          <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
           {buttonState.text}
         </div>
       ) : (
-        buttonState.text
+        <><Save className="h-4 w-4" aria-hidden="true" />{buttonState.text}</>
       )}
-      <ChevronRight className="w-4 h-4" />
-    </button>
+    </Button>
   </div>
 );
 

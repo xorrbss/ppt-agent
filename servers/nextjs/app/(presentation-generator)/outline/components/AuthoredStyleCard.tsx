@@ -336,10 +336,10 @@ const AuthoredStyleCard = memo(function AuthoredStyleCard({
     <Card
       data-testid={`authored-style-card-${style.id}`}
       className={cn(
-        "relative min-w-0 overflow-hidden rounded-[22px] border bg-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
+        "relative min-w-0 overflow-hidden rounded-xl border bg-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm",
         isSelected
-          ? "border-[#5141E5] ring-2 ring-[#5141E5]/25 shadow-sm"
-          : "border-[#E8E9EC]"
+          ? "border-[#6194F4] ring-2 ring-[#6194F4]/20 shadow-sm"
+          : "border-[#EBEBEC]"
       )}
     >
       <button
@@ -355,7 +355,7 @@ const AuthoredStyleCard = memo(function AuthoredStyleCard({
         onKeyDown={handleAuthoredRadioKeyDown}
       >
         <AuthoredStylePreview style={style} />
-        <div className="min-w-0 border-t border-[#EDEEEF] bg-white px-5 py-4">
+        <div className="min-w-0 border-t border-[#EBEBEC] bg-white px-4 py-3">
           <div className="flex min-w-0 items-start justify-between gap-3">
             <div className="min-w-0">
               <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#6B6D76]">
@@ -371,7 +371,7 @@ const AuthoredStyleCard = memo(function AuthoredStyleCard({
             {isSelected && (
               <span
                 aria-hidden="true"
-                className="flex shrink-0 items-center gap-1 rounded-full bg-[#EEECFF] px-2 py-1 text-[11px] font-semibold text-[#4033B8]"
+                className="flex shrink-0 items-center gap-1 rounded-md bg-[#F5F9FE] px-2 py-1 text-[11px] font-semibold text-[#366FCF]"
               >
                 <Check className="h-3 w-3" aria-hidden="true" />
                 선택됨

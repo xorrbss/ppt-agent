@@ -2,6 +2,120 @@
 @tailwind components;
 @tailwind utilities;
 
+/* DevAX slide UI reference tokens. Scope stays on application chrome so deck
+   content and export typography keep their own contracts. */
+@font-face {
+  font-family: "DevaxPretendard";
+  src: url("/devax-slide-ui/fonts/Pretendard-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "DevaxPretendard";
+  src: url("/devax-slide-ui/fonts/Pretendard-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "DevaxPretendard";
+  src: url("/devax-slide-ui/fonts/Pretendard-SemiBold.woff2") format("woff2");
+  font-weight: 600 900;
+  font-style: normal;
+  font-display: swap;
+}
+.devax-workspace {
+  --devax-ink: #27251e;
+  --devax-muted: #6b6b73;
+  --devax-line: #ebebec;
+  --devax-panel: #f9fafb;
+  --devax-hover: #eeeff1;
+  --devax-primary: #6194f4;
+  display: flex;
+  min-height: 100dvh;
+  min-width: 0;
+  background: white;
+  color: var(--devax-ink);
+}
+
+.devax-workspace--editor { height: 100dvh; overflow: hidden; }
+.devax-workspace__main { min-width: 0; width: 100%; }
+.devax-workspace--editor .devax-workspace__main { height: 100%; }
+.devax-sidebar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  width: 240px;
+  height: 100dvh;
+  flex: 0 0 240px;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--devax-line);
+  background: var(--devax-panel);
+  transition: width .18s ease, flex-basis .18s ease;
+}
+.devax-sidebar.is-collapsed { width: 56px; flex-basis: 56px; }
+.devax-sidebar__top { display: flex; height: 52px; flex: 0 0 52px; align-items: center; justify-content: space-between; padding: 6px 10px; }
+.devax-sidebar__brand { display: flex; height: 38px; align-items: center; overflow: hidden; border-radius: 10px; }
+.devax-sidebar__brand img { width: 92px; height: 28px; object-fit: contain; }
+.devax-sidebar__mark { display: none; }
+.devax-sidebar__collapse { display: grid; width: 30px; height: 30px; flex: 0 0 30px; place-items: center; border-radius: 8px; }
+.devax-sidebar__collapse:hover, .devax-sidebar__nav-item:hover, .devax-sidebar__history:hover { background: var(--devax-hover); }
+.devax-sidebar__workspace { display: flex; height: 42px; margin: 4px 10px 10px; align-items: center; gap: 9px; padding: 5px 8px; border-radius: 8px; background: white; font-size: 12px; font-weight: 500; }
+.devax-sidebar__avatar { display: grid; width: 28px; height: 28px; flex: 0 0 28px; place-items: center; border-radius: 8px; background: #f3f4f6; }
+.devax-sidebar__nav { display: grid; gap: 4px; padding: 0 10px; }
+.devax-sidebar__nav-item, .devax-sidebar__history { display: flex; min-height: 38px; align-items: center; gap: 11px; overflow: hidden; border-radius: 7px; padding: 8px; color: var(--devax-ink); font-size: 13px; transition: background .12s ease; }
+.devax-sidebar__nav-item img, .devax-sidebar__history img { flex: 0 0 auto; }
+.devax-sidebar__nav-item.is-active { background: var(--devax-hover); color: #2f68c8; font-weight: 500; }
+.devax-sidebar__section { display: flex; min-height: 0; flex: 1; flex-direction: column; overflow: hidden; padding: 24px 10px 10px; }
+.devax-sidebar__section-label { padding: 0 8px 8px; color: #9b9ba1; font-size: 11px; font-weight: 500; }
+.devax-sidebar__recent-heading { display: flex; flex-shrink: 0; align-items: center; gap: 4px; }
+.devax-sidebar__recent-heading .devax-sidebar__history { min-width: 0; flex: 1; }
+.devax-sidebar__refresh { display: grid; width: 28px; height: 28px; flex: 0 0 28px; place-items: center; border: 1px solid var(--devax-line); border-radius: 50%; background: white; color: var(--devax-muted); }
+.devax-sidebar__refresh:hover { background: var(--devax-hover); }
+.devax-sidebar__refresh:disabled { cursor: wait; opacity: .5; }
+.devax-sidebar__recent-content { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.devax-sidebar__list-message { padding: 12px 8px; color: var(--devax-muted); font-size: 12px; line-height: 1.6; }
+.devax-sidebar__deck-list { display: grid; gap: 4px; margin: 6px 0; padding: 0; list-style: none; }
+.devax-sidebar__deck { display: flex; min-width: 0; flex-direction: column; gap: 5px; border-radius: 8px; padding: 9px 10px; color: var(--devax-ink); }
+.devax-sidebar__deck:hover { background: var(--devax-hover); }
+.devax-sidebar__deck.is-active { background: #eaf1fe; box-shadow: inset 2px 0 0 var(--devax-primary); }
+.devax-sidebar__deck.is-unavailable { opacity: .65; }
+.devax-sidebar__deck-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 500; }
+.devax-sidebar__deck-meta { display: flex; flex-wrap: wrap; column-gap: 8px; row-gap: 2px; color: var(--devax-muted); font-size: 10px; line-height: 1.5; }
+.devax-sidebar__view-all { flex-shrink: 0; padding: 10px 8px 2px; color: #366fcf; font-size: 11px; }
+.devax-sidebar__view-all:hover { text-decoration: underline; }
+.devax-sidebar.is-collapsed :is(.devax-sidebar__recent-content, .devax-sidebar__refresh, .devax-sidebar__view-all) { display: none; }
+.devax-sidebar__footer { border-top: 1px solid var(--devax-line); padding: 10px; }
+.devax-sidebar.is-collapsed .devax-sidebar__brand { display: none; }
+.devax-sidebar.is-collapsed .devax-sidebar__label, .devax-sidebar.is-collapsed .devax-sidebar__section-label { display: none; }
+.devax-sidebar.is-collapsed .devax-sidebar__workspace { margin-inline: 8px; padding-inline: 6px; }
+.devax-sidebar.is-collapsed .devax-sidebar__top { justify-content: center; padding-inline: 8px; }
+.devax-sidebar.is-collapsed .devax-sidebar__nav, .devax-sidebar.is-collapsed .devax-sidebar__section, .devax-sidebar.is-collapsed .devax-sidebar__footer { padding-inline: 8px; }
+.devax-sidebar.is-collapsed .devax-sidebar__nav-item, .devax-sidebar.is-collapsed .devax-sidebar__history { justify-content: center; padding-inline: 8px; }
+.devax-upload, .devax-upload :is(.font-syne, .font-inter), .devax-sidebar, .devax-editor-header { font-family: "DevaxPretendard", system-ui, sans-serif; }
+.devax-workspace .devax-presentation-canvas { background: #f3f4f6 !important; }
+.devax-gallery-tabs { height: auto; gap: 20px; padding: 0; border-radius: 0; background: transparent; }
+.devax-gallery-tabs [role="tab"] { border-radius: 0; border-bottom: 2px solid transparent; padding: 12px 0; color: #6b6b73; font-size: 16px; box-shadow: none; }
+.devax-gallery-tabs [role="tab"][data-state="active"] { border-bottom-color: #27251e; background: transparent; color: #27251e; box-shadow: none; }
+.devax-recent-gallery > .grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); }
+.devax-upload [data-testid="compose-card"]:focus-within { border-color: #6194f4; }
+.devax-sidebar :is(a, button):focus-visible { outline: 2px solid #6194f4; outline-offset: 2px; }
+
+@media (max-width: 1023px) {
+  .devax-sidebar { width: 56px; flex-basis: 56px; }
+  .devax-sidebar__brand, .devax-sidebar__label, .devax-sidebar__section-label { display: none; }
+  .devax-sidebar__collapse { display: none; }
+  .devax-sidebar__recent-content, .devax-sidebar__refresh, .devax-sidebar__view-all { display: none; }
+  .devax-sidebar__mark { display: flex; }
+  .devax-sidebar__workspace { margin-inline: 8px; padding-inline: 6px; }
+  .devax-sidebar__top { justify-content: center; }
+  .devax-sidebar__nav, .devax-sidebar__section, .devax-sidebar__footer { padding-inline: 8px; }
+  .devax-sidebar__nav-item, .devax-sidebar__history { justify-content: center; padding-inline: 8px; }
+}
+
 
 body {
   font-family: var(--font-syne), var(--font-unbounded), var(--font-inter), sans-serif;
