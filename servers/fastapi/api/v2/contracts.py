@@ -25,6 +25,7 @@ from pydantic import (
 from pydantic.alias_generators import to_camel
 
 from models.generate_presentation_request import (
+    AuthoredMasterPinInput,
     SourceContentManifestPinInput,
     SourceContentPolicy,
 )
@@ -123,6 +124,7 @@ class PresentationGenerationRequestV2(PublicWireModel):
     slide_count: int | None = Field(default=None, ge=1, le=100)
     language: str | None = Field(default=None, min_length=1, max_length=64)
     authored_style: str | None = Field(default=None, min_length=1, max_length=160)
+    master_pin: AuthoredMasterPinInput | None = None
     reference_snapshot_ids: list[str] = Field(default_factory=list, max_length=16)
     source_mode: Literal["source_content_restyle"] | None = None
     source_content_manifest_pin: SourceContentManifestPinInput | None = None

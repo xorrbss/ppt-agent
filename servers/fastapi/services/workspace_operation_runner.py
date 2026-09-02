@@ -1247,6 +1247,81 @@ async def _terminalize_queued_public_deadline(
     )
 
 
+_PHASE2_ADMISSION_INVALID = "public_phase2_admission_invalid"
+
+
+def _has_invalid_public_v2_admission(
+    operation: WorkspaceOperation,
+    admission: PublicOperationAdmission | None,
+) -> bool:
+    """A v2-contract operation bound to an incomplete admission row.
+
+    Such a row can never be activated under the strict authority, so raising
+    for it on every sweep would pin the queue head (claim) or abort the whole
+    recovery pass.  The caller terminalizes it instead.
+    """
+
+    return (
+        admission is not None
+        and _is_public_v2_workspace_operation(operation)
+        and not _is_public_v2_admission(admission)
+    )
+
+
+def _phase2_admission_invalid_projection(*, now: datetime) -> dict[str, Any]:
+    return {
+        "state": "failed",
+        "attempt_token": None,
+        "lease_expires_at": None,
+        "heartbeat_at": now,
+        "next_attempt_at": None,
+        "backoff_seconds": 0,
+        "error_code": _PHASE2_ADMISSION_INVALID,
+        "error_detail": {
+            "error_code": _PHASE2_ADMISSION_INVALID,
+            "retryable": False,
+        },
+        "completed_at": now,
+    }
+
+
+async def _terminalize_queued_invalid_public_admission(
+    session: AsyncSession,
+    operation: WorkspaceOperation,
+    admission: PublicOperationAdmission,
+    *,
+    now: datetime,
+) -> bool:
+    """Fail a queued v2 operation whose admission row cannot authorize work."""
+
+    event = await append_operation_event(
+        session,
+        operation_id=operation.id,
+        event_type="operation.error",
+        payload={
+            "state": "failed",
+            "error_code": _PHASE2_ADMISSION_INVALID,
+            "retryable": False,
+        },
+        operation_kind=operation.kind,
+        fencing_token=operation.fencing_token,
+        public_admission_fence=int(admission.fence),
+        allowed_states=("queued",),
+        expected_version=operation.version,
+        projection_values=_phase2_admission_invalid_projection(now=now),
+        allow_invalid_public_admission=True,
+    )
+    if event is None:
+        return False
+    return await _project_linked_generation_terminal(
+        session,
+        operation,
+        state="failed",
+        error_code=_PHASE2_ADMISSION_INVALID,
+        resume_allowed=False,
+    )
+
+
 async def append_operation_event(
     session: AsyncSession,
     *,
@@ -1264,6 +1339,7 @@ async def append_operation_event(
     expected_version: int | None = None,
     additional_conditions: Sequence[Any] = (),
     enqueue_notification: bool = True,
+    allow_invalid_public_admission: bool = False,
 ) -> WorkspaceOperationEvent | None:
     """CAS a projection and reserve/insert its event in one transaction.
 
@@ -1371,7 +1447,13 @@ async def append_operation_event(
             and _is_public_v2_workspace_operation(operation)
             and (
                 admission is None
-                or not _is_public_v2_admission(admission)
+                or (
+                    not _is_public_v2_admission(admission)
+                    # Only the explicit invalid-admission terminalization may
+                    # fail such a row; its phase-1 admission is finished below
+                    # through the compatible (non-fenced) path.
+                    and not allow_invalid_public_admission
+                )
             )
         ):
             raise PublicAdmissionRejected("public_phase2_admission_invalid")
@@ -1646,11 +1728,17 @@ async def claim_next_workspace_operation(
                 next_fencing_token = proposed_fence
                 workspace_lease_expires_at = proposed_lease_expires_at
                 break
-            if (
-                _is_public_v2_workspace_operation(queued_candidate)
-                and not _is_public_v2_admission(admission)
-            ):
-                raise PublicAdmissionRejected("public_phase2_admission_invalid")
+            if _has_invalid_public_v2_admission(queued_candidate, admission):
+                if not await _terminalize_queued_invalid_public_admission(
+                    session,
+                    queued_candidate,
+                    admission,
+                    now=now,
+                ):
+                    await session.rollback()
+                    continue
+                await session.commit()
+                continue
             if _public_phase1_partial_deadline_expired(
                 queued_candidate,
                 admission,
@@ -3524,13 +3612,14 @@ async def recover_expired_workspace_operations(
                     now=now,
                 )
             )
+            invalid_public_admission = bool(
+                operation_authority is not None
+                and _has_invalid_public_v2_admission(operation_authority, admission)
+            )
             if (
                 operation_authority is not None
                 and _is_public_v2_workspace_operation(operation_authority)
-                and (
-                    admission is None
-                    or not _is_public_v2_admission(admission)
-                )
+                and admission is None
             ):
                 raise PublicAdmissionRejected("public_phase2_admission_invalid")
             if public_v2:
@@ -3637,6 +3726,16 @@ async def recover_expired_workspace_operations(
                     "cancelled_at": now,
                     "completed_at": now,
                 }
+                observed_retry_count = stale["retry_count"]
+            elif invalid_public_admission:
+                next_state = "failed"
+                event_type = "operation.error"
+                payload = {
+                    "state": next_state,
+                    "error_code": _PHASE2_ADMISSION_INVALID,
+                    "retryable": False,
+                }
+                projection = _phase2_admission_invalid_projection(now=now)
                 observed_retry_count = stale["retry_count"]
             elif public_v2 and (
                 recovery_budget_error := _public_retry_budget_error(admission)
@@ -3758,6 +3857,8 @@ async def recover_expired_workspace_operations(
             recovery_error_code = (
                 None
                 if next_state in {"cancelled", "succeeded"}
+                else _PHASE2_ADMISSION_INVALID
+                if invalid_public_admission
                 else str(payload["error_code"])
                 if payload.get("error_code") in _PUBLIC_BUDGET_ERROR_CODES
                 else "public_deadline_exceeded"
@@ -3842,6 +3943,8 @@ async def recover_expired_workspace_operations(
                             "reason_code": (
                                 "deadline_exceeded"
                                 if next_state == "deadline_exceeded"
+                                else _PHASE2_ADMISSION_INVALID
+                                if invalid_public_admission
                                 else "worker_crash"
                             ),
                         }
@@ -3862,6 +3965,7 @@ async def recover_expired_workspace_operations(
                 fencing_token=event_fencing_token,
                 public_admission_fence=stale["fencing_token"],
                 public_admission_attempt=stale["attempt_number"],
+                allow_invalid_public_admission=invalid_public_admission,
             )
             if event is None:
                 await session.rollback()
@@ -3873,7 +3977,10 @@ async def recover_expired_workspace_operations(
                     operation,
                     state=next_state,
                     error_code=recovery_error_code,
-                    resume_allowed=next_state != "deadline_exceeded",
+                    resume_allowed=(
+                        next_state != "deadline_exceeded"
+                        and not invalid_public_admission
+                    ),
                 ):
                     await session.rollback()
                     continue

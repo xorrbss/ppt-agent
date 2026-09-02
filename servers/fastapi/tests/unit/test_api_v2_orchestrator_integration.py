@@ -54,6 +54,7 @@ from services.authored_vnext.narrative_ir.content_graph import (
     seal_content_integrity_receipt,
 )
 from services.authored_vnext.narrative_ir.contracts import model_payload
+from services.source_content.errors import SourceContentError
 
 
 def test_public_v2_requires_explicit_strict_postgresql_profile() -> None:
@@ -965,3 +966,204 @@ def test_registered_template_export_requires_passed_content_integrity() -> None:
         result={"contentIntegrityReceipt": model_payload(receipt)},
     )
     require_generation_content_integrity_for_export(passed, source_revision=2)
+
+
+_SOURCE_RESTYLE_SUBMISSION = {
+    "schemaVersion": "presentation-generation-request/v2",
+    "content": "restyle the uploaded deck",
+    "slideCount": 5,
+    "authoredStyle": "default",
+    "masterPin": {
+        "masterId": "master:company",
+        "revision": 3,
+        "digest": "sha256:" + ("a" * 64),
+    },
+    "sourceMode": "source_content_restyle",
+    "sourceContentManifestPin": {
+        "manifestId": "manifest:source-content",
+        "digest": "sha256:" + ("b" * 64),
+    },
+    "contentPolicy": {"text": "outline", "allowSummarization": True},
+}
+
+
+async def _submit_source_restyle(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    admit_manifest,
+) -> tuple[object, object, dict[str, object], list[object], list[int]]:
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'restyle.db'}")
+    tables = [
+        User.__table__, PresentationModel.__table__, WorkspaceConversation.__table__,
+        WorkspaceOperation.__table__, PublicPolicyProfile.__table__,
+        PublicOperationAdmission.__table__, AsyncPresentationGenerationTaskModel.__table__,
+        PresentationGenerationJob.__table__,
+    ]
+    async with engine.begin() as connection:
+        await connection.run_sync(lambda sync: SQLModel.metadata.create_all(sync, tables=tables))
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+    owner = uuid.uuid4()
+    actor = PublicRequestActor(
+        owner, "tenant-restyle", "trace-restyle", frozenset({"presentations:write"}),
+    )
+    request_plans: list[object] = []
+    captured_generation_settings: dict[str, object] = {}
+    route_slide_counts: list[int] = []
+
+    def fake_route_resolver(**kwargs):
+        # The internal design-pack lookup needs app-data storage; the route
+        # receipt only has to observe the admitted count here.
+        route_slide_counts.append(kwargs["slide_count"])
+        return {
+            "selectedRoute": "authored-fallback",
+            "narrativeIrDigest": None,
+            "fallbackReason": "no-compatible-design-pack",
+        }
+
+    async def fake_admission(session, *, principal, operation_id, operation_kind, **kwargs):
+        request_plans.append(kwargs["request_plan"])
+        row = PublicOperationAdmission(
+            operation_id=operation_id, policy_version="restyle-test/v1", owner_id=principal.owner_id,
+            tenant_id=principal.tenant_id, trace_id_hash="a" * 64, operation_kind=operation_kind,
+            resource_units=1, policy_digest="b" * 64, deadline_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+            state="queued", slide_count=kwargs["request_plan"].slide_count, planned_request_limit=1,
+            retry_request_limit=0, estimated_cost_limit_microunits=1, actual_cost_limit_microunits=1,
+        )
+        session.add(row)
+        await session.flush()
+        return row
+
+    async def fake_bootstrap(session, *, presentation_id, request, commit, initial_operation_state):
+        captured_generation_settings.update(request.generation_settings)
+        conversation = WorkspaceConversation(owner_id=owner, owner_scope=str(owner), presentation_id=presentation_id)
+        session.add(conversation)
+        await session.flush()
+        operation = WorkspaceOperation(
+            owner_id=owner, owner_scope=str(owner), conversation_id=conversation.id,
+            presentation_id=presentation_id, anchor_position=1, kind=request.operation_type,
+            state=initial_operation_state, idempotency_key_hash="c" * 64, request_hash="d" * 64,
+            request_payload={}, expected_revision=request.expected_revision,
+            contract_version="public-operation/v2",
+            execution_profile_version="public-generation-export/v2",
+            phase="admission", deadline_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+        )
+        session.add(operation)
+        await session.flush()
+        return conversation, None, operation, False
+
+    async def nothing(*args, **kwargs):
+        return None
+
+    async def no_references(*args, **kwargs):
+        return []
+
+    async def admit_with_owner(candidate, *, sql_session, owner_id):
+        assert owner_id == owner
+        assert candidate.source_content_manifest_pin.manifest_id == "manifest:source-content"
+        assert candidate.reference_snapshot_ids == []
+        return await admit_manifest(candidate)
+
+    monkeypatch.setattr("services.public_v2_orchestrator.bootstrap_workspace", fake_bootstrap)
+    monkeypatch.setattr("services.public_v2_orchestrator.admit_reference_snapshots", no_references)
+    monkeypatch.setattr("services.public_v2_orchestrator.claim_reference_snapshots", nothing)
+    monkeypatch.setattr("services.public_v2_orchestrator.append_operation_event", nothing)
+    monkeypatch.setattr("services.public_v2_orchestrator.wake_workspace_operation_runner", lambda: None)
+    monkeypatch.setattr(
+        "services.public_generation_slide_count.admit_source_content_request",
+        admit_with_owner,
+    )
+
+    app = FastAPI()
+    app.include_router(API_V2_PUBLIC_ROUTER)
+    app.dependency_overrides[get_public_request_actor] = lambda: actor
+    app.state.public_v2_orchestrator = SqlPublicV2Orchestrator(
+        maker,
+        admission=fake_admission,
+        generation_route_resolver=fake_route_resolver,
+    )
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/v2/presentations/generations",
+                headers={"Idempotency-Key": "restyle-key"},
+                json=_SOURCE_RESTYLE_SUBMISSION,
+            )
+        return response, maker, captured_generation_settings, request_plans, route_slide_counts
+    finally:
+        await engine.dispose()
+
+
+def test_api_submit_source_restyle_charges_source_pages_and_pins_master(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A page-locked restyle is admitted for its source pages, not ``slideCount``."""
+
+    async def scenario() -> None:
+        async def admit_manifest(candidate):
+            candidate._source_document_outline = SimpleNamespace(source_slide_count=7)
+
+        response, maker, generation_settings, request_plans, route_counts = (
+            await _submit_source_restyle(
+                tmp_path, monkeypatch, admit_manifest=admit_manifest,
+            )
+        )
+        assert response.status_code == 202, response.json()
+        assert route_counts == [7]
+        operation_id = uuid.UUID(response.json()["operationId"])
+        async with maker() as session:
+            operation = await session.get(WorkspaceOperation, operation_id)
+            presentation = await session.get(PresentationModel, operation.presentation_id)
+            job = await session.scalar(
+                select(PresentationGenerationJob).where(
+                    PresentationGenerationJob.workspace_operation_id == operation_id
+                )
+            )
+        assert [plan.slide_count for plan in request_plans] == [7]
+        assert presentation.n_slides == 7
+        assert job.total_slides == 7
+        assert generation_settings["n_slides"] == 7
+        expected_pin = {
+            "masterId": "master:company",
+            "revision": 3,
+            "digest": "sha256:" + ("a" * 64),
+        }
+        assert generation_settings["master_pin"] == expected_pin
+        assert generation_settings["source_mode"] == "source_content_restyle"
+        # The durable job payload is the worker's request; it is persisted by
+        # field name rather than wire alias.
+        assert job.request_payload["n_slides"] == 7
+        assert job.request_payload["master_pin"] == {
+            "master_id": "master:company",
+            "revision": 3,
+            "digest": "sha256:" + ("a" * 64),
+        }
+        assert job.request_payload["source_mode"] == "source_content_restyle"
+        assert operation.request_payload["generation_request"] == job.request_payload
+
+    asyncio.run(scenario())
+
+
+def test_api_submit_source_restyle_rejects_unadmittable_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Manifest rejection fails closed before any durable row or admission exists."""
+
+    async def scenario() -> None:
+        async def admit_manifest(candidate):
+            raise SourceContentError("source_content_manifest_invalid", status_code=409)
+
+        response, maker, _settings, request_plans, route_counts = (
+            await _submit_source_restyle(
+                tmp_path, monkeypatch, admit_manifest=admit_manifest,
+            )
+        )
+        assert response.status_code == 409
+        assert route_counts == []
+        assert response.json() == {"detail": {"reasonCode": "source_content_manifest_invalid"}}
+        assert request_plans == []
+        async with maker() as session:
+            assert (await session.scalars(select(WorkspaceOperation))).all() == []
+            assert (await session.scalars(select(PresentationModel))).all() == []
+
+    asyncio.run(scenario())

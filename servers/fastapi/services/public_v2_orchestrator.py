@@ -41,6 +41,11 @@ from api.v2.orchestration import (
     PublicV2OrchestrationError,
 )
 from models.generate_presentation_request import GeneratePresentationRequest
+from services.public_generation_slide_count import (
+    resolve_source_content_admission_slide_count,
+    source_content_admission_carrier,
+)
+from services.source_content.errors import SourceContentError
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
@@ -159,6 +164,43 @@ def _generation_request_hash_payload(
         payload.pop("generationMode", None)
         payload.pop("designPackPin", None)
     return payload
+
+
+async def _generation_admission_slide_count(
+    session: AsyncSession,
+    request: PresentationGenerationRequestV2,
+    *,
+    owner_id: uuid.UUID,
+    reference_ids: list[uuid.UUID],
+) -> int:
+    """Resolve the count the worker will author before anything is admitted.
+
+    A page-locked source restyle authors one slide per admitted source page, so
+    its immutable deadline and budgets are sized from the manifest rather than
+    the caller's ``slideCount`` hint.
+    """
+
+    if request.source_mode is not None:
+        carrier = source_content_admission_carrier(
+            source_mode=request.source_mode,
+            source_content_manifest_pin=request.source_content_manifest_pin,
+            instructions=request.instructions,
+            reference_snapshot_ids=[str(value) for value in reference_ids],
+        )
+        try:
+            source_slide_count = await resolve_source_content_admission_slide_count(
+                carrier,
+                sql_session=session,
+                owner_id=owner_id,
+            )
+        except SourceContentError as error:
+            raise _public_error(error.status_code, error.code) from error
+        if source_slide_count is None:
+            raise _public_error(409, "source_content_outline_invalid")
+        return source_slide_count
+    return request.slide_count or (
+        len(request.slides_markdown) if request.slides_markdown else 10
+    )
 
 
 def _generation_route_digest(payload: Mapping[str, Any]) -> str:
@@ -632,8 +674,11 @@ class SqlPublicV2Orchestrator:
                     for binding in snapshot.asset_bindings
                 )
             )
-            slide_count = request.slide_count or (
-                len(request.slides_markdown) if request.slides_markdown else 10
+            slide_count = await _generation_admission_slide_count(
+                session,
+                request,
+                owner_id=actor.owner_id,
+                reference_ids=reference_ids,
             )
             generation_route_receipt = await _resolve_generation_route_receipt(
                 request,
@@ -676,6 +721,11 @@ class SqlPublicV2Orchestrator:
                 visionQa=request.quality_policy == "release-v1",
                 reference_snapshot_ids=reference_ids,
                 authored_style=request.authored_style,
+                masterPin=(
+                    request.master_pin.model_dump(mode="json", by_alias=True)
+                    if request.master_pin is not None
+                    else None
+                ),
                 sourceMode=request.source_mode,
                 sourceContentManifestPin=(
                     request.source_content_manifest_pin.model_dump(
@@ -754,6 +804,11 @@ class SqlPublicV2Orchestrator:
                         "reference_snapshot_ids": [str(value) for value in reference_ids],
                         "quality_policy": request.quality_policy,
                         "authored_style": request.authored_style,
+                        "master_pin": (
+                            request.master_pin.model_dump(mode="json", by_alias=True)
+                            if request.master_pin is not None
+                            else None
+                        ),
                         "source_mode": request.source_mode,
                         "source_content_manifest_pin": (
                             request.source_content_manifest_pin.model_dump(

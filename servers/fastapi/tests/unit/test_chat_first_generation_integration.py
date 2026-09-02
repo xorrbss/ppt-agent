@@ -30,6 +30,7 @@ from models.sql.presentation_export_attempt import PresentationExportAttempt
 from models.sql.public_admission import (
     PublicOperationAdmission,
     PublicPolicyProfile,
+    PublicProviderLogicalCall,
     PublicQuotaCounter,
     PublicResourceLease,
 )
@@ -44,7 +45,13 @@ from models.sql.workspace import (
     WorkspaceOperationEvent,
     WorkspaceOutbox,
 )
-from services import workspace_asset_service, workspace_legacy_write_gate, workspace_operation_runner
+from services import (
+    public_generation_slide_count,
+    workspace_asset_service,
+    workspace_legacy_write_gate,
+    workspace_operation_runner,
+)
+from services.source_content.errors import SourceContentError
 from services.workspace_artifact_publication_service import (
     WorkspaceArtifactPublicationError,
     prepare_workspace_generation_artifact,
@@ -345,6 +352,7 @@ TABLES = [
     PublicPolicyProfile.__table__,
     PublicQuotaCounter.__table__,
     PublicOperationAdmission.__table__,
+    PublicProviderLogicalCall.__table__,
     PublicResourceLease.__table__,
     PresentationModel.__table__,
     WorkspaceConversation.__table__,
@@ -1880,6 +1888,370 @@ def test_stale_attempt_never_publishes_artifact(tmp_path: Path, monkeypatch):
                 assert caught.value.code == "operation_lease_lost"
             assert not artifact.absolute_path.exists()
         finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def _source_content_request(
+    presentation_id: uuid.UUID, *, n_slides: int
+) -> GeneratePresentationRequest:
+    return GeneratePresentationRequest(
+        presentation_id=presentation_id,
+        content="Restyle the uploaded deck",
+        n_slides=n_slides,
+        language="en",
+        template="authored",
+        strategy="authored",
+        authored_style="default",
+        sourceMode="source_content_restyle",
+        sourceContentManifestPin={
+            "manifestId": "scm_source-deck",
+            "digest": "sha256:" + "b" * 64,
+        },
+        contentPolicy={"text": "verbatim"},
+    )
+
+
+async def _admit_source_content_request_plan(
+    monkeypatch, request: GeneratePresentationRequest
+):
+    observed: dict[str, object] = {}
+
+    async def capture_admission(session, **kwargs):
+        observed.update(kwargs)
+        return SimpleNamespace(id=uuid.uuid4())
+
+    monkeypatch.setattr(
+        presentation_generate,
+        "admit_public_operation_compatible_v2",
+        capture_admission,
+    )
+    monkeypatch.setattr(
+        presentation_generate,
+        "current_principal_context",
+        lambda: object(),
+    )
+    await presentation_generate._admit_generation_operation_v2_compatible(
+        object(),
+        request=request,
+        presentation=SimpleNamespace(n_slides=28),
+        operation=SimpleNamespace(id=uuid.uuid4()),
+    )
+    return observed["request_plan"]
+
+
+def test_source_content_admission_charges_source_pages_not_slide_hint(monkeypatch):
+    """A page-locked restyle authors one slide per source page.
+
+    Admission sizes the immutable deadline from its count, so it must charge
+    the manifest's page count rather than the caller's ``n_slides`` hint.
+    """
+
+    async def scenario():
+        request = _source_content_request(uuid.uuid4(), n_slides=28)
+        manifest_admissions: list[object] = []
+
+        async def admit_manifest(candidate, *, sql_session, owner_id):
+            manifest_admissions.append(candidate)
+            candidate._source_document_outline = SimpleNamespace(
+                source_slide_count=35
+            )
+
+        monkeypatch.setattr(
+            public_generation_slide_count,
+            "admit_source_content_request",
+            admit_manifest,
+        )
+
+        first = await _admit_source_content_request_plan(monkeypatch, request)
+        replay = await _admit_source_content_request_plan(monkeypatch, request)
+
+        assert first.slide_count == 35
+        # A replay reuses the frozen outline, so the count cannot drift.
+        assert replay.slide_count == 35
+        assert len(manifest_admissions) == 1
+
+    asyncio.run(scenario())
+
+
+def test_source_content_admission_defers_manifest_rejection_to_validation(
+    monkeypatch,
+):
+    """An unadmittable manifest keeps the caller count so validation projects it."""
+
+    async def scenario():
+        request = _source_content_request(uuid.uuid4(), n_slides=28)
+
+        async def reject_manifest(candidate, *, sql_session, owner_id):
+            raise SourceContentError(
+                "source_content_manifest_invalid", status_code=409
+            )
+
+        monkeypatch.setattr(
+            public_generation_slide_count,
+            "admit_source_content_request",
+            reject_manifest,
+        )
+
+        plan = await _admit_source_content_request_plan(monkeypatch, request)
+
+        assert plan.slide_count == 28
+        assert request._source_document_outline is None
+
+    asyncio.run(scenario())
+
+
+def _invalid_admission_policy(version: str) -> PublicPolicyProfile:
+    return PublicPolicyProfile(
+        version=version,
+        max_slides=100,
+        global_active_generation=10,
+        global_queued_generation=10,
+        owner_active_generation=10,
+        owner_queued_generation=10,
+        tenant_active_generation=10,
+        tenant_queued_generation=10,
+        global_active_export=10,
+        global_queued_export=10,
+        owner_active_export=10,
+        owner_queued_export=10,
+        tenant_active_export=10,
+        tenant_queued_export=10,
+        global_active_resource_units=100,
+        global_queued_resource_units=100,
+        tenant_active_resource_units=100,
+        tenant_queued_resource_units=100,
+        owner_active_resource_units=100,
+        owner_queued_resource_units=100,
+        retry_request_limit=1,
+        estimated_cost_limit_microunits=1,
+        actual_cost_limit_microunits=1,
+        generation_deadline_seconds=60,
+        export_deadline_seconds=60,
+    )
+
+
+async def _seed_v2_operation_with_phase1_admission(
+    maker,
+    *,
+    presentation_id: uuid.UUID,
+    policy_version: str,
+    now: datetime,
+    running: bool,
+) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID]:
+    """Persist a v2-contract generation whose admission row never gained a fence."""
+
+    async with maker() as session:
+        await _create(
+            session,
+            presentation_id=presentation_id,
+            idempotency_key=f"presentation-create:{presentation_id}",
+        )
+        operation = await session.scalar(
+            select(WorkspaceOperation).where(
+                WorkspaceOperation.presentation_id == presentation_id,
+                WorkspaceOperation.kind == "presentation.generate",
+            )
+        )
+        assert operation is not None
+        operation.contract_version = "public-operation/v2"
+        operation.execution_profile_version = "public-generation-export/v2"
+        operation.deadline_at = now + timedelta(minutes=10)
+        operation.fencing_token = 0
+        if running:
+            operation.state = "running"
+            operation.phase = "active"
+            operation.attempt_number = 1
+            operation.attempt_token = "stuck-attempt"
+            operation.lease_expires_at = now - timedelta(minutes=1)
+            operation.heartbeat_at = now - timedelta(minutes=1)
+        else:
+            operation.state = "queued"
+            operation.phase = "queued"
+        task = AsyncPresentationGenerationTaskModel(
+            status="processing" if running else "pending",
+            message="stuck",
+            owner_id=OWNER_A,
+        )
+        job = PresentationGenerationJob(
+            task_id=task.id,
+            presentation_id=presentation_id,
+            workspace_operation_id=operation.id,
+            request_sha256="a" * 64,
+            request_payload={"content": "stuck"},
+            state="running" if running else "queued",
+            resume_allowed=True,
+        )
+        operation.request_payload = {"job_id": str(job.id)}
+        admission = PublicOperationAdmission(
+            operation_id=operation.id,
+            policy_version=policy_version,
+            owner_id=OWNER_A,
+            tenant_id="default",
+            trace_id_hash="b" * 64,
+            operation_kind="generation",
+            resource_units=1,
+            policy_digest="c" * 64,
+            deadline_at=now + timedelta(minutes=10),
+            fence=0,
+            state="active" if running else "queued",
+            planned_request_limit=1,
+            retry_request_limit=1,
+            estimated_cost_limit_microunits=1,
+            actual_cost_limit_microunits=1,
+        )
+        counter_kwargs = (
+            {"active_count": 1, "active_resource_units": 1}
+            if running
+            else {"queued_count": 1, "queued_resource_units": 1}
+        )
+        counters = [
+            PublicQuotaCounter(
+                policy_version=policy_version,
+                scope_type=scope,
+                scope_key=key,
+                operation_kind="generation",
+                **counter_kwargs,
+            )
+            for scope, key in (("tenant", "default"), ("owner", str(OWNER_A)))
+        ]
+        session.add(_invalid_admission_policy(policy_version))
+        await session.flush()
+        session.add_all([task, job, admission, *counters])
+        await session.commit()
+        return operation.id, admission.id, job.id, task.id
+
+
+async def _assert_invalid_admission_terminalized(
+    maker,
+    *,
+    operation_id: uuid.UUID,
+    admission_id: uuid.UUID,
+    job_id: uuid.UUID,
+    task_id: uuid.UUID,
+    policy_version: str,
+) -> None:
+    async with maker() as session:
+        operation = await session.get(WorkspaceOperation, operation_id)
+        admission = await session.get(PublicOperationAdmission, admission_id)
+        job = await session.get(PresentationGenerationJob, job_id)
+        task = await session.get(AsyncPresentationGenerationTaskModel, task_id)
+        assert operation.state == "failed"
+        assert operation.error_code == "public_phase2_admission_invalid"
+        assert admission.state == "failed"
+        assert job.state == "failed"
+        assert job.resume_allowed is False
+        assert task.status == "error"
+        assert task.error["code"] == "public_phase2_admission_invalid"
+        counters = (
+            await session.execute(
+                select(PublicQuotaCounter).where(
+                    PublicQuotaCounter.policy_version == policy_version
+                )
+            )
+        ).scalars()
+        assert all(
+            row.active_count == 0 and row.queued_count == 0 for row in counters
+        )
+
+
+def test_claim_terminalizes_v2_operation_with_invalid_admission(
+    tmp_path: Path,
+    monkeypatch,
+):
+    """A fence-less admission row must fail its operation, not pin the queue head."""
+
+    async def scenario():
+        engine, maker = await _database(tmp_path / "invalid-admission-claim.db")
+        async with maker() as session, session.begin():
+            session.add(User(id=OWNER_A, username="owner-a", hashed_password="x"))
+        owner_token = set_current_owner_id(OWNER_A)
+        # The deadline check constraint compares against the real created_at.
+        now = datetime.now(timezone.utc)
+        policy_version = "invalid-admission-claim/v1"
+        try:
+            monkeypatch.setattr(
+                presentation_crud, "_chat_first_create_enabled", lambda: True
+            )
+            ids = await _seed_v2_operation_with_phase1_admission(
+                maker,
+                presentation_id=uuid.uuid4(),
+                policy_version=policy_version,
+                now=now,
+                running=False,
+            )
+
+            claim = await workspace_operation_runner.claim_next_workspace_operation(
+                session_factory=maker
+            )
+
+            assert claim is None
+            operation_id, admission_id, job_id, task_id = ids
+            await _assert_invalid_admission_terminalized(
+                maker,
+                operation_id=operation_id,
+                admission_id=admission_id,
+                job_id=job_id,
+                task_id=task_id,
+                policy_version=policy_version,
+            )
+            # The row is terminal, so the next poll no longer trips over it.
+            assert (
+                await workspace_operation_runner.claim_next_workspace_operation(
+                    session_factory=maker
+                )
+                is None
+            )
+        finally:
+            reset_current_owner_id(owner_token)
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_recovery_terminalizes_v2_operation_with_invalid_admission(
+    tmp_path: Path,
+    monkeypatch,
+):
+    """Recovery must fail such a row instead of aborting the whole sweep."""
+
+    async def scenario():
+        engine, maker = await _database(tmp_path / "invalid-admission-recovery.db")
+        async with maker() as session, session.begin():
+            session.add(User(id=OWNER_A, username="owner-a", hashed_password="x"))
+        owner_token = set_current_owner_id(OWNER_A)
+        # The deadline check constraint compares against the real created_at.
+        now = datetime.now(timezone.utc)
+        policy_version = "invalid-admission-recovery/v1"
+        try:
+            monkeypatch.setattr(
+                presentation_crud, "_chat_first_create_enabled", lambda: True
+            )
+            ids = await _seed_v2_operation_with_phase1_admission(
+                maker,
+                presentation_id=uuid.uuid4(),
+                policy_version=policy_version,
+                now=now,
+                running=True,
+            )
+
+            recovered = await workspace_operation_runner.recover_expired_workspace_operations(
+                session_factory=maker
+            )
+
+            assert recovered == 1
+            operation_id, admission_id, job_id, task_id = ids
+            await _assert_invalid_admission_terminalized(
+                maker,
+                operation_id=operation_id,
+                admission_id=admission_id,
+                job_id=job_id,
+                task_id=task_id,
+                policy_version=policy_version,
+            )
+        finally:
+            reset_current_owner_id(owner_token)
             await engine.dispose()
 
     asyncio.run(scenario())
