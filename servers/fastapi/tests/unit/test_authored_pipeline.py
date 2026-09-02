@@ -37,6 +37,7 @@ from utils.llm_calls import author_vision_qa as author_vision_qa_mod
 from utils.llm_calls import critique_slide as critique_slide_mod
 from utils.llm_calls.author_deck import (
     AuthoredBatchFailure,
+    AuthoredProviderBudgetExhausted,
     AuthoredDeckResult,
     AuthoredPlannedBatchResult,
     author_deck,
@@ -853,13 +854,19 @@ def test_author_deck_fails_closed_after_one_local_renderer_correction(monkeypatc
 
     monkeypatch.setattr(author_deck_mod, "author_slide_html", always_rejected)
 
-    with pytest.raises(RendererPolicyError, match="CSS declaration is malformed"):
+    # A deterministic renderer rejection that survives the one bounded
+    # correction is reported as an exhausted slide call budget, carrying the
+    # renderer detail and the last rejected html instead of a placeholder.
+    with pytest.raises(AuthoredProviderBudgetExhausted) as captured:
         _run(
             author_deck_mod._author_one_resilient(
                 "slide", "design", _brand(), "COVER", 0, 1, raise_on_failure=True
             )
         )
 
+    assert captured.value.code == "authored_renderer_css_declaration_budget_exhausted"
+    assert captured.value.detail == "CSS declaration is malformed"
+    assert captured.value.rejected_html == rejected_html
     assert len(calls) == 2
     assert calls[0].get("rejected_html") is None
     assert calls[1]["rejected_html"] == rejected_html
