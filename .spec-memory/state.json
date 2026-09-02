@@ -129,7 +129,8 @@
     "deployment.web-only-postgresql-runtime": "decisions/deployment.web-only-postgresql-runtime.1.json",
     "source-content.verbatim-dom-binding": "decisions/source-content.verbatim-dom-binding.1.json",
     "authored.generation.batch-authoring": "decisions/authored.generation.batch-authoring.1.json",
-    "public-v2.generation-deadline-scaling": "decisions/public-v2.generation-deadline-scaling.1.json"
+    "public-v2.generation-deadline-scaling": "decisions/public-v2.generation-deadline-scaling.1.json",
+    "source-content.restyle-block-order": "decisions/source-content.restyle-block-order.1.json"
   },
   "readFirst": [
     "AGENTS.md"

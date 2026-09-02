@@ -247,16 +247,29 @@ def verify_source_verbatim_readback(
             for block_id in expected_ids:
                 if block_id not in actual_ids and block_id not in missing:
                     missing.append(block_id)
-        cursor = 0
         rendered = visible_text(str(html))
+        # Restyling recomposes the page: the new template owns where a source
+        # block lands, so one block's position relative to *another* block is
+        # not part of the contract.  Source shape order is not even the source's
+        # own reading order -- a page number in the top-right corner regularly
+        # precedes a bottom running footer in the XML -- so requiring the
+        # authored slide to reproduce it rejects correct decks.  Order still
+        # binds *within* a block (``_find_block_runs`` walks its own runs in
+        # order), which is where the source author's sequence carries meaning.
+        # Two blocks that share the same text keep a monotonic cursor so N
+        # identical source blocks still require N rendered occurrences.
+        text_cursors: dict[str, int] = {}
         for _, block_id, block in ordered_text_blocks:
             checked_blocks += 1
-            next_cursor = _find_block_runs(rendered, block, cursor)
+            block_key = _block_text(block)
+            next_cursor = _find_block_runs(
+                rendered, block, text_cursors.get(block_key, 0)
+            )
             if next_cursor < 0:
                 missing.append(block_id)
                 failed_slide_indices.add(slide_index)
             else:
-                cursor = next_cursor
+                text_cursors[block_key] = next_cursor
 
     result = SourceVerbatimReadbackResult(
         checked_slide_count=len(units),
@@ -267,7 +280,11 @@ def verify_source_verbatim_readback(
     if not result.passed:
         raise SourceContentReadbackError(
             "source_content_verbatim_readback_failed",
-            detail="source text is missing or out of source order",
+            detail=(
+                "source text is missing from the authored deck"
+                if not result.order_violations
+                else "source reading order does not match the manifest"
+            ),
             slide_indices=tuple(sorted(failed_slide_indices)),
             block_ids=result.missing_block_ids,
             order_violations=result.order_violations,

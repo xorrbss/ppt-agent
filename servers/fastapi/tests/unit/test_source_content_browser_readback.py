@@ -309,3 +309,16 @@ def test_source_occurrence_readback_rejects_qid_owned_by_non_source_dom() -> Non
         )
 
     assert error.value.block_ids == ("b1",)
+
+
+def test_browser_readback_accepts_blocks_the_template_relocated() -> None:
+    # DOM order across blocks is the new template's choice; every stronger
+    # binding (one visible owner per block, no duplicates, none missing) holds.
+    result = verify_browser_source_readback(
+        manifest=_manifest(),
+        outline=_outline("b1", "b2"),
+        browser_metrics=[_metrics(ids=("b2", "b1"), text=("중요한 본문", "원문 제목"))],
+    )
+    assert result.passed
+    assert result.order_violations == 0
+    assert sorted(item.source_block_id for item in result.evidence) == ["b1", "b2"]

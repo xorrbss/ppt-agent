@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "key": "source-content.restyle-block-order",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Restyle readback verifies presence, uniqueness and within-block run order; it does not require authored block order to equal source shape order.",
+  "scope": [
+    "source-content",
+    "authored-generation"
+  ],
+  "invariants": [
+    "Every source text block is bound to exactly one visible DOM owner, and no block is bound twice.",
+    "The runs projected from one source block appear in source order.",
+    "N source blocks sharing the same text still require N rendered occurrences.",
+    "Outline reading order and source unit identity are still compared with the manifest and fail closed.",
+    "The server-generated placement plan keeps its sealed source order in the allocator and the coverage gate."
+  ],
+  "forbidden": [
+    "Fail a deck because one source block renders before or after another source block.",
+    "Report a missing-text failure as a reading-order failure."
+  ],
+  "rationale": [
+    "Source shape order is PPTX XML order, not the source's own reading order: a top-right page number regularly precedes a bottom running footer.",
+    "Restyling assigns each source block a slot in the new template, so page numbers and running headers move into the template's own bands.",
+    "Measured on the stored 35-slide deck of job 1b59b81a: cross-block order rejected 30 of 35 slides; without it 27 pass and the remaining 8 fail on genuinely absent source text."
+  ],
+  "evidence": [
+    "servers/fastapi/services/source_content/readback.py",
+    "servers/fastapi/services/source_content/browser_readback.py",
+    "servers/fastapi/services/source_content/allocator.py",
+    "servers/fastapi/tests/unit/test_source_content_readback.py",
+    "servers/fastapi/tests/unit/test_source_content_browser_readback.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-02T09:20:00.0000000+00:00"
+}

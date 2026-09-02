@@ -89,3 +89,30 @@ def test_verbatim_readback_rejects_outline_order_or_omission() -> None:
     assert error.value.order_violations == 1
     assert error.value.block_ids == ("b1",)
     assert error.value.slide_indices == (0,)
+
+
+def test_verbatim_readback_accepts_blocks_relocated_by_the_restyle() -> None:
+    # The template owns where each source block lands, so a page number that
+    # sits after the footer in the source XML may render before it.
+    result = verify_source_verbatim_readback(
+        manifest=_manifest(("b1", "원문 제목"), ("b2", "02"), ("b3", "꿀벌쌤 | 실전 과정")),
+        outline=_outline("b1", "b2", "b3"),
+        htmls=["<h1>원문 제목</h1><footer><span>꿀벌쌤 | 실전 과정</span><span>02</span></footer>"],
+    )
+    assert result.passed
+    assert result.checked_block_count == 3
+
+
+def test_verbatim_readback_still_requires_one_occurrence_per_repeated_block() -> None:
+    with pytest.raises(SourceContentReadbackError) as error:
+        verify_source_verbatim_readback(
+            manifest=_manifest(("b1", "반복 문구"), ("b2", "반복 문구")),
+            outline=_outline("b1", "b2"),
+            htmls=["<p>반복 문구</p>"],
+        )
+    assert error.value.block_ids == ("b2",)
+    assert verify_source_verbatim_readback(
+        manifest=_manifest(("b1", "반복 문구"), ("b2", "반복 문구")),
+        outline=_outline("b1", "b2"),
+        htmls=["<p>반복 문구</p><p>반복 문구</p>"],
+    ).passed
