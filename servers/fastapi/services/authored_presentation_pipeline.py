@@ -398,6 +398,7 @@ async def _author_illustrate_render_pipeline(
                 slide_index=index,
                 stage="author",
                 attempt_token=attempt_token,
+                fencing_token=fencing_token,
                 html=admitted,
             )
 
@@ -413,7 +414,12 @@ async def _author_illustrate_render_pipeline(
 
         for index in selected:
             if generation_job is not None:
-                checkpoint = await get_checkpoint(generation_job.id, index)
+                checkpoint = await get_checkpoint(
+                    generation_job.id,
+                    index,
+                    attempt_token=attempt_token,
+                    fencing_token=fencing_token,
+                )
                 if checkpoint and should_inject_failure(
                     checkpoint, slide_index=index, stage="author"
                 ):
@@ -427,6 +433,7 @@ async def _author_illustrate_render_pipeline(
                     slide_index=index,
                     stage="author",
                     attempt_token=attempt_token,
+                    fencing_token=fencing_token,
                 )
 
             def observe(ordinal: int, *, slide_index: int = index) -> None:
@@ -443,6 +450,7 @@ async def _author_illustrate_render_pipeline(
                         job_id=generation_job.id,
                         slide_index=slide_index,
                         attempt_token=attempt_token,
+                        fencing_token=fencing_token,
                         ordinal=ordinal,
                     )
 
@@ -524,7 +532,12 @@ async def _author_illustrate_render_pipeline(
         successful: set[int] = set()
         for index in range(len(plan.contents)):
             checkpoint = (
-                await get_checkpoint(generation_job.id, index)
+                await get_checkpoint(
+                    generation_job.id,
+                    index,
+                    attempt_token=attempt_token,
+                    fencing_token=fencing_token,
+                )
                 if generation_job is not None
                 else None
             )
@@ -661,6 +674,7 @@ async def _author_illustrate_render_pipeline(
                         slide_index=index,
                         stage="author",
                         attempt_token=attempt_token,
+                        fencing_token=fencing_token,
                         error=stage_error,
                         request_id=generation_job.request_id,
                     )
