@@ -1048,7 +1048,10 @@ def test_temporary_authored_render_preserves_sub_12px_source_css(monkeypatch):
     assert rendered == [html.encode("utf-8") for html in htmls]
 
 
-def test_authored_render_cache_version_separates_pre_font_floor_entries(monkeypatch):
+def test_authored_render_cache_identity_version_separates_stale_entries(monkeypatch):
+    # The in-process render LRU is keyed by the cache identity digest, whose
+    # version string is the invalidation contract: bumping it must never serve
+    # pixels rendered under the previous identity.
     calls = 0
 
     async def fake_uncached(html, timeout=60):
@@ -1059,13 +1062,16 @@ def test_authored_render_cache_version_separates_pre_font_floor_entries(monkeypa
     slide_capture._render_cache.clear()
     slide_capture._render_inflight.clear()
     monkeypatch.setattr(slide_capture, "_render_html_to_png_uncached", fake_uncached)
-    monkeypatch.setattr(slide_capture, "RENDER_CACHE_VERSION", "legacy-9pt-floor")
+    monkeypatch.setattr(
+        slide_capture, "CACHE_IDENTITY_VERSION", "authored-render-cache-identity/v1"
+    )
+    assert _run(slide_capture.render_html_to_png(_VALID)) == b"render-1"
     assert _run(slide_capture.render_html_to_png(_VALID)) == b"render-1"
 
     monkeypatch.setattr(
         slide_capture,
-        "RENDER_CACHE_VERSION",
-        "authored-render-v3-preserve-authored-font-size",
+        "CACHE_IDENTITY_VERSION",
+        "authored-render-cache-identity/v2-capability-registry",
     )
     assert _run(slide_capture.render_html_to_png(_VALID)) == b"render-2"
     assert calls == 2
