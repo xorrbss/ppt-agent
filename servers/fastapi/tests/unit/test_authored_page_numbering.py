@@ -122,7 +122,7 @@ def test_the_unnumbered_slide_prompt_omits_the_marker():
 
     assert "PAGE MARKER FOR THIS SLIDE: OMIT IT" in prompt
     assert "This deck is not numbered" in prompt
-    assert 'render exactly "01" once' not in prompt
+    assert "render exactly" not in prompt
 
 
 def test_the_unnumbered_fallback_slide_has_no_footer():
@@ -139,7 +139,8 @@ def test_the_numbered_fallback_slide_keeps_its_72px_footer_zone():
         "content", _brand(), "PROBLEM", 1, 4, page_number_mode=TEMPLATE_PAGE_NUMBER_MODE
     )
 
-    assert '<div class="foot">01</div>' in html
+    # index 1 is the deck's second slide, so its page number is 02.
+    assert '<div class="foot">02</div>' in html
     assert "padding:64px 64px 72px" in html
 
 
@@ -166,3 +167,29 @@ def test_toggling_numbering_is_reported_as_a_structural_change():
     assert "pageNumber.enabled" in structural_changes(off, on)
     assert "pageNumber.enabled" in structural_changes(on, off)
     assert structural_changes(off, off) == ()
+
+
+def test_the_page_number_is_the_slide_s_own_position():
+    """The marker is one-based, like the "Author slide N of M" line beside it.
+
+    Numbering it from the zero-based index put every page number one behind the
+    slide carrying it, and, when restyling a source deck, guaranteed the source
+    slide's own page number could never match the one the template rendered.
+    """
+    second = author_prompt(
+        "content", "DESIGN", _brand(), "PROBLEM", 1, 4,
+        page_number_mode=TEMPLATE_PAGE_NUMBER_MODE,
+    )
+    tenth = author_prompt(
+        "content", "DESIGN", _brand(), "PROBLEM", 9, 12,
+        page_number_mode=TEMPLATE_PAGE_NUMBER_MODE,
+    )
+
+    assert 'render exactly "02" once' in second
+    assert "Author slide 2 of 4" in second
+    assert 'render exactly "10" once' in tenth
+    assert "Author slide 10 of 12" in tenth
+    assert '<div class="foot">10</div>' in fallback_slide_html(
+        "content", _brand(), "PROBLEM", 9, 12,
+        page_number_mode=TEMPLATE_PAGE_NUMBER_MODE,
+    )

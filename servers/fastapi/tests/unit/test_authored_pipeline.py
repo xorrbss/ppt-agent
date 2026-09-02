@@ -682,10 +682,11 @@ def test_fallback_cover_omits_page_number():
 def test_fallback_slide_html_uses_bottom_center_number_after_cover():
     html = fallback_slide_html("content", _brand(), "PROBLEM", 1, 5)
 
-    assert '<div class="foot">01</div>' in html
+    # index 1 is the deck's second slide, so its page number is 02.
+    assert '<div class="foot">02</div>' in html
     assert "left:0;right:0;bottom:14px;text-align:center" in html
     assert "line-height:16px;font-weight:500;color:#A7ACB3" in html
-    assert "01 / 05" not in html
+    assert "02 / 05" not in html
 
 
 def test_fallback_slide_html_uses_offline_safe_logical_font_stack():
@@ -1047,10 +1048,10 @@ def test_author_prompt_uses_cover_exception_and_sequential_bottom_center_marker(
 
     assert "PAGE MARKER FOR THIS SLIDE: OMIT IT" in cover
     assert "render no page number and no footer text" in cover
-    assert 'render exactly "01" once' in content
+    assert 'render exactly "02" once' in content
     assert "as the only footer text" in content
     assert "Company-standard furniture owns page numbering" in company_standard
-    assert 'render exactly "01" once' not in company_standard
+    assert "render exactly" not in company_standard
     assert "company-standard furniture owns all page numbering" in company_design
     assert "Every slide after the cover has exactly one page-number" not in company_design
     assert 'class="foot"' not in company_fallback

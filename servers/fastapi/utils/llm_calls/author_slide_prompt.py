@@ -432,9 +432,15 @@ def author_prompt(
             "and no footer text."
         )
     else:
+        # ``index`` is zero-based, as the "Author slide {index + 1} of {n}" line
+        # below already reflects. Numbering the marker from it put every page
+        # number one behind the slide it sits on: the deck's second slide read
+        # "01". It also guaranteed a mismatch when restyling a source deck,
+        # whose own page number is the slide's real position, so that source
+        # text could never bind to the number the template rendered.
         page_marker = (
-            f'PAGE MARKER FOR THIS SLIDE: render exactly "{index:02d}" once, as the only '
-            "footer text, using the fixed bottom-center page-number system."
+            f'PAGE MARKER FOR THIS SLIDE: render exactly "{index + 1:02d}" once, as the '
+            "only footer text, using the fixed bottom-center page-number system."
         )
     wordmark = (
         f" Brand wordmark: {brand.wordmark}. If used, keep it outside the reserved footer zone."

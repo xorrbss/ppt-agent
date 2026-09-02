@@ -751,7 +751,8 @@ def fallback_slide_html(
     marker = (
         ""
         if role == "COVER" or page_number_mode != TEMPLATE_PAGE_NUMBER_MODE
-        else f"{index:02d}"
+        # Zero-based index, one-based page number, matching the authored prompt.
+        else f"{index + 1:02d}"
     )
     footer = f'<div class="foot">{marker}</div>' if marker else ""
     # The numbered layout reserves a 72px footer zone; an unnumbered deck keeps
