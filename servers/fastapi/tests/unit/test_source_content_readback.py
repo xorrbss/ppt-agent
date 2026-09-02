@@ -160,11 +160,19 @@ def test_verbatim_readback_accepts_pipe_halves_in_either_slot() -> None:
     assert result.passed
 
 
-def test_verbatim_readback_still_requires_arrow_steps_in_order() -> None:
+def test_verbatim_readback_reads_arrow_steps_wherever_the_template_puts_them() -> None:
+    # A flow the template lays out right-to-left still carries every step, so
+    # the text gate passes it; the stamping gate reports the placement.
+    assert verify_source_verbatim_readback(
+        manifest=_manifest(("b1", "영업 → 상담 → 제안")),
+        outline=_outline("b1"),
+        htmls=["<div><span>제안</span><span>상담</span><span>영업</span></div>"],
+    ).passed
+    # A step the deck never rendered still fails.
     with pytest.raises(SourceContentReadbackError) as error:
         verify_source_verbatim_readback(
             manifest=_manifest(("b1", "영업 → 상담 → 제안")),
             outline=_outline("b1"),
-            htmls=["<div><span>제안</span><span>상담</span><span>영업</span></div>"],
+            htmls=["<div><span>영업</span><span>상담</span></div>"],
         )
     assert error.value.block_ids == ("b1",)

@@ -1122,8 +1122,11 @@ def test_semantic_roles_are_stamped_before_owned_text_browser_capacity_gate(monk
     )
     bindings = ((('source:block:1', 'Body'),),)
     _require_source_verbatim_bindings([sealed], bindings)
+    # Text the deck no longer carries breaks the seal; punctuation the model
+    # added around intact source text does not (see the presence contract).
     with pytest.raises(BrowserSourceReadbackError):
-        _require_source_verbatim_bindings([sealed.replace("Body", "Body..")], bindings)
+        _require_source_verbatim_bindings([sealed.replace("Body", "Bod")], bindings)
+    _require_source_verbatim_bindings([sealed.replace("Body", "Body..")], bindings)
 
 
 def test_capacity_gate_builds_role_aware_initial_critiques_for_bounded_repair():

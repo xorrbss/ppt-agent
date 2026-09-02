@@ -6,6 +6,7 @@ import pytest
 
 from services.authored_vnext.capability_registry import CAPABILITY_REGISTRY_DIGEST
 from utils.authored_dom_quality import ensure_authored_qids
+from services.source_content.source_runs import source_run_binding_id
 from services.source_content.browser_readback import (
     BrowserSourceReadbackError,
     deterministic_source_block_id,
@@ -156,8 +157,9 @@ def test_stamp_source_block_ids_requires_unique_rendered_dom_match() -> None:
     with pytest.raises(BrowserSourceReadbackError) as conflict:
         stamp_source_block_ids('<p data-source-block-id="other">같은 텍스트</p>', [("b1", "같은 텍스트")])
     assert "conflicting" in conflict.value.detail
-    with pytest.raises(BrowserSourceReadbackError):
+    with pytest.raises(BrowserSourceReadbackError) as absent:
         stamp_source_block_ids('<p>다른 텍스트</p>', [("b1", "같은 텍스트")])
+    assert absent.value.block_ids == ("b1",)
 
 
 def test_stamp_source_block_ids_closes_void_elements_without_corrupting_text_ownership() -> None:
@@ -322,3 +324,78 @@ def test_browser_readback_accepts_blocks_the_template_relocated() -> None:
     assert result.passed
     assert result.order_violations == 0
     assert sorted(item.source_block_id for item in result.evidence) == ["b1", "b2"]
+
+
+def _run_manifest(block_text: str) -> dict[str, object]:
+    return {
+        "units": [{
+            "sourceUnitId": "unit-1", "sourceIndex": 0,
+            "blocks": [
+                {"sourceBlockId": "b1", "kind": "text", "order": 0, "payload": {"text": block_text}},
+            ],
+        }],
+    }
+
+
+def _run_metrics(*spans: tuple[int, int, str], run_count: int) -> dict[str, object]:
+    elements = []
+    for index, (start, end, rendered) in enumerate(spans):
+        binding_id = source_run_binding_id("b1", start, end, run_count)
+        elements.append({
+            "sourceBlockId": binding_id,
+            "qid": deterministic_source_qid(binding_id),
+            "semanticRole": "body",
+            "renderedText": rendered,
+            "bbox": {"x": 20, "y": 20 + index * 40, "width": 200, "height": 24},
+            "cssVisible": True,
+            "effectiveOpacity": 1,
+            "fontLoaded": True,
+            "clipped": False,
+            "glyphClipped": False,
+            "lineBoxClipped": False,
+            "occludedFraction": 0.0,
+            "continuousOccludedFraction": 0.0,
+            "computedStyle": {"display": "block", "visibility": "visible"},
+            "measurement": {"occlusion": True},
+            "occlusionMeasurementEvidence": {"status": "measured"},
+        })
+    return {"width": 1280, "height": 720, "fontsReady": True, "elements": elements}
+
+
+def test_browser_readback_accepts_a_pipe_block_whose_halves_the_template_swapped() -> None:
+    # A pipe joins independent labels and the new template owns which slot each
+    # lands in.  Stamping grants that exemption, so the browser gate must too or
+    # it fails the very decks stamping just bound.
+    result = verify_browser_source_readback(
+        manifest=_run_manifest("꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"),
+        outline=_outline("b1"),
+        browser_metrics=[_run_metrics(
+            (1, 1, "숏폼대행 1인사업자 홀로서기"),
+            (0, 0, "꿀벌쌤"),
+            run_count=2,
+        )],
+    )
+    assert result.passed
+    assert result.order_violations == 0
+    assert [item.source_block_id for item in result.evidence] == ["b1"]
+
+
+def test_browser_readback_records_a_block_whose_own_items_were_reordered() -> None:
+    """Where a template places one block's items is layout, not lost text.
+
+    Both items are measured and both are on the slide, so the deck passes and
+    the receipt carries the deviation instead of rejecting the run.
+    """
+
+    result = verify_browser_source_readback(
+        manifest=_run_manifest("• 첫째 항목\n• 둘째 항목"),
+        outline=_outline("b1"),
+        browser_metrics=[_run_metrics(
+            (1, 1, "둘째 항목"),
+            (0, 0, "첫째 항목"),
+            run_count=2,
+        )],
+    )
+    assert result.passed
+    assert result.binding_deviations == 1
+    assert result.order_violations == 0

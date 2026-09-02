@@ -194,20 +194,21 @@ def _find_block_runs(rendered: str, block: Mapping[str, Any], cursor: int) -> in
     """Return the cursor after the block's projected runs, or ``-1``.
 
     Authored markup may split one source block into bullet items, flow steps
-    or lines.  Every projected run must still occur verbatim and in order;
-    only the leading bullet/enumerator/arrow marker of a run is optional.
+    or lines, and the new template decides where each lands.  What the source
+    contract promises is that every projected run's characters are on the
+    slide, so each run is searched from the block's own cursor and the cursor
+    advances to the furthest run found rather than to the last one.  Where a
+    template places one block's items relative to each other is layout: the
+    stamping gate reports that as a binding deviation instead of losing text.
+    Only the leading bullet/enumerator/arrow marker of a run is optional.
     """
 
     try:
         projection = project_source_runs(_block_raw_text(block))
     except ValueError:
         return -1
+    furthest = cursor
     for run in projection.runs:
-        # A pipe joins independent labels the new template may place in either
-        # order, so a run after one is searched from the start of the slide.
-        # Bullets, arrows and lines keep the sequence the source author chose.
-        if run.order_free_before:
-            cursor = 0
         forms = (run.marker + run.body, run.body) if run.marker else (run.body,)
         position = -1
         for raw_form in forms:
@@ -216,11 +217,11 @@ def _find_block_runs(rendered: str, block: Mapping[str, Any], cursor: int) -> in
                 continue
             position = rendered.find(form, cursor)
             if position >= 0:
-                cursor = position + len(form)
+                furthest = max(furthest, position + len(form))
                 break
         if position < 0:
             return -1
-    return cursor
+    return furthest
 
 
 def verify_source_verbatim_readback(
@@ -303,9 +304,10 @@ def verify_source_verbatim_readback(
         # not part of the contract.  Source shape order is not even the source's
         # own reading order -- a page number in the top-right corner regularly
         # precedes a bottom running footer in the XML -- so requiring the
-        # authored slide to reproduce it rejects correct decks.  Order still
-        # binds *within* a block (``_find_block_runs`` walks its own runs in
-        # order), which is where the source author's sequence carries meaning.
+        # authored slide to reproduce it rejects correct decks.  Order inside a
+        # block is layout too: the same five bullets read correctly whether the
+        # template stacks them or spreads them over three cards, and stamping
+        # reports that placement as a binding deviation.
         # Two blocks that share the same text keep a monotonic cursor so N
         # identical source blocks still require N rendered occurrences.
         text_cursors: dict[str, int] = {}

@@ -18,6 +18,7 @@ from services.source_content.source_runs import (
 )
 from services.source_content.text_stamping import (
     stamp_source_block_ids,
+    stamp_source_blocks,
     terminal_punctuation_surplus,
 )
 
@@ -98,15 +99,27 @@ def test_stamp_splits_pipe_header_and_accepts_omitted_markers() -> None:
     assert '<h3 data-source-block-id="e"' in badge
 
 
-def test_stamp_fails_closed_when_a_run_has_no_exact_element() -> None:
-    with pytest.raises(BrowserSourceReadbackError) as error:
-        stamp_source_block_ids("<ul><li>프로필 사진</li><li>한 줄 소개 문구</li></ul>", [("b1", BULLETS)])
-    assert "run 1" in error.value.detail
-    with pytest.raises(BrowserSourceReadbackError):
-        stamp_source_block_ids("<div>10</div><div>곳 찾기</div>", [("n", "10곳 찾기")])
+def test_stamp_fails_closed_only_when_source_characters_are_absent() -> None:
+    # A blank field drawn as an empty line is source text nothing renders.
     with pytest.raises(BrowserSourceReadbackError) as blank:
         stamp_source_block_ids('<div>타깃</div><div class="line"></div>', [("t", "타깃"), ("l", "______")])
     assert blank.value.block_ids == ("l",)
+    with pytest.raises(BrowserSourceReadbackError) as dropped:
+        stamp_source_block_ids("<ul><li>프로필 사진</li></ul>", [("b1", BULLETS)])
+    assert "run 1" in dropped.value.detail
+    # A run the model buried inside a larger element is still on the slide:
+    # bind the element that carries it and report the compromise.
+    buried = stamp_source_blocks(
+        '<div class="card">연습 포인트 10곳 찾기</div>', [("n", "10곳 찾기")]
+    )
+    assert [item.kind for item in buried.deviations] == ["shared_owner"]
+    assert '<div class="card" data-source-block-id="n"' in buried.html
+    # A run split across sibling boxes binds their container, which owns its
+    # characters exactly.
+    split = stamp_source_blocks(
+        '<section class="metric"><div>10</div><div>곳 찾기</div></section>', [("n", "10곳 찾기")]
+    )
+    assert '<section class="metric" data-source-block-id="n"' in split.html
 
 
 def test_stamp_tolerates_exact_decorative_repeats_only() -> None:
@@ -121,8 +134,10 @@ def test_stamp_tolerates_exact_decorative_repeats_only() -> None:
     assert '<div class="eyebrow" data-source-block-id="t"' in stamped
     assert "<h1>2주차 PART 1 | 릴스 기획</h1>" in stamped
     assert stamp_source_block_ids(stamped, pairs) == stamped
-    with pytest.raises(BrowserSourceReadbackError):
-        stamp_source_block_ids("<span>07 / 35</span><footer>p.07</footer>", [("p", "07")])
+    # "07" survives inside "07 / 35"; no element owns it, so the binder falls
+    # back to the element carrying it and says so.
+    partial = stamp_source_blocks("<span>07 / 35</span><footer>p.07</footer>", [("p", "07")])
+    assert [item.kind for item in partial.deviations] == ["shared_owner"]
 
 
 def test_stamp_binds_identical_text_blocks_in_document_order() -> None:
@@ -218,16 +233,10 @@ def test_browser_readback_folds_run_partition_into_block_evidence() -> None:
     [
         # incomplete partition
         [_element("b1", "원문 제목", 0), _element("b2:run:0", "프로필 사진", 1)],
-        # runs out of DOM order
-        [
-            _element("b1", "원문 제목", 0),
-            _element("b2:run:1", "한 줄 소개", 1),
-            _element("b2:run:0", "프로필 사진", 2),
-        ],
         # altered run text
         [
             _element("b1", "원문 제목", 0),
-            _element("b2:run:0", "프로필 사진들", 1),
+            _element("b2:run:0", "프로필 그림", 1),
             _element("b2:run:1", "한 줄 소개", 2),
         ],
         # whole and run bindings for the same block
@@ -251,6 +260,25 @@ def test_browser_readback_rejects_broken_run_partitions(elements) -> None:
     assert "b2" in error.value.block_ids or error.value.order_violations
 
 
+def test_browser_readback_records_run_order_instead_of_failing_it() -> None:
+    """A template may place a block's own items in any order it likes.
+
+    The runs still have to partition the block exactly, and each element is
+    still measured; only the DOM order of the owners is downgraded from a
+    failure to a counted deviation on the receipt.
+    """
+
+    metrics = _metrics(
+        _element("b1", "원문 제목", 0, role="title"),
+        _element("b2:run:1", "한 줄 소개", 1),
+        _element("b2:run:0", "프로필 사진", 2),
+    )
+    result = verify_browser_source_readback(manifest=_manifest(), outline=_outline(), browser_metrics=metrics)
+    assert result.passed
+    assert result.binding_deviations == 1
+    assert result.as_dict()["bindingDeviations"] == 1
+
+
 def test_html_readback_accepts_projected_runs_in_source_order() -> None:
     manifest = _manifest()
     manifest["units"][0]["blocks"].append(
@@ -259,9 +287,13 @@ def test_html_readback_accepts_projected_runs_in_source_order() -> None:
     outline = {"slides": [{"sourceUnitId": "unit-1", "sourceIndex": 0, "readingOrder": ["b1", "b2", "b3"]}]}
     html = "<h1>원문 제목</h1><ul><li>프로필 사진</li><li>한 줄 소개</li></ul><div>영업</div><div>상담</div>"
     assert verify_source_verbatim_readback(manifest=manifest, outline=outline, htmls=[html]).passed
+    # Where the template places one block's own items is layout, not lost text.
     reordered = "<h1>원문 제목</h1><ul><li>한 줄 소개</li><li>프로필 사진</li></ul><div>영업</div><div>상담</div>"
+    assert verify_source_verbatim_readback(manifest=manifest, outline=outline, htmls=[reordered]).passed
+    # Text the deck never rendered still fails.
+    dropped = "<h1>원문 제목</h1><ul><li>프로필 사진</li></ul><div>영업</div><div>상담</div>"
     with pytest.raises(SourceContentReadbackError) as error:
-        verify_source_verbatim_readback(manifest=manifest, outline=outline, htmls=[reordered])
+        verify_source_verbatim_readback(manifest=manifest, outline=outline, htmls=[dropped])
     assert error.value.block_ids == ("b2",)
 
 
@@ -351,17 +383,17 @@ def test_stamp_binds_what_the_verbatim_prompt_allows() -> None:
     stamped = stamp_source_block_ids(shared, [("b", bullets)])
     assert '<div class="copy" data-source-block-id="b:run:0-1"' in stamped
     assert '<div class="side" data-source-block-id="b:run:2"' in stamped
-    # The same items out of source order still fail closed.
-    with pytest.raises(BrowserSourceReadbackError) as error:
-        stamp_source_block_ids(
-            '<div class="side">업무 범위</div><div class="copy">사업 정의<br>편집자와의 차이</div>', [("b", bullets)]
-        )
-    assert "run 2" in error.value.detail
-    # A dropped internal pipe is dropped source text, not presentation.
-    with pytest.raises(BrowserSourceReadbackError):
-        stamp_source_block_ids(
-            "<div>꿀벌쌤 숏폼대행 1인사업자 홀로서기</div>", [("h", "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기")]
-        )
+    # The same items out of source order bind and are reported, not rejected.
+    out_of_order = stamp_source_blocks(
+        '<div class="side">업무 범위</div><div class="copy">사업 정의<br>편집자와의 차이</div>', [("b", bullets)]
+    )
+    assert [item.kind for item in out_of_order.deviations] == ["out_of_order"]
+    assert 'data-source-block-id="b:run:2"' in out_of_order.html
+    # A dropped internal pipe leaves every source character on the slide.
+    joined = stamp_source_blocks(
+        "<div>꿀벌쌤 숏폼대행 1인사업자 홀로서기</div>", [("h", "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기")]
+    )
+    assert [item.kind for item in joined.deviations] == ["shared_owner"]
 
 
 def test_stamp_repairs_an_appended_full_stop_after_a_drawn_marker() -> None:
@@ -384,11 +416,19 @@ def test_browser_readback_accepts_the_same_presentation_drift_as_stamping() -> N
     )
     result = verify_browser_source_readback(manifest=manifest, outline=outline, browser_metrics=metrics)
     assert result.passed
+    # One element carrying a block's items in another order is measured, not
+    # failed; text the browser never saw still is.
     drifted = _metrics(
         _element("b1", "원문 제목", 0, role="title"),
         _element("b2", "한 줄 소개 프로필 사진", 1),
         _element("b3", "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기", 2),
     )
+    assert verify_browser_source_readback(manifest=manifest, outline=outline, browser_metrics=drifted).passed
+    absent = _metrics(
+        _element("b1", "원문 제목", 0, role="title"),
+        _element("b2", "프로필 사진", 1),
+        _element("b3", "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기", 2),
+    )
     with pytest.raises(BrowserSourceReadbackError) as error:
-        verify_browser_source_readback(manifest=manifest, outline=outline, browser_metrics=drifted)
+        verify_browser_source_readback(manifest=manifest, outline=outline, browser_metrics=absent)
     assert "b2" in error.value.block_ids

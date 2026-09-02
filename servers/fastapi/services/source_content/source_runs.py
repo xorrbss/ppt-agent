@@ -43,6 +43,12 @@ _MARKER_ONLY = re.compile(
 _RUN_ID = re.compile(r"^(?P<block>.+):run:(?P<start>\d+)(?:-(?P<end>\d+))?$")
 
 
+def _squash(value: object) -> str:
+    """Drop whitespace entirely so layout cannot hide present source text."""
+
+    return re.sub(r"\s+", "", str(value or ""))
+
+
 def normalize_source_text(value: object) -> str:
     """Collapse layout whitespace exactly like the readback verifiers."""
 
@@ -101,6 +107,27 @@ class SourceRunProjection:
         if first.marker:
             return (full, self.text[first.body_begin : self.runs[end].end])
         return (full,)
+
+    def contains(self, start: int, end: int, rendered: object) -> bool:
+        """Return whether one element's text carries this span's characters.
+
+        Whitespace is the template's and the characters are the source's, so
+        both sides are compared with whitespace removed and every run's marker
+        optional.  Unlike :meth:`accepts` the element may carry other text as
+        well, and the span's runs may appear in any position: this answers
+        *presence*, which is the content contract, while ``accepts`` answers
+        exclusive ownership, which is a measurement convenience.
+        """
+
+        haystack = _squash(rendered)
+        if not haystack:
+            return False
+        for index in range(start, end + 1):
+            run = self.runs[index]
+            body = _squash(run.body)
+            if body and body not in haystack:
+                return False
+        return True
 
     def accepts(self, start: int, end: int, rendered: object) -> bool:
         """Return whether one element's rendered text satisfies a span.

@@ -17,7 +17,6 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from functools import partial
 import hashlib
 import math
 import re
@@ -85,6 +84,9 @@ class BrowserSourceReadbackResult:
     missing_block_ids: tuple[str, ...] = ()
     order_violations: int = 0
     visibility_failures: tuple[str, ...] = ()
+    # Blocks bound to a shared or out-of-order owner: measured and reported,
+    # never a failure.  Where a template places a block's own items is layout.
+    binding_deviations: int = 0
 
     @property
     def passed(self) -> bool:
@@ -101,6 +103,7 @@ class BrowserSourceReadbackResult:
             "evidence": [item.as_dict() for item in self.evidence],
             "missingBlockIds": list(self.missing_block_ids),
             "orderViolations": self.order_violations,
+            "bindingDeviations": self.binding_deviations,
             "visibilityFailures": list(self.visibility_failures),
             "passed": self.passed,
             # Only this browser verifier can mint the explicit admission bit
@@ -531,6 +534,50 @@ def _fold_run_evidence(block_id: str, runs: Sequence[tuple[int, int, int, _Obser
     )
 
 
+def _dom_order_follows_source(
+    projection: SourceRunProjection,
+    source_ordered: Sequence[tuple[int, int, int, Mapping[str, Any]]],
+) -> bool:
+    """Mirror the stamping binder's order rule for one block's own runs.
+
+    Bullets, arrows and lines enumerate a sequence the source author chose, so
+    their elements must appear in that order in the DOM.  A span that begins
+    right after a pipe is an independent label whose slot the new template
+    owns -- a brand beside a course title, regularly emitted second -- so it
+    may be rendered anywhere.  That is exactly the exemption ``_bind_block``
+    applies when it searches the document from the start again, and this gate
+    has to grant it too or it rejects the decks stamping accepted.
+    """
+
+    last_dom = -1
+    for dom_index, start, _end, _metric in source_ordered:
+        if not 0 <= start < projection.run_count:
+            return False
+        if not projection.runs[start].order_free_before and dom_index <= last_dom:
+            return False
+        last_dom = max(last_dom, dom_index)
+    return True
+
+
+def _span_matcher(
+    projection: SourceRunProjection, start: int, end: int
+) -> Callable[[str], bool]:
+    """Accept an element that owns the span, or one that merely carries it.
+
+    Exclusive ownership is the better measurement and stays the first test.
+    An element carrying the span among other text is what the binder falls back
+    to, and rejecting it here would fail a slide whose source text is entirely
+    present -- the opposite of what the content contract promises.
+    """
+
+    def matches(rendered: str) -> bool:
+        return projection.accepts(start, end, rendered) or projection.contains(
+            start, end, rendered
+        )
+
+    return matches
+
+
 def _verify_run_partition(
     block_id: str,
     projection: SourceRunProjection | None,
@@ -542,15 +589,20 @@ def _verify_run_partition(
 ) -> tuple[BrowserSourceBlockEvidence | None, bool, bool]:
     """Return ``(evidence, complete, ordered)`` for a run-bound block.
 
-    Runs must partition the projection exactly (every run once, no overlap)
-    and appear in source order in the DOM.  Each run element is held to the
-    same geometry/visibility/QID/text contract as a whole-block binding.
+    Runs must partition the projection exactly (every run once, no overlap).
+    Each run element is held to the same geometry/visibility/QID/text contract
+    as a whole-block binding.  DOM order is still measured and returned so the
+    receipt can carry it, but the caller records it rather than failing on it.
     """
 
-    ordered_runs = sorted(runs, key=lambda item: item[0])
-    spans = [(start, end) for _, start, end, _ in ordered_runs]
     if projection is None or projection.run_count < 2:
         return None, False, True
+    # Completeness is a property of the projection, not of the page: sort by
+    # source span so a block whose template placed a later run first can still
+    # prove every run is bound exactly once.  Ordering is checked separately,
+    # against the same exemption the binder applies.
+    source_ordered = sorted(runs, key=lambda item: (item[1], item[2]))
+    spans = [(start, end) for _, start, end, _ in source_ordered]
     expected_cursor = 0
     complete = True
     for start, end in spans:
@@ -559,15 +611,15 @@ def _verify_run_partition(
             break
         expected_cursor = end + 1
     complete = complete and expected_cursor == projection.run_count
-    ordered = spans == sorted(spans)
+    ordered = _dom_order_follows_source(projection, source_ordered)
     if not complete:
         return None, False, ordered
     observed: list[tuple[int, int, int, _Observation]] = []
     failed = False
-    for _, start, end, metric in ordered_runs:
+    for _, start, end, metric in source_ordered:
         observation = _observe(metric, *canvas)
         run_id = source_run_binding_id(block_id, start, end, projection.run_count)
-        accepts = partial(projection.accepts, start, end)
+        accepts = _span_matcher(projection, start, end)
         if observation.text_failed(accepts, deterministic_source_qid(run_id), qid_counts, seen_qids):
             failed = True
         seen_qids.add(observation.qid)
@@ -658,6 +710,7 @@ def verify_browser_source_readback(*, manifest: Any, outline: Any, browser_metri
     missing: list[str] = []
     visibility_failures: list[str] = []
     order_violations = 0
+    binding_deviations = 0
     checked = 0
     failed_slides: set[int] = set()
     for index, (raw_slide, metrics) in enumerate(zip(slides, metric_slides, strict=True)):
@@ -726,7 +779,7 @@ def verify_browser_source_readback(*, manifest: Any, outline: Any, browser_metri
             expected_qid = declared_qid or deterministic_source_qid(block_id)
             if block_kind == "text":
                 projection = _block_projection(block)
-                accepts = partial(projection.accepts, *projection.whole) if projection is not None else None
+                accepts = _span_matcher(projection, *projection.whole) if projection is not None else None
                 failed = observation.text_failed(accepts, expected_qid, qid_counts, seen_qids)
             else:
                 failed = (
@@ -779,8 +832,7 @@ def verify_browser_source_readback(*, manifest: Any, outline: Any, browser_metri
             )
             seen.add(block_id)
             if not ordered:
-                order_violations += 1
-                failed_slides.add(index)
+                binding_deviations += 1
             if block_evidence is None:
                 missing.append(block_id)
                 failed_slides.add(index)
@@ -805,7 +857,7 @@ def verify_browser_source_readback(*, manifest: Any, outline: Any, browser_metri
         # runs to appear in source order.
         evidence.extend(item[2] for item in sorted(observed, key=lambda item: item[0]))
 
-    result = BrowserSourceReadbackResult(len(slides), checked, tuple(evidence), tuple(dict.fromkeys(missing)), order_violations, tuple(dict.fromkeys(visibility_failures)))
+    result = BrowserSourceReadbackResult(len(slides), checked, tuple(evidence), tuple(dict.fromkeys(missing)), order_violations, tuple(dict.fromkeys(visibility_failures)), binding_deviations)
     if not result.passed:
         raise BrowserSourceReadbackError("source_content_browser_readback_failed", detail="browser source text/geometry/visibility contract failed", block_ids=tuple(dict.fromkeys((*result.missing_block_ids, *result.visibility_failures))), slide_indices=tuple(sorted(failed_slides)), order_violations=result.order_violations)
     return result

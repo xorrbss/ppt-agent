@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import logging
 import os
 import time
 import uuid
@@ -69,7 +70,8 @@ from services.authored_batch_policy import (
     plan_authored_recovery_batches,
 )
 from services.source_images.models import SourceImageCandidate
-from services.source_content.browser_readback import stamp_source_block_ids, BrowserSourceReadbackError
+from services.source_content.browser_readback import BrowserSourceReadbackError
+from services.source_content.text_stamping import stamp_source_blocks
 from utils.asset_directory_utils import get_images_directory
 from utils.authored_illustrations import (
     enforce_strict_source_image_size_floor,
@@ -105,6 +107,9 @@ from utils.slide_capture import (
     get_cached_browser_metrics,
     render_html_to_png,
 )
+
+LOGGER = logging.getLogger(__name__)
+
 
 
 # Provider authoring consumes one selected-provider policy shared with the
@@ -1041,9 +1046,19 @@ async def _author_illustrate_render_pipeline(
 
             if source_block_bindings is not None and index < len(source_block_bindings):
                 try:
-                    illustrated_html = stamp_source_block_ids(
+                    stamped_source = stamp_source_blocks(
                         illustrated_html, source_block_bindings[index]
                     )
+                    illustrated_html = stamped_source.html
+                    if stamped_source.deviations:
+                        # Layout compromises, not lost text: the source stayed
+                        # verbatim but no element owns it exclusively or the
+                        # template placed one block's items out of source order.
+                        LOGGER.info(
+                            "source binding deviations slide=%d %s",
+                            index,
+                            [item.as_dict() for item in stamped_source.deviations],
+                        )
                 except BrowserSourceReadbackError as exc:
                     raise AuthoredStageError(
                         slide_index=index,

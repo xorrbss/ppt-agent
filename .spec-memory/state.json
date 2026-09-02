@@ -131,7 +131,8 @@
     "authored.generation.batch-authoring": "decisions/authored.generation.batch-authoring.1.json",
     "public-v2.generation-deadline-scaling": "decisions/public-v2.generation-deadline-scaling.1.json",
     "source-content.restyle-block-order": "decisions/source-content.restyle-block-order.1.json",
-    "source-content.verbatim-presentation-tolerance": "decisions/source-content.verbatim-presentation-tolerance.1.json"
+    "source-content.verbatim-presentation-tolerance": "decisions/source-content.verbatim-presentation-tolerance.1.json",
+    "source-content.verbatim-presence-contract": "decisions/source-content.verbatim-presence-contract.1.json"
   },
   "readFirst": [
     "AGENTS.md"
