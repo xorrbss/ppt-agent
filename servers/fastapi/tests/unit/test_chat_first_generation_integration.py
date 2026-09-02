@@ -45,7 +45,13 @@ from models.sql.workspace import (
     WorkspaceOperationEvent,
     WorkspaceOutbox,
 )
-from services import workspace_asset_service, workspace_legacy_write_gate, workspace_operation_runner
+from services import (
+    public_generation_slide_count,
+    workspace_asset_service,
+    workspace_legacy_write_gate,
+    workspace_operation_runner,
+)
+from services.source_content.errors import SourceContentError
 from services.workspace_artifact_publication_service import (
     WorkspaceArtifactPublicationError,
     prepare_workspace_generation_artifact,
@@ -1883,6 +1889,115 @@ def test_stale_attempt_never_publishes_artifact(tmp_path: Path, monkeypatch):
             assert not artifact.absolute_path.exists()
         finally:
             await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def _source_content_request(
+    presentation_id: uuid.UUID, *, n_slides: int
+) -> GeneratePresentationRequest:
+    return GeneratePresentationRequest(
+        presentation_id=presentation_id,
+        content="Restyle the uploaded deck",
+        n_slides=n_slides,
+        language="en",
+        template="authored",
+        strategy="authored",
+        authored_style="default",
+        sourceMode="source_content_restyle",
+        sourceContentManifestPin={
+            "manifestId": "scm_source-deck",
+            "digest": "sha256:" + "b" * 64,
+        },
+        contentPolicy={"text": "verbatim"},
+    )
+
+
+async def _admit_source_content_request_plan(
+    monkeypatch, request: GeneratePresentationRequest
+):
+    observed: dict[str, object] = {}
+
+    async def capture_admission(session, **kwargs):
+        observed.update(kwargs)
+        return SimpleNamespace(id=uuid.uuid4())
+
+    monkeypatch.setattr(
+        presentation_generate,
+        "admit_public_operation_compatible_v2",
+        capture_admission,
+    )
+    monkeypatch.setattr(
+        presentation_generate,
+        "current_principal_context",
+        lambda: object(),
+    )
+    await presentation_generate._admit_generation_operation_v2_compatible(
+        object(),
+        request=request,
+        presentation=SimpleNamespace(n_slides=28),
+        operation=SimpleNamespace(id=uuid.uuid4()),
+    )
+    return observed["request_plan"]
+
+
+def test_source_content_admission_charges_source_pages_not_slide_hint(monkeypatch):
+    """A page-locked restyle authors one slide per source page.
+
+    Admission sizes the immutable deadline from its count, so it must charge
+    the manifest's page count rather than the caller's ``n_slides`` hint.
+    """
+
+    async def scenario():
+        request = _source_content_request(uuid.uuid4(), n_slides=28)
+        manifest_admissions: list[object] = []
+
+        async def admit_manifest(candidate, *, sql_session, owner_id):
+            manifest_admissions.append(candidate)
+            candidate._source_document_outline = SimpleNamespace(
+                source_slide_count=35
+            )
+
+        monkeypatch.setattr(
+            public_generation_slide_count,
+            "admit_source_content_request",
+            admit_manifest,
+        )
+
+        first = await _admit_source_content_request_plan(monkeypatch, request)
+        replay = await _admit_source_content_request_plan(monkeypatch, request)
+
+        assert first.slide_count == 35
+        # A replay reuses the frozen outline, so the count cannot drift.
+        assert replay.slide_count == 35
+        assert len(manifest_admissions) == 1
+
+    asyncio.run(scenario())
+
+
+def test_source_content_admission_defers_manifest_rejection_to_validation(
+    monkeypatch,
+):
+    """An unadmittable manifest keeps the caller count so validation projects it."""
+
+    async def scenario():
+        request = _source_content_request(uuid.uuid4(), n_slides=28)
+
+        async def reject_manifest(candidate, *, sql_session, owner_id):
+            raise SourceContentError(
+                "source_content_manifest_invalid", status_code=409
+            )
+
+        monkeypatch.setattr(
+            public_generation_slide_count,
+            "admit_source_content_request",
+            reject_manifest,
+        )
+
+        plan = await _admit_source_content_request_plan(monkeypatch, request)
+
+        assert plan.slide_count == 28
+        assert request._source_document_outline is None
 
     asyncio.run(scenario())
 

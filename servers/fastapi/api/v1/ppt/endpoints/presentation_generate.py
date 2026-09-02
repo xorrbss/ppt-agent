@@ -198,6 +198,9 @@ from services.public_operation_admission import (
     plan_weighted_resources,
 )
 from services.provider_usage_instrumentation import provider_usage_scope
+from services.public_generation_slide_count import (
+    resolve_source_content_admission_slide_count,
+)
 from services.workspace_service import (
     WorkspaceServiceError,
     activate_workspace_operation,
@@ -2273,11 +2276,15 @@ async def _bootstrap_generation_workspace(
 def _generation_admission_slide_count(
     request: GeneratePresentationRequest,
     presentation: PresentationModel,
+    *,
+    source_slide_count: int | None = None,
 ) -> int:
     """Resolve the count the worker will actually generate."""
 
     slide_count = (
-        len(request.slides_markdown)
+        source_slide_count
+        if source_slide_count is not None
+        else len(request.slides_markdown)
         if request.slides_markdown
         else request.n_slides
     )
@@ -2291,6 +2298,27 @@ def _generation_admission_slide_count(
     return slide_count
 
 
+async def _source_content_admission_slide_count(
+    request: GeneratePresentationRequest,
+    sql_session: AsyncSession,
+) -> int | None:
+    """Charge a page-locked restyle for its source pages, not the caller's hint."""
+
+    try:
+        return await resolve_source_content_admission_slide_count(
+            request,
+            sql_session=sql_session,
+            owner_id=get_current_owner_id(),
+        )
+    except SourceContentError:
+        # The admission row must exist before a validation failure can be
+        # projected onto the workspace operation, so validation re-runs this
+        # same manifest admission right after the row is written and reports
+        # the failure there.  The fallback count only sizes an admission that
+        # then fails; no generation runs against it.
+        return None
+
+
 async def _admit_generation_operation_v2_compatible(
     sql_session: AsyncSession,
     *,
@@ -2300,7 +2328,13 @@ async def _admit_generation_operation_v2_compatible(
 ) -> uuid.UUID:
     """Bind the browser-compatible request to one complete v2 admission."""
 
-    slide_count = _generation_admission_slide_count(request, presentation)
+    slide_count = _generation_admission_slide_count(
+        request,
+        presentation,
+        source_slide_count=await _source_content_admission_slide_count(
+            request, sql_session
+        ),
+    )
     try:
         admission = await admit_public_operation_compatible_v2(
             sql_session,
