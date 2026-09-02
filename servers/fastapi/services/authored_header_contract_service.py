@@ -101,6 +101,25 @@ def page_number_mode_for(contract: Optional[AuthoredHeaderContract]) -> str:
     return NO_PAGE_NUMBER_MODE
 
 
+def generation_page_number_mode(
+    contract: Optional[AuthoredHeaderContract],
+    *,
+    source_verbatim: bool,
+) -> str:
+    """Resolve the mode for one generation, deferring to a verbatim source.
+
+    A verbatim restyle inherits the source deck's own page numbers as source
+    text that must survive character for character.  Numbering the slides again
+    puts two different numbers on one slide -- a source ``10`` beside a
+    generated ``09`` -- and invites the author to treat the generated one as the
+    source's and drop a source block.  The source's numbering is the deck's.
+    """
+
+    if source_verbatim:
+        return NO_PAGE_NUMBER_MODE
+    return page_number_mode_for(contract)
+
+
 def load_header_contract(theme: object) -> Optional[AuthoredHeaderContract]:
     """Rebuild a persisted contract, treating an unreadable one as absent."""
     if not isinstance(theme, dict):
@@ -118,6 +137,7 @@ def load_header_contract(theme: object) -> Optional[AuthoredHeaderContract]:
 __all__ = [
     "default_header_contract",
     "load_header_contract",
+    "generation_page_number_mode",
     "page_number_mode_for",
     "resolve_header_contract",
 ]

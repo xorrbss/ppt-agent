@@ -86,22 +86,49 @@ def _normalise_text(value: str) -> str:
 
 
 class _VisibleTextParser(HTMLParser):
-    """Small dependency-free visible-text extractor for authored HTML."""
+    """Small dependency-free visible-text extractor for authored HTML.
+
+    Text is concatenated the way a browser lays it out: an inline element does
+    not separate the characters around it, while a block-level boundary and an
+    explicit ``br`` do.  Separating on *every* tag turned emphasis inside a
+    source sentence -- ``<strong>8시간</strong>의 원칙`` -- into ``8시간 의 원칙``
+    and made verbatim source text look absent.
+    """
 
     _HIDDEN = frozenset({"script", "style", "noscript", "template"})
+    _INLINE = frozenset({
+        "a", "abbr", "b", "bdi", "bdo", "big", "cite", "code", "data", "dfn",
+        "em", "font", "i", "kbd", "mark", "nobr", "q", "rp", "rt", "ruby", "s",
+        "samp", "small", "span", "strong", "sub", "sup", "time", "tt", "u",
+        "var", "wbr",
+    })
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self._hidden_depth = 0
         self.parts: list[str] = []
 
+    def _boundary(self, tag: str) -> None:
+        if tag not in self._INLINE and not self._hidden_depth:
+            self.parts.append("\n")
+
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag.lower() in self._HIDDEN:
+        lowered = tag.lower()
+        if lowered in self._HIDDEN:
             self._hidden_depth += 1
+            return
+        self._boundary(lowered)
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self._boundary(tag.lower())
 
     def handle_endtag(self, tag: str) -> None:
-        if tag.lower() in self._HIDDEN and self._hidden_depth:
-            self._hidden_depth -= 1
+        lowered = tag.lower()
+        if lowered in self._HIDDEN:
+            if self._hidden_depth:
+                self._hidden_depth -= 1
+            return
+        self._boundary(lowered)
 
     def handle_data(self, data: str) -> None:
         if not self._hidden_depth and data:
@@ -120,7 +147,7 @@ def visible_text(html: str) -> str:
             "source_content_verbatim_readback_invalid",
             detail="authored slide HTML could not be parsed",
         ) from error
-    return _normalise_text(" ".join(parser.parts))
+    return _normalise_text("".join(parser.parts))
 
 
 def _block_raw_text(block: Mapping[str, Any]) -> str:
@@ -148,6 +175,21 @@ def _block_text(block: Mapping[str, Any]) -> str:
     return _normalise_text(_block_raw_text(block))
 
 
+def _layout_free(value: str) -> str:
+    """Drop whitespace entirely so layout cannot hide present source text.
+
+    ``_normalise_text`` already collapses whitespace runs, which is not enough:
+    a restyle may put a source run's parts in separate boxes (a metric widget
+    rendering ``10곳 찾기`` as ``10`` beside ``곳 찾기``) or wrap part of it in
+    emphasis.  Whitespace is the template's, the characters are the source's.
+    Single-element ownership and uniqueness are proven by the stamping gate, so
+    matching here only has to answer whether the characters are present in
+    order.
+    """
+
+    return re.sub(r"\s+", "", value)
+
+
 def _find_block_runs(rendered: str, block: Mapping[str, Any], cursor: int) -> int:
     """Return the cursor after the block's projected runs, or ``-1``.
 
@@ -163,7 +205,10 @@ def _find_block_runs(rendered: str, block: Mapping[str, Any], cursor: int) -> in
     for run in projection.runs:
         forms = (run.marker + run.body, run.body) if run.marker else (run.body,)
         position = -1
-        for form in forms:
+        for raw_form in forms:
+            form = _layout_free(raw_form)
+            if not form:
+                continue
             position = rendered.find(form, cursor)
             if position >= 0:
                 cursor = position + len(form)
@@ -247,7 +292,7 @@ def verify_source_verbatim_readback(
             for block_id in expected_ids:
                 if block_id not in actual_ids and block_id not in missing:
                     missing.append(block_id)
-        rendered = visible_text(str(html))
+        rendered = _layout_free(visible_text(str(html)))
         # Restyling recomposes the page: the new template owns where a source
         # block lands, so one block's position relative to *another* block is
         # not part of the contract.  Source shape order is not even the source's

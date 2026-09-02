@@ -116,3 +116,33 @@ def test_verbatim_readback_still_requires_one_occurrence_per_repeated_block() ->
         outline=_outline("b1", "b2"),
         htmls=["<p>반복 문구</p><p>반복 문구</p>"],
     ).passed
+
+
+def test_visible_text_keeps_inline_emphasis_joined_and_separates_blocks() -> None:
+    # A browser renders <strong>8시간</strong>의 원칙 as one word run; separating
+    # on every tag made verbatim source text look absent.
+    assert visible_text("<div><strong>8시간</strong>의 원칙</div>") == "8시간의 원칙"
+    assert visible_text("<div>앞</div><div>뒤</div>") == "앞 뒤"
+    assert visible_text("<p>첫 줄<br>둘째 줄</p>") == "첫 줄 둘째 줄"
+
+
+def test_verbatim_readback_accepts_a_run_split_across_layout_boxes() -> None:
+    # A metric widget renders "10곳 찾기" as a big "10" beside "곳 찾기"; the
+    # whitespace is the template's and the characters are the source's.
+    result = verify_source_verbatim_readback(
+        manifest=_manifest(("b1", "10곳 찾기 → 3곳 연락")),
+        outline=_outline("b1"),
+        htmls=['<div><div class="num">10</div><div class="unit">곳 찾기</div>'
+               '<div class="next">3곳 연락</div></div>'],
+    )
+    assert result.passed
+
+
+def test_verbatim_readback_still_rejects_altered_characters() -> None:
+    with pytest.raises(SourceContentReadbackError) as error:
+        verify_source_verbatim_readback(
+            manifest=_manifest(("b1", "10곳 찾기")),
+            outline=_outline("b1"),
+            htmls=["<div><div>11</div><div>곳 찾기</div></div>"],
+        )
+    assert error.value.block_ids == ("b1",)

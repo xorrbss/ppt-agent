@@ -62,7 +62,7 @@ from services.authored_deck_plan_checkpoint import (
     resolve_with_authored_deck_plan_checkpoint,
 )
 from services.authored_header_contract_service import (
-    page_number_mode_for,
+    generation_page_number_mode,
     resolve_header_contract,
 )
 from services.authored_presentation_pipeline import _author_illustrate_render_pipeline
@@ -1994,7 +1994,12 @@ async def _generate_authored_presentation(
         )
     pipeline_kwargs = {
         "header_contract": header_contract,
-        "page_number_mode": page_number_mode_for(header_contract),
+        "page_number_mode": generation_page_number_mode(
+            header_contract,
+            source_verbatim=(
+                source_reflow and composition_profile.text_mode == "verbatim"
+            ),
+        ),
         "chapter_plan": chapter_plan,
         "illustration_plan": illustration_plan,
         "instructions": request.instructions,
