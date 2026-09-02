@@ -4,15 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import base64
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 import copy
 import hashlib
 import json
 import logging
 import math
 import time
-from typing import Any, NamedTuple
-import unicodedata
+from typing import Any
 import uuid
 
 from lxml import html as lxml_html
@@ -27,6 +26,8 @@ from services.authored_vnext.deck_ir.integration import DeckIrIntegrationError
 from services.authored_vnext.deck_ir.product_adapter import (
     ProductDeckIrExecutionAdapter,
 )
+from services.authored_vnext import source_render_geometry as geometry
+from services.authored_vnext.source_render_geometry import RenderGeometryError
 from services.authored_vnext.design_pack import RegisteredDesignPack
 from services.authored_vnext.composition import (
     CompositionError,
@@ -76,7 +77,6 @@ from services.authored_vnext.source_unitization import (
 )
 from services.authored_vnext.source_verbatim_capacity import (
     CapacityAdmissionError,
-    _BODY_FONT_FLOOR_PX,
     _COMPONENT_OVERLAY_PADDING_PX,
     _COMPONENT_VISUAL_GAP_PX,
     _FOOTER_BODY_GAP_PX,
@@ -647,69 +647,14 @@ def _flow_role(slot: Mapping[str, object]) -> str:
     ).strip().lower()
 
 
-# Single source of truth for the numbers that appear in the emitted flow CSS.
-# Both `_append_semantic_block` (which writes the CSS) and
-# `_estimated_flow_block_height` (which predicts the rendered height of that
-# CSS) read these, so the two can no longer drift apart.
-_TITLE_LINE_HEIGHT = 1.18
-_BODY_LINE_HEIGHT = 1.32
-# Card chrome: `padding:10px 12px` plus a 1px border on every side.
-_CARD_PADDING_X_PX = 12.0
-_CARD_PADDING_Y_PX = 10.0
-_CARD_BORDER_PX = 1.0
-_CARD_STACK_GAP_PX = 5.0
-# Media card chrome: `padding:10px`, a 1px border, and a fixed media column.
-_MEDIA_CARD_PADDING_PX = 10.0
-_MEDIA_CARD_MEDIA_COLUMN_PX = 52.0
-_MEDIA_CARD_COLUMN_GAP_PX = 10.0
-_MEDIA_CARD_IMAGE_PX = 48.0
-_MEDIA_CARD_TEXT_GAP_PX = 4.0
-# Process step grid: `gap:5px 10px` around an `auto minmax(0,1fr)` track pair.
-_PROCESS_STEP_ROW_GAP_PX = 5.0
-_PROCESS_STEP_COLUMN_GAP_PX = 10.0
-_PROCESS_BODY_GAP_PX = 4.0
-# Plain stacked text wrapper: `gap:4px`.
-_TEXT_STACK_GAP_PX = 4.0
-# Table matrix cells: `gap:1px 10px`, `padding:1px 6px`, `border-left:2px`
-# and a `line-height:1.08!important` that overrides the inherited text role.
-_TABLE_ROW_GAP_PX = 1.0
-_TABLE_COLUMN_GAP_PX = 10.0
-_TABLE_CELL_PADDING_X_PX = 6.0
-_TABLE_CELL_PADDING_Y_PX = 1.0
-_TABLE_CELL_BORDER_LEFT_PX = 2.0
-_TABLE_CELL_LINE_HEIGHT = 1.08
-
-# Semantic roles the emitter special-cases. Kept explicit so that role
-# classification stays total: an unlisted role must never silently inherit the
-# caller's slot role.
-_PROCESS_STEP_HEADING_ROLES = frozenset(
-    {"title", "heading", "step-title", "step-heading"}
-)
-_PROCESS_STEP_NUMBER_ROLES = frozenset({"process-number", "step-number"})
-_TITLE_TEXT_ROLES = frozenset({"title", "heading", "section-heading"})
-_NUMERIC_EMPHASIS_ROLES = frozenset({"process-number", "step-number", "kpi-value"})
-_FLOOR_FONT_ROLES = frozenset({"eyebrow", "kpi-label", "compact-footer"})
-_BODY_TEXT_ROLES = frozenset(
-    {"body", "lede", "step-title", "step-heading"}
-    | _NUMERIC_EMPHASIS_ROLES
-    | _FLOOR_FONT_ROLES
-)
-
-
 def _flow_font_px(
     slot: Mapping[str, object], *, role: str, adaptive_scale: float
 ) -> float:
-    style = _flow_mapping(slot, "textStyle")
-    declared = _flow_number(style.get("fontSize"), 0.0)
-    title_like = role in {"title", "headline", "heading"}
-    # CSS pixels convert to points at 0.75pt/px. Dense verbatim source pages
-    # retain a 12pt floor while title defaults preserve a clear hierarchy.
-    default = 40.0 if title_like else 22.0
-    minimum = 32.0 if title_like else (SOURCE_NATIVE_MIN_BODY_FONT_PT / 0.75)
-    resolved = max(minimum, max(minimum, declared or default) * adaptive_scale)
-    if resolved < minimum - 0.01:
-        raise SourceNativeGenerationError("source_native_text_readability_failed")
-    return resolved
+    return geometry.flow_font_px(
+        geometry.slot_declared_font_px(slot),
+        role=role,
+        adaptive_scale=adaptive_scale,
+    )
 
 
 def _flow_text_css(
@@ -735,7 +680,8 @@ def _flow_text_css(
     return (
         f"font-family:'{family}';font-size:{font_px:.2f}px;"
         f"font-weight:{weight};"
-        f"line-height:{_TITLE_LINE_HEIGHT if role == 'title' else _BODY_LINE_HEIGHT};"
+        f"line-height:"
+        f"{geometry.TITLE_LINE_HEIGHT if role == 'title' else geometry.BODY_LINE_HEIGHT};"
         f"text-align:{alignment};color:{color};letter-spacing:-0.01em"
     )
 
@@ -805,18 +751,38 @@ def _unit_semantic_role(unit: SealedContentUnit) -> str:
 
 
 def _flow_blocks(units: list[SealedContentUnit]) -> list[list[SealedContentUnit]]:
-    """Retain each digest-bound semantic group as one compositor block."""
+    """Retain each digest-bound semantic group as one compositor block.
 
+    A semantic group is atomic: `_apply_composition_plan` requires exactly one
+    wrapper per group id whose `data-content-unit-ids` matches the manifest
+    order. So a group is emitted once, at the position of its first member, and
+    keeps every member even when the group is not contiguous in this lane.
+    Ungrouped table cells keep their contiguous-run behaviour.
+    """
+
+    members: dict[str, list[SealedContentUnit]] = {}
+    for unit in units:
+        group_id = _unit_group_id(unit)
+        if group_id:
+            members.setdefault(group_id, []).append(unit)
     blocks: list[list[SealedContentUnit]] = []
+    emitted: set[str] = set()
     index = 0
     while index < len(units):
         group_id = _unit_group_id(units[index])
-        end = index + 1
         if group_id:
-            while end < len(units) and _unit_group_id(units[end]) == group_id:
-                end += 1
-        elif _unit_boundary_kind(units[index]) == "table-cell":
-            while end < len(units) and _unit_boundary_kind(units[end]) == "table-cell":
+            if group_id not in emitted:
+                emitted.add(group_id)
+                blocks.append(members[group_id])
+            index += 1
+            continue
+        end = index + 1
+        if _unit_boundary_kind(units[index]) == "table-cell":
+            while (
+                end < len(units)
+                and not _unit_group_id(units[end])
+                and _unit_boundary_kind(units[end]) == "table-cell"
+            ):
                 end += 1
         blocks.append(units[index:end])
         index = end
@@ -851,46 +817,12 @@ def _semantic_boolean(unit: SealedContentUnit, key: str) -> bool:
 def _flow_table_matrix_shape(
     block: list[SealedContentUnit],
 ) -> tuple[int, int] | None:
-    has_metadata = any(
-        _semantic_nonnegative_int(item, "table-row") is not None
-        or _semantic_nonnegative_int(item, "table-column") is not None
-        for item in block
-    )
-    if not has_metadata:
-        return None
-    if any(
-        _semantic_nonnegative_int(item, "table-row") is None
-        or _semantic_nonnegative_int(item, "table-column") is None
-        for item in block
-    ):
-        raise SourceNativeGenerationError("source_native_table_matrix_invalid")
-    rows = max(
-        int(_semantic_nonnegative_int(item, "table-row") or 0)
-        + _semantic_positive_int(item, "table-row-span")
-        for item in block
-    )
-    columns = max(
-        int(_semantic_nonnegative_int(item, "table-column") or 0)
-        + _semantic_positive_int(item, "table-column-span")
-        for item in block
-    )
-    occupied: set[tuple[int, int]] = set()
-    for item in block:
-        row = int(_semantic_nonnegative_int(item, "table-row") or 0)
-        column = int(_semantic_nonnegative_int(item, "table-column") or 0)
-        row_span = _semantic_positive_int(item, "table-row-span")
-        column_span = _semantic_positive_int(item, "table-column-span")
-        for row_index in range(row, row + row_span):
-            for column_index in range(column, column + column_span):
-                position = (row_index, column_index)
-                if position in occupied:
-                    raise SourceNativeGenerationError(
-                        "source_native_table_matrix_invalid"
-                    )
-                occupied.add(position)
-    if rows <= 0 or columns <= 0:
-        raise SourceNativeGenerationError("source_native_table_matrix_invalid")
-    return rows, columns
+    """Resolve the declared table matrix through the canonical geometry."""
+
+    try:
+        return geometry.table_matrix_shape(_render_units(block))
+    except RenderGeometryError as error:
+        raise SourceNativeGenerationError(error.code) from error
 
 
 def _flow_table_columns(block: list[SealedContentUnit]) -> int:
@@ -899,100 +831,28 @@ def _flow_table_columns(block: list[SealedContentUnit]) -> int:
     matrix_shape = _flow_table_matrix_shape(block)
     if matrix_shape is not None:
         return matrix_shape[1]
-    return max(2, min(4, math.ceil(len(block) ** 0.5)))
+    return geometry.auto_table_columns(len(block))
 
 
-def _flow_table_cell_width(base_cell_width: float, column_span: int) -> float:
-    """Content width of one emitted table cell.
+def _render_unit(unit: SealedContentUnit) -> geometry.RenderUnit:
+    """Project one sealed unit onto the canonical render-geometry view."""
 
-    Cells are laid out content-box, so the horizontal padding and the left
-    border come out of the grid track before the text is measured.
-    """
-
-    return max(
-        1.0,
-        base_cell_width * column_span
-        + _TABLE_COLUMN_GAP_PX * (column_span - 1)
-        - 2.0 * _TABLE_CELL_PADDING_X_PX
-        - _TABLE_CELL_BORDER_LEFT_PX,
+    return geometry.RenderUnit(
+        text=_unit_render_text(unit),
+        kind=unit.kind,
+        semantic_role=_unit_semantic_role(unit).lower(),
+        group_kind=_unit_group_kind(unit).lower(),
+        image_kind=_unit_image_kind(unit),
+        image_aspect=_unit_image_aspect(unit),
+        table_row=_semantic_nonnegative_int(unit, "table-row"),
+        table_column=_semantic_nonnegative_int(unit, "table-column"),
+        table_row_span=_semantic_positive_int(unit, "table-row-span"),
+        table_column_span=_semantic_positive_int(unit, "table-column-span"),
     )
 
 
-def _flow_table_cell_height(
-    unit: SealedContentUnit,
-    *,
-    cell_width: float,
-    font_px: float,
-) -> float:
-    """Height of one emitted table cell under its `line-height:1.08!important`."""
-
-    return (
-        _estimated_text_lines(
-            _unit_render_text(unit), width_px=cell_width, font_px=font_px
-        )
-        * font_px
-        * _TABLE_CELL_LINE_HEIGHT
-        + 2.0 * _TABLE_CELL_PADDING_Y_PX
-    )
-
-
-def _fixed_flow_table_height(
-    block: list[SealedContentUnit],
-    *,
-    column_width: float,
-    slot: Mapping[str, object],
-    adaptive_scale: float,
-    role: str,
-) -> tuple[float, int]:
-    shape = _flow_table_matrix_shape(block)
-    if shape is None:
-        raise SourceNativeGenerationError("source_native_table_matrix_unavailable")
-    rows, columns = shape
-    base_cell_width = max(
-        1.0, (column_width - (columns - 1) * _TABLE_COLUMN_GAP_PX) / columns
-    )
-    row_heights = [0.0] * rows
-    for unit in block:
-        column_span = _semantic_positive_int(unit, "table-column-span")
-        cell_height = _flow_table_cell_height(
-            unit,
-            cell_width=_flow_table_cell_width(base_cell_width, column_span),
-            font_px=_semantic_text_metrics(
-                unit,
-                slot=slot,
-                adaptive_scale=adaptive_scale,
-                fallback_role=role,
-            ).font_px,
-        )
-        per_row_height = cell_height / _semantic_positive_int(unit, "table-row-span")
-        start = int(_semantic_nonnegative_int(unit, "table-row") or 0)
-        for row_index in range(
-            start, start + _semantic_positive_int(unit, "table-row-span")
-        ):
-            row_heights[row_index] = max(row_heights[row_index], per_row_height)
-    return sum(row_heights) + _TABLE_ROW_GAP_PX * max(0, rows - 1), columns
-
-
-class _SemanticTextMetrics(NamedTuple):
-    """The text geometry `_semantic_text_css` emits for one sealed unit."""
-
-    text_role: str
-    font_px: float
-    line_height: float
-    css_suffix: str
-
-
-def _semantic_text_role(unit: SealedContentUnit, fallback: str) -> str:
-    """Classify every role the emitter special-cases, never by omission."""
-
-    semantic_role = _unit_semantic_role(unit).lower()
-    if semantic_role in _TITLE_TEXT_ROLES:
-        return "title"
-    if semantic_role in _BODY_TEXT_ROLES:
-        return "body"
-    if fallback in {"title", "headline", "heading"}:
-        return "title"
-    return "body"
+def _render_units(block: Sequence[SealedContentUnit]) -> list[geometry.RenderUnit]:
+    return [_render_unit(item) for item in block]
 
 
 def _semantic_text_metrics(
@@ -1001,53 +861,40 @@ def _semantic_text_metrics(
     slot: Mapping[str, object],
     adaptive_scale: float,
     fallback_role: str,
-) -> _SemanticTextMetrics:
-    """Resolve font size, line height and CSS overrides exactly once.
+) -> geometry.TextMetrics:
+    """Font size and line height the emitted CSS carries for one unit."""
 
-    `_semantic_text_css` renders this result and the flow estimator measures
-    it, so the predicted height of a text child cannot diverge from the CSS
-    that Chromium actually lays out.
+    return geometry.semantic_text_metrics(
+        semantic_role=_unit_semantic_role(unit).lower(),
+        group_kind=_unit_group_kind(unit).lower(),
+        fallback_role=fallback_role,
+        declared_font_px=geometry.slot_declared_font_px(slot),
+        adaptive_scale=adaptive_scale,
+    )
+
+
+def _semantic_weight_override(
+    *, semantic_role: str, process_header: bool
+) -> tuple[int, bool] | None:
+    """Font weight the emitter appends, and whether it restates the size.
+
+    The sizes themselves come from `geometry.semantic_text_metrics`, so this
+    only decides the purely presentational part of the declaration.
     """
 
-    semantic_role = _unit_semantic_role(unit).lower()
-    group_kind = _unit_group_kind(unit).lower()
-    body_px = _flow_font_px(slot, role="body", adaptive_scale=adaptive_scale)
-    # A process step heading is rendered with the body line rhythm so that the
-    # step number and its heading share one grid row cleanly.
-    process_header = (
-        group_kind == "process-step" and semantic_role in _PROCESS_STEP_HEADING_ROLES
-    )
-    text_role = "body" if process_header else _semantic_text_role(unit, fallback_role)
-    line_height = _TITLE_LINE_HEIGHT if text_role == "title" else _BODY_LINE_HEIGHT
-
-    def resolved(font_px: float, css_suffix: str) -> _SemanticTextMetrics:
-        return _SemanticTextMetrics(text_role, font_px, line_height, css_suffix)
-
     if process_header:
-        font_px = max(20.0, body_px * 1.08)
-        return resolved(font_px, f";font-size:{font_px:.2f}px;font-weight:700")
+        return 700, True
     if semantic_role == "title":
-        return resolved(
-            _flow_font_px(slot, role=text_role, adaptive_scale=adaptive_scale),
-            ";font-weight:750",
-        )
+        return 750, False
     if semantic_role in {"heading", "section-heading"}:
-        font_px = max(20.0, body_px * 1.18)
-        return resolved(font_px, f";font-size:{font_px:.2f}px;font-weight:700")
-    if semantic_role in _NUMERIC_EMPHASIS_ROLES:
-        font_px = max(24.0, body_px * 1.35)
-        return resolved(font_px, f";font-size:{font_px:.2f}px;font-weight:800")
-    if semantic_role in _FLOOR_FONT_ROLES:
-        return resolved(
-            _BODY_FONT_FLOOR_PX,
-            f";font-size:{_BODY_FONT_FLOOR_PX:.2f}px;font-weight:650",
-        )
+        return 700, True
+    if semantic_role in geometry.EMPHASIS_NUMBER_ROLES:
+        return 800, True
+    if semantic_role in geometry.FLOOR_FONT_ROLES:
+        return 650, True
     if semantic_role == "lede":
-        font_px = max(18.0, body_px)
-        return resolved(font_px, f";font-size:{font_px:.2f}px;font-weight:500")
-    return resolved(
-        _flow_font_px(slot, role=text_role, adaptive_scale=adaptive_scale), ""
-    )
+        return 500, True
+    return None
 
 
 def _semantic_text_css(
@@ -1057,16 +904,37 @@ def _semantic_text_css(
     adaptive_scale: float,
     fallback_role: str,
 ) -> str:
-    metrics = _semantic_text_metrics(
+    semantic_role = _unit_semantic_role(unit).lower()
+    group_kind = _unit_group_kind(unit).lower()
+    # A process step heading is emitted with the body line rhythm so the step
+    # number and its heading share one grid row cleanly.
+    process_header = (
+        group_kind == "process-step"
+        and semantic_role in geometry.PROCESS_HEADER_ROLES
+    )
+    text_role = (
+        "body"
+        if process_header
+        else geometry.semantic_text_role(
+            semantic_role=semantic_role, fallback_role=fallback_role
+        )
+    )
+    base = _flow_text_css(slot, role=text_role, adaptive_scale=adaptive_scale)
+    override = _semantic_weight_override(
+        semantic_role=semantic_role, process_header=process_header
+    )
+    if override is None:
+        return base
+    weight, restates_size = override
+    if not restates_size:
+        return base + f";font-weight:{weight}"
+    font_px = _semantic_text_metrics(
         unit,
         slot=slot,
         adaptive_scale=adaptive_scale,
         fallback_role=fallback_role,
-    )
-    return (
-        _flow_text_css(slot, role=metrics.text_role, adaptive_scale=adaptive_scale)
-        + metrics.css_suffix
-    )
+    ).font_px
+    return base + f";font-size:{font_px:.2f}px;font-weight:{weight}"
 
 
 def _append_semantic_block(
@@ -1125,11 +993,11 @@ def _append_semantic_block(
         wrapper.set(
             "style",
             "display:grid!important;"
-            f"grid-template-columns:{_MEDIA_CARD_MEDIA_COLUMN_PX:.0f}px minmax(0,1fr);"
-            f"gap:{_MEDIA_CARD_COLUMN_GAP_PX:.0f}px;"
+            f"grid-template-columns:{geometry.MEDIA_CARD_ICON_COLUMN_PX:.0f}px minmax(0,1fr);"
+            f"gap:{geometry.MEDIA_CARD_COLUMN_GAP_PX:.0f}px;"
             "align-items:start;min-width:0;min-height:0;flex:0 0 auto;"
-            f"padding:{_MEDIA_CARD_PADDING_PX:.0f}px;box-sizing:border-box;"
-            f"border:{_CARD_BORDER_PX:.0f}px solid rgba(37,99,235,.22);border-radius:12px;"
+            f"padding:{geometry.MEDIA_CARD_PADDING_PX:.0f}px;box-sizing:border-box;"
+            f"border:{geometry.CARD_BORDER_PX:.0f}px solid rgba(37,99,235,.22);border-radius:12px;"
             "background:rgba(255,255,255,.045);overflow:hidden;break-inside:avoid",
         )
     elif group_kind == "process-step":
@@ -1141,11 +1009,11 @@ def _append_semantic_block(
                 if process_media_height > 0.0
                 else "grid-template-rows:auto auto;"
             )
-            + f"gap:{_PROCESS_STEP_ROW_GAP_PX:.0f}px {_PROCESS_STEP_COLUMN_GAP_PX:.0f}px;"
+            + f"gap:{geometry.PROCESS_ROW_GAP_PX:.0f}px {geometry.PROCESS_COLUMN_GAP_PX:.0f}px;"
             "align-content:start;min-width:0;"
             "flex:0 0 auto;"
-            f"padding:{_CARD_PADDING_Y_PX:.0f}px {_CARD_PADDING_X_PX:.0f}px;"
-            f"box-sizing:border-box;border:{_CARD_BORDER_PX:.0f}px solid rgba(37,99,235,.22);"
+            f"padding:{geometry.CARD_PADDING_Y_PX:.0f}px {geometry.CARD_PADDING_X_PX:.0f}px;"
+            f"box-sizing:border-box;border:{geometry.CARD_BORDER_PX:.0f}px solid rgba(37,99,235,.22);"
             "border-radius:12px;background:rgba(255,255,255,.045);"
             "overflow:hidden;break-inside:avoid",
         )
@@ -1153,9 +1021,9 @@ def _append_semantic_block(
         wrapper.set(
             "style",
             "display:flex!important;flex:0 0 auto;flex-direction:column;"
-            f"gap:{_CARD_STACK_GAP_PX:.0f}px;min-width:0;"
-            f"padding:{_CARD_PADDING_Y_PX:.0f}px {_CARD_PADDING_X_PX:.0f}px;"
-            f"box-sizing:border-box;border:{_CARD_BORDER_PX:.0f}px solid rgba(37,99,235,.22);"
+            f"gap:{geometry.CARD_STACK_GAP_PX:.0f}px;min-width:0;"
+            f"padding:{geometry.CARD_PADDING_Y_PX:.0f}px {geometry.CARD_PADDING_X_PX:.0f}px;"
+            f"box-sizing:border-box;border:{geometry.CARD_BORDER_PX:.0f}px solid rgba(37,99,235,.22);"
             "border-radius:12px;background:rgba(255,255,255,.045);"
             "overflow:hidden;break-inside:avoid",
         )
@@ -1170,7 +1038,7 @@ def _append_semantic_block(
         wrapper.set(
             "style",
             "display:flex!important;flex:0 0 auto;flex-direction:column;"
-            f"gap:{_TEXT_STACK_GAP_PX:.0f}px;min-width:0;"
+            f"gap:{geometry.FLOW_STACK_GAP_PX:.0f}px;min-width:0;"
             "overflow:hidden;break-inside:avoid",
         )
 
@@ -1181,7 +1049,7 @@ def _append_semantic_block(
             "style",
             "display:grid!important;width:100%;min-width:0;flex:0 0 auto;break-inside:avoid;"
             f"grid-template-columns:repeat({columns},minmax(0,1fr));"
-            f"gap:{_TABLE_ROW_GAP_PX:.0f}px {_TABLE_COLUMN_GAP_PX:.0f}px;overflow:hidden",
+            f"gap:{geometry.TABLE_ROW_GAP_PX:.0f}px {geometry.TABLE_COLUMN_GAP_PX:.0f}px;overflow:hidden",
         )
         for unit in block:
             child = lxml_html.Element("div")
@@ -1203,11 +1071,11 @@ def _append_semantic_block(
                 "style",
                 position
                 + "display:flex;align-items:center;min-width:0;"
-                + f"padding:{_TABLE_CELL_PADDING_Y_PX:.0f}px {_TABLE_CELL_PADDING_X_PX:.0f}px;"
+                + f"padding:{geometry.TABLE_CELL_PADDING_Y_PX:.0f}px {geometry.TABLE_CELL_PADDING_X_PX:.0f}px;"
                 + ("background:rgba(37,99,235,.12);font-weight:700;" if header else "")
-                + f"border-left:{_TABLE_CELL_BORDER_LEFT_PX:.0f}px solid rgba(37,99,235,.35);"
+                + f"border-left:{geometry.TABLE_CELL_BORDER_LEFT_PX:.0f}px solid rgba(37,99,235,.35);"
                 "overflow-wrap:break-word;"
-                f"word-break:keep-all;line-height:{_TABLE_CELL_LINE_HEIGHT}!important;"
+                f"word-break:keep-all;line-height:{geometry.TABLE_CELL_LINE_HEIGHT}!important;"
                 + _semantic_text_css(
                     unit,
                     slot=slot,
@@ -1227,7 +1095,7 @@ def _append_semantic_block(
             "style",
             f"grid-column:1/-1;grid-row:{3 if process_media_height > 0.0 else 2};"
             "display:flex!important;flex-direction:column;"
-            f"gap:{_PROCESS_BODY_GAP_PX:.0f}px;min-width:0;min-height:0;overflow:visible",
+            f"gap:{geometry.PROCESS_BODY_GAP_PX:.0f}px;min-width:0;min-height:0;overflow:visible",
         )
     if evidence_card:
         text_container = lxml_html.Element("div")
@@ -1243,7 +1111,7 @@ def _append_semantic_block(
         text_container.set(
             "style",
             "grid-column:2;display:flex!important;flex-direction:column;"
-            f"gap:{_MEDIA_CARD_TEXT_GAP_PX:.0f}px;"
+            f"gap:{geometry.MEDIA_CARD_TEXT_GAP_PX:.0f}px;"
             "min-width:0;overflow:hidden",
         )
     assets = image_assets or {}
@@ -1279,8 +1147,8 @@ def _append_semantic_block(
                     "justify-self:center;object-fit:contain;overflow:hidden"
                     if group_kind == "process-step" and not evidence_card
                     else
-                    f"display:block;width:{_MEDIA_CARD_IMAGE_PX:.0f}px;"
-                    f"height:{_MEDIA_CARD_IMAGE_PX:.0f}px;min-width:0;min-height:0;"
+                    f"display:block;width:{geometry.MEDIA_CARD_IMAGE_PX:.0f}px;"
+                    f"height:{geometry.MEDIA_CARD_IMAGE_PX:.0f}px;min-width:0;min-height:0;"
                     "grid-column:1;grid-row:1;align-self:start;object-fit:contain;overflow:hidden"
                     if group_kind == "media-card" and not evidence_card
                     else f"display:block;width:{_FLOW_ICON_HEIGHT_PX:.3f}px;"
@@ -1359,6 +1227,48 @@ def _append_semantic_block(
     parent.append(wrapper)
 
 
+def _tag_image_lane_group(element: object, block: list[SealedContentUnit]) -> None:
+    """Carry a semantic group identity on an image rendered outside a card.
+
+    `_apply_composition_plan` requires exactly one element per semantic group
+    id whose `data-content-unit-ids` matches the manifest order, so image-only
+    groups must still be labelled even though the image lanes place their
+    pictures directly as grid items.
+    """
+
+    group_id = _unit_group_id(block[0])
+    if not group_id:
+        return
+    element.set("data-source-semantic-group-id", group_id)
+    element.set("data-source-semantic-group-kind", _unit_group_kind(block[0]).lower())
+    element.set(
+        "data-content-unit-ids", "|".join(item.content_unit_id for item in block)
+    )
+    element.set(
+        "data-content-unit-digests",
+        "|".join(item.content_digest for item in block),
+    )
+
+
+def _image_lane_container(
+    panel: object, block: list[SealedContentUnit]
+) -> object:
+    """Return the element a block's pictures are appended to.
+
+    A single-picture group labels the picture itself so the grid geometry is
+    untouched; a multi-picture group needs a carrier, and `display:contents`
+    keeps its pictures as direct grid items.
+    """
+
+    if len(block) < 2:
+        return panel
+    container = lxml_html.Element("div")
+    container.set("style", "display:contents")
+    _tag_image_lane_group(container, block)
+    panel.append(container)
+    return container
+
+
 def _append_flow_text_units(
     parent: object,
     units: list[SealedContentUnit],
@@ -1379,56 +1289,6 @@ def _append_flow_text_units(
         )
 
 
-def _estimated_text_advance_px(text: str, *, font_px: float) -> float:
-    """Advance width of one unwrapped run, shared by wrapping and max-content."""
-
-    total = 0.0
-    for character in text:
-        if character.isspace():
-            total += font_px * 0.33
-        elif unicodedata.east_asian_width(character) in {"W", "F", "A"}:
-            total += font_px
-        elif character.isupper():
-            total += font_px * 0.64
-        elif character.isdigit():
-            total += font_px * 0.56
-        else:
-            total += font_px * 0.54
-    return total
-
-
-def _estimated_text_lines(text: str, *, width_px: float, font_px: float) -> int:
-    def advance(value: str) -> float:
-        return _estimated_text_advance_px(value, font_px=font_px)
-
-    normalized = " ".join(text.split())
-    if not normalized:
-        return 1
-    space = font_px * 0.33
-    lines = 1
-    occupied = 0.0
-    for word in normalized.split(" "):
-        word_width = advance(word)
-        separator = space if occupied > 0 else 0.0
-        if occupied > 0 and occupied + separator + word_width > width_px:
-            lines += 1
-            occupied = 0.0
-            separator = 0.0
-        if word_width <= width_px:
-            occupied += separator + word_width
-            continue
-        remaining = word_width
-        while remaining > width_px:
-            if occupied > 0:
-                lines += 1
-                occupied = 0.0
-            remaining -= width_px
-            if remaining > 0:
-                lines += 1
-        occupied = remaining
-    return lines
-
-
 def _select_flow_table_layout(
     cells: list[SealedContentUnit],
     *,
@@ -1440,123 +1300,22 @@ def _select_flow_table_layout(
     """Report the table grid `_append_semantic_block` actually emits."""
 
     readable_floor_px = SOURCE_NATIVE_MIN_BODY_FONT_PT / 0.75
-    if role not in {"title", "headline", "heading"} and (
+    if role not in geometry.TITLE_SLOT_ROLES and (
         _flow_font_px(slot, role=role, adaptive_scale=adaptive_scale)
         < readable_floor_px
     ):
         raise SourceNativeGenerationError("source_native_text_readability_failed")
-    if _flow_table_matrix_shape(cells) is not None:
-        estimated_height, columns = _fixed_flow_table_height(
-            cells,
+    try:
+        estimated_height, columns = geometry.table_block_height(
+            _render_units(cells),
             column_width=column_width,
-            slot=slot,
+            declared_font_px=geometry.slot_declared_font_px(slot),
             adaptive_scale=adaptive_scale,
-            role=role,
+            fallback_role=role,
         )
-        return columns, estimated_height
-    # Unshaped table blocks fall back to the same square-ish auto-flow grid the
-    # emitter derives, so estimation measures the grid that gets rendered.
-    columns = _flow_table_columns(cells)
-    rows = math.ceil(len(cells) / columns)
-    base_cell_width = max(
-        1.0, (column_width - (columns - 1) * _TABLE_COLUMN_GAP_PX) / columns
-    )
-    cell_width = _flow_table_cell_width(base_cell_width, 1)
-    heights = [
-        _flow_table_cell_height(
-            unit,
-            cell_width=cell_width,
-            font_px=_semantic_text_metrics(
-                unit,
-                slot=slot,
-                adaptive_scale=adaptive_scale,
-                fallback_role=role,
-            ).font_px,
-        )
-        for unit in cells
-    ]
-    estimated_height = (
-        sum(max(heights[row * columns : (row + 1) * columns]) for row in range(rows))
-        + _TABLE_ROW_GAP_PX * max(0, rows - 1)
-    )
+    except RenderGeometryError as error:
+        raise SourceNativeGenerationError(error.code) from error
     return columns, estimated_height
-
-
-class _SemanticBlockChrome(NamedTuple):
-    """Padding, border and gap the wrapper CSS writes for one group kind."""
-
-    width_inset: float
-    height_inset: float
-    stack_gap: float
-
-
-def _semantic_block_chrome(group_kind: str) -> _SemanticBlockChrome:
-    """Mirror the wrapper box model `_append_semantic_block` emits."""
-
-    if group_kind == "media-card":
-        # `padding:10px` and a 1px border on both sides; the text container
-        # sits behind the fixed media column and its grid column gap.
-        return _SemanticBlockChrome(
-            2.0 * (_MEDIA_CARD_PADDING_PX + _CARD_BORDER_PX)
-            + _MEDIA_CARD_MEDIA_COLUMN_PX
-            + _MEDIA_CARD_COLUMN_GAP_PX,
-            2.0 * (_MEDIA_CARD_PADDING_PX + _CARD_BORDER_PX),
-            _MEDIA_CARD_TEXT_GAP_PX,
-        )
-    if group_kind in {"process-step", "kpi"}:
-        # `padding:10px 12px` and a 1px border on every side.
-        return _SemanticBlockChrome(
-            2.0 * (_CARD_PADDING_X_PX + _CARD_BORDER_PX),
-            2.0 * (_CARD_PADDING_Y_PX + _CARD_BORDER_PX),
-            _PROCESS_STEP_ROW_GAP_PX
-            if group_kind == "process-step"
-            else _CARD_STACK_GAP_PX,
-        )
-    if group_kind == "title-stack":
-        return _SemanticBlockChrome(0.0, 0.0, _TITLE_STACK_GAP_PX)
-    return _SemanticBlockChrome(0.0, 0.0, _TEXT_STACK_GAP_PX)
-
-
-def _estimated_text_child_height(
-    unit: SealedContentUnit,
-    *,
-    slot: Mapping[str, object],
-    adaptive_scale: float,
-    fallback_role: str,
-    width_px: float,
-) -> float:
-    """Height of one emitted text child: line boxes plus its padding-bottom."""
-
-    metrics = _semantic_text_metrics(
-        unit,
-        slot=slot,
-        adaptive_scale=adaptive_scale,
-        fallback_role=fallback_role,
-    )
-    return (
-        _estimated_text_lines(
-            _unit_render_text(unit),
-            width_px=max(1.0, width_px),
-            font_px=metrics.font_px,
-        )
-        * metrics.font_px
-        * metrics.line_height
-        + _TEXT_LINE_BOX_BREATHING_PX
-    )
-
-
-def _emitted_flow_image_height(
-    unit: SealedContentUnit, *, group_kind: str
-) -> float:
-    """Height the image CSS declares for one flow image child."""
-
-    if group_kind == "media-card":
-        return _MEDIA_CARD_IMAGE_PX
-    if _unit_image_kind(unit) == "icon":
-        return _FLOW_ICON_HEIGHT_PX
-    if group_kind == "process-step":
-        return _FLOW_PROCESS_MEDIA_HEIGHT_PX
-    return _FLOW_MEDIA_HEIGHT_PX
 
 
 def _estimated_flow_block_height(
@@ -1567,10 +1326,12 @@ def _estimated_flow_block_height(
     role: str,
     column_width: float,
 ) -> float:
-    group_kind = _unit_group_kind(block[0]).lower()
-    if group_kind == "compact-footer":
-        return _FOOTER_LANE_HEIGHT_PX
-    if group_kind == "table-matrix" or _unit_boundary_kind(block[0]) == "table-cell":
+    """Rendered height of one emitted semantic block at a column width."""
+
+    if (
+        _unit_group_kind(block[0]).lower() == "table-matrix"
+        or _unit_boundary_kind(block[0]) == "table-cell"
+    ):
         _, estimated_height = _select_flow_table_layout(
             block,
             slot=slot,
@@ -1579,108 +1340,21 @@ def _estimated_flow_block_height(
             column_width=column_width,
         )
         return estimated_height
-    chrome = _semantic_block_chrome(group_kind)
-    content_width = max(1.0, column_width - chrome.width_inset)
-    if group_kind == "process-step":
-        media_height = 0.0
-        number_width = 0.0
-        header_heights: list[float] = []
-        heading_units: list[SealedContentUnit] = []
-        body_heights: list[float] = []
-        for unit in block:
-            if unit.kind == "image":
-                media_height = max(
-                    media_height,
-                    _emitted_flow_image_height(unit, group_kind=group_kind),
-                )
-                continue
-            semantic_role = _unit_semantic_role(unit).lower()
-            if semantic_role in _PROCESS_STEP_NUMBER_ROLES:
-                metrics = _semantic_text_metrics(
-                    unit,
-                    slot=slot,
-                    adaptive_scale=adaptive_scale,
-                    fallback_role=role,
-                )
-                # `grid-template-columns:auto minmax(0,1fr)` sizes the number
-                # column to the unwrapped number itself.
-                number_width = max(
-                    number_width,
-                    _estimated_text_advance_px(
-                        _unit_render_text(unit), font_px=metrics.font_px
-                    ),
-                )
-                header_heights.append(
-                    metrics.font_px * metrics.line_height
-                    + _TEXT_LINE_BOX_BREATHING_PX
-                )
-            elif semantic_role in _PROCESS_STEP_HEADING_ROLES:
-                heading_units.append(unit)
-            else:
-                # The body container spans `grid-column:1/-1`, so body units
-                # are laid out across the whole content width.
-                body_heights.append(
-                    _estimated_text_child_height(
-                        unit,
-                        slot=slot,
-                        adaptive_scale=adaptive_scale,
-                        fallback_role=role,
-                        width_px=content_width,
-                    )
-                )
-        heading_width = content_width - number_width - _PROCESS_STEP_COLUMN_GAP_PX
-        header_heights.extend(
-            _estimated_text_child_height(
-                unit,
-                slot=slot,
-                adaptive_scale=adaptive_scale,
-                fallback_role=role,
-                width_px=heading_width,
-            )
-            for unit in heading_units
-        )
-        body_height = sum(body_heights) + _PROCESS_BODY_GAP_PX * max(
-            0, len(body_heights) - 1
-        )
-        # `grid-template-rows` declares its tracks unconditionally, so the row
-        # gap applies between every declared track whether or not it is empty.
-        declared_rows = 3 if media_height > 0.0 else 2
-        return (
-            media_height
-            + max(header_heights, default=0.0)
-            + body_height
-            + chrome.height_inset
-            + _PROCESS_STEP_ROW_GAP_PX * (declared_rows - 1)
-        )
-    text_heights = [
-        _estimated_text_child_height(
-            unit,
-            slot=slot,
+    try:
+        # Every lane measured here sizes a block by its content, so an evidence
+        # card resolves to its own picture geometry. The evidence gallery is the
+        # only lane that hands the card a definite height, and it is composed
+        # straight from `evidence_blocks` without ever being measured here.
+        return geometry.semantic_block_height(
+            _render_units(block),
+            column_width=column_width,
+            declared_font_px=geometry.slot_declared_font_px(slot),
             adaptive_scale=adaptive_scale,
             fallback_role=role,
-            width_px=content_width,
+            table_block=False,
         )
-        for unit in block
-        if unit.kind != "image"
-    ]
-    image_heights = [
-        _emitted_flow_image_height(unit, group_kind=group_kind)
-        for unit in block
-        if unit.kind == "image"
-    ]
-    if group_kind == "media-card":
-        # The fixed media column and the text container share grid row 1.
-        content_height = max(
-            max(image_heights, default=0.0),
-            sum(text_heights)
-            + chrome.stack_gap * max(0, len(text_heights) - 1),
-        )
-    else:
-        # `wrapper.insert(0, image)` stacks images ahead of the text inside the
-        # same flex column, so every child contributes one gap.
-        stacked = image_heights + text_heights
-        content_height = sum(stacked) + chrome.stack_gap * max(0, len(stacked) - 1)
-    return content_height + chrome.height_inset
+    except RenderGeometryError as error:
+        raise SourceNativeGenerationError(error.code) from error
 
 
 def _balanced_contiguous_ends(weights: list[float], columns: int) -> tuple[int, ...]:
@@ -1726,16 +1400,21 @@ def _append_fixed_text_columns(
     column_gap: float,
     width_fraction: float = 1.0,
     height_fraction: float = 1.0,
+    image_assets: Mapping[str, Mapping[str, object]] | None = None,
 ) -> float:
     """Keep atomic source units inside an explicit, bounded column grid."""
 
-    footer_units = [
-        item
-        for item in units
-        if _unit_group_kind(item).lower() == "compact-footer"
-        or _unit_semantic_role(item).lower() == "compact-footer"
-    ]
-    body_units = [item for item in units if item not in footer_units]
+    # A semantic group must stay inside one lane, so a group only becomes
+    # footer copy when every one of its units is footer copy.
+    footer_units: list[SealedContentUnit] = []
+    body_units: list[SealedContentUnit] = []
+    for block in _flow_blocks(units):
+        footer_block = all(
+            _unit_group_kind(item).lower() == "compact-footer"
+            or _unit_semantic_role(item).lower() == "compact-footer"
+            for item in block
+        )
+        (footer_units if footer_block else body_units).extend(block)
     blocks = _flow_blocks(body_units)
     if not blocks and not footer_units:
         return adaptive_scale
@@ -1817,6 +1496,7 @@ def _append_fixed_text_columns(
                 slot=slot,
                 adaptive_scale=adaptive_scale,
                 role="body",
+                image_assets=image_assets,
             )
         return adaptive_scale
 
@@ -1924,6 +1604,7 @@ def _append_fixed_text_columns(
                 slot=slot,
                 adaptive_scale=effective_scale,
                 role=role,
+                image_assets=image_assets,
             )
         grid_parent.append(column)
     if footer_units:
@@ -1943,6 +1624,7 @@ def _append_fixed_text_columns(
                 slot=slot,
                 adaptive_scale=effective_scale,
                 role="body",
+                image_assets=image_assets,
             )
         parent.append(footer_lane)
     return effective_scale
@@ -1964,15 +1646,7 @@ def _unit_image_aspect(unit: SealedContentUnit) -> float | None:
 
 
 def _is_meaningful_flow_image(unit: SealedContentUnit) -> bool:
-    if unit.kind != "image" or _unit_image_kind(unit) == "icon":
-        return False
-    evidence = (
-        f"{_unit_semantic_role(unit)} {_unit_group_kind(unit)} {_unit_image_kind(unit)}"
-    ).lower()
-    return any(
-        token in evidence
-        for token in ("ui", "evidence", "screenshot", "product-screen")
-    )
+    return geometry.is_meaningful_image(_render_unit(unit))
 
 
 def _meaningful_image_geometry_pass(
@@ -2117,7 +1791,7 @@ def _append_component_canvas(
     body_height_fraction = (
         max(
             1.0,
-            summary_height - _FOOTER_LANE_HEIGHT_PX - _FOOTER_BODY_GAP_PX,
+            summary_height - _FOOTER_LANE_HEIGHT_PX - root_gap,
         )
         / summary_height
         if footer_blocks
@@ -2172,6 +1846,7 @@ def _append_component_canvas(
                     column_gap=16.0,
                     width_fraction=width_fraction,
                     height_fraction=height_fraction,
+                    image_assets=image_assets,
                 )
             except SourceNativeGenerationError as error:
                 if error.code != "source_native_text_capacity_exceeded":
@@ -2215,15 +1890,30 @@ def _append_component_canvas(
         - _flow_number(spacing.get("insetLeft"))
         - _flow_number(spacing.get("insetRight")),
     )
-    height = max(
+    # `region_height` is the root's own content box: the overlay declares
+    # `height:{bounds.height}px` with the slot insets as padding, and the root
+    # is `height:100%` of that. Absolutely positioned children (the evidence
+    # gallery at `inset:0`, its overlay at `inset:8px`) are measured against it.
+    region_height = max(
         1.0,
         _flow_number(bounds.get("height"), _SLIDE_HEIGHT_PX)
         - _flow_number(spacing.get("insetTop"))
         - _flow_number(spacing.get("insetBottom")),
     )
+    # `height` is what an in-flow `flex:1` panel may occupy. The root is a
+    # column flex with `gap:{root_gap}px`, so a fixed `flex:0 0 23px` footer
+    # lane costs its own height plus one gap.
+    height = region_height
+    if footer_blocks:
+        height = max(1.0, height - _FOOTER_LANE_HEIGHT_PX - root_gap)
     if plain_blocks and (table_blocks or visual_blocks) and not evidence_blocks:
         if table_blocks:
-            height = max(1.0, height * (1.0 - plain_fraction) - 12.0)
+            # The summary is an in-flow `flex:0 0 P%` sibling. A percentage
+            # flex basis resolves against the root's own content height, and
+            # the summary adds one more root gap.
+            height = max(
+                1.0, height - region_height * plain_fraction - root_gap
+            )
 
     if table_blocks:
         capacity = _flow_mapping(slot, "capacityEnvelope")
@@ -2294,7 +1984,7 @@ def _append_component_canvas(
         )
         evidence_height_fraction = 1.0 if evidence_count == 1 else 0.82
         evidence_cell_width = width * evidence_width_fraction
-        evidence_cell_height = height * evidence_height_fraction
+        evidence_cell_height = region_height * evidence_height_fraction
         if not all(
             _meaningful_image_geometry_pass(
                 unit,
@@ -2361,7 +2051,7 @@ def _append_component_canvas(
                 len(overlay_blocks),
                 max(1, int((width + horizontal_gap) // 280.0)),
             )
-            overlay_height = max(1.0, height - 16.0)
+            overlay_height = max(1.0, region_height - 16.0)
             overlay_options: list[
                 tuple[float, int, float, tuple[int, ...]]
             ] = []
@@ -2662,6 +2352,7 @@ def _append_component_canvas(
             columns_count=max(1, min(3, len(plain_blocks))),
             column_gap=16.0,
             height_fraction=body_height_fraction,
+            image_assets=image_assets,
         )
         plain.set(
             "style",
@@ -2713,8 +2404,18 @@ def _patch_exact_slot(
         node.set("data-content-unit-ids", "")
         node.set("data-content-unit-digests", "")
         return
-    image_units = [item for item in units if item.kind == "image"]
-    text_units = [item for item in units if item.kind != "image"]
+    # Lanes are split by semantic group, never by unit kind: a group that mixes
+    # a picture with its copy (media-card, process-step) stays whole in the text
+    # lane, where `_append_semantic_block` lays the picture out inside the card.
+    image_blocks: list[list[SealedContentUnit]] = []
+    text_blocks: list[list[SealedContentUnit]] = []
+    for block in _flow_blocks(units):
+        if all(item.kind == "image" for item in block):
+            image_blocks.append(block)
+        else:
+            text_blocks.append(block)
+    image_units = [item for block in image_blocks for item in block]
+    text_units = [item for block in text_blocks for item in block]
     flow_kind = str((slot or {}).get("sourceFlowLayout") or "")
     if flow_kind == "components":
         if slot is None:
@@ -2788,6 +2489,7 @@ def _patch_exact_slot(
                     column_gap=14.0,
                     width_fraction=width_fraction,
                     height_fraction=height_fraction,
+                    image_assets=assets,
                 )
             except SourceNativeGenerationError as error:
                 if error.code != "source_native_text_capacity_exceeded":
@@ -2837,28 +2539,36 @@ def _patch_exact_slot(
             f"grid-template-columns:repeat({image_columns},minmax(0,1fr));"
             f"grid-template-rows:repeat({image_rows},minmax(0,1fr));gap:8px",
         )
-        for index, unit in enumerate(image_units):
-            occurrence_id = unit.asset_occurrence_id or ""
-            asset = assets.get(occurrence_id)
-            if (
-                not occurrence_id
-                or asset is None
-                or str(asset.get("assetDigest") or "") != unit.asset_digest
-            ):
-                raise SourceNativeGenerationError("source_content_image_occurrence_mismatch")
-            image = lxml_html.Element("img")
-            image.set("src", str(asset["dataUrl"]))
-            image.set("alt", "")
-            image.set("data-qid", f"source-flow-image:{occurrence_id}")
-            image.set("data-source-block-id", occurrence_id)
-            image.set("data-asset-digest", str(asset["assetDigest"]))
-            image.set("data-source-occurrence-index", str(index))
-            image.set(
-                "style",
-                "display:block;width:100%;height:100%;min-width:0;min-height:0;"
-                "object-fit:contain;overflow:hidden",
-            )
-            image_panel.append(image)
+        index = 0
+        for block in image_blocks:
+            container = _image_lane_container(image_panel, block)
+            for unit in block:
+                occurrence_id = unit.asset_occurrence_id or ""
+                asset = assets.get(occurrence_id)
+                if (
+                    not occurrence_id
+                    or asset is None
+                    or str(asset.get("assetDigest") or "") != unit.asset_digest
+                ):
+                    raise SourceNativeGenerationError(
+                        "source_content_image_occurrence_mismatch"
+                    )
+                image = lxml_html.Element("img")
+                image.set("src", str(asset["dataUrl"]))
+                image.set("alt", "")
+                image.set("data-qid", f"source-flow-image:{occurrence_id}")
+                image.set("data-source-block-id", occurrence_id)
+                image.set("data-asset-digest", str(asset["assetDigest"]))
+                image.set("data-source-occurrence-index", str(index))
+                image.set(
+                    "style",
+                    "display:block;width:100%;height:100%;min-width:0;min-height:0;"
+                    "object-fit:contain;overflow:hidden",
+                )
+                if container is image_panel:
+                    _tag_image_lane_group(image, block)
+                container.append(image)
+                index += 1
         wrapper.extend((text_panel, image_panel))
         node.append(wrapper)
         existing_style = str(node.get("style") or "").rstrip(";")
@@ -2906,33 +2616,39 @@ def _patch_exact_slot(
                 "style",
                 f"{existing_style};{grid_style}" if existing_style else grid_style,
             )
-        for index, unit in enumerate(units):
-            occurrence_id = unit.asset_occurrence_id or ""
-            asset = assets.get(occurrence_id)
-            if (
-                not occurrence_id
-                or asset is None
-                or str(asset.get("assetDigest") or "") != unit.asset_digest
-            ):
-                raise SourceNativeGenerationError(
-                    "source_content_image_occurrence_mismatch"
+        index = 0
+        for block in image_blocks:
+            container = node if tag == "img" else _image_lane_container(node, block)
+            for unit in block:
+                occurrence_id = unit.asset_occurrence_id or ""
+                asset = assets.get(occurrence_id)
+                if (
+                    not occurrence_id
+                    or asset is None
+                    or str(asset.get("assetDigest") or "") != unit.asset_digest
+                ):
+                    raise SourceNativeGenerationError(
+                        "source_content_image_occurrence_mismatch"
+                    )
+                image = node if tag == "img" else lxml_html.Element("img")
+                image.set("src", str(asset["dataUrl"]))
+                image.set("alt", "")
+                image.set("data-source-block-id", occurrence_id)
+                image.set("data-asset-digest", str(asset["assetDigest"]))
+                image.set("data-source-occurrence-index", str(index))
+                if image is not node:
+                    slot_qid = str(node.get("data-qid") or "source-image")
+                    image.set("data-qid", f"{slot_qid}--occurrence-{index + 1:03d}")
+                image.set(
+                    "style",
+                    "display:block;width:100%;height:100%;min-width:0;min-height:0;"
+                    "object-fit:contain;overflow:hidden",
                 )
-            image = node if tag == "img" else lxml_html.Element("img")
-            image.set("src", str(asset["dataUrl"]))
-            image.set("alt", "")
-            image.set("data-source-block-id", occurrence_id)
-            image.set("data-asset-digest", str(asset["assetDigest"]))
-            image.set("data-source-occurrence-index", str(index))
-            if image is not node:
-                slot_qid = str(node.get("data-qid") or "source-image")
-                image.set("data-qid", f"{slot_qid}--occurrence-{index + 1:03d}")
-            image.set(
-                "style",
-                "display:block;width:100%;height:100%;min-width:0;min-height:0;"
-                "object-fit:contain;overflow:hidden",
-            )
-            if image is not node:
-                node.append(image)
+                if container is node or image is node:
+                    _tag_image_lane_group(image, block)
+                if image is not node:
+                    container.append(image)
+                index += 1
         node.attrib.pop("hidden", None)
         node.attrib.pop("data-source-native-empty", None)
         if node.get("aria-hidden") == "true":
@@ -2982,6 +2698,7 @@ def _patch_exact_slot(
             role=role,
             columns_count=columns_count,
             column_gap=column_gap,
+            image_assets=image_assets,
         )
         node.append(columns)
     else:
@@ -3132,11 +2849,27 @@ def _apply_composition_plan(
         group_id = _unit_group_id(unit)
         if group_id:
             expected_groups.setdefault(group_id, []).append(unit.content_unit_id)
+    slide_key = str(plan.get("slideKey") or "")
+    sequence_index = plan.get("sequenceIndex")
     for group_id, expected_unit_ids in expected_groups.items():
         wrappers = document.xpath(
             "//*[@data-source-semantic-group-id=$group_id]", group_id=group_id
         )
         if len(wrappers) != 1:
+            logger.warning(
+                "Source-native semantic group not atomic reason=wrapper-count "
+                "slide=%s sequence=%s group=%s wrappers=%s expected_units=%s "
+                "observed_wrapper_units=%s",
+                slide_key,
+                sequence_index,
+                group_id,
+                len(wrappers),
+                expected_unit_ids,
+                [
+                    str(item.get("data-content-unit-ids") or "")
+                    for item in wrappers
+                ],
+            )
             raise SourceNativeGenerationError("source_native_semantic_group_not_atomic")
         observed_unit_ids = [
             item
@@ -3144,6 +2877,19 @@ def _apply_composition_plan(
             if item
         ]
         if observed_unit_ids != expected_unit_ids:
+            logger.warning(
+                "Source-native semantic group not atomic reason=unit-mismatch "
+                "slide=%s sequence=%s group=%s wrapper_qid=%s expected_units=%s "
+                "observed_units=%s missing=%s unexpected=%s",
+                slide_key,
+                sequence_index,
+                group_id,
+                str(wrappers[0].get("data-qid") or ""),
+                expected_unit_ids,
+                observed_unit_ids,
+                [item for item in expected_unit_ids if item not in observed_unit_ids],
+                [item for item in observed_unit_ids if item not in expected_unit_ids],
+            )
             raise SourceNativeGenerationError("source_native_semantic_group_not_atomic")
     serialized = lxml_html.tostring(document, encoding="unicode", method="html")
     protected_after = _protected_dom_digest(document, editable_qids)

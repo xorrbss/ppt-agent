@@ -15,6 +15,12 @@ from services.authored_vnext.source_native_generation import (
     _StructuredNarrativeProvider,
     _apply_composition_plan,
     _assert_source_image_readback,
+    _semantic_text_css,
+    _semantic_text_metrics,
+)
+from services.authored_vnext.source_render_geometry import (
+    BODY_LINE_HEIGHT,
+    semantic_text_role,
 )
 from services.authored_vnext.source_unitization import (
     SourceUnitizationError,
@@ -644,3 +650,67 @@ def test_manifest_semantics_group_media_process_kpi_and_table_without_geometry()
         "title",
         "lede",
     ]
+
+
+@pytest.mark.parametrize(
+    ("semantic_role", "expected_font_px"),
+    [
+        # `step-title`/`step-heading` outside a process-step group keep the
+        # slot body size; the emphasis numbers carry their own `max(24, …)`.
+        ("step-title", 22.0),
+        ("step-heading", 22.0),
+        ("process-number", 29.7),
+        ("step-number", 29.7),
+        ("kpi-value", 29.7),
+    ],
+)
+def test_renderer_classifies_own_font_roles_as_body_in_a_title_slot(
+    semantic_role: str, expected_font_px: float
+) -> None:
+    """Roles the renderer sizes itself must never inherit a title slot's role.
+
+    `_semantic_text_role` has to stay total: if one of these five falls through
+    to the caller's role, a title slot hands it `line-height:1.18` and, for
+    `step-title`/`step-heading`, the 40px title font as well. That changes the
+    emitted CSS, not merely a predicted height.
+    """
+
+    slot = {"textStyle": {"fontSize": 22}}
+    unit = SealedContentUnit(
+        content_unit_id="unit-1",
+        content_digest="digest-1",
+        kind="text",
+        required=True,
+        text="본문",
+        data=[
+            {
+                "sourceSemantic": {
+                    "role": semantic_role,
+                    "group-kind": "body-flow",
+                    "group-id": "group-1",
+                }
+            }
+        ],
+        source_page_index=0,
+        source_unit_index=0,
+        asset_occurrence_id=None,
+        asset_digest=None,
+        source_ownership=[{"useMode": "verbatim"}],
+        semantic_role=semantic_role,
+    )
+
+    assert (
+        semantic_text_role(semantic_role=semantic_role, fallback_role="title")
+        == "body"
+    )
+    metrics = _semantic_text_metrics(
+        unit, slot=slot, adaptive_scale=1.0, fallback_role="title"
+    )
+    assert metrics.line_height == BODY_LINE_HEIGHT
+    assert metrics.font_px == pytest.approx(expected_font_px)
+
+    emitted = _semantic_text_css(
+        unit, slot=slot, adaptive_scale=1.0, fallback_role="title"
+    )
+    assert f"line-height:{BODY_LINE_HEIGHT}" in emitted
+    assert f"font-size:{expected_font_px:.2f}px" in emitted

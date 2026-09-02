@@ -431,29 +431,47 @@ def _free_rect(
 def _positive_gaps(
     rects: Sequence[Mapping[str, float]], *, axis: str
 ) -> list[float]:
+    """Gutters between *adjacent* tracks on one axis, in CSS ``gap`` terms.
+
+    The median of this list becomes ``layoutHints['columnGap'|'rowGap']``, and
+    the renderer emits that number verbatim as the grid gap of the region it
+    paints: ``source_native_generation`` reads those hints for both the fixed
+    text columns and the image lane.  ``_group_capacity`` then subtracts the
+    same number before measuring one column.  A CSS gap is the distance between
+    *neighbouring* tracks, so only neighbours may be measured here.  Counting
+    every pair mixes the column 1 -> column 3 and column 1 -> column 4
+    separations into the median and reports a gutter several times the authored
+    one, which starves the rendered column width and shrinks the admitted
+    characters per line by the same factor.
+
+    Each rectangle therefore contributes at most one gap: the distance to the
+    nearest rectangle that follows it on ``axis`` while sharing a band with it
+    on the cross axis.  That rule needs no band clustering and stays correct on
+    a ragged final row.
+    """
+
     gaps: list[float] = []
-    for index, left in enumerate(rects):
-        for right in rects[index + 1 :]:
+    for left in rects:
+        nearest: float | None = None
+        for right in rects:
+            if right is left:
+                continue
             if axis == "x":
                 overlap = max(
                     0.0,
                     min(_bottom(left), _bottom(right)) - max(left["y"], right["y"]),
                 )
-                gap = max(
-                    0.0,
-                    max(left["x"], right["x"]) - min(_right(left), _right(right)),
-                )
+                gap = right["x"] - _right(left)
             else:
                 overlap = max(
                     0.0,
                     min(_right(left), _right(right)) - max(left["x"], right["x"]),
                 )
-                gap = max(
-                    0.0,
-                    max(left["y"], right["y"]) - min(_bottom(left), _bottom(right)),
-                )
-            if overlap > 0 and gap > 0:
-                gaps.append(gap)
+                gap = right["y"] - _bottom(left)
+            if overlap > 0 and gap > 0 and (nearest is None or gap < nearest):
+                nearest = gap
+        if nearest is not None:
+            gaps.append(nearest)
     return sorted(gaps)
 
 
@@ -540,15 +558,22 @@ def _group_capacity(
             for value in (envelope.get("maxImageAspectRatio"),)
             if value not in (None, "")
         ]
+        # An image region carries exactly the picture budget the Design Pack
+        # declared for the merged placeholders.  Merging placeholders widens
+        # the region but does not create new authored picture positions, and
+        # the renderer sizes a picture from its own aspect ratio rather than
+        # tiling the region, so no area-derived floor may raise this budget.
+        # A geometric floor here silently admits pictures that the region can
+        # never lay out, which is content loss behind `overflow:hidden` instead
+        # of the fail-closed rejection this module contracts for.
         declared_capacity = sum(
             max(1, int(envelope.get("maxImages", 1) or 1))
             for envelope in envelopes
         )
-        geometry_capacity = max(1, int(content_area // (64.0 * 64.0)))
         return {
             "measurementBasis": "design-pack-derived",
             "contentArea": content_area,
-            "maxImages": max(declared_capacity, geometry_capacity),
+            "maxImages": declared_capacity,
             **({"minImageAspectRatio": min(minimums)} if minimums else {}),
             **({"maxImageAspectRatio": max(maximums)} if maximums else {}),
         }
@@ -2056,7 +2081,14 @@ def allocate_units(
                 if bundle_fits(item, assigned[str(item["slotId"])], bundle)
             ]
 
-            def preference_score(item: Mapping[str, Any]) -> tuple[object, ...]:
+            def preference_score(
+                item: Mapping[str, Any],
+                *,
+                # Bound at definition time so the comparator cannot read a
+                # later iteration's bundle if it ever outlives this sort.
+                bundle: Sequence[object] = bundle,
+                unit_kind: str = unit_kind,
+            ) -> tuple[object, ...]:
                 slot_id = str(item["slotId"])
                 occupancy = len(assigned[slot_id])
                 image_count = sum(

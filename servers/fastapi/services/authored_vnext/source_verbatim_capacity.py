@@ -31,6 +31,7 @@ from .source_render_geometry import (
     TITLE_STACK_GAP_PX,
     flow_font_px,
     footer_lane_item_height,
+    is_meaningful_image,
     semantic_block_height,
     semantic_text_metrics,
     slot_declared_font_px,
@@ -648,6 +649,7 @@ def _render_unit(unit: _AdmissionUnit) -> RenderUnit:
         semantic_role=unit.semantic_role,
         group_kind=unit.semantic_group_kind,
         image_kind=unit.image_kind or "media",
+        image_aspect=unit.image_aspect_ratio,
         table_row=unit.table_row,
         table_column=unit.table_column,
         table_row_span=unit.table_row_span,
@@ -679,17 +681,9 @@ def _footer_lane_width(units: Sequence[_AdmissionUnit]) -> float:
 
 
 def _is_meaningful_image(unit: _AdmissionUnit) -> bool:
-    if unit.kind != "image":
-        return False
-    evidence = (
-        f"{unit.semantic_role} {unit.semantic_group_kind} {unit.image_kind}"
-    ).lower()
-    if "icon" in evidence:
-        return False
-    return any(
-        token in evidence
-        for token in ("ui", "evidence", "screenshot", "product-screen")
-    )
+    """One predicate with the renderer, so the lanes cannot classify apart."""
+
+    return is_meaningful_image(_render_unit(unit))
 
 
 def _table_matrix_shape(

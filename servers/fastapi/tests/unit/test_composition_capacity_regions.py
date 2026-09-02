@@ -204,7 +204,12 @@ def test_source_flow_regions_are_pack_derived_atomic_and_capacity_fail_closed() 
     ]
     assert planned_slots == slots
 
-    oversized = _unit("unit-body-too-large", 1, "문장" * 400)
+    # The body region merges two 500x600 panels, so its pack-derived envelope
+    # resolves to 600 characters over 20 lines and a source unit may still be
+    # laid out down to MIN_SOURCE_VERBATIM_TEXT_SCALE.  Only a unit that stays
+    # over capacity at that readable floor proves the gate is fail-closed; 800
+    # characters fit at 0.70 and asserted nothing about capacity.
+    oversized = _unit("unit-body-too-large", 1, "문장" * 600)
     rejected, _, _ = build_composition_plan(
         narrative=narrative,
         slide=SimpleNamespace(
@@ -244,6 +249,24 @@ def test_source_flow_does_not_merge_same_role_across_pack_containers() -> None:
 
 
 def test_source_flow_preserves_heterogeneous_component_surfaces() -> None:
+    """Heterogeneous surfaces stay apart; repeated siblings share one canvas.
+
+    Two contracts are pinned here, and they are deliberately different:
+
+    * A large common ancestor is not evidence that a title and a row of cards
+      form one text flow.  The title keeps its own ``component-container``
+      surface, so the frame-wide ``container-inherited`` promotion that put a
+      title and its cards in a single envelope cannot come back.
+    * Repeated sibling cards that share a pack-derived component kind *are*
+      coalesced onto one bounded ``component-group`` canvas.  The renderer owns
+      the layout inside a component surface (``_append_component_canvas`` and
+      the semantic-block lane in ``source_native_generation``), and it hides the
+      authored leaf elements, so per-leaf regions would describe geometry no
+      renderer ever paints.  The card leaves therefore survive as the group's
+      ``sourceFlowMemberSlotIds``/``sourceFlowSiblingSurfaceIds``, not as active
+      regions.
+    """
+
     frame = {
         "frameId": "arbitrary-frame",
         "sourceDigest": "sha256:" + "f" * 64,
@@ -299,22 +322,48 @@ def test_source_flow_preserves_heterogeneous_component_surfaces() -> None:
     title_slot["containerId"] = "html:arbitrary-frame"
     frame["slots"].append(title_slot)
 
+    leaf_ids = [f"slot:leaf-{index}" for index in range(8)]
     slots = source_flow_slots(frame)
     active = [item for item in slots if item.get("sourceFlowLayout")]
     title = next(item for item in active if item["slotId"] == "slot:outside-title")
-    cards = [item for item in active if item["slotId"].startswith("slot:leaf-")]
+    card_group = next(item for item in active if item is not title)
 
-    assert len(active) == 9
+    assert len(active) == 2
     assert all(item["sourceFlowContainerGraphVersion"] == "v2" for item in active)
+
+    assert title["sourceFlowSurface"] == "component-container"
     assert title["sourceFlowComponentKind"] == "titleBand"
     assert title["sourceFlowMemberSlotIds"] == ["slot:outside-title"]
-    assert {item["sourceFlowComponentKind"] for item in cards} == {"cardGrid"}
-    assert len({item["sourceFlowComponentGroupId"] for item in cards}) == 1
-    assert all(
-        item["sourceFlowMemberSlotIds"] == [item["slotId"]] for item in cards
-    )
-    assert all(item["sourceFlowSurface"] == "component-container" for item in active)
-    assert not [item for item in slots if item.get("sourceFlowSuppressedBy")]
+
+    assert card_group["slotId"] in leaf_ids
+    assert card_group["sourceFlowSurface"] == "component-group"
+    assert card_group["sourceFlowComponentKind"] == "cardGrid"
+    assert card_group["sourceFlowMemberSlotIds"] == leaf_ids
+    assert card_group["sourceFlowSiblingSurfaceIds"] == leaf_ids
+    assert card_group["sourceFlowParentContainerId"] == "html:arbitrary-frame#content"
+    assert card_group["layoutHints"]["columnCount"] == 4
+    assert card_group["layoutHints"]["rowCount"] == 2
+    # The renderer emits these hints verbatim as the grid gap of the region it
+    # paints, and `_group_capacity` subtracts the same numbers before measuring
+    # a column, so they must be the authored gutter between *adjacent* cards:
+    # 380 - (105 + 220) across, 415 - (195 + 150) down.  Measuring every pair
+    # instead of neighbours reported 192.5px here and halved the admitted
+    # characters per line.
+    assert card_group["layoutHints"]["columnGap"] == 55.0
+    assert card_group["layoutHints"]["rowGap"] == 70.0
+    assert card_group["capacityEnvelope"]["charactersPerLine"] == 14
+    # The card canvas covers the cards and nothing else: it must not grow up
+    # into the title band the way the retired container-inherited surface did.
+    assert card_group["bounds"]["y"] > title["bounds"]["y"] + title["bounds"]["height"]
+
+    suppressed = [item for item in slots if item.get("sourceFlowSuppressedBy")]
+    assert [item["slotId"] for item in suppressed] == [
+        item for item in leaf_ids if item != card_group["slotId"]
+    ]
+    assert all(item["acceptedKinds"] == [] for item in suppressed)
+    assert {item["sourceFlowSuppressedBy"] for item in suppressed} == {
+        card_group["sourceFlowComponentGroupId"]
+    }
 
     grouped = [
         {
@@ -342,7 +391,7 @@ def test_source_flow_preserves_heterogeneous_component_surfaces() -> None:
     _, assignments, unmapped = allocate_units(grouped, active)
     assigned_slots = {item["slotId"] for item in assignments}
 
+    # One semantic source group stays atomic and lands on the component
+    # surface its group kind prefers, never on the title band.
     assert unmapped == []
-    assert len(assigned_slots) == 1
-    selected = next(item for item in active if item["slotId"] in assigned_slots)
-    assert selected["sourceFlowComponentKind"] == "cardGrid"
+    assert assigned_slots == {card_group["slotId"]}

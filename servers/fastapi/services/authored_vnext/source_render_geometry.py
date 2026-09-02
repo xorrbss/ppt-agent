@@ -58,6 +58,8 @@ MEDIA_CARD_VERTICAL_CHROME_PX = 2.0 * (MEDIA_CARD_PADDING_PX + CARD_BORDER_PX)
 MEDIA_CARD_HORIZONTAL_CHROME_PX = 2.0 * (MEDIA_CARD_PADDING_PX + CARD_BORDER_PX)
 MEDIA_CARD_ICON_COLUMN_PX = 52.0
 MEDIA_CARD_COLUMN_GAP_PX = 10.0
+# The picture inside that column is emitted at a fixed 48px square.
+MEDIA_CARD_IMAGE_PX = FLOW_ICON_HEIGHT_PX
 
 # Stack gaps, one per emitted wrapper.
 FLOW_STACK_GAP_PX = 4.0
@@ -69,10 +71,17 @@ PROCESS_COLUMN_GAP_PX = 10.0
 PROCESS_BODY_GAP_PX = 4.0
 
 # Table chrome: `gap:1px 10px` with `padding:1px 6px;border-left:2px` cells.
+# Cells are laid out content-box, so both the padding and the left border come
+# out of the grid track before the text is measured.
 TABLE_ROW_GAP_PX = 1.0
 TABLE_COLUMN_GAP_PX = 10.0
-TABLE_CELL_VERTICAL_CHROME_PX = 2.0
-TABLE_CELL_HORIZONTAL_CHROME_PX = 14.0
+TABLE_CELL_PADDING_Y_PX = 1.0
+TABLE_CELL_PADDING_X_PX = 6.0
+TABLE_CELL_BORDER_LEFT_PX = 2.0
+TABLE_CELL_VERTICAL_CHROME_PX = 2.0 * TABLE_CELL_PADDING_Y_PX
+TABLE_CELL_HORIZONTAL_CHROME_PX = (
+    2.0 * TABLE_CELL_PADDING_X_PX + TABLE_CELL_BORDER_LEFT_PX
+)
 
 # Compact footer lane: `height:23px` with a `16px` item gap, separated from the
 # body track by an equal spacer row.
@@ -81,9 +90,6 @@ FOOTER_BODY_GAP_PX = 16.0
 
 TITLE_SLOT_ROLES = frozenset({"title", "headline", "heading"})
 TITLE_TEXT_ROLES = frozenset({"title", "heading", "section-heading"})
-BODY_TEXT_ROLES = frozenset(
-    {"body", "lede", "eyebrow", "kpi-label", "compact-footer"}
-)
 PROCESS_HEADER_ROLES = frozenset(
     {"title", "heading", "step-title", "step-heading"}
 )
@@ -92,7 +98,19 @@ EMPHASIS_NUMBER_ROLES = frozenset(
     {"process-number", "step-number", "kpi-value"}
 )
 FLOOR_FONT_ROLES = frozenset({"eyebrow", "kpi-label", "compact-footer"})
+# Role classification is total for every role the renderer special-cases: a
+# role the renderer gives its own font size must never inherit the slot role,
+# because a title slot would then hand it the 1.18 title line height.
+BODY_TEXT_ROLES = frozenset(
+    {"body", "lede", "step-title", "step-heading"}
+    | EMPHASIS_NUMBER_ROLES
+    | FLOOR_FONT_ROLES
+)
 CARD_GROUP_KINDS = frozenset({"media-card", "process-step", "kpi"})
+# A picture is "meaningful" — screenshot-like evidence rather than an icon or
+# decoration — when its role, group kind or image kind says so. Such a block is
+# emitted as an evidence card instead of a stacked text card.
+MEANINGFUL_IMAGE_SIGNALS = ("ui", "evidence", "screenshot", "product-screen")
 
 
 class RenderGeometryError(ValueError):
@@ -112,6 +130,7 @@ class RenderUnit:
     semantic_role: str = "body"
     group_kind: str = ""
     image_kind: str = "media"
+    image_aspect: float | None = None
     table_row: int | None = None
     table_column: int | None = None
     table_row_span: int = 1
@@ -291,6 +310,56 @@ def image_height_px(unit: RenderUnit, *, group_kind: str = "") -> float:
     if group_kind.strip().lower() == "process-step":
         return FLOW_ICON_HEIGHT_PX if icon else FLOW_PROCESS_MEDIA_HEIGHT_PX
     return FLOW_ICON_HEIGHT_PX if icon else FLOW_MEDIA_HEIGHT_PX
+
+
+def is_meaningful_image(unit: RenderUnit) -> bool:
+    """Whether one picture is screenshot-like evidence rather than an icon."""
+
+    if unit.kind != "image" or unit.image_kind.strip().lower() == "icon":
+        return False
+    evidence = (
+        f"{unit.semantic_role} {unit.group_kind} {unit.image_kind}"
+    ).lower()
+    return any(token in evidence for token in MEANINGFUL_IMAGE_SIGNALS)
+
+
+def is_evidence_card(block: Sequence[RenderUnit]) -> bool:
+    """Whether the renderer emits this block through the evidence-card path."""
+
+    return any(is_meaningful_image(unit) for unit in block)
+
+
+def evidence_card_height(
+    block: Sequence[RenderUnit], *, column_width: float
+) -> float:
+    """Height of an evidence card that is sized by its own content.
+
+    The card is `display:block;padding:0;border:1px` and its caption container
+    is `position:absolute`, so the caption contributes no height. The pictures
+    are `width:100%;height:100%`, and a percentage height against a container
+    with no definite height computes to `auto`, so each picture resolves to
+    `content_width / aspect`.
+
+    The evidence *gallery* is the other lane: there the wrapper carries an
+    explicit `height:{fraction}%` inside a `position:absolute;inset:0` parent,
+    so it has a definite height and never uses this. Only callers that know the
+    card is content-sized may use it.
+    """
+
+    content_width = max(1.0, column_width - 2.0 * CARD_BORDER_PX)
+    height = 0.0
+    for unit in block:
+        if unit.kind != "image":
+            continue
+        aspect = unit.image_aspect
+        if aspect is None or not math.isfinite(aspect) or aspect <= 0.0:
+            # Matches the meaningful-image geometry gate: an undeclared aspect
+            # ratio is unplaceable rather than silently guessed.
+            raise RenderGeometryError(
+                "source_native_meaningful_image_capacity_exceeded"
+            )
+        height += content_width / aspect
+    return height + 2.0 * CARD_BORDER_PX
 
 
 def is_table_block(block: Sequence[RenderUnit]) -> bool:
@@ -489,11 +558,19 @@ def semantic_block_height(
     adaptive_scale: float,
     fallback_role: str,
     table_block: bool | None = None,
+    evidence_card: bool | None = None,
 ) -> float:
     """Rendered height of one emitted semantic group at a given column width.
 
     ``table_block`` lets a caller whose boundary classifier already segmented
     the block into table cells reuse that decision instead of re-deriving it.
+
+    ``evidence_card`` says whether the block is laid out as a content-sized
+    evidence card. ``None`` detects it, which is right for every lane that
+    sizes a block by its content. A lane that hands the card a definite height
+    -- only the evidence gallery, whose wrapper carries an explicit
+    ``height:{fraction}%`` inside a ``position:absolute;inset:0`` parent --
+    must pass ``False``.
     """
 
     if not block:
@@ -509,6 +586,8 @@ def semantic_block_height(
             adaptive_scale=adaptive_scale,
             fallback_role=fallback_role,
         )[0]
+    if is_evidence_card(block) if evidence_card is None else evidence_card:
+        return evidence_card_height(block, column_width=column_width)
     if group_kind == "process-step":
         return _process_step_height(
             block,
