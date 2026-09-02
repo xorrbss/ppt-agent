@@ -75,11 +75,19 @@ def test_authored_progress_tolerates_an_unknown_total():
 
 
 class _StubJob:
-    def __init__(self, template: str, completed: int, total: int):
+    def __init__(
+        self,
+        template: str,
+        completed: int,
+        total: int,
+        *,
+        stage_completed: int | None = None,
+    ):
         self.request_payload = {"template": template}
         self.completed_slides = completed
         self.total_slides = total
         self.current_stage = "author"
+        self.stage_completed = stage_completed
 
 
 class _StubSession:
@@ -94,6 +102,11 @@ class _StubSession:
 
     async def get(self, _model, _job_id):
         return self._job
+
+    async def scalar(self, _statement):
+        if self._job.stage_completed is not None:
+            return self._job.stage_completed
+        return self._job.completed_slides
 
 
 def test_authored_poller_defers_to_template_v2_self_reporting():
@@ -152,3 +165,32 @@ def test_authored_poller_reports_each_distinct_change_once():
     # An unchanged snapshot is polled repeatedly but reported only once.
     assert len(reported) == 2
     assert [update["current"] for update in reported] == [1, 2]
+
+
+def test_authored_poller_counts_completed_author_checkpoints_before_persist():
+    reported: list[dict] = []
+
+    async def report(**update):
+        reported.append(update)
+        return True
+
+    async def scenario():
+        job = _StubJob("authored", 0, 35, stage_completed=9)
+        task = asyncio.create_task(
+            stream_authored_generation_progress(
+                job_id=uuid.uuid4(),
+                report=report,
+                session_factory=lambda: _StubSession(job),
+                interval_seconds=0.01,
+            )
+        )
+        await asyncio.sleep(0.04)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(scenario())
+
+    assert reported[0]["current"] == 9
+    assert reported[0]["total"] == 35
+    assert "9/35장" in reported[0]["message"]

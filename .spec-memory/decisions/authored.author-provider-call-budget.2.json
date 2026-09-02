@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.author-provider-call-budget",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Author up to three slides per call, warm up serially, then allow two calls; downgrade on overload and recover failed slides once.",
+  "scope": [
+    "authored",
+    "provider",
+    "generation"
+  ],
+  "invariants": [
+    "A provider call authors at most three slides.",
+    "The first authoring wave is serial; after a healthy success, at most two batch calls may run concurrently.",
+    "An overload-class failure downgrades the current job to serial authoring.",
+    "Accepted slides are checkpointed and never regenerated; only failed slides receive at most one recovery call."
+  ],
+  "forbidden": [
+    "Regenerating an accepted slide during batch recovery."
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_batch_policy.py",
+    "servers/fastapi/utils/llm_calls/author_batch.py",
+    "servers/fastapi/utils/llm_calls/author_deck.py",
+    "servers/fastapi/services/authored_presentation_pipeline.py",
+    "servers/fastapi/tests/unit/test_authored_pipeline.py"
+  ],
+  "supersedes": "authored.author-provider-call-budget@1",
+  "recordedAt": "2026-09-02T02:46:16.5400319+00:00"
+}

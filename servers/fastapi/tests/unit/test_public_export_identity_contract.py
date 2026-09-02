@@ -19,7 +19,6 @@ from sqlmodel import SQLModel
 
 import services.public_export_operation as public_export_operation
 from migration_revision_contract import (
-    HEAD_REVISION,
     REVISION_ACCOUNT_DELETION_OUTBOX,
     REVISION_PUBLIC_ARTIFACT_JOURNAL_REUSE,
 )
@@ -700,7 +699,11 @@ def test_canonical_export_identity_is_feature_gated_digest_bound_and_fenced(
                 / "alembic/versions/a1e5f8c2d7b0_scope_workspace_artifact_storage_uniqueness.py"
             )
         )
-        assert migration["revision"] == HEAD_REVISION == REVISION_PUBLIC_ARTIFACT_JOURNAL_REUSE
+        # Pin this migration's own identity and its place in the chain.  The
+        # global head deliberately is not asserted here: an unrelated migration
+        # added later moves the head without changing anything this contract
+        # covers, and asserting it made that a false failure.
+        assert migration["revision"] == REVISION_PUBLIC_ARTIFACT_JOURNAL_REUSE
         assert migration["down_revision"] == REVISION_ACCOUNT_DELETION_OUTBOX
 
         def reject_lossy_downgrade(connection):

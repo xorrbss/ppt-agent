@@ -1,0 +1,82 @@
+"""Slide-count scaled generation deadline for public operation admission.
+
+The public control plane pins one absolute deadline per operation at admission
+time.  A single fixed budget cannot cover both a three-slide deck and a
+hundred-slide deck: authored generation issues one provider call per three
+slides, runs the first call serially as a warm-up, and then runs at most two
+calls per wave (see ``services/authored_batch_policy.py``).  The number of
+scheduling waves is therefore the only structural driver of wall-clock time,
+and this module turns it into a second budget.
+
+Everything here is a pure function of the requested slide count.  The result is
+pinned into the admission row at admission time and is never recomputed while
+an operation runs, so a later policy change cannot move a running deadline.
+"""
+
+from __future__ import annotations
+
+
+# Mirrors the executing contract in ``services/authored_batch_policy.py``:
+# three slides per provider call, one serial warm-up call, then two calls per
+# wave.  Kept local so the durable control plane does not depend on the
+# generation runtime module.
+SLIDES_PER_PROVIDER_CALL = 3
+STEADY_WAVE_CONCURRENCY = 2
+
+# Measured 3-slide authoring calls land between ~170s and ~240s, so one wave of
+# up to two parallel calls costs roughly five minutes.  The base covers outline,
+# content brief, deck plan, header contract, images, and persistence.
+PUBLIC_GENERATION_DEADLINE_BASE_SECONDS = 900
+PUBLIC_GENERATION_DEADLINE_PER_WAVE_SECONDS = 300
+PUBLIC_GENERATION_DEADLINE_MIN_SECONDS = 1200
+PUBLIC_GENERATION_DEADLINE_MAX_SECONDS = 7200
+
+
+def _slide_count(value: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError("public_generation_slide_count_must_be_nonnegative")
+    return value
+
+
+def _ceil_div(numerator: int, denominator: int) -> int:
+    return -(-numerator // denominator)
+
+
+def public_generation_batch_call_count(slide_count: int) -> int:
+    """Return the number of authoring provider calls the deck needs."""
+
+    return _ceil_div(_slide_count(slide_count), SLIDES_PER_PROVIDER_CALL)
+
+
+def public_generation_wave_count(slide_count: int) -> int:
+    """Return the scheduling waves: one serial warm-up, then paired calls."""
+
+    batch_calls = public_generation_batch_call_count(slide_count)
+    return 1 + _ceil_div(max(batch_calls - 1, 0), STEADY_WAVE_CONCURRENCY)
+
+
+def public_generation_deadline_seconds(slide_count: int) -> int:
+    """Return the clamped whole-job generation budget for ``slide_count``."""
+
+    waves = public_generation_wave_count(slide_count)
+    scaled = (
+        PUBLIC_GENERATION_DEADLINE_BASE_SECONDS
+        + PUBLIC_GENERATION_DEADLINE_PER_WAVE_SECONDS * waves
+    )
+    return min(
+        PUBLIC_GENERATION_DEADLINE_MAX_SECONDS,
+        max(PUBLIC_GENERATION_DEADLINE_MIN_SECONDS, scaled),
+    )
+
+
+__all__ = [
+    "PUBLIC_GENERATION_DEADLINE_BASE_SECONDS",
+    "PUBLIC_GENERATION_DEADLINE_MAX_SECONDS",
+    "PUBLIC_GENERATION_DEADLINE_MIN_SECONDS",
+    "PUBLIC_GENERATION_DEADLINE_PER_WAVE_SECONDS",
+    "SLIDES_PER_PROVIDER_CALL",
+    "STEADY_WAVE_CONCURRENCY",
+    "public_generation_batch_call_count",
+    "public_generation_deadline_seconds",
+    "public_generation_wave_count",
+]

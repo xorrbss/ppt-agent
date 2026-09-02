@@ -40,9 +40,9 @@ from utils.owner_context import (
 )
 
 
-PUBLIC_DEFAULT_POLICY_VERSION = "public-default/v2"
+PUBLIC_DEFAULT_POLICY_VERSION = "public-default/v3"
 PUBLIC_DEFAULT_MAX_SLIDES = 100
-PUBLIC_PHASE2_DEFAULT_POLICY_VERSION = "public-default/v2"
+PUBLIC_PHASE2_DEFAULT_POLICY_VERSION = "public-default/v3"
 PUBLIC_PROVIDER_STAGES = frozenset(
     {
         "outline",
@@ -60,6 +60,9 @@ from services.provider_pricing import (
     ProviderModelPricing,
     ProviderUsageCost,
     calculate_actual_usage_cost,
+)
+from services.public_generation_deadline_policy import (
+    public_generation_deadline_seconds,
 )
 from services.public_operation_correlation import log_public_operation_correlation
 _TERMINAL_STATES = frozenset(
@@ -381,17 +384,43 @@ def _utc(value: datetime, field: str) -> datetime:
     return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
 
 
+def _policy_deadline_seconds(
+    *,
+    policy: PublicPolicyProfile,
+    operation_kind: str,
+    planned_slide_count: int,
+) -> int:
+    """Return the policy budget, scaled by slide count for generation only.
+
+    The policy column is the immutable per-version ceiling.  Generation scales
+    the slide-count formula underneath it, so a version that keeps the legacy
+    fixed budget (``public-default/v1`` and ``/v2`` at 900s) is unchanged while
+    ``public-default/v3`` raises the ceiling and lets the formula decide.
+    Export keeps its flat policy budget.
+    """
+
+    ceiling = _nonnegative(
+        int(getattr(policy, f"{operation_kind}_deadline_seconds")),
+        "policy_deadline_seconds",
+    )
+    if operation_kind != "generation":
+        return ceiling
+    return min(ceiling, public_generation_deadline_seconds(planned_slide_count))
+
+
 def _absolute_deadline(
     *,
     now: datetime,
     policy: PublicPolicyProfile,
     operation_kind: str,
+    planned_slide_count: int,
     auth_expires_at: datetime | None,
     server_hard_deadline_at: datetime | None,
 ) -> datetime:
-    seconds = _nonnegative(
-        int(getattr(policy, f"{operation_kind}_deadline_seconds")),
-        "policy_deadline_seconds",
+    seconds = _policy_deadline_seconds(
+        policy=policy,
+        operation_kind=operation_kind,
+        planned_slide_count=planned_slide_count,
     )
     if seconds < _PHASE2_COMMIT_RESERVE_SECONDS:
         raise PublicAdmissionRejected("public_policy_deadline_invalid")
@@ -771,7 +800,12 @@ async def admit_public_operation(
 
     now = get_current_utc_datetime()
     legacy_deadline_seconds = max(
-        1, int(getattr(policy, f"{operation_kind}_deadline_seconds"))
+        1,
+        _policy_deadline_seconds(
+            policy=policy,
+            operation_kind=operation_kind,
+            planned_slide_count=slide_count,
+        ),
     )
     row = PublicOperationAdmission(
         operation_id=operation_id,
@@ -870,6 +904,14 @@ async def _admit_public_operation_v2(
         now=now,
         policy=policy,
         operation_kind=operation_kind,
+        # The full request plan is validated below.  Reading only the slide
+        # count here keeps every existing rejection ordering intact while the
+        # deadline is still derived from the requested deck size.
+        planned_slide_count=(
+            request_plan.slide_count
+            if operation_kind == "generation" and request_plan is not None
+            else 0
+        ),
         auth_expires_at=auth_expires_at,
         server_hard_deadline_at=server_hard_deadline_at,
     )

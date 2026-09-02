@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "key": "public-v2.generation-deadline-scaling",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "New public generation admissions pin 20-120 minute deadlines from 3-slide batch waves; v1/v2 and retry deadlines remain unchanged.",
+  "scope": [
+    "public-v2",
+    "generation",
+    "admission",
+    "deadline"
+  ],
+  "invariants": [
+    "batch_calls=ceil(slides/3)",
+    "waves=1+ceil(max(batch_calls-1,0)/2)",
+    "deadline_seconds=clamp(900+300*waves,1200,7200)",
+    "The calculated absolute deadline is pinned at first admission and is not reset by retry or resume.",
+    "Existing public-default/v1 and v2 jobs keep their 900 second generation deadline.",
+    "Export deadline remains 600 seconds."
+  ],
+  "forbidden": [
+    "Do not mutate the immutable v1 or v2 policy rows.",
+    "Do not recompute or extend an admitted operation deadline during retry or resume."
+  ],
+  "evidence": [
+    "servers/fastapi/services/public_generation_deadline_policy.py",
+    "servers/fastapi/alembic/versions/e1a7c9d4b2f8_add_public_scaled_deadline_policy_v3.py",
+    "servers/fastapi/services/public_operation_admission.py",
+    "servers/fastapi/tests/unit/test_public_generation_deadline_policy.py",
+    "uv run pytest targeted contracts -> 34 passed"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-02T04:36:39.2526942+00:00"
+}

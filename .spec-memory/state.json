@@ -72,7 +72,7 @@
     "authored.connector-text-clearance": "decisions/authored.connector-text-clearance.1.json",
     "authored.release-export-atomic-binding": "decisions/authored.release-export-atomic-binding.1.json",
     "authored.full-reauthor-safe-semantic-alias": "decisions/authored.full-reauthor-safe-semantic-alias.1.json",
-    "authored.author-provider-call-budget": "decisions/authored.author-provider-call-budget.1.json",
+    "authored.author-provider-call-budget": "decisions/authored.author-provider-call-budget.2.json",
     "authored.capacity.chart-week-ticks": "decisions/authored.capacity.chart-week-ticks.1.json",
     "authored.hybrid-multizband-quality-schema": "decisions/authored.hybrid-multizband-quality-schema.1.json",
     "authored.export-release-finalization": "decisions/authored.export-release-finalization.1.json",
@@ -123,10 +123,12 @@
     "public-v2.policy-slide-limit": "decisions/public-v2.policy-slide-limit.1.json",
     "authored.provider-outcome-contract": "decisions/authored.provider-outcome-contract.1.json",
     "public-v2.generation-worker-lifecycle": "decisions/public-v2.generation-worker-lifecycle.1.json",
-    "public-v2.provider-resume-call-fencing": "decisions/public-v2.provider-resume-call-fencing.1.json"
+    "public-v2.provider-resume-call-fencing": "decisions/public-v2.provider-resume-call-fencing.1.json",
+    "authored.generation.batch-authoring": "decisions/authored.generation.batch-authoring.1.json",
+    "public-v2.generation-deadline-scaling": "decisions/public-v2.generation-deadline-scaling.1.json"
   },
   "readFirst": [
     "AGENTS.md"
   ],
-  "updatedAt": "2026-09-01T12:45:05.9354630+00:00"
+  "updatedAt": "2026-09-02T04:36:39.3428037+00:00"
 }
