@@ -29,6 +29,7 @@ from services.authored_vnext.source_native_generation import (
     _append_fixed_text_columns,
     _apply_composition_plan,
     _build_slide_quality_observation,
+    _estimated_flow_block_height,
     _flow_text_css,
 )
 from services.authored_vnext.deck_ir.product_adapter import (
@@ -91,16 +92,32 @@ def test_source_native_fixed_columns_preserve_atomic_order_without_overflow_colu
 
     style = str(parent.get("style") or "")
     columns = list(parent)
-    resolved_columns = int(parent.get("data-source-flow-column-count"))
+    resolved_columns = len(columns)
     assert "column-count" not in style
     assert resolved_columns > 1
     assert f"grid-template-columns:repeat({resolved_columns},minmax(0,1fr))" in style
     assert "width:100%" in style and "overflow:hidden" in style
     assert len(columns) == resolved_columns
-    assert float(parent.get("data-source-flow-maximum-estimated-height")) <= float(
-        parent.get("data-source-flow-target-height")
-    )
-    heights = [float(column.get("data-source-flow-estimated-height")) for column in columns]
+    column_width = (980.0 - 18.0 * (resolved_columns - 1)) / resolved_columns
+    by_id = {unit.content_unit_id: unit for unit in units}
+    heights = [
+        sum(
+            _estimated_flow_block_height(
+                [by_id[str(node.get("data-source-flow-unit-id"))]],
+                slot={
+                    "bounds": {"width": 1000, "height": 620},
+                    "spacing": {"insetLeft": 10, "insetRight": 10},
+                    "textStyle": {"fontSize": 8},
+                },
+                adaptive_scale=1.0,
+                role="body",
+                column_width=column_width,
+            )
+            for node in column.xpath(".//*[@data-source-flow-unit-id]")
+        )
+        for column in columns
+    ]
+    assert max(heights) <= 620.0 * 0.90
     assert max(heights) - min(heights) < max(heights) * 0.2
     assert [
         str(node.get("data-source-flow-unit-id"))

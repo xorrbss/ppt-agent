@@ -978,22 +978,13 @@ def _append_fixed_text_columns(
         f"grid-template-columns:repeat({resolved_columns},minmax(0,1fr));"
         f"column-gap:{column_gap:.3f}px;overflow:hidden",
     )
-    parent.set("data-source-flow-column-count", str(resolved_columns))
-    parent.set("data-source-flow-target-height", f"{target_height:.3f}")
-    parent.set(
-        "data-source-flow-maximum-estimated-height",
-        f"{maximum_estimated_height:.3f}",
-    )
     start = 0
     parent_qid = str(parent.get("data-qid") or "source-flow-columns")
     for column_index, end in enumerate(ends):
         selected_blocks = blocks[start:end]
-        estimated_height = sum(weights[start:end])
         start = end
         column = lxml_html.Element("div")
         column.set("data-qid", f"{parent_qid}--column-{column_index + 1:02d}")
-        column.set("data-source-flow-column-index", str(column_index))
-        column.set("data-source-flow-estimated-height", f"{estimated_height:.3f}")
         column.set(
             "style",
             "display:flex!important;flex-direction:column;min-width:0;min-height:0;"
