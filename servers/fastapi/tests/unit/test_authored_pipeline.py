@@ -3114,12 +3114,14 @@ def test_is_authored_predicate():
         content="x", n_slides=1, language="ko", theme={"mode": "authored"},
         layout={"name": "ignored"},
     )
-    by_null_layout = PresentationModel(content="x", n_slides=1, language="ko")
+    without_mode_or_sentinel = PresentationModel(content="x", n_slides=1, language="ko")
     templated = PresentationModel(
         content="x", n_slides=1, language="ko", layout={"name": "adaptive"},
     )
     assert by_theme.is_authored() is True
-    assert by_null_layout.is_authored() is True
+    # A missing React layout is no longer an authored sentinel: the mode column
+    # is backfilled for legacy rows and only the theme sentinel still counts.
+    assert without_mode_or_sentinel.is_authored() is False
     assert templated.is_authored() is False
 
 
