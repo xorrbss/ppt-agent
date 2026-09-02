@@ -1,4 +1,5 @@
 import os
+from contextlib import suppress
 import uuid
 from typing import Optional, Union
 
@@ -159,15 +160,23 @@ class TempFileService:
 
     @staticmethod
     def _delete_resolved_dir_files(dir_path: str):
+        # Startup cleanup runs in every process that imports this module, so
+        # two of them booting together walk the same tree and race: one removes
+        # an entry the other has already listed. Losing that race is the normal
+        # outcome -- the entry is gone, which is what the caller wanted -- and
+        # must not raise, because this runs at import and would otherwise stop
+        # a worker from starting at all.
         for root, dirs, files in os.walk(dir_path, topdown=False):
             for name in files:
-                os.remove(os.path.join(root, name))
+                with suppress(FileNotFoundError):
+                    os.remove(os.path.join(root, name))
             for name in dirs:
                 child_dir = os.path.join(root, name)
-                if os.path.islink(child_dir):
-                    os.unlink(child_dir)
-                else:
-                    os.rmdir(child_dir)
+                with suppress(FileNotFoundError):
+                    if os.path.islink(child_dir):
+                        os.unlink(child_dir)
+                    else:
+                        os.rmdir(child_dir)
 
     def _delete_dir_files(self, dir_path: str):
         dir_path = self.resolve_temp_path(dir_path, must_exist=True)
@@ -181,7 +190,8 @@ class TempFileService:
                 return
             raise
         self._delete_dir_files(dir_path)
-        os.rmdir(dir_path)
+        with suppress(FileNotFoundError):
+            os.rmdir(dir_path)
 
     def cleanup_base_dir(self):
         # Singleton construction may happen lazily while an authenticated
