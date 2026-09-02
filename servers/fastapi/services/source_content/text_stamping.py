@@ -125,9 +125,14 @@ def _bind_block(
     while cursor < count:
         binding = None
         conflict = False
+        # A span that starts after a pipe may be rendered anywhere: the pipe
+        # joins independent labels and the new template decides which slot each
+        # lands in, regularly emitting the second before the first. Ordered
+        # separators -- bullets, arrows, lines -- still bind in source order.
+        after = -1 if projection.runs[cursor].order_free_before else last_start
         for end in range(count - 1, cursor - 1, -1):
             binding, conflict = _find_span(
-                parser, projection, block_id, cursor, end, after=last_start
+                parser, projection, block_id, cursor, end, after=after
             )
             if binding is not None:
                 break
@@ -140,7 +145,7 @@ def _bind_block(
                 )
             raise _no_match(block_id, projection, cursor, cursor)
         bound.append(binding)
-        last_start = binding.node.start
+        last_start = max(last_start, binding.node.start)
         cursor = binding.end + 1
     return bound
 

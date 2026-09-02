@@ -146,3 +146,25 @@ def test_verbatim_readback_still_rejects_altered_characters() -> None:
             htmls=["<div><div>11</div><div>곳 찾기</div></div>"],
         )
     assert error.value.block_ids == ("b1",)
+
+
+def test_verbatim_readback_accepts_pipe_halves_in_either_slot() -> None:
+    # The template put the second half in its eyebrow and the first in its
+    # right slot, which is a placement choice, not lost text.
+    result = verify_source_verbatim_readback(
+        manifest=_manifest(("b1", "꿀벌쌤 | 숏폼대행 홀로서기")),
+        outline=_outline("b1"),
+        htmls=['<header><div class="eyebrow">숏폼대행 홀로서기</div>'
+               '<div class="right">꿀벌쌤</div></header>'],
+    )
+    assert result.passed
+
+
+def test_verbatim_readback_still_requires_arrow_steps_in_order() -> None:
+    with pytest.raises(SourceContentReadbackError) as error:
+        verify_source_verbatim_readback(
+            manifest=_manifest(("b1", "영업 → 상담 → 제안")),
+            outline=_outline("b1"),
+            htmls=["<div><span>제안</span><span>상담</span><span>영업</span></div>"],
+        )
+    assert error.value.block_ids == ("b1",)

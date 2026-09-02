@@ -291,3 +291,18 @@ def test_a_number_is_content_even_though_a_glyph_is_not() -> None:
 def test_a_block_of_only_glyphs_still_projects_a_run() -> None:
     # Nothing to fold the glyph into, and a block must never project empty.
     assert [run.body for run in project_source_runs("•").runs] == ["•"]
+
+
+def test_a_pipe_frees_the_order_of_the_run_after_it() -> None:
+    """``brand | course title`` are independent labels, not a sequence.
+
+    The template owns which header slot each half lands in and regularly
+    renders the second before the first, so requiring source order there
+    rejected correct slides. A sequence the source author ordered -- bullets,
+    arrows, lines -- keeps its order.
+    """
+    piped = project_source_runs("꿀벌쌤 | 숏폼대행 1인사업자 홀로서기").runs
+    assert [run.order_free_before for run in piped] == [False, True]
+
+    for sequence in ("영업 → 상담 → 제안", "• □ 하나 • □ 둘", "첫 줄\n둘째 줄"):
+        assert not any(run.order_free_before for run in project_source_runs(sequence).runs)

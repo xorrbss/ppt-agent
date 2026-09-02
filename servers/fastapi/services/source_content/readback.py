@@ -203,6 +203,11 @@ def _find_block_runs(rendered: str, block: Mapping[str, Any], cursor: int) -> in
     except ValueError:
         return -1
     for run in projection.runs:
+        # A pipe joins independent labels the new template may place in either
+        # order, so a run after one is searched from the start of the slide.
+        # Bullets, arrows and lines keep the sequence the source author chose.
+        if run.order_free_before:
+            cursor = 0
         forms = (run.marker + run.body, run.body) if run.marker else (run.body,)
         position = -1
         for raw_form in forms:

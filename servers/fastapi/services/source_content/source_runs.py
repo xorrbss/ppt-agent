@@ -29,7 +29,7 @@ _SEPARATOR = re.compile(
     r"\t+"
     r"|[ \u00a0\u3000]{2,}"
     r"|\s+[→⇒➜➔⟶↦]\s+"
-    r"|\s+\|\s+"
+    r"|(?P<order_free>\s+\|\s+)"
     rf"|\s+(?=[{re.escape(_ITEM_GLYPHS)}]\s)"
 )
 _BLANK_FIELD = re.compile(r"(_{3,})")
@@ -59,6 +59,11 @@ class SourceRun:
     begin: int
     body_begin: int
     end: int
+    # A pipe joins independent labels on one line -- a brand beside a course
+    # title -- and the new template owns where each lands, so this run may be
+    # rendered before the one preceding it. Bullets, arrows and lines enumerate
+    # a sequence whose order the source author chose, and keep it.
+    order_free_before: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,7 +121,7 @@ def project_source_runs(raw_text: object) -> SourceRunProjection:
     ):
         cursor = 0
         first_run = len(runs)
-        for segment in _segments(line):
+        for segment, order_free in _segments(line):
             marker, body = _split_marker(normalize_source_text(segment))
             piece = marker + body
             position = normalized_line.find(piece, cursor)
@@ -132,6 +137,7 @@ def project_source_runs(raw_text: object) -> SourceRunProjection:
                     begin=begin,
                     body_begin=begin + len(marker),
                     end=begin + len(piece),
+                    order_free_before=order_free,
                 )
             )
             cursor = position + len(piece)
@@ -142,16 +148,28 @@ def project_source_runs(raw_text: object) -> SourceRunProjection:
     return SourceRunProjection(text=text, runs=tuple(runs), lines=tuple(line_spans))
 
 
-def _segments(line: str) -> list[str]:
-    pieces: list[str] = []
-    for chunk in _SEPARATOR.split(line):
-        for part in _BLANK_FIELD.split(chunk):
-            if part.strip():
-                pieces.append(part)
-    return _attach_marker_only_pieces(pieces)
+def _segments(line: str) -> list[tuple[str, bool]]:
+    """Return each piece with whether the separator before it frees its order."""
+
+    pieces: list[tuple[str, bool]] = []
+    cursor = 0
+    order_free = False
+    for match in _SEPARATOR.finditer(line):
+        pieces.extend(_split_blank_fields(line[cursor : match.start()], order_free))
+        order_free = match.group("order_free") is not None
+        cursor = match.end()
+    pieces.extend(_split_blank_fields(line[cursor:], order_free))
+    return _drop_marker_only_pieces(pieces)
 
 
-def _attach_marker_only_pieces(pieces: list[str]) -> list[str]:
+def _split_blank_fields(chunk: str, order_free: bool) -> list[tuple[str, bool]]:
+    parts = [part for part in _BLANK_FIELD.split(chunk) if part.strip()]
+    return [(part, order_free and index == 0) for index, part in enumerate(parts)]
+
+
+def _drop_marker_only_pieces(
+    pieces: list[tuple[str, bool]],
+) -> list[tuple[str, bool]]:
     """Fold a piece that is only presentation into the item it introduces.
 
     Splitting before every item glyph turns ``• □ 누구에게`` into ``•`` and
@@ -165,7 +183,7 @@ def _attach_marker_only_pieces(pieces: list[str]) -> list[str]:
     kept = [
         piece
         for piece in pieces
-        if not _MARKER_ONLY.match(normalize_source_text(piece))
+        if not _MARKER_ONLY.match(normalize_source_text(piece[0]))
     ]
     # A block that is nothing but glyphs has no item to fold them into; keep it
     # as-is rather than projecting an empty block.
