@@ -95,6 +95,10 @@ def test_canonical_export_identity_is_feature_gated_digest_bound_and_fenced(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # SQLite is metadata-only development support for the durable artifact
+    # store: its CAS-key guard refuses to run outside a development profile.
+    monkeypatch.setenv("ENVIRONMENT", "local")
+
     async def scenario() -> None:
         engine = create_async_engine(
             f"sqlite+aiosqlite:///{tmp_path / 'canonical-export.db'}"
@@ -266,7 +270,6 @@ def test_canonical_export_identity_is_feature_gated_digest_bound_and_fenced(
                 render_adapter="public-isolated-fidelity",
                 renderer_version="public-worker-protocol/v2",
             )
-            monkeypatch.setenv("ENVIRONMENT", "local")
             async with acquire_slide_render_authority(
                 session,
                 identity=render_identity,
