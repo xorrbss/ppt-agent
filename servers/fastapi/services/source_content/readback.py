@@ -14,6 +14,8 @@ from html.parser import HTMLParser
 import re
 from typing import Any
 
+from services.source_content.source_runs import project_source_runs
+
 
 class SourceContentReadbackError(ValueError):
     """A publication-blocking source-verbatim readback failure."""
@@ -121,11 +123,11 @@ def visible_text(html: str) -> str:
     return _normalise_text(" ".join(parser.parts))
 
 
-def _block_text(block: Mapping[str, Any]) -> str:
+def _block_raw_text(block: Mapping[str, Any]) -> str:
     payload = _mapping(_value(block, "payload", default={}), label="source block payload")
     text = _value(payload, "text", default=None)
     if isinstance(text, str):
-        return _normalise_text(text)
+        return text
     # A few extractors retain only runs in payload.  Joining those runs keeps
     # the check lossless without requiring a particular extractor version.
     runs = _value(payload, "runs", default=())
@@ -138,8 +140,37 @@ def _block_text(block: Mapping[str, Any]) -> str:
                 value = run
             if isinstance(value, str):
                 values.append(value)
-        return _normalise_text("".join(values))
+        return "".join(values)
     return ""
+
+
+def _block_text(block: Mapping[str, Any]) -> str:
+    return _normalise_text(_block_raw_text(block))
+
+
+def _find_block_runs(rendered: str, block: Mapping[str, Any], cursor: int) -> int:
+    """Return the cursor after the block's projected runs, or ``-1``.
+
+    Authored markup may split one source block into bullet items, flow steps
+    or lines.  Every projected run must still occur verbatim and in order;
+    only the leading bullet/enumerator/arrow marker of a run is optional.
+    """
+
+    try:
+        projection = project_source_runs(_block_raw_text(block))
+    except ValueError:
+        return -1
+    for run in projection.runs:
+        forms = (run.marker + run.body, run.body) if run.marker else (run.body,)
+        position = -1
+        for form in forms:
+            position = rendered.find(form, cursor)
+            if position >= 0:
+                cursor = position + len(form)
+                break
+        if position < 0:
+            return -1
+    return cursor
 
 
 def verify_source_verbatim_readback(
@@ -219,14 +250,13 @@ def verify_source_verbatim_readback(
         cursor = 0
         rendered = visible_text(str(html))
         for _, block_id, block in ordered_text_blocks:
-            expected = _block_text(block)
             checked_blocks += 1
-            position = rendered.find(expected, cursor)
-            if position < 0:
+            next_cursor = _find_block_runs(rendered, block, cursor)
+            if next_cursor < 0:
                 missing.append(block_id)
                 failed_slide_indices.add(slide_index)
             else:
-                cursor = position + len(expected)
+                cursor = next_cursor
 
     result = SourceVerbatimReadbackResult(
         checked_slide_count=len(units),

@@ -148,10 +148,16 @@ def test_stamp_source_block_ids_requires_unique_rendered_dom_match() -> None:
     assert 'data-semantic-role="title"' in stamped
     assert stamped.count('data-source-block-id="b1"') == 1
     assert stamp_source_block_ids(stamped, [("b1", "제목"), ("b2", "본문")]) == stamped
-    with pytest.raises(BrowserSourceReadbackError):
-        stamp_source_block_ids('<p>같은 텍스트</p><div>같은 텍스트</div>', [("b1", "같은 텍스트")])
-    with pytest.raises(BrowserSourceReadbackError):
+    # An exact repeat binds the first element in document order; the copy is
+    # decorative.  Text already owned by another source ID still conflicts.
+    repeated = stamp_source_block_ids('<p>같은 텍스트</p><div>같은 텍스트</div>', [("b1", "같은 텍스트")])
+    assert repeated.startswith('<p data-source-block-id="b1"')
+    assert repeated.endswith("<div>같은 텍스트</div>")
+    with pytest.raises(BrowserSourceReadbackError) as conflict:
         stamp_source_block_ids('<p data-source-block-id="other">같은 텍스트</p>', [("b1", "같은 텍스트")])
+    assert "conflicting" in conflict.value.detail
+    with pytest.raises(BrowserSourceReadbackError):
+        stamp_source_block_ids('<p>다른 텍스트</p>', [("b1", "같은 텍스트")])
 
 
 def test_stamp_source_block_ids_closes_void_elements_without_corrupting_text_ownership() -> None:

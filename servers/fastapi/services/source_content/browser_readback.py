@@ -5,6 +5,11 @@ block to an explicit ``data-source-block-id`` (or its metrics equivalent) and
 checks the *rendered* Chromium observation, rather than trusting HTML strings.
 The resulting evidence keeps geometry and visibility facts attached to the
 source block for publication gates and later audit.
+
+A block may be bound as a whole element or as a partition of projected runs
+(``<blockId>:run:<n>``, see :mod:`services.source_content.source_runs`).  Run
+bindings are verified individually and folded into one evidence entry per
+manifest block, so receipts keyed by block ID are unchanged.
 """
 
 from __future__ import annotations
@@ -13,25 +18,26 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 import hashlib
-import html
-from html.parser import HTMLParser
 import math
 import re
 from typing import Any
 
 from services.authored_vnext.capability_registry import capability_metadata
-
-
-class BrowserSourceReadbackError(ValueError):
-    """Publication-blocking failure in browser-observed source readback."""
-
-    def __init__(self, code: str, *, detail: str, block_ids: tuple[str, ...] = (), slide_indices: tuple[int, ...] = (), order_violations: int = 0) -> None:
-        super().__init__(code)
-        self.code = code
-        self.detail = detail
-        self.block_ids = block_ids
-        self.slide_indices = slide_indices
-        self.order_violations = order_violations
+from services.source_content.source_runs import (
+    SourceRunProjection,
+    parse_source_binding_id,
+    project_source_runs,
+    source_run_binding_id,
+)
+from services.source_content.source_stamp_dom import (
+    BrowserSourceReadbackError,
+    deterministic_source_qid,
+    insert_start_tag_attributes,
+    parse_stamp_dom,
+    replace_source_qid,
+    source_block_data_attribute,
+)
+from services.source_content.text_stamping import stamp_source_block_ids
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,9 +54,10 @@ class BrowserSourceBlockEvidence:
     natural_width: float | None = None
     natural_height: float | None = None
     semantic_role: str = ""
+    run_bindings: tuple[dict[str, Any], ...] = ()
 
     def as_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "sourceBlockId": self.source_block_id,
             "qid": self.qid,
             "renderedText": self.rendered_text,
@@ -64,6 +71,9 @@ class BrowserSourceBlockEvidence:
             "naturalHeight": self.natural_height,
             "semanticRole": self.semantic_role,
         }
+        if self.run_bindings:
+            payload["runs"] = [dict(item) for item in self.run_bindings]
+        return payload
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,224 +109,6 @@ class BrowserSourceReadbackResult:
             "verified": self.passed,
             "capabilityRegistry": capability_metadata(consumer="readback"),
         }
-
-
-class _StampNode:
-    __slots__ = (
-        "start", "end", "text", "hidden", "stamped", "source_id",
-        "has_qid", "qid_count", "has_semantic_role",
-    )
-
-    def __init__(self, start: int, hidden: bool) -> None:
-        self.start = start
-        self.end: int | None = None
-        self.text: list[str] = []
-        self.hidden = hidden
-        self.stamped = False
-        self.source_id: str | None = None
-        self.has_qid = False
-        self.qid_count = 0
-        self.has_semantic_role = False
-
-
-class _StampParser(HTMLParser):
-    """Token-preserving parser used only to add source IDs before capture."""
-
-    _HIDDEN = frozenset({"script", "style", "noscript", "template"})
-    _VOID = frozenset(
-        {
-            "area",
-            "base",
-            "br",
-            "col",
-            "embed",
-            "hr",
-            "img",
-            "input",
-            "link",
-            "meta",
-            "param",
-            "source",
-            "track",
-            "wbr",
-        }
-    )
-
-    def __init__(self) -> None:
-        super().__init__(convert_charrefs=False)
-        self.tokens: list[str] = []
-        self.stack: list[_StampNode] = []
-        self.nodes: list[_StampNode] = []
-
-    def _append_text(self, value: str) -> None:
-        for node in self.stack:
-            if node.hidden:
-                break
-            node.text.append(value)
-
-    def _record_starttag(
-        self,
-        tag: str,
-        attrs: list[tuple[str, str | None]],
-        *,
-        closed: bool,
-    ) -> None:
-        raw = self.get_starttag_text() or f"<{tag}>"
-        index = len(self.tokens)
-        self.tokens.append(raw)
-        if tag.lower() == "br":
-            # HTMLParser reports ``br`` as an empty start tag, but its rendered
-            # text contribution is a line break. Keep that separator in every
-            # open ancestor so a source run split with ``<br>`` still matches
-            # the browser's visible text.
-            self._append_text("\n")
-        inherited_hidden = bool(self.stack and self.stack[-1].hidden)
-        node = _StampNode(index, inherited_hidden or tag.lower() in self._HIDDEN)
-        for name, value in attrs:
-            lowered = name.lower()
-            if lowered == "data-source-block-id":
-                node.stamped = True
-                node.source_id = value or ""
-            elif lowered == "data-qid":
-                node.has_qid = True
-                node.qid_count += 1
-            elif lowered in {"data-semantic-role", "data-role"} or lowered == "role":
-                node.has_semantic_role = bool(value)
-        self.nodes.append(node)
-        if closed:
-            node.end = index
-        else:
-            self.stack.append(node)
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        self._record_starttag(tag, attrs, closed=tag.lower() in self._VOID)
-
-    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        self._record_starttag(tag, attrs, closed=True)
-
-    def handle_endtag(self, tag: str) -> None:
-        self.tokens.append(f"</{tag}>")
-        if self.stack:
-            self.stack[-1].end = len(self.tokens) - 1
-            self.stack.pop()
-
-    def handle_data(self, data: str) -> None:
-        self.tokens.append(data)
-        self._append_text(data)
-
-    def handle_entityref(self, name: str) -> None:
-        self.tokens.append(f"&{name};")
-        self._append_text(html.unescape(f"&{name};"))
-
-    def handle_charref(self, name: str) -> None:
-        self.tokens.append(f"&#{name};")
-        self._append_text(html.unescape(f"&#{name};"))
-
-    def handle_comment(self, data: str) -> None:
-        self.tokens.append(f"<!--{data}-->")
-
-    def handle_decl(self, decl: str) -> None:
-        self.tokens.append(f"<!{decl}>")
-
-    def handle_pi(self, data: str) -> None:
-        self.tokens.append(f"<?{data}>")
-
-
-def stamp_source_block_ids(html_source: str, block_texts: Sequence[tuple[str, str]]) -> str:
-    """Stamp one deterministic source ID on each uniquely matching DOM element.
-
-    Matching is against an element's complete rendered text (nested text is
-    included and hidden script/style text is ignored).  A missing or ambiguous
-    match raises instead of guessing, keeping the browser binding fail closed.
-    """
-
-    parser = _StampParser()
-    try:
-        parser.feed(str(html_source))
-        parser.close()
-    except Exception as error:  # pragma: no cover - HTMLParser is forgiving
-        raise BrowserSourceReadbackError("source_content_browser_readback_invalid", detail="authored slide HTML could not be parsed") from error
-    used: set[str] = set()
-    for raw_block_id, raw_expected in block_texts:
-        block_id, expected = str(raw_block_id).strip(), _text(raw_expected)
-        if not block_id or not expected or block_id in used:
-            raise BrowserSourceReadbackError("source_content_browser_readback_invalid", detail="source block IDs/text must be unique and non-empty")
-        matching = [node for node in parser.nodes if not node.hidden and _text("".join(node.text)) == expected]
-        punctuation_repair = False
-        if not matching:
-            # Verbatim authoring can occasionally append the same terminal
-            # punctuation already present in the immutable source (``.`` ->
-            # ``..``). This is not accepted as equivalent readback: repair the
-            # uniquely identified leaf back to the exact source bytes before
-            # Chromium capture. Any other wording/punctuation drift still
-            # fails closed.
-            matching = [
-                node
-                for node in parser.nodes
-                if not node.hidden
-                and _has_only_duplicated_terminal_punctuation(
-                    _text("".join(node.text)), expected
-                )
-            ]
-            punctuation_repair = bool(matching)
-        conflicts = [node for node in matching if node.stamped and node.source_id != block_id]
-        if conflicts:
-            raise BrowserSourceReadbackError("source_content_browser_readback_failed", detail="source block text is already bound to a conflicting ID", block_ids=(block_id,))
-        candidates = [node for node in matching if not node.stamped or node.source_id == block_id]
-        # A wrapper and its leaf can expose the same rendered text (for example
-        # ``<p><span>text</span></p>``).  Bind the deepest unique match; two
-        # unrelated leaves remain ambiguous and fail closed.
-        candidates = [
-            node for node in candidates
-            if not any(
-                other is not node and other.start > node.start and
-                (node.end is None or (other.end is not None and other.end <= node.end))
-                for other in candidates
-            )
-        ]
-        if len(candidates) != 1:
-            raise BrowserSourceReadbackError("source_content_browser_readback_failed", detail="source block text has no unique DOM element", block_ids=(block_id,))
-        node = candidates[0]
-        if node.qid_count > 1:
-            raise BrowserSourceReadbackError(
-                "source_content_browser_readback_failed",
-                detail="source block has duplicate authored QID attributes",
-                block_ids=(block_id,),
-            )
-        if punctuation_repair:
-            # Only a leaf with one direct text token can be rewritten without
-            # disturbing nested emphasis, inline objects, or author markup.
-            if node.end != node.start + 2:
-                raise BrowserSourceReadbackError(
-                    "source_content_browser_readback_failed",
-                    detail="source block punctuation drift is not safely repairable",
-                    block_ids=(block_id,),
-                )
-            parser.tokens[node.start + 1] = html.escape(expected, quote=False)
-        raw_tag = parser.tokens[node.start]
-        source_qid = deterministic_source_qid(block_id)
-        if node.has_qid:
-            raw_tag = _replace_source_qid(raw_tag, source_qid)
-        close = raw_tag.rfind("/") if raw_tag.rstrip().endswith("/>") else raw_tag.rfind(">")
-        if close < 0:
-            raise BrowserSourceReadbackError("source_content_browser_readback_invalid", detail="invalid DOM start tag", block_ids=(block_id,))
-        attributes = "" if node.stamped else source_block_data_attribute(block_id)
-        if not node.has_qid:
-            attributes = (attributes + " " if attributes else "") + f'data-qid="{source_qid}"'
-        if not node.has_semantic_role:
-            # Keep source text in the same semantic contract as authored text.
-            # Heading tags are title targets; all other visible source text is
-            # body content.  This marker is observed by Chromium and avoids
-            # accepting an HTML-only match.
-            tag_match = re.match(r"\s*<\s*([a-z0-9]+)", raw_tag, flags=re.IGNORECASE)
-            semantic_role = "title" if tag_match and tag_match.group(1).lower() in {"h1", "h2"} else "body"
-            attributes = (attributes + " " if attributes else "") + f'data-semantic-role="{semantic_role}"'
-        if attributes:
-            parser.tokens[node.start] = raw_tag[:close].rstrip() + " " + attributes + raw_tag[close:]
-        node.stamped = True
-        node.source_id = block_id
-        used.add(block_id)
-    return "".join(parser.tokens)
 
 
 def deterministic_source_block_id(source_unit_id: str, order: int, text: str) -> str:
@@ -365,9 +157,7 @@ def stamp_source_image_block_ids(
     collapsing multiple occurrences into one browser owner.
     """
 
-    parser = _StampParser()
-    parser.feed(str(html_source))
-    parser.close()
+    parser = parse_stamp_dom(html_source)
     ids = [str(value).strip() for value in image_block_ids]
     if not ids and not any(
         parser.tokens[node.start].lstrip().lower().startswith("<img")
@@ -420,14 +210,7 @@ def stamp_source_image_block_ids(
         raw_tag = parser.tokens[node.start]
         source_qid = deterministic_source_qid(block_id)
         if node.has_qid:
-            raw_tag = _replace_source_qid(raw_tag, source_qid)
-        close = raw_tag.rfind("/") if raw_tag.rstrip().endswith("/>") else raw_tag.rfind(">")
-        if close < 0:
-            raise BrowserSourceReadbackError(
-                "source_content_browser_readback_invalid",
-                detail="invalid image start tag",
-                block_ids=(block_id,),
-            )
+            raw_tag = replace_source_qid(raw_tag, source_qid)
         attrs = "" if node.stamped else source_block_data_attribute(block_id)
         if not node.has_qid:
             attrs = (attrs + " " if attrs else "") + f'data-qid="{source_qid}"'
@@ -437,32 +220,12 @@ def stamp_source_image_block_ids(
         # than merely an HTML string containing an <img> tag.
         if not node.has_semantic_role:
             attrs = (attrs + " " if attrs else "") + 'data-semantic-role="image"'
-        parser.tokens[node.start] = (
-            raw_tag[:close].rstrip() + " " + attrs + raw_tag[close:]
-            if attrs
-            else raw_tag
+        parser.tokens[node.start] = insert_start_tag_attributes(
+            raw_tag, attrs, block_id=block_id, label="image"
         )
         node.stamped = True
         node.source_id = block_id
     return "".join(parser.tokens)
-
-
-def _replace_source_qid(raw_tag: str, source_qid: str) -> str:
-    """Replace the one authored QID on a source-owned start tag in place."""
-
-    pattern = re.compile(
-        r"(\sdata-qid)(?:\s*=\s*(?:\"[^\"]*\"|'[^']*'|[^\s>]+))?(?=\s|/?>)",
-        re.IGNORECASE,
-    )
-    replaced, count = pattern.subn(
-        lambda match: f'{match.group(1)}="{source_qid}"', raw_tag, count=1
-    )
-    if count != 1:
-        raise BrowserSourceReadbackError(
-            "source_content_browser_readback_invalid",
-            detail="source QID attribute could not be replaced safely",
-        )
-    return replaced
 
 
 def _is_decorative_image_tag(raw_tag: str) -> bool:
@@ -486,21 +249,6 @@ def _is_decorative_image_tag(raw_tag: str) -> bool:
     return attrs.get("data-decorative") in {"true", "1", "yes"} or attrs.get("data-decoration") in {"true", "1", "yes"}
 
 
-def source_block_data_attribute(source_block_id: str) -> str:
-    """Render the escaped attribute used by authored HTML instrumentation."""
-
-    value = str(source_block_id).strip()
-    if not value or any(char in value for char in "\r\n\t"):
-        raise ValueError("source block id must be a non-empty single-line value")
-    return f'data-source-block-id="{html.escape(value, quote=True)}"'
-
-
-def deterministic_source_qid(source_block_id: str) -> str:
-    """Stable qid used when source HTML has no editable identity."""
-
-    return "source-block-" + hashlib.sha256(str(source_block_id).encode("utf-8")).hexdigest()[:16]
-
-
 def _mapping(value: Any, label: str) -> Mapping[str, Any]:
     if hasattr(value, "model_dump"):
         value = value.model_dump(mode="json", by_alias=True)
@@ -518,17 +266,6 @@ def _field(value: Mapping[str, Any], *names: str, default: Any = None) -> Any:
 
 def _text(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()
-
-
-def _has_only_duplicated_terminal_punctuation(actual: str, expected: str) -> bool:
-    """Recognize one safe verbatim repair: duplicated final punctuation."""
-
-    actual_value, expected_value = _text(actual), _text(expected)
-    match = re.search(r"([.!?\u3002\uff01\uff1f])\1+$", actual_value)
-    if match is None or not expected_value.endswith(match.group(1)):
-        return False
-    repaired = actual_value[: match.start()] + match.group(1)
-    return repaired == expected_value
 
 
 def _finite_bbox(value: Any) -> dict[str, float] | None:
@@ -567,14 +304,21 @@ def _metric_visible(metric: Mapping[str, Any], bbox: Mapping[str, float]) -> boo
     return explicit is not False and display not in {"none", "contents"} and visibility not in {"hidden", "collapse"} and opacity > 0 and bbox["width"] > 0 and bbox["height"] > 0
 
 
-def _block_text(block: Mapping[str, Any]) -> str:
+def _block_raw_text(block: Mapping[str, Any]) -> str:
     payload = _mapping(_field(block, "payload", default={}), "source block payload")
     if isinstance(payload.get("text"), str):
-        return _text(payload["text"])
+        return payload["text"]
     runs = payload.get("runs", ())
     if isinstance(runs, Sequence) and not isinstance(runs, (str, bytes)):
-        return _text("".join(str(run.get("text", "")) if isinstance(run, Mapping) else str(run) for run in runs))
+        return "".join(str(run.get("text", "")) if isinstance(run, Mapping) else str(run) for run in runs)
     return ""
+
+
+def _block_projection(block: Mapping[str, Any]) -> SourceRunProjection | None:
+    try:
+        return project_source_runs(_block_raw_text(block))
+    except ValueError:
+        return None
 
 
 def _number(value: Any) -> float | None:
@@ -595,26 +339,242 @@ def _slides_metrics(browser_metrics: Any) -> list[Mapping[str, Any]]:
     return [root]
 
 
-def verify_browser_source_readback(*, manifest: Any, outline: Any, browser_metrics: Any, htmls: Sequence[str] | None = None) -> BrowserSourceReadbackResult:
-    """Validate source IDs, rendered text, geometry, order, and visibility.
+@dataclass(frozen=True, slots=True)
+class _Observation:
+    """Measured facts about one bound DOM element, independent of the block."""
 
-    ``browser_metrics`` is the payload emitted by ``ensure_browser_metrics``
-    (one object per slide, or ``{"slides": [...]}``). Every admitted text block
-    must have one explicit source-block binding and a measured, visible DOM box.
-    Missing telemetry, clipping, occlusion, duplicate/unknown IDs, and rendered
-    text mismatches all fail closed.
+    tag: str
+    qid: str
+    rendered: str
+    semantic_role: str
+    bbox: dict[str, float] | None
+    in_canvas: bool
+    visible: bool | None
+    clipped: bool
+    clipping_known: bool
+    occluded: float | None
+    continuous: float | None
+    occlusion_known: bool
+    font_loaded: bool
+    image_payload: Mapping[str, Any] | None
+    natural_width: float | None
+    natural_height: float | None
+
+    def text_failed(
+        self,
+        accepted: Sequence[str],
+        expected_qid: str,
+        qid_counts: Counter[str],
+        seen_qids: set[str],
+    ) -> bool:
+        return (
+            not self.qid
+            or self.qid in seen_qids
+            or self.qid != expected_qid
+            or qid_counts.get(self.qid, 0) != 1
+            or not self.in_canvas
+            or self.visible is not True
+            or not self.font_loaded
+            or not self.clipping_known
+            or self.clipped
+            or not self.occlusion_known
+            or not accepted
+            or self.rendered not in accepted
+            or not self.semantic_role
+        )
+
+
+def _observe(metric: Mapping[str, Any], canvas_width: float, canvas_height: float) -> _Observation:
+    bbox = _finite_bbox(_field(metric, "bbox", default=None))
+    qid = str(_field(metric, "qid", default="") or "").strip()
+    rendered = _text(_field(metric, "rendered_text", "renderedText", "innerText", "text", default=""))
+    visible = _metric_visible(metric, bbox or {}) if bbox is not None else None
+    clip_values = [
+        _field(metric, "clipped", default=None),
+        _field(metric, "glyph_clipped", "glyphClipped", default=None),
+        _field(metric, "line_box_clipped", "lineBoxClipped", default=None),
+    ]
+    clipped = any(value is True for value in clip_values)
+    clipping_known = all(isinstance(value, bool) for value in clip_values)
+    occluded = _number(_field(metric, "occluded_fraction", "occludedFraction", default=None))
+    continuous = _number(_field(metric, "continuous_occluded_fraction", "continuousOccludedFraction", default=None))
+    occlusion_known = (
+        occluded is not None
+        and continuous is not None
+        and 0 <= occluded <= 1
+        and 0 <= continuous <= 1
+        and occluded == 0
+        and continuous == 0
+    )
+    measurement = _field(metric, "measurement", default={})
+    occlusion_known = (
+        occlusion_known
+        and isinstance(measurement, Mapping)
+        and measurement.get("occlusion") is True
+    )
+    occlusion_evidence = _field(
+        metric, "occlusion_measurement_evidence", "occlusionMeasurementEvidence", default={}
+    )
+    occlusion_known = (
+        occlusion_known
+        and isinstance(occlusion_evidence, Mapping)
+        and occlusion_evidence.get("status") == "measured"
+    )
+    in_canvas = (
+        bbox is not None
+        and bbox["x"] >= 0
+        and bbox["y"] >= 0
+        and bbox["x"] + bbox["width"] <= canvas_width
+        and bbox["y"] + bbox["height"] <= canvas_height
+    )
+    tag = str(_field(metric, "tag", default="")).lower()
+    image_payload = _field(metric, "image", default=None)
+    if not isinstance(image_payload, Mapping) and tag == "img":
+        image_payload = metric
+    if not isinstance(image_payload, Mapping):
+        image_payload = None
+    natural_width = natural_height = None
+    if image_payload is not None:
+        natural_width = _number(_field(image_payload, "natural_width", "naturalWidth", default=None))
+        natural_height = _number(_field(image_payload, "natural_height", "naturalHeight", default=None))
+    return _Observation(
+        tag=tag,
+        qid=qid,
+        rendered=rendered,
+        semantic_role=str(_field(metric, "semantic_role", "semanticRole", "role", default="") or "").strip(),
+        bbox=bbox,
+        in_canvas=in_canvas,
+        visible=visible,
+        clipped=clipped,
+        clipping_known=clipping_known,
+        occluded=occluded,
+        continuous=continuous,
+        occlusion_known=occlusion_known,
+        font_loaded=_field(metric, "font_loaded", "fontLoaded", default=None) is True,
+        image_payload=image_payload,
+        natural_width=natural_width,
+        natural_height=natural_height,
+    )
+
+
+def _image_failed(observation: _Observation, payload: Mapping[str, Any]) -> bool:
+    image = observation.image_payload or {}
+    complete = _field(image, "complete", default=None)
+    image_visible = _field(image, "cssVisible", "css_visible", default=None)
+    role = observation.semantic_role.lower()
+    expected_width = _number(
+        _field(payload, "naturalWidth", "natural_width", "intrinsicWidth", "intrinsic_width", default=None)
+    )
+    expected_height = _number(
+        _field(payload, "naturalHeight", "natural_height", "intrinsicHeight", "intrinsic_height", default=None)
+    )
+    width, height = observation.natural_width, observation.natural_height
+    return (
+        observation.tag != "img"
+        or complete is not True
+        or width is None or width <= 0
+        or height is None or height <= 0
+        or image_visible is False
+        or not role
+        or not (role.startswith("image") or role.endswith("image"))
+        or (expected_width is not None and abs(width - expected_width) > 0.5)
+        or (expected_height is not None and abs(height - expected_height) > 0.5)
+    )
+
+
+def _max_or_none(values: Sequence[float | None]) -> float | None:
+    present = [value for value in values if value is not None]
+    return max(present) if len(present) == len(values) and present else None
+
+
+def _fold_run_evidence(block_id: str, runs: Sequence[tuple[int, int, int, _Observation]]) -> BrowserSourceBlockEvidence:
+    """Fold verified run observations into one block-level evidence entry."""
+
+    observations = [item[3] for item in runs]
+    boxes = [item.bbox for item in observations if item.bbox is not None]
+    bbox: dict[str, float] = {}
+    if boxes and len(boxes) == len(observations):
+        left = min(box["x"] for box in boxes)
+        top = min(box["y"] for box in boxes)
+        bbox = {
+            "x": left,
+            "y": top,
+            "width": max(box["x"] + box["width"] for box in boxes) - left,
+            "height": max(box["y"] + box["height"] for box in boxes) - top,
+        }
+    return BrowserSourceBlockEvidence(
+        block_id,
+        observations[0].qid,
+        " ".join(item.rendered for item in observations),
+        bbox,
+        all(item.visible is True for item in observations),
+        any(item.clipped for item in observations),
+        _max_or_none([item.occluded for item in observations]),
+        _max_or_none([item.continuous for item in observations]),
+        "text",
+        None,
+        None,
+        observations[0].semantic_role,
+        tuple(
+            {
+                "sourceBlockId": source_run_binding_id(block_id, start, end, run_count),
+                "qid": item.qid,
+                "renderedText": item.rendered,
+                "bbox": dict(item.bbox or {}),
+                "visible": item.visible is True,
+                "clipped": item.clipped,
+                "semanticRole": item.semantic_role,
+            }
+            for (start, end, run_count, item) in runs
+        ),
+    )
+
+
+def _verify_run_partition(
+    block_id: str,
+    projection: SourceRunProjection | None,
+    runs: Sequence[tuple[int, int, int, Mapping[str, Any]]],
+    *,
+    canvas: tuple[float, float],
+    qid_counts: Counter[str],
+    seen_qids: set[str],
+) -> tuple[BrowserSourceBlockEvidence | None, bool, bool]:
+    """Return ``(evidence, complete, ordered)`` for a run-bound block.
+
+    Runs must partition the projection exactly (every run once, no overlap)
+    and appear in source order in the DOM.  Each run element is held to the
+    same geometry/visibility/QID/text contract as a whole-block binding.
     """
 
-    manifest_value = _mapping(manifest, "source manifest")
-    outline_value = _mapping(outline, "source outline")
-    units = _field(manifest_value, "units", default=())
-    slides = _field(outline_value, "slides", default=())
-    if not isinstance(units, Sequence) or isinstance(units, (str, bytes)) or not isinstance(slides, Sequence) or isinstance(slides, (str, bytes)):
-        raise BrowserSourceReadbackError("source_content_browser_readback_invalid", detail="manifest units and outline slides must be sequences")
-    metric_slides = _slides_metrics(browser_metrics)
-    if len(units) != len(slides) or len(metric_slides) != len(slides) or (htmls is not None and len(htmls) != len(slides)):
-        raise BrowserSourceReadbackError("source_content_browser_readback_failed", detail="source and browser slide cardinality differs", slide_indices=tuple(range(max(len(slides), len(metric_slides)))))
+    ordered_runs = sorted(runs, key=lambda item: item[0])
+    spans = [(start, end) for _, start, end, _ in ordered_runs]
+    if projection is None or projection.run_count < 2:
+        return None, False, True
+    expected_cursor = 0
+    complete = True
+    for start, end in spans:
+        if start != expected_cursor or end < start:
+            complete = False
+            break
+        expected_cursor = end + 1
+    complete = complete and expected_cursor == projection.run_count
+    ordered = spans == sorted(spans)
+    if not complete:
+        return None, False, ordered
+    observed: list[tuple[int, int, int, _Observation]] = []
+    failed = False
+    for _, start, end, metric in ordered_runs:
+        observation = _observe(metric, *canvas)
+        run_id = source_run_binding_id(block_id, start, end, projection.run_count)
+        if observation.text_failed(projection.accepted_texts(start, end), deterministic_source_qid(run_id), qid_counts, seen_qids):
+            failed = True
+        seen_qids.add(observation.qid)
+        observed.append((start, end, projection.run_count, observation))
+    evidence = _fold_run_evidence(block_id, observed)
+    return evidence, not failed, ordered
 
+
+def _manifest_index(units: Sequence[Any]) -> tuple[dict[str, dict[str, Mapping[str, Any]]], dict[str, list[str]], list[str]]:
     blocks_by_unit: dict[str, dict[str, Mapping[str, Any]]] = {}
     ordered_ids_by_unit: dict[str, list[str]] = {}
     unit_order: list[tuple[int, str]] = []
@@ -645,7 +605,52 @@ def verify_browser_source_readback(*, manifest: Any, outline: Any, browser_metri
         except (TypeError, ValueError) as error:
             raise BrowserSourceReadbackError("source_content_browser_readback_invalid", detail=str(error)) from error
         ordered_ids_by_unit[unit_id] = [item[1] for item in sorted(ordered_blocks)]
-    expected_unit_order = [item[1] for item in sorted(unit_order)]
+    return blocks_by_unit, ordered_ids_by_unit, [item[1] for item in sorted(unit_order)]
+
+
+def _check_slide_capture(metrics: Mapping[str, Any], html_source: str | None, index: int) -> tuple[float, float]:
+    if html_source is not None:
+        expected_html_digest = "sha256:" + hashlib.sha256(html_source.encode("utf-8")).hexdigest()
+        admitted_source_digest = _field(metrics, "source_digest", "sourceDigest", default=None)
+        admitted_render_digest = _field(metrics, "render_digest", "renderDigest", default=None)
+        if (
+            admitted_source_digest != expected_html_digest
+            or not isinstance(admitted_render_digest, str)
+            or re.fullmatch(r"sha256:[0-9a-f]{64}", admitted_render_digest) is None
+        ):
+            raise BrowserSourceReadbackError(
+                "source_content_browser_readback_failed",
+                detail="browser capture identity does not match the rendered HTML",
+                slide_indices=(index,),
+            )
+    if _field(metrics, "probe_error", "probeError", default=None) or _field(metrics, "fonts_ready", "fontsReady", default=None) is not True:
+        raise BrowserSourceReadbackError("source_content_browser_readback_failed", detail="browser font/probe telemetry is incomplete", slide_indices=(index,))
+    canvas_width, canvas_height = _number(metrics.get("width")), _number(metrics.get("height"))
+    if canvas_width is None or canvas_height is None or canvas_width <= 0 or canvas_height <= 0:
+        raise BrowserSourceReadbackError("source_content_browser_readback_failed", detail="browser canvas geometry is unavailable", slide_indices=(index,))
+    return canvas_width, canvas_height
+
+
+def verify_browser_source_readback(*, manifest: Any, outline: Any, browser_metrics: Any, htmls: Sequence[str] | None = None) -> BrowserSourceReadbackResult:
+    """Validate source IDs, rendered text, geometry, order, and visibility.
+
+    ``browser_metrics`` is the payload emitted by ``ensure_browser_metrics``
+    (one object per slide, or ``{"slides": [...]}``). Every admitted text block
+    must have one explicit source-block binding (or a complete run partition)
+    and measured, visible DOM boxes.  Missing telemetry, clipping, occlusion,
+    duplicate/unknown IDs, and rendered text mismatches all fail closed.
+    """
+
+    manifest_value = _mapping(manifest, "source manifest")
+    outline_value = _mapping(outline, "source outline")
+    units = _field(manifest_value, "units", default=())
+    slides = _field(outline_value, "slides", default=())
+    if not isinstance(units, Sequence) or isinstance(units, (str, bytes)) or not isinstance(slides, Sequence) or isinstance(slides, (str, bytes)):
+        raise BrowserSourceReadbackError("source_content_browser_readback_invalid", detail="manifest units and outline slides must be sequences")
+    metric_slides = _slides_metrics(browser_metrics)
+    if len(units) != len(slides) or len(metric_slides) != len(slides) or (htmls is not None and len(htmls) != len(slides)):
+        raise BrowserSourceReadbackError("source_content_browser_readback_failed", detail="source and browser slide cardinality differs", slide_indices=tuple(range(max(len(slides), len(metric_slides)))))
+    blocks_by_unit, ordered_ids_by_unit, expected_unit_order = _manifest_index(units)
 
     evidence: list[BrowserSourceBlockEvidence] = []
     missing: list[str] = []
@@ -672,32 +677,7 @@ def verify_browser_source_readback(*, manifest: Any, outline: Any, browser_metri
         if expected_unit_order[index] != unit_id or outline_text_ids != expected_ids:
             order_violations += 1
             failed_slides.add(index)
-        if htmls is not None:
-            expected_html_digest = "sha256:" + hashlib.sha256(
-                htmls[index].encode("utf-8")
-            ).hexdigest()
-            admitted_source_digest = _field(
-                metrics, "source_digest", "sourceDigest", default=None
-            )
-            admitted_render_digest = _field(
-                metrics, "render_digest", "renderDigest", default=None
-            )
-            digest_pattern = r"sha256:[0-9a-f]{64}"
-            if (
-                admitted_source_digest != expected_html_digest
-                or not isinstance(admitted_render_digest, str)
-                or re.fullmatch(digest_pattern, admitted_render_digest) is None
-            ):
-                raise BrowserSourceReadbackError(
-                    "source_content_browser_readback_failed",
-                    detail="browser capture identity does not match the rendered HTML",
-                    slide_indices=(index,),
-                )
-        if _field(metrics, "probe_error", "probeError", default=None) or _field(metrics, "fonts_ready", "fontsReady", default=None) is not True:
-            raise BrowserSourceReadbackError("source_content_browser_readback_failed", detail="browser font/probe telemetry is incomplete", slide_indices=(index,))
-        canvas_width, canvas_height = _number(metrics.get("width")), _number(metrics.get("height"))
-        if canvas_width is None or canvas_height is None or canvas_width <= 0 or canvas_height <= 0:
-            raise BrowserSourceReadbackError("source_content_browser_readback_failed", detail="browser canvas geometry is unavailable", slide_indices=(index,))
+        canvas = _check_slide_capture(metrics, htmls[index] if htmls is not None else None, index)
         raw_elements = _field(metrics, "elements", default=())
         if not isinstance(raw_elements, Sequence) or isinstance(raw_elements, (str, bytes)):
             raise BrowserSourceReadbackError("source_content_browser_readback_failed", detail="browser elements telemetry is missing", slide_indices=(index,))
@@ -713,99 +693,101 @@ def verify_browser_source_readback(*, manifest: Any, outline: Any, browser_metri
         observed: list[tuple[int, str, BrowserSourceBlockEvidence]] = []
         seen: set[str] = set()
         seen_qids: set[str] = set()
+        run_groups: dict[str, list[tuple[int, int, int, Mapping[str, Any]]]] = {}
         for dom_index, raw_metric in enumerate(raw_elements):
             metric = _mapping(raw_metric, "browser element metric")
-            block_id = str(_field(metric, "sourceBlockId", "source_block_id", "dataSourceBlockId", "data_source_block_id", default="") or "")
-            if not block_id:
+            raw_id = str(_field(metric, "sourceBlockId", "source_block_id", "dataSourceBlockId", "data_source_block_id", default="") or "")
+            if not raw_id:
                 continue
+            block_id, run_start, run_end = parse_source_binding_id(raw_id)
             if block_id in seen or block_id not in expected_ids:
                 order_violations += 1
                 failed_slides.add(index)
                 continue
-            bbox = _finite_bbox(_field(metric, "bbox", default=None))
-            qid = str(_field(metric, "qid", default="") or "").strip()
-            rendered = _text(_field(metric, "rendered_text", "renderedText", "innerText", "text", default=""))
-            visible = _metric_visible(metric, bbox or {}) if bbox is not None else None
-            clip_values = [_field(metric, "clipped", default=None), _field(metric, "glyph_clipped", "glyphClipped", default=None), _field(metric, "line_box_clipped", "lineBoxClipped", default=None)]
-            clipped = any(value is True for value in clip_values)
-            clipping_known = all(isinstance(value, bool) for value in clip_values)
-            occluded = _number(_field(metric, "occluded_fraction", "occludedFraction", default=None))
-            continuous = _number(_field(metric, "continuous_occluded_fraction", "continuousOccludedFraction", default=None))
-            occlusion_known = (
-                occluded is not None
-                and continuous is not None
-                and 0 <= occluded <= 1
-                and 0 <= continuous <= 1
-                and occluded == 0
-                and continuous == 0
-            )
-            measurement = _field(metric, "measurement", default={})
-            occlusion_known = (
-                occlusion_known
-                and isinstance(measurement, Mapping)
-                and measurement.get("occlusion") is True
-            )
-            occlusion_evidence = _field(
-                metric,
-                "occlusion_measurement_evidence",
-                "occlusionMeasurementEvidence",
-                default={},
-            )
-            occlusion_known = (
-                occlusion_known
-                and isinstance(occlusion_evidence, Mapping)
-                and occlusion_evidence.get("status") == "measured"
-            )
             block = blocks_by_unit[unit_id][block_id]
             block_kind = str(_field(block, "kind", default="text"))
-            expected_text = _block_text(block) if block_kind == "text" else ""
+            if run_start is not None:
+                if block_kind != "text":
+                    order_violations += 1
+                    failed_slides.add(index)
+                    continue
+                run_groups.setdefault(block_id, []).append((dom_index, run_start, run_end or run_start, metric))
+                continue
+            if block_id in run_groups:
+                # A block cannot be bound both as a whole and as runs.
+                order_violations += 1
+                failed_slides.add(index)
+                continue
+            observation = _observe(metric, *canvas)
             payload = _mapping(_field(block, "payload", default={}), "source block payload")
-            in_canvas = bbox is not None and bbox["x"] >= 0 and bbox["y"] >= 0 and bbox["x"] + bbox["width"] <= canvas_width and bbox["y"] + bbox["height"] <= canvas_height
-            image_payload = _field(metric, "image", default=None)
-            if not isinstance(image_payload, Mapping) and (
-                str(_field(metric, "tag", default="")).lower() == "img"
-            ):
-                image_payload = metric
-            natural_width = _number(
-                _field(image_payload or {}, "natural_width", "naturalWidth", default=None)
-            ) if isinstance(image_payload, Mapping) else None
-            natural_height = _number(
-                _field(image_payload or {}, "natural_height", "naturalHeight", default=None)
-            ) if isinstance(image_payload, Mapping) else None
-            expected_natural_width = _number(
-                _field(payload, "naturalWidth", "natural_width", "intrinsicWidth", "intrinsic_width", default=None)
-            )
-            expected_natural_height = _number(
-                _field(payload, "naturalHeight", "natural_height", "intrinsicHeight", "intrinsic_height", default=None)
-            )
-            image_failure = False
-            semantic_role = str(_field(metric, "semantic_role", "semanticRole", "role", default="") or "").strip()
             declared_qid = str(_field(block, "qid", "sourceQid", "source_qid", default="") or "").strip()
             expected_qid = declared_qid or deterministic_source_qid(block_id)
-            qid_failure = qid != expected_qid or qid_counts.get(qid, 0) != 1
-            if block_kind == "image":
-                complete = _field(image_payload or {}, "complete", default=None) if isinstance(image_payload, Mapping) else None
-                image_visible = _field(image_payload or {}, "cssVisible", "css_visible", default=None) if isinstance(image_payload, Mapping) else None
-                image_failure = (
-                    str(_field(metric, "tag", default="")).lower() != "img"
-                    or complete is not True
-                    or natural_width is None or natural_width <= 0
-                    or natural_height is None or natural_height <= 0
-                    or image_visible is False
-                    or not semantic_role
-                    or not (semantic_role.lower().startswith("image") or semantic_role.lower().endswith("image"))
-                    or (expected_natural_width is not None and abs(natural_width - expected_natural_width) > 0.5)
-                    or (expected_natural_height is not None and abs(natural_height - expected_natural_height) > 0.5)
+            if block_kind == "text":
+                projection = _block_projection(block)
+                accepted = projection.accepted_texts(*projection.whole) if projection is not None else ()
+                failed = observation.text_failed(accepted, expected_qid, qid_counts, seen_qids)
+            else:
+                failed = (
+                    not observation.qid
+                    or observation.qid in seen_qids
+                    or observation.qid != expected_qid
+                    or qid_counts.get(observation.qid, 0) != 1
+                    or not observation.in_canvas
+                    or observation.visible is not True
+                    or not observation.clipping_known
+                    or observation.clipped
+                    or not observation.occlusion_known
+                    or (block_kind == "image" and _image_failed(observation, payload))
                 )
-            text_failure = block_kind == "text" and (not expected_text or rendered != expected_text or not semantic_role)
-            font_failure = block_kind == "text" and _field(metric, "font_loaded", "fontLoaded", default=None) is not True
-            if not qid or qid in seen_qids or qid_failure or not in_canvas or visible is not True or font_failure or not clipping_known or clipped or not occlusion_known or text_failure or image_failure:
+            if failed:
                 visibility_failures.append(block_id)
                 failed_slides.add(index)
             seen.add(block_id)
-            seen_qids.add(qid)
-            observed.append((dom_index, block_id, BrowserSourceBlockEvidence(block_id, qid, rendered, bbox or {}, bool(visible), clipped, occluded, continuous, block_kind, natural_width, natural_height, semantic_role)))
-        actual_ids = [item[1] for item in sorted(observed)]
+            seen_qids.add(observation.qid)
+            observed.append((
+                dom_index,
+                block_id,
+                BrowserSourceBlockEvidence(
+                    block_id,
+                    observation.qid,
+                    observation.rendered,
+                    observation.bbox or {},
+                    bool(observation.visible),
+                    observation.clipped,
+                    observation.occluded,
+                    observation.continuous,
+                    block_kind,
+                    observation.natural_width,
+                    observation.natural_height,
+                    observation.semantic_role,
+                ),
+            ))
+        for block_id, runs in run_groups.items():
+            if block_id in seen:
+                order_violations += 1
+                failed_slides.add(index)
+                continue
+            block_evidence, passed, ordered = _verify_run_partition(
+                block_id,
+                _block_projection(blocks_by_unit[unit_id][block_id]),
+                runs,
+                canvas=canvas,
+                qid_counts=qid_counts,
+                seen_qids=seen_qids,
+            )
+            seen.add(block_id)
+            if not ordered:
+                order_violations += 1
+                failed_slides.add(index)
+            if block_evidence is None:
+                missing.append(block_id)
+                failed_slides.add(index)
+                continue
+            if not passed:
+                visibility_failures.append(block_id)
+                failed_slides.add(index)
+            observed.append((min(item[0] for item in runs), block_id, block_evidence))
+        actual_ids = [item[1] for item in sorted(observed, key=lambda item: item[0])]
         for block_id in expected_ids:
             checked += 1
             if block_id not in seen:
@@ -814,7 +796,7 @@ def verify_browser_source_readback(*, manifest: Any, outline: Any, browser_metri
         if actual_ids != expected_ids:
             order_violations += 1
             failed_slides.add(index)
-        evidence.extend(item[2] for item in sorted(observed))
+        evidence.extend(item[2] for item in sorted(observed, key=lambda item: item[0]))
 
     result = BrowserSourceReadbackResult(len(slides), checked, tuple(evidence), tuple(dict.fromkeys(missing)), order_violations, tuple(dict.fromkeys(visibility_failures)))
     if not result.passed:
