@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "key": "source-content.verbatim-flow-layout",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "43쪽 source-restyle은 템플릿 chrome을 보존하고 편집 영역을 2열 text flow와 image grid로 재구성하며 Chromium overflow를 hard gate로 둔다.",
+  "scope": [
+    "source-content",
+    "authored",
+    "public-v2"
+  ],
+  "invariants": [
+    "원본 페이지 수와 순서를 유지한다",
+    "문장 중간을 자르지 않는다",
+    "이미지 출현을 owner-scoped manifest에 결합한다"
+  ],
+  "forbidden": [
+    "provider가 source-verbatim 원문을 재작성하는 것",
+    "Chromium overflow 실패 후 publication 하는 것"
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_vnext/composition_capacity.py",
+    "servers/fastapi/services/authored_vnext/source_native_generation.py",
+    "output/source-native-43-rc-20260902/product-path-summary.json",
+    "output/source-native-43-rc-20260902/visual-fidelity-evidence.json"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-01T18:44:48.3405373+00:00"
+}

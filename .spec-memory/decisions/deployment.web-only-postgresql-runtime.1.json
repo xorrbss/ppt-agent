@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "key": "deployment.web-only-postgresql-runtime",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "웹 서비스만 제공하며 Electron 제품 경로와 서비스용 SQLite 실행을 제거하고 PostgreSQL을 유일한 런타임 DB로 사용한다.",
+  "scope": [
+    "deployment",
+    "runtime",
+    "database",
+    "electron"
+  ],
+  "invariants": [
+    "Web API and workers require PostgreSQL authority",
+    "Electron is not shipped or supported"
+  ],
+  "forbidden": [
+    "Starting the web service with SQLite",
+    "Retaining an Electron production fallback"
+  ],
+  "evidence": [],
+  "supersedes": null,
+  "recordedAt": "2026-09-01T23:57:05.9380660+00:00"
+}

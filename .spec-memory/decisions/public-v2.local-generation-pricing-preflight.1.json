@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "key": "public-v2.local-generation-pricing-preflight",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "PPT generation test startup must inject the local pricing catalog and verify an exact active provider-model match before reporting ready.",
+  "scope": [
+    "public-v2",
+    "local-runtime",
+    "provider-pricing"
+  ],
+  "invariants": [
+    "Load PUBLIC_PROVIDER_PRICING_REVISION and PUBLIC_PROVIDER_PRICING_CATALOG from the approved local profile before starting the backend or generation worker.",
+    "Verify the catalog contains an exact entry for the active generation provider and model."
+  ],
+  "forbidden": [
+    "Do not report a PPT generation test stack ready based only on open ports or HTTP 200 responses.",
+    "Do not use the generic local backend startup for workspace-linked generation without the pricing preflight."
+  ],
+  "evidence": [
+    "scripts/restart-public-v2-local-services.ps1",
+    "servers/fastapi/constants/settings_registry.json",
+    "servers/fastapi/services/provider_pricing_registry.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-01T17:16:58.0047840+00:00"
+}
