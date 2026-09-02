@@ -11,7 +11,8 @@ import json
 import logging
 import math
 import time
-from typing import Any
+from typing import Any, NamedTuple
+import unicodedata
 import uuid
 
 from lxml import html as lxml_html
@@ -75,6 +76,23 @@ from services.authored_vnext.source_unitization import (
 )
 from services.authored_vnext.source_verbatim_capacity import (
     CapacityAdmissionError,
+    _BODY_FONT_FLOOR_PX,
+    _COMPONENT_OVERLAY_PADDING_PX,
+    _COMPONENT_VISUAL_GAP_PX,
+    _FOOTER_BODY_GAP_PX,
+    _FOOTER_LANE_HEIGHT_PX,
+    _FLOW_ICON_HEIGHT_PX,
+    _FLOW_MEDIA_HEIGHT_PX,
+    _FLOW_PROCESS_MEDIA_HEIGHT_PX,
+    _MEANINGFUL_IMAGE_MIN_AREA_RATIO,
+    _MEANINGFUL_IMAGE_MIN_HEIGHT_PX,
+    _MEANINGFUL_IMAGE_MIN_WIDTH_PX,
+    _MEANINGFUL_IMAGE_SCALE_FLOOR,
+    _SLIDE_HEIGHT_PX,
+    _SLIDE_WIDTH_PX,
+    _TEXT_LINE_BOX_BREATHING_PX,
+    _TITLE_STACK_GAP_PX,
+    _normalized_source_semantic,
     assert_source_verbatim_capacity_admission,
     build_source_verbatim_capacity_admission,
 )
@@ -629,6 +647,55 @@ def _flow_role(slot: Mapping[str, object]) -> str:
     ).strip().lower()
 
 
+# Single source of truth for the numbers that appear in the emitted flow CSS.
+# Both `_append_semantic_block` (which writes the CSS) and
+# `_estimated_flow_block_height` (which predicts the rendered height of that
+# CSS) read these, so the two can no longer drift apart.
+_TITLE_LINE_HEIGHT = 1.18
+_BODY_LINE_HEIGHT = 1.32
+# Card chrome: `padding:10px 12px` plus a 1px border on every side.
+_CARD_PADDING_X_PX = 12.0
+_CARD_PADDING_Y_PX = 10.0
+_CARD_BORDER_PX = 1.0
+_CARD_STACK_GAP_PX = 5.0
+# Media card chrome: `padding:10px`, a 1px border, and a fixed media column.
+_MEDIA_CARD_PADDING_PX = 10.0
+_MEDIA_CARD_MEDIA_COLUMN_PX = 52.0
+_MEDIA_CARD_COLUMN_GAP_PX = 10.0
+_MEDIA_CARD_IMAGE_PX = 48.0
+_MEDIA_CARD_TEXT_GAP_PX = 4.0
+# Process step grid: `gap:5px 10px` around an `auto minmax(0,1fr)` track pair.
+_PROCESS_STEP_ROW_GAP_PX = 5.0
+_PROCESS_STEP_COLUMN_GAP_PX = 10.0
+_PROCESS_BODY_GAP_PX = 4.0
+# Plain stacked text wrapper: `gap:4px`.
+_TEXT_STACK_GAP_PX = 4.0
+# Table matrix cells: `gap:1px 10px`, `padding:1px 6px`, `border-left:2px`
+# and a `line-height:1.08!important` that overrides the inherited text role.
+_TABLE_ROW_GAP_PX = 1.0
+_TABLE_COLUMN_GAP_PX = 10.0
+_TABLE_CELL_PADDING_X_PX = 6.0
+_TABLE_CELL_PADDING_Y_PX = 1.0
+_TABLE_CELL_BORDER_LEFT_PX = 2.0
+_TABLE_CELL_LINE_HEIGHT = 1.08
+
+# Semantic roles the emitter special-cases. Kept explicit so that role
+# classification stays total: an unlisted role must never silently inherit the
+# caller's slot role.
+_PROCESS_STEP_HEADING_ROLES = frozenset(
+    {"title", "heading", "step-title", "step-heading"}
+)
+_PROCESS_STEP_NUMBER_ROLES = frozenset({"process-number", "step-number"})
+_TITLE_TEXT_ROLES = frozenset({"title", "heading", "section-heading"})
+_NUMERIC_EMPHASIS_ROLES = frozenset({"process-number", "step-number", "kpi-value"})
+_FLOOR_FONT_ROLES = frozenset({"eyebrow", "kpi-label", "compact-footer"})
+_BODY_TEXT_ROLES = frozenset(
+    {"body", "lede", "step-title", "step-heading"}
+    | _NUMERIC_EMPHASIS_ROLES
+    | _FLOOR_FONT_ROLES
+)
+
+
 def _flow_font_px(
     slot: Mapping[str, object], *, role: str, adaptive_scale: float
 ) -> float:
@@ -667,7 +734,8 @@ def _flow_text_css(
     color = declared_color if declared_color.startswith("#") else "inherit"
     return (
         f"font-family:'{family}';font-size:{font_px:.2f}px;"
-        f"font-weight:{weight};line-height:{1.18 if role == 'title' else 1.32};"
+        f"font-weight:{weight};"
+        f"line-height:{_TITLE_LINE_HEIGHT if role == 'title' else _BODY_LINE_HEIGHT};"
         f"text-align:{alignment};color:{color};letter-spacing:-0.01em"
     )
 
@@ -702,11 +770,593 @@ def _flow_overlay_css(slot: Mapping[str, object]) -> str:
 
 
 def _unit_boundary_kind(unit: SealedContentUnit) -> str:
+    semantic = _normalized_source_semantic(payload={}, data=unit.data)
+    semantic_role = str(semantic.get("role") or unit.semantic_role or "").lower()
+    group_kind = str(semantic.get("group-kind") or "").lower()
+    if group_kind == "table-matrix" or semantic_role.startswith("table-"):
+        return "table-cell"
+    if semantic_role == "title":
+        return "title-candidate"
+    if group_kind == "compact-footer" or semantic_role == "compact-footer":
+        return "compact-footer"
     unit_id = unit.content_unit_id
+    if unit_id.endswith(":key-message"):
+        return "title-candidate"
     for kind in ("title-candidate", "table-cell", "paragraph", "bullet"):
         if f":{kind}-" in unit_id:
             return kind
     return "paragraph"
+
+
+def _unit_semantic(unit: SealedContentUnit) -> dict[str, object]:
+    return _normalized_source_semantic(payload={}, data=unit.data)
+
+
+def _unit_group_id(unit: SealedContentUnit) -> str:
+    return str(_unit_semantic(unit).get("group-id") or "")
+
+
+def _unit_group_kind(unit: SealedContentUnit) -> str:
+    return str(_unit_semantic(unit).get("group-kind") or "body-flow")
+
+
+def _unit_semantic_role(unit: SealedContentUnit) -> str:
+    return str(_unit_semantic(unit).get("role") or unit.semantic_role or "body")
+
+
+def _flow_blocks(units: list[SealedContentUnit]) -> list[list[SealedContentUnit]]:
+    """Retain each digest-bound semantic group as one compositor block."""
+
+    blocks: list[list[SealedContentUnit]] = []
+    index = 0
+    while index < len(units):
+        group_id = _unit_group_id(units[index])
+        end = index + 1
+        if group_id:
+            while end < len(units) and _unit_group_id(units[end]) == group_id:
+                end += 1
+        elif _unit_boundary_kind(units[index]) == "table-cell":
+            while end < len(units) and _unit_boundary_kind(units[end]) == "table-cell":
+                end += 1
+        blocks.append(units[index:end])
+        index = end
+    return blocks
+
+
+def _semantic_nonnegative_int(unit: SealedContentUnit, key: str) -> int | None:
+    value = _unit_semantic(unit).get(key)
+    if isinstance(value, bool) or value in (None, ""):
+        return None
+    try:
+        resolved = int(value)
+    except (TypeError, ValueError):
+        return None
+    return resolved if resolved >= 0 else None
+
+
+def _semantic_positive_int(
+    unit: SealedContentUnit, key: str, *, default: int = 1
+) -> int:
+    resolved = _semantic_nonnegative_int(unit, key)
+    return resolved if resolved is not None and resolved > 0 else default
+
+
+def _semantic_boolean(unit: SealedContentUnit, key: str) -> bool:
+    value = _unit_semantic(unit).get(key)
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes"}
+
+
+def _flow_table_matrix_shape(
+    block: list[SealedContentUnit],
+) -> tuple[int, int] | None:
+    has_metadata = any(
+        _semantic_nonnegative_int(item, "table-row") is not None
+        or _semantic_nonnegative_int(item, "table-column") is not None
+        for item in block
+    )
+    if not has_metadata:
+        return None
+    if any(
+        _semantic_nonnegative_int(item, "table-row") is None
+        or _semantic_nonnegative_int(item, "table-column") is None
+        for item in block
+    ):
+        raise SourceNativeGenerationError("source_native_table_matrix_invalid")
+    rows = max(
+        int(_semantic_nonnegative_int(item, "table-row") or 0)
+        + _semantic_positive_int(item, "table-row-span")
+        for item in block
+    )
+    columns = max(
+        int(_semantic_nonnegative_int(item, "table-column") or 0)
+        + _semantic_positive_int(item, "table-column-span")
+        for item in block
+    )
+    occupied: set[tuple[int, int]] = set()
+    for item in block:
+        row = int(_semantic_nonnegative_int(item, "table-row") or 0)
+        column = int(_semantic_nonnegative_int(item, "table-column") or 0)
+        row_span = _semantic_positive_int(item, "table-row-span")
+        column_span = _semantic_positive_int(item, "table-column-span")
+        for row_index in range(row, row + row_span):
+            for column_index in range(column, column + column_span):
+                position = (row_index, column_index)
+                if position in occupied:
+                    raise SourceNativeGenerationError(
+                        "source_native_table_matrix_invalid"
+                    )
+                occupied.add(position)
+    if rows <= 0 or columns <= 0:
+        raise SourceNativeGenerationError("source_native_table_matrix_invalid")
+    return rows, columns
+
+
+def _flow_table_columns(block: list[SealedContentUnit]) -> int:
+    """Column count the emitted table wrapper declares for one block."""
+
+    matrix_shape = _flow_table_matrix_shape(block)
+    if matrix_shape is not None:
+        return matrix_shape[1]
+    return max(2, min(4, math.ceil(len(block) ** 0.5)))
+
+
+def _flow_table_cell_width(base_cell_width: float, column_span: int) -> float:
+    """Content width of one emitted table cell.
+
+    Cells are laid out content-box, so the horizontal padding and the left
+    border come out of the grid track before the text is measured.
+    """
+
+    return max(
+        1.0,
+        base_cell_width * column_span
+        + _TABLE_COLUMN_GAP_PX * (column_span - 1)
+        - 2.0 * _TABLE_CELL_PADDING_X_PX
+        - _TABLE_CELL_BORDER_LEFT_PX,
+    )
+
+
+def _flow_table_cell_height(
+    unit: SealedContentUnit,
+    *,
+    cell_width: float,
+    font_px: float,
+) -> float:
+    """Height of one emitted table cell under its `line-height:1.08!important`."""
+
+    return (
+        _estimated_text_lines(
+            _unit_render_text(unit), width_px=cell_width, font_px=font_px
+        )
+        * font_px
+        * _TABLE_CELL_LINE_HEIGHT
+        + 2.0 * _TABLE_CELL_PADDING_Y_PX
+    )
+
+
+def _fixed_flow_table_height(
+    block: list[SealedContentUnit],
+    *,
+    column_width: float,
+    slot: Mapping[str, object],
+    adaptive_scale: float,
+    role: str,
+) -> tuple[float, int]:
+    shape = _flow_table_matrix_shape(block)
+    if shape is None:
+        raise SourceNativeGenerationError("source_native_table_matrix_unavailable")
+    rows, columns = shape
+    base_cell_width = max(
+        1.0, (column_width - (columns - 1) * _TABLE_COLUMN_GAP_PX) / columns
+    )
+    row_heights = [0.0] * rows
+    for unit in block:
+        column_span = _semantic_positive_int(unit, "table-column-span")
+        cell_height = _flow_table_cell_height(
+            unit,
+            cell_width=_flow_table_cell_width(base_cell_width, column_span),
+            font_px=_semantic_text_metrics(
+                unit,
+                slot=slot,
+                adaptive_scale=adaptive_scale,
+                fallback_role=role,
+            ).font_px,
+        )
+        per_row_height = cell_height / _semantic_positive_int(unit, "table-row-span")
+        start = int(_semantic_nonnegative_int(unit, "table-row") or 0)
+        for row_index in range(
+            start, start + _semantic_positive_int(unit, "table-row-span")
+        ):
+            row_heights[row_index] = max(row_heights[row_index], per_row_height)
+    return sum(row_heights) + _TABLE_ROW_GAP_PX * max(0, rows - 1), columns
+
+
+class _SemanticTextMetrics(NamedTuple):
+    """The text geometry `_semantic_text_css` emits for one sealed unit."""
+
+    text_role: str
+    font_px: float
+    line_height: float
+    css_suffix: str
+
+
+def _semantic_text_role(unit: SealedContentUnit, fallback: str) -> str:
+    """Classify every role the emitter special-cases, never by omission."""
+
+    semantic_role = _unit_semantic_role(unit).lower()
+    if semantic_role in _TITLE_TEXT_ROLES:
+        return "title"
+    if semantic_role in _BODY_TEXT_ROLES:
+        return "body"
+    if fallback in {"title", "headline", "heading"}:
+        return "title"
+    return "body"
+
+
+def _semantic_text_metrics(
+    unit: SealedContentUnit,
+    *,
+    slot: Mapping[str, object],
+    adaptive_scale: float,
+    fallback_role: str,
+) -> _SemanticTextMetrics:
+    """Resolve font size, line height and CSS overrides exactly once.
+
+    `_semantic_text_css` renders this result and the flow estimator measures
+    it, so the predicted height of a text child cannot diverge from the CSS
+    that Chromium actually lays out.
+    """
+
+    semantic_role = _unit_semantic_role(unit).lower()
+    group_kind = _unit_group_kind(unit).lower()
+    body_px = _flow_font_px(slot, role="body", adaptive_scale=adaptive_scale)
+    # A process step heading is rendered with the body line rhythm so that the
+    # step number and its heading share one grid row cleanly.
+    process_header = (
+        group_kind == "process-step" and semantic_role in _PROCESS_STEP_HEADING_ROLES
+    )
+    text_role = "body" if process_header else _semantic_text_role(unit, fallback_role)
+    line_height = _TITLE_LINE_HEIGHT if text_role == "title" else _BODY_LINE_HEIGHT
+
+    def resolved(font_px: float, css_suffix: str) -> _SemanticTextMetrics:
+        return _SemanticTextMetrics(text_role, font_px, line_height, css_suffix)
+
+    if process_header:
+        font_px = max(20.0, body_px * 1.08)
+        return resolved(font_px, f";font-size:{font_px:.2f}px;font-weight:700")
+    if semantic_role == "title":
+        return resolved(
+            _flow_font_px(slot, role=text_role, adaptive_scale=adaptive_scale),
+            ";font-weight:750",
+        )
+    if semantic_role in {"heading", "section-heading"}:
+        font_px = max(20.0, body_px * 1.18)
+        return resolved(font_px, f";font-size:{font_px:.2f}px;font-weight:700")
+    if semantic_role in _NUMERIC_EMPHASIS_ROLES:
+        font_px = max(24.0, body_px * 1.35)
+        return resolved(font_px, f";font-size:{font_px:.2f}px;font-weight:800")
+    if semantic_role in _FLOOR_FONT_ROLES:
+        return resolved(
+            _BODY_FONT_FLOOR_PX,
+            f";font-size:{_BODY_FONT_FLOOR_PX:.2f}px;font-weight:650",
+        )
+    if semantic_role == "lede":
+        font_px = max(18.0, body_px)
+        return resolved(font_px, f";font-size:{font_px:.2f}px;font-weight:500")
+    return resolved(
+        _flow_font_px(slot, role=text_role, adaptive_scale=adaptive_scale), ""
+    )
+
+
+def _semantic_text_css(
+    unit: SealedContentUnit,
+    *,
+    slot: Mapping[str, object],
+    adaptive_scale: float,
+    fallback_role: str,
+) -> str:
+    metrics = _semantic_text_metrics(
+        unit,
+        slot=slot,
+        adaptive_scale=adaptive_scale,
+        fallback_role=fallback_role,
+    )
+    return (
+        _flow_text_css(slot, role=metrics.text_role, adaptive_scale=adaptive_scale)
+        + metrics.css_suffix
+    )
+
+
+def _append_semantic_block(
+    parent: object,
+    block: list[SealedContentUnit],
+    *,
+    slot: Mapping[str, object],
+    adaptive_scale: float,
+    role: str,
+    image_assets: Mapping[str, Mapping[str, object]] | None = None,
+    component_kind: str | None = None,
+) -> None:
+    if not block:
+        return
+    group_kind = _unit_group_kind(block[0]).lower()
+    group_id = _unit_group_id(block[0])
+    evidence_card = any(_is_meaningful_flow_image(item) for item in block)
+    process_media_height = max(
+        (
+            _FLOW_ICON_HEIGHT_PX
+            if _unit_image_kind(item) == "icon"
+            else _FLOW_PROCESS_MEDIA_HEIGHT_PX
+        )
+        for item in block
+        if item.kind == "image"
+    ) if group_kind == "process-step" and any(item.kind == "image" for item in block) else 0.0
+    wrapper = lxml_html.Element("div")
+    wrapper.set("data-qid", f"source-semantic-group:{group_id or block[0].content_unit_id}")
+    wrapper.set("data-source-semantic-group-id", group_id)
+    wrapper.set("data-source-semantic-group-kind", group_kind)
+    if component_kind:
+        wrapper.set("data-source-component-kind", component_kind)
+    if evidence_card:
+        wrapper.set("data-allow-overlap", "true")
+    wrapper.set("data-content-unit-ids", "|".join(item.content_unit_id for item in block))
+    wrapper.set("data-content-unit-digests", "|".join(item.content_digest for item in block))
+    card_like = group_kind in {"media-card", "process-step", "kpi"}
+    if group_kind == "compact-footer":
+        wrapper.set(
+            "style",
+            "display:flex!important;align-items:center;gap:16px;height:23px;"
+            "min-width:0;overflow:hidden;white-space:nowrap",
+        )
+    elif evidence_card:
+        # The gallery gives the card its definite height explicitly; anywhere
+        # else the card is sized by its content, so no percentage height.
+        wrapper.set(
+            "style",
+            "position:relative!important;display:block!important;min-width:0;min-height:0;"
+            "flex:0 0 auto;padding:0;box-sizing:border-box;"
+            "border:1px solid rgba(37,99,235,.24);"
+            "border-radius:12px;background:rgba(255,255,255,.045);"
+            "overflow:hidden;break-inside:avoid",
+        )
+    elif group_kind == "media-card":
+        wrapper.set(
+            "style",
+            "display:grid!important;"
+            f"grid-template-columns:{_MEDIA_CARD_MEDIA_COLUMN_PX:.0f}px minmax(0,1fr);"
+            f"gap:{_MEDIA_CARD_COLUMN_GAP_PX:.0f}px;"
+            "align-items:start;min-width:0;min-height:0;flex:0 0 auto;"
+            f"padding:{_MEDIA_CARD_PADDING_PX:.0f}px;box-sizing:border-box;"
+            f"border:{_CARD_BORDER_PX:.0f}px solid rgba(37,99,235,.22);border-radius:12px;"
+            "background:rgba(255,255,255,.045);overflow:hidden;break-inside:avoid",
+        )
+    elif group_kind == "process-step":
+        wrapper.set(
+            "style",
+            "display:grid!important;grid-template-columns:auto minmax(0,1fr);"
+            + (
+                f"grid-template-rows:{process_media_height:.3f}px auto auto;"
+                if process_media_height > 0.0
+                else "grid-template-rows:auto auto;"
+            )
+            + f"gap:{_PROCESS_STEP_ROW_GAP_PX:.0f}px {_PROCESS_STEP_COLUMN_GAP_PX:.0f}px;"
+            "align-content:start;min-width:0;"
+            "flex:0 0 auto;"
+            f"padding:{_CARD_PADDING_Y_PX:.0f}px {_CARD_PADDING_X_PX:.0f}px;"
+            f"box-sizing:border-box;border:{_CARD_BORDER_PX:.0f}px solid rgba(37,99,235,.22);"
+            "border-radius:12px;background:rgba(255,255,255,.045);"
+            "overflow:hidden;break-inside:avoid",
+        )
+    elif card_like:
+        wrapper.set(
+            "style",
+            "display:flex!important;flex:0 0 auto;flex-direction:column;"
+            f"gap:{_CARD_STACK_GAP_PX:.0f}px;min-width:0;"
+            f"padding:{_CARD_PADDING_Y_PX:.0f}px {_CARD_PADDING_X_PX:.0f}px;"
+            f"box-sizing:border-box;border:{_CARD_BORDER_PX:.0f}px solid rgba(37,99,235,.22);"
+            "border-radius:12px;background:rgba(255,255,255,.045);"
+            "overflow:hidden;break-inside:avoid",
+        )
+    elif group_kind == "title-stack":
+        wrapper.set(
+            "style",
+            "display:flex!important;flex:0 0 auto;flex-direction:column;"
+            f"gap:{_TITLE_STACK_GAP_PX:.0f}px;min-width:0;"
+            "overflow:hidden;break-inside:avoid",
+        )
+    else:
+        wrapper.set(
+            "style",
+            "display:flex!important;flex:0 0 auto;flex-direction:column;"
+            f"gap:{_TEXT_STACK_GAP_PX:.0f}px;min-width:0;"
+            "overflow:hidden;break-inside:avoid",
+        )
+
+    if group_kind == "table-matrix" or _unit_boundary_kind(block[0]) == "table-cell":
+        matrix_shape = _flow_table_matrix_shape(block)
+        columns = _flow_table_columns(block)
+        wrapper.set(
+            "style",
+            "display:grid!important;width:100%;min-width:0;flex:0 0 auto;break-inside:avoid;"
+            f"grid-template-columns:repeat({columns},minmax(0,1fr));"
+            f"gap:{_TABLE_ROW_GAP_PX:.0f}px {_TABLE_COLUMN_GAP_PX:.0f}px;overflow:hidden",
+        )
+        for unit in block:
+            child = lxml_html.Element("div")
+            child.text = _unit_render_text(unit)
+            child.set("data-qid", f"source-flow:{unit.content_unit_id}")
+            child.set("data-source-flow-unit-id", unit.content_unit_id)
+            child.set("data-source-boundary-kind", "table-cell")
+            child.set("data-quality-unintentional", "true")
+            position = ""
+            if matrix_shape is not None:
+                row = int(_semantic_nonnegative_int(unit, "table-row") or 0) + 1
+                column = int(_semantic_nonnegative_int(unit, "table-column") or 0) + 1
+                position = (
+                    f"grid-row:{row}/span {_semantic_positive_int(unit, 'table-row-span')};"
+                    f"grid-column:{column}/span {_semantic_positive_int(unit, 'table-column-span')};"
+                )
+            header = _semantic_boolean(unit, "table-header")
+            child.set(
+                "style",
+                position
+                + "display:flex;align-items:center;min-width:0;"
+                + f"padding:{_TABLE_CELL_PADDING_Y_PX:.0f}px {_TABLE_CELL_PADDING_X_PX:.0f}px;"
+                + ("background:rgba(37,99,235,.12);font-weight:700;" if header else "")
+                + f"border-left:{_TABLE_CELL_BORDER_LEFT_PX:.0f}px solid rgba(37,99,235,.35);"
+                "overflow-wrap:break-word;"
+                f"word-break:keep-all;line-height:{_TABLE_CELL_LINE_HEIGHT}!important;"
+                + _semantic_text_css(
+                    unit,
+                    slot=slot,
+                    adaptive_scale=adaptive_scale,
+                    fallback_role=role,
+                ),
+            )
+            wrapper.append(child)
+        parent.append(wrapper)
+        return
+
+    text_container = wrapper
+    process_body_container = None
+    if group_kind == "process-step" and not evidence_card:
+        process_body_container = lxml_html.Element("div")
+        process_body_container.set(
+            "style",
+            f"grid-column:1/-1;grid-row:{3 if process_media_height > 0.0 else 2};"
+            "display:flex!important;flex-direction:column;"
+            f"gap:{_PROCESS_BODY_GAP_PX:.0f}px;min-width:0;min-height:0;overflow:visible",
+        )
+    if evidence_card:
+        text_container = lxml_html.Element("div")
+        text_container.set(
+            "style",
+            "position:absolute;left:8px;right:8px;bottom:8px;z-index:2;"
+            "display:flex!important;flex-direction:column;gap:3px;max-height:38%;"
+            "padding:8px 10px;box-sizing:border-box;border-radius:8px;"
+            "background:rgba(15,23,42,.86);color:#fff;overflow:hidden",
+        )
+    elif group_kind == "media-card":
+        text_container = lxml_html.Element("div")
+        text_container.set(
+            "style",
+            "grid-column:2;display:flex!important;flex-direction:column;"
+            f"gap:{_MEDIA_CARD_TEXT_GAP_PX:.0f}px;"
+            "min-width:0;overflow:hidden",
+        )
+    assets = image_assets or {}
+    for index, unit in enumerate(block):
+        if unit.kind == "image":
+            occurrence_id = unit.asset_occurrence_id or ""
+            asset = assets.get(occurrence_id)
+            if (
+                not occurrence_id
+                or asset is None
+                or str(asset.get("assetDigest") or "") != unit.asset_digest
+            ):
+                raise SourceNativeGenerationError("source_content_image_occurrence_mismatch")
+            image = lxml_html.Element("img")
+            image.set("src", str(asset["dataUrl"]))
+            image.set("alt", "")
+            image.set("data-qid", f"source-flow-image:{occurrence_id}")
+            image.set("data-source-block-id", occurrence_id)
+            image.set("data-asset-digest", str(asset["assetDigest"]))
+            image.set("data-source-occurrence-index", str(index))
+            semantic = _unit_semantic(unit)
+            image.set("data-source-image-kind", str(semantic.get("image-kind") or "media"))
+            image.set(
+                "data-source-image-aspect-ratio",
+                str(semantic.get("image-aspect-ratio") or ""),
+            )
+            image.set(
+                "style",
+                (
+                    f"display:block;width:{'48px' if _unit_image_kind(unit) == 'icon' else '100%'};"
+                    f"height:{_FLOW_ICON_HEIGHT_PX if _unit_image_kind(unit) == 'icon' else _FLOW_PROCESS_MEDIA_HEIGHT_PX:.3f}px;"
+                    "min-width:0;min-height:0;grid-column:1/-1;grid-row:1;align-self:center;"
+                    "justify-self:center;object-fit:contain;overflow:hidden"
+                    if group_kind == "process-step" and not evidence_card
+                    else
+                    f"display:block;width:{_MEDIA_CARD_IMAGE_PX:.0f}px;"
+                    f"height:{_MEDIA_CARD_IMAGE_PX:.0f}px;min-width:0;min-height:0;"
+                    "grid-column:1;grid-row:1;align-self:start;object-fit:contain;overflow:hidden"
+                    if group_kind == "media-card" and not evidence_card
+                    else f"display:block;width:{_FLOW_ICON_HEIGHT_PX:.3f}px;"
+                    f"height:{_FLOW_ICON_HEIGHT_PX:.3f}px;min-width:0;min-height:0;"
+                    "align-self:center;object-fit:contain;overflow:hidden"
+                    if not evidence_card and _unit_image_kind(unit) == "icon"
+                    else f"display:block;width:100%;height:{_FLOW_MEDIA_HEIGHT_PX:.3f}px;"
+                    "min-width:0;min-height:0;align-self:center;object-fit:contain;overflow:hidden"
+                    if not evidence_card
+                    else "display:block;width:100%;height:100%;min-width:0;min-height:0;"
+                    "object-fit:contain;overflow:hidden"
+                ),
+            )
+            if evidence_card:
+                image.set("data-allow-overlap", "true")
+            wrapper.insert(0, image)
+            continue
+        semantic_role = _unit_semantic_role(unit).lower()
+        element = "h2" if semantic_role in {"title", "heading", "section-heading"} else "p"
+        child = lxml_html.Element(element)
+        child.text = _unit_render_text(unit)
+        child.set("data-qid", f"source-flow:{unit.content_unit_id}")
+        child.set("data-source-flow-unit-id", unit.content_unit_id)
+        child.set("data-source-boundary-kind", _unit_boundary_kind(unit))
+        child.set("data-quality-unintentional", "true")
+        if evidence_card:
+            child.set("data-allow-overlap", "true")
+        process_grid_style = ""
+        if group_kind == "process-step":
+            process_header_row = 2 if process_media_height > 0.0 else 1
+            if semantic_role in {"process-number", "step-number"}:
+                process_grid_style = (
+                    f"grid-column:1;grid-row:{process_header_row};align-self:start;"
+                )
+            elif semantic_role in {
+                "title",
+                "heading",
+                "step-title",
+                "step-heading",
+            }:
+                process_grid_style = (
+                    f"grid-column:2;grid-row:{process_header_row};align-self:center;"
+                )
+        child.set(
+            "style",
+            "margin:0;box-sizing:border-box;"
+            f"padding-bottom:{_TEXT_LINE_BOX_BREATHING_PX:.3f}px;"
+            "overflow-wrap:break-word;word-break:keep-all;"
+            + process_grid_style
+            + _semantic_text_css(
+                unit,
+                slot=slot,
+                adaptive_scale=adaptive_scale,
+                fallback_role=role,
+            ),
+        )
+        target_container = (
+            process_body_container
+            if process_body_container is not None
+            and semantic_role
+            not in {
+                "process-number",
+                "step-number",
+                "title",
+                "heading",
+                "step-title",
+                "step-heading",
+            }
+            else text_container
+        )
+        target_container.append(child)
+    if process_body_container is not None and len(process_body_container):
+        wrapper.append(process_body_container)
+    if text_container is not wrapper:
+        wrapper.append(text_container)
+    parent.append(wrapper)
 
 
 def _append_flow_text_units(
@@ -716,57 +1366,1330 @@ def _append_flow_text_units(
     slot: Mapping[str, object],
     adaptive_scale: float,
     role: str,
+    column_width: float | None = None,
 ) -> None:
-    index = 0
-    while index < len(units):
-        unit = units[index]
-        boundary = _unit_boundary_kind(unit)
-        if boundary == "table-cell":
-            end = index + 1
-            while end < len(units) and _unit_boundary_kind(units[end]) == "table-cell":
-                end += 1
-            cells = units[index:end]
-            grid = lxml_html.Element("div")
-            grid.set("data-qid", f"source-flow-table:{cells[0].content_unit_id}")
-            columns = max(2, min(4, math.ceil(len(cells) ** 0.5)))
-            grid.set(
-                "style",
-                "display:grid!important;break-inside:avoid;margin:0 0 8px;"
-                f"grid-template-columns:repeat({columns},minmax(0,1fr));gap:4px 10px",
-            )
-            for cell in cells:
-                child = lxml_html.Element("span")
-                child.text = _unit_render_text(cell)
-                child.set("data-qid", f"source-flow:{cell.content_unit_id}")
-                child.set("data-source-flow-unit-id", cell.content_unit_id)
-                child.set("data-source-boundary-kind", "table-cell")
-                child.set("data-quality-unintentional", "true")
-                child.set(
-                    "style",
-                    "display:block;min-width:0;padding:3px 6px;"
-                    "border-left:2px solid rgba(30,82,155,.35);"
-                    "overflow-wrap:break-word;word-break:keep-all;"
-                    + _flow_text_css(slot, role=role, adaptive_scale=adaptive_scale),
-                )
-                grid.append(child)
-            parent.append(grid)
-            index = end
-            continue
-        unit_role = "title" if boundary == "title-candidate" or role == "title" else role
-        child = lxml_html.Element("h2" if unit_role == "title" else "p")
-        child.text = _unit_render_text(unit)
-        child.set("data-qid", f"source-flow:{unit.content_unit_id}")
-        child.set("data-source-flow-unit-id", unit.content_unit_id)
-        child.set("data-source-boundary-kind", boundary)
-        child.set("data-quality-unintentional", "true")
-        child.set(
-            "style",
-            f"margin:0 0 {10.0 if unit_role == 'title' else 6.0:.1f}px;"
-            "break-inside:avoid;overflow-wrap:break-word;word-break:keep-all;"
-            + _flow_text_css(slot, role=unit_role, adaptive_scale=adaptive_scale),
+    del column_width  # Geometry was already selected for whole atomic blocks.
+    for block in _flow_blocks(units):
+        _append_semantic_block(
+            parent,
+            block,
+            slot=slot,
+            adaptive_scale=adaptive_scale,
+            role=role,
         )
-        parent.append(child)
-        index += 1
+
+
+def _estimated_text_advance_px(text: str, *, font_px: float) -> float:
+    """Advance width of one unwrapped run, shared by wrapping and max-content."""
+
+    total = 0.0
+    for character in text:
+        if character.isspace():
+            total += font_px * 0.33
+        elif unicodedata.east_asian_width(character) in {"W", "F", "A"}:
+            total += font_px
+        elif character.isupper():
+            total += font_px * 0.64
+        elif character.isdigit():
+            total += font_px * 0.56
+        else:
+            total += font_px * 0.54
+    return total
+
+
+def _estimated_text_lines(text: str, *, width_px: float, font_px: float) -> int:
+    def advance(value: str) -> float:
+        return _estimated_text_advance_px(value, font_px=font_px)
+
+    normalized = " ".join(text.split())
+    if not normalized:
+        return 1
+    space = font_px * 0.33
+    lines = 1
+    occupied = 0.0
+    for word in normalized.split(" "):
+        word_width = advance(word)
+        separator = space if occupied > 0 else 0.0
+        if occupied > 0 and occupied + separator + word_width > width_px:
+            lines += 1
+            occupied = 0.0
+            separator = 0.0
+        if word_width <= width_px:
+            occupied += separator + word_width
+            continue
+        remaining = word_width
+        while remaining > width_px:
+            if occupied > 0:
+                lines += 1
+                occupied = 0.0
+            remaining -= width_px
+            if remaining > 0:
+                lines += 1
+        occupied = remaining
+    return lines
+
+
+def _select_flow_table_layout(
+    cells: list[SealedContentUnit],
+    *,
+    slot: Mapping[str, object],
+    adaptive_scale: float,
+    role: str,
+    column_width: float,
+) -> tuple[int, float]:
+    """Report the table grid `_append_semantic_block` actually emits."""
+
+    readable_floor_px = SOURCE_NATIVE_MIN_BODY_FONT_PT / 0.75
+    if role not in {"title", "headline", "heading"} and (
+        _flow_font_px(slot, role=role, adaptive_scale=adaptive_scale)
+        < readable_floor_px
+    ):
+        raise SourceNativeGenerationError("source_native_text_readability_failed")
+    if _flow_table_matrix_shape(cells) is not None:
+        estimated_height, columns = _fixed_flow_table_height(
+            cells,
+            column_width=column_width,
+            slot=slot,
+            adaptive_scale=adaptive_scale,
+            role=role,
+        )
+        return columns, estimated_height
+    # Unshaped table blocks fall back to the same square-ish auto-flow grid the
+    # emitter derives, so estimation measures the grid that gets rendered.
+    columns = _flow_table_columns(cells)
+    rows = math.ceil(len(cells) / columns)
+    base_cell_width = max(
+        1.0, (column_width - (columns - 1) * _TABLE_COLUMN_GAP_PX) / columns
+    )
+    cell_width = _flow_table_cell_width(base_cell_width, 1)
+    heights = [
+        _flow_table_cell_height(
+            unit,
+            cell_width=cell_width,
+            font_px=_semantic_text_metrics(
+                unit,
+                slot=slot,
+                adaptive_scale=adaptive_scale,
+                fallback_role=role,
+            ).font_px,
+        )
+        for unit in cells
+    ]
+    estimated_height = (
+        sum(max(heights[row * columns : (row + 1) * columns]) for row in range(rows))
+        + _TABLE_ROW_GAP_PX * max(0, rows - 1)
+    )
+    return columns, estimated_height
+
+
+class _SemanticBlockChrome(NamedTuple):
+    """Padding, border and gap the wrapper CSS writes for one group kind."""
+
+    width_inset: float
+    height_inset: float
+    stack_gap: float
+
+
+def _semantic_block_chrome(group_kind: str) -> _SemanticBlockChrome:
+    """Mirror the wrapper box model `_append_semantic_block` emits."""
+
+    if group_kind == "media-card":
+        # `padding:10px` and a 1px border on both sides; the text container
+        # sits behind the fixed media column and its grid column gap.
+        return _SemanticBlockChrome(
+            2.0 * (_MEDIA_CARD_PADDING_PX + _CARD_BORDER_PX)
+            + _MEDIA_CARD_MEDIA_COLUMN_PX
+            + _MEDIA_CARD_COLUMN_GAP_PX,
+            2.0 * (_MEDIA_CARD_PADDING_PX + _CARD_BORDER_PX),
+            _MEDIA_CARD_TEXT_GAP_PX,
+        )
+    if group_kind in {"process-step", "kpi"}:
+        # `padding:10px 12px` and a 1px border on every side.
+        return _SemanticBlockChrome(
+            2.0 * (_CARD_PADDING_X_PX + _CARD_BORDER_PX),
+            2.0 * (_CARD_PADDING_Y_PX + _CARD_BORDER_PX),
+            _PROCESS_STEP_ROW_GAP_PX
+            if group_kind == "process-step"
+            else _CARD_STACK_GAP_PX,
+        )
+    if group_kind == "title-stack":
+        return _SemanticBlockChrome(0.0, 0.0, _TITLE_STACK_GAP_PX)
+    return _SemanticBlockChrome(0.0, 0.0, _TEXT_STACK_GAP_PX)
+
+
+def _estimated_text_child_height(
+    unit: SealedContentUnit,
+    *,
+    slot: Mapping[str, object],
+    adaptive_scale: float,
+    fallback_role: str,
+    width_px: float,
+) -> float:
+    """Height of one emitted text child: line boxes plus its padding-bottom."""
+
+    metrics = _semantic_text_metrics(
+        unit,
+        slot=slot,
+        adaptive_scale=adaptive_scale,
+        fallback_role=fallback_role,
+    )
+    return (
+        _estimated_text_lines(
+            _unit_render_text(unit),
+            width_px=max(1.0, width_px),
+            font_px=metrics.font_px,
+        )
+        * metrics.font_px
+        * metrics.line_height
+        + _TEXT_LINE_BOX_BREATHING_PX
+    )
+
+
+def _emitted_flow_image_height(
+    unit: SealedContentUnit, *, group_kind: str
+) -> float:
+    """Height the image CSS declares for one flow image child."""
+
+    if group_kind == "media-card":
+        return _MEDIA_CARD_IMAGE_PX
+    if _unit_image_kind(unit) == "icon":
+        return _FLOW_ICON_HEIGHT_PX
+    if group_kind == "process-step":
+        return _FLOW_PROCESS_MEDIA_HEIGHT_PX
+    return _FLOW_MEDIA_HEIGHT_PX
+
+
+def _estimated_flow_block_height(
+    block: list[SealedContentUnit],
+    *,
+    slot: Mapping[str, object],
+    adaptive_scale: float,
+    role: str,
+    column_width: float,
+) -> float:
+    group_kind = _unit_group_kind(block[0]).lower()
+    if group_kind == "compact-footer":
+        return _FOOTER_LANE_HEIGHT_PX
+    if group_kind == "table-matrix" or _unit_boundary_kind(block[0]) == "table-cell":
+        _, estimated_height = _select_flow_table_layout(
+            block,
+            slot=slot,
+            adaptive_scale=adaptive_scale,
+            role=role,
+            column_width=column_width,
+        )
+        return estimated_height
+    chrome = _semantic_block_chrome(group_kind)
+    content_width = max(1.0, column_width - chrome.width_inset)
+    if group_kind == "process-step":
+        media_height = 0.0
+        number_width = 0.0
+        header_heights: list[float] = []
+        heading_units: list[SealedContentUnit] = []
+        body_heights: list[float] = []
+        for unit in block:
+            if unit.kind == "image":
+                media_height = max(
+                    media_height,
+                    _emitted_flow_image_height(unit, group_kind=group_kind),
+                )
+                continue
+            semantic_role = _unit_semantic_role(unit).lower()
+            if semantic_role in _PROCESS_STEP_NUMBER_ROLES:
+                metrics = _semantic_text_metrics(
+                    unit,
+                    slot=slot,
+                    adaptive_scale=adaptive_scale,
+                    fallback_role=role,
+                )
+                # `grid-template-columns:auto minmax(0,1fr)` sizes the number
+                # column to the unwrapped number itself.
+                number_width = max(
+                    number_width,
+                    _estimated_text_advance_px(
+                        _unit_render_text(unit), font_px=metrics.font_px
+                    ),
+                )
+                header_heights.append(
+                    metrics.font_px * metrics.line_height
+                    + _TEXT_LINE_BOX_BREATHING_PX
+                )
+            elif semantic_role in _PROCESS_STEP_HEADING_ROLES:
+                heading_units.append(unit)
+            else:
+                # The body container spans `grid-column:1/-1`, so body units
+                # are laid out across the whole content width.
+                body_heights.append(
+                    _estimated_text_child_height(
+                        unit,
+                        slot=slot,
+                        adaptive_scale=adaptive_scale,
+                        fallback_role=role,
+                        width_px=content_width,
+                    )
+                )
+        heading_width = content_width - number_width - _PROCESS_STEP_COLUMN_GAP_PX
+        header_heights.extend(
+            _estimated_text_child_height(
+                unit,
+                slot=slot,
+                adaptive_scale=adaptive_scale,
+                fallback_role=role,
+                width_px=heading_width,
+            )
+            for unit in heading_units
+        )
+        body_height = sum(body_heights) + _PROCESS_BODY_GAP_PX * max(
+            0, len(body_heights) - 1
+        )
+        # `grid-template-rows` declares its tracks unconditionally, so the row
+        # gap applies between every declared track whether or not it is empty.
+        declared_rows = 3 if media_height > 0.0 else 2
+        return (
+            media_height
+            + max(header_heights, default=0.0)
+            + body_height
+            + chrome.height_inset
+            + _PROCESS_STEP_ROW_GAP_PX * (declared_rows - 1)
+        )
+    text_heights = [
+        _estimated_text_child_height(
+            unit,
+            slot=slot,
+            adaptive_scale=adaptive_scale,
+            fallback_role=role,
+            width_px=content_width,
+        )
+        for unit in block
+        if unit.kind != "image"
+    ]
+    image_heights = [
+        _emitted_flow_image_height(unit, group_kind=group_kind)
+        for unit in block
+        if unit.kind == "image"
+    ]
+    if group_kind == "media-card":
+        # The fixed media column and the text container share grid row 1.
+        content_height = max(
+            max(image_heights, default=0.0),
+            sum(text_heights)
+            + chrome.stack_gap * max(0, len(text_heights) - 1),
+        )
+    else:
+        # `wrapper.insert(0, image)` stacks images ahead of the text inside the
+        # same flex column, so every child contributes one gap.
+        stacked = image_heights + text_heights
+        content_height = sum(stacked) + chrome.stack_gap * max(0, len(stacked) - 1)
+    return content_height + chrome.height_inset
+
+
+def _balanced_contiguous_ends(weights: list[float], columns: int) -> tuple[int, ...]:
+    prefix = [0.0]
+    for weight in weights:
+        prefix.append(prefix[-1] + weight)
+    states: dict[tuple[int, int], tuple[float, float, tuple[int, ...]]] = {}
+    for end in range(1, len(weights) + 1):
+        load = prefix[end]
+        states[(1, end)] = (load, load * load, (end,))
+    for count in range(2, columns + 1):
+        for end in range(count, len(weights) + 1):
+            candidates = []
+            for split in range(count - 1, end):
+                previous = states[(count - 1, split)]
+                load = prefix[end] - prefix[split]
+                candidates.append(
+                    (
+                        max(previous[0], load),
+                        previous[1] + load * load,
+                        previous[2] + (end,),
+                    )
+                )
+            states[(count, end)] = min(
+                candidates,
+                key=lambda item: (
+                    round(item[0], 6),
+                    round(item[1], 6),
+                    item[2],
+                ),
+            )
+    return states[(columns, len(weights))][2]
+
+
+def _append_fixed_text_columns(
+    parent: object,
+    units: list[SealedContentUnit],
+    *,
+    slot: Mapping[str, object],
+    adaptive_scale: float,
+    role: str,
+    columns_count: int,
+    column_gap: float,
+    width_fraction: float = 1.0,
+    height_fraction: float = 1.0,
+) -> float:
+    """Keep atomic source units inside an explicit, bounded column grid."""
+
+    footer_units = [
+        item
+        for item in units
+        if _unit_group_kind(item).lower() == "compact-footer"
+        or _unit_semantic_role(item).lower() == "compact-footer"
+    ]
+    body_units = [item for item in units if item not in footer_units]
+    blocks = _flow_blocks(body_units)
+    if not blocks and not footer_units:
+        return adaptive_scale
+    initial_columns = max(1, min(columns_count, len(blocks)))
+    bounds = _flow_mapping(slot, "bounds")
+    spacing = _flow_mapping(slot, "spacing")
+    content_width = max(
+        1.0,
+        _flow_number(bounds.get("width"), 1280.0)
+        - max(0.0, _flow_number(spacing.get("insetLeft")))
+        - max(0.0, _flow_number(spacing.get("insetRight"))),
+    ) * max(0.05, min(1.0, width_fraction))
+    usable_height = max(
+        1.0,
+        _flow_number(bounds.get("height"), 720.0)
+        - max(0.0, _flow_number(spacing.get("insetTop")))
+        - max(0.0, _flow_number(spacing.get("insetBottom"))),
+    ) * max(0.05, min(1.0, height_fraction))
+    if footer_units and body_units:
+        usable_height -= _FOOTER_LANE_HEIGHT_PX + _FOOTER_BODY_GAP_PX
+        if usable_height <= 0:
+            raise SourceNativeGenerationError("source_native_footer_capacity_exceeded")
+    # The overlay is itself the hard geometry boundary and Chromium performs
+    # the downstream overflow check, so admission may use the full measured
+    # content height instead of discarding an arbitrary ten-percent reserve.
+    target_height = usable_height
+    capacity = _flow_mapping(slot, "capacityEnvelope")
+    minimum_scale = min(
+        adaptive_scale,
+        max(
+            0.1,
+            _flow_number(capacity.get("minimumTextScale"), 0.70),
+        ),
+    )
+
+    def evaluate(
+        candidate_columns: int, candidate_scale: float
+    ) -> tuple[list[float], tuple[int, ...], float]:
+        column_width = max(
+            1.0,
+            (
+                content_width
+                - column_gap * max(0, candidate_columns - 1)
+            )
+            / candidate_columns,
+        )
+        candidate_weights = [
+            _estimated_flow_block_height(
+                block,
+                slot=slot,
+                adaptive_scale=candidate_scale,
+                role=role,
+                column_width=column_width,
+            )
+            for block in blocks
+        ]
+        candidate_ends = _balanced_contiguous_ends(
+            candidate_weights, candidate_columns
+        )
+        start = 0
+        candidate_maximum = 0.0
+        for end in candidate_ends:
+            candidate_maximum = max(
+                candidate_maximum, sum(candidate_weights[start:end])
+            )
+            start = end
+        return candidate_weights, candidate_ends, candidate_maximum
+
+    if not blocks:
+        parent.set(
+            "style",
+            "display:flex!important;align-items:flex-end;width:100%;height:100%;"
+            "min-width:0;min-height:0;overflow:hidden",
+        )
+        for footer_block in _flow_blocks(footer_units):
+            _append_semantic_block(
+                parent,
+                footer_block,
+                slot=slot,
+                adaptive_scale=adaptive_scale,
+                role="body",
+            )
+        return adaptive_scale
+
+    options: list[
+        tuple[float, int, list[float], tuple[int, ...], float]
+    ] = []
+    fixed_table_matrix = any(
+        _flow_table_matrix_shape(block) is not None
+        for block in blocks
+        if _unit_group_kind(block[0]).lower() == "table-matrix"
+        or _unit_boundary_kind(block[0]) == "table-cell"
+    )
+    column_candidates = (
+        (1,)
+        if fixed_table_matrix
+        else range(1, min(4, columns_count, len(blocks)) + 1)
+    )
+    for candidate_columns in column_candidates:
+        minimum_result = evaluate(candidate_columns, minimum_scale)
+        if minimum_result[2] > target_height:
+            continue
+        maximum_result = evaluate(candidate_columns, adaptive_scale)
+        if maximum_result[2] <= target_height:
+            options.append(
+                (
+                    adaptive_scale,
+                    candidate_columns,
+                    maximum_result[0],
+                    maximum_result[1],
+                    maximum_result[2],
+                )
+            )
+            continue
+        lower = minimum_scale
+        upper = adaptive_scale
+        lower_result = minimum_result
+        for _ in range(18):
+            midpoint = (lower + upper) / 2.0
+            midpoint_result = evaluate(candidate_columns, midpoint)
+            if midpoint_result[2] <= target_height:
+                lower = midpoint
+                lower_result = midpoint_result
+            else:
+                upper = midpoint
+        options.append(
+            (
+                lower,
+                candidate_columns,
+                lower_result[0],
+                lower_result[1],
+                lower_result[2],
+            )
+        )
+    if not options:
+        raise SourceNativeGenerationError("source_native_text_capacity_exceeded")
+    effective_scale, resolved_columns, weights, ends, _ = max(
+        options,
+        key=lambda item: (round(item[0], 6), -item[1]),
+    )
+    resolved_column_width = max(
+        1.0,
+        (
+            content_width
+            - column_gap * max(0, resolved_columns - 1)
+        )
+        / resolved_columns,
+    )
+    parent.set(
+        "style",
+        (
+            "display:grid!important;width:100%;height:100%;min-width:0;min-height:0;"
+            f"grid-template-rows:minmax(0,1fr) {_FOOTER_BODY_GAP_PX:.3f}px {_FOOTER_LANE_HEIGHT_PX:.3f}px;"
+            "overflow:hidden"
+            if footer_units
+            else "display:block!important;width:100%;height:100%;min-width:0;min-height:0;overflow:hidden"
+        ),
+    )
+    grid_parent = parent
+    if footer_units:
+        grid_parent = lxml_html.Element("div")
+        grid_parent.set("data-qid", f"{str(parent.get('data-qid') or 'source-flow-columns')}--body")
+        parent.append(grid_parent)
+    grid_parent.set(
+        "style",
+        "display:grid!important;width:100%;height:100%;min-width:0;min-height:0;"
+        f"grid-template-columns:repeat({resolved_columns},minmax(0,1fr));"
+        f"column-gap:{column_gap:.3f}px;overflow:hidden",
+    )
+    start = 0
+    parent_qid = str(parent.get("data-qid") or "source-flow-columns")
+    for column_index, end in enumerate(ends):
+        selected_blocks = blocks[start:end]
+        start = end
+        column = lxml_html.Element("div")
+        column.set("data-qid", f"{parent_qid}--column-{column_index + 1:02d}")
+        column.set(
+            "style",
+            "display:flex!important;flex-direction:column;min-width:0;min-height:0;"
+            "overflow:hidden",
+        )
+        for block in selected_blocks:
+            _append_semantic_block(
+                column,
+                block,
+                slot=slot,
+                adaptive_scale=effective_scale,
+                role=role,
+            )
+        grid_parent.append(column)
+    if footer_units:
+        spacer = lxml_html.Element("div")
+        spacer.set("aria-hidden", "true")
+        parent.append(spacer)
+        footer_lane = lxml_html.Element("div")
+        footer_lane.set(
+            "style",
+            "display:flex!important;align-items:center;gap:16px;height:23px;"
+            "min-width:0;overflow:hidden;white-space:nowrap",
+        )
+        for footer_block in _flow_blocks(footer_units):
+            _append_semantic_block(
+                footer_lane,
+                footer_block,
+                slot=slot,
+                adaptive_scale=effective_scale,
+                role="body",
+            )
+        parent.append(footer_lane)
+    return effective_scale
+
+
+def _unit_image_kind(unit: SealedContentUnit) -> str:
+    return str(_unit_semantic(unit).get("image-kind") or "media").strip().lower()
+
+
+def _unit_image_aspect(unit: SealedContentUnit) -> float | None:
+    value = _unit_semantic(unit).get("image-aspect-ratio")
+    if isinstance(value, bool) or value in (None, ""):
+        return None
+    try:
+        resolved = float(value)
+    except (TypeError, ValueError):
+        return None
+    return resolved if resolved > 0 else None
+
+
+def _is_meaningful_flow_image(unit: SealedContentUnit) -> bool:
+    if unit.kind != "image" or _unit_image_kind(unit) == "icon":
+        return False
+    evidence = (
+        f"{_unit_semantic_role(unit)} {_unit_group_kind(unit)} {_unit_image_kind(unit)}"
+    ).lower()
+    return any(
+        token in evidence
+        for token in ("ui", "evidence", "screenshot", "product-screen")
+    )
+
+
+def _meaningful_image_geometry_pass(
+    unit: SealedContentUnit, *, cell_width: float, cell_height: float
+) -> bool:
+    if not _is_meaningful_flow_image(unit):
+        return True
+    aspect = _unit_image_aspect(unit)
+    if aspect is None or cell_width <= 0 or cell_height <= 0:
+        return False
+    if cell_width / cell_height >= aspect:
+        rendered_height = cell_height
+        rendered_width = rendered_height * aspect
+    else:
+        rendered_width = cell_width
+        rendered_height = rendered_width / aspect
+    dimension_pass = (
+        rendered_width >= _MEANINGFUL_IMAGE_MIN_WIDTH_PX
+        and rendered_height >= _MEANINGFUL_IMAGE_MIN_HEIGHT_PX
+    )
+    area_scale_pass = (
+        rendered_width * rendered_height
+        >= _SLIDE_WIDTH_PX * _SLIDE_HEIGHT_PX * _MEANINGFUL_IMAGE_MIN_AREA_RATIO
+        and min(
+            rendered_width / _SLIDE_WIDTH_PX,
+            rendered_height / _SLIDE_HEIGHT_PX,
+        )
+        >= _MEANINGFUL_IMAGE_SCALE_FLOOR
+    )
+    return dimension_pass or area_scale_pass
+
+
+def _component_preference(group_kind: str, *, has_image: bool) -> tuple[str, ...]:
+    if group_kind == "title-stack":
+        return ("titleBand", "introBand", "bodyFlow")
+    if group_kind == "media-card" or has_image:
+        return ("evidenceGallery", "cardGrid", "bodyFlow")
+    if group_kind == "process-step":
+        return ("cardGrid", "tableMatrix", "bodyFlow")
+    if group_kind == "kpi":
+        return ("dataGrid", "cardGrid", "bodyFlow")
+    if group_kind == "table-matrix":
+        return ("tableMatrix", "dataGrid", "bodyFlow")
+    if group_kind == "compact-footer":
+        return ("footerBand",)
+    return ("bodyFlow", "cardGrid")
+
+
+def _append_component_canvas(
+    parent: object,
+    units: list[SealedContentUnit],
+    *,
+    slot: Mapping[str, object],
+    adaptive_scale: float,
+    image_assets: Mapping[str, Mapping[str, object]] | None,
+) -> None:
+    surfaces = slot.get("sourceFlowComponentSurfaces")
+    if not isinstance(surfaces, list) or not surfaces:
+        raise SourceNativeGenerationError("source_native_component_graph_missing")
+    expected_digest = str(slot.get("sourceFlowComponentGraphDigest") or "")
+    if not expected_digest or canonical_digest(surfaces) != expected_digest:
+        raise SourceNativeGenerationError("source_native_component_graph_digest_mismatch")
+
+    blocks = _flow_blocks(units)
+    if not blocks:
+        raise SourceNativeGenerationError("source_native_component_units_missing")
+    surface_kinds = {
+        str(item.get("componentKind") or "")
+        for item in surfaces
+        if isinstance(item, Mapping)
+    }
+    root = lxml_html.Element("div")
+    root_qid = str(parent.get("data-qid") or "source-components")
+    root.set("data-qid", f"{root_qid}--components")
+    root.set("data-source-component-graph-digest", expected_digest)
+    root_gap = (
+        _FOOTER_BODY_GAP_PX
+        if any(
+            _unit_group_kind(block[0]).lower() == "compact-footer"
+            for block in blocks
+        )
+        else 12.0
+    )
+    root.set(
+        "style",
+        "display:flex!important;flex-direction:column;width:100%;height:100%;"
+        f"min-width:0;min-height:0;gap:{root_gap:.3f}px;overflow:hidden",
+    )
+
+    footer_blocks = [
+        block for block in blocks if _unit_group_kind(block[0]).lower() == "compact-footer"
+    ]
+    body_blocks = [block for block in blocks if block not in footer_blocks]
+    table_blocks = [
+        block
+        for block in body_blocks
+        if _unit_group_kind(block[0]).lower() == "table-matrix"
+        or _unit_boundary_kind(block[0]) == "table-cell"
+    ]
+    visual_blocks = [
+        block
+        for block in body_blocks
+        if any(item.kind == "image" for item in block)
+        or _unit_group_kind(block[0]).lower() in {"media-card", "process-step", "kpi"}
+    ]
+    plain_blocks = [
+        block
+        for block in body_blocks
+        if block not in table_blocks and block not in visual_blocks
+    ]
+    evidence_blocks = [
+        block
+        for block in visual_blocks
+        if any(_is_meaningful_flow_image(item) for item in block)
+    ]
+    secondary_visual_blocks = [
+        block for block in visual_blocks if block not in evidence_blocks
+    ]
+
+    selected_component_kinds: dict[int, str] = {}
+    for block in blocks:
+        group_kind = _unit_group_kind(block[0]).lower()
+        has_image = any(item.kind == "image" for item in block)
+        preferences = _component_preference(group_kind, has_image=has_image)
+        selected = next((kind for kind in preferences if kind in surface_kinds), "bodyFlow")
+        selected_component_kinds[id(block)] = selected
+
+    summary_bounds = _flow_mapping(slot, "bounds")
+    summary_spacing = _flow_mapping(slot, "spacing")
+    summary_width = max(
+        1.0,
+        _flow_number(summary_bounds.get("width"), _SLIDE_WIDTH_PX)
+        - _flow_number(summary_spacing.get("insetLeft"))
+        - _flow_number(summary_spacing.get("insetRight")),
+    )
+    summary_height = max(
+        1.0,
+        _flow_number(summary_bounds.get("height"), _SLIDE_HEIGHT_PX)
+        - _flow_number(summary_spacing.get("insetTop"))
+        - _flow_number(summary_spacing.get("insetBottom")),
+    )
+    body_height_fraction = (
+        max(
+            1.0,
+            summary_height - _FOOTER_LANE_HEIGHT_PX - _FOOTER_BODY_GAP_PX,
+        )
+        / summary_height
+        if footer_blocks
+        else 1.0
+    )
+
+    plain_fraction = 0.0
+    selected_summary: object | None = None
+    if plain_blocks and (table_blocks or visual_blocks) and not evidence_blocks:
+        plain_units = [unit for block in plain_blocks for unit in block]
+        for candidate_fraction in (
+            0.08,
+            0.12,
+            0.16,
+            0.20,
+            0.25,
+            0.30,
+            0.35,
+            0.40,
+            0.45,
+            0.50,
+            0.55,
+            0.60,
+            0.65,
+            0.70,
+            0.75,
+        ):
+            candidate_summary = lxml_html.Element("div")
+            candidate_summary.set("data-qid", f"{root_qid}--component-summary")
+            width_fraction = 1.0
+            height_fraction = candidate_fraction
+            if not table_blocks:
+                overlay_padding = _COMPONENT_OVERLAY_PADDING_PX * 2.0
+                width_fraction = max(
+                    0.05, (summary_width - overlay_padding) / summary_width
+                )
+                height_fraction = max(
+                    0.05,
+                    (
+                        summary_height * candidate_fraction - overlay_padding
+                    )
+                    / summary_height,
+                )
+            try:
+                _append_fixed_text_columns(
+                    candidate_summary,
+                    plain_units,
+                    slot=slot,
+                    adaptive_scale=adaptive_scale,
+                    role="body",
+                    columns_count=max(1, min(4, len(plain_blocks))),
+                    column_gap=16.0,
+                    width_fraction=width_fraction,
+                    height_fraction=height_fraction,
+                )
+            except SourceNativeGenerationError as error:
+                if error.code != "source_native_text_capacity_exceeded":
+                    raise
+                continue
+            plain_fraction = candidate_fraction
+            selected_summary = candidate_summary
+            break
+        if selected_summary is None:
+            raise SourceNativeGenerationError("source_native_text_capacity_exceeded")
+        if table_blocks:
+            selected_summary.set(
+                "style",
+                str(selected_summary.get("style") or "")
+                + f";flex:0 0 {plain_fraction * 100.0:.3f}%;min-width:0;min-height:0;overflow:hidden",
+            )
+            root.append(selected_summary)
+        else:
+            root.set(
+                "style",
+                str(root.get("style") or "") + ";position:relative!important",
+            )
+            selected_summary.set("data-allow-overlap", "true")
+            selected_summary.set(
+                "style",
+                str(selected_summary.get("style") or "")
+                + ";position:absolute!important;left:8px;right:8px;bottom:8px;z-index:4;"
+                f"height:{plain_fraction * 100.0:.3f}%;"
+                f"padding:{_COMPONENT_OVERLAY_PADDING_PX:.3f}px;box-sizing:border-box;"
+                "min-width:0;min-height:0;overflow:hidden;border-radius:12px;"
+                "background:rgba(15,23,42,.82);color:#fff;backdrop-filter:blur(2px)",
+            )
+            for element in selected_summary.iterdescendants():
+                element.set("data-allow-overlap", "true")
+
+    bounds = _flow_mapping(slot, "bounds")
+    spacing = _flow_mapping(slot, "spacing")
+    width = max(
+        1.0,
+        _flow_number(bounds.get("width"), _SLIDE_WIDTH_PX)
+        - _flow_number(spacing.get("insetLeft"))
+        - _flow_number(spacing.get("insetRight")),
+    )
+    height = max(
+        1.0,
+        _flow_number(bounds.get("height"), _SLIDE_HEIGHT_PX)
+        - _flow_number(spacing.get("insetTop"))
+        - _flow_number(spacing.get("insetBottom")),
+    )
+    if plain_blocks and (table_blocks or visual_blocks) and not evidence_blocks:
+        if table_blocks:
+            height = max(1.0, height * (1.0 - plain_fraction) - 12.0)
+
+    if table_blocks:
+        capacity = _flow_mapping(slot, "capacityEnvelope")
+        minimum_scale = max(
+            0.1, min(1.0, _flow_number(capacity.get("minimumTextScale"), 0.70))
+        )
+
+        def table_height(scale: float) -> float:
+            return sum(
+                _estimated_flow_block_height(
+                    block,
+                    slot=slot,
+                    adaptive_scale=scale,
+                    role="body",
+                    column_width=width,
+                )
+                for block in table_blocks
+            ) + 10.0 * max(0, len(table_blocks) - 1)
+
+        if table_height(minimum_scale) > height:
+            raise SourceNativeGenerationError(
+                "source_native_table_matrix_capacity_exceeded"
+            )
+        if table_height(adaptive_scale) <= height:
+            table_scale = adaptive_scale
+        else:
+            lower = minimum_scale
+            upper = adaptive_scale
+            for _ in range(18):
+                midpoint = (lower + upper) / 2.0
+                if table_height(midpoint) <= height:
+                    lower = midpoint
+                else:
+                    upper = midpoint
+            table_scale = lower
+        table_panel = lxml_html.Element("div")
+        table_panel.set("data-qid", f"{root_qid}--component-table")
+        table_panel.set(
+            "style",
+            "display:flex!important;flex:1;flex-direction:column;gap:10px;"
+            "min-width:0;min-height:0;overflow:hidden",
+        )
+        for block in table_blocks:
+            _append_semantic_block(
+                table_panel,
+                block,
+                slot=slot,
+                adaptive_scale=table_scale,
+                role="body",
+                image_assets=image_assets,
+                component_kind=selected_component_kinds[id(block)],
+            )
+        root.append(table_panel)
+    elif evidence_blocks:
+        root.set(
+            "style",
+            str(root.get("style") or "") + ";position:relative!important",
+        )
+        evidence_count = len(evidence_blocks)
+        evidence_width_fraction = (
+            1.0
+            if evidence_count == 1
+            else 0.60
+            if evidence_count == 2
+            else 0.55
+            if evidence_count == 3
+            else 0.52
+        )
+        evidence_height_fraction = 1.0 if evidence_count == 1 else 0.82
+        evidence_cell_width = width * evidence_width_fraction
+        evidence_cell_height = height * evidence_height_fraction
+        if not all(
+            _meaningful_image_geometry_pass(
+                unit,
+                cell_width=evidence_cell_width,
+                cell_height=evidence_cell_height,
+            )
+            for block in evidence_blocks
+            for unit in block
+            if unit.kind == "image"
+        ):
+            raise SourceNativeGenerationError(
+                "source_native_meaningful_image_capacity_exceeded"
+            )
+        overlap_percent = (
+            0.0
+            if evidence_count <= 1
+            else (evidence_count * evidence_width_fraction - 1.0)
+            / (evidence_count - 1)
+            * 100.0
+        )
+        gallery = lxml_html.Element("div")
+        gallery.set("data-qid", f"{root_qid}--evidence-gallery")
+        gallery.set("data-allow-overlap", "true")
+        gallery.set(
+            "style",
+            "position:absolute!important;inset:0;z-index:1;display:flex!important;"
+            "align-items:center;justify-content:center;min-width:0;min-height:0;overflow:hidden",
+        )
+        capacity = _flow_mapping(slot, "capacityEnvelope")
+        evidence_scale = max(
+            0.1, min(1.0, _flow_number(capacity.get("minimumTextScale"), 0.70))
+        )
+        for index, block in enumerate(evidence_blocks):
+            _append_semantic_block(
+                gallery,
+                block,
+                slot=slot,
+                adaptive_scale=evidence_scale,
+                role="body",
+                image_assets=image_assets,
+                component_kind=selected_component_kinds[id(block)],
+            )
+            evidence_wrapper = gallery[-1]
+            evidence_wrapper.set(
+                "style",
+                str(evidence_wrapper.get("style") or "")
+                + f";flex:0 0 {evidence_width_fraction * 100.0:.3f}%;"
+                f"height:{evidence_height_fraction * 100.0:.3f}%;"
+                + (
+                    f"margin-left:-{overlap_percent:.3f}%;"
+                    if index > 0
+                    else ""
+                )
+                + f"z-index:{index + 1}",
+            )
+        root.append(gallery)
+
+        overlay_blocks = [*plain_blocks, *secondary_visual_blocks]
+        if overlay_blocks:
+            horizontal_gap = 12.0
+            vertical_gap = 8.0
+            maximum_overlay_columns = min(
+                3,
+                len(overlay_blocks),
+                max(1, int((width + horizontal_gap) // 280.0)),
+            )
+            overlay_height = max(1.0, height - 16.0)
+            overlay_options: list[
+                tuple[float, int, float, tuple[int, ...]]
+            ] = []
+
+            def overlay_layout(
+                scale: float, columns: int
+            ) -> tuple[float, tuple[int, ...]]:
+                overlay_width = max(
+                    1.0,
+                    (
+                        width
+                        - 16.0
+                        - horizontal_gap * max(0, columns - 1)
+                    )
+                    / columns,
+                )
+                weights = [
+                    _estimated_flow_block_height(
+                        block,
+                        slot=slot,
+                        adaptive_scale=scale,
+                        role="body",
+                        column_width=overlay_width,
+                    )
+                    for block in overlay_blocks
+                ]
+                weighted = [value + vertical_gap for value in weights]
+                ends = _balanced_contiguous_ends(weighted, columns)
+                start = 0
+                maximum = 0.0
+                for end in ends:
+                    maximum = max(
+                        maximum,
+                        max(0.0, sum(weighted[start:end]) - vertical_gap),
+                    )
+                    start = end
+                return maximum, ends
+
+            for columns in range(1, maximum_overlay_columns + 1):
+                minimum_height, minimum_ends = overlay_layout(
+                    evidence_scale, columns
+                )
+                if minimum_height > overlay_height:
+                    continue
+                maximum_height, maximum_ends = overlay_layout(
+                    adaptive_scale, columns
+                )
+                if maximum_height <= overlay_height:
+                    overlay_options.append(
+                        (
+                            adaptive_scale,
+                            columns,
+                            maximum_height,
+                            maximum_ends,
+                        )
+                    )
+                    continue
+                lower = evidence_scale
+                upper = adaptive_scale
+                selected_height = minimum_height
+                selected_ends = minimum_ends
+                for _ in range(18):
+                    midpoint = (lower + upper) / 2.0
+                    midpoint_height, midpoint_ends = overlay_layout(
+                        midpoint, columns
+                    )
+                    if midpoint_height <= overlay_height:
+                        lower = midpoint
+                        selected_height = midpoint_height
+                        selected_ends = midpoint_ends
+                    else:
+                        upper = midpoint
+                overlay_options.append(
+                    (lower, columns, selected_height, selected_ends)
+                )
+            if not overlay_options:
+                raise SourceNativeGenerationError(
+                    "source_native_text_capacity_exceeded"
+                )
+            overlay_scale, overlay_columns, _, overlay_ends = max(
+                overlay_options,
+                key=lambda item: (
+                    round(item[0], 6),
+                    item[1],
+                    -round(item[2], 6),
+                ),
+            )
+            overlay = lxml_html.Element("div")
+            overlay.set("data-qid", f"{root_qid}--evidence-overlay")
+            overlay.set("data-allow-overlap", "true")
+            overlay.set(
+                "style",
+                "position:absolute!important;inset:8px;z-index:3;padding:8px;box-sizing:border-box;"
+                "display:grid!important;min-width:0;min-height:0;overflow:hidden;"
+                f"grid-template-columns:repeat({overlay_columns},minmax(0,1fr));"
+                f"gap:0 {horizontal_gap:.3f}px;border-radius:12px;"
+                "background:linear-gradient(180deg,rgba(15,23,42,.30),rgba(15,23,42,.72));"
+                "color:#fff;backdrop-filter:blur(1.5px)",
+            )
+            start = 0
+            for column_index, end in enumerate(overlay_ends):
+                column = lxml_html.Element("div")
+                column.set(
+                    "data-qid",
+                    f"{root_qid}--evidence-overlay-column-{column_index + 1}",
+                )
+                column.set("data-allow-overlap", "true")
+                column.set(
+                    "style",
+                    "display:flex!important;flex-direction:column;gap:8px;"
+                    "min-width:0;min-height:0;overflow:hidden",
+                )
+                for block in overlay_blocks[start:end]:
+                    _append_semantic_block(
+                        column,
+                        block,
+                        slot=slot,
+                        adaptive_scale=overlay_scale,
+                        role="body",
+                        image_assets=image_assets,
+                        component_kind=selected_component_kinds[id(block)],
+                    )
+                overlay.append(column)
+                start = end
+            for element in overlay.iterdescendants():
+                element.set("data-allow-overlap", "true")
+            root.append(overlay)
+    elif visual_blocks:
+        gap = _COMPONENT_VISUAL_GAP_PX
+        maximum_columns = min(
+            4,
+            len(visual_blocks),
+            max(1, int((width + gap) // 280.0)),
+        )
+        capacity = _flow_mapping(slot, "capacityEnvelope")
+        minimum_scale = max(
+            0.1, min(1.0, _flow_number(capacity.get("minimumTextScale"), 0.70))
+        )
+        maximum_scale = 1.0
+
+        def visual_layout(
+            scale: float, columns: int
+        ) -> tuple[float, tuple[int, ...]]:
+            column_width = max(
+                1.0,
+                (width - gap * max(0, columns - 1)) / columns,
+            )
+            weights = [
+                _estimated_flow_block_height(
+                    block,
+                    slot=slot,
+                    adaptive_scale=scale,
+                    role="body",
+                    column_width=column_width,
+                )
+                for block in visual_blocks
+            ]
+            weighted = [value + gap for value in weights]
+            ends = _balanced_contiguous_ends(weighted, columns)
+            start = 0
+            maximum = 0.0
+            for end in ends:
+                maximum = max(
+                    maximum,
+                    max(0.0, sum(weighted[start:end]) - gap),
+                )
+                start = end
+            return maximum, ends
+
+        def visual_row_layout(scale: float, columns: int) -> float:
+            column_width = max(
+                1.0,
+                (width - gap * max(0, columns - 1)) / columns,
+            )
+            weights = [
+                _estimated_flow_block_height(
+                    block,
+                    slot=slot,
+                    adaptive_scale=scale,
+                    role="body",
+                    column_width=column_width,
+                )
+                for block in visual_blocks
+            ]
+            row_heights = [
+                max(weights[start : start + columns])
+                for start in range(0, len(weights), columns)
+            ]
+            return sum(row_heights) + gap * max(0, len(row_heights) - 1)
+
+        options: list[tuple[float, int, float, str, tuple[int, ...]]] = []
+        for columns in range(1, maximum_columns + 1):
+            for packing in ("columns", "rows"):
+                def evaluate(scale: float) -> tuple[float, tuple[int, ...]]:
+                    if packing == "rows":
+                        return visual_row_layout(scale, columns), ()
+                    return visual_layout(scale, columns)
+
+                minimum_height, minimum_ends = evaluate(minimum_scale)
+                if minimum_height > height:
+                    continue
+                maximum_height, maximum_ends = evaluate(maximum_scale)
+                if maximum_height <= height:
+                    options.append(
+                        (
+                            maximum_scale,
+                            columns,
+                            maximum_height,
+                            packing,
+                            maximum_ends,
+                        )
+                    )
+                    continue
+                lower = minimum_scale
+                upper = maximum_scale
+                selected_height = minimum_height
+                selected_ends = minimum_ends
+                for _ in range(18):
+                    midpoint = (lower + upper) / 2.0
+                    midpoint_height, midpoint_ends = evaluate(midpoint)
+                    if midpoint_height <= height:
+                        lower = midpoint
+                        selected_height = midpoint_height
+                        selected_ends = midpoint_ends
+                    else:
+                        upper = midpoint
+                options.append(
+                    (lower, columns, selected_height, packing, selected_ends)
+                )
+        if not options:
+            raise SourceNativeGenerationError("source_native_text_capacity_exceeded")
+        visual_scale, selected_columns, _, selected_packing, selected_ends = max(
+            options,
+            key=lambda item: (
+                round(item[0], 6),
+                item[1],
+                -round(item[2], 6),
+                1 if item[3] == "columns" else 0,
+            ),
+        )
+        grid = lxml_html.Element("div")
+        grid.set("data-qid", f"{root_qid}--component-grid")
+        grid.set(
+            "style",
+            "display:grid!important;flex:1;min-width:0;min-height:0;overflow:hidden;"
+            f"grid-template-columns:repeat({selected_columns},minmax(0,1fr));"
+            "grid-auto-rows:max-content;align-content:start;"
+            f"gap:{gap:.3f}px",
+        )
+        if selected_packing == "rows":
+            for block in visual_blocks:
+                _append_semantic_block(
+                    grid,
+                    block,
+                    slot=slot,
+                    adaptive_scale=visual_scale,
+                    role="body",
+                    image_assets=image_assets,
+                    component_kind=selected_component_kinds[id(block)],
+                )
+        else:
+            start = 0
+            for column_index, end in enumerate(selected_ends):
+                column = lxml_html.Element("div")
+                column.set(
+                    "data-qid",
+                    f"{root_qid}--component-column-{column_index + 1}",
+                )
+                column.set(
+                    "style",
+                    f"display:flex!important;flex-direction:column;gap:{gap:.3f}px;"
+                    "min-width:0;min-height:0;overflow:hidden",
+                )
+                for block in visual_blocks[start:end]:
+                    _append_semantic_block(
+                        column,
+                        block,
+                        slot=slot,
+                        adaptive_scale=visual_scale,
+                        role="body",
+                        image_assets=image_assets,
+                        component_kind=selected_component_kinds[id(block)],
+                    )
+                grid.append(column)
+                start = end
+        root.append(grid)
+        if selected_summary is not None:
+            root.append(selected_summary)
+    elif plain_blocks:
+        plain = lxml_html.Element("div")
+        plain.set("data-qid", f"{root_qid}--component-body")
+        _append_fixed_text_columns(
+            plain,
+            [unit for block in plain_blocks for unit in block],
+            slot=slot,
+            adaptive_scale=adaptive_scale,
+            role="body",
+            columns_count=max(1, min(3, len(plain_blocks))),
+            column_gap=16.0,
+            height_fraction=body_height_fraction,
+        )
+        plain.set(
+            "style",
+            str(plain.get("style") or "")
+            + ";flex:1 1 0;height:auto!important",
+        )
+        root.append(plain)
+
+    if footer_blocks:
+        footer_lane = lxml_html.Element("div")
+        footer_lane.set(
+            "style",
+            "display:flex!important;align-items:center;gap:16px;height:23px;"
+            "flex:0 0 23px;"
+            "min-width:0;overflow:hidden;white-space:nowrap",
+        )
+        for block in footer_blocks:
+            _append_semantic_block(
+                footer_lane,
+                block,
+                slot=slot,
+                adaptive_scale=adaptive_scale,
+                role="body",
+                image_assets=image_assets,
+                component_kind="footerBand",
+            )
+        root.append(footer_lane)
+    parent.append(root)
 
 
 def _patch_exact_slot(
@@ -775,6 +2698,7 @@ def _patch_exact_slot(
     *,
     slot: Mapping[str, object] | None = None,
     image_assets: Mapping[str, Mapping[str, object]] | None = None,
+    component_adaptive_scale: float = 1.0,
 ) -> None:
     if not units:
         node.text = None
@@ -791,53 +2715,121 @@ def _patch_exact_slot(
         return
     image_units = [item for item in units if item.kind == "image"]
     text_units = [item for item in units if item.kind != "image"]
+    flow_kind = str((slot or {}).get("sourceFlowLayout") or "")
+    if flow_kind == "components":
+        if slot is None:
+            raise SourceNativeGenerationError("source_native_slot_contract_missing")
+        for child in list(node):
+            node.remove(child)
+        node.text = None
+        _append_component_canvas(
+            node,
+            units,
+            slot=slot,
+            adaptive_scale=component_adaptive_scale,
+            image_assets=image_assets,
+        )
+        existing_style = str(node.get("style") or "").rstrip(";")
+        node.set(
+            "style",
+            f"{existing_style};{_flow_overlay_css(slot)};display:block!important;"
+            "white-space:normal!important;z-index:50!important",
+        )
+        node.set(
+            "data-asset-occurrence-ids",
+            "|".join(item.asset_occurrence_id or "" for item in image_units),
+        )
+        node.set("data-content-unit-ids", "|".join(item.content_unit_id for item in units))
+        node.set("data-content-unit-digests", "|".join(item.content_digest for item in units))
+        return
     if image_units and text_units:
         if slot is None or str(slot.get("sourceFlowLayout") or "") != "text":
             raise SourceNativeGenerationError("source_native_mixed_image_slot")
-        adaptive_scale = largest_fitting_text_scale(slot, text_units)
-        if adaptive_scale is None:
-            raise SourceNativeGenerationError("source_native_text_readability_failed")
+        # The source-flow renderer performs the authoritative bounded
+        # width/height/column search below.  The legacy character-area helper
+        # is intentionally not used as a pre-gate here because it can reject
+        # layouts that the exact geometry search fits at the readable floor.
+        maximum_scale = 1.0
         assets = image_assets or {}
         for child in list(node):
             node.remove(child)
         node.text = None
+        flow_qid = str(node.get("data-qid") or "source-flow")
         wrapper = lxml_html.Element("div")
-        wrapper.set("data-qid", f"{str(node.get('data-qid') or 'source-flow')}--mixed")
+        wrapper.set("data-qid", f"{flow_qid}--mixed")
         text_weight = max(1.0, sum(len(_unit_render_text(item)) for item in text_units) / 220.0)
         image_weight = max(1.0, float(len(image_units)))
         image_fraction = max(0.28, min(0.48, image_weight / (text_weight + image_weight)))
-        wrapper.set(
-            "style",
-            "display:grid!important;height:100%;width:100%;min-width:0;min-height:0;overflow:hidden;"
-            f"grid-template-columns:minmax(0,{(1.0 - image_fraction):.4f}fr) minmax(0,{image_fraction:.4f}fr);"
-            "column-gap:14px",
-        )
-        text_panel = lxml_html.Element("div")
-        text_panel.set(
-            "data-qid",
-            f"{str(node.get('data-qid') or 'source-flow')}--mixed-text",
-        )
         hints = _flow_mapping(slot, "layoutHints")
         text_columns = max(1, min(2, int(_flow_number(hints.get("columnCount"), 1))))
-        text_panel.set(
-            "style",
-            f"column-count:{text_columns};column-gap:14px;column-fill:auto;"
-            "height:100%;min-width:0;min-height:0;overflow:hidden",
-        )
         role = _flow_role(slot)
-        _append_flow_text_units(
-            text_panel,
-            text_units,
-            slot=slot,
-            adaptive_scale=adaptive_scale,
-            role=role,
+        vertical_image_columns = max(1, min(4, len(image_units)))
+        vertical_image_rows = max(
+            1, math.ceil(len(image_units) / vertical_image_columns)
         )
+        vertical_image_fraction = max(
+            0.20, min(0.42, 0.16 + 0.08 * vertical_image_rows)
+        )
+        candidates: list[tuple[float, str, object, float]] = []
+        for layout, width_fraction, height_fraction in (
+            ("horizontal", 1.0 - image_fraction, 1.0),
+            ("vertical", 1.0, 1.0 - vertical_image_fraction),
+        ):
+            candidate_panel = lxml_html.Element("div")
+            candidate_panel.set("data-qid", f"{flow_qid}--mixed-text")
+            try:
+                readable_scale = _append_fixed_text_columns(
+                    candidate_panel,
+                    text_units,
+                    slot=slot,
+                    adaptive_scale=maximum_scale,
+                    role=role,
+                    columns_count=text_columns,
+                    column_gap=14.0,
+                    width_fraction=width_fraction,
+                    height_fraction=height_fraction,
+                )
+            except SourceNativeGenerationError as error:
+                if error.code != "source_native_text_capacity_exceeded":
+                    raise
+                continue
+            candidates.append(
+                (readable_scale, layout, candidate_panel, height_fraction)
+            )
+        if not candidates:
+            raise SourceNativeGenerationError("source_native_text_readability_failed")
+        _readable_scale, selected_layout, text_panel, text_fraction = max(
+            candidates,
+            key=lambda item: (
+                round(item[0], 6),
+                item[1] == ("vertical" if len(image_units) >= 4 else "horizontal"),
+                item[1],
+            ),
+        )
+        if selected_layout == "vertical":
+            wrapper.set(
+                "style",
+                "display:grid!important;height:100%;width:100%;min-width:0;min-height:0;overflow:hidden;"
+                f"grid-template-rows:minmax(0,{text_fraction:.4f}fr) minmax(0,{(1.0 - text_fraction):.4f}fr);"
+                "row-gap:14px",
+            )
+        else:
+            wrapper.set(
+                "style",
+                "display:grid!important;height:100%;width:100%;min-width:0;min-height:0;overflow:hidden;"
+                f"grid-template-columns:minmax(0,{(1.0 - image_fraction):.4f}fr) minmax(0,{image_fraction:.4f}fr);"
+                "column-gap:14px",
+            )
         image_panel = lxml_html.Element("div")
         image_panel.set(
             "data-qid",
             f"{str(node.get('data-qid') or 'source-flow')}--mixed-images",
         )
-        image_columns = max(1, min(3, math.ceil(len(image_units) ** 0.5)))
+        image_columns = (
+            vertical_image_columns
+            if selected_layout == "vertical"
+            else max(1, min(3, math.ceil(len(image_units) ** 0.5)))
+        )
         image_rows = max(1, math.ceil(len(image_units) / image_columns))
         image_panel.set(
             "style",
@@ -958,10 +2950,14 @@ def _patch_exact_slot(
         raise SourceNativeGenerationError("source_native_empty_content_unit")
     if slot is None:
         raise SourceNativeGenerationError("source_native_slot_contract_missing")
-    adaptive_scale = largest_fitting_text_scale(slot, units)
+    source_flow = str((slot or {}).get("sourceFlowLayout") or "")
+    adaptive_scale = (
+        1.0
+        if source_flow == "text"
+        else largest_fitting_text_scale(slot, units)
+    )
     if adaptive_scale is None:
         raise SourceNativeGenerationError("source_native_text_capacity_exceeded")
-    source_flow = str((slot or {}).get("sourceFlowLayout") or "")
     # Preserve the editable element tree while clearing all template copy in
     # that exact content scope. Nested slots are applied parent-first later.
     node.text = None
@@ -978,17 +2974,14 @@ def _patch_exact_slot(
         columns = lxml_html.Element("div")
         flow_qid = str(node.get("data-qid") or "source-flow")
         columns.set("data-qid", f"{flow_qid}--columns")
-        columns.set(
-            "style",
-            f"column-count:{columns_count};column-gap:{column_gap:.3f}px;"
-            "column-fill:auto;height:100%;min-width:0;min-height:0;overflow:hidden",
-        )
-        _append_flow_text_units(
+        _append_fixed_text_columns(
             columns,
             units,
             slot=slot,
             adaptive_scale=adaptive_scale,
             role=role,
+            columns_count=columns_count,
+            column_gap=column_gap,
         )
         node.append(columns)
     else:
@@ -1023,6 +3016,7 @@ def _apply_composition_plan(
     units: list[SealedContentUnit],
     slots: list[dict[str, object]],
     image_assets: Mapping[str, Mapping[str, object]] | None = None,
+    renderer_geometry_scale: float = 1.0,
 ) -> tuple[str, list[dict[str, object]], str, str]:
     try:
         document = lxml_html.document_fromstring(raw_html)
@@ -1066,7 +3060,7 @@ def _apply_composition_plan(
                     template_node.attrib.pop(attribute, None)
     for slot in slots:
         flow_kind = str(slot.get("sourceFlowLayout") or "")
-        if flow_kind not in {"text", "images"}:
+        if flow_kind not in {"text", "images", "components"}:
             continue
         handle = slot.get("patchHandle")
         handle = handle if isinstance(handle, Mapping) else {}
@@ -1105,6 +3099,7 @@ def _apply_composition_plan(
             assigned,
             slot=slot,
             image_assets=image_assets,
+            component_adaptive_scale=renderer_geometry_scale,
         )
         if not assigned:
             continue
@@ -1119,8 +3114,37 @@ def _apply_composition_plan(
                 "contentUnitIds": [item.content_unit_id for item in assigned],
                 "contentDigests": [item.content_digest for item in assigned],
                 "slotId": slot_id,
+                "sourceFlowLayout": slot.get("sourceFlowLayout"),
+                "componentKind": slot.get("sourceFlowComponentKind"),
+                "componentGraphDigest": slot.get("sourceFlowComponentGraphDigest"),
+                "semanticGroupIds": list(
+                    dict.fromkeys(
+                        group_id
+                        for item in assigned
+                        for group_id in (_unit_group_id(item),)
+                        if group_id
+                    )
+                ),
             }
         )
+    expected_groups: dict[str, list[str]] = {}
+    for unit in units:
+        group_id = _unit_group_id(unit)
+        if group_id:
+            expected_groups.setdefault(group_id, []).append(unit.content_unit_id)
+    for group_id, expected_unit_ids in expected_groups.items():
+        wrappers = document.xpath(
+            "//*[@data-source-semantic-group-id=$group_id]", group_id=group_id
+        )
+        if len(wrappers) != 1:
+            raise SourceNativeGenerationError("source_native_semantic_group_not_atomic")
+        observed_unit_ids = [
+            item
+            for item in str(wrappers[0].get("data-content-unit-ids") or "").split("|")
+            if item
+        ]
+        if observed_unit_ids != expected_unit_ids:
+            raise SourceNativeGenerationError("source_native_semantic_group_not_atomic")
     serialized = lxml_html.tostring(document, encoding="unicode", method="html")
     protected_after = _protected_dom_digest(document, editable_qids)
     if protected_before != protected_after:
@@ -1275,7 +3299,7 @@ def _build_slide_quality_observation(
     candidate_slots = [
         item
         for item in slots
-        if item.get("sourceFlowLayout") in {"text", "images"}
+        if item.get("sourceFlowLayout") in {"text", "images", "components"}
         and item.get("acceptedKinds")
     ]
     # Every registered flow region is rendered so its QID remains measurable,
@@ -1320,6 +3344,7 @@ def _build_slide_quality_observation(
         item
         for item in unit_elements
         if ":title-candidate-" in str(item.get("qid") or "")
+        or str(item.get("qid") or "").endswith(":key-message")
     ]
     body_elements = [item for item in unit_elements if item not in title_elements]
     body_fonts_pt = [
@@ -1445,23 +3470,43 @@ def _build_slide_quality_observation(
                 if parent_qid == qid or parent_qid.startswith(qid + "--")
             ]
             slot_qid = max(candidates, key=len) if candidates else ""
-        group = images_by_slot.get(slot_qid, [item])
-        group_box = image_group_boxes.get(
-            slot_qid,
-            slot_boxes_by_qid.get(
-                slot_qid,
-                {"x": 0.0, "y": 0.0, "width": viewport_width, "height": viewport_height},
-            ),
-        )
-        group_area = _bbox_area(group_box)
-        fair_cell_area = group_area / max(1, len(group))
-        relative_cell_share = _bbox_area(_quality_bbox(item.get("bbox"))) / max(1.0, fair_cell_area)
-        # Mixed text/image regions intentionally reserve 28-48% of their slot
-        # for images.  A source occurrence using at least a quarter of its fair
-        # cell is meaningfully visible; below one eighth is a hard undersize.
-        image_size_scores.append(min(1.0, relative_cell_share / 0.25))
-        if relative_cell_share < 0.125:
-            undersized += 1
+        image_kind = str(item.get("source_image_kind") or "media").strip().lower()
+        meaningful = image_kind != "icon" and image_kind in {
+            "evidence",
+            "ui",
+            "screenshot",
+            "product-screen",
+        }
+        if meaningful:
+            image_box = _quality_bbox(item.get("bbox"))
+            rendered_width = image_box["width"]
+            rendered_height = image_box["height"]
+            rendered_area = _bbox_area(image_box)
+            slide_scale = min(
+                rendered_width / viewport_width,
+                rendered_height / viewport_height,
+            )
+            dimension_ratio = min(
+                rendered_width / _MEANINGFUL_IMAGE_MIN_WIDTH_PX,
+                rendered_height / _MEANINGFUL_IMAGE_MIN_HEIGHT_PX,
+            )
+            area_ratio = rendered_area / max(
+                1.0, slide_area * _MEANINGFUL_IMAGE_MIN_AREA_RATIO
+            )
+            scale_ratio = slide_scale / _MEANINGFUL_IMAGE_SCALE_FLOOR
+            image_size_scores.append(
+                min(1.0, max(dimension_ratio, min(area_ratio, scale_ratio)))
+            )
+            dimension_pass = (
+                rendered_width >= _MEANINGFUL_IMAGE_MIN_WIDTH_PX
+                and rendered_height >= _MEANINGFUL_IMAGE_MIN_HEIGHT_PX
+            )
+            area_scale_pass = (
+                rendered_area >= slide_area * _MEANINGFUL_IMAGE_MIN_AREA_RATIO
+                and slide_scale >= _MEANINGFUL_IMAGE_SCALE_FLOOR
+            )
+            if not (dimension_pass or area_scale_pass):
+                undersized += 1
         image = item.get("image")
         image = image if isinstance(image, Mapping) else {}
         crop_ok = bool(
@@ -1493,7 +3538,7 @@ def _build_slide_quality_observation(
         "offCanvasElementCount": off_canvas_count,
         "balanceScore": round(balance_score, 6),
         "whitespaceScore": round(whitespace_score, 6),
-        "meaningfulImageCount": len(image_elements),
+        "meaningfulImageCount": len(image_size_scores),
         "meaningfulImageSizeScore": round(sum(image_size_scores) / len(image_size_scores), 6) if image_size_scores else 1.0,
         "imageCropFidelityScore": round(sum(image_crop_scores) / len(image_crop_scores), 6) if image_crop_scores else 1.0,
         "undersizedMeaningfulImageCount": undersized,
@@ -1688,7 +3733,14 @@ class _SourceNativeExecutor:
             operation_id, uuid.UUID
         ):
             raise SourceNativeGenerationError("source_native_generation_lane_invalid")
-        for narrative_slide, selected in zip(narrative_slides, selected_slides, strict=True):
+        capacity_pages = tuple(
+            item
+            for item in self._capacity_admission_receipt.get("pages", ())
+            if isinstance(item, Mapping)
+        )
+        for slide_index, (narrative_slide, selected) in enumerate(
+            zip(narrative_slides, selected_slides, strict=True)
+        ):
             author_started_at = time.monotonic()
             frame = source_frames.get(selected.selected_frame_id)
             frame_contract = frame_contracts.get(selected.selected_frame_id)
@@ -1716,12 +3768,40 @@ class _SourceNativeExecutor:
                     source_image_occurrences.append(occurrence)
                 else:
                     source_text_occurrences.append(occurrence)
+            renderer_geometry_scale = 1.0
+            if capacity_pages:
+                expected_content_unit_ids = tuple(
+                    str(item)
+                    for item in capacity_pages[slide_index].get(
+                        "expectedContentUnitIds", ()
+                    )
+                )
+                rendered_content_unit_ids = tuple(
+                    unit.content_unit_id for unit in units
+                )
+                if expected_content_unit_ids != rendered_content_unit_ids:
+                    raise SourceNativeGenerationError(
+                        "source_verbatim_capacity_scale_binding_invalid"
+                    )
+                try:
+                    renderer_geometry_scale = float(
+                        capacity_pages[slide_index]["selectedRendererGeometryScale"]
+                    )
+                except (IndexError, KeyError, TypeError, ValueError) as error:
+                    raise SourceNativeGenerationError(
+                        "source_verbatim_capacity_scale_binding_invalid"
+                    ) from error
+                if not 0.1 <= renderer_geometry_scale <= 1.0:
+                    raise SourceNativeGenerationError(
+                        "source_verbatim_capacity_scale_binding_invalid"
+                    )
             html, semantic, protected_before, protected_after = _apply_composition_plan(
                 str(frame["html"]),
                 plan=plan,
                 units=units,
                 slots=slots,
                 image_assets=image_assets,
+                renderer_geometry_scale=renderer_geometry_scale,
             )
             author_elapsed_ms += round((time.monotonic() - author_started_at) * 1000)
             render_started_at = time.monotonic()
@@ -1783,8 +3863,49 @@ class _SourceNativeExecutor:
                 or report.telemetry_status != "available"
                 or blocking
             ):
+                blocking_qids = {
+                    str(qid)
+                    for issue in blocking
+                    for qid in (getattr(issue, "qids", ()) or ())
+                    if str(qid)
+                }
+                metric_by_qid = {
+                    str(item.get("qid") or ""): item
+                    for item in normalized.get("elements", ())
+                    if isinstance(item, Mapping) and str(item.get("qid") or "")
+                }
+                diagnostic_qids = set(blocking_qids)
+                frontier = set(blocking_qids)
+                for _ in range(4):
+                    frontier = {
+                        str(metric_by_qid[qid].get("parent_qid") or "")
+                        for qid in frontier
+                        if qid in metric_by_qid
+                        and str(metric_by_qid[qid].get("parent_qid") or "")
+                    }
+                    diagnostic_qids.update(frontier)
+                diagnostics = [
+                    {
+                        key: item.get(key)
+                        for key in (
+                            "qid",
+                            "parent_qid",
+                            "bbox",
+                            "clientHeight",
+                            "scrollHeight",
+                            "glyph_clipped",
+                            "line_box_clipped",
+                            "glyph_clip_cause",
+                            "text_fragments",
+                            "font_size",
+                            "computed_style",
+                        )
+                    }
+                    for qid in sorted(diagnostic_qids)
+                    if (item := metric_by_qid.get(qid)) is not None
+                ]
                 logger.warning(
-                    "Source-native Chromium quality gate failed slide=%s viewport=%s fonts_ready=%s telemetry=%s issues=%s",
+                    "Source-native Chromium quality gate failed slide=%s viewport=%s fonts_ready=%s telemetry=%s issues=%s metrics=%s",
                     narrative_slide.slide_key,
                     normalized.get("viewport"),
                     normalized.get("fonts_ready"),
@@ -1793,6 +3914,7 @@ class _SourceNativeExecutor:
                         issue.to_dict()
                         for issue in blocking[:20]
                     ],
+                    diagnostics,
                 )
                 raise SourceNativeGenerationError("source_native_browser_quality_failed")
             quality_observations.append(

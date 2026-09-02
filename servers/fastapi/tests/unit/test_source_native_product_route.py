@@ -6,8 +6,10 @@ from datetime import datetime, timezone
 import uuid
 
 import pytest
+from lxml import html as lxml_html
 
 from services.authored_vnext.composition import (
+    SealedContentUnit,
     assert_composition_plan,
     build_composition_plan,
     build_content_integrity_page,
@@ -24,9 +26,14 @@ from services.authored_vnext.narrative_ir.content_graph import (
     seal_content_integrity_receipt,
 )
 from services.authored_vnext.source_native_generation import (
+    _append_flow_text_units,
+    _append_fixed_text_columns,
     _apply_composition_plan,
     _build_slide_quality_observation,
+    _estimated_flow_block_height,
     _flow_text_css,
+    _patch_exact_slot,
+    _select_flow_table_layout,
 )
 from services.authored_vnext.deck_ir.product_adapter import (
     _generation_release_quality_receipts,
@@ -41,6 +48,254 @@ from services.public_quality_receipt_v3_projection import (
     project_persisted_authored_quality_receipt_v3,
 )
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
+
+
+def test_source_native_fixed_columns_preserve_atomic_order_without_overflow_columns() -> None:
+    units = [
+        SealedContentUnit(
+            content_unit_id=(
+                "generated:001:key-message"
+                if index == 0
+                else f"page:paragraph-{index:03d}"
+            ),
+            content_digest="sha256:" + f"{index + 1:064x}",
+            kind="text",
+            required=True,
+            text=("원문 제목" if index == 0 else "가" * 17),
+            data=(),
+            source_page_index=0,
+            source_unit_index=index,
+            asset_occurrence_id=None,
+            asset_digest=None,
+            source_ownership=(),
+            semantic_role="title" if index == 0 else "body",
+        )
+        for index in range(28)
+    ]
+    parent = lxml_html.Element("div")
+    parent.set("data-qid", "flow--columns")
+    slot = {
+        "bounds": {"width": 1100, "height": 469},
+        "spacing": {
+            "insetLeft": 8,
+            "insetTop": 8,
+            "insetRight": 8,
+            "insetBottom": 8,
+        },
+        "capacityEnvelope": {"minimumTextScale": 0.7},
+        "textStyle": {"fontSize": 22},
+    }
+
+    _append_fixed_text_columns(
+        parent,
+        units,
+        slot=slot,
+        adaptive_scale=1.0,
+        role="body",
+        columns_count=2,
+        column_gap=20.0,
+    )
+
+    style = str(parent.get("style") or "")
+    columns = list(parent)
+    resolved_columns = len(columns)
+    assert "column-count" not in style
+    assert resolved_columns > 1
+    assert f"grid-template-columns:repeat({resolved_columns},minmax(0,1fr))" in style
+    assert "width:100%" in style and "overflow:hidden" in style
+    assert len(columns) == resolved_columns
+    assert 2 <= resolved_columns <= 4
+    body_nodes = [
+        node
+        for column in columns
+        for node in column.xpath(".//*[@data-source-boundary-kind='paragraph']")
+    ]
+    body_font_px = float(
+        str(body_nodes[0].get("style")).split("font-size:", 1)[1].split("px", 1)[0]
+    )
+    assert 16.0 <= body_font_px <= 22.0
+    effective_scale = body_font_px / 22.0
+    column_width = (1084.0 - 20.0 * (resolved_columns - 1)) / resolved_columns
+    by_id = {unit.content_unit_id: unit for unit in units}
+    heights = [
+        sum(
+            _estimated_flow_block_height(
+                [by_id[str(node.get("data-source-flow-unit-id"))]],
+                slot=slot,
+                adaptive_scale=effective_scale,
+                role="body",
+                column_width=column_width,
+            )
+            for node in column.xpath(".//*[@data-source-flow-unit-id]")
+        )
+        for column in columns
+    ]
+    assert max(heights) <= 453.0
+    assert max(heights) - min(heights) < max(heights) * 0.2
+    assert [
+        str(node.get("data-source-flow-unit-id"))
+        for column in columns
+        for node in column.xpath(".//*[@data-source-flow-unit-id]")
+    ] == [unit.content_unit_id for unit in units]
+    title = parent.xpath(".//*[@data-source-flow-unit-id='generated:001:key-message']")
+    assert len(title) == 1
+    assert title[0].get("data-source-boundary-kind") == "title-candidate"
+    assert "font-size:32.00px" in str(title[0].get("style") or "")
+
+
+def test_source_native_mixed_layout_selects_vertical_row_and_preserves_images() -> None:
+    text_units = [
+        SealedContentUnit(
+            content_unit_id=f"page:paragraph-{index + 1:03d}",
+            content_digest="sha256:" + f"{index + 1:064x}",
+            kind="text",
+            required=True,
+            text=("고밀도 한글 원문 문장 " * 4).strip(),
+            data=(),
+            source_page_index=0,
+            source_unit_index=index,
+            asset_occurrence_id=None,
+            asset_digest=None,
+            source_ownership=(),
+            semantic_role="body",
+        )
+        for index in range(4)
+    ]
+    image_units = [
+        SealedContentUnit(
+            content_unit_id=f"page:image-{index + 1:03d}",
+            content_digest="sha256:" + f"{index + 101:064x}",
+            kind="image",
+            required=True,
+            text="",
+            data=(),
+            source_page_index=0,
+            source_unit_index=index + len(text_units),
+            asset_occurrence_id=f"occurrence-{index + 1:03d}",
+            asset_digest="sha256:" + f"{index + 201:064x}",
+            source_ownership=(),
+            semantic_role="data",
+        )
+        for index in range(4)
+    ]
+    node = lxml_html.Element("div")
+    node.set("data-qid", "mixed-flow")
+    slot = {
+        "sourceFlowLayout": "text",
+        "sourceFlowRole": "body",
+        "bounds": {"x": 40, "y": 40, "width": 1000, "height": 620},
+        "spacing": {
+            "insetLeft": 10,
+            "insetRight": 10,
+            "insetTop": 10,
+            "insetBottom": 10,
+        },
+        "textStyle": {"fontSize": 8},
+        "capacityEnvelope": {
+            "maxCharacters": 10000,
+            "maxLines": 1000,
+            "contentArea": 10000000,
+            "characterArea": 10,
+            "minimumTextScale": 0.7,
+        },
+        "layoutHints": {"columnCount": 2},
+    }
+    assets = {
+        str(unit.asset_occurrence_id): {
+            "assetDigest": unit.asset_digest,
+            "dataUrl": "data:image/png;base64,iVBORw0KGgo=",
+        }
+        for unit in image_units
+    }
+
+    _patch_exact_slot(
+        node,
+        [*text_units, *image_units],
+        slot=slot,
+        image_assets=assets,
+    )
+
+    wrapper = node.xpath(".//*[@data-qid='mixed-flow--mixed']")[0]
+    image_panel = wrapper.xpath(
+        ".//*[@data-qid='mixed-flow--mixed-images']"
+    )[0]
+    images = image_panel.xpath(".//img[@data-source-block-id]")
+    assert "grid-template-rows" in str(wrapper.get("style") or "")
+    assert "grid-template-columns:repeat(4,minmax(0,1fr))" in str(
+        image_panel.get("style") or ""
+    )
+    assert [image.get("data-source-block-id") for image in images] == [
+        unit.asset_occurrence_id for unit in image_units
+    ]
+    assert len({image.get("data-source-block-id") for image in images}) == 4
+    assert all(
+        "font-size:16.00px" in str(item.get("style") or "")
+        for item in wrapper.xpath(".//*[@data-source-flow-unit-id]")
+    )
+
+
+def test_source_native_table_cells_share_data_driven_estimator_columns() -> None:
+    cells = [
+        SealedContentUnit(
+            content_unit_id=f"source-page-042:table-cell-{index + 1:03d}",
+            content_digest="sha256:" + f"{index + 1:064x}",
+            kind="text",
+            required=True,
+            text=f"표 셀 {index + 1:02d}",
+            data=(),
+            source_page_index=41,
+            source_unit_index=index,
+            asset_occurrence_id=None,
+            asset_digest=None,
+            source_ownership=(),
+            semantic_role="body",
+        )
+        for index in range(36)
+    ]
+    slot = {
+        "bounds": {"width": 1100, "height": 469},
+        "spacing": {
+            "insetLeft": 8,
+            "insetTop": 8,
+            "insetRight": 8,
+            "insetBottom": 8,
+        },
+        "textStyle": {"fontSize": 22},
+    }
+    column_width = 1084.0
+    selected_columns, selected_height = _select_flow_table_layout(
+        cells,
+        slot=slot,
+        adaptive_scale=1.0,
+        role="body",
+        column_width=column_width,
+    )
+
+    parent = lxml_html.Element("div")
+    _append_flow_text_units(
+        parent,
+        cells,
+        slot=slot,
+        adaptive_scale=1.0,
+        role="body",
+        column_width=column_width,
+    )
+
+    assert 4 < selected_columns <= 8
+    assert _estimated_flow_block_height(
+        cells,
+        slot=slot,
+        adaptive_scale=1.0,
+        role="body",
+        column_width=column_width,
+    ) == selected_height
+    grids = parent.xpath("./div[starts-with(@data-qid, 'source-flow-table:')]")
+    assert len(grids) == 1
+    assert (
+        f"grid-template-columns:repeat({selected_columns},minmax(0,1fr))"
+        in str(grids[0].get("style") or "")
+    )
+    assert len(grids[0].xpath("./span")) == 36
 
 
 def test_source_native_flow_text_inherits_container_color_without_pack_override() -> None:
@@ -85,7 +340,7 @@ def test_source_native_quality_observation_uses_occupied_flow_regions_and_action
         "elements": [
             {"qid": "flow", "css_visible": True, "bbox": {"x": 10, "y": 10, "width": 600, "height": 500}},
             {"qid": "empty", "css_visible": False, "bbox": {"x": 0, "y": 0, "width": 0, "height": 0}},
-            {**common, "qid": "source-flow:page:title-candidate-001", "parent_qid": "flow--columns", "font_size": 40, "bbox": {"x": 20, "y": 20, "width": 240, "height": 52}},
+            {**common, "qid": "source-flow:generated:001:key-message", "parent_qid": "flow--columns", "font_size": 40, "bbox": {"x": 20, "y": 20, "width": 240, "height": 52}},
             {**common, "qid": "source-flow:page:paragraph-001", "parent_qid": "flow--columns", "font_size": 16, "bbox": {"x": 330, "y": 20, "width": 240, "height": 120}},
             {"qid": "flow--mixed-images", "bbox": {"x": 310, "y": 100, "width": 300, "height": 300}},
             {

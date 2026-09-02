@@ -7,6 +7,7 @@ flattening paragraph boundaries, or cutting inside a sentence or word.
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 import hashlib
@@ -76,6 +77,30 @@ _TABLE_SEPARATOR = re.compile(r"^:?-{3,}:?$")
 _SENTENCE = re.compile(
     r".*?(?:[.!?\u3002\uff01\uff1f]+(?:[\"'\u201d\u2019)\]]+)?(?=\s|$)|$)",
     re.DOTALL,
+)
+_PAGE_NUMBER = re.compile(r"^\s*\d{1,3}\s*/\s*\d{1,3}\s*$")
+_EYEBROW = re.compile(r"^\s*\d{1,2}\s*(?:[·.\-—]|[|:])\s*\S+")
+_PROCESS_STEP = re.compile(r"^0*[1-9]\d{0,2}$")
+_PROCESS_SECTION = re.compile(r"^\s*\d{1,2}\s*[—-]\s*\d{1,2}(?:\s+\S.*)?$")
+_KPI_VALUE = re.compile(
+    r"^\s*(?:\d+(?:[.,]\d+)?\s*(?:%|건|개|명|주|일|시간|분|초|원|억|만|배|MD)"
+    r"|\d+(?:[.,]\d+)?\s*(?:→|->)\s*\d+(?:[.,]\d+)?(?:\s*[A-Za-z가-힣]+)?)\s*$",
+    re.IGNORECASE,
+)
+
+_SEMANTIC_FIELDS = (
+    ("semantic-role", "semanticRole"),
+    ("semantic-group-kind", "semanticGroupKind"),
+    ("semantic-group-id", "semanticGroupId"),
+    ("semantic-group-ordinal", "semanticGroupOrdinal"),
+    ("semantic-table-row", "tableRow"),
+    ("semantic-table-column", "tableColumn"),
+    ("semantic-table-row-span", "tableRowSpan"),
+    ("semantic-table-column-span", "tableColumnSpan"),
+    ("semantic-table-header", "tableHeader"),
+    ("semantic-image-kind", "imageKind"),
+    ("semantic-image-aspect-class", "imageAspectClass"),
+    ("semantic-image-aspect-ratio", "imageAspectRatio"),
 )
 
 
@@ -529,6 +554,394 @@ def _manifest_text_units(
     return units
 
 
+def _manifest_block_texts(block: Mapping[str, object]) -> tuple[str, ...]:
+    """Return normalized paragraph values for recurrence classification only."""
+
+    payload = _mapping(_field(block, "payload"))
+    paragraphs = _field(payload, "paragraphs")
+    values: list[str] = []
+    if isinstance(paragraphs, Sequence) and not isinstance(
+        paragraphs, (str, bytes, bytearray)
+    ):
+        values.extend(
+            normalized
+            for paragraph in paragraphs
+            if (normalized := _normalize_inline(
+                str(_field(_mapping(paragraph), "text") or "")
+            ))
+        )
+    if values:
+        return tuple(values)
+    return tuple(
+        normalized
+        for item in str(_field(payload, "text") or "")
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
+        .split("\n")
+        if (normalized := _normalize_inline(item))
+    )
+
+
+def _recurring_text_values(
+    raw_units: Sequence[object], *, page_count: int
+) -> frozenset[str]:
+    counts: Counter[str] = Counter()
+    for raw_unit in raw_units:
+        unit = _mapping(raw_unit)
+        raw_blocks = _field(unit, "blocks")
+        if not isinstance(raw_blocks, Sequence) or isinstance(
+            raw_blocks, (str, bytes, bytearray)
+        ):
+            raise SourceUnitizationError("source_content_manifest_invalid")
+        page_text_values: list[str] = []
+        for raw_block in sorted(
+            raw_blocks,
+            key=lambda item: (
+                int(_field(_mapping(item), "order") or 0),
+                str(
+                    _field(
+                        _mapping(item), "sourceBlockId", "source_block_id"
+                    )
+                    or ""
+                ),
+            ),
+        ):
+            block = _mapping(raw_block)
+            if str(_field(block, "kind") or "") == "text":
+                page_text_values.extend(_manifest_block_texts(block))
+        # The leading title stack is structural even when a section deck repeats
+        # its eyebrow or lede. Only later repeated copy can be compact footer.
+        counts.update(set(page_text_values[3:]))
+    threshold = max(3, (page_count + 1) // 2)
+    return frozenset(value for value, count in counts.items() if count >= threshold)
+
+
+def _image_semantics(
+    payload: Mapping[str, object], *, neighborhood: Sequence[str]
+) -> tuple[str, str, float]:
+    geometry_value = _field(payload, "geometry")
+    if not isinstance(geometry_value, Mapping):
+        return "media", "unknown", 0.0
+    width = float(_field(geometry_value, "cx", "width") or 0)
+    height = float(_field(geometry_value, "cy", "height") or 0)
+    if width <= 0 or height <= 0:
+        return "media", "unknown", 0.0
+    ratio = width / height
+    if ratio >= 1.35:
+        aspect_class = "landscape"
+    elif ratio <= 0.74:
+        aspect_class = "portrait"
+    else:
+        aspect_class = "square"
+
+    alt_text = _normalize_inline(str(_field(payload, "altText", "alt_text") or ""))
+    context = " ".join((alt_text, *neighborhood)).lower()
+    size_bytes = max(0, int(_field(payload, "sizeBytes", "size_bytes") or 0))
+    area = width * height
+    decorative_signals = (
+        "decorative",
+        "decoration",
+        "background",
+        "ornament",
+        "divider",
+        "장식",
+    )
+    icon_signals = (
+        "icon",
+        "logo",
+        "badge",
+        "symbol",
+        "transparent",
+        "아이콘",
+        "로고",
+        "심볼",
+        "투명",
+    )
+    evidence_signals = (
+        "screenshot",
+        "screen capture",
+        "dashboard",
+        "console",
+        "product screen",
+        "스크린샷",
+        "화면 캡처",
+        "대시보드",
+        "제품 화면",
+    )
+    if any(signal in context for signal in decorative_signals):
+        image_kind = "decorative"
+    elif any(signal in context for signal in icon_signals) or (
+        aspect_class == "square"
+        and (
+            (width <= 1_500_000 and height <= 1_500_000)
+            or 0 < size_bytes <= 64 * 1024
+        )
+    ):
+        image_kind = "icon"
+    elif aspect_class == "landscape" and (
+        any(signal in context for signal in evidence_signals)
+        or (area >= 6_000_000_000_000 and size_bytes >= 80 * 1024)
+    ):
+        image_kind = "evidence"
+    else:
+        image_kind = "media"
+    return image_kind, aspect_class, round(ratio, 4)
+
+
+def _image_neighborhood(
+    blocks: Sequence[Mapping[str, object]], *, block_index: int
+) -> tuple[str, ...]:
+    values: list[str] = []
+    for index in range(max(0, block_index - 2), min(len(blocks), block_index + 3)):
+        if index == block_index:
+            continue
+        block = blocks[index]
+        if str(_field(block, "kind") or "") == "text":
+            values.extend(_manifest_block_texts(block))
+    return tuple(values)
+
+
+def _assign_semantic_group(
+    prepared: list[dict[str, object]],
+    indexes: Sequence[int],
+    *,
+    page_index: int,
+    group_kind: str,
+    group_number: int,
+    roles: Sequence[str],
+) -> None:
+    group_id = (
+        f"source-page-{page_index + 1:03d}:{group_kind}-{group_number:03d}"
+    )
+    for ordinal, (item_index, role) in enumerate(zip(indexes, roles, strict=True)):
+        item = prepared[item_index]
+        item["semanticRole"] = role
+        item["semanticGroupKind"] = group_kind
+        item["semanticGroupId"] = group_id
+        item["semanticGroupOrdinal"] = ordinal
+
+
+def _semantic_metadata(item: Mapping[str, object]) -> list[dict[str, object]]:
+    binding_id = str(item["sourceBindingId"])
+    return [
+        {
+            "datumKey": datum_key,
+            "label": datum_key,
+            "value": item[item_key],
+            "sourceBindingId": binding_id,
+        }
+        for datum_key, item_key in _SEMANTIC_FIELDS
+        if item_key in item
+    ]
+
+
+def _decorate_manifest_semantics(
+    prepared: list[dict[str, object]],
+    *,
+    page_index: int,
+) -> None:
+    """Add digest-bound semantic grouping without changing source units or order."""
+
+    group_counts: Counter[str] = Counter()
+
+    def assign(indexes: Sequence[int], kind: str, roles: Sequence[str]) -> None:
+        group_counts[kind] += 1
+        _assign_semantic_group(
+            prepared,
+            indexes,
+            page_index=page_index,
+            group_kind=kind,
+            group_number=group_counts[kind],
+            roles=roles,
+        )
+
+    footer_indexes = [
+        index for index, item in enumerate(prepared) if item.get("compactFooter")
+    ]
+    if footer_indexes:
+        footer_run = [footer_indexes[0]]
+        for footer_index in footer_indexes[1:]:
+            if footer_index == footer_run[-1] + 1:
+                footer_run.append(footer_index)
+                continue
+            assign(
+                footer_run,
+                "compact-footer",
+                ["compact-footer"] * len(footer_run),
+            )
+            footer_run = [footer_index]
+        assign(
+            footer_run,
+            "compact-footer",
+            ["compact-footer"] * len(footer_run),
+        )
+
+    table_groups: dict[str, list[int]] = {}
+    for index, item in enumerate(prepared):
+        if "tableRow" in item:
+            table_groups.setdefault(str(item["sourceBindingId"]), []).append(index)
+    for indexes in table_groups.values():
+        roles = [
+            "table-header"
+            if int(prepared[index]["tableRow"]) == 0
+            else "table-row-header"
+            if int(prepared[index]["tableColumn"]) == 0
+            else "table-cell"
+            for index in indexes
+        ]
+        assign(indexes, "table-matrix", roles)
+
+    title_candidates = [
+        index
+        for index, item in enumerate(prepared)
+        if item.get("kind") == "text"
+        and "semanticGroupId" not in item
+        and item.get("boundaryKind") != "table-cell"
+    ]
+    if title_candidates:
+        boundary_title = next(
+            (
+                index
+                for index in title_candidates
+                if prepared[index].get("boundaryKind") == "title-candidate"
+            ),
+            title_candidates[0],
+        )
+        stack: list[int] = []
+        roles: list[str] = []
+        position = title_candidates.index(boundary_title)
+        first = boundary_title
+        first_text = str(prepared[first].get("text") or "")
+        previous = title_candidates[position - 1] if position > 0 else None
+        if previous is not None and previous != boundary_title - 1:
+            previous = None
+        previous_text = (
+            str(prepared[previous].get("text") or "")
+            if previous is not None
+            else ""
+        )
+        if previous is not None and _EYEBROW.match(previous_text):
+            stack.extend((previous, boundary_title))
+            roles.extend(("eyebrow", "title"))
+            if (
+                position + 1 < len(title_candidates)
+                and title_candidates[position + 1] == boundary_title + 1
+                and not _PROCESS_STEP.fullmatch(
+                    str(prepared[title_candidates[position + 1]].get("text") or "")
+                )
+            ):
+                stack.append(title_candidates[position + 1])
+                roles.append("lede")
+        elif (
+            _EYEBROW.match(first_text)
+            and position + 1 < len(title_candidates)
+            and title_candidates[position + 1] == first + 1
+        ):
+            stack.extend((first, title_candidates[position + 1]))
+            roles.extend(("eyebrow", "title"))
+            if (
+                position + 2 < len(title_candidates)
+                and title_candidates[position + 2] == first + 2
+                and not _PROCESS_STEP.fullmatch(
+                    str(prepared[title_candidates[position + 2]].get("text") or "")
+                )
+            ):
+                stack.append(title_candidates[position + 2])
+                roles.append("lede")
+        else:
+            stack.append(boundary_title)
+            roles.append("title")
+            if (
+                position + 1 < len(title_candidates)
+                and title_candidates[position + 1] == boundary_title + 1
+            ):
+                stack.append(title_candidates[position + 1])
+                roles.append("lede")
+        assign(stack, "title-stack", roles)
+
+    # A process step is a retained number/heading/body triple plus its
+    # immediately preceding visual when present. Keeping that visual inside
+    # the same semantic group prevents column packing from separating a
+    # screenshot/icon from the step it explains.
+    for index in range(max(0, len(prepared) - 2)):
+        members = (index, index + 1, index + 2)
+        if any("semanticGroupId" in prepared[item] for item in members):
+            continue
+        if not all(prepared[item].get("kind") == "text" for item in members):
+            continue
+        number, heading, body = (str(prepared[item].get("text") or "") for item in members)
+        if (
+            _PROCESS_STEP.fullmatch(number)
+            and 1 <= len(heading) <= 60
+            and body
+            and not _PROCESS_STEP.fullmatch(heading)
+            and not _PROCESS_STEP.fullmatch(body)
+        ):
+            process_members = members
+            process_roles: tuple[str, ...] = (
+                "step-number",
+                "step-heading",
+                "step-body",
+            )
+            if (
+                index > 0
+                and prepared[index - 1].get("kind") == "image"
+                and prepared[index - 1].get("imageKind")
+                not in {"evidence", "ui", "product-screen", "screenshot"}
+                and "semanticGroupId" not in prepared[index - 1]
+            ):
+                process_members = (index - 1, *members)
+                process_roles = (
+                    "step-media",
+                    "step-number",
+                    "step-heading",
+                    "step-body",
+                )
+            assign(
+                process_members,
+                "process-step",
+                process_roles,
+            )
+
+    # Preserve image/text interleaving while identifying a generic media card.
+    for index in range(max(0, len(prepared) - 2)):
+        members = (index, index + 1, index + 2)
+        if any("semanticGroupId" in prepared[item] for item in members):
+            continue
+        if prepared[index].get("kind") != "image" or not all(
+            prepared[item].get("kind") == "text" for item in members[1:]
+        ):
+            continue
+        heading = str(prepared[index + 1].get("text") or "")
+        body = str(prepared[index + 2].get("text") or "")
+        if 1 <= len(heading) <= 60 and len(body) > len(heading):
+            assign(members, "media-card", ("media", "heading", "body"))
+
+    for index in range(max(0, len(prepared) - 1)):
+        members = (index, index + 1)
+        if any("semanticGroupId" in prepared[item] for item in members):
+            continue
+        if not all(prepared[item].get("kind") == "text" for item in members):
+            continue
+        value = str(prepared[index].get("text") or "")
+        label = str(prepared[index + 1].get("text") or "")
+        if _KPI_VALUE.fullmatch(value) and label:
+            assign(members, "kpi", ("kpi-value", "kpi-label"))
+
+    for index, item in enumerate(prepared):
+        if "semanticGroupId" in item:
+            continue
+        text = str(item.get("text") or "")
+        role = (
+            "section-heading"
+            if item.get("kind") == "text" and _PROCESS_SECTION.match(text)
+            else "media"
+            if item.get("kind") == "image"
+            else "body"
+        )
+        assign((index,), "body-flow", (role,))
+
+
 def build_manifest_source_content_admission(
     *,
     manifest: object,
@@ -565,6 +978,9 @@ def build_manifest_source_content_admission(
         str(_field(_mapping(item), "sourceUnitId", "source_unit_id") or ""): _mapping(item)
         for item in raw_units
     }
+    recurring_texts = _recurring_text_values(
+        raw_units, page_count=expected_slide_count
+    )
     pages: list[dict[str, object]] = []
     page_digests: list[str] = []
     for page_index, raw_slide in enumerate(raw_slides):
@@ -594,7 +1010,7 @@ def build_manifest_source_content_admission(
         )
         prepared: list[dict[str, object]] = []
         title_marked = False
-        for block in blocks:
+        for block_index, block in enumerate(blocks):
             block_id = str(
                 _field(block, "sourceBlockId", "source_block_id") or ""
             )
@@ -623,6 +1039,10 @@ def build_manifest_source_content_admission(
                             "kind": "text",
                             "text": text,
                             "boundaryKind": resolved_kind,
+                            "compactFooter": (
+                                text in recurring_texts
+                                or bool(_PAGE_NUMBER.fullmatch(text))
+                            ),
                             "sourceBindingId": block_id,
                             "sourceContentDigest": block_digest,
                         }
@@ -632,14 +1052,24 @@ def build_manifest_source_content_admission(
                 rows = _field(payload, "rows")
                 if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
                     raise SourceUnitizationError("source_content_manifest_invalid")
-                for row in rows:
+                for row_index, row in enumerate(rows):
                     if not isinstance(row, Sequence) or isinstance(row, (str, bytes)):
                         raise SourceUnitizationError("source_content_manifest_invalid")
-                    for cell in row:
+                    for column_index, cell in enumerate(row):
                         cell_value = _mapping(cell)
                         cell_text = _normalize_inline(str(_field(cell_value, "text") or ""))
                         if not cell_text:
                             continue
+                        resolved_row = int(_field(cell_value, "row") or row_index)
+                        resolved_column = int(
+                            _field(cell_value, "column") or column_index
+                        )
+                        row_span = max(
+                            1, int(_field(cell_value, "rowSpan", "row_span") or 1)
+                        )
+                        column_span = max(
+                            1, int(_field(cell_value, "gridSpan", "grid_span") or 1)
+                        )
                         for text, _, _ in _split_complete_sentences(
                             cell_text, capacity=body_capacity
                         ):
@@ -650,6 +1080,11 @@ def build_manifest_source_content_admission(
                                     "boundaryKind": "table-cell",
                                     "sourceBindingId": block_id,
                                     "sourceContentDigest": block_digest,
+                                    "tableRow": resolved_row,
+                                    "tableColumn": resolved_column,
+                                    "tableRowSpan": row_span,
+                                    "tableColumnSpan": column_span,
+                                    "tableHeader": resolved_row == 0,
                                 }
                             )
             elif kind == "image":
@@ -660,12 +1095,21 @@ def build_manifest_source_content_admission(
                 )
                 if not asset_id or not asset_digest.startswith("sha256:"):
                     raise SourceUnitizationError("source_content_image_occurrence_mismatch")
+                image_kind, aspect_class, aspect_ratio = _image_semantics(
+                    payload,
+                    neighborhood=_image_neighborhood(
+                        blocks, block_index=block_index
+                    ),
+                )
                 prepared.append(
                     {
                         "kind": "image",
                         "assetOccurrenceId": block_id,
                         "assetDigest": asset_digest,
                         "assetId": asset_id,
+                        "imageKind": image_kind,
+                        "imageAspectClass": aspect_class,
+                        "imageAspectRatio": aspect_ratio,
                         "sourceBindingId": block_id,
                         "sourceContentDigest": block_digest,
                     }
@@ -684,6 +1128,7 @@ def build_manifest_source_content_admission(
                     "source_native_title_candidate_capacity_exceeded"
                 )
             first_text["boundaryKind"] = "title-candidate"
+        _decorate_manifest_semantics(prepared, page_index=page_index)
         content_units: list[dict[str, object]] = []
         boundary_counts: dict[str, int] = {}
         for item in prepared:
@@ -692,7 +1137,7 @@ def build_manifest_source_content_admission(
             content_unit_id = (
                 f"source-page-{page_index + 1:03d}:{boundary}-{boundary_counts[boundary]:03d}"
             )
-            payload: dict[str, object] = {"data": []}
+            payload: dict[str, object] = {"data": _semantic_metadata(item)}
             if item["kind"] == "text":
                 payload["text"] = item["text"]
             else:
