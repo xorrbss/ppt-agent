@@ -1062,6 +1062,18 @@ async def activate_workspace_operation(
     return operation, False
 
 
+def _event_status(payload: Any) -> str | None:
+    """Return the event's operation status, accepting the runner's ``state`` key."""
+
+    if not isinstance(payload, dict):
+        return None
+    for key in ("status", "state"):
+        value = payload.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
 def _event_to_wire(
     event: WorkspaceOperationEvent,
     *,
@@ -1139,7 +1151,13 @@ def _event_to_wire(
         "cursor": str(event.cursor) if event.cursor is not None else None,
         "operation_anchor_position": operation_anchor_position,
         "type": event.event_type,
-        "status": payload.get("status") if isinstance(payload, dict) else None,
+        # The runner records an outcome under ``state`` and the public contract
+        # carries it as ``status``; the client applies only ``status`` to its
+        # operation card. Reading ``status`` alone shipped every terminal
+        # transition as a version bump with no outcome, so a dead-lettered or
+        # deadline-exceeded generation stayed "in progress" at its last percent
+        # with a cancel button until the page was reloaded.
+        "status": _event_status(payload),
         "message": payload.get("message") if isinstance(payload, dict) else None,
         "progress": (
             payload.get("progress", payload.get("percent"))

@@ -55,6 +55,8 @@ const TERMINAL_OPERATION_STATUSES = new Set([
   "failed",
   "cancelled",
   "dead_letter",
+  // The admission deadline ends a public generation as durably as a failure.
+  "deadline_exceeded",
 ]);
 
 function isTerminalWorkspaceEvent(event: {
