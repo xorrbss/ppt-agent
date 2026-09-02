@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "key": "source-content.verbatim-presentation-tolerance",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Verbatim DOM binding accepts presentation-only drift the authoring prompt already permits: any marker glyph may be omitted, and a pipe or arrow may stay attached to the edge of the element beside it.",
+  "scope": [
+    "source-content",
+    "authored-generation"
+  ],
+  "invariants": [
+    "Every source character outside a marker is rendered exactly, including blank fields, punctuation, and the separators between a span's own runs.",
+    "Runs of one block still appear in source order, and each run is still owned by exactly one visible DOM element.",
+    "Stamping (text_stamping) and the Chromium readback (browser_readback) accept the same renderings through SourceRunProjection.accepts.",
+    "accepted_texts keeps returning the canonical forms so receipts and repair logic are unchanged."
+  ],
+  "forbidden": [
+    "Accept a dropped or moved pipe/arrow between two runs bound to one element.",
+    "Accept an item split across elements at anything but a projected run boundary.",
+    "Accept items of one block in a different order than the source."
+  ],
+  "rationale": [
+    "The verbatim prompt tells the model bullet glyphs, circled numbers and leading arrows may be drawn separately or omitted; the gate only accepted the whole marker kept or the whole marker dropped, so '• ① 타깃:' rendered as '① 타깃:' failed.",
+    "A pipe joins two independent labels and the template decides the slot of each; models regularly leave the glyph on the first label ('꿀벌쌤 |'), which is layout, not a text change.",
+    "Measured on the stored deck of job 688e184a: 26/35 slides passed stamping before, 30/35 after; on job a5a906bc 31/35 before, 32/35 after; the remaining failures are items split mid-run or reordered, which stay rejected."
+  ],
+  "evidence": [
+    "servers/fastapi/services/source_content/source_runs.py",
+    "servers/fastapi/services/source_content/text_stamping.py",
+    "servers/fastapi/services/source_content/browser_readback.py",
+    "servers/fastapi/tests/unit/test_source_content_source_runs.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-02T17:45:00.0000000+00:00"
+}

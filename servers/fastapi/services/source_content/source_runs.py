@@ -17,6 +17,7 @@ block ID so existing receipts are unchanged for single-element blocks.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 import re
 
 _MARKER_GLYPHS = "•·◦▪▫■□◆◇●○★☆✓✔✗☐☑▶►➤➜→⇒↓⇨‣⁃∙*-–—"
@@ -101,9 +102,68 @@ class SourceRunProjection:
             return (full, self.text[first.body_begin : self.runs[end].end])
         return (full,)
 
+    def accepts(self, start: int, end: int, rendered: object) -> bool:
+        """Return whether one element's rendered text satisfies a span.
+
+        The canonical forms from :meth:`accepted_texts` are accepted, and so
+        is every rendering that keeps the span's source characters intact
+        while treating only presentation loosely:
+
+        * any glyph of any run's marker may be omitted (a CSS bullet, a drawn
+          number badge, a list that keeps ``①`` but drops ``•``);
+        * a pipe or arrow that joins this span to its neighbour on the same
+          line may stay attached to the element's edge (``꿀벌쌤 |`` beside
+          ``숏폼대행 1인사업자 홀로서기``).
+
+        Bodies, blank fields, punctuation, and the separators *between* the
+        span's own runs must still match character for character.
+        """
+
+        self._check_span(start, end)
+        return _span_pattern(self, start, end).fullmatch(normalize_source_text(rendered)) is not None
+
     def _check_span(self, start: int, end: int) -> None:
         if not (0 <= start <= end < len(self.runs)):
             raise ValueError("source run span is out of range")
+
+
+@lru_cache(maxsize=4096)
+def _span_pattern(projection: SourceRunProjection, start: int, end: int) -> re.Pattern[str]:
+    """Compile the tolerant matcher for one run span (see ``accepts``)."""
+
+    runs = projection.runs
+    parts: list[str] = []
+    if start > 0 and runs[start - 1].line == runs[start].line:
+        before = projection.text[runs[start - 1].end : runs[start].begin].strip()
+        if before:
+            parts.append(rf"(?:{re.escape(before)}\s*)?")
+    for index in range(start, end + 1):
+        run = runs[index]
+        if index > start:
+            parts.append(re.escape(projection.text[runs[index - 1].end : run.begin]))
+        for token in _marker_tokens(run.marker):
+            parts.append(rf"(?:{re.escape(token)}\s*)?")
+        parts.append(re.escape(run.body))
+    if end + 1 < len(runs) and runs[end + 1].line == runs[end].line:
+        after = projection.text[runs[end].end : runs[end + 1].begin].strip()
+        if after:
+            parts.append(rf"(?:\s*{re.escape(after)})?")
+    return re.compile("".join(parts))
+
+
+def _marker_tokens(marker: str) -> list[str]:
+    """Split a peeled marker back into the glyphs ``_split_marker`` matched."""
+
+    tokens: list[str] = []
+    position = 0
+    while position < len(marker):
+        match = _MARKER.match(marker, position)
+        if match is None or match.end() == position:  # pragma: no cover - markers are _MARKER matches
+            tokens.append(marker[position:].strip())
+            break
+        tokens.append(match.group(0).strip())
+        position = match.end()
+    return [token for token in tokens if token]
 
 
 def project_source_runs(raw_text: object) -> SourceRunProjection:

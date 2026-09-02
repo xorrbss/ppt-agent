@@ -306,3 +306,89 @@ def test_a_pipe_frees_the_order_of_the_run_after_it() -> None:
 
     for sequence in ("영업 → 상담 → 제안", "• □ 하나 • □ 둘", "첫 줄\n둘째 줄"):
         assert not any(run.order_free_before for run in project_source_runs(sequence).runs)
+
+
+def test_accepts_treats_markers_and_edge_separators_as_presentation() -> None:
+    fields = project_source_runs("• ① 타깃: __________________\n• ② 상품: __________________")
+    assert fields.accepts(0, 1, "① 타깃: __________________")
+    assert fields.accepts(0, 1, "타깃: __________________")
+    assert fields.accepts(0, 1, "• ① 타깃: __________________")
+    assert not fields.accepts(0, 1, "① 타깃 __________________")
+    assert not fields.accepts(0, 0, "① 상품:")
+    header = project_source_runs("꿀벌쌤 | 숏폼대행 1인사업자 홀로서기")
+    assert header.accepts(0, 0, "꿀벌쌤 |")
+    assert header.accepts(1, 1, "| 숏폼대행 1인사업자 홀로서기")
+    assert header.accepts(0, 1, "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기")
+    assert not header.accepts(0, 0, "꿀벌쌤 | 숏폼")
+    assert not header.accepts(0, 1, "꿀벌쌤 숏폼대행 1인사업자 홀로서기")
+    bullets = project_source_runs("• 사업 정의\n• 편집자와의 차이\n• 업무 범위")
+    assert bullets.accepts(0, 1, "사업 정의 편집자와의 차이")
+    assert bullets.accepts(0, 2, "사업 정의 • 편집자와의 차이 업무 범위")
+    assert not bullets.accepts(0, 1, "편집자와의 차이 사업 정의")
+    arrows = project_source_runs("영업 → 상담 → 제안")
+    assert arrows.accepts(0, 0, "영업 →")
+    assert arrows.accepts(1, 1, "→ 상담 →")
+    assert not arrows.accepts(0, 2, "영업 상담 제안")
+
+
+def test_stamp_binds_what_the_verbatim_prompt_allows() -> None:
+    # A list that keeps the circled number but draws the bullet with CSS,
+    # each label sharing one element with its blank field.
+    fields = "• ① 타깃: __________________\n• ② 상품: __________________"
+    html = "<ul><li>① 타깃: __________________</li><li>② 상품: __________________</li></ul>"
+    stamped = stamp_source_block_ids(html, [("f", fields)])
+    assert '<li data-source-block-id="f:run:0-1"' in stamped
+    assert '<li data-source-block-id="f:run:2-3"' in stamped
+    assert stamp_source_block_ids(stamped, [("f", fields)]) == stamped
+    # A pipe left attached to the eyebrow beside the title it joined.
+    header = '<div class="eyebrow">꿀벌쌤 |</div><div class="title">숏폼대행 1인사업자 홀로서기</div>'
+    stamped = stamp_source_block_ids(header, [("h", "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기")])
+    assert '<div class="eyebrow" data-source-block-id="h:run:0"' in stamped
+    assert '<div class="title" data-source-block-id="h:run:1"' in stamped
+    # Two items sharing one element without their bullets, in source order.
+    bullets = "• 사업 정의\n• 편집자와의 차이\n• 업무 범위"
+    shared = '<div class="copy">사업 정의<br>편집자와의 차이</div><div class="side">업무 범위</div>'
+    stamped = stamp_source_block_ids(shared, [("b", bullets)])
+    assert '<div class="copy" data-source-block-id="b:run:0-1"' in stamped
+    assert '<div class="side" data-source-block-id="b:run:2"' in stamped
+    # The same items out of source order still fail closed.
+    with pytest.raises(BrowserSourceReadbackError) as error:
+        stamp_source_block_ids(
+            '<div class="side">업무 범위</div><div class="copy">사업 정의<br>편집자와의 차이</div>', [("b", bullets)]
+        )
+    assert "run 2" in error.value.detail
+    # A dropped internal pipe is dropped source text, not presentation.
+    with pytest.raises(BrowserSourceReadbackError):
+        stamp_source_block_ids(
+            "<div>꿀벌쌤 숏폼대행 1인사업자 홀로서기</div>", [("h", "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기")]
+        )
+
+
+def test_stamp_repairs_an_appended_full_stop_after_a_drawn_marker() -> None:
+    stamped = stamp_source_block_ids('<div class="num">①</div><h3>누구에게.</h3>', [("e", "① 누구에게")])
+    assert '<h3 data-source-block-id="e"' in stamped
+    assert ">누구에게</h3>" in stamped
+
+
+def test_browser_readback_accepts_the_same_presentation_drift_as_stamping() -> None:
+    manifest = _manifest()
+    manifest["units"][0]["blocks"].append(
+        {"sourceBlockId": "b3", "kind": "text", "order": 2, "payload": {"text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"}}
+    )
+    outline = {"slides": [{"sourceUnitId": "unit-1", "sourceIndex": 0, "readingOrder": ["b1", "b2", "b3"]}]}
+    metrics = _metrics(
+        _element("b1", "원문 제목", 0, role="title"),
+        _element("b2", "프로필 사진 한 줄 소개", 1),
+        _element("b3:run:0", "꿀벌쌤 |", 2),
+        _element("b3:run:1", "숏폼대행 1인사업자 홀로서기", 3),
+    )
+    result = verify_browser_source_readback(manifest=manifest, outline=outline, browser_metrics=metrics)
+    assert result.passed
+    drifted = _metrics(
+        _element("b1", "원문 제목", 0, role="title"),
+        _element("b2", "한 줄 소개 프로필 사진", 1),
+        _element("b3", "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기", 2),
+    )
+    with pytest.raises(BrowserSourceReadbackError) as error:
+        verify_browser_source_readback(manifest=manifest, outline=outline, browser_metrics=drifted)
+    assert "b2" in error.value.block_ids

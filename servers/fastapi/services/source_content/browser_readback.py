@@ -15,8 +15,9 @@ manifest block, so receipts keyed by block ID are unchanged.
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from functools import partial
 import hashlib
 import math
 import re
@@ -362,13 +363,14 @@ class _Observation:
 
     def text_failed(
         self,
-        accepted: Sequence[str],
+        accepts: Callable[[str], bool] | None,
         expected_qid: str,
         qid_counts: Counter[str],
         seen_qids: set[str],
     ) -> bool:
         return (
-            not self.qid
+            accepts is None
+            or not self.qid
             or self.qid in seen_qids
             or self.qid != expected_qid
             or qid_counts.get(self.qid, 0) != 1
@@ -378,8 +380,7 @@ class _Observation:
             or not self.clipping_known
             or self.clipped
             or not self.occlusion_known
-            or not accepted
-            or self.rendered not in accepted
+            or not accepts(self.rendered)
             or not self.semantic_role
         )
 
@@ -566,7 +567,8 @@ def _verify_run_partition(
     for _, start, end, metric in ordered_runs:
         observation = _observe(metric, *canvas)
         run_id = source_run_binding_id(block_id, start, end, projection.run_count)
-        if observation.text_failed(projection.accepted_texts(start, end), deterministic_source_qid(run_id), qid_counts, seen_qids):
+        accepts = partial(projection.accepts, start, end)
+        if observation.text_failed(accepts, deterministic_source_qid(run_id), qid_counts, seen_qids):
             failed = True
         seen_qids.add(observation.qid)
         observed.append((start, end, projection.run_count, observation))
@@ -724,8 +726,8 @@ def verify_browser_source_readback(*, manifest: Any, outline: Any, browser_metri
             expected_qid = declared_qid or deterministic_source_qid(block_id)
             if block_kind == "text":
                 projection = _block_projection(block)
-                accepted = projection.accepted_texts(*projection.whole) if projection is not None else ()
-                failed = observation.text_failed(accepted, expected_qid, qid_counts, seen_qids)
+                accepts = partial(projection.accepts, *projection.whole) if projection is not None else None
+                failed = observation.text_failed(accepts, expected_qid, qid_counts, seen_qids)
             else:
                 failed = (
                     not observation.qid

@@ -5,8 +5,9 @@ one element whose complete rendered text equals the block when one exists;
 otherwise its projected runs (lines, bullet items, arrow/pipe steps, tab-gapped
 cells) are covered by the longest contiguous spans that each equal one
 element, in source order.  Every bound span gets ``data-source-block-id`` with
-the run identity from :mod:`services.source_content.source_runs`.  A run
-without an exact DOM element still fails closed.
+the run identity from :mod:`services.source_content.source_runs`.  "Equals"
+is ``SourceRunProjection.accepts``: source characters verbatim, markers and
+edge separators presentational.  A run without such an element fails closed.
 
 Repeats are tolerated only when bounded: identical text that matches several
 elements binds the first in document order, and the remaining exact
@@ -177,19 +178,16 @@ def _find_span(
     """
 
     binding_id = source_run_binding_id(block_id, start, end, projection.run_count)
-    accepted = projection.accepted_texts(start, end)
     visible = [node for node in parser.nodes if not node.hidden and node.start > after]
     texts = {id(node): normalize_source_text(parser.node_text(node)) for node in visible}
-    matching = [node for node in visible if texts[id(node)] in accepted]
+    matching = [node for node in visible if projection.accepts(start, end, texts[id(node)])]
     surplus_by_node: dict[int, str] = {}
     if not matching:
         for node in visible:
-            for expected in accepted:
-                surplus = terminal_punctuation_surplus(texts[id(node)], expected)
-                if surplus:
-                    surplus_by_node[id(node)] = surplus
-                    matching.append(node)
-                    break
+            surplus = _span_punctuation_surplus(projection, start, end, texts[id(node)])
+            if surplus:
+                surplus_by_node[id(node)] = surplus
+                matching.append(node)
     candidates = [node for node in matching if not node.stamped or node.source_id == binding_id]
     if not candidates:
         return None, bool(matching)
@@ -207,6 +205,34 @@ def _find_span(
     ]
     node = candidates[0]
     return _SpanBinding(start, end, node, binding_id, surplus_by_node.get(id(node))), False
+
+
+def _span_punctuation_surplus(
+    projection: SourceRunProjection, start: int, end: int, actual: str
+) -> str | None:
+    """Surplus terminal punctuation on a span rendering, if repairing it binds.
+
+    ``terminal_punctuation_surplus`` decides which surplus is repairable; the
+    span's tolerant matcher decides whether the text left after the repair is
+    the span, so an omitted marker or an attached pipe does not block the same
+    one-mark repair a canonical rendering gets.
+    """
+
+    if not actual:
+        return None
+    last = actual[-1]
+    if last in _TERMINAL_MARKS:
+        repaired = actual.rstrip(last)
+        candidates = (repaired + last, repaired)
+    else:
+        candidates = (actual,)
+    for candidate in candidates:
+        if candidate == actual or not projection.accepts(start, end, candidate):
+            continue
+        surplus = terminal_punctuation_surplus(actual, candidate)
+        if surplus:
+            return surplus
+    return None
 
 
 def _repair_terminal_punctuation(
