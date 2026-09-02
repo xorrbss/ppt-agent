@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "key": "source-content.verbatim-dom-binding",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Render each source-verbatim text run exactly once in one containing DOM element; HTML void tags never own following text.",
+  "scope": [
+    "source-content",
+    "authored-generation"
+  ],
+  "invariants": [
+    "A br element contributes rendered whitespace when matching a source text run.",
+    "Nested spans and line breaks may remain inside the single containing source element."
+  ],
+  "forbidden": [
+    "Duplicate a complete source text run in another header, callout, or footer.",
+    "Treat HTML void elements as open text-owning containers."
+  ],
+  "evidence": [
+    "servers/fastapi/services/source_content/browser_readback.py",
+    "servers/fastapi/services/source_content/pipeline.py",
+    "servers/fastapi/tests/unit/test_source_content_browser_readback.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-02T00:14:02.6643960+00:00"
+}

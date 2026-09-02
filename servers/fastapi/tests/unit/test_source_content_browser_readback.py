@@ -154,6 +154,24 @@ def test_stamp_source_block_ids_requires_unique_rendered_dom_match() -> None:
         stamp_source_block_ids('<p data-source-block-id="other">같은 텍스트</p>', [("b1", "같은 텍스트")])
 
 
+def test_stamp_source_block_ids_closes_void_elements_without_corrupting_text_ownership() -> None:
+    stamped = stamp_source_block_ids(
+        """<!DOCTYPE html><html><head><meta charset="utf-8"><style></style></head>
+        <body><h1><span>숏폼대행</span><br>1인사업자 홀로서기</h1>
+        <p>후속 문구</p></body></html>""",
+        [("title", "숏폼대행\n1인사업자 홀로서기"), ("body", "후속 문구")],
+    )
+
+    assert 'data-source-block-id="title"' in stamped
+    assert 'data-source-block-id="body"' in stamped
+    assert "</meta>" not in stamped
+    assert "</br>" not in stamped
+    assert stamp_source_block_ids(
+        stamped,
+        [("title", "숏폼대행\n1인사업자 홀로서기"), ("body", "후속 문구")],
+    ) == stamped
+
+
 def test_source_stamps_replace_one_authored_qid_and_reject_preexisting_duplicates() -> None:
     text = stamp_source_block_ids(
         '<p data-qid="cover.subtitle">원문</p>', [("b1", "원문")]

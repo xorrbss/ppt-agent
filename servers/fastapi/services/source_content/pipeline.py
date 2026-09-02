@@ -169,8 +169,11 @@ def prepare_source_content_authored_reflow(request: Any) -> str:
         contract_instruction = (
             "Treat each page's extracted source text and source images as page-locked "
             "verbatim authority. Recompose within the selected template, but copy every "
-            "source text run exactly: do not summarize, paraphrase, translate, omit, "
-            "or invent content. If a page cannot fit on one slide, fail closed instead "
+            "source text run exactly once: keep each complete run inside one containing "
+            "DOM element (nested spans and line breaks are allowed), and never repeat the "
+            "same complete run in another header, callout, or footer. Do not summarize, "
+            "paraphrase, translate, omit, or invent content. If a page cannot fit on one "
+            "slide, fail closed instead "
             "of changing the source. Place every source image offered for that slide "
             "exactly once. Do not create or reproduce tables, charts, or the source "
             "slide layout. Do not generate replacement illustrations."

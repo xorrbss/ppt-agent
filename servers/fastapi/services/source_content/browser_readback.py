@@ -123,6 +123,24 @@ class _StampParser(HTMLParser):
     """Token-preserving parser used only to add source IDs before capture."""
 
     _HIDDEN = frozenset({"script", "style", "noscript", "template"})
+    _VOID = frozenset(
+        {
+            "area",
+            "base",
+            "br",
+            "col",
+            "embed",
+            "hr",
+            "img",
+            "input",
+            "link",
+            "meta",
+            "param",
+            "source",
+            "track",
+            "wbr",
+        }
+    )
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=False)
@@ -136,10 +154,22 @@ class _StampParser(HTMLParser):
                 break
             node.text.append(value)
 
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+    def _record_starttag(
+        self,
+        tag: str,
+        attrs: list[tuple[str, str | None]],
+        *,
+        closed: bool,
+    ) -> None:
         raw = self.get_starttag_text() or f"<{tag}>"
         index = len(self.tokens)
         self.tokens.append(raw)
+        if tag.lower() == "br":
+            # HTMLParser reports ``br`` as an empty start tag, but its rendered
+            # text contribution is a line break. Keep that separator in every
+            # open ancestor so a source run split with ``<br>`` still matches
+            # the browser's visible text.
+            self._append_text("\n")
         inherited_hidden = bool(self.stack and self.stack[-1].hidden)
         node = _StampNode(index, inherited_hidden or tag.lower() in self._HIDDEN)
         for name, value in attrs:
@@ -153,11 +183,16 @@ class _StampParser(HTMLParser):
             elif lowered in {"data-semantic-role", "data-role"} or lowered == "role":
                 node.has_semantic_role = bool(value)
         self.nodes.append(node)
-        self.stack.append(node)
+        if closed:
+            node.end = index
+        else:
+            self.stack.append(node)
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self._record_starttag(tag, attrs, closed=tag.lower() in self._VOID)
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        self.handle_starttag(tag, attrs)
-        self.handle_endtag(tag)
+        self._record_starttag(tag, attrs, closed=True)
 
     def handle_endtag(self, tag: str) -> None:
         self.tokens.append(f"</{tag}>")
