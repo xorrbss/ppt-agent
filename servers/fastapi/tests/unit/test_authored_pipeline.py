@@ -13,6 +13,8 @@ from types import SimpleNamespace
 
 import pytest
 from PIL import Image
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlmodel import SQLModel
 
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
 from models.authored_header_contract import default_header_contract
@@ -480,6 +482,32 @@ def _outline(n):
 
 def _brand():
     return Brand(topic="주제", language="Korean", primary="#2563EB", fonts="Noto Sans KR")
+
+
+async def _sqlite_engine(tmp_path):
+    # Authored publication seals the semantic deck graph against the persisted
+    # presentation row it just wrote, so the service needs a real session.
+    engine = create_async_engine(
+        f"sqlite+aiosqlite:///{tmp_path / 'authored-service.db'}"
+    )
+    async with engine.begin() as connection:
+        await connection.run_sync(SQLModel.metadata.create_all)
+    return engine
+
+
+async def _generate_on_sqlite(tmp_path, request, outline, language):
+    presentation_id = uuid.uuid4()
+    engine = await _sqlite_engine(tmp_path)
+    try:
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            result = await authored_service.generate_authored_presentation(
+                request, presentation_id, outline, language, session
+            )
+            presentation = await session.get(PresentationModel, presentation_id)
+    finally:
+        await engine.dispose()
+    assert presentation is not None
+    return result, presentation
 
 
 def test_save_slide_pngs_keeps_owner_namespace_in_browser_reference(
@@ -2497,7 +2525,7 @@ def test_vision_qa_exact_same_role_slides_keep_distinct_per_slide_sources(
 
 
 def test_authored_service_resolves_passes_and_persists_canonical_style(
-    monkeypatch, fake_async_session
+    monkeypatch, tmp_path
 ):
     selected_style = SimpleNamespace(id="editorial", brief="- Editorial")
     captured = {}
@@ -2567,20 +2595,23 @@ def test_authored_service_resolves_passes_and_persists_canonical_style(
     )
     monkeypatch.setattr(llm_provider, "get_model", lambda: "stub-model")
 
-    session = fake_async_session
     request = GeneratePresentationRequest(
         content="topic",
         template="authored",
         authored_style="editorial-alias",
         vision_qa=True,
     )
-    result = _run(
-        authored_service.generate_authored_presentation(
-            request, uuid.uuid4(), _outline(1), "English", session
+    owner_id = uuid.uuid4()
+    owner_token = set_current_owner_id(owner_id)
+    try:
+        result, presentation = _run(
+            _generate_on_sqlite(tmp_path, request, _outline(1), "English")
         )
-    )
-    presentation = next(x for x in session.added if isinstance(x, PresentationModel))
+    finally:
+        reset_current_owner_id(owner_token)
 
+    # Persisting an authored deck is owner-scoped; the row binds the caller.
+    assert presentation.owner_id == owner_id
     assert captured["style"] is selected_style
     # The default contract asks for no numbering, so the pipeline is driven with
     # the unnumbered mode rather than the historical always-numbered default.
@@ -2594,7 +2625,7 @@ def test_authored_service_resolves_passes_and_persists_canonical_style(
 
 
 def test_a_design_replay_is_authored_rather_than_dumped_verbatim(
-    monkeypatch, fake_async_session
+    monkeypatch, tmp_path
 ):
     """Retemplating re-authors the source text against the newly chosen style.
 
@@ -2663,15 +2694,16 @@ def test_a_design_replay_is_authored_rather_than_dumped_verbatim(
         authored_style="editorial",
     )
     request._authored_design_replay = True
-    result = _run(
-        authored_service.generate_authored_presentation(
-            request, uuid.uuid4(), _outline(1), "Korean", fake_async_session
+    owner_id = uuid.uuid4()
+    owner_token = set_current_owner_id(owner_id)
+    try:
+        result, presentation = _run(
+            _generate_on_sqlite(tmp_path, request, _outline(1), "Korean")
         )
-    )
-    presentation = next(
-        x for x in fake_async_session.added if isinstance(x, PresentationModel)
-    )
+    finally:
+        reset_current_owner_id(owner_token)
 
+    assert presentation.owner_id == owner_id
     assert captured["authored"] is True
     # A replay gets the same frozen deck chrome as any other authored deck.
     assert captured["header_contract"] is not None
