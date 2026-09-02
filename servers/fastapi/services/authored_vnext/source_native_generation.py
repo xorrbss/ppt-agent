@@ -915,7 +915,7 @@ def _append_fixed_text_columns(
                 end += 1
         blocks.append(units[index:end])
         index = end
-    resolved_columns = max(1, min(columns_count, len(blocks)))
+    initial_columns = max(1, min(columns_count, len(blocks)))
     bounds = _flow_mapping(slot, "bounds")
     spacing = _flow_mapping(slot, "spacing")
     content_width = max(
@@ -924,27 +924,65 @@ def _append_fixed_text_columns(
         - max(0.0, _flow_number(spacing.get("insetLeft")))
         - max(0.0, _flow_number(spacing.get("insetRight"))),
     ) * max(0.05, min(1.0, width_fraction))
-    column_width = max(
+    usable_height = max(
         1.0,
-        (content_width - column_gap * max(0, resolved_columns - 1))
-        / resolved_columns,
+        _flow_number(bounds.get("height"), 720.0)
+        - max(0.0, _flow_number(spacing.get("insetTop")))
+        - max(0.0, _flow_number(spacing.get("insetBottom"))),
     )
-    weights = [
-        _estimated_flow_block_height(
-            block,
-            slot=slot,
-            adaptive_scale=adaptive_scale,
-            role=role,
-            column_width=column_width,
+    target_height = usable_height * 0.90
+    resolved_columns = initial_columns
+    weights: list[float] = []
+    ends: tuple[int, ...] = ()
+    maximum_estimated_height = math.inf
+    for candidate_columns in range(initial_columns, min(4, len(blocks)) + 1):
+        column_width = max(
+            1.0,
+            (
+                content_width
+                - column_gap * max(0, candidate_columns - 1)
+            )
+            / candidate_columns,
         )
-        for block in blocks
-    ]
-    ends = _balanced_contiguous_ends(weights, resolved_columns)
+        candidate_weights = [
+            _estimated_flow_block_height(
+                block,
+                slot=slot,
+                adaptive_scale=adaptive_scale,
+                role=role,
+                column_width=column_width,
+            )
+            for block in blocks
+        ]
+        candidate_ends = _balanced_contiguous_ends(
+            candidate_weights, candidate_columns
+        )
+        start = 0
+        candidate_maximum = 0.0
+        for end in candidate_ends:
+            candidate_maximum = max(
+                candidate_maximum, sum(candidate_weights[start:end])
+            )
+            start = end
+        resolved_columns = candidate_columns
+        weights = candidate_weights
+        ends = candidate_ends
+        maximum_estimated_height = candidate_maximum
+        if candidate_maximum <= target_height:
+            break
+    if maximum_estimated_height > target_height:
+        raise SourceNativeGenerationError("source_native_text_capacity_exceeded")
     parent.set(
         "style",
         "display:grid!important;width:100%;height:100%;min-width:0;min-height:0;"
         f"grid-template-columns:repeat({resolved_columns},minmax(0,1fr));"
         f"column-gap:{column_gap:.3f}px;overflow:hidden",
+    )
+    parent.set("data-source-flow-column-count", str(resolved_columns))
+    parent.set("data-source-flow-target-height", f"{target_height:.3f}")
+    parent.set(
+        "data-source-flow-maximum-estimated-height",
+        f"{maximum_estimated_height:.3f}",
     )
     start = 0
     parent_qid = str(parent.get("data-qid") or "source-flow-columns")

@@ -58,7 +58,7 @@ def test_source_native_fixed_columns_preserve_atomic_order_without_overflow_colu
             kind="text",
             required=True,
             text=(
-                ("긴한글문장 묶음 " * 24).strip()
+                ("긴한글문장 묶음 " * 12).strip()
                 if 1 <= index <= 7
                 else f"원문 단락 {index:02d}"
             ),
@@ -85,20 +85,22 @@ def test_source_native_fixed_columns_preserve_atomic_order_without_overflow_colu
         },
         adaptive_scale=1.0,
         role="body",
-        columns_count=4,
+        columns_count=1,
         column_gap=18.0,
     )
 
     style = str(parent.get("style") or "")
     columns = list(parent)
+    resolved_columns = int(parent.get("data-source-flow-column-count"))
     assert "column-count" not in style
-    assert "grid-template-columns:repeat(4,minmax(0,1fr))" in style
+    assert resolved_columns > 1
+    assert f"grid-template-columns:repeat({resolved_columns},minmax(0,1fr))" in style
     assert "width:100%" in style and "overflow:hidden" in style
-    assert len(columns) == 4
-    counts = [len(column.xpath(".//*[@data-source-flow-unit-id]")) for column in columns]
+    assert len(columns) == resolved_columns
+    assert float(parent.get("data-source-flow-maximum-estimated-height")) <= float(
+        parent.get("data-source-flow-target-height")
+    )
     heights = [float(column.get("data-source-flow-estimated-height")) for column in columns]
-    assert counts != [6, 5, 5, 5]
-    assert counts[-1] > counts[0]
     assert max(heights) - min(heights) < max(heights) * 0.2
     assert [
         str(node.get("data-source-flow-unit-id"))
