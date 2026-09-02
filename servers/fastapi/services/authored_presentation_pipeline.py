@@ -55,6 +55,7 @@ from services.authored_vnext.generation.scene_envelope import (
 )
 from services.provider_usage_instrumentation import provider_usage_scope, record_local_stage
 from services.authored_generation_performance import authored_provider_concurrency
+from services.authored_slide_worker_pool import run_slide_worker_pool
 from services.authored_batch_policy import (
     advance_authored_batch_policy,
     new_authored_batch_policy_state,
@@ -1275,74 +1276,11 @@ async def _author_illustrate_render_pipeline(
                 )
             raise
 
-    results: list[tuple[Any, ...] | None] = [None] * len(plan.contents)
-    worker_count = min(_AUTHORED_SLIDE_WORKERS, len(plan.contents))
-    # The producer can be at most two worker windows ahead. This is real
-    # backpressure rather than an unbounded queue prefilled with every slide.
-    queue: asyncio.Queue[int | object] = asyncio.Queue(
-        maxsize=max(1, worker_count * 2)
+    completed_results = await run_slide_worker_pool(
+        process_slide,
+        slide_count=len(plan.contents),
+        worker_count=_AUTHORED_SLIDE_WORKERS,
     )
-    sentinel = object()
-    stop_workers = asyncio.Event()
-
-    async def producer() -> None:
-        try:
-            for index in range(len(plan.contents)):
-                if stop_workers.is_set():
-                    break
-                await queue.put(index)
-        finally:
-            for _ in range(worker_count):
-                await queue.put(sentinel)
-
-    async def worker() -> None:
-        while True:
-            item = await queue.get()
-            try:
-                if item is sentinel:
-                    return
-                if stop_workers.is_set():
-                    continue
-                index = int(item)
-                try:
-                    results[index] = await process_slide(index)
-                except BaseException:
-                    # Already-returned provider work is checkpointed by the
-                    # process_slide boundary. Other workers drain without
-                    # claiming more billable slides.
-                    stop_workers.set()
-                    raise
-            finally:
-                queue.task_done()
-
-    producer_task = asyncio.create_task(producer())
-    worker_tasks = [asyncio.create_task(worker()) for _ in range(worker_count)]
-    try:
-        worker_outcomes = await asyncio.gather(
-            *worker_tasks, return_exceptions=True
-        )
-    except asyncio.CancelledError:
-        # User/server cancellation still interrupts the deck attempt. Any
-        # provider result that already returned is checkpointed by the helper
-        # above before the worker can finish cancellation.
-        producer_task.cancel()
-        for task in worker_tasks:
-            task.cancel()
-        await asyncio.gather(producer_task, *worker_tasks, return_exceptions=True)
-        raise
-    failures = [
-        outcome
-        for outcome in worker_outcomes
-        if isinstance(outcome, BaseException)
-    ]
-    if failures:
-        producer_task.cancel()
-        await asyncio.gather(producer_task, return_exceptions=True)
-        raise failures[0]
-    await producer_task
-    completed_results = [result for result in results if result is not None]
-    if len(completed_results) != len(plan.contents):
-        raise RuntimeError("authored slide worker exited before completion")
     htmls = [result[1] for result in completed_results]
     pngs = [result[2] for result in completed_results]
     quality_gate_reports = [
