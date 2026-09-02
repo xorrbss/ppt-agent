@@ -9,7 +9,12 @@ import pytest
 
 from utils.llm_calls import author_deck as author_deck_mod
 from utils.llm_calls.author_slide import Brand
-from utils.provider_idempotency import ProviderOutcomeError, provider_generate_call
+from services.authored_batch_policy import is_authored_provider_overload
+from utils.provider_idempotency import (
+    PROVIDER_CALL_TIMEOUT_SECONDS,
+    ProviderOutcomeError,
+    provider_generate_call,
+)
 
 
 _VALID_HTML = (
@@ -30,10 +35,13 @@ class _RawClient:
     def __init__(self, events):
         self.responses = _Responses(events)
         self.options = None
+        self.cloned_options = None
 
     def with_options(self, **options):
         cloned = _RawClient(self.responses.events)
         cloned.options = options
+        # Kept on the original so a test can inspect what the clone received.
+        self.cloned_options = options
         return cloned
 
 
@@ -102,6 +110,92 @@ def test_empty_output_and_bridge_exception_are_not_terminal_event_aliases():
     assert raised_bridge.value.retryable is False
     assert raised_bridge.value.recovery_allowed is True
     assert "private detail" not in str(raised_bridge.value)
+
+
+class _PlainClient:
+    """A transport with no idempotency support but a cloneable raw client."""
+
+    def __init__(self, error=None):
+        self._client = _RawClient([])
+        self.error = error
+
+    def generate(self, **_kwargs):
+        if self.error is not None:
+            raise self.error
+        return SimpleNamespace(content="ok")
+
+
+_PlainClient.__module__ = "llmai.other.client"
+
+
+class _UncloneableClient:
+    def __init__(self):
+        self._client = SimpleNamespace()
+
+    def generate(self, **_kwargs):
+        return SimpleNamespace(content="ok")
+
+
+_UncloneableClient.__module__ = "llmai.other.client"
+
+
+def test_every_cloneable_transport_gets_the_bounded_call_timeout():
+    """The timeout is applied even when nothing else needs adapting."""
+
+    adapted = _ChatGPTClient([])
+    _call(adapted)()
+    assert adapted._client.options is None  # the shared client is never mutated
+    assert adapted._client.cloned_options == {
+        "max_retries": 0,
+        "timeout": PROVIDER_CALL_TIMEOUT_SECONDS,
+    }
+
+    plain = _PlainClient()
+    generate = provider_generate_call(
+        plain,
+        provider_id="anthropic",
+        kwargs={},
+        idempotency_key=None,
+        outcome_scope=None,
+    )
+    generate()
+    # Cloned purely for the timeout: no retry/idempotency adaptation applies.
+    assert plain._client.options is None
+    assert plain._client.cloned_options == {
+        "timeout": PROVIDER_CALL_TIMEOUT_SECONDS
+    }
+
+
+def test_call_timeout_is_a_distinct_recoverable_outcome():
+    class ReadTimeout(RuntimeError):
+        pass
+
+    timed_out = _ChatGPTClient([], error=ReadTimeout("private endpoint detail"))
+    with pytest.raises(ProviderOutcomeError) as raised:
+        _call(timed_out)()
+
+    assert raised.value.code == "public_provider_call_timeout"
+    assert raised.value.code != "public_provider_bridge_exception"
+    assert raised.value.retryable is False
+    assert raised.value.recovery_allowed is True
+    assert "private endpoint detail" not in str(raised.value)
+
+    # A stuck call is an overload signal: the job drops to serial authoring.
+    assert is_authored_provider_overload(raised.value) is True
+
+
+def test_unenforceable_timeout_is_reported_rather_than_assumed(caplog):
+    with caplog.at_level("WARNING"):
+        provider_generate_call(
+            _UncloneableClient(),
+            provider_id="uncloneable-provider",
+            kwargs={},
+            idempotency_key=None,
+            outcome_scope=None,
+        )()
+
+    assert "provider_call_timeout_not_enforced" in caplog.text
+    assert "uncloneable-provider" in caplog.text
 
 
 def test_provider_outcome_gets_only_the_explicit_single_recovery(monkeypatch):

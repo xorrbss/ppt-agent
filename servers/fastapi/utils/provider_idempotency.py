@@ -3,14 +3,75 @@
 from __future__ import annotations
 
 from copy import copy
+import logging
 from types import MethodType
 from typing import Any, Callable, Mapping
 
+
+LOGGER = logging.getLogger(__name__)
 
 _SUPPORTED_PROVIDER_IDS = frozenset({"openai"})
 _LLMAI_OPENAI_MODULE_PREFIX = "llmai.openai."
 _LLMAI_CHATGPT_MODULE_PREFIX = "llmai.chatgpt."
 _AUTHORED_OUTCOME_SCOPE = "authored"
+
+# One provider call must not outlive its slice of the job budget.  Measured
+# three-slide authoring calls land between ~170s and ~240s, so this only fires
+# on a call that is genuinely stuck.  The whole-job budgets are enforced
+# elsewhere and carry their own codes -- ``public_deadline_exceeded`` from
+# admission and ``public_worker_job_expired`` from the isolated worker -- so a
+# call that trips this limit is never confused with either.
+PROVIDER_CALL_TIMEOUT_SECONDS = 360.0
+
+_TIMEOUT_UNENFORCEABLE_PROVIDERS: set[str] = set()
+
+
+def _warn_timeout_unenforceable(provider_id: str, reason: str) -> None:
+    """Say once, per provider, that this transport cannot bound a call."""
+
+    if provider_id in _TIMEOUT_UNENFORCEABLE_PROVIDERS:
+        return
+    _TIMEOUT_UNENFORCEABLE_PROVIDERS.add(provider_id)
+    LOGGER.warning(
+        "provider_call_timeout_not_enforced provider=%s reason=%s seconds=%s",
+        provider_id,
+        reason,
+        PROVIDER_CALL_TIMEOUT_SECONDS,
+    )
+
+
+def _clone_raw_client(
+    raw_client: Any, options: Mapping[str, Any], *, provider_id: str
+) -> Any:
+    """Clone the transport with a request timeout, degrading loudly if refused."""
+
+    try:
+        return raw_client.with_options(
+            **options, timeout=PROVIDER_CALL_TIMEOUT_SECONDS
+        )
+    except TypeError:
+        # This transport takes no request timeout.  Keep the existing
+        # retry/idempotency contract rather than failing the call, and say so.
+        _warn_timeout_unenforceable(provider_id, "with_options_rejected_timeout")
+        return raw_client.with_options(**options) if options else raw_client
+
+
+def _is_call_timeout(error: BaseException) -> bool:
+    """Recognize a transport timeout across provider SDKs without importing them."""
+
+    current: BaseException | None = error
+    visited: set[int] = set()
+    for _ in range(6):
+        if current is None or id(current) in visited:
+            return False
+        visited.add(id(current))
+        if isinstance(current, TimeoutError):
+            return True
+        if "timeout" in type(current).__name__.casefold():
+            return True
+        nested = getattr(current, "cause", None) or getattr(current, "__cause__", None)
+        current = nested if isinstance(nested, BaseException) else None
+    return False
 
 
 class ProviderOutcomeError(RuntimeError):
@@ -151,19 +212,29 @@ def provider_generate_call(
         and can_clone_raw_client
     )
     adapted_client = client
+    options: dict[str, Any] = {}
     if should_adapt:
-        options: dict[str, Any] = {"max_retries": 0}
+        options["max_retries"] = 0
         if idempotency_key and supports_provider_idempotency(
             client, provider_id=provider_id
         ):
             options["extra_headers"] = {"Idempotency-Key": idempotency_key}
-        raw_client = client._client.with_options(**options)
+    if can_clone_raw_client:
+        # Clone for the request timeout even when nothing else needs adapting.
+        # A stuck call otherwise holds one of the bounded authoring executor
+        # threads for the whole job: that executor runs the provider SDK
+        # synchronously, so cancelling the awaiting task frees nothing.
+        raw_client = _clone_raw_client(
+            client._client, options, provider_id=provider_id
+        )
         adapted_client = copy(client)
         adapted_client._client = (
             _GuardedResponsesClient(raw_client)
             if outcome_scope == _AUTHORED_OUTCOME_SCOPE and is_chatgpt
             else raw_client
         )
+    else:
+        _warn_timeout_unenforceable(provider_id, "raw_client_not_cloneable")
     if callable(getattr(adapted_client, "_get_openai_chat_max_tokens_kwargs", None)):
         # llmai 0.3.7 normally retries a rejected output-token parameter once
         # inside `_create_chat_completion`. That hidden second network request
@@ -202,6 +273,14 @@ def provider_generate_call(
                 raise provider_outcome from error
             if outcome_scope != _AUTHORED_OUTCOME_SCOPE:
                 raise
+            if _is_call_timeout(error):
+                # Distinct from the generic bridge failure so the batch policy
+                # can treat a stuck call as overload and the failed slides
+                # still get their one recovery call.
+                raise ProviderOutcomeError(
+                    "public_provider_call_timeout",
+                    recovery_allowed=True,
+                ) from error
             raise ProviderOutcomeError(
                 "public_provider_bridge_exception",
                 recovery_allowed=_bridge_recovery_allowed(error),
@@ -219,6 +298,7 @@ def provider_generate_call(
 
 
 __all__ = [
+    "PROVIDER_CALL_TIMEOUT_SECONDS",
     "ProviderOutcomeError",
     "provider_generate_call",
     "supports_provider_idempotency",

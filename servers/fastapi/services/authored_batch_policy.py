@@ -20,6 +20,10 @@ _OVERLOAD_CODES = frozenset(
     {
         "provider_circuit_open",
         "public_provider_bridge_exception",
+        # A call that exhausted its own transport timeout is the strongest
+        # overload signal available.  The underscore-joined code does not match
+        # the free-text timeout pattern below, so it is named here explicitly.
+        "public_provider_call_timeout",
     }
 )
 _HTTP_OVERLOAD_PATTERN = re.compile(r"(?<!\d)(?:500|503)(?!\d)")
