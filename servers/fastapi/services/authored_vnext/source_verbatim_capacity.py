@@ -6,7 +6,6 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 import math
 from typing import Any
-import unicodedata
 
 from .composition_capacity import (
     _mapping,
@@ -19,6 +18,25 @@ from .composition_capacity import (
     source_flow_slots,
     unit_text,
 )
+from .source_render_geometry import (
+    BODY_FONT_FLOOR_PX,
+    FLOW_ICON_HEIGHT_PX,
+    FLOW_MEDIA_HEIGHT_PX,
+    FLOW_PROCESS_MEDIA_HEIGHT_PX,
+    FOOTER_BODY_GAP_PX,
+    FOOTER_LANE_HEIGHT_PX,
+    RenderUnit,
+    TEXT_LINE_BOX_BREATHING_PX,
+    TITLE_FONT_FLOOR_PX,
+    TITLE_STACK_GAP_PX,
+    flow_font_px,
+    footer_lane_item_height,
+    semantic_block_height,
+    semantic_text_metrics,
+    slot_declared_font_px,
+    table_matrix_shape,
+    text_advance_px,
+)
 
 
 SOURCE_VERBATIM_CAPACITY_POLICY_V1: dict[str, object] = {
@@ -30,17 +48,47 @@ SOURCE_VERBATIM_CAPACITY_POLICY_V1: dict[str, object] = {
     "allowContentMutation": False,
     "allowContentOmission": False,
     "overflowAction": "fail-before-provider",
-    "packingStrategy": "same-page-render-geometry-fit/v4",
+    "packingStrategy": "same-page-render-geometry-fit/v12",
     "frameRanking": "semantic-density-media-render-geometry/v2",
     "varietyTieBreak": "least-used-after-fit/v1",
     "minimumAdaptiveTextScale": 0.70,
     "minimumBodyFontPoints": 12.0,
+    "textLineBoxBreathingPx": 1.0,
+    "componentOverlayPaddingPx": 8.0,
+    "iconVisualHeightPx": 48.0,
+    "mediaVisualHeightPx": 120.0,
+    "processMediaVisualHeightPx": 96.0,
+    "componentVisualGapPx": 8.0,
+    "componentVisualPacking": "best-of-row-major-or-contiguous-columns/v1",
+    "titleStackGapPx": 6.0,
+    "processStepMedia": "atomic-image-header-body/v1",
+    "semanticGrouping": "normalized-source-semantic/v1",
+    "tableLayout": "source-matrix-when-present/v1",
+    "meaningfulImageGate": "ui-evidence-absolute-geometry/v1",
+    "footerLayout": "compact-lane/v1",
     "chromiumOverflowGateRequired": True,
 }
 
 
-_BODY_FONT_FLOOR_PX = 12.0 / 0.75
-_TITLE_FONT_FLOOR_PX = 32.0
+# The render geometry model is canonical; these aliases retain the private
+# names that existing call sites import.
+_BODY_FONT_FLOOR_PX = BODY_FONT_FLOOR_PX
+_TITLE_FONT_FLOOR_PX = TITLE_FONT_FLOOR_PX
+_FOOTER_LANE_HEIGHT_PX = FOOTER_LANE_HEIGHT_PX
+_FOOTER_BODY_GAP_PX = FOOTER_BODY_GAP_PX
+_TEXT_LINE_BOX_BREATHING_PX = TEXT_LINE_BOX_BREATHING_PX
+_FLOW_ICON_HEIGHT_PX = FLOW_ICON_HEIGHT_PX
+_FLOW_MEDIA_HEIGHT_PX = FLOW_MEDIA_HEIGHT_PX
+_FLOW_PROCESS_MEDIA_HEIGHT_PX = FLOW_PROCESS_MEDIA_HEIGHT_PX
+_TITLE_STACK_GAP_PX = TITLE_STACK_GAP_PX
+_SLIDE_WIDTH_PX = 1280.0
+_SLIDE_HEIGHT_PX = 720.0
+_MEANINGFUL_IMAGE_MIN_WIDTH_PX = 480.0
+_MEANINGFUL_IMAGE_MIN_HEIGHT_PX = 270.0
+_MEANINGFUL_IMAGE_MIN_AREA_RATIO = 0.140625
+_MEANINGFUL_IMAGE_SCALE_FLOOR = 0.33
+_COMPONENT_OVERLAY_PADDING_PX = 8.0
+_COMPONENT_VISUAL_GAP_PX = 8.0
 
 
 class CapacityAdmissionError(ValueError):
@@ -61,6 +109,116 @@ class _AdmissionUnit:
     source_page_index: int
     source_unit_index: int
     semantic_role: str
+    semantic_group_kind: str
+    semantic_group_id: str
+    table_row: int | None
+    table_column: int | None
+    table_row_span: int
+    table_column_span: int
+    table_header: bool
+    image_kind: str
+    image_aspect_ratio: float | None
+
+
+def _semantic_key(value: object) -> str:
+    key = str(value or "").strip().replace("_", "-").lower()
+    aliases = {
+        "semanticrole": "role",
+        "semantic-role": "role",
+        "semanticgroupkind": "group-kind",
+        "semantic-group-kind": "group-kind",
+        "semanticgroupid": "group-id",
+        "semantic-group-id": "group-id",
+        "semantictablerow": "table-row",
+        "semantic-table-row": "table-row",
+        "semantictablecolumn": "table-column",
+        "semantic-table-column": "table-column",
+        "semantictablerowspan": "table-row-span",
+        "semantic-table-row-span": "table-row-span",
+        "semantictablecolumnspan": "table-column-span",
+        "semantic-table-column-span": "table-column-span",
+        "semantictableheader": "table-header",
+        "semantic-table-header": "table-header",
+        "semanticimageaspectratio": "image-aspect-ratio",
+        "semantic-image-aspect-ratio": "image-aspect-ratio",
+        "semanticimagekind": "image-kind",
+        "semantic-image-kind": "image-kind",
+    }
+    if key.startswith("source-semantic."):
+        key = key.removeprefix("source-semantic.")
+    elif key.startswith("source-semantic-"):
+        key = key.removeprefix("source-semantic-")
+    return aliases.get(key, key)
+
+
+def _normalized_source_semantic(
+    *, payload: Mapping[str, Any], data: object
+) -> dict[str, object]:
+    """Read normalized metadata while accepting legacy payload.data shapes."""
+
+    resolved: dict[str, object] = {}
+
+    def merge(value: object) -> None:
+        if not isinstance(value, Mapping):
+            return
+        nested = value.get(
+            "source-semantic",
+            value.get("sourceSemantic", value.get("source_semantic")),
+        )
+        if isinstance(nested, Mapping):
+            for key, item in nested.items():
+                resolved[_semantic_key(key)] = item
+        datum_key = value.get(
+            "datumKey", value.get("datum_key", value.get("key"))
+        )
+        if datum_key is not None and "value" in value:
+            resolved[_semantic_key(datum_key)] = value["value"]
+        for key, item in value.items():
+            normalized = _semantic_key(key)
+            if normalized in {
+                "role",
+                "group-kind",
+                "group-id",
+                "table-row",
+                "table-column",
+                "table-row-span",
+                "table-column-span",
+                "table-header",
+                "image-aspect-ratio",
+                "image-kind",
+            }:
+                resolved[normalized] = item
+
+    merge(payload)
+    if isinstance(data, Sequence) and not isinstance(
+        data, (str, bytes, bytearray)
+    ):
+        for item in data:
+            merge(item)
+    else:
+        merge(data)
+    return resolved
+
+
+def _optional_nonnegative_int(value: object) -> int | None:
+    if isinstance(value, bool) or value in (None, ""):
+        return None
+    try:
+        resolved = int(value)
+    except (TypeError, ValueError):
+        return None
+    return resolved if resolved >= 0 else None
+
+
+def _positive_int(value: object, default: int = 1) -> int:
+    resolved = _optional_nonnegative_int(value)
+    return resolved if resolved is not None and resolved > 0 else default
+
+
+def _boolean(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes"}
 
 
 def _semantic_role(
@@ -80,8 +238,19 @@ def _semantic_role(
     evidence = f"{explicit} {content_unit_id} {kind.lower()}"
     if any(token in evidence for token in ("title", "headline", "heading")):
         return "title"
-    if any(token in evidence for token in ("table-cell", "table_cell", "cell")):
+    if any(
+        token in evidence
+        for token in (
+            "table-cell",
+            "table_cell",
+            "table-header",
+            "table-row-header",
+            "cell",
+        )
+    ):
         return "table-cell"
+    if explicit and explicit not in {"text", "paragraph", "body", "media"}:
+        return explicit
     if kind == "image" or any(
         token in evidence for token in ("image", "photo", "picture", "media")
     ):
@@ -106,6 +275,29 @@ def _admission_units(page: object, page_index: int) -> list[_AdmissionUnit]:
             data = payload.get("data")
         if kind != "text" and data in (None, [], {}):
             data = payload
+        source_semantic = _normalized_source_semantic(
+            payload=payload,
+            data=data,
+        )
+        explicit_semantic_role = str(source_semantic.get("role") or "").strip()
+        semantic_role = _semantic_role(
+            value=value,
+            payload={
+                **payload,
+                **(
+                    {"semanticRole": explicit_semantic_role}
+                    if explicit_semantic_role
+                    else {}
+                ),
+            },
+            kind=kind,
+            index=index,
+        )
+        image_aspect_ratio = _positive_float(
+            source_semantic.get("image-aspect-ratio")
+        )
+        if image_aspect_ratio is None:
+            image_aspect_ratio = _image_aspect(data)
         units.append(
             _AdmissionUnit(
                 content_unit_id=str(
@@ -140,12 +332,28 @@ def _admission_units(page: object, page_index: int) -> list[_AdmissionUnit]:
                     )
                     or 0
                 ),
-                semantic_role=_semantic_role(
-                    value=value,
-                    payload=payload,
-                    kind=kind,
-                    index=index,
+                semantic_role=semantic_role,
+                semantic_group_kind=str(
+                    source_semantic.get("group-kind") or ""
+                ).strip(),
+                semantic_group_id=str(
+                    source_semantic.get("group-id") or ""
+                ).strip(),
+                table_row=_optional_nonnegative_int(
+                    source_semantic.get("table-row")
                 ),
+                table_column=_optional_nonnegative_int(
+                    source_semantic.get("table-column")
+                ),
+                table_row_span=_positive_int(
+                    source_semantic.get("table-row-span")
+                ),
+                table_column_span=_positive_int(
+                    source_semantic.get("table-column-span")
+                ),
+                table_header=_boolean(source_semantic.get("table-header")),
+                image_kind=str(source_semantic.get("image-kind") or "").strip(),
+                image_aspect_ratio=image_aspect_ratio,
             )
         )
     return units
@@ -155,7 +363,16 @@ def _role_group(role: object, *, kind: str = "") -> str:
     evidence = f"{str(role or '').lower()} {kind.lower()}"
     if any(token in evidence for token in ("title", "headline", "heading")):
         return "title"
-    if any(token in evidence for token in ("table-cell", "table_cell", "cell")):
+    if any(
+        token in evidence
+        for token in (
+            "table-cell",
+            "table_cell",
+            "table-header",
+            "table-row-header",
+            "cell",
+        )
+    ):
         return "table-cell"
     if kind == "image" or any(
         token in evidence for token in ("image", "photo", "picture", "media")
@@ -201,7 +418,7 @@ def _content_features(units: Sequence[_AdmissionUnit]) -> dict[str, Any]:
         role_counts[group] = role_counts.get(group, 0) + 1
     aspects = sorted(
         aspect
-        for aspect in (_image_aspect(item.data) for item in images)
+        for aspect in (item.image_aspect_ratio for item in images)
         if aspect is not None
     )
     table_cells = role_counts.get("table-cell", 0)
@@ -215,9 +432,27 @@ def _content_features(units: Sequence[_AdmissionUnit]) -> dict[str, Any]:
             (len(unit_text(item)) for item in text_units), default=0
         ),
         "imageOccurrenceCount": len(images),
+        "meaningfulImageCount": sum(
+            1 for item in images if _is_meaningful_image(item)
+        ),
         "imageAspectRatios": [round(item, 6) for item in aspects],
         "dataUnitCount": data_units,
         "tableCellCount": table_cells,
+        "fixedTableMatrixCount": len(
+            {
+                item.semantic_group_id
+                for item in units
+                if item.table_row is not None
+                and item.table_column is not None
+                and item.semantic_group_id
+            }
+        ),
+        "semanticGroupCount": len(
+            {item.semantic_group_id for item in units if item.semantic_group_id}
+        ),
+        "compactFooterUnitCount": sum(
+            1 for item in units if _is_footer_unit(item)
+        ),
         "semanticRoleCounts": dict(sorted(role_counts.items())),
     }
 
@@ -399,58 +634,68 @@ def _slot_number(value: object, default: float = 0.0) -> float:
 def _renderer_font_px(
     slot: Mapping[str, Any], *, role: str, adaptive_scale: float
 ) -> float:
-    style = _mapping(slot.get("textStyle"))
-    declared = _slot_number(style.get("fontSize"), 0.0)
-    title_like = role in {"title", "headline", "heading"}
-    default = 40.0 if title_like else 22.0
-    minimum = _TITLE_FONT_FLOOR_PX if title_like else _BODY_FONT_FLOOR_PX
-    return max(minimum, max(minimum, declared or default) * adaptive_scale)
+    return flow_font_px(
+        slot_declared_font_px(slot), role=role, adaptive_scale=adaptive_scale
+    )
 
 
-def _estimated_renderer_text_lines(
-    text: str, *, width_px: float, font_px: float
-) -> int:
-    def advance(value: str) -> float:
-        total = 0.0
-        for character in value:
-            if character.isspace():
-                total += font_px * 0.33
-            elif unicodedata.east_asian_width(character) in {"W", "F", "A"}:
-                total += font_px
-            elif character.isupper():
-                total += font_px * 0.64
-            elif character.isdigit():
-                total += font_px * 0.56
-            else:
-                total += font_px * 0.54
-        return total
+def _render_unit(unit: _AdmissionUnit) -> RenderUnit:
+    """Project an admission unit onto the shared render geometry model."""
 
-    normalized = " ".join(text.split())
-    if not normalized:
-        return 1
-    lines = 1
-    occupied = 0.0
-    space = font_px * 0.33
-    for word in normalized.split(" "):
-        word_width = advance(word)
-        separator = space if occupied > 0 else 0.0
-        if occupied > 0 and occupied + separator + word_width > width_px:
-            lines += 1
-            occupied = 0.0
-            separator = 0.0
-        if word_width <= width_px:
-            occupied += separator + word_width
-            continue
-        remaining = word_width
-        while remaining > width_px:
-            if occupied > 0:
-                lines += 1
-                occupied = 0.0
-            remaining -= width_px
-            if remaining > 0:
-                lines += 1
-        occupied = remaining
-    return lines
+    return RenderUnit(
+        text=unit_text(unit),
+        kind=unit.kind,
+        semantic_role=unit.semantic_role,
+        group_kind=unit.semantic_group_kind,
+        image_kind=unit.image_kind or "media",
+        table_row=unit.table_row,
+        table_column=unit.table_column,
+        table_row_span=unit.table_row_span,
+        table_column_span=unit.table_column_span,
+    )
+
+
+def _is_footer_unit(unit: _AdmissionUnit) -> bool:
+    evidence = (
+        f"{unit.semantic_role} {unit.semantic_group_kind} {unit.image_kind}"
+    ).lower()
+    return "footer" in evidence
+
+
+def _footer_lane_width(units: Sequence[_AdmissionUnit]) -> float:
+    """Advance width of the nowrap footer lane including its 16px item gaps."""
+
+    metrics = semantic_text_metrics(
+        semantic_role="compact-footer",
+        group_kind="compact-footer",
+        fallback_role="body",
+        declared_font_px=0.0,
+        adaptive_scale=1.0,
+    )
+    return sum(
+        text_advance_px(unit_text(item), font_px=metrics.font_px)
+        for item in units
+    ) + _FOOTER_BODY_GAP_PX * max(0, len(units) - 1)
+
+
+def _is_meaningful_image(unit: _AdmissionUnit) -> bool:
+    if unit.kind != "image":
+        return False
+    evidence = (
+        f"{unit.semantic_role} {unit.semantic_group_kind} {unit.image_kind}"
+    ).lower()
+    if "icon" in evidence:
+        return False
+    return any(
+        token in evidence
+        for token in ("ui", "evidence", "screenshot", "product-screen")
+    )
+
+
+def _table_matrix_shape(
+    block: Sequence[_AdmissionUnit],
+) -> tuple[int, int] | None:
+    return table_matrix_shape([_render_unit(item) for item in block])
 
 
 def _renderer_blocks(
@@ -459,15 +704,20 @@ def _renderer_blocks(
     blocks: list[list[_AdmissionUnit]] = []
     index = 0
     while index < len(units):
-        if _role_group(units[index].semantic_role, kind=units[index].kind) != "table-cell":
-            blocks.append([units[index]])
-            index += 1
-            continue
+        unit = units[index]
+        boundary = _role_group(unit.semantic_role, kind=unit.kind)
         end = index + 1
-        while end < len(units) and _role_group(
-            units[end].semantic_role, kind=units[end].kind
-        ) == "table-cell":
-            end += 1
+        if boundary == "table-cell":
+            while end < len(units) and _role_group(
+                units[end].semantic_role, kind=units[end].kind
+            ) == "table-cell":
+                end += 1
+        elif unit.semantic_group_id:
+            while (
+                end < len(units)
+                and units[end].semantic_group_id == unit.semantic_group_id
+            ):
+                end += 1
         blocks.append(list(units[index:end]))
         index = end
     return blocks
@@ -481,57 +731,16 @@ def _estimated_renderer_block_height(
     role: str,
     column_width: float,
 ) -> float:
-    boundary = _role_group(block[0].semantic_role, kind=block[0].kind)
-    if boundary == "table-cell":
-        font_px = _renderer_font_px(
-            slot, role=role, adaptive_scale=adaptive_scale
-        )
-        candidates: list[tuple[float, int]] = []
-        candidate_columns = (
-            (1,)
-            if len(block) < 2
-            else range(2, min(8, len(block)) + 1)
-        )
-        for columns in candidate_columns:
-            rows = math.ceil(len(block) / columns)
-            cell_width = max(
-                1.0,
-                (column_width - (columns - 1) * 10.0) / columns - 12.0,
-            )
-            heights = [
-                _estimated_renderer_text_lines(
-                    unit_text(unit), width_px=cell_width, font_px=font_px
-                )
-                * font_px
-                * 1.32
-                + 6.0
-                for unit in block
-            ]
-            estimated_height = (
-                sum(
-                    max(heights[row * columns : (row + 1) * columns])
-                    for row in range(rows)
-                )
-                + max(0, rows - 1) * 4.0
-                + 8.0
-            )
-            candidates.append((estimated_height, columns))
-        return min(
-            candidates, key=lambda item: (round(item[0], 6), item[1])
-        )[0]
-    unit_role = "title" if boundary == "title" or role == "title" else role
-    font_px = _renderer_font_px(
-        slot, role=unit_role, adaptive_scale=adaptive_scale
-    )
-    line_height = 1.18 if unit_role == "title" else 1.32
-    margin = 10.0 if unit_role == "title" else 6.0
-    return (
-        _estimated_renderer_text_lines(
-            unit_text(block[0]), width_px=column_width, font_px=font_px
-        )
-        * font_px
-        * line_height
-        + margin
+    """Delegate to the canonical model so admission cannot outrun rendering."""
+
+    return semantic_block_height(
+        [_render_unit(item) for item in block],
+        column_width=column_width,
+        declared_font_px=slot_declared_font_px(slot),
+        adaptive_scale=adaptive_scale,
+        fallback_role=role,
+        table_block=_role_group(block[0].semantic_role, kind=block[0].kind)
+        == "table-cell",
     )
 
 
@@ -599,6 +808,31 @@ def _renderer_text_geometry(
         - max(0.0, _slot_number(spacing.get("insetBottom"))),
     ) * max(0.05, min(1.0, height_fraction))
     content_width *= max(0.05, min(1.0, width_fraction))
+    footer_units = [item for item in units if _is_footer_unit(item)]
+    body_units = [item for item in units if not _is_footer_unit(item)]
+    if footer_units:
+        footer_width = _footer_lane_width(footer_units)
+        if (
+            footer_width > content_width
+            # The lane is a fixed `height:23px` box with `overflow:hidden`.
+            or footer_lane_item_height() > _FOOTER_LANE_HEIGHT_PX
+            or usable_height
+            < (
+                _FOOTER_LANE_HEIGHT_PX + _FOOTER_BODY_GAP_PX
+                if body_units
+                else _FOOTER_LANE_HEIGHT_PX
+            )
+        ):
+            return (
+                False,
+                1.0,
+                math.inf,
+                0,
+                "source_native_footer_capacity_exceeded",
+            )
+        if not body_units:
+            return True, 1.0, _FOOTER_LANE_HEIGHT_PX / usable_height, 1, None
+        usable_height -= _FOOTER_LANE_HEIGHT_PX + _FOOTER_BODY_GAP_PX
     target_height = usable_height
     hints = _mapping(slot.get("layoutHints"))
     column_gap = max(
@@ -608,7 +842,24 @@ def _renderer_text_geometry(
     role = str(
         slot.get("sourceFlowRole") or slot.get("semanticRole") or "body"
     ).strip().lower()
-    blocks = _renderer_blocks(units)
+    blocks = _renderer_blocks(body_units)
+    if not blocks:
+        return True, 1.0, 0.0, 1, None
+    try:
+        fixed_table_matrix = any(
+            _table_matrix_shape(block) is not None
+            for block in blocks
+            if _role_group(block[0].semantic_role, kind=block[0].kind)
+            == "table-cell"
+        )
+    except ValueError:
+        return (
+            False,
+            1.0,
+            math.inf,
+            0,
+            "source_native_table_matrix_invalid",
+        )
     envelope = _mapping(slot.get("capacityEnvelope"))
     minimum_scale = min(
         adaptive_scale,
@@ -620,16 +871,19 @@ def _renderer_text_geometry(
             1.0,
             (content_width - column_gap * max(0, columns - 1)) / columns,
         )
-        weights = [
-            _estimated_renderer_block_height(
-                block,
-                slot=slot,
-                adaptive_scale=scale,
-                role=role,
-                column_width=column_width,
-            )
-            for block in blocks
-        ]
+        try:
+            weights = [
+                _estimated_renderer_block_height(
+                    block,
+                    slot=slot,
+                    adaptive_scale=scale,
+                    role=role,
+                    column_width=column_width,
+                )
+                for block in blocks
+            ]
+        except ValueError:
+            return math.inf
         ends = _balanced_renderer_ends(weights, columns)
         start = 0
         maximum = 0.0
@@ -639,7 +893,20 @@ def _renderer_text_geometry(
         return maximum
 
     options: list[tuple[float, int, float]] = []
-    for columns in range(1, min(4, len(blocks)) + 1):
+    maximum_columns = max(
+        1,
+        min(
+            4,
+            int(_slot_number(hints.get("columnCount"), 4)),
+            len(blocks),
+        ),
+    )
+    candidate_columns: Sequence[int] = (
+        (1,)
+        if fixed_table_matrix
+        else range(1, maximum_columns + 1)
+    )
+    for columns in candidate_columns:
         minimum_height = evaluate(columns, minimum_scale)
         if minimum_height > target_height:
             continue
@@ -660,17 +927,499 @@ def _renderer_text_geometry(
                 upper = midpoint
         options.append((lower, columns, lower_height))
     if not options:
+        reason = (
+            "source_native_table_matrix_capacity_exceeded"
+            if fixed_table_matrix
+            else "source_native_text_capacity_exceeded"
+        )
         return (
             False,
             minimum_scale,
             math.inf,
             0,
-            "source_native_text_capacity_exceeded",
+            reason,
         )
     scale, columns, maximum_height = max(
         options, key=lambda item: (round(item[0], 6), -item[1])
     )
     return True, scale, maximum_height / target_height, columns, None
+
+
+def _renderer_component_geometry(
+    *,
+    slot: Mapping[str, Any],
+    units: Sequence[_AdmissionUnit],
+) -> tuple[bool, float, float, int, str | None]:
+    surfaces = slot.get("sourceFlowComponentSurfaces")
+    expected_digest = str(slot.get("sourceFlowComponentGraphDigest") or "")
+    if (
+        not isinstance(surfaces, Sequence)
+        or isinstance(surfaces, (str, bytes))
+        or not surfaces
+        or not expected_digest
+        or canonical_digest(list(surfaces)) != expected_digest
+    ):
+        return False, 0.0, math.inf, 0, "source_native_component_graph_invalid"
+    bounds = _mapping(slot.get("bounds"))
+    spacing = _mapping(slot.get("spacing"))
+    width = max(
+        1.0,
+        _slot_number(bounds.get("width"))
+        - max(0.0, _slot_number(spacing.get("insetLeft")))
+        - max(0.0, _slot_number(spacing.get("insetRight"))),
+    )
+    full_height = max(
+        1.0,
+        _slot_number(bounds.get("height"))
+        - max(0.0, _slot_number(spacing.get("insetTop")))
+        - max(0.0, _slot_number(spacing.get("insetBottom"))),
+    )
+    height = full_height
+    footer_units = [item for item in units if _is_footer_unit(item)]
+    body_units = [item for item in units if not _is_footer_unit(item)]
+    if footer_units:
+        footer_width = _footer_lane_width(footer_units)
+        if (
+            footer_width > width
+            or footer_lane_item_height() > _FOOTER_LANE_HEIGHT_PX
+            or height <= _FOOTER_LANE_HEIGHT_PX + _FOOTER_BODY_GAP_PX
+        ):
+            return False, 1.0, math.inf, 0, "source_native_footer_capacity_exceeded"
+        height -= _FOOTER_LANE_HEIGHT_PX + _FOOTER_BODY_GAP_PX
+    blocks = _renderer_blocks(body_units)
+    if not blocks:
+        return True, 1.0, 0.0, 1, None
+    table_blocks = [
+        block
+        for block in blocks
+        if block[0].semantic_group_kind == "table-matrix"
+        or _role_group(block[0].semantic_role, kind=block[0].kind) == "table-cell"
+    ]
+    visual_blocks = [
+        block
+        for block in blocks
+        if any(item.kind == "image" for item in block)
+        or block[0].semantic_group_kind in {"media-card", "process-step", "kpi"}
+    ]
+    plain_blocks = [
+        block
+        for block in blocks
+        if block not in table_blocks and block not in visual_blocks
+    ]
+    evidence_blocks = [
+        block
+        for block in visual_blocks
+        if any(_is_meaningful_image(item) for item in block)
+    ]
+    secondary_visual_blocks = [
+        block for block in visual_blocks if block not in evidence_blocks
+    ]
+    envelope = _mapping(slot.get("capacityEnvelope"))
+    minimum_scale = max(
+        0.1, min(1.0, _slot_number(envelope.get("minimumTextScale"), 0.70))
+    )
+    maximum_utilization = 0.0
+    selected_scale = 1.0
+    plain_fraction = 0.0
+    if plain_blocks and (table_blocks or visual_blocks) and not evidence_blocks:
+        plain_units = [item for block in plain_blocks for item in block]
+        plain_fit: tuple[bool, float, float, int, str | None] | None = None
+        for candidate_fraction in (
+            0.08,
+            0.12,
+            0.16,
+            0.20,
+            0.25,
+            0.30,
+            0.35,
+            0.40,
+            0.45,
+            0.50,
+            0.55,
+            0.60,
+            0.65,
+            0.70,
+            0.75,
+        ):
+            width_fraction = 1.0
+            height_fraction = candidate_fraction
+            if not table_blocks:
+                overlay_padding = _COMPONENT_OVERLAY_PADDING_PX * 2.0
+                width_fraction = max(0.05, (width - overlay_padding) / width)
+                height_fraction = max(
+                    0.05,
+                    (height * candidate_fraction - overlay_padding) / height,
+                )
+            candidate_fit = _renderer_text_geometry(
+                slot=slot,
+                units=plain_units,
+                width_fraction=width_fraction,
+                height_fraction=height_fraction,
+            )
+            if candidate_fit[0]:
+                plain_fraction = candidate_fraction
+                plain_fit = candidate_fit
+                break
+        if plain_fit is None:
+            return (
+                False,
+                minimum_scale,
+                math.inf,
+                0,
+                "source_native_text_capacity_exceeded",
+            )
+        selected_scale = min(selected_scale, plain_fit[1])
+        maximum_utilization = max(maximum_utilization, plain_fit[2])
+        if table_blocks:
+            height = max(1.0, height * (1.0 - plain_fraction) - 12.0)
+
+    if table_blocks:
+        try:
+            if any(_table_matrix_shape(block) is None for block in table_blocks):
+                return (
+                    False,
+                    minimum_scale,
+                    math.inf,
+                    1,
+                    "source_native_table_matrix_invalid",
+                )
+        except ValueError:
+            return (
+                False,
+                minimum_scale,
+                math.inf,
+                1,
+                "source_native_table_matrix_invalid",
+            )
+
+        def table_height(scale: float) -> float:
+            try:
+                return sum(
+                    _estimated_renderer_block_height(
+                        block,
+                        slot=slot,
+                        adaptive_scale=scale,
+                        role="body",
+                        column_width=width,
+                    )
+                    for block in table_blocks
+                ) + 10.0 * max(0, len(table_blocks) - 1)
+            except ValueError:
+                return math.inf
+
+        minimum_height = table_height(minimum_scale)
+        if minimum_height > height:
+            return (
+                False,
+                minimum_scale,
+                math.inf,
+                1,
+                "source_native_table_matrix_capacity_exceeded",
+            )
+        maximum_height = table_height(1.0)
+        if maximum_height <= height:
+            table_scale = 1.0
+            selected_height = maximum_height
+        else:
+            lower = minimum_scale
+            upper = 1.0
+            selected_height = minimum_height
+            for _ in range(18):
+                midpoint = (lower + upper) / 2.0
+                midpoint_height = table_height(midpoint)
+                if midpoint_height <= height:
+                    lower = midpoint
+                    selected_height = midpoint_height
+                else:
+                    upper = midpoint
+            table_scale = lower
+        selected_scale = min(selected_scale, table_scale)
+        maximum_utilization = max(maximum_utilization, selected_height / height)
+        return True, selected_scale, maximum_utilization, 1, None
+
+    if evidence_blocks:
+        evidence_count = len(evidence_blocks)
+        evidence_width_fraction = (
+            1.0
+            if evidence_count == 1
+            else 0.60
+            if evidence_count == 2
+            else 0.55
+            if evidence_count == 3
+            else 0.52
+        )
+        evidence_height_fraction = 1.0 if evidence_count == 1 else 0.82
+        evidence_cell_width = width * evidence_width_fraction
+        evidence_cell_height = height * evidence_height_fraction
+        geometry_pass = True
+        for block in evidence_blocks:
+            for unit in block:
+                if not _is_meaningful_image(unit):
+                    continue
+                aspect = unit.image_aspect_ratio
+                if aspect is None:
+                    geometry_pass = False
+                    break
+                if evidence_cell_width / evidence_cell_height >= aspect:
+                    rendered_height = evidence_cell_height
+                    rendered_width = rendered_height * aspect
+                else:
+                    rendered_width = evidence_cell_width
+                    rendered_height = rendered_width / aspect
+                dimension_pass = (
+                    rendered_width >= _MEANINGFUL_IMAGE_MIN_WIDTH_PX
+                    and rendered_height >= _MEANINGFUL_IMAGE_MIN_HEIGHT_PX
+                )
+                area_scale_pass = (
+                    rendered_width * rendered_height
+                    >= _SLIDE_WIDTH_PX
+                    * _SLIDE_HEIGHT_PX
+                    * _MEANINGFUL_IMAGE_MIN_AREA_RATIO
+                    and min(
+                        rendered_width / _SLIDE_WIDTH_PX,
+                        rendered_height / _SLIDE_HEIGHT_PX,
+                    )
+                    >= _MEANINGFUL_IMAGE_SCALE_FLOOR
+                )
+                if not (dimension_pass or area_scale_pass):
+                    geometry_pass = False
+                    break
+            if not geometry_pass:
+                break
+        if not geometry_pass:
+            return (
+                False,
+                minimum_scale,
+                math.inf,
+                0,
+                "source_native_meaningful_image_capacity_exceeded",
+            )
+        overlay_blocks = [*plain_blocks, *secondary_visual_blocks]
+        overlay_scale = 1.0
+        overlay_utilization = 0.0
+        overlay_columns = 0
+        if overlay_blocks:
+            horizontal_gap = 12.0
+            vertical_gap = 8.0
+            overlay_height = max(1.0, height - 16.0)
+            maximum_overlay_columns = min(
+                3,
+                len(overlay_blocks),
+                max(1, int((width + horizontal_gap) // 280.0)),
+            )
+            overlay_options: list[tuple[float, int, float]] = []
+
+            def overlay_layout(scale: float, columns: int) -> float:
+                overlay_width = max(
+                    1.0,
+                    (
+                        width
+                        - 16.0
+                        - horizontal_gap * max(0, columns - 1)
+                    )
+                    / columns,
+                )
+                try:
+                    weights = [
+                        _estimated_renderer_block_height(
+                            block,
+                            slot=slot,
+                            adaptive_scale=scale,
+                            role="body",
+                            column_width=overlay_width,
+                        )
+                        for block in overlay_blocks
+                    ]
+                except ValueError:
+                    return math.inf
+                weighted = [value + vertical_gap for value in weights]
+                ends = _balanced_renderer_ends(weighted, columns)
+                start = 0
+                maximum = 0.0
+                for end in ends:
+                    maximum = max(
+                        maximum,
+                        max(0.0, sum(weighted[start:end]) - vertical_gap),
+                    )
+                    start = end
+                return maximum
+
+            for columns in range(1, maximum_overlay_columns + 1):
+                minimum_height = overlay_layout(minimum_scale, columns)
+                if minimum_height > overlay_height:
+                    continue
+                maximum_height = overlay_layout(1.0, columns)
+                if maximum_height <= overlay_height:
+                    overlay_options.append((1.0, columns, maximum_height))
+                    continue
+                lower = minimum_scale
+                upper = 1.0
+                selected_height = minimum_height
+                for _ in range(18):
+                    midpoint = (lower + upper) / 2.0
+                    midpoint_height = overlay_layout(midpoint, columns)
+                    if midpoint_height <= overlay_height:
+                        lower = midpoint
+                        selected_height = midpoint_height
+                    else:
+                        upper = midpoint
+                overlay_options.append((lower, columns, selected_height))
+            if not overlay_options:
+                return (
+                    False,
+                    minimum_scale,
+                    math.inf,
+                    0,
+                    "source_native_text_capacity_exceeded",
+                )
+            overlay_scale, overlay_columns, selected_height = max(
+                overlay_options,
+                key=lambda item: (
+                    round(item[0], 6),
+                    item[1],
+                    -round(item[2], 6),
+                ),
+            )
+            overlay_utilization = selected_height / overlay_height
+        return (
+            True,
+            min(selected_scale, overlay_scale),
+            max(maximum_utilization, overlay_utilization),
+            max(evidence_count, overlay_columns),
+            None,
+        )
+
+    if visual_blocks:
+        gap = _COMPONENT_VISUAL_GAP_PX
+        maximum_columns = min(
+            4,
+            len(visual_blocks),
+            max(1, int((width + gap) // 280.0)),
+        )
+        options: list[tuple[float, int, float, str, tuple[int, ...]]] = []
+
+        def visual_layout(
+            scale: float, columns: int
+        ) -> tuple[float, tuple[int, ...]]:
+            column_width = max(
+                1.0,
+                (width - gap * max(0, columns - 1)) / columns,
+            )
+            try:
+                weights = [
+                    _estimated_renderer_block_height(
+                        block,
+                        slot=slot,
+                        adaptive_scale=scale,
+                        role="body",
+                        column_width=column_width,
+                    )
+                    for block in visual_blocks
+                ]
+            except ValueError:
+                return math.inf, ()
+            weighted = [value + gap for value in weights]
+            ends = _balanced_renderer_ends(weighted, columns)
+            start = 0
+            maximum = 0.0
+            for end in ends:
+                maximum = max(
+                    maximum,
+                    max(0.0, sum(weighted[start:end]) - gap),
+                )
+                start = end
+            return maximum, ends
+
+        def visual_row_layout(scale: float, columns: int) -> float:
+            column_width = max(
+                1.0,
+                (width - gap * max(0, columns - 1)) / columns,
+            )
+            try:
+                weights = [
+                    _estimated_renderer_block_height(
+                        block,
+                        slot=slot,
+                        adaptive_scale=scale,
+                        role="body",
+                        column_width=column_width,
+                    )
+                    for block in visual_blocks
+                ]
+            except ValueError:
+                return math.inf
+            row_heights = [
+                max(weights[start : start + columns])
+                for start in range(0, len(weights), columns)
+            ]
+            return sum(row_heights) + gap * max(0, len(row_heights) - 1)
+
+        for columns in range(1, maximum_columns + 1):
+            for packing in ("columns", "rows"):
+                def evaluate(scale: float) -> tuple[float, tuple[int, ...]]:
+                    if packing == "rows":
+                        return visual_row_layout(scale, columns), ()
+                    return visual_layout(scale, columns)
+
+                minimum_height, minimum_ends = evaluate(minimum_scale)
+                if minimum_height > height:
+                    continue
+                maximum_height, maximum_ends = evaluate(1.0)
+                if maximum_height <= height:
+                    options.append(
+                        (1.0, columns, maximum_height, packing, maximum_ends)
+                    )
+                    continue
+                lower = minimum_scale
+                upper = 1.0
+                selected_height = minimum_height
+                selected_ends = minimum_ends
+                for _ in range(18):
+                    midpoint = (lower + upper) / 2.0
+                    midpoint_height, midpoint_ends = evaluate(midpoint)
+                    if midpoint_height <= height:
+                        lower = midpoint
+                        selected_height = midpoint_height
+                        selected_ends = midpoint_ends
+                    else:
+                        upper = midpoint
+                options.append(
+                    (lower, columns, selected_height, packing, selected_ends)
+                )
+        if not options:
+            return (
+                False,
+                minimum_scale,
+                math.inf,
+                0,
+                "source_native_text_capacity_exceeded",
+            )
+        visual_scale, selected_columns, selected_height, _, _ = max(
+            options,
+            key=lambda item: (
+                round(item[0], 6),
+                item[1],
+                -round(item[2], 6),
+                1 if item[3] == "columns" else 0,
+            ),
+        )
+        selected_scale = min(selected_scale, visual_scale)
+        maximum_utilization = max(
+            maximum_utilization, selected_height / max(1.0, height)
+        )
+        return (
+            True,
+            selected_scale,
+            maximum_utilization,
+            selected_columns,
+            None,
+        )
+
+    return _renderer_text_geometry(
+        slot=slot,
+        units=body_units,
+        height_fraction=height / full_height,
+    )
 
 
 def _renderer_geometry_fit(
@@ -695,11 +1444,24 @@ def _renderer_geometry_fit(
             if str(_value(item, "kind", default="text") or "text")
             in {"text", "title", "body", "quote"}
         ]
-        image_count = sum(
-            1
+        image_units = [
+            item
             for item in values
             if str(_value(item, "kind", default="") or "") == "image"
-        )
+        ]
+        image_count = len(image_units)
+        if str(slot.get("sourceFlowLayout") or "") == "components":
+            component_units = [item for item in values if isinstance(item, _AdmissionUnit)]
+            passed, scale, utilization, columns, reason = (
+                _renderer_component_geometry(slot=slot, units=component_units)
+            )
+            minimum_scale = min(minimum_scale, scale)
+            maximum_utilization = max(maximum_utilization, utilization)
+            resolved_columns = max(resolved_columns, columns)
+            mixed_layouts[slot_id] = "components"
+            if not passed:
+                failures.append({"slotId": slot_id, "reasonCode": str(reason)})
+            continue
         if text_units:
             selected_layout = "text"
             image_fraction = 0.0
@@ -787,11 +1549,56 @@ def _renderer_geometry_fit(
             else:
                 columns = max(1, min(3, math.ceil(image_count**0.5)))
             rows = max(1, math.ceil(image_count / columns))
-            cell_area = (usable_width / columns) * (usable_height / rows)
+            cell_width = usable_width / columns
+            cell_height = usable_height / rows
+            cell_area = cell_width * cell_height
             maximum_image_penalty = max(
                 maximum_image_penalty,
                 max(0.0, 1.0 - cell_area / (120.0 * 90.0)),
             )
+            for image_unit in image_units:
+                if not isinstance(image_unit, _AdmissionUnit) or not _is_meaningful_image(
+                    image_unit
+                ):
+                    continue
+                aspect = image_unit.image_aspect_ratio
+                if aspect is None:
+                    failures.append(
+                        {
+                            "slotId": slot_id,
+                            "reasonCode": "source_native_meaningful_image_geometry_unavailable",
+                        }
+                    )
+                    continue
+                if cell_width / cell_height >= aspect:
+                    rendered_height = cell_height
+                    rendered_width = rendered_height * aspect
+                else:
+                    rendered_width = cell_width
+                    rendered_height = rendered_width / aspect
+                rendered_area = rendered_width * rendered_height
+                slide_scale = min(
+                    rendered_width / _SLIDE_WIDTH_PX,
+                    rendered_height / _SLIDE_HEIGHT_PX,
+                )
+                dimension_pass = (
+                    rendered_width >= _MEANINGFUL_IMAGE_MIN_WIDTH_PX
+                    and rendered_height >= _MEANINGFUL_IMAGE_MIN_HEIGHT_PX
+                )
+                area_scale_pass = (
+                    rendered_area
+                    >= _SLIDE_WIDTH_PX
+                    * _SLIDE_HEIGHT_PX
+                    * _MEANINGFUL_IMAGE_MIN_AREA_RATIO
+                    and slide_scale >= _MEANINGFUL_IMAGE_SCALE_FLOOR
+                )
+                if not (dimension_pass or area_scale_pass):
+                    failures.append(
+                        {
+                            "slotId": slot_id,
+                            "reasonCode": "source_native_meaningful_image_capacity_exceeded",
+                        }
+                    )
     hard_fit = not failures
     rank_utilization = (
         maximum_utilization
@@ -805,7 +1612,7 @@ def _renderer_geometry_fit(
     ]
     return {
         "rendererGeometryFit": hard_fit,
-        "rendererGeometryScale": round(minimum_scale, 6),
+        "rendererGeometryScale": math.floor(minimum_scale * 1_000_000.0) / 1_000_000.0,
         "rendererGeometryUtilization": (
             round(maximum_utilization, 6)
             if math.isfinite(maximum_utilization)

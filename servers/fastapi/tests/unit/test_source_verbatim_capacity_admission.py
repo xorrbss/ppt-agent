@@ -9,6 +9,8 @@ from services.authored_vnext.composition_capacity import (
 from services.authored_vnext.source_verbatim_capacity import (
     CapacityAdmissionError,
     _admission_units,
+    _renderer_blocks,
+    _renderer_geometry_fit,
     _renderer_text_geometry,
     assert_source_verbatim_capacity_admission,
     build_source_verbatim_capacity_admission,
@@ -184,7 +186,8 @@ def test_source_verbatim_capacity_admission_preserves_exact_43_pages_and_fails_c
         if "-image-" in assignment["contentUnitId"]:
             slot_id = assignment["slotId"]
             first_page_image_slots[slot_id] = first_page_image_slots.get(slot_id, 0) + 1
-    assert sorted(first_page_image_slots.values()) == [8]
+    assert sum(first_page_image_slots.values()) == 8
+    assert all("-image-" in slot_id for slot_id in first_page_image_slots)
     assert receipt["policy"] == {
         "schemaVersion": "source-verbatim-capacity-policy/v1",
         "preservePageCount": True,
@@ -194,11 +197,24 @@ def test_source_verbatim_capacity_admission_preserves_exact_43_pages_and_fails_c
         "allowContentMutation": False,
         "allowContentOmission": False,
         "overflowAction": "fail-before-provider",
-        "packingStrategy": "same-page-render-geometry-fit/v4",
+        "packingStrategy": "same-page-render-geometry-fit/v12",
         "frameRanking": "semantic-density-media-render-geometry/v2",
         "varietyTieBreak": "least-used-after-fit/v1",
         "minimumAdaptiveTextScale": 0.70,
         "minimumBodyFontPoints": 12.0,
+        "textLineBoxBreathingPx": 1.0,
+        "componentOverlayPaddingPx": 8.0,
+        "iconVisualHeightPx": 48.0,
+        "mediaVisualHeightPx": 120.0,
+        "processMediaVisualHeightPx": 96.0,
+        "componentVisualGapPx": 8.0,
+        "componentVisualPacking": "best-of-row-major-or-contiguous-columns/v1",
+        "titleStackGapPx": 6.0,
+        "processStepMedia": "atomic-image-header-body/v1",
+        "semanticGrouping": "normalized-source-semantic/v1",
+        "tableLayout": "source-matrix-when-present/v1",
+        "meaningfulImageGate": "ui-evidence-absolute-geometry/v1",
+        "footerLayout": "compact-lane/v1",
         "chromiumOverflowGateRequired": True,
     }
 
@@ -487,4 +503,245 @@ def test_source_verbatim_admission_uses_renderer_geometry_and_fails_closed() -> 
         units=_admission_units(table_page, 0)[1:],
     )
     assert (passed, scale, columns, reason) == (True, 1.0, 1, None)
-    assert utilization == pytest.approx(0.538, abs=0.000001)
+    # The renderer emits `repeat(3,minmax(0,1fr))` for eight metadata-free
+    # cells, each `padding:1px 6px;border-left:2px;line-height:1.08!important`
+    # inside a `gap:1px 10px` grid: three rows of 22*1.08+2 plus two 1px row
+    # gaps is 79.28px in the 80px region.
+    assert utilization == pytest.approx(0.991, abs=0.000001)
+
+
+def test_source_verbatim_normalized_semantics_drive_fixed_geometry_gates() -> None:
+    def attach(unit: dict[str, object], **metadata: object) -> dict[str, object]:
+        payload = unit["payload"]
+        assert isinstance(payload, dict)
+        payload["data"] = [
+            {
+                "datumKey": f"source-semantic.{key}",
+                "value": value,
+            }
+            for key, value in metadata.items()
+        ]
+        return unit
+
+    grouped = [
+        attach(
+            _unit(0, index, text),
+            role=role,
+            **{"group-kind": "process-step", "group-id": "step-01"},
+        )
+        for index, (role, text) in enumerate(
+            (
+                ("step-number", "01"),
+                ("step-heading", "목표 입력"),
+                ("step-body", "자연어 요구와 성공 기준 수집"),
+            )
+        )
+    ]
+    grouped_page = {
+        "pageId": "grouped",
+        "pageIndex": 0,
+        "contentUnits": grouped,
+    }
+    grouped_units = _admission_units(grouped_page, 0)
+    blocks = _renderer_blocks(grouped_units)
+    assert [len(block) for block in blocks] == [3]
+    assert grouped_units[0].semantic_group_kind == "process-step"
+
+    table_raw = []
+    for row in range(2):
+        for column in range(3):
+            table_raw.append(
+                attach(
+                    _unit(0, row * 3 + column, f"R{row}C{column}"),
+                    role="table-header" if row == 0 else "table-cell",
+                    **{
+                        "group-kind": "table-matrix",
+                        "group-id": "table-01",
+                        "table-row": row,
+                        "table-column": column,
+                        "table-row-span": 1,
+                        "table-column-span": 1,
+                        "table-header": row == 0,
+                    },
+                )
+            )
+    table_page = {
+        "pageId": "table",
+        "pageIndex": 0,
+        "contentUnits": table_raw,
+    }
+    table_units = _admission_units(table_page, 0)
+    table_slot = {
+        "slotId": "table-slot",
+        "semanticRole": "table-cell",
+        "sourceFlowRole": "data",
+        "sourceFlowLayout": "text",
+        "acceptedKinds": ["text", "table"],
+        "bounds": {"width": 900, "height": 240},
+        "spacing": {},
+        "textStyle": {"fontSize": 22},
+        "layoutHints": {"columnGap": 18},
+        "capacityEnvelope": {"minimumTextScale": 0.70},
+    }
+    passed, scale, utilization, columns, reason = _renderer_text_geometry(
+        slot=table_slot,
+        units=table_units,
+    )
+    assert passed is True and scale == 1.0 and reason is None
+    assert columns == 1
+    assert utilization < 1.0
+    assert {(unit.table_row, unit.table_column) for unit in table_units} == {
+        (row, column) for row in range(2) for column in range(3)
+    }
+
+    small_image = attach(
+        _image_unit(0, 1),
+        role="ui-evidence",
+        **{"image-aspect-ratio": 16 / 9},
+    )
+    icon = attach(
+        _image_unit(0, 2),
+        role="icon",
+        **{"image-aspect-ratio": 16 / 9},
+    )
+    image_slot = {
+        "slotId": "image-slot",
+        "semanticRole": "image",
+        "acceptedKinds": ["image"],
+        "bounds": {"width": 400, "height": 225},
+        "spacing": {},
+        "capacityEnvelope": {"maxImages": 1},
+    }
+    small_unit = _admission_units(
+        {"contentUnits": [small_image]}, 0
+    )[0]
+    icon_unit = _admission_units({"contentUnits": [icon]}, 0)[0]
+    rejected = _renderer_geometry_fit(
+        slots=[image_slot],
+        assigned={"image-slot": [small_unit]},
+    )
+    assert rejected["rendererGeometryFit"] is False
+    assert rejected["rendererGeometryFailures"] == [
+        {
+            "slotId": "image-slot",
+            "reasonCode": "source_native_meaningful_image_capacity_exceeded",
+        }
+    ]
+    accepted_icon = _renderer_geometry_fit(
+        slots=[image_slot],
+        assigned={"image-slot": [icon_unit]},
+    )
+    assert accepted_icon["rendererGeometryFit"] is True
+
+    footer_raw = [
+        attach(
+            _unit(0, index, text),
+            role="compact-footer",
+            **{"group-kind": "compact-footer", "group-id": "footer-01"},
+        )
+        for index, text in enumerate(("제안서", "CONFIDENTIAL", "1 / 43"))
+    ]
+    footer_units = _admission_units(
+        {"contentUnits": [*grouped, *footer_raw]}, 0
+    )
+    footer_slot = {
+        **table_slot,
+        "slotId": "footer-slot",
+        "semanticRole": "body",
+        "sourceFlowRole": "body",
+        "bounds": {"width": 1136, "height": 240},
+    }
+    footer_fit = _renderer_text_geometry(
+        slot=footer_slot,
+        units=footer_units,
+    )
+    assert footer_fit[0] is True
+
+    dense_units_raw: list[dict[str, object]] = []
+    for step in range(6):
+        for offset, (role, text) in enumerate(
+            (
+                ("step-number", f"{step + 1:02d}"),
+                ("step-heading", f"단계 {step + 1}"),
+                (
+                    "step-body",
+                    "요구 구조화와 검증 결과를 같은 페이지에서 읽을 수 있게 유지합니다.",
+                ),
+            )
+        ):
+            dense_units_raw.append(
+                attach(
+                    _unit(0, step * 3 + offset, text),
+                    role=role,
+                    **{
+                        "group-kind": "process-step",
+                        "group-id": f"dense-step-{step + 1:02d}",
+                    },
+                )
+            )
+    for index in range(2):
+        dense_units_raw.append(
+            attach(
+                _image_unit(0, 100 + index, aspect_ratio=16 / 9),
+                role="ui-evidence",
+                **{
+                    "group-kind": "media-card",
+                    "group-id": f"evidence-{index + 1:02d}",
+                    "image-kind": "ui-evidence",
+                    "image-aspect-ratio": 16 / 9,
+                },
+            )
+        )
+    dense_units = _admission_units(
+        {"pageId": "components", "contentUnits": dense_units_raw}, 0
+    )
+    component_surfaces = [
+        {
+            "componentKind": "cardGrid",
+            "slotId": "pack-card-grid",
+            "relativeBounds": {"x": 0, "y": 0, "width": 1136, "height": 446},
+        },
+        {
+            "componentKind": "evidenceGallery",
+            "slotId": "pack-evidence-gallery",
+            "relativeBounds": {"x": 0, "y": 0, "width": 1136, "height": 446},
+        },
+    ]
+    component_slot = {
+        **table_slot,
+        "slotId": "component-slot",
+        "semanticRole": "source-flow-body",
+        "sourceFlowRole": "body",
+        "sourceFlowLayout": "components",
+        "sourceFlowComponentKind": "contentCanvas",
+        "acceptedKinds": ["text", "image"],
+        "bounds": {"width": 1136, "height": 446},
+        "spacing": {},
+        "textStyle": {},
+        "capacityEnvelope": {"minimumTextScale": 0.70, "maxImages": 8},
+        "sourceFlowComponentSurfaces": component_surfaces,
+        "sourceFlowComponentGraphDigest": canonical_digest(component_surfaces),
+    }
+    component_fit = _renderer_geometry_fit(
+        slots=[component_slot],
+        assigned={"component-slot": dense_units},
+    )
+    assert component_fit["rendererGeometryFit"] is True
+    assert component_fit["rendererGeometryScale"] >= 0.70
+    assert component_fit["rendererGeometryColumns"] == 3
+
+    invalid_component_slot = {
+        **component_slot,
+        "sourceFlowComponentGraphDigest": canonical_digest("tampered"),
+    }
+    invalid_component = _renderer_geometry_fit(
+        slots=[invalid_component_slot],
+        assigned={"component-slot": dense_units},
+    )
+    assert invalid_component["rendererGeometryFit"] is False
+    assert invalid_component["rendererGeometryFailures"] == [
+        {
+            "slotId": "component-slot",
+            "reasonCode": "source_native_component_graph_invalid",
+        }
+    ]

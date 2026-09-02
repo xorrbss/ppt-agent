@@ -63,6 +63,21 @@ def _unit_from_contract(value: object, *, semantic_role: str = "body") -> Sealed
     kind = str(_value(value, "kind", default="text") or "text")
     text = str(_value(value, "text", default=payload.get("text", "")) or "")
     data = _value(value, "data", default=payload.get("data"))
+    resolved_semantic_role = semantic_role
+    if isinstance(data, Sequence) and not isinstance(data, (str, bytes, bytearray)):
+        for datum in data:
+            try:
+                datum_key = str(
+                    _value(datum, "datum_key", "datumKey", default="") or ""
+                )
+                datum_value = _value(datum, "value", default="")
+            except (TypeError, ValueError):
+                continue
+            if datum_key == "semantic-role" and isinstance(datum_value, str):
+                candidate = datum_value.strip()
+                if candidate:
+                    resolved_semantic_role = candidate
+                    break
     source_ownership = _value(value, "source_ownership", "sourceOwnership", default=())
     ownership = tuple(
         _mapping(item)
@@ -95,7 +110,7 @@ def _unit_from_contract(value: object, *, semantic_role: str = "body") -> Sealed
         asset_occurrence_id=(str(unsigned["assetOccurrenceId"]) if unsigned["assetOccurrenceId"] else None),
         asset_digest=(str(unsigned["assetDigest"]) if unsigned["assetDigest"] else None),
         source_ownership=ownership,
-        semantic_role=semantic_role,
+        semantic_role=resolved_semantic_role,
     )
 
 

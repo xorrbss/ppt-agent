@@ -56,6 +56,13 @@ GLOBAL_ATTRIBUTES = {
     "data-quality-unintentional",
     "data-asset-digest", "data-source-occurrence-index",
     "data-asset-occurrence-ids",
+    # Inert, server-stamped source composition bindings. These identifiers,
+    # classifications, and digests let the Chromium readback prove that the
+    # admitted component/group graph is exactly the graph that was rendered.
+    # They do not authorize resources or executable behaviour.
+    "data-source-component-graph-digest", "data-source-component-kind",
+    "data-source-semantic-group-id", "data-source-semantic-group-kind",
+    "data-source-image-kind", "data-source-image-aspect-ratio",
     # Inert export-planning hint occasionally emitted by Authored.  It carries
     # no URL or executable value; Hybrid still derives authoritative coverage
     # from the admitted DOM instead of trusting this hint.

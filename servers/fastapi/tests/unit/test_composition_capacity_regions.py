@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from services.authored_vnext.composition import build_composition_plan
-from services.authored_vnext.composition_capacity import source_flow_slots
+from services.authored_vnext.composition_capacity import allocate_units, source_flow_slots
 
 
 def _slot(
@@ -243,7 +243,7 @@ def test_source_flow_does_not_merge_same_role_across_pack_containers() -> None:
     assert all(len(item["sourceFlowMemberSlotIds"]) == 1 for item in body_flows)
 
 
-def test_source_flow_promotes_authored_container_graph_instead_of_leaf_slots() -> None:
+def test_source_flow_preserves_heterogeneous_component_surfaces() -> None:
     frame = {
         "frameId": "arbitrary-frame",
         "sourceDigest": "sha256:" + "f" * 64,
@@ -301,18 +301,48 @@ def test_source_flow_promotes_authored_container_graph_instead_of_leaf_slots() -
 
     slots = source_flow_slots(frame)
     active = [item for item in slots if item.get("sourceFlowLayout")]
-    promoted = [
-        item
-        for item in active
-        if item.get("sourceFlowContainerGraphVersion") == "v1"
-    ]
+    title = next(item for item in active if item["slotId"] == "slot:outside-title")
+    cards = [item for item in active if item["slotId"].startswith("slot:leaf-")]
 
-    assert len(active) == 1
-    assert len(promoted) == 1
-    assert promoted[0]["containerId"] == "html:arbitrary-frame#content"
-    assert promoted[0]["sourceFlowSurface"] == "container-inherited"
-    assert promoted[0]["sourceFlowMemberSlotIds"] == [
-        f"slot:leaf-{index}" for index in range(8)
-    ] + ["slot:outside-title"]
-    assert promoted[0]["bounds"]["y"] < 100
-    assert len([item for item in slots if item.get("sourceFlowSuppressedBy")]) == 8
+    assert len(active) == 9
+    assert all(item["sourceFlowContainerGraphVersion"] == "v2" for item in active)
+    assert title["sourceFlowComponentKind"] == "titleBand"
+    assert title["sourceFlowMemberSlotIds"] == ["slot:outside-title"]
+    assert {item["sourceFlowComponentKind"] for item in cards} == {"cardGrid"}
+    assert len({item["sourceFlowComponentGroupId"] for item in cards}) == 1
+    assert all(
+        item["sourceFlowMemberSlotIds"] == [item["slotId"]] for item in cards
+    )
+    assert all(item["sourceFlowSurface"] == "component-container" for item in active)
+    assert not [item for item in slots if item.get("sourceFlowSuppressedBy")]
+
+    grouped = [
+        {
+            **_unit(f"unit:step-{index}", index, text),
+            "text": text,
+            "data": [
+                {
+                    "datumKey": "source-semantic.group-id",
+                    "value": "source-page-001:process-step-001",
+                },
+                {
+                    "datumKey": "source-semantic.group-kind",
+                    "value": "process-step",
+                },
+                {
+                    "datumKey": "source-semantic.role",
+                    "value": role,
+                },
+            ],
+        }
+        for index, (text, role) in enumerate(
+            (("01", "step-number"), ("Discover", "step-heading"), ("One atomic step.", "step-body"))
+        )
+    ]
+    _, assignments, unmapped = allocate_units(grouped, active)
+    assigned_slots = {item["slotId"] for item in assignments}
+
+    assert unmapped == []
+    assert len(assigned_slots) == 1
+    selected = next(item for item in active if item["slotId"] in assigned_slots)
+    assert selected["sourceFlowComponentKind"] == "cardGrid"

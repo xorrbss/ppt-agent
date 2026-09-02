@@ -894,6 +894,8 @@ def _instrument_authored_html(
         qid: node.getAttribute('data-qid'), tag: node.tagName.toLowerCase(),
         semantic_role: node.getAttribute('data-semantic-role') || node.getAttribute('data-role') || node.getAttribute('role') || null,
         source_block_id: node.getAttribute('data-source-block-id'),
+        source_image_kind: node.getAttribute('data-source-image-kind'),
+        source_image_aspect_ratio: node.getAttribute('data-source-image-aspect-ratio'),
         css_visible: cssVisible, effective_opacity: effectiveOpacity,
         viewport_intersection_ratio: viewportIntersectionRatio,
         bbox: {{x: rect.x, y: rect.y, width: rect.width, height: rect.height}},
