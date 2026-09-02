@@ -460,6 +460,14 @@ _CANONICAL_VALID = _VALID.replace(
     "<meta charset='utf-8'>",
     '<meta charset="utf-8">',
 )
+# author_deck seals the render-bound owner namespace on every accepted slide
+# before the header and capacity contracts are checked: each rendered element
+# gets its stable data-qid and the derived data-semantic-role. A valid provider
+# result therefore comes back annotated rather than byte-identical.
+_SEALED_VALID = _VALID.replace(
+    "<h1>제목</h1>",
+    '<h1 data-qid="q-h1-94f712e4878d" data-semantic-role="title">제목</h1>',
+)
 
 
 def _outline(n):
@@ -669,7 +677,7 @@ def test_author_deck_uses_authored_html_when_valid(monkeypatch):
     monkeypatch.setattr(author_deck_mod, "author_slide_html", fake)
     htmls = _run(author_deck(_outline(4), _brand())).htmls
     assert len(htmls) == 4
-    assert all(h == _VALID for h in htmls)
+    assert all(h == _SEALED_VALID for h in htmls)
 
 
 def test_author_deck_recovers_only_failed_slide_from_batch(monkeypatch):
@@ -733,7 +741,7 @@ def test_author_deck_retries_then_succeeds(monkeypatch):
 
     monkeypatch.setattr(author_deck_mod, "author_slide_html", flaky)
     htmls = _run(author_deck(_outline(1), _brand())).htmls
-    assert htmls == [_VALID]
+    assert htmls == [_SEALED_VALID]
     assert calls["n"] == 2
 
 
@@ -749,7 +757,7 @@ def test_author_deck_retries_semantic_failure_with_bounded_correction(monkeypatc
     monkeypatch.setattr(author_deck_mod, "author_slide_html", flaky)
     htmls = _run(author_deck(_outline(1), _brand())).htmls
 
-    assert htmls == [_VALID]
+    assert htmls == [_SEALED_VALID]
     assert hints[0] is None
     assert "Every rendered HTML element" in hints[1]
     assert "data-qid" in hints[1]
@@ -767,7 +775,7 @@ def test_author_deck_stops_after_one_bounded_semantic_correction(monkeypatch):
     monkeypatch.setattr(author_deck_mod, "author_slide_html", flaky)
     htmls = _run(author_deck(_outline(1), _brand())).htmls
 
-    assert htmls == [_VALID]
+    assert htmls == [_SEALED_VALID]
     assert len(calls) == 2
     assert calls[0].get("correction_hint") is None
     assert "first rejected element was <section>" in calls[1]["correction_hint"]
@@ -824,7 +832,7 @@ def test_author_deck_retries_local_renderer_failure_with_rejected_html(monkeypat
 
     monkeypatch.setattr(author_deck_mod, "author_slide_html", flaky)
 
-    assert _run(author_deck(_outline(1), _brand())).htmls == [_VALID]
+    assert _run(author_deck(_outline(1), _brand())).htmls == [_SEALED_VALID]
     assert calls[0].get("rejected_html") is None
     assert calls[1]["rejected_html"] == rejected_html
     assert "pseudo-element" in calls[1]["correction_hint"]
@@ -1309,7 +1317,7 @@ def test_author_deck_builds_and_shares_selected_design_system_once(monkeypatch):
     assert len(build_calls) == 1
     assert build_calls[0][1] is style
     assert result == AuthoredDeckResult(
-        htmls=[_VALID, _VALID, _VALID], design_system="SELECTED DESIGN SYSTEM"
+        htmls=[_SEALED_VALID] * 3, design_system="SELECTED DESIGN SYSTEM"
     )
     assert author_design_systems == ["SELECTED DESIGN SYSTEM"] * 3
 
@@ -1372,7 +1380,7 @@ def test_author_deck_propagates_exact_reference_mode(monkeypatch, tmp_path):
 
     result = _run(author_deck(_outline(1), _brand(), style))
 
-    assert result.htmls == [_VALID]
+    assert result.htmls == [_SEALED_VALID]
     assert captured == [((cover,), EXACT_RECONSTRUCTION)]
 
 
