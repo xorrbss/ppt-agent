@@ -2,9 +2,14 @@ from __future__ import annotations
 
 import pytest
 
-from services.authored_vnext.composition_capacity import canonical_digest
+from services.authored_vnext.composition_capacity import (
+    canonical_digest,
+    source_flow_slots,
+)
 from services.authored_vnext.source_verbatim_capacity import (
     CapacityAdmissionError,
+    _admission_units,
+    _renderer_text_geometry,
     assert_source_verbatim_capacity_admission,
     build_source_verbatim_capacity_admission,
 )
@@ -189,10 +194,11 @@ def test_source_verbatim_capacity_admission_preserves_exact_43_pages_and_fails_c
         "allowContentMutation": False,
         "allowContentOmission": False,
         "overflowAction": "fail-before-provider",
-        "packingStrategy": "same-page-content-fit/v3",
-        "frameRanking": "semantic-density-media-data-readability/v1",
+        "packingStrategy": "same-page-render-geometry-fit/v4",
+        "frameRanking": "semantic-density-media-render-geometry/v2",
         "varietyTieBreak": "least-used-after-fit/v1",
         "minimumAdaptiveTextScale": 0.70,
+        "minimumBodyFontPoints": 12.0,
         "chromiumOverflowGateRequired": True,
     }
 
@@ -321,3 +327,164 @@ def test_source_verbatim_frame_ranking_uses_image_aspect_and_table_semantics() -
     assert selected["contentFeatures"]["imageOccurrenceCount"] == 1
     assert selected["contentFeatures"]["imageAspectRatios"] == [1.777778]
     assert selected["contentFeatures"]["tableCellCount"] == 1
+
+
+def test_source_verbatim_admission_uses_renderer_geometry_and_fails_closed() -> None:
+    units = [_unit(0, 0, "Title")]
+    units.extend(
+        _unit(0, index, "한" * 100)
+        for index in range(1, 4)
+    )
+    page = {"pageId": "page-001", "pageIndex": 0, "contentUnits": units}
+    page["pageDigest"] = canonical_digest(page)
+    graph = {
+        "contentGraphDigest": canonical_digest([page]),
+        "pages": [page],
+    }
+
+    def frame(frame_id: str, *, body_width: float, body_height: float) -> dict[str, object]:
+        return {
+            "frameId": frame_id,
+            "sourceDigest": canonical_digest(frame_id),
+            "slots": [
+                {
+                    "slotId": f"{frame_id}-title",
+                    "semanticRole": "title",
+                    "acceptedKinds": ["text"],
+                    "required": True,
+                    "capacityEnvelope": {
+                        "maxCharacters": 4000,
+                        "maxLines": 1000,
+                        "charactersPerLine": 1000,
+                        "contentArea": 1000000,
+                        "characterArea": 1,
+                    },
+                    "patchHandle": {
+                        "kind": "authored-qid",
+                        "elementId": f"{frame_id}-title",
+                    },
+                    "bounds": {"x": 40, "y": 40, "width": 600, "height": 90},
+                    "textStyle": {"fontSize": 40},
+                    "extractionConfidence": 1.0,
+                },
+                {
+                    "slotId": f"{frame_id}-body",
+                    "semanticRole": "body",
+                    "acceptedKinds": ["text"],
+                    "required": True,
+                    "capacityEnvelope": {
+                        "maxCharacters": 4000,
+                        "maxLines": 1000,
+                        "charactersPerLine": 1000,
+                        "contentArea": 1000000,
+                        "characterArea": 1,
+                    },
+                    "patchHandle": {
+                        "kind": "authored-qid",
+                        "elementId": f"{frame_id}-body",
+                    },
+                    "bounds": {
+                        "x": 40,
+                        "y": 150,
+                        "width": body_width,
+                        "height": body_height,
+                    },
+                    "textStyle": {"fontSize": 22},
+                    "extractionConfidence": 1.0,
+                },
+            ],
+        }
+
+    synthetic_only = frame("synthetic-only", body_width=120, body_height=80)
+    actual_fit = frame("actual-fit", body_width=900, body_height=500)
+    receipt = build_source_verbatim_capacity_admission(
+        content_graph=graph,
+        frames=[synthetic_only, actual_fit],
+        frame_structure_digest=canonical_digest([synthetic_only, actual_fit]),
+        expected_slide_count=1,
+    )
+
+    assert_source_verbatim_capacity_admission(receipt)
+    selected = receipt["pages"][0]
+    assert selected["selectedFrameId"] == "actual-fit"
+    assert selected["hardPassCandidateCount"] == 1
+    assert selected["selectedRendererGeometryScale"] >= 0.70
+    assert selected["rendererGeometryFailures"] == []
+
+    rejected = build_source_verbatim_capacity_admission(
+        content_graph=graph,
+        frames=[synthetic_only],
+        frame_structure_digest=canonical_digest([synthetic_only]),
+        expected_slide_count=1,
+    )
+    assert rejected["status"] == "failed"
+    assert rejected["failureCode"] == "source_verbatim_same_page_capacity_exceeded"
+    assert rejected["pages"][0]["selectedFrameId"] is None
+    assert rejected["pages"][0]["hardPassCandidateCount"] == 0
+    assert rejected["pages"][0]["unmappedRequiredUnits"] == []
+    geometry_failures = rejected["pages"][0]["rendererGeometryFailures"]
+    assert "synthetic-only-body" in {
+        item["slotId"] for item in geometry_failures
+    }
+    assert {
+        item["reasonCode"] for item in geometry_failures
+    } == {"source_native_text_capacity_exceeded"}
+
+    mixed_units = [
+        _unit(0, 0, "Title"),
+        _unit(0, 1, "Short body"),
+        *[
+            _image_unit(0, index)
+            for index in range(2, 6)
+        ],
+    ]
+    mixed_page = {
+        "pageId": "mixed-page",
+        "pageIndex": 0,
+        "contentUnits": mixed_units,
+    }
+    mixed_page["pageDigest"] = canonical_digest(mixed_page)
+    mixed_graph = {
+        "contentGraphDigest": canonical_digest([mixed_page]),
+        "pages": [mixed_page],
+    }
+    mixed_fit = frame("mixed-fit", body_width=900, body_height=500)
+    mixed_fit["slots"][0]["capacityEnvelope"]["maxCharacters"] = 5
+    mixed_fit["slots"][1]["capacityEnvelope"]["maxImages"] = 8
+    mixed_receipt = build_source_verbatim_capacity_admission(
+        content_graph=mixed_graph,
+        frames=[mixed_fit],
+        frame_structure_digest=canonical_digest([mixed_fit]),
+        expected_slide_count=1,
+    )
+    assert_source_verbatim_capacity_admission(mixed_receipt)
+    mixed_selected = mixed_receipt["pages"][0]
+    assert mixed_selected["selectedRendererGeometryScale"] == 1.0
+    assert mixed_selected["selectedRendererMixedLayouts"] == {
+        "mixed-fit-body": "vertical"
+    }
+
+    table_units = [_unit(0, 0, "Head")]
+    for index in range(1, 9):
+        cell = _unit(0, index, f"값{index:02d}")
+        cell["contentUnitId"] = f"page-001-table-cell-{index:03d}"
+        table_units.append(cell)
+    table_page = {
+        "pageId": "table-page",
+        "pageIndex": 0,
+        "contentUnits": table_units,
+    }
+    table_page["pageDigest"] = canonical_digest(table_page)
+    table_fit = frame("table-fit", body_width=900, body_height=80)
+    table_fit["slots"][1]["semanticRole"] = "table-cell"
+    table_slot = next(
+        slot
+        for slot in source_flow_slots(table_fit)
+        if slot.get("sourceFlowRole") == "data"
+    )
+    passed, scale, utilization, columns, reason = _renderer_text_geometry(
+        slot=table_slot,
+        units=_admission_units(table_page, 0)[1:],
+    )
+    assert (passed, scale, columns, reason) == (True, 1.0, 1, None)
+    assert utilization == pytest.approx(0.538, abs=0.000001)

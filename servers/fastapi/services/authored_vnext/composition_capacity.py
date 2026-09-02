@@ -669,12 +669,24 @@ def _promoted_container_flow_slots(
             str(item.get("slotId") or ""),
         ),
     )
-    inset = min(18.0, selected_bounds["width"] * 0.025, selected_bounds["height"] * 0.04)
+    all_member_rects = [
+        rect
+        for rect in (_rect(item.get("bounds")) for item in slots)
+        if rect is not None
+    ]
+    if not all_member_rects:
+        return [dict(item) for item in resolved]
+    editable_envelope = _union_rect(all_member_rects)
+    inset = min(
+        18.0,
+        editable_envelope["width"] * 0.025,
+        editable_envelope["height"] * 0.04,
+    )
     region = {
-        "x": selected_bounds["x"] + inset,
-        "y": selected_bounds["y"] + inset,
-        "width": max(1.0, selected_bounds["width"] - inset * 2),
-        "height": max(1.0, selected_bounds["height"] - inset * 2),
+        "x": editable_envelope["x"] + inset,
+        "y": editable_envelope["y"] + inset,
+        "width": max(1.0, editable_envelope["width"] - inset * 2),
+        "height": max(1.0, editable_envelope["height"] - inset * 2),
     }
     aspect = region["width"] / max(1.0, region["height"])
     columns = 3 if aspect >= 2.5 else 2 if aspect >= 1.45 else 1
@@ -722,9 +734,11 @@ def _promoted_container_flow_slots(
             "sourceFlowLayout": "text",
             "sourceFlowRole": "body",
             "sourceFlowGroupId": group_id,
-            "sourceFlowMemberSlotIds": sorted(str(item["slotId"]) for item in slots),
+            "sourceFlowMemberSlotIds": sorted(
+                str(item["slotId"]) for item in slots
+            ),
             "sourceFlowMemberBounds": [
-                rect for rect in (_rect(item.get("bounds")) for item in slots) if rect
+                rect for rect in all_member_rects
             ],
             "sourceFlowSurface": "container-inherited",
             "sourceFlowContainerGraphVersion": "v1",

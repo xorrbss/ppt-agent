@@ -289,12 +289,30 @@ def test_source_flow_promotes_authored_container_graph_instead_of_leaf_slots() -
         )
         slot["containerId"] = f"html:arbitrary-frame#card-{index}"
         frame["slots"].append(slot)
+    title_slot = _slot(
+        "slot:outside-title",
+        "title",
+        "text",
+        {"x": 90, "y": 62, "width": 820, "height": 64},
+        maximum=80,
+    )
+    title_slot["containerId"] = "html:arbitrary-frame"
+    frame["slots"].append(title_slot)
 
     slots = source_flow_slots(frame)
     active = [item for item in slots if item.get("sourceFlowLayout")]
+    promoted = [
+        item
+        for item in active
+        if item.get("sourceFlowContainerGraphVersion") == "v1"
+    ]
 
     assert len(active) == 1
-    assert active[0]["containerId"] == "html:arbitrary-frame#content"
-    assert active[0]["sourceFlowSurface"] == "container-inherited"
-    assert active[0]["sourceFlowContainerGraphVersion"] == "v1"
-    assert len([item for item in slots if item.get("sourceFlowSuppressedBy")]) == 7
+    assert len(promoted) == 1
+    assert promoted[0]["containerId"] == "html:arbitrary-frame#content"
+    assert promoted[0]["sourceFlowSurface"] == "container-inherited"
+    assert promoted[0]["sourceFlowMemberSlotIds"] == [
+        f"slot:leaf-{index}" for index in range(8)
+    ] + ["slot:outside-title"]
+    assert promoted[0]["bounds"]["y"] < 100
+    assert len([item for item in slots if item.get("sourceFlowSuppressedBy")]) == 8

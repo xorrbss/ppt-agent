@@ -719,6 +719,7 @@ def _append_flow_text_units(
     slot: Mapping[str, object],
     adaptive_scale: float,
     role: str,
+    column_width: float | None = None,
 ) -> None:
     index = 0
     while index < len(units):
@@ -731,7 +732,16 @@ def _append_flow_text_units(
             cells = units[index:end]
             grid = lxml_html.Element("div")
             grid.set("data-qid", f"source-flow-table:{cells[0].content_unit_id}")
-            columns = max(2, min(4, math.ceil(len(cells) ** 0.5)))
+            if column_width is None:
+                columns = max(2, min(4, math.ceil(len(cells) ** 0.5)))
+            else:
+                columns, _ = _select_flow_table_layout(
+                    cells,
+                    slot=slot,
+                    adaptive_scale=adaptive_scale,
+                    role=role,
+                    column_width=column_width,
+                )
             grid.set(
                 "style",
                 "display:grid!important;break-inside:avoid;margin:0 0 8px;"
@@ -816,6 +826,56 @@ def _estimated_text_lines(text: str, *, width_px: float, font_px: float) -> int:
     return lines
 
 
+def _select_flow_table_layout(
+    cells: list[SealedContentUnit],
+    *,
+    slot: Mapping[str, object],
+    adaptive_scale: float,
+    role: str,
+    column_width: float,
+) -> tuple[int, float]:
+    """Choose one readable table grid shared by estimation and rendering."""
+
+    if len(cells) < 2:
+        candidate_columns = (1,)
+    else:
+        candidate_columns = range(2, min(8, len(cells)) + 1)
+    font_px = _flow_font_px(slot, role=role, adaptive_scale=adaptive_scale)
+    readable_floor_px = SOURCE_NATIVE_MIN_BODY_FONT_PT / 0.75
+    if role not in {"title", "headline", "heading"} and font_px < readable_floor_px:
+        raise SourceNativeGenerationError("source_native_text_readability_failed")
+    candidates: list[tuple[float, int]] = []
+    for columns in candidate_columns:
+        rows = math.ceil(len(cells) / columns)
+        cell_width = max(
+            1.0,
+            (column_width - (columns - 1) * 10.0) / columns - 12.0,
+        )
+        heights = [
+            _estimated_text_lines(
+                _unit_render_text(unit), width_px=cell_width, font_px=font_px
+            )
+            * font_px
+            * 1.32
+            + 6.0
+            for unit in cells
+        ]
+        estimated_height = (
+            sum(
+                max(heights[row * columns : (row + 1) * columns])
+                for row in range(rows)
+            )
+            + max(0, rows - 1) * 4.0
+            + 8.0
+        )
+        candidates.append((estimated_height, columns))
+    estimated_height, columns = min(
+        candidates,
+        key=lambda item: (round(item[0], 6), item[1]),
+    )
+    return columns, estimated_height
+
+
 def _estimated_flow_block_height(
     block: list[SealedContentUnit],
     *,
@@ -825,23 +885,14 @@ def _estimated_flow_block_height(
     column_width: float,
 ) -> float:
     if _unit_boundary_kind(block[0]) == "table-cell":
-        columns = max(2, min(4, math.ceil(len(block) ** 0.5)))
-        rows = math.ceil(len(block) / columns)
-        cell_width = max(1.0, (column_width - (columns - 1) * 10.0) / columns - 12.0)
-        font_px = _flow_font_px(slot, role=role, adaptive_scale=adaptive_scale)
-        heights = [
-            _estimated_text_lines(
-                _unit_render_text(unit), width_px=cell_width, font_px=font_px
-            )
-            * font_px
-            * 1.32
-            + 6.0
-            for unit in block
-        ]
-        return sum(
-            max(heights[row * columns : (row + 1) * columns])
-            for row in range(rows)
-        ) + max(0, rows - 1) * 4.0 + 8.0
+        _, estimated_height = _select_flow_table_layout(
+            block,
+            slot=slot,
+            adaptive_scale=adaptive_scale,
+            role=role,
+            column_width=column_width,
+        )
+        return estimated_height
     unit = block[0]
     unit_role = (
         "title"
@@ -903,7 +954,8 @@ def _append_fixed_text_columns(
     columns_count: int,
     column_gap: float,
     width_fraction: float = 1.0,
-) -> None:
+    height_fraction: float = 1.0,
+) -> float:
     """Keep atomic source units inside an explicit, bounded column grid."""
 
     blocks: list[list[SealedContentUnit]] = []
@@ -929,13 +981,23 @@ def _append_fixed_text_columns(
         _flow_number(bounds.get("height"), 720.0)
         - max(0.0, _flow_number(spacing.get("insetTop")))
         - max(0.0, _flow_number(spacing.get("insetBottom"))),
+    ) * max(0.05, min(1.0, height_fraction))
+    # The overlay is itself the hard geometry boundary and Chromium performs
+    # the downstream overflow check, so admission may use the full measured
+    # content height instead of discarding an arbitrary ten-percent reserve.
+    target_height = usable_height
+    capacity = _flow_mapping(slot, "capacityEnvelope")
+    minimum_scale = min(
+        adaptive_scale,
+        max(
+            0.1,
+            _flow_number(capacity.get("minimumTextScale"), 0.70),
+        ),
     )
-    target_height = usable_height * 0.90
-    resolved_columns = initial_columns
-    weights: list[float] = []
-    ends: tuple[int, ...] = ()
-    maximum_estimated_height = math.inf
-    for candidate_columns in range(initial_columns, min(4, len(blocks)) + 1):
+
+    def evaluate(
+        candidate_columns: int, candidate_scale: float
+    ) -> tuple[list[float], tuple[int, ...], float]:
         column_width = max(
             1.0,
             (
@@ -948,7 +1010,7 @@ def _append_fixed_text_columns(
             _estimated_flow_block_height(
                 block,
                 slot=slot,
-                adaptive_scale=adaptive_scale,
+                adaptive_scale=candidate_scale,
                 role=role,
                 column_width=column_width,
             )
@@ -964,14 +1026,61 @@ def _append_fixed_text_columns(
                 candidate_maximum, sum(candidate_weights[start:end])
             )
             start = end
-        resolved_columns = candidate_columns
-        weights = candidate_weights
-        ends = candidate_ends
-        maximum_estimated_height = candidate_maximum
-        if candidate_maximum <= target_height:
-            break
-    if maximum_estimated_height > target_height:
+        return candidate_weights, candidate_ends, candidate_maximum
+
+    options: list[
+        tuple[float, int, list[float], tuple[int, ...], float]
+    ] = []
+    for candidate_columns in range(1, min(4, len(blocks)) + 1):
+        minimum_result = evaluate(candidate_columns, minimum_scale)
+        if minimum_result[2] > target_height:
+            continue
+        maximum_result = evaluate(candidate_columns, adaptive_scale)
+        if maximum_result[2] <= target_height:
+            options.append(
+                (
+                    adaptive_scale,
+                    candidate_columns,
+                    maximum_result[0],
+                    maximum_result[1],
+                    maximum_result[2],
+                )
+            )
+            continue
+        lower = minimum_scale
+        upper = adaptive_scale
+        lower_result = minimum_result
+        for _ in range(18):
+            midpoint = (lower + upper) / 2.0
+            midpoint_result = evaluate(candidate_columns, midpoint)
+            if midpoint_result[2] <= target_height:
+                lower = midpoint
+                lower_result = midpoint_result
+            else:
+                upper = midpoint
+        options.append(
+            (
+                lower,
+                candidate_columns,
+                lower_result[0],
+                lower_result[1],
+                lower_result[2],
+            )
+        )
+    if not options:
         raise SourceNativeGenerationError("source_native_text_capacity_exceeded")
+    effective_scale, resolved_columns, weights, ends, _ = max(
+        options,
+        key=lambda item: (round(item[0], 6), -item[1]),
+    )
+    resolved_column_width = max(
+        1.0,
+        (
+            content_width
+            - column_gap * max(0, resolved_columns - 1)
+        )
+        / resolved_columns,
+    )
     parent.set(
         "style",
         "display:grid!important;width:100%;height:100%;min-width:0;min-height:0;"
@@ -994,10 +1103,12 @@ def _append_fixed_text_columns(
             column,
             [unit for block in selected_blocks for unit in block],
             slot=slot,
-            adaptive_scale=adaptive_scale,
+            adaptive_scale=effective_scale,
             role=role,
+            column_width=resolved_column_width,
         )
         parent.append(column)
+    return effective_scale
 
 
 def _patch_exact_slot(
@@ -1025,48 +1136,93 @@ def _patch_exact_slot(
     if image_units and text_units:
         if slot is None or str(slot.get("sourceFlowLayout") or "") != "text":
             raise SourceNativeGenerationError("source_native_mixed_image_slot")
-        adaptive_scale = largest_fitting_text_scale(slot, text_units)
-        if adaptive_scale is None:
-            raise SourceNativeGenerationError("source_native_text_readability_failed")
+        # The source-flow renderer performs the authoritative bounded
+        # width/height/column search below.  The legacy character-area helper
+        # is intentionally not used as a pre-gate here because it can reject
+        # layouts that the exact geometry search fits at the readable floor.
+        maximum_scale = 1.0
         assets = image_assets or {}
         for child in list(node):
             node.remove(child)
         node.text = None
+        flow_qid = str(node.get("data-qid") or "source-flow")
         wrapper = lxml_html.Element("div")
-        wrapper.set("data-qid", f"{str(node.get('data-qid') or 'source-flow')}--mixed")
+        wrapper.set("data-qid", f"{flow_qid}--mixed")
         text_weight = max(1.0, sum(len(_unit_render_text(item)) for item in text_units) / 220.0)
         image_weight = max(1.0, float(len(image_units)))
         image_fraction = max(0.28, min(0.48, image_weight / (text_weight + image_weight)))
-        wrapper.set(
-            "style",
-            "display:grid!important;height:100%;width:100%;min-width:0;min-height:0;overflow:hidden;"
-            f"grid-template-columns:minmax(0,{(1.0 - image_fraction):.4f}fr) minmax(0,{image_fraction:.4f}fr);"
-            "column-gap:14px",
-        )
-        text_panel = lxml_html.Element("div")
-        text_panel.set(
-            "data-qid",
-            f"{str(node.get('data-qid') or 'source-flow')}--mixed-text",
-        )
         hints = _flow_mapping(slot, "layoutHints")
         text_columns = max(1, min(2, int(_flow_number(hints.get("columnCount"), 1))))
         role = _flow_role(slot)
-        _append_fixed_text_columns(
-            text_panel,
-            text_units,
-            slot=slot,
-            adaptive_scale=adaptive_scale,
-            role=role,
-            columns_count=text_columns,
-            column_gap=14.0,
-            width_fraction=1.0 - image_fraction,
+        vertical_image_columns = max(1, min(4, len(image_units)))
+        vertical_image_rows = max(
+            1, math.ceil(len(image_units) / vertical_image_columns)
         )
+        vertical_image_fraction = max(
+            0.20, min(0.42, 0.16 + 0.08 * vertical_image_rows)
+        )
+        candidates: list[tuple[float, str, object, float]] = []
+        for layout, width_fraction, height_fraction in (
+            ("horizontal", 1.0 - image_fraction, 1.0),
+            ("vertical", 1.0, 1.0 - vertical_image_fraction),
+        ):
+            candidate_panel = lxml_html.Element("div")
+            candidate_panel.set("data-qid", f"{flow_qid}--mixed-text")
+            try:
+                readable_scale = _append_fixed_text_columns(
+                    candidate_panel,
+                    text_units,
+                    slot=slot,
+                    adaptive_scale=maximum_scale,
+                    role=role,
+                    columns_count=text_columns,
+                    column_gap=14.0,
+                    width_fraction=width_fraction,
+                    height_fraction=height_fraction,
+                )
+            except SourceNativeGenerationError as error:
+                if error.code != "source_native_text_capacity_exceeded":
+                    raise
+                continue
+            candidates.append(
+                (readable_scale, layout, candidate_panel, height_fraction)
+            )
+        if not candidates:
+            raise SourceNativeGenerationError("source_native_text_readability_failed")
+        readable_scale, selected_layout, text_panel, text_fraction = max(
+            candidates,
+            key=lambda item: (
+                round(item[0], 6),
+                item[1] == ("vertical" if len(image_units) >= 4 else "horizontal"),
+                item[1],
+            ),
+        )
+        wrapper.set("data-source-mixed-layout", selected_layout)
+        wrapper.set("data-source-mixed-text-scale", f"{readable_scale:.6f}")
+        if selected_layout == "vertical":
+            wrapper.set(
+                "style",
+                "display:grid!important;height:100%;width:100%;min-width:0;min-height:0;overflow:hidden;"
+                f"grid-template-rows:minmax(0,{text_fraction:.4f}fr) minmax(0,{(1.0 - text_fraction):.4f}fr);"
+                "row-gap:14px",
+            )
+        else:
+            wrapper.set(
+                "style",
+                "display:grid!important;height:100%;width:100%;min-width:0;min-height:0;overflow:hidden;"
+                f"grid-template-columns:minmax(0,{(1.0 - image_fraction):.4f}fr) minmax(0,{image_fraction:.4f}fr);"
+                "column-gap:14px",
+            )
         image_panel = lxml_html.Element("div")
         image_panel.set(
             "data-qid",
             f"{str(node.get('data-qid') or 'source-flow')}--mixed-images",
         )
-        image_columns = max(1, min(3, math.ceil(len(image_units) ** 0.5)))
+        image_columns = (
+            vertical_image_columns
+            if selected_layout == "vertical"
+            else max(1, min(3, math.ceil(len(image_units) ** 0.5)))
+        )
         image_rows = max(1, math.ceil(len(image_units) / image_columns))
         image_panel.set(
             "style",
@@ -1187,10 +1343,14 @@ def _patch_exact_slot(
         raise SourceNativeGenerationError("source_native_empty_content_unit")
     if slot is None:
         raise SourceNativeGenerationError("source_native_slot_contract_missing")
-    adaptive_scale = largest_fitting_text_scale(slot, units)
+    source_flow = str((slot or {}).get("sourceFlowLayout") or "")
+    adaptive_scale = (
+        1.0
+        if source_flow == "text"
+        else largest_fitting_text_scale(slot, units)
+    )
     if adaptive_scale is None:
         raise SourceNativeGenerationError("source_native_text_capacity_exceeded")
-    source_flow = str((slot or {}).get("sourceFlowLayout") or "")
     # Preserve the editable element tree while clearing all template copy in
     # that exact content scope. Nested slots are applied parent-first later.
     node.text = None

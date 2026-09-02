@@ -6,6 +6,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 import math
 from typing import Any
+import unicodedata
 
 from .composition_capacity import (
     _mapping,
@@ -29,12 +30,17 @@ SOURCE_VERBATIM_CAPACITY_POLICY_V1: dict[str, object] = {
     "allowContentMutation": False,
     "allowContentOmission": False,
     "overflowAction": "fail-before-provider",
-    "packingStrategy": "same-page-content-fit/v3",
-    "frameRanking": "semantic-density-media-data-readability/v1",
+    "packingStrategy": "same-page-render-geometry-fit/v4",
+    "frameRanking": "semantic-density-media-render-geometry/v2",
     "varietyTieBreak": "least-used-after-fit/v1",
     "minimumAdaptiveTextScale": 0.70,
+    "minimumBodyFontPoints": 12.0,
     "chromiumOverflowGateRequired": True,
 }
+
+
+_BODY_FONT_FLOOR_PX = 12.0 / 0.75
+_TITLE_FONT_FLOOR_PX = 32.0
 
 
 class CapacityAdmissionError(ValueError):
@@ -380,6 +386,440 @@ def _frame_fit_quality(
     }
 
 
+def _slot_number(value: object, default: float = 0.0) -> float:
+    if isinstance(value, bool):
+        return default
+    try:
+        resolved = float(value)
+    except (TypeError, ValueError):
+        return default
+    return resolved if math.isfinite(resolved) else default
+
+
+def _renderer_font_px(
+    slot: Mapping[str, Any], *, role: str, adaptive_scale: float
+) -> float:
+    style = _mapping(slot.get("textStyle"))
+    declared = _slot_number(style.get("fontSize"), 0.0)
+    title_like = role in {"title", "headline", "heading"}
+    default = 40.0 if title_like else 22.0
+    minimum = _TITLE_FONT_FLOOR_PX if title_like else _BODY_FONT_FLOOR_PX
+    return max(minimum, max(minimum, declared or default) * adaptive_scale)
+
+
+def _estimated_renderer_text_lines(
+    text: str, *, width_px: float, font_px: float
+) -> int:
+    def advance(value: str) -> float:
+        total = 0.0
+        for character in value:
+            if character.isspace():
+                total += font_px * 0.33
+            elif unicodedata.east_asian_width(character) in {"W", "F", "A"}:
+                total += font_px
+            elif character.isupper():
+                total += font_px * 0.64
+            elif character.isdigit():
+                total += font_px * 0.56
+            else:
+                total += font_px * 0.54
+        return total
+
+    normalized = " ".join(text.split())
+    if not normalized:
+        return 1
+    lines = 1
+    occupied = 0.0
+    space = font_px * 0.33
+    for word in normalized.split(" "):
+        word_width = advance(word)
+        separator = space if occupied > 0 else 0.0
+        if occupied > 0 and occupied + separator + word_width > width_px:
+            lines += 1
+            occupied = 0.0
+            separator = 0.0
+        if word_width <= width_px:
+            occupied += separator + word_width
+            continue
+        remaining = word_width
+        while remaining > width_px:
+            if occupied > 0:
+                lines += 1
+                occupied = 0.0
+            remaining -= width_px
+            if remaining > 0:
+                lines += 1
+        occupied = remaining
+    return lines
+
+
+def _renderer_blocks(
+    units: Sequence[_AdmissionUnit],
+) -> list[list[_AdmissionUnit]]:
+    blocks: list[list[_AdmissionUnit]] = []
+    index = 0
+    while index < len(units):
+        if _role_group(units[index].semantic_role, kind=units[index].kind) != "table-cell":
+            blocks.append([units[index]])
+            index += 1
+            continue
+        end = index + 1
+        while end < len(units) and _role_group(
+            units[end].semantic_role, kind=units[end].kind
+        ) == "table-cell":
+            end += 1
+        blocks.append(list(units[index:end]))
+        index = end
+    return blocks
+
+
+def _estimated_renderer_block_height(
+    block: Sequence[_AdmissionUnit],
+    *,
+    slot: Mapping[str, Any],
+    adaptive_scale: float,
+    role: str,
+    column_width: float,
+) -> float:
+    boundary = _role_group(block[0].semantic_role, kind=block[0].kind)
+    if boundary == "table-cell":
+        font_px = _renderer_font_px(
+            slot, role=role, adaptive_scale=adaptive_scale
+        )
+        candidates: list[tuple[float, int]] = []
+        candidate_columns = (
+            (1,)
+            if len(block) < 2
+            else range(2, min(8, len(block)) + 1)
+        )
+        for columns in candidate_columns:
+            rows = math.ceil(len(block) / columns)
+            cell_width = max(
+                1.0,
+                (column_width - (columns - 1) * 10.0) / columns - 12.0,
+            )
+            heights = [
+                _estimated_renderer_text_lines(
+                    unit_text(unit), width_px=cell_width, font_px=font_px
+                )
+                * font_px
+                * 1.32
+                + 6.0
+                for unit in block
+            ]
+            estimated_height = (
+                sum(
+                    max(heights[row * columns : (row + 1) * columns])
+                    for row in range(rows)
+                )
+                + max(0, rows - 1) * 4.0
+                + 8.0
+            )
+            candidates.append((estimated_height, columns))
+        return min(
+            candidates, key=lambda item: (round(item[0], 6), item[1])
+        )[0]
+    unit_role = "title" if boundary == "title" or role == "title" else role
+    font_px = _renderer_font_px(
+        slot, role=unit_role, adaptive_scale=adaptive_scale
+    )
+    line_height = 1.18 if unit_role == "title" else 1.32
+    margin = 10.0 if unit_role == "title" else 6.0
+    return (
+        _estimated_renderer_text_lines(
+            unit_text(block[0]), width_px=column_width, font_px=font_px
+        )
+        * font_px
+        * line_height
+        + margin
+    )
+
+
+def _balanced_renderer_ends(
+    weights: Sequence[float], columns: int
+) -> tuple[int, ...]:
+    prefix = [0.0]
+    for weight in weights:
+        prefix.append(prefix[-1] + weight)
+    states: dict[tuple[int, int], tuple[float, float, tuple[int, ...]]] = {}
+    for end in range(1, len(weights) + 1):
+        load = prefix[end]
+        states[(1, end)] = (load, load * load, (end,))
+    for count in range(2, columns + 1):
+        for end in range(count, len(weights) + 1):
+            candidates = []
+            for split in range(count - 1, end):
+                previous = states[(count - 1, split)]
+                load = prefix[end] - prefix[split]
+                candidates.append(
+                    (
+                        max(previous[0], load),
+                        previous[1] + load * load,
+                        previous[2] + (end,),
+                    )
+                )
+            states[(count, end)] = min(
+                candidates,
+                key=lambda item: (
+                    round(item[0], 6),
+                    round(item[1], 6),
+                    item[2],
+                ),
+            )
+    return states[(columns, len(weights))][2]
+
+
+def _renderer_text_geometry(
+    *,
+    slot: Mapping[str, Any],
+    units: Sequence[_AdmissionUnit],
+    mixed: bool = False,
+    width_fraction: float = 1.0,
+    height_fraction: float = 1.0,
+) -> tuple[bool, float, float, int, str | None]:
+    bounds = _mapping(slot.get("bounds"))
+    spacing = _mapping(slot.get("spacing"))
+    width = _slot_number(bounds.get("width"))
+    height = _slot_number(bounds.get("height"))
+    if width <= 0 or height <= 0:
+        return False, 0.0, math.inf, 0, "source_native_flow_geometry_invalid"
+    # Source-flow rendering deliberately skips the legacy character/line
+    # pre-gate and lets the exact bounded geometry search start at 1.0.
+    adaptive_scale = 1.0
+    content_width = max(
+        1.0,
+        width
+        - max(0.0, _slot_number(spacing.get("insetLeft")))
+        - max(0.0, _slot_number(spacing.get("insetRight"))),
+    )
+    usable_height = max(
+        1.0,
+        height
+        - max(0.0, _slot_number(spacing.get("insetTop")))
+        - max(0.0, _slot_number(spacing.get("insetBottom"))),
+    ) * max(0.05, min(1.0, height_fraction))
+    content_width *= max(0.05, min(1.0, width_fraction))
+    target_height = usable_height
+    hints = _mapping(slot.get("layoutHints"))
+    column_gap = max(
+        0.0,
+        14.0 if mixed else _slot_number(hints.get("columnGap"), 18.0),
+    )
+    role = str(
+        slot.get("sourceFlowRole") or slot.get("semanticRole") or "body"
+    ).strip().lower()
+    blocks = _renderer_blocks(units)
+    envelope = _mapping(slot.get("capacityEnvelope"))
+    minimum_scale = min(
+        adaptive_scale,
+        max(0.1, _slot_number(envelope.get("minimumTextScale"), 0.70)),
+    )
+
+    def evaluate(columns: int, scale: float) -> float:
+        column_width = max(
+            1.0,
+            (content_width - column_gap * max(0, columns - 1)) / columns,
+        )
+        weights = [
+            _estimated_renderer_block_height(
+                block,
+                slot=slot,
+                adaptive_scale=scale,
+                role=role,
+                column_width=column_width,
+            )
+            for block in blocks
+        ]
+        ends = _balanced_renderer_ends(weights, columns)
+        start = 0
+        maximum = 0.0
+        for end in ends:
+            maximum = max(maximum, sum(weights[start:end]))
+            start = end
+        return maximum
+
+    options: list[tuple[float, int, float]] = []
+    for columns in range(1, min(4, len(blocks)) + 1):
+        minimum_height = evaluate(columns, minimum_scale)
+        if minimum_height > target_height:
+            continue
+        maximum_height = evaluate(columns, adaptive_scale)
+        if maximum_height <= target_height:
+            options.append((adaptive_scale, columns, maximum_height))
+            continue
+        lower = minimum_scale
+        upper = adaptive_scale
+        lower_height = minimum_height
+        for _ in range(18):
+            midpoint = (lower + upper) / 2.0
+            midpoint_height = evaluate(columns, midpoint)
+            if midpoint_height <= target_height:
+                lower = midpoint
+                lower_height = midpoint_height
+            else:
+                upper = midpoint
+        options.append((lower, columns, lower_height))
+    if not options:
+        return (
+            False,
+            minimum_scale,
+            math.inf,
+            0,
+            "source_native_text_capacity_exceeded",
+        )
+    scale, columns, maximum_height = max(
+        options, key=lambda item: (round(item[0], 6), -item[1])
+    )
+    return True, scale, maximum_height / target_height, columns, None
+
+
+def _renderer_geometry_fit(
+    *,
+    slots: Sequence[Mapping[str, Any]],
+    assigned: Mapping[str, Sequence[object]],
+) -> dict[str, Any]:
+    minimum_scale = 1.0
+    maximum_utilization = 0.0
+    maximum_image_penalty = 0.0
+    resolved_columns = 0
+    failures: list[dict[str, str]] = []
+    mixed_layouts: dict[str, str] = {}
+    for slot in slots:
+        slot_id = str(slot["slotId"])
+        values = list(assigned[slot_id])
+        if not values:
+            continue
+        text_units = [
+            item
+            for item in values
+            if str(_value(item, "kind", default="text") or "text")
+            in {"text", "title", "body", "quote"}
+        ]
+        image_count = sum(
+            1
+            for item in values
+            if str(_value(item, "kind", default="") or "") == "image"
+        )
+        if text_units:
+            selected_layout = "text"
+            image_fraction = 0.0
+            vertical_image_fraction = 0.0
+            if image_count:
+                text_weight = max(
+                    1.0, sum(len(unit_text(item)) for item in text_units) / 220.0
+                )
+                image_weight = max(1.0, float(image_count))
+                image_fraction = max(
+                    0.28,
+                    min(0.48, image_weight / (text_weight + image_weight)),
+                )
+                vertical_image_columns = max(1, min(4, image_count))
+                vertical_image_rows = max(
+                    1, math.ceil(image_count / vertical_image_columns)
+                )
+                vertical_image_fraction = max(
+                    0.20, min(0.42, 0.16 + 0.08 * vertical_image_rows)
+                )
+                layout_candidates = []
+                for layout, width_fraction, height_fraction in (
+                    ("horizontal", 1.0 - image_fraction, 1.0),
+                    ("vertical", 1.0, 1.0 - vertical_image_fraction),
+                ):
+                    result = _renderer_text_geometry(
+                        slot=slot,
+                        units=text_units,
+                        mixed=True,
+                        width_fraction=width_fraction,
+                        height_fraction=height_fraction,
+                    )
+                    if result[0]:
+                        layout_candidates.append((*result, layout))
+                if layout_candidates:
+                    passed, scale, utilization, columns, reason, selected_layout = max(
+                        layout_candidates,
+                        key=lambda item: (
+                            round(item[1], 6),
+                            item[5]
+                            == ("vertical" if image_count >= 4 else "horizontal"),
+                            item[5],
+                        ),
+                    )
+                    mixed_layouts[slot_id] = selected_layout
+                else:
+                    passed = False
+                    scale = 0.0
+                    utilization = math.inf
+                    columns = 0
+                    reason = "source_native_text_readability_failed"
+            else:
+                passed, scale, utilization, columns, reason = (
+                    _renderer_text_geometry(
+                        slot=slot,
+                        units=text_units,
+                    )
+                )
+            minimum_scale = min(minimum_scale, scale)
+            maximum_utilization = max(maximum_utilization, utilization)
+            resolved_columns = max(resolved_columns, columns)
+            if not passed:
+                failures.append({"slotId": slot_id, "reasonCode": str(reason)})
+        if image_count:
+            bounds = _mapping(slot.get("bounds"))
+            spacing = _mapping(slot.get("spacing"))
+            usable_width = max(
+                1.0,
+                _slot_number(bounds.get("width"))
+                - max(0.0, _slot_number(spacing.get("insetLeft")))
+                - max(0.0, _slot_number(spacing.get("insetRight"))),
+            )
+            usable_height = max(
+                1.0,
+                _slot_number(bounds.get("height"))
+                - max(0.0, _slot_number(spacing.get("insetTop")))
+                - max(0.0, _slot_number(spacing.get("insetBottom"))),
+            )
+            if text_units and selected_layout == "vertical":
+                usable_height *= vertical_image_fraction
+                columns = vertical_image_columns
+            elif text_units:
+                usable_width *= image_fraction
+                columns = max(1, min(3, math.ceil(image_count**0.5)))
+            else:
+                columns = max(1, min(3, math.ceil(image_count**0.5)))
+            rows = max(1, math.ceil(image_count / columns))
+            cell_area = (usable_width / columns) * (usable_height / rows)
+            maximum_image_penalty = max(
+                maximum_image_penalty,
+                max(0.0, 1.0 - cell_area / (120.0 * 90.0)),
+            )
+    hard_fit = not failures
+    rank_utilization = (
+        maximum_utilization
+        if math.isfinite(maximum_utilization)
+        else 1_000_000.0
+    )
+    rank = [
+        round(1.0 - minimum_scale, 6),
+        round(rank_utilization, 6),
+        round(maximum_image_penalty, 6),
+    ]
+    return {
+        "rendererGeometryFit": hard_fit,
+        "rendererGeometryScale": round(minimum_scale, 6),
+        "rendererGeometryUtilization": (
+            round(maximum_utilization, 6)
+            if math.isfinite(maximum_utilization)
+            else None
+        ),
+        "rendererGeometryColumns": resolved_columns,
+        "rendererImageGeometryPenalty": round(maximum_image_penalty, 6),
+        "rendererGeometryFailures": failures,
+        "rendererMixedLayouts": dict(sorted(mixed_layouts.items())),
+        "rendererFitRank": rank,
+        "minimumBodyFontPoints": 12.0,
+    }
+
+
 def build_source_verbatim_capacity_admission(
     *,
     content_graph: object,
@@ -485,12 +925,17 @@ def build_source_verbatim_capacity_admission(
                     slots=slots,
                     assigned=assigned,
                 )
+                renderer_geometry = _renderer_geometry_fit(
+                    slots=slots,
+                    assigned=assigned,
+                )
                 hard_pass = bool(
                     units
                     and not unmapped
                     and not duplicates
                     and not missing_required_slots
                     and not invalid_order
+                    and renderer_geometry["rendererGeometryFit"]
                 )
                 assignment_digest = canonical_digest(assignments)
                 evaluation_unsigned = {
@@ -515,6 +960,7 @@ def build_source_verbatim_capacity_admission(
                         native_frame_features
                     ),
                     **fit_quality,
+                    **renderer_geometry,
                     "assignmentDigest": assignment_digest,
                     "unmappedRequiredUnits": unmapped_required,
                     "duplicateRequiredUnits": duplicates,
@@ -534,6 +980,7 @@ def build_source_verbatim_capacity_admission(
             def candidate_rank(item: Mapping[str, Any]) -> tuple[object, ...]:
                 frame_key = (str(item["frameDigest"]), str(item["frameId"]))
                 return (
+                    *tuple(float(value) for value in item["rendererFitRank"]),
                     *tuple(float(value) for value in item["fitQualityRank"]),
                     int(item["semanticPenalty"]),
                     abs(float(item["capacitySlack"])),
@@ -557,6 +1004,7 @@ def build_source_verbatim_capacity_admission(
                         len(item["unmappedRequiredUnits"]),
                         len(item["missingRequiredSlots"]),
                         len(item["duplicateRequiredUnits"]),
+                        len(item["rendererGeometryFailures"]),
                         item["semanticPenalty"],
                         item["frameDigest"],
                         item["frameId"],
@@ -617,6 +1065,21 @@ def build_source_verbatim_capacity_admission(
                 "selectedReadabilitySlack": (
                     selected["readabilitySlack"] if selected is not None else None
                 ),
+                "selectedRendererGeometryScale": (
+                    selected["rendererGeometryScale"]
+                    if selected is not None
+                    else None
+                ),
+                "selectedRendererGeometryUtilization": (
+                    selected["rendererGeometryUtilization"]
+                    if selected is not None
+                    else None
+                ),
+                "selectedRendererMixedLayouts": (
+                    selected["rendererMixedLayouts"]
+                    if selected is not None
+                    else None
+                ),
                 "selectedVarietyUseCountBeforeSelection": (
                     selected_variety_use_count
                 ),
@@ -640,6 +1103,9 @@ def build_source_verbatim_capacity_admission(
                     "duplicateRequiredUnits"
                 ],
                 "missingRequiredSlots": diagnostic["missingRequiredSlots"],
+                "rendererGeometryFailures": diagnostic[
+                    "rendererGeometryFailures"
+                ],
                 "sourceOrderError": invalid_order,
                 "status": "passed" if selected is not None else "failed",
             }
