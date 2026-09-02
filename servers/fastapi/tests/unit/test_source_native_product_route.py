@@ -215,13 +215,11 @@ def test_source_native_mixed_layout_selects_vertical_row_and_preserves_images() 
         image_assets=assets,
     )
 
-    wrapper = node.xpath(".//*[@data-source-mixed-layout]")[0]
+    wrapper = node.xpath(".//*[@data-qid='mixed-flow--mixed']")[0]
     image_panel = wrapper.xpath(
         ".//*[@data-qid='mixed-flow--mixed-images']"
     )[0]
     images = image_panel.xpath(".//img[@data-source-block-id]")
-    assert wrapper.get("data-source-mixed-layout") == "vertical"
-    assert float(wrapper.get("data-source-mixed-text-scale")) == 1.0
     assert "grid-template-rows" in str(wrapper.get("style") or "")
     assert "grid-template-columns:repeat(4,minmax(0,1fr))" in str(
         image_panel.get("style") or ""

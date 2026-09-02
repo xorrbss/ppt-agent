@@ -1189,7 +1189,7 @@ def _patch_exact_slot(
             )
         if not candidates:
             raise SourceNativeGenerationError("source_native_text_readability_failed")
-        readable_scale, selected_layout, text_panel, text_fraction = max(
+        _readable_scale, selected_layout, text_panel, text_fraction = max(
             candidates,
             key=lambda item: (
                 round(item[0], 6),
@@ -1197,8 +1197,6 @@ def _patch_exact_slot(
                 item[1],
             ),
         )
-        wrapper.set("data-source-mixed-layout", selected_layout)
-        wrapper.set("data-source-mixed-text-scale", f"{readable_scale:.6f}")
         if selected_layout == "vertical":
             wrapper.set(
                 "style",
