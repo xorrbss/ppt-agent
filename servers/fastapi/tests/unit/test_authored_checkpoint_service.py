@@ -973,3 +973,65 @@ def test_resumed_completed_html_is_canonicalized_then_rendered_normally(
             await engine.dispose()
 
     asyncio.run(scenario())
+
+
+def test_budget_exhaustion_keeps_the_first_attempt_s_reason() -> None:
+    """A retry must not replace *why* a slide failed with *that it ran out*.
+
+    The second attempt only knows the slide already spent its provider calls.
+    Recording that alone overwrites the one field that says where to look, so
+    the first attempt's bounded diagnostic is carried forward beside it.
+    """
+
+    from services.authored_checkpoint_errors import AuthoredStageError
+
+    first_attempt = {
+        "code": "authored_slide_author_failed",
+        "exception_type": "ValueError",
+        "cause": "authored_batch_slide_missing",
+        "fingerprint": "4f4d2e88899a67f8",
+        "slide_index": 34,
+        "html": "<!doctype html><html>...</html>",
+    }
+    exhausted = AuthoredStageError(
+        slide_index=34,
+        stage="author",
+        code="authored_provider_attempt_budget_exhausted",
+        retryable=False,
+        provider_attempt_count=2,
+        prior_failure=first_attempt,
+    )
+
+    recorded = exhausted.as_safe_dict()
+
+    assert recorded["code"] == "authored_provider_attempt_budget_exhausted"
+    assert recorded["prior_failure"] == {
+        "code": "authored_slide_author_failed",
+        "exception_type": "ValueError",
+        "cause": "authored_batch_slide_missing",
+        "fingerprint": "4f4d2e88899a67f8",
+    }
+
+
+def test_a_carried_reason_is_bounded_and_never_widens_the_record() -> None:
+    from services.authored_checkpoint_errors import AuthoredStageError
+
+    carried = AuthoredStageError(
+        slide_index=0,
+        stage="author",
+        code="authored_provider_attempt_budget_exhausted",
+        prior_failure={"cause": "x" * 900, "session_token": "secret", "code": 12},
+    ).as_safe_dict()
+
+    assert set(carried["prior_failure"]) == {"cause"}
+    assert len(carried["prior_failure"]["cause"]) == 200
+
+
+def test_no_prior_failure_leaves_the_record_unchanged() -> None:
+    from services.authored_checkpoint_errors import AuthoredStageError
+
+    plain = AuthoredStageError(
+        slide_index=0, stage="author", code="authored_slide_author_failed"
+    ).as_safe_dict()
+
+    assert "prior_failure" not in plain

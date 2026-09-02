@@ -551,12 +551,13 @@ async def _author_illustrate_render_pipeline(
             prior = _checkpoint_provider_attempt_count(checkpoint)
             preauthored_attempt_counts[index] = prior
             if prior >= 2:
-                prior_code = (
-                    str(checkpoint.error.get("code") or "")
+                prior_error = (
+                    checkpoint.error
                     if checkpoint is not None
                     and isinstance(checkpoint.error, Mapping)
-                    else ""
+                    else None
                 )
+                prior_code = str((prior_error or {}).get("code") or "")
                 error = AuthoredStageError(
                     slide_index=index,
                     stage="author",
@@ -567,6 +568,10 @@ async def _author_illustrate_render_pipeline(
                     ),
                     retryable=False,
                     provider_attempt_count=prior,
+                    # Without this the retry records only that the slide ran out
+                    # of calls, replacing the first attempt's record of why it
+                    # failed -- the only thing that says where to look.
+                    prior_failure=prior_error,
                 )
                 failures[index] = AuthoredBatchFailure(error, str(error))
             elif prior == 1:

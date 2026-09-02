@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from datetime import timedelta
+from collections.abc import Mapping
 from typing import Any
 import re
 import uuid
@@ -33,6 +34,28 @@ _SECRET_PATTERNS = (
 _PUBLISH_FENCE_SECONDS = 300
 
 
+_PRIOR_FAILURE_KEYS = ("code", "exception_type", "cause", "fingerprint")
+
+
+def _bounded_prior_failure(
+    value: Mapping[str, Any] | None,
+) -> dict[str, str] | None:
+    """Keep only the scalar diagnostic fields of an earlier attempt's failure.
+
+    The stored value is already sanitized task metadata, but a later attempt
+    must not widen it: copy a fixed set of short strings and nothing else.
+    """
+
+    if not isinstance(value, Mapping):
+        return None
+    bounded = {
+        key: " ".join(str(value[key]).split())[:200]
+        for key in _PRIOR_FAILURE_KEYS
+        if isinstance(value.get(key), str) and value.get(key)
+    }
+    return bounded or None
+
+
 class AuthoredStageError(RuntimeError):
     def __init__(
         self,
@@ -44,12 +67,17 @@ class AuthoredStageError(RuntimeError):
         retryable: bool = True,
         message: str | None = None,
         provider_attempt_count: int | None = None,
+        prior_failure: Mapping[str, Any] | None = None,
     ) -> None:
         self.slide_index = slide_index
         self.stage = stage
         self.code = code
         self.cause = cause
         self.retryable = retryable
+        # A later attempt that only knows "this slide already spent its calls"
+        # would otherwise overwrite the one record that says *why* the slide
+        # failed. Carry the first attempt's bounded diagnostic forward.
+        self.prior_failure = _bounded_prior_failure(prior_failure)
         self.safe_message = message or _default_message(code, stage)
         self.provider_attempt_count = (
             provider_attempt_count
@@ -89,6 +117,8 @@ class AuthoredStageError(RuntimeError):
             value["attempt_number"] = attempt_number
         if self.provider_attempt_count is not None:
             value["provider_attempt_count"] = self.provider_attempt_count
+        if self.prior_failure:
+            value["prior_failure"] = dict(self.prior_failure)
         from services.authored_author_capacity_recovery import safe_owner_capacity_diagnostic
 
         diagnostic = safe_owner_capacity_diagnostic(
