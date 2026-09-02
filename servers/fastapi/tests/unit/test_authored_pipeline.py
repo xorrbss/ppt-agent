@@ -59,6 +59,7 @@ from utils.llm_calls.author_slide import (
     validate_authored_slide_html,
 )
 from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
+from utils.provider_idempotency import ProviderOutcomeError
 from utils.renderer_isolation import RendererPolicyError
 
 
@@ -1201,22 +1202,28 @@ def test_author_slide_style_reference_enforces_screen_font_floor(monkeypatch):
     assert len(calls) == 1
 
 
-def test_author_slide_style_reference_preserves_text_only_fallback(monkeypatch, tmp_path):
+def test_author_slide_style_reference_failure_is_one_receipted_provider_outcome(
+    monkeypatch, tmp_path
+):
+    # A multimodal provider failure used to downgrade silently to a second,
+    # text-only call. Every authored provider call is now receipted against the
+    # two-call slide budget, so the failure surfaces as a content-free provider
+    # outcome after exactly one call and the deck owns the single recovery.
     calls = _capture_author_requests(monkeypatch, [RuntimeError("vision unavailable"), _VALID])
 
-    html = _run(
-        author_slide_mod.author_slide_html(
-            "content", "DESIGN", _brand(), "COVER", 0, 1,
-            reference_images=[_reference_image(tmp_path)],
+    with pytest.raises(ProviderOutcomeError) as captured:
+        _run(
+            author_slide_mod.author_slide_html(
+                "content", "DESIGN", _brand(), "COVER", 0, 1,
+                reference_images=[_reference_image(tmp_path)],
+            )
         )
-    )
 
-    assert html == _CANONICAL_VALID
-    assert len(calls) == 2
+    assert captured.value.code == "public_provider_bridge_exception"
+    assert captured.value.recovery_allowed is True
+    assert str(captured.value.__cause__) == "vision unavailable"
+    assert len(calls) == 1
     assert isinstance(_author_user_content(calls[0]), list)
-    assert _author_user_content(calls[1]) == _author_user_content(calls[0])[0].text.split(
-        "\n\nVISUAL REFERENCES", 1
-    )[0]
 
 
 def test_author_slide_exact_reconstruction_uses_fidelity_prompt(monkeypatch, tmp_path):
@@ -1268,9 +1275,8 @@ def test_author_slide_exact_reconstruction_never_retries_without_the_image(
     monkeypatch, tmp_path
 ):
     calls = _capture_author_requests(monkeypatch, [RuntimeError("vision unavailable")])
-    monkeypatch.setattr(author_slide_mod, "handle_llm_client_exceptions", lambda error: error)
 
-    with pytest.raises(RuntimeError, match="vision unavailable"):
+    with pytest.raises(ProviderOutcomeError, match="public_provider_bridge_exception") as captured:
         _run(
             author_slide_mod.author_slide_html(
                 "content", "DESIGN", _brand(), "COVER", 0, 1,
@@ -1279,6 +1285,7 @@ def test_author_slide_exact_reconstruction_never_retries_without_the_image(
             )
         )
 
+    assert str(captured.value.__cause__) == "vision unavailable"
     assert len(calls) == 1
     assert isinstance(_author_user_content(calls[0]), list)
 
