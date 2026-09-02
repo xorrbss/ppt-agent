@@ -1504,9 +1504,17 @@ def test_vision_qa_reuses_selected_design_system(monkeypatch):
         return [SlideCritique(needs_fix=True)]
 
     async def fake_author(
-        content, design_system, brand, role, index, n, reasoning_effort=None
+        content, design_system, brand, role, index, n, reasoning_effort=None, **kwargs
     ):
-        captured.append((design_system, reasoning_effort))
+        captured.append(
+            (
+                design_system,
+                reasoning_effort,
+                kwargs["receipt_retry_class"],
+                kwargs["receipt_attempt_ordinal"],
+                kwargs["allow_provider_fallback"],
+            )
+        )
         return _VALID
 
     async def fake_render(html, timeout=60):
@@ -1527,7 +1535,9 @@ def test_vision_qa_reuses_selected_design_system(monkeypatch):
         )
     )
 
-    assert captured == [("SELECTED DESIGN SYSTEM", "high")]
+    # The full re-author is the slide's one receipted recovery call; it must
+    # never downgrade to an unreceipted text-only provider fallback.
+    assert captured == [("SELECTED DESIGN SYSTEM", "high", "recovery", 2, False)]
     assert htmls == [_VALID]
     assert pngs == [b"revised-png"]
     assert fixed == [0]
@@ -2120,7 +2130,7 @@ def test_vision_qa_subset_preserves_absolute_slide_position(monkeypatch):
         return [SlideCritique(needs_fix=True)]
 
     async def fake_author(
-        content, design_system, brand, role, index, n, reasoning_effort=None
+        content, design_system, brand, role, index, n, reasoning_effort=None, **kwargs
     ):
         captured.append((index, n))
         return _VALID
@@ -2160,7 +2170,7 @@ def test_vision_qa_pipelines_fast_slide_fix_before_slowest_review(monkeypatch):
             return [SlideCritique(needs_fix=True)]
 
         async def fake_author(
-            content, design_system, brand, role, index, n, reasoning_effort=None
+            content, design_system, brand, role, index, n, reasoning_effort=None, **kwargs
         ):
             if index == 0:
                 first_correction_started.set()
