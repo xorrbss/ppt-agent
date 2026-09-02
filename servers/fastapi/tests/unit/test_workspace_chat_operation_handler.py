@@ -18,6 +18,7 @@ from models.sql.chat_history_message import ChatHistoryMessageModel
 from models.sql.image_asset import ImageAsset
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_export_attempt import PresentationExportAttempt
+from models.sql.public_artifact import PublicArtifact
 from models.sql.slide import SlideModel
 from models.sql.template_v2 import TemplateV2
 from models.sql.user import User
@@ -65,6 +66,10 @@ TABLES = [
     WorkspaceOperationEvent.__table__,
     WorkspaceOutbox.__table__,
     PresentationExportAttempt.__table__,
+    # workspace_artifacts.public_artifact_id carries a FK to public_artifacts.
+    # SQLite resolves FK parent tables at DML time, so omitting this table
+    # fails every insert here even while the column stays NULL.
+    PublicArtifact.__table__,
     WorkspaceArtifact.__table__,
     WorkspaceAsset.__table__,
 ]
