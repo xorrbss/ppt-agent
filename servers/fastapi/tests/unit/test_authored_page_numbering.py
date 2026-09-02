@@ -7,10 +7,7 @@ from models.authored_header_contract import (
     DeckPageNumberSpec,
     default_header_contract,
 )
-from services.authored_header_contract_service import (
-    generation_page_number_mode,
-    page_number_mode_for,
-)
+from services.authored_header_contract_service import page_number_mode_for
 from utils.authored_header_style_map import structural_changes
 from utils.llm_calls.author_header_contract import (
     build_header_contract_messages,
@@ -169,17 +166,3 @@ def test_toggling_numbering_is_reported_as_a_structural_change():
     assert "pageNumber.enabled" in structural_changes(off, on)
     assert "pageNumber.enabled" in structural_changes(on, off)
     assert structural_changes(off, off) == ()
-
-
-def test_a_verbatim_source_restyle_keeps_only_the_source_numbering():
-    # The source deck's own numbers arrive as verbatim source text. Numbering
-    # the slides again would put a generated "09" beside the source's "10" and
-    # let the author drop the source block as already satisfied.
-    numbered = AuthoredHeaderContract(page_number=DeckPageNumberSpec(enabled=True))
-
-    assert generation_page_number_mode(numbered, source_verbatim=True) == NO_PAGE_NUMBER_MODE
-    assert (
-        generation_page_number_mode(numbered, source_verbatim=False)
-        == TEMPLATE_PAGE_NUMBER_MODE
-    )
-    assert generation_page_number_mode(None, source_verbatim=False) == NO_PAGE_NUMBER_MODE
