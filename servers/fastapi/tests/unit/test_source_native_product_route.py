@@ -50,14 +50,18 @@ def test_source_native_fixed_columns_preserve_atomic_order_without_overflow_colu
     units = [
         SealedContentUnit(
             content_unit_id=(
-                "page:title-candidate-001"
+                "generated:001:key-message"
                 if index == 0
                 else f"page:paragraph-{index:03d}"
             ),
             content_digest="sha256:" + f"{index + 1:064x}",
             kind="text",
             required=True,
-            text=f"원문 단락 {index:02d}",
+            text=(
+                ("긴한글문장 묶음 " * 24).strip()
+                if 1 <= index <= 7
+                else f"원문 단락 {index:02d}"
+            ),
             data=(),
             source_page_index=0,
             source_unit_index=index,
@@ -74,7 +78,11 @@ def test_source_native_fixed_columns_preserve_atomic_order_without_overflow_colu
     _append_fixed_text_columns(
         parent,
         units,
-        slot={"textStyle": {"fontSize": 16}},
+        slot={
+            "bounds": {"width": 1000, "height": 620},
+            "spacing": {"insetLeft": 10, "insetRight": 10},
+            "textStyle": {"fontSize": 8},
+        },
         adaptive_scale=1.0,
         role="body",
         columns_count=4,
@@ -87,12 +95,25 @@ def test_source_native_fixed_columns_preserve_atomic_order_without_overflow_colu
     assert "grid-template-columns:repeat(4,minmax(0,1fr))" in style
     assert "width:100%" in style and "overflow:hidden" in style
     assert len(columns) == 4
-    assert [len(column.xpath(".//*[@data-source-flow-unit-id]")) for column in columns] == [6, 5, 5, 5]
+    counts = [len(column.xpath(".//*[@data-source-flow-unit-id]")) for column in columns]
+    heights = [float(column.get("data-source-flow-estimated-height")) for column in columns]
+    assert counts != [6, 5, 5, 5]
+    assert counts[-1] > counts[0]
+    assert max(heights) - min(heights) < max(heights) * 0.2
     assert [
         str(node.get("data-source-flow-unit-id"))
         for column in columns
         for node in column.xpath(".//*[@data-source-flow-unit-id]")
     ] == [unit.content_unit_id for unit in units]
+    assert all(
+        "font-size:16.00px" in str(node.get("style") or "")
+        for column in columns
+        for node in column.xpath(".//*[@data-source-boundary-kind='paragraph']")
+    )
+    title = parent.xpath(".//*[@data-source-flow-unit-id='generated:001:key-message']")
+    assert len(title) == 1
+    assert title[0].get("data-source-boundary-kind") == "title-candidate"
+    assert "font-size:32.00px" in str(title[0].get("style") or "")
 
 
 def test_source_native_flow_text_inherits_container_color_without_pack_override() -> None:
@@ -137,7 +158,7 @@ def test_source_native_quality_observation_uses_occupied_flow_regions_and_action
         "elements": [
             {"qid": "flow", "css_visible": True, "bbox": {"x": 10, "y": 10, "width": 600, "height": 500}},
             {"qid": "empty", "css_visible": False, "bbox": {"x": 0, "y": 0, "width": 0, "height": 0}},
-            {**common, "qid": "source-flow:page:title-candidate-001", "parent_qid": "flow--columns", "font_size": 40, "bbox": {"x": 20, "y": 20, "width": 240, "height": 52}},
+            {**common, "qid": "source-flow:generated:001:key-message", "parent_qid": "flow--columns", "font_size": 40, "bbox": {"x": 20, "y": 20, "width": 240, "height": 52}},
             {**common, "qid": "source-flow:page:paragraph-001", "parent_qid": "flow--columns", "font_size": 16, "bbox": {"x": 330, "y": 20, "width": 240, "height": 120}},
             {"qid": "flow--mixed-images", "bbox": {"x": 310, "y": 100, "width": 300, "height": 300}},
             {

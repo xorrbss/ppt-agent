@@ -12,6 +12,7 @@ import logging
 import math
 import time
 from typing import Any
+import unicodedata
 import uuid
 
 from lxml import html as lxml_html
@@ -703,6 +704,8 @@ def _flow_overlay_css(slot: Mapping[str, object]) -> str:
 
 def _unit_boundary_kind(unit: SealedContentUnit) -> str:
     unit_id = unit.content_unit_id
+    if unit_id.endswith(":key-message"):
+        return "title-candidate"
     for kind in ("title-candidate", "table-cell", "paragraph", "bullet"):
         if f":{kind}-" in unit_id:
             return kind
@@ -769,6 +772,127 @@ def _append_flow_text_units(
         index += 1
 
 
+def _estimated_text_lines(text: str, *, width_px: float, font_px: float) -> int:
+    def advance(value: str) -> float:
+        total = 0.0
+        for character in value:
+            if character.isspace():
+                total += font_px * 0.33
+            elif unicodedata.east_asian_width(character) in {"W", "F", "A"}:
+                total += font_px
+            elif character.isupper():
+                total += font_px * 0.64
+            elif character.isdigit():
+                total += font_px * 0.56
+            else:
+                total += font_px * 0.54
+        return total
+
+    normalized = " ".join(text.split())
+    if not normalized:
+        return 1
+    space = font_px * 0.33
+    lines = 1
+    occupied = 0.0
+    for word in normalized.split(" "):
+        word_width = advance(word)
+        separator = space if occupied > 0 else 0.0
+        if occupied > 0 and occupied + separator + word_width > width_px:
+            lines += 1
+            occupied = 0.0
+            separator = 0.0
+        if word_width <= width_px:
+            occupied += separator + word_width
+            continue
+        remaining = word_width
+        while remaining > width_px:
+            if occupied > 0:
+                lines += 1
+                occupied = 0.0
+            remaining -= width_px
+            if remaining > 0:
+                lines += 1
+        occupied = remaining
+    return lines
+
+
+def _estimated_flow_block_height(
+    block: list[SealedContentUnit],
+    *,
+    slot: Mapping[str, object],
+    adaptive_scale: float,
+    role: str,
+    column_width: float,
+) -> float:
+    if _unit_boundary_kind(block[0]) == "table-cell":
+        columns = max(2, min(4, math.ceil(len(block) ** 0.5)))
+        rows = math.ceil(len(block) / columns)
+        cell_width = max(1.0, (column_width - (columns - 1) * 10.0) / columns - 12.0)
+        font_px = _flow_font_px(slot, role=role, adaptive_scale=adaptive_scale)
+        heights = [
+            _estimated_text_lines(
+                _unit_render_text(unit), width_px=cell_width, font_px=font_px
+            )
+            * font_px
+            * 1.32
+            + 6.0
+            for unit in block
+        ]
+        return sum(
+            max(heights[row * columns : (row + 1) * columns])
+            for row in range(rows)
+        ) + max(0, rows - 1) * 4.0 + 8.0
+    unit = block[0]
+    unit_role = (
+        "title"
+        if _unit_boundary_kind(unit) == "title-candidate" or role == "title"
+        else role
+    )
+    font_px = _flow_font_px(slot, role=unit_role, adaptive_scale=adaptive_scale)
+    line_height = 1.18 if unit_role == "title" else 1.32
+    margin = 10.0 if unit_role == "title" else 6.0
+    return (
+        _estimated_text_lines(
+            _unit_render_text(unit), width_px=column_width, font_px=font_px
+        )
+        * font_px
+        * line_height
+        + margin
+    )
+
+
+def _balanced_contiguous_ends(weights: list[float], columns: int) -> tuple[int, ...]:
+    prefix = [0.0]
+    for weight in weights:
+        prefix.append(prefix[-1] + weight)
+    states: dict[tuple[int, int], tuple[float, float, tuple[int, ...]]] = {}
+    for end in range(1, len(weights) + 1):
+        load = prefix[end]
+        states[(1, end)] = (load, load * load, (end,))
+    for count in range(2, columns + 1):
+        for end in range(count, len(weights) + 1):
+            candidates = []
+            for split in range(count - 1, end):
+                previous = states[(count - 1, split)]
+                load = prefix[end] - prefix[split]
+                candidates.append(
+                    (
+                        max(previous[0], load),
+                        previous[1] + load * load,
+                        previous[2] + (end,),
+                    )
+                )
+            states[(count, end)] = min(
+                candidates,
+                key=lambda item: (
+                    round(item[0], 6),
+                    round(item[1], 6),
+                    item[2],
+                ),
+            )
+    return states[(columns, len(weights))][2]
+
+
 def _append_fixed_text_columns(
     parent: object,
     units: list[SealedContentUnit],
@@ -778,6 +902,7 @@ def _append_fixed_text_columns(
     role: str,
     columns_count: int,
     column_gap: float,
+    width_fraction: float = 1.0,
 ) -> None:
     """Keep atomic source units inside an explicit, bounded column grid."""
 
@@ -791,21 +916,46 @@ def _append_fixed_text_columns(
         blocks.append(units[index:end])
         index = end
     resolved_columns = max(1, min(columns_count, len(blocks)))
+    bounds = _flow_mapping(slot, "bounds")
+    spacing = _flow_mapping(slot, "spacing")
+    content_width = max(
+        1.0,
+        _flow_number(bounds.get("width"), 1280.0)
+        - max(0.0, _flow_number(spacing.get("insetLeft")))
+        - max(0.0, _flow_number(spacing.get("insetRight"))),
+    ) * max(0.05, min(1.0, width_fraction))
+    column_width = max(
+        1.0,
+        (content_width - column_gap * max(0, resolved_columns - 1))
+        / resolved_columns,
+    )
+    weights = [
+        _estimated_flow_block_height(
+            block,
+            slot=slot,
+            adaptive_scale=adaptive_scale,
+            role=role,
+            column_width=column_width,
+        )
+        for block in blocks
+    ]
+    ends = _balanced_contiguous_ends(weights, resolved_columns)
     parent.set(
         "style",
         "display:grid!important;width:100%;height:100%;min-width:0;min-height:0;"
         f"grid-template-columns:repeat({resolved_columns},minmax(0,1fr));"
         f"column-gap:{column_gap:.3f}px;overflow:hidden",
     )
-    minimum, extra = divmod(len(blocks), resolved_columns)
-    cursor = 0
+    start = 0
     parent_qid = str(parent.get("data-qid") or "source-flow-columns")
-    for column_index in range(resolved_columns):
-        block_count = minimum + (1 if column_index < extra else 0)
-        selected_blocks = blocks[cursor : cursor + block_count]
-        cursor += block_count
+    for column_index, end in enumerate(ends):
+        selected_blocks = blocks[start:end]
+        estimated_height = sum(weights[start:end])
+        start = end
         column = lxml_html.Element("div")
         column.set("data-qid", f"{parent_qid}--column-{column_index + 1:02d}")
+        column.set("data-source-flow-column-index", str(column_index))
+        column.set("data-source-flow-estimated-height", f"{estimated_height:.3f}")
         column.set(
             "style",
             "display:flex!important;flex-direction:column;min-width:0;min-height:0;"
@@ -880,6 +1030,7 @@ def _patch_exact_slot(
             role=role,
             columns_count=text_columns,
             column_gap=14.0,
+            width_fraction=1.0 - image_fraction,
         )
         image_panel = lxml_html.Element("div")
         image_panel.set(
@@ -1366,6 +1517,7 @@ def _build_slide_quality_observation(
         item
         for item in unit_elements
         if ":title-candidate-" in str(item.get("qid") or "")
+        or str(item.get("qid") or "").endswith(":key-message")
     ]
     body_elements = [item for item in unit_elements if item not in title_elements]
     body_fonts_pt = [
