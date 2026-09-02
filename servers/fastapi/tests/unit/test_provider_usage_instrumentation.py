@@ -119,14 +119,16 @@ def test_operation_attempts_share_one_bounded_runtime_job(monkeypatch) -> None:
             stage="content_brief",
             attempt_number=2,
         ):
-            with pytest.raises(BudgetExceededError):
+            # max_total_requests is a JobKillCondition, not a cost budget: the
+            # breach cancels the shared job rather than rejecting one call.
+            with pytest.raises(CancellationRequested):
                 async with provider_call_admission():
                     pytest.fail("recovery attempt reset the durable job request cap")
 
         status = await provider_runtime_job_status(job_id)
         assert status["job_id"] == str(job_id)
         assert status["total_requests"] == 1
-        assert status["cancelled"] is False
+        assert status["cancelled"] is True
 
     asyncio.run(scenario())
 
@@ -245,9 +247,26 @@ def test_public_success_is_terminal_and_independent_scopes_reuse_semantic_call(
     asyncio.run(scenario())
 
 
-def test_reported_tokens_enrich_terminal_call_without_inventing_price(
-    monkeypatch,
-) -> None:
+def _priced(provider_id: str, model_id: str) -> ProviderModelPricing:
+    """One microunit per token, so an expected cost is exact rather than rounded."""
+
+    return ProviderModelPricing(
+        revision="test-pricing-v1",
+        provider_id=provider_id,
+        model_id=model_id,
+        input_microunits_per_million_tokens=1_000_000,
+        output_microunits_per_million_tokens=1_000_000,
+    )
+
+
+def test_priced_public_call_enriches_with_the_computed_cost(monkeypatch) -> None:
+    """The only reachable public path: a fence implies an exact pinned rate.
+
+    ``public_fence`` gates both the pricing lookup and the public reservation,
+    and ``resolve_public_provider_pricing`` fails closed, so a public logical
+    call always carries pricing whose identity equals the call's own.
+    """
+
     async def scenario() -> None:
         events = []
         public_lease = SimpleNamespace(
@@ -267,19 +286,18 @@ def test_reported_tokens_enrich_terminal_call_without_inventing_price(
         async def enrich(lease, **kwargs):
             events.append(("enrich", lease, kwargs))
 
-        async def receipt(_receipt):
-            events.append(("receipt",))
+        async def receipt(value):
+            events.append(("receipt", value))
 
-        monkeypatch.delenv("PROVIDER_INPUT_MICROUNITS_PER_1K", raising=False)
-        monkeypatch.delenv("PROVIDER_OUTPUT_MICROUNITS_PER_1K", raising=False)
         monkeypatch.setattr(
             "services.provider_usage_instrumentation.durable_provider_runtime_required",
             lambda: False,
         )
         monkeypatch.setattr(
             "services.provider_pricing_registry.resolve_public_provider_pricing",
-            lambda **_kwargs: _unavailable_pricing(),
+            lambda **_kwargs: _priced("codex", "test-model"),
         )
+
         async def current_fence(_fence):
             return None
 
@@ -315,7 +333,9 @@ def test_reported_tokens_enrich_terminal_call_without_inventing_price(
             attempt_number=1,
             slide_index=0,
         ):
-            async with provider_call_admission():
+            # Production call sites hand admission the same identity they later
+            # report; the placeholder defaults are never used under a fence.
+            async with provider_call_admission(provider="codex", model="test-model"):
                 pass
             await record_provider_call(
                 provider="codex",
@@ -333,9 +353,61 @@ def test_reported_tokens_enrich_terminal_call_without_inventing_price(
             "receipt",
         ]
         enrich_kwargs = events[2][2]
-        assert enrich_kwargs["actual_cost_microunits"] is None
+        assert enrich_kwargs["actual_cost_microunits"] == 12 + 34
         assert enrich_kwargs["input_tokens"] == 12
         assert enrich_kwargs["output_tokens"] == 34
+        assert enrich_kwargs["pricing_revision"] == "test-pricing-v1"
+
+    asyncio.run(scenario())
+
+
+def test_unpriced_local_call_records_tokens_without_inventing_a_cost(
+    monkeypatch,
+) -> None:
+    """Without a public fence there is no rate card, and none may be invented."""
+
+    async def scenario() -> None:
+        receipts = []
+
+        async def receipt(value):
+            receipts.append(value)
+
+        monkeypatch.delenv("PROVIDER_INPUT_MICROUNITS_PER_1K", raising=False)
+        monkeypatch.delenv("PROVIDER_OUTPUT_MICROUNITS_PER_1K", raising=False)
+        monkeypatch.setattr(
+            "services.provider_usage_instrumentation.durable_provider_runtime_required",
+            lambda: False,
+        )
+        monkeypatch.setattr(
+            "services.provider_usage_receipt_service.record_provider_usage_receipt_detached",
+            receipt,
+        )
+
+        with provider_usage_scope(
+            job_id=uuid.uuid4(),
+            operation="generate",
+            stage="author",
+            attempt_number=1,
+            slide_index=0,
+        ):
+            async with provider_call_admission(provider="codex", model="test-model"):
+                pass
+            await record_provider_call(
+                provider="codex",
+                model="test-model",
+                response=SimpleNamespace(
+                    usage=SimpleNamespace(input_tokens=12, output_tokens=34)
+                ),
+                latency_ms=23,
+            )
+
+        assert len(receipts) == 1
+        recorded = receipts[0]
+        assert recorded.usage_state == "reported"
+        assert recorded.input_tokens == 12
+        assert recorded.output_tokens == 34
+        assert recorded.reported_cost_microunits is None
+        assert recorded.pricing_version == "unpriced-v1"
 
     asyncio.run(scenario())
 
