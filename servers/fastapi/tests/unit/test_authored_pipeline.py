@@ -1717,7 +1717,9 @@ def test_source_reflow_residual_repairs_are_checkpointed_before_retry(monkeypatc
         fake_complete,
     )
     job_id = uuid.uuid4()
-    job = SimpleNamespace(id=job_id, attempt_token="attempt-3")
+    job = SimpleNamespace(
+        id=job_id, attempt_token="attempt-3", _workspace_fencing_token=7
+    )
     error = author_vision_qa_mod.AuthoredVqaResidualDomIssuesError(
         "2:available:1",
         htmls=["original", "patched-html"],
@@ -1728,12 +1730,15 @@ def test_source_reflow_residual_repairs_are_checkpointed_before_retry(monkeypatc
 
     _run(authored_generation_mod._checkpoint_source_reflow_vqa_repairs(job, error))
 
+    # Every checkpoint write is fenced by the workspace lease token, and an
+    # unavailable browser probe is persisted as explicit empty evidence.
     assert calls == [
         {
             "job_id": job_id,
             "slide_index": 1,
             "stage": "illustrate",
             "attempt_token": "attempt-3",
+            "fencing_token": 7,
             "html": "patched-html",
         },
         {
@@ -1741,7 +1746,10 @@ def test_source_reflow_residual_repairs_are_checkpointed_before_retry(monkeypatc
             "slide_index": 1,
             "stage": "render",
             "attempt_token": "attempt-3",
+            "fencing_token": 7,
+            "html": "patched-html",
             "png": b"patched-png",
+            "browser_metrics": {},
         },
     ]
 
