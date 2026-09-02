@@ -313,6 +313,32 @@ def _write_result(value: Mapping[str, object]) -> None:
     sys.stdout.buffer.flush()
 
 
+async def _execute_before_job_deadline(
+    *,
+    job: IsolatedWorkerJob,
+    executor: WorkerExecutor,
+    store: LocalContentAddressedStore,
+) -> ArtifactRef:
+    """Run one worker executor without allowing it to outlive its sealed job."""
+
+    remaining_seconds = job.deadline_epoch_seconds - time.time()
+    if remaining_seconds <= 0:
+        raise PublicWorkerExecutionError("public_worker_job_expired")
+    task = asyncio.create_task(executor(job, store))
+    try:
+        done, _pending = await asyncio.wait((task,), timeout=remaining_seconds)
+        if task not in done:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            raise PublicWorkerExecutionError("public_worker_job_expired")
+        return task.result()
+    except BaseException:
+        if not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        raise
+
+
 async def run_worker(role: WorkerRole, executor: WorkerExecutor) -> int:
     job: IsolatedWorkerJob | None = None
     try:
@@ -390,9 +416,10 @@ async def run_worker(role: WorkerRole, executor: WorkerExecutor) -> int:
         output_root_value = output_root_value or legacy_root
         if not input_root_value or not output_root_value:
             raise PublicWorkerExecutionError("public_worker_store_root_required")
-        output = await executor(
-            job,
-            LocalContentAddressedStore(
+        output = await _execute_before_job_deadline(
+            job=job,
+            executor=executor,
+            store=LocalContentAddressedStore(
                 pathlib.Path(input_root_value),
                 pathlib.Path(output_root_value),
             ),

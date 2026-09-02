@@ -55,6 +55,12 @@ from services.authored_vnext.generation.scene_envelope import (
 )
 from services.provider_usage_instrumentation import provider_usage_scope, record_local_stage
 from services.authored_generation_performance import authored_provider_concurrency
+from services.authored_batch_policy import (
+    advance_authored_batch_policy,
+    new_authored_batch_policy_state,
+    plan_authored_batch_wave,
+    plan_authored_recovery_batches,
+)
 from services.source_images.models import SourceImageCandidate
 from services.source_content.browser_readback import stamp_source_block_ids, BrowserSourceReadbackError
 from utils.asset_directory_utils import get_images_directory
@@ -66,8 +72,11 @@ from utils.authored_illustrations import (
 from utils.authored_font_policy import enforce_authored_font_floor
 from utils.authored_dom_quality import ensure_authored_qids, inspect_authored_dom
 from utils.llm_calls.author_deck import (
+    AuthoredBatchFailure,
     AuthoredProviderBudgetExhausted,
     AuthoredDeckResult,
+    AuthoredPlannedBatchResult,
+    author_planned_batch,
     author_planned_slide,
     plan_deck_roles,
     prepare_authored_deck,
@@ -107,6 +116,7 @@ _AUTHORED_RENDER_WORKERS = max(
     ),
 )
 _AUTHORED_SLIDE_WORKERS = _AUTHORED_AUTHOR_WORKERS + _AUTHORED_RENDER_WORKERS
+_DEFAULT_AUTHOR_PLANNED_SLIDE = author_planned_slide
 
 
 def _author_failure_retryable(error: BaseException) -> bool:
@@ -342,6 +352,327 @@ async def _author_illustrate_render_pipeline(
     author_gate = asyncio.Semaphore(_AUTHORED_AUTHOR_WORKERS)
     render_gate = asyncio.Semaphore(_AUTHORED_RENDER_WORKERS)
 
+    # Production authoring is filled before the local illustration/render tail
+    # begins. One physical provider call returns at most three HTML documents;
+    # accepted documents are checkpointed immediately and never enter recovery.
+    # A monkeypatched single-slide callable keeps legacy fixture seams isolated
+    # from provider I/O without weakening the product path.
+    preauthored_htmls: dict[int, str] = {}
+    preauthored_attempt_counts: dict[int, int] = {}
+    preauthored_author_work: dict[int, float] = {}
+
+    def _checkpoint_provider_attempt_count(checkpoint: object | None) -> int:
+        error = getattr(checkpoint, "error", None)
+        if isinstance(error, Mapping):
+            raw = error.get("provider_attempt_count")
+            if isinstance(raw, int) and not isinstance(raw, bool):
+                return min(2, max(0, raw))
+        return 0
+
+    async def _persist_batch_success(index: int, html: str) -> None:
+        if is_fallback_slide_html(html):
+            raise AuthoredStageError(
+                slide_index=index,
+                stage="author",
+                code="authored_slide_author_failed",
+            )
+        try:
+            admitted = validate_authored_slide_html(
+                html, allow_illustration_slots=True
+            )
+        except RendererPolicyError as exc:
+            raise AuthoredStageError(
+                slide_index=index,
+                stage="author",
+                code="authored_slide_author_failed",
+                cause=exc,
+                retryable=False,
+            ) from exc
+        preauthored_htmls[index] = admitted
+        if generation_job is not None:
+            await _complete_stage_after_external_success(
+                job_id=generation_job.id,
+                slide_index=index,
+                stage="author",
+                attempt_token=attempt_token,
+                html=admitted,
+            )
+
+    async def _run_author_batch(
+        indexes: Sequence[int],
+        *,
+        recovery: bool,
+        prior_failures: Mapping[int, AuthoredBatchFailure],
+    ):
+        selected = tuple(indexes)
+        attempt_observers: dict[int, Any] = {}
+        attempt_reservers: dict[int, Any] = {}
+
+        for index in selected:
+            if generation_job is not None:
+                checkpoint = await get_checkpoint(generation_job.id, index)
+                if checkpoint and should_inject_failure(
+                    checkpoint, slide_index=index, stage="author"
+                ):
+                    raise AuthoredStageError(
+                        slide_index=index,
+                        stage="author",
+                        code="authored_injected_failure",
+                    )
+                await start_stage(
+                    job_id=generation_job.id,
+                    slide_index=index,
+                    stage="author",
+                    attempt_token=attempt_token,
+                )
+
+            def observe(ordinal: int, *, slide_index: int = index) -> None:
+                preauthored_attempt_counts[slide_index] = max(
+                    preauthored_attempt_counts.get(slide_index, 0), int(ordinal)
+                )
+
+            attempt_observers[index] = observe
+            if generation_job is not None:
+                async def reserve(
+                    ordinal: int, *, slide_index: int = index
+                ) -> None:
+                    await reserve_provider_attempt(
+                        job_id=generation_job.id,
+                        slide_index=slide_index,
+                        attempt_token=attempt_token,
+                        ordinal=ordinal,
+                    )
+
+                attempt_reservers[index] = reserve
+
+        sources_by_index = {
+            index: tuple(
+                (slide_source_images[index] or {}).values()
+                if slide_source_images is not None
+                else ()
+            )
+            for index in selected
+        }
+        started_batch = time.monotonic()
+        try:
+            with provider_usage_scope(
+                job_id=generation_job.id if generation_job is not None else None,
+                operation="authored_generation",
+                stage="author",
+                attempt_number=(generation_job.attempt_number if generation_job else 0),
+                slide_index=None,
+            ):
+                result = await author_planned_batch(
+                    plan,
+                    selected,
+                    source_images_by_index=sources_by_index,
+                    require_all_source_images=require_all_source_images,
+                    recovery=recovery,
+                    prior_failures=prior_failures,
+                    raise_on_failure=generation_job is not None,
+                    attempt_observers=attempt_observers,
+                    attempt_reservers=attempt_reservers,
+                )
+            persisted_htmls: dict[int, str] = {}
+            persisted_failures = dict(result.failures)
+            for index, html in result.htmls.items():
+                try:
+                    await _persist_batch_success(index, html)
+                    persisted_htmls[index] = html
+                except BaseException as error:
+                    # The provider output itself succeeded. Never spend the
+                    # slide's recovery call to compensate for a checkpoint I/O
+                    # failure; fail the attempt with the HTML retained in memory.
+                    preauthored_attempt_counts[index] = 2
+                    persisted_failures[index] = AuthoredBatchFailure(
+                        AuthoredStageError(
+                            slide_index=index,
+                            stage="author",
+                            code="authored_slide_persist_failed",
+                            cause=error,
+                            retryable=is_retryable_exception(error),
+                            provider_attempt_count=1 if not recovery else 2,
+                        ),
+                        "Do not regenerate this accepted provider output.",
+                        html,
+                    )
+            return AuthoredPlannedBatchResult(
+                htmls=persisted_htmls,
+                failures=persisted_failures,
+            )
+        finally:
+            elapsed = time.monotonic() - started_batch
+            # Count a shared provider wait once in deck totals, never once per
+            # returned slide.
+            if selected:
+                preauthored_author_work[selected[0]] = (
+                    preauthored_author_work.get(selected[0], 0.0) + elapsed
+                )
+            await record_local_stage(latency_ms=elapsed * 1000)
+
+    async def _preauthor_missing_slides() -> None:
+        if generation_job is None:
+            return
+        if author_planned_slide is not _DEFAULT_AUTHOR_PLANNED_SLIDE:
+            return
+        initial: list[int] = []
+        resumed_recovery: list[int] = []
+        failures: dict[int, AuthoredBatchFailure] = {}
+        successful: set[int] = set()
+        for index in range(len(plan.contents)):
+            checkpoint = (
+                await get_checkpoint(generation_job.id, index)
+                if generation_job is not None
+                else None
+            )
+            if (
+                checkpoint is not None
+                and checkpoint.author_status == "completed"
+                and checkpoint.author_html
+            ):
+                successful.add(index)
+                continue
+            prior = _checkpoint_provider_attempt_count(checkpoint)
+            preauthored_attempt_counts[index] = prior
+            if prior >= 2:
+                prior_code = (
+                    str(checkpoint.error.get("code") or "")
+                    if checkpoint is not None
+                    and isinstance(checkpoint.error, Mapping)
+                    else ""
+                )
+                error = AuthoredStageError(
+                    slide_index=index,
+                    stage="author",
+                    code=(
+                        prior_code
+                        if prior_code.startswith("public_provider_")
+                        else "authored_provider_attempt_budget_exhausted"
+                    ),
+                    retryable=False,
+                    provider_attempt_count=prior,
+                )
+                failures[index] = AuthoredBatchFailure(error, str(error))
+            elif prior == 1:
+                resumed_recovery.append(index)
+                failures[index] = AuthoredBatchFailure(
+                    RuntimeError("authored_prior_attempt_failed"),
+                    "Regenerate this slide while obeying every original contract.",
+                )
+            else:
+                initial.append(index)
+
+        policy = new_authored_batch_policy_state()
+        pending = list(initial)
+        while pending:
+            wave = plan_authored_batch_wave(pending, policy)
+            outcomes = await asyncio.gather(
+                *(
+                    _run_author_batch(
+                        batch.slide_indices,
+                        recovery=False,
+                        prior_failures={},
+                    )
+                    for batch in wave.batches
+                ),
+                return_exceptions=True,
+            )
+            consumed: set[int] = set()
+            for batch, outcome in zip(wave.batches, outcomes):
+                consumed.update(batch.slide_indices)
+                if isinstance(outcome, BaseException):
+                    policy = advance_authored_batch_policy(
+                        policy, succeeded=False, error=outcome
+                    )
+                    failures.update(
+                        {
+                            index: AuthoredBatchFailure(outcome, str(outcome))
+                            for index in batch.slide_indices
+                        }
+                    )
+                    continue
+                policy = advance_authored_batch_policy(
+                    policy, succeeded=bool(outcome.htmls)
+                )
+                successful.update(outcome.htmls)
+                failures.update(outcome.failures)
+            pending = [index for index in pending if index not in consumed]
+
+        failed_for_recovery = [
+            index
+            for index in [*initial, *resumed_recovery]
+            if index in failures and preauthored_attempt_counts.get(index, 0) < 2
+        ]
+        recovery_batches = plan_authored_recovery_batches(
+            failed_for_recovery,
+            successful_slide_indices=successful,
+        )
+        for offset in range(0, len(recovery_batches), policy.concurrency):
+            window = recovery_batches[offset : offset + policy.concurrency]
+            outcomes = await asyncio.gather(
+                *(
+                    _run_author_batch(
+                        batch.slide_indices,
+                        recovery=True,
+                        prior_failures=failures,
+                    )
+                    for batch in window
+                ),
+                return_exceptions=True,
+            )
+            for batch, outcome in zip(window, outcomes):
+                if isinstance(outcome, BaseException):
+                    policy = advance_authored_batch_policy(
+                        policy, succeeded=False, error=outcome
+                    )
+                    for index in batch.slide_indices:
+                        failures[index] = AuthoredBatchFailure(outcome, str(outcome))
+                    continue
+                policy = advance_authored_batch_policy(
+                    policy, succeeded=bool(outcome.htmls)
+                )
+                successful.update(outcome.htmls)
+                for index in outcome.htmls:
+                    failures.pop(index, None)
+                failures.update(outcome.failures)
+
+        unresolved = [
+            index for index in range(len(plan.contents))
+            if index not in successful and index in failures
+        ]
+        if unresolved:
+            for index in unresolved:
+                error = failures[index].error
+                stage_error = (
+                    error
+                    if isinstance(error, AuthoredStageError)
+                    else _author_stage_failure(
+                        index,
+                        error,
+                        provider_attempt_count=preauthored_attempt_counts.get(index),
+                    )
+                )
+                if generation_job is not None:
+                    await fail_stage(
+                        job_id=generation_job.id,
+                        slide_index=index,
+                        stage="author",
+                        attempt_token=attempt_token,
+                        error=stage_error,
+                        request_id=generation_job.request_id,
+                    )
+            first = unresolved[0]
+            error = failures[first].error
+            if isinstance(error, AuthoredStageError):
+                raise error
+            raise _author_stage_failure(
+                first,
+                error,
+                provider_attempt_count=preauthored_attempt_counts.get(first),
+            ) from error
+
+    await _preauthor_missing_slides()
+
     async def process_slide(
         index: int,
     ) -> tuple[
@@ -357,14 +688,14 @@ async def _author_illustrate_render_pipeline(
         AuthoredSlideSceneEnvelope,
         int,
     ]:
-        author_work = 0.0
+        author_work = preauthored_author_work.get(index, 0.0)
         illustration_work = 0.0
         render_work = 0.0
         quality_work = 0.0
         browser_metrics = None
         quality_report = None
         quality_failure = None
-        author_provider_attempt_count = 0
+        author_provider_attempt_count = preauthored_attempt_counts.get(index, 0)
         # The authoring call and the substitution step must see the identical
         # set: substitution resolves a placed id against this mapping, so an id
         # the author was never offered has nowhere to resolve.
@@ -384,7 +715,9 @@ async def _author_illustrate_render_pipeline(
                 and not isinstance(raw_prior_attempts, bool)
             ):
                 prior_provider_attempt_count = min(2, max(0, raw_prior_attempts))
-        author_provider_attempt_count = prior_provider_attempt_count
+        author_provider_attempt_count = max(
+            author_provider_attempt_count, prior_provider_attempt_count
+        )
         durable_evidence = None
         if checkpoint is not None and checkpoint.render_status == "completed":
             try:
@@ -410,12 +743,31 @@ async def _author_illustrate_render_pipeline(
                     )
 
         try:
-            html = checkpoint.author_html if checkpoint else None
-            if html and checkpoint.author_status == "completed":
+            html = (
+                checkpoint.author_html
+                if checkpoint is not None and checkpoint.author_html
+                else preauthored_htmls.get(index)
+            )
+            if (
+                html
+                and checkpoint is not None
+                and checkpoint.author_status == "completed"
+            ):
                 # The old checkpoint schema has no slide-scoped provider-call
                 # ordinal. Never risk a third billable call after recovery.
-                author_provider_attempt_count = 2
-            if not html or checkpoint.author_status != "completed":
+                if index not in preauthored_attempt_counts:
+                    author_provider_attempt_count = 2
+            author_completed = bool(
+                html
+                and (
+                    index in preauthored_htmls
+                    or (
+                        checkpoint is not None
+                        and checkpoint.author_status == "completed"
+                    )
+                )
+            )
+            if not author_completed:
                 if author_provider_attempt_count >= 2:
                     prior_code = (
                         str(checkpoint.error.get("code") or "")

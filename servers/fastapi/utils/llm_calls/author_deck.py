@@ -55,12 +55,23 @@ from utils.llm_calls.author_slide import (
     normalize_reference_mode,
     validate_page_number_mode,
 )
+from utils.llm_calls.author_batch import (
+    AuthoredBatchSlideRequest,
+    author_slides_html,
+)
+from services.authored_batch_policy import (
+    advance_authored_batch_policy,
+    new_authored_batch_policy_state,
+    plan_authored_batch_wave,
+    plan_authored_recovery_batches,
+)
 from utils.authored_styles import reference_images_for_role
 from utils.renderer_worker_policy import RendererPolicyError
 
 logger = logging.getLogger(__name__)
 
 _MAX_AUTHOR_CALLS_PER_SLIDE = 2
+_DEFAULT_AUTHOR_SLIDE_HTML = author_slide_html
 
 
 @dataclass(frozen=True)
@@ -113,6 +124,23 @@ class AuthoredDeckPlan:
     # Exact title/body/visible-text accounting produced before provider work.
     # It shares the capacity authority above and never mutates source content.
     text_plan: AuthoredTextPlan | None = None
+
+
+@dataclass(frozen=True)
+class AuthoredBatchFailure:
+    """One rejected slide from a provider batch, with bounded repair context."""
+
+    error: BaseException
+    correction_hint: str
+    rejected_html: str | None = None
+
+
+@dataclass(frozen=True)
+class AuthoredPlannedBatchResult:
+    """Per-slide outcomes from one physical provider call."""
+
+    htmls: Mapping[int, str]
+    failures: Mapping[int, AuthoredBatchFailure]
 
 
 # Concurrency is bounded PROCESS-WIDE inside author_slide_html (the AUTHOR_CONCURRENCY-sized
@@ -1285,6 +1313,253 @@ def prepare_authored_deck(
     )
 
 
+def _planned_slide_capacity_inputs(
+    plan: AuthoredDeckPlan,
+    index: int,
+    source_images: Sequence[SourceImageCandidate],
+) -> tuple[SlideCapacity | None, str | None]:
+    capacity_plan = getattr(plan, "capacity_plan", None)
+    if capacity_plan is None:
+        return None, None
+    capacity = capacity_plan.at(index).with_source_images(len(source_images))
+    brief = capacity.prompt_brief(capacity_plan.profile)
+    text_plan = getattr(plan, "text_plan", None)
+    if text_plan is not None:
+        brief += " " + text_plan.at(index, capacity=capacity).prompt_brief()
+    return capacity, brief
+
+
+def _planned_batch_request(
+    plan: AuthoredDeckPlan,
+    index: int,
+    *,
+    source_images: Sequence[SourceImageCandidate],
+    require_all_source_images: bool,
+    failure: AuthoredBatchFailure | None,
+) -> AuthoredBatchSlideRequest:
+    illustration_slots = getattr(plan, "illustration_slots", ())
+    visual_plan = getattr(plan, "visual_plan", None)
+    _capacity, capacity_brief = _planned_slide_capacity_inputs(
+        plan, index, source_images
+    )
+    return AuthoredBatchSlideRequest(
+        index=index,
+        content=plan.contents[index],
+        role=plan.roles[index],
+        reference_images=plan.reference_images[index],
+        reference_mode=plan.reference_mode,
+        structured_context=plan.structured_contexts[index],
+        page_number_mode=plan.page_number_mode,
+        requirements_enabled=_requirements_enabled(plan.header_contract),
+        chapter_breadcrumb=_chapter_breadcrumb(plan.header_contract),
+        chapter_prefix=(
+            plan.chapter_prefixes[index] if plan.chapter_prefixes else None
+        ),
+        instructions=getattr(plan, "instructions", None),
+        illustration_allowed=(
+            illustration_slots[index] if illustration_slots else None
+        ),
+        visual_intent=(visual_plan.at(index) if visual_plan is not None else None),
+        capacity_brief=capacity_brief,
+        source_images=tuple(source_images),
+        require_all_source_images=require_all_source_images,
+        correction_hint=(failure.correction_hint if failure is not None else None),
+        rejected_html=(failure.rejected_html if failure is not None else None),
+    )
+
+
+def _validate_planned_batch_candidate(
+    plan: AuthoredDeckPlan,
+    index: int,
+    html: str,
+    *,
+    source_images: Sequence[SourceImageCandidate],
+    prior_failure: AuthoredBatchFailure | None,
+    recovery: bool,
+    raise_on_failure: bool,
+) -> str:
+    capacity_plan = getattr(plan, "capacity_plan", None)
+    capacity, _brief = _planned_slide_capacity_inputs(plan, index, source_images)
+    if (
+        recovery
+        and prior_failure is not None
+        and isinstance(prior_failure.error, AuthoredAggregateOwnerCapacityExhausted)
+        and prior_failure.rejected_html is not None
+        and prior_failure.error.title_recovery_qids
+    ):
+        boundary = title_capacity_recovery_boundary(
+            prior_failure.rejected_html,
+            html,
+            prior_failure.error.title_recovery_qids,
+        )
+        if boundary:
+            raise AuthoredProviderBudgetExhausted(
+                "authored_title_recovery_boundary_exhausted",
+                ",".join(boundary),
+                rejected_html=html,
+            )
+
+    constrained = _constrain_structured_zone_html(
+        html, plan.structured_contexts[index]
+    )
+    if capacity is not None:
+        constrained = canonicalize_authored_capacity_html(constrained)
+    header_violations = (
+        validate_header_contract(
+            constrained,
+            plan.header_contract,
+            role=plan.roles[index],
+            content=plan.contents[index],
+        )
+        if plan.header_contract is not None
+        else ()
+    )
+    if header_violations:
+        # Preserve the historical non-strict final fallback: after the one
+        # correction, a usable render with only header drift is preferable to a
+        # placeholder. Product generation passes raise_on_failure=True and
+        # therefore remains fail closed.
+        if recovery and not (
+            raise_on_failure
+            or plan.reference_mode == EXACT_RECONSTRUCTION
+            or plan.structured_contexts[index] is not None
+        ):
+            return constrained
+        error = ValueError(
+            "header contract violated: " + ", ".join(header_violations)
+        )
+        error.rejected_html = constrained
+        raise error
+
+    owner_violations = (
+        aggregate_owner_capacity_violations(constrained, capacity)
+        if capacity is not None
+        else ()
+    )
+    if not owner_violations:
+        return constrained
+    allow_reduction = bool(
+        capacity_plan is not None
+        and capacity_plan.profile.profile_id == "ordinary"
+        and capacity_plan.profile.allow_summarization
+        and not source_images
+    )
+    if allow_reduction and capacity is not None:
+        reduced = reduce_authored_owner_text_capacity(
+            constrained,
+            capacity,
+            profile_id="ordinary",
+            allow_summarization=True,
+        )
+        reduced_violations = aggregate_owner_capacity_violations(reduced, capacity)
+        if reduced != constrained and not reduced_violations:
+            return reduced
+        if reduced != constrained:
+            constrained = reduced
+            owner_violations = reduced_violations
+    raise AuthoredAggregateOwnerCapacityExhausted(
+        owner_violations,
+        rejected_html=constrained,
+        capacity=capacity,
+        title_recovery_qids=(
+            title_capacity_recovery_qids(
+                constrained,
+                instructions=getattr(plan, "instructions", None),
+            )
+            if capacity_plan is not None
+            and capacity_plan.profile.profile_id == "ordinary"
+            and capacity_plan.profile.allow_summarization
+            and not source_images
+            and plan.reference_mode != EXACT_RECONSTRUCTION
+            and plan.structured_contexts[index] is None
+            and any(item.startswith("owner_title:") for item in owner_violations)
+            else ()
+        ),
+    )
+
+
+def _batch_failure(error: BaseException) -> AuthoredBatchFailure:
+    correction = _classify_author_validation_error(error, source_image_ids=())
+    hint = (
+        correction.hint
+        if correction is not None
+        else _author_retry_correction(error, source_image_ids=())
+    )
+    rejected = getattr(error, "rejected_html", None)
+    return AuthoredBatchFailure(
+        error=error,
+        correction_hint=hint,
+        rejected_html=rejected if isinstance(rejected, str) else None,
+    )
+
+
+async def author_planned_batch(
+    plan: AuthoredDeckPlan,
+    indexes: Sequence[int],
+    *,
+    source_images_by_index: Mapping[int, Sequence[SourceImageCandidate]] | None = None,
+    require_all_source_images: bool = False,
+    recovery: bool = False,
+    prior_failures: Mapping[int, AuthoredBatchFailure] | None = None,
+    raise_on_failure: bool = False,
+    attempt_observers: Mapping[int, Callable[[int], None]] | None = None,
+    attempt_reservers: Mapping[int, Callable[[int], Awaitable[None]]] | None = None,
+) -> AuthoredPlannedBatchResult:
+    """Author one to three planned slides with one fenced provider call."""
+
+    selected = tuple(indexes)
+    if not 1 <= len(selected) <= 3 or len(set(selected)) != len(selected):
+        raise ValueError("planned authored batch must contain one to three unique slides")
+    ordinal = 2 if recovery else 1
+    # Every included slide owns the physical call before provider admission.
+    # Reserving all ordinals first makes cancellation/process death fail closed
+    # instead of allowing a subset to reopen the same billable attempt.
+    for index in selected:
+        reserver = (attempt_reservers or {}).get(index)
+        if reserver is not None:
+            await reserver(ordinal)
+        observer = (attempt_observers or {}).get(index)
+        if observer is not None:
+            observer(ordinal)
+
+    sources = source_images_by_index or {}
+    requests = tuple(
+        _planned_batch_request(
+            plan,
+            index,
+            source_images=tuple(sources.get(index, ())),
+            require_all_source_images=require_all_source_images,
+            failure=(prior_failures or {}).get(index),
+        )
+        for index in selected
+    )
+    response = await author_slides_html(
+        requests,
+        design_system=plan.design_system,
+        brand=plan.brand,
+        slide_count=len(plan.contents),
+        recovery=recovery,
+    )
+    htmls: dict[int, str] = {}
+    failures: dict[int, AuthoredBatchFailure] = {
+        index: _batch_failure(error) for index, error in response.errors.items()
+    }
+    for index, candidate in response.htmls.items():
+        try:
+            htmls[index] = _validate_planned_batch_candidate(
+                plan,
+                index,
+                candidate,
+                source_images=tuple(sources.get(index, ())),
+                prior_failure=(prior_failures or {}).get(index),
+                recovery=recovery,
+                raise_on_failure=raise_on_failure,
+            )
+        except BaseException as error:  # slide-only validation boundary
+            failures[index] = _batch_failure(error)
+    return AuthoredPlannedBatchResult(htmls=htmls, failures=failures)
+
+
 async def author_planned_slide(
     plan: AuthoredDeckPlan,
     index: int,
@@ -1364,15 +1639,97 @@ async def author_deck(
     brand: Brand,
     style: Optional[AuthoredStyleLike] = None,
 ) -> AuthoredDeckResult:
-    """Author every outline slide against the shared design system, with bounded
-    concurrency and per-slide resilience. Returns the valid HTML documents (order
-    preserved) plus the exact prompt shared with vision-QA. Failed style-reference
-    slides fall back to a branded placeholder; exact reconstruction fails closed."""
+    """Author a deck in adaptive waves of one-call, at-most-three-slide batches."""
     plan = prepare_authored_deck(outline, brand, style)
-    htmls = await asyncio.gather(
-        *[author_planned_slide(plan, i) for i in range(len(plan.contents))]
+    if author_slide_html is not _DEFAULT_AUTHOR_SLIDE_HTML:
+        # Preserve the established single-slide injection seam used by offline
+        # fixtures; the unmodified product callable always takes the batch path.
+        htmls = await asyncio.gather(
+            *[author_planned_slide(plan, index) for index in range(len(plan.contents))]
+        )
+        return AuthoredDeckResult(
+            htmls=list(htmls), design_system=plan.design_system
+        )
+    html_by_index: dict[int, str] = {}
+    failures: dict[int, AuthoredBatchFailure] = {}
+    pending = list(range(len(plan.contents)))
+    policy = new_authored_batch_policy_state()
+    while pending:
+        wave = plan_authored_batch_wave(pending, policy)
+        outcomes = await asyncio.gather(
+            *(
+                author_planned_batch(plan, batch.slide_indices)
+                for batch in wave.batches
+            ),
+            return_exceptions=True,
+        )
+        consumed: set[int] = set()
+        for batch, outcome in zip(wave.batches, outcomes):
+            consumed.update(batch.slide_indices)
+            if isinstance(outcome, BaseException):
+                policy = advance_authored_batch_policy(
+                    policy, succeeded=False, error=outcome
+                )
+                failures.update(
+                    {index: _batch_failure(outcome) for index in batch.slide_indices}
+                )
+                continue
+            policy = advance_authored_batch_policy(
+                policy, succeeded=bool(outcome.htmls)
+            )
+            html_by_index.update(outcome.htmls)
+            failures.update(outcome.failures)
+        pending = [index for index in pending if index not in consumed]
+
+    recovery_batches = plan_authored_recovery_batches(
+        failures,
+        successful_slide_indices=html_by_index,
     )
-    return AuthoredDeckResult(htmls=list(htmls), design_system=plan.design_system)
+    for offset in range(0, len(recovery_batches), policy.concurrency):
+        window = recovery_batches[offset : offset + policy.concurrency]
+        outcomes = await asyncio.gather(
+            *(
+                author_planned_batch(
+                    plan,
+                    batch.slide_indices,
+                    recovery=True,
+                    prior_failures=failures,
+                )
+                for batch in window
+            ),
+            return_exceptions=True,
+        )
+        for batch, outcome in zip(window, outcomes):
+            if isinstance(outcome, BaseException):
+                policy = advance_authored_batch_policy(
+                    policy, succeeded=False, error=outcome
+                )
+                for index in batch.slide_indices:
+                    failures[index] = _batch_failure(outcome)
+                continue
+            policy = advance_authored_batch_policy(
+                policy, succeeded=bool(outcome.htmls)
+            )
+            html_by_index.update(outcome.htmls)
+            for index in outcome.htmls:
+                failures.pop(index, None)
+            failures.update(outcome.failures)
+
+    for index, failure in sorted(failures.items()):
+        if plan.reference_mode == EXACT_RECONSTRUCTION:
+            raise failure.error
+        html_by_index[index] = fallback_slide_html(
+            plan.contents[index],
+            plan.brand,
+            plan.roles[index],
+            index,
+            len(plan.contents),
+            page_number_mode=plan.page_number_mode,
+        )
+    return AuthoredDeckResult(
+        htmls=[html_by_index[index] for index in range(len(plan.contents))],
+        design_system=plan.design_system,
+    )
 
 
 def build_image_pptx(images: List[bytes], out_path: str) -> str:

@@ -22,10 +22,11 @@ import logging
 import uuid
 from typing import Awaitable, Callable, Protocol
 
-from sqlalchemy import update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from models.sql.presentation_generation_job import PresentationGenerationJob
+from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from services.database import async_session_maker
 from utils.datetime_utils import get_current_utc_datetime
 
@@ -184,11 +185,28 @@ async def _read_job_counters(
             # Template V2 reports its own slide progress; a second writer here
             # would fight it and move the bar backwards.
             return None
-        return (
-            max(0, job.completed_slides or 0),
-            max(0, job.total_slides or 0),
-            job.current_stage,
-        )
+        total = max(0, job.total_slides or 0)
+        current_stage = str(job.current_stage or "").strip().lower()
+        completed = max(0, job.completed_slides or 0)
+        stage_status_field = {
+            "author": AuthoredSlideCheckpoint.author_status,
+            "illustrate": AuthoredSlideCheckpoint.illustrate_status,
+            "render": AuthoredSlideCheckpoint.render_status,
+            "persist": AuthoredSlideCheckpoint.persist_status,
+        }.get(current_stage)
+        if stage_status_field is not None:
+            completed = int(
+                await session.scalar(
+                    select(func.count())
+                    .select_from(AuthoredSlideCheckpoint)
+                    .where(
+                        AuthoredSlideCheckpoint.job_id == job_id,
+                        stage_status_field == "completed",
+                    )
+                )
+                or 0
+            )
+        return (max(0, min(total, completed)), total, job.current_stage)
 
 
 async def stream_authored_generation_progress(

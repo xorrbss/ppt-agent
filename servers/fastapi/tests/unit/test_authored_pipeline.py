@@ -36,7 +36,9 @@ from utils.llm_calls import author_slide as author_slide_mod
 from utils.llm_calls import author_vision_qa as author_vision_qa_mod
 from utils.llm_calls import critique_slide as critique_slide_mod
 from utils.llm_calls.author_deck import (
+    AuthoredBatchFailure,
     AuthoredDeckResult,
+    AuthoredPlannedBatchResult,
     author_deck,
     build_image_pptx,
     plan_authored_visual_story,
@@ -668,6 +670,35 @@ def test_author_deck_uses_authored_html_when_valid(monkeypatch):
     htmls = _run(author_deck(_outline(4), _brand())).htmls
     assert len(htmls) == 4
     assert all(h == _VALID for h in htmls)
+
+
+def test_author_deck_recovers_only_failed_slide_from_batch(monkeypatch):
+    calls = []
+    failed = AuthoredBatchFailure(ValueError("slide 1 rejected"), "repair slide 1")
+
+    async def fake_batch(plan, indexes, *, recovery=False, prior_failures=None):
+        calls.append((tuple(indexes), recovery, dict(prior_failures or {})))
+        if not recovery:
+            return AuthoredPlannedBatchResult(
+                htmls={0: "batch-slide-0", 2: "batch-slide-2"},
+                failures={1: failed},
+            )
+        assert tuple(indexes) == (1,)
+        assert prior_failures is not None
+        assert tuple(prior_failures) == (1,)
+        return AuthoredPlannedBatchResult(
+            htmls={1: "recovered-slide-1"}, failures={}
+        )
+
+    monkeypatch.setattr(author_deck_mod, "author_planned_batch", fake_batch)
+    htmls = _run(author_deck(_outline(3), _brand())).htmls
+
+    assert htmls == ["batch-slide-0", "recovered-slide-1", "batch-slide-2"]
+    assert calls[0][0] == (0, 1, 2)
+    assert calls[0][1] is False
+    assert calls[1][0] == (1,)
+    assert calls[1][1] is True
+    assert calls[1][2][1] is failed
 
 
 def test_author_deck_falls_back_when_authoring_raises(monkeypatch):

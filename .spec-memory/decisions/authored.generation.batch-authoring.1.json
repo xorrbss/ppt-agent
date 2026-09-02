@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.generation.batch-authoring",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Legacy Authored authoring uses one-call batches up to 3 slides, serial first then max 2, overload downgrades to serial, failed-only recovery.",
+  "scope": [
+    "authored-generation",
+    "provider-usage",
+    "checkpointing"
+  ],
+  "invariants": [
+    "Each Authored batch provider call contains 1-3 slide indexes and returns per-slide HTML wrappers.",
+    "A new job starts with one author batch; after a batch returns at least one accepted slide, max wave concurrency is 2.",
+    "500/503/timeout/provider overload marks the job permanently serial.",
+    "Successful slides are checkpointed and excluded from recovery; recovery batches may contain only failed slides.",
+    "Per-slide provider attempt ordinals are reserved before the batch call while the physical provider receipt uses one deck-level batch slot."
+  ],
+  "forbidden": [
+    "Do not regenerate accepted/checkpointed slides during recovery.",
+    "Do not treat fixture/unit tests as product-path provider/Chromium/COM proof."
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_batch_policy.py",
+    "servers/fastapi/utils/llm_calls/author_batch.py",
+    "servers/fastapi/utils/llm_calls/author_deck.py",
+    "servers/fastapi/services/authored_presentation_pipeline.py",
+    "servers/fastapi/tests/unit/test_authored_batch_policy.py",
+    "uv run pytest -q tests/unit/test_authored_batch_policy.py -> 19 passed"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-02T02:45:10.0692084+00:00"
+}
