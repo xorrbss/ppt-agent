@@ -23,6 +23,11 @@ type OutlineStreamEvent =
   | { type: "closing" }
   | { type: "error"; detail?: string };
 
+const isModelAvailabilityError = (detail: string) =>
+  /(?:servers are currently overloaded|presentation model is temporarily unavailable after multiple attempts)/i.test(
+    detail,
+  );
+
 const createBrowserEventSource: OutlineEventSourceFactory = (url) =>
   new EventSource(url);
 
@@ -277,6 +282,14 @@ export const useOutlineStreaming = (
             retryCount = 0;
             break;
           case "error":
+            if (isModelAvailabilityError(data.detail || "")) {
+              stopStreaming();
+              notify.error(
+                "프레젠테이션 모델 일시 장애",
+                data.detail || "잠시 후 개요 생성을 다시 시도해 주세요.",
+              );
+              break;
+            }
             if (
               /codex oauth access token is not set/i.test(data.detail || "")
             ) {

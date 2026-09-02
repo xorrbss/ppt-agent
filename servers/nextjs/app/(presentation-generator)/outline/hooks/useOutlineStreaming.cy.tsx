@@ -263,4 +263,68 @@ describe("useOutlineStreaming", () => {
       expect(FakeEventSource.instances[0].closed).to.equal(true);
     });
   });
+
+  it("stops without retrying when the presentation model is overloaded", () => {
+    const testStore = createTestStore("codex");
+    type ResponseListener = (event: MessageEvent<string>) => void;
+
+    class FakeEventSource {
+      static instances: FakeEventSource[] = [];
+      listeners: ResponseListener[] = [];
+      onerror: (() => void) | null = null;
+      closed = false;
+
+      constructor(_url: string | URL) {
+        FakeEventSource.instances.push(this);
+      }
+
+      addEventListener(type: string, listener: EventListener) {
+        if (type === "response") {
+          this.listeners.push(listener as ResponseListener);
+        }
+      }
+
+      close() {
+        this.closed = true;
+      }
+
+      emit(data: unknown) {
+        const event = { data: JSON.stringify(data) } as MessageEvent<string>;
+        this.listeners.forEach((listener) => listener(event));
+      }
+    }
+
+    cy.stub(DashboardApi, "getPresentation").resolves({ outlines: null } as any);
+    cy.stub(CodexAuthApi, "refreshIfExpired").resolves(false);
+
+    const createEventSource: OutlineEventSourceFactory = (url) =>
+      new FakeEventSource(url) as unknown as EventSource;
+
+    mount(
+      <TestProviders store={testStore}>
+        <Harness
+          presentationId="p-model-unavailable"
+          createEventSource={createEventSource}
+        />
+      </TestProviders>,
+    );
+
+    cy.wrap(null).should(() => {
+      expect(FakeEventSource.instances).to.have.length(1);
+    });
+    cy.then(() => {
+      FakeEventSource.instances[0].emit({
+        type: "error",
+        detail: "Our servers are currently overloaded. Please try again later.",
+      });
+    });
+
+    cy.get('[data-cy="streaming"]').should("have.text", "false");
+    cy.get('[data-cy="loading"]').should("have.text", "false");
+    cy.wait(3_100);
+    cy.then(() => {
+      expect(FakeEventSource.instances).to.have.length(1);
+      expect(FakeEventSource.instances[0].closed).to.equal(true);
+    });
+  });
 });
