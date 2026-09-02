@@ -90,6 +90,8 @@ export interface BrowserElementObservation {
   shape?: BrowserShapeObservation;
   /** Computed, normalized evidence for bounded declared-table admission. */
   tableEvidence?: AuthoredHybridTableEvidence;
+  /** Authored `data-native="table"` opt-in observed on the element. */
+  nativeHint?: "table";
 }
 
 /** Serializable identity token carried from extraction into backplate capture. */

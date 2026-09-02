@@ -51,10 +51,16 @@ from services.authored_presentation_artifacts import (
 from models.authored_chapter_plan import AuthoredChapterPlan
 from models.authored_header_contract import AuthoredHeaderContract, default_header_contract
 from models.authored_illustration_plan import AuthoredIllustrationPlan
+from models.authored_infographic_plan import AuthoredInfographicPlan
+from services.authored_infographic_assets import (
+    build_infographic_asset_context,
+    deck_has_picture_source,
+)
 from services.authored_deck_plans import (
     AuthoredDeckPlans,
+    derive_illustration_plan,
     resolve_deck_plans,
-    resolve_final_outline_illustration_plan,
+    resolve_final_outline_infographic_plan,
 )
 from services.authored_deck_plan_checkpoint import (
     AuthoredDeckPlanCheckpointError,
@@ -825,6 +831,7 @@ async def _revise_gate_repair_candidates(
         "provider_recovery_allowed",
         "chapter_prefixes",
         "illustration_slots",
+        "infographic_briefs",
         "reference_images_by_slide",
     ):
         values = subset_kwargs.get(key)
@@ -1686,7 +1693,7 @@ async def _generate_authored_presentation(
 
     async def resolve_current_deck_plans() -> AuthoredDeckPlans:
         return await resolve_deck_plans(
-            request, outline, brand, style, roles, resolve_illustration=False
+            request, outline, brand, style, roles, resolve_infographic=False
         )
 
     with provider_usage_scope(
@@ -1834,14 +1841,17 @@ async def _generate_authored_presentation(
     # Start only after every existing-presentation/admission early exit. The
     # illustration and header calls now read the same final outline in parallel,
     # but no provider task survives an already-published return.
-    async def resolve_current_illustration_plan() -> AuthoredIllustrationPlan | None:
-        return await resolve_final_outline_illustration_plan(
-            request, outline, brand, style
+    async def resolve_current_infographic_plan() -> AuthoredInfographicPlan | None:
+        return await resolve_final_outline_infographic_plan(
+            request, outline, brand, style, roles
         )
 
-    async def resolve_checkpointed_illustration_plan() -> tuple[
-        AuthoredIllustrationPlan | None, bool
+    async def resolve_checkpointed_infographic_plan() -> tuple[
+        AuthoredInfographicPlan | None, bool
     ]:
+        # The checkpoint stage keeps its historical name: the figure plan is
+        # what now decides the deck's pictures, and a resumed attempt reads the
+        # same stage row it always did.
         with provider_usage_scope(
             job_id=generation_job.id if generation_job is not None else None,
             operation="authored_generation",
@@ -1859,22 +1869,22 @@ async def _generate_authored_presentation(
                     style=style,
                     stage="illustration",
                 ),
-                resolve=resolve_current_illustration_plan,
+                resolve=resolve_current_infographic_plan,
                 encode=lambda value: _encode_optional_model(
-                    "authored-illustration-plan/v1", "illustrationPlan", value
+                    "authored-infographic-plan/v1", "infographicPlan", value
                 ),
                 decode=lambda payload: (
-                    AuthoredIllustrationPlan.model_validate(
-                        payload.get("illustrationPlan")
+                    AuthoredInfographicPlan.model_validate(
+                        payload.get("infographicPlan")
                     )
-                    if isinstance(payload.get("illustrationPlan"), dict)
+                    if isinstance(payload.get("infographicPlan"), dict)
                     else None
                 ),
                 observe=observe_deck_checkpoint,
             )
 
-    illustration_plan_task = asyncio.create_task(
-        resolve_checkpointed_illustration_plan()
+    infographic_plan_task = asyncio.create_task(
+        resolve_checkpointed_infographic_plan()
     )
     use_single_slide_header_fast_path = _use_single_slide_header_fast_path(
         request, outline, style
@@ -1946,11 +1956,14 @@ async def _generate_authored_presentation(
                     observe=observe_deck_checkpoint,
                 )
             )
-    illustration_plan, illustration_reused = await illustration_plan_task
+    infographic_plan, infographic_reused = await infographic_plan_task
+    illustration_plan: AuthoredIllustrationPlan | None = derive_illustration_plan(
+        infographic_plan
+    )
     LOGGER.info(
-        "[authored] deck checkpoint reuse: header=%s illustration=%s",
+        "[authored] deck checkpoint reuse: header=%s infographic=%s",
         header_reused,
-        illustration_reused,
+        infographic_reused,
     )
     outline_elapsed = time.monotonic() - outline_stage_started
     record_stage_timing("outline", outline_elapsed * 1000)
@@ -2001,11 +2014,15 @@ async def _generate_authored_presentation(
         **job_kwargs,
     }
     # Keep narrow legacy/test doubles source-compatible while the product
-    # pipeline consumes the frozen composition profile.
+    # pipeline consumes the frozen composition profile and the figure plan.
     if _callable_accepts_keyword(
         _author_illustrate_render_pipeline, "composition_profile"
     ):
         pipeline_kwargs["composition_profile"] = composition_profile
+    if _callable_accepts_keyword(
+        _author_illustrate_render_pipeline, "infographic_plan"
+    ):
+        pipeline_kwargs["infographic_plan"] = infographic_plan
     if source_text_bindings is not None:
         pipeline_kwargs["source_block_bindings"] = source_text_bindings
     if source_image_bindings is not None:
@@ -2219,6 +2236,10 @@ async def _generate_authored_presentation(
         if illustration_plan is not None:
             repair_kwargs["illustration_slots"] = [
                 illustration_plan.allows(index) for index in flagged
+            ]
+        if infographic_plan is not None:
+            repair_kwargs["infographic_briefs"] = [
+                infographic_plan.at(index) for index in flagged
             ]
         frozen_gate_inputs: dict[int, tuple[str, bytes, object | None, object | None]] = {}
         for absolute_index in flagged:
@@ -2499,7 +2520,19 @@ async def _generate_authored_presentation(
                             illustration_plan.allows(index)
                             for index in range(len(htmls))
                         ]
-                    if getattr(style, "illustration_prompt", None):
+                    if infographic_plan is not None:
+                        vision_qa_kwargs["infographic_briefs"] = [
+                            infographic_plan.at(index)
+                            for index in range(len(htmls))
+                        ]
+                        vision_qa_kwargs["infographic_assets"] = (
+                            build_infographic_asset_context(
+                                style=style,
+                                brand=brand,
+                                instructions=request.instructions,
+                            )
+                        )
+                    if deck_has_picture_source(style):
                         # One service is shared by this bounded QA pass; the
                         # reviser calls it only for an allowed replacement slot.
                         vision_qa_kwargs["image_service"] = ImageGenerationService(
@@ -3044,6 +3077,7 @@ async def _generate_authored_presentation(
         roles=roles,
         exact_provenance=exact_provenance,
         chapter_plan=chapter_plan,
+        infographic_plan=infographic_plan,
         illustration_plan=illustration_plan,
         htmls=htmls,
         semantic_components=semantic_components,
@@ -3062,6 +3096,37 @@ async def _generate_authored_presentation(
         generation_job,
         stage="publication",
         elapsed_seconds=publication_elapsed,
+    )
+    # Per-slide figure measurement.  Written for every authored deck, job or
+    # no job, so the local synchronous benchmark route is measured too.  The
+    # variant and the critic score come from the quality loop's own per-slide
+    # receipts; a slide the loop did not run for records them as absent rather
+    # than as zero.
+    from services.authored_slide_quality_receipt import (
+        build_slide_quality_records,
+        record_slide_quality_receipt,
+    )
+
+    loop_receipts = dict(getattr(pipeline, "slide_quality_receipts", {}) or {})
+    record_slide_quality_receipt(
+        presentation_id,
+        build_slide_quality_records(
+            slide_count=len(htmls or ()),
+            infographic_plan=infographic_plan,
+            variants={
+                index: (receipt.get("best_of") or {}).get("variant_chosen")
+                for index, receipt in loop_receipts.items()
+                if isinstance(receipt.get("best_of"), dict)
+            },
+            critic_scores={
+                index: receipt["critic_score"]
+                for index, receipt in loop_receipts.items()
+                if receipt.get("critic_score") is not None
+            },
+        ),
+        attempt_number=(
+            generation_job.attempt_number if generation_job is not None else None
+        ),
     )
     if generation_job is not None and quality_receipt_v2 is not None:
         from services.public_operation_admission import (

@@ -172,3 +172,45 @@ def is_authored_source_images_enabled(
     illustrated exactly as it was before source-image reuse existed.
     """
     return _is_truthy(get_setting_env("AUTHORED_SOURCE_IMAGES_ENABLED", settings))
+
+
+def _int_setting(key: str, default: int, settings: RuntimeSettings | None) -> int:
+    raw = (get_setting_env(key, settings) or "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+def is_authored_quality_loop_enabled(
+    settings: RuntimeSettings | None = None,
+) -> bool:
+    """Whether a figure slide is rendered as several CSS-only candidates.
+
+    Off by default. With the flag unset every slide is rendered exactly once,
+    from the HTML its author wrote, as it was before best-of-N existed.
+    """
+    return _is_truthy(get_setting_env("AUTHORED_QUALITY_LOOP_ENABLED", settings))
+
+
+def get_authored_quality_loop_candidates(
+    settings: RuntimeSettings | None = None,
+) -> int:
+    """Candidates rendered per figure slide, baseline included, clamped to 1-4."""
+    return max(1, min(4, _int_setting("AUTHORED_QUALITY_LOOP_CANDIDATES", 3, settings)))
+
+
+def is_authored_design_critique_enabled(
+    settings: RuntimeSettings | None = None,
+) -> bool:
+    """Whether the closed-operation design critic runs. Off by default."""
+    return _is_truthy(get_setting_env("AUTHORED_DESIGN_CRITIQUE_ENABLED", settings))
+
+
+def get_authored_export_fallback_limit(
+    settings: RuntimeSettings | None = None,
+) -> int:
+    """Raster fallbacks a hybrid-exported slide may keep before it is flagged."""
+    return max(0, _int_setting("AUTHORED_EXPORT_FALLBACK_LIMIT", 2, settings))

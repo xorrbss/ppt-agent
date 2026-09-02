@@ -518,6 +518,31 @@ export interface AuthoredScriptTypefaceResolution {
   readonly requiresEmbedding: boolean;
 }
 
+export interface ScriptAwareTypefaceOptions {
+  /**
+   * Exact packaged faces. An authored Hangul-capable family such as
+   * Pretendard replaces the Noto Sans KR default only when this evidence
+   * proves that family itself (not an equivalent substitute) was embedded.
+   */
+  readonly embeddedTypefaceFaces?: readonly AuthoredEmbeddedTypefaceFaceEvidence[];
+  readonly face?: AuthoredEmbeddedFontFace;
+}
+
+/** Authored sans-serif families that ship full Hangul coverage. */
+const HANGUL_CAPABLE_AUTHORED_FAMILIES = new Set(["pretendard"]);
+
+function exactEmbeddedTypefaceFace(
+  evidence: readonly AuthoredEmbeddedTypefaceFaceEvidence[] | undefined,
+  typeface: string,
+  face: AuthoredEmbeddedFontFace | undefined
+): boolean {
+  if (!evidence || !face) return false;
+  const expected = normalizedFontName(typeface);
+  return evidence.some(
+    (entry) => entry.face === face && normalizedFontName(entry.typeface) === expected
+  );
+}
+
 /**
  * Script-aware native policy. CJK never inherits a Latin monospace face.
  * Conversely, the IBM Plex Mono/Consolas pair is considered only for a run
@@ -526,13 +551,27 @@ export interface AuthoredScriptTypefaceResolution {
  */
 export function resolveScriptAwareTypeface(
   script: AuthoredFontScript,
-  families: readonly string[]
+  families: readonly string[],
+  options: ScriptAwareTypefaceOptions = {}
 ): AuthoredScriptTypefaceResolution {
   if (script === "cjk") {
     if (isCjkSerifFontStack(families)) {
       return {
         typeface: "Noto Serif KR",
         fallbackTypeface: "Batang",
+        requiresEmbedding: true,
+      };
+    }
+    const authoredHangul = families
+      .map((family) => family.trim().replace(/^['"]|['"]$/g, ""))
+      .find((family) => HANGUL_CAPABLE_AUTHORED_FAMILIES.has(normalizedFontName(family)));
+    if (
+      authoredHangul &&
+      exactEmbeddedTypefaceFace(options.embeddedTypefaceFaces, authoredHangul, options.face)
+    ) {
+      return {
+        typeface: authoredHangul,
+        fallbackTypeface: resolveFontFamily(authoredHangul),
         requiresEmbedding: true,
       };
     }

@@ -3,6 +3,11 @@
 from services import authored_quality_review_service as _service
 from services.authored_deck_chapter_plan import load_chapter_plan
 from services.authored_deck_illustration_plan import load_illustration_plan
+from services.authored_deck_infographic_plan import load_infographic_plan
+from services.authored_infographic_assets import (
+    build_infographic_asset_context,
+    deck_has_picture_source,
+)
 from services.authored_header_contract_service import (
     load_header_contract,
     page_number_mode_for,
@@ -92,6 +97,7 @@ async def prepare_legacy_review(ctx):
         # from a review subset would give an edited page a different right to
         # use a generated picture than its untouched siblings.
         illustration_plan=load_illustration_plan(ctx.presentation.theme),
+        infographic_plan=load_infographic_plan(ctx.presentation.theme),
     )
     ctx.plan_reference_mode = _service.normalize_reference_mode(
         getattr(ctx.plan, "reference_mode", ctx.saved_reference_mode)
@@ -114,7 +120,15 @@ async def prepare_legacy_review(ctx):
             ctx.illustration_reauthor_kwargs["illustration_slots"] = [
                 illustration_slots[position] for position in ctx.positions
             ]
-        if getattr(ctx.style, "illustration_prompt", None):
+        infographic_briefs = getattr(ctx.plan, "infographic_briefs", ())
+        if infographic_briefs:
+            ctx.illustration_reauthor_kwargs["infographic_briefs"] = [
+                infographic_briefs[position] for position in ctx.positions
+            ]
+            ctx.illustration_reauthor_kwargs["infographic_assets"] = (
+                build_infographic_asset_context(style=ctx.style, brand=ctx.plan.brand)
+            )
+        if deck_has_picture_source(ctx.style):
             ctx.illustration_reauthor_kwargs["image_service"] = (
                 _service.ImageGenerationService(_service.get_images_directory())
             )

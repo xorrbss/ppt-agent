@@ -105,6 +105,30 @@ when that family was actually embedded in the package; otherwise it uses the
 deterministic Office/Windows substitute from `font-policy.ts`, and CSS
 collector fallback must use `cssFontStack` from the same module.
 
+### Bundled Pretendard
+
+Pretendard (OFL-1.1, `public/fonts/pretendard/`, licence file beside the
+fonts) is delivered and embedded without any network access:
+
+- `bundled-fonts-collector.ts` runs after the Google Fonts collector. When the
+  authored CSS names `Pretendard`, the regular WOFF2 face (and the bold face
+  when the document uses weight >= 600, `<strong>`, `<th>` or headings) is
+  injected as trusted `data:` @font-face rules so the backplate and the text
+  measurement pass use the same glyphs PowerPoint will show. The trusted
+  self-contained preflight bounds that document by `maxTrustedHtmlBytes`;
+  structural limits still apply to the authored markup without font faces.
+- `font-embedding-policy.ts` lists the static TrueType regular/bold faces under
+  the `bundled-open-font` source. `nativeEmbeddingFamilies` requests
+  `Pretendard` whenever the stored slide HTML names it.
+- `resolveScriptAwareTypeface` keeps Hangul runs on `Pretendard` only when the
+  authored stack names it **and** the exact Pretendard face was packaged;
+  otherwise Hangul still resolves to Noto Sans KR / Malgun Gothic.
+- Weights 500 and 600-900 intentionally resolve to the two shipped faces in
+  the browser as well, because PresentationML declares only regular and bold.
+
+Measured cost: the two static faces add about 2.3 MiB to a deflated PPTX
+(5.4 MB of TrueType source).
+
 ## Optional export quality metadata
 
 Hybrid export responses may include additive `quality` metadata using

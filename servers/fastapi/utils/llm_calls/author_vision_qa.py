@@ -16,7 +16,13 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Protocol, Sequence, Tuple
 
+from models.authored_infographic_plan import AuthoredSlideInfographic
 from models.image_prompt import ImagePrompt
+from services.authored_infographic_assets import (
+    InfographicAssetContext,
+    fill_scene_cutout,
+    substitute_figure_icons,
+)
 from utils.authored_dom_quality import (
     build_compact_dom_map,
     ensure_authored_qids,
@@ -556,6 +562,8 @@ async def revise_authored_deck(
     chapter_prefixes: Optional[Sequence[Optional[str]]] = None,
     image_service: Optional[_ImageServiceLike] = None,
     illustration_slots: Optional[Sequence[bool]] = None,
+    infographic_briefs: Optional[Sequence[AuthoredSlideInfographic | None]] = None,
+    infographic_assets: Optional[InfographicAssetContext] = None,
     local_patch_only: bool = False,
     fail_on_residual_dom_issues: bool = False,
     capacity_briefs: Optional[Sequence[str]] = None,
@@ -595,6 +603,8 @@ async def revise_authored_deck(
         raise ValueError("chapter_prefixes must match the reviewed slide count")
     if illustration_slots is not None and len(illustration_slots) != n:
         raise ValueError("illustration_slots must match the reviewed slide count")
+    if infographic_briefs is not None and len(infographic_briefs) != n:
+        raise ValueError("infographic_briefs must match the reviewed slide count")
     if capacity_briefs is not None and len(capacity_briefs) != n:
         raise ValueError("capacity_briefs must match the reviewed slide count")
     if provider_recovery_allowed is not None and len(provider_recovery_allowed) != n:
@@ -615,6 +625,7 @@ async def revise_authored_deck(
             contents,
             roles,
             illustration_slots=tuple(illustration_slots or ()),
+            infographic_briefs=tuple(infographic_briefs or ()),
         )
     )
     exact_source_images: Optional[List[bytes]] = None
@@ -740,6 +751,11 @@ async def revise_authored_deck(
             reference_kwargs["illustration_allowed"] = illustration_allowed
         if visual_plan is not None:
             reference_kwargs["visual_intent"] = visual_plan.at(i)
+        if (
+            reference_mode != EXACT_RECONSTRUCTION
+            and infographic_briefs is not None
+        ):
+            reference_kwargs["infographic"] = infographic_briefs[i]
         if capacity_briefs is not None:
             reference_kwargs["capacity_brief"] = capacity_briefs[i]
         new_html = await author_slide_html(
@@ -771,27 +787,45 @@ async def revise_authored_deck(
             # an empty box that was not in the source.
             raise ValueError("exact full re-author returned an illustration slot")
         if reference_mode != EXACT_RECONSTRUCTION:
+            style_prompt = (getattr(style, "illustration_prompt", None) or "").strip()
             can_generate = (
                 illustration_allowed
                 and image_service is not None
-                and bool(
-                    (getattr(style, "illustration_prompt", None) or "").strip()
-                )
+                and (bool(style_prompt) or infographic_assets is not None)
             )
+            brief = infographic_briefs[i] if infographic_briefs is not None else None
             if can_generate:
-                new_html = await apply_authored_illustration(
+                # A scene's cutout goes first, like the first-pass stage: when
+                # it lands there is no slot left for the ordinary fill.
+                new_html = await fill_scene_cutout(
                     new_html,
-                    style,
-                    image_service,
+                    slide=brief,
+                    context=infographic_assets,
                     slide_index=absolute_indices[i],
-                    slide_content=contents[i],
-                    raise_on_failure=True,
                 )
+                if style_prompt:
+                    new_html = await apply_authored_illustration(
+                        new_html,
+                        style,
+                        image_service,
+                        slide_index=absolute_indices[i],
+                        slide_content=contents[i],
+                        raise_on_failure=True,
+                    )
+                else:
+                    # Without a style prompt the cutout was the only fill; a
+                    # slot it did not take is withdrawn like any failed one.
+                    new_html = strip_illustration_slots(new_html)
             else:
                 # Finalization alone would turn an unresolved authored slot into
                 # a src-less <img> box. Withdraw it through the same path used by
                 # the first-pass illustration stage when the deck disallows it.
                 new_html = strip_illustration_slots(new_html)
+            # The re-authored figure carries the library's built-in icons again;
+            # give it the same pack icons its first draft had.
+            new_html = await substitute_figure_icons(
+                new_html, slide=brief, context=infographic_assets
+            )
         finalized_html = validate_authored_slide_html(new_html, finalized=True)
         # Real author output is already canonicalized at the author-stage boundary.
         # Preserve the legacy lexical HTML for test doubles/older callers that return

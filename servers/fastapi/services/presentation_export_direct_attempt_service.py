@@ -388,6 +388,18 @@ async def complete_direct_hybrid_export_attempt(
         ).model_dump(mode="json", by_alias=True)
     )
     finalized_coverage_json = finalized_coverage.model_dump(mode="json", by_alias=True)
+    # Fold this export's per-slide raster-fallback counts into the deck's
+    # measurement receipt.  Coverage numbers slides from 1; the receipt indexes
+    # them from 0, the way the infographic plan does.  Never blocks the export.
+    from services.authored_slide_quality_receipt import merge_slide_quality_fallbacks
+
+    merge_slide_quality_fallbacks(
+        presentation_id,
+        {
+            slide.slide_number - 1: slide.raster_remaining
+            for slide in finalized_coverage.slides
+        },
+    )
     atomic_binding = {
         "presentation_id": str(presentation_id),
         "export_attempt_id": str(attempt.id),

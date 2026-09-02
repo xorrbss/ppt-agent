@@ -14,6 +14,7 @@ from models.presentation_and_path import PresentationAndPath
 from models.sql.presentation_export_attempt import (
     PresentationExportCoverageManifest,
 )
+from services.authored_export_quality_flag import evaluate_export_fallback_quality
 from services.export_task_service import EXPORT_TASK_SERVICE
 from utils.asset_directory_utils import get_exports_directory
 from utils.filename_utils import safe_export_basename
@@ -32,6 +33,9 @@ class AuthoredHybridPresentationAndPath(PresentationAndPath):
 
     coverage_manifest: dict
     renderer_source_sha256: str
+    #: Stage 4 per-slide raster-fallback verdicts read from the export quality
+    #: report. Reporting only: a flagged slide does not fail the export.
+    fallback_quality: dict = {}
 
 
 def _validated_hybrid_coverage(
@@ -331,6 +335,13 @@ async def export_authored_hybrid_presentation(
             expected_canonical_digest=canonical_source_digest,
         )
         renderer_source_sha256 = coverage_manifest["source"]["sourceDigest"]
+        fallback_quality = evaluate_export_fallback_quality(quality)
+        if fallback_quality.failed:
+            LOGGER.warning(
+                "[export] hybrid export kept more than %d raster fallbacks on slide(s) %s",
+                fallback_quality.limit,
+                ", ".join(str(number) for number in fallback_quality.failed_slide_numbers),
+            )
 
         shared_path = _resolve_hybrid_export_path(download_path)
         if shared_path is not None and shared_path.is_file():
@@ -340,6 +351,7 @@ async def export_authored_hybrid_presentation(
                 path=str(shared_path),
                 coverage_manifest=coverage_manifest,
                 renderer_source_sha256=renderer_source_sha256,
+                fallback_quality=fallback_quality.to_dict(),
             )
 
         safe_title = safe_export_basename(
@@ -377,6 +389,7 @@ async def export_authored_hybrid_presentation(
             path=str(destination),
             coverage_manifest=coverage_manifest,
             renderer_source_sha256=renderer_source_sha256,
+            fallback_quality=fallback_quality.to_dict(),
         )
 
 

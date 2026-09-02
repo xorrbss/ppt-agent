@@ -2,6 +2,12 @@
 
 export const AUTHORED_RENDER_LIMITS = Object.freeze({
   maxHtmlBytes: 2 * 1024 * 1024,
+  /**
+   * Collector output: the authored document bound above plus the base64 form
+   * of the aggregate font budget. Applies only to trusted self-contained HTML
+   * whose @font-face payloads are validated individually.
+   */
+  maxTrustedHtmlBytes: 2 * 1024 * 1024 + Math.ceil((16 * 1024 * 1024 * 4) / 3),
   maxNodes: 5_000,
   maxDomDepth: 64,
   maxAttributesPerElement: 64,

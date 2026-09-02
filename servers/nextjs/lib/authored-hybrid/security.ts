@@ -391,13 +391,17 @@ export function preflightTrustedSelfContainedAuthoredHtml(
   html: string
 ): HybridHtmlPreflightResult {
   if (!html.trim()) return { ok: false, reason: "empty-html" };
-  if (Buffer.byteLength(html, "utf8") > AUTHORED_RENDER_LIMITS.maxHtmlBytes) {
+  if (Buffer.byteLength(html, "utf8") > AUTHORED_RENDER_LIMITS.maxTrustedHtmlBytes) {
     return { ok: false, reason: "html-too-large" };
   }
+  // The authored document without collector font faces keeps the untrusted bound.
   const withoutFontFaces = html.replace(/@font-face\s*\{[^{}]*\}/gi, "");
   const authored = preflightAuthoredHtmlForHybrid(withoutFontFaces);
   if (!authored.ok) return authored;
-  const structure = inspectStructure(html);
+  // Structural limits (node count, depth, text-node size) describe the
+  // authored document; a full-family data font face is bounded separately by
+  // the font limits in inspectAuthoredHtmlResources.
+  const structure = inspectStructure(withoutFontFaces);
   if (!structure.ok) return { ok: false, reason: structure.reason };
   const cssPolicy = validateCssAllowlist(html, true);
   if (!cssPolicy.ok) return cssPolicy;
@@ -409,7 +413,11 @@ export function inspectAuthoredHtmlResources(
   html: string,
   allowCollectorFonts = false
 ): (HybridHtmlPreflightResult & Partial<AuthoredHtmlResourceInspection>) {
-  const structure = inspectStructure(html);
+  // Collector font faces are validated below as bounded font payloads, not
+  // as authored text nodes.
+  const structure = inspectStructure(
+    allowCollectorFonts ? html.replace(/@font-face\s*\{[^{}]*\}/gi, "") : html
+  );
   if (!structure.ok) return structure;
   const imageDigests: string[] = [];
   const fontDigests: string[] = [];

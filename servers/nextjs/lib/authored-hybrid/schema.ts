@@ -304,8 +304,34 @@ export interface AuthoredHybridTableCellEvidence {
   fontSizePt: number;
 }
 
+export interface AuthoredHybridTableBorderEvidence {
+  color: string;
+  widthPx: number;
+}
+
+export interface AuthoredHybridTableCellStyleEvidence {
+  horizontalAlign: "left" | "center" | "right" | "justify";
+  verticalAlign: "top" | "middle" | "bottom";
+  borders: Partial<Record<"top" | "right" | "bottom" | "left", AuthoredHybridTableBorderEvidence>>;
+}
+
+/**
+ * Cell text/paint evidence for declared-table reconciliation plus the extra
+ * geometry and style facts consumed by markup-driven (`data-native="table"`)
+ * admission. Declared reconciliation compares `rows` only, so the additional
+ * top-level keys never change that comparison.
+ */
 export interface AuthoredHybridTableEvidence {
   rows: AuthoredHybridTableCellEvidence[][];
+  columnWidthsPx?: number[];
+  rowHeightsPx?: number[];
+  cellStyles?: AuthoredHybridTableCellStyleEvidence[][];
+  /** Solid table-root background, applied to cells without their own fill. */
+  rootFill?: string;
+  /** Images, SVG, canvas or video inside the table; such tables stay raster. */
+  containsReplacedContent?: boolean;
+  /** Background images or non-solid borders that a DrawingML table cannot carry. */
+  unsupportedPaint?: boolean;
 }
 
 export interface AuthoredHybridElementBase {
@@ -327,6 +353,8 @@ export interface AuthoredHybridElementBase {
   typographyIssues?: AuthoredHybridTypographyIssue[];
   /** Browser-computed table cell evidence retained only for semantic admission/suppression. */
   tableEvidence?: AuthoredHybridTableEvidence;
+  /** Authored `data-native` opt-in for markup-driven native emission. */
+  nativeHint?: "table";
 }
 
 export interface AuthoredHybridNativeTextElement

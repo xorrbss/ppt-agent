@@ -44,6 +44,11 @@ from services.authored_quality_review_service import (
 )
 from services.authored_deck_chapter_plan import load_chapter_plan
 from services.authored_deck_illustration_plan import load_illustration_plan
+from services.authored_deck_infographic_plan import load_infographic_plan
+from services.authored_infographic_assets import (
+    build_infographic_asset_context,
+    deck_has_picture_source,
+)
 from services.authored_header_contract_service import (
     load_header_contract,
     page_number_mode_for,
@@ -257,6 +262,7 @@ async def _authoring_context(
         # prefix and the same role it was authored with.
         chapter_plan=load_chapter_plan(presentation.theme),
         illustration_plan=load_illustration_plan(presentation.theme),
+        infographic_plan=load_infographic_plan(presentation.theme),
     )
     plan_mode = normalize_reference_mode(getattr(plan, "reference_mode", saved_mode))
     if plan_mode != saved_mode:
@@ -384,7 +390,17 @@ async def run_authored_page_remake_preview(
             reference_kwargs["illustration_slots"] = [
                 illustration_slots[slide_index]
             ]
-        if getattr(style, "illustration_prompt", None):
+        infographic_briefs = getattr(plan, "infographic_briefs", ())
+        if infographic_briefs:
+            reference_kwargs["infographic_briefs"] = [
+                infographic_briefs[slide_index]
+            ]
+            # The remade page gets the same pack icons and scene cutout its
+            # siblings carry, from the same per-style pack.
+            reference_kwargs["infographic_assets"] = build_infographic_asset_context(
+                style=style, brand=plan.brand
+            )
+        if deck_has_picture_source(style):
             reference_kwargs["image_service"] = ImageGenerationService(
                 get_images_directory()
             )

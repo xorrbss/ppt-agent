@@ -416,3 +416,36 @@ test("OOXML QID ownership preserves exact native/raster disposition and fails cl
     /presentation_export_qid_ownership_mismatch/,
   );
 });
+
+test("per-slide fallbackElementIds mirror the element-level fallback list", () => {
+  const report = createPresentationExportQuality("hybrid", [
+    {
+      slideNumber: 1,
+      editable: true,
+      imageFallback: false,
+      nativeTextElements: 2,
+      nativeShapeElements: 0,
+      nativeImageElements: 0,
+      rasterFallbackElements: 2,
+      fallbackReasons: [],
+      fallbackElements: [
+        { elementId: "kpi.chart", candidateKind: "complex", reasons: ["complex-chart"] },
+        { elementId: "hero.glow", candidateKind: "shape", reasons: ["gradient-backplate-only"] },
+        { elementId: "hero.glow", candidateKind: "shape", reasons: ["shadow-backplate-only"] },
+      ],
+    },
+    {
+      slideNumber: 2,
+      editable: true,
+      imageFallback: false,
+      nativeTextElements: 1,
+      nativeShapeElements: 0,
+      nativeImageElements: 0,
+      rasterFallbackElements: 0,
+      fallbackReasons: [],
+    },
+  ]);
+  assert.deepEqual(report.slides[0].fallbackElementIds, ["hero.glow", "kpi.chart"]);
+  assert.deepEqual(report.slides[1].fallbackElementIds, []);
+  assert.equal(report.slides[0].rasterFallbackElements, 2);
+});

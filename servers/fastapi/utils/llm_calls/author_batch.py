@@ -18,7 +18,9 @@ from typing import Mapping, Sequence
 from llmai import get_client
 from llmai.shared import SystemMessage, TextContentPart, UserMessage
 
+from models.authored_infographic_plan import AuthoredSlideInfographic
 from models.authored_visual_plan import AuthoredSlideVisualIntent
+from utils.authored_infographic import finalize_infographic_slide_html
 from services.provider_usage_instrumentation import (
     ProviderCallTimer,
     current_provider_idempotency_key,
@@ -86,6 +88,7 @@ class AuthoredBatchSlideRequest:
     instructions: str | None = None
     illustration_allowed: bool | None = None
     visual_intent: AuthoredSlideVisualIntent | None = None
+    infographic: AuthoredSlideInfographic | None = None
     capacity_brief: str | None = None
     source_images: tuple[SourceImageCandidate, ...] = ()
     require_all_source_images: bool = False
@@ -138,6 +141,7 @@ def _prepare_slide(
         instructions=request.instructions,
         illustration_allowed=request.illustration_allowed,
         visual_intent=request.visual_intent,
+        infographic=request.infographic,
         capacity_brief=request.capacity_brief,
     )
     if request.correction_hint:
@@ -215,6 +219,8 @@ def _parse_batch_response(text: str, expected: set[int]) -> tuple[dict[int, str]
 def _postprocess_slide(
     prepared: _PreparedSlide,
     raw_html: str,
+    *,
+    brand: Brand,
 ) -> str:
     request = prepared.request
     mode = normalize_reference_mode(request.reference_mode)
@@ -222,6 +228,10 @@ def _postprocess_slide(
     authored_html = _strip_nonvisual_pointer_events(authored_html)
     if mode != EXACT_RECONSTRUCTION:
         authored_html = enforce_authored_font_floor(authored_html)
+        # Same figure contract and library injection as the single-slide path.
+        authored_html = finalize_infographic_slide_html(
+            authored_html, brand=brand, slide=request.infographic
+        )
         if request.require_all_source_images and prepared.source_slot_candidates:
             placed = Counter(
                 slot.source_slot_id
@@ -397,7 +407,9 @@ async def author_slides_html(
     prepared_by_index = {item.request.index: item for item in prepared}
     for index, candidate in raw.items():
         try:
-            htmls[index] = _postprocess_slide(prepared_by_index[index], candidate)
+            htmls[index] = _postprocess_slide(
+                prepared_by_index[index], candidate, brand=brand
+            )
         except BaseException as error:  # per-slide validation boundary
             errors[index] = error
     return AuthoredBatchCallResult(htmls=htmls, errors=errors)

@@ -161,7 +161,7 @@ def test_author_slide_preserves_nonretryable_public_provider_budget_limit(monkey
     assert raised.value.retryable is False
 
 
-def test_final_outline_illustration_resolver_is_separate_from_outline_expansion(
+def test_final_outline_infographic_resolver_is_separate_from_outline_expansion(
     monkeypatch,
 ) -> None:
     outline = PresentationOutlineModel(slides=[SlideOutlineModel(content="one")])
@@ -169,28 +169,30 @@ def test_final_outline_illustration_resolver_is_separate_from_outline_expansion(
     style = SimpleNamespace(reference_mode="style_reference", illustration_prompt="art")
     sentinel = object()
 
-    async def fake_illustration(received_outline, received_brand, received_style, **kwargs):
+    async def fake_infographic(received_outline, received_brand, received_style, **kwargs):
         assert received_outline is outline
         assert received_brand is sentinel
         assert received_style is style
         assert kwargs["instructions"] == "keep it"
-        return "illustration-plan"
+        assert kwargs["roles"] == ["CONTENT"]
+        return "infographic-plan"
 
     monkeypatch.setattr(
-        authored_deck_plans, "resolve_illustration_plan", fake_illustration
+        authored_deck_plans, "resolve_infographic_plan", fake_infographic
     )
     plans = asyncio.run(
         authored_deck_plans.resolve_deck_plans(
-            request, outline, sentinel, style, ["CONTENT"], resolve_illustration=False
+            request, outline, sentinel, style, ["CONTENT"], resolve_infographic=False
         )
     )
     assert plans.outline is outline
+    assert plans.infographic_plan is None
     assert plans.illustration_plan is None
     assert asyncio.run(
-        authored_deck_plans.resolve_final_outline_illustration_plan(
-            request, plans.outline, sentinel, style
+        authored_deck_plans.resolve_final_outline_infographic_plan(
+            request, plans.outline, sentinel, style, ["CONTENT"]
         )
-    ) == "illustration-plan"
+    ) == "infographic-plan"
 
 
 def test_baseline_cache_key_includes_renderer_full_identity(monkeypatch) -> None:

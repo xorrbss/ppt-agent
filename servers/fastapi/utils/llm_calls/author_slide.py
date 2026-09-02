@@ -33,7 +33,9 @@ from llmai import get_client
 from llmai.shared import SystemMessage, TextContentPart, UserMessage
 
 from models.authored_header_contract import AuthoredHeaderContract
+from models.authored_infographic_plan import AuthoredSlideInfographic
 from models.authored_visual_plan import AuthoredSlideVisualIntent
+from utils.authored_infographic import finalize_infographic_slide_html
 from utils.authored_font_policy import enforce_authored_font_floor
 from utils.authored_dom_quality import validate_declared_authored_qids
 from utils.authored_header_prompt import render_header_contract
@@ -337,6 +339,7 @@ def _author_prompt(
     instructions: Optional[str] = None,
     illustration_allowed: Optional[bool] = None,
     visual_intent: Optional[AuthoredSlideVisualIntent] = None,
+    infographic: Optional[AuthoredSlideInfographic] = None,
     capacity_brief: Optional[str] = None,
 ) -> str:
     return author_slide_prompt.author_prompt(
@@ -354,6 +357,7 @@ def _author_prompt(
         instructions=instructions,
         illustration_allowed=illustration_allowed,
         visual_intent=visual_intent,
+        infographic=infographic,
         capacity_brief=capacity_brief,
     )
 
@@ -914,6 +918,7 @@ async def author_slide_html(
     instructions: Optional[str] = None,
     illustration_allowed: Optional[bool] = None,
     visual_intent: Optional[AuthoredSlideVisualIntent] = None,
+    infographic: Optional[AuthoredSlideInfographic] = None,
     capacity_brief: Optional[str] = None,
     correction_hint: Optional[str] = None,
     rejected_html: Optional[str] = None,
@@ -953,6 +958,7 @@ async def author_slide_html(
         instructions=instructions,
         illustration_allowed=illustration_allowed,
         visual_intent=visual_intent,
+        infographic=infographic,
         capacity_brief=capacity_brief,
     )
     if correction_hint:
@@ -1153,6 +1159,13 @@ async def author_slide_html(
     authored_html = _strip_nonvisual_pointer_events(authored_html)
     if mode != EXACT_RECONSTRUCTION:
         authored_html = enforce_authored_font_floor(authored_html)
+        # A planned figure is held to its contract and given the library
+        # stylesheet here, before admission, so the injected CSS is validated
+        # like the model's own and every author path (first pass, review
+        # re-author, remake) produces the same document.
+        authored_html = finalize_infographic_slide_html(
+            authored_html, brand=brand, slide=infographic
+        )
         if require_all_source_images and source_slot_candidates:
             placed = Counter(
                 slot.source_slot_id

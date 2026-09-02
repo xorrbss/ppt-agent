@@ -3,7 +3,7 @@ import { realpath, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
 import { resolveAppDataDirectory } from "../app-data-directory.ts";
-
+import { BUNDLED_FONT_FAMILIES, type BundledFontFamily, bundledFontDirectories } from "./bundled-fonts.ts";
 import {
   type EmbeddedFontFaceKind,
   type FontEmbeddingLicenseAssessment,
@@ -28,7 +28,7 @@ const DEFAULT_WINDOWS_FONT_ROOT = "C:\\Windows\\Fonts";
 
 export interface ResolvedEmbeddedFontFile {
   sourceId: string;
-  source: "server-font-allowlist" | "local-derived-static" | "windows-system-reviewed";
+  source: "server-font-allowlist" | "local-derived-static" | "windows-system-reviewed" | "bundled-open-font";
   /** Allowlist-relative name only; never exposes an arbitrary server path. */
   sourcePath: string;
   fileName: string;
@@ -214,8 +214,20 @@ const CONSOLAS_CANDIDATES: readonly AllowlistedCandidate[] = [
   },
 ];
 
+/** Open-licensed static TrueType faces shipped in `public/fonts/` (bundled-fonts.ts). */
+function bundledCandidates(family: BundledFontFamily): readonly AllowlistedCandidate[] {
+  return family.faces.map((face) => ({
+    fileName: face.ooxmlFileName,
+    variable: false,
+    source: "bundled-open-font",
+    derivedFromVariable: false,
+    faces: [{ face: face.weight === 700 ? "bold" : "regular", weight: face.weight, style: face.style }],
+  }));
+}
+
 const ALLOWLIST = new Map<string, readonly AllowlistedCandidate[]>([
   ["noto sans kr", NOTO_SANS_KR_CANDIDATES],
+  ...BUNDLED_FONT_FAMILIES.map((family) => [family.family.toLowerCase(), bundledCandidates(family)] as const),
   ["ibm plex mono", IBM_PLEX_MONO_CANDIDATES],
   ["malgun gothic", MALGUN_GOTHIC_CANDIDATES],
   ["batang", BATANG_COLLECTION_CANDIDATES],
@@ -255,7 +267,10 @@ async function loadAllowlistedCandidate(
   candidate: AllowlistedCandidate,
   strategy: FontEmbeddingStrategy
 ): Promise<ResolvedEmbeddedFontFile | undefined> {
-  for (const root of fontRoots()) {
+  const roots = candidate.source === "bundled-open-font"
+    ? [...fontRoots(), ...bundledFontDirectories(family)]
+    : fontRoots();
+  for (const root of roots) {
     const expectedPath = path.resolve(root, candidate.fileName);
     if (path.dirname(expectedPath).toLowerCase() !== root.toLowerCase()) continue;
     try {

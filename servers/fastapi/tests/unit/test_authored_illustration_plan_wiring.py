@@ -18,6 +18,7 @@ from types import SimpleNamespace
 from PIL import Image
 
 from models.authored_illustration_plan import AuthoredIllustrationPlan
+from models.authored_infographic_plan import coerce_infographic_plan
 from models.generate_presentation_request import GeneratePresentationRequest
 from models.presentation_outline_model import (
     PresentationOutlineModel,
@@ -29,6 +30,7 @@ from services import authored_illustration_stage as illustration_stage_mod
 from services import authored_presentation_pipeline as pipeline_mod
 from services import authored_presentation_service as authored_service
 from services.authored_deck_illustration_plan import load_illustration_plan
+from services.authored_deck_infographic_plan import load_infographic_plan
 from utils.llm_calls import author_deck as author_deck_mod
 from utils.llm_calls.author_deck import (
     AuthoredDeckResult,
@@ -259,15 +261,42 @@ def test_explicit_slide_count_disables_chapter_expansion():
 def test_the_plan_round_trips_through_the_persisted_theme(
     monkeypatch, fake_async_session
 ):
-    """A published deck carries its plan, so a later remake can replay it."""
-    resolved = AuthoredIllustrationPlan(slide_indices=(0, 2))
+    """A published deck carries both plans, so a later remake can replay them.
+
+    The illustration plan is derived from the infographic plan's scenes, and
+    the two are persisted side by side under the same final-outline indices.
+    """
+    content = "## 프레스 3호 라인\n- 주 모터\n- 베어링\n- 유압 유닛"
+    scene = {
+        "archetype": "scene",
+        "weight": "hero",
+        "takeaway": "센서를 단다",
+        "nodes": [{"label": "주 모터"}, {"label": "베어링"}, {"label": "유압 유닛"}],
+    }
+    # Eight figure pages keep the scene ceiling (a quarter of them) at two.
+    resolved = coerce_infographic_plan(
+        {
+            "slides": [
+                dict(scene, index=i)
+                if i in (0, 2)
+                else dict(scene, index=i, archetype="icon_list", weight="standard")
+                for i in range(8)
+            ]
+        },
+        slide_contents=[content] * 8,
+        roles=["CONTENT"] * 8,
+    )
+    assert resolved.scene_indices() == (0, 2)
     style = SimpleNamespace(id="editorial", brief=None, illustration_prompt="art")
 
-    async def fake_resolve_illustration_plan(outline, brand, plan_style=None, **kwargs):
+    async def fake_resolve_infographic_plan(outline, brand, plan_style=None, **kwargs):
         return resolved
 
     async def fake_pipeline(*_args, **kwargs):
-        assert kwargs["illustration_plan"] is resolved
+        assert kwargs["infographic_plan"] is resolved
+        assert kwargs["illustration_plan"] == AuthoredIllustrationPlan(
+            slide_indices=(0, 2)
+        )
         return authored_service.AuthoredGenerationPipelineResult(
             deck=AuthoredDeckResult([_slide_html(0, slot=False)], "DESIGN SYSTEM"),
             pngs=[b"png"],
@@ -281,7 +310,7 @@ def test_the_plan_round_trips_through_the_persisted_theme(
         return default_header_contract(primary=brand.primary)
 
     monkeypatch.setattr(
-        deck_plans_mod, "resolve_illustration_plan", fake_resolve_illustration_plan
+        deck_plans_mod, "resolve_infographic_plan", fake_resolve_infographic_plan
     )
     monkeypatch.setattr(
         authored_service, "resolve_authored_style", lambda _style_id: style
@@ -325,4 +354,7 @@ def test_the_plan_round_trips_through_the_persisted_theme(
     )
 
     assert presentation.theme["illustrationPlan"]["slide_indices"] == [0, 2]
-    assert load_illustration_plan(presentation.theme) == resolved
+    assert load_illustration_plan(presentation.theme) == AuthoredIllustrationPlan(
+        slide_indices=(0, 2)
+    )
+    assert load_infographic_plan(presentation.theme) == resolved

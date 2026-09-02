@@ -54,6 +54,7 @@ import {
   type FontEmbeddingPlan,
 } from "./font-embedding-policy.ts";
 import {
+  bundledFamiliesReferencedByHtml,
   embeddedGlyphAvailable,
   nativeEmbeddingFamilies,
   nativeFontUsage,
@@ -875,7 +876,17 @@ export async function runAuthoredHybridPresentationExport(
 
   const fontEmbeddingPlan = await resolveFontEmbeddingPlan({
     requested: params.fontEmbedding !== false,
-    families: nativeEmbeddingFamilies(activeBinding, editableHybridProfileId),
+    families: nativeEmbeddingFamilies(
+      activeBinding,
+      editableHybridProfileId,
+      bundledFamiliesReferencedByHtml(
+        presentation.slides.map((slide) =>
+          isRecord(slide) && typeof slide.html_content === "string"
+            ? slide.html_content
+            : "",
+        ),
+      ),
+    ),
     // Full-font embedding keeps newly typed Hangul editable. The opt-in API can
     // add subset selection later without changing this safe default.
     strategy: "full",

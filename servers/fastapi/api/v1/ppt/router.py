@@ -6,6 +6,9 @@ from api.v1.ppt.endpoints.authored_operations import AUTHORED_OPERATIONS_ROUTER
 from api.v1.ppt.endpoints.presentation_blank import PRESENTATION_BLANK_ROUTER
 from api.v1.ppt.endpoints.presentation_versions import PRESENTATION_VERSION_ROUTER
 from api.v1.ppt.endpoints.presentation_share import PRESENTATION_SHARE_ROUTER
+from api.v1.ppt.endpoints.authored_editor_events import (
+    AUTHORED_EDITOR_EVENTS_ROUTER,
+)
 from api.v1.ppt.endpoints.authored_batch_remake import (
     AUTHORED_BATCH_REMAKE_ROUTER,
 )
@@ -79,6 +82,11 @@ PPT_FEATURE_MODULES = (
     FeatureModule(
         "authored-batch-remake",
         AUTHORED_BATCH_REMAKE_ROUTER,
+        frozenset({"ppt-api", "presentation"}),
+    ),
+    FeatureModule(
+        "authored-editor-events",
+        AUTHORED_EDITOR_EVENTS_ROUTER,
         frozenset({"ppt-api", "presentation"}),
     ),
     FeatureModule("presentation-share", PRESENTATION_SHARE_ROUTER, frozenset({"ppt-api", "presentation"})),

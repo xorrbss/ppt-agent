@@ -754,6 +754,42 @@
       "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public", "user_config.ui"],
       "group": "web_search.brave",
       "description": "Brave Search API key."
+    },
+    {
+      "key": "AUTHORED_QUALITY_LOOP_ENABLED",
+      "type": "boolean",
+      "default": false,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Render CSS-only density/emphasis candidates for authored figure slides and keep the best measured one."
+    },
+    {
+      "key": "AUTHORED_QUALITY_LOOP_CANDIDATES",
+      "type": "integer",
+      "default": 3,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Candidates rendered per figure slide, including the baseline (1-4)."
+    },
+    {
+      "key": "AUTHORED_DESIGN_CRITIQUE_ENABLED",
+      "type": "boolean",
+      "default": false,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Run the closed-operation design critic on DOM-flagged and figure slides only."
+    },
+    {
+      "key": "AUTHORED_EXPORT_FALLBACK_LIMIT",
+      "type": "integer",
+      "default": 2,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Raster fallback elements a hybrid-exported slide may keep before it is marked a quality failure."
     }
   ]
 }

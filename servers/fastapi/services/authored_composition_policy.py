@@ -153,9 +153,15 @@ class SlideCapacity:
                 "wording before reducing type size."
             ),
         }[profile.text_mode]
+        # What the AUTHOR may ask for, which is not the deterministic ceiling:
+        # the gate also has to admit the archetype library's own node icons,
+        # which the model neither writes nor controls.
+        authored_slots = self.source_image_count or (
+            1 if profile.profile_id == "ordinary" else self.max_images
+        )
         image_rule = (
-            f"Reserve up to {self.max_images} visible image slot(s)"
-            if self.max_images
+            f"Reserve up to {authored_slots} visible image slot(s)"
+            if authored_slots
             else "Use no image slots"
         )
         decoration_rule = (
@@ -249,7 +255,13 @@ def build_authored_capacity_plan(
                 title_max_chars=title,
                 body_max_chars=body,
                 max_visible_text_chars=visible,
-                max_images=8 if profile.profile_id != "ordinary" else 1,
+                # Every profile shares one image ceiling. The ordinary deck used
+                # to be held to a single slot, which was true while a slide's
+                # only picture was the generated illustration. A figure slide now
+                # carries one small icon per node from the archetype component
+                # library, so a four-node figure tripped the gate with
+                # "images:4>1" and the deck failed to publish.
+                max_images=8,
                 max_qids=qids,
             )
         )
@@ -1254,6 +1266,28 @@ def _declared_html_qids(html: str) -> tuple[str, ...]:
     )
 
 
+#: One node icon of the archetype component library, as the asset layer emits
+#: it: an ``<img>`` alone inside the node's ``.ig-ic`` slot.
+_LIBRARY_ICON_IMAGE = re.compile(
+    r'<div\b[^>]*\bclass="ig-ic"[^>]*>\s*<img\b[^>]*>',
+    re.IGNORECASE,
+)
+
+
+def count_content_images(html: str) -> int:
+    """How many images this slide claims as content.
+
+    The archetype component library's node icons are excluded. They are
+    decoration the model never wrote, they carry no declared QID, and so they
+    never appear in the Chromium payload — counting them here would both spend
+    the slide's image budget and make the HTML total disagree with the measured
+    one, which is itself a violation.
+    """
+    return len(
+        re.findall(r"<img\b", _LIBRARY_ICON_IMAGE.sub("<div>", html or ""), re.IGNORECASE)
+    )
+
+
 def capacity_violations(
     html: str,
     browser_metrics: Any,
@@ -1271,7 +1305,7 @@ def capacity_violations(
     violations: list[str] = []
     nodes = build_compact_dom_map(html)
 
-    image_count = len(re.findall(r"<img\b", html, flags=re.IGNORECASE))
+    image_count = count_content_images(html)
     if image_count > capacity.max_images:
         violations.append(f"images:{image_count}>{capacity.max_images}")
 
@@ -2223,6 +2257,7 @@ __all__ = [
     "capacity_overflow",
     "capacity_repair_instructions",
     "capacity_violations",
+    "count_content_images",
     "bounded_capacity_repair_eligible",
     "ensure_authored_semantic_roles",
     "project_authored_owned_text",

@@ -19,6 +19,9 @@ from models.sql.async_task import AsyncTaskModel  # noqa: F401, E402
 from models.sql.authored_slide_checkpoint import (  # noqa: F401, E402
     AuthoredSlideCheckpoint,
 )
+from models.sql.authored_slide_editor_event import (  # noqa: F401, E402
+    AuthoredSlideEditorEvent,
+)
 from models.sql.authored_exact_provenance import (  # noqa: F401, E402
     AuthoredExactProvenance,
 )

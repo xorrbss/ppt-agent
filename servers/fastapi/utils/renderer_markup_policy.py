@@ -67,6 +67,12 @@ GLOBAL_ATTRIBUTES = {
     # no URL or executable value; Hybrid still derives authoritative coverage
     # from the admitted DOM instead of trusting this hint.
     "data-raster-fallback",
+    # The opposite hint, and equally inert: the archetype component library
+    # marks a comparison/before-after table so Hybrid promotes it to a native
+    # DrawingML table instead of rasterising it. The exporter still derives the
+    # cells from measured DOM geometry rather than trusting this attribute, and
+    # a slide that omits it simply exports as a picture.
+    "data-native",
     # Inert authored-header markers. They carry no behaviour and no URL; the
     # deck's header contract validator is what constrains their values.
     "data-header-part", "data-requirement-ids", "data-header-band",

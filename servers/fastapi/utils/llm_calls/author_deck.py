@@ -16,6 +16,10 @@ from typing import Any, Awaitable, Callable, List, Mapping, Optional, Sequence, 
 from models.authored_chapter_plan import AuthoredChapterPlan
 from models.authored_header_contract import AuthoredHeaderContract
 from models.authored_illustration_plan import AuthoredIllustrationPlan
+from models.authored_infographic_plan import (
+    AuthoredInfographicPlan,
+    AuthoredSlideInfographic,
+)
 from models.authored_visual_plan import (
     AuthoredSlideVisualIntent,
     AuthoredVisualPlan,
@@ -23,6 +27,7 @@ from models.authored_visual_plan import (
 )
 from models.presentation_outline_model import PresentationOutlineModel
 from utils.authored_header_validation import validate_header_contract
+from utils.authored_infographic import CONTRACT_ERROR_PREFIX
 from services.source_images.models import SourceImageCandidate
 from services.authored_composition_policy import (
     AuthoredCapacityPlan,
@@ -110,6 +115,10 @@ class AuthoredDeckPlan:
     # every slide is handed its own share here. An empty tuple is a deck with no
     # plan, which keeps the pre-plan behaviour of letting the model decide.
     illustration_slots: Tuple[bool, ...] = ()
+    # Each slide's frozen figure from the deck's infographic plan, one entry
+    # per FINAL outline index. An empty tuple is a deck with no plan, where
+    # every slide composes itself as it did before the plan existed.
+    infographic_briefs: Tuple[AuthoredSlideInfographic | None, ...] = ()
     # The caller's own free-text request, repeated into every slide prompt so a
     # slide-level instruction ("no pictures", "keep it text-only") reaches the
     # slide it is about rather than only the deck-scoped planners.
@@ -498,6 +507,17 @@ def _classify_author_validation_error(
     """Classify fail-closed local rejections without weakening their policies."""
 
     message = str(error)
+    if message.startswith(CONTRACT_ERROR_PREFIX):
+        # The checker's message already names each departure from the planned
+        # figure, so the retry is told exactly what to restore.
+        return _AuthorValidationCorrection(
+            "infographic_contract",
+            "The figure on this slide departed from its FIGURE CONTRACT: "
+            + message[len(CONTRACT_ERROR_PREFIX):].strip()
+            + ". Reproduce the FIGURE MARKUP exactly as given (every class, data-qid and "
+            "planned label), keep all styling of .ig* elements to the injected library, and "
+            "change only what the contract allows. Preserve the rest of the slide.",
+        )
     if isinstance(error, AuthoredAggregateOwnerCapacityExhausted) or (
         "authored_aggregate_owner_capacity_exceeded:" in message
     ):
@@ -727,11 +747,30 @@ def _has_structured_table(content: str) -> bool:
     return len(lines) >= 3 and bool(_MARKDOWN_TABLE_DIVIDER.search(content))
 
 
+#: Which story a planned figure tells, for the archetypes whose shape the
+#: story rules already describe. Every other archetype keeps the deterministic
+#: story below; the figure brief itself says how it is drawn.
+_ARCHETYPE_STORY: dict[str, StoryKind] = {
+    "process": "process",
+    "cycle": "process",
+    "timeline": "process",
+    "roadmap": "process",
+    "swimlane": "process",
+    "branch": "process",
+    "hierarchy": "architecture",
+    "layers": "architecture",
+    "hub_spoke": "architecture",
+    "kpi": "metric",
+    "gauge": "metric",
+}
+
+
 def _story_kind(
     content: str,
     role: str,
     *,
     illustration_allowed: bool,
+    infographic: AuthoredSlideInfographic | None = None,
 ) -> StoryKind:
     normalized_role = (role or "").strip().upper()
     if normalized_role == "COVER":
@@ -742,6 +781,8 @@ def _story_kind(
         return "section"
     if normalized_role == "AGENDA":
         return "agenda"
+    if infographic is not None and infographic.archetype in _ARCHETYPE_STORY:
+        return _ARCHETYPE_STORY[infographic.archetype]
 
     lowered = content.lower()
     # A table is promoted only from a real row/column contract.  Mere wording
@@ -794,6 +835,7 @@ def plan_authored_visual_story(
     roles: Sequence[str],
     *,
     illustration_slots: Sequence[bool] = (),
+    infographic_briefs: Sequence[AuthoredSlideInfographic | None] = (),
 ) -> AuthoredVisualPlan:
     """Freeze deck-wide story/silhouette choices before parallel authoring.
 
@@ -805,6 +847,8 @@ def plan_authored_visual_story(
         raise ValueError("visual plan contents and roles must have matching lengths")
     if illustration_slots and len(illustration_slots) != len(contents):
         raise ValueError("visual plan illustration slots must match slide count")
+    if infographic_briefs and len(infographic_briefs) != len(contents):
+        raise ValueError("visual plan infographic briefs must match slide count")
 
     planned: list[AuthoredSlideVisualIntent] = []
     for index, (content, role) in enumerate(zip(contents, roles)):
@@ -812,6 +856,7 @@ def plan_authored_visual_story(
             content,
             role,
             illustration_allowed=bool(illustration_slots and illustration_slots[index]),
+            infographic=(infographic_briefs[index] if infographic_briefs else None),
         )
         candidates = _SILHOUETTES[story_kind]
         recent = {item.silhouette for item in planned[-2:]}
@@ -857,6 +902,7 @@ async def _author_one_resilient(
     instructions: str | None = None,
     illustration_allowed: bool | None = None,
     visual_intent: AuthoredSlideVisualIntent | None = None,
+    infographic: AuthoredSlideInfographic | None = None,
     # Pictures the user already owns that this slide may place. Empty is the
     # pre-feature request, byte for byte.
     source_images: Sequence[SourceImageCandidate] = (),
@@ -940,6 +986,7 @@ async def _author_one_resilient(
                 instructions=instructions,
                 illustration_allowed=illustration_allowed,
                 visual_intent=visual_intent,
+                infographic=infographic,
                 capacity_brief=capacity_brief,
                 **kwargs,
             )
@@ -1183,6 +1230,7 @@ def prepare_authored_deck(
     header_contract: AuthoredHeaderContract | None = None,
     chapter_plan: AuthoredChapterPlan | None = None,
     illustration_plan: AuthoredIllustrationPlan | None = None,
+    infographic_plan: AuthoredInfographicPlan | None = None,
     instructions: Optional[str] = None,
     composition_profile: CompositionProfile | None = None,
 ) -> AuthoredDeckPlan:
@@ -1276,6 +1324,18 @@ def prepare_authored_deck(
         if illustration_plan is not None
         else ()
     )
+    # The figure plan is flattened to one brief per slide for the same reason
+    # the illustration plan is flattened to one boolean: the authoring layer
+    # answers "what is THIS slide drawn as", never "what did the deck choose".
+    # Exact reconstruction and template-owned geometry take no figure brief:
+    # the first reproduces a source, the second is drawn by the template.
+    infographic_briefs = (
+        tuple(infographic_plan.at(i) for i in range(len(slides)))
+        if infographic_plan is not None
+        and reference_mode != EXACT_RECONSTRUCTION
+        and not structured
+        else ()
+    )
     visual_plan = (
         None
         if reference_mode == EXACT_RECONSTRUCTION or structured
@@ -1283,6 +1343,7 @@ def prepare_authored_deck(
             contents,
             roles,
             illustration_slots=illustration_slots,
+            infographic_briefs=infographic_briefs,
         )
     )
     return AuthoredDeckPlan(
@@ -1306,6 +1367,7 @@ def prepare_authored_deck(
             else ()
         ),
         illustration_slots=illustration_slots,
+        infographic_briefs=infographic_briefs,
         instructions=instructions,
         visual_plan=visual_plan,
         capacity_plan=capacity_plan,
@@ -1338,6 +1400,7 @@ def _planned_batch_request(
     failure: AuthoredBatchFailure | None,
 ) -> AuthoredBatchSlideRequest:
     illustration_slots = getattr(plan, "illustration_slots", ())
+    infographic_briefs = getattr(plan, "infographic_briefs", ())
     visual_plan = getattr(plan, "visual_plan", None)
     _capacity, capacity_brief = _planned_slide_capacity_inputs(
         plan, index, source_images
@@ -1360,6 +1423,7 @@ def _planned_batch_request(
             illustration_slots[index] if illustration_slots else None
         ),
         visual_intent=(visual_plan.at(index) if visual_plan is not None else None),
+        infographic=(infographic_briefs[index] if infographic_briefs else None),
         capacity_brief=capacity_brief,
         source_images=tuple(source_images),
         require_all_source_images=require_all_source_images,
@@ -1580,6 +1644,7 @@ async def author_planned_slide(
     # objects that carry only the fields they need, and a missing field here has
     # a well-defined meaning — no plan, so the model decides as it did before.
     illustration_slots = getattr(plan, "illustration_slots", ())
+    infographic_briefs = getattr(plan, "infographic_briefs", ())
     visual_plan = getattr(plan, "visual_plan", None)
     capacity_plan = getattr(plan, "capacity_plan", None)
     capacity_brief = None
@@ -1613,6 +1678,7 @@ async def author_planned_slide(
             illustration_slots[index] if illustration_slots else None
         ),
         visual_intent=(visual_plan.at(index) if visual_plan is not None else None),
+        infographic=(infographic_briefs[index] if infographic_briefs else None),
         source_images=source_images,
         require_all_source_images=require_all_source_images,
         capacity_brief=capacity_brief,

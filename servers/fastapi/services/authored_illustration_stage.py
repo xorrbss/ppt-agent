@@ -29,6 +29,12 @@ from services.authored_checkpoint_service import (
 from services.authored_presentation_artifacts import (
     _complete_stage_after_external_success,
 )
+from models.authored_infographic_plan import AuthoredSlideInfographic
+from services.authored_infographic_assets import (
+    InfographicAssetContext,
+    fill_scene_cutout,
+    substitute_figure_icons,
+)
 from services.source_images.models import SourceImageCandidate
 from services.provider_usage_instrumentation import (
     provider_usage_scope,
@@ -68,6 +74,11 @@ async def illustrate_slide(
     generation_job: Any,
     attempt_token: Optional[str],
     source_images: Optional[Mapping[str, SourceImageCandidate]] = None,
+    # The slide's planned figure and the deck's icon-pack context. Both default
+    # to absent: a deck without a plan, or one that cannot spend a transparent
+    # PNG, runs the stage exactly as it did before figures existed.
+    infographic: Optional[AuthoredSlideInfographic] = None,
+    infographic_assets: Optional[InfographicAssetContext] = None,
 ) -> tuple[str, Any, float]:
     """Return this slide's finalized HTML, its checkpoint, and time spent.
 
@@ -131,6 +142,22 @@ async def illustrate_slide(
     # stage runs for either reason. Resolution is also what drops an id the
     # slide was never offered, which is the feature's security boundary.
     substituting = source_images is not None
+    # A scene's object cutout is tried first, on the same withdrawn-slot copy:
+    # when it lands, the ordinary stage below finds no slot left to fill; when
+    # it does not, the slot is still there and the ordinary fill-or-strip rule
+    # applies unchanged.
+    if generating and infographic_assets is not None:
+        illustrated_html = await fill_scene_cutout(
+            illustrated_html,
+            slide=infographic,
+            context=infographic_assets,
+            slide_index=index,
+        )
+        if not (getattr(style, "illustration_prompt", None) or "").strip():
+            # The cutout was this deck's only fill: without a style prompt the
+            # ordinary stage has nothing to generate, so a slot the cutout did
+            # not take is withdrawn the same way a failed generation is.
+            illustrated_html = strip_illustration_slots(illustrated_html)
     skipped = not (generating or substituting)
     if generating or substituting:
         illustration_started = time.monotonic()
@@ -190,6 +217,18 @@ async def illustrate_slide(
             finally:
                 illustration_work = time.monotonic() - illustration_started
                 await record_local_stage(latency_ms=illustration_work * 1000)
+
+    # Figure icons are not budgeted by the illustration plan — they replace
+    # the library's built-in SVG, never add a picture — so they are placed
+    # whenever the deck may spend a transparent PNG at all. This runs after
+    # the contract check the author stage already passed, on purpose: the
+    # checker must keep seeing the library's own markup.
+    if infographic_assets is not None and infographic is not None:
+        icons_started = time.monotonic()
+        illustrated_html = await substitute_figure_icons(
+            illustrated_html, slide=infographic, context=infographic_assets
+        )
+        illustration_work += time.monotonic() - icons_started
 
     illustrated_html = _finalize(illustrated_html, index)
     if generation_job is not None:

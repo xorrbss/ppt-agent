@@ -79,6 +79,11 @@ export interface PresentationExportSlideQuality {
    * `rasterFallbackElements`.
    */
   fallbackElements?: PresentationExportFallbackElement[];
+  /**
+   * Sorted, de-duplicated ids of `fallbackElements`. Quality loops read this
+   * list (and `rasterFallbackElements`) per slide without re-deriving it.
+   */
+  fallbackElementIds?: string[];
   /** Digest-only semantic receipts; bounded and safe for attempt binding. */
   semanticReceipts?: {
     observationReceiptDigest?: string;
@@ -506,6 +511,9 @@ export function createPresentationExportQuality(
           ...fallbackElements.flatMap((element) => element.reasons),
         ]),
         fallbackElements,
+        fallbackElementIds: cleanStrings(
+          fallbackElements.map((element) => element.elementId),
+        ),
         logicalCoverage,
         ooxmlReadback: {
           ...readback,

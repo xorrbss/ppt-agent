@@ -29,7 +29,7 @@ import {
   type AuthoredHybridSlideLayer,
 } from "./pptx-assembler.ts";
 import { preflightAuthoredHtmlForHybrid } from "./security.ts";
-import { getGoogleFontsCollector } from "./google-fonts-runtime.ts";
+import { collectSlideFonts } from "./bundled-fonts-collector.ts";
 import { mergePowerPointTextLayout } from "./font-layout.ts";
 import type {
   PresentationExportFallbackElement,
@@ -47,6 +47,7 @@ import {
 } from "./semantic-reconciliation.ts";
 import { prepareDeclaredNativeCharts } from "./native-chart.ts";
 import { prepareDeclaredNativeTables } from "./native-table.ts";
+import { prepareObservedNativeTables } from "./native-table-observed.ts";
 
 // The collector adds a bounded network step ahead of each browser pass, so
 // the per-pass ceiling is higher than the pre-collection 20s.
@@ -217,23 +218,26 @@ function withAppliedStructuralGroups(
 function withAdmittedSemanticChartEligibility(
   contract: AuthoredHybridSlideV1,
   selected: readonly PreparedNativeElement[],
-  semanticContext?: AuthoredSemanticSlideContext,
+  semanticContext: AuthoredSemanticSlideContext | undefined,
+  observedTableIds: ReadonlySet<string>,
 ): AuthoredHybridSlideV1 {
-  if (!semanticContext || !selected.some((element) => element.kind === "chart" || element.kind === "table")) {
+  if (!selected.some((element) => element.kind === "chart" || element.kind === "table")) {
     return contract;
   }
   const declaredCharts = new Set(
-    semanticContext.declaredElements
+    semanticContext?.declaredElements
       .filter((element) => element.kind === "chart")
-      .map((element) => element.elementId),
+      .map((element) => element.elementId) ?? [],
   );
   const admittedChartIds = selected
     .filter(
       (element) => element.kind === "chart" && declaredCharts.has(element.source.id),
     )
     .map((element) => element.source.id);
-  const declaredTables = new Set(semanticContext.declaredElements.filter((element) => element.kind === "table").map((element) => element.elementId));
-  const admittedTableIds = selected.filter((element) => element.kind === "table" && declaredTables.has(element.source.id)).map((element) => element.source.id);
+  // Tables are admitted through the declared payload path or the markup-driven
+  // observed path; both must be listed so the backplate may hide them.
+  const declaredTables = new Set(semanticContext?.declaredElements.filter((element) => element.kind === "table").map((element) => element.elementId) ?? []);
+  const admittedTableIds = selected.filter((element) => element.kind === "table" && (declaredTables.has(element.source.id) || observedTableIds.has(element.source.id))).map((element) => element.source.id);
   if (!admittedChartIds.length && !admittedTableIds.length) return contract;
   return {
     ...contract,
@@ -303,7 +307,7 @@ export async function prepareSlideLayer(
   // preflighted, so untrusted authored HTML can never self-authorize a data
   // font face; the verified form carrying collector-built @font-face rules is
   // used only after that preflight succeeds.
-  const fontCollection = await getGoogleFontsCollector().prepareHtml(html);
+  const fontCollection = await collectSlideFonts(html);
   const fontRendering = {
     browserFontFilesCollected: fontCollection.fontFiles,
     browserCollectionFailures: fontCollection.failures.length,
@@ -373,6 +377,22 @@ export async function prepareSlideLayer(
     // The mapped-font pass is an accuracy enhancement. Source extraction and
     // fidelity backplate remain a safe compatible fallback if it cannot run.
   }
+  // Markup-driven tables (`data-native="table"`) are rebuilt from browser
+  // evidence. In compatibility mode the admitted table owns its cell text
+  // candidates, which therefore leave the native/raster denominator.
+  const observedTablePreparation = prepareObservedNativeTables(
+    nativeLayoutElements,
+    semanticContext?.declaredElements,
+    { embeddedTypefaceFamilies },
+  );
+  const observedTableIds = new Set(
+    observedTablePreparation.tables.map((table) => table.id),
+  );
+  if (observedTablePreparation.ownedDescendantIds.size) {
+    nativeLayoutElements = nativeLayoutElements.filter(
+      (element) => !observedTablePreparation.ownedDescendantIds.has(element.id),
+    );
+  }
   const typographyPreflight = preflightNativeTypography(nativeLayoutElements, {
     embeddedTypefaceFaces,
     embeddedGlyphAvailable,
@@ -404,6 +424,11 @@ export async function prepareSlideLayer(
       kind: "table" as const,
       source,
     })),
+    ...observedTablePreparation.tables
+      .filter((source) =>
+        !declaredTablePreparation.tables.some((declared) => declared.id === source.id),
+      )
+      .map((source) => ({ kind: "table" as const, source })),
   ];
   const preparedLeaves = preSerializePreparedElements(
     [
@@ -493,7 +518,7 @@ export async function prepareSlideLayer(
 
   let backplate = await renderAuthoredBackplate(
     collectedHtml,
-    withAdmittedSemanticChartEligibility(contract, selected, semanticContext),
+    withAdmittedSemanticChartEligibility(contract, selected, semanticContext, observedTableIds),
     backplatePromotedElementIds(selected),
     extractionOptions
   );
@@ -547,7 +572,7 @@ export async function prepareSlideLayer(
     selected = finalSelected;
     backplate = await renderAuthoredBackplate(
       collectedHtml,
-      withAdmittedSemanticChartEligibility(contract, selected, semanticContext),
+      withAdmittedSemanticChartEligibility(contract, selected, semanticContext, observedTableIds),
       backplatePromotedElementIds(selected),
       extractionOptions
     );
@@ -596,7 +621,7 @@ export async function prepareSlideLayer(
       }
       backplate = await renderAuthoredBackplate(
         collectedHtml,
-        withAdmittedSemanticChartEligibility(contract, selected, semanticContext),
+        withAdmittedSemanticChartEligibility(contract, selected, semanticContext, observedTableIds),
         backplatePromotedElementIds(selected),
         extractionOptions
       );
@@ -672,6 +697,9 @@ export async function prepareSlideLayer(
             : []),
           ...(declaredTablePreparation.rejections.has(element.id)
             ? [declaredTablePreparation.rejections.get(element.id)!]
+            : []),
+          ...(observedTablePreparation.rejections.has(element.id)
+            ? [observedTablePreparation.rejections.get(element.id)!]
             : []),
         ]
       )
@@ -935,7 +963,7 @@ export async function prepareFidelitySlideLayer(
   slideNumber: number,
   chromeExecutable: string
 ): Promise<PreparedFidelitySlideOutcome> {
-  const fontCollection = await getGoogleFontsCollector().prepareHtml(html);
+  const fontCollection = await collectSlideFonts(html);
   const fontRendering = {
     browserFontFilesCollected: fontCollection.fontFiles,
     browserCollectionFailures: fontCollection.failures.length,

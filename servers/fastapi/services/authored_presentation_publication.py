@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.authored_chapter_plan import AuthoredChapterPlan
 from models.authored_header_contract import AuthoredHeaderContract
 from models.authored_illustration_plan import AuthoredIllustrationPlan
+from models.authored_infographic_plan import AuthoredInfographicPlan
 from models.generate_presentation_request import GeneratePresentationRequest
 from models.presentation_and_path import PresentationPathAndEditPath
 from models.presentation_outline_model import PresentationOutlineModel
@@ -200,6 +201,7 @@ async def publish_authored_presentation(
     header_contract: AuthoredHeaderContract | None = None,
     chapter_plan: AuthoredChapterPlan | None = None,
     illustration_plan: AuthoredIllustrationPlan | None = None,
+    infographic_plan: AuthoredInfographicPlan | None = None,
     quality_gate_receipt: dict[str, object] | None = None,
 ) -> tuple[str, float]:
     persist_started = time.monotonic()
@@ -374,6 +376,14 @@ async def publish_authored_presentation(
             # one must not lose it. An EMPTY plan is still a plan and is stored,
             # because "this deck gets no pictures" is a decision.
             presentation.theme["illustrationPlan"] = illustration_plan.model_dump(
+                mode="json"
+            )
+        if infographic_plan is not None:
+            # The deck's frozen figures, in the same final-outline indices. A
+            # single-page remake replays the page's archetype and labels so the
+            # remade page is drawn as the figure its siblings were planned
+            # around, not re-decided from one page's content alone.
+            presentation.theme["infographicPlan"] = infographic_plan.model_dump(
                 mode="json"
             )
         if master_generation is not None:

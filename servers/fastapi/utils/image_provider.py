@@ -55,8 +55,15 @@ def is_open_webui_selected(settings: RuntimeSettings | None = None) -> bool:
 # Image providers whose model is verified to render short, correct label text —
 # Korean included — inside a generated illustration.
 #
-# `gpt-image-2` was verified live: a generated diagram came back with correct
-# Korean labels and a correct middle dot. `gpt-image-1.5` is the same OpenAI
+# `gpt-image-2` was verified live twice. First a generated diagram came back
+# with correct Korean labels and a correct middle dot; then the 2026-09-02
+# infographic experiment rendered ten full slides with every required Korean
+# string correct (60/60 labels, 0 garbled, 0 invented — see
+# `output/infographic-experiment-20260902/C-raster/manifest.json`, model
+# `gpt-image-2`, size 1536x1024, quality medium). The same model also draws
+# transparent-background sprite sheets and object cutouts with no text at all
+# when asked (`artifacts/icon-pack-verification-20260903/manifest.json`), which
+# is what the authored icon pack relies on. `gpt-image-1.5` is the same OpenAI
 # text-rendering generation and is grouped with it.
 #
 # `dall-e-3` is deliberately NOT listed: it renders Latin text only

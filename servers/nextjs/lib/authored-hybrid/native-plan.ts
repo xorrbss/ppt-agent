@@ -772,9 +772,13 @@ function scriptAwareRuns(
 
 function styleForScriptRun(
   style: AuthoredHybridTextStyle,
-  script: AuthoredHybridTextScript
+  script: AuthoredHybridTextScript,
+  embeddedTypefaceFaces?: readonly AuthoredEmbeddedTypefaceFaceEvidence[]
 ): AuthoredHybridTextStyle {
-  const resolution = resolveScriptAwareTypeface(script, style.fontFamilies);
+  const resolution = resolveScriptAwareTypeface(script, style.fontFamilies, {
+    embeddedTypefaceFaces,
+    face: embeddedFaceForStyle(style),
+  });
   if (script === "common") return style;
   if (script === "cjk") {
     return {
@@ -905,7 +909,11 @@ export function preflightNativeTypography(
     if (!("text" in element) || !element.text) return element;
     const runs = scriptAwareRuns(element.text.runs).map((run) => ({
       ...run,
-      style: styleForScriptRun(run.style, scriptForRun(run)),
+      style: styleForScriptRun(
+        run.style,
+        scriptForRun(run),
+        options.embeddedTypefaceFaces
+      ),
     }));
     const issues: AuthoredHybridTypographyIssue[] = [];
     runs.forEach((run, runIndex) => {
@@ -920,8 +928,11 @@ export function preflightNativeTypography(
         });
       }
       if (script === "common") return;
-      const resolution = resolveScriptAwareTypeface(script, run.style.fontFamilies);
       const face = embeddedFaceForStyle(run.style);
+      const resolution = resolveScriptAwareTypeface(script, run.style.fontFamilies, {
+        embeddedTypefaceFaces: options.embeddedTypefaceFaces,
+        face,
+      });
       const embedded = hasEmbeddedTypefaceFace(
         options.embeddedTypefaceFaces,
         resolution.typeface,

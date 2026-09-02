@@ -1783,7 +1783,60 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       }
       result.push(cells);
     }
-    return { rows: result };
+    return Object.assign({ rows: result }, tableLayoutEvidence(element, rows));
+  }
+
+  // Geometry and style facts for markup-driven native tables. Kept outside
+  // "rows" so declared-table reconciliation, which compares rows only, is
+  // unaffected by this richer evidence.
+  function tableLayoutEvidence(element, rows) {
+    var unsupportedPaint = false;
+    var edges = ["Top", "Right", "Bottom", "Left"];
+    function paintUnsupported(style) {
+      if (style.backgroundImage && style.backgroundImage !== "none") return true;
+      return edges.some(function (edge) {
+        var borderStyle = style["border" + edge + "Style"];
+        var width = number(style["border" + edge + "Width"], 0);
+        return width > 0 && borderStyle !== "none" && borderStyle !== "hidden" && borderStyle !== "solid";
+      });
+    }
+    var rootStyle = getComputedStyle(element);
+    if (paintUnsupported(rootStyle)) unsupportedPaint = true;
+    var rootFill = parseColor(rootStyle.backgroundColor);
+    var cellStyles = rows.map(function (row) {
+      if (paintUnsupported(getComputedStyle(row))) unsupportedPaint = true;
+      return Array.from(row.cells).map(function (cell) {
+        var style = getComputedStyle(cell);
+        if (paintUnsupported(style)) unsupportedPaint = true;
+        var borders = {};
+        edges.forEach(function (edge) {
+          var width = number(style["border" + edge + "Width"], 0);
+          var color = parseColor(style["border" + edge + "Color"]);
+          if (width <= 0 || style["border" + edge + "Style"] !== "solid" || !color) return;
+          if (color.alpha !== 1) { unsupportedPaint = true; return; }
+          borders[edge.toLowerCase()] = { color: "#" + color.hex, widthPx: round(width) };
+        });
+        var textAlign = style.textAlign;
+        var vertical = style.verticalAlign;
+        return {
+          horizontalAlign: textAlign === "center" ? "center"
+            : textAlign === "right" || textAlign === "end" ? "right"
+            : textAlign === "justify" ? "justify" : "left",
+          verticalAlign: vertical === "top" ? "top" : vertical === "bottom" ? "bottom" : "middle",
+          borders: borders,
+        };
+      });
+    });
+    return {
+      columnWidthsPx: Array.from(rows[0].cells).map(function (cell) {
+        return round(cell.getBoundingClientRect().width);
+      }),
+      rowHeightsPx: rows.map(function (row) { return round(row.getBoundingClientRect().height); }),
+      cellStyles: cellStyles,
+      ...(rootFill && rootFill.alpha === 1 ? { rootFill: "#" + rootFill.hex } : {}),
+      ...(element.querySelector("img,svg,canvas,video,picture,iframe") ? { containsReplacedContent: true } : {}),
+      ...(unsupportedPaint ? { unsupportedPaint: true } : {}),
+    };
   }
 
   function svgSerializationMarkup(element, bounds) {
@@ -3763,6 +3816,9 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       if (complexReason === "complex-table" && candidateKind === "complex") {
         var tableEvidence = tableCellEvidence(element);
         if (tableEvidence) observation.tableEvidence = tableEvidence;
+        if ((element.getAttribute("data-native") || "").trim().toLowerCase() === "table") {
+          observation.nativeHint = "table";
+        }
       }
 
       try {

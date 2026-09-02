@@ -1,0 +1,663 @@
+{
+  "benchmark": "authored-infographic-50/v1",
+  "deck_title": "정밀부품 제조사 데이터 기반 경영 혁신 제안",
+  "language": "ko",
+  "canvas": { "width": 1280, "height": 720 },
+  "palette": {
+    "primary": "#1E5EFF",
+    "accent": "#FF7A1A",
+    "ink": "#0F172A",
+    "muted": "#64748B",
+    "bg": "#FFFFFF"
+  },
+  "notes": "Fixed benchmark. Do not edit slide content between runs: the point of the fixture is that two library versions are compared on identical input. Adding a slide is a new fixture version, not an edit.",
+  "archetype_coverage": [
+    "process",
+    "cycle",
+    "hierarchy",
+    "layers",
+    "comparison",
+    "before_after",
+    "timeline",
+    "roadmap",
+    "funnel",
+    "pyramid",
+    "matrix",
+    "kpi",
+    "gauge",
+    "icon_list",
+    "checklist",
+    "hub_spoke",
+    "venn",
+    "swimlane",
+    "branch",
+    "scene"
+  ],
+  "slides": [
+    {
+      "index": 1,
+      "role": "COVER",
+      "archetype_hint": "none",
+      "title": "정밀부품 제조사 데이터 기반 경영 혁신 제안",
+      "takeaway": "18개월 안에 손실 절반",
+      "bullets": []
+    },
+    {
+      "index": 2,
+      "role": "AGENDA",
+      "archetype_hint": "none",
+      "title": "목차",
+      "takeaway": "네 개 장으로 나눈다",
+      "bullets": [
+        "1장 현황 진단",
+        "2장 전환 설계",
+        "3장 실행 계획",
+        "4장 기대 효과"
+      ]
+    },
+    {
+      "index": 3,
+      "role": "SECTION",
+      "archetype_hint": "none",
+      "title": "1장 현황 진단",
+      "takeaway": "보이지 않는 손실",
+      "bullets": []
+    },
+    {
+      "index": 4,
+      "role": "CONTENT",
+      "archetype_hint": "kpi",
+      "title": "현장 손실의 규모",
+      "takeaway": "매출의 12%가 사라진다",
+      "bullets": [
+        "비계획 설비 정지 월평균 38시간",
+        "공정 불량률 4.6%, 업계 평균 2.1%",
+        "재고 실사 오차 9%",
+        "연간 손실 추정 14억 원"
+      ]
+    },
+    {
+      "index": 5,
+      "role": "CONTENT",
+      "archetype_hint": "icon_list",
+      "title": "손실이 생기는 네 지점",
+      "takeaway": "네 지점에서 샌다",
+      "bullets": [
+        "설비: 예고 없는 정지",
+        "품질: 뒤늦은 불량 발견",
+        "재고: 장부와 실물 불일치",
+        "납기: 일정 재조정 반복"
+      ]
+    },
+    {
+      "index": 6,
+      "role": "CONTENT",
+      "archetype_hint": "process",
+      "title": "현재 불량 대응 절차",
+      "takeaway": "발견까지 사흘 걸린다",
+      "bullets": [
+        "1단계 검사: 출하 전 전수 검사",
+        "2단계 보고: 일일 품질 회의 상신",
+        "3단계 원인: 설비 이력 수기 대조",
+        "4단계 조치: 다음 생산 계획 반영"
+      ]
+    },
+    {
+      "index": 7,
+      "role": "CONTENT",
+      "archetype_hint": "matrix",
+      "title": "라인별 문제 분포",
+      "takeaway": "1라인이 가장 급하다",
+      "bullets": [
+        "1라인: 정지 잦고 불량 높음",
+        "2라인: 정지 적고 불량 높음",
+        "3라인: 정지 잦고 불량 낮음",
+        "4라인: 정지 적고 불량 낮음"
+      ]
+    },
+    {
+      "index": 8,
+      "role": "CONTENT",
+      "archetype_hint": "gauge",
+      "title": "설비 종합 효율",
+      "takeaway": "OEE 61%에 머문다",
+      "bullets": [
+        "가동률 78%",
+        "성능률 84%",
+        "양품률 93%",
+        "종합 효율 61%"
+      ]
+    },
+    {
+      "index": 9,
+      "role": "CONTENT",
+      "archetype_hint": "comparison",
+      "title": "동종 업계와의 격차",
+      "takeaway": "모든 지표가 뒤진다",
+      "bullets": [
+        "불량률: 자사 4.6% 대 업계 2.1%",
+        "정지시간: 자사 38시간 대 업계 14시간",
+        "재고 오차: 자사 9% 대 업계 3%",
+        "납기 준수: 자사 87% 대 업계 95%"
+      ]
+    },
+    {
+      "index": 10,
+      "role": "CONTENT",
+      "archetype_hint": "hierarchy",
+      "title": "품질 책임 구조",
+      "takeaway": "결정이 위에서만 난다",
+      "bullets": [
+        "경영진: 월 단위 품질 보고 수신",
+        "품질보증팀: 검사 기준 관리",
+        "생산팀: 라인별 자체 점검",
+        "현장 작업자: 이상 발생 시 구두 보고"
+      ]
+    },
+    {
+      "index": 11,
+      "role": "CONTENT",
+      "archetype_hint": "funnel",
+      "title": "개선 제안의 생존율",
+      "takeaway": "제안 100건 중 6건",
+      "bullets": [
+        "현장 제안 접수 100건",
+        "부서 검토 통과 48건",
+        "예산 배정 19건",
+        "실제 적용 6건"
+      ]
+    },
+    {
+      "index": 12,
+      "role": "CONTENT",
+      "archetype_hint": "swimlane",
+      "title": "부서별 대응 흐름",
+      "takeaway": "부서 사이가 끊긴다",
+      "bullets": [
+        "생산: 이상 감지 후 라인 정지",
+        "설비: 정비 요청 접수 및 출동",
+        "품질: 불량 판정과 격리 지시",
+        "구매: 대체 자재 긴급 발주"
+      ]
+    },
+    {
+      "index": 13,
+      "role": "CONTENT",
+      "archetype_hint": "venn",
+      "title": "세 시스템의 중복 영역",
+      "takeaway": "가운데가 비어 있다",
+      "bullets": [
+        "MES: 생산 실적 관리",
+        "EAM: 설비 정비 이력",
+        "ERP: 자재와 원가",
+        "세 시스템 공통: 설비 코드 체계"
+      ]
+    },
+    {
+      "index": 14,
+      "role": "CONTENT",
+      "archetype_hint": "checklist",
+      "title": "데이터 준비도 점검",
+      "takeaway": "절반만 준비되었다",
+      "bullets": [
+        "설비 식별 코드 표준화 완료",
+        "센서 수집 주기 통일 미완료",
+        "품질 판정 기준 문서화 완료",
+        "이력 데이터 보존 기간 미정"
+      ]
+    },
+    {
+      "index": 15,
+      "role": "SECTION",
+      "archetype_hint": "none",
+      "title": "2장 전환 설계",
+      "takeaway": "무엇을 어떻게 바꾸나",
+      "bullets": []
+    },
+    {
+      "index": 16,
+      "role": "CONTENT",
+      "archetype_hint": "layers",
+      "title": "목표 시스템 구성",
+      "takeaway": "센서에서 경영까지",
+      "bullets": [
+        "현장 계층: 진동·온도·전류 센서 320개",
+        "수집 계층: 엣지 게이트웨이 12대",
+        "운영 계층: MES와 설비관리 연동",
+        "경영 계층: KPI 대시보드와 예측 리포트"
+      ]
+    },
+    {
+      "index": 17,
+      "role": "CONTENT",
+      "archetype_hint": "cycle",
+      "title": "예지보전 순환",
+      "takeaway": "감지에서 학습까지",
+      "bullets": [
+        "감지: 진동 이상 패턴 포착",
+        "판정: 잔여 수명 추정",
+        "조치: 계획 정비로 전환",
+        "학습: 결과를 모델에 반영"
+      ]
+    },
+    {
+      "index": 18,
+      "role": "CONTENT",
+      "archetype_hint": "hub_spoke",
+      "title": "데이터 허브 구조",
+      "takeaway": "허브 하나로 모은다",
+      "bullets": [
+        "허브: 통합 데이터 플랫폼",
+        "생산 실적 수집",
+        "설비 상태 수집",
+        "품질 검사 수집",
+        "자재 입출고 수집"
+      ]
+    },
+    {
+      "index": 19,
+      "role": "CONTENT",
+      "archetype_hint": "before_after",
+      "title": "불량 대응 방식의 변화",
+      "takeaway": "사흘에서 두 시간",
+      "bullets": [
+        "발견 시점: 출하 전 → 공정 중",
+        "원인 규명: 72시간 → 2시간",
+        "조치 범위: 로트 전체 → 해당 구간",
+        "재발 방지: 회의 결정 → 규칙 자동화"
+      ]
+    },
+    {
+      "index": 20,
+      "role": "CONTENT",
+      "archetype_hint": "branch",
+      "title": "이상 감지 후 분기",
+      "takeaway": "세 갈래로 나뉜다",
+      "bullets": [
+        "경고 수준: 다음 정기 정비에 반영",
+        "주의 수준: 당일 야간에 점검",
+        "위험 수준: 즉시 라인 정지",
+        "판정 기준: 잔여 수명 추정치"
+      ]
+    },
+    {
+      "index": 21,
+      "role": "CONTENT",
+      "archetype_hint": "pyramid",
+      "title": "데이터 활용 성숙 단계",
+      "takeaway": "네 단계를 밟는다",
+      "bullets": [
+        "1단계 수집: 데이터가 남는다",
+        "2단계 가시화: 현황이 보인다",
+        "3단계 예측: 고장을 미리 안다",
+        "4단계 최적화: 스스로 조정한다"
+      ]
+    },
+    {
+      "index": 22,
+      "role": "CONTENT",
+      "archetype_hint": "scene",
+      "title": "현장에서 달라지는 것",
+      "takeaway": "태블릿 한 대로 본다",
+      "bullets": [
+        "작업자: 설비 앞에서 상태 확인",
+        "반장: 라인 전체 이상 알림 수신",
+        "정비사: 예정 정비 목록 자동 배정",
+        "관리자: 사무실에서 동일 화면 확인"
+      ]
+    },
+    {
+      "index": 23,
+      "role": "CONTENT",
+      "archetype_hint": "process",
+      "title": "데이터 수집 파이프라인",
+      "takeaway": "네 단계로 흐른다",
+      "bullets": [
+        "1단계 계측: 센서 원시 신호 취득",
+        "2단계 정제: 결측과 이상치 제거",
+        "3단계 적재: 시계열 저장소 기록",
+        "4단계 배포: 분석 모델에 공급"
+      ]
+    },
+    {
+      "index": 24,
+      "role": "CONTENT",
+      "archetype_hint": "comparison",
+      "title": "자체 구축과 구독 방식",
+      "takeaway": "구독이 2년 유리하다",
+      "bullets": [
+        "초기 투자: 자체 9억 원 대 구독 1억 원",
+        "연간 운영: 자체 8천만 원 대 구독 2억 원",
+        "구축 기간: 자체 14개월 대 구독 5개월",
+        "2년 총액: 자체 10억 원 대 구독 5억 원"
+      ]
+    },
+    {
+      "index": 25,
+      "role": "CONTENT",
+      "archetype_hint": "matrix",
+      "title": "과제 우선순위",
+      "takeaway": "왼쪽 위부터 한다",
+      "bullets": [
+        "효과 크고 난이도 낮음: 설비 정지 알림",
+        "효과 크고 난이도 높음: 잔여 수명 예측",
+        "효과 작고 난이도 낮음: 일보 자동화",
+        "효과 작고 난이도 높음: 협력사 연동"
+      ]
+    },
+    {
+      "index": 26,
+      "role": "CONTENT",
+      "archetype_hint": "hierarchy",
+      "title": "새 거버넌스 체계",
+      "takeaway": "현장이 먼저 정한다",
+      "bullets": [
+        "혁신추진위: 분기 투자 승인",
+        "데이터 관리자: 표준과 품질 책임",
+        "라인 책임자: 규칙 기준값 조정",
+        "현장 작업자: 이상 등록과 확인"
+      ]
+    },
+    {
+      "index": 27,
+      "role": "CONTENT",
+      "archetype_hint": "layers",
+      "title": "보안 계층",
+      "takeaway": "네 겹으로 막는다",
+      "bullets": [
+        "망 분리: 생산망과 사무망 분리",
+        "접근 통제: 역할 기반 권한 부여",
+        "전송 암호화: 게이트웨이 구간 적용",
+        "감사 기록: 조회와 변경 전량 기록"
+      ]
+    },
+    {
+      "index": 28,
+      "role": "CONTENT",
+      "archetype_hint": "venn",
+      "title": "세 조직의 공동 책임",
+      "takeaway": "겹치는 곳이 핵심",
+      "bullets": [
+        "생산본부: 라인 운영 지표",
+        "품질본부: 판정 기준과 이력",
+        "정보전략실: 데이터 표준과 보안",
+        "세 조직 공통: 설비 마스터 정합성"
+      ]
+    },
+    {
+      "index": 29,
+      "role": "SECTION",
+      "archetype_hint": "none",
+      "title": "3장 실행 계획",
+      "takeaway": "18개월 일정",
+      "bullets": []
+    },
+    {
+      "index": 30,
+      "role": "CONTENT",
+      "archetype_hint": "roadmap",
+      "title": "도입 로드맵",
+      "takeaway": "진단에서 확산까지",
+      "bullets": [
+        "1단계 진단 2개월: 수집 범위 확정",
+        "2단계 파일럿 4개월: 핵심 라인 2개",
+        "3단계 표준화 6개월: 전 라인 연동",
+        "4단계 확산 6개월: 협력사 공유"
+      ]
+    },
+    {
+      "index": 31,
+      "role": "CONTENT",
+      "archetype_hint": "timeline",
+      "title": "주요 일정",
+      "takeaway": "분기마다 관문이 있다",
+      "bullets": [
+        "2026년 1분기: 착수와 현황 진단",
+        "2026년 3분기: 파일럿 성과 검증",
+        "2027년 1분기: 전 라인 표준 적용",
+        "2027년 3분기: 협력사 확산 개시"
+      ]
+    },
+    {
+      "index": 32,
+      "role": "CONTENT",
+      "archetype_hint": "swimlane",
+      "title": "역할 분담",
+      "takeaway": "세 주체가 나눈다",
+      "bullets": [
+        "자사 현업: 요구사항 정의와 검증",
+        "정보전략실: 인프라와 보안 승인",
+        "수행사: 구축과 이관 교육",
+        "감리: 단계별 산출물 검토"
+      ]
+    },
+    {
+      "index": 33,
+      "role": "CONTENT",
+      "archetype_hint": "checklist",
+      "title": "파일럿 착수 조건",
+      "takeaway": "네 가지가 먼저다",
+      "bullets": [
+        "대상 라인 2개 선정 완료",
+        "센서 설치 정전 일정 확보",
+        "데이터 표준 문서 승인",
+        "현장 교육 인원 배정"
+      ]
+    },
+    {
+      "index": 34,
+      "role": "CONTENT",
+      "archetype_hint": "kpi",
+      "title": "파일럿 성공 기준",
+      "takeaway": "네 지표로 판정한다",
+      "bullets": [
+        "정지시간 30% 감소",
+        "불량률 1.5%p 감소",
+        "이상 감지 정확도 85% 이상",
+        "현장 사용률 주 5일 중 4일"
+      ]
+    },
+    {
+      "index": 35,
+      "role": "CONTENT",
+      "archetype_hint": "branch",
+      "title": "파일럿 이후 판단",
+      "takeaway": "세 갈래 중 하나",
+      "bullets": [
+        "기준 충족: 전 라인 확산 착수",
+        "부분 충족: 범위 축소 후 재검증",
+        "미충족: 수집 설계부터 재수립",
+        "판단 시점: 파일럿 종료 4주 내"
+      ]
+    },
+    {
+      "index": 36,
+      "role": "CONTENT",
+      "archetype_hint": "funnel",
+      "title": "확산 대상 선별",
+      "takeaway": "40개 중 12개",
+      "bullets": [
+        "전체 설비 40대",
+        "센서 부착 가능 31대",
+        "이력 데이터 확보 19대",
+        "1차 확산 대상 12대"
+      ]
+    },
+    {
+      "index": 37,
+      "role": "CONTENT",
+      "archetype_hint": "icon_list",
+      "title": "필요 자원",
+      "takeaway": "사람과 장비와 시간",
+      "bullets": [
+        "전담 인력 4명",
+        "센서와 게이트웨이 예산 3억 원",
+        "정전 작업 창 월 1회",
+        "교육 시간 인당 16시간"
+      ]
+    },
+    {
+      "index": 38,
+      "role": "CONTENT",
+      "archetype_hint": "hub_spoke",
+      "title": "협력사 연동 범위",
+      "takeaway": "다섯 곳이 붙는다",
+      "bullets": [
+        "허브: 자사 데이터 플랫폼",
+        "1차 협력사 가공 2곳",
+        "1차 협력사 열처리 1곳",
+        "2차 협력사 표면처리 2곳"
+      ]
+    },
+    {
+      "index": 39,
+      "role": "CONTENT",
+      "archetype_hint": "pyramid",
+      "title": "교육 체계",
+      "takeaway": "세 층으로 가르친다",
+      "bullets": [
+        "전사 인식 교육 240명",
+        "현장 운영 교육 60명",
+        "데이터 분석 심화 12명",
+        "사내 강사 양성 4명"
+      ]
+    },
+    {
+      "index": 40,
+      "role": "CONTENT",
+      "archetype_hint": "gauge",
+      "title": "위험도 평가",
+      "takeaway": "위험은 중간 수준",
+      "bullets": [
+        "기술 위험 낮음",
+        "일정 위험 중간",
+        "조직 수용 위험 중간",
+        "종합 위험 중간"
+      ]
+    },
+    {
+      "index": 41,
+      "role": "CONTENT",
+      "archetype_hint": "scene",
+      "title": "통합 관제실 구상",
+      "takeaway": "한 화면에 모인다",
+      "bullets": [
+        "정면 대형 화면: 전 라인 가동 현황",
+        "좌측 화면: 설비 이상 알림 목록",
+        "우측 화면: 당일 품질 추이",
+        "운영 인원: 교대당 2명"
+      ]
+    },
+    {
+      "index": 42,
+      "role": "SECTION",
+      "archetype_hint": "none",
+      "title": "4장 기대 효과",
+      "takeaway": "숫자로 확인한다",
+      "bullets": []
+    },
+    {
+      "index": 43,
+      "role": "CONTENT",
+      "archetype_hint": "before_after",
+      "title": "핵심 지표 개선",
+      "takeaway": "불량 절반, 정지 3분의 1",
+      "bullets": [
+        "불량률: 4.6% → 2.2%",
+        "비계획 정지: 월 38시간 → 12시간",
+        "재고 오차: 9% → 1.5%",
+        "납기 준수율: 87% → 96%"
+      ]
+    },
+    {
+      "index": 44,
+      "role": "CONTENT",
+      "archetype_hint": "kpi",
+      "title": "재무 효과",
+      "takeaway": "연 9억 원 절감",
+      "bullets": [
+        "품질 비용 절감 4억 2천만 원",
+        "설비 정지 손실 절감 3억 1천만 원",
+        "재고 유지비 절감 1억 원",
+        "긴급 물류비 절감 7천만 원"
+      ]
+    },
+    {
+      "index": 45,
+      "role": "CONTENT",
+      "archetype_hint": "timeline",
+      "title": "효과 실현 시점",
+      "takeaway": "9개월부터 나온다",
+      "bullets": [
+        "6개월: 가시화 효과 확인",
+        "9개월: 정지시간 감소 시작",
+        "14개월: 불량률 목표 도달",
+        "18개월: 투자비 회수 완료"
+      ]
+    },
+    {
+      "index": 46,
+      "role": "CONTENT",
+      "archetype_hint": "cycle",
+      "title": "개선의 선순환",
+      "takeaway": "돌수록 좋아진다",
+      "bullets": [
+        "측정: 지표를 매일 남긴다",
+        "분석: 편차 원인을 좁힌다",
+        "개선: 규칙과 기준을 고친다",
+        "표준화: 전 라인에 반영한다"
+      ]
+    },
+    {
+      "index": 47,
+      "role": "CONTENT",
+      "archetype_hint": "comparison",
+      "title": "투자와 회수",
+      "takeaway": "18개월에 회수한다",
+      "bullets": [
+        "총 투자: 1년차 7억 원",
+        "연간 절감: 9억 원",
+        "회수 기간: 18개월",
+        "3년 순효과: 20억 원"
+      ]
+    },
+    {
+      "index": 48,
+      "role": "CONTENT",
+      "archetype_hint": "process",
+      "title": "성과 관리 절차",
+      "takeaway": "월 단위로 점검한다",
+      "bullets": [
+        "1단계 집계: 월간 지표 자동 산출",
+        "2단계 검토: 부서별 편차 확인",
+        "3단계 조정: 기준값 재설정",
+        "4단계 보고: 경영 회의 상신"
+      ]
+    },
+    {
+      "index": 49,
+      "role": "CONTENT",
+      "archetype_hint": "roadmap",
+      "title": "다음 3년",
+      "takeaway": "공장에서 공급망까지",
+      "bullets": [
+        "1년차: 자사 전 라인 안정화",
+        "2년차: 협력사 품질 데이터 연동",
+        "3년차: 수요 예측 기반 생산 계획",
+        "이후: 그룹 표준 모델로 확대"
+      ]
+    },
+    {
+      "index": 50,
+      "role": "CLOSING",
+      "archetype_hint": "none",
+      "title": "제안 요약",
+      "takeaway": "지금 시작해야 한다",
+      "bullets": [
+        "18개월 안에 투자비를 회수한다",
+        "불량률과 정지시간을 절반으로 낮춘다",
+        "다음 단계는 파일럿 라인 2개 선정이다"
+      ]
+    }
+  ]
+}

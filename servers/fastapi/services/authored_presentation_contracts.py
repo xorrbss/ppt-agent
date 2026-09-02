@@ -1,5 +1,5 @@
-from dataclasses import dataclass
-from typing import Any, List
+from dataclasses import dataclass, field
+from typing import Any, List, Mapping
 
 from utils.llm_calls.author_deck import AuthoredDeckResult
 from services.authored_quality_receipt_v2 import public_attempt_id
@@ -21,6 +21,12 @@ class AuthoredGenerationPipelineResult:
     # it can repair only the affected slides.  Capacity/telemetry admission
     # failures remain hard errors in the pipeline; geometry defects are bounded
     # repair candidates and must not force a whole-deck regeneration.
+    # What the Stage 4 quality loop chose for each figure slide, keyed by final
+    # outline index. Empty when the loop is off or chose nothing to report; the
+    # measurement stage reads ``variant_chosen`` and ``critic_score`` from it.
+    slide_quality_receipts: Mapping[int, dict[str, Any]] = field(
+        default_factory=dict
+    )
     quality_gate_reports: tuple[Any, ...] = ()
     quality_gate_failed_indices: tuple[int, ...] = ()
     # JSON-safe form consumed by the generation repair boundary.

@@ -271,9 +271,25 @@ export function embeddedGlyphAvailable(plan: FontEmbeddingPlan) {
   };
 }
 
+const BUNDLED_HANGUL_FAMILY_PATTERN = /font(?:-family)?\s*:\s*(?:[^;}]*[\s,"'])?pretendard(?=$|[\s,"';}])/iu;
+
+/**
+ * Families named by the stored slide HTML that the package can embed. The
+ * active-emission binding only lists families from declared text runs, which
+ * compatibility bundles leave empty, so the authored CSS is scanned directly.
+ */
+export function bundledFamiliesReferencedByHtml(
+  slideHtml: readonly string[],
+): string[] {
+  return slideHtml.some((html) => BUNDLED_HANGUL_FAMILY_PATTERN.test(html))
+    ? ["Pretendard"]
+    : [];
+}
+
 export function nativeEmbeddingFamilies(
   binding: ActiveEmissionExportBinding,
   profileId: string | undefined,
+  htmlFamilies: readonly string[] = [],
 ): string[] {
   const authored = binding.slides.flatMap((slide) => slide.fontFamilies);
   const requiresKoreanFace =
@@ -282,11 +298,12 @@ export function nativeEmbeddingFamilies(
       /(?:noto\s+sans\s+(?:kr|cjk)|pretendard|malgun|맑은\s*고딕)/iu.test(family),
     );
   // Browser CSS may name only the Latin face even when Hangul is resolved by
-  // a fallback. The sealed ko/en profile's script-aware serializer always
-  // emits Noto Sans KR for Hangul, so include that exact package family in the
-  // plan instead of discovering the requirement after packaging.
+  // a fallback. The script-aware serializer emits Noto Sans KR for Hangul
+  // unless the run's authored stack names an embedded Hangul-capable family
+  // (Pretendard), so both package families are requested when relevant.
   return [...new Set([
     ...(requiresKoreanFace ? [KOREAN_NATIVE_EMBEDDING_FAMILY] : []),
     ...authored,
+    ...htmlFamilies,
   ])];
 }

@@ -77,6 +77,21 @@ def test_source_boundary_kind_is_admitted_as_inert_readback_metadata() -> None:
     assert 'data-quality-unintentional="true"' in admitted.html
 
 
+def test_native_table_hint_is_admitted_as_an_inert_export_hint() -> None:
+    """The archetype library marks a comparison table for native export.
+
+    Without this the whole figure is rejected before Chromium ("HTML attribute
+    is not allowed: data-native") and the slide falls back to a branded
+    placeholder, which is how a real ten-slide fixture lost its third page.
+    """
+    admitted = renderer_isolation.admit_authored_html(
+        '<table data-qid="ig.s1.table" data-native="table">'
+        "<tr><th>불량률</th><td>4.6%</td><td>2.2%</td></tr></table>"
+    )
+
+    assert 'data-native="table"' in admitted.html
+
+
 def test_tabular_numerals_are_admitted() -> None:
     """Authored slides line digits up in tables and chips; the property is inert."""
     source = (

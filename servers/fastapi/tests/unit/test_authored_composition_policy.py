@@ -16,6 +16,7 @@ from services.authored_composition_policy import (
     build_authored_capacity_plan,
     canonicalize_authored_capacity_html,
     capacity_violations,
+    count_content_images,
     ensure_authored_semantic_roles,
     repair_authored_layout_alignment,
     repair_authored_owned_text_paint_order,
@@ -2158,3 +2159,39 @@ def test_final_capacity_violation_is_terminal_after_bounded_repair():
 
     assert caught.value.code == "authored_slide_capacity_exceeded"
     assert caught.value.retryable is False
+
+
+def _library_icon_slot(node: int) -> str:
+    """One archetype-library node icon exactly as the asset layer emits it."""
+    return (
+        f'<div class="ig-ic" data-qid="ig.s1.n{node}.ic">'
+        '<img src="data:image/png;base64,AA" alt=""></div>'
+    )
+
+
+def test_library_node_icons_do_not_spend_the_slide_image_budget():
+    """A four-node figure carries four icons and still claims no content image.
+
+    The icons are decoration the model never wrote and never declares, so they
+    are absent from the Chromium payload. Counting them would both spend the
+    envelope and make the HTML total disagree with the measured one, which is
+    itself a violation — that pairing failed a real five-slide deck with
+    "images:4>1" and "browser_images:0!=4".
+    """
+    icons = "".join(_library_icon_slot(index) for index in range(4))
+    html = f"<body><section class='ig ig-cycle n4'>{icons}</section></body>"
+
+    assert count_content_images(html) == 0
+    with_illustration = html.replace(
+        "</body>", '<img data-illust-prompt="a press line"></body>'
+    )
+    assert count_content_images(with_illustration) == 1
+
+
+def test_the_ordinary_deck_no_longer_stops_at_one_image_slot():
+    """The gate admits a figure's icons; the author is still offered one slot."""
+    profile = CompositionProfile("ordinary", "authored", True, True, 1)
+    capacity = build_authored_capacity_plan(("# 슬라이드",), ("CONTENT",), profile).at(0)
+
+    assert capacity.max_images == 8
+    assert "Reserve up to 1 visible image slot(s)" in capacity.prompt_brief(profile)

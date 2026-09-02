@@ -226,7 +226,11 @@ export function serializeNativeTableFrame(source: AuthoredHybridNativeTableSourc
         covered?.hMerge ? 'hMerge="1"' : "",
         covered?.vMerge ? 'vMerge="1"' : "",
       ].filter(Boolean).join(" ");
-      return `<a:tc${mergeAttrs ? ` ${mergeAttrs}` : ""}><a:txBody><a:bodyPr/><a:lstStyle/><a:p><a:pPr algn="${alignment}"/><a:r><a:rPr lang="en-US" sz="${Math.round(size * 100)}"${cell.bold || rowIndex < (table.headerRows ?? 0) ? ' b="1"' : ""}><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:latin typeface="${esc(family)}"/><a:ea typeface="${esc(family)}"/><a:cs typeface="${esc(family)}"/></a:rPr><a:t>${esc(cell.text)}</a:t></a:r><a:endParaRPr/></a:p></a:txBody><a:tcPr anchor="${anchor}">${borderXml(borders)}${fill}</a:tcPr></a:tc>`;
+      const runProperties = `<a:rPr lang="en-US" sz="${Math.round(size * 100)}"${cell.bold || rowIndex < (table.headerRows ?? 0) ? ' b="1"' : ""}><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:latin typeface="${esc(family)}"/><a:ea typeface="${esc(family)}"/><a:cs typeface="${esc(family)}"/></a:rPr>`;
+      // Each authored line becomes its own paragraph; readback joins `<a:t>`
+      // runs with "\n", so cell text round-trips exactly.
+      const paragraphs = cell.text.split("\n").map((line) => `<a:p><a:pPr algn="${alignment}"/><a:r>${runProperties}<a:t>${esc(line)}</a:t></a:r><a:endParaRPr/></a:p>`).join("");
+      return `<a:tc${mergeAttrs ? ` ${mergeAttrs}` : ""}><a:txBody><a:bodyPr/><a:lstStyle/>${paragraphs}</a:txBody><a:tcPr anchor="${anchor}">${borderXml(borders)}${fill}</a:tcPr></a:tc>`;
     }).join("");
     return `<a:tr h="${height}">${cells}</a:tr>`;
   }).join("");

@@ -17,6 +17,7 @@ from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
+from models.sql.authored_slide_editor_event import AuthoredSlideEditorEvent
 from models.sql.authored_exact_provenance import AuthoredExactProvenance
 from models.sql.authored_canonical_revision import AuthoredCanonicalRevision
 from models.sql.authored_editable_hybrid_mvp_completion import (
@@ -324,6 +325,7 @@ _STRICT_OWNER_MODELS = (
     AssetGatewayIdempotencyReceipt,
     PresentationExportAttempt,
     AuthoredCanonicalRevision,
+    AuthoredSlideEditorEvent,
     PublicOperationAdmission,
     PublicArtifact,
     PublicExportIdentity,
@@ -480,6 +482,7 @@ async def create_db_and_tables():
                         AuthoredCanonicalRevision.__table__,
                         PresentationGenerationJob.__table__,
                         AuthoredSlideCheckpoint.__table__,
+                        AuthoredSlideEditorEvent.__table__,
                         PresentationVersionModel.__table__,
                         SlideModel.__table__,
                         SlideSpecArtifactBundle.__table__,

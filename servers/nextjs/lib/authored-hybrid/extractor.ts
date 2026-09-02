@@ -264,9 +264,13 @@ function expectedPromotedElements(
       element.classification.mode === "raster" &&
       element.classification.candidateKind === "complex" &&
       element.classification.reasons.includes("complex-chart");
+    // A table is promotable when the server admitted it, either through the
+    // declared semantic payload or through the markup-driven observed path;
+    // both record the admitted id in backplate.nativeTableElementIds.
     const rasterDeclaredTable =
-      element?.identityAuthority === "declared-qid" &&
-      element.classification.mode === "raster" &&
+      (element?.identityAuthority === "declared-qid" ||
+        (slide.backplate.nativeTableElementIds ?? []).includes(id)) &&
+      element?.classification.mode === "raster" &&
       element.classification.candidateKind === "complex" &&
       element.classification.reasons.includes("complex-table");
     if (

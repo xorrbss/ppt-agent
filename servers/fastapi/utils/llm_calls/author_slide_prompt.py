@@ -7,7 +7,9 @@ from dataclasses import replace
 import json
 from typing import Any
 
+from models.authored_infographic_plan import AuthoredSlideInfographic
 from models.authored_visual_plan import AuthoredSlideVisualIntent
+from utils.llm_calls.author_infographic_marker import infographic_marker
 from services.authored_vnext.capability_registry import prompt_capability_clause
 from services.source_images.models import SourceImageCandidate
 from utils.prompt_safety import format_untrusted_source_documents
@@ -412,6 +414,7 @@ def author_prompt(
     instructions: str | None = None,
     illustration_allowed: bool | None = None,
     visual_intent: AuthoredSlideVisualIntent | None = None,
+    infographic: AuthoredSlideInfographic | None = None,
     capacity_brief: str | None = None,
 ) -> str:
     if page_number_mode == "companyStandard":
@@ -490,6 +493,8 @@ def author_prompt(
     illustration_block = f"{illustration}\n\n" if illustration else ""
     visual_story = visual_story_marker(visual_intent)
     visual_story_block = f"{visual_story}\n\n" if visual_story else ""
+    figure = infographic_marker(infographic)
+    figure_block = f"{figure}\n\n" if figure else ""
     direction = user_direction_brief(instructions)
     direction_block = f"{direction}\n\n" if direction else ""
     capacity_block = f"{capacity_brief}\n\n" if capacity_brief else ""
@@ -497,7 +502,8 @@ def author_prompt(
         f"Author slide {index + 1} of {n}. Deck topic: {brand.topic}. This slide's ROLE: "
         f"{role}. CONTENT: {content}.{wordmark}{structured_contract}\n\n"
         f"{page_marker}\n\n{structure_block}{chapter_block}{requirement_block}"
-        f"{illustration_block}{visual_story_block}{direction_block}{design_system}\n\n"
+        f"{illustration_block}{visual_story_block}{figure_block}{direction_block}"
+        f"{design_system}\n\n"
         f"{capacity_block}"
         "Design THIS slide bespoke and premium within the shared system, vary the layout to "
         "suit the role. Every visible text, image, simple shape, chart/table container, and "

@@ -405,6 +405,7 @@ function convertElement(
     rotationDeg: observation.rotationDeg,
     opacity: observation.opacity,
     ...(observation.tableEvidence ? { tableEvidence: observation.tableEvidence } : {}),
+    ...(observation.nativeHint === "table" ? { nativeHint: "table" as const } : {}),
   };
 
   if (classification.mode === "raster") {

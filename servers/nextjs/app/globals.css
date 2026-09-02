@@ -25,6 +25,25 @@
   font-style: normal;
   font-display: swap;
 }
+/* Deck typeface. Authored slides that name "Pretendard" render with the same
+   bundled regular/bold faces the hybrid exporter embeds into PPTX
+   (public/fonts/pretendard, OFL-1.1), both in the editor and in the fidelity
+   export renderer. Weights 500 and 600-900 intentionally resolve to these two
+   faces because PresentationML carries only regular and bold. */
+@font-face {
+  font-family: "Pretendard";
+  src: url("/fonts/pretendard/Pretendard-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Pretendard";
+  src: url("/fonts/pretendard/Pretendard-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
 .devax-workspace {
   --devax-ink: #27251e;
   --devax-muted: #6b6b73;

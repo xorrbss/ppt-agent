@@ -11,6 +11,7 @@ from typing import Any
 from models.authored_chapter_plan import AuthoredChapterPlan
 from models.authored_header_contract import AuthoredHeaderContract
 from models.authored_illustration_plan import AuthoredIllustrationPlan
+from models.authored_infographic_plan import AuthoredInfographicPlan
 from models.presentation_outline_model import PresentationOutlineModel
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from services.authored_checkpoint_service import (
@@ -31,6 +32,11 @@ from services.authored_presentation_artifacts import (
     _complete_stage_after_external_success,
 )
 from services.authored_illustration_stage import illustrate_slide
+from services.authored_infographic_assets import (
+    build_infographic_asset_context,
+    deck_has_picture_source,
+)
+from services.authored_quality_loop_stage import apply_slide_quality_loop
 from services.authored_presentation_contracts import AuthoredGenerationPipelineResult
 from services.authored_evidence_ledger import DeckEvidenceLedger
 from services.image_generation_service import ImageGenerationService
@@ -254,6 +260,9 @@ async def _author_illustrate_render_pipeline(
     # The deck's already-decided illustration slots. None means no plan ran, and
     # the deck keeps the pre-plan behaviour in which any slide may author one.
     illustration_plan: AuthoredIllustrationPlan | None = None,
+    # The deck's already-decided figures, one per final-outline slide. None
+    # means no plan ran and every slide composes itself as before.
+    infographic_plan: AuthoredInfographicPlan | None = None,
     instructions: str | None = None,
     source_block_bindings: Sequence[Sequence[tuple[str, str]]] | None = None,
     source_image_block_bindings: Sequence[Sequence[str]] | None = None,
@@ -278,6 +287,7 @@ async def _author_illustrate_render_pipeline(
         header_contract=header_contract,
         chapter_plan=chapter_plan,
         illustration_plan=illustration_plan,
+        infographic_plan=infographic_plan,
         instructions=instructions,
         composition_profile=composition_profile,
     )
@@ -326,11 +336,27 @@ async def _author_illustrate_render_pipeline(
         # Reproducing a source slide-for-slide may not gain a picture the
         # source does not have, whatever the caller uploaded.
         source_images = ()
+    # A transparent-capable provider is a picture source too: a planned scene
+    # takes its object cutout from it without any style illustration prompt.
     image_service = (
         ImageGenerationService(get_images_directory())
         if not disable_generated_illustrations
         and plan_reference_mode != EXACT_RECONSTRUCTION
-        and getattr(style, "illustration_prompt", None)
+        and deck_has_picture_source(style)
+        else None
+    )
+    # Whether the deck may replace the figures' built-in icons and a scene's
+    # slot with transparent PNGs from the icon pack. Decided once per deck;
+    # None keeps every slide's library markup as authored.
+    infographic_briefs = getattr(plan, "infographic_briefs", ())
+    infographic_assets = (
+        build_infographic_asset_context(
+            style=style,
+            brand=plan.brand,
+            instructions=instructions,
+            image_service=image_service,
+        )
+        if infographic_briefs and not disable_generated_illustrations
         else None
     )
     attempt_token = generation_job.attempt_token if generation_job else None
@@ -989,6 +1015,10 @@ async def _author_illustrate_render_pipeline(
                 ),
                 generation_job=generation_job,
                 attempt_token=attempt_token,
+                infographic=(
+                    infographic_briefs[index] if infographic_briefs else None
+                ),
+                infographic_assets=infographic_assets,
             )
             if require_all_source_images:
                 try:
@@ -1061,6 +1091,20 @@ async def _author_illustrate_render_pipeline(
                 )
             else:
                 illustrated_html = ensure_authored_qids(illustrated_html)
+
+            # Stage 4 best-of-N. Off unless AUTHORED_QUALITY_LOOP_ENABLED is
+            # set; when on, the figure's density/emphasis classes are varied and
+            # re-rendered (no provider call) and the measured winner replaces
+            # this document *before* the envelope below is sealed.
+            illustrated_html, quality_loop_receipt = await apply_slide_quality_loop(
+                illustrated_html,
+                slide_index=index,
+                checkpoint=checkpoint,
+                reference_mode=plan_reference_mode,
+                composition_profile=composition_profile,
+                slide_content=plan.contents[index] if index < len(plan.contents) else "",
+                infographic=infographic_briefs[index] if infographic_briefs else None,
+            )
 
             scene_envelope: AuthoredSlideSceneEnvelope
             if generation_job is not None:
@@ -1281,6 +1325,7 @@ async def _author_illustrate_render_pipeline(
                 quality_failure,
                 scene_envelope,
                 author_provider_attempt_count,
+                quality_loop_receipt,
             )
         except AuthoredStageError as exc:
             if generation_job is not None:
@@ -1331,4 +1376,12 @@ async def _author_illustrate_render_pipeline(
         author_provider_attempt_counts=tuple(
             int(result[10]) for result in completed_results
         ),
+        # Slides are authored in parallel child tasks, so the quality loop's
+        # per-slide choice has no ambient way back to the measurement stage.
+        # It travels with the slide's own result instead.
+        slide_quality_receipts={
+            int(result[0]): dict(result[11])
+            for result in completed_results
+            if isinstance(result[11], dict) and result[11]
+        },
     )
