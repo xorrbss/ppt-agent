@@ -263,3 +263,31 @@ def test_html_readback_accepts_projected_runs_in_source_order() -> None:
     with pytest.raises(SourceContentReadbackError) as error:
         verify_source_verbatim_readback(manifest=manifest, outline=outline, htmls=[reordered])
     assert error.value.block_ids == ("b2",)
+
+
+def test_a_bullet_before_another_glyph_never_becomes_its_own_run() -> None:
+    """``• □ item`` splits before both glyphs, orphaning the bullet.
+
+    Authored markup draws a bullet with CSS or an empty decoration span, so a
+    run whose whole body is the glyph can never find a DOM owner and failed
+    every block that paired a bullet with a checkbox.
+    """
+    runs = project_source_runs("• □ 누구에게 팔지 안다 • □ 무엇을 팔지 안다").runs
+
+    assert [run.body for run in runs] == ["누구에게 팔지 안다", "무엇을 팔지 안다"]
+    assert all(run.body.strip() for run in runs)
+
+
+def test_a_number_is_content_even_though_a_glyph_is_not() -> None:
+    # A verbatim restyle must keep a source page number; only glyphs and
+    # enumerators are presentation.
+    assert [run.body for run in project_source_runs("16").runs] == ["16"]
+    assert [run.body for run in project_source_runs("• ① 타깃: ______").runs] == [
+        "타깃:",
+        "______",
+    ]
+
+
+def test_a_block_of_only_glyphs_still_projects_a_run() -> None:
+    # Nothing to fold the glyph into, and a block must never project empty.
+    assert [run.body for run in project_source_runs("•").runs] == ["•"]

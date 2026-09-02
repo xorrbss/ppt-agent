@@ -33,6 +33,12 @@ _SEPARATOR = re.compile(
     rf"|\s+(?=[{re.escape(_ITEM_GLYPHS)}]\s)"
 )
 _BLANK_FIELD = re.compile(r"(_{3,})")
+# A piece made only of bullet/checkbox glyphs and enumerators carries no source
+# characters of its own. Digits are deliberately excluded: "16" is a page
+# number a verbatim restyle must preserve, not decoration.
+_MARKER_ONLY = re.compile(
+    rf"^(?:[{re.escape(_MARKER_GLYPHS)}]|[{_ENUMERATORS}]|[.)\s])+$"
+)
 _RUN_ID = re.compile(r"^(?P<block>.+):run:(?P<start>\d+)(?:-(?P<end>\d+))?$")
 
 
@@ -142,7 +148,28 @@ def _segments(line: str) -> list[str]:
         for part in _BLANK_FIELD.split(chunk):
             if part.strip():
                 pieces.append(part)
-    return pieces
+    return _attach_marker_only_pieces(pieces)
+
+
+def _attach_marker_only_pieces(pieces: list[str]) -> list[str]:
+    """Fold a piece that is only presentation into the item it introduces.
+
+    Splitting before every item glyph turns ``• □ 누구에게`` into ``•`` and
+    ``□ 누구에게``: the bullet loses its item and becomes a run of its own.
+    Nothing renders it -- authored markup draws bullets with CSS or an empty
+    decoration span -- so such a run could never find a DOM owner and failed
+    every block that used a glyph pair. A marker belongs to the item after it,
+    and a trailing one is presentation with nothing left to introduce.
+    """
+
+    kept = [
+        piece
+        for piece in pieces
+        if not _MARKER_ONLY.match(normalize_source_text(piece))
+    ]
+    # A block that is nothing but glyphs has no item to fold them into; keep it
+    # as-is rather than projecting an empty block.
+    return kept or pieces
 
 
 def _split_marker(segment: str) -> tuple[str, str]:
