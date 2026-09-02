@@ -20,6 +20,7 @@ from utils.authored_infographic import (
     slot_contract,
     tokens_for_brand,
 )
+from utils.authored_dom_quality import ensure_authored_qids
 from utils.authored_infographic.library import LIBRARY_TEMPLATE
 from utils.authored_infographic.skeleton import density_class, node_count, split_figure
 from utils.llm_calls import author_deck as author_deck_mod

@@ -233,6 +233,37 @@ def test_absolutely_placed_plates_stay_inside_the_figure(archetype, count):
         assert y >= 0 and y + height <= CANVAS_H, f"{archetype}/n{count}: .{name} leaves the figure"
 
 
+#: How each archetype that stacks or spreads its parts claims the height it
+#: was given. A figure that centres a short band inside a tall canvas reads as
+#: an unfinished page, so every one of these declarations is load-bearing;
+#: the rendered proof is the ``empty-band`` probe of the F2-verify sweep.
+FILL_DECLARATIONS = [
+    (["ig-process", "ig-node"], "flex", "1 1 0"),
+    (["ig-milestones", "ig-node"], "flex", "1 1 0"),
+    (["ig-roadmap", "ig-node"], "flex", "1 1 0"),
+    (["ig-swimlane", "ig-node"], "flex", "1 1 0"),
+    (["ig-checklist", "ig-node"], "flex", "1 1 0"),
+    (["ig-layers", "ig-node"], "flex", "1 1 0"),
+    (["ig-funnel", "ig-node"], "flex", "1 1 0"),
+    (["ig-pyramid", "ig-node"], "flex", "1 1 0"),
+    (["ig-hierarchy", "ig-children", "ig-node"], "flex", "1 1 0"),
+    (["ig-gauge", "ig-facts", "ig-node"], "flex", "1 1 0"),
+    (["ig-kpi"], "align-content", "stretch"),
+    (["ig-icon-list"], "align-content", "stretch"),
+    (["ig-compare"], "align-items", "stretch"),
+    (["ig-before-after"], "align-items", "stretch"),
+    (["ig-compare", "ig-table"], "height", "100%"),
+    (["ig-before-after", "ig-table"], "height", "100%"),
+]
+
+
+@pytest.mark.parametrize(("chain", "prop", "value"), FILL_DECLARATIONS)
+def test_an_archetype_claims_the_height_it_was_given(chain, prop, value):
+    rules = _rules(library_css(Brand(topic="스마트팩토리", primary="#1E5EFF", fonts="Pretendard")))
+    classes = [frozenset({"ig", chain[0], "n4"})] + [frozenset({name}) for name in chain[1:]]
+    assert _declarations(rules, classes).get(prop) == value
+
+
 @pytest.mark.parametrize("count", [3, 4, 5, 6])
 def test_a_roadmap_bar_ends_inside_its_track(count):
     rules = _rules(library_css(Brand(topic="스마트팩토리", primary="#1E5EFF", fonts="Pretendard")))
