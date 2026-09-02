@@ -13,6 +13,8 @@ from types import SimpleNamespace
 
 import pytest
 from PIL import Image
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlmodel import SQLModel
 
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
 from models.authored_header_contract import default_header_contract
@@ -37,6 +39,7 @@ from utils.llm_calls import author_vision_qa as author_vision_qa_mod
 from utils.llm_calls import critique_slide as critique_slide_mod
 from utils.llm_calls.author_deck import (
     AuthoredBatchFailure,
+    AuthoredProviderBudgetExhausted,
     AuthoredDeckResult,
     AuthoredPlannedBatchResult,
     author_deck,
@@ -58,6 +61,7 @@ from utils.llm_calls.author_slide import (
     validate_authored_slide_html,
 )
 from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
+from utils.provider_idempotency import ProviderOutcomeError
 from utils.renderer_isolation import RendererPolicyError
 
 
@@ -460,6 +464,14 @@ _CANONICAL_VALID = _VALID.replace(
     "<meta charset='utf-8'>",
     '<meta charset="utf-8">',
 )
+# author_deck seals the render-bound owner namespace on every accepted slide
+# before the header and capacity contracts are checked: each rendered element
+# gets its stable data-qid and the derived data-semantic-role. A valid provider
+# result therefore comes back annotated rather than byte-identical.
+_SEALED_VALID = _VALID.replace(
+    "<h1>제목</h1>",
+    '<h1 data-qid="q-h1-94f712e4878d" data-semantic-role="title">제목</h1>',
+)
 
 
 def _outline(n):
@@ -470,6 +482,32 @@ def _outline(n):
 
 def _brand():
     return Brand(topic="주제", language="Korean", primary="#2563EB", fonts="Noto Sans KR")
+
+
+async def _sqlite_engine(tmp_path):
+    # Authored publication seals the semantic deck graph against the persisted
+    # presentation row it just wrote, so the service needs a real session.
+    engine = create_async_engine(
+        f"sqlite+aiosqlite:///{tmp_path / 'authored-service.db'}"
+    )
+    async with engine.begin() as connection:
+        await connection.run_sync(SQLModel.metadata.create_all)
+    return engine
+
+
+async def _generate_on_sqlite(tmp_path, request, outline, language):
+    presentation_id = uuid.uuid4()
+    engine = await _sqlite_engine(tmp_path)
+    try:
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            result = await authored_service.generate_authored_presentation(
+                request, presentation_id, outline, language, session
+            )
+            presentation = await session.get(PresentationModel, presentation_id)
+    finally:
+        await engine.dispose()
+    assert presentation is not None
+    return result, presentation
 
 
 def test_save_slide_pngs_keeps_owner_namespace_in_browser_reference(
@@ -669,7 +707,7 @@ def test_author_deck_uses_authored_html_when_valid(monkeypatch):
     monkeypatch.setattr(author_deck_mod, "author_slide_html", fake)
     htmls = _run(author_deck(_outline(4), _brand())).htmls
     assert len(htmls) == 4
-    assert all(h == _VALID for h in htmls)
+    assert all(h == _SEALED_VALID for h in htmls)
 
 
 def test_author_deck_recovers_only_failed_slide_from_batch(monkeypatch):
@@ -733,7 +771,7 @@ def test_author_deck_retries_then_succeeds(monkeypatch):
 
     monkeypatch.setattr(author_deck_mod, "author_slide_html", flaky)
     htmls = _run(author_deck(_outline(1), _brand())).htmls
-    assert htmls == [_VALID]
+    assert htmls == [_SEALED_VALID]
     assert calls["n"] == 2
 
 
@@ -749,7 +787,7 @@ def test_author_deck_retries_semantic_failure_with_bounded_correction(monkeypatc
     monkeypatch.setattr(author_deck_mod, "author_slide_html", flaky)
     htmls = _run(author_deck(_outline(1), _brand())).htmls
 
-    assert htmls == [_VALID]
+    assert htmls == [_SEALED_VALID]
     assert hints[0] is None
     assert "Every rendered HTML element" in hints[1]
     assert "data-qid" in hints[1]
@@ -767,7 +805,7 @@ def test_author_deck_stops_after_one_bounded_semantic_correction(monkeypatch):
     monkeypatch.setattr(author_deck_mod, "author_slide_html", flaky)
     htmls = _run(author_deck(_outline(1), _brand())).htmls
 
-    assert htmls == [_VALID]
+    assert htmls == [_SEALED_VALID]
     assert len(calls) == 2
     assert calls[0].get("correction_hint") is None
     assert "first rejected element was <section>" in calls[1]["correction_hint"]
@@ -824,7 +862,7 @@ def test_author_deck_retries_local_renderer_failure_with_rejected_html(monkeypat
 
     monkeypatch.setattr(author_deck_mod, "author_slide_html", flaky)
 
-    assert _run(author_deck(_outline(1), _brand())).htmls == [_VALID]
+    assert _run(author_deck(_outline(1), _brand())).htmls == [_SEALED_VALID]
     assert calls[0].get("rejected_html") is None
     assert calls[1]["rejected_html"] == rejected_html
     assert "pseudo-element" in calls[1]["correction_hint"]
@@ -845,13 +883,19 @@ def test_author_deck_fails_closed_after_one_local_renderer_correction(monkeypatc
 
     monkeypatch.setattr(author_deck_mod, "author_slide_html", always_rejected)
 
-    with pytest.raises(RendererPolicyError, match="CSS declaration is malformed"):
+    # A deterministic renderer rejection that survives the one bounded
+    # correction is reported as an exhausted slide call budget, carrying the
+    # renderer detail and the last rejected html instead of a placeholder.
+    with pytest.raises(AuthoredProviderBudgetExhausted) as captured:
         _run(
             author_deck_mod._author_one_resilient(
                 "slide", "design", _brand(), "COVER", 0, 1, raise_on_failure=True
             )
         )
 
+    assert captured.value.code == "authored_renderer_css_declaration_budget_exhausted"
+    assert captured.value.detail == "CSS declaration is malformed"
+    assert captured.value.rejected_html == rejected_html
     assert len(calls) == 2
     assert calls[0].get("rejected_html") is None
     assert calls[1]["rejected_html"] == rejected_html
@@ -1033,7 +1077,10 @@ def test_temporary_authored_render_preserves_sub_12px_source_css(monkeypatch):
     assert rendered == [html.encode("utf-8") for html in htmls]
 
 
-def test_authored_render_cache_version_separates_pre_font_floor_entries(monkeypatch):
+def test_authored_render_cache_identity_version_separates_stale_entries(monkeypatch):
+    # The in-process render LRU is keyed by the cache identity digest, whose
+    # version string is the invalidation contract: bumping it must never serve
+    # pixels rendered under the previous identity.
     calls = 0
 
     async def fake_uncached(html, timeout=60):
@@ -1044,13 +1091,16 @@ def test_authored_render_cache_version_separates_pre_font_floor_entries(monkeypa
     slide_capture._render_cache.clear()
     slide_capture._render_inflight.clear()
     monkeypatch.setattr(slide_capture, "_render_html_to_png_uncached", fake_uncached)
-    monkeypatch.setattr(slide_capture, "RENDER_CACHE_VERSION", "legacy-9pt-floor")
+    monkeypatch.setattr(
+        slide_capture, "CACHE_IDENTITY_VERSION", "authored-render-cache-identity/v1"
+    )
+    assert _run(slide_capture.render_html_to_png(_VALID)) == b"render-1"
     assert _run(slide_capture.render_html_to_png(_VALID)) == b"render-1"
 
     monkeypatch.setattr(
         slide_capture,
-        "RENDER_CACHE_VERSION",
-        "authored-render-v3-preserve-authored-font-size",
+        "CACHE_IDENTITY_VERSION",
+        "authored-render-cache-identity/v2-capability-registry",
     )
     assert _run(slide_capture.render_html_to_png(_VALID)) == b"render-2"
     assert calls == 2
@@ -1180,22 +1230,28 @@ def test_author_slide_style_reference_enforces_screen_font_floor(monkeypatch):
     assert len(calls) == 1
 
 
-def test_author_slide_style_reference_preserves_text_only_fallback(monkeypatch, tmp_path):
+def test_author_slide_style_reference_failure_is_one_receipted_provider_outcome(
+    monkeypatch, tmp_path
+):
+    # A multimodal provider failure used to downgrade silently to a second,
+    # text-only call. Every authored provider call is now receipted against the
+    # two-call slide budget, so the failure surfaces as a content-free provider
+    # outcome after exactly one call and the deck owns the single recovery.
     calls = _capture_author_requests(monkeypatch, [RuntimeError("vision unavailable"), _VALID])
 
-    html = _run(
-        author_slide_mod.author_slide_html(
-            "content", "DESIGN", _brand(), "COVER", 0, 1,
-            reference_images=[_reference_image(tmp_path)],
+    with pytest.raises(ProviderOutcomeError) as captured:
+        _run(
+            author_slide_mod.author_slide_html(
+                "content", "DESIGN", _brand(), "COVER", 0, 1,
+                reference_images=[_reference_image(tmp_path)],
+            )
         )
-    )
 
-    assert html == _CANONICAL_VALID
-    assert len(calls) == 2
+    assert captured.value.code == "public_provider_bridge_exception"
+    assert captured.value.recovery_allowed is True
+    assert str(captured.value.__cause__) == "vision unavailable"
+    assert len(calls) == 1
     assert isinstance(_author_user_content(calls[0]), list)
-    assert _author_user_content(calls[1]) == _author_user_content(calls[0])[0].text.split(
-        "\n\nVISUAL REFERENCES", 1
-    )[0]
 
 
 def test_author_slide_exact_reconstruction_uses_fidelity_prompt(monkeypatch, tmp_path):
@@ -1247,9 +1303,8 @@ def test_author_slide_exact_reconstruction_never_retries_without_the_image(
     monkeypatch, tmp_path
 ):
     calls = _capture_author_requests(monkeypatch, [RuntimeError("vision unavailable")])
-    monkeypatch.setattr(author_slide_mod, "handle_llm_client_exceptions", lambda error: error)
 
-    with pytest.raises(RuntimeError, match="vision unavailable"):
+    with pytest.raises(ProviderOutcomeError, match="public_provider_bridge_exception") as captured:
         _run(
             author_slide_mod.author_slide_html(
                 "content", "DESIGN", _brand(), "COVER", 0, 1,
@@ -1258,6 +1313,7 @@ def test_author_slide_exact_reconstruction_never_retries_without_the_image(
             )
         )
 
+    assert str(captured.value.__cause__) == "vision unavailable"
     assert len(calls) == 1
     assert isinstance(_author_user_content(calls[0]), list)
 
@@ -1309,7 +1365,7 @@ def test_author_deck_builds_and_shares_selected_design_system_once(monkeypatch):
     assert len(build_calls) == 1
     assert build_calls[0][1] is style
     assert result == AuthoredDeckResult(
-        htmls=[_VALID, _VALID, _VALID], design_system="SELECTED DESIGN SYSTEM"
+        htmls=[_SEALED_VALID] * 3, design_system="SELECTED DESIGN SYSTEM"
     )
     assert author_design_systems == ["SELECTED DESIGN SYSTEM"] * 3
 
@@ -1372,7 +1428,7 @@ def test_author_deck_propagates_exact_reference_mode(monkeypatch, tmp_path):
 
     result = _run(author_deck(_outline(1), _brand(), style))
 
-    assert result.htmls == [_VALID]
+    assert result.htmls == [_SEALED_VALID]
     assert captured == [((cover,), EXACT_RECONSTRUCTION)]
 
 
@@ -1476,9 +1532,17 @@ def test_vision_qa_reuses_selected_design_system(monkeypatch):
         return [SlideCritique(needs_fix=True)]
 
     async def fake_author(
-        content, design_system, brand, role, index, n, reasoning_effort=None
+        content, design_system, brand, role, index, n, reasoning_effort=None, **kwargs
     ):
-        captured.append((design_system, reasoning_effort))
+        captured.append(
+            (
+                design_system,
+                reasoning_effort,
+                kwargs["receipt_retry_class"],
+                kwargs["receipt_attempt_ordinal"],
+                kwargs["allow_provider_fallback"],
+            )
+        )
         return _VALID
 
     async def fake_render(html, timeout=60):
@@ -1499,7 +1563,9 @@ def test_vision_qa_reuses_selected_design_system(monkeypatch):
         )
     )
 
-    assert captured == [("SELECTED DESIGN SYSTEM", "high")]
+    # The full re-author is the slide's one receipted recovery call; it must
+    # never downgrade to an unreceipted text-only provider fallback.
+    assert captured == [("SELECTED DESIGN SYSTEM", "high", "recovery", 2, False)]
     assert htmls == [_VALID]
     assert pngs == [b"revised-png"]
     assert fixed == [0]
@@ -1679,7 +1745,9 @@ def test_source_reflow_residual_repairs_are_checkpointed_before_retry(monkeypatc
         fake_complete,
     )
     job_id = uuid.uuid4()
-    job = SimpleNamespace(id=job_id, attempt_token="attempt-3")
+    job = SimpleNamespace(
+        id=job_id, attempt_token="attempt-3", _workspace_fencing_token=7
+    )
     error = author_vision_qa_mod.AuthoredVqaResidualDomIssuesError(
         "2:available:1",
         htmls=["original", "patched-html"],
@@ -1690,12 +1758,15 @@ def test_source_reflow_residual_repairs_are_checkpointed_before_retry(monkeypatc
 
     _run(authored_generation_mod._checkpoint_source_reflow_vqa_repairs(job, error))
 
+    # Every checkpoint write is fenced by the workspace lease token, and an
+    # unavailable browser probe is persisted as explicit empty evidence.
     assert calls == [
         {
             "job_id": job_id,
             "slide_index": 1,
             "stage": "illustrate",
             "attempt_token": "attempt-3",
+            "fencing_token": 7,
             "html": "patched-html",
         },
         {
@@ -1703,7 +1774,10 @@ def test_source_reflow_residual_repairs_are_checkpointed_before_retry(monkeypatc
             "slide_index": 1,
             "stage": "render",
             "attempt_token": "attempt-3",
+            "fencing_token": 7,
+            "html": "patched-html",
             "png": b"patched-png",
+            "browser_metrics": {},
         },
     ]
 
@@ -2092,7 +2166,7 @@ def test_vision_qa_subset_preserves_absolute_slide_position(monkeypatch):
         return [SlideCritique(needs_fix=True)]
 
     async def fake_author(
-        content, design_system, brand, role, index, n, reasoning_effort=None
+        content, design_system, brand, role, index, n, reasoning_effort=None, **kwargs
     ):
         captured.append((index, n))
         return _VALID
@@ -2132,7 +2206,7 @@ def test_vision_qa_pipelines_fast_slide_fix_before_slowest_review(monkeypatch):
             return [SlideCritique(needs_fix=True)]
 
         async def fake_author(
-            content, design_system, brand, role, index, n, reasoning_effort=None
+            content, design_system, brand, role, index, n, reasoning_effort=None, **kwargs
         ):
             if index == 0:
                 first_correction_started.set()
@@ -2451,7 +2525,7 @@ def test_vision_qa_exact_same_role_slides_keep_distinct_per_slide_sources(
 
 
 def test_authored_service_resolves_passes_and_persists_canonical_style(
-    monkeypatch, fake_async_session
+    monkeypatch, tmp_path
 ):
     selected_style = SimpleNamespace(id="editorial", brief="- Editorial")
     captured = {}
@@ -2521,20 +2595,23 @@ def test_authored_service_resolves_passes_and_persists_canonical_style(
     )
     monkeypatch.setattr(llm_provider, "get_model", lambda: "stub-model")
 
-    session = fake_async_session
     request = GeneratePresentationRequest(
         content="topic",
         template="authored",
         authored_style="editorial-alias",
         vision_qa=True,
     )
-    result = _run(
-        authored_service.generate_authored_presentation(
-            request, uuid.uuid4(), _outline(1), "English", session
+    owner_id = uuid.uuid4()
+    owner_token = set_current_owner_id(owner_id)
+    try:
+        result, presentation = _run(
+            _generate_on_sqlite(tmp_path, request, _outline(1), "English")
         )
-    )
-    presentation = next(x for x in session.added if isinstance(x, PresentationModel))
+    finally:
+        reset_current_owner_id(owner_token)
 
+    # Persisting an authored deck is owner-scoped; the row binds the caller.
+    assert presentation.owner_id == owner_id
     assert captured["style"] is selected_style
     # The default contract asks for no numbering, so the pipeline is driven with
     # the unnumbered mode rather than the historical always-numbered default.
@@ -2548,7 +2625,7 @@ def test_authored_service_resolves_passes_and_persists_canonical_style(
 
 
 def test_a_design_replay_is_authored_rather_than_dumped_verbatim(
-    monkeypatch, fake_async_session
+    monkeypatch, tmp_path
 ):
     """Retemplating re-authors the source text against the newly chosen style.
 
@@ -2617,15 +2694,16 @@ def test_a_design_replay_is_authored_rather_than_dumped_verbatim(
         authored_style="editorial",
     )
     request._authored_design_replay = True
-    result = _run(
-        authored_service.generate_authored_presentation(
-            request, uuid.uuid4(), _outline(1), "Korean", fake_async_session
+    owner_id = uuid.uuid4()
+    owner_token = set_current_owner_id(owner_id)
+    try:
+        result, presentation = _run(
+            _generate_on_sqlite(tmp_path, request, _outline(1), "Korean")
         )
-    )
-    presentation = next(
-        x for x in fake_async_session.added if isinstance(x, PresentationModel)
-    )
+    finally:
+        reset_current_owner_id(owner_token)
 
+    assert presentation.owner_id == owner_id
     assert captured["authored"] is True
     # A replay gets the same frozen deck chrome as any other authored deck.
     assert captured["header_contract"] is not None
@@ -3036,12 +3114,14 @@ def test_is_authored_predicate():
         content="x", n_slides=1, language="ko", theme={"mode": "authored"},
         layout={"name": "ignored"},
     )
-    by_null_layout = PresentationModel(content="x", n_slides=1, language="ko")
+    without_mode_or_sentinel = PresentationModel(content="x", n_slides=1, language="ko")
     templated = PresentationModel(
         content="x", n_slides=1, language="ko", layout={"name": "adaptive"},
     )
     assert by_theme.is_authored() is True
-    assert by_null_layout.is_authored() is True
+    # A missing React layout is no longer an authored sentinel: the mode column
+    # is backfilled for legacy rows and only the theme sentinel still counts.
+    assert without_mode_or_sentinel.is_authored() is False
     assert templated.is_authored() is False
 
 

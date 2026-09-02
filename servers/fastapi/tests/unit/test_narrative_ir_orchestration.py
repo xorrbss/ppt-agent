@@ -228,48 +228,133 @@ def test_content_graph_dual_lane_seals_every_unit_and_fails_closed() -> None:
             content_graph=graph,
         )
 
-    integrity_pages = []
-    for page in graph.pages:
-        unit_ids = tuple(unit.content_unit_id for unit in page.content_units)
-        digest = canonical_digest(
-            [unit.content_digest for unit in page.content_units]
-        )
-        assets = tuple(
-            unit.payload.asset_occurrence_id
-            for unit in page.content_units
-            if unit.payload.asset_occurrence_id is not None
-        )
-        integrity_pages.append(
-            {
-                "pageIndex": page.page_index,
-                "expectedContentUnitIds": unit_ids,
-                "boundContentUnitIds": unit_ids,
-                "renderedContentUnitIds": unit_ids,
-                "expectedDigest": digest,
-                "boundDigest": digest,
-                "renderedDigest": digest,
-                "expectedAssetOccurrences": assets,
-                "renderedAssetOccurrences": assets,
-                "sourceOwnershipDigest": canonical_digest(
-                    [
-                        ownership.model_dump(mode="json", by_alias=True)
-                        for unit in page.content_units
-                        for ownership in unit.source_ownership
-                    ]
-                ),
-            }
-        )
+    # The receipt is bound to one durable attempt (operation, job, attempt token
+    # and lease fence) and carries the sealed provider call budget it consumed.
+    job_id = UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+    attempt_binding_digest = canonical_digest(
+        {
+            "operationId": str(operation_id),
+            "jobId": str(job_id),
+            "attemptToken": "attempt-1",
+            "fencingToken": 3,
+        }
+    )
+
+    def provider_call_budget(*, actual_calls: int) -> dict[str, object]:
+        return {
+            "schemaVersion": "narrative-provider-call-budget/v1",
+            "maximumLogicalCalls": 2,
+            "maximumPhysicalCalls": 2,
+            "actualLogicalCalls": actual_calls,
+            "actualPhysicalCalls": actual_calls,
+            "reservations": [
+                {
+                    "reservationId": f"{job_id}:narrative:{ordinal}",
+                    "purpose": "narrative.initial" if ordinal == 1 else "narrative.recovery",
+                    "logicalOrdinal": ordinal,
+                    "physicalOrdinal": ordinal,
+                }
+                for ordinal in range(1, actual_calls + 1)
+            ],
+        }
+
+    def integrity_pages_for(sealed_graph) -> list[dict[str, object]]:
+        pages_out: list[dict[str, object]] = []
+        for page in sealed_graph.pages:
+            unit_ids = tuple(unit.content_unit_id for unit in page.content_units)
+            digest = canonical_digest(
+                [unit.content_digest for unit in page.content_units]
+            )
+            assets = tuple(
+                unit.payload.asset_occurrence_id
+                for unit in page.content_units
+                if unit.payload.asset_occurrence_id is not None
+            )
+            protected_chrome_digest = canonical_digest(
+                {"protectedChrome": page.page_id}
+            )
+            pages_out.append(
+                {
+                    "pageIndex": page.page_index,
+                    "expectedContentUnitIds": unit_ids,
+                    "boundContentUnitIds": unit_ids,
+                    "renderedContentUnitIds": unit_ids,
+                    "expectedDigest": digest,
+                    "boundDigest": digest,
+                    "renderedDigest": digest,
+                    "expectedAssetOccurrences": assets,
+                    "renderedAssetOccurrences": assets,
+                    "sourceOwnershipDigest": canonical_digest(
+                        [
+                            ownership.model_dump(mode="json", by_alias=True)
+                            for unit in page.content_units
+                            for ownership in unit.source_ownership
+                        ]
+                    ),
+                    "expectedProtectedChromeDigest": protected_chrome_digest,
+                    "observedProtectedChromeDigest": protected_chrome_digest,
+                    "browserReadbackDigest": canonical_digest(
+                        {"browserReadback": page.page_id, "units": list(unit_ids)}
+                    ),
+                }
+            )
+        return pages_out
+
+    integrity_pages = integrity_pages_for(graph)
     receipt = seal_content_integrity_receipt(
         operation_id=operation_id,
+        attempt_binding_digest=attempt_binding_digest,
         source_revision=1,
         result_revision=2,
         generation_lane="new-authoring",
         content_graph_digest=graph.content_graph_digest,
         route_strategy_receipt_digest="sha256:" + "4" * 64,
         narrative_digest=narrative.narrative_digest,
+        preserve_source_input_digest=None,
+        provider_call_budget=provider_call_budget(actual_calls=1),
         pages=integrity_pages,
     )
     assert receipt.status == "passed" and receipt.required_coverage == 1.0
+    assert receipt.attempt_binding_digest == attempt_binding_digest
+    assert receipt.provider_call_budget.actual_physical_calls == 1
+    assert receipt.provider_call_budget_digest == canonical_digest(
+        receipt.provider_call_budget.model_dump(mode="json", by_alias=True)
+    )
+
+    # The preserve-source lane seals the same page evidence against the sealed
+    # input digest instead of a narrative, and it may not consume provider calls.
+    preserve_receipt = seal_content_integrity_receipt(
+        operation_id=operation_id,
+        attempt_binding_digest=attempt_binding_digest,
+        source_revision=1,
+        result_revision=2,
+        generation_lane="preserve-source",
+        content_graph_digest=preserve_graph.content_graph_digest,
+        route_strategy_receipt_digest="sha256:" + "4" * 64,
+        narrative_digest=None,
+        preserve_source_input_digest=preserve_input.input_digest,
+        provider_call_budget=provider_call_budget(actual_calls=0),
+        pages=integrity_pages_for(preserve_graph),
+    )
+    assert preserve_receipt.status == "passed"
+    assert preserve_receipt.preserve_source_input_digest == preserve_input.input_digest
+    with pytest.raises(
+        ContentGraphValidationError, match="content_integrity_receipt_invalid"
+    ):
+        seal_content_integrity_receipt(
+            operation_id=operation_id,
+            attempt_binding_digest=attempt_binding_digest,
+            source_revision=1,
+            result_revision=2,
+            generation_lane="preserve-source",
+            content_graph_digest=preserve_graph.content_graph_digest,
+            route_strategy_receipt_digest="sha256:" + "4" * 64,
+            narrative_digest=None,
+            preserve_source_input_digest=preserve_input.input_digest,
+            provider_call_budget=provider_call_budget(actual_calls=1),
+            pages=integrity_pages_for(preserve_graph),
+        )
+
     failed_page = dict(integrity_pages[0])
     failed_page["renderedContentUnitIds"] = ()
     with pytest.raises(
@@ -278,12 +363,15 @@ def test_content_graph_dual_lane_seals_every_unit_and_fails_closed() -> None:
     ):
         seal_content_integrity_receipt(
             operation_id=operation_id,
+            attempt_binding_digest=attempt_binding_digest,
             source_revision=1,
             result_revision=2,
             generation_lane="new-authoring",
             content_graph_digest=graph.content_graph_digest,
             route_strategy_receipt_digest="sha256:" + "4" * 64,
             narrative_digest=narrative.narrative_digest,
+            preserve_source_input_digest=None,
+            provider_call_budget=provider_call_budget(actual_calls=1),
             pages=[failed_page, integrity_pages[1]],
         )
 
