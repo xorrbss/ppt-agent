@@ -34,7 +34,7 @@ def test_provider_runtime_revision_is_single_head_and_round_trips(
             inspector = inspect(connection)
             assert TABLES.issubset(inspector.get_table_names())
             assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-                migrations.REVISION_PROVIDER_RUNTIME_RESERVATIONS
+                migrations.HEAD_REVISION
             )
             budget_foreign_keys = {
                 (
@@ -59,7 +59,7 @@ def test_provider_runtime_revision_is_single_head_and_round_trips(
         with engine.connect() as connection:
             assert TABLES.issubset(inspect(connection).get_table_names())
             assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-                migrations.REVISION_PROVIDER_RUNTIME_RESERVATIONS
+                migrations.HEAD_REVISION
             )
     finally:
         engine.dispose()
