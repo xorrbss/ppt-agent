@@ -14,7 +14,8 @@
     "A page is exempt only when it carries neither a block repeated on at least half the deck's pages nor its own page number.",
     "Exempt slides receive no header contract at all: no band brief, no requirement slot, no chapter breadcrumb, and no header validation.",
     "Every other slide still reproduces the deck's one header design exactly.",
-    "Decks with no source content (ordinary authored generation, page remake, quality review) keep an empty exemption set and are unchanged."
+    "Decks with no source content (ordinary authored generation, page remake, quality review) keep an empty exemption set and are unchanged.",
+    "Whether a restyled deck prints page numbers follows the source manifest, not the header-contract call: a source that numbers its own pages is always authored in template page-number mode."
   ],
   "forbidden": [
     "Require a header band on a page whose source has none.",
@@ -23,7 +24,8 @@
   "rationale": [
     "Operation ce48036c spent both of slide 35's provider calls, and then the deck, on header_band_missing: the source closing page is a logo, a statement, a subtitle and a footer, with no running header and no page number, so the model composed it full-bleed and the contract rejected a faithful composition.",
     "Role exclusion already existed for COVER and SECTION but is positional and keyword-derived, which cannot see that a particular source page has no header.",
-    "Measured on the real 35-page deck: exactly pages 1 and 35 are exempt, and all 33 content pages carry both the running header and their number."
+    "Measured on the real 35-page deck: exactly pages 1 and 35 are exempt, and all 33 content pages carry both the running header and their number.",
+    "The contract call judges a deck's design from a content sample and answered pageNumbers=False on the same 35-page source it had answered True for; that run instructed every slide to render no page number and no footer text, and then failed 8 slides for the missing source text."
   ],
   "evidence": [
     "servers/fastapi/services/source_content/header_pages.py",

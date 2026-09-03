@@ -67,6 +67,8 @@ from services.authored_deck_plan_checkpoint import (
     canonical_checkpoint_digest,
     resolve_with_authored_deck_plan_checkpoint,
 )
+from utils.llm_calls.author_slide import TEMPLATE_PAGE_NUMBER_MODE as _TEMPLATE_PAGE_NUMBER_MODE
+from services.source_content.header_pages import source_pages_are_numbered
 from services.authored_header_contract_service import (
     page_number_mode_for,
     resolve_header_contract,
@@ -2096,7 +2098,16 @@ async def _generate_authored_presentation(
         )
     pipeline_kwargs = {
         "header_contract": header_contract,
-        "page_number_mode": page_number_mode_for(header_contract),
+        # A restyle reproduces the source's own page numbers, so the source
+        # decides whether this deck is numbered. The contract call reads a
+        # content sample and judges the deck's design, which on identical
+        # input answered False and instructed every slide to render no page
+        # number and no footer -- exactly the source text it then failed on.
+        "page_number_mode": (
+            _TEMPLATE_PAGE_NUMBER_MODE
+            if source_pages_are_numbered(source_text_bindings)
+            else page_number_mode_for(header_contract)
+        ),
         "chapter_plan": chapter_plan,
         "illustration_plan": illustration_plan,
         "instructions": request.instructions,

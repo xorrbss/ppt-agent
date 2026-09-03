@@ -28,6 +28,30 @@ _RUNNING_HEADER_SHARE = 0.5
 _PAGE_NUMBER = re.compile(r"0*\d{1,3}")
 
 
+def source_pages_are_numbered(
+    bindings: Sequence[Sequence[tuple[str, str]]] | None,
+) -> bool:
+    """Whether the source itself prints a page number on its pages.
+
+    In a verbatim restyle a page number is not deck furniture the design may
+    decide about: it is source text the deck must reproduce.  Asking a model
+    whether the deck "looks numbered" answers a different question and answered
+    it differently on identical input, which told the slides to render no page
+    number and no footer at all -- and then failed them for the missing text.
+    """
+
+    if not bindings:
+        return False
+    numbered = 0
+    for index, page in enumerate(bindings):
+        for _, text in page:
+            normalized = normalize_source_text(text)
+            if _PAGE_NUMBER.fullmatch(normalized) and int(normalized) == index + 1:
+                numbered += 1
+                break
+    return numbered >= max(2, int(len(bindings) * _RUNNING_HEADER_SHARE))
+
+
 def header_absent_pages(
     bindings: Sequence[Sequence[tuple[str, str]]] | None,
 ) -> frozenset[int]:
@@ -59,4 +83,4 @@ def header_absent_pages(
     return frozenset(absent)
 
 
-__all__ = ["header_absent_pages"]
+__all__ = ["header_absent_pages", "source_pages_are_numbered"]

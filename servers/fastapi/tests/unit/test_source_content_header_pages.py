@@ -10,7 +10,10 @@ on ``header_band_missing``.
 
 from __future__ import annotations
 
-from services.source_content.header_pages import header_absent_pages
+from services.source_content.header_pages import (
+    header_absent_pages,
+    source_pages_are_numbered,
+)
 from utils.llm_calls.author_deck import AuthoredDeckPlan
 
 
@@ -103,3 +106,32 @@ def test_the_plan_hands_an_exempt_slide_no_contract(monkeypatch) -> None:
     )
     assert plan.header_contract_at(0) is contract
     assert plan.header_contract_at(1) is None
+
+
+def test_the_source_decides_whether_a_restyled_deck_is_numbered() -> None:
+    """Page numbers are source text here, not a design decision.
+
+    The header-contract call reads a content sample and judges whether the deck
+    "looks numbered". On identical input it answered True on one run and False
+    on the next, and the False run told every slide to render no page number
+    and no footer text -- then failed those slides for the missing source text.
+    """
+
+    assert source_pages_are_numbered(_deck()) is True
+    unnumbered = [
+        [("a", "표지")],
+        [("b", "첫 주제"), ("c", RUNNING_HEADER)],
+        [("d", "둘째 주제"), ("e", RUNNING_HEADER)],
+        [("f", "셋째 주제"), ("g", RUNNING_HEADER)],
+    ]
+    assert source_pages_are_numbered(unnumbered) is False
+    # A number that is not this page's own is content, not pagination.
+    stale = [
+        [("a", "표지")],
+        [("b", "10곳 찾기"), ("c", "10")],
+        [("d", "둘째"), ("e", "10")],
+        [("f", "셋째"), ("g", "10")],
+    ]
+    assert source_pages_are_numbered(stale) is False
+    assert source_pages_are_numbered(None) is False
+    assert source_pages_are_numbered([]) is False
