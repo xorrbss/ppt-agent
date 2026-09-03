@@ -701,6 +701,38 @@ def _author_retry_correction(
     )
 
 
+def author_correction_from_stored_failure(error: object) -> str | None:
+    """Corrective guidance for a slide a previous operation attempt failed.
+
+    The durable checkpoint keeps the reason the slide was rejected -- a header
+    contract violation, missing source text, a capacity overflow.  Re-sending
+    the identical prompt on the next attempt reproduces the same rejection, so
+    the reason is replayed as the correction the in-slide retry would have
+    used.  Unknown shapes yield ``None`` and the attempt starts clean.
+    """
+
+    if not isinstance(error, Mapping):
+        return None
+    parts: list[str] = []
+    for candidate in (error, error.get("prior_failure")):
+        if not isinstance(candidate, Mapping):
+            continue
+        cause = str(candidate.get("cause") or "").strip()
+        code = str(candidate.get("code") or "").strip()
+        detail = cause or str(candidate.get("message") or "").strip()
+        if detail and detail not in parts and not detail.startswith("Authored slide"):
+            parts.append(detail)
+        elif code and code not in parts and not detail:
+            parts.append(code)
+    if not parts:
+        return None
+    return (
+        "A previous attempt at this slide was rejected: "
+        + "; ".join(parts[:2])[:400]
+        + ". Fix exactly that and keep every other rule."
+    )
+
+
 def derive_role(index: int, n: int, content: str) -> str:
     """Per-slide ROLE for the authoring prompt, from position + content keywords."""
     if index == 0:
@@ -914,6 +946,7 @@ async def _author_one_resilient(
     attempt_observer: Callable[[int], None] | None = None,
     provider_attempt_offset: int = 0,
     attempt_reserver: Callable[[int], Awaitable[None]] | None = None,
+    prior_failure_hint: str | None = None,
 ) -> str:
     """Author one slide with one explicit correction and a branded fallback.
 
@@ -937,7 +970,10 @@ async def _author_one_resilient(
         raise ValueError("authored provider attempt offset must be 0 or 1")
     attempts_made = 0
     header_reject: str | None = None
-    correction_hint: str | None = None
+    # A correction learned in an earlier attempt of the same operation. Without
+    # it a retry that exists to redo one failed slide re-sends the prompt that
+    # already failed and reproduces the same rejection.
+    correction_hint: str | None = prior_failure_hint or None
     rejected_html: str | None = None
     title_recovery: tuple[str, tuple[str, ...]] | None = None
     while provider_attempt_offset + attempts_made < _MAX_AUTHOR_CALLS_PER_SLIDE:
@@ -1634,6 +1670,7 @@ async def author_planned_slide(
     attempt_observer: Callable[[int], None] | None = None,
     provider_attempt_offset: int = 0,
     attempt_reserver: Callable[[int], Awaitable[None]] | None = None,
+    prior_failure_hint: str | None = None,
 ) -> str:
     """Author one planned slide; safe to compose with illustration/render stages.
 
@@ -1697,6 +1734,7 @@ async def author_planned_slide(
         attempt_observer=attempt_observer,
         provider_attempt_offset=provider_attempt_offset,
         attempt_reserver=attempt_reserver,
+        prior_failure_hint=prior_failure_hint,
     )
 
 

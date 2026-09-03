@@ -82,6 +82,7 @@ from utils.authored_illustrations import (
 from utils.authored_font_policy import enforce_authored_font_floor
 from utils.authored_dom_quality import ensure_authored_qids, inspect_authored_dom
 from utils.llm_calls.author_deck import (
+    author_correction_from_stored_failure,
     AuthoredBatchFailure,
     AuthoredProviderBudgetExhausted,
     AuthoredDeckResult,
@@ -568,6 +569,11 @@ async def _author_illustrate_render_pipeline(
         resumed_recovery: list[int] = []
         failures: dict[int, AuthoredBatchFailure] = {}
         successful: set[int] = set()
+        # Why an earlier attempt of this operation rejected a slide. A retry
+        # exists to redo exactly those slides, and re-sending the prompt that
+        # already failed reproduces the same rejection, so the reason travels
+        # with the slide as its correction.
+        carried_failures: dict[int, AuthoredBatchFailure] = {}
         for index in range(len(plan.contents)):
             checkpoint = (
                 await get_checkpoint(
@@ -588,6 +594,13 @@ async def _author_illustrate_render_pipeline(
                 continue
             prior = _checkpoint_provider_attempt_count(checkpoint)
             preauthored_attempt_counts[index] = prior
+            carried_hint = author_correction_from_stored_failure(
+                getattr(checkpoint, "error", None)
+            )
+            if carried_hint:
+                carried_failures[index] = AuthoredBatchFailure(
+                    RuntimeError("authored_prior_attempt_failed"), carried_hint
+                )
             if prior >= 2:
                 prior_error = (
                     checkpoint.error
@@ -614,9 +627,12 @@ async def _author_illustrate_render_pipeline(
                 failures[index] = AuthoredBatchFailure(error, str(error))
             elif prior == 1:
                 resumed_recovery.append(index)
-                failures[index] = AuthoredBatchFailure(
-                    RuntimeError("authored_prior_attempt_failed"),
-                    "Regenerate this slide while obeying every original contract.",
+                failures[index] = carried_failures.get(
+                    index,
+                    AuthoredBatchFailure(
+                        RuntimeError("authored_prior_attempt_failed"),
+                        "Regenerate this slide while obeying every original contract.",
+                    ),
                 )
             else:
                 initial.append(index)
@@ -630,7 +646,7 @@ async def _author_illustrate_render_pipeline(
                     _run_author_batch(
                         batch.slide_indices,
                         recovery=False,
-                        prior_failures={},
+                        prior_failures=carried_failures,
                     )
                     for batch in wave.batches
                 ),
@@ -910,6 +926,13 @@ async def _author_illustrate_render_pipeline(
                                 author_kwargs["provider_attempt_offset"] = (
                                     prior_provider_attempt_count
                                 )
+                            carried_hint = author_correction_from_stored_failure(
+                                getattr(checkpoint, "error", None)
+                            )
+                            if carried_hint and "prior_failure_hint" in inspect.signature(
+                                author_planned_slide
+                            ).parameters:
+                                author_kwargs["prior_failure_hint"] = carried_hint
                             if (
                                 generation_job is not None
                                 and "attempt_reserver" in inspect.signature(

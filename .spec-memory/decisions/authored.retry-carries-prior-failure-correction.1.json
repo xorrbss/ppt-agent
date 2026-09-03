@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.retry-carries-prior-failure-correction",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "A slide re-authored by a later operation attempt receives the reason the earlier attempt rejected it as its correction hint, on both the batch and single-slide authoring paths.",
+  "scope": [
+    "authored-generation"
+  ],
+  "invariants": [
+    "The hint is derived only from the slide's own durable checkpoint record, never from another slide or another job.",
+    "Generic wrapper messages carry no instruction and are dropped; the hint is bounded to 400 characters of cause text.",
+    "A checkpoint with no recorded reason yields no hint and the attempt starts clean.",
+    "Carrying a hint never changes the provider ordinal a batch reserves: recovery status still decides that."
+  ],
+  "forbidden": [
+    "Re-send the identical prompt to a slide a previous attempt already rejected when the reason is recorded.",
+    "Let a correction hint widen a slide's provider call budget."
+  ],
+  "rationale": [
+    "Operation ce48036c failed both of slide 35's provider calls on the same header contract violation; an attempt that repeats the prompt reproduces the rejection.",
+    "The in-slide retry loop already sends a correction after a local failure, so the machinery existed and only the durable seam across operation attempts was missing.",
+    "Pairs with authored.provider-attempt-budget-per-operation-attempt: the budget change lets the retry call the provider, and this change tells it what to fix."
+  ],
+  "evidence": [
+    "servers/fastapi/utils/llm_calls/author_deck.py",
+    "servers/fastapi/services/authored_presentation_pipeline.py",
+    "servers/fastapi/tests/unit/test_authored_generation_authority.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-03T01:05:00.0000000+00:00"
+}

@@ -133,7 +133,8 @@
     "source-content.restyle-block-order": "decisions/source-content.restyle-block-order.1.json",
     "source-content.verbatim-presentation-tolerance": "decisions/source-content.verbatim-presentation-tolerance.1.json",
     "source-content.verbatim-presence-contract": "decisions/source-content.verbatim-presence-contract.1.json",
-    "authored.provider-attempt-budget-per-operation-attempt": "decisions/authored.provider-attempt-budget-per-operation-attempt.1.json"
+    "authored.provider-attempt-budget-per-operation-attempt": "decisions/authored.provider-attempt-budget-per-operation-attempt.1.json",
+    "authored.retry-carries-prior-failure-correction": "decisions/authored.retry-carries-prior-failure-correction.1.json"
   },
   "readFirst": [
     "AGENTS.md"

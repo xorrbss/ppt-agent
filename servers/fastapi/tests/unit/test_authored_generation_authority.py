@@ -12,6 +12,7 @@ from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from services import authored_checkpoint_service as checkpoints
 from services.authored_checkpoint_state import provider_attempt_count_in_epoch
+from utils.llm_calls.author_deck import author_correction_from_stored_failure
 from services.authored_checkpoint_errors import AuthoredStageError
 from services.authored_composition_policy import (
     CompositionProfile,
@@ -138,6 +139,45 @@ def test_provider_attempt_count_rejects_unbounded_checkpoint_value() -> None:
         provider_attempt_count=99,
     )
     assert "provider_attempt_count" not in error.as_safe_dict()
+
+
+def test_a_retry_carries_the_reason_the_slide_was_rejected() -> None:
+    """The next attempt must know what to fix, or it repeats the mistake.
+
+    The durable checkpoint already records why a slide was rejected. Operation
+    ce48036c failed both of slide 35's calls on the same header contract
+    violation, so an attempt that re-sends the identical prompt reproduces it.
+    """
+
+    stored = {
+        "code": "authored_provider_attempt_budget_exhausted",
+        "cause": "Authored slide author failed",
+        "prior_failure": {
+            "code": "authored_slide_author_failed",
+            "exception_type": "ValueError",
+            "cause": (
+                "header contract violated: header_band_missing, "
+                "header_title_missing, header_eyebrow_missing"
+            ),
+        },
+    }
+    hint = author_correction_from_stored_failure(stored)
+    assert hint is not None
+    assert "header_band_missing" in hint
+    assert "header_title_missing" in hint
+    # The generic wrapper message says nothing actionable and is dropped.
+    assert "Authored slide author failed" not in hint
+    assert len(hint) <= 460
+
+    # A bare code is still better than nothing; an empty record stays silent.
+    assert "public_provider_retry_limit_exceeded" in (
+        author_correction_from_stored_failure(
+            {"code": "public_provider_retry_limit_exceeded"}
+        )
+        or ""
+    )
+    assert author_correction_from_stored_failure(None) is None
+    assert author_correction_from_stored_failure({}) is None
 
 
 def test_a_later_operation_attempt_gives_a_failed_slide_its_calls_back(
