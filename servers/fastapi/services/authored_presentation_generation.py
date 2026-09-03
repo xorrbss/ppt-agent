@@ -601,6 +601,47 @@ def _callable_accepts_keyword(callable_object, keyword: str) -> bool:
     )
 
 
+#: A critique carries at most this many issues (``SlideCritique.issues``).  The
+#: deterministic gate can report more -- one per offending element -- and
+#: handing the model a longer list raised a validation error that killed the
+#: whole deck instead of repairing the slide.
+_MAX_CRITIQUE_ISSUES = 8
+
+def _bounded_critique_issues(
+    issues: list[CritiqueIssue], *, slide_index: int
+) -> list[CritiqueIssue]:
+    """Fit one slide's gate findings into the critique contract.
+
+    The gate reports per element, so the four boxes that overflowed slide 10 of
+    operation b3e18cc2 produced four identical sentences.  Collapsing those is
+    what makes the cap bite only on genuinely different findings, and it is
+    also the better repair prompt: one instruction beats the same instruction
+    four times.  Anything still over the cap keeps the gate's own reporting
+    order -- every issue it raises here carries the same severity -- and the
+    drop is logged rather than raised, because a slide with many defects is
+    exactly the slide that must reach repair.
+    """
+
+    unique: list[CritiqueIssue] = []
+    seen: set[tuple[str, str, str]] = set()
+    for issue in issues:
+        key = (issue.type, issue.severity, issue.detail)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(issue)
+    if len(unique) <= _MAX_CRITIQUE_ISSUES:
+        return unique
+    LOGGER.warning(
+        "[authored] slide %d reported %d distinct gate issues; repairing the "
+        "first %d",
+        slide_index + 1,
+        len(unique),
+        _MAX_CRITIQUE_ISSUES,
+    )
+    return unique[:_MAX_CRITIQUE_ISSUES]
+
+
 def _capacity_gate_initial_critiques(
     gate_failures: list[dict[str, object]],
     slide_indices: list[int],
@@ -648,7 +689,9 @@ def _capacity_gate_initial_critiques(
         (
             SlideCritique(
                 needs_fix=True,
-                issues=details_by_slide[index],
+                issues=_bounded_critique_issues(
+                    details_by_slide[index], slide_index=index
+                ),
             )
             if details_by_slide.get(index)
             else None
