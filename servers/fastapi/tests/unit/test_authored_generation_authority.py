@@ -11,6 +11,7 @@ from models.sql.async_presentation_generation_status import (
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from services import authored_checkpoint_service as checkpoints
+from services.authored_checkpoint_state import provider_attempt_count_in_epoch
 from services.authored_checkpoint_errors import AuthoredStageError
 from services.authored_composition_policy import (
     CompositionProfile,
@@ -137,6 +138,104 @@ def test_provider_attempt_count_rejects_unbounded_checkpoint_value() -> None:
         provider_attempt_count=99,
     )
     assert "provider_attempt_count" not in error.as_safe_dict()
+
+
+def test_a_later_operation_attempt_gives_a_failed_slide_its_calls_back(
+    tmp_path, monkeypatch
+) -> None:
+    """The ordinal pair fences one attempt; it is not a lifetime cap.
+
+    A deck that fails on one slide is retried to redo that slide.  When the
+    slide's two ordinals stayed spent across attempts the retry could not call
+    the provider at all and failed the whole deck in under a second, so the
+    counter restarts when the fencing token advances and what the slide already
+    cost is kept in ``provider_attempt_total``.
+    """
+
+    async def scenario() -> dict[str, int]:
+        engine = create_async_engine(
+            f"sqlite+aiosqlite:///{tmp_path / 'provider-attempt-epoch.db'}"
+        )
+        async with engine.begin() as connection:
+            await connection.run_sync(
+                SQLModel.metadata.create_all,
+                tables=[
+                    AsyncPresentationGenerationTaskModel.__table__,
+                    PresentationGenerationJob.__table__,
+                    AuthoredSlideCheckpoint.__table__,
+                ],
+            )
+        maker = async_sessionmaker(engine, expire_on_commit=False)
+        monkeypatch.setattr(checkpoints, "async_session_maker", maker)
+        monkeypatch.setenv(
+            "AUTHORED_CHECKPOINT_DIRECTORY", str(tmp_path / "checkpoint-artifacts")
+        )
+        status = AsyncPresentationGenerationTaskModel(status="running")
+        job = PresentationGenerationJob(
+            task_id=status.id,
+            presentation_id=uuid.uuid4(),
+            request_sha256="b" * 64,
+            request_payload={"template": "authored"},
+            state="running",
+            attempt_number=1,
+            attempt_token="attempt-a",
+        )
+        async with maker() as session:
+            session.add_all((status, job))
+            await session.commit()
+        await checkpoints.initialize_checkpoints(
+            job_id=job.id, attempt_token="attempt-a", roles=["CLOSING"]
+        )
+        await checkpoints.start_stage(
+            job_id=job.id, slide_index=0, stage="author", attempt_token="attempt-a"
+        )
+        for ordinal in (1, 2):
+            await checkpoints.reserve_provider_attempt(
+                job_id=job.id,
+                slide_index=0,
+                attempt_token="attempt-a",
+                ordinal=ordinal,
+                fencing_token=1,
+            )
+        exhausted = await checkpoints.get_checkpoint(job.id, 0)
+        spent_in_first = provider_attempt_count_in_epoch(exhausted.error, 1)
+
+        # The operation is retried: a new lease, a new fencing token, the same
+        # durable checkpoint carrying the slides that already succeeded.
+        async with maker() as session:
+            persisted = await session.get(PresentationGenerationJob, job.id)
+            persisted.attempt_token = "attempt-b"
+            persisted.attempt_number = 2
+            session.add(persisted)
+            await session.commit()
+        carried = await checkpoints.get_checkpoint(job.id, 0)
+        remaining = provider_attempt_count_in_epoch(carried.error, 2)
+
+        await checkpoints.start_stage(
+            job_id=job.id, slide_index=0, stage="author", attempt_token="attempt-b"
+        )
+        await checkpoints.reserve_provider_attempt(
+            job_id=job.id,
+            slide_index=0,
+            attempt_token="attempt-b",
+            ordinal=1,
+            fencing_token=2,
+        )
+        retried = await checkpoints.get_checkpoint(job.id, 0)
+        await engine.dispose()
+        return {
+            "spent_in_first": spent_in_first,
+            "remaining": remaining,
+            "in_second": provider_attempt_count_in_epoch(retried.error, 2),
+            "total": int(retried.error["provider_attempt_total"]),
+        }
+
+    assert asyncio.run(scenario()) == {
+        "spent_in_first": 2,
+        "remaining": 0,
+        "in_second": 1,
+        "total": 2,
+    }
 
 
 def test_provider_attempt_reservation_survives_crash_and_fences_stale_worker(

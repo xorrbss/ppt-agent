@@ -175,6 +175,40 @@ async def start_stage(
         return checkpoint
 
 
+def provider_attempt_epoch(metadata: Mapping[str, Any] | None) -> int:
+    """Return the operation attempt the stored provider ordinals belong to."""
+
+    if not isinstance(metadata, Mapping):
+        return 0
+    raw = metadata.get("provider_attempt_epoch")
+    if isinstance(raw, int) and not isinstance(raw, bool) and raw >= 0:
+        return raw
+    return 0
+
+
+def provider_attempt_count_in_epoch(
+    metadata: Mapping[str, Any] | None, epoch: int | None
+) -> int:
+    """Ordinals this slide has spent inside ``epoch``.
+
+    The ordinal pair is a crash fence for one operation attempt: it stops a
+    resumed worker from paying twice for the same call. It is not a lifetime
+    cap on the slide, so a later attempt of the operation -- a new lease, a new
+    fencing token -- starts the slide with its two calls again. Without this
+    the retry that exists to redo one failed slide could not call the provider
+    at all and failed the whole deck in under a second.
+    """
+
+    if not isinstance(metadata, Mapping):
+        return 0
+    raw = metadata.get("provider_attempt_count", 0)
+    current = raw if isinstance(raw, int) and not isinstance(raw, bool) else 0
+    current = min(2, max(0, current))
+    if epoch is None:
+        return current
+    return current if provider_attempt_epoch(metadata) >= int(epoch) else 0
+
+
 async def reserve_provider_attempt(
     *,
     job_id: uuid.UUID,
@@ -190,6 +224,10 @@ async def reserve_provider_attempt(
     lease takeover. Replaying the same ordinal is idempotent; skipping or
     decreasing an ordinal fails closed. The counter lives in the existing JSON
     checkpoint seam so this crash fence needs no schema migration.
+
+    The ordinals are scoped to one operation attempt: when the fencing token
+    advances the slide's counter restarts at zero and the calls it already paid
+    for are added to ``provider_attempt_total`` for cost accounting.
     """
 
     if isinstance(ordinal, bool) or ordinal not in {1, 2}:
@@ -206,6 +244,19 @@ async def reserve_provider_attempt(
             if isinstance(raw_current, int) and not isinstance(raw_current, bool)
             else 0
         )
+        epoch = None if fencing_token is None else int(fencing_token)
+        if epoch is not None and provider_attempt_epoch(metadata) < epoch:
+            # A later attempt of the operation: keep what this slide already
+            # cost, and give it its ordinals back so the retry can run.
+            raw_total = metadata.get("provider_attempt_total", 0)
+            total = (
+                raw_total
+                if isinstance(raw_total, int) and not isinstance(raw_total, bool)
+                else 0
+            )
+            metadata["provider_attempt_total"] = max(0, total) + max(0, current)
+            metadata["provider_attempt_epoch"] = epoch
+            current = 0
         if current not in {0, 1, 2}:
             await mutation_session.rollback()
             raise AuthoredStageError(
@@ -227,6 +278,8 @@ async def reserve_provider_attempt(
             return checkpoint
         metadata["provider_attempt_count"] = ordinal
         metadata["provider_attempt_state"] = "reserved"
+        if epoch is not None:
+            metadata["provider_attempt_epoch"] = epoch
         checkpoint.error = metadata
         checkpoint.attempt_token = attempt_token
         checkpoint.updated_at = get_current_utc_datetime()

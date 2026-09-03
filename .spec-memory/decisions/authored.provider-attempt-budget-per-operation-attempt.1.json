@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.provider-attempt-budget-per-operation-attempt",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "A slide's two provider ordinals fence one operation attempt, not the slide's lifetime: when the fencing token advances the counter restarts and the calls already made move to provider_attempt_total.",
+  "scope": [
+    "authored-generation",
+    "public-v2"
+  ],
+  "invariants": [
+    "Within one operation attempt a slide still admits at most two provider calls, and replaying the same ordinal stays idempotent.",
+    "Skipping or decreasing an ordinal inside an attempt still fails closed.",
+    "A stale worker holding an old attempt token still cannot advance the counter.",
+    "Calls spent in earlier attempts are preserved in provider_attempt_total for cost accounting.",
+    "Total provider calls for one slide stay bounded by the operation's own max_attempts."
+  ],
+  "forbidden": [
+    "Treat the ordinal pair as a lifetime cap so a retry cannot re-author the slide that failed.",
+    "Reset the counter inside a single operation attempt."
+  ],
+  "rationale": [
+    "Per-slide checkpoints already let a retry skip completed slides, so a one-slide failure never needed a whole new deck.",
+    "Measured on operation ce48036c: attempt 1 authored 34 of 35 slides in 15 minutes and slide 35 failed the header contract twice; attempt 2 reused the 34 checkpoints, found the slide's budget spent, and failed in 726 ms without calling the provider once.",
+    "The counter's purpose is a crash fence for one attempt -- do not pay twice for the same call after a lease takeover -- which an epoch preserves exactly."
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_checkpoint_state.py",
+    "servers/fastapi/services/authored_presentation_pipeline.py",
+    "servers/fastapi/tests/unit/test_authored_generation_authority.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-03T00:20:00.0000000+00:00"
+}

@@ -15,6 +15,7 @@ from models.authored_illustration_plan import AuthoredIllustrationPlan
 from models.authored_infographic_plan import AuthoredInfographicPlan
 from models.presentation_outline_model import PresentationOutlineModel
 from models.sql.presentation_generation_job import PresentationGenerationJob
+from services.authored_checkpoint_state import provider_attempt_count_in_epoch
 from services.authored_checkpoint_service import (
     AuthoredStageError,
     fail_stage,
@@ -396,12 +397,18 @@ async def _author_illustrate_render_pipeline(
     preauthored_author_work: dict[int, float] = {}
 
     def _checkpoint_provider_attempt_count(checkpoint: object | None) -> int:
+        """Provider calls this slide has already spent in *this* attempt.
+
+        Ordinals from an earlier attempt of the operation are history: the
+        retry exists to redo the slides that failed, and it cannot do that with
+        an exhausted budget.  ``reserve_provider_attempt`` rolls them into
+        ``provider_attempt_total`` when the fencing token advances.
+        """
+
         error = getattr(checkpoint, "error", None)
-        if isinstance(error, Mapping):
-            raw = error.get("provider_attempt_count")
-            if isinstance(raw, int) and not isinstance(raw, bool):
-                return min(2, max(0, raw))
-        return 0
+        return provider_attempt_count_in_epoch(
+            error if isinstance(error, Mapping) else None, fencing_token
+        )
 
     async def _persist_batch_success(index: int, html: str) -> None:
         if is_fallback_slide_html(html):
@@ -765,14 +772,7 @@ async def _author_illustrate_render_pipeline(
             if generation_job is not None
             else None
         )
-        prior_provider_attempt_count = 0
-        if checkpoint is not None and isinstance(checkpoint.error, Mapping):
-            raw_prior_attempts = checkpoint.error.get("provider_attempt_count")
-            if (
-                isinstance(raw_prior_attempts, int)
-                and not isinstance(raw_prior_attempts, bool)
-            ):
-                prior_provider_attempt_count = min(2, max(0, raw_prior_attempts))
+        prior_provider_attempt_count = _checkpoint_provider_attempt_count(checkpoint)
         author_provider_attempt_count = max(
             author_provider_attempt_count, prior_provider_attempt_count
         )
