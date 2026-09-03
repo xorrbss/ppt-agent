@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.repair-preflight-separates-source-from-decoration",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "A capacity violation ends a restyled slide without a repair call only when it is about an element that owns source text; the model's own decoration is something a repair call can fix.",
+  "scope": [
+    "authored-generation",
+    "source-content"
+  ],
+  "invariants": [
+    "An ordinary authored deck, which owns all of its text, keeps the original classification unchanged.",
+    "A violation that names an element owning source text, or that carries a measurement instead of an element, stays terminal.",
+    "Source ownership is read from the slide's own HTML: an element carrying data-source-block-id, or a deterministic source QID.",
+    "Safety issues are still reported; only the code changes, and the caller already lets a safety classification continue into repair."
+  ],
+  "forbidden": [
+    "End a deck without a repair call because the model's own ornament failed a capacity check.",
+    "Relax the classification for elements that render immutable source text."
+  ],
+  "rationale": [
+    "Operation 3d0b9e72 authored 35 of 35 slides and was ended by slide 16's hero mark: a '+' ornament the browser could not see, clipped, and overlapping the source block beside it. The preflight classified it authored_slide_capacity_exceeded and raised before any repair call.",
+    "Capacity is terminal because verbatim source text cannot be shortened to fit. An ornament is not source text: shrinking, moving or dropping it is exactly what a repair call does.",
+    "Replayed on the stored artifact of that slide the classification moves from authored_slide_capacity_exceeded to authored_composition_safety_gate_failed, which the caller allows into repair."
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_generation_preflight.py",
+    "servers/fastapi/services/authored_presentation_generation.py",
+    "servers/fastapi/tests/unit/test_authored_generation_preflight.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-03T06:35:00.0000000+00:00"
+}

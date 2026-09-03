@@ -91,6 +91,9 @@ def test_generation_info_returns_empty_attachments_and_legacy_default(tmp_path):
                     content="Create a short summary",
                     n_slides=3,
                     language="en",
+                    # Every deck this fork creates is authored; a row with no
+                    # identity described a retired React-template format.
+                    mode="authored",
                 )
             )
             await session.commit()
@@ -122,6 +125,9 @@ def test_generation_info_prefers_the_original_workspace_generation_prompt(tmp_pa
                 content="Generated outline summary that is not the user's prompt",
                 n_slides=90,
                 language="ko",
+                # Every deck this fork creates is authored; a row with no
+                # identity described a retired React-template format.
+                mode="authored",
             )
             conversation = WorkspaceConversation(presentation_id=presentation_id)
             session.add_all([presentation, conversation])
@@ -167,6 +173,9 @@ def test_generation_info_does_not_report_the_attachment_fallback_as_user_prompt(
                 content="Generated Korean outline that replaced the original input",
                 n_slides=90,
                 language="ko",
+                # Every deck this fork creates is authored; a row with no
+                # identity described a retired React-template format.
+                mode="authored",
             )
             conversation = WorkspaceConversation(presentation_id=presentation_id)
             session.add_all([presentation, conversation])

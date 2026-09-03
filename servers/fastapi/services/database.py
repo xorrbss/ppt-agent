@@ -28,7 +28,10 @@ from models.sql.image_asset import ImageAsset
 from models.sql.key_value import KeyValueSqlModel
 from models.sql.ollama_pull_status import OllamaPullStatus
 from models.sql.presentation_layout_code import PresentationLayoutCodeModel
-from models.sql.presentation import PresentationModel
+from models.sql.presentation import (
+    PRESENTATION_LIFECYCLE_DELETED,
+    PresentationModel,
+)
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.presentation_version import PresentationVersionModel
 from models.sql.template import TemplateModel
@@ -429,6 +432,13 @@ def _stamp_new_owned_rows(session, _flush_context, _instances) -> None:
             stamp_presentation_profile(instance)
     for instance in session.dirty:
         if not isinstance(instance, PresentationModel):
+            continue
+        if instance.lifecycle_status == PRESENTATION_LIFECYCLE_DELETED:
+            # A tombstone is not a deck. Deletion deliberately redacts the
+            # theme and the mode, which are two of the identity fields below,
+            # so re-deriving a profile here asked the resolver to describe a
+            # row that has just been emptied on purpose -- and it refused,
+            # which made deleting an authored presentation raise.
             continue
         state = inspect(instance)
         if any(

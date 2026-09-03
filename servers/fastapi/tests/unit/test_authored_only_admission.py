@@ -3,11 +3,9 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from api.v1.ppt.endpoints.presentation_blank import create_blank_presentation
-from api.v1.ppt.endpoints.presentation_generate import (
-    check_if_api_request_is_valid,
-)
 from models.generate_presentation_request import GeneratePresentationRequest
 from models.sql.presentation import PresentationModel
 from services.compatibility_migration.admission import (
@@ -25,9 +23,11 @@ from services.presentation_profiles import resolve_presentation_profile
 @pytest.mark.parametrize(
     ("strategy", "template", "expected"),
     [
-        ("legacy", "default", "standard"),
-        ("adaptive", "adaptive", "smart"),
-        (None, "adaptive", "smart"),
+        # Anything that is neither authored nor template-v2 is one name now.
+        # The retired ``standard`` and ``smart`` drivers went with the React
+        # templates they rendered, which this fork no longer ships.
+        (None, "adaptive", "legacy"),
+        ("legacy", "default", "legacy"),
         ("template_v2", "adaptive", "template-v2"),
         ("authored", "adaptive", "authored"),
         (None, "authored", "authored"),
@@ -134,13 +134,18 @@ def test_ui_manifest_hides_legacy_creation(monkeypatch):
     ]
 
 
-def test_generation_route_rejects_legacy_before_database_use(monkeypatch):
-    monkeypatch.setenv("AUTHORED_ONLY_NEW_PRESENTATION_ADMISSION", "true")
-    monkeypatch.setenv("AUTHORED_ONLY_CANARY_STAGE", "100")
-    request = GeneratePresentationRequest(content="legacy", strategy="legacy")
-    with pytest.raises(HTTPException) as raised:
-        asyncio.run(check_if_api_request_is_valid(request, None))
-    assert raised.value.detail["code"] == "legacy_generation_admission_closed"
+def test_generation_route_rejects_legacy_before_database_use():
+    """A legacy strategy cannot be asked for, so it never reaches the route.
+
+    The closure moved into the request contract itself: ``strategy`` accepts
+    only the two drivers this fork still has renderers for, and the refusal
+    therefore happens while parsing the body rather than anywhere near the
+    database.
+    """
+    with pytest.raises(ValidationError) as raised:
+        GeneratePresentationRequest(content="legacy", strategy="legacy")
+
+    assert "strategy" in str(raised.value)
 
 
 def test_blank_route_rejects_before_database_use(monkeypatch):

@@ -56,6 +56,9 @@ async def _seed_deck(
             content="deck",
             n_slides=1,
             language="ko",
+            # Every deck this fork creates is authored; a row with no
+            # identity described a retired React-template format.
+            mode="authored",
         )
     )
     session.add(

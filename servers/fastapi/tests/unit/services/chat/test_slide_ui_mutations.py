@@ -189,6 +189,9 @@ async def _database(
         n_slides=1,
         language="en",
         layout={"name": "native"},
+        # Every deck this fork creates is authored; a row with no
+        # identity described a retired React-template format.
+        mode="authored",
     )
     slide = _slide(presentation.id, owner_id)
     async with maker() as session:

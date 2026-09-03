@@ -65,28 +65,63 @@ async def _session_maker(path):
     return engine, async_sessionmaker(engine, expire_on_commit=False)
 
 
-def _legacy_presentation(owner_id: uuid.UUID) -> PresentationModel:
+def _frozen_presentation(owner_id: uuid.UUID) -> PresentationModel:
+    """A deck that is not authored, and therefore frozen.
+
+    Template-v2 is the only such format left: the React-template drivers these
+    fixtures used to describe were removed with their components, so a row in
+    one of those formats resolves no profile and is reported as corrupt rather
+    than as frozen.
+    """
     return PresentationModel(
         owner_id=owner_id,
-        content="private legacy source",
+        content="private template source",
         n_slides=1,
         language="Korean",
-        title="Legacy deck",
-        mode=None,
-        version="v1-standard",
+        title="Template deck",
+        mode="template",
+        version="v2-standard",
         generation_mode="standard",
     )
 
 
-def _legacy_slide(owner_id: uuid.UUID, presentation_id: uuid.UUID) -> SlideModel:
+def _frozen_slide(owner_id: uuid.UUID, presentation_id: uuid.UUID) -> SlideModel:
     return SlideModel(
         owner_id=owner_id,
         presentation=presentation_id,
-        layout_group="general",
+        layout_group="native",
         layout="title",
         index=0,
         content={"title": "original-only-value"},
+        ui=_native_ui(),
     )
+
+
+def _native_ui() -> dict:
+    """The smallest slide UI the template-v2 canonicaliser accepts."""
+    return {
+        "id": "title",
+        "description": "Native editable title slide",
+        "components": [
+            {
+                "id": "hero",
+                "description": "Editable hero title component",
+                "position": {"x": 0, "y": 0},
+                "elements": [
+                    {
+                        "type": "text",
+                        "position": {"x": 1, "y": 1},
+                        "size": {"width": 8, "height": 1},
+                        "runs": [{"text": "Title", "font": {"size": 18}}],
+                        "decorative": False,
+                        "name": "title",
+                        "min_length": 1,
+                        "max_length": 80,
+                    }
+                ],
+            }
+        ],
+    }
 
 
 def test_archive_manifest_hashes_payloads_and_detects_tampering():
@@ -139,14 +174,14 @@ def test_frozen_runtime_allows_only_declared_operations_and_is_owner_scoped(tmp_
         engine, maker = await _session_maker(tmp_path / "runtime.db")
         owner_id = uuid.uuid4()
         other_owner_id = uuid.uuid4()
-        source = _legacy_presentation(owner_id)
+        source = _frozen_presentation(owner_id)
         with _owner(owner_id):
             async with maker() as session:
                 session.add(source)
                 await session.commit()
 
                 descriptor = await get_frozen_runtime_descriptor(session, source.id)
-                assert descriptor.source_driver_id == "standard"
+                assert descriptor.source_driver_id == "template-v2"
                 assert set(descriptor.allowed_operations) == set(
                     FrozenCompatibilityOperation
                 )
@@ -177,7 +212,7 @@ def test_workspace_chat_common_context_rejects_frozen_legacy_before_provider(tmp
     async def runner():
         engine, maker = await _session_maker(tmp_path / "workspace-gate.db")
         owner_id = uuid.uuid4()
-        source = _legacy_presentation(owner_id)
+        source = _frozen_presentation(owner_id)
         claim = type(
             "Claim",
             (),
@@ -234,7 +269,7 @@ def test_authored_profile_with_legacy_slide_evidence_is_quarantined(tmp_path):
             mode="authored",
             theme={"mode": "authored"},
         )
-        legacy_slide = _legacy_slide(owner_id, presentation.id)
+        legacy_slide = _frozen_slide(owner_id, presentation.id)
         with _owner(owner_id):
             async with maker() as session:
                 session.add_all((presentation, legacy_slide))
@@ -253,14 +288,21 @@ def test_upgrade_fork_is_authored_new_id_and_preserves_original(tmp_path):
     async def runner():
         engine, maker = await _session_maker(tmp_path / "upgrade.db")
         owner_id = uuid.uuid4()
-        source = _legacy_presentation(owner_id)
-        source_slide = _legacy_slide(owner_id, source.id)
+        source = _frozen_presentation(owner_id)
+        source_slide = _frozen_slide(owner_id, source.id)
         key = b"archive-signing-key-for-focused-test"
         with _owner(owner_id):
             async with maker() as session:
                 session.add(source)
                 session.add(source_slide)
                 await session.commit()
+                # Read the rows back before snapshotting them. A template-v2
+                # slide's ``ui`` is canonicalised on the way to storage, so an
+                # in-memory snapshot would differ from the stored row for that
+                # reason alone and hide what this test is actually checking:
+                # that the upgrade leaves the source untouched.
+                await session.refresh(source)
+                await session.refresh(source_slide)
                 original_presentation = source.model_dump(
                     mode="json",
                     exclude={"created_at", "updated_at", "profile_backfilled_at"},
@@ -329,7 +371,7 @@ def test_upgrade_fork_rejects_stale_revision_and_other_owner(tmp_path):
         engine, maker = await _session_maker(tmp_path / "upgrade-errors.db")
         owner_id = uuid.uuid4()
         other_owner_id = uuid.uuid4()
-        source = _legacy_presentation(owner_id)
+        source = _frozen_presentation(owner_id)
         with _owner(owner_id):
             async with maker() as session:
                 session.add(source)
@@ -374,7 +416,7 @@ def test_mixed_slide_evidence_is_quarantined_from_runtime_and_upgrade(tmp_path):
     async def runner():
         engine, maker = await _session_maker(tmp_path / "quarantine.db")
         owner_id = uuid.uuid4()
-        source = _legacy_presentation(owner_id)
+        source = _frozen_presentation(owner_id)
         mixed_slide = SlideModel(
             owner_id=owner_id,
             presentation=source.id,

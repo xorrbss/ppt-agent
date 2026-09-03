@@ -24,7 +24,13 @@ class FrozenRuntimeDescriptor(BaseModel):
 
     schema_version: Literal[1] = 1
     presentation_id: uuid.UUID
-    source_driver_id: Literal["standard", "smart", "template-v2"]
+    # The only driver a frozen deck can have. ``authored`` is absent because an
+    # authored deck is not frozen and raises before the descriptor is built,
+    # and the retired ``standard``/``smart`` ids named React-template drivers
+    # this fork no longer ships: ``app/presentation-templates/`` holds no
+    # component at all, so such a deck could not be rendered even if a row for
+    # one survived.
+    source_driver_id: Literal["template-v2"]
     state: Literal["frozen-compatibility"] = "frozen-compatibility"
     allowed_operations: tuple[FrozenCompatibilityOperation, ...]
 

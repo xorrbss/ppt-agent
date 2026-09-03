@@ -104,3 +104,76 @@ def test_preflight_is_the_provider_call_authority() -> None:
     )
     assert deterministic.classification == "deterministic_repair"
     assert deterministic.provider_call_allowed is False
+
+
+def _restyle_artifact(*, decor_visible: bool):
+    """A restyled slide whose ornament lands on top of a source block.
+
+    Slide 16 of operation 3d0b9e72 rendered a "+" hero mark that the browser
+    could not see, that was clipped, and that overlapped the source text beside
+    it.  The mark is the model's own decoration; the block under it is source.
+    """
+
+    html = (
+        "<html><head></head><body>"
+        '<h1 data-qid="title" data-semantic-role="title">Title</h1>'
+        '<div data-qid="s15.hero.decor" class="hero-mark" data-semantic-role="body">+</div>'
+        '<div data-qid="source-block-4c1e" data-semantic-role="body"'
+        ' data-source-block-id="source-slide:16:text:8">대행사는 촬영 가이드까지 제공할 수 있다</div>'
+        "</body></html>"
+    )
+    decor = _metric("s15.hero.decor", "body", "+", y=120, visible=decor_visible)
+    decor["clipped"] = True
+    decor["glyph_clipped"] = True
+    decor["bbox"] = {"x": 40, "y": 120, "width": 500, "height": 60}
+    source = _metric(
+        "source-block-4c1e", "body", "대행사는 촬영 가이드까지 제공할 수 있다", y=140
+    )
+    source["bbox"] = {"x": 60, "y": 140, "width": 460, "height": 28}
+    return AuthoredSlideArtifact(
+        html=html,
+        png=b"png",
+        browser_metrics={
+            "viewport": {"width": 1280, "height": 720},
+            "elements": [_metric("title", "title", "Title", y=30), decor, source],
+        },
+    )
+
+
+def test_an_ornament_over_source_text_still_reaches_the_repair_call():
+    """Capacity is terminal because source text cannot be shortened to fit.
+
+    That reasoning covers the elements that own source text, not the decoration
+    the model drew around them.  Classifying an invisible "+" ornament as a
+    capacity impossibility ended a 35-slide deck without one repair call.
+    """
+
+    preflight = preflight_authored_provider_repair(
+        slide_index=15,
+        artifact=_restyle_artifact(decor_visible=False),
+        capacity=SlideCapacity(15, "CONTENT", 40, 120, 200, 0, 8),
+        profile_id="source-verbatim",
+        reference_mode="style_reference",
+    )
+    assert "browser_text_not_visible:s15.hero.decor" in preflight.violations
+    # The caller lets a safety-gate classification continue into repair and
+    # raises on a capacity one, so the code is the whole decision here.
+    assert preflight.code == "authored_composition_safety_gate_failed"
+
+
+def test_source_text_that_cannot_fit_is_still_terminal():
+    artifact = _restyle_artifact(decor_visible=True)
+    metrics = dict(artifact.browser_metrics)
+    elements = [dict(item) for item in metrics["elements"]]
+    elements[2]["css_visible"] = False
+    metrics["elements"] = elements
+    preflight = preflight_authored_provider_repair(
+        slide_index=15,
+        artifact=AuthoredSlideArtifact(artifact.html, artifact.png, metrics),
+        capacity=SlideCapacity(15, "CONTENT", 40, 120, 200, 0, 8),
+        profile_id="source-verbatim",
+        reference_mode="style_reference",
+    )
+    assert "browser_text_not_visible:source-block-4c1e" in preflight.violations
+    assert preflight.code == "authored_slide_capacity_exceeded"
+    assert preflight.terminal is True

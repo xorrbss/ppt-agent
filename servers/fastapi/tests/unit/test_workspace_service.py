@@ -108,6 +108,9 @@ async def _create_presentation(maker) -> PresentationModel:
             n_slides=1,
             language="en",
             layout={"name": "test"},
+            # Every deck this fork creates is authored; a row with no
+            # identity described a retired React-template format.
+            mode="authored",
         )
         session.add(presentation)
         await session.commit()

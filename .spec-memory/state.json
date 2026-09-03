@@ -137,7 +137,8 @@
     "authored.retry-carries-prior-failure-correction": "decisions/authored.retry-carries-prior-failure-correction.1.json",
     "authored.source-binding-failure-is-slide-scoped": "decisions/authored.source-binding-failure-is-slide-scoped.1.json",
     "authored.header-contract-follows-the-source-page": "decisions/authored.header-contract-follows-the-source-page.1.json",
-    "authored.gate-critique-fits-the-repair-contract": "decisions/authored.gate-critique-fits-the-repair-contract.1.json"
+    "authored.gate-critique-fits-the-repair-contract": "decisions/authored.gate-critique-fits-the-repair-contract.1.json",
+    "authored.repair-preflight-separates-source-from-decoration": "decisions/authored.repair-preflight-separates-source-from-decoration.1.json"
   },
   "readFirst": [
     "AGENTS.md"

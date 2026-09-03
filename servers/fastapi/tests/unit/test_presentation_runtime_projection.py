@@ -43,6 +43,9 @@ def _presentation(**overrides):
             {
                 "mode": "authored",
                 "theme": {"mode": "authored"},
+                # An authored deck is v1. Inheriting the base payload's v2 here
+                # described a deck that cannot exist, and the projection said so.
+                "version": "v1-standard",
                 "deck_plan": None,
             },
             "authored",

@@ -17,19 +17,19 @@ from services.presentation_profiles import (
 )
 from templates.v2.persistence import canonicalize_slide_ui
 
+#: What a censused deck can be. A deck in one of the retired React-template
+#: formats is ``invalid``: its profile cannot resolve, which is exactly the
+#: report an operator needs. Slide-level evidence keeps its own richer
+#: vocabulary below, because a slide's markers still distinguish the formats
+#: even when the deck as a whole can no longer be described.
 CensusClassification: TypeAlias = Literal[
-    "legacy",
-    "adaptive",
-    "smart",
     "template_v2",
     "authored",
     "mixed",
     "invalid",
 ]
 
-_CLASSIFICATIONS = frozenset(
-    {"legacy", "adaptive", "smart", "template_v2", "authored", "mixed", "invalid"}
-)
+_CLASSIFICATIONS = frozenset({"template_v2", "authored", "mixed", "invalid"})
 
 
 def _read(value: object, key: str, default: Any = None) -> Any:
@@ -129,13 +129,18 @@ def _slide_evidence(slide: object) -> SlideEvidence:
     return SlideEvidence(slide_id, index, "legacy", "legacy_elements")
 
 
-def _canonical_classification(presentation: object, driver_id: str) -> CensusClassification:
-    if driver_id == "standard":
-        mode = _read(presentation, "mode")
-        return "adaptive" if mode == "adaptive" or _read(presentation, "deck_plan") is not None else "legacy"
+def _canonical_classification(driver_id: str) -> CensusClassification:
+    """Name the format of a deck whose profile resolved.
+
+    Only two formats can. The retired React-template drivers this fork no
+    longer ships (``standard``, ``smart``) are not in the driver registry, so
+    a row in one of those formats never reaches here: its profile fails to
+    resolve and the caller reports it ``invalid``, which is what the census
+    exists to surface.
+    """
     return cast(
         CensusClassification,
-        {"smart": "smart", "template-v2": "template_v2", "authored": "authored"}[driver_id],
+        {"template-v2": "template_v2", "authored": "authored"}[driver_id],
     )
 
 
@@ -177,18 +182,15 @@ def classify_presentation(
             evidence,
         )
 
-    canonical = _canonical_classification(presentation, profile.driver_id)
+    canonical = _canonical_classification(profile.driver_id)
     expected_evidence = {
-        "legacy": "legacy",
-        "adaptive": "legacy",
-        "smart": "smart",
         "template_v2": "template_v2",
         "authored": "authored",
     }[canonical]
     observed: set[str] = set()
     for item in evidence:
         kind = item.content_kind
-        if kind == "untyped_html" and canonical in {"smart", "authored"}:
+        if kind == "untyped_html" and canonical == "authored":
             kind = canonical
         observed.add(kind)
     if "mixed" in observed or any(kind != expected_evidence for kind in observed):

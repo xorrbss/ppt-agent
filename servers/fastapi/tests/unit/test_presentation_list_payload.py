@@ -106,6 +106,9 @@ async def _seed(maker) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
                     language="en",
                     title="Native deck",
                     mode="template",
+                    # A template deck is v2; the default v1 with a template
+                    # mode is one of the retired React-template formats.
+                    version="v2-standard",
                     lifecycle_status=PRESENTATION_LIFECYCLE_PUBLISHED,
                 ),
                 PresentationModel(
@@ -114,6 +117,10 @@ async def _seed(maker) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
                     n_slides=1,
                     language="en",
                     title="Staging deck",
+                    # A staging shell is stamped authored the moment generation
+                    # creates it, so it carries that identity here too.
+                    mode="authored",
+                    theme={"mode": "authored"},
                     lifecycle_status=PRESENTATION_LIFECYCLE_STAGING,
                 ),
                 SlideModel(
@@ -309,6 +316,11 @@ def test_server_search_pagination_total_and_owner_scope_match(tmp_path: Path):
                     n_slides=1,
                     language="ko",
                     title=title,
+                    # Every deck this fork can create is authored; a row with
+                    # no identity describes one of the retired React-template
+                    # formats, which no longer resolves a profile.
+                    mode="authored",
+                    theme={"mode": "authored"},
                     updated_at=updated_at,
                     lifecycle_status=(
                         PRESENTATION_LIFECYCLE_PUBLISHED

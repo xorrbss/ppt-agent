@@ -81,24 +81,21 @@ def _native_ui():
 
 
 def test_canonical_census_assigns_every_required_classification_once():
+    """Two formats can be described; everything else is reported, not guessed.
+
+    A deck in one of the retired React-template formats resolves no profile —
+    this fork ships no component for them — so the census reports it invalid
+    and quarantines it rather than inventing a cohort for a deck nothing can
+    render.
+    """
     presentations = [
-        _presentation("legacy"),
-        _presentation("adaptive", mode="adaptive", deck_plan={"slides": []}),
-        _presentation("smart", generation_mode="smart"),
         _presentation("template", mode="template", version="v2-standard"),
         _presentation("authored", mode="authored", theme={"mode": "authored"}),
         _presentation("mixed", mode="authored", theme={"mode": "authored"}),
+        _presentation("retired"),
         _presentation("invalid", generation_mode="mystery"),
     ]
     slides = [
-        _slide("legacy"),
-        _slide("adaptive"),
-        _slide(
-            "smart",
-            layout_group="smart-html",
-            layout="smart-html",
-            html_content="<section>smart</section>",
-        ),
         _slide("template", layout_group="native", ui=_native_ui()),
         _slide(
             "authored",
@@ -108,22 +105,25 @@ def test_canonical_census_assigns_every_required_classification_once():
             html_content="<section>authored</section>",
         ),
         _slide("mixed"),
+        _slide("retired"),
         _slide("invalid"),
     ]
 
     result = build_census(presentations, slides)
 
     assert [entry.classification for entry in result] == [
-        "legacy",
-        "adaptive",
-        "smart",
         "template_v2",
         "authored",
         "mixed",
         "invalid",
+        "invalid",
     ]
     assert len(result) == len(presentations)
-    assert all(entry.quarantine for entry in result[-2:])
+    assert all(entry.quarantine for entry in result[-3:])
+    assert [entry.quarantine_reason for entry in result[-2:]] == [
+        "unsupported_presentation_driver",
+        "unsupported_generation_mode",
+    ]
 
 
 def test_malformed_slide_is_invalid_and_profile_evidence_conflict_is_mixed():
@@ -227,7 +227,12 @@ def test_fixture_database_report_has_full_coverage_quarantine_and_drain(tmp_path
                     "id": deck_id,
                     "owner_id": "owner-a",
                     "generation_mode": "standard",
-                    "version": "v1-standard",
+                    # A template-v2 deck: the non-authored format this fork can
+                    # still describe, so the report is exercised by the
+                    # malformed slide below rather than by a deck whose profile
+                    # cannot resolve at all.
+                    "mode": "template",
+                    "version": "v2-standard",
                 }
             ],
         )

@@ -42,7 +42,16 @@ async def _engine(path):
 
 async def _seed(session: AsyncSession):
     presentation = PresentationModel(
-        id=uuid.uuid4(), owner_id=OWNER, content="deck", n_slides=1, language="Korean"
+        id=uuid.uuid4(),
+        owner_id=OWNER,
+        content="deck",
+        n_slides=1,
+        language="Korean",
+        # The slides below are authored, so the deck is. Leaving the identity
+        # blank described a deck in one of the retired React-template formats,
+        # which this fork ships no component for and cannot describe.
+        mode="authored",
+        theme={"mode": "authored"},
     )
     session.add(presentation)
     await session.flush()

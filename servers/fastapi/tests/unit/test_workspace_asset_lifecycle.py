@@ -124,6 +124,9 @@ async def _seed_owner_and_presentation(
                 n_slides=1,
                 language="en",
                 layout={"name": "test"},
+                # Every deck this fork creates is authored; a row with no
+                # identity described a retired React-template format.
+                mode="authored",
             )
             session.add(presentation)
             await session.commit()

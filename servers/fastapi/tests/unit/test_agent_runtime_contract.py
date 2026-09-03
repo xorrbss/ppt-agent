@@ -35,31 +35,40 @@ from services.workspace_chat_operation_handler import _default_chat_service_fact
 
 class _PresentationSession:
     def __init__(self, generation_mode: str) -> None:
-        self.presentation = SimpleNamespace(generation_mode=generation_mode)
+        self.presentation = SimpleNamespace(
+            generation_mode=generation_mode,
+            # The stored deck has to resolve a profile; the service reads it
+            # before it builds anything, and a deck with no identity is one of
+            # the retired React-template formats this fork no longer ships.
+            mode="authored",
+            version="v1-standard",
+            theme={"mode": "authored"},
+            deck_plan=None,
+            community_design_ids=None,
+            profile_driver_id=None,
+            profile_schema_version=None,
+        )
 
     async def get(self, _model, _identifier):
         return self.presentation
 
 
-@pytest.mark.parametrize(
-    ("stored_mode", "spoofed_mode", "required_tool", "forbidden_tool"),
-    (
-        ("standard", "smart", "getPresentationOutline", "getSmartPresentationContext"),
-        ("smart", "standard", "getSmartPresentationContext", "getPresentationOutline"),
-    ),
-)
 def test_real_default_factory_uses_db_capability_and_tool_registry(
     monkeypatch,
     tmp_path: Path,
-    stored_mode: str,
-    spoofed_mode: str,
-    required_tool: str,
-    forbidden_tool: str,
 ):
+    """A caller-supplied generation mode must not steer the service.
+
+    The two-registry world this used to parametrise is gone: ``generation_mode``
+    accepts one value, ``presentation_type`` is a server constant, and
+    ``getSmartPresentationContext`` no longer exists. What still has to hold is
+    that the stored deck, not the run context, decides what the service sees.
+    """
+
     async def scenario() -> None:
         presentation_id = uuid.uuid4()
         conversation_id = uuid.uuid4()
-        session = _PresentationSession(stored_mode)
+        session = _PresentationSession("standard")
         monkeypatch.setattr(
             PresentationChatMemoryLayer,
             "retrieve_context",
@@ -81,7 +90,7 @@ def test_real_default_factory_uses_db_capability_and_tool_registry(
             conversation_id=conversation_id,
             user_message="inspect",
             expected_revision=3,
-            generation_mode=spoofed_mode,  # type: ignore[arg-type]
+            generation_mode="smart",  # spoofed; the stored deck wins  # type: ignore[arg-type]
             artifact_scope=OperationArtifactScope(tmp_path),
         )
 
@@ -90,12 +99,12 @@ def test_real_default_factory_uses_db_capability_and_tool_registry(
         )
 
         assert service._memory is not None
-        assert service._memory.presentation_type == stored_mode
+        assert service._memory.presentation_type == "standard"
         assert service._memory._images_directory() == str(tmp_path)
         assert service._tools is not None
         names = {tool.name for tool in service._tools.get_tool_definitions()}
-        assert required_tool in names
-        assert forbidden_tool not in names
+        assert "getPresentationOutline" in names
+        assert "getSmartPresentationContext" not in names
 
     asyncio.run(scenario())
 

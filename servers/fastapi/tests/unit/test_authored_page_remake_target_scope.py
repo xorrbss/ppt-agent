@@ -191,6 +191,10 @@ async def _a_deck_that_is_not_authored_at_all_is_still_refused(tmp_path: Path):
                     language="ko",
                     title="layout deck",
                     layout={"name": "deck", "slides": []},
+                    # Template-v2 is the only non-authored format left, so it
+                    # is what "not authored at all" now means.
+                    mode="template",
+                    version="v2-standard",
                 )
             )
             session.add(

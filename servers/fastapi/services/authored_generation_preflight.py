@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Any, Mapping
 
 from services.authored_composition_policy import (
@@ -27,6 +28,57 @@ _CAPACITY_PREFIXES = (
     "font:",
     "supporting_font:",
 )
+
+
+#: ``data-qid="..."`` of an element that also carries ``data-source-block-id``.
+#: Those elements render immutable source text; everything else on the slide is
+#: the model's own composition.
+_SOURCE_OWNER_QID = re.compile(
+    r"<[^>]*?data-qid=\"([^\"]+)\"[^>]*?data-source-block-id=|"
+    r"<[^>]*?data-source-block-id=[^>]*?data-qid=\"([^\"]+)\"",
+    re.IGNORECASE,
+)
+
+
+#: A QID names an element; anything else in a violation tail is a measurement.
+_QID_TOKEN = re.compile(r"[A-Za-z][\w.\-]*(?::[\w.\-]+)*")
+
+
+def _source_owner_qids(html: str) -> frozenset[str]:
+    """QIDs of the elements that own source text on this slide."""
+
+    found: set[str] = set()
+    for first, second in _SOURCE_OWNER_QID.findall(str(html or "")):
+        name = (first or second or "").strip()
+        if name:
+            found.add(name)
+    return frozenset(found)
+
+
+def _names_a_source_owner(violation: str, source_qids: frozenset[str]) -> bool:
+    """Whether a capacity violation is about source text rather than decoration.
+
+    A violation reads ``<check>:<qid>[,<qid>...]`` or carries a measurement
+    instead of an element.  Anything this cannot resolve to the model's own
+    elements is treated as source-owned, so the fail-closed classification is
+    the default and only a violation proven to be about decoration relaxes it.
+    """
+
+    _, separator, tail = str(violation).rpartition(":")
+    if not separator:
+        return True
+    names = [
+        item.strip()
+        for item in tail.split(",")
+        if _QID_TOKEN.fullmatch(item.strip())
+    ]
+    if not names:
+        # A measurement rather than an element ("visible_text:1200>900"): the
+        # slide as a whole is over budget, which is the source text's problem.
+        return True
+    return any(
+        name in source_qids or name.startswith("source-block-") for name in names
+    )
 
 
 @dataclass(frozen=True)
@@ -128,9 +180,29 @@ def preflight_authored_provider_repair(
             terminal=False,
         )
 
+    # A capacity violation is terminal because verbatim source text cannot be
+    # shortened to fit.  That reasoning covers the elements that own source
+    # text, not the decoration the model drew around them: a hero mark that
+    # renders no visible glyph and lands on top of a source block is the
+    # model's own composition and exactly what a repair call can fix.  Slide 16
+    # of operation 3d0b9e72 was ended without a single repair call for one such
+    # "+" ornament.
+    source_qids = _source_owner_qids(artifact.html)
+    capacity_violations_found = [
+        item for item in violations if item.startswith(_CAPACITY_PREFIXES)
+    ]
+    source_capacity_blocked = bool(capacity_violations_found) and (
+        # An ordinary authored deck owns all of its text, so the distinction
+        # does not exist there and the original classification stands.
+        not source_qids
+        or any(
+            _names_a_source_owner(item, source_qids)
+            for item in capacity_violations_found
+        )
+    )
     code = (
         "authored_slide_capacity_exceeded"
-        if any(item.startswith(_CAPACITY_PREFIXES) for item in violations)
+        if source_capacity_blocked
         else (
             "authored_composition_safety_gate_failed"
             if safety_issues

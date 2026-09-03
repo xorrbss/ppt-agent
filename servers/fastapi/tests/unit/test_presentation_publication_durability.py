@@ -68,6 +68,9 @@ async def _seed_running_operation(maker, *, kind: str):
             language="en",
             layout={"name": "test"},
             revision=3,
+            # Every deck this fork creates is authored; a row with no
+            # identity described a retired React-template format.
+            mode="authored",
         )
         session.add(presentation)
         await session.flush()

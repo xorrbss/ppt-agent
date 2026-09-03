@@ -638,6 +638,9 @@ async def _delete_recovery_treats_same_operation_tombstone_as_committed_effect(
                 language="en",
                 lifecycle_status=PRESENTATION_LIFECYCLE_STAGING,
                 revision=7,
+                # Every deck this fork creates is authored; a row with no
+                # identity described a retired React-template format.
+                mode="authored",
             )
             session.add(presentation)
             await session.flush()
@@ -684,6 +687,9 @@ async def _delete_recovery_treats_same_operation_tombstone_as_committed_effect(
                 language="en",
                 lifecycle_status=PRESENTATION_LIFECYCLE_STAGING,
                 revision=3,
+                # Every deck this fork creates is authored; a row with no
+                # identity described a retired React-template format.
+                mode="authored",
             )
             session.add(other_presentation)
             await session.flush()
@@ -1086,6 +1092,9 @@ async def _account_cascade_keeps_cleanup_snapshot_recoverable(
                 language="en",
                 layout={"name": "private"},
                 lifecycle_status=PRESENTATION_LIFECYCLE_STAGING,
+                # Every deck this fork creates is authored; a row with no
+                # identity described a retired React-template format.
+                mode="authored",
             )
             session.add(presentation)
             await session.flush()
