@@ -1167,10 +1167,24 @@ async def _author_illustrate_render_pipeline(
                     )
                     if scene_state is not None:
                         if scene_state.envelope.html_projection != illustrated_html:
-                            raise ValueError(
-                                "authored_scene_checkpoint_projection_mismatch"
+                            # The slide was authored again -- a source-binding
+                            # rejection is a slide-scoped failure now, so its
+                            # HTML legitimately changes between attempts. The
+                            # sealed envelope has to follow the document that
+                            # will actually be rendered, and persisting it
+                            # keeps the slide's repair budget and failure
+                            # fingerprint, so this cannot buy another repair.
+                            LOGGER.info(
+                                "resealing scene envelope after re-author slide=%d",
+                                index,
                             )
-                        scene_envelope = scene_state.envelope
+                            scene_envelope = seal_slide_scene_envelope(
+                                illustrated_html,
+                                slide_index=index,
+                            )
+                            persist_scene_envelope(generation_job.id, scene_envelope)
+                        else:
+                            scene_envelope = scene_state.envelope
                     else:
                         scene_envelope = seal_slide_scene_envelope(
                             illustrated_html,

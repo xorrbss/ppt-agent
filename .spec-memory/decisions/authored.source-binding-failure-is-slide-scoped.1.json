@@ -14,7 +14,8 @@
     "The stored reason becomes the slide's correction hint on the next attempt.",
     "Slides already authored keep their checkpoints and are not re-authored.",
     "The deck still fails when the retries are exhausted; nothing is published with source text missing.",
-    "Total provider calls stay bounded by the operation's max_attempts and the per-attempt ordinal pair."
+    "Total provider calls stay bounded by the operation's max_attempts and the per-attempt ordinal pair.",
+    "A re-authored slide re-seals its scene envelope: persist_scene_envelope carries the slide's repair count and failure fingerprint onto the new digest, so re-authoring never buys another repair."
   ],
   "forbidden": [
     "End a deck on one slide's source-binding rejection while the other slides are authored and durable.",
@@ -23,7 +24,8 @@
   "rationale": [
     "Operation 612d4b75 authored all 35 slides and lost every one of them because slide 28 omitted '장기고객 만들기' from a header it was told to copy verbatim.",
     "Stamping already detects this per slide at the author stage, so the slide is the natural unit of the failure; only the retryable flag stood between that and a one-slide redo.",
-    "Completes the pair authored.provider-attempt-budget-per-operation-attempt (the retry can call the provider) and authored.retry-carries-prior-failure-correction (it knows what to fix)."
+    "Completes the pair authored.provider-attempt-budget-per-operation-attempt (the retry can call the provider) and authored.retry-carries-prior-failure-correction (it knows what to fix).",
+    "Operation b5d5f33a authored, rendered and persisted 35 of 35 slides and then died on authored_scene_checkpoint_projection_mismatch for slide 28 -- the one slide it had re-authored, whose new HTML no longer matched the envelope sealed on the previous attempt."
   ],
   "evidence": [
     "servers/fastapi/services/authored_presentation_pipeline.py",
