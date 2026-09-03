@@ -382,7 +382,12 @@ async def export_authored_hybrid_presentation(
             _persist_hybrid_coverage(destination, coverage_manifest)
         except BaseException:
             temporary.unlink(missing_ok=True)
-            Path(f"{destination}.coverage.json").unlink(missing_ok=True)
+            # Deliberately synchronous: this runs inside a ``BaseException``
+            # handler that re-raises, and awaiting here would let a pending
+            # cancellation replace the failure the caller must see.
+            Path(f"{destination}.coverage.json").unlink(  # noqa: ASYNC240
+                missing_ok=True
+            )
             raise
         return AuthoredHybridPresentationAndPath(
             presentation_id=presentation_id,

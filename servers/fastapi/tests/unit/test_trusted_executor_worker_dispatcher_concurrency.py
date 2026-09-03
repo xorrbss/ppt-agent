@@ -158,7 +158,10 @@ async def _concurrent_dispatch(tmp_path: Path) -> None:
         (jobs[1].operation_id, 12),
         (jobs[2].operation_id, 13),
     ]
-    assert [root.startswith(f"fence-{job.fencing_token}-") for job, (_, _, root) in zip(jobs, transport.bindings)] == [
+    assert [
+        root.startswith(f"fence-{job.fencing_token}-")
+        for job, (_, _, root) in zip(jobs, transport.bindings, strict=True)
+    ] == [
         True,
         True,
         True,

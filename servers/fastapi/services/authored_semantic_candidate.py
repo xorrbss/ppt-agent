@@ -269,7 +269,7 @@ def compile_semantic_component_with_bounded_retry(
     if max_attempts < 1 or max_attempts > 2:
         raise ValueError("authored_semantic_retry_bound_invalid")
     last_code = "authored_semantic_generation_failed"
-    for attempt in range(1, max_attempts + 1):
+    for _attempt in range(1, max_attempts + 1):
         try:
             return {"semanticSource": compiler(html, slide_index=slide_index)}
         except (TypeError, ValueError) as error:

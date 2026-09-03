@@ -431,7 +431,7 @@ def verify_scene_coverage(
     first_positions = {block_id: output_order.index(block_id) for block_id in set(output_order)}
     order_violations = sum(
         first_positions[left] > first_positions[right]
-        for left, right in zip(ordered_block_ids, ordered_block_ids[1:])
+        for left, right in zip(ordered_block_ids, ordered_block_ids[1:], strict=False)
     )
     if order_violations:
         raise SourceContentCoverageError(

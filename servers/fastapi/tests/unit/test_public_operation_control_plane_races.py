@@ -32,7 +32,6 @@ from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.public_admission import (
     PublicOperationAdmission,
     PublicPolicyProfile,
-    PublicProviderLogicalCall,
     PublicQuotaCounter,
     PublicResourceLease,
 )

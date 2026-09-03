@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.source-native-design-pack-route",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Owner-scoped Design Pack pins use one Narrative IR call and server-owned source frames; incompatible packs fall back only as a whole operation.",
+  "scope": [
+    "authored",
+    "generation",
+    "design-pack"
+  ],
+  "invariants": [
+    "exact owner pack pin",
+    "server-owned frame selection",
+    "legacy provider HTML forbidden"
+  ],
+  "forbidden": [
+    "per-slide mixed fallback"
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_vnext/source_native_generation.py",
+    "output/source-native-devax-20260901/product-path-evidence.json"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-01T12:11:21.7546151+00:00"
+}

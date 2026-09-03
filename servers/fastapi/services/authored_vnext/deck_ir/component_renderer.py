@@ -143,7 +143,7 @@ def render_component(slide_key: str, component: Mapping[str, Any], *, connector_
             body += leaf(payload["caption"], "strong", "dir-chart-caption")
         for item in series:
             body += leaf(item["name"], "p", "dir-series-name")
-            for category, raw_value in zip(categories, item["values"]):
+            for category, raw_value in zip(categories, item["values"], strict=True):
                 value = float(raw_value)
                 percent = abs(value) / scale * 100
                 # Server-computed finite scalar; provider CSS is never accepted.

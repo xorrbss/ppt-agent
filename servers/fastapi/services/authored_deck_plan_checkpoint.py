@@ -216,7 +216,7 @@ async def commit_authored_deck_plan_checkpoint(
         )
         try:
             await session.commit()
-        except IntegrityError:
+        except IntegrityError as conflict:
             await session.rollback()
             replay = await load_authored_deck_plan_checkpoint(
                 generation_job_id=generation_job_id,
@@ -226,7 +226,7 @@ async def commit_authored_deck_plan_checkpoint(
             if replay != normalized:
                 raise AuthoredDeckPlanCheckpointError(
                     "authored_deck_checkpoint_commit_conflict"
-                )
+                ) from conflict
         return normalized
 
 

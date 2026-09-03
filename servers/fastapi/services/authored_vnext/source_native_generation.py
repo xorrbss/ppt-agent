@@ -11,7 +11,6 @@ import json
 import logging
 import math
 import time
-from typing import Any
 import uuid
 
 from lxml import html as lxml_html
@@ -60,7 +59,6 @@ from services.authored_vnext.narrative_ir.checkpoint import (
 from services.authored_vnext.narrative_ir.contracts import (
     NarrativeCheckpointV1,
     NarrativeDraftV1,
-    NarrativeIRV1,
     ProviderCallReservationV1,
     model_payload,
 )
@@ -283,8 +281,8 @@ async def _source_image_occurrence_assets(
     if manifest is None:
         return {}
     try:
-        manifest_owner_id = uuid.UUID(str(getattr(manifest, "owner_id")))
-        manifest_id = str(getattr(manifest, "manifest_id"))
+        manifest_owner_id = uuid.UUID(str(manifest.owner_id))
+        manifest_id = str(manifest.manifest_id)
     except (AttributeError, TypeError, ValueError) as error:
         raise SourceNativeGenerationError("source_content_owner_required") from error
     if manifest_owner_id != owner_id or not manifest_id:
@@ -1418,7 +1416,6 @@ def _append_fixed_text_columns(
     blocks = _flow_blocks(body_units)
     if not blocks and not footer_units:
         return adaptive_scale
-    initial_columns = max(1, min(columns_count, len(blocks)))
     bounds = _flow_mapping(slot, "bounds")
     spacing = _flow_mapping(slot, "spacing")
     content_width = max(
@@ -1555,14 +1552,6 @@ def _append_fixed_text_columns(
     effective_scale, resolved_columns, weights, ends, _ = max(
         options,
         key=lambda item: (round(item[0], 6), -item[1]),
-    )
-    resolved_column_width = max(
-        1.0,
-        (
-            content_width
-            - column_gap * max(0, resolved_columns - 1)
-        )
-        / resolved_columns,
     )
     parent.set(
         "style",
@@ -2245,7 +2234,15 @@ def _append_component_canvas(
         options: list[tuple[float, int, float, str, tuple[int, ...]]] = []
         for columns in range(1, maximum_columns + 1):
             for packing in ("columns", "rows"):
-                def evaluate(scale: float) -> tuple[float, tuple[int, ...]]:
+                # Both loop variables are bound as defaults: the option
+                # search calls ``evaluate`` before the next packing is tried,
+                # and a captured read would score every option as the last one.
+                def evaluate(
+                    scale: float,
+                    *,
+                    packing: str = packing,
+                    columns: int = columns,
+                ) -> tuple[float, tuple[int, ...]]:
                     if packing == "rows":
                         return visual_row_layout(scale, columns), ()
                     return visual_layout(scale, columns)
@@ -3446,7 +3443,7 @@ class _SourceNativeExecutor:
         quality_observations: list[dict[str, object]] = []
         source_text_occurrences: list[dict[str, str]] = []
         source_image_occurrences: list[dict[str, str]] = []
-        selected_slides = getattr(selection, "slides")
+        selected_slides = selection.slides
         admitted_frame_ids = [
             str(item.get("selectedFrameId") or "")
             for item in self._capacity_admission_receipt.get("pages", ())
@@ -3460,7 +3457,7 @@ class _SourceNativeExecutor:
             raise SourceNativeGenerationError(
                 "source_verbatim_capacity_frame_binding_mismatch"
             )
-        claim = getattr(self._context, "claim")
+        claim = self._context.claim
         owner_id = getattr(claim, "owner_id", None)
         if not isinstance(owner_id, uuid.UUID):
             raise SourceNativeGenerationError("source_native_operation_binding_invalid")
@@ -3835,7 +3832,7 @@ class _SourceNativeExecutor:
         ):
             raise SourceNativeGenerationError("source_native_operation_binding_invalid")
         sealed_result_revision = source_revision + 1
-        provider_call_budget = getattr(route, "provider_call_budget")
+        provider_call_budget = route.provider_call_budget
         provider_call_budget_digest = canonical_digest(
             model_payload(provider_call_budget)
         )
@@ -3892,12 +3889,12 @@ class _SourceNativeExecutor:
                 "preserveSourceInputDigest": getattr(
                     narrative, "preserve_source_input_digest", None
                 ),
-                "checkpointDigest": getattr(checkpoint, "checkpoint_digest"),
-                "frameSelectionReceiptDigest": getattr(selection, "receipt_digest"),
+                "checkpointDigest": checkpoint.checkpoint_digest,
+                "frameSelectionReceiptDigest": selection.receipt_digest,
                 "sourceVerbatimCapacityAdmissionDigest": self._capacity_admission_receipt.get(
                     "capacityAdmissionDigest"
                 ),
-                "providerCallBudget": model_payload(getattr(route, "provider_call_budget")),
+                "providerCallBudget": model_payload(route.provider_call_budget),
             },
             "publicationRoute": "source-native",
         }
@@ -3942,7 +3939,7 @@ class _SourceNativeExecutor:
             "preserveSourceInputDigest": getattr(
                 narrative, "preserve_source_input_digest", None
             ),
-            "frameSelectionReceiptDigest": getattr(selection, "receipt_digest"),
+            "frameSelectionReceiptDigest": selection.receipt_digest,
         }
 
 
@@ -3962,7 +3959,7 @@ async def run_source_native_generation(
     route_receipt: Mapping[str, object],
 ) -> Mapping[str, object]:
     outline_started_at = time.monotonic()
-    claim = getattr(context, "claim")
+    claim = context.claim
     operation_id = getattr(claim, "operation_id", None)
     owner_id = getattr(claim, "owner_id", None)
     attempt_token = getattr(claim, "attempt_token", None)

@@ -2284,7 +2284,6 @@ async def _generate_authored_presentation(
         if (signature := _gate_failure_signature(htmls, item)) is not None
     }
     repaired_gate_indices: list[int] = []
-    header_fallback_attempted = False
     await mark_stage("repair")
     repair_started = time.monotonic()
     repair_claims: dict[int, object] = {}

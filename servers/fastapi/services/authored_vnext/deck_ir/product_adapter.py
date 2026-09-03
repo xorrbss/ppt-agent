@@ -15,7 +15,6 @@ from datetime import datetime, timezone
 import os
 from pathlib import Path
 import re
-from typing import Any
 import uuid
 
 from sqlalchemy import select, update
@@ -51,6 +50,7 @@ from services.authored_vnext.deck_ir.integration import (
     ConstraintCompilerDeckIrExecutionAdapter,
     DeckIrIntegrationError,
 )
+from services.authored_vnext.deck_ir.grammar import default_design_grammar
 from services.authored_vnext.deck_ir.style_profiles import (
     design_grammar_for_style,
     resolve_style_profile,
@@ -792,7 +792,7 @@ class ProductDeckIrExecutionAdapter:
 
         if validate_sealed_generation_strategy(
             strategy_receipt,
-            operation_id=str(getattr(getattr(context, "claim"), "operation_id")),
+            operation_id=str(context.claim.operation_id),
         ) != "deck-ir":
             raise DeckIrIntegrationError("deck_ir_strategy_not_selected")
         slide_count = getattr(request, "n_slides", None)
@@ -824,11 +824,11 @@ class ProductDeckIrExecutionAdapter:
             schema=DeckIRV1.model_json_schema(),
             schemas_by_purpose=schemas,
             job_id=getattr(generation_job, "id", None),
-            attempt_number=int(getattr(getattr(context, "claim"), "attempt_number", 0) or 0),
+            attempt_number=int(getattr(context.claim, "attempt_number", 0) or 0),
         )
         job_id = getattr(generation_job, "id", None)
-        attempt_token = getattr(getattr(context, "claim"), "attempt_token", None)
-        fencing_token = getattr(getattr(context, "claim"), "fencing_token", None)
+        attempt_token = getattr(context.claim, "attempt_token", None)
+        fencing_token = getattr(context.claim, "fencing_token", None)
         if not isinstance(job_id, uuid.UUID) or not isinstance(attempt_token, str) or not attempt_token:
             raise DeckIrIntegrationError("deck_ir_operation_binding_invalid")
         await initialize_checkpoints(
@@ -841,7 +841,7 @@ class ProductDeckIrExecutionAdapter:
 
         async def reserve(purpose: str) -> None:
             nonlocal reservation_count
-            await getattr(context, "raise_if_cancelled")()
+            await context.raise_if_cancelled()
             # The existing checkpoint reservation supports two durable ordinals
             # per slide.  Keep global/batches independently replay-safe and use
             # the second global ordinal for the one shared recovery only.
@@ -907,13 +907,13 @@ class ProductDeckIrExecutionAdapter:
         context: object,
         captures: Mapping[str, object],
     ) -> Mapping[str, object]:
-        claim = getattr(context, "claim")
-        operation_id = getattr(claim, "operation_id")
-        presentation_id = getattr(claim, "presentation_id")
-        owner_id = getattr(claim, "owner_id")
-        attempt_token = getattr(claim, "attempt_token")
-        fencing_token = getattr(claim, "fencing_token")
-        expected_revision = getattr(claim, "expected_revision")
+        claim = context.claim
+        operation_id = claim.operation_id
+        presentation_id = claim.presentation_id
+        owner_id = claim.owner_id
+        attempt_token = claim.attempt_token
+        fencing_token = claim.fencing_token
+        expected_revision = claim.expected_revision
         if not all(isinstance(value, uuid.UUID) for value in (operation_id, presentation_id, owner_id)):
             raise DeckIrIntegrationError("deck_ir_operation_binding_invalid")
         if not isinstance(attempt_token, str) or not isinstance(fencing_token, int) or not isinstance(expected_revision, int):

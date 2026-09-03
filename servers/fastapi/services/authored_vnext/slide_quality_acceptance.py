@@ -17,7 +17,7 @@ import json
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Literal
 
 
 SCHEMA_VERSION = "slide-document-quality-acceptance-receipt/v1"

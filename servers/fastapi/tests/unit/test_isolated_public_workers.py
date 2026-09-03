@@ -39,6 +39,7 @@ from services.trusted_executor.contracts import (
 )
 from workers import public_worker_runtime
 from workers.public_export_worker import (
+    EXPORT_BUNDLE_SCHEMA,
     EXPORT_CHECKPOINT_BUNDLE_SCHEMA,
     execute_export,
 )

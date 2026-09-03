@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.visual-acceptance-artifact-bound",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Visual acceptance is page, role, revision and artifact bound across 12 dimensions; no percentage or acceptance is valid without sealed human correlation.",
+  "scope": [
+    "authored",
+    "quality",
+    "visual"
+  ],
+  "invariants": [
+    "worst-page gate",
+    "120-pair human correlation before percentage"
+  ],
+  "forbidden": [
+    "global palette geometry score as acceptance",
+    "reuse of 96.47"
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_vnext/deck_ir/visual_evaluator.py",
+    "output/source-native-devax-20260901/visual-decision.json"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-01T12:11:05.6919630+00:00"
+}

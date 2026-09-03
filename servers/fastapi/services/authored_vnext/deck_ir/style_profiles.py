@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Mapping
 
 from .grammar import DesignGrammarManifest, default_design_grammar, digest
 

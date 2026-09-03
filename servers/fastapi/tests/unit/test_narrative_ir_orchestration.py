@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from uuid import UUID
 
+from pydantic import ValidationError
 import pytest
 
 from services.authored_vnext.narrative_ir.content_graph import (
@@ -148,7 +149,7 @@ def test_content_graph_dual_lane_seals_every_unit_and_fails_closed() -> None:
     assert preserve_input.content_graph.pages[1].content_units[0].payload.asset_occurrence_id == (
         "image-occurrence-001"
     )
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         preserve_input.content_graph.pages[0].page_index = 9
     structural_page = _content_page(0)
     structural_page["contentUnits"][0]["kind"] = "chart"

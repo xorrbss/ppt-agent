@@ -412,7 +412,6 @@ def derive_quality_drift_receipt(
     else:
         action = "hold-canary"
 
-    previous_fp = _fingerprint(previous_qualified)
     current_fp = _fingerprint(candidate)
     changed_digests = {
         key: value

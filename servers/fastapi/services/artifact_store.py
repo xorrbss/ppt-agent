@@ -581,10 +581,12 @@ class LocalDevelopmentArtifactObjectStore:
                 raise ArtifactBindingError("artifact.payload_binding_invalid")
             try:
                 os.link(temporary, target)
-            except FileExistsError:
+            except FileExistsError as conflict:
                 existing_size, existing_digest = self._file_binding(target)
                 if existing_size != artifact.size_bytes or existing_digest != artifact.sha256:
-                    raise ArtifactStoreError("artifact.immutable_object_conflict")
+                    raise ArtifactStoreError(
+                        "artifact.immutable_object_conflict"
+                    ) from conflict
         finally:
             try:
                 temporary.unlink(missing_ok=True)
@@ -754,13 +756,15 @@ class LocalDevelopmentArtifactObjectStore:
                 raise ArtifactBindingError("artifact.payload_binding_invalid")
             try:
                 os.link(temporary, target)
-            except FileExistsError:
+            except FileExistsError as conflict:
                 existing_size, existing_digest = self._file_binding(target)
                 if (
                     existing_size != provisional.artifact.size_bytes
                     or existing_digest != provisional.artifact.sha256
                 ):
-                    raise ArtifactStoreError("artifact.provisional_object_conflict")
+                    raise ArtifactStoreError(
+                        "artifact.provisional_object_conflict"
+                    ) from conflict
         finally:
             temporary.unlink(missing_ok=True)
 
@@ -778,10 +782,12 @@ class LocalDevelopmentArtifactObjectStore:
         destination.parent.mkdir(parents=True, exist_ok=True)
         try:
             os.link(source, destination)
-        except FileExistsError:
+        except FileExistsError as conflict:
             existing_size, existing_digest = self._file_binding(destination)
             if existing_size != size or existing_digest != digest:
-                raise ArtifactStoreError("artifact.immutable_object_conflict")
+                raise ArtifactStoreError(
+                    "artifact.immutable_object_conflict"
+                ) from conflict
         source.unlink(missing_ok=True)
 
     async def delete_provisional(self, provisional: ProvisionalArtifactRef) -> None:
@@ -1541,7 +1547,7 @@ class DurableArtifactService:
                 outcome="succeeded",
             )
             return reference
-        except IntegrityError:
+        except IntegrityError as conflict:
             existing = await session.scalar(
                 select(PublicArtifact).where(
                     PublicArtifact.owner_id == reference.owner_id,
@@ -1554,12 +1560,16 @@ class DurableArtifactService:
                 ).execution_options(populate_existing=True)
             )
             if existing is None:
-                raise ArtifactStoreError("artifact.metadata_deduplication_failed")
+                raise ArtifactStoreError(
+                    "artifact.metadata_deduplication_failed"
+                ) from conflict
             if existing.lifecycle_state != "committed" or (
                 existing.to_ref().model_dump(exclude={"artifact_id"})
                 != reference.model_dump(exclude={"artifact_id"})
             ):
-                raise ArtifactBindingError("artifact.metadata_deduplication_not_committed_or_exact")
+                raise ArtifactBindingError(
+                    "artifact.metadata_deduplication_not_committed_or_exact"
+                ) from conflict
             log_public_operation_correlation(
                 operation_id=reference.created_by_operation_id,
                 component="upload",
@@ -1702,10 +1712,15 @@ class DurableArtifactService:
         """
 
         source = Path(source_path)
-        if not source.is_absolute() or not source.is_file():
+        # A worker result is measured in megabytes, so the stat and the open
+        # both run off the event loop; only the path shape is answered inline.
+        if not source.is_absolute() or not await asyncio.to_thread(source.is_file):
             raise ArtifactNotFound("artifact.worker_output_path_missing")
-        with source.open("rb") as stream:
+        stream = await asyncio.to_thread(source.open, "rb")
+        try:
             await self._object_store.put_stream(reference, stream)
+        finally:
+            await asyncio.to_thread(stream.close)
         metadata = await self._object_store.head(reference)
         if (
             metadata is None

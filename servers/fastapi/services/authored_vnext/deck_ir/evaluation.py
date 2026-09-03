@@ -609,14 +609,14 @@ def derive_service_promotion_evidence_bundle(evidence: object) -> ServicePromoti
         errors.append("release_same_rc_32_cell_matrix_missing")
     if _read(evidence, "matrixSameRc", "matrix_same_rc", default=None) is not True:
         errors.append("release_matrix_rc_binding_invalid")
-    for field, code in (
+    for field_name, code in (
         ("workerFaultPassed", "release_worker_fault_evidence_missing"),
         ("databaseFaultPassed", "release_database_fault_evidence_missing"),
         ("objectStoreFaultPassed", "release_object_store_fault_evidence_missing"),
         ("providerFaultPassed", "release_provider_fault_evidence_missing"),
         ("maliciousCorpusPassed", "release_security_evidence_missing"),
     ):
-        if _read(evidence, field, default=None) is not True:
+        if _read(evidence, field_name, default=None) is not True:
             errors.append(code)
     if (_integer(_read(evidence, "soakDurationSeconds", "soak_duration_seconds", default=None)) or 0) < 86_400:
         errors.append("release_soak_duration_insufficient")

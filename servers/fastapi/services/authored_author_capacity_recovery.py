@@ -99,7 +99,7 @@ def authored_owner_capacity_diagnostic(html: str, capacity: SlideCapacity) -> di
         "limits": dict(zip(CAPACITY_KEYS, (
             capacity.max_qids, capacity.title_max_chars, capacity.body_max_chars,
             capacity.max_visible_text_chars, capacity.max_images,
-        ))),
+        ), strict=True)),
         "owners": ordered[:DIAGNOSTIC_OWNER_LIMIT],
     }
 

@@ -31,9 +31,9 @@ def test_public_status_projects_bounded_export_execution_and_publication_receipt
         if isinstance(node, ast.Dict) and any(
             isinstance(key, ast.Constant) and key.value == "compiler"
             and isinstance(value, ast.Constant) and value.value == "public-isolated-export"
-            for key, value in zip(node.keys, node.values)
+            for key, value in zip(node.keys, node.values, strict=True)
         )
-        for key, value in zip(node.keys, node.values)
+        for key, value in zip(node.keys, node.values, strict=True)
         if isinstance(key, ast.Constant) and key.value == "runtime_version"
     ]
     receipt_versions = [

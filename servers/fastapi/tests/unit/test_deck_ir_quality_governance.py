@@ -137,7 +137,9 @@ def _fingerprint(rc_seed: str, grammar_seed: str) -> dict[str, object]:
 
 
 def test_static_browser_deck_gates_and_bounded_shared_recovery() -> None:
-    clean = lambda names: {"checks": {name: True for name in names}, "issues": []}
+    def clean(names):
+        return {"checks": {name: True for name in names}, "issues": []}
+
     receipt = evaluate_deck_quality(
         static_evidence=clean(STATIC_REQUIRED_CHECKS),
         browser_evidence=clean(BROWSER_REQUIRED_CHECKS),

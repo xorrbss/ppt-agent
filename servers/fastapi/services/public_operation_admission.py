@@ -40,6 +40,18 @@ from utils.owner_context import (
 )
 
 
+from models.sql.workspace import WorkspaceOperation
+from services.provider_pricing import (
+    ProviderModelPricing,
+    ProviderUsageCost,
+    calculate_actual_usage_cost,
+)
+from services.public_generation_deadline_policy import (
+    public_generation_deadline_seconds,
+)
+from services.public_operation_correlation import log_public_operation_correlation
+
+
 PUBLIC_DEFAULT_POLICY_VERSION = "public-default/v3"
 PUBLIC_DEFAULT_MAX_SLIDES = 100
 PUBLIC_PHASE2_DEFAULT_POLICY_VERSION = "public-default/v3"
@@ -55,16 +67,6 @@ PUBLIC_PROVIDER_STAGES = frozenset(
         "vqa",
     }
 )
-from models.sql.workspace import WorkspaceOperation
-from services.provider_pricing import (
-    ProviderModelPricing,
-    ProviderUsageCost,
-    calculate_actual_usage_cost,
-)
-from services.public_generation_deadline_policy import (
-    public_generation_deadline_seconds,
-)
-from services.public_operation_correlation import log_public_operation_correlation
 _TERMINAL_STATES = frozenset(
     {"succeeded", "failed", "cancelled", "budget_exhausted", "deadline_exceeded"}
 )
@@ -1937,7 +1939,7 @@ async def reserve_public_provider_call(
                 raise PublicAdmissionRejected("public_provider_budget_cas_rejected")
             session.add(row)
             await session.flush()
-    except IntegrityError:
+    except IntegrityError as conflict:
         existing = await session.scalar(
             select(PublicProviderLogicalCall).where(
                 PublicProviderLogicalCall.admission_id == admission_id,
@@ -1957,7 +1959,7 @@ async def reserve_public_provider_call(
             ):
                 raise PublicAdmissionRejected(
                     "public_provider_logical_call_conflict"
-                )
+                ) from conflict
             log_public_operation_correlation(
                 operation_id=admission.operation_id,
                 component="provider",
@@ -1965,7 +1967,7 @@ async def reserve_public_provider_call(
                 outcome="replayed",
             )
             return (existing, True) if _return_reuse else existing
-        raise PublicAdmissionRejected("public_provider_logical_call_conflict")
+        raise PublicAdmissionRejected("public_provider_logical_call_conflict") from conflict
     except PublicAdmissionRejected as error:
         if error.code != "public_provider_budget_cas_rejected":
             raise
@@ -1975,7 +1977,7 @@ async def reserve_public_provider_call(
             .execution_options(populate_existing=True)
         )
         if current is None or current.state != "active":
-            raise PublicAdmissionRejected("public_provider_operation_not_active")
+            raise PublicAdmissionRejected("public_provider_operation_not_active") from error
         used = current.retry_request_count if is_retry else current.initial_request_count
         limit = current.retry_request_limit if is_retry else current.planned_request_limit
         if used >= limit:
@@ -1983,7 +1985,7 @@ async def reserve_public_provider_call(
                 "public_provider_retry_limit_exceeded"
                 if is_retry
                 else "public_provider_request_limit_exceeded"
-            )
+            ) from error
         if (
             current.estimated_consumed_microunits
             + current.estimated_reserved_microunits
@@ -1992,8 +1994,8 @@ async def reserve_public_provider_call(
         ):
             raise PublicAdmissionRejected(
                 "public_provider_estimated_cost_limit_exceeded"
-            )
-        raise PublicAdmissionRejected("public_provider_actual_cost_limit_exceeded")
+            ) from error
+        raise PublicAdmissionRejected("public_provider_actual_cost_limit_exceeded") from error
     log_public_operation_correlation(
         operation_id=admission.operation_id,
         component="provider",

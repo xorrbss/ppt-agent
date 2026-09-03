@@ -300,10 +300,10 @@ async def _authored_frame(
 
 def _response(manifest: object, frame_count: int) -> DesignPackPinResponse:
     return DesignPackPinResponse(
-        design_pack_id=getattr(manifest, "pack_id"),
-        version=int(getattr(manifest, "package_version").split(".", 1)[0]),
-        digest=getattr(manifest, "package_digest"),
-        source_kind=getattr(manifest, "source_kind"),
+        design_pack_id=manifest.pack_id,
+        version=int(manifest.package_version.split(".", 1)[0]),
+        digest=manifest.package_digest,
+        source_kind=manifest.source_kind,
         frame_count=frame_count,
     )
 

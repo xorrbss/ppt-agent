@@ -16,7 +16,6 @@ from PIL import Image
 
 from models.authored_vnext.deck import (
     SceneAssetManifestEntry,
-    SceneCapability,
     SceneChartElement,
     SceneDataManifestEntry,
     SceneEditability,
@@ -626,7 +625,12 @@ def build_editable_hybrid_scene(
                     declared_by_id.get(current, {}).get("parentId") or ""
                 )
 
-        def inside_other_atomic_owner(owner_id: str) -> bool:
+        def inside_other_atomic_owner(
+            owner_id: str,
+            *,
+            declared_by_id: Mapping[str, Mapping[str, object]] = declared_by_id,
+            atomic_owner_ids: set[str] = atomic_owner_ids,
+        ) -> bool:
             current = str(declared_by_id.get(owner_id, {}).get("parentId") or "")
             seen: set[str] = set()
             while current and current not in seen:
@@ -660,7 +664,6 @@ def build_editable_hybrid_scene(
                 # Authored master furniture already owns the running header;
                 # the body eyebrow would otherwise be rendered on top of it.
                 continue
-            classes = set(attrs.get("class", "").lower().split())
             required_features = {
                 str(item).lower()
                 for item in raw.get("requiredFeatures", [])

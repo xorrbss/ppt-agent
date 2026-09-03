@@ -10,7 +10,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
-import math
 import re
 from types import MappingProxyType
 from typing import Any, Mapping, Sequence

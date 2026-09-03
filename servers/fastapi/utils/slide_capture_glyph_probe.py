@@ -303,7 +303,9 @@ def probe_glyph_clipping_sync(html, metrics, png, *, command, frame_id):
 
 
 async def probe_glyph_clipping_file(
-    html, metrics, png, *, directory, screenshot_args, timeout,
+    html, metrics, png, *, directory, screenshot_args,
+    # The screenshot subprocess owns this deadline; see capture_slide_evidence.
+    timeout,  # noqa: ASYNC109
     count_runtime, run_screenshot, wait_for_output,
 ):
     plan = build_glyph_probe(html, metrics)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Annotated, Any, Literal
+from typing import Any, Literal
 
 from pydantic import Field, ValidationError
 
@@ -134,10 +134,10 @@ def _slot_envelope(slot: Mapping[str, Any]) -> Mapping[str, Any]:
 
 
 def _capacity(slide: object, frame: SourceNativeFrameV1) -> tuple[float, list[str]]:
-    text_values = [str(getattr(slide, "key_message"))]
-    text_values.extend(str(item) for item in getattr(slide, "supporting_points"))
+    text_values = [str(slide.key_message)]
+    text_values.extend(str(item) for item in slide.supporting_points)
     characters = sum(len(" ".join(item.split())) for item in text_values)
-    data = list(getattr(slide, "data"))
+    data = list(slide.data)
     numeric_items = sum(
         1
         for item in data
@@ -169,7 +169,7 @@ def _capacity(slide: object, frame: SourceNativeFrameV1) -> tuple[float, list[st
             except (TypeError, ValueError):
                 pass
     if not frame.slot_contracts:
-        point_count = len(getattr(slide, "supporting_points"))
+        point_count = len(slide.supporting_points)
         legacy = 1.0 if point_count == 0 else min(1.0, frame.max_supporting_points / point_count)
         return legacy, []
     envelopes = [_slot_envelope(item) for item in frame.slot_contracts]
@@ -220,7 +220,7 @@ def _capacity(slide: object, frame: SourceNativeFrameV1) -> tuple[float, list[st
             reasons.append("image-aspect-capacity-exceeded")
             break
     required_slots = [item for item in frame.slot_contracts if item.get("required") is True]
-    if len(required_slots) > 1 + len(getattr(slide, "supporting_points")) + len(data):
+    if len(required_slots) > 1 + len(slide.supporting_points) + len(data):
         reasons.append("required-slot-coverage-missing")
     ratios = [(content_area / estimated_area) if estimated_area else 1.0]
     if max_characters is not None:
@@ -231,13 +231,13 @@ def _capacity(slide: object, frame: SourceNativeFrameV1) -> tuple[float, list[st
 
 
 def _quality(slide: object, frame: SourceNativeFrameV1) -> dict[str, float]:
-    semantics = set(getattr(slide, "frame_semantics"))
+    semantics = set(slide.frame_semantics)
     supported = set(frame.frame_semantics)
     semantic_fit = 1.0 if not semantics else len(semantics & supported) / len(semantics)
     capacity, _ = _capacity(slide, frame)
-    owns_source = bool(getattr(slide, "source_ownership"))
+    owns_source = bool(slide.source_ownership)
     return {
-        "roleFitness": 1.0 if getattr(slide, "role") in frame.roles else 0.0,
+        "roleFitness": 1.0 if slide.role in frame.roles else 0.0,
         "contentCapacity": round(capacity, 6),
         "sourceCompatibility": (
             1.0 if not owns_source or frame.supports_source_owned_content else 0.0
@@ -250,19 +250,19 @@ def _rejections(slide: object, frame: SourceNativeFrameV1) -> list[str]:
     reasons: list[str] = []
     if not frame.executable:
         reasons.append("frame-fidelity-only")
-    if getattr(slide, "role") not in frame.roles:
+    if slide.role not in frame.roles:
         reasons.append("role-unsupported")
-    if getattr(slide, "data_representation") not in frame.data_representations:
+    if slide.data_representation not in frame.data_representations:
         reasons.append("data-representation-unsupported")
-    if getattr(slide, "density") not in frame.densities:
+    if slide.density not in frame.densities:
         reasons.append("density-unsupported")
-    if len(getattr(slide, "supporting_points")) > frame.max_supporting_points:
+    if len(slide.supporting_points) > frame.max_supporting_points:
         reasons.append("content-capacity-exceeded")
     _, capacity_reasons = _capacity(slide, frame)
     reasons.extend(capacity_reasons)
-    if getattr(slide, "source_ownership") and not frame.supports_source_owned_content:
+    if slide.source_ownership and not frame.supports_source_owned_content:
         reasons.append("source-ownership-unsupported")
-    if not set(getattr(slide, "frame_semantics")).issubset(frame.frame_semantics):
+    if not set(slide.frame_semantics).issubset(frame.frame_semantics):
         reasons.append("frame-semantics-unsupported")
     return reasons
 

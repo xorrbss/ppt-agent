@@ -8,9 +8,7 @@ process and the deterministic result remains usable without an AI provider.
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from copy import deepcopy
 import hashlib
-import json
 import math
 import os
 from pathlib import Path, PurePosixPath
@@ -733,7 +731,7 @@ def _feature_distance(left: dict[str, object], right: dict[str, object]) -> floa
     left_vector = left["vector"]
     right_vector = right["vector"]
     base = math.sqrt(
-        sum((a - b) ** 2 for a, b in zip(left_vector, right_vector))
+        sum((a - b) ** 2 for a, b in zip(left_vector, right_vector, strict=True))
         / len(left_vector)
     )
     left_hint = left["semanticHint"]
@@ -1534,7 +1532,7 @@ def _layouts_geometrically_equivalent(
     return bool(left_slots) and left_slots.keys() == right_slots.keys() and all(
         abs(left_value - right_value) <= GEOMETRY_TOLERANCE_RATIO
         for role in left_slots
-        for left_value, right_value in zip(left_slots[role], right_slots[role])
+        for left_value, right_value in zip(left_slots[role], right_slots[role], strict=True)
     )
 
 
@@ -2136,7 +2134,7 @@ def _feature_logical_slot_distance(
         right_ordered = sorted(
             right_roles[role], key=lambda slot: (slot.bounds.x, slot.bounds.y)
         )
-        for left_slot, right_slot in zip(left_ordered, right_ordered):
+        for left_slot, right_slot in zip(left_ordered, right_ordered, strict=True):
             differences.extend(
                 [
                     abs(left_slot.bounds.x - right_slot.bounds.x) / max(1, width),

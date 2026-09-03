@@ -15,7 +15,7 @@ import json
 import logging
 import os
 import time
-from typing import Any, Protocol
+from typing import Protocol
 
 from services.authored_checkpoint_artifacts import write_detached_deck_ir_checkpoint, write_deck_ir_execution_evidence
 from services.authored_vnext.deck_ir.director import (
@@ -84,7 +84,7 @@ def ensure_product_deck_ir_execution_adapter(*, explicit: bool = False) -> bool:
     before the adapter can reserve a provider call.
     """
 
-    if not explicit and not os.getenv("DECK_IR_GENERATION_ENABLED", "").strip().lower() in {
+    if not explicit and os.getenv("DECK_IR_GENERATION_ENABLED", "").strip().lower() not in {
         "1", "true", "yes", "on"
     }:
         return False
@@ -112,8 +112,8 @@ def _digest(payload: Mapping[str, object]) -> str:
 
 
 async def _progress(context: object, *, stage: str, percent: int, message: str) -> None:
-    await getattr(context, "raise_if_cancelled")()
-    accepted = await getattr(context, "progress")(
+    await context.raise_if_cancelled()
+    accepted = await context.progress(
         stage=stage, percent=percent, message=message
     )
     if accepted is False:
@@ -378,7 +378,7 @@ class ConstraintCompilerDeckIrExecutionAdapter:
         context: object,
         strategy_receipt: Mapping[str, object],
     ) -> Mapping[str, object]:
-        operation_id = str(getattr(getattr(context, "claim"), "operation_id"))
+        operation_id = str(context.claim.operation_id)
         strategy = validate_sealed_generation_strategy(
             strategy_receipt, operation_id=operation_id
         )
@@ -433,9 +433,9 @@ class ConstraintCompilerDeckIrExecutionAdapter:
         )
         await _progress(context, stage="authoring", percent=45, message="Deck IR validated")
         checkpoint = write_detached_deck_ir_checkpoint(
-            job_id=getattr(generation_job, "id"),
-            attempt_token=getattr(getattr(context, "claim"), "attempt_token"),
-            fencing_token=getattr(getattr(context, "claim"), "fencing_token"),
+            job_id=generation_job.id,
+            attempt_token=context.claim.attempt_token,
+            fencing_token=context.claim.fencing_token,
             payload={
                 "operationId": operation_id,
                 "strategyReceiptDigest": strategy_receipt.get("receiptDigest"),
@@ -499,9 +499,9 @@ class ConstraintCompilerDeckIrExecutionAdapter:
 
         def retain_execution(payload):
             return write_deck_ir_execution_evidence(
-                job_id=getattr(generation_job, "id"),
-                attempt_token=getattr(getattr(context, "claim"), "attempt_token"),
-                fencing_token=getattr(getattr(context, "claim"), "fencing_token"),
+                job_id=generation_job.id,
+                attempt_token=context.claim.attempt_token,
+                fencing_token=context.claim.fencing_token,
                 payload={"operationId": operation_id, "originalCheckpointDigest": checkpoint["checkpointDigest"],
                          "candidateSelectionReceipt": selection_receipt, **payload},
             )
@@ -513,7 +513,17 @@ class ConstraintCompilerDeckIrExecutionAdapter:
             ranked_candidates = ranked.get(key)
             if candidate is None or not isinstance(ranked_candidates, tuple):
                 raise DeckIrIntegrationError("candidate_set_exhausted")
-            def compile_candidate(item: object, closure_revision: int, measurement_digest: str | None) -> object:
+            # The per-slide closures below are consumed inside this same
+            # iteration, so binding the slide and its key as defaults changes
+            # nothing today and stops a later reordering from compiling every
+            # candidate against the deck's last slide.
+            def compile_candidate(
+                item: object,
+                closure_revision: int,
+                measurement_digest: str | None,
+                *,
+                slide: Mapping[str, object] = slide,
+            ) -> object:
                 return compile_slide(
                     operation_id=operation_id,
                     deck_ir=deck_ir,
@@ -528,7 +538,9 @@ class ConstraintCompilerDeckIrExecutionAdapter:
                     style_profile_digest=style_profile_digest,
                 )
 
-            async def observe_candidate(result: object) -> Mapping[str, object]:
+            async def observe_candidate(
+                result: object, *, key: str = key
+            ) -> Mapping[str, object]:
                 candidate_html = getattr(result, "html", None)
                 candidate_semantic = getattr(result, "semantic", None)
                 candidate_receipt = getattr(result, "receipt", None)
@@ -643,8 +655,8 @@ class ConstraintCompilerDeckIrExecutionAdapter:
                 {
                     "schemaVersion": "authored-emission-bundle-input/deck-ir-v1",
                     "operationId": operation_id,
-                    "attemptToken": getattr(getattr(context, "claim"), "attempt_token"),
-                    "fencingToken": getattr(getattr(context, "claim"), "fencing_token"),
+                    "attemptToken": context.claim.attempt_token,
+                    "fencingToken": context.claim.fencing_token,
                     "strategyReceipt": dict(strategy_receipt),
                     "styleProfileDigest": style_profile_digest,
                     "retainedReferenceDigest": retained_reference_digest,

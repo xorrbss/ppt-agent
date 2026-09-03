@@ -285,4 +285,4 @@ async def generate_ppt_outline(
         # code and retryability metadata.  Do not feed those exception objects
         # into the legacy text-chunk stream where callers would concatenate
         # them with strings and mask the real fail-closed reason as HTTP 500.
-        raise handled
+        raise handled from e

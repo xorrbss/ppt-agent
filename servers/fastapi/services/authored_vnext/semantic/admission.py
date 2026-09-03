@@ -48,10 +48,14 @@ def reconcile_and_issue_native_admission(
     input_bundle_digest: str,
     source: AuthoredSemanticSourceV1,
     observation: BrowserObservationReceiptV1,
-    registry: SerializerRegistryV1 = SerializerRegistryV1(),
+    registry: SerializerRegistryV1 | None = None,
 ) -> NativeAdmissionReceiptV1:
     """Fail publication integrity mismatches; rasterize expression mismatches."""
 
+    # Built per call, not once at import: the registry validates itself against
+    # the live capability table in __post_init__, and a default frozen at import
+    # time would keep answering from a table that has since moved.
+    registry = registry or SerializerRegistryV1()
     if observation.input_bundle_digest != input_bundle_digest:
         raise SemanticContractError("authored_semantic_observation_bundle_mismatch")
     if observation.receipt_digest is None:

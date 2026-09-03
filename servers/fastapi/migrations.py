@@ -13,8 +13,10 @@ from sqlalchemy.engine import make_url
 from alembic import command
 import migration_revision_contract as revision_contract
 from migration_retired_revision import (
-    RETIRED_AUTHORED_VNEXT_TABLES,
-    RETIRED_PROVIDER_RUNTIME_TABLES,
+    # Re-exported, not used here: callers read the retired-table sets as
+    # ``migrations.RETIRED_*`` so the schema contract has a single entry point.
+    RETIRED_AUTHORED_VNEXT_TABLES,  # noqa: F401
+    RETIRED_PROVIDER_RUNTIME_TABLES,  # noqa: F401
     repair_orphan_alembic_revision,
 )
 from migration_runtime_settings_schema import (

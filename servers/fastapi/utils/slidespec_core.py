@@ -8,9 +8,8 @@ from html import escape
 import json
 import re
 from typing import Any, Iterable, Mapping
-from uuid import uuid4
 
-from pydantic import BaseModel, TypeAdapter
+from pydantic import BaseModel
 
 from models.slidespec_v1 import (
     AppliedRepair,
@@ -24,7 +23,6 @@ from models.slidespec_v1 import (
     SemanticDomEntry,
     SlideDigests,
     SlideSpec,
-    SLIDESPEC_SCHEMA,
     SLIDESPEC_SCHEMA_V1_0,
 )
 from utils.slidespec_constraints import (

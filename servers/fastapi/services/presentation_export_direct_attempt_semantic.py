@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.authored_vnext.semantic.contracts import (
     AuthoredEmissionBundleV1,
     ExportAttemptDigestBindingV1,
-    SemanticUnavailableReceiptV1,
 )
 from models.authored_vnext.semantic.readiness import (
     ExportAuthorityClaimV2,

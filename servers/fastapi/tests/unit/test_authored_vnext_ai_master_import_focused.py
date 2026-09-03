@@ -107,9 +107,9 @@ def _layouts_are_structurally_equivalent(
         left_slot[0] == right_slot[0]
         and all(
             abs(left_value - right_value) <= tolerance
-            for left_value, right_value in zip(left_slot[1:], right_slot[1:])
+            for left_value, right_value in zip(left_slot[1:], right_slot[1:], strict=True)
         )
-        for left_slot, right_slot in zip(left_bounds, right_bounds)
+        for left_slot, right_slot in zip(left_bounds, right_bounds, strict=True)
     )
 
 

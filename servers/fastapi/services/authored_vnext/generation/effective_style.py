@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from models.authored_vnext.deck.composition import (
@@ -119,7 +118,6 @@ def _semantic_policy_evidence(
     zones: list[ReservedZoneSnapshot] = []
     review: list[str] = []
     for element in contract.semantic_elements:
-        placeholder = element.content.placeholder_role
         role = element.content.role or ""
         if element.type == "placeholder":
             # Title evidence is projected into the role policy. Body/content/

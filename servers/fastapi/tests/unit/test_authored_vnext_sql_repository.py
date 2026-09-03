@@ -144,13 +144,15 @@ def test_same_owner_request_repositories_keep_operation_claims_isolated(
         _GenerationCommand(operation_id="operation:first", deck_id="deck:first"),
         _GenerationCommand(operation_id="operation:second", deck_id="deck:second"),
     ]
-    for repository, command in zip((first, second), commands, strict=True):
+    for repository, generation_command in zip(
+        (first, second), commands, strict=True
+    ):
         repository.begin_operation(
-            operation_id=command.operation_id,
-            deck_id=command.deck_id,
+            operation_id=generation_command.operation_id,
+            deck_id=generation_command.deck_id,
             kind="test.complete",
-            idempotency_key=command.operation_id,
-            request=command,
+            idempotency_key=generation_command.operation_id,
+            request=generation_command,
             expected_revision=None,
             expected_digest=None,
         )

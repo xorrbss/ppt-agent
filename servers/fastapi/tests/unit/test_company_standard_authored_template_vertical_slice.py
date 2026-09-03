@@ -374,7 +374,7 @@ def test_company_standard_authored_template_vertical_slice(
         exported = worker_slides(persisted, effective)
         assert len(previews) == len(exported) == len(manuscript)
         assert all(
-            f'id="furniture:page-number"' in preview
+            'id="furniture:page-number"' in preview
             and f'>{page_number}</div>' in preview
             for page_number, preview in enumerate(previews, start=1)
         )

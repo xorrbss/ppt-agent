@@ -137,7 +137,7 @@ def _validate_composition(deck: DeckIRV1, graph: CompositionIntentGraphV1) -> No
             edges.append((relation.from_, relation.to))
         elif relation.strength == "hard" and relation.relation in {"rightOf", "below"}:
             edges.append((relation.to, relation.from_))
-    order_edges = list(zip(graph.reading_order, graph.reading_order[1:]))
+    order_edges = list(zip(graph.reading_order, graph.reading_order[1:], strict=False))
     _assert_acyclic(nodes, edges + order_edges)
     owners = Counter(ref for zone in graph.zones for ref in zone.content_refs)
     content_keys = {item.element_key for item in slide.components if item.kind != "decoration"}

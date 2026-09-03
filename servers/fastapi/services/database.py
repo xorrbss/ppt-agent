@@ -530,7 +530,17 @@ async def create_db_and_tables():
                         # migrated one.
                         PublicPrincipalBinding.__table__,
                         PublicArtifact.__table__,
+                        # A publication pointer and a slide checkpoint are read
+                        # whenever an export resumes or an account is deleted, so
+                        # they belong beside the artifact they point at rather
+                        # than only in the Alembic chain.
+                        PublicArtifactPublication.__table__,
+                        PublicSlideCheckpoint.__table__,
                         PublicExportIdentity.__table__,
+                        # The editable-hybrid completion ledger is not part of the
+                        # authored-vnext repository tuple, so it has to be named on
+                        # its own or the probes that read it find no table.
+                        AuthoredEditableHybridMvpCompletion.__table__,
                         *AUTHORED_VNEXT_SQL_TABLES,
                     ],
                 )

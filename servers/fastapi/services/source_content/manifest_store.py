@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
 import hmac
 from pathlib import Path
 from typing import Any
@@ -30,7 +29,7 @@ from services.source_content.contracts import (
 )
 from services.source_content.digests import digest_json
 from services.source_content.errors import MANIFEST_INVALID, SECURITY_REJECTED, SourceContentError
-from services.source_content.pptx import ExtractedSourceContent, extract_pptx_source_content
+from services.source_content.pptx import extract_pptx_source_content
 from services.workspace_asset_service import resolve_workspace_asset_download
 from services.workspace_service import WorkspaceServiceError
 from utils.datetime_utils import get_current_utc_datetime

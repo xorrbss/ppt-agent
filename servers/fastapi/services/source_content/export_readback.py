@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import io
 import posixpath
@@ -290,8 +291,10 @@ async def render_candidate_powerpoint_evidence(
 
     from services.presentation_export_powerpoint_qa import trusted_powerpoint_qa
 
-    path = Path(candidate_pptx).resolve()
-    content = _candidate_bytes(path)
+    # Resolving the candidate and reading it back both touch a deck-sized file;
+    # the QA helper itself already keeps its blocking work off the event loop.
+    path = await asyncio.to_thread(Path(candidate_pptx).resolve)
+    content = await asyncio.to_thread(_candidate_bytes, path)
     artifact_digest = f"sha256:{hashlib.sha256(content).hexdigest()}"
     envelope = _mapping(materialized_scene, label="materialized Scene")
     scene = _mapping(_value(envelope, "scene"), label="canonical Scene")

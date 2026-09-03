@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-import json
 from typing import Any
 import uuid
 
@@ -39,7 +38,6 @@ from models.sql.slide import SlideModel
 from .canonical import (
     SemanticContractError,
     bytes_digest,
-    canonical_digest,
     canonical_json,
     seal_asset_manifest,
     seal_deck_manifest,

@@ -323,7 +323,8 @@ async def _build_run_context(
     if presentation is None:
         raise NonRetryableWorkspaceOperationError("presentation_not_found")
     try:
-        profile = await require_authored_mutation_evidence(session, presentation)
+        # Admission only; the handler works from the claim, not the profile.
+        await require_authored_mutation_evidence(session, presentation)
     except FrozenCompatibilityError as error:
         raise NonRetryableWorkspaceOperationError(error.code) from error
     generation_mode = "standard"

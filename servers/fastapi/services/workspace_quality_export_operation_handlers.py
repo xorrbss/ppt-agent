@@ -409,7 +409,6 @@ class WorkspaceExportOperationHandler:
             presentation = await session.get(PresentationModel, claim.presentation_id)
             if presentation is None:
                 raise NonRetryableWorkspaceOperationError("presentation_not_found")
-            title = presentation.title or "presentation"
             authored_vnext_projection = (
                 presentation.theme.get("authored_vnext")
                 if isinstance(presentation.theme, Mapping)

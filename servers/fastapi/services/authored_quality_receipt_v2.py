@@ -16,7 +16,6 @@ from contextlib import contextmanager
 from collections.abc import Mapping, MutableMapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any
 
 from services.authored_composition_policy import _normalized_capacity_owned_text
 
@@ -1195,9 +1194,11 @@ def _manifest_lock(path: Path, *, timeout_seconds: float = 5.0):
                         handle.seek(0)
                         msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
                         locked = True
-                    except OSError:
+                    except OSError as busy:
                         if time.monotonic() - started >= timeout_seconds:
-                            raise ValueError("quality_receipt_manifest_lock_timeout")
+                            raise ValueError(
+                                "quality_receipt_manifest_lock_timeout"
+                            ) from busy
                         time.sleep(0.01)
             else:
                 import fcntl
@@ -1206,9 +1207,11 @@ def _manifest_lock(path: Path, *, timeout_seconds: float = 5.0):
                     try:
                         fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
                         locked = True
-                    except OSError:
+                    except OSError as busy:
                         if time.monotonic() - started >= timeout_seconds:
-                            raise ValueError("quality_receipt_manifest_lock_timeout")
+                            raise ValueError(
+                                "quality_receipt_manifest_lock_timeout"
+                            ) from busy
                         time.sleep(0.01)
             yield
         finally:

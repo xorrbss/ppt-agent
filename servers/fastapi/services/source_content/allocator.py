@@ -159,7 +159,7 @@ class SourceContentPlacementPlan(StrictCamelModel):
             ordered = sorted(ranges, key=lambda item: item.start)
             if ordered[0].start != 0:
                 raise ValueError("source_content_fragment_gap")
-            for previous, current in zip(ordered, ordered[1:]):
+            for previous, current in zip(ordered, ordered[1:], strict=False):
                 if current.start < previous.end_exclusive:
                     raise ValueError("source_content_fragment_overlap")
                 if current.start > previous.end_exclusive:
@@ -267,7 +267,7 @@ class ContentAllocator:
             ]
             if outline_ids != manifest_ids:
                 raise ValueError("source_content_source_unit_cardinality_mismatch")
-            for unit, outline_slide in zip(ordered_units, outline_units):
+            for unit, outline_slide in zip(ordered_units, outline_units, strict=True):
                 block_ids = [
                     str(_field(_mapping(block), "sourceBlockId", "source_block_id") or "")
                     for block in sorted(

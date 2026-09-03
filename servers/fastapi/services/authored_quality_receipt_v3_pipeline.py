@@ -15,12 +15,9 @@ from services.authored_quality_receipt_v2 import (
     QualityReceiptV3Ledger,
     create_quality_receipt_v3_from_v2,
     quality_receipt_manifest_path,
-    validate_current_quality_receipt_payload,
-    validate_quality_receipt_v3_payload,
 )
 from services.authored_vnext.capability_registry import (
     CAPABILITY_REGISTRY_DIGEST,
-    capability_metadata,
     require_capability_metadata,
 )
 from services.authored_vnext.master.digests import canonical_digest

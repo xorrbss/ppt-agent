@@ -152,7 +152,8 @@ def test_orphan_sweep_removes_stale_prepared_marker(tmp_path: Path):
     slide_dir.mkdir(parents=True)
     prepared = slide_dir / ".prepared-r1-deadbeef.json"
     prepared.write_text('{"revision":1,"digest":"deadbeef"}', "utf-8")
-    import os, time
+    import os
+    import time
     old = time.time() - 3600
     os.utime(prepared, (old, old))
     assert store.sweep_orphans(max_age_seconds=60) == 1

@@ -357,7 +357,9 @@ class PresentationChatService:
         presentation = await self._sql_session.get(PresentationModel, self._presentation_id)
         if not presentation:
             raise HTTPException(status_code=404, detail="Presentation not found")
-        profile = resolve_presentation_profile(presentation)
+        # Called for its fail-closed effect: an unresolvable deck must not
+        # reach the chat surface at all.
+        resolve_presentation_profile(presentation)
         # The profile remains the authority for deck access; all retained chat
         # tools use the neutral structured-content surface.
         self._presentation_type = "standard"

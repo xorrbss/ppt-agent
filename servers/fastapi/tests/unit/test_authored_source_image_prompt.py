@@ -120,7 +120,7 @@ def test_source_image_brief_names_each_candidate_and_its_origin(tmp_path):
         ]
     )
 
-    assert f'source slot "source-slot-' in brief
+    assert 'source slot "source-slot-' in brief
     assert "1600x900px" in brief
     assert "from source slide 4" in brief
     assert 'headed "시장 개요"' in brief

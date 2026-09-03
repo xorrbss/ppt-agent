@@ -55,7 +55,6 @@ class SealedContentUnit:
 
 
 def _unit_from_contract(value: object, *, semantic_role: str = "body") -> SealedContentUnit:
-    raw = _mapping(value)
     payload = _mapping(_value(value, "payload", default={}))
     unit_id = str(_value(value, "content_unit_id", "contentUnitId", default="") or "")
     if not unit_id:
@@ -221,9 +220,6 @@ def build_composition_plan(
     new_authoring_adaptive = generation_lane == "new-authoring"
     uses_source_flow = source_verbatim or new_authoring_adaptive
     slots = source_flow_slots(frame) if uses_source_flow else executable_slots(frame)
-    unit_order = {
-        unit.content_unit_id: index for index, unit in enumerate(units)
-    }
     assigned, assignments, unmapped = allocate_units(units, slots)
     mapped_ids = [item["contentUnitId"] for item in assignments]
     duplicates = sorted({item for item in mapped_ids if mapped_ids.count(item) > 1})

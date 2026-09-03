@@ -23,7 +23,6 @@ from services.database import async_session_maker
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
     RetryableWorkspaceOperationError,
-    WorkspaceOperationCancelled,
     WorkspaceOperationExecutionContext,
     WorkspaceOperationHandlerRegistry,
     WorkspaceOperationLeaseLost,

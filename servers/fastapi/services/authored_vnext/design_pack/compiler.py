@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import html
 import json
-import math
 import posixpath
 import re
 from collections import Counter
@@ -34,7 +33,6 @@ from .models import (
     Spacing,
     TextStyle,
     UnsupportedElement,
-    canonical_digest,
     seal_structure,
 )
 

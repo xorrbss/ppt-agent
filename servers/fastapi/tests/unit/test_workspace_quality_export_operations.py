@@ -14,7 +14,6 @@ from sqlalchemy import event, func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
-from models.presentation_and_path import PresentationAndPath
 from models.presentation_from_template import AuthoredQualityReviewRequest
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
@@ -36,8 +35,6 @@ from models.workspace import WorkspaceCommandRequest
 from services import workspace_artifact_publication_service as publication
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
-    RetryableWorkspaceOperationError,
-    WorkspaceOperationCancelled,
     WorkspaceOperationClaim,
     WorkspaceOperationHandlerRegistry,
     WorkspaceOperationLeaseLost,

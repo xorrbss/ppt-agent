@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 from pathlib import Path
 import re
 import subprocess
@@ -14,7 +13,7 @@ from typing import Mapping
 import uuid
 from collections.abc import Awaitable
 
-from services.isolated_worker_contracts import ArtifactRef, IsolatedWorkerJob
+from services.isolated_worker_contracts import IsolatedWorkerJob
 from services.trusted_executor.isolation_policy import (
     EnforcementStatus,
     IsolationControl,
@@ -201,7 +200,9 @@ class DockerTrustedWorkerWireTransport:
         capability_key = Path(
             environment.get("PUBLIC_WORKER_CAPABILITY_KEY_FILE", "").strip()
         )
-        if not capability_key.is_absolute() or not capability_key.is_file():
+        if not capability_key.is_absolute() or not await asyncio.to_thread(
+            capability_key.is_file
+        ):
             raise TrustedWorkerWireError("trusted_worker_capability_key_unavailable")
         container_name = (
             f"presenton-worker-{str(job.operation_id)[:12]}-"

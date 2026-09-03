@@ -12,7 +12,7 @@ import hashlib
 import json
 import os
 import unicodedata
-from typing import Any, Literal
+from typing import Literal
 
 
 GenerationStrategy = Literal["deck-ir", "legacy-authored", "reject"]

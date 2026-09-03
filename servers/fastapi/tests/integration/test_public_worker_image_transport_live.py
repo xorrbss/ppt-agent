@@ -11,12 +11,8 @@ import time
 import uuid
 import zipfile
 
-import pytest
-
-pytestmark = pytest.mark.skip(
-    reason="Docker image transport is retired; use Windows local product-path validation"
-)
 from PIL import Image
+import pytest
 
 from services.isolated_worker_contracts import (
     ArtifactRef,
@@ -28,6 +24,10 @@ from services.trusted_executor.composition import (
     create_trusted_worker_executor_runtime,
 )
 from services.trusted_executor.worker_dispatcher import TrustedWorkerWireError
+
+pytestmark = pytest.mark.skip(
+    reason="Docker image transport is retired; use Windows local product-path validation"
+)
 
 
 _PRODUCT_IMAGE = (

@@ -351,7 +351,15 @@ def test_public_render_controller_bounds_large_decks_and_keeps_five_slide_batch(
             worker_finished = asyncio.Event()
             holder_finished = asyncio.Event()
 
-            async def failing_render(_batch):
+            # Every closure in this loop runs before the next iteration, so
+            # the loop variables are bound as defaults to keep it that way.
+            async def failing_render(
+                _batch,
+                *,
+                entered=entered,
+                cancel=cancel,
+                worker_finished=worker_finished,
+            ):
                 entered.set()
                 try:
                     if not cancel:
@@ -362,7 +370,7 @@ def test_public_render_controller_bounds_large_decks_and_keeps_five_slide_batch(
 
             failed = batcher(2, failing_render)
 
-            async def holder():
+            async def holder(*, failed=failed, holder_finished=holder_finished):
                 try:
                     async with admission.acquire(on_wait=lambda: None, wait_seconds=2):
                         failed.settle(1)
@@ -370,7 +378,7 @@ def test_public_render_controller_bounds_large_decks_and_keeps_five_slide_batch(
                 finally:
                     holder_finished.set()
 
-            async def operation():
+            async def operation(*, failed=failed):
                 try:
                     return await gather_render_members([
                         failed.render(0, references[0]), holder(),

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "key": "public-service.generation-slide-limit",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "공개 프레젠테이션 생성 한도를 100페이지로 설정하고 변경 시 새 버전 정책을 사용한다.",
+  "scope": [
+    "public-service",
+    "generation",
+    "admission"
+  ],
+  "invariants": [
+    "활성 기본 공개 정책은 최대 100페이지를 허용한다.",
+    "이미 작업이 참조한 공개 정책 revision은 변경하지 않는다."
+  ],
+  "forbidden": [
+    "기존 durable operation이 참조한 정책 revision의 한도 값을 직접 변경한다."
+  ],
+  "evidence": [
+    "servers/fastapi/services/public_operation_admission.py",
+    "servers/fastapi/alembic/versions/c8d5f3a20b71_raise_public_slide_limit_to_100.py",
+    "servers/fastapi/tests/unit/test_public_operation_admission.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-01T09:57:16.9964267+00:00"
+}

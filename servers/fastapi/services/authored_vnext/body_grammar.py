@@ -112,7 +112,7 @@ def _partition_text(text: str, desired: int = 3) -> list[str]:
         cuts.append(cut)
         floor = cut
     points = [0, *cuts, len(text)]
-    blocks = [text[left:right] for left, right in zip(points, points[1:])]
+    blocks = [text[left:right] for left, right in zip(points, points[1:], strict=False)]
     blocks = [block for block in blocks if block]
     if "".join(blocks) != text:
         raise ValueError("authored body grammar partition changed source text")
@@ -137,7 +137,7 @@ def _partition_text_by_capacity(text: str, capacities: list[float]) -> list[str]
     cuts: list[int] = []
     floor = 0
     cumulative_capacity = 0.0
-    for index, capacity in enumerate(positive[:-1]):
+    for capacity in positive[:-1]:
         if capacity <= 0:
             cuts.append(floor)
             continue
@@ -152,7 +152,7 @@ def _partition_text_by_capacity(text: str, capacities: list[float]) -> list[str]
         cuts.append(cut)
         floor = cut
     points = [0, *cuts, len(text)]
-    parts = [text[left:right] for left, right in zip(points, points[1:])]
+    parts = [text[left:right] for left, right in zip(points, points[1:], strict=False)]
     if "".join(parts) != text:
         raise ValueError("authored capacity partition changed source text")
     return parts

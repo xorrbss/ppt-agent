@@ -3196,7 +3196,7 @@ def test_visual_story_plan_varies_silhouettes_and_keeps_hybrid_claims_partial():
     ]
     assert all(
         current.silhouette != previous.silhouette
-        for previous, current in zip(plan.slides, plan.slides[1:])
+        for previous, current in zip(plan.slides, plan.slides[1:], strict=False)
     )
     assert "table" in plan.at(2).hybrid_native_candidates
     assert "chart" in plan.at(3).hybrid_native_candidates

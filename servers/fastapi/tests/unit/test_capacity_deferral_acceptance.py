@@ -168,7 +168,6 @@ def test_authored_capacity_deferral_is_fair_durable_and_cancel_safe(
 async def _capacity_acceptance(tmp_path: Path, monkeypatch):
     engine, maker = await _database(tmp_path / "capacity-deferral.db")
     seeded = await _seed_operations(maker)
-    owner_by_operation = {row[2]: row[0] for row in seeded}
     job_by_operation = {row[2]: row[3] for row in seeded}
     first_operation = seeded[0][2]
     cancelled_operation = seeded[3][2]

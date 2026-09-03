@@ -6,7 +6,6 @@ one plain `client.generate` text call against the selected provider (codex /
 anthropic / ...). Opt-in — never on the fast deterministic default path."""
 
 import asyncio
-import functools
 import html as _html
 import logging
 import os

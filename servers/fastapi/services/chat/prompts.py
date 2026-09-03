@@ -1,4 +1,3 @@
-from constants.presentation import MAX_NUMBER_OF_SLIDES
 
 
 def _trim_block(label: str, text: str) -> str:

@@ -6,7 +6,6 @@ import asyncio
 from contextlib import nullcontext
 from dataclasses import dataclass
 from hashlib import sha256
-import hmac
 import json
 import os
 from pathlib import Path
@@ -15,7 +14,6 @@ import tempfile
 import threading
 import time
 from typing import Any
-import uuid
 import xml.etree.ElementTree as ET
 import zipfile
 
@@ -545,7 +543,7 @@ def _geometry_contract_mismatches(
             continue
         shape = matches[0]
         actual = tuple(float(shape[field]) * 4 / 3 for field in ("left", "top", "width", "height"))
-        if any(abs(left - right) > tolerance_px for left, right in zip(actual, geometry)):
+        if any(abs(left - right) > tolerance_px for left, right in zip(actual, geometry, strict=True)):
             mismatches += 1
     return mismatches
 
@@ -842,12 +840,12 @@ def _run_powerpoint_com_qa(
                 interactive_observation = True
                 dialog_watcher_status = "armed"
                 dialog_watcher_armed_before_first_open = True
-            except Exception:
+            except Exception as watcher_error:
                 dialog_watcher_status = "unavailable"
                 if release_required:
                     raise PresentationExportContractError(
                         "presentation_export_powerpoint_dialog_watcher_unavailable"
-                    )
+                    ) from watcher_error
                 interactive_observation = False
         if evidence_directory is None:
             evidence_context = tempfile.TemporaryDirectory(

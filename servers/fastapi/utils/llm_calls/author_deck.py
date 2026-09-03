@@ -901,7 +901,7 @@ def plan_authored_visual_story(
         raise ValueError("visual plan infographic briefs must match slide count")
 
     planned: list[AuthoredSlideVisualIntent] = []
-    for index, (content, role) in enumerate(zip(contents, roles)):
+    for index, (content, role) in enumerate(zip(contents, roles, strict=True)):
         story_kind = _story_kind(
             content,
             role,
@@ -1789,7 +1789,7 @@ async def author_deck(
             return_exceptions=True,
         )
         consumed: set[int] = set()
-        for batch, outcome in zip(wave.batches, outcomes):
+        for batch, outcome in zip(wave.batches, outcomes, strict=True):
             consumed.update(batch.slide_indices)
             if isinstance(outcome, BaseException):
                 policy = advance_authored_batch_policy(
@@ -1824,7 +1824,7 @@ async def author_deck(
             ),
             return_exceptions=True,
         )
-        for batch, outcome in zip(window, outcomes):
+        for batch, outcome in zip(window, outcomes, strict=True):
             if isinstance(outcome, BaseException):
                 policy = advance_authored_batch_policy(
                     policy, succeeded=False, error=outcome

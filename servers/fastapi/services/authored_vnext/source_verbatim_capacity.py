@@ -1350,7 +1350,15 @@ def _renderer_component_geometry(
 
         for columns in range(1, maximum_columns + 1):
             for packing in ("columns", "rows"):
-                def evaluate(scale: float) -> tuple[float, tuple[int, ...]]:
+                # Both loop variables are bound as defaults: the option
+                # search calls ``evaluate`` before the next packing is tried,
+                # and a captured read would score every option as the last one.
+                def evaluate(
+                    scale: float,
+                    *,
+                    packing: str = packing,
+                    columns: int = columns,
+                ) -> tuple[float, tuple[int, ...]]:
                     if packing == "rows":
                         return visual_row_layout(scale, columns), ()
                     return visual_layout(scale, columns)
@@ -1778,7 +1786,13 @@ def build_source_verbatim_capacity_admission(
                 item for item in evaluations if item["status"] == "passed"
             ]
 
-            def candidate_rank(item: Mapping[str, Any]) -> tuple[object, ...]:
+            def candidate_rank(
+                item: Mapping[str, Any],
+                *,
+                previous_selected_frame: tuple[str, str] | None = (
+                    previous_selected_frame
+                ),
+            ) -> tuple[object, ...]:
                 frame_key = (str(item["frameDigest"]), str(item["frameId"]))
                 return (
                     *tuple(float(value) for value in item["rendererFitRank"]),

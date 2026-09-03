@@ -2,7 +2,6 @@ from services.trusted_executor.weighted_scheduler import (
     ScheduledOperation,
     SchedulerCaps,
     SchedulerPolicy,
-    SchedulerWeights,
     WeightedScheduler,
 )
 

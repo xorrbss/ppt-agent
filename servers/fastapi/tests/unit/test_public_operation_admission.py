@@ -60,7 +60,7 @@ def test_weighted_resource_plan_is_deterministic_and_mode_weighted() -> None:
     ).resource_units
     assert hybrid.resource_units > fidelity.resource_units
     with pytest.raises(ValueError, match="public_fidelity_mode_invalid"):
-        WeightedResourcePlan(**base, fidelity_mode="unknown").resource_units
+        _ = WeightedResourcePlan(**base, fidelity_mode="unknown").resource_units
 
     assert PUBLIC_DEFAULT_POLICY_VERSION == "public-default/v3"
     assert PUBLIC_DEFAULT_MAX_SLIDES == 100

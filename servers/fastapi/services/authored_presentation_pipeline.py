@@ -659,7 +659,7 @@ async def _author_illustrate_render_pipeline(
                 return_exceptions=True,
             )
             consumed: set[int] = set()
-            for batch, outcome in zip(wave.batches, outcomes):
+            for batch, outcome in zip(wave.batches, outcomes, strict=True):
                 consumed.update(batch.slide_indices)
                 if isinstance(outcome, BaseException):
                     policy = advance_authored_batch_policy(
@@ -701,7 +701,7 @@ async def _author_illustrate_render_pipeline(
                 ),
                 return_exceptions=True,
             )
-            for batch, outcome in zip(window, outcomes):
+            for batch, outcome in zip(window, outcomes, strict=True):
                 if isinstance(outcome, BaseException):
                     policy = advance_authored_batch_policy(
                         policy, succeeded=False, error=outcome
@@ -1362,7 +1362,9 @@ async def _author_illustrate_render_pipeline(
             if browser_metrics is None:
                 browser_metrics = get_cached_browser_metrics(illustrated_html)
             if durable_evidence is not None and durable_evidence.html == illustrated_html:
-                evidence = evidence_ledger.hydrate_slide(
+                # Called for the ledger write; the returned record is read
+                # back from the ledger by the stages that need it.
+                evidence_ledger.hydrate_slide(
                     attempt_id=evidence_attempt_id,
                     slide_index=index,
                     html=illustrated_html,
@@ -1371,7 +1373,7 @@ async def _author_illustrate_render_pipeline(
                     checkpoint_revision=durable_evidence.revision,
                 )
             else:
-                evidence = evidence_ledger.record_slide(
+                evidence_ledger.record_slide(
                     attempt_id=evidence_attempt_id,
                     slide_index=index,
                     html=illustrated_html,

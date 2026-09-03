@@ -16,7 +16,6 @@ from utils.llm_calls.author_deck import author_correction_from_stored_failure
 from services.authored_checkpoint_errors import AuthoredStageError
 from services.authored_composition_policy import (
     CompositionProfile,
-    SlideCapacity,
     build_authored_capacity_plan,
 )
 from services.authored_generation_planner import plan_authored_text

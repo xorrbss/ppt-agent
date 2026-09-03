@@ -647,7 +647,10 @@ async def capture_slide_evidence(
     attempt_id: str,
     slide_index: int,
     html: str,
-    timeout: int = 60,
+    # A renderer deadline handed to the browser process, not an asyncio one:
+    # ``asyncio.timeout`` at the caller would abandon the capture rather than
+    # bound it.
+    timeout: int = 60,  # noqa: ASYNC109
     revision: int | None = None,
 ) -> SlideEvidence:
     """Capture through ``slide_capture`` and atomically retain its tuple."""

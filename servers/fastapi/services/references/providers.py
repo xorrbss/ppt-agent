@@ -78,7 +78,7 @@ def fit_uploaded_reference_payload(
         return _uploaded_reference_payload(
             [
                 {**item, "text": text}
-                for item, text in zip(documents, compacted)
+                for item, text in zip(documents, compacted, strict=True)
             ]
         )
 

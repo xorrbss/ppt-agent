@@ -131,7 +131,7 @@ def _structural_fitness(composition, art, placements):
     return dict(zip(_FITNESS_DIMENSIONS, (round(value, 6) for value in (
         sum(hierarchy) / len(hierarchy) if hierarchy else 1.0,
         1 - abs(empty_fraction - requested_empty), role_fit, sum(agreement) / len(agreement),
-    ))))
+    )), strict=True))
 
 
 def enumerate_candidates(*, slide: Mapping[str, Any], composition: Mapping[str, Any], art_direction: Mapping[str, Any], grammar: DesignGrammarManifest, requested_k: int = BALANCED_QUALITY_K) -> tuple[Candidate, ...]:
@@ -201,7 +201,8 @@ def _pareto_rank(combinations):
 
     def dominates(first, second):
         left, right = vector(first), vector(second)
-        return all(a >= b for a, b in zip(left, right)) and any(a > b for a, b in zip(left, right))
+        pairs = list(zip(left, right, strict=True))
+        return all(a >= b for a, b in pairs) and any(a > b for a, b in pairs)
 
     def tie_break(combo):
         repeats = len(combo) - len({item.diversity_signature for item in combo})

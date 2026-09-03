@@ -389,7 +389,7 @@ async def author_slides_html(
         _register_author_rate_limit(error)
         if isinstance(error, (PublicAdmissionRejected, ProviderOutcomeError)):
             raise
-        raise handle_llm_client_exceptions(error)
+        raise handle_llm_client_exceptions(error) from error
     finally:
         await record_provider_call(
             provider=provider,

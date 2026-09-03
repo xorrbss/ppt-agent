@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from html import escape
 import re
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping
 
 from .candidates import Candidate
 from .component_renderer import COMPONENT_CSS, render_component

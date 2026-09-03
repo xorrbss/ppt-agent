@@ -73,7 +73,7 @@ from services.presentation_export_direct_attempt_evidence import (
 from services.presentation_export_direct_attempt_semantic import (
     active_semantic_emission as _active_semantic_emission,
     bind_completed_semantic_export_attempt,
-    completed_export_binding as _completed_export_binding,
+    completed_export_binding as _completed_export_binding,  # noqa: F401
     current_export_canonical_digest as _current_export_canonical_digest,
     prefixed_digest as _prefixed_digest,
     release_authority_pin_from_projection as _release_authority_pin_from_projection,

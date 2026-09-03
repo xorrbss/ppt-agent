@@ -70,6 +70,9 @@ def _generated_content_graph(
         )
         units: list[dict[str, object]] = []
 
+        # ``units`` is rebound on every page, so the accumulator is bound as a
+        # default rather than read from the enclosing scope: the helper then
+        # always appends to the page it was defined for.
         def append_unit(
             *,
             unit_id: str,
@@ -77,6 +80,7 @@ def _generated_content_graph(
             text: str,
             data: Sequence[object] = (),
             inherited_ownership: Sequence[object] = (),
+            units: list[dict[str, object]] = units,
         ) -> None:
             payload = {
                 "text": text,

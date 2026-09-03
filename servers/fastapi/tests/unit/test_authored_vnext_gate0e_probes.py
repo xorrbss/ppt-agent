@@ -22,7 +22,9 @@ from services.authored_vnext.generation.gate0e_probes import (
 
 
 def test_gate0e_manifest_cases_compare_malformed_payloads_to_current_baseline() -> None:
-    digest = lambda character: "sha256:" + character * 64
+    def digest(character: str) -> str:
+        return "sha256:" + character * 64
+
     baseline = Gate0eBaseline(
         owner_scope="owner:current",
         tenant_id="tenant:current",

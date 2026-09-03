@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 import hashlib
 import json
 import logging
@@ -713,8 +714,10 @@ def read_valid_evidence(
     try:
         revision_payload = json.loads(revision_sidecar.read_text("utf-8"))
         revision_bundle = SlideCheckpointBundle.from_payload(revision_payload)
-    except FileNotFoundError:
-        raise SlideCheckpointCorrupt("checkpoint_evidence_revision_missing")
+    except FileNotFoundError as missing:
+        raise SlideCheckpointCorrupt(
+            "checkpoint_evidence_revision_missing"
+        ) from missing
     except (OSError, ValueError, json.JSONDecodeError, SlideCheckpointCorrupt) as exc:
         if isinstance(exc, SlideCheckpointCorrupt):
             raise

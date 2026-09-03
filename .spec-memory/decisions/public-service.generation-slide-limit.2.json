@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "key": "public-service.generation-slide-limit",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Use v1 compatibility admission for public generation with a 100-slide limit; keep v2 explicit until its full worker contract is integrated.",
+  "scope": [
+    "public-generation",
+    "admission",
+    "quota"
+  ],
+  "invariants": [
+    "Default public generation admission uses public-default/v1.",
+    "public-default/v1 max_slides is 100.",
+    "Phase 2 admission keeps public-default/v2 as its explicit default."
+  ],
+  "forbidden": [
+    "Do not switch the compatibility generation path to public-default/v2 without integrating Phase 2 leases, fences, deadlines, retries, and worker validation."
+  ],
+  "evidence": [
+    "servers/fastapi/services/public_operation_admission.py",
+    "servers/fastapi/alembic/versions/d4b7f9a1c2e6_raise_v1_public_slide_limit_to_100.py",
+    "servers/fastapi/tests/unit/test_public_operation_admission.py"
+  ],
+  "supersedes": "public-service.generation-slide-limit@1",
+  "recordedAt": "2026-09-01T11:34:53.7905244+00:00"
+}

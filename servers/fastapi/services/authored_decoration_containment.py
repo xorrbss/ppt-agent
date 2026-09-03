@@ -155,7 +155,7 @@ def _clip_rect(css, box, *, direct_parent):
     # This inscribed rectangle is inside each normalized corner ellipse. Add
     # border widths and one CSS pixel, keeping the complete quad off the clip.
     corner_insets = (max(radii[0][0], radii[3][0]), max(radii[0][1], radii[1][1]), max(radii[1][0], radii[2][0]), max(radii[2][1], radii[3][1]))
-    insets = [border + max(radius * (1 - 1 / math.sqrt(2)) + 1, pad if direct_parent else 0) for border, radius, pad in zip(borders, corner_insets, pads)]
+    insets = [border + max(radius * (1 - 1 / math.sqrt(2)) + 1, pad if direct_parent else 0) for border, radius, pad in zip(borders, corner_insets, pads, strict=True)]
     return (box[0] + insets[0], box[1] + insets[1], box[0] + box[2] - insets[2], box[1] + box[3] - insets[3])
 
 
@@ -253,7 +253,7 @@ def plan_decoration_containment(html, browser_metrics, *, profile_id="ordinary",
     if not parser.valid or parser._stack:
         return None
     attrs = [_attribute_map(row[1]) for row in parser.tags]
-    if any(tag[0] in {"html", "body"} and not row.get("data-qid") and any(key in row for key in ("class", "style", "id")) for tag, row in zip(parser.tags, attrs)):
+    if any(tag[0] in {"html", "body"} and not row.get("data-qid") and any(key in row for key in ("class", "style", "id")) for tag, row in zip(parser.tags, attrs, strict=True)):
         return None
     declared = [row.get("data-qid") for row in attrs if row.get("data-qid")]
     if len(set(declared)) != len(declared) or set(declared) != set(metrics):
@@ -428,7 +428,7 @@ def validate_decoration_containment(plan, original_html, original_metrics, candi
             if prior_points is None or not isinstance(item.get("computed_style"), Mapping) or not isinstance(original.get("computed_style"), Mapping):
                 return False
             cx, cy = (sum(p[axis] for p in prior_points) / 4 for axis in (0, 1))
-            if any(abs(a - b) > .01 for point, prior in zip(points, prior_points) for a, b in zip(point, (cx + (prior[0] - cx) * scale + dx, cy + (prior[1] - cy) * scale + dy))):
+            if any(abs(a - b) > .01 for point, prior in zip(points, prior_points, strict=True) for a, b in zip(point, (cx + (prior[0] - cx) * scale + dx, cy + (prior[1] - cy) * scale + dy), strict=True)):
                 return False
             expected_style = plan.geometry_styles.get(qid, {})
             allowed = set(expected_style) if expected_style else {"transform"}
@@ -437,7 +437,7 @@ def validate_decoration_containment(plan, original_html, original_metrics, candi
             for key, expected in expected_style.items():
                 current = tuple(_px(token) for token in str(item["computed_style"].get(key)).split()) if key == "transformOrigin" else (_px(item["computed_style"].get(key)),)
                 expected_values = expected if isinstance(expected, tuple) else (expected,)
-                if len(current) != len(expected_values) or any(value is None or abs(value - desired) > .01 for value, desired in zip(current, expected_values)):
+                if len(current) != len(expected_values) or any(value is None or abs(value - desired) > .01 for value, desired in zip(current, expected_values, strict=True)):
                     return False
             if any(item.get("measurement", {}).get(key) is not True for key in ("geometry", "transform", "clipping")):
                 return False

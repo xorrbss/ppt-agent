@@ -743,7 +743,7 @@ class OperationEventPageV2(PublicWireModel):
             raise ValueError("event operationId does not match page operationId")
         if any(
             right.sequence <= left.sequence
-            for left, right in zip(self.events, self.events[1:])
+            for left, right in zip(self.events, self.events[1:], strict=False)
         ):
             raise ValueError("events must be strictly ordered by sequence")
         return self
