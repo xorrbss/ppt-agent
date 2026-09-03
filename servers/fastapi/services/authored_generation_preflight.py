@@ -55,13 +55,15 @@ def _source_owner_qids(html: str) -> frozenset[str]:
     return frozenset(found)
 
 
-def _names_a_source_owner(violation: str, source_qids: frozenset[str]) -> bool:
-    """Whether a capacity violation is about source text rather than decoration.
+def _is_slide_over_budget(violation: str) -> bool:
+    """Whether a capacity violation says the slide's text does not fit.
 
-    A violation reads ``<check>:<qid>[,<qid>...]`` or carries a measurement
-    instead of an element.  Anything this cannot resolve to the model's own
-    elements is treated as source-owned, so the fail-closed classification is
-    the default and only a violation proven to be about decoration relaxes it.
+    A violation reads ``<check>:<qid>[,<qid>...]`` when it is about one
+    element, and ``<check>:<measured>><allowed>`` when it is about the slide's
+    budget.  Only the second kind is the impossibility that ends a verbatim
+    restyle: its text cannot be shortened to fit.  Which element ended up
+    invisible, clipped or off-canvas is a layout mistake, and re-laying out the
+    slide is what the repair call does.
     """
 
     _, separator, tail = str(violation).rpartition(":")
@@ -72,13 +74,7 @@ def _names_a_source_owner(violation: str, source_qids: frozenset[str]) -> bool:
         for item in tail.split(",")
         if _QID_TOKEN.fullmatch(item.strip())
     ]
-    if not names:
-        # A measurement rather than an element ("visible_text:1200>900"): the
-        # slide as a whole is over budget, which is the source text's problem.
-        return True
-    return any(
-        name in source_qids or name.startswith("source-block-") for name in names
-    )
+    return not names
 
 
 @dataclass(frozen=True)
@@ -181,24 +177,22 @@ def preflight_authored_provider_repair(
         )
 
     # A capacity violation is terminal because verbatim source text cannot be
-    # shortened to fit.  That reasoning covers the elements that own source
-    # text, not the decoration the model drew around them: a hero mark that
-    # renders no visible glyph and lands on top of a source block is the
-    # model's own composition and exactly what a repair call can fix.  Slide 16
-    # of operation 3d0b9e72 was ended without a single repair call for one such
-    # "+" ornament.
-    source_qids = _source_owner_qids(artifact.html)
+    # shortened to fit.  On a restyled deck that reasoning belongs to the
+    # violations that measure the slide against its budget, not to the ones
+    # naming an element that ended up invisible, clipped or off-canvas: those
+    # are layout mistakes and re-laying out the slide is exactly what a repair
+    # call does.  Operation 3d0b9e72 was ended for a "+" ornament that rendered
+    # no glyph, and 069c620d for one clipped block on a page carrying 168
+    # characters -- neither deck was over budget, and neither got a repair call.
+    # An ordinary authored deck owns all of its text and keeps the original
+    # classification, where shortening is the repair.
+    restyled = bool(_source_owner_qids(artifact.html))
     capacity_violations_found = [
         item for item in violations if item.startswith(_CAPACITY_PREFIXES)
     ]
     source_capacity_blocked = bool(capacity_violations_found) and (
-        # An ordinary authored deck owns all of its text, so the distinction
-        # does not exist there and the original classification stands.
-        not source_qids
-        or any(
-            _names_a_source_owner(item, source_qids)
-            for item in capacity_violations_found
-        )
+        not restyled
+        or any(_is_slide_over_budget(item) for item in capacity_violations_found)
     )
     code = (
         "authored_slide_capacity_exceeded"

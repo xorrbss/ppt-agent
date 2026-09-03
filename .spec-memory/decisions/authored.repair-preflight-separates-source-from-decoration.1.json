@@ -4,25 +4,26 @@
   "revision": 1,
   "status": "accepted",
   "authority": "code",
-  "summary": "A capacity violation ends a restyled slide without a repair call only when it is about an element that owns source text; the model's own decoration is something a repair call can fix.",
+  "summary": "On a restyled deck a capacity violation ends a slide without a repair call only when it measures the slide over its text budget; a violation naming an element that ended up invisible, clipped or off-canvas is a layout defect the repair call fixes.",
   "scope": [
     "authored-generation",
     "source-content"
   ],
   "invariants": [
     "An ordinary authored deck, which owns all of its text, keeps the original classification unchanged.",
-    "A violation that names an element owning source text, or that carries a measurement instead of an element, stays terminal.",
-    "Source ownership is read from the slide's own HTML: an element carrying data-source-block-id, or a deterministic source QID.",
-    "Safety issues are still reported; only the code changes, and the caller already lets a safety classification continue into repair."
+    "A restyled slide measured over its budget (visible_text, body, title, images) stays terminal: verbatim source text cannot be shortened to fit.",
+    "A restyled slide whose violation names elements is classified by the safety gate instead, which the caller allows into the repair cycle.",
+    "A violation this cannot resolve to element names is treated as a budget measurement, so the fail-closed classification is the default.",
+    "Safety issues are still reported in the violations either way; only the code changes."
   ],
   "forbidden": [
-    "End a deck without a repair call because the model's own ornament failed a capacity check.",
-    "Relax the classification for elements that render immutable source text."
+    "End a deck without a repair call because one element was laid out badly.",
+    "Let a restyled page that is genuinely over its text budget reach a repair call that could only fix it by deleting source text."
   ],
   "rationale": [
-    "Operation 3d0b9e72 authored 35 of 35 slides and was ended by slide 16's hero mark: a '+' ornament the browser could not see, clipped, and overlapping the source block beside it. The preflight classified it authored_slide_capacity_exceeded and raised before any repair call.",
-    "Capacity is terminal because verbatim source text cannot be shortened to fit. An ornament is not source text: shrinking, moving or dropping it is exactly what a repair call does.",
-    "Replayed on the stored artifact of that slide the classification moves from authored_slide_capacity_exceeded to authored_composition_safety_gate_failed, which the caller allows into repair."
+    "Operation 3d0b9e72 authored 35 of 35 slides and was ended by slide 16's hero mark: a '+' ornament the browser could not see, clipped, and overlapping the source block beside it.",
+    "Operation 069c620d authored, rendered and persisted 35 of 35 and was ended by one clipped source block on page 13, whose entire source is 168 characters across 8 blocks. Nothing was over budget; the slide was laid out badly.",
+    "Capacity is terminal because verbatim source text cannot be shortened. That is a statement about the slide's budget, not about which element ended up invisible."
   ],
   "evidence": [
     "servers/fastapi/services/authored_generation_preflight.py",

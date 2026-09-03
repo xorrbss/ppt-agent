@@ -161,7 +161,14 @@ def test_an_ornament_over_source_text_still_reaches_the_repair_call():
     assert preflight.code == "authored_composition_safety_gate_failed"
 
 
-def test_source_text_that_cannot_fit_is_still_terminal():
+def test_a_clipped_source_block_is_a_layout_defect_the_repair_can_fix():
+    """Which element ended up invisible is layout, not an impossibility.
+
+    Operation 069c620d was ended by one clipped source block on a page whose
+    whole source is 168 characters. Nothing there is over budget; the slide was
+    simply laid out badly, and no repair call was made.
+    """
+
     artifact = _restyle_artifact(decor_visible=True)
     metrics = dict(artifact.browser_metrics)
     elements = [dict(item) for item in metrics["elements"]]
@@ -175,5 +182,24 @@ def test_source_text_that_cannot_fit_is_still_terminal():
         reference_mode="style_reference",
     )
     assert "browser_text_not_visible:source-block-4c1e" in preflight.violations
+    assert preflight.code == "authored_composition_safety_gate_failed"
+
+
+def test_a_restyled_slide_over_its_text_budget_is_still_terminal():
+    """Verbatim source text cannot be shortened, so an over-budget page ends.
+
+    This is the measurement the terminal classification exists for, and it
+    stays terminal however the slide is laid out.
+    """
+
+    artifact = _restyle_artifact(decor_visible=True)
+    preflight = preflight_authored_provider_repair(
+        slide_index=15,
+        artifact=artifact,
+        capacity=SlideCapacity(15, "CONTENT", 4, 4, 8, 0, 8),
+        profile_id="source-verbatim",
+        reference_mode="style_reference",
+    )
+    assert any(">" in item for item in preflight.violations)
     assert preflight.code == "authored_slide_capacity_exceeded"
     assert preflight.terminal is True
