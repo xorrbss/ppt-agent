@@ -198,6 +198,7 @@ def project_source_runs(raw_text: object) -> SourceRunProjection:
 
     raw = str(raw_text or "")
     lines = [line for line in re.split(r"\r\n|\r|\n", raw) if line.strip()]
+    lines = _drop_marker_only_lines(lines)
     normalized_lines = [normalize_source_text(line) for line in lines]
     text = " ".join(normalized_lines)
     runs: list[SourceRun] = []
@@ -233,6 +234,28 @@ def project_source_runs(raw_text: object) -> SourceRunProjection:
     if not runs:
         raise ValueError("source text block has no visible text")
     return SourceRunProjection(text=text, runs=tuple(runs), lines=tuple(line_spans))
+
+
+def _drop_marker_only_lines(lines: list[str]) -> list[str]:
+    """Drop a line that is only presentation, keeping the block's own text.
+
+    A flow written as ``문제 제시`` / ``↓`` / ``해결·정보`` puts the arrow on its
+    own line.  The arrow is drawn by the new template -- as a border, a CSS
+    glyph or an empty span -- so a run holding nothing but that arrow can never
+    find a DOM owner, and the block failed every slide that used the shape.
+    ``_drop_marker_only_pieces`` already folds such a piece into the item after
+    it, but only inside one line; a line of its own never reached it.
+
+    A block that is nothing but glyphs keeps them: there is no item to fold
+    into, and projecting an empty block would lose the source entirely.
+    """
+
+    kept = [
+        line
+        for line in lines
+        if not _MARKER_ONLY.match(normalize_source_text(line))
+    ]
+    return kept or lines
 
 
 def _segments(line: str) -> list[tuple[str, bool]]:

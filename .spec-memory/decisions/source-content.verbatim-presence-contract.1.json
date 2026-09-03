@@ -14,7 +14,8 @@
     "N source blocks sharing the same text still require N rendered occurrences.",
     "Every block is still bound to a visible element and measured for canvas containment, clipping and occlusion.",
     "Stamping and the Chromium readback accept the same renderings: exclusive ownership first, then an element that carries the characters.",
-    "Binding compromises are reported as SourceBindingDeviation entries and counted in BrowserSourceReadbackResult.binding_deviations."
+    "Binding compromises are reported as SourceBindingDeviation entries and counted in BrowserSourceReadbackResult.binding_deviations.",
+    "A line that is nothing but marker glyphs is presentation the new template draws, and projects no run of its own; a block that is nothing but glyphs still projects them."
   ],
   "forbidden": [
     "Fail a deck because a template placed one block's items in another order.",
@@ -25,7 +26,8 @@
     "Exclusive ownership and DOM order are a measurement convenience, not the content promise: DOM order is not visual order, so the rule both rejected correct layouts and would accept visually reordered ones.",
     "Measured on three stored 35-slide decks (jobs 82f1f228, 688e184a, a5a906bc): all 533 source runs were present on their slides in every run, while stamping rejected 6, 9 and 3 slides purely on ownership and order.",
     "With the presence contract all three decks pass 35/35, and the deck that failed live records 3 shared-owner and 6 out-of-order deviations across 6 slides.",
-    "Accepted cost: text the model ADDS inside a bound element is no longer detected, because a carrying element is accepted. Removed or altered source characters still fail."
+    "Accepted cost: text the model ADDS inside a bound element is no longer detected, because a carrying element is accepted. Removed or altered source characters still fail.",
+    "Operation 6eabc8fd authored, rendered and persisted 35 of 35 slides and failed slide 13 on a lone '↓' line from '문제 제시 / ↓ / 해결·정보 / ↓ / 행동 유도'. The template draws that arrow as a border or CSS glyph, so the run could never find a DOM owner."
   ],
   "evidence": [
     "servers/fastapi/services/source_content/source_runs.py",

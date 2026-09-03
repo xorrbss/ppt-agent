@@ -42,8 +42,11 @@ def test_projection_splits_lines_bullets_arrows_pipes_and_gaps() -> None:
     assert [run.body for run in project_source_runs("좌→우 / 우→좌").runs] == ["좌→우 / 우→좌"]
     steps = project_source_runs("가게 분석\n→ 4개 기획")
     assert [(run.marker, run.body) for run in steps.runs] == [("", "가게 분석"), ("→ ", "4개 기획")]
+    # The arrow line is presentation the new template draws itself; keeping
+    # it as a run left source text no element could ever own (see the
+    # dedicated test below).
     arrows = project_source_runs("문제 제시\n↓\n해결")
-    assert [(run.marker, run.body) for run in arrows.runs] == [("", "문제 제시"), ("", "↓"), ("", "해결")]
+    assert [(run.marker, run.body) for run in arrows.runs] == [("", "문제 제시"), ("", "해결")]
     inline = project_source_runs("• A • B")
     assert [run.body for run in inline.runs] == ["A", "B"]
     with pytest.raises(ValueError):
@@ -432,3 +435,28 @@ def test_browser_readback_accepts_the_same_presentation_drift_as_stamping() -> N
     with pytest.raises(BrowserSourceReadbackError) as error:
         verify_browser_source_readback(manifest=manifest, outline=outline, browser_metrics=absent)
     assert "b2" in error.value.block_ids
+
+
+def test_an_arrow_on_its_own_line_never_becomes_its_own_run() -> None:
+    """A flow writes its arrow on a line of its own; the template draws it.
+
+    Operation 6eabc8fd authored, rendered and persisted all 35 slides and then
+    failed slide 13 on run 1 -- a lone "↓" from
+    "문제 제시 / ↓ / 해결·정보 / ↓ / 행동 유도".  The new template draws that arrow
+    as a border or a CSS glyph, so a run holding only the arrow can never find
+    a DOM owner.  The same folding already applied to a glyph beside an item on
+    one line; a glyph with a line to itself never reached it.
+    """
+
+    flow = project_source_runs("문제 제시\n↓\n해결/정보\n↓\n행동 유도")
+    assert [run.body for run in flow.runs] == ["문제 제시", "해결/정보", "행동 유도"]
+    assert flow.text == "문제 제시 해결/정보 행동 유도"
+    assert [run.body for run in project_source_runs("• 첫째\n•\n• 둘째").runs] == [
+        "첫째",
+        "둘째",
+    ]
+    # A block that is nothing but a glyph keeps it: there is no item to fold
+    # into, and an empty projection would lose the source outright.
+    assert [run.body for run in project_source_runs("↓").runs] == ["↓"]
+    # A page number is content, not presentation, however alone it stands.
+    assert [run.body for run in project_source_runs("13").runs] == ["13"]
