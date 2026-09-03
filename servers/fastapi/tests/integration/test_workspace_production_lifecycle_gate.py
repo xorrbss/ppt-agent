@@ -197,6 +197,10 @@ def _start_crash_probe_worker(
 ) -> subprocess.Popen[str]:
     worker_env = {
         **env,
+        # An external worker claims one controller profile. The default,
+        # ppt-core, is the export controller and refuses without an export
+        # controller declaration; this probe runs generation operations.
+        "PPT_PROCESS_PROFILE": "generation",
         "WORKSPACE_CRASH_PROBE_MARKER": str(marker_path),
         "WORKSPACE_CRASH_PROBE_MODE": mode,
     }

@@ -151,8 +151,17 @@ def _blocked_quality(*, operation_id: uuid.UUID, presentation_id: uuid.UUID, dig
     return receipt.model_dump(mode="json", by_alias=True)
 
 
-def test_public_export_product_path_uses_postgres_claim_trusted_dispatch_and_fenced_projection(tmp_path: Path) -> None:
+def test_public_export_product_path_uses_postgres_claim_trusted_dispatch_and_fenced_projection(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
     """No subprocess worker, SQLite authority, or synthetic terminal projection is used."""
+
+    # The dispatched worker here is a plain interpreter, not a container that
+    # can attest network-none OS isolation. Trusted dispatch has a declared
+    # local policy for exactly that case; without it the job is refused before
+    # the claim and projection this test is about ever run.
+    monkeypatch.setenv("PUBLIC_TRUSTED_WORKER_LOCAL_POLICY", "development")
 
     async def scenario(sync_url: str) -> None:
         async_url = make_url(to_sync_sqlalchemy_url(sync_url)).set(
@@ -281,6 +290,10 @@ def test_public_export_product_path_uses_postgres_claim_trusted_dispatch_and_fen
                         presentation_id=presentation_id, kind="export.pptx", absolute_path=private_path,
                         storage_key="workspace-artifacts/test/product-path.pptx", public_path="/api/v2/artifacts/hidden/download",
                         sha256=output_digest, size_bytes=len(output_bytes), source_revision=0,
+                        # Publication cross-checks the prepared intent against
+                        # the arguments; a prepared artifact that claims no
+                        # public binding cannot be published as a public one.
+                        public_artifact_id=output_ref.artifact_id, tenant_id=tenant,
                     ),
                     attempt_token=claim.attempt_token, fencing_token=claim.fencing_token,
                     export_format="pptx", public_artifact_id=output_ref.artifact_id,
