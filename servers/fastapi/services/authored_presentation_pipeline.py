@@ -1083,12 +1083,17 @@ async def _author_illustrate_render_pipeline(
                             [item.as_dict() for item in stamped_source.deviations],
                         )
                 except BrowserSourceReadbackError as exc:
+                    # One slide dropped source text the model was told to copy.
+                    # The other slides are authored and durable, so this is the
+                    # slide's failure, not the deck's: mark its author stage
+                    # failed with the reason and let the retry re-author that
+                    # one slide with the reason as its correction.
                     raise AuthoredStageError(
                         slide_index=index,
                         stage="author",
                         code=exc.code,
                         cause=exc,
-                        retryable=False,
+                        retryable=True,
                         message=exc.detail,
                     ) from exc
             if source_image_block_bindings is not None and index < len(source_image_block_bindings):
@@ -1098,12 +1103,15 @@ async def _author_illustrate_render_pipeline(
                         illustrated_html, source_image_block_bindings[index]
                     )
                 except BrowserSourceReadbackError as exc:
+                    # A picture the slide was offered and did not place is the
+                    # same shape of failure as dropped text: one slide's, and
+                    # fixable by re-authoring that slide.
                     raise AuthoredStageError(
                         slide_index=index,
                         stage="author",
                         code=exc.code,
                         cause=exc,
-                        retryable=False,
+                        retryable=True,
                         message=exc.detail,
                     ) from exc
 

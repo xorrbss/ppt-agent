@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.source-binding-failure-is-slide-scoped",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "A slide rejected after authoring because its HTML does not carry the source it was given fails that slide's author stage retryably, so the retry re-authors only that slide instead of discarding the deck.",
+  "scope": [
+    "authored-generation",
+    "source-content"
+  ],
+  "invariants": [
+    "The rejection is recorded with fail_stage(stage=\"author\"), which clears the slide's completed status and stores the reason.",
+    "The stored reason becomes the slide's correction hint on the next attempt.",
+    "Slides already authored keep their checkpoints and are not re-authored.",
+    "The deck still fails when the retries are exhausted; nothing is published with source text missing.",
+    "Total provider calls stay bounded by the operation's max_attempts and the per-attempt ordinal pair."
+  ],
+  "forbidden": [
+    "End a deck on one slide's source-binding rejection while the other slides are authored and durable.",
+    "Publish a deck whose source text a slide never rendered."
+  ],
+  "rationale": [
+    "Operation 612d4b75 authored all 35 slides and lost every one of them because slide 28 omitted '장기고객 만들기' from a header it was told to copy verbatim.",
+    "Stamping already detects this per slide at the author stage, so the slide is the natural unit of the failure; only the retryable flag stood between that and a one-slide redo.",
+    "Completes the pair authored.provider-attempt-budget-per-operation-attempt (the retry can call the provider) and authored.retry-carries-prior-failure-correction (it knows what to fix)."
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_presentation_pipeline.py",
+    "servers/fastapi/tests/unit/test_authored_slide_scoped_failure_contract.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-03T02:10:00.0000000+00:00"
+}
