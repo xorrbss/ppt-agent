@@ -284,6 +284,23 @@ def _remove_workspace_artifact(claim: CleanupClaim) -> None:
         raise WorkspaceCleanupDeleteError(
             "workspace_cleanup_artifact_identity_invalid", retryable=False
         )
+    if "public_artifact_id" not in claim.resource_metadata:
+        # A row journaled before the binding was recorded. Guessing either way
+        # is worse than stopping: unlinking may destroy bytes a sibling public
+        # row still serves, and skipping silently abandons a file the owner
+        # asked to have deleted.
+        raise WorkspaceCleanupDeleteError(
+            "workspace_cleanup_artifact_public_binding_unknown", retryable=False
+        )
+    raw_public_artifact_id = claim.resource_metadata["public_artifact_id"]
+    public_artifact_id = (
+        None
+        if raw_public_artifact_id is None
+        else _as_uuid(
+            raw_public_artifact_id,
+            code="workspace_cleanup_artifact_identity_invalid",
+        )
+    )
     root = _claim_storage_root(
         claim,
         expected_root_kind=_WORKSPACE_ARTIFACT_ROOT_KIND,
@@ -301,6 +318,7 @@ def _remove_workspace_artifact(claim: CleanupClaim) -> None:
             operation_id=operation_id,
             kind=artifact_kind,
             storage_key=claim.storage_key,
+            public_artifact_id=public_artifact_id,
             token=claim.token,
             attempts=claim.attempts,
         ),

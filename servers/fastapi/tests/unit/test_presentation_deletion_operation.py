@@ -231,10 +231,13 @@ async def _approved_delete_runner_tombstones_staging_and_failed_all_modes(
             _drop_runner_finalizer,
         )
 
+        # Every mode this fork can persist, in both lifecycles that a delete
+        # has to cope with. A third case seeded an "adaptive" deck, one of the
+        # retired React-template formats: no such deck can exist here any more,
+        # and the profile resolver refuses to describe one.
         cases = (
             ("authored", PRESENTATION_LIFECYCLE_STAGING),
             ("template", PRESENTATION_LIFECYCLE_GENERATION_FAILED),
-            ("adaptive", PRESENTATION_LIFECYCLE_STAGING),
         )
         for case_index, (mode, lifecycle_status) in enumerate(cases):
             async with maker() as session, session.begin():
@@ -249,10 +252,11 @@ async def _approved_delete_runner_tombstones_staging_and_failed_all_modes(
                     tone="private tone",
                     verbosity="private verbosity",
                     theme={"mode": mode, "secret": "brand"},
-                    deck_plan={"slides": [{"private": True}]}
-                    if mode == "adaptive"
-                    else None,
+                    deck_plan=None,
                     mode=mode,
+                    # Identity is the pair, not the mode alone: a template deck
+                    # is only resolvable as template-v2 at the v2 version.
+                    version="v2-standard" if mode == "template" else "v1-standard",
                     lifecycle_status=lifecycle_status,
                     revision=4,
                     share_token=f"private-share-{case_index}",
@@ -789,10 +793,13 @@ async def _delete_recovery_treats_same_operation_tombstone_as_committed_effect(
             assert operation.cancel_requested_at is None
             assert operation.cancelled_at is None
             assert operation.error_code is None
+            # An authored deck always leaves cleanup behind: tombstoning
+            # one enqueues its checkpoint and image trees, and nothing has
+            # swept them yet at this point.
             assert operation.result == {
                 "presentation_id": str(presentation_id),
                 "lifecycle_status": "deleted",
-                "cleanup_pending": False,
+                "cleanup_pending": True,
                 "deletion_operation_id": str(operation_id),
                 "result_revision": 7,
             }
@@ -809,7 +816,7 @@ async def _delete_recovery_treats_same_operation_tombstone_as_committed_effect(
                 "state": "succeeded",
                 "presentation_id": str(presentation_id),
                 "lifecycle_status": "deleted",
-                "cleanup_pending": False,
+                "cleanup_pending": True,
                 "deletion_operation_id": str(operation_id),
                 "result_revision": 7,
                 "operation_id": str(operation_id),

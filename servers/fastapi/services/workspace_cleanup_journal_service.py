@@ -303,6 +303,17 @@ def workspace_artifact_cleanup_target(
             ),
             "artifact_id": str(artifact.id),
             "artifact_kind": artifact.kind,
+            # Deletion turns on this binding: a publicly bound artifact keeps
+            # its bytes in the immutable public store, where several rows may
+            # share one storage key, so the sweeper must never unlink the file.
+            # The row is gone by the time cleanup runs, so the journal is the
+            # only place that can carry the answer. Always write the key, even
+            # as null, so an older row is distinguishable from an unbound one.
+            "public_artifact_id": (
+                str(artifact.public_artifact_id)
+                if artifact.public_artifact_id is not None
+                else None
+            ),
         },
     )
 
