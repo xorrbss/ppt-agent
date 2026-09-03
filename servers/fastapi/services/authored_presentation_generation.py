@@ -2565,6 +2565,14 @@ async def _generate_authored_presentation(
         except AuthoredStageError:
             raise
         except Exception as error:
+            if source_reflow and isinstance(error, AuthoredVqaResidualDomIssuesError):
+                # The round repaired some slides and could not repair the rest.
+                # Throwing the whole round away made every attempt of the
+                # operation start from the same defects: 3d0b9e72 fixed slide 12
+                # and lost that fix with slide 33's overlap. Keeping what worked
+                # lets the next attempt begin from the better deck and spend its
+                # one repair on what is actually left.
+                await _checkpoint_source_reflow_vqa_repairs(generation_job, error)
             LOGGER.warning(
                 "[authored] bounded quality-gate repair failed slides=%s error=%s",
                 flagged,
