@@ -13,7 +13,8 @@
     "The clamp appends a rule; it never edits or deletes an authored declaration, text, QID or semantic role.",
     "A slide that fits, or one with no measurements, is returned byte-identical.",
     "The gate re-measures the clamped slide, so a clamp that does not help is rejected like any other repair candidate.",
-    "A clipped element whose text is a source blank field is set at the 15px design floor and kept on one line; real text is left to the capacity gate."
+    "Clipped text is set at the size its own box can show, computed from Chromium's scroll-versus-client shortfall, and never below the 15px design floor; a blank field is additionally kept on one line.",
+    "An element already at the floor, or clipped by an ancestor rather than by its own box, is left to the provider repair, which can re-compose the slide."
   ],
   "forbidden": [
     "Clamp an element that starts at the canvas edge: a full-bleed band is authored that way on purpose.",
@@ -24,7 +25,9 @@
     "Operation 34c290c6 lost three slides to it and 02aaadec one, each after the bounded repair round had already tried and failed; on slide 30 of 02aaadec a body wrapper at x=64 carried ten more elements out of the frame.",
     "width:auto on a block is its container's content width, which is the width the author meant, so the clamp restores the intent rather than guessing a number.",
     "Slide 10 of operation 7787af14 clipped two thirty-underscore worksheet lines set at 20px in a 347px box, and survived the bounded repair round. The characters are source and cannot be shortened, so the size is the only thing left to give.",
-    "A relative clamp is not enough: max-width:100% is the parent's width, and on slide 35 of operation e2b871ef the parent was the whole canvas, so the element stayed exactly as wide as before and the deck died anyway."
+    "A relative clamp is not enough: max-width:100% is the parent's width, and on slide 35 of operation e2b871ef the parent was the whole canvas, so the element stayed exactly as wide as before and the deck died anyway.",
+    "The shortfall is measured, not guessed: slide 10 of operation e02f5c64 showed 279 of the 361 pixels its worksheet line needed, which is 0.77, and 20px times 0.77 is the 15px floor.",
+    "Vertical overflow is deliberately left alone: slide 13 of that run placed a 445px column at y=366, and no size change makes 445 fit in 282; only re-composing the slide does."
   ],
   "evidence": [
     "servers/fastapi/services/authored_offcanvas_repair.py",

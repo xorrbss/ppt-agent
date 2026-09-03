@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from services.authored_offcanvas_repair import (
     clipped_blank_field_qids,
+    clipped_text_sizes,
     overhanging_qids,
     overhanging_widths,
     repair_authored_blank_field_clipping,
@@ -96,7 +97,15 @@ def test_repairing_twice_is_stable() -> None:
     assert "본문" in twice
 
 
-def _blank_field(qid: str, *, font: float, clipped: bool = True, text: str = "_" * 30):
+def _blank_field(
+    qid: str,
+    *,
+    font: float,
+    clipped: bool = True,
+    text: str = "_" * 30,
+    content: float = 361.0,
+    box: float = 279.0,
+):
     return {
         "qid": qid,
         "rendered_text": text,
@@ -104,28 +113,43 @@ def _blank_field(qid: str, *, font: float, clipped: bool = True, text: str = "_"
         "clipped": clipped,
         "glyph_clipped": False,
         "line_box_clipped": False,
-        "bbox": {"x": 100, "y": 200, "width": 347, "height": 26},
+        "scrollWidth": content,
+        "clientWidth": box,
+        "scrollHeight": 27,
+        "clientHeight": 27,
+        "bbox": {"x": 100, "y": 200, "width": box, "height": 26},
     }
 
 
-def test_only_a_clipped_blank_field_above_the_floor_is_resized() -> None:
+def test_the_fitted_size_comes_from_the_measured_shortfall() -> None:
+    """279 of the 361 pixels a line needs is 0.77 of it, so 20px becomes 15px."""
+
     metrics = _metrics(
         _blank_field("field.a", font=20),
         # Already at the floor: there is nothing left to give.
         _blank_field("field.b", font=15),
         # Not clipped: it fits as authored.
         _blank_field("field.c", font=20, clipped=False),
-        # Real text is not a blank field; shrinking it is the capacity gate's
-        # decision, not this repair's.
-        {
-            "qid": "copy",
-            "rendered_text": "고객이 실제로 원하는 결과",
-            "font_size": 20,
-            "clipped": True,
-            "bbox": {"x": 100, "y": 300, "width": 347, "height": 26},
-        },
+        # Real text clips too, and gets the same measured treatment; only the
+        # blank field is additionally kept on one line.
+        _blank_field(
+            "copy", font=40, text="고객이 실제로 원하는 결과", content=440.0, box=352.0
+        ),
+    )
+    assert clipped_text_sizes(metrics) == (
+        ("field.a", 15.0, True),
+        ("copy", 32.0, False),
     )
     assert clipped_blank_field_qids(metrics) == ("field.a",)
+
+
+def test_an_element_with_no_measured_shortfall_is_left_alone() -> None:
+    # Clipped by an ancestor rather than by its own box: nothing here says how
+    # much smaller would help, so the provider repair keeps it.
+    metrics = _metrics(
+        _blank_field("field.a", font=20, content=279.0, box=279.0),
+    )
+    assert clipped_text_sizes(metrics) == ()
 
 
 def test_the_blank_field_rule_sets_the_floor_and_keeps_the_characters() -> None:

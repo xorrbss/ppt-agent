@@ -145,45 +145,86 @@ def _clipped(element: Mapping[str, Any]) -> bool:
     )
 
 
-def clipped_blank_field_qids(browser_metrics: Any) -> tuple[str, ...]:
-    """QIDs of clipped elements whose text is a source blank field.
+def _fit_ratio(element: Mapping[str, Any]) -> float | None:
+    """How much of its own content the element's box actually shows.
 
-    A worksheet line is thirty underscores the restyle must keep, and at the
-    author's chosen size it is wider than the box drawn for it.  The
-    characters are not negotiable and the box is the template's, so the size
-    is the one thing left to give.
+    Chromium reports the laid-out size beside the visible one, so the shortfall
+    is measured rather than guessed: 279 of the 361 pixels a line needs is 0.77
+    of it, and text set 0.77 smaller fits the box it was given.
     """
 
-    found: list[str] = []
+    ratios: list[float] = []
+    for content_key, box_key in (
+        ("scrollWidth", "clientWidth"),
+        ("scrollHeight", "clientHeight"),
+    ):
+        content = _number(element.get(content_key))
+        box = _number(element.get(box_key))
+        if content is None or box is None or box <= 0 or content <= box:
+            continue
+        ratios.append(box / content)
+    return min(ratios) if ratios else None
+
+
+def clipped_text_sizes(browser_metrics: Any) -> tuple[tuple[str, float, bool], ...]:
+    """Clipped text elements with the size that fits, and whether each is a field.
+
+    A restyle cannot shorten source text and does not own the box the template
+    drew, so type size is the one lever left. The new size comes from the
+    measured shortfall and never goes below the design floor; an element
+    already at the floor is left to the provider repair, which can re-compose
+    the slide instead of setting it smaller.
+    """
+
+    found: list[tuple[str, float, bool]] = []
+    seen: set[str] = set()
     for element in _elements(browser_metrics):
         qid = str(element.get("qid") or "").strip()
-        if not qid or not _QID.match(qid) or qid in found or not _clipped(element):
+        if not qid or not _QID.match(qid) or qid in seen or not _clipped(element):
             continue
         text = str(element.get("rendered_text") or "")
         size = _number(element.get("font_size"))
-        if text and _BLANK_FIELD.match(text) and size is not None and size > MIN_FONT_PX:
-            found.append(qid)
+        if not text or size is None or size <= MIN_FONT_PX:
+            continue
+        ratio = _fit_ratio(element)
+        if ratio is None:
+            continue
+        fitted = max(MIN_FONT_PX, float(int(size * ratio)))
+        if fitted >= size:
+            continue
+        seen.add(qid)
+        found.append((qid, fitted, bool(_BLANK_FIELD.match(text))))
     return tuple(found)
 
 
+def clipped_blank_field_qids(browser_metrics: Any) -> tuple[str, ...]:
+    """The blank fields among :func:`clipped_text_sizes`."""
+
+    return tuple(
+        qid for qid, _size, is_field in clipped_text_sizes(browser_metrics) if is_field
+    )
+
+
 def repair_authored_blank_field_clipping(html: str, browser_metrics: Any) -> str:
-    """Set a clipped blank field at the design floor so its line fits.
+    """Set clipped text at the size its own box can show.
 
     Thirty underscores at 20px overflowed a 347px box on slide 10 of operation
-    7787af14 and survived the bounded repair round.  At the floor the same run
-    fits, the characters are untouched, and no other element is affected.
+    7787af14 and survived the bounded repair round; the same slide in e02f5c64
+    showed 279 of the 361 pixels that line needed. A blank field also stops
+    wrapping, because a worksheet rule is one line by definition.
     """
 
     document = str(html or "")
-    qids = clipped_blank_field_qids(browser_metrics)
-    if not document or not qids:
+    measured = clipped_text_sizes(browser_metrics)
+    if not document or not measured:
         return document
-    selector = ", ".join(f'[data-qid="{qid}"]' for qid in qids)
-    rule = (
-        "\n/* deterministic blank-field containment: measured clipping */\n"
-        f"{selector} {{ font-size: {MIN_FONT_PX:.0f}px !important;"
-        " white-space: nowrap !important; }\n"
+    rules = "".join(
+        f'[data-qid="{qid}"] {{ font-size: {size:.0f}px !important;'
+        + (" white-space: nowrap !important;" if is_field else "")
+        + " }\n"
+        for qid, size, is_field in measured
     )
+    rule = "\n/* deterministic text containment: measured clipping */\n" + rules
     return _append_style_rule(document, rule)
 
 
@@ -192,6 +233,7 @@ __all__ = [
     "CANVAS_WIDTH",
     "MIN_FONT_PX",
     "clipped_blank_field_qids",
+    "clipped_text_sizes",
     "overhanging_qids",
     "overhanging_widths",
     "repair_authored_blank_field_clipping",
