@@ -72,6 +72,7 @@ from services.authored_batch_policy import (
 )
 from services.source_images.models import SourceImageCandidate
 from services.source_content.browser_readback import BrowserSourceReadbackError
+from services.source_content.header_pages import header_absent_pages
 from services.source_content.text_stamping import stamp_source_blocks
 from utils.asset_directory_utils import get_images_directory
 from utils.authored_illustrations import (
@@ -292,6 +293,11 @@ async def _author_illustrate_render_pipeline(
         structured_slide_contexts=structured_slide_contexts,
         page_number_mode=page_number_mode,
         header_contract=header_contract,
+        # A restyled page keeps the deck's header only if its own source page
+        # has one. A cover and a closing page carry neither the running header
+        # nor a page number, and requiring a band there rejected a composition
+        # that was faithful to the source.
+        header_exempt_slides=header_absent_pages(source_block_bindings),
         chapter_plan=chapter_plan,
         illustration_plan=illustration_plan,
         infographic_plan=infographic_plan,

@@ -102,6 +102,11 @@ class AuthoredDeckPlan:
     # The deck's frozen top-area design. None for decks authored before contracts
     # existed and for exact reconstruction, which reproduces a source verbatim.
     header_contract: AuthoredHeaderContract | None = None
+    # Slides the deck's header does not govern because their own source page has
+    # none: a cover, a closing page.  Requiring a band there rejects the
+    # composition the source page actually is, which cost a 35-slide deck two
+    # provider calls and then the deck itself.
+    header_exempt_slides: frozenset[int] = frozenset()
     # Per-slide eyebrow prefixes derived from the deck's frozen chapter plan,
     # separator included; an empty tuple is a deck with no chapters. Kept as one
     # value per slide rather than as the plan itself so the authoring layer never
@@ -133,6 +138,19 @@ class AuthoredDeckPlan:
     # Exact title/body/visible-text accounting produced before provider work.
     # It shares the capacity authority above and never mutates source content.
     text_plan: AuthoredTextPlan | None = None
+
+    def header_contract_at(self, index: int) -> AuthoredHeaderContract | None:
+        """The contract governing one slide, or None when its source has none.
+
+        The deck's header is one design, and every slide that has a header
+        reproduces it exactly.  A page whose own source carries no running
+        header and no page number is not such a slide, and asking it for a band
+        rejects the composition the source page is.
+        """
+
+        if index in self.header_exempt_slides:
+            return None
+        return self.header_contract
 
 
 @dataclass(frozen=True)
@@ -1264,6 +1282,7 @@ def prepare_authored_deck(
     structured_slide_contexts: Sequence[Mapping[str, Any] | None] | None = None,
     page_number_mode: str = TEMPLATE_PAGE_NUMBER_MODE,
     header_contract: AuthoredHeaderContract | None = None,
+    header_exempt_slides: frozenset[int] | None = None,
     chapter_plan: AuthoredChapterPlan | None = None,
     illustration_plan: AuthoredIllustrationPlan | None = None,
     infographic_plan: AuthoredInfographicPlan | None = None,
@@ -1397,6 +1416,7 @@ def prepare_authored_deck(
         structured_contexts=structured_contexts,
         page_number_mode=page_number_mode,
         header_contract=effective_contract,
+        header_exempt_slides=frozenset(header_exempt_slides or ()),
         chapter_prefixes=(
             tuple(chapter_plan.eyebrow_prefix_at(i) for i in range(len(slides)))
             if chapter_plan is not None and effective_contract is not None
@@ -1449,8 +1469,8 @@ def _planned_batch_request(
         reference_mode=plan.reference_mode,
         structured_context=plan.structured_contexts[index],
         page_number_mode=plan.page_number_mode,
-        requirements_enabled=_requirements_enabled(plan.header_contract),
-        chapter_breadcrumb=_chapter_breadcrumb(plan.header_contract),
+        requirements_enabled=_requirements_enabled(plan.header_contract_at(index)),
+        chapter_breadcrumb=_chapter_breadcrumb(plan.header_contract_at(index)),
         chapter_prefix=(
             plan.chapter_prefixes[index] if plan.chapter_prefixes else None
         ),
@@ -1504,14 +1524,15 @@ def _validate_planned_batch_candidate(
     )
     if capacity is not None:
         constrained = canonicalize_authored_capacity_html(constrained)
+    slide_contract = plan.header_contract_at(index)
     header_violations = (
         validate_header_contract(
             constrained,
-            plan.header_contract,
+            slide_contract,
             role=plan.roles[index],
             content=plan.contents[index],
         )
-        if plan.header_contract is not None
+        if slide_contract is not None
         else ()
     )
     if header_violations:
@@ -1706,7 +1727,7 @@ async def author_planned_slide(
         raise_on_failure=raise_on_failure,
         structured_context=plan.structured_contexts[index],
         page_number_mode=plan.page_number_mode,
-        header_contract=plan.header_contract,
+        header_contract=plan.header_contract_at(index),
         chapter_prefix=(
             plan.chapter_prefixes[index] if plan.chapter_prefixes else None
         ),
