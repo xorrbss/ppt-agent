@@ -138,6 +138,9 @@ from models.sql.public_artifact import (  # noqa: F401, E402
     PublicExportIdentity,
     PublicSlideCheckpoint,
 )
+from models.sql.public_principal_binding import (  # noqa: F401, E402
+    PublicPrincipalBinding,
+)
 from models.sql.source_content import (  # noqa: F401, E402
     SourceContentCoverageReceipt,
     SourceContentGenerationBinding,

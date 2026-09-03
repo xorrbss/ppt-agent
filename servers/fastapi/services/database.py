@@ -524,6 +524,11 @@ async def create_db_and_tables():
                         PublicQuotaCounter.__table__,
                         PublicOperationAdmission.__table__,
                         PublicProviderLogicalCall.__table__,
+                        # Resolving an external principal reads this on
+                        # every public request, so a database built
+                        # without Alembic needs it as much as a
+                        # migrated one.
+                        PublicPrincipalBinding.__table__,
                         PublicArtifact.__table__,
                         PublicExportIdentity.__table__,
                         *AUTHORED_VNEXT_SQL_TABLES,
