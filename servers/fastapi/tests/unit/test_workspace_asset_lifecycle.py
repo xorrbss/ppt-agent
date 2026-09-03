@@ -15,6 +15,7 @@ from sqlmodel import SQLModel
 from starlette.datastructures import Headers, UploadFile
 
 from api.v1.ppt.endpoints.workspace import WORKSPACE_ROUTER, post_workspace_asset
+from models.sql.account_deletion_request import AccountDeletionRequest
 from models.sql.presentation import PresentationModel
 from models.sql.user import User
 from models.sql.workspace import (
@@ -66,6 +67,9 @@ from utils.owner_context import (
 WORKSPACE_ASSET_TABLES = [
     User.__table__,
     PresentationModel.__table__,
+    # Marking an account deleting records a durable request row, so the
+    # deletion marker test cannot run against a schema without it.
+    AccountDeletionRequest.__table__,
     WorkspaceConversation.__table__,
     WorkspaceMessage.__table__,
     WorkspaceAsset.__table__,

@@ -229,6 +229,14 @@ WORKSPACE_UNIQUE_CONSTRAINTS = {
     },
     "workspace_artifacts": {"uq_workspace_artifacts_storage_key"},
 }
+# a1e5f8c2d7b0 retires the artifact's plain storage-key constraint in favour of
+# a partial unique index that lets rows sharing immutable public CAS bytes
+# coexist.  Both names are recorded so the d6 validator below can accept either
+# shape rather than reading the newer one as a missing constraint.
+WORKSPACE_ARTIFACT_STORAGE_KEY_CONSTRAINT = "uq_workspace_artifacts_storage_key"
+WORKSPACE_ARTIFACT_LOCAL_STORAGE_KEY_INDEX = (
+    "uq_workspace_artifacts_local_storage_key"
+)
 WORKSPACE_INDEXES = {
     "workspace_conversations": {
         "ix_workspace_conversations_owner_presentation_updated"
@@ -434,6 +442,15 @@ AUTHORED_SLIDE_CHECKPOINT_COLUMNS = {
     "created_at",
     "updated_at",
 }
+# ``artifact_refs`` is not part of the checkpoint revision.  It arrives much
+# later, in fe8b1c4d7a20, and the set above deliberately mirrors the model, so
+# it names the column too.  The checkpoint revision's own validator must ask
+# only for what a3c5e7f9b1d2 created, or every database stamped between the two
+# revisions is misread as a half-applied migration and refuses to start.
+AUTHORED_CHECKPOINT_ARTIFACT_REF_COLUMNS = {"artifact_refs"}
+AUTHORED_SLIDE_CHECKPOINT_REVISION_COLUMNS = (
+    AUTHORED_SLIDE_CHECKPOINT_COLUMNS - AUTHORED_CHECKPOINT_ARTIFACT_REF_COLUMNS
+)
 AUTHORED_SLIDE_CHECKPOINT_CONSTRAINTS = {
     "ck_authored_slide_checkpoints_slide_index_nonnegative",
     "ck_authored_slide_checkpoints_author_status",
@@ -562,7 +579,19 @@ def _workspace_schema_applied(
             constraint.get("name")
             for constraint in inspector.get_unique_constraints(table)
         }
-        if not WORKSPACE_UNIQUE_CONSTRAINTS[table].issubset(unique_names):
+        missing_unique = WORKSPACE_UNIQUE_CONSTRAINTS[table] - unique_names
+        # A partial unique index is not reported as a unique constraint, so the
+        # a1e5f8c2d7b0 replacement has to be recognised by name.  The d6 prefix
+        # is complete in either state; only the constraint's shape changed.
+        if table == "workspace_artifacts" and missing_unique == {
+            WORKSPACE_ARTIFACT_STORAGE_KEY_CONSTRAINT
+        }:
+            artifact_index_names = {
+                index.get("name") for index in inspector.get_indexes(table)
+            }
+            if WORKSPACE_ARTIFACT_LOCAL_STORAGE_KEY_INDEX in artifact_index_names:
+                missing_unique = set()
+        if missing_unique:
             raise RuntimeError(
                 f"Chat-first workspace table {table} is missing unique constraints"
             )
@@ -1138,7 +1167,7 @@ def _validate_authored_checkpoint_schema(
         column["name"]
         for column in inspector.get_columns("authored_slide_checkpoints")
     }
-    if not AUTHORED_SLIDE_CHECKPOINT_COLUMNS.issubset(checkpoint_columns):
+    if not AUTHORED_SLIDE_CHECKPOINT_REVISION_COLUMNS.issubset(checkpoint_columns):
         raise RuntimeError(
             "Authored slide checkpoint table is only partially applied"
         )

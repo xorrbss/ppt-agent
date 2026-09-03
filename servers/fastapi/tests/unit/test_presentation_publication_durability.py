@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
 from models.sql.presentation import PresentationModel
+from models.sql.public_admission import PublicOperationAdmission
 from models.sql.user import User
 from models.sql.workspace import (
     WorkspaceConversation,
@@ -34,6 +35,9 @@ from services.workspace_operation_runner import (
 TABLES = [
     User.__table__,
     PresentationModel.__table__,
+    # Recovery joins the admission journal to tell a legacy publication apart
+    # from a fenced one, so the scan reads this table on every startup.
+    PublicOperationAdmission.__table__,
     WorkspaceConversation.__table__,
     WorkspaceOperation.__table__,
     WorkspaceOperationEvent.__table__,
