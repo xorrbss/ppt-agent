@@ -9,7 +9,7 @@
     "authored-generation"
   ],
   "invariants": [
-    "Only the QIDs Chromium reported outside the canvas are named, and only for a horizontal overhang of an element that starts inside the frame.",
+    "Only the QIDs Chromium reported outside the canvas are named, for a horizontal overhang of an element that starts inside the frame, and each is given the measured allowance 1280 minus its own left offset.",
     "The clamp appends a rule; it never edits or deletes an authored declaration, text, QID or semantic role.",
     "A slide that fits, or one with no measurements, is returned byte-identical.",
     "The gate re-measures the clamped slide, so a clamp that does not help is rejected like any other repair candidate.",
@@ -23,7 +23,8 @@
     "The mistake is arithmetic, not design: a wrapper inset from the edge is given the full 1280px canvas width, so it and everything inside it run past the right edge by exactly the inset.",
     "Operation 34c290c6 lost three slides to it and 02aaadec one, each after the bounded repair round had already tried and failed; on slide 30 of 02aaadec a body wrapper at x=64 carried ten more elements out of the frame.",
     "width:auto on a block is its container's content width, which is the width the author meant, so the clamp restores the intent rather than guessing a number.",
-    "Slide 10 of operation 7787af14 clipped two thirty-underscore worksheet lines set at 20px in a 347px box, and survived the bounded repair round. The characters are source and cannot be shortened, so the size is the only thing left to give."
+    "Slide 10 of operation 7787af14 clipped two thirty-underscore worksheet lines set at 20px in a 347px box, and survived the bounded repair round. The characters are source and cannot be shortened, so the size is the only thing left to give.",
+    "A relative clamp is not enough: max-width:100% is the parent's width, and on slide 35 of operation e2b871ef the parent was the whole canvas, so the element stayed exactly as wide as before and the deck died anyway."
   ],
   "evidence": [
     "servers/fastapi/services/authored_offcanvas_repair.py",

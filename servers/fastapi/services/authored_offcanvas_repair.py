@@ -14,8 +14,8 @@ exactly the inset. Operation 34c290c6 lost three slides to it and 02aaadec one,
 each after the bounded repair round had already tried and failed.
 
 The repair is deterministic and measured: only the elements Chromium reported
-outside the canvas are touched, and each is told to take its container's width
-instead of the width it was given. Nothing else about the slide changes -- no
+outside the canvas are touched, and each is given the widest box that still
+lands on the frame from where it was measured. Nothing else about the slide changes -- no
 text, no QID, no semantic role, no other rule -- and the gate re-measures the
 result, so a clamp that does not help is simply rejected like any other
 candidate.
@@ -52,18 +52,24 @@ def _elements(metrics: Any) -> Sequence[Mapping[str, Any]]:
     return tuple(item for item in raw or () if isinstance(item, Mapping))
 
 
-def overhanging_qids(browser_metrics: Any) -> tuple[str, ...]:
-    """QIDs whose measured box runs past the right edge of the canvas.
+def overhanging_widths(browser_metrics: Any) -> tuple[tuple[str, float], ...]:
+    """Each overhanging QID with the widest box that would still fit.
 
     Only the horizontal overhang is reported: a too-wide box is the mistake
     this repair can undo, while a block that starts below the fold needs the
     slide re-composed and belongs to the provider repair.
+
+    The allowance is measured rather than relative. ``max-width: 100%`` is the
+    parent's width, and the parent is regularly the full canvas, which left
+    slide 35 of operation e2b871ef exactly as wide as before. ``1280 - x`` is
+    the number that puts the right edge on the frame whatever the parent is.
     """
 
-    found: list[str] = []
+    found: list[tuple[str, float]] = []
+    seen: set[str] = set()
     for element in _elements(browser_metrics):
         qid = str(element.get("qid") or "").strip()
-        if not qid or not _QID.match(qid) or qid in found:
+        if not qid or not _QID.match(qid) or qid in seen:
             continue
         box = element.get("bbox")
         if not isinstance(box, Mapping):
@@ -73,30 +79,37 @@ def overhanging_qids(browser_metrics: Any) -> tuple[str, ...]:
         if left is None or width is None or width <= 0:
             continue
         if left + width > CANVAS_WIDTH + _TOLERANCE and left > _TOLERANCE:
-            found.append(qid)
+            seen.add(qid)
+            found.append((qid, CANVAS_WIDTH - left))
     return tuple(found)
+
+
+def overhanging_qids(browser_metrics: Any) -> tuple[str, ...]:
+    """The QIDs of :func:`overhanging_widths`, in the same order."""
+
+    return tuple(qid for qid, _allowance in overhanging_widths(browser_metrics))
 
 
 def repair_authored_offcanvas_width(html: str, browser_metrics: Any) -> str:
     """Return ``html`` with the overhanging elements clamped to their container.
 
-    ``width:auto`` on a block element is its container's content width, which
-    is the width the author meant. ``max-width:100%`` keeps a flex or grid item
-    from insisting on its own basis, and ``box-sizing:border-box`` stops padding
-    from re-creating the overhang. The rule is appended last and marked
-    important so it wins over the authored declaration without editing it.
+    Each element is given the widest box that still lands on the frame from
+    where it was measured, ``1280 - x``. ``box-sizing:border-box`` stops its own
+    padding from re-creating the overhang. The rules are appended last and
+    marked important so they win over the authored declaration without editing
+    it.
     """
 
     document = str(html or "")
-    qids = overhanging_qids(browser_metrics)
-    if not document or not qids:
+    measured = overhanging_widths(browser_metrics)
+    if not document or not measured:
         return document
-    selector = ", ".join(f'[data-qid="{qid}"]' for qid in qids)
-    rule = (
-        "\n/* deterministic off-canvas containment: measured overhang */\n"
-        f"{selector} {{ width: auto !important; max-width: 100% !important;"
+    rules = "".join(
+        f'[data-qid="{qid}"] {{ max-width: {allowance:.0f}px !important;'
         " box-sizing: border-box !important; }\n"
+        for qid, allowance in measured
     )
+    rule = "\n/* deterministic off-canvas containment: measured overhang */\n" + rules
     return _append_style_rule(document, rule)
 
 
@@ -180,6 +193,7 @@ __all__ = [
     "MIN_FONT_PX",
     "clipped_blank_field_qids",
     "overhanging_qids",
+    "overhanging_widths",
     "repair_authored_blank_field_clipping",
     "repair_authored_offcanvas_width",
 ]

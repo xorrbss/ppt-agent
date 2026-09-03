@@ -12,6 +12,7 @@ from __future__ import annotations
 from services.authored_offcanvas_repair import (
     clipped_blank_field_qids,
     overhanging_qids,
+    overhanging_widths,
     repair_authored_blank_field_clipping,
     repair_authored_offcanvas_width,
 )
@@ -44,12 +45,23 @@ def test_only_the_elements_measured_outside_the_canvas_are_named() -> None:
     assert overhanging_qids(metrics) == ("wrap",)
 
 
+def test_the_allowance_is_measured_not_relative() -> None:
+    """A parent that is the whole canvas makes ``max-width:100%`` a no-op.
+
+    Slide 35 of operation e2b871ef sat at x=64 inside a full-width parent, so a
+    relative clamp left it exactly as wide as before and the deck died anyway.
+    """
+
+    assert overhanging_widths(_metrics(_element("wrap", x=64, width=1280))) == (
+        ("wrap", 1216.0),
+    )
+
+
 def test_the_clamp_is_appended_as_css_and_touches_nothing_else() -> None:
     metrics = _metrics(_element("wrap", x=64, width=1280))
     repaired = repair_authored_offcanvas_width(HTML, metrics)
     assert '[data-qid="wrap"]' in repaired
-    assert "width: auto !important" in repaired
-    assert "max-width: 100% !important" in repaired
+    assert "max-width: 1216px !important" in repaired
     assert "box-sizing: border-box !important" in repaired
     # The authored rule is left as written; the clamp simply comes after it.
     assert ".body-wrap{width:1280px}" in repaired
