@@ -16,6 +16,7 @@ from starlette.datastructures import Headers, UploadFile
 
 from api.v1.ppt.endpoints.workspace import WORKSPACE_ROUTER, post_workspace_asset
 from models.sql.account_deletion_request import AccountDeletionRequest
+from models.sql.public_admission import PublicOperationAdmission
 from models.sql.presentation import PresentationModel
 from models.sql.user import User
 from models.sql.workspace import (
@@ -70,6 +71,10 @@ WORKSPACE_ASSET_TABLES = [
     # Marking an account deleting records a durable request row, so the
     # deletion marker test cannot run against a schema without it.
     AccountDeletionRequest.__table__,
+    # Terminalizing an operation reads the admission journal. Without the
+    # table the read fails, the failure is swallowed, and the operation is
+    # left running forever.
+    PublicOperationAdmission.__table__,
     WorkspaceConversation.__table__,
     WorkspaceMessage.__table__,
     WorkspaceAsset.__table__,
@@ -248,7 +253,12 @@ async def _async_upload_bootstrap_waits_for_durable_asset_runner_then_completes(
 
         async def generation_handler(context):
             seen_asset_ids.extend(context.claim.request_payload["asset_ids"])
-            return WorkspaceOperationResult(payload={"status": "completed"})
+            # A generate operation only completes once it has published a
+            # revision, so a handler that returns none leaves it running.
+            return WorkspaceOperationResult(
+                payload={"status": "completed"},
+                result_revision=context.claim.expected_revision,
+            )
 
         registry = WorkspaceOperationHandlerRegistry()
         registry.register("presentation.generate", generation_handler)
