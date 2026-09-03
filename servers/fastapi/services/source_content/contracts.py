@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    model_serializer,
+)
 
 
 # Source geometry is part of the authored substance for template restyling.
@@ -76,6 +82,13 @@ class SourceContentCounts(ContractModel):
     raster_fallback_blocks: int = Field(default=0, ge=0)
 
 
+class SourceSlideSize(ContractModel):
+    """Source page size in EMU from ``ppt/presentation.xml`` ``p:sldSz``."""
+
+    cx: int = Field(gt=0)
+    cy: int = Field(gt=0)
+
+
 class SourceContentManifest(ContractModel):
     contract_version: Literal["source-content-manifest/v1"] = (
         "source-content-manifest/v1"
@@ -90,6 +103,18 @@ class SourceContentManifest(ContractModel):
     units: tuple[SourceContentUnit, ...]
     counts: SourceContentCounts
     manifest_digest: str
+    #: Captured since the Composer enrichment; ``None`` for manifests sealed
+    #: before it. Omitted from dumps while ``None`` so those stored manifests
+    #: still re-derive their recorded digest byte for byte.
+    slide_size: SourceSlideSize | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_uncaptured_fields(self, handler: SerializerFunctionWrapHandler):
+        data = handler(self)
+        for key in ("slideSize", "slide_size"):
+            if key in data and data[key] is None:
+                del data[key]
+        return data
 
 
 class SourceContentManifestPin(ContractModel):

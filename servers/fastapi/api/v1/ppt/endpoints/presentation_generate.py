@@ -230,6 +230,7 @@ from utils.llm_utils import message_content_to_text
 from utils.outline_citations import strip_outline_citations
 from utils.outline_utils import (
     get_images_for_slides_from_outline,
+    get_no_of_outlines_to_generate_for_n_slides,
     get_presentation_title_from_presentation_outline,
 )
 from utils.owner_context import get_current_owner_id
@@ -1516,6 +1517,18 @@ async def generate_presentation_handler(
         await _admit_source_content_generation(request, sql_session)
         await _admit_source_content_reference_snapshot(request, sql_session)
         prepare_source_content_authored_reflow(request)
+        if getattr(request, "_composer_restyle", False):
+            from services.composer.pipeline import run_composer_restyle
+
+            return await run_composer_restyle(
+                request=request,
+                presentation_id=presentation_id,
+                generation_job=generation_job,
+                progress_reporter=progress_reporter,
+                sql_session=sql_session,
+                async_status=async_status,
+                export_cookie_header=export_cookie_header,
+            )
     elif request.reference_snapshot_ids and not request._reference_snapshots:
         await _admit_generation_references(request, sql_session)
     # Bootstrap admission failures have a linked failed job so a terminal

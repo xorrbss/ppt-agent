@@ -783,6 +783,15 @@
       "description": "Run the closed-operation design critic on DOM-flagged and figure slides only."
     },
     {
+      "key": "COMPOSER_RESTYLE_ENABLED",
+      "type": "boolean",
+      "default": false,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.composer",
+      "description": "Route source_content_restyle to the server-owned Composer (typed plan, fit ladder, zero provider calls) instead of the authored rewrite."
+    },
+    {
       "key": "AUTHORED_EXPORT_FALLBACK_LIMIT",
       "type": "integer",
       "default": 2,

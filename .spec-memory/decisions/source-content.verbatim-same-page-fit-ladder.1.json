@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "key": "source-content.verbatim-same-page-fit-ladder",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "A verbatim restyle keeps one source page per slide, always; a page that does not fit the template is made to fit by a deterministic ladder that compacts the template's chrome, then sets the page at its own source type size, then falls back to the page's own geometry, and never fails on geometry.",
+  "scope": [
+    "source-content",
+    "authored-generation",
+    "composer"
+  ],
+  "invariants": [
+    "Slide count equals source page count; no continuation slides, no merges.",
+    "Source text is never hidden, truncated, shortened or reordered to make a page fit.",
+    "The ladder buys room by shrinking the template's footprint before it shrinks the text: dense variant, type scale to the 15px/12px design floor, chrome compaction (title band to one line, footer band to one line, margins 64 to 24px), then source-relative type, then source geometry.",
+    "At rungs 4 and 5 text may be set below the 15px design floor, but never below the page's own source size times 0.9; the rung reached is recorded per slide in the quality receipt.",
+    "Title typography and position are identical at every rung so pages set at different rungs read as one deck.",
+    "Rung 5 (source geometry) uses the source page's rectangles as the terminal fit, with template colors, type family, accent and side bands; it is never chosen as the design basis for a page that fits an earlier rung.",
+    "Fit is estimated from font metrics, rendered by the server, and confirmed once in Chromium per step; a measured defect is a renderer bug to fix in code, never a reason for a provider repair call."
+  ],
+  "forbidden": [
+    "Producing more or fewer slides than source pages.",
+    "Failing a deck because a page cannot fit at the design floor.",
+    "Asking a provider to rewrite or re-layout a page to make it fit.",
+    "Setting any text below 0.9 times its source size."
+  ],
+  "rationale": [
+    "The user decided on 2026-09-04 that the original document had one page and the result must have one slide: grow the box or set the type at the original size, but never split.",
+    "The previous contract fixed verbatim text, page count, no expansion and overflow_policy same_page_recompose_or_fail at once, with a 15px floor and template chrome on top; a 10pt, 400-character source page has no solution under those constraints, and both engines failed on it (authored: 0 of 43 verbatim restyle operations since 2026-08-28; source-native: source_verbatim_same_page_capacity_exceeded, source_native_sentence_capacity_exceeded).",
+    "Rung 5 terminates because the source page laid this content out at this size once already; a uniform scale of that layout always fits. The allocator already names the mode (placement_strategy sourceGeometry) and the manifest already carries the rectangles.",
+    "Chrome compaction comes before any text change because the template bands cost about 40% of the content area (1152x544 at level 0 versus 1232x648 at level 3)."
+  ],
+  "evidence": [
+    "docs/generation-quality-root-cause-and-composer-architecture-20260904.md",
+    "servers/fastapi/services/composer/plan.py",
+    "servers/fastapi/services/composer/contracts.py"
+  ],
+  "supersedes": {
+    "key": "source-content.template-restyle-contract",
+    "revision": 7,
+    "narrowedClause": "'원본 도형과 기존 슬라이드 레이아웃을 디자인 기반으로 재사용하지 않는다' stays for pages that fit rungs 0-4 and is narrowed to permit source geometry as the terminal rung; SourceContentPolicy.overflow_policy gains same_page_fit_ladder."
+  },
+  "recordedAt": "2026-09-04T09:00:00.0000000+00:00"
+}

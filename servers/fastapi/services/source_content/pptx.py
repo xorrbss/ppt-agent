@@ -28,6 +28,8 @@ from services.source_content.errors import (
     UNSUPPORTED_OBJECT,
     SourceContentError,
 )
+from services.source_content.pptx_text_body import extract_text_body, placeholder_payload
+from services.source_content.pptx_typography import PptxTypographyResolver
 from services.source_content.security import (
     REL_NS,
     PackageSecurityReport,
@@ -236,57 +238,6 @@ def _shape_identity(element: etree._Element, fallback: int) -> tuple[str, str]:
     return c_nv_pr.get("id", str(fallback)), c_nv_pr.get("name", "")
 
 
-def _paragraph_payload(element: etree._Element) -> tuple[list[dict[str, Any]], str]:
-    paragraphs: list[dict[str, Any]] = []
-    flat: list[str] = []
-    for paragraph in element.findall(".//a:p", namespaces=NS):
-        paragraph_properties = paragraph.find("a:pPr", namespaces=NS)
-        bullet_kind: str | None = None
-        bullet_level = 0
-        if paragraph_properties is not None:
-            try:
-                bullet_level = max(0, int(paragraph_properties.get("lvl", "0")))
-            except ValueError:
-                bullet_level = 0
-            if paragraph_properties.find("a:buNone", namespaces=NS) is None:
-                for element_name, resolved_kind in (
-                    ("a:buChar", "character"),
-                    ("a:buAutoNum", "auto-number"),
-                    ("a:buBlip", "picture"),
-                ):
-                    if paragraph_properties.find(element_name, namespaces=NS) is not None:
-                        bullet_kind = resolved_kind
-                        break
-        runs: list[str] = []
-        for child in paragraph:
-            if child.tag in {f"{{{A_NS}}}r", f"{{{A_NS}}}fld"}:
-                text = child.find("a:t", namespaces=NS)
-                runs.append(text.text if text is not None and text.text is not None else "")
-            elif child.tag == f"{{{A_NS}}}br":
-                runs.append("\n")
-        paragraph_text = "".join(runs)
-        paragraphs.append(
-            {
-                "runs": runs,
-                "text": paragraph_text,
-                "bullet": bullet_kind is not None,
-                "bulletKind": bullet_kind,
-                "level": bullet_level,
-            }
-        )
-        flat.append(paragraph_text)
-    return paragraphs, "\n".join(flat)
-
-
-def _flat_runs(paragraphs: list[dict[str, Any]]) -> list[str]:
-    runs: list[str] = []
-    for index, paragraph in enumerate(paragraphs):
-        runs.extend(paragraph["runs"])
-        if index + 1 < len(paragraphs):
-            runs.append("\n")
-    return runs
-
-
 def _geometry(element: etree._Element) -> dict[str, int]:
     xfrm = element.find(".//a:xfrm", namespaces=NS)
     if xfrm is None:
@@ -334,7 +285,7 @@ def _extract_table(element: etree._Element) -> tuple[dict[str, Any], int]:
     for row_index, row in enumerate(element.findall(".//a:tbl/a:tr", namespaces=NS)):
         values: list[dict[str, Any]] = []
         for column_index, cell in enumerate(row.findall("a:tc", namespaces=NS)):
-            paragraphs, text = _paragraph_payload(cell)
+            body = extract_text_body(cell)
             grid_span = int(cell.get("gridSpan", "1"))
             row_span = int(cell.get("rowSpan", "1"))
             h_merge = cell.get("hMerge") in {"1", "true"}
@@ -343,8 +294,8 @@ def _extract_table(element: etree._Element) -> tuple[dict[str, Any], int]:
                 {
                     "row": row_index,
                     "column": column_index,
-                    "text": text,
-                    "paragraphs": paragraphs,
+                    "text": body.text,
+                    "paragraphs": body.paragraphs,
                     "gridSpan": grid_span,
                     "rowSpan": row_span,
                     "hMerge": h_merge,
@@ -515,6 +466,7 @@ def _extract_unit(
     object_type: str,
     media_assets: dict[str, SealedManifestAsset],
     image_occurrences: Counter[str],
+    typography: PptxTypographyResolver,
 ) -> tuple[SourceContentUnit, list[SourceInventoryObject], dict[str, int]]:
     root = secure_xml(package.read(part_name), part_name=part_name)
     rels = _relationship_map(package, part_name)
@@ -540,8 +492,10 @@ def _extract_unit(
         new_block: SourceContentBlock | None = None
 
         if local == "sp":
-            paragraphs, text = _paragraph_payload(element)
-            if text:
+            body = extract_text_body(
+                element, context=typography.shape_context(element, part_name=part_name)
+            )
+            if body.text:
                 kind = "source_note" if object_type == "notes_object" else "text"
                 role = _semantic_role(element, default="body")
                 new_block = _block(
@@ -550,11 +504,14 @@ def _extract_unit(
                     role=role,
                     order=order,
                     payload={
-                        "text": text,
-                        "paragraphs": paragraphs,
-                        "runs": _flat_runs(paragraphs),
+                        "text": body.text,
+                        "paragraphs": body.paragraphs,
+                        "runs": body.runs,
                         "shapeName": shape_name,
                         "geometry": _geometry(element),
+                        "runStyles": body.run_styles,
+                        "dominantSizePt": body.dominant_size_pt,
+                        **placeholder_payload(element),
                     },
                 )
             elif element.find(".//p:ph", namespaces=NS) is not None:
@@ -615,6 +572,7 @@ def _extract_unit(
                         "occurrence": image_occurrences[asset_id],
                         "geometry": _geometry(element),
                         "altText": shape_name,
+                        **placeholder_payload(element),
                     },
                 )
         elif local == "graphicFrame":
@@ -744,6 +702,8 @@ def extract_pptx_source_content(
     manifest_id = f"scm_{sha256(seed).hexdigest()}"
 
     with ZipFile(path, "r") as package:
+        typography = PptxTypographyResolver(package, relationship_map=_relationship_map)
+        slide_size = typography.slide_size()
         inventory_objects = _inventory_package(package, report)
         media_assets: dict[str, SealedManifestAsset] = {}
         image_occurrences: Counter[str] = Counter()
@@ -760,6 +720,7 @@ def extract_pptx_source_content(
                 object_type="slide_object",
                 media_assets=media_assets,
                 image_occurrences=image_occurrences,
+                typography=typography,
             )
             units.append(unit)
             inventory_objects.extend(objects)
@@ -780,6 +741,7 @@ def extract_pptx_source_content(
                     object_type="notes_object",
                     media_assets=media_assets,
                     image_occurrences=image_occurrences,
+                    typography=typography,
                 )
                 if notes_unit.blocks:
                     units[-1] = SourceContentUnit(
@@ -842,6 +804,8 @@ def extract_pptx_source_content(
         "units": [unit.model_dump(mode="json", by_alias=True) for unit in units],
         "counts": counts.model_dump(mode="json", by_alias=True),
     }
+    if slide_size is not None:
+        manifest_without_digest["slideSize"] = slide_size
     manifest = SourceContentManifest(
         **manifest_without_digest,
         owner_id=owner_id,

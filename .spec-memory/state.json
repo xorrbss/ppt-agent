@@ -139,10 +139,11 @@
     "authored.header-contract-follows-the-source-page": "decisions/authored.header-contract-follows-the-source-page.1.json",
     "authored.gate-critique-fits-the-repair-contract": "decisions/authored.gate-critique-fits-the-repair-contract.1.json",
     "authored.repair-preflight-separates-source-from-decoration": "decisions/authored.repair-preflight-separates-source-from-decoration.1.json",
-    "authored.offcanvas-width-is-repaired-deterministically": "decisions/authored.offcanvas-width-is-repaired-deterministically.1.json"
+    "authored.offcanvas-width-is-repaired-deterministically": "decisions/authored.offcanvas-width-is-repaired-deterministically.1.json",
+    "source-content.verbatim-same-page-fit-ladder": "decisions/source-content.verbatim-same-page-fit-ladder.1.json"
   },
   "readFirst": [
     "AGENTS.md"
   ],
-  "updatedAt": "2026-09-02T04:36:39.3428037+00:00"
+  "updatedAt": "2026-09-03T16:55:56.0000000+00:00"
 }
