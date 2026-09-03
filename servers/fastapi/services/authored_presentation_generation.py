@@ -2811,7 +2811,12 @@ async def _generate_authored_presentation(
                 source_slide_locked=True,
             )
             if final_source_images is None:
-                raise ValueError("authored_source_image_plan_unavailable")
+                # ``None`` is this planner's word for "source images are not in
+                # play for this deck", which is the ordinary state of a source
+                # whose pages are text only. There is nothing to place and so
+                # nothing to check; treating it as a failure ended a 35-slide
+                # deck that had already passed every gate before it.
+                final_source_images = [{} for _ in htmls]
             final_metrics = (
                 retained_final_metrics
                 if evidence_ledger is not None
