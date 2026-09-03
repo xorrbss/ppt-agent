@@ -1,4 +1,11 @@
-"""Pull an element that overhangs the slide back inside the canvas.
+"""Deterministic geometry repairs measured from one slide's own capture.
+
+Both repairs here fix arithmetic the author got wrong, cost no provider call,
+and change nothing but the CSS of the elements Chromium reported broken. The
+gate re-measures the result, so a repair that does not help is rejected like
+any other candidate.
+
+Pull an element that overhangs the slide back inside the canvas.
 
 The frame is exactly 1280x720 and clips. The recurring authoring mistake is
 arithmetic rather than design: a wrapper inset from the edge is still given the
@@ -90,6 +97,12 @@ def repair_authored_offcanvas_width(html: str, browser_metrics: Any) -> str:
         f"{selector} {{ width: auto !important; max-width: 100% !important;"
         " box-sizing: border-box !important; }\n"
     )
+    return _append_style_rule(document, rule)
+
+
+def _append_style_rule(document: str, rule: str) -> str:
+    """Put ``rule`` last in the document's own stylesheet, or add one."""
+
     match = None
     for candidate in _STYLE_CLOSE.finditer(document):
         match = candidate
@@ -102,9 +115,71 @@ def repair_authored_offcanvas_width(html: str, browser_metrics: Any) -> str:
     return document + block
 
 
+#: The authored design contract treats 15px as the inclusive 11pt floor, which
+#: is the same number the capacity gate enforces.
+MIN_FONT_PX = 15.0
+
+#: A source blank field is a run of underscores the deck must reproduce
+#: literally: it cannot be shortened, only set smaller.
+_BLANK_FIELD = re.compile(r"^[_\s–—]+$")
+
+
+def _clipped(element: Mapping[str, Any]) -> bool:
+    return bool(
+        element.get("clipped")
+        or element.get("glyph_clipped")
+        or element.get("line_box_clipped")
+    )
+
+
+def clipped_blank_field_qids(browser_metrics: Any) -> tuple[str, ...]:
+    """QIDs of clipped elements whose text is a source blank field.
+
+    A worksheet line is thirty underscores the restyle must keep, and at the
+    author's chosen size it is wider than the box drawn for it.  The
+    characters are not negotiable and the box is the template's, so the size
+    is the one thing left to give.
+    """
+
+    found: list[str] = []
+    for element in _elements(browser_metrics):
+        qid = str(element.get("qid") or "").strip()
+        if not qid or not _QID.match(qid) or qid in found or not _clipped(element):
+            continue
+        text = str(element.get("rendered_text") or "")
+        size = _number(element.get("font_size"))
+        if text and _BLANK_FIELD.match(text) and size is not None and size > MIN_FONT_PX:
+            found.append(qid)
+    return tuple(found)
+
+
+def repair_authored_blank_field_clipping(html: str, browser_metrics: Any) -> str:
+    """Set a clipped blank field at the design floor so its line fits.
+
+    Thirty underscores at 20px overflowed a 347px box on slide 10 of operation
+    7787af14 and survived the bounded repair round.  At the floor the same run
+    fits, the characters are untouched, and no other element is affected.
+    """
+
+    document = str(html or "")
+    qids = clipped_blank_field_qids(browser_metrics)
+    if not document or not qids:
+        return document
+    selector = ", ".join(f'[data-qid="{qid}"]' for qid in qids)
+    rule = (
+        "\n/* deterministic blank-field containment: measured clipping */\n"
+        f"{selector} {{ font-size: {MIN_FONT_PX:.0f}px !important;"
+        " white-space: nowrap !important; }\n"
+    )
+    return _append_style_rule(document, rule)
+
+
 __all__ = [
     "CANVAS_HEIGHT",
     "CANVAS_WIDTH",
+    "MIN_FONT_PX",
+    "clipped_blank_field_qids",
     "overhanging_qids",
+    "repair_authored_blank_field_clipping",
     "repair_authored_offcanvas_width",
 ]

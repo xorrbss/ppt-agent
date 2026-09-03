@@ -134,7 +134,10 @@ from services.authored_composition_policy import (
     resolve_composition_profile,
     semantic_repair_boundary_violations,
 )
-from services.authored_offcanvas_repair import repair_authored_offcanvas_width
+from services.authored_offcanvas_repair import (
+    repair_authored_blank_field_clipping,
+    repair_authored_offcanvas_width,
+)
 from services.authored_generation_preflight import (
     AuthoredSlideArtifact,
     preflight_authored_provider_repair,
@@ -771,6 +774,10 @@ def _deterministic_repair_candidate(
     # Clamping the measured overhang costs no provider call and leaves the
     # slide otherwise untouched; the gate re-measures the result.
     candidate = repair_authored_offcanvas_width(candidate, browser_metrics)
+    # A source blank field is a run of underscores the deck must reproduce
+    # literally, so when the author's size makes it wider than the box drawn
+    # for it, the size is the only thing left to give.
+    candidate = repair_authored_blank_field_clipping(candidate, browser_metrics)
     candidate = reduce_authored_owner_text_capacity(
         candidate,
         capacity,

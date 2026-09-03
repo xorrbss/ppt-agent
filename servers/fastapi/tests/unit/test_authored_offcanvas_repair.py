@@ -10,7 +10,9 @@ bounded repair round had already tried and failed.
 from __future__ import annotations
 
 from services.authored_offcanvas_repair import (
+    clipped_blank_field_qids,
     overhanging_qids,
+    repair_authored_blank_field_clipping,
     repair_authored_offcanvas_width,
 )
 
@@ -80,3 +82,51 @@ def test_repairing_twice_is_stable() -> None:
     # in effect, and the measured metrics are what decide either way.
     assert twice.count('[data-qid="wrap"]') == 2
     assert "본문" in twice
+
+
+def _blank_field(qid: str, *, font: float, clipped: bool = True, text: str = "_" * 30):
+    return {
+        "qid": qid,
+        "rendered_text": text,
+        "font_size": font,
+        "clipped": clipped,
+        "glyph_clipped": False,
+        "line_box_clipped": False,
+        "bbox": {"x": 100, "y": 200, "width": 347, "height": 26},
+    }
+
+
+def test_only_a_clipped_blank_field_above_the_floor_is_resized() -> None:
+    metrics = _metrics(
+        _blank_field("field.a", font=20),
+        # Already at the floor: there is nothing left to give.
+        _blank_field("field.b", font=15),
+        # Not clipped: it fits as authored.
+        _blank_field("field.c", font=20, clipped=False),
+        # Real text is not a blank field; shrinking it is the capacity gate's
+        # decision, not this repair's.
+        {
+            "qid": "copy",
+            "rendered_text": "고객이 실제로 원하는 결과",
+            "font_size": 20,
+            "clipped": True,
+            "bbox": {"x": 100, "y": 300, "width": 347, "height": 26},
+        },
+    )
+    assert clipped_blank_field_qids(metrics) == ("field.a",)
+
+
+def test_the_blank_field_rule_sets_the_floor_and_keeps_the_characters() -> None:
+    html = (
+        "<html><head><style>.field{font-size:20px}</style></head><body>"
+        '<div class="field" data-qid="field.a">______________________________</div>'
+        "</body></html>"
+    )
+    repaired = repair_authored_blank_field_clipping(
+        html, _metrics(_blank_field("field.a", font=20))
+    )
+    assert "font-size: 15px !important" in repaired
+    assert "white-space: nowrap !important" in repaired
+    assert "______________________________" in repaired
+    assert ".field{font-size:20px}" in repaired
+    assert repair_authored_blank_field_clipping(html, _metrics()) == html
