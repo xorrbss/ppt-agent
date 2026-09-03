@@ -137,6 +137,14 @@ DESIGN SYSTEM (obey on EVERY slide so the deck is cohesive):
   must fit fully inside it with NO overflow, NO clipping, and NO overlap between blocks. This is
   the single most common failure — prioritise it over visual ambition. Use less/shorter text and
   generous spacing rather than cramming.
+- Width belongs to the CONTENT BOX, not the canvas: inside a container that is inset from the
+  edge, an element is never 1280px wide. Subtract both insets (a 72px inset on each side leaves
+  1136px) or set no width at all and let the container size it. Measured failures: three slides
+  of one deck placed elements at x=72 with width:1280px, so each ran 72px past the right edge and
+  clipped the source text inside it.
+- The same arithmetic applies down the page: an element's top plus its height must stay above
+  the footer safe zone. A block starting at y=749 on a 720px canvas is invisible, however
+  correct its own box looks.
 {type_scale}
 - Heading sizing: size headings to the ACTUAL text length so they stay within their area, and
   budget vertical space for the real number of wrapped lines.
