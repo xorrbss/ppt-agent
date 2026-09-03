@@ -134,6 +134,7 @@ from services.authored_composition_policy import (
     resolve_composition_profile,
     semantic_repair_boundary_violations,
 )
+from services.authored_offcanvas_repair import repair_authored_offcanvas_width
 from services.authored_generation_preflight import (
     AuthoredSlideArtifact,
     preflight_authored_provider_repair,
@@ -765,6 +766,11 @@ def _deterministic_repair_candidate(
         browser_metrics,
         profile_id=profile_id,
     )
+    # A wrapper inset from the edge that was given the full canvas width runs
+    # past the right edge by exactly its inset, taking its children with it.
+    # Clamping the measured overhang costs no provider call and leaves the
+    # slide otherwise untouched; the gate re-measures the result.
+    candidate = repair_authored_offcanvas_width(candidate, browser_metrics)
     candidate = reduce_authored_owner_text_capacity(
         candidate,
         capacity,
