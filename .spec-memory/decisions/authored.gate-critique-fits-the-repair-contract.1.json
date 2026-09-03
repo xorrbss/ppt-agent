@@ -11,6 +11,7 @@
   "invariants": [
     "A critique never carries more issues than SlideCritique.issues accepts.",
     "Identical instructions are emitted once; the gate reports per element and repeats the same sentence for each.",
+    "Each instruction names the elements the gate measured the defect on, and never cuts an element name in half to fit the detail budget.",
     "Findings kept beyond the cap follow the gate's own reporting order, and the drop is logged.",
     "A slide within the cap is unchanged, and a slide with no findings still receives no critique."
   ],
@@ -21,7 +22,8 @@
   "rationale": [
     "Operation b3e18cc2 finished authoring 35 of 35 slides -- the first run to do so -- and then died building the repair instruction for slide 10, whose four overflowing boxes produced 12 gate issues against a cap of 8.",
     "Four identical sentences are not four instructions: collapsing them took that slide from 12 issues to 6 and made the cap irrelevant for it.",
-    "The same bounding already existed at authored_quality_review_support; this closes the one builder that lacked it."
+    "The same bounding already existed at authored_quality_review_support; this closes the one builder that lacked it.",
+    "Without the element names the repair for slide 10 read 'something overflows'; the gate knows which four boxes, and the instruction now says so."
   ],
   "evidence": [
     "servers/fastapi/services/authored_presentation_generation.py",

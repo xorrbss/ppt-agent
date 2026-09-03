@@ -67,6 +67,29 @@ def test_repeated_findings_collapse_instead_of_failing_the_deck() -> None:
     assert any("clipped visible content" in detail for detail in details)
     assert any("scroll dimensions exceed" in detail for detail in details)
     assert sum("overlaps a sibling" in detail for detail in details) == 4
+    # And each says which elements the gate measured it on.
+    clipping = next(d for d in details if "clipped visible content" in d)
+    assert "Elements: a" in clipping
+    assert "+" in clipping or clipping.count(",") >= 3
+
+
+def test_an_instruction_never_cuts_an_element_name_in_half() -> None:
+    long_qids = [f"source-block-{index:016x}" for index in range(6)]
+    issues = [
+        _element_issue(
+            "overflow", "high", "content scroll dimensions exceed its client box", qid
+        )
+        for qid in long_qids
+    ]
+    critiques = _capacity_gate_initial_critiques(
+        [{"slide_index": 0, "issues": issues}], [0], ["PILLARS"]
+    )
+    detail = critiques[0].issues[0].detail
+    assert len(detail) <= 200
+    assert detail.endswith("header text.")
+    listed = [qid for qid in long_qids if qid in detail]
+    assert listed, "at least one element must be named"
+    assert f"+{len(long_qids) - len(listed)} more" in detail
 
 
 def test_a_slide_over_the_cap_is_still_repaired() -> None:
@@ -79,6 +102,8 @@ def test_a_slide_over_the_cap_is_still_repaired() -> None:
     )
     critique = critiques[0]
     assert critique is not None
+    # Twenty elements reporting twenty different defects stay twenty
+    # instructions until the cap, which is what the cap is for.
     assert len(critique.issues) == _MAX_CRITIQUE_ISSUES
     # The gate's own reporting order is kept, so the repair sees a prefix of
     # what it found rather than an arbitrary sample.

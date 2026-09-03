@@ -607,6 +607,42 @@ def _callable_accepts_keyword(callable_object, keyword: str) -> bool:
 #: whole deck instead of repairing the slide.
 _MAX_CRITIQUE_ISSUES = 8
 
+#: ``CritiqueIssue.detail`` accepts this many characters, and the element names
+#: are what makes the instruction actionable, so the boilerplate is what gives
+#: way first.
+_MAX_CRITIQUE_DETAIL = 200
+
+
+def _dom_repair_detail(
+    category: str, message: str, qids: object
+) -> str:
+    """One repair instruction that says which elements the gate measured.
+
+    The gate reports per element and the caller collapses identical sentences,
+    so without the element names a slide with four overflowing boxes is
+    repaired from "something overflows".  The names come from the measurement,
+    fit inside the detail budget, and the count is kept when they do not.
+    """
+
+    names = [
+        str(value).strip()
+        for value in (qids if isinstance(qids, (list, tuple)) else ())
+        if str(value).strip()
+    ]
+    head = f"DOM {category}: {message}."
+    tail = " Keep every QID, semantic role, source owner and header text."
+    # Name as many elements as fit whole. Slicing the finished sentence would
+    # cut a QID in half, and half a QID points at nothing.
+    for count in range(len(names), 0, -1):
+        listed = ", ".join(names[:count])
+        remaining = len(names) - count
+        elements = listed + (f" +{remaining} more" if remaining else "")
+        candidate = f"{head} Elements: {elements}.{tail}"
+        if len(candidate) <= _MAX_CRITIQUE_DETAIL:
+            return candidate
+    return (head + tail)[:_MAX_CRITIQUE_DETAIL]
+
+
 def _bounded_critique_issues(
     issues: list[CritiqueIssue], *, slide_index: int
 ) -> list[CritiqueIssue]:
@@ -652,6 +688,7 @@ def _capacity_gate_initial_critiques(
     """Make deterministic capacity failures start the existing one-cycle repair."""
 
     details_by_slide: dict[int, list[CritiqueIssue]] = {}
+    dom_groups: dict[int, dict[tuple[str, str, str], list[str]]] = {}
     for failure in gate_failures:
         slide_index = failure.get("slide_index")
         if not isinstance(slide_index, int):
@@ -675,16 +712,25 @@ def _capacity_gate_initial_critiques(
                 )
                 continue
             issue_type = "overlap" if category == "overlap" else "overflow"
-            details_by_slide.setdefault(slide_index, []).append(
-                CritiqueIssue(
-                    type=issue_type,
-                    severity="high",
-                    detail=(
-                        f"Deterministic DOM {category} gate: {message}. Preserve all "
-                        "QIDs, semantic roles, source owners, and title/header text."
-                    )[:200],
-                )
+            # One instruction per distinct defect, naming every element the
+            # gate measured it on. Reported per element, the same sentence
+            # would otherwise arrive four times and say nothing about where.
+            group = dom_groups.setdefault(slide_index, {}).setdefault(
+                (issue_type, category, message), []
             )
+            for value in issue.get("qids") or ():
+                name = str(value).strip()
+                if name and name not in group:
+                    group.append(name)
+    for slide_index, groups in dom_groups.items():
+        details_by_slide.setdefault(slide_index, []).extend(
+            CritiqueIssue(
+                type=issue_type,
+                severity="high",
+                detail=_dom_repair_detail(category, message, qids),
+            )
+            for (issue_type, category, message), qids in groups.items()
+        )
     return [
         (
             SlideCritique(
