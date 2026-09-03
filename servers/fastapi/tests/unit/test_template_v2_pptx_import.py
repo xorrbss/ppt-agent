@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import pytest
 import hashlib
 import importlib.util
 import io
@@ -19,7 +20,6 @@ from api.v1.ppt.endpoints import structured_template_imports
 from api.v1.ppt.endpoints.structured_template_imports import (
     create_structured_template_import,
 )
-from models.sql.template_v2_pptx_import import TemplateV2PptxImport
 from services import template_v2_pptx_ingestion_service as ingestion
 from services.template_v2_pptx_storage import (
     PPTX_MEDIA_TYPE,
@@ -423,11 +423,15 @@ def test_private_streaming_storage_hash_limit_and_path_safety(
         raise AssertionError("streaming byte limit was not enforced")
 
 
-def test_import_api_queues_for_the_durable_dispatcher(
+def test_import_api_is_closed_even_with_the_feature_fully_enabled(
     tmp_path: Path,
     monkeypatch,
     fake_async_session,
 ) -> None:
+    """Importing a .pptx as a template mints a template-v2 deck, which this
+    fork no longer creates. The route used to queue a durable dispatcher job;
+    it now refuses before touching storage, the session, or the dispatcher."""
+
     monkeypatch.setenv("APP_DATA_DIRECTORY", str(tmp_path / "app-data"))
     monkeypatch.setenv("DISABLE_AUTH", "true")
     monkeypatch.setenv("ENABLE_TEMPLATE_V2", "true")
@@ -438,49 +442,42 @@ def test_import_api_queues_for_the_durable_dispatcher(
         "notify_template_v2_pptx_dispatcher",
         lambda: notifications.append("queued"),
     )
-    class EmptyResult:
-        def scalar_one_or_none(self):
-            return None
 
-    async def execute_empty(*_args, **_kwargs):
-        return EmptyResult()
-
-    monkeypatch.setattr(fake_async_session, "execute", execute_empty)
-
-    response = asyncio.run(
-        create_structured_template_import(
-            request=_request(),
-            template_id="safe-template",
-            pptx_file=_upload(_pptx_bytes()),
-            idempotency_key="request-key-0001",
-            sql_session=fake_async_session,
+    with pytest.raises(HTTPException) as rejected:
+        asyncio.run(
+            create_structured_template_import(
+                request=_request(),
+                template_id="safe-template",
+                pptx_file=_upload(_pptx_bytes()),
+                idempotency_key="request-key-0001",
+                sql_session=fake_async_session,
+            )
         )
-    )
 
-    assert response.state == "queued"
-    assert response.requested_template_id == "safe-template"
-    assert response.source_sha256
-    assert response.source_inventory["source"]["sha256"] == response.source_sha256
-    assert response.source_inventory["artifacts"] == []
-    assert response.source_inventory["candidates"] == []
-    assert fake_async_session.commit_count == 1
-    jobs = [
-        obj
-        for obj in fake_async_session.added
-        if isinstance(obj, TemplateV2PptxImport)
-    ]
-    assert jobs and "/" in jobs[0].source_storage_key
-    assert notifications == ["queued"]
-    assert "source_storage_key" not in response.model_dump()
+    assert rejected.value.status_code == 409
+    assert rejected.value.detail == {
+        "code": "template_v2_import_admission_closed",
+        "operation": "template-v2-import",
+        "required_driver": "authored",
+        "upgrade_path": "compatibility.upgrade-fork",
+    }
+    assert notifications == []
+    assert fake_async_session.added == []
+    assert fake_async_session.commit_count == 0
 
 
-def test_import_api_respects_default_off_policy(
+def test_import_api_is_closed_before_the_feature_policy_is_consulted(
     monkeypatch,
     fake_async_session,
 ) -> None:
+    """With the feature off the route used to answer 403
+    template_v2_creation_disabled. Admission is now the outer gate, so the
+    answer no longer depends on a policy that could be switched back on."""
+
     monkeypatch.delenv("ENABLE_TEMPLATE_V2", raising=False)
     monkeypatch.delenv("TEMPLATE_V2_TEMPLATE_ALLOWLIST", raising=False)
-    try:
+
+    with pytest.raises(HTTPException) as rejected:
         asyncio.run(
             create_structured_template_import(
                 request=_request(),
@@ -490,11 +487,9 @@ def test_import_api_respects_default_off_policy(
                 sql_session=fake_async_session,
             )
         )
-    except HTTPException as error:
-        assert error.status_code == 403
-        assert error.detail == "template_v2_creation_disabled"
-    else:
-        raise AssertionError("default-off import policy was bypassed")
+
+    assert rejected.value.status_code == 409
+    assert rejected.value.detail["code"] == "template_v2_import_admission_closed"
 
 
 def test_import_migration_upgrade_and_empty_downgrade(tmp_path: Path) -> None:

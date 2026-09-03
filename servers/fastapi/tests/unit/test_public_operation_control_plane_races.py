@@ -55,6 +55,7 @@ from services.public_operation_admission import (
     requeue_public_operation_v2,
     reserve_public_provider_call,
 )
+from services.provider_pricing import ProviderModelPricing
 from services.provider_usage_instrumentation import (
     provider_call_admission,
     provider_usage_scope,
@@ -1504,6 +1505,19 @@ def test_public_authority_failure_starts_no_provider_or_browser(monkeypatch) -> 
         monkeypatch.setattr(
             "services.public_operation_admission.reserve_public_provider_call_detached",
             reject_public_reservation,
+        )
+        # A public call prices itself before it reserves anything, so without a
+        # rate the admission stops one gate earlier than the authority failure
+        # this test is about.
+        monkeypatch.setattr(
+            "services.provider_pricing_registry.resolve_public_provider_pricing",
+            lambda **_kwargs: ProviderModelPricing(
+                revision="test-pricing-v1",
+                provider_id="unavailable",
+                model_id="unavailable",
+                input_microunits_per_million_tokens=1,
+                output_microunits_per_million_tokens=1,
+            ),
         )
         with public_operation_scope(uuid.uuid4()):
             with provider_usage_scope(

@@ -516,11 +516,15 @@ def test_admin_aggregate_backfills_all_owners_and_anonymous_preserving_owner(
                         owner_context.__enter__()
                     async with maker() as session:
                         image = ImageAsset(path=str(paths[owner_id]))
+                        # A deck whose profile columns are blanked below, so
+                        # the backfill has something to canonicalize. Its
+                        # identity has to be one this fork can still describe:
+                        # the retired React-template formats have no driver.
                         presentation = PresentationModel(
                             content="legacy",
                             n_slides=1,
                             language="en",
-                            layout={"name": "legacy"},
+                            mode="authored",
                             generation_mode="standard",
                         )
                         session.add_all([image, presentation])
@@ -599,7 +603,7 @@ def test_admin_aggregate_backfills_all_owners_and_anonymous_preserving_owner(
                         )
                     )
                     assert {row.id for row in presentations} == set(presentation_ids)
-                    assert all(row.profile_driver_id == "standard" for row in presentations)
+                    assert all(row.profile_driver_id == "authored" for row in presentations)
                     report = await compatibility_readiness(
                         session,
                         aggregate_all_owners=True,
@@ -630,8 +634,8 @@ def test_profile_backfill_and_removal_gate_fail_closed_without_deployment_eviden
                             content="smart",
                             n_slides=1,
                             language="en",
-                            layout={"name": "legacy"},
-                            generation_mode="smart",
+                            mode="authored",
+                            generation_mode="standard",
                         )
                     session.add(presentation)
                     await session.commit()
@@ -651,7 +655,7 @@ def test_profile_backfill_and_removal_gate_fail_closed_without_deployment_eviden
                     result = await backfill_presentation_profiles(session)
                     assert result.backfilled == 1
                     row = (await session.execute(select(PresentationModel))).scalar_one()
-                    assert row.profile_driver_id == "smart"
+                    assert row.profile_driver_id == "authored"
                     report = await compatibility_readiness(session)
                     assert report.presentation_rows_without_canonical_profile == 0
                     assert report.generation_mode_removal_ready is False
