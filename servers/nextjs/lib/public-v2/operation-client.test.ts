@@ -43,6 +43,11 @@ function status(state: "queued" | "running" | "succeeded" | "failed" | "cancelle
       ? { reasonCode: "operation_cancelled", retryable: false }
       : null,
     releaseReadiness: "not_assessed",
+    readinessScope: "artifact:fidelity",
+    fidelityArtifactReady: false,
+    nativeEditabilityReady: false,
+    promotionReady: false,
+    deploymentAuthorized: false,
     artifacts: [],
   };
 }
@@ -230,6 +235,11 @@ test("generation source revision drives fidelity export status and authorized do
         absoluteDeadlineAt: "2026-08-30T00:05:00Z",
         error: null,
         releaseReadiness: "not_assessed",
+        readinessScope: "artifact:fidelity",
+        fidelityArtifactReady: false,
+        nativeEditabilityReady: false,
+        promotionReady: false,
+        deploymentAuthorized: false,
         artifacts: [{
           artifactId,
           operationId: exportOperationId,

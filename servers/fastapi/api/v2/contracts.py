@@ -578,6 +578,94 @@ class PublicExportExecutionReceiptV1(PublicWireModel):
         return self
 
 
+class PublicGenerationStageDurationV1(PublicWireModel):
+    duration_millis: int = Field(ge=0)
+
+
+PublicGenerationStageValueV1 = (
+    PublicGenerationStageDurationV1 | Literal["not_started"]
+)
+
+
+class PublicGenerationStageTimingsV1(PublicWireModel):
+    outline: PublicGenerationStageValueV1
+    provider: PublicGenerationStageValueV1
+    authoring: PublicGenerationStageValueV1
+    repair: PublicGenerationStageValueV1
+    chromium_review: PublicGenerationStageValueV1
+    publication: PublicGenerationStageValueV1
+
+
+class PublicGenerationUsageAvailabilityV1(PublicWireModel):
+    tokens: Literal["available", "partial", "unavailable", "not_started"]
+    cost: Literal["available", "partial", "unavailable", "not_started"]
+
+
+class PublicGenerationWorkerTimingV1(PublicWireModel):
+    status: Literal["observed", "unavailable", "not_started"]
+    worker: str | None = Field(default=None, min_length=1, max_length=160)
+    peak_memory: int | None = Field(default=None, ge=0)
+    peak_handles: int | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def validate_worker_observation(self) -> "PublicGenerationWorkerTimingV1":
+        observed_values = (
+            self.worker is not None
+            or self.peak_memory is not None
+            or self.peak_handles is not None
+        )
+        if self.status == "observed" and not observed_values:
+            raise ValueError("observed worker timing requires worker evidence")
+        if self.status != "observed" and observed_values:
+            raise ValueError("unobserved worker timing cannot carry worker evidence")
+        return self
+
+
+class PublicGenerationTimingV1(PublicWireModel):
+    """Terminal public projection of one durable generation attempt."""
+
+    schema_version: Literal["public-generation-timing/v1"] = (
+        "public-generation-timing/v1"
+    )
+    attempt_number: int = Field(ge=0)
+    outcome: Literal[
+        "succeeded",
+        "failed",
+        "budget_exhausted",
+        "cancelled",
+        "dead_letter",
+        "worker_crash",
+    ]
+    stages: PublicGenerationStageTimingsV1
+    queue_wait_millis: int | Literal["not_started"]
+    wall_millis: int | Literal["not_started"]
+    logical_calls: int | Literal["not_started"]
+    retry_reason: str | None = Field(default=None, min_length=1, max_length=160)
+    usage_availability: PublicGenerationUsageAvailabilityV1
+    worker: PublicGenerationWorkerTimingV1
+    terminal_error: str | None = Field(default=None, min_length=1, max_length=160)
+    source_receipt_digest: str | None = Field(default=None, pattern=DIGEST_PATTERN)
+
+    @field_validator("queue_wait_millis", "wall_millis", "logical_calls")
+    @classmethod
+    def validate_non_negative_or_not_started(
+        cls, value: int | str
+    ) -> int | str:
+        if value == "not_started":
+            return value
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError("timing counters must be non-negative or not_started")
+        return value
+
+    @model_validator(mode="after")
+    def validate_terminal_error(self) -> "PublicGenerationTimingV1":
+        if self.outcome == "succeeded" and self.terminal_error is not None:
+            raise ValueError("succeeded generation timing cannot carry terminalError")
+        if self.outcome != "succeeded" and self.terminal_error is None:
+            raise ValueError("failed generation timing requires terminalError")
+        return self
+
+
 class OperationExecutionReceiptV2(PublicWireModel):
     schema_version: Literal["operation-execution-receipt/v2"] = (
         "operation-execution-receipt/v2"
@@ -613,6 +701,7 @@ class OperationStatusV2(PublicWireModel):
     error: PublicOperationErrorV2 | None = None
     generation_route_receipt: GenerationRouteReceiptV1 | None = None
     generation_timing_receipt: dict[str, Any] | None = None
+    generation_timing: PublicGenerationTimingV1 | None = None
     content_integrity_receipt: ContentIntegrityReceiptV2 | None = None
     execution_receipt: OperationExecutionReceiptV2 | None = None
     quality_receipt: QualityReceiptV3 | None = None

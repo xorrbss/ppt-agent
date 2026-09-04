@@ -115,6 +115,46 @@ export type PublicV2Quality = {
   receipt: Record<string, unknown> | null;
 };
 
+export type PublicV2Readiness = {
+  scope: "artifact:fidelity";
+  fidelityArtifactReady: boolean;
+  nativeEditabilityReady: false;
+  promotionReady: false;
+  deploymentAuthorized: false;
+};
+
+export type PublicV2GenerationStageTiming =
+  | "not_started"
+  | { durationMillis: number };
+
+export type PublicV2GenerationTiming = {
+  attemptNumber: number;
+  outcome: "succeeded" | "failed" | "budget_exhausted" | "cancelled" | "dead_letter" | "worker_crash";
+  stages: {
+    outline: PublicV2GenerationStageTiming;
+    provider: PublicV2GenerationStageTiming;
+    authoring: PublicV2GenerationStageTiming;
+    repair: PublicV2GenerationStageTiming;
+    chromiumReview: PublicV2GenerationStageTiming;
+    publication: PublicV2GenerationStageTiming;
+  };
+  queueWaitMillis: number | "not_started";
+  wallMillis: number | "not_started";
+  logicalCalls: number | "not_started";
+  retryReason: string | null;
+  usageAvailability: {
+    tokens: "available" | "partial" | "unavailable" | "not_started";
+    cost: "available" | "partial" | "unavailable" | "not_started";
+  };
+  worker: {
+    status: "observed" | "unavailable" | "not_started";
+    worker: string | null;
+    peakMemory: number | null;
+    peakHandles: number | null;
+  };
+  terminalError: string | null;
+};
+
 export type PublicV2OperationSnapshot = {
   lifecycle: PublicV2Lifecycle;
   operationId: string | null;
@@ -133,6 +173,8 @@ export type PublicV2OperationSnapshot = {
   quality: PublicV2Quality;
   /** Server-resolved routing evidence; never used to choose a client route. */
   generationRouteReceipt: PublicV2GenerationRouteReceipt | null;
+  readiness: PublicV2Readiness;
+  generationTiming: PublicV2GenerationTiming | null;
   artifacts: readonly PublicV2Artifact[];
   /** Artifact availability, intentionally separate from quality/readiness. */
   downloadStatus: "unavailable" | "ready";
@@ -194,6 +236,8 @@ type PublicV2Status = {
   sourceRevision: number | null;
   error: PublicV2OperationFailure | null;
   quality: PublicV2Quality;
+  readiness: PublicV2Readiness;
+  generationTiming: PublicV2GenerationTiming | null;
   generationRouteReceipt: PublicV2GenerationRouteReceipt | null;
   artifacts: PublicV2Artifact[];
 };
@@ -255,6 +299,14 @@ const EMPTY_SNAPSHOT: PublicV2OperationSnapshot = {
   pendingAdmission: false,
   cancellationRequested: false,
   quality: { releaseReadiness: "not_assessed", receipt: null },
+  readiness: {
+    scope: "artifact:fidelity",
+    fidelityArtifactReady: false,
+    nativeEditabilityReady: false,
+    promotionReady: false,
+    deploymentAuthorized: false,
+  },
+  generationTiming: null,
   generationRouteReceipt: null,
   artifacts: [],
   downloadStatus: "unavailable",
@@ -304,6 +356,96 @@ function optionalRevision(value: unknown): number | null {
     throw new PublicV2ApiError(502, "public_v2_invalid_source_revision");
   }
   return value;
+}
+
+function nonNegativeCounter(value: unknown, reasonCode: string): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    throw new PublicV2ApiError(502, reasonCode);
+  }
+  return value;
+}
+
+function timingCounter(value: unknown): number | "not_started" {
+  return value === "not_started"
+    ? value
+    : nonNegativeCounter(value, "public_v2_invalid_generation_timing");
+}
+
+function generationStageTiming(value: unknown): PublicV2GenerationStageTiming {
+  if (value === "not_started") return value;
+  const source = record(value);
+  if (Object.keys(source).some((key) => key !== "durationMillis")) {
+    throw new PublicV2ApiError(502, "public_v2_invalid_generation_stage_timing");
+  }
+  return {
+    durationMillis: nonNegativeCounter(
+      source.durationMillis,
+      "public_v2_invalid_generation_stage_timing",
+    ),
+  };
+}
+
+function generationTiming(value: unknown): PublicV2GenerationTiming | null {
+  if (value === null || value === undefined) return null;
+  const source = record(value);
+  if (source.schemaVersion !== "public-generation-timing/v1") {
+    throw new PublicV2ApiError(502, "public_v2_invalid_generation_timing");
+  }
+  const stages = record(source.stages);
+  const stageNames = ["outline", "provider", "authoring", "repair", "chromiumReview", "publication"] as const;
+  if (Object.keys(stages).length !== stageNames.length || stageNames.some((name) => !(name in stages))) {
+    throw new PublicV2ApiError(502, "public_v2_invalid_generation_timing_stages");
+  }
+  const outcomes = new Set(["succeeded", "failed", "budget_exhausted", "cancelled", "dead_letter", "worker_crash"]);
+  if (typeof source.outcome !== "string" || !outcomes.has(source.outcome)) {
+    throw new PublicV2ApiError(502, "public_v2_invalid_generation_timing_outcome");
+  }
+  const usage = record(source.usageAvailability);
+  const availability = new Set(["available", "partial", "unavailable", "not_started"]);
+  if (typeof usage.tokens !== "string" || !availability.has(usage.tokens) || typeof usage.cost !== "string" || !availability.has(usage.cost)) {
+    throw new PublicV2ApiError(502, "public_v2_invalid_generation_usage_availability");
+  }
+  const worker = record(source.worker);
+  if (worker.status !== "observed" && worker.status !== "unavailable" && worker.status !== "not_started") {
+    throw new PublicV2ApiError(502, "public_v2_invalid_generation_worker");
+  }
+  const optionalWorkerCounter = (counter: unknown): number | null => counter === null || counter === undefined
+    ? null
+    : nonNegativeCounter(counter, "public_v2_invalid_generation_worker");
+  const retryReason = source.retryReason === null || source.retryReason === undefined
+    ? null
+    : typeof source.retryReason === "string" && source.retryReason
+      ? source.retryReason
+      : (() => { throw new PublicV2ApiError(502, "public_v2_invalid_generation_retry_reason"); })();
+  const terminalError = source.terminalError === null || source.terminalError === undefined
+    ? null
+    : typeof source.terminalError === "string" && source.terminalError
+      ? source.terminalError
+      : (() => { throw new PublicV2ApiError(502, "public_v2_invalid_generation_terminal_error"); })();
+  return {
+    attemptNumber: nonNegativeCounter(source.attemptNumber, "public_v2_invalid_generation_attempt"),
+    outcome: source.outcome as PublicV2GenerationTiming["outcome"],
+    stages: Object.fromEntries(stageNames.map((name) => [name, generationStageTiming(stages[name])])) as PublicV2GenerationTiming["stages"],
+    queueWaitMillis: timingCounter(source.queueWaitMillis),
+    wallMillis: timingCounter(source.wallMillis),
+    logicalCalls: timingCounter(source.logicalCalls),
+    retryReason,
+    usageAvailability: {
+      tokens: usage.tokens as PublicV2GenerationTiming["usageAvailability"]["tokens"],
+      cost: usage.cost as PublicV2GenerationTiming["usageAvailability"]["cost"],
+    },
+    worker: {
+      status: worker.status as PublicV2GenerationTiming["worker"]["status"],
+      worker: worker.worker === null || worker.worker === undefined
+        ? null
+        : typeof worker.worker === "string" && worker.worker
+          ? worker.worker
+          : (() => { throw new PublicV2ApiError(502, "public_v2_invalid_generation_worker"); })(),
+      peakMemory: optionalWorkerCounter(worker.peakMemory),
+      peakHandles: optionalWorkerCounter(worker.peakHandles),
+    },
+    terminalError,
+  };
 }
 
 function lifecycleFor(status: PublicV2OperationStatus): PublicV2Lifecycle {
@@ -449,6 +591,17 @@ function parseStatus(value: unknown): PublicV2Status {
   })();
   const operationId = publicId(source.operationId, "operation_id");
   const presentationId = publicId(source.presentationId, "presentation_id");
+  if (
+    source.readinessScope !== "artifact:fidelity" ||
+    typeof source.fidelityArtifactReady !== "boolean" ||
+    source.nativeEditabilityReady !== false ||
+    source.promotionReady !== false ||
+    source.deploymentAuthorized !== false ||
+    (releaseReadiness === "ready" && source.fidelityArtifactReady !== true) ||
+    (source.fidelityArtifactReady === true && (releaseReadiness !== "ready" || artifacts.length === 0))
+  ) {
+    throw new PublicV2ApiError(502, "public_v2_invalid_readiness_boundary");
+  }
   if (artifacts.some((item) => item.operationId !== operationId || item.presentationId !== presentationId)) {
     throw new PublicV2ApiError(502, "public_v2_artifact_binding_invalid");
   }
@@ -467,6 +620,14 @@ function parseStatus(value: unknown): PublicV2Status {
         ? null
         : record(source.qualityReceipt),
     },
+    readiness: {
+      scope: "artifact:fidelity",
+      fidelityArtifactReady: source.fidelityArtifactReady,
+      nativeEditabilityReady: false,
+      promotionReady: false,
+      deploymentAuthorized: false,
+    },
+    generationTiming: generationTiming(source.generationTiming),
     generationRouteReceipt: generationRouteReceipt(source.generationRouteReceipt),
     artifacts,
   };
@@ -900,6 +1061,8 @@ export class PublicV2OperationClient {
       pendingAdmission: false,
       cancellationRequested: this.snapshotValue.cancellationRequested && (status.status === "queued" || status.status === "running"),
       quality: status.quality,
+      readiness: status.readiness,
+      generationTiming: status.generationTiming,
       generationRouteReceipt: status.generationRouteReceipt,
       artifacts: status.artifacts,
       downloadStatus: status.artifacts.length ? "ready" : "unavailable",

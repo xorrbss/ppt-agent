@@ -8,6 +8,8 @@ export {
   type PublicV2ExportRequest,
   type PublicV2GenerationMode,
   type PublicV2GenerationRequest,
+  type PublicV2GenerationStageTiming,
+  type PublicV2GenerationTiming,
   type PublicV2Lifecycle,
   type PublicV2OperationClientOptions,
   type PublicV2OperationEvent,
@@ -17,6 +19,7 @@ export {
   type PublicV2OperationSnapshot,
   type PublicV2OperationStatus,
   type PublicV2Quality,
+  type PublicV2Readiness,
 } from "./operation-client.ts";
 export {
   usePublicV2Operation,

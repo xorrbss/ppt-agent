@@ -179,6 +179,9 @@ def test_generation_timing_receipt_is_durable_bounded_and_runner_projected(
             id=uuid.uuid4(),
             presentation_id=uuid.uuid4(),
             kind="presentation.generate",
+            # The status projection reads the admission payload for the
+            # route receipt; this attempt carries none.
+            request_payload=None,
             state="succeeded",
             error_code=None,
             error_detail=None,
@@ -498,6 +501,9 @@ def test_failed_attempt_timing_is_attached_and_exposed_by_public_v2_status(
             id=claim.operation_id,
             presentation_id=uuid.uuid4(),
             kind="presentation.generate",
+            # The status projection reads the admission payload for the
+            # route receipt; this attempt carries none.
+            request_payload=None,
             state="failed",
             error_code="authored_slide_capacity_exceeded",
             error_detail={"retryable": False},
@@ -528,7 +534,10 @@ def test_failed_attempt_timing_is_attached_and_exposed_by_public_v2_status(
     assert status.generation_timing.logical_calls == 0
     assert status.generation_timing.usage_availability.tokens == "not_started"
     assert status.generation_timing.usage_availability.cost == "not_started"
-    assert status.generation_timing.worker.status == "unavailable"
+    # The handler stamps the worker on every attempt receipt, so a failed
+    # attempt still carries worker evidence rather than an empty slot.
+    assert status.generation_timing.worker.status == "observed"
+    assert status.generation_timing.worker.worker == "workspace-generation-worker"
     assert status.generation_timing.terminal_error == "authored_slide_capacity_exceeded"
     assert status.readiness_scope == "artifact:fidelity"
     assert status.fidelity_artifact_ready is False
