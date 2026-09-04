@@ -537,6 +537,58 @@ Everything else in that list is out of scope here.
 Every phase is mergeable on its own; every new behaviour ships behind a flag
 whose default is today's behaviour until the phase's exit measurement passes.
 
+### 9.1 Phase 1 measurement, 2026-09-04
+
+Phase 1 shipped A1, A2, A3, B1, D's lease fixes, E1 and E4, plus one defect
+this measurement itself uncovered (below). Measured on an isolated backend
+(SQLite, token profile, image generation on, warm icon pack) with
+`node scripts/generation-benchmark.mjs`; evidence in
+`artifacts/e1-benchmark-20260904/`.
+
+| Exit criterion | Target | Measured | Verdict |
+|---|---|---|---|
+| Worker-lane success, 20-slide fixture | ≥ 80 % | 2 / 3 (67 %) | not met |
+| Wall, 20-slide deck | ≤ 420 s | p50 790 s, p90 981 s | not met |
+
+The baseline both numbers are measured against is 16/157 succeeded and a
+13-minute 20-slide deck, so the lane went from mostly-failing to mostly-working
+and roughly held its wall. Neither target is met, and both misses are
+informative rather than surprising:
+
+- The single failure is `authored_composition_safety_gate_failed` — a measured
+  layout defect returned to the model as prose. That is precisely the failure
+  class **A4** replaces with the deterministic ladder in phase 2; no phase-1
+  item addressed it.
+- The wall is dominated by provider latency: 774–814 s of the 790–981 s wall,
+  over 10–11 calls. The token profile's batch shape (3 slides per call,
+  1 then 2 concurrent waves) is the ceiling, and it is deliberate — it exists
+  to keep the personal token under its rate limit. The levers left are **A6**
+  (shorter calls) and the **API profile** (B1, `AUTHORED_PROVIDER_RATE_PROFILE=api`),
+  both phase 3. G4's 7-minute figure is therefore a phase-3 number on the
+  token profile, not a phase-1 one; this document's own arithmetic (section 2)
+  predicted ~5.5 min of authoring alone at concurrency 5, and the token
+  profile does not run at concurrency 5.
+
+**Defect found by the measurement (fixed in phase 1).** The same 10-slide
+fixture first died at 2 097 s with `public_deadline_exceeded` while only
+417 s of that was provider time. E4's new per-stage `wallMillis` located the
+missing 27 minutes in image generation: all three `AsyncOpenAI` image clients
+(`services/image_generation_service.py` ×2,
+`services/authored_icon_pack/provider.py` ×1) were constructed with
+`max_retries=0` but **no timeout**, so the SDK's own ten-minute default
+applied, twice (`OPENAI_IMAGE_MAX_ATTEMPTS = 2`), behind the process-wide
+image lock — one hung picture could hold every picture and the deck's whole
+deadline. Fixed with a registered `IMAGE_GENERATION_TIMEOUT_SECONDS`
+(default 180, clamped 5–600) applied to every image client; a picture that
+exceeds it degrades to the HTML-only figure. Same fixture after the fix:
+447 s, published. This defect plausibly accounts for part of the
+`presentation_generation_failed` / `http_error_500` group in section 1.2.
+
+Images remain part of the product on this route: they are icons inside
+infographic figures and `scene` cutouts, not standalone illustrations, so
+they belong in every measurement. Their cost here is ~67 s per 10-slide deck
+with a warm pack; a cold pack costs a further ~2.4 min once per style.
+
 ---
 
 ## 10. Pre-development verification checklist

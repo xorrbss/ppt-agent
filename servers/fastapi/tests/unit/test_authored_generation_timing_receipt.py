@@ -12,6 +12,7 @@ from services.authored_generation_timing_receipt import (
     GENERATION_ATTEMPT_TIMING_STAGES,
     GENERATION_OBSERVABILITY_METRICS,
     GenerationTimingRecorder,
+    _attempt_receipt_v2_from_dict,
     create_generation_attempt_timing_receipt,
     create_generation_attempt_timing_receipt_v2,
     create_generation_timing_receipt,
@@ -31,6 +32,7 @@ from services.authored_deck_plan_checkpoint import (
 from services.authored_quality_receipt_v2 import (
     QualityReceiptLedger,
     create_quality_receipt_v2,
+    public_attempt_id,
     quality_receipt_manifest_path,
 )
 from services.workspace_operation_runner import (
@@ -752,4 +754,265 @@ def test_failed_attempt_receipt_preserves_provider_and_checkpoint_signals(
             total_ms=receipt.total_ms,
             provider_usage=provider_snapshot,
             checkpoint_signals=captured["signals"],
+        )
+
+
+# --- E4 (docs/generation-programme-master-design-20260904.md section 8, D13):
+# per-stage wallMillis, providerRateProfile, normalizations, qualityLoop.variant
+# on the v2 attempt-timing receipt. ------------------------------------------
+
+
+def _v2_usage() -> dict:
+    return {
+        "totals": {
+            "logicalCalls": 1,
+            "physicalCalls": 1,
+            "retryCalls": 0,
+            "reportedUsageCalls": 1,
+            "unavailableUsageCalls": 0,
+            "pricedCalls": 1,
+            "latencyMs": 13,
+            "inputTokens": 3,
+            "outputTokens": 4,
+            "actualCostMicrounits": 0,
+            "estimatedCostMicrounits": 7,
+        },
+        "stages": {},
+    }
+
+
+def test_v2_stage_wall_millis_reveals_a_gap_the_summed_duration_hides(
+    tmp_path, monkeypatch
+) -> None:
+    """D13: chromiumReview's durationMillis is a work sum; wallMillis is the
+    real start-to-end span, so the two only agree when nothing overlapped and
+    no gap opened up between the merged source stages."""
+    monkeypatch.setenv("AUTHORED_QUALITY_RECEIPT_DIRECTORY", str(tmp_path))
+    job_id = uuid.uuid4()
+    receipt = create_generation_attempt_timing_receipt_v2(
+        job_id=job_id,
+        attempt_id="private-wall-gap-attempt",
+        attempt_number=1,
+        revision=0,
+        outcome="succeeded",
+        stage_observations={
+            "outline": {"startMillis": 0, "endMillis": 5, "durationMillis": 5},
+            "render": {"startMillis": 5, "endMillis": 15, "durationMillis": 10},
+            # A 5ms idle gap between render ending and quality starting.
+            "quality": {"startMillis": 20, "endMillis": 25, "durationMillis": 5},
+            "publication": {"startMillis": 25, "endMillis": 30, "durationMillis": 5},
+        },
+        executed_stages=("outline", "authoring", "chromiumReview", "publication"),
+        queue_wait_ms=0,
+        wall_ms=30,
+        provider_usage=_v2_usage(),
+        retry_reason=None,
+        worker="workspace-generation-worker",
+        terminal_error=None,
+    )
+    review = receipt.to_dict()["stages"]["chromiumReview"]
+    assert review["durationMillis"] == 15
+    assert review["wallMillis"] == 20
+    assert review["wallMillis"] != review["durationMillis"]
+    assert load_generation_attempt_timing_receipts(job_id)[-1].to_dict() == (
+        receipt.to_dict()
+    )
+
+
+def _v2_digest(payload: dict) -> str:
+    import hashlib as _hashlib
+    import json as _json
+
+    clean = dict(payload)
+    clean.pop("receiptDigest", None)
+    return "sha256:" + _hashlib.sha256(
+        _json.dumps(
+            clean, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def _v2_receipt_dict(stages: dict, attempt_id: str) -> dict:
+    payload = dict(
+        schemaVersion="generation-attempt-timing-receipt/v2",
+        attemptId=public_attempt_id(attempt_id),
+        attemptNumber=1,
+        revision=0,
+        outcome="succeeded",
+        stages=stages,
+        queueWaitMillis=0,
+        wallMillis=11,
+        logicalCalls=0,
+        retryReason=None,
+        tokenAvailability="not_started",
+        costAvailability="not_started",
+        worker="w",
+        terminalError=None,
+        validity="valid",
+        invalidReasons=[],
+        providerUsage=None,
+        receiptDigest="",
+    )
+    payload["receiptDigest"] = _v2_digest(payload)
+    return payload
+
+
+def test_v2_stage_observed_dict_accepts_missing_wall_and_rejects_non_numeric() -> None:
+    legacy_stages = {
+        "outline": {
+            "state": "observed", "startMillis": 0, "endMillis": 5, "durationMillis": 5,
+        },
+        "provider": {"state": "not_started"},
+        "authoring": {
+            "state": "observed", "startMillis": 0, "endMillis": 5, "durationMillis": 5,
+        },
+        "repair": {"state": "not_started"},
+        "chromiumReview": {
+            "state": "observed", "startMillis": 5, "endMillis": 10, "durationMillis": 5,
+        },
+        "publication": {
+            "state": "observed", "startMillis": 10, "endMillis": 11, "durationMillis": 1,
+        },
+    }
+
+    # A receipt written before D13 landed has no wallMillis at all -- still
+    # loads, and its digest is unaffected by the new (absent) field.
+    legacy = _v2_receipt_dict(legacy_stages, "private-wall-legacy")
+    receipt = _attempt_receipt_v2_from_dict(legacy)
+    assert "wallMillis" not in receipt.to_dict()["stages"]["outline"]
+    assert receipt.to_dict() == legacy
+
+    # A non-numeric wallMillis on one stage is rejected.
+    bad_stages = dict(legacy_stages)
+    bad_stages["outline"] = {**legacy_stages["outline"], "wallMillis": "not-a-number"}
+    with pytest.raises(ValueError, match="generation_timing_outline_wall_invalid"):
+        _attempt_receipt_v2_from_dict(_v2_receipt_dict(bad_stages, "private-wall-bad"))
+
+    # A valid numeric wallMillis on one stage round-trips.
+    good_stages = dict(legacy_stages)
+    good_stages["outline"] = {**legacy_stages["outline"], "wallMillis": 4}
+    good = _attempt_receipt_v2_from_dict(_v2_receipt_dict(good_stages, "private-wall-good"))
+    assert good.to_dict()["stages"]["outline"]["wallMillis"] == 4
+
+
+def test_v2_receipt_carries_pinned_provider_rate_profile_normalizations_and_variant(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("AUTHORED_QUALITY_RECEIPT_DIRECTORY", str(tmp_path))
+    monkeypatch.setenv("AUTHORED_PROVIDER_RATE_PROFILE", "token")
+    from services.authored_provider_rate_profile import resolve_authored_rate_profile
+
+    profile = resolve_authored_rate_profile()
+    assert profile.name == "token"
+
+    job_id = uuid.uuid4()
+    normalization_entries = [
+        {
+            "rule": "hidden_element_without_bound_text_removed",
+            "detail": "div",
+            "count": 2,
+        }
+    ]
+    receipt = create_generation_attempt_timing_receipt_v2(
+        job_id=job_id,
+        attempt_id="private-e4-fields-attempt",
+        attempt_number=1,
+        revision=0,
+        outcome="succeeded",
+        stage_observations={
+            "outline": {"startMillis": 0, "endMillis": 5, "durationMillis": 5},
+        },
+        executed_stages=("outline",),
+        queue_wait_ms=0,
+        wall_ms=5,
+        provider_usage=_v2_usage(),
+        retry_reason=None,
+        worker="workspace-generation-worker",
+        terminal_error=None,
+        provider_rate_profile=profile.name,
+        normalizations=normalization_entries,
+        quality_loop_variant="density-tight",
+    )
+    payload = receipt.to_dict()
+    assert payload["providerRateProfile"] == "token"
+    assert payload["normalizations"] == normalization_entries
+    assert payload["qualityLoop"] == {"variant": "density-tight"}
+    assert load_generation_attempt_timing_receipts(job_id)[-1].to_dict() == payload
+
+
+def test_v2_legacy_receipt_digest_is_unaffected_by_the_new_e4_fields() -> None:
+    """A receipt sealed before E4 must still verify: the new fields are only
+    serialized when set, so ``to_dict()`` for an old receipt is unchanged."""
+    stages = {
+        "outline": {
+            "state": "observed", "startMillis": 0, "endMillis": 5, "durationMillis": 5,
+        },
+        "provider": {"state": "not_started"},
+        "authoring": {
+            "state": "observed", "startMillis": 0, "endMillis": 5, "durationMillis": 5,
+        },
+        "repair": {"state": "not_started"},
+        "chromiumReview": {
+            "state": "observed", "startMillis": 5, "endMillis": 10, "durationMillis": 5,
+        },
+        "publication": {
+            "state": "observed", "startMillis": 10, "endMillis": 11, "durationMillis": 1,
+        },
+    }
+    payload = _v2_receipt_dict(stages, "private-legacy-e4")
+    receipt = _attempt_receipt_v2_from_dict(payload)
+    assert receipt.provider_rate_profile is None
+    assert receipt.normalizations == ()
+    assert receipt.quality_loop_variant is None
+    assert receipt.to_dict() == payload
+    assert "providerRateProfile" not in receipt.to_dict()
+    assert "normalizations" not in receipt.to_dict()
+    assert "qualityLoop" not in receipt.to_dict()
+
+
+def test_v2_provider_rate_profile_rejects_an_unknown_name() -> None:
+    with pytest.raises(
+        ValueError, match="generation_attempt_v2_provider_rate_profile_invalid"
+    ):
+        create_generation_attempt_timing_receipt_v2(
+            job_id=uuid.uuid4(),
+            attempt_id="private-bad-profile",
+            attempt_number=1,
+            revision=0,
+            outcome="succeeded",
+            stage_observations={
+                "outline": {"startMillis": 0, "endMillis": 1, "durationMillis": 1},
+            },
+            executed_stages=("outline",),
+            queue_wait_ms=0,
+            wall_ms=1,
+            provider_usage=_v2_usage(),
+            retry_reason=None,
+            worker="w",
+            terminal_error=None,
+            provider_rate_profile="bogus",
+        )
+
+
+def test_v2_normalizations_reject_a_malformed_entry() -> None:
+    with pytest.raises(
+        ValueError, match="generation_attempt_v2_normalizations_invalid"
+    ):
+        create_generation_attempt_timing_receipt_v2(
+            job_id=uuid.uuid4(),
+            attempt_id="private-bad-normalizations",
+            attempt_number=1,
+            revision=0,
+            outcome="succeeded",
+            stage_observations={
+                "outline": {"startMillis": 0, "endMillis": 1, "durationMillis": 1},
+            },
+            executed_stages=("outline",),
+            queue_wait_ms=0,
+            wall_ms=1,
+            provider_usage=_v2_usage(),
+            retry_reason=None,
+            worker="w",
+            terminal_error=None,
+            normalizations=[{"rule": "x"}],
         )

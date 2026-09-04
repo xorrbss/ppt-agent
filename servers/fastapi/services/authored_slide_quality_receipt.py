@@ -71,6 +71,12 @@ class AuthoredSlideQualityRecord:
     variant_chosen: str | None = None
     critic_score: float | None = None
     fallback_count: int | None = None
+    #: E4 (docs/generation-programme-master-design-20260904.md section 8):
+    #: this slide's fired A2 admission normalisation rules (possibly an empty
+    #: tuple, meaning "measured, none fired"). ``None`` means "not measured by
+    #: this write" -- the generation stage is the only writer that knows it,
+    #: so a later export-only write must not erase it.
+    normalizations: tuple[dict[str, Any], ...] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -83,6 +89,11 @@ class AuthoredSlideQualityRecord:
             "variantChosen": self.variant_chosen,
             "criticScore": self.critic_score,
             "fallbackCount": self.fallback_count,
+            "normalizations": (
+                [dict(entry) for entry in self.normalizations]
+                if self.normalizations is not None
+                else None
+            ),
         }
 
     as_dict = to_dict
@@ -95,6 +106,7 @@ def build_slide_quality_records(
     variants: Mapping[int, str] | None = None,
     critic_scores: Mapping[int, float] | None = None,
     fallback_counts: Mapping[int, int] | None = None,
+    normalizations: Mapping[int, Iterable[Mapping[str, Any]]] | None = None,
 ) -> tuple[AuthoredSlideQualityRecord, ...]:
     """Project the frozen infographic plan onto one record per slide.
 
@@ -102,11 +114,17 @@ def build_slide_quality_records(
     or a slide added after the plan was frozen -- still gets a record, with the
     archetype ``none``.  A missing plan therefore degrades to a receipt that
     says "no figure was planned", never to a missing receipt.
+
+    ``normalizations`` (E4) is the deck's per-slide map of fired A2 admission
+    rules, keyed the same way as ``variants``/``critic_scores``. A slide
+    absent from the map is left ``None`` (not measured by this write) rather
+    than an invented empty list.
     """
 
     variants = variants or {}
     critic_scores = critic_scores or {}
     fallback_counts = fallback_counts or {}
+    normalizations = normalizations or {}
     records: list[AuthoredSlideQualityRecord] = []
     for index in range(max(int(slide_count), 0)):
         entry = None
@@ -115,6 +133,7 @@ def build_slide_quality_records(
                 entry = infographic_plan.at(index)
             except Exception:  # pragma: no cover - a foreign plan shape
                 entry = None
+        slide_normalizations = normalizations.get(index)
         records.append(
             AuthoredSlideQualityRecord(
                 slide_index=index,
@@ -129,6 +148,11 @@ def build_slide_quality_records(
                 variant_chosen=_optional_text(variants.get(index)),
                 critic_score=_optional_number(critic_scores.get(index)),
                 fallback_count=_optional_count(fallback_counts.get(index)),
+                normalizations=(
+                    tuple(dict(entry) for entry in slide_normalizations)
+                    if slide_normalizations is not None
+                    else None
+                ),
             )
         )
     return tuple(records)

@@ -3248,6 +3248,11 @@ async def _generate_authored_presentation(
                 for index, receipt in loop_receipts.items()
                 if receipt.get("critic_score") is not None
             },
+            normalizations={
+                index: receipt["normalizations"]
+                for index, receipt in loop_receipts.items()
+                if isinstance(receipt.get("normalizations"), list)
+            },
         ),
         attempt_number=(
             generation_job.attempt_number if generation_job is not None else None

@@ -31,6 +31,7 @@ from services.authored_generation_progress_poller import (
     mark_authored_generation_stage,
     start_authored_generation_progress_polling,
 )
+from services.authored_provider_rate_profile import resolve_authored_rate_profile
 from services.authored_generation_timing_receipt import (
     GENERATION_ATTEMPT_TIMING_STAGES,
     GenerationTimingRecorder,
@@ -218,6 +219,7 @@ async def _persist_terminal_attempt_timing(
             retry_reason=retry_reason,
             worker="workspace-generation-worker",
             terminal_error=terminal_error,
+            provider_rate_profile=resolve_authored_rate_profile().name,
         )
         return receipt.to_dict()
     except (OSError, TypeError, ValueError):

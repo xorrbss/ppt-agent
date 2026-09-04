@@ -650,6 +650,82 @@ def test_authored_html_validation_allows_server_stamped_source_block_identity():
 # ALLOWED_CSS_PROPERTIES, so `page-break-inside` (same normalised family,
 # still outside the allowlist) is used here to keep demonstrating a real,
 # currently-failing admission error fixed by normalisation.
+def test_authored_html_validation_normalizes_forbidden_page_break_declaration(monkeypatch):
+    monkeypatch.setenv("AUTHORED_HTML_NORMALIZE_ENABLED", "true")
+    html = (
+        "<!doctype html><html><head><meta charset='utf-8'></head><body>"
+        '<div style="page-break-inside: avoid; color: red">t</div>'
+        "</body></html>"
+    )
+    with pytest.raises(RendererPolicyError, match="page-break-inside"):
+        admit_authored_html(html)
+
+    validated = validate_authored_slide_html(html)
+
+    assert "page-break-inside" not in validated
+    assert "color: red" in validated
+    admit_authored_html(validated)
+
+
+def test_authored_html_validation_normalizes_hidden_attribute_evidence_bucket(monkeypatch):
+    monkeypatch.setenv("AUTHORED_HTML_NORMALIZE_ENABLED", "true")
+    html = (
+        "<!doctype html><html><head><meta charset='utf-8'></head><body>"
+        '<div hidden class="ghost">decorative only</div>'
+        '<p hidden data-source-block-id="source-slide:1:text:1">원문</p>'
+        "</body></html>"
+    )
+    with pytest.raises(RendererPolicyError, match="hidden"):
+        admit_authored_html(html)
+
+    validated = validate_authored_slide_html(html)
+
+    assert "ghost" not in validated
+    assert "decorative only" not in validated
+    assert 'data-source-block-id="source-slide:1:text:1"' in validated
+    assert "원문" in validated
+    admit_authored_html(validated)
+
+
+def test_authored_html_validation_still_rejects_findings_outside_the_whitelist(
+    monkeypatch,
+):
+    monkeypatch.setenv("AUTHORED_HTML_NORMALIZE_ENABLED", "true")
+    html = (
+        "<!doctype html><html><head><meta charset='utf-8'></head><body>"
+        '<div style="content-visibility: hidden; color: red">t</div>'
+        "</body></html>"
+    )
+    with pytest.raises(RendererPolicyError, match="content-visibility"):
+        validate_authored_slide_html(html)
+
+
+def test_authored_html_validation_normalization_disabled_by_flag(monkeypatch):
+    monkeypatch.setenv("AUTHORED_HTML_NORMALIZE_ENABLED", "false")
+    html = (
+        "<!doctype html><html><head><meta charset='utf-8'></head><body>"
+        '<div style="page-break-inside: avoid; color: red">t</div>'
+        "</body></html>"
+    )
+    with pytest.raises(RendererPolicyError, match="page-break-inside"):
+        validate_authored_slide_html(html)
+
+
+def test_authored_html_validation_records_normalizations_in_caller_receipt(monkeypatch):
+    monkeypatch.setenv("AUTHORED_HTML_NORMALIZE_ENABLED", "true")
+    html = (
+        "<!doctype html><html><head><meta charset='utf-8'></head><body>"
+        '<div style="page-break-inside: avoid">t</div>'
+        '<div hidden class="ghost">decor</div>'
+        "</body></html>"
+    )
+    receipt: list[dict] = []
+
+    validate_authored_slide_html(html, normalization_receipt=receipt)
+
+    fired_rules = {entry["rule"] for entry in receipt}
+    assert "css_break_control_property_stripped" in fired_rules
+    assert "hidden_element_without_bound_text_removed" in fired_rules
 
 
 def test_finalized_illustration_html_removes_prompt_only():
@@ -3278,3 +3354,55 @@ def test_authored_title_prefers_clean_content_over_verbose_outline():
 # a slide whose authored HTML needs A2 normalisation carries the fired rules
 # in its own ``slide_quality_receipts`` entry. --------------------------------
 
+
+def test_slide_pipeline_records_normalizations_in_the_slides_own_receipt(
+    monkeypatch,
+):
+    async def scenario():
+        plan = SimpleNamespace(
+            contents=("slide 0", "slide 1"), design_system="NORMALIZED DESIGN SYSTEM"
+        )
+
+        async def fake_author(selected_plan, index):
+            assert selected_plan is plan
+            if index == 0:
+                # Needs normalisation: a hidden decorative element with no
+                # bound source text is stripped by A2 before admission.
+                return (
+                    "<!doctype html><html><head><meta charset='utf-8'></head>"
+                    "<body><h1>slide-0</h1>"
+                    '<div hidden class="ghost">decorative only</div>'
+                    "</body></html>"
+                )
+            return (
+                "<!doctype html><html><head><meta charset='utf-8'></head>"
+                f"<body><h1>slide-{index}</h1></body></html>"
+            )
+
+        async def fake_render(_html):
+            return b"png"
+
+        monkeypatch.setattr(
+            authored_service, "prepare_authored_deck", lambda *args, **kwargs: plan
+        )
+        monkeypatch.setattr(authored_service, "author_planned_slide", fake_author)
+        monkeypatch.setattr(authored_service, "render_html_to_png", fake_render)
+
+        return await authored_service._author_illustrate_render_pipeline(
+            _outline(2),
+            _brand(),
+            SimpleNamespace(id="default", illustration_prompt=None),
+        )
+
+    result = _run(scenario())
+
+    normalized_receipt = result.slide_quality_receipts[0]
+    fired_rules = {
+        entry["rule"] for entry in normalized_receipt["normalizations"]
+    }
+    assert "hidden_element_without_bound_text_removed" in fired_rules
+    assert "ghost" not in result.deck.htmls[0]
+
+    # A slide that needed no normalisation, and whose quality loop did not
+    # run, is not force-added with an empty receipt.
+    assert 1 not in result.slide_quality_receipts

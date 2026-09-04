@@ -1,0 +1,36 @@
+{
+  "fixture": "scripts/fixtures/generation-benchmark/f1-stage12-x2.json",
+  "profile": "token",
+  "runs": 3,
+  "succeeded": 2,
+  "successRate": 0.6666666666666666,
+  "wall": {
+    "p50Seconds": 790.399,
+    "p90Seconds": 981.261,
+    "measuredRuns": 3
+  },
+  "tokensPerSuccessfulDeck": {
+    "inputTokensAvg": 162087.5,
+    "outputTokensAvg": 42956,
+    "decksMeasured": 2
+  },
+  "rungHistogram": null,
+  "normalizationCounts": null,
+  "qualityLoopVariantHistogram": null,
+  "terminalErrorHistogram": {
+    "authored_composition_safety_gate_failed": 1
+  },
+  "fallbackElementIdsCountAvg": null,
+  "fallbackElementIdsMeasuredRuns": 0,
+  "passed": false,
+  "successPass": false,
+  "wallPass": false,
+  "reasons": [
+    "success rate 66.7% below --success-min 80.0%",
+    "wall p90 981.3s exceeds --wall-max-seconds 420s"
+  ],
+  "thresholds": {
+    "successMin": 0.8,
+    "wallMaxSeconds": 420
+  }
+}

@@ -12,6 +12,15 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from time import monotonic
 
+from services.authored_generation_timing_receipt_e4 import (
+    merged_stage_wall_millis,
+    normalization_entries,
+    optional_top_level_fields,
+    provider_rate_profile as _e4_provider_rate_profile,
+    quality_loop_variant_field,
+    stage_has_wall,
+    stage_wall_millis,
+)
 from services.authored_quality_receipt_v2 import (
     QualityReceiptV2,
     _manifest_digest,
@@ -662,6 +671,12 @@ class GenerationAttemptTimingReceiptV2:
     validity: str
     invalid_reasons: tuple[str, ...] = ()
     provider_usage: dict[str, object] | None = None
+    #: E4 additions (``authored_generation_timing_receipt_e4.py`` module
+    #: docstring has the full field-by-field description and the digest
+    #: backward-compatibility rationale for their conditional serialization).
+    provider_rate_profile: str | None = None
+    normalizations: tuple[dict[str, object], ...] = ()
+    quality_loop_variant: str | None = None
     receipt_digest: str = ""
 
     def to_dict(self) -> dict[str, object]:
@@ -683,6 +698,11 @@ class GenerationAttemptTimingReceiptV2:
             "validity": self.validity,
             "invalidReasons": list(self.invalid_reasons),
             "providerUsage": self.provider_usage,
+            **optional_top_level_fields(
+                provider_rate_profile=self.provider_rate_profile,
+                normalizations=self.normalizations,
+                quality_loop_variant=self.quality_loop_variant,
+            ),
             "receiptDigest": self.receipt_digest,
         }
 
@@ -725,7 +745,11 @@ def _public_stage_receipts(
             raise ValueError("generation_attempt_v2_stages_invalid")
         state = raw.get("state")
         if state == "observed":
-            if set(raw) != {"state", "startMillis", "endMillis", "durationMillis"}:
+            # ``wallMillis`` (D13/E4, authored_generation_timing_receipt_e4.py)
+            # is optional so a receipt written before it existed still loads.
+            has_wall = stage_has_wall(raw)
+            required_keys = {"state", "startMillis", "endMillis", "durationMillis"}
+            if set(raw) != required_keys | ({"wallMillis"} if has_wall else set()):
                 raise ValueError("generation_attempt_v2_stages_invalid")
             start = _bounded_timing_ms(raw.get("startMillis"), f"{name}_start")
             end = _bounded_timing_ms(raw.get("endMillis"), f"{name}_end")
@@ -738,6 +762,11 @@ def _public_stage_receipts(
                 "endMillis": end,
                 "durationMillis": duration,
             }
+            wall = stage_wall_millis(
+                raw, stage_name=name, bounded_timing_ms=_bounded_timing_ms
+            )
+            if wall is not None:
+                normalized["wallMillis"] = wall
         elif state == "not_started" and set(raw) == {"state"}:
             normalized = {"state": "not_started"}
         elif (
@@ -809,6 +838,8 @@ def _attempt_receipt_v2_from_dict(
     worker = _optional_reason(value.get("worker"), "worker")
     if worker is None:
         raise ValueError("generation_attempt_timing_receipt_v2_invalid")
+    # E4 fields (providerRateProfile/normalizations/qualityLoop). Absent on a
+    # receipt written before E4 landed -- ``None``/empty then, not invented.
     receipt = GenerationAttemptTimingReceiptV2(
         schema_version="generation-attempt-timing-receipt/v2",
         attempt_id=public_attempt_id(value.get("attemptId")),
@@ -827,6 +858,13 @@ def _attempt_receipt_v2_from_dict(
         validity=str(validity),
         invalid_reasons=reasons,
         provider_usage=_provider_usage(value.get("providerUsage")),
+        provider_rate_profile=_e4_provider_rate_profile(
+            value.get("providerRateProfile")
+        ),
+        normalizations=normalization_entries(value.get("normalizations")),
+        quality_loop_variant=quality_loop_variant_field(
+            value.get("qualityLoop"), optional_reason=_optional_reason
+        ),
         receipt_digest=_required_sha256(value.get("receiptDigest"), "receipt_digest"),
     )
     if receipt.receipt_digest != _attempt_receipt_v2_digest(receipt):
@@ -1033,8 +1071,18 @@ def create_generation_attempt_timing_receipt_v2(
     retry_reason: str | None,
     worker: str,
     terminal_error: str | None,
+    provider_rate_profile: str | None = None,
+    normalizations: Sequence[Mapping[str, object]] = (),
+    quality_loop_variant: str | None = None,
 ) -> GenerationAttemptTimingReceiptV2:
-    """Seal one v2 terminal receipt without prompt, content, or provider traces."""
+    """Seal one v2 terminal receipt without prompt, content, or provider traces.
+
+    ``provider_rate_profile``, ``normalizations`` and ``quality_loop_variant``
+    are E4 additions (section 8 of the design doc) and all default to the
+    absent/empty state a caller that does not supply them yet already
+    produces: this stays backward compatible for a caller that has not been
+    updated.
+    """
 
     if (
         isinstance(attempt_number, bool)
@@ -1084,11 +1132,16 @@ def create_generation_attempt_timing_receipt_v2(
             if source_name in normalized_observations
         ]
         if observations:
+            merged_start = min(item["startMillis"] for item in observations)
+            merged_end = max(item["endMillis"] for item in observations)
             public_stages[public_name] = {
                 "state": "observed",
-                "startMillis": min(item["startMillis"] for item in observations),
-                "endMillis": max(item["endMillis"] for item in observations),
+                "startMillis": merged_start,
+                "endMillis": merged_end,
                 "durationMillis": sum(item["durationMillis"] for item in observations),
+                # D13: the merged window's real wall span, next to the summed
+                # per-source work above (authored_generation_timing_receipt_e4.py).
+                "wallMillis": merged_stage_wall_millis(merged_start, merged_end),
             }
         elif public_name in executed:
             public_stages[public_name] = {
@@ -1146,6 +1199,11 @@ def create_generation_attempt_timing_receipt_v2(
         validity="rc_invalid" if invalid_reasons else "valid",
         invalid_reasons=tuple(invalid_reasons),
         provider_usage=safe_usage,
+        provider_rate_profile=_e4_provider_rate_profile(provider_rate_profile),
+        normalizations=normalization_entries(normalizations),
+        quality_loop_variant=_optional_reason(
+            quality_loop_variant, "quality_loop_variant"
+        ),
     )
     if (outcome == "succeeded") != (receipt.terminal_error is None):
         raise ValueError("generation_attempt_timing_receipt_v2_invalid")

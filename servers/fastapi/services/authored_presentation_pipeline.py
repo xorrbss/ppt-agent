@@ -824,6 +824,11 @@ async def _author_illustrate_render_pipeline(
                     )
 
         try:
+            # E4 (docs/generation-programme-master-design-20260904.md section
+            # 8): fired A2 normalisation rules from this slide's own
+            # ``validate_authored_slide_html`` call(s), carried into this
+            # slide's quality receipt below.
+            normalization_receipt: list[dict] = []
             html = (
                 checkpoint.author_html
                 if checkpoint is not None and checkpoint.author_html
@@ -993,6 +998,7 @@ async def _author_illustrate_render_pipeline(
                     html = validate_authored_slide_html(
                         html,
                         allow_illustration_slots=True,
+                        normalization_receipt=normalization_receipt,
                     )
                 except RendererPolicyError as exc:
                     raise AuthoredStageError(
@@ -1016,6 +1022,7 @@ async def _author_illustrate_render_pipeline(
                     html = validate_authored_slide_html(
                         html,
                         allow_illustration_slots=True,
+                        normalization_receipt=normalization_receipt,
                     )
                 except RendererPolicyError as exc:
                     raise AuthoredStageError(
@@ -1395,6 +1402,7 @@ async def _author_illustrate_render_pipeline(
                 scene_envelope,
                 author_provider_attempt_count,
                 quality_loop_receipt,
+                normalization_receipt,
             )
         except AuthoredStageError as exc:
             if generation_job is not None:
@@ -1447,9 +1455,14 @@ async def _author_illustrate_render_pipeline(
         ),
         # Slides are authored in parallel child tasks, so the quality loop's
         # per-slide choice has no ambient way back to the measurement stage.
+        # It travels with the slide's own result instead. E4: the same result
+        # slot carries this slide's fired A2 normalisation rules (possibly
+        # empty), merged in under "normalizations" so a slide that needed
+        # normalisation is still recorded even when the quality loop did not
+        # run for it.
         slide_quality_receipts={
-            int(result[0]): dict(result[11])
+            int(result[0]): {**dict(result[11]), "normalizations": list(result[12])}
             for result in completed_results
-            if isinstance(result[11], dict) and result[11]
+            if (isinstance(result[11], dict) and result[11]) or result[12]
         },
     )

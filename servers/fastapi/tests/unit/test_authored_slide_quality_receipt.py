@@ -158,3 +158,76 @@ def test_an_empty_presentation_id_is_refused():
 
 def test_a_negative_fallback_count_is_not_recorded():
     assert merge_slide_quality_fallbacks("deck-6", {0: -1}) is None
+
+
+# --- E4 (docs/generation-programme-master-design-20260904.md section 8):
+# fired A2 admission normalisations, merged in per slide. --------------------
+
+
+def test_unmeasured_normalizations_are_absent_not_an_empty_list():
+    records = build_slide_quality_records(slide_count=1, infographic_plan=_plan())
+
+    assert records[0].normalizations is None
+    assert records[0].to_dict()["normalizations"] is None
+
+
+def test_normalizations_round_trip_through_the_sidecar_including_empty():
+    records = build_slide_quality_records(
+        slide_count=2,
+        infographic_plan=_plan(),
+        normalizations={
+            0: [
+                {
+                    "rule": "hidden_element_without_bound_text_removed",
+                    "detail": "div",
+                    "count": 1,
+                }
+            ],
+            1: [],
+        },
+    )
+
+    assert records[0].normalizations == (
+        {
+            "rule": "hidden_element_without_bound_text_removed",
+            "detail": "div",
+            "count": 1,
+        },
+    )
+    assert records[1].normalizations == ()
+
+    path = record_slide_quality_receipt("deck-7", records)
+    slides = json.loads(path.read_text(encoding="utf-8"))["slides"]
+    assert slides["0"]["normalizations"] == [
+        {
+            "rule": "hidden_element_without_bound_text_removed",
+            "detail": "div",
+            "count": 1,
+        }
+    ]
+    # Measured-but-empty is recorded as ``[]``, distinct from "not measured".
+    assert slides["1"]["normalizations"] == []
+
+
+def test_a_later_write_without_normalizations_does_not_clear_them():
+    record_slide_quality_receipt(
+        "deck-8",
+        (
+            AuthoredSlideQualityRecord(
+                slide_index=0,
+                normalizations=(
+                    {"rule": "css_break_control_property_stripped", "detail": "x", "count": 1},
+                ),
+            ),
+        ),
+    )
+
+    record_slide_quality_receipt(
+        "deck-8", (AuthoredSlideQualityRecord(slide_index=0, fallback_count=2),)
+    )
+
+    slide = load_slide_quality_receipt("deck-8")["slides"]["0"]
+    assert slide["normalizations"] == [
+        {"rule": "css_break_control_property_stripped", "detail": "x", "count": 1}
+    ]
+    assert slide["fallbackCount"] == 2
