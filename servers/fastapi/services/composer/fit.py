@@ -28,6 +28,17 @@ cannot fix a title problem, so the remaining steps of that rung are skipped
 and the walk moves straight to the next rung (see ``fit_ladder.
 title_only_blocking`` and ``step_changes_title``).
 
+A page that *is* accepted at rung 0 or 1 is offered one grow render before
+the walk ends. The ladder only shrinks, so a source page carrying two bullets
+otherwise fits at template type in the top third of the canvas and reads as a
+fragment. ``measure.content_area_fill`` says how much of the content area the
+accepted render actually used; ``fit_ladder.grow_step`` turns a sparse
+measurement into one bounded larger-and-centred candidate. It is confirmed in
+Chromium like every rung, costs at most one extra render per slide and is
+skipped once the budget is spent; if the grown render does not measure clean
+the walk keeps the render that already fitted, so growth can never be the
+reason a slide overflows.
+
 The estimator (``estimate.py``) is conservative by construction and can
 reject every rung 0-4 step without ever calling the browser. That must never
 be the sole reason a slide lands in source geometry: if no render has
@@ -47,11 +58,13 @@ from services.composer.fit_ladder import (
     TERMINAL_PAGE_SCALE,
     TERMINAL_PAGE_SCALES,
     blamed_components,
+    grow_step,
     ladder_steps,
     step_changes_title,
     step_label,
     title_only_blocking,
 )
+from services.composer.measure import content_area_fill
 from services.composer.plan import (
     ComposerDeckPlan,
     ComposerSlidePlan,
@@ -137,6 +150,32 @@ class _Walk:
         )
 
 
+async def _grown(
+    walk: _Walk, params: FitParameters, html: str, measurement: Measurement
+) -> ComposerSlideResult:
+    """Return the accepted result, after one bounded grow render when the page
+    is sparse. A rejected grow render is discarded and the original kept."""
+
+    fill = content_area_fill(measurement.metrics)
+    candidate = None if fill is None else grow_step(params, fill)
+    if candidate is None:
+        return walk.result(html, params, measurement)
+    if walk.budget_spent:
+        walk.trail.append(
+            f"{step_label(params)}: fitted using {fill:.0%} of the content area, "
+            f"render budget {walk.max_renders} spent, not grown"
+        )
+        return walk.result(html, params, measurement)
+    walk.trail.append(f"{step_label(params)}: fitted using {fill:.0%} of the content area")
+    grown_html, grown = await walk.attempt(candidate)
+    if accepted(grown):
+        return walk.result(grown_html, candidate, grown)
+    walk.trail.append(
+        f"{step_label(candidate)}: {rejection_reason(grown)}; keeping {step_label(params)}"
+    )
+    return walk.result(html, params, measurement)
+
+
 def _is_terminal(params: FitParameters) -> bool:
     return params.page_scale <= TERMINAL_PAGE_SCALE + 1e-9
 
@@ -217,7 +256,7 @@ async def fit_slide(
             continue
         html, measurement = await walk.attempt(params)
         if accepted(measurement):
-            return walk.result(html, params, measurement)
+            return await _grown(walk, params, html, measurement)
         walk.trail.append(f"{step_label(params)}: {rejection_reason(measurement)}")
         if not step_changes_title(params) and title_only_blocking(plan, measurement.blocking_issues):
             rung = params.rung

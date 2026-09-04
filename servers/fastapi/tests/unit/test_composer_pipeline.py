@@ -16,7 +16,7 @@ from models.generate_presentation_request import GeneratePresentationRequest
 from services.composer.assets import in_memory_asset_resolver
 from services.composer.contracts import Measurement
 from services.composer.pipeline import ComposerAssertionError, assert_slide_bindings, run_composer_restyle
-from services.composer.pipeline_inputs import deck_title_px
+from services.composer.pipeline_inputs import build_deck_context, deck_title, deck_title_px
 from services.composer.plan import (
     TITLE_FLOOR_PX,
     ComposerComponent,
@@ -167,7 +167,7 @@ def fake_estimator(plan, tokens, params, deck) -> bool:
 def _tokens() -> ComposerTokens:
     return ComposerTokens(
         background="#FFFFFF", surface="#F4F6F8", text_primary="#111827", text_secondary="#4B5563",
-        accent="#0F62FE", accent_soft="#D0E2FF", rule="#E5E7EB",
+        accent="#0F62FE", accent_text="#0F62FE", accent_soft="#D0E2FF", rule="#E5E7EB",
     )
 
 
@@ -215,6 +215,115 @@ def test_deck_title_px_ignores_cover_slides_and_returns_none_without_a_title() -
     assert deck_title_px(untitled, _tokens()) is None
 
 
+# --- pipeline_inputs: deck_title -----------------------------------------------------------
+
+
+def _cover_unit(blocks: list[dict[str, Any]]) -> dict[str, Any]:
+    return {"sourceUnitId": "u1", "sourceIndex": 0, "blocks": blocks}
+
+
+def _text_block(block_id: str, text: str, role: str, order: int) -> dict[str, Any]:
+    return {
+        "sourceBlockId": block_id,
+        "kind": "text",
+        "semanticRole": role,
+        "order": order,
+        "payload": {"text": text},
+        "contentDigest": "sha256:" + "0" * 64,
+    }
+
+
+def test_deck_title_returns_the_cover_page_title_block_verbatim() -> None:
+    units = [
+        _cover_unit(
+            [
+                _text_block("u1:text:1", "2026 Growth Strategy", "title", 0),
+                _text_block("u1:text:2", "Confidential", "body", 1),
+            ]
+        )
+    ]
+    assert deck_title(units) == "2026 Growth Strategy"
+
+
+def test_deck_title_collapses_whitespace_and_caps_length() -> None:
+    padded = "  Quarterly   Report  \n\nfor   Investors  "
+    units = [_cover_unit([_text_block("u1:text:1", padded, "title", 0)])]
+    assert deck_title(units) == "Quarterly Report for Investors"
+
+    overlong = "가" * 400
+    units = [_cover_unit([_text_block("u1:text:1", overlong, "title", 0)])]
+    result = deck_title(units)
+    assert result == "가" * 200
+    assert len(result) == 200
+
+
+def test_deck_title_falls_back_to_untitled_when_the_cover_page_has_no_title_role() -> None:
+    # A cover page that classified only body/subtitle text -- no source
+    # document title survives to be resolved from the manifest alone.
+    units = [
+        _cover_unit(
+            [
+                _text_block("u1:text:1", "Prepared by the finance team", "subtitle", 0),
+                _text_block("u1:text:2", "Internal use only", "body", 1),
+            ]
+        )
+    ]
+    assert deck_title(units) == "Untitled Presentation"
+
+
+def test_deck_title_falls_back_to_untitled_when_there_are_no_units() -> None:
+    assert deck_title([]) == "Untitled Presentation"
+
+
+def test_deck_title_falls_back_to_document_title_when_no_cover_title_role() -> None:
+    units = [_cover_unit([_text_block("u1:text:1", "Prepared by the finance team", "subtitle", 0)])]
+    assert deck_title(units, document_title="  Quarterly   Deck  ") == "Quarterly Deck"
+
+
+def test_deck_title_falls_back_to_file_name_title_when_no_cover_or_document_title() -> None:
+    units = [_cover_unit([_text_block("u1:text:1", "Prepared by the finance team", "subtitle", 0)])]
+    assert deck_title(units, file_name_title="Q3 Board Deck") == "Q3 Board Deck"
+
+
+def test_deck_title_document_title_outranks_file_name_title() -> None:
+    units = [_cover_unit([_text_block("u1:text:1", "Prepared by the finance team", "subtitle", 0)])]
+    assert (
+        deck_title(units, document_title="Doc Title", file_name_title="File Title")
+        == "Doc Title"
+    )
+
+
+def test_deck_title_cover_page_title_outranks_document_and_file_name_title() -> None:
+    units = [_cover_unit([_text_block("u1:text:1", "Cover Title", "title", 0)])]
+    assert (
+        deck_title(units, document_title="Doc Title", file_name_title="File Title")
+        == "Cover Title"
+    )
+
+
+def test_deck_title_treats_a_blank_document_title_as_absent() -> None:
+    units = [_cover_unit([_text_block("u1:text:1", "Prepared by the finance team", "subtitle", 0)])]
+    assert deck_title(units, document_title="   ", file_name_title="File Title") == "File Title"
+
+
+def test_build_deck_context_reads_document_and_file_name_title_from_the_manifest() -> None:
+    units = [_cover_unit([_text_block("u1:text:1", "Prepared by the finance team", "subtitle", 0)])]
+    with_document_title = {
+        "manifestId": "manifest-1",
+        "units": units,
+        "documentTitle": "Quarterly Deck",
+        "sourceFileTitle": "Q3 Board Deck",
+    }
+    assert build_deck_context(with_document_title, units).deck_title == "Quarterly Deck"
+
+    without_document_title = {
+        "manifestId": "manifest-1",
+        "units": units,
+        "sourceFileTitle": "Q3 Board Deck",
+    }
+    assert build_deck_context(without_document_title, units).deck_title == "Q3 Board Deck"
+
+
 class CountingMeasurer:
     def __init__(self) -> None:
         self.in_flight = 0
@@ -257,7 +366,8 @@ class RecordingPublisher:
 
 
 async def _run(
-    monkeypatch, tmp_path, *, renderer, publisher, measurer, concurrency: str, reporter=None
+    monkeypatch, tmp_path, *, renderer, publisher, measurer, concurrency: str, reporter=None,
+    extend_lease=None,
 ) -> Any:
     monkeypatch.setenv("AUTHORED_QUALITY_RECEIPT_DIRECTORY", str(tmp_path))
     monkeypatch.setenv("PUBLIC_RENDER_MAX_CONCURRENCY", concurrency)
@@ -281,6 +391,7 @@ async def _run(
         renderer=renderer,
         estimator=fake_estimator,
         publisher=publisher,
+        extend_lease=extend_lease,
     )
     return result, presentation_id, job, progress
 
@@ -405,6 +516,62 @@ def test_run_composer_restyle_serializes_on_slide_progress_reports(monkeypatch, 
     assert overlapped is False
 
 
+def test_run_composer_restyle_extends_lease_once_per_slide_during_fit(monkeypatch, tmp_path) -> None:
+    """The workspace operation's lease is widened from the fit loop, not just before publish.
+
+    Before this, ``run_composer_restyle`` accepted ``extend_lease`` but only
+    called it once, right before the publish transaction; the caller never
+    even wired one through (docs/generation-quality-root-cause-and-composer-
+    architecture-20260904.md, section 6a "Known follow-ups"). A 43-page deck's
+    fit stage alone took 223s against a 300s lease, so a heavier deck -- or
+    several running at once -- could lose the lease mid-render. ``fit_deck``
+    (services.composer.pipeline_fit) now calls ``extend_lease`` once per
+    completed slide, from the same lock-serialized path as ``on_slide``.
+    """
+
+    from services.composer.pipeline import EXTEND_LEASE_SECONDS_FOR_PUBLISH
+    from services.composer.pipeline_fit import EXTEND_LEASE_SECONDS_FOR_FIT
+
+    calls: list[int] = []
+
+    async def extend_lease(*, seconds: int) -> bool:
+        calls.append(seconds)
+        return True
+
+    asyncio.run(
+        _run(
+            monkeypatch, tmp_path, renderer=fake_renderer, publisher=RecordingPublisher(),
+            measurer=CountingMeasurer(), concurrency="2", extend_lease=extend_lease,
+        )
+    )
+
+    # Once per slide during the fit loop, plus once more before publish.
+    assert len(calls) == len(PAGES) + 1
+    assert calls[:-1] == [EXTEND_LEASE_SECONDS_FOR_FIT] * len(PAGES)
+    assert calls[-1] == EXTEND_LEASE_SECONDS_FOR_PUBLISH
+
+
+def test_run_composer_restyle_survives_a_failing_lease_extension(monkeypatch, tmp_path) -> None:
+    """A lease extension that returns ``False`` or raises never fails the deck.
+
+    ``maybe_extend_lease`` is best-effort by design (services.composer.
+    pipeline_fit): the fit loop's own readback/binding assertions and
+    publication's own fencing protect correctness regardless of whether the
+    lease was actually widened.
+    """
+
+    async def flaky_extend_lease(*, seconds: int) -> bool:
+        raise RuntimeError("simulated lease-store outage")
+
+    result, presentation_id, _job, _progress = asyncio.run(
+        _run(
+            monkeypatch, tmp_path, renderer=fake_renderer, publisher=RecordingPublisher(),
+            measurer=CountingMeasurer(), concurrency="2", extend_lease=flaky_extend_lease,
+        )
+    )
+    assert result.presentation_id == presentation_id
+
+
 def test_run_composer_restyle_dropped_run_fails_closed_with_slide_index(monkeypatch, tmp_path) -> None:
     publisher = RecordingPublisher()
     with pytest.raises(ComposerAssertionError) as raised:
@@ -432,7 +599,9 @@ def test_semantic_draft_declares_qids_in_document_order() -> None:
         "page_count": len(PAGES), "source_page_emu": (PAGE_EMU["cx"], PAGE_EMU["cy"]),
     })
     html = _render(plan).replace("</body>", '<img data-qid="img-1" data-semantic-role="image" alt=""></body>')
-    draft = semantic_draft_from_html(html, language="ko", font_family="Malgun Gothic", font_face="Regular")
+    draft = semantic_draft_from_html(
+        html, language="ko", font_family="Malgun Gothic", font_face="Regular", tokens=_tokens()
+    )
     elements = draft["semanticSource"]["elements"]
     assert [item["kind"] for item in elements] == ["text", "text", "shape"]
     assert [item["semanticRole"] for item in elements] == ["title", "body", "image"]

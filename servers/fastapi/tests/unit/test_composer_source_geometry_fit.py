@@ -45,6 +45,7 @@ TOKENS = ComposerTokens(
     text_primary="#0F172A",
     text_secondary="#334155",
     accent="#2563EB",
+    accent_text="#2563EB",
     accent_soft="#DBEAFE",
     rule="#CBD5E1",
 )

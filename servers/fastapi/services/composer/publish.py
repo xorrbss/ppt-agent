@@ -39,6 +39,7 @@ from services.composer.publish_cas import (
     require_operation_fence,
     stage_workspace_artifact,
 )
+from services.composer.fonts import composer_publication_font_materials
 from services.composer.publish_semantic import semantic_draft_from_html
 from services.composer.receipt import ComposerPipelineError, ComposerPublicationError
 
@@ -142,8 +143,6 @@ async def publish_composer_deck(
         _remove_partial_slide_pngs,
         _save_slide_pngs,
     )
-    from services.authored_vnext.deck_ir.integration import DeckIrIntegrationError
-    from services.authored_vnext.deck_ir.product_adapter import _publication_font_materials
     from services.authored_vnext.semantic.canonical import SemanticContractError, canonical_digest
     from services.authored_vnext.semantic.publication import publish_authored_semantic_bundle_graph
     from services.presentation_publication_service import (
@@ -205,10 +204,13 @@ async def publish_composer_deck(
         )
         sql_session.add_all(slides)
         await sql_session.flush()
-        try:
-            font_manifest, font_bytes, font_family, font_face = await _publication_font_materials()
-        except DeckIrIntegrationError as error:
-            raise ComposerPublicationError(str(error.code)) from error
+        # The Composer declares the bundled, OFL-licensed Pretendard faces it
+        # renders with, not Deck IR's Windows Malgun Gothic: the exporter only
+        # admits a Korean run as native text when the family it embedded is the
+        # one the run's own stack names.
+        font_manifest, font_bytes, font_family, font_face = (
+            await composer_publication_font_materials()
+        )
         language = str(getattr(request, "language", None) or presentation.language or "ko")
         style = getattr(request, "_authored_style_snapshot", None)
         style_id = str(getattr(style, "id", None) or getattr(request, "authored_style", None) or "")
@@ -226,7 +228,9 @@ async def publish_composer_deck(
                 slides=slides,
                 htmls=list(htmls),
                 semantic_drafts=[
-                    semantic_draft_from_html(html, language=language, font_family=font_family, font_face=font_face)
+                    semantic_draft_from_html(
+                        html, language=language, font_family=font_family, font_face=font_face, tokens=deck.tokens
+                    )
                     for html in htmls
                 ],
                 master_contract_digest=canonical_digest(

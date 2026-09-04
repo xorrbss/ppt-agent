@@ -902,6 +902,9 @@ class _PipelineContext:
     async def raise_if_cancelled(self) -> None:
         return None
 
+    async def extend_lease(self, *, seconds: int) -> bool:
+        return True
+
 
 def test_authored_master_admission_allows_unpinned_full_canvas():
     from api.v1.ppt.endpoints import presentation_generate as endpoint
@@ -984,6 +987,7 @@ async def _default_pipeline_merges_publication_result(
             export_cookie_header,
             generation_job,
             progress_reporter,
+            extend_lease=None,
             sql_session,
         ):
             nonlocal generation_calls
@@ -991,6 +995,7 @@ async def _default_pipeline_merges_publication_result(
             assert export_cookie_header is None
             assert generation_job.id == job_id
             assert progress_reporter == context.progress
+            assert extend_lease == context.extend_lease
             if failure_mode:
                 _request._authored_timing_stage = "quality"
                 _request._authored_generation_timing_recorder.record_stage_ms(
@@ -1177,6 +1182,7 @@ async def _default_pipeline_resolves_durable_authored_master_pin_before_generati
             export_cookie_header,
             generation_job,
             progress_reporter,
+            extend_lease=None,
             sql_session,
         ):
             calls.append("generate")
@@ -1185,6 +1191,7 @@ async def _default_pipeline_resolves_durable_authored_master_pin_before_generati
             assert export_cookie_header is None
             assert generation_job.id == job_id
             assert progress_reporter == context.progress
+            assert extend_lease == context.extend_lease
             async_status.status = "completed"
             presentation = await sql_session.get(
                 PresentationModel, presentation_id

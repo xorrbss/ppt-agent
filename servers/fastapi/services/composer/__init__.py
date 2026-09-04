@@ -18,7 +18,10 @@ Module map (each file stays under 350 lines behind this facade):
   ``classify_groups``, ``classify_title``, ``classify_summary``
 - ``render``     plan + tokens + fit parameters -> HTML; helpers ``render_css``,
   ``render_text``, ``render_context``, ``render_components``, ``render_table``,
-  ``render_chrome``, ``render_geometry``
+  ``render_chrome`` (band/content-area composition, backed by ``render_flow``
+  for source-order segments and ``render_image_region`` for the two image
+  regions), ``render_geometry``, ``render_cover`` (the cover archetype) and
+  ``render_title`` (the title's own fit axis)
 - ``fit``        the fit ladder loop; ``fit_ladder`` the pure step generator
 - ``estimate``   font-metric fit estimate run before any Chromium call
 - ``measure``    Chromium measurement wrapper and the blocking-defect predicate

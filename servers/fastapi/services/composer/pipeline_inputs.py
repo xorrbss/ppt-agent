@@ -13,8 +13,7 @@ from typing import Any
 from services.composer.contracts import DeckContext, repeated_texts
 from services.composer.plan import ComposerSlidePlan, ComposerTokens
 from services.composer.receipt import ComposerPipelineError
-
-_HEX = "0123456789ABCDEF"
+from utils.color_contrast import blend, normalize_hex
 
 
 def as_mapping(value: Any) -> Mapping[str, Any]:
@@ -95,8 +94,50 @@ def source_page_emu(manifest: Any) -> tuple[int, int] | None:
     return (cx, cy) if cx > 0 and cy > 0 else None
 
 
-def deck_title(units: Sequence[Mapping[str, Any]]) -> str:
-    """The first title-role text block of the first page, if any."""
+#: Last-resort deck title, reached only when the source's cover page carries
+#: no title-role text block at all. Matches the codebase-wide "no title
+#: available" convention (``utils/ppt_utils.py``, ``utils/outline_utils.py``,
+#: the blank-presentation default in ``endpoints/presentation_blank.py``)
+#: rather than a Composer-only literal.
+_DECK_TITLE_FALLBACK = "Untitled Presentation"
+
+_DECK_TITLE_ROLES = frozenset({"title", "ctrtitle", "heading"})
+_DECK_TITLE_MAX_LENGTH = 200
+
+
+def _clamp_title(value: Any) -> str | None:
+    """Whitespace-collapse and length-cap a title candidate; blank is absent."""
+
+    if not isinstance(value, str):
+        return None
+    collapsed = " ".join(value.split())
+    return collapsed[:_DECK_TITLE_MAX_LENGTH] if collapsed else None
+
+
+def deck_title(
+    units: Sequence[Mapping[str, Any]],
+    *,
+    document_title: str | None = None,
+    file_name_title: str | None = None,
+) -> str:
+    """The deck title, resolved from the source document itself.
+
+    1. The first title-role text block classified on the source's cover
+       page (the manifest's first unit, in source order) -- taken verbatim,
+       only whitespace-collapsed and length-capped. This wins because it is
+       what a reader of the original deck actually saw on open; the other
+       two signals are metadata the author may never have looked at.
+    2. ``document_title`` -- the source's own ``docProps/core.xml``
+       ``dc:title`` (``services/source_content/pptx_document_identity.py``),
+       when the source declares one. A deliberate document-level title beats
+       a filename, which is often just how the file happened to get saved.
+    3. ``file_name_title`` -- a title candidate cleaned from the uploaded
+       file's own name (same module). Reliable in practice (a user's file is
+       typically named after its subject) but ranked last because a
+       filename is incidental, not authored content.
+    4. ``_DECK_TITLE_FALLBACK`` when none of the above carries anything --
+       the last resort.
+    """
 
     for unit in units[:1]:
         blocks = sorted(
@@ -109,37 +150,21 @@ def deck_title(units: Sequence[Mapping[str, Any]]) -> str:
             role = str(block.get("semanticRole") or block.get("semantic_role") or "").lower()
             payload = block.get("payload") or {}
             text = payload.get("text") if isinstance(payload, Mapping) else None
-            if role in {"title", "ctrtitle", "heading"} and isinstance(text, str) and text.strip():
-                return " ".join(text.split())[:200]
-    return ""
+            if role in _DECK_TITLE_ROLES and isinstance(text, str) and text.strip():
+                return " ".join(text.split())[:_DECK_TITLE_MAX_LENGTH]
+    return _clamp_title(document_title) or _clamp_title(file_name_title) or _DECK_TITLE_FALLBACK
 
 
 def build_deck_context(manifest: Any, units: Sequence[Mapping[str, Any]]) -> DeckContext:
+    manifest_value = as_mapping(manifest)
+    document_title = manifest_value.get("documentTitle") or manifest_value.get("document_title")
+    file_name_title = manifest_value.get("sourceFileTitle") or manifest_value.get("source_file_title")
     return DeckContext(
         page_count=len(units),
         repeated_texts=repeated_texts(units),
         source_page_emu=source_page_emu(manifest),
-        deck_title=deck_title(units),
+        deck_title=deck_title(units, document_title=document_title, file_name_title=file_name_title),
     )
-
-
-def _hex_color(value: Any, fallback: str) -> str:
-    text = str(value or "").strip()
-    if len(text) == 7 and text[0] == "#" and all(ch.upper() in _HEX for ch in text[1:]):
-        return text.upper()
-    return fallback
-
-
-def blend(foreground: str, background: str, amount: float) -> str:
-    """Mix ``amount`` of ``foreground`` over ``background``; deterministic hex."""
-
-    ratio = min(1.0, max(0.0, amount))
-    channels = []
-    for offset in (1, 3, 5):
-        fg = int(foreground[offset : offset + 2], 16)
-        bg = int(background[offset : offset + 2], 16)
-        channels.append(round(bg + (fg - bg) * ratio))
-    return "#" + "".join(f"{channel:02X}" for channel in channels)
 
 
 def composer_tokens(style: Any, *, deck_title_text: str = "") -> ComposerTokens:
@@ -149,24 +174,31 @@ def composer_tokens(style: Any, *, deck_title_text: str = "") -> ComposerTokens:
     and background because the authored styles carry neither.
     """
 
+    from services.composer.fonts import font_family_stack
     from services.source_content.pipeline import _style_tokens
 
     tokens = _style_tokens(style)
-    background = _hex_color(tokens.background, "#FFFFFF")
-    accent = _hex_color(tokens.accent, "#2563EB")
-    text_secondary = _hex_color(tokens.text_secondary, "#334155")
-    body_font = str(tokens.body_font or "Noto Sans KR").strip()
+    background = normalize_hex(tokens.background, "#FFFFFF")
+    accent = normalize_hex(tokens.accent, "#2563EB")
+    accent_text = normalize_hex(tokens.accent_text, accent)
+    text_secondary = normalize_hex(tokens.text_secondary, "#334155")
+    # The embeddable family always leads: a style's own face may follow as a
+    # secondary fallback, but if it led, Chromium would resolve an installed
+    # system face while the exporter emits Pretendard, and every Korean run
+    # would rasterize as `font-substitution` (services.composer.fonts).
+    body_font = str(tokens.body_font or "").strip()
     heading_font = str(tokens.heading_font or body_font).strip()
     return ComposerTokens(
         background=background,
-        surface=_hex_color(tokens.surface, "#FFFFFF"),
-        text_primary=_hex_color(tokens.text_primary, "#0F172A"),
+        surface=normalize_hex(tokens.surface, "#FFFFFF"),
+        text_primary=normalize_hex(tokens.text_primary, "#0F172A"),
         text_secondary=text_secondary,
         accent=accent,
+        accent_text=accent_text,
         accent_soft=blend(accent, background, 0.16),
         rule=blend(text_secondary, background, 0.28),
-        font_family=f"'{body_font}', Pretendard, 'Malgun Gothic', sans-serif",
-        heading_font_family=f"'{heading_font}', Pretendard, 'Malgun Gothic', sans-serif",
+        font_family=font_family_stack(body_font),
+        heading_font_family=font_family_stack(heading_font),
         deck_title=deck_title_text,
     )
 

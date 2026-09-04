@@ -36,6 +36,10 @@ if str(FASTAPI_ROOT) not in sys.path:
 from scripts import composer_offline_eval_fit as fit_lib  # noqa: E402
 from scripts import composer_offline_eval_report as report_lib  # noqa: E402
 from scripts.composer_offline_eval_db import bundle_from_database  # noqa: E402
+#: The style the generation lane requests for a verbatim restyle run; also the
+#: id ``--style default`` names.
+PRODUCT_STYLE_ID = "default"
+
 from scripts.composer_offline_eval_inputs import (  # noqa: E402
     SourceBundle,
     SourceLookupError,
@@ -94,7 +98,20 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--env-json", type=Path, default=DEFAULT_ENV_JSON, help="captured environment (database mode)")
     parser.add_argument("--owner", action="append", dest="owners", help="owner id to try (repeatable)")
     parser.add_argument("--tenant", help="tenant id; default PPT_SERVICE_TENANT_ID from the environment")
-    parser.add_argument("--style", help="authored style id for tokens; default neutral palette")
+    # The harness defaults to the style the product actually generates with, so
+    # a run measures the tokens the deck renders from: the neutral placeholder
+    # palette once hid an invisible-text regression because the default run
+    # never reached ``services.source_content.pipeline._style_tokens`` at all.
+    # "--style none" opts back out to that placeholder palette.
+    parser.add_argument(
+        "--style",
+        default=PRODUCT_STYLE_ID,
+        help=(
+            "authored style id whose real derived tokens to evaluate "
+            f"(default: {PRODUCT_STYLE_ID!r}, the style the product generates "
+            "with; 'none' evaluates the neutral placeholder palette instead)"
+        ),
+    )
     parser.add_argument("--out", type=Path, help="output directory (default: under artifacts/composer-offline-eval/)")
     parser.add_argument("--label", help="deck label used in file names and the report")
     parser.add_argument("--concurrency", type=int, default=2, help="parallel Chromium fits (default 2)")
@@ -118,6 +135,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         parser.error("--concurrency must be at least 1")
     if args.limit is not None and args.limit < 1:
         parser.error("--limit must be at least 1")
+    # "--style none" is the one documented opt-out spelling to the neutral
+    # placeholder palette; an empty string used to reach the same branch
+    # through build_tokens's own "if not style_id" check, giving the opt-out
+    # two spellings. Reject it here instead so exactly one spelling exists.
+    if args.style is not None and not str(args.style).strip():
+        parser.error("--style must not be empty; use --style none to opt out of the derived palette")
     args.owners = tuple(args.owners or DEFAULT_OWNERS)
     return args
 
@@ -220,7 +243,12 @@ async def run(args: argparse.Namespace) -> int:
     notes = list(bundle.notes)
     units = bundle.units
     deck_title = deck_title_from_units(units)
-    tokens, tokens_source = build_tokens(args.style, deck_title=deck_title)
+    style_id = (
+        None
+        if args.style is None or str(args.style).strip().casefold() == "none"
+        else args.style
+    )
+    tokens, tokens_source = build_tokens(style_id, deck_title=deck_title)
     notes.append(f"tokens: {tokens_source}")
     context = build_deck_context(units, bundle.manifest, deck_title=deck_title)
 

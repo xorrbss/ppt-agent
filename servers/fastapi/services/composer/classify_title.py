@@ -3,7 +3,9 @@
 Placeholder type first, then the largest type size in the upper page, then --
 when the manifest carries no sizes at all -- the first short one-line block.
 The subtitle is the ``subTitle`` placeholder or the next-largest sized block
-directly under the title that stands alone in its row.
+directly under the title that stands alone in its row and is not itself a
+list: a run of bullet or numbered items belongs in the body even when it
+happens to sit right under the title and would otherwise win on size.
 
 A title candidate must carry words: a block with no letter at all, at most
 ``TITLE_MIN_CHARS - 1`` characters, or text shaped like a KPI callout
@@ -20,6 +22,7 @@ import re
 
 from services.composer.classify_bindings import TextBlock
 from services.composer.classify_common import PageBox, overlap_ratio
+from services.composer.classify_groups import list_kind
 
 TITLE_TOP_SHARE = 0.40
 TITLE_MAX_CHARS = 160
@@ -138,7 +141,15 @@ def _pick_title(candidates: Sequence[TextBlock], page: PageBox | None) -> TextBl
 
 
 def _subtitle_below(title: TextBlock, blocks: Sequence[TextBlock], page: PageBox | None) -> TextBlock | None:
-    """The next-largest sized block directly under the title, standing alone in its row."""
+    """The next-largest sized block directly under the title, standing alone in its row.
+
+    A block with more than one line that reads as a bullet or numbered list
+    is never a subtitle candidate, however large its size or however close it
+    sits to the title: that is a run of body items, not an eyebrow line, and
+    belongs in the content area. A single line is left alone even when the
+    source happened to open it with a glyph the projection also treats as a
+    peelable marker (a company mark such as ``㈜``), since that is not a run.
+    """
 
     if page is None or title.geometry is None:
         return None
@@ -147,6 +158,8 @@ def _subtitle_below(title: TextBlock, blocks: Sequence[TextBlock], page: PageBox
         if block.geometry is None or not block.dominant_size_pt or block.char_count > SUBTITLE_MAX_CHARS:
             continue
         if title.dominant_size_pt and block.dominant_size_pt > title.dominant_size_pt:
+            continue
+        if block.line_count > 1 and list_kind(block) is not None:
             continue
         gap = (block.geometry.y - title.geometry.bottom) / page.height
         under = overlap_ratio(title.geometry.x, title.geometry.right, block.geometry.x, block.geometry.right) > 0

@@ -73,6 +73,11 @@ FOOTER_BAND_PADDING_Y = 8
 
 #: Roles that share the supporting rung of the type scale and its floor.
 _SUPPORTING_ROLES = frozenset({"supporting", "caption", "furniture"})
+
+#: Roles the grow step never enlarges. The title band sizes itself on its own
+#: axis (``render_title.fitted_title_px``) so it stays identical across the
+#: deck, and footer/header furniture is chrome rather than content.
+_NO_GROW_ROLES = frozenset({"title", "subtitle", "furniture"})
 _ROLE_SCALE_KEY = {
     "title": "title",
     "subtitle": "subtitle",
@@ -81,6 +86,45 @@ _ROLE_SCALE_KEY = {
     "caption": "supporting",
     "furniture": "supporting",
 }
+
+#: CSS class -> the ``ComposerTokens`` field its rule in ``stylesheet`` paints
+#: text with, in the same order the rules appear there. An element carries
+#: several classes (``class="cx-text cx-body cx-step-head"``); when more than
+#: one is colour-bearing the CSS cascade picks the last declared rule, so a
+#: caller resolves this by keeping the *last* match found while walking the
+#: dict in order. ``publish_semantic.py`` reads this back for the declared
+#: semantic bundle so it never disagrees with what this module actually
+#: paints -- a role-keyed table gets ``.cx-marker``/``.cx-kpi`` wrong: both
+#: carry a non-text ``data-semantic-role`` (``decoration``/``body``) while
+#: painting in ``accent_text``.
+TEXT_COLOR_CLASS_TOKENS: dict[str, str] = {
+    "cx-title": "text_primary",
+    "cx-subtitle": "text_secondary",
+    "cx-running-header": "text_secondary",
+    "cx-furniture": "text_secondary",
+    "cx-marker": "accent_text",
+    "cx-compare-head": "text_primary",
+    "cx-kpi": "accent_text",
+    "cx-caption": "text_secondary",
+    "cx-accent": "accent_text",
+    "cx-muted": "text_secondary",
+}
+
+#: Token an element with no class in ``TEXT_COLOR_CLASS_TOKENS`` paints with:
+#: inherited from ``body{color:...}`` in ``stylesheet``.
+DEFAULT_TEXT_COLOR_TOKEN = "text_primary"
+
+#: CSS classes whose rule in ``stylesheet`` sets ``font-weight:700``
+#: unconditionally, regardless of the source formatting a bound paragraph
+#: carries. A title's own inline style never repeats this -- ``render_text.
+#: render_bound_text`` only adds ``font-weight:700`` inline when every run of
+#: the *source* paragraph was itself bold -- so a reader that only looked at
+#: inline style would still declare 400 for an (unbolded-source) title even
+#: though the browser computes 700 for it via this class, reproducing the
+#: exact divergence this module exists to close. ``publish_semantic.py``
+#: therefore declares 700 when either this class is present *or* the inline
+#: style says so.
+BOLD_CLASS_NAMES = frozenset({"cx-title", "cx-marker", "cx-step-head", "cx-compare-head", "cx-kpi", "cx-accent"})
 
 
 @dataclass(frozen=True)
@@ -155,13 +199,19 @@ def px(value: float) -> str:
     return f"{rounded:.2f}px"
 
 
-def template_px(role: str, type_scale: float) -> float:
-    """Template type scale at rungs 0-3; each role stops at its design floor."""
+def template_px(role: str, type_scale: float, type_grow: float = 1.0) -> float:
+    """Template type scale at rungs 0-3; each role stops at its design floor.
+
+    ``type_grow`` is the grow step's multiplier (1.0 for every ladder rung).
+    It is applied after the floor because it only ever grows, and never to
+    ``_NO_GROW_ROLES``.
+    """
 
     key = _ROLE_SCALE_KEY.get(role, "body")
     base = TEMPLATE_TYPE_SCALE_PX[key]
     floor = SUPPORTING_FLOOR_PX if role in _SUPPORTING_ROLES else BODY_FLOOR_PX
-    return max(base * float(type_scale), min(base, floor))
+    size = max(base * float(type_scale), min(base, floor))
+    return size if role in _NO_GROW_ROLES else size * float(type_grow)
 
 
 def text_px(
@@ -185,7 +235,7 @@ def text_px(
         factor = params.page_scale if params.source_geometry else params.source_factor
         size = float(source_size_pt) * PX_PER_PT * deck.source_px_scale * factor
     else:
-        size = template_px(role, params.type_scale)
+        size = template_px(role, params.type_scale, params.type_grow)
     return max(size * float(box_scale), MIN_FONT_PX)
 
 
@@ -263,7 +313,7 @@ def stylesheet(
         f".cx-body{{line-height:{density.line_height};}}"
         f".cx-panel{{background:{tokens.surface};border-radius:12px;padding:{px(gap)};}}"
         ".cx-item{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:10px;align-items:start;}"
-        f".cx-marker{{color:{tokens.accent};font-weight:700;line-height:{density.line_height};font-style:normal;}}"
+        f".cx-marker{{color:{tokens.accent_text};font-weight:700;line-height:{density.line_height};font-style:normal;}}"
         f".cx-process{{display:grid;gap:{px(gap)};}}"
         f".cx-step{{position:relative;background:{tokens.surface};border-top:3px solid {tokens.accent};"
         f"padding:{px(step_pad_y)} {px(step_pad_x)};display:flex;flex-direction:column;"
@@ -284,16 +334,16 @@ def stylesheet(
         f".cx-images{{display:grid;gap:{px(gap)};}}"
         ".cx-figure{margin:0;min-width:0;min-height:0;display:flex;align-items:center;justify-content:center;}"
         ".cx-image{width:100%;height:100%;object-fit:contain;display:block;}"
-        #: ``render_chrome._flex_image_row`` only: the figure's grid cell is
+        #: ``render_image_region.flex_image_row`` only: the figure's grid cell is
         #: already a definite, fixed-fraction size (never ``auto``), so the
         #: image is capped to it with ``max-*`` instead of forced to fill it
         #: -- it can shrink with the row but never exceed the cell, so it can
         #: never leave the canvas or paint over the text above it.
         ".cx-image-flex{max-width:100%;max-height:100%;object-fit:contain;display:block;}"
         f".cx-quote{{border-left:4px solid {tokens.accent};padding-left:16px;font-style:italic;}}"
-        f".cx-kpi{{font-weight:700;color:{tokens.accent};line-height:1.2;}}"
+        f".cx-kpi{{font-weight:700;color:{tokens.accent_text};line-height:1.2;}}"
         f".cx-caption{{color:{tokens.text_secondary};line-height:1.35;}}"
-        f".cx-accent{{color:{tokens.accent};font-weight:700;}}"
+        f".cx-accent{{color:{tokens.accent_text};font-weight:700;}}"
         f".cx-muted{{color:{tokens.text_secondary};}}"
         ".cx-geo{position:absolute;min-width:0;}"
         f".cx-side-band{{position:absolute;background:{tokens.accent_soft};}}"
@@ -301,9 +351,12 @@ def stylesheet(
 
 
 __all__ = [
+    "BOLD_CLASS_NAMES",
+    "DEFAULT_TEXT_COLOR_TOKEN",
     "FOOTER_BAND_PADDING_Y",
     "MIN_FONT_PX",
     "SUBTITLE_LINE_HEIGHT",
+    "TEXT_COLOR_CLASS_TOKENS",
     "TITLE_LEFT_PX",
     "TITLE_LINE_HEIGHT",
     "TITLE_STACK_GAP_PX",

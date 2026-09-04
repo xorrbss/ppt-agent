@@ -25,7 +25,7 @@ overflows on text, that alone is 4 x up to 0.35 of the content area, more
 than the whole budget before a single line of text is measured.
 
 The one exception is a slide that carries both images and a wide component
-(comparison/process/table): there, ``render_chrome._flex_image_row`` gives
+(comparison/process/table): there, ``render_image_region.flex_image_row`` gives
 the image row a real ``min-height`` floor inside the same flex column as the
 text, so unlike every other layout an image row *can* be the reason that
 combination does not fit -- when the text already leaves less than the floor,
@@ -35,12 +35,12 @@ would exceed the area, never a fixed height for the row otherwise, so a page
 whose text already fits comfortably alongside the images is never estimated
 as "over" on the images' account.
 
-``render_chrome`` never places a ``comparison``/``process``/``table`` component
+``render_flow`` never places a ``comparison``/``process``/``table`` component
 (or any other kind outside ``FLOW_KINDS``) in a balanced column: it renders as
 its own full-width row, in source order, and only splits the plan's flow
 components -- paragraph/bullets/numbered/quote/kpi/caption -- into runs that
 each get their own ``params.columns``-wide balanced grid between the wide
-rows (``render_chrome._segments`` / ``_flow_region`` / ``_wide_row``).
+rows (``render_flow.content_segments`` / ``_flow_region`` / ``_wide_row``).
 Modelling every component as one pool bin-packed at a single ``column_width``
 -- the model this estimate used before -- both undercounts a wide block's real
 width (the renderer never shares a column with it; it gets the *full* content
@@ -65,7 +65,7 @@ terms are simple lower bounds, and their max is a good and cheap approximation
 of ``balanced_partition``'s outcome without re-implementing its DP here. The
 whole-slide estimate is the sum of every segment's height plus one inter-segment
 gap between consecutive segments, in source order -- exactly what
-``render_chrome``'s vertical sequence of rows and column grids stacks.
+``render_flow``'s vertical sequence of rows and column grids stacks.
 """
 
 from __future__ import annotations
@@ -131,7 +131,7 @@ def _content_components(plan: ComposerSlidePlan) -> list[ComposerComponent]:
 
 def _segments(components: list[ComposerComponent]) -> list[tuple[str, list[ComposerComponent]]]:
     """``components`` split into flow runs and standalone wide rows, in source
-    order -- mirrors ``render_chrome._segments`` exactly, at component (not
+    order -- mirrors ``render_flow.content_segments`` exactly, at component (not
     paragraph) granularity, matching this estimate's existing per-component
     approximation."""
 
@@ -174,7 +174,7 @@ def _flow_height_px(
     gap: float,
 ) -> float:
     """A flow run's height under the two-sided bin-packing bound, mirroring
-    ``render_chrome._flow_region``'s balanced-column grid for that run alone."""
+    ``render_flow._flow_region``'s balanced-column grid for that run alone."""
 
     items = [
         paragraphs_height_px(component.paragraphs, component, params, deck, width_px=column_width)

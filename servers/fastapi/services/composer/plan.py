@@ -31,6 +31,18 @@ SUPPORTING_FLOOR_PX = 12.0
 #: A dense page may set text at its own size, never below this share of it.
 MIN_SOURCE_RELATIVE_SCALE = 0.9
 
+#: Ceiling of the grow step (``fit_ladder.grow_step``). A sparse page may set
+#: its *body* text larger so it reads as composed rather than as a fragment,
+#: but verbatim restyle must not turn a modest page into a poster, so the
+#: growth stops where the deck's own type hierarchy does: 20 px body x 1.30 is
+#: 26 px, exactly ``TEMPLATE_TYPE_SCALE_PX["subtitle"]``. Body text therefore
+#: never reaches the subtitle rung, let alone the 40 px title rung, and a
+#: grown page still reads as the same deck as an ungrown one. Title, subtitle
+#: and furniture are excluded from the multiplier entirely
+#: (``render_css.template_px``), so the title's size and position stay
+#: identical at every rung, as section 4.3 requires.
+MAX_TYPE_GROW = 1.30
+
 #: A title never shrinks below this to fit its band; it wraps instead.
 TITLE_FLOOR_PX = 28.0
 
@@ -183,6 +195,11 @@ class ComposerTokens(StrictModel):
     text_primary: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
     text_secondary: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
     accent: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
+    #: The accent pushed to a legible contrast, for accent-coloured *text*
+    #: (``utils.color_contrast.readable_accent_color``). ``accent`` stays the
+    #: authored brand colour for fills and rules; only text-bearing rules use
+    #: this instead (``services.composer.render_css.stylesheet``).
+    accent_text: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
     accent_soft: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
     rule: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
     font_family: str = Field(default="Pretendard, 'Malgun Gothic', sans-serif")
@@ -221,6 +238,14 @@ class FitParameters(StrictModel):
     #: Rung 5 per-box text shrink already applied, by component_id.
     box_text_scale: dict[str, float] = Field(default_factory=dict)
     columns: int = Field(default=1, ge=1, le=3)
+    #: Grow step: uniform multiplier on the template body/supporting scale of
+    #: a page whose *measured* content used far less than the content area.
+    #: Only ever above 1.0 at rungs 0-1; never applied to title, subtitle or
+    #: furniture. See ``MAX_TYPE_GROW``.
+    type_grow: float = Field(default=1.0, ge=1.0, le=MAX_TYPE_GROW)
+    #: Grow step: centre the content block in the content area instead of
+    #: hanging it from the top edge.
+    content_centered: bool = False
 
 
 class FitReceipt(StrictModel):
@@ -260,6 +285,7 @@ __all__ = [
     "FitReceipt",
     "FitRung",
     "FurnitureKind",
+    "MAX_TYPE_GROW",
     "MIN_SOURCE_RELATIVE_SCALE",
     "PX_PER_PT",
     "Paragraph",

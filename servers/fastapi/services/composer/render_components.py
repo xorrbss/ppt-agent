@@ -29,7 +29,7 @@ FLOW_KINDS = frozenset(
     {"title", "subtitle", "paragraph", "quote", "kpi", "caption", "bullets", "numbered"}
 )
 #: Kinds that never share a balanced column with flow text: they render as their
-#: own full-width row instead, at ``render_chrome._segments``.
+#: own full-width row instead, at ``render_flow.content_segments``.
 WIDE_KINDS = frozenset({"comparison", "process", "table"})
 _LIST_KINDS = frozenset({"bullets", "numbered"})
 _KIND_CSS = {
@@ -266,7 +266,7 @@ def render_image(
     admission. The visibility seal replaces the QID with the occurrence's own.
 
     ``flex=True`` selects ``cx-image-flex`` instead of the ordinary
-    ``cx-image``: used by ``render_chrome._flex_image_row``, whose grid cell
+    ``cx-image``: used by ``render_image_region.flex_image_row``, whose grid cell
     is stretched to a definite size by fixed-fraction row/column tracks
     (never ``auto``), so the image is capped with ``max-height``/
     ``max-width`` instead of forced to fill it via ``width``/``height``.

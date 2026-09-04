@@ -18,10 +18,16 @@ Rung summary (verbatim restyle):
    for the blamed components, then page_scale 0.90 -- three renders total,
    however many rungs 0-4 already spent (see ``BOX_TEXT_SCALE_STEPS`` and
    ``TERMINAL_PAGE_SCALES`` below)
+
+The ladder only shrinks, so it has one counterpart: ``grow_step``, offered
+once to a page *accepted* at rung 0 or 1 with much of its content area unused.
+It is not a rung (the page keeps the one it fitted at) and never a step of
+``ladder_steps``: it is derived from a measurement, not proposed ahead of one.
 """
 
 from __future__ import annotations
 
+import math
 import re
 import statistics
 from collections.abc import Iterable, Iterator, Sequence
@@ -29,6 +35,7 @@ from collections.abc import Iterable, Iterator, Sequence
 from services.composer.estimate import paragraph_source_size_pt
 from services.composer.plan import (
     BODY_FLOOR_PX,
+    MAX_TYPE_GROW,
     PX_PER_PT,
     ComposerComponent,
     ComposerDeckPlan,
@@ -55,6 +62,20 @@ TERMINAL_PAGE_SCALE = 0.90
 BOX_TEXT_SCALE_STEPS: tuple[float, ...] = (0.90,)
 TERMINAL_PAGE_SCALES: tuple[float, ...] = (TERMINAL_PAGE_SCALE,)
 MAX_COLUMNS = 3
+
+#: Grow step. A page whose measured content stops well short of the content
+#: area still fits, but reads as a fragment hanging under the title with dead
+#: canvas below it. ``grow_step`` answers with one bounded render that turns
+#: two knobs at once: type alone would not fix it (three lines set 30% larger
+#: still leave most of the area empty) and centring alone leaves the page
+#: under-set. Below ``GROW_TRIGGER_FILL`` -- a quarter of the area empty, about
+#: where a block stops reading as a page -- is worth the second render; at or
+#: above it the page keeps exactly what it fitted with, so a dense deck pays
+#: nothing. ``GROW_TARGET_FILL`` is what a grown page aims at, leaving a
+#: visible margin above and below the centred block rather than crowding the
+#: bands.
+GROW_TRIGGER_FILL = 0.75
+GROW_TARGET_FILL = 0.90
 
 #: ``text``/``list`` archetypes: (max verbatim characters, columns); more -> 3.
 TEXT_COLUMN_THRESHOLDS: tuple[tuple[int, int], ...] = ((600, 1), (1400, 2))
@@ -133,6 +154,44 @@ def source_factor_steps(body_source_px: float) -> tuple[float, ...]:
         return (1.0,)
     delta = (start - 1.0) / (SOURCE_FACTOR_STEP_COUNT - 1)
     return tuple(round(start - index * delta, 4) for index in range(SOURCE_FACTOR_STEP_COUNT))
+
+
+def grow_factor(fill: float) -> float | None:
+    """Multiplier that lifts a measured fill of ``fill`` to ``GROW_TARGET_FILL``.
+
+    Wrapped text of a fixed column width covers an area proportional to the
+    square of its font size, so a wrapping block's height scales with that
+    square and the factor is ``sqrt(target / fill)``. That model is the
+    conservative one: gaps, padding and card chrome do not grow with the type
+    at all, and a block that does not wrap grows only linearly, so the page
+    ends a little short of the target rather than past it -- the direction
+    ``estimate.py`` also errs in. Capped at ``MAX_TYPE_GROW``; ``None`` for
+    every page already at or above ``GROW_TRIGGER_FILL``.
+    """
+
+    if fill <= 0 or fill >= GROW_TRIGGER_FILL:
+        return None
+    return round(min(MAX_TYPE_GROW, math.sqrt(GROW_TARGET_FILL / fill)), 4)
+
+
+def grow_step(params: FitParameters, fill: float) -> FitParameters | None:
+    """The one grow render offered to a page that fitted with room to spare.
+
+    Only the template rungs 0 and 1 qualify. Rungs 2 and up were reached
+    *because* the page did not fit at a larger type, and rungs 4-5 set every
+    block at its own source size, which is the source's decision, not the
+    template's; growing either would contradict the rung. ``None`` when the
+    page does not qualify or is already full enough.
+    """
+
+    if params.rung > 1 or params.source_relative or params.source_geometry:
+        return None
+    if params.type_grow > 1.0 or params.content_centered:
+        return None
+    factor = grow_factor(fill)
+    if factor is None:
+        return None
+    return params.model_copy(update={"type_grow": factor, "content_centered": True})
 
 
 def terminal_entry(columns: int) -> FitParameters:
@@ -254,6 +313,8 @@ def step_label(params: FitParameters) -> str:
     """Short trail label: the rung and the knob this step turned."""
 
     rung = int(params.rung)
+    if params.type_grow > 1.0 or params.content_centered:
+        return f"rung {rung} grow x{params.type_grow:.2f} centered"
     if rung == 0:
         return f"rung 0 columns {params.columns}"
     if rung == 1:
@@ -272,6 +333,8 @@ def step_label(params: FitParameters) -> str:
 __all__ = [
     "BOX_TEXT_SCALE_STEPS",
     "CHROME_STEPS",
+    "GROW_TARGET_FILL",
+    "GROW_TRIGGER_FILL",
     "TERMINAL_PAGE_SCALE",
     "TERMINAL_PAGE_SCALES",
     "TEXT_COLUMN_THRESHOLDS",
@@ -280,6 +343,8 @@ __all__ = [
     "blamed_components",
     "body_source_size_pt",
     "component_identifiers",
+    "grow_factor",
+    "grow_step",
     "ladder_steps",
     "source_factor_steps",
     "step_changes_title",

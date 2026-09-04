@@ -110,6 +110,19 @@ def manifest(deck_path: Path) -> SourceContentManifest:
     ).manifest
 
 
+@pytest.fixture
+def manifest_with_document_identity(deck_path: Path) -> SourceContentManifest:
+    deck = Presentation(str(deck_path))
+    deck.core_properties.title = "  Quarterly   Review  Deck  "
+    deck.save(str(deck_path))
+    return extract_pptx_source_content(
+        deck_path,
+        owner_id="owner-a",
+        reference_snapshot_id="snapshot-a",
+        original_file_name="Q3_Board_Deck_2026-01-05 (2).pptx",
+    ).manifest
+
+
 def _text_blocks(manifest: SourceContentManifest) -> dict[str, Any]:
     """Text blocks of the only slide keyed by their first line."""
 
@@ -242,3 +255,67 @@ def test_manifest_store_admits_legacy_and_enriched_records(manifest: SourceConte
         SimpleNamespace(manifest_json=enriched, manifest_digest=enriched["manifestDigest"]),
         owner_id=None,
     ).slide_size == SourceSlideSize(cx=9144000, cy=6858000)
+
+
+# --- document title / uploaded file name -----------------------------------------------
+
+
+def test_manifest_without_document_identity_still_validates_and_re_derives_digest(
+    manifest: SourceContentManifest,
+) -> None:
+    """No core-properties title, no ``original_file_name`` -- both fields absent."""
+
+    assert manifest.document_title is None
+    assert manifest.source_file_title is None
+    public = manifest.model_dump(mode="json", by_alias=True)
+    assert "documentTitle" not in public
+    assert "sourceFileTitle" not in public
+    unsigned = dict(public)
+    unsigned.pop("manifestDigest")
+    assert digest_json(unsigned) == manifest.manifest_digest
+
+
+def test_document_title_and_file_name_title_are_captured_and_sealed_into_the_digest(
+    manifest_with_document_identity: SourceContentManifest,
+) -> None:
+    manifest = manifest_with_document_identity
+    # docProps/core.xml dc:title, whitespace-collapsed.
+    assert manifest.document_title == "Quarterly Review Deck"
+    # Extension, trailing "(2)" copy suffix and trailing date stripped, then
+    # underscores normalised to spaces.
+    assert manifest.source_file_title == "Q3 Board Deck"
+
+    public = manifest.model_dump(mode="json", by_alias=True)
+    assert public["documentTitle"] == "Quarterly Review Deck"
+    assert public["sourceFileTitle"] == "Q3 Board Deck"
+    unsigned = dict(public)
+    unsigned.pop("manifestDigest")
+    assert digest_json(unsigned) == manifest.manifest_digest
+    without_identity = {
+        key: value for key, value in unsigned.items()
+        if key not in {"documentTitle", "sourceFileTitle"}
+    }
+    assert digest_json(without_identity) != manifest.manifest_digest
+
+
+def test_blank_core_properties_title_is_treated_as_absent(deck_path: Path) -> None:
+    deck = Presentation(str(deck_path))
+    deck.core_properties.title = "   "
+    deck.save(str(deck_path))
+    manifest = extract_pptx_source_content(
+        deck_path, owner_id="owner-a", reference_snapshot_id="snapshot-a"
+    ).manifest
+    assert manifest.document_title is None
+    assert "documentTitle" not in manifest.model_dump(mode="json", by_alias=True)
+
+
+def test_generic_and_opaque_file_names_do_not_become_source_file_title(deck_path: Path) -> None:
+    for original_name in ("Presentation1.pptx", "3fa85f64-5717-4562-b3fc-2c963f66afa6.pptx"):
+        manifest = extract_pptx_source_content(
+            deck_path,
+            owner_id="owner-a",
+            reference_snapshot_id="snapshot-a",
+            original_file_name=original_name,
+        ).manifest
+        assert manifest.source_file_title is None
+        assert "sourceFileTitle" not in manifest.model_dump(mode="json", by_alias=True)

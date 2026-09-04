@@ -202,7 +202,7 @@ def test_manifest_asset_resolver_returns_none_on_store_miss(monkeypatch: pytest.
 def _tokens() -> ComposerTokens:
     return ComposerTokens(
         background="#FFFFFF", surface="#F4F6F8", text_primary="#111827", text_secondary="#4B5563",
-        accent="#0F62FE", accent_soft="#D0E2FF", rule="#E5E7EB",
+        accent="#0F62FE", accent_text="#0F62FE", accent_soft="#D0E2FF", rule="#E5E7EB",
     )
 
 

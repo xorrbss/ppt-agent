@@ -258,6 +258,15 @@ class GeneratePresentationRequest(BaseModel):
     )
 
     @model_validator(mode="after")
+    def freeze_fixed_outline_slide_count(self) -> "GeneratePresentationRequest":
+        # A supplied outline already fixes the deck cardinality. Normalize it
+        # before queue admission and request fingerprinting; the generation
+        # worker historically did this later, after capacity planning.
+        if self.slides_markdown:
+            self.n_slides = len(self.slides_markdown)
+        return self
+
+    @model_validator(mode="after")
     def validate_generation_mode(self) -> "GeneratePresentationRequest":
         if self.generation_mode == "editable-first":
             raise ValueError("capability_not_supported: editable-first")

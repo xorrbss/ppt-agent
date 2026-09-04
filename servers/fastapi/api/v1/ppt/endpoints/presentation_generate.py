@@ -239,6 +239,11 @@ from utils.process_slides import process_slide_and_fetch_assets
 logger = logging.getLogger(__name__)
 
 GenerationProgressReporter = Callable[..., Awaitable[bool]]
+#: A workspace operation attempt's ``extend_lease(seconds=...)``
+#: (``services.workspace_operation_runner._ExecutionContext.extend_lease``).
+#: Only a durable-operation caller offers one; direct/legacy callers leave it
+#: ``None`` and callees must treat that as "no lease to extend".
+GenerationLeaseExtender = Callable[..., Awaitable[bool]]
 
 AUTHORED_RESUME_MAX_ATTEMPTS_DEFAULT = 5
 _INTERNAL_EXACT_SNAPSHOT_KEY = "_internal_authored_exact_snapshot_id"
@@ -1506,6 +1511,7 @@ async def generate_presentation_handler(
     export_cookie_header: Optional[str] = None,
     generation_job: Optional[PresentationGenerationJob] = None,
     progress_reporter: GenerationProgressReporter | None = None,
+    extend_lease: GenerationLeaseExtender | None = None,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
     # Internal callers can bypass validation, so re-run owner, expiry, asset
@@ -1528,6 +1534,7 @@ async def generate_presentation_handler(
                 sql_session=sql_session,
                 async_status=async_status,
                 export_cookie_header=export_cookie_header,
+                extend_lease=extend_lease,
             )
     elif request.reference_snapshot_ids and not request._reference_snapshots:
         await _admit_generation_references(request, sql_session)

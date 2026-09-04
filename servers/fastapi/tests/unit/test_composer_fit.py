@@ -29,19 +29,23 @@ from services.composer.estimate import (
 )
 from services.composer.fit import ComposerMeasurementError, fit_slide
 from services.composer.fit_ladder import (
+    GROW_TRIGGER_FILL,
     TERMINAL_PAGE_SCALES,
     TYPE_SCALE_STEPS,
     archetype_columns,
     blamed_components,
+    grow_factor,
+    grow_step,
     ladder_steps,
     source_factor_steps,
     step_changes_title,
     step_label,
     title_only_blocking,
 )
-from services.composer.measure import issue_summaries, measurement_from_capture
+from services.composer.measure import content_area_fill, issue_summaries, measurement_from_capture
 from services.composer.plan import (
     BODY_FLOOR_PX,
+    MAX_TYPE_GROW,
     PX_PER_PT,
     TEMPLATE_TYPE_SCALE_PX,
     ComposerComponent,
@@ -71,6 +75,7 @@ def _tokens() -> ComposerTokens:
         text_primary="#111827",
         text_secondary="#4B5563",
         accent="#0F62FE",
+        accent_text="#0F62FE",
         accent_soft="#D0E2FF",
         rule="#E5E7EB",
     )
@@ -870,3 +875,132 @@ def test_measurement_from_capture_classifies_telemetry():
     assert available.telemetry_available is True
     assert available.blocking_issues == ()
     assert available.metrics["elements"][0]["qid"] == "copy"
+
+
+# --- grow step ----------------------------------------------------------------
+
+
+def _fill_metrics(used_height: float, *, top: float = 120.0, bottom: float = 664.0) -> dict:
+    """Telemetry for a slide whose content section runs ``top``..``bottom`` and
+    whose lowest content box ends ``used_height`` px below ``top``."""
+
+    def element(qid: str, x: float, y: float, width: float, height: float) -> dict:
+        return {"qid": qid, "tag": "div", "bbox": {"x": x, "y": y, "width": width, "height": height}}
+
+    return {
+        "viewport": {"width": 1280, "height": 720},
+        "fonts_ready": True,
+        "elements": [
+            element("cx-title-band", 0, 0, 1280, top),
+            element("cx-content", 0, top, 1280, bottom - top),
+            element("cx-flow", 64, top, 1152, used_height),
+            element("cx-body", 64, top, 1000, used_height),
+            element("cx-footer-band", 0, bottom, 1280, 720 - bottom),
+            element("cx-footer-left", 64, bottom + 18, 260, 20),
+        ],
+    }
+
+
+def test_content_area_fill_measures_the_section_not_the_canvas():
+    assert content_area_fill(_fill_metrics(544.0)) == pytest.approx(1.0)
+    assert content_area_fill(_fill_metrics(136.0)) == pytest.approx(0.25)
+    # a taller title band shrinks the section, so the same used height fills more
+    assert content_area_fill(_fill_metrics(136.0, top=256.0)) == pytest.approx(1.0 / 3.0)
+
+
+def test_content_area_fill_is_none_without_a_single_content_section():
+    assert content_area_fill(None) is None
+    assert content_area_fill({}) is None
+    # a cover slide: the only full-width box below the top is the footer band
+    cover = {
+        "viewport": {"width": 1280, "height": 720},
+        "elements": [
+            {"qid": "cx-cover", "bbox": {"x": 0, "y": 0, "width": 1280, "height": 664}},
+            {"qid": "cx-footer-band", "bbox": {"x": 0, "y": 664, "width": 1280, "height": 56}},
+        ],
+    }
+    assert content_area_fill(cover) is None
+
+
+def test_grow_factor_is_bounded_and_conservative():
+    assert grow_factor(GROW_TRIGGER_FILL) is None
+    assert grow_factor(0.95) is None
+    assert grow_factor(0.0) is None
+    # sqrt(0.90 / fill), never past MAX_TYPE_GROW
+    assert grow_factor(0.70) == pytest.approx(1.1339, abs=1e-4)
+    assert grow_factor(0.08) == MAX_TYPE_GROW
+    assert grow_factor(0.5) <= MAX_TYPE_GROW
+
+
+def test_grow_step_only_offered_to_the_template_rungs():
+    sparse = 0.30
+    grown = grow_step(FitParameters(rung=0, columns=2), sparse)
+    assert grown is not None
+    assert grown.rung == 0 and grown.columns == 2
+    assert grown.type_grow == MAX_TYPE_GROW and grown.content_centered is True
+    assert grow_step(FitParameters(rung=1, density=1), sparse) is not None
+    assert grow_step(FitParameters(rung=2, type_scale=0.9), sparse) is None
+    assert grow_step(FitParameters(rung=3, chrome_level=2, type_scale=0.75), sparse) is None
+    assert grow_step(FitParameters(rung=4, source_relative=True, type_scale=0.75), sparse) is None
+    assert grow_step(FitParameters(rung=5, source_geometry=True, type_scale=0.75), sparse) is None
+    # never twice
+    assert grow_step(grown, sparse) is None
+    assert step_label(grown) == "rung 0 grow x1.30 centered"
+
+
+@dataclass
+class FillMeasurer:
+    """Clean measurements carrying a scripted content fill per call."""
+
+    fills: list[float | None]
+    blocked_calls: tuple[int, ...] = ()
+    calls: list[FitParameters] = field(default_factory=list)
+
+    async def __call__(self, html: str, plan: ComposerSlidePlan) -> Measurement:
+        del plan
+        index = len(self.calls)
+        self.calls.append(params_of(html))
+        fill = self.fills[index] if index < len(self.fills) else None
+        metrics = {} if fill is None else _fill_metrics(544.0 * fill)
+        issues = ("overflow: text exceeds its box (body-0)",) if index in self.blocked_calls else ()
+        return Measurement(metrics=metrics, png=b"png", blocking_issues=issues, telemetry_available=True)
+
+
+def test_sparse_page_is_grown_and_centered():
+    plan = _plan(300)
+    measurer = FillMeasurer(fills=[0.30, 0.85])
+    result = run(fit_slide(plan, _tokens(), _deck(plan), render=fake_render, measure=measurer, estimate=None))
+    assert [params.type_grow for params in measurer.calls] == [1.0, MAX_TYPE_GROW]
+    assert result.receipt.rung == 0
+    assert result.receipt.renders == 2
+    assert result.receipt.parameters.type_grow == MAX_TYPE_GROW
+    assert result.receipt.parameters.content_centered is True
+    assert params_of(result.html).type_grow == MAX_TYPE_GROW
+    assert "fitted using 30% of the content area" in result.receipt.trail[0]
+
+
+def test_grown_render_that_overflows_falls_back_to_what_fitted():
+    plan = _plan(300)
+    measurer = FillMeasurer(fills=[0.30, 0.30], blocked_calls=(1,))
+    result = run(fit_slide(plan, _tokens(), _deck(plan), render=fake_render, measure=measurer, estimate=None))
+    assert len(measurer.calls) == 2
+    assert result.receipt.rung == 0
+    assert result.receipt.parameters.type_grow == 1.0
+    assert result.receipt.parameters.content_centered is False
+    assert result.receipt.blocking_issues == []
+    assert "keeping rung 0 columns 1" in result.receipt.trail[-1]
+
+
+def test_full_page_and_spent_budget_never_spend_a_grow_render():
+    plan = _plan(300)
+    full = FillMeasurer(fills=[0.92])
+    run(fit_slide(plan, _tokens(), _deck(plan), render=fake_render, measure=full, estimate=None))
+    assert len(full.calls) == 1
+
+    sparse = FillMeasurer(fills=[0.20])
+    result = run(
+        fit_slide(plan, _tokens(), _deck(plan), render=fake_render, measure=sparse, estimate=None, max_renders=1)
+    )
+    assert len(sparse.calls) == 1
+    assert result.receipt.parameters.type_grow == 1.0
+    assert "render budget 1 spent, not grown" in result.receipt.trail[-1]

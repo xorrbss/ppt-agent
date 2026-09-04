@@ -15,7 +15,9 @@ Module map (thin facade over):
 - ``render_context``    per-render state shared by the component renderers
 - ``render_components`` archetype markup (text, list, process, comparison, image)
 - ``render_table``      the native-table contract
-- ``render_chrome``     title/footer bands, furniture, column flow
+- ``render_chrome``     title/footer bands, furniture, the content area
+- ``render_flow``       source-order segments, balanced columns, wide rows
+- ``render_image_region`` the fixed-height image grid and the flex image row
 - ``render_geometry``   rung 5 source-rectangle placement
 - ``render_title``      title/subtitle fit, independent of the body type scale
 - ``render_cover``      the ``cover`` archetype: a centred title/subtitle stack

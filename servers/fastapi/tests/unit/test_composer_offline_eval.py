@@ -164,11 +164,17 @@ def test_slide_row_populates_index_and_chrome_from_the_receipt() -> None:
 
     plan = ComposerSlidePlan(slide_index=2, source_unit_id="unit-2", archetype="text")
     receipt = FitReceipt(
-        slide_index=2, rung=1, parameters=FitParameters(chrome_level=2), renders=3, estimate_used=True,
+        slide_index=2,
+        rung=1,
+        parameters=FitParameters(chrome_level=2, type_grow=1.2, content_centered=True),
+        renders=3,
+        estimate_used=True,
     )
     result = ComposerSlideResult(slide_index=2, html="<html></html>", receipt=receipt)
     row = slide_row(plan, result, None, 12.5)
     assert row["index"] == 2 and row["chrome"] == 2
+    assert row["parameters"]["typeGrow"] == 1.2
+    assert row["parameters"]["contentCentered"] is True
 
 
 def test_slide_row_leaves_index_and_chrome_none_without_a_result() -> None:

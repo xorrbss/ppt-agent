@@ -8,7 +8,6 @@ Database lookup lives in ``composer_offline_eval_db``.
 
 from __future__ import annotations
 
-import importlib
 import json
 import os
 from dataclasses import dataclass, field
@@ -25,19 +24,14 @@ NEUTRAL_TOKENS: dict[str, str] = {
     "text_primary": "#0F172A",
     "text_secondary": "#334155",
     "accent": "#2563EB",
+    # Already >= 4.5:1 against both "background" and "surface" above
+    # (utils.color_contrast.readable_accent_color returns it unchanged), so
+    # the neutral placeholder's accent_text is the accent itself.
+    "accent_text": "#2563EB",
     "accent_soft": "#DBEAFE",
     "rule": "#CBD5E1",
 }
 
-#: Names a ``services.composer.pipeline`` token derivation may be exported as.
-PIPELINE_TOKEN_FUNCTIONS = (
-    "tokens_from_style",
-    "composer_tokens_from_style",
-    "style_to_tokens",
-    "derive_tokens",
-    "build_tokens",
-)
-FONT_FALLBACKS = "Pretendard, 'Malgun Gothic', sans-serif"
 
 
 class SourceLookupError(RuntimeError):
@@ -183,57 +177,42 @@ def blend_hex(foreground: str, background: str, share: float) -> str:
     return "#" + "".join(f"{channel:02X}" for channel in mixed)
 
 
-def _pipeline_tokens(style: Any, deck_title: str) -> Any | None:
-    try:
-        module = importlib.import_module("services.composer.pipeline")
-    except ModuleNotFoundError as error:
-        if error.name == "services.composer.pipeline":
-            return None
-        raise
-    from services.composer.plan import ComposerTokens
-
-    for name in PIPELINE_TOKEN_FUNCTIONS:
-        function = getattr(module, name, None)
-        if not callable(function):
-            continue
-        try:
-            tokens = function(style)
-        except TypeError:
-            continue
-        if isinstance(tokens, ComposerTokens):
-            return tokens if tokens.deck_title else tokens.model_copy(update={"deck_title": deck_title})
-    return None
-
-
 def build_tokens(style_id: str | None, *, deck_title: str) -> tuple[Any, str]:
-    """``ComposerTokens`` plus a label saying where they came from."""
+    """``ComposerTokens`` plus a label saying where they came from.
 
+    The harness derives them through the exact function the generation pipeline
+    calls (``services.composer.pipeline_inputs.composer_tokens``).  A private
+    copy of that derivation would let the evaluated palette and font stack drift
+    away from what production renders, which is how the stack the eval measured
+    came to differ from the stack the product shipped.
+    """
+
+    from services.composer.fonts import FONT_FAMILY, font_family_stack
+    from services.composer.pipeline_inputs import composer_tokens
     from services.composer.plan import ComposerTokens
 
     if not style_id:
-        return ComposerTokens(**NEUTRAL_TOKENS, deck_title=deck_title), "neutral palette"
-    from utils.authored_styles import resolve_authored_style
+        tokens = ComposerTokens(
+            **NEUTRAL_TOKENS,
+            font_family=font_family_stack(),
+            deck_title=deck_title,
+        )
+        label = "neutral palette"
+    else:
+        from utils.authored_styles import resolve_authored_style
 
-    style = resolve_authored_style(style_id)
-    tokens = _pipeline_tokens(style, deck_title)
-    if tokens is not None:
-        return tokens, f"services.composer.pipeline for style '{style.id}'"
-    from services.source_content.pipeline import _style_tokens
-
-    source = _style_tokens(style)
-    tokens = ComposerTokens(
-        background=source.background,
-        surface=source.surface,
-        text_primary=source.text_primary,
-        text_secondary=source.text_secondary,
-        accent=source.accent,
-        accent_soft=blend_hex(source.accent, source.background, 0.8),
-        rule=blend_hex(source.text_secondary, source.background, 0.65),
-        font_family=f"'{source.body_font}', {FONT_FALLBACKS}",
-        heading_font_family=f"'{source.heading_font}', {FONT_FALLBACKS}",
-        deck_title=deck_title,
-    )
-    return tokens, f"authored style '{style.id}' via source_content.pipeline._style_tokens"
+        style = resolve_authored_style(style_id)
+        tokens = composer_tokens(style, deck_title_text=deck_title)
+        label = f"services.composer.pipeline_inputs.composer_tokens for style '{style.id}'"
+    leading_family = tokens.font_family.split(",", 1)[0].strip().strip("'\"")
+    if leading_family.casefold() != FONT_FAMILY.casefold():
+        # The exporter admits a Korean run as native text only when the run's
+        # own stack leads with the embeddable family; an eval that measured any
+        # other stack would not be measuring the product.
+        raise SourceLookupError(
+            f"composer font stack must lead with {FONT_FAMILY}, got {tokens.font_family!r}"
+        )
+    return tokens, label
 
 
 def build_deck_context(units: Sequence[Mapping[str, Any]], manifest: Mapping[str, Any], *, deck_title: str) -> Any:
@@ -250,7 +229,6 @@ def build_deck_context(units: Sequence[Mapping[str, Any]], manifest: Mapping[str
 
 __all__ = [
     "NEUTRAL_TOKENS",
-    "PIPELINE_TOKEN_FUNCTIONS",
     "SourceBundle",
     "SourceLookupError",
     "blend_hex",

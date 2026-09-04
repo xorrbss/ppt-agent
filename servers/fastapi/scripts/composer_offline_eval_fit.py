@@ -47,6 +47,8 @@ def parameters_payload(params: Any) -> dict[str, Any]:
         "sourceGeometry": params.source_geometry,
         "pageScale": params.page_scale,
         "columns": params.columns,
+        "typeGrow": params.type_grow,
+        "contentCentered": params.content_centered,
     }
 
 

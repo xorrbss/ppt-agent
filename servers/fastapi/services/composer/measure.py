@@ -12,6 +12,10 @@ design signals and never block the ladder.
 pipeline's job. The Chromium runtime is imported lazily so this module (and
 the ladder) import without a browser present; unit tests pass their own
 ``Measurer``.
+
+``content_area_fill`` reads the same telemetry from the other side: not
+"did anything overflow" but "how much of the content area was used", which is
+what the ladder's grow step needs to decide that a page is sparse.
 """
 
 from __future__ import annotations
@@ -22,9 +26,74 @@ from typing import Any
 from services.authored_composition_policy import blocking_safety_issues
 from services.composer.contracts import Measurement
 from services.composer.plan import ComposerSlidePlan
-from utils.authored_dom_quality import STYLE_REFERENCE, DomQualityReport, inspect_authored_dom
+from utils.authored_dom_quality import (
+    STYLE_REFERENCE,
+    DomQualityReport,
+    inspect_authored_dom,
+    normalize_browser_metrics,
+)
 
 DEFAULT_RENDER_TIMEOUT_SECONDS = 60
+
+#: A browser box may land a fraction of a pixel outside its container from
+#: sub-pixel rounding; boxes are matched to the content area within this.
+EDGE_TOLERANCE_PX = 1.0
+
+
+def content_area_fill(metrics: Mapping[str, Any] | None) -> float | None:
+    """Share of the content area the rendered content actually occupies.
+
+    The content section is located by geometry, never by QID string:
+    ``render_css.stylesheet`` gives exactly three boxes the full canvas width
+    at x=0 -- ``.cx-title-band`` (flush to the top), ``.cx-content`` and
+    ``.cx-footer-band`` (flush to the bottom) -- so the one full-width box
+    touching neither canvas edge is the content area, and it is the *rendered*
+    one, so a title band that grew because its title wrapped is already
+    accounted for. Everything else the renderer emits sits inside the section's
+    horizontal padding and is narrower.
+
+    Returns the used height over the section height, or ``None`` when the
+    telemetry does not show exactly one such box: a ``cover`` slide has no
+    content section, and rung 5 lays the page out with absolute boxes instead.
+    Only boxes wholly inside the section count toward the used height, so this
+    is meaningful only for a measurement that already has no blocking issue --
+    which is the only place the ladder asks for it.
+    """
+
+    normalized = normalize_browser_metrics(metrics if isinstance(metrics, Mapping) else None)
+    elements = normalized["elements"]
+    width = float(normalized["viewport"]["width"])
+    height = float(normalized["viewport"]["height"])
+    if not elements or width <= 0 or height <= 0:
+        return None
+    sections = [
+        item
+        for item in elements
+        if abs(float(item["bbox"]["x"])) <= EDGE_TOLERANCE_PX
+        and abs(float(item["bbox"]["width"]) - width) <= EDGE_TOLERANCE_PX
+        and float(item["bbox"]["y"]) > EDGE_TOLERANCE_PX
+        and float(item["bbox"]["y"]) + float(item["bbox"]["height"]) < height - EDGE_TOLERANCE_PX
+    ]
+    if len(sections) != 1:
+        return None
+    section = sections[0]
+    top = float(section["bbox"]["y"])
+    bottom = top + float(section["bbox"]["height"])
+    if bottom - top <= 0:
+        return None
+    used = top
+    for item in elements:
+        if item is section:
+            continue
+        box = item["bbox"]
+        item_top, item_height = float(box["y"]), float(box["height"])
+        if item_height <= 0 or float(box["width"]) <= 0:
+            continue
+        if item_top < top - EDGE_TOLERANCE_PX or item_top + item_height > bottom + EDGE_TOLERANCE_PX:
+            continue
+        used = max(used, item_top + item_height)
+    return (used - top) / (bottom - top)
+
 
 
 def issue_summaries(report: DomQualityReport) -> tuple[str, ...]:
@@ -114,7 +183,9 @@ class ChromiumMeasurer:
 
 __all__ = [
     "DEFAULT_RENDER_TIMEOUT_SECONDS",
+    "EDGE_TOLERANCE_PX",
     "ChromiumMeasurer",
+    "content_area_fill",
     "issue_summaries",
     "measure_slide",
     "measurement_from_capture",

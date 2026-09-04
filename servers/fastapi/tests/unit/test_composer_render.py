@@ -47,6 +47,7 @@ TOKENS = ComposerTokens(
     text_primary="#0F172A",
     text_secondary="#475569",
     accent="#1473E6",
+    accent_text="#1473E6",
     accent_soft="#E8F0FE",
     rule="#D9E2EF",
 )
@@ -345,6 +346,41 @@ def test_title_and_subtitle_line_heights_never_touch_the_canvas_edge() -> None:
         level_style = level_html[level_html.index("<style>") : level_html.index("</style>")]
         assert f"padding:{pad}px" in level_style
         assert "padding:8px" in level_style  # footer band, every level
+
+
+def test_accent_text_paints_marker_accent_and_kpi_while_accent_still_fills() -> None:
+    """``accent_text`` (readable_accent_color) drives text-bearing rules only.
+
+    ``accent`` keeps painting every fill/stroke/rule (band border, cover rule,
+    step border, arrow, quote rail) unchanged: only the classes that render
+    accent-coloured *text* switch to the legible variant.
+    """
+
+    tokens = ComposerTokens(
+        background="#FFFFFF", surface="#F3F6FA", text_primary="#0F172A", text_secondary="#475569",
+        accent="#FFD400", accent_text="#7A6600", accent_soft="#FFF6CC", rule="#D9E2EF",
+    )
+    plan = text_plan()
+    deck = deck_for(plan)
+    html = render_slide(plan, tokens, FitParameters(chrome_level=0), deck)
+    style = html[html.index("<style>") : html.index("</style>")]
+
+    for selector in (".cx-marker{", ".cx-accent{", ".cx-kpi{"):
+        assert selector in style, selector
+        body = style[style.index(selector) : style.index("}", style.index(selector)) + 1]
+        assert f"color:{tokens.accent_text}" in body, body
+        assert tokens.accent not in body, body
+
+    # The stylesheet is one static block for the whole slide, so every
+    # selector is emitted regardless of which components the plan uses.
+    for selector in (".cx-cover-rule{", ".cx-step{", ".cx-arrow{", ".cx-quote{"):
+        assert selector in style, selector
+        body = style[style.index(selector) : style.index("}", style.index(selector)) + 1]
+        assert tokens.accent in body, body
+        assert tokens.accent_text not in body, body
+
+    band = style[style.index(".cx-title-band{") : style.index(".cx-title-stack{")]
+    assert f"border-bottom:3px solid {tokens.accent};" in band
 
 
 def test_title_stack_band_height_estimate_fits_the_canvas() -> None:
@@ -958,3 +994,54 @@ def test_every_visible_element_is_qid_declared_or_explicitly_exempt(plan: Compos
     html = render_slide(plan, TOKENS, FitParameters(), deck_for(plan))
     validate_declared_authored_qids(html)
     _assert_every_element_is_declared(html)
+
+
+# --- grow step: larger body type, centred content ------------------------------
+
+
+def _body_font_px(html: str, qid: str) -> float:
+    for _tag, attrs, _text in elements(html):
+        if attrs.get("data-qid") == qid:
+            match = re.search(r"font-size:([\d.]+)px", attrs.get("style", ""))
+            assert match, f"{qid} carries no font-size"
+            return float(match.group(1))
+    raise AssertionError(f"{qid} not rendered")
+
+
+def test_grown_render_enlarges_body_but_not_title_or_furniture():
+    plan = text_plan()
+    deck = deck_for(plan)
+    plain = render_slide(plan, TOKENS, FitParameters(rung=0, columns=1), deck)
+    grown = render_slide(plan, TOKENS, FitParameters(rung=0, columns=1, type_grow=1.25, content_centered=True), deck)
+
+    body_qid = deterministic_source_qid("b2")
+    assert _body_font_px(grown, body_qid) == pytest.approx(_body_font_px(plain, body_qid) * 1.25)
+    for chrome in ("b1", "b5", "b6"):
+        qid = deterministic_source_qid(chrome)
+        assert _body_font_px(grown, qid) == pytest.approx(_body_font_px(plain, qid))
+
+
+def test_grown_render_centers_the_content_section():
+    plan = text_plan()
+    deck = deck_for(plan)
+    plain = render_slide(plan, TOKENS, FitParameters(rung=0, columns=1), deck)
+    grown = render_slide(plan, TOKENS, FitParameters(rung=0, columns=1, type_grow=1.1, content_centered=True), deck)
+    assert 'class="cx-content" style="align-content:center"' in grown
+    assert "align-content:center" not in plain
+
+    # a wide row beside images keeps the flex column: its image row already
+    # absorbs whatever the text leaves, so there is no unused area to centre in.
+    mixed = image_plan(count=2)
+    mixed = mixed.model_copy(update={"components": [comparison_plan().components[0]]})
+    flex = render_slide(mixed, TOKENS, FitParameters(rung=0, columns=1, type_grow=1.1, content_centered=True),
+                        deck_for(mixed))
+    assert 'class="cx-content" style="display:flex;flex-direction:column;min-height:0"' in flex
+
+
+def test_grow_never_reaches_the_source_relative_rungs():
+    plan = text_plan()
+    deck = deck_for(plan)
+    params = FitParameters(rung=4, source_relative=True, source_factor=1.0, type_scale=0.75)
+    assert render_slide(plan, TOKENS, params, deck) == render_slide(
+        plan, TOKENS, params.model_copy(update={"type_grow": 1.3}), deck
+    )

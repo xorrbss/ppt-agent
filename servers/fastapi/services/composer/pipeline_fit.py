@@ -69,6 +69,7 @@ existed when every render ran cooperatively on one loop:
 from __future__ import annotations
 
 import asyncio
+import logging
 import threading
 import uuid
 from collections.abc import Awaitable, Callable
@@ -84,6 +85,8 @@ from services.composer.assets import (
 from services.composer.contracts import Estimator, Measurement, Measurer, Renderer
 from services.composer.plan import ComposerDeckPlan, ComposerSlidePlan, ComposerSlideResult
 from services.composer.receipt import ComposerAssertionError, ComposerPipelineError
+
+LOGGER = logging.getLogger(__name__)
 
 #: Serializes every call into the real Chromium measurer across worker
 #: threads. See the module docstring: ``utils.slide_capture``'s render/
@@ -169,6 +172,28 @@ async def preload_assets_for_fit(
     return in_memory_asset_resolver(resolved)
 
 
+async def maybe_extend_lease(
+    extend_lease: Callable[..., Awaitable[bool]] | None, seconds: int
+) -> None:
+    """Best-effort widen of the attempt's lease; never raises into the caller.
+
+    Shared by the fit loop below (called per slide, from the same serialized
+    path as ``on_slide``) and the publish stage in ``services.composer.
+    pipeline`` (called once, before its one long write transaction). Neither
+    caller offering ``extend_lease`` (most callers -- see ``run_composer_restyle``'s
+    docstring on the parameter) nor a ``False`` return is an error here: the
+    fit loop's own readback/binding assertions and publication's fencing
+    protect correctness regardless of whether the lease was actually widened.
+    """
+
+    if extend_lease is None:
+        return
+    try:
+        await extend_lease(seconds=seconds)
+    except Exception:
+        LOGGER.warning("composer_restyle lease extension failed", exc_info=True)
+
+
 def _run_fit_slide_in_thread(
     plan: ComposerSlidePlan,
     deck: ComposerDeckPlan,
@@ -192,6 +217,18 @@ def _run_fit_slide_in_thread(
     )
 
 
+#: Lease window requested after each slide completes, when a caller offers
+#: ``extend_lease``. Matched to ``WORKSPACE_OPERATION_LEASE_SECONDS`` (300s):
+#: every slide re-establishes a full lease window, so the 30s heartbeat only
+#: has to land once within that window rather than continuously for the
+#: whole fit stage (223s measured for the 43-page deck, section 6a of
+#: docs/generation-quality-root-cause-and-composer-architecture-20260904.md).
+#: A literal, not an import of the workspace constant, for the same reason
+#: ``pipeline.py``'s ``EXTEND_LEASE_SECONDS_FOR_PUBLISH`` is a literal: this
+#: package stays decoupled from that subsystem's internals.
+EXTEND_LEASE_SECONDS_FOR_FIT = 300
+
+
 async def fit_deck(
     deck: ComposerDeckPlan,
     *,
@@ -200,6 +237,8 @@ async def fit_deck(
     estimator: Estimator | None,
     concurrency: int,
     on_slide: Callable[[ComposerSlideResult, int], Awaitable[None]] | None = None,
+    extend_lease: Callable[..., Awaitable[bool]] | None = None,
+    extend_lease_seconds: int = EXTEND_LEASE_SECONDS_FOR_FIT,
 ) -> list[ComposerSlideResult]:
     """Fit every slide with at most ``concurrency`` Chromium sessions at once.
 
@@ -208,7 +247,12 @@ async def fit_deck(
     dynamically here (not bound as a default argument) so a test can patch
     ``asyncio.to_thread`` and observe it being used. ``on_slide`` calls are
     serialized behind one lock local to this call, so two slides finishing at
-    nearly the same moment never report progress concurrently.
+    nearly the same moment never report progress concurrently. ``extend_lease``
+    -- the operation attempt's lease widener, when a durable-operation caller
+    offers one -- is called from that same serialized path once per slide, for
+    the same reason: it is a second write keyed off the operation's row, and
+    keeping it behind the same lock keeps every per-slide side effect
+    strictly ordered rather than racing across worker threads.
     """
 
     from services.composer.fit import ComposerMeasurementError
@@ -236,16 +280,26 @@ async def fit_deck(
             except ComposerAssetError as error:
                 raise ComposerAssertionError(error.slide_index, error.code, error.detail) from error
         completed += 1
-        if on_slide is not None:
+        if on_slide is not None or extend_lease is not None:
             # Serialize: on_slide ultimately writes an optimistic-concurrency
             # row (see the module docstring); two concurrent callers racing
-            # it lose one as a spurious lease loss, not a real one.
+            # it lose one as a spurious lease loss, not a real one. The lease
+            # extension is kept in this same lock for the same reason -- it
+            # is another write keyed off the operation's row.
             async with report_lock:
-                await on_slide(result, completed)
+                if on_slide is not None:
+                    await on_slide(result, completed)
+                await maybe_extend_lease(extend_lease, extend_lease_seconds)
         return result
 
     results = await asyncio.gather(*(one(plan) for plan in deck.slides))
     return sorted(results, key=lambda item: item.slide_index)
 
 
-__all__ = ["fit_deck", "guard_shared_chromium_state", "preload_assets_for_fit"]
+__all__ = [
+    "EXTEND_LEASE_SECONDS_FOR_FIT",
+    "fit_deck",
+    "guard_shared_chromium_state",
+    "maybe_extend_lease",
+    "preload_assets_for_fit",
+]

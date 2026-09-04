@@ -40,7 +40,7 @@ TABLE_LINE_HEIGHT = 1.3
 IMAGE_MAX_AREA_SHARE = 0.35
 DEFAULT_IMAGE_ASPECT = 16.0 / 9.0
 #: Floor on the image row's height when it shares the content area with a
-#: wide component (``render_chrome._flex_image_row``): a recognisable
+#: wide component (``render_image_region.flex_image_row``): a recognisable
 #: thumbnail at looser chrome, smaller once density and chrome are both
 #: already tightened. Shared by the estimate (``estimated_content_height``)
 #: and the renderer so neither can disagree about how much room the row is
@@ -84,11 +84,17 @@ def type_scale_key(component: ComposerComponent, params: FitParameters | None = 
 
 
 def template_font_px(component: ComposerComponent, params: FitParameters) -> float:
-    """Template size at the step's ``type_scale``, never below the design floor."""
+    """Template size at the step's ``type_scale``, never below the design floor.
+
+    Mirrors ``render_css.template_px``, the grow step included: a grown page
+    sets its body and supporting text ``params.type_grow`` larger, while the
+    title and subtitle bands keep their own size.
+    """
 
     key = type_scale_key(component, params)
     floor = SUPPORTING_FLOOR_PX if key == "supporting" else BODY_FLOOR_PX
-    return max(floor, TEMPLATE_TYPE_SCALE_PX[key] * params.type_scale)
+    size = max(floor, TEMPLATE_TYPE_SCALE_PX[key] * params.type_scale)
+    return size if key in _BAND_ROLES else size * float(params.type_grow)
 
 
 def paragraph_source_size_pt(paragraph: Paragraph) -> float | None:
@@ -300,7 +306,7 @@ def image_height_px(component: ComposerComponent, *, width_px: float, area_heigh
 
 
 def wide_sibling_image_floor_px(params: FitParameters) -> float:
-    """The floor ``render_chrome._flex_image_row`` and ``estimated_content_height``
+    """The floor ``render_image_region.flex_image_row`` and ``estimated_content_height``
     both use for the image row's ``min-height`` when it shares the content
     area with a wide component: 72px once density and chrome are both
     already tight (``density >= 1`` and ``chrome_level >= 2``), 90px otherwise."""
