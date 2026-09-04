@@ -51,35 +51,37 @@ reference_images:
   closing:
     - devax-si-proposal/closing.png
 brief: |-
-  PURPOSE
-  Create a Korean enterprise SI proposal that visibly belongs to the retained DevAX proposal family. The reference images are the authoritative visual grammar only. Write new audience-facing content for the current request; never copy reference wording, project claims, client names, or measurements unless they are supplied in the request.
+  MOOD
+  Create a Korean enterprise SI proposal that visibly belongs to the retained DevAX proposal family. The deck should feel like a polished Korean B2B proposal: information-rich but ordered, formal but visually active. The reference images are the authoritative visual grammar only. Write new audience-facing content for the current request; never copy reference wording, project claims, client names, or measurements unless they are supplied in the request.
 
-  VISUAL IDENTITY
-  Use a near-white canvas with cool gray architectural corner planes, cobalt blue as the primary signal, deep navy for evidence rails and conclusions, sky blue for supporting structure, and violet only for numbered stages. The deck should feel like a polished Korean B2B proposal: information-rich but ordered, formal but visually active.
+  PALETTE
+  Use a near-white #F7F9FC canvas with white #FFFFFF content zones and cool gray #F2F6FA architectural corner planes. Use cobalt blue #1677E8 as the primary signal, deep navy #102A52 for evidence rails and conclusions, sky blue #64B5F6 for supporting structure, and violet #7157E8 only for numbered stages.
 
   TYPOGRAPHY
   Use Pretendard or Noto Sans KR. Titles are compact and decisive, generally 30–42px, with one cobalt keyword when useful. Body copy is 16–22px with short lines. Use small English eyebrow labels such as “DevAX | AI Transformation” only as recurring navigation chrome. Keep all meaningful text editable HTML.
 
-  RECURRING CHROME
-  Content slides use a small top-left DevAX/section eyebrow and a thin cobalt horizontal rule. Add a restrained footer or page marker only when it helps continuity. Several slides may use a dark navy evidence rail occupying roughly 18–24% of the right edge, but do not force it onto every slide. Cover and section slides may use translucent cool-gray corner planes derived from the reference family.
-
   LAYOUT SYSTEM
-  Work on a disciplined 16:9 grid with 48–64px safe margins. Favor broad business-infographic compositions over generic card dashboards. Use one dominant composition per slide: a left-to-right process, a 60/40 explanation and evidence split, a central architecture with bounded domains, a comparison with a dark evidence rail, or a staged implementation matrix. Align every label, connector, and panel to a visible grid.
+  Work on a disciplined 16:9 grid with 48–64px safe margins. Favor broad business-infographic compositions over generic card dashboards. Use one dominant composition per slide, drawn from a left-to-right process, a 60/40 explanation and evidence split, a central architecture with bounded domains, a comparison with a dark evidence rail, or a staged implementation matrix. Align every label, connector, and panel to a visible grid.
 
-  COVER
-  Keep the cover spacious. Place a concise DevAX SI proposal title in the central-left field, one short business outcome line below it, and a restrained client/date line near the bottom. Preserve the reference family’s cool-gray corner geometry and cobalt/navy emphasis without reproducing source text.
+  SIGNATURE ELEMENTS
+  Content slides use a small top-left DevAX or section eyebrow and a thin cobalt horizontal rule. Add a restrained footer or page marker only when it helps continuity. Several slides may use a dark navy evidence rail occupying roughly 18–24% of the right edge, but do not force it onto every slide. Cover and section slides may use translucent cool-gray corner planes derived from the reference family. Build content zones from compact numbered sections, strong cobalt directional bands, and white or light-gray fields. Draw process rails and architecture as editable native HTML or SVG, using cobalt arrows, navy labels, pale-blue group zones, and violet stage dots. Connectors must visibly terminate at their nodes and stay behind labels. Use thin lines and small shadows, and avoid oversized rounded tiles.
 
-  CONTENT
-  Use compact numbered sections, strong cobalt directional bands, and white/light-gray content zones. For dense slides, combine one main infographic with one evidence column rather than repeating equal cards. Use thin lines and small shadows; avoid oversized rounded tiles.
-
-  ARCHITECTURE AND PROCESS
-  Draw editable process rails and architecture using native HTML/SVG. Use cobalt arrows, navy labels, pale-blue group zones, and violet stage dots. Connectors must visibly terminate at their nodes and stay behind labels. Limit the primary flow to five stages and the architecture to one hub plus four domains.
-
-  DATA AND TABLES
+  DATA VISUALIZATION
   Tables and charts should look proposal-authored rather than application UI: compact headers, clear units, direct labels, pale-blue row grouping, and one dark navy conclusion strip. Highlight only the figures that support the slide’s claim. Never invent metrics.
 
-  IMAGERY
+  IMAGE DIRECTION
   Favor credible enterprise workspace, infrastructure, or professional cutouts and restrained system diagrams. Do not use cute robot mascots, glossy 3D objects, generic browser-window piles, or full-bleed stock photography. Images must support the proposal claim and remain subordinate to the information hierarchy.
+
+  SLIDE ARCHETYPES
+  cover: Keep the cover spacious, placing a concise DevAX SI proposal title in the central-left field, one short business outcome line below it, and a restrained client and date line near the bottom, and preserve the reference family’s cool-gray corner geometry and cobalt and navy emphasis without reproducing source text.
+  section divider: Open a section on the same spacious translucent cool-gray corner geometry as the cover, carrying only the section label with one cobalt keyword and no dense body copy.
+  process rail: Run one left-to-right rail limited to five stages, with violet numbered stage dots, cobalt arrows that visibly terminate at their nodes and stay behind labels, and one short navy label under each stage.
+  architecture hub: Center one hub with exactly four bounded domains around it, using pale-blue group zones, navy component labels, and cobalt connectors that terminate at their nodes and stay behind the labels.
+  evidence split: Divide the field 60/40 into one main infographic and one evidence column rather than repeating equal cards, keeping explanation on the wide side and support on the narrow one.
+  comparison with evidence rail: Set the compared options as aligned cobalt-banded zones on the near-white field and reserve the dark navy rail on the right edge for the decisive evidence and the conclusion.
+  implementation matrix: Stage the adoption plan as a numbered matrix of phases against workstreams, with violet markers carrying the stage numbers and compact navy labels in the cells.
+  data table: Pair one compact proposal-authored table with a small companion chart, group rows in pale blue, highlight only the supporting figures, and close with a single dark navy conclusion strip.
+  closing: Close on the same spacious cool-gray corner geometry as the cover with one navy conclusion line and a restrained supporting line beneath it, introducing no new figures.
 
   AVOID
   Avoid the generic default-blueprint look, sparse title-and-four-card pages, detached UI widgets, large empty white fields without purpose, thick borders, excessive rounded rectangles, gradients used as decoration, tiny Korean copy, copied source wording, and claims of template fidelity without comparing a newly generated product result.
