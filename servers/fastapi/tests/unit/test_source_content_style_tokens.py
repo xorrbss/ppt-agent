@@ -162,3 +162,68 @@ def test_default_style_text_primary_is_not_white_on_off_white_background() -> No
         f"documented background #F8FAFC measures {ratio:.2f}:1, below the "
         f"WCAG AA body-text minimum of {WCAG_AA_BODY_TEXT_MINIMUM}:1"
     )
+
+
+@pytest.mark.parametrize("style_id", _STYLE_IDS, ids=_STYLE_IDS)
+def test_accent_text_is_legible_on_both_planes(style_id: str) -> None:
+    """An accent painted as text must clear the same floor body text does.
+
+    ``accent`` itself is exempt: it is authored as a fill and a rule colour,
+    where WCAG's text floor does not apply, so styles legitimately ship a
+    pale or very dark one. ``accent_text`` is the variant callers must use
+    when the accent becomes small text (``.cx-marker`` / ``.cx-accent`` /
+    ``.cx-kpi``, and the ``sectionLabel`` scene role). 21 of 38 shipped
+    accents measured below 4.5:1 before this token existed.
+    """
+
+    style = _style_by_id(style_id)
+    tokens = _style_tokens(style)
+
+    for surface_role, surface_color in (
+        ("background", tokens.background),
+        ("surface", tokens.surface),
+    ):
+        ratio = contrast_ratio(tokens.accent_text, surface_color)
+        assert ratio >= WCAG_AA_BODY_TEXT_MINIMUM, (
+            f"style '{style_id}': accent_text={tokens.accent_text} against "
+            f"{surface_role}={surface_color} measures {ratio:.2f}:1, below the "
+            f"WCAG AA body-text minimum of {WCAG_AA_BODY_TEXT_MINIMUM}:1 "
+            f"(authored accent={tokens.accent})"
+        )
+
+
+def test_a_conforming_accent_is_left_exactly_as_authored() -> None:
+    """The derivation must not repaint accents that already pass.
+
+    Pushing every accent to a fixed ink would flatten the styles whose brand
+    colour is already legible, so the token has to be a floor, not a rule.
+    """
+
+    passing = [
+        style_id
+        for style_id in _STYLE_IDS
+        if (tokens := _style_tokens(_style_by_id(style_id)))
+        and contrast_ratio(tokens.accent, tokens.background) >= WCAG_AA_BODY_TEXT_MINIMUM
+        and contrast_ratio(tokens.accent, tokens.surface) >= WCAG_AA_BODY_TEXT_MINIMUM
+    ]
+    assert passing, "expected at least one catalogue accent to already conform"
+    for style_id in passing:
+        tokens = _style_tokens(_style_by_id(style_id))
+        assert tokens.accent_text == tokens.accent, (
+            f"style '{style_id}': accent={tokens.accent} already conforms but "
+            f"accent_text moved it to {tokens.accent_text}"
+        )
+
+
+@pytest.mark.parametrize("style_id", _STYLE_IDS, ids=_STYLE_IDS)
+def test_accent_text_never_collapses_into_body_ink(style_id: str) -> None:
+    """A legible accent must still read as an accent, not as body copy."""
+
+    tokens = _style_tokens(_style_by_id(style_id))
+    if tokens.accent.upper() in {"#000000", "#FFFFFF"}:
+        return  # a monochrome accent has nowhere else to land
+    assert tokens.accent_text != tokens.text_primary, (
+        f"style '{style_id}': accent_text collapsed onto text_primary "
+        f"({tokens.text_primary}); the accent would be invisible as emphasis"
+    )
+

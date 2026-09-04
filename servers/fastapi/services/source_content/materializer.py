@@ -73,6 +73,9 @@ class SourceContentStyleTokens(StrictCamelModel):
     text_primary: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
     text_secondary: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
     accent: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
+    #: The accent pushed to a legible contrast, for accent-coloured *text*.
+    #: ``accent`` stays the authored brand colour for fills and rules.
+    accent_text: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
     heading_font: str = Field(min_length=1, max_length=200)
     body_font: str = Field(min_length=1, max_length=200)
 
@@ -705,7 +708,10 @@ class SourceContentSceneMaterializer:
                         "#FFFFFF"
                         if dark_slide
                         else (
-                            style_tokens.accent
+                            # Accent-coloured text, so the legible variant:
+                            # a fill-grade accent fails AA on 21 of the 38
+                            # shipped styles (worst 1.35:1).
+                            style_tokens.accent_text
                             if semantic_role == "sectionLabel"
                             else (
                                 style_tokens.text_secondary

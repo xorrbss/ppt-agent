@@ -57,7 +57,11 @@ from services.source_content.outline import (
     build_authored_text_image_slides,
 )
 from services.authored_composition_policy import resolve_composition_profile
-from utils.color_contrast import normalize_hex, readable_color_scheme
+from utils.color_contrast import (
+    normalize_hex,
+    readable_accent_color,
+    readable_color_scheme,
+)
 from utils.get_env import get_composer_restyle_enabled
 
 
@@ -245,16 +249,17 @@ def _style_tokens(style: Any) -> SourceContentStyleTokens:
             "#FFFFFF",
         )
     )
+    accent = normalize_hex(
+        getattr(style, "primary_color", None) or getattr(style, "preview_accent", None),
+        "#2563EB",
+    )
     return SourceContentStyleTokens(
         background=scheme.background,
         surface=scheme.surface,
         text_primary=scheme.text_primary,
         text_secondary=scheme.text_secondary,
-        accent=normalize_hex(
-            getattr(style, "primary_color", None)
-            or getattr(style, "preview_accent", None),
-            "#2563EB",
-        ),
+        accent=accent,
+        accent_text=readable_accent_color(accent, scheme.background, scheme.surface),
         heading_font=(getattr(style, "heading_font", None) or "Noto Sans KR"),
         body_font=(getattr(style, "body_font", None) or "Noto Sans KR"),
     )
