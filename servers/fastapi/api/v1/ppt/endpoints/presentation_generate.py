@@ -720,8 +720,10 @@ async def check_if_api_request_is_valid(
 
     if request.strategy not in {None, "authored"}:
         raise HTTPException(status_code=400, detail="generation_strategy_conflict")
-    if request.template.lower() != AUTHORED_TEMPLATE:
-        raise HTTPException(status_code=400, detail="generation_strategy_conflict")
+    # Any template name is normalised to the authored template rather than
+    # rejected: a caller naming both a strategy and a template is asking for
+    # the strategy, and this endpoint has normalised that since before the
+    # strategy existed.
     request.template = AUTHORED_TEMPLATE
     _validate_authored_exact_admission(request)
     await _validate_authored_master_pin_admission(request)
