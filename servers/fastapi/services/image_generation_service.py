@@ -26,6 +26,7 @@ from utils.get_env import (
     get_openai_compat_image_base_url_env,
     get_openai_compat_image_api_key_env,
     get_openai_compat_image_model_env, get_openai_api_key_env, get_google_api_key_env,
+    get_image_generation_timeout_seconds,
     is_parallel_image_generation_enabled,
 )
 from utils.runtime_settings import RuntimeSettings, resolve_runtime_settings
@@ -270,7 +271,11 @@ class ImageGenerationService:
             raise ValueError("OPENAI_API_KEY is not configured")
         # SDK retries would create unobservable physical spend outside our
         # per-attempt admission boundary; public retries are explicit below.
-        client = AsyncOpenAI(api_key=api_key, max_retries=0)
+        client = AsyncOpenAI(
+            api_key=api_key,
+            max_retries=0,
+            timeout=get_image_generation_timeout_seconds(self.settings),
+        )
         result = None
         for attempt in range(OPENAI_IMAGE_MAX_ATTEMPTS):
             try:
@@ -951,6 +956,7 @@ class ImageGenerationService:
                 api_key=api_key,
                 http_client=http_client,
                 max_retries=0,
+                timeout=get_image_generation_timeout_seconds(self.settings),
             )
             async with _metered_image_provider_call(
                 semantic_slot="image.primary",

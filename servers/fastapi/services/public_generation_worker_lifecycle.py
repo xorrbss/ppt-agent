@@ -25,6 +25,7 @@ from services.workspace_operation_handler_registry import (
     WorkspaceOperationLeaseLost,
 )
 from services.workspace_operation_retry_policy import WorkspaceOperationRetryDecision
+from utils.datetime_utils import as_utc
 
 
 PUBLIC_OPERATION_CONTRACT_VERSION = "public-operation/v2"
@@ -50,14 +51,10 @@ def clamp_retry_to_public_deadline(
 ) -> tuple[WorkspaceOperationRetryDecision, bool]:
     """Terminalize a retry whose first eligible instant misses the deadline."""
 
-    deadline = (
-        deadline_at
-        if deadline_at is None or deadline_at.tzinfo is not None
-        else deadline_at.replace(tzinfo=timezone.utc)
-    )
+    deadline = as_utc(deadline_at) if deadline_at is not None else None
     retry_at = decision.next_attempt_at
-    if retry_at is not None and retry_at.tzinfo is None:
-        retry_at = retry_at.replace(tzinfo=timezone.utc)
+    if retry_at is not None:
+        retry_at = as_utc(retry_at)
     missed = bool(
         deadline is not None
         and decision.state == "queued"
@@ -210,11 +207,7 @@ async def public_generation_deadline(
             raise NonRetryableWorkspaceOperationError(
                 "public_operation_deadline_missing"
             )
-        return (
-            deadline
-            if deadline.tzinfo is not None
-            else deadline.replace(tzinfo=timezone.utc)
-        )
+        return as_utc(deadline)
 async def claim_linked_generation_job(
     *,
     session_factory: async_sessionmaker[AsyncSession],

@@ -179,6 +179,45 @@ async def record_provider_usage_receipt_detached(
         return stored
 
 
+_RETRY_CLASSES_ADMITTED_AS_RETRY = frozenset(("retry", "recovery"))
+
+
+async def persisted_provider_request_counts(
+    session: AsyncSession, job_id: uuid.UUID
+) -> tuple[int, int]:
+    """Return ``(initial, retry)`` provider request counts persisted for a job.
+
+    Local stage receipts (``provider == "local"``) never passed provider
+    admission and are excluded. ``resume`` receipts were admitted as
+    non-retry calls, so they count as initial requests; ``retry`` and
+    ``recovery`` receipts were admitted as retries.
+    """
+
+    rows = (
+        await session.execute(
+            select(
+                ProviderUsageReceipt.retry_class,
+                ProviderUsageReceipt.request_count,
+            ).where(
+                ProviderUsageReceipt.job_id == job_id,
+                ~(
+                    (ProviderUsageReceipt.provider == "local")
+                    & (ProviderUsageReceipt.model == "none")
+                ),
+            )
+        )
+    ).all()
+    initial = 0
+    retry = 0
+    for retry_class, request_count in rows:
+        count = max(0, int(request_count))
+        if retry_class in _RETRY_CLASSES_ADMITTED_AS_RETRY:
+            retry += count
+        else:
+            initial += count
+    return initial, retry
+
+
 async def aggregate_provider_usage_for_job(
     session: AsyncSession, job_id: uuid.UUID
 ) -> dict[str, object]:

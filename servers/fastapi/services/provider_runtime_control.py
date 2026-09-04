@@ -95,12 +95,23 @@ class ProviderRuntimeControl:
         estimated_budget_microunits: int | None,
         actual_budget_microunits: int | None,
         kill_conditions: JobKillConditions | None = None,
+        initial_requests: int = 0,
+        retry_requests: int = 0,
     ) -> CancellationToken:
-        """Register one job and return its cooperative cancellation token."""
+        """Register one job and return its cooperative cancellation token.
+
+        ``initial_requests`` and ``retry_requests`` seed the request counters
+        with calls already persisted by earlier attempts of the same durable
+        job. Without them a process restart resets the counters to zero and a
+        resumed attempt's first legitimately-classified retry is rejected as
+        ``retry_requires_an_initial_request``.
+        """
 
         _validate_identifier(job_id, "job_id")
         _validate_optional_nonnegative(estimated_budget_microunits, "estimated_budget_microunits")
         _validate_optional_nonnegative(actual_budget_microunits, "actual_budget_microunits")
+        _validate_nonnegative(initial_requests, "initial_requests")
+        _validate_nonnegative(retry_requests, "retry_requests")
         conditions = kill_conditions or JobKillConditions()
         async with self._condition:
             if job_id in self._jobs:
@@ -114,6 +125,9 @@ class ProviderRuntimeControl:
                 actual_limit=actual_budget_microunits,
                 kill_conditions=conditions,
                 deadline_at=deadline_at,
+                total_requests=initial_requests + retry_requests,
+                initial_requests=initial_requests,
+                retry_requests=retry_requests,
             )
             self._jobs[job_id] = state
             return state.token

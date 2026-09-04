@@ -36,6 +36,7 @@ from utils.get_env import (
     get_gpt_image_1_5_quality_env,
     get_gpt_image_2_quality_env,
     get_openai_api_key_env,
+    get_image_generation_timeout_seconds,
     is_parallel_image_generation_enabled,
 )
 from utils.image_provider import (
@@ -120,7 +121,11 @@ class TransparentPngProvider:
         model = self.model or "gpt-image-2"
         # SDK retries would be unobservable spend outside the admission
         # boundary, exactly as for the primary illustration call.
-        client = AsyncOpenAI(api_key=api_key, max_retries=0)
+        client = AsyncOpenAI(
+            api_key=api_key,
+            max_retries=0,
+            timeout=get_image_generation_timeout_seconds(self.settings),
+        )
         result = None
         for attempt in range(OPENAI_IMAGE_MAX_ATTEMPTS):
             try:

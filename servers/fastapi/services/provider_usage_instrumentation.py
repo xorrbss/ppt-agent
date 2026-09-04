@@ -19,7 +19,6 @@ import asyncio
 from weakref import WeakKeyDictionary
 
 from services.provider_runtime_control import (
-    JobKillConditions,
     ProviderCallLease,
     ProviderRuntimeControl,
     RuntimeLimits,
@@ -32,6 +31,10 @@ from services.provider_durable_admission import (
 from services.provider_pricing import (
     ProviderModelPricing,
     calculate_actual_usage_cost,
+)
+from services.provider_runtime_job_registration import (
+    ensure_runtime_job,
+    optional_env_int,
 )
 
 
@@ -430,59 +433,6 @@ def _positive_int(value: Any) -> int | None:
     return value if 0 <= value <= 2_000_000_000 else None
 
 
-def _optional_env_int(name: str) -> int | None:
-    import os
-
-    raw = (os.getenv(name) or "").strip()
-    if not raw:
-        return None
-    try:
-        value = int(raw)
-    except ValueError as error:
-        raise RuntimeError(f"{name}_must_be_an_integer") from error
-    if value < 0:
-        raise RuntimeError(f"{name}_must_be_nonnegative")
-    return value
-
-
-async def _ensure_runtime_job(scope: ProviderUsageScope) -> str:
-    runtime = _runtime_state()
-    durable_job_id = str(scope.job_id)
-    # A durable generation job has one provider budget across every operation
-    # attempt.  Re-registering an attempt-suffixed runtime job resets the hard
-    # cap after recovery and permits retry amplification.
-    job_id = durable_job_id
-    if job_id in runtime.registered_jobs:
-        runtime.latest_job_keys[durable_job_id] = job_id
-        return job_id
-    async with runtime.registration_lock:
-        if job_id in runtime.registered_jobs:
-            return job_id
-        deadline = _optional_env_int("PROVIDER_JOB_DEADLINE_SECONDS")
-        await runtime.control.register_job(
-            job_id,
-            estimated_budget_microunits=_optional_env_int(
-                "PROVIDER_JOB_ESTIMATED_BUDGET_MICROUNITS"
-            ),
-            actual_budget_microunits=_optional_env_int(
-                "PROVIDER_JOB_ACTUAL_BUDGET_MICROUNITS"
-            ),
-            kill_conditions=JobKillConditions(
-                deadline_seconds=float(deadline) if deadline is not None else None,
-                max_total_requests=_optional_env_int(
-                    "PROVIDER_JOB_MAX_TOTAL_REQUESTS"
-                ),
-                max_retry_requests=_optional_env_int(
-                    "PROVIDER_JOB_MAX_RETRY_REQUESTS"
-                ),
-                max_consecutive_failures=_optional_env_int(
-                    "PROVIDER_JOB_MAX_CONSECUTIVE_FAILURES"
-                ),
-            ),
-        )
-        runtime.registered_jobs.add(job_id)
-        runtime.latest_job_keys[durable_job_id] = job_id
-    return job_id
 
 
 @asynccontextmanager
@@ -506,10 +456,10 @@ async def provider_call_admission(
     if active_lease is not None:
         yield active_lease
         return
-    job_id = await _ensure_runtime_job(scope)
+    job_id = await ensure_runtime_job(_runtime_state(), scope)
     estimated = estimated_cost_microunits
     if estimated is None:
-        estimated = _optional_env_int("PROVIDER_CALL_ESTIMATED_COST_MICROUNITS")
+        estimated = optional_env_int("PROVIDER_CALL_ESTIMATED_COST_MICROUNITS")
     if estimated is None:
         # Unknown cost is not zero. Reserve a conservative accounting unit so
         # request amplification still consumes a configured job ceiling.

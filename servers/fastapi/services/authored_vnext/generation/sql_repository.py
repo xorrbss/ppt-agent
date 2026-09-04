@@ -391,6 +391,11 @@ class SqlGenerationRepository:
                     error_code=None,
                     error_detail=None,
                 )
+                # The row is already loaded in this session; the default
+                # "evaluate" synchronisation would re-run the lease comparison
+                # in Python, where SQLite's naive ``lease_expires_at`` cannot
+                # be compared with the aware ``now``.
+                .execution_options(synchronize_session=False)
             ).rowcount
             if changed != 1:
                 raise GenerationConflictError("operation lease unavailable")

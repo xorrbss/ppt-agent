@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Literal
 
 from sqlalchemy import Select, case, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from utils.datetime_utils import as_utc
 from utils.owner_context import get_current_owner_id
 from enums.async_task_status import AsyncTaskStatus
 from models.async_task_read import AsyncTaskReadModel
@@ -84,12 +85,7 @@ def _to_read_model(
 def _latest_datetime(left: datetime, right: datetime) -> datetime:
     """Compare SQLite-naive and PostgreSQL-aware timestamps portably."""
 
-    def comparable(value: datetime) -> datetime:
-        if value.tzinfo is None:
-            return value.replace(tzinfo=timezone.utc)
-        return value.astimezone(timezone.utc)
-
-    return left if comparable(left) >= comparable(right) else right
+    return left if as_utc(left) >= as_utc(right) else right
 
 
 async def get_async_task(

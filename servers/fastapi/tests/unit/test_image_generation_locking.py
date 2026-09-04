@@ -86,3 +86,46 @@ def test_stock_provider_keeps_single_argument_calling_convention(monkeypatch):
 
     assert result == "https://example.com/stock.png"
     assert received_prompts == ["city skyline"]
+
+
+def test_image_provider_calls_carry_a_bounded_deadline(monkeypatch):
+    """One hung picture may not hold a deck past its generation deadline.
+
+    Image calls run behind a process-wide lock and the OpenAI SDK's own
+    default deadline is ten minutes, so an unbounded call stalls every other
+    picture too. A measured worker-lane run lost 27 minutes of authoring wall
+    this way while only 7 provider calls were made.
+    """
+
+    from utils.get_env import get_image_generation_timeout_seconds
+
+    monkeypatch.delenv("IMAGE_GENERATION_TIMEOUT_SECONDS", raising=False)
+    assert get_image_generation_timeout_seconds() == 180.0
+
+    monkeypatch.setenv("IMAGE_GENERATION_TIMEOUT_SECONDS", "45")
+    assert get_image_generation_timeout_seconds() == 45.0
+
+    # The bounds keep an operator from reintroducing the ten-minute stall or
+    # setting a deadline no real image call could meet.
+    monkeypatch.setenv("IMAGE_GENERATION_TIMEOUT_SECONDS", "5000")
+    assert get_image_generation_timeout_seconds() == 600.0
+    monkeypatch.setenv("IMAGE_GENERATION_TIMEOUT_SECONDS", "0")
+    assert get_image_generation_timeout_seconds() == 5.0
+
+
+def test_every_openai_image_client_is_constructed_with_the_deadline():
+    """The deadline is only real if every image client carries it."""
+
+    import inspect
+
+    from services import image_generation_service
+    from services.authored_icon_pack import provider as icon_provider
+
+    for module in (image_generation_service, icon_provider):
+        source = inspect.getsource(module)
+        constructions = source.count("AsyncOpenAI(")
+        deadlines = source.count("timeout=get_image_generation_timeout_seconds(")
+        assert constructions == deadlines, (
+            f"{module.__name__} constructs {constructions} image client(s) "
+            f"but only {deadlines} carry the image deadline"
+        )

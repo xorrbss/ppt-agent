@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from hashlib import sha256
 from inspect import Parameter, signature
 import logging
@@ -44,7 +44,7 @@ from services.workspace_operation_handler_registry import (
     WorkspaceOperationClaim,
     WorkspaceOperationLeaseLost,
 )
-from utils.datetime_utils import get_current_utc_datetime
+from utils.datetime_utils import as_utc, get_current_utc_datetime
 
 LOGGER = logging.getLogger(__name__)
 
@@ -62,11 +62,7 @@ TERMINAL_OPERATION_STATES = frozenset(
 def _deadline_reached(deadline_at: datetime, *, now: datetime) -> bool:
     """Compare persisted deadlines consistently across SQLite and PostgreSQL."""
 
-    if deadline_at.tzinfo is None:
-        deadline_at = deadline_at.replace(tzinfo=timezone.utc)
-    if now.tzinfo is None:
-        now = now.replace(tzinfo=timezone.utc)
-    return deadline_at <= now
+    return as_utc(deadline_at) <= as_utc(now)
 
 
 def _supports_fencing_token(callback: Callable[..., object]) -> bool:
@@ -145,6 +141,11 @@ async def heartbeat_workspace_operation(
         else:
             # Phase-1/local operations preserve the workspace-only lease path.
             public_admission = None
+        # The operation row is already in this session's identity map.  The ORM
+        # default ``synchronize_session="evaluate"`` would re-run the WHERE
+        # clause in Python against that object, comparing SQLite's naive
+        # ``deadline_at`` with the aware ``now`` and raising ``TypeError``.
+        # Nothing reads the objects after this update, so skip synchronisation.
         statement = (
             update(WorkspaceOperation)
             .where(WorkspaceOperation.id == operation_id)
@@ -169,6 +170,7 @@ async def heartbeat_workspace_operation(
                 ),
                 updated_at=now,
             )
+            .execution_options(synchronize_session=False)
         )
         if fencing_token is not None:
             statement = statement.where(
@@ -211,6 +213,7 @@ async def heartbeat_workspace_operation(
                     ),
                     version=PublicResourceLease.version + 1,
                 )
+                .execution_options(synchronize_session=False)
             )
             if lease_result.rowcount != 3:
                 await session.rollback()

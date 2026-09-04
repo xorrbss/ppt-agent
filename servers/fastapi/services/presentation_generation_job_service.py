@@ -22,6 +22,7 @@ from services.authored_generation_observability import (
     log_authored_generation_observation,
 )
 from services.database import async_session_maker
+from utils.datetime_utils import as_utc
 from utils.owner_context import get_current_owner_id
 from utils.runtime_settings import create_runtime_settings_task as create_config_task
 
@@ -150,10 +151,7 @@ def _job_is_claimable(
         return allow_auth_resume
     if job.state not in {"running", "staging"} or job.lease_expires_at is None:
         return False
-    expires_at = job.lease_expires_at
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    return expires_at < now
+    return as_utc(job.lease_expires_at) < as_utc(now)
 
 
 async def _authored_capacity_available(
@@ -256,12 +254,9 @@ async def _workspace_linked_generation_queue_position(
         if not _is_authored_payload(payload):
             continue
         normalized_owner = str(owner_scope)
-        lease_is_live = lease_expires_at is not None
-        if lease_is_live:
-            normalized_lease = lease_expires_at
-            if normalized_lease.tzinfo is None:
-                normalized_lease = normalized_lease.replace(tzinfo=timezone.utc)
-            lease_is_live = normalized_lease >= now
+        lease_is_live = (
+            lease_expires_at is not None and as_utc(lease_expires_at) >= now
+        )
         if (
             operation_state == "running"
             and job_state in {"running", "staging"}
@@ -393,6 +388,9 @@ async def claim_generation_job(
         ):
             await session.rollback()
             raise GenerationCapacityUnavailable()
+        # ``target`` is in the identity map: the ORM default ``evaluate`` sync
+        # would re-run ``claimable`` in Python and compare SQLite's naive
+        # ``lease_expires_at`` with the aware ``now`` (``TypeError``).
         result = await session.execute(
             update(PresentationGenerationJob)
             .where(PresentationGenerationJob.id == job_id)
@@ -408,6 +406,7 @@ async def claim_generation_job(
                 last_started_at=now,
                 updated_at=now,
             )
+            .execution_options(synchronize_session="fetch")
         )
         if result.rowcount != 1:
             await session.rollback()

@@ -38,7 +38,11 @@ from utils.authored_infographic import finalize_infographic_slide_html
 from utils.authored_font_policy import enforce_authored_font_floor
 from utils.authored_dom_quality import validate_declared_authored_qids
 from utils.authored_header_prompt import render_header_contract
-from utils.get_env import is_authored_source_images_enabled
+from utils.authored_html_normalize import normalize_authored_html
+from utils.get_env import (
+    is_authored_html_normalize_enabled,
+    is_authored_source_images_enabled,
+)
 from utils.llm_calls.author_slide_images import (
     illustration_slot_rules,
     reference_parts,
@@ -670,6 +674,7 @@ def validate_authored_slide_html(
     *,
     allow_illustration_slots: bool = False,
     finalized: bool = False,
+    normalization_receipt: list[dict] | None = None,
 ) -> str:
     """Return canonical HTML after applying the renderer's existing admission policy.
 
@@ -680,8 +685,31 @@ def validate_authored_slide_html(
     model-supplied ``src`` on such an unresolved slot is excluded from that
     projection too: the illustration/source-image stage either replaces it with
     a verified data URL or drops the whole tag before final admission.
+
+    Before admission (A2, ``docs/generation-programme-master-design-20260904.md``
+    section 4), a whitelist of harmless findings -- forbidden break/page-break
+    CSS declarations and a ``hidden`` attribute -- is normalised out when
+    ``AUTHORED_HTML_NORMALIZE_ENABLED`` is on (default). The normalised document
+    is the one returned (and so the one persisted): admission and every later
+    consumer see the same, already-clean HTML. Firing rules are appended to
+    ``normalization_receipt`` when the caller passes a list, so they can travel
+    with the caller's own per-slide quality receipt; admission itself remains
+    the security boundary and still rejects anything outside that whitelist.
     """
     canonical = canonicalize_authored_slide_html(html, finalized=finalized)
+    if is_authored_html_normalize_enabled():
+        normalized = normalize_authored_html(canonical)
+        if normalized.normalizations:
+            canonical = normalized.html
+            if normalization_receipt is not None:
+                normalization_receipt.extend(normalized.normalizations)
+            logger.info(
+                "authored_html_normalize fired %d rule(s): %s",
+                len(normalized.normalizations),
+                ", ".join(
+                    f"{entry['rule']}x{entry['count']}" for entry in normalized.normalizations
+                ),
+            )
     validation_source = (
         _without_authoring_only_image_attributes(canonical)
         if allow_illustration_slots
