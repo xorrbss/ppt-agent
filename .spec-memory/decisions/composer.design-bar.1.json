@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "key": "composer.design-bar",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Blind rating of Composer output is scored against three named decks already on disk: the 09-02 source-native output as the floor, the customer's own source deck as parity, and the Hyundai SI reference deck as the design target.",
+  "scope": [
+    "composer",
+    "visual-quality",
+    "source-content",
+    "authored-generation"
+  ],
+  "invariants": [
+    "Floor, must be beaten on every rated slide and not merely on average: output/candidate-54892244-dual-lane/preserve-43.pdf, with output/source-native-43-rc-20260902/source-native-43-fidelity.pdf as secondary.",
+    "Parity, must not be regressed against: the source deck itself rendered to PDF, deck-43 sourceDigest sha256:32b098831a84774dfc35820fed6e21e715259e2fc4e72e586a63c3fc650f1188 and deck-35; a restyle harder to read than the original is a regression whatever the template gains.",
+    "Target, the design bar proper: output/hyundai-reference-90plus-20260901/DevAX-SI-10slides-hyundai-reference.pptx with montage reference-first10-montage.png; it is the only tier that may be lost without failing the phase.",
+    "There is no authored comparator for verbatim restyle and there will not be one; any acceptance text asking for the best authored output on the same source is struck rather than approximated.",
+    "For ordinary generation the pinned authored comparator is authored-bounded-release-v3-final-20260823/product-attempt-21-head-4b89560-rev3-final/hybrid.pptx, fixed so the A/B does not drift onto a newer authored build mid-comparison.",
+    "Rating protocol: slide level, decks anonymised to A/B/C with page order preserved and pages aligned to the same source page across decks, at least 3 raters, 1 to 5 on five axes (legibility, information hierarchy, layout craft, deck level consistency, reads as designed rather than filled), score is the median.",
+    "Phase 1 acceptance: at or above the floor on every slide, at or above parity on legibility and consistency, and at least 80 percent of the target deck's median craft score.",
+    "The pixel feature scorer at output/hyundai-reference-90plus-20260901/evaluate_visual_system.py is a pre-filter for palette and density drift between rating rounds and is advisory only."
+  ],
+  "forbidden": [
+    "Scoring a blind rating against an unnamed or newly chosen reference deck.",
+    "Passing phase 1 on an average that hides a slide rated below the floor deck.",
+    "Using the automated style conformance score as the acceptance gate.",
+    "Substituting a newer authored build for the pinned comparator during an in-flight comparison.",
+    "Padding or truncating the 10 page target deck to page-align it with the 43 page comparison; it is a craft calibration set on different content."
+  ],
+  "rationale": [
+    "A blind rating needs named comparators rather than an adjective; all three tiers already exist on disk, so the bar is reproducible.",
+    "The floor deck is what this repository's own design document calls a text dump, so beating it on average would let a single bad slide through.",
+    "The customer already read the source page at its own size, which makes the source deck the only unarguable parity reference for a verbatim restyle.",
+    "The Hyundai reference deck is already used as this repository's fidelity reference and carries the craft the archetype library is aimed at.",
+    "The user decided on 2026-09-04 to proceed on this design bar after the proposal in section 7b of the design document."
+  ],
+  "evidence": [
+    "docs/generation-quality-root-cause-and-composer-architecture-20260904.md sections 6 and 7b",
+    "output/candidate-54892244-dual-lane/preserve-43.pdf",
+    "output/hyundai-reference-90plus-20260901/",
+    "servers/fastapi/scripts/composer_offline_eval_targets.json"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-04T12:00:00.0000000+00:00"
+}

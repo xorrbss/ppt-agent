@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.generation.composer-verbatim-promotion",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "The engine switch gate is split in two: verbatim restyle promotes the Composer to default on an absolute seven-criterion gate because the authored path has no successful verbatim run to compare against, while ordinary generation still promotes only on the phase 2 matched A/B.",
+  "scope": [
+    "composer",
+    "source-content",
+    "authored-generation",
+    "public-api",
+    "visual-quality"
+  ],
+  "invariants": [
+    "The promotion gate for route source_content_restyle is absolute, not comparative: A1 at least 95 percent of 20 consecutive live operations reach published, over at least 5 distinct source decks of which at least 3 were previously unseen; A2 100 percent of source blocks present in readback on every run; A3 zero blocking DOM defects at rungs 0 to 4; A4 residual overlap at rung 5 only where the source page itself overlaps at that scale, each such slide named in the receipt and reviewed once; A5 at most 5 minutes for 50 pages or fewer and zero provider calls; A6 hybrid PPTX export round-trips as native OOXML shapes and opens editable; A7 setting COMPOSER_RESTYLE_ENABLED to false restores the authored path with no data migration.",
+    "A6 is the blocking criterion: no flag flip while hybrid PPTX export of a Composer deck is unexercised or falls back to an image PPTX.",
+    "Until A1 through A7 all pass, COMPOSER_RESTYLE_ENABLED stays default false and is enabled per environment only.",
+    "The flag changes the default for source_content_restyle alone; ordinary authored generation is not routed to the Composer by it.",
+    "The authored path stays available and revertible by the flag for at least 14 days after the flip, with no data migration in either direction.",
+    "For ordinary generation the phase 2 matched A/B remains the promotion gate: 20 prompts by 20 slides, identical input, reference, slide count, language and quality settings, receipts kept separate by engine, Composer winning on success rate, wall time and provider cost and tying or better on blind quality.",
+    "Gate criteria are scored from measured receipts and operation records, never from assertion; a criterion with no measurement is not_evaluated, never pass."
+  ],
+  "forbidden": [
+    "Treating a comparison against zero successful authored verbatim runs as an A/B result.",
+    "Flipping the default for ordinary generation on this decision.",
+    "Flipping the verbatim default before A6 is exercised on a real Composer deck.",
+    "Widening COMPOSER_RESTYLE_ENABLED beyond source_content_restyle without a further decision.",
+    "Recording a gate criterion as passing without the measurement that scores it."
+  ],
+  "rationale": [
+    "Zero of 43 authored verbatim restyle operations succeeded since 2026-08-28, so a matched A/B on that route would score the Composer against a path that produces no artifact; a comparison against zero is not a gate.",
+    "Every other criterion is already measured or nearly so: 289/289 and 965/965 source blocks in readback, zero blocking defects at rungs 0 to 4, 48 s and 223 s wall time with zero provider calls, one successful live worker-lane run. Export parity is the single leg where the Composer could be silently worse than the authored path, because authored-hybrid reads attributes the Composer emits by construction and no run has confirmed the reader agrees.",
+    "The user decided on 2026-09-04 to proceed on this split gate after the proposal in section 7a of the design document."
+  ],
+  "evidence": [
+    "docs/generation-quality-root-cause-and-composer-architecture-20260904.md sections 6, 6a, 7a",
+    "servers/fastapi/scripts/composer_offline_eval.py and artifacts/composer-offline-eval/",
+    "Live worker-lane run: operation 35bb622d, job bb9b2687, presentation 7fc147dd, receipt composer-receipt/v1"
+  ],
+  "supersedes": {
+    "key": "authored.generation.dual-engine-comparison",
+    "revision": 1,
+    "narrowedClause": "'Changing the default engine before a separate decision' and 'Decide default routing or promotion only after matched A/B comparison evidence' stay in force for ordinary generation; route source_content_restyle is carved out and promotes on the absolute A1-A7 gate named here, because the authored engine produced no verbatim artifact to compare against."
+  },
+  "recordedAt": "2026-09-04T12:00:00.0000000+00:00"
+}

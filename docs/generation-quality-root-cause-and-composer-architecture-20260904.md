@@ -386,8 +386,8 @@ available for the matched A/B the ledger requires
 
 | Phase | Work | Acceptance |
 |---|---|---|
-| 0. Verbatim Composer (2 weeks) | route `source_content_restyle` to the Composer behind `COMPOSER_RESTYLE_ENABLED`; manifest enrichment; furniture and hierarchy classifier; source bindings by construction; fit ladder rungs 1 to 3; rung 4 per decision 7.1 | the stored 35-page and 43-page manifests render 100% of source blocks with zero blocking DOM defects, offline, under 5 minutes, zero provider calls; readback gates pass as assertions |
-| 1. Archetype library (3 weeks, parallel with 0) | port `utils/authored_infographic/` archetypes into Composer components with density variants; template tokens from authored styles; furniture bands | blind rating of the 43-page deck against the 09-02 server-owned output and against the best authored output on the same source |
+| 0. Verbatim Composer (2 weeks) | route `source_content_restyle` to the Composer behind `COMPOSER_RESTYLE_ENABLED`; manifest enrichment; furniture and hierarchy classifier; source bindings by construction; fit ladder rungs 1 to 3; rung 4 per decision 7.1 | the A1-A7 gate of 7a, scored by `scripts/composer_acceptance_gate.py`. A6 (hybrid PPTX export as native shapes) is the blocking criterion; the flag stays default-off until all seven pass |
+| 1. Archetype library (3 weeks, parallel with 0) | port `utils/authored_infographic/` archetypes into Composer components with density variants; template tokens from authored styles; furniture bands | blind rating of the 43-page deck against the three tiers of 7b: at or above the floor on every slide, at or above parity on legibility and consistency, at least 80% of the target deck's median craft score. There is no authored comparator for verbatim; that clause is struck, not approximated |
 | 2. Ordinary authored on Deck IR (3 weeks) | admit source bindings at runtime; add `bullets` and text runs; lift the 10-slide and 12-component caps or batch across them; fit ladder rung 4 as typed abridgement; fix renderer enum gaps | matched A/B on 20 prompts × 20 slides: success rate, wall time, provider cost, blind quality; Composer must win on the first three and tie on the fourth |
 | 3. Retire (1 week) | flip defaults; delete repair machinery listed in 4.5; keep authored HTML for legacy decks read-only | file-size ratchet green; test count drops; no `authored_*_repair` module imported on the product path |
 
@@ -449,10 +449,270 @@ shrinks, so light pages sit at the floor with empty canvas below);
    for pages that fit nothing else". The 15 px floor of
    `authored.quality-composition-first` is relaxed for restyle at rungs 4 and
    5 only, never below the source's own size × 0.9.
-2. Engine switch. Confirm that the A/B in phase 2 is the promotion gate, and
-   that phase 0 may ship for verbatim restyle before it, since the authored
-   path has no successful verbatim run to compare against.
-3. Design bar. Name the reference decks the blind rating is scored against.
+2. Engine switch. **Decided 2026-09-04** (7a), ledger
+   `authored.generation.composer-verbatim-promotion.1`: the gate is split in
+   two. The phase 2 matched A/B stays the promotion gate for ordinary
+   generation. Verbatim restyle promotes on an absolute A1-A7 gate instead,
+   because the authored path has no successful verbatim run to compare
+   against; a comparison against zero is not a gate.
+3. Design bar. **Decided 2026-09-04** (7b), ledger `composer.design-bar.1`:
+   three named tiers - the 09-02 source-native output as the floor, the
+   source deck itself as parity, and the Hyundai SI reference deck as the
+   target.
+
+## 7a. Engine switch gate (decision 2, accepted 2026-09-04)
+
+The existing ledger entry `authored.generation.dual-engine-comparison`
+forbids changing the default engine before a separate decision. This is that
+decision, and it is deliberately narrow: it moves the default for one route,
+not for the product.
+
+**Route A - `source_content_restyle` (verbatim). Absolute gate, no A/B.**
+There is no baseline to compare against: 0 of 43 authored verbatim restyle
+operations succeeded since 2026-08-28, so a matched A/B would score the
+Composer against a route that never produces an artifact. The gate is
+therefore absolute, and every criterion is measured, not asserted:
+
+| # | Criterion | Threshold | Status 2026-09-04 |
+|---|---|---|---|
+| A1 | Operations reaching `published` | >= 95% over 20 consecutive live runs (>= 5 distinct source decks, >= 3 previously unseen) | 1 of 1 live run; offline 2 of 2 decks |
+| A2 | Source blocks present in readback | 100%, every run | 289/289 and 965/965 |
+| A3 | Blocking DOM defects at rungs 0-4 | 0 | 0 |
+| A4 | Rung 5 slides | residual overlap permitted only where the source page itself overlaps at that scale; each such slide named in the receipt and eyeballed once | **FAIL** (measured 2026-09-04, twice): 5 offending slides, 3 after the `render_geometry.py` fix. The remaining cause is upstream of geometry, see 7c |
+| A5 | Wall time, provider calls | <= 5 min for <= 50 pages, 0 provider calls | 48 s / 223 s, 0 calls |
+| A6 | Hybrid PPTX export | round-trips and opens editable in PowerPoint, native shapes not a raster page | **FAIL** (measured 2026-09-04): unreachable on the product path, and 0 of 642 text elements native when forced, see 7d |
+| A7 | Rollback | `COMPOSER_RESTYLE_ENABLED=false` restores the authored path with no data migration; kept available 14 days after the flip | **PASS** (measured 2026-09-04): routing flips at `presentation_generate.py:1526` alone, published Composer decks still export fidelity PPTX and PDF through the product lane, zero Composer tables and zero Composer alembic revisions |
+
+A6 is the gate that matters. Everything else is already measured or nearly
+so; export parity is the one leg where the Composer could be silently worse
+than the authored path, because authored-hybrid reads attributes the
+Composer emits by construction and no run has confirmed the reader agrees.
+
+Sequencing: ship phase 0 flag-on for verbatim restyle only once A1-A7 pass.
+Until then the flag stays default-off and is enabled per environment.
+Ordinary authored generation is untouched by this decision; the flag must
+not widen its own scope.
+
+**Route B - ordinary authored generation. The phase 2 matched A/B stands.**
+20 prompts x 20 slides, both engines on identical input, reference, slide
+count, language and quality settings, receipts kept separate by engine as
+the ledger requires. Composer must win on success rate, wall time and
+provider cost, and tie or better on blind quality (7b). No default change on
+this route before that evidence exists.
+
+**Ledger effect.** `authored.generation.dual-engine-comparison` is narrowed,
+not superseded: "Changing the default engine before a separate decision"
+stays forbidden for ordinary generation; verbatim restyle is carved out with
+the A1-A7 gate named in place of the comparison.
+
+## 7b. Design bar (decision 3, accepted 2026-09-04)
+
+Blind rating needs named comparators, not an adjective. Three tiers, all
+already on disk:
+
+| Tier | Deck | Role |
+|---|---|---|
+| Floor - must beat on every rated slide | `output/candidate-54892244-dual-lane/preserve-43.pdf` (09-02 source-native, 43 pages, 153 s, 0 provider calls); secondary `output/source-native-43-rc-20260902/source-native-43-fidelity.pdf` | the server-owned deck this document calls a text dump. Beating it on average is not enough; a single slide rated below it is a finding |
+| Parity - must not regress against | the source deck itself, rendered to PDF: `deck-43` (`sourceDigest sha256:32b0988...`, PPTX under `app_data/workspace_assets/d74ac154-.../32b0988...pptx`) and `deck-35` | the customer already read this page at this size. A restyle that is harder to read than the original is a regression by definition, whatever the template gains |
+| Target - the design bar proper | `output/hyundai-reference-90plus-20260901/DevAX-SI-10slides-hyundai-reference.pptx`, montage `reference-first10-montage.png` | human-grade Korean SI deck already used as this repo's fidelity reference. Phase 1's archetype library is aimed at it, and it is the only tier that can be lost without failing the phase |
+
+There is no authored comparator for verbatim restyle and there will not be
+one: the authored path produced no verbatim deck to rate. Any phase 1
+acceptance text asking for "the best authored output on the same source"
+should be struck rather than approximated. For route B (phase 2) the
+authored comparator is
+`authored-bounded-release-v3-final-20260823/product-attempt-21-head-4b89560-rev3-final/hybrid.pptx`,
+pinned so the A/B does not drift onto a newer authored build mid-comparison.
+
+**Protocol.** Slide-level, decks anonymised to A/B/C and page order kept, at
+least 3 raters, 1-5 on five axes: legibility, information hierarchy, layout
+craft, deck-level consistency, and whether the slide reads as designed
+rather than filled. Score = median. The pixel-feature scorer at
+`output/hyundai-reference-90plus-20260901/evaluate_visual_system.py`
+(style conformance against `reference-first10`) is a pre-filter to catch
+palette and density drift between rating rounds, never the gate itself.
+
+**Phase 1 acceptance, restated.** Composer >= floor on every slide, >=
+parity on legibility and consistency, >= 80% of the target deck's median
+craft score.
+
+## 7c. A4 measurement, 2026-09-04: the rung 5 overlap is ours
+
+Evidence `artifacts/composer-rung5-characterization-20260904/`, contact sheet
+`rung5-source-vs-composer-deck43.png`.
+
+deck-43 re-run: 43/43 fitted, rungs 0:2 1:10 2:12 3:13 5:6, 102 renders (down
+from 150 after the 07:00 `_fit_growable_box` commit), 965/965 blocks,
+`zeroBlockingIssues` false. Six slides reach rung 5; slide 42 is clean; the
+other five (12, 13, 14, 15, 32 = source pages 13, 14, 15, 16, 33) each show the
+kicker line above the title colliding with the title. The source pages,
+rendered for comparison, do not overlap. So the count A4 permits is zero, and
+the criterion fails.
+
+Two defects, both in `services/composer/render_geometry.py`:
+
+1. **The font floor invalidates per-box shrink-to-fit.** `_fit_growable_box`
+   computes `scale = available / natural` and pins the box to `available` on
+   the assumption the text shrinks to that scale, but `render_css.py`'s
+   `MIN_FONT_PX` (`SUPPORTING_FLOOR_PX * 0.9 = 10.8 px`) clamps the font from
+   below, so the text renders larger than the box was sized for and, with
+   `overflow: visible`, spills onto the title. Measured on slide 12: kicker box
+   `height 25.92 px`, rendered font exactly `10.80 px`, real two-line height
+   about 35 px. Affects 12, 14, 15, 32.
+2. **`process` components are excluded from correction.** `_GROWABLE_KINDS`
+   omits `process`, so such a component keeps its source box at scale 1.0.
+   Affects 13.
+
+deck-35 is unaffected: 35/35, rungs 0:30 1:5, no rung 5 slide, acceptance
+passed. Note the histogram is 0:30 1:5 in two independent runs today, not the
+0:31 1:4 recorded in 6a; the 6a figures predate the 07:00 commit.
+
+A consequence for the harness: a DOM issue categorised `overlap` does not by
+itself distinguish a faithful dense source page from a renderer bug, so
+`scripts/composer_acceptance_gate.py` scores any rung 5 slide carrying an
+issue as fail and names it for review. A4 therefore cannot be passed by the
+harness alone; the eyeball step in its wording is structural.
+
+**Both defects fixed the same day** in `render_geometry.py` (496 lines, tests
+in `tests/unit/test_composer_source_geometry_fit.py`, evidence
+`artifacts/composer-a4-fix-20260904/`): height prediction now follows the font
+the renderer will actually use, `_fitting_scale` bisects on a real evaluation
+instead of a linear `available / natural` guess and reports the shortfall it
+cannot absorb, `process` gets a natural height mirroring `render_process`
+(sharing `process_per_row` for row splitting), and a box may now grow down to
+its next neighbour or up into free canvas before any text shrinks — the growth
+limit is the canvas, per 4.3, not the page.
+
+deck-43 after the fix: 43/43 fitted, **rung histogram unchanged**
+(0:2 1:10 2:12 3:13 5:6 — no slide fell to a worse rung), 965/965 blocks,
+0 provider calls, 98 renders (from 102), 484 s (from 528 s), and blocking
+slides down from five to three. deck-35 unchanged and still passing.
+
+**A4 still fails**, and the remaining cause is no longer geometry. Slide 15's
+residual is legitimate — the source page itself puts a number over a filled
+card (`residual-slide15-source-number-on-card.png`) — but slides 16 and 33 are
+ours, and they are broken upstream of layout:
+
+- Slide 33: one source subtitle paragraph is split into five paragraphs, one
+  per run, so a one-line subtitle renders as five lines and collides with
+  "CASE 01" (`residual-slide33-source-subtitle.png` versus
+  `-composer-subtitle.png`).
+- Slide 16: a one-line multi-run strip is promoted to the `process` archetype
+  and rendered as an 11-card, two-row grid inside a 43 px band
+  (`residual-slide16-*.png`). No box correction can fit that: card chrome
+  alone exceeds the band at the font floor.
+
+The fix therefore belongs in unitisation and classification, not in the fit
+ladder — either stop promoting a low wide strip to `process`, or let
+`render_process` lay a wide short source rect out as one chrome-less row, or
+keep runs inside their source paragraph. Until one of those lands, "zero
+overlap we introduced" is not reachable.
+
+**Unitisation fixed the same day.** The splitter is not the OOXML run
+structure: `services/source_content/source_runs.py` tokenises a block's plain
+text at tabs, runs of two or more spaces, ` → `, ` | `, and item glyphs. Three
+context-blind defects, all reproduced before the fix:
+
+1. An arrow chain ran on past a sentence end, so a whole sentence became one
+   step and its tail (`1회.`) an orphan.
+2. A separator inside `(...)` split the pair, leaving unbalanced brackets.
+3. ` | ` with two spaces lost to the multi-space alternative — `re` picks the
+   leftmost alternative at a position — so `|` survived as a content run and
+   `order_free_before` was never set. Source block `source-slide:16:text:45`
+   became 11 atoms with `|` as three of them.
+
+Fixed in `source_runs.py` (349 -> 491 lines, new tests in
+`tests/unit/test_source_content_run_boundaries.py`): the `order_free`
+alternative moved ahead of the gap rule, split candidates are now accepted
+only at bracket and quote depth zero (only *closed* pairs protect, so an
+unmatched opener cannot swallow a line), and an arrow chain stops at a piece
+that closes a sentence and keeps writing. Decimals, enumerators, Korean dates,
+ellipses and a chain's own trailing period are deliberately untouched. `|` is
+**not** folded into a marker and not added to `_MARKER_ONLY`: it stays in
+`projection.text` and is a required literal in any span crossing it, which is
+stricter than the marker route and keeps two existing verbatim guards intact.
+`classify_groups.flow_step_groups` then groups runs at `order_free`
+boundaries, wired in at `classify.py:_block_component`.
+
+Measured after both fixes (`artifacts/composer-tokenizer-fix-20260904/`,
+same neutral palette as the baseline so the comparison holds):
+
+| | deck-43 before | deck-43 after | deck-35 before | deck-35 after |
+|---|---|---|---|---|
+| slides fitted | 43/43 | 43/43 | 35/35 | 35/35 |
+| rungs | 0:2 1:10 2:12 3:13 5:6 | 0:2 1:11 2:13 3:11 5:6 | 0:30 1:5 | 0:30 1:5 |
+| blocking slides | 3 (14, 15, 32) | **2 (14, 32)** | 0 | 0 |
+| issues on slide 32 | 9 | **5** | - | - |
+| wall time | 484 s | **349 s** | 99 s | 124 s |
+| provider calls | 0 | 0 | 0 | 0 |
+
+Slide 15 — the 11-card grid — is clean. Slide 32 lost its `text:16` cluster.
+Slide 14 is unchanged at 21 issues: it carries both a legitimate source
+overlap (`process:8`, a number set over a filled card in the source itself)
+and a `text:43`/`text:44` pair that is ours. A4 therefore still fails, on two
+slides rather than five, and A5 still fails at 349 s against the 300 s
+threshold — but both moved in the right direction for the same reason, which
+supports the reading that inflated natural heights were driving rung
+selection.
+
+
+
+## 7d. A6 measurement, 2026-09-04: hybrid export is unreachable, and empty when forced
+
+Evidence `artifacts/composer-export-parity-20260904/` (`evidence.json`,
+`a6-hybrid-6a48c368.pptx`, `calib-authored-hybrid-20260819.json`,
+`text-rejection-slide2*.json`, `ownership-diagnosis.json`).
+
+**The product path never reaches the hybrid renderer at all**, and this is not
+a Composer problem. `servers/nextjs/lib/authored-hybrid/export.ts:819`
+`runAuthoredHybridPresentationExport` has **no caller anywhere in the product
+code** — only its own definition. Commit `3a9690152` (2026-08-30, "feat(public-service):
+add durable generation and export path") turned
+`app/api/export-presentation/route.ts` into an admission proxy onto workspace
+commands without restoring a `semantic-hybrid` branch in the handler. The last
+successful workspace hybrid export in the database is **2026-08-19** (11
+successes, none since). Every engine has been exporting raster PPTX since.
+
+Three gates block a hybrid command today, measured:
+
+1. `services/workspace_quality_export_operation_handlers.py:766-770` rejects
+   `pptx_mode=hybrid` with `public_isolated_hybrid_not_supported`. **The user
+   retired this constraint on 2026-09-04**; see ledger
+   `public-export.hybrid-in-isolated-lane.1` — Chrome and the OOXML assembler
+   may run in the isolated export worker.
+2. `_resolved_authored_quality_digest` (`:219-236`) requires
+   `theme.authoredQualityGate.qualityReceiptV3`, which Composer publication
+   does not write. Deck IR's equivalent is `product_adapter.py:1093`.
+3. `models/authored_vnext/semantic/contracts.py:636` caps
+   `WorkbenchCapabilityProjectionV1.elements` at 1024; a Composer deck has
+   1306, so the capability-projection endpoint 500s and the editor disables
+   the hybrid button.
+
+**Forced through the renderer, the output carries no native text.** Deck
+`6a48c368` (same source, rungs 0:31 1:4) produced a 25 MB PPTX with 35 slides,
+178 native shapes, and **0 of 642 text elements native** — 1128 of 1306
+elements fell back to raster (native ratio 0.136), `<a:t>` runs 0, so text
+correctness cannot even be checked. Fonts embedded correctly but
+`fontEmbeddingStatus.nativeTextUsage = "raster-only-unused"`. Fallback reasons:
+`native-preparation-or-layer-safety-rejected` 675, `unsupported-shape` 427.
+The 2026-08-19 authored-hybrid calibration deck has 410 native text shapes and
+482 runs, so the reader works; the Composer's elements are what it drops.
+
+Localisation: on slide 2, extraction, native classification, preparation and
+layer-safety all pass (22 observed, 14 native, 14 prepared, 14 layer-safe).
+The loss happens in `prepareSlideLayer`'s backplate promotion round trip
+(`renderAuthoredBackplate` → `appliedPromotedElementIds` → second
+`selectLayerSafeNativeElements`), which is why the count surfaces as
+`native-preparation-or-layer-safety-rejected`. The likely cause is that the
+Composer declares every structural wrapper as a `shape` occupying the same
+rectangle as its text.
+
+Separately, deck `7fc147dd` cannot export hybrid at all:
+`authored_semantic_ownership_mismatch` because its sealed semantic graph
+declares every element's `parentId` null while Chromium observes real nesting
+(slide 1: 14 of 16 mismatched). Parent projection is being added to
+`publish_semantic.py` in another session; decks published before it are
+structurally unexportable and must be republished.
 
 ## 8. Risks
 
