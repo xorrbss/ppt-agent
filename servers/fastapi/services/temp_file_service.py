@@ -1,5 +1,6 @@
 import os
 from contextlib import suppress
+import logging
 import uuid
 from typing import Optional, Union
 
@@ -7,6 +8,9 @@ from fastapi import HTTPException
 
 from utils.owner_context import get_current_owner_id
 from utils.get_env import get_temp_directory_env
+
+
+logger = logging.getLogger(__name__)
 
 
 class TempFileService:
@@ -159,24 +163,37 @@ class TempFileService:
         os.remove(file_path)
 
     @staticmethod
-    def _delete_resolved_dir_files(dir_path: str):
+    def _delete_resolved_dir_files(dir_path: str, *, best_effort: bool = False):
         # Startup cleanup runs in every process that imports this module, so
         # two of them booting together walk the same tree and race: one removes
         # an entry the other has already listed. Losing that race is the normal
         # outcome -- the entry is gone, which is what the caller wanted -- and
         # must not raise, because this runs at import and would otherwise stop
         # a worker from starting at all.
+        def remove(path: str, operation) -> None:
+            with suppress(FileNotFoundError):
+                try:
+                    operation(path)
+                except OSError as error:
+                    # A held entry is not a lost race: it still exists. Only the
+                    # startup sweep may walk past one, and it says so in the log.
+                    if not best_effort:
+                        raise
+                    logger.warning(
+                        "temp_startup_cleanup_skipped path=%s error=%s",
+                        path,
+                        error,
+                    )
+
         for root, dirs, files in os.walk(dir_path, topdown=False):
             for name in files:
-                with suppress(FileNotFoundError):
-                    os.remove(os.path.join(root, name))
+                remove(os.path.join(root, name), os.remove)
             for name in dirs:
                 child_dir = os.path.join(root, name)
-                with suppress(FileNotFoundError):
-                    if os.path.islink(child_dir):
-                        os.unlink(child_dir)
-                    else:
-                        os.rmdir(child_dir)
+                if os.path.islink(child_dir):
+                    remove(child_dir, os.unlink)
+                else:
+                    remove(child_dir, os.rmdir)
 
     def _delete_dir_files(self, dir_path: str):
         dir_path = self.resolve_temp_path(dir_path, must_exist=True)
@@ -200,7 +217,11 @@ class TempFileService:
         # owner's subdirectory.
         base_dir = self._base_dir_realpath()
         os.makedirs(base_dir, exist_ok=True)
-        self._delete_resolved_dir_files(base_dir)
+        # A previous worker or antivirus can transiently hold one Windows temp
+        # entry open. Startup cleanup is hygiene, not an availability gate: keep
+        # strict cleanup semantics for explicit calls, but skip locked stale
+        # entries here so every generation controller can still start.
+        self._delete_resolved_dir_files(base_dir, best_effort=True)
 
 
 TEMP_FILE_SERVICE = TempFileService()

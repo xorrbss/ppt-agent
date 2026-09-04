@@ -149,3 +149,12 @@ def test_supported_runtime_admits_create_and_generation(monkeypatch):
 
     assert presentation_crud._chat_first_create_enabled() is True
     assert presentation_generate._chat_first_generation_enabled() is True
+
+
+def test_fixed_outline_freezes_slide_count_before_runtime_admission():
+    request = GeneratePresentationRequest(
+        content="fixed outline",
+        slides_markdown=["# First", "# Second", "# Third"],
+    )
+
+    assert request.n_slides == 3
