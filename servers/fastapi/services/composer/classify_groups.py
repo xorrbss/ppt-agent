@@ -21,6 +21,7 @@ from services.composer.classify_common import (
     mapping_or_empty,
     overlap_ratio,
 )
+from services.composer.plan import Paragraph
 
 #: Blocks whose x-ranges overlap this share of the narrower one share a column.
 COLUMN_OVERLAP = 0.40
@@ -273,6 +274,40 @@ def _attach_descriptions(
     return groups, leftovers
 
 
+def flow_step_groups(
+    block: TextBlock, steps: Sequence[Paragraph]
+) -> tuple[list[list[Paragraph]], list[Paragraph | None]]:
+    """Group one block's per-run flow steps at ``order_free`` (``|``) boundaries.
+
+    ``steps`` must be one :class:`Paragraph` per projected run, in run order --
+    exactly what ``classify_bindings.bind_paragraphs`` returns for a block
+    ``is_arrow_flow`` accepted. A run marked ``order_free_before`` (the source
+    put `` | `` before it) opens a new, independent group; every run without
+    that marker stays chained onto the group it follows, so a source
+    ``조건 → 결과`` pair ends up as one group carrying both sides instead of
+    two. Chaining keeps each run's own Paragraph -- and so its own binding --
+    intact; only the grouping around them changes.
+
+    With no ``order_free`` boundary anywhere in the block this returns exactly
+    ``([[step] for step in steps], [None] * len(steps))``: one group per run,
+    byte-identical to the grouping ``classify.py`` builds inline today.
+
+    Every run index is covered by exactly one Paragraph, in its original
+    order, in both branches: this only repartitions the existing list, it
+    never rebuilds, drops, duplicates or reorders a Paragraph.
+    """
+
+    runs = block.projection.runs
+    if len(runs) != len(steps):
+        raise ValueError("steps must be exactly one Paragraph per projected run")
+    boundaries = [index for index in range(1, len(runs)) if runs[index].order_free_before]
+    if not boundaries:
+        return [[step] for step in steps], [None] * len(steps)
+    cuts = [0, *boundaries, len(steps)]
+    groups = [list(steps[start:end]) for start, end in zip(cuts, cuts[1:], strict=False)]
+    return groups, [None] * len(groups)
+
+
 def detect_captions(
     blocks: Sequence[TextBlock], images: Sequence[Geometry], page: PageBox | None
 ) -> dict[str, Geometry]:
@@ -301,6 +336,7 @@ __all__ = [
     "detect_captions",
     "detect_comparison",
     "detect_process",
+    "flow_step_groups",
     "group_header",
     "is_arrow_flow",
     "is_arrow_shape",

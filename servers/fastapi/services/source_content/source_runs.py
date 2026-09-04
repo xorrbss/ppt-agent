@@ -26,13 +26,31 @@ _ENUMERATORS = "①-⑳⑴-⒇⒈-⒛❶-❿㉠-㉭㈀-㈜"
 _MARKER = re.compile(
     rf"(?:[{re.escape(_MARKER_GLYPHS)}]\s+|[{_ENUMERATORS}]\s*|\d{{1,2}}[.)]\s+)"
 )
+# The divider alternative is listed first on purpose: its leading
+# whitespace also matches the gap alternative's two-or-more spaces, and
+# alternation resolves left to right, so gap-first left "승인 가능  |  미통과"
+# with a bare "|" as a run of its own -- a divider the template draws, so
+# no element can own it. Divider-first makes every spacing of " | " behave
+# like the single-space form the projection already got right.
 _SEPARATOR = re.compile(
-    r"\t+"
+    r"(?P<order_free>\s+\|\s+)"
+    r"|\t+"
     r"|[ \u00a0\u3000]{2,}"
-    r"|\s+[→⇒➜➔⟶↦]\s+"
-    r"|(?P<order_free>\s+\|\s+)"
+    r"|(?P<arrow>\s+[→⇒➜➔⟶↦]\s+)"
     rf"|\s+(?=[{re.escape(_ITEM_GLYPHS)}]\s)"
 )
+# A separator inside a bracket or quote pair is content, not structure:
+# "(사례: 재작업 5회 → 1회)" is one parenthetical, and splitting it tears
+# the pair across two runs.
+_BRACKET_PAIRS = {
+    "(": ")", "[": "]", "{": "}", "（": "）", "［": "］", "｛": "｝",
+    "〔": "〕", "【": "】", "「": "」", "『": "』", "《": "》",
+    "〈": "〉", "“": "”", "‘": "’",
+}
+_BRACKET_CLOSERS = frozenset(_BRACKET_PAIRS.values())
+_SYMMETRIC_QUOTES = "\"'"
+_SENTENCE_ENDERS = ".。?!？！"
+_CLOSING_MARKS = "\"'’”)]}」』》〉"
 _BLANK_FIELD = re.compile(r"(_{3,})")
 # A piece made only of bullet/checkbox glyphs and enumerators carries no source
 # characters of its own. Digits are deliberately excluded: "16" is a page
@@ -259,17 +277,141 @@ def _drop_marker_only_lines(lines: list[str]) -> list[str]:
 
 
 def _segments(line: str) -> list[tuple[str, bool]]:
-    """Return each piece with whether the separator before it frees its order."""
+    """Return each piece with whether the separator before it frees its order.
+
+    A candidate separator only becomes a boundary where splitting there is
+    structure: outside every bracket or quote pair the line closes, and -- for
+    an arrow -- while the flow it chains has not already run into prose.
+    """
 
     pieces: list[tuple[str, bool]] = []
+    protected = _protected_spans(line)
     cursor = 0
     order_free = False
+    chain_ended = False
     for match in _SEPARATOR.finditer(line):
+        if _is_protected(protected, match.start(), match.end()):
+            continue
+        if match.group("arrow") is not None:
+            if chain_ended or _holds_a_sentence_break(line[cursor : match.start()]):
+                chain_ended = True
+                continue
         pieces.extend(_split_blank_fields(line[cursor : match.start()], order_free))
         order_free = match.group("order_free") is not None
         cursor = match.end()
     pieces.extend(_split_blank_fields(line[cursor:], order_free))
     return _drop_marker_only_pieces(pieces)
+
+
+def _protected_spans(line: str) -> tuple[tuple[int, int], ...]:
+    """Return the span of every bracket or quote pair the line closes.
+
+    Only a pair that closes protects anything. An opener left dangling at
+    end of line -- a smiley, a stray quote, a truncated source cell --
+    protects nothing, so an unbalanced line degrades to the plain separator
+    rules instead of swallowing its whole remainder into one run.
+    """
+
+    spans: list[tuple[int, int]] = []
+    stack: list[tuple[str, int]] = []
+    quotes: dict[str, int] = {}
+    for index, char in enumerate(line):
+        if char in _BRACKET_CLOSERS:
+            for depth in range(len(stack) - 1, -1, -1):
+                if _BRACKET_PAIRS[stack[depth][0]] == char:
+                    spans.append((stack[depth][1], index))
+                    # Openers nested above this one never close; drop them.
+                    del stack[depth:]
+                    break
+        elif char in _BRACKET_PAIRS:
+            stack.append((char, index))
+        elif char in _SYMMETRIC_QUOTES:
+            opened = quotes.get(char)
+            if opened is not None and _closes_quote(line, index):
+                spans.append((opened, index))
+                del quotes[char]
+            elif opened is None and _opens_quote(line, index):
+                quotes[char] = index
+    return tuple(spans)
+
+
+def _is_protected(
+    spans: tuple[tuple[int, int], ...], start: int, end: int
+) -> bool:
+    return any(begin < start and end <= close for begin, close in spans)
+
+
+def _opens_quote(line: str, index: int) -> bool:
+    """A straight quote opens only where a word can begin after it."""
+
+    before = line[index - 1] if index else " "
+    after = line[index + 1] if index + 1 < len(line) else ""
+    if not after or after.isspace():
+        return False
+    return before.isspace() or before in _BRACKET_PAIRS
+
+
+def _closes_quote(line: str, index: int) -> bool:
+    """A straight quote closes only where a word can have ended before it.
+
+    This stops the apostrophe in "don't" opening a region that never closes.
+    """
+
+    before = line[index - 1] if index else ""
+    after = line[index + 1] if index + 1 < len(line) else " "
+    if not before or before.isspace():
+        return False
+    return (
+        after.isspace()
+        or after in _BRACKET_CLOSERS
+        or after in _SENTENCE_ENDERS
+        or after in ",;:"
+    )
+
+
+def _terminates_sentence(text: str, index: int) -> bool:
+    """Whether ``text[index]`` ends a sentence rather than punctuating a token.
+
+    A period after a digit is a decimal, an enumerator or a Korean date part
+    ("3.5", "1.", "2026. 09. 04."), and a period beside another period is an
+    ellipsis.  Neither ends a sentence.
+    """
+
+    char = text[index]
+    if char not in _SENTENCE_ENDERS:
+        return False
+    if char != ".":
+        return True
+    previous = text[index - 1] if index else ""
+    following = text[index + 1] if index + 1 < len(text) else ""
+    return not (previous.isdigit() or previous == "." or following == ".")
+
+
+def _holds_a_sentence_break(piece: str) -> bool:
+    """Whether ``piece`` finishes a sentence and then keeps writing.
+
+    An arrow chain enumerates steps.  Once a piece has run past a full stop
+    into a second sentence it is prose, and the arrows still to come on the
+    line are that prose's own punctuation -- "재작업 5회 → 1회." is a phrase,
+    not two more steps.  A terminator that merely ends the piece breaks
+    nothing, so the closing period of a real chain's last step is left alone.
+    """
+
+    index = 0
+    while index < len(piece):
+        if not _terminates_sentence(piece, index):
+            index += 1
+            continue
+        after = index + 1
+        while after < len(piece) and (
+            piece[after] in _SENTENCE_ENDERS or piece[after] in _CLOSING_MARKS
+        ):
+            after += 1
+        # Glued to the next character it is a host name or an abbreviation.
+        if after < len(piece) and piece[after].isspace() and piece[after:].strip():
+            return True
+        index = after
+    return False
 
 
 def _split_blank_fields(chunk: str, order_free: bool) -> list[tuple[str, bool]]:

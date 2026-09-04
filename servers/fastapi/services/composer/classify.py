@@ -54,6 +54,7 @@ from services.composer.classify_groups import (
     detect_captions,
     detect_comparison,
     detect_process,
+    flow_step_groups,
     group_header,
     is_arrow_flow,
     list_kind,
@@ -232,12 +233,13 @@ def _block_component(block: TextBlock, page: PageBox | None) -> ComposerComponen
         return _text_component(block, kind, "body", page)
     if is_arrow_flow(block):
         steps = bind_paragraphs(block)
+        groups, group_headers = flow_step_groups(block, steps)
         return ComposerComponent(
             component_id=block.block_id,
             kind="process",
             semantic_role="body",
-            groups=[[step] for step in steps],
-            group_headers=[None] * len(steps),
+            groups=groups,
+            group_headers=group_headers,
             source_rect=normalized_rect(block.geometry, page),
             source_size_pt=block.dominant_size_pt,
         )
