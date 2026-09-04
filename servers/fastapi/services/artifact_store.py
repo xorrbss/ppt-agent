@@ -43,6 +43,7 @@ from models.sql.public_artifact import (
 from models.sql.public_admission import PublicOperationAdmission
 from models.sql.workspace import WorkspaceOperation
 from services.public_operation_correlation import log_public_operation_correlation
+from utils.path_helpers import get_writable_path
 
 
 class ArtifactStoreError(RuntimeError):
@@ -413,6 +414,32 @@ class ArtifactObjectStore(Protocol):
     ) -> int: ...
 
 
+_WINDOWS_EXTENDED_LENGTH_PREFIX = "\\\\?\\"
+_WINDOWS_EXTENDED_LENGTH_UNC_PREFIX = "\\\\?\\UNC\\"
+
+
+def _strip_extended_length_prefix(path: Path) -> Path:
+    """Normalize a resolved Windows path for containment comparison.
+
+    ``Path.resolve()`` returns a path carrying the ``\\\\?\\`` extended-length
+    prefix once the OS opts into it (e.g. a sufficiently deep/long path),
+    while a shorter sibling path under the very same root resolves without
+    it. The prefix changes only how the OS opens the path, never its
+    identity, so comparing containment on the un-prefixed form avoids a
+    false ``storage_key_escape`` for a path that genuinely lives under the
+    root. A path that genuinely escapes the root still fails the comparison
+    after stripping, because stripping does not change *which* filesystem
+    path either side names.
+    """
+
+    text = str(path)
+    if text.startswith(_WINDOWS_EXTENDED_LENGTH_UNC_PREFIX):
+        return Path("\\\\" + text[len(_WINDOWS_EXTENDED_LENGTH_UNC_PREFIX):])
+    if text.startswith(_WINDOWS_EXTENDED_LENGTH_PREFIX):
+        return Path(text[len(_WINDOWS_EXTENDED_LENGTH_PREFIX):])
+    return path
+
+
 class LocalDevelopmentArtifactObjectStore:
     """Filesystem adapter/cache for local development, never production authority."""
 
@@ -525,7 +552,9 @@ class LocalDevelopmentArtifactObjectStore:
     def _path_for_key(self, storage_key: str) -> Path:
         candidate = (self._root / Path(*storage_key.split("/"))).resolve()
         try:
-            candidate.relative_to(self._root)
+            _strip_extended_length_prefix(candidate).relative_to(
+                _strip_extended_length_prefix(self._root)
+            )
         except ValueError as exc:
             raise ArtifactBindingError("artifact.storage_key_escape") from exc
         return candidate
@@ -2007,12 +2036,19 @@ def configured_public_artifact_service() -> DurableArtifactService:
 
 
 def configured_worker_artifact_cache() -> WorkerArtifactTransportCache:
-    """Return the local transport cache; never infer it from request data."""
+    """Return the local transport cache; never infer it from request data.
+
+    This cache is disposable transport scratch, never durable storage, and it
+    must never resolve to the same directory as the artifact authority root:
+    ``WorkerArtifactTransportCache`` evicts entries by TTL and byte budget, and
+    a shared root would let that eviction delete an object the authority
+    still owns.
+    """
 
     root_value = (os.getenv("PUBLIC_WORKER_ARTIFACT_CACHE_ROOT") or "").strip()
+    backend = (os.getenv("PUBLIC_ARTIFACT_STORE_BACKEND") or "").strip().lower()
     if not root_value:
         # Compatibility is limited to the explicitly development-only backend.
-        backend = (os.getenv("PUBLIC_ARTIFACT_STORE_BACKEND") or "").strip().lower()
         environment = (os.getenv("ENVIRONMENT") or "production").strip().lower()
         if backend == "local-development" and environment in {
             "development",
@@ -2020,10 +2056,18 @@ def configured_worker_artifact_cache() -> WorkerArtifactTransportCache:
             "local",
             "test",
         }:
-            root_value = (os.getenv("PUBLIC_WORKER_OBJECT_STORE_ROOT") or "").strip()
+            # A sensible default that does not require every local/dev/test
+            # caller to configure a cache root of its own: a dedicated
+            # writable-cache location, deliberately never the authority root
+            # named by PUBLIC_WORKER_OBJECT_STORE_ROOT.
+            root_value = get_writable_path("public-worker-artifact-cache")
     root = Path(root_value)
     if not root_value or not root.is_absolute():
         raise RuntimeError("artifact.worker_cache_root_required")
+    if backend == "local-development":
+        authority_root_value = (os.getenv("PUBLIC_WORKER_OBJECT_STORE_ROOT") or "").strip()
+        if authority_root_value and Path(authority_root_value).resolve() == root.resolve():
+            raise RuntimeError("artifact.worker_cache_root_must_differ_from_authority")
     try:
         max_cache_bytes = int(
             os.getenv(

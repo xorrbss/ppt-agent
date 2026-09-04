@@ -9,7 +9,7 @@ import pathlib
 from pathlib import PurePosixPath
 import sys
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any
 import uuid
 
@@ -30,6 +30,7 @@ NETWORK_NONE_ATTESTATION = "nonroot-readonly-tmpfs-network-none"
 WINDOWS_LOCAL_DEVELOPMENT_ATTESTATION = "windows-job-object-local-development"
 MAX_JOB_BYTES = 2 * 1024 * 1024
 MAX_RESULT_BYTES = 16 * 1024 * 1024
+MAX_EXECUTION_EVIDENCE_BYTES = 256 * 1024
 _ENV_ALLOWLIST = frozenset(
     {
         "CHROME_PATH",
@@ -58,6 +59,11 @@ _ENV_ALLOWLIST = frozenset(
         "PUBLIC_WORKER_LOCAL_DEVELOPMENT",
         "PUBLIC_WORKER_OBJECT_STORE_ROOT",
         "PUBLIC_WORKER_OUTPUT_STORE_ROOT",
+        # The export role may assemble an editable hybrid deck. Both values name
+        # read-only local resources: the assembler argv and the licensed server
+        # font allowlist. Neither carries a session, a provider or a database.
+        "PUBLIC_EXPORT_HYBRID_COMMAND_JSON",
+        "PUBLIC_EXPORT_FONT_ALLOWLIST_DIR",
         "PPT_WORKER_NETWORK_MODE",
         "PPT_WORKER_ROOT_FILESYSTEM",
         "PPT_WORKER_SCRATCH",
@@ -123,6 +129,8 @@ class IsolatedWorkerResult:
     error_code: str | None
     output_artifact: Mapping[str, Any] | None
     resource_metrics: Mapping[str, Any] | None = None
+    #: Bounded, worker-authored summary of how the artifact was produced.
+    execution_evidence: Mapping[str, Any] = field(default_factory=dict)
 
 
 def worker_environment(
@@ -226,9 +234,25 @@ def _decode_result(payload: bytes, job: IsolatedWorkerJob) -> IsolatedWorkerResu
         "ok",
         "errorCode",
         "outputArtifact",
+        "executionEvidence",
     }
     if set(value) != expected_keys or value.get("schemaVersion") != ISOLATED_RESULT_SCHEMA:
         raise IsolatedWorkerProcessError("public worker result shape is invalid")
+    execution_evidence = value.get("executionEvidence")
+    if not isinstance(execution_evidence, Mapping):
+        raise IsolatedWorkerProcessError("public worker execution evidence is invalid")
+    if (
+        len(
+            json.dumps(
+                dict(execution_evidence),
+                ensure_ascii=True,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        )
+        > MAX_EXECUTION_EVIDENCE_BYTES
+    ):
+        raise IsolatedWorkerProcessError("public worker execution evidence is too large")
     if (
         value.get("role") != job.role
         or value.get("operationId") != str(job.operation_id)
@@ -279,6 +303,7 @@ def _decode_result(payload: bytes, job: IsolatedWorkerJob) -> IsolatedWorkerResu
         ok=ok,
         error_code=error_code if isinstance(error_code, str) else None,
         output_artifact=output_artifact if isinstance(output_artifact, Mapping) else None,
+        execution_evidence=dict(execution_evidence),
     )
 
 
@@ -345,6 +370,7 @@ def development_worker_command(role: WorkerRole) -> list[str]:
 
 
 __all__ = [
+    "MAX_EXECUTION_EVIDENCE_BYTES",
     "IsolatedWorkerProcessError",
     "IsolatedWorkerResult",
     "NETWORK_NONE_ATTESTATION",

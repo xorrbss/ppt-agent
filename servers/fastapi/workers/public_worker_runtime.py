@@ -9,9 +9,8 @@ import os
 import pathlib
 import sys
 import time
-import shutil
-import uuid
 from collections.abc import Awaitable, Callable, Mapping
+from dataclasses import dataclass, field
 
 from services.isolated_worker_contracts import (
     ISOLATED_RESULT_SCHEMA,
@@ -32,234 +31,55 @@ from services.public_worker_profiles import (
     validate_public_worker_environment,
 )
 from services.public_operation_correlation import log_public_operation_correlation
+from workers.public_worker_store import (
+    MAX_ARTIFACT_BYTES,
+    LocalContentAddressedStore,
+    PublicWorkerExecutionError,
+)
 
-
-MAX_ARTIFACT_BYTES = 512 * 1024 * 1024
+# An execution evidence summary rides back with the artifact so the durable
+# receipt can say which path produced the file. It is a bounded, sanitized
+# summary: never paths, never session material, never raw worker output.
+MAX_EXECUTION_EVIDENCE_BYTES = 256 * 1024
 _REPLAY_GUARD = CapabilityReplayGuard()
 
 
-class PublicWorkerExecutionError(RuntimeError):
-    def __init__(self, code: str) -> None:
-        self.code = code
-        super().__init__(code)
+@dataclass(frozen=True, slots=True)
+class WorkerOutput:
+    """One worker artifact plus the bounded evidence describing how it was made."""
 
-
-class LocalContentAddressedStore:
-    """Non-authoritative transport cache shared with one isolated worker."""
-
-    def __init__(
-        self,
-        input_root: pathlib.Path,
-        output_root: pathlib.Path | None = None,
-    ) -> None:
-        resolved_output = input_root if output_root is None else output_root
-        if not input_root.is_absolute() or not resolved_output.is_absolute():
-            raise PublicWorkerExecutionError("public_worker_store_root_not_absolute")
-        try:
-            self.max_cache_bytes = int(
-                os.getenv("PUBLIC_WORKER_ARTIFACT_CACHE_MAX_BYTES", "")
-            )
-            self.ttl_seconds = int(
-                os.getenv("PUBLIC_WORKER_ARTIFACT_CACHE_TTL_SECONDS", "")
-            )
-        except ValueError as error:
-            raise PublicWorkerExecutionError(
-                "public_worker_cache_limits_invalid"
-            ) from error
-        if self.max_cache_bytes <= 0 or self.ttl_seconds <= 0:
-            raise PublicWorkerExecutionError("public_worker_cache_limits_invalid")
-        self.input_root = input_root.resolve(strict=False)
-        self.output_root = resolved_output.resolve(strict=False)
-        self.output_root.mkdir(parents=True, exist_ok=True)
-
-    def _entries(self) -> list[tuple[pathlib.Path, float, int]]:
-        entries: list[tuple[pathlib.Path, float, int]] = []
-        for path in self.output_root.rglob("*"):
-            try:
-                if path.is_symlink() or not path.is_file() or path.name.startswith("."):
-                    continue
-                stat = path.stat()
-            except OSError:
-                continue
-            entries.append((path, stat.st_mtime, stat.st_size))
-        return entries
-
-    def _evict(self, *, protected: pathlib.Path | None = None) -> None:
-        now = time.time()
-        survivors: list[tuple[pathlib.Path, float, int]] = []
-        for path, modified, size in self._entries():
-            if path != protected and now - modified > self.ttl_seconds:
-                try:
-                    path.unlink(missing_ok=True)
-                except OSError:
-                    survivors.append((path, modified, size))
-            else:
-                survivors.append((path, modified, size))
-        total = sum(size for _, _, size in survivors)
-        for path, _, size in sorted(survivors, key=lambda item: item[1]):
-            if total <= self.max_cache_bytes:
-                break
-            if path == protected:
-                continue
-            try:
-                path.unlink(missing_ok=True)
-            except OSError:
-                continue
-            total -= size
-
-    def _path(self, storage_key: str, *, output: bool = False) -> pathlib.Path:
-        root = self.output_root if output else self.input_root
-        candidate = (root / storage_key).resolve(strict=False)
-        try:
-            candidate.relative_to(root)
-        except ValueError as error:
-            raise PublicWorkerExecutionError(
-                "public_worker_storage_key_escape"
-            ) from error
-        return candidate
-
-    def verified_path(self, reference: ArtifactRef) -> pathlib.Path:
-        path = self._path(reference.storage_key)
-        if not path.is_file() and self.output_root != self.input_root:
-            path = self._path(reference.storage_key, output=True)
-        is_output = self.output_root == self.input_root or path.is_relative_to(
-            self.output_root
-        )
-        try:
-            stat = path.stat()
-        except OSError as error:
-            raise PublicWorkerExecutionError("public_worker_artifact_unavailable") from error
-        if time.time() - stat.st_mtime > self.ttl_seconds:
-            if is_output:
-                try:
-                    path.unlink(missing_ok=True)
-                except OSError:
-                    pass
-            raise PublicWorkerExecutionError("public_worker_artifact_expired")
-        size = stat.st_size
-        if size != reference.size_bytes or size > MAX_ARTIFACT_BYTES:
-            raise PublicWorkerExecutionError("public_worker_artifact_size_mismatch")
-        digest = hashlib.sha256()
-        with path.open("rb") as stream:
-            while chunk := stream.read(1024 * 1024):
-                digest.update(chunk)
-        if digest.hexdigest() != reference.sha256:
-            raise PublicWorkerExecutionError("public_worker_artifact_digest_mismatch")
-        if is_output:
-            os.utime(path, None)
-        return path
-
-    def read(self, reference: ArtifactRef) -> bytes:
-        return self.verified_path(reference).read_bytes()
-
-    def put(
-        self,
-        payload: bytes,
-        *,
-        source: ArtifactRef,
-        operation_id: uuid.UUID,
-        kind: str,
-        media_type: str,
-    ) -> ArtifactRef:
-        try:
-            configured_limit = int(
-                os.getenv("PPT_WORKER_OUTPUT_LIMIT_BYTES", str(MAX_ARTIFACT_BYTES))
-            )
-        except ValueError as error:
-            raise PublicWorkerExecutionError("public_worker_output_limit_invalid") from error
-        output_limit = min(MAX_ARTIFACT_BYTES, configured_limit)
-        if configured_limit <= 0:
-            raise PublicWorkerExecutionError("public_worker_output_limit_invalid")
-        if not payload or len(payload) > output_limit:
-            raise PublicWorkerExecutionError("public_worker_output_size_invalid")
-        if len(payload) > self.max_cache_bytes:
-            raise PublicWorkerExecutionError("public_worker_cache_budget_exceeded")
-        temporary_source = self.output_root / f".wire-output-{uuid.uuid4().hex}.tmp"
-        try:
-            temporary_source.write_bytes(payload)
-            return self.put_path(
-                temporary_source,
-                source=source,
-                operation_id=operation_id,
-                kind=kind,
-                media_type=media_type,
-            )
-        finally:
-            temporary_source.unlink(missing_ok=True)
-
-    def put_path(
-        self,
-        source_path: pathlib.Path,
-        *,
-        source: ArtifactRef,
-        operation_id: uuid.UUID,
-        kind: str,
-        media_type: str,
-    ) -> ArtifactRef:
-        size_bytes = source_path.stat().st_size
-        if size_bytes <= 0 or size_bytes > MAX_ARTIFACT_BYTES:
-            raise PublicWorkerExecutionError("public_worker_output_size_invalid")
-        if size_bytes > self.max_cache_bytes:
-            raise PublicWorkerExecutionError("public_worker_cache_budget_exceeded")
-        digest_state = hashlib.sha256()
-        with source_path.open("rb") as stream:
-            while chunk := stream.read(1024 * 1024):
-                digest_state.update(chunk)
-        digest = digest_state.hexdigest()
-        tenant_scope = hashlib.sha256(source.tenant_id.encode("utf-8")).hexdigest()
-        storage_key = (
-            f"v1/tenant/{tenant_scope}/owner/{source.owner_id}/"
-            f"sha256/{digest[:2]}/{digest}"
-        )
-        path = self._path(storage_key, output=True)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
-        try:
-            if path.exists():
-                if path.stat().st_size != size_bytes:
-                    raise PublicWorkerExecutionError("public_worker_cas_conflict")
-                existing_digest = hashlib.sha256()
-                with path.open("rb") as existing:
-                    while chunk := existing.read(1024 * 1024):
-                        existing_digest.update(chunk)
-                if existing_digest.hexdigest() != digest:
-                    raise PublicWorkerExecutionError("public_worker_cas_conflict")
-            else:
-                with temporary.open("xb") as stream:
-                    with source_path.open("rb") as source_stream:
-                        shutil.copyfileobj(source_stream, stream, 1024 * 1024)
-                    stream.flush()
-                    os.fsync(stream.fileno())
-                os.replace(temporary, path)
-        finally:
-            temporary.unlink(missing_ok=True)
-        os.utime(path, None)
-        self._evict(protected=path)
-        reference = ArtifactRef(
-            artifact_id=uuid.uuid4(),
-            owner_id=source.owner_id,
-            tenant_id=source.tenant_id,
-            kind=kind,
-            sha256=digest,
-            size_bytes=size_bytes,
-            media_type=media_type,
-            storage_key=storage_key,
-            created_by_operation_id=operation_id,
-            retention_class="ephemeral",
-        )
-        log_public_operation_correlation(
-            operation_id=operation_id,
-            component="upload",
-            action="artifact_uploaded",
-            outcome="succeeded",
-        )
-        return reference
+    artifact: "ArtifactRef"
+    evidence: Mapping[str, object] = field(default_factory=dict)
 
 
 WorkerExecutor = Callable[
     [IsolatedWorkerJob, LocalContentAddressedStore],
-    Awaitable[ArtifactRef],
+    Awaitable["ArtifactRef | WorkerOutput"],
 ]
+
+
+def _normalized_output(value: "ArtifactRef | WorkerOutput") -> WorkerOutput:
+    if isinstance(value, WorkerOutput):
+        return value
+    return WorkerOutput(artifact=value)
+
+
+def _validated_execution_evidence(evidence: Mapping[str, object]) -> dict[str, object]:
+    """Keep the evidence a bounded JSON object the parent can trust to decode."""
+
+    if not evidence:
+        return {}
+    try:
+        encoded = json.dumps(
+            dict(evidence), ensure_ascii=True, sort_keys=True, separators=(",", ":")
+        )
+    except (TypeError, ValueError) as error:
+        raise PublicWorkerExecutionError(
+            "public_worker_execution_evidence_invalid"
+        ) from error
+    if len(encoded) > MAX_EXECUTION_EVIDENCE_BYTES:
+        raise PublicWorkerExecutionError("public_worker_execution_evidence_too_large")
+    return json.loads(encoded)
 
 
 def _read_signing_key() -> bytes:
@@ -318,7 +138,7 @@ async def _execute_before_job_deadline(
     job: IsolatedWorkerJob,
     executor: WorkerExecutor,
     store: LocalContentAddressedStore,
-) -> ArtifactRef:
+) -> "ArtifactRef | WorkerOutput":
     """Run one worker executor without allowing it to outlive its sealed job."""
 
     remaining_seconds = job.deadline_epoch_seconds - time.time()
@@ -416,14 +236,18 @@ async def run_worker(role: WorkerRole, executor: WorkerExecutor) -> int:
         output_root_value = output_root_value or legacy_root
         if not input_root_value or not output_root_value:
             raise PublicWorkerExecutionError("public_worker_store_root_required")
-        output = await _execute_before_job_deadline(
-            job=job,
-            executor=executor,
-            store=LocalContentAddressedStore(
-                pathlib.Path(input_root_value),
-                pathlib.Path(output_root_value),
-            ),
+        worker_output = _normalized_output(
+            await _execute_before_job_deadline(
+                job=job,
+                executor=executor,
+                store=LocalContentAddressedStore(
+                    pathlib.Path(input_root_value),
+                    pathlib.Path(output_root_value),
+                ),
+            )
         )
+        output = worker_output.artifact
+        execution_evidence = _validated_execution_evidence(worker_output.evidence)
         try:
             output_limit = int(os.getenv("PPT_WORKER_OUTPUT_LIMIT_BYTES", ""))
         except ValueError as error:
@@ -453,6 +277,7 @@ async def run_worker(role: WorkerRole, executor: WorkerExecutor) -> int:
                 "ok": True,
                 "errorCode": None,
                 "outputArtifact": output.to_wire(),
+                "executionEvidence": execution_evidence,
             }
         )
         return 0
@@ -478,6 +303,7 @@ async def run_worker(role: WorkerRole, executor: WorkerExecutor) -> int:
                     "ok": False,
                     "errorCode": code,
                     "outputArtifact": None,
+                    "executionEvidence": {},
                 }
             )
         return 1
@@ -489,7 +315,9 @@ def main(role: WorkerRole, executor: WorkerExecutor) -> int:
 
 __all__ = [
     "LocalContentAddressedStore",
+    "MAX_EXECUTION_EVIDENCE_BYTES",
     "PublicWorkerExecutionError",
+    "WorkerOutput",
     "main",
     "run_worker",
 ]

@@ -1797,15 +1797,16 @@ def test_legacy_fidelity_compatibility_and_nonretryable_export_error(
         "evidence": None,
         "reasonCode": "legacy_authoring_evidence_missing",
     }
-    with pytest.raises(
-        NonRetryableWorkspaceOperationError,
-        match="quality_receipt_v3_required",
-    ):
-        _resolved_authored_quality_digest(
-            {},
-            scene_digest=scene_digest,
-            pptx_mode="hybrid",
-        )
+    # An absent V3 receipt is a legacy deck, not a quality claim. Since
+    # `public-export.hybrid-in-isolated-lane` the same blocked compatibility
+    # binding also carries Hybrid, so the mode no longer decides it.
+    hybrid_digest, hybrid_compatibility = _resolved_authored_quality_digest(
+        {},
+        scene_digest=scene_digest,
+        pptx_mode="hybrid",
+    )
+    assert hybrid_compatibility == "legacy"
+    assert hybrid_digest == quality_digest
 
     sealed = {
         "schemaVersion": "quality-receipt/v3",
@@ -1843,6 +1844,39 @@ def test_legacy_fidelity_compatibility_and_nonretryable_export_error(
     )
     assert pending_quality == pending_digest.removeprefix("sha256:")
     assert pending_compatibility == "visual-review-pending"
+    # A present but blocked receipt is never bypassed, in either mode, and
+    # compatibility must not launder it into the legacy binding.
+    with pytest.raises(
+        NonRetryableWorkspaceOperationError,
+        match="quality_receipt_v3_blocked",
+    ):
+        _resolved_authored_quality_digest(
+            {
+                "authoredQualityGate": {
+                    "qualityReceiptV3": {**sealed, "receiptDigest": pending_digest}
+                }
+            },
+            scene_digest=scene_digest,
+            pptx_mode="hybrid",
+        )
+    with pytest.raises(
+        NonRetryableWorkspaceOperationError,
+        match="quality_receipt_v3_digest_invalid",
+    ):
+        _resolved_authored_quality_digest(
+            {
+                "authoredQualityGate": {
+                    "qualityReceiptV3": {
+                        **sealed,
+                        "gatePassed": True,
+                        "blockers": [],
+                        "receiptDigest": pending_digest,
+                    }
+                }
+            },
+            scene_digest=scene_digest,
+            pptx_mode="hybrid",
+        )
 
     async def scenario():
         engine, maker = await _database(tmp_path / "cancel.db")

@@ -1262,10 +1262,10 @@ class SqlPublicV2Orchestrator:
         idempotency_key: str,
         request: PresentationExportRequestV2,
     ) -> OperationReceiptV2:
-        if (
-            request.output.mode == "editable-hybrid"
-            or request.output.required_capabilities
-        ):
+        # Editable hybrid is served by the isolated export worker
+        # (`public-export.hybrid-in-isolated-lane`). Named extra capabilities
+        # remain unsupported: nothing declares or verifies them yet.
+        if request.output.required_capabilities:
             raise _public_error(422, "capability_not_supported")
         with _actor_context(actor):
             try:

@@ -589,16 +589,6 @@ def test_sql_adapter_requires_current_publication_and_rejects_unwired_export_cap
                     "sourceRevision": 3,
                     "output": {
                         "format": "pptx",
-                        "mode": "editable-hybrid",
-                        "fallbackPolicy": "reject",
-                    },
-                }
-            ),
-            PresentationExportRequestV2.model_validate(
-                {
-                    "sourceRevision": 3,
-                    "output": {
-                        "format": "pptx",
                         "mode": "fidelity-raster",
                         "requiredCapabilities": ["native-text"],
                     },
@@ -615,6 +605,31 @@ def test_sql_adapter_requires_current_publication_and_rejects_unwired_export_cap
                 )
             assert rejected.value.status_code == 422
             assert rejected.value.reason_code == "capability_not_supported"
+
+        # Editable hybrid is served by the isolated export worker since
+        # `public-export.hybrid-in-isolated-lane`, so it must no longer be
+        # refused as an unwired capability. Admission may still fail this
+        # fixture for unrelated reasons; it must not fail for that one.
+        hybrid_request = PresentationExportRequestV2.model_validate(
+            {
+                "sourceRevision": 3,
+                "output": {
+                    "format": "pptx",
+                    "mode": "editable-hybrid",
+                    "fallbackPolicy": "whole-deck-fidelity",
+                    "fontEmbedding": "subset",
+                },
+            }
+        )
+        try:
+            await adapter.submit_export(
+                actor=actor,
+                presentation_id=str(presentation_id),
+                idempotency_key="hybrid-admitted",
+                request=hybrid_request,
+            )
+        except PublicV2OrchestrationError as error:
+            assert error.reason_code != "capability_not_supported"
 
         async with maker() as session, session.begin():
             session.add(User(id=owner, username="publication-owner", hashed_password="test"))

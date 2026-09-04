@@ -15,7 +15,7 @@ import os
 from pathlib import Path
 import threading
 import uuid
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import time
@@ -486,8 +486,37 @@ def _input_bundle_references(
         raise TrustedWorkerWireError("trusted_worker_bundle_invalid")
     if job.role == "render" and value.get("schemaVersion") != "public-render-bundle/v1":
         raise TrustedWorkerWireError("trusted_worker_render_bundle_invalid")
+    expected_kind = "slide-html" if job.role == "render" else "slide-png"
+    expected_media_type = "text/html" if job.role == "render" else "image/png"
+    result = _staged_bundle_slides(
+        job, value["slides"], kind=expected_kind, media_type=expected_media_type
+    )
+    if not 1 <= len(result) <= 100:
+        raise TrustedWorkerWireError("trusted_worker_bundle_slide_count_invalid")
+    # An editable-hybrid export additionally measures the authored HTML inside
+    # the isolated worker, so those sources must be staged with the rasters.
+    sources = value.get("sourceSlides")
+    if job.role == "export" and sources is not None:
+        if not isinstance(sources, list) or len(sources) != len(result):
+            raise TrustedWorkerWireError("trusted_worker_bundle_source_count_invalid")
+        result = (
+            *result,
+            *_staged_bundle_slides(
+                job, sources, kind="slide-html", media_type="text/html"
+            ),
+        )
+    return tuple(result)
+
+
+def _staged_bundle_slides(
+    job: IsolatedWorkerJob,
+    entries: Sequence[object],
+    *,
+    kind: str,
+    media_type: str,
+) -> tuple[ArtifactRef, ...]:
     result: list[ArtifactRef] = []
-    for entry in value["slides"]:
+    for entry in entries:
         raw = entry.get("artifactRef") if isinstance(entry, Mapping) else None
         if raw is None:
             raw = entry
@@ -497,13 +526,11 @@ def _input_bundle_references(
             reference = ArtifactRef.from_wire(raw)
         except ValueError as error:
             raise TrustedWorkerWireError("trusted_worker_bundle_slide_ref_invalid") from error
-        expected_kind = "slide-html" if job.role == "render" else "slide-png"
-        expected_media_type = "text/html" if job.role == "render" else "image/png"
         if (
             reference.owner_id != job.input_artifact.owner_id
             or reference.tenant_id != job.input_artifact.tenant_id
-            or reference.kind != expected_kind
-            or reference.media_type != expected_media_type
+            or reference.kind != kind
+            or reference.media_type != media_type
             or (
                 job.role == "render"
                 and reference.created_by_operation_id != job.operation_id
@@ -511,8 +538,6 @@ def _input_bundle_references(
         ):
             raise TrustedWorkerWireError("trusted_worker_bundle_slide_binding_mismatch")
         result.append(reference)
-    if not 1 <= len(result) <= 100:
-        raise TrustedWorkerWireError("trusted_worker_bundle_slide_count_invalid")
     return tuple(result)
 
 

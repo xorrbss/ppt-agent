@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "key": "public-export.legacy-fidelity-quality-compatibility",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Legacy Authored decks missing V3 evidence may export in either public mode with a blocked public quality receipt; a present but blocked or digest-invalid receipt remains blocked in every mode.",
+  "scope": [
+    "public-export",
+    "fidelity",
+    "authored-hybrid",
+    "quality-receipt"
+  ],
+  "invariants": [
+    "Compatibility applies only when qualityReceiptV3 is entirely absent; the requested output mode no longer decides it.",
+    "The public QualityReceiptV3 remains releaseReadiness blocked and records missing checker evidence, for Hybrid exactly as for Fidelity.",
+    "The visual-review-pending allowance stays Fidelity-only: a sealed receipt whose sole blocker is human visual review never authorizes Hybrid."
+  ],
+  "forbidden": [
+    "Do not bypass a present but blocked or digest-invalid V3 receipt, in any mode.",
+    "Do not treat compatibility export as release, promotion, or deployment readiness."
+  ],
+  "rationale": [
+    "Revision 1 restricted compatibility to Fidelity because a public Hybrid export did not exist. `public-export.hybrid-in-isolated-lane` (authority user, 2026-09-04) created it, and leaving the restriction in place would make every deck predating the V3 receipt permanently raster-only.",
+    "The compatibility receipt already reports authoring and geometry evidence as failed/missing with releaseReadiness blocked. Delivering an editable file under that same honest receipt overstates nothing: it stops gating editability on evidence that does not gate raster delivery either."
+  ],
+  "evidence": [
+    "servers/fastapi/services/workspace_quality_export_operation_handlers.py",
+    "servers/fastapi/tests/unit/test_workspace_quality_export_operations.py"
+  ],
+  "supersedes": "public-export.legacy-fidelity-quality-compatibility.1",
+  "recordedAt": "2026-09-04T01:00:00.0000000+00:00"
+}

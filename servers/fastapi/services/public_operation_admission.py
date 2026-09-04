@@ -50,6 +50,10 @@ from services.public_generation_deadline_policy import (
     public_generation_deadline_seconds,
 )
 from services.public_operation_correlation import log_public_operation_correlation
+from services.public_workstation_runtime_profile import (
+    PublicWorkstationProfileError,
+    resolve_enabled_workstation_runtime_profile,
+)
 
 
 PUBLIC_DEFAULT_POLICY_VERSION = "public-default/v3"
@@ -602,6 +606,68 @@ def _resource_limits(
     )
 
 
+def _effective_runtime_quota_limits(
+    policy: PublicPolicyProfile, *, scope_type: str, operation_kind: str
+) -> tuple[int, int]:
+    """Never let a persisted policy over-admit the selected workstation.
+
+    The profile is opt-in while rollout wiring is incomplete.  Once selected,
+    invalid evidence, a missing provider cap, or hard host pressure fails
+    closed instead of falling back to the historical policy row.
+    """
+
+    active, queued = _quota_limits(
+        policy, scope_type=scope_type, operation_kind=operation_kind
+    )
+    try:
+        profile = resolve_enabled_workstation_runtime_profile()
+    except PublicWorkstationProfileError as error:
+        raise PublicAdmissionRejected(str(error), retry_after_seconds=15) from error
+    if profile is None:
+        return active, queued
+    capacity = profile.admission_capacity(operation_kind)
+    if scope_type == "owner":
+        profile_active = (
+            profile.owner_generation_active
+            if operation_kind == "generation"
+            else profile.owner_export_active
+        )
+        profile_queued = (
+            profile.owner_generation_queued
+            if operation_kind == "generation"
+            else profile.owner_export_queued
+        )
+    else:
+        profile_active = (
+            capacity.generation_active_slots
+            if operation_kind == "generation"
+            else capacity.render_export_active_slots
+        )
+        # Queue counts remain a secondary anti-amplification guard. Resource
+        # units below are authoritative for slide-weighted work.
+        profile_queued = capacity.generation_queue_units
+    return min(active, profile_active), min(queued, profile_queued)
+
+
+def _effective_runtime_resource_limits(
+    policy: PublicPolicyProfile, *, scope_type: str, operation_kind: str
+) -> tuple[int, int]:
+    queued, active = _resource_limits(policy, scope_type=scope_type)
+    try:
+        profile = resolve_enabled_workstation_runtime_profile()
+    except PublicWorkstationProfileError as error:
+        raise PublicAdmissionRejected(str(error), retry_after_seconds=15) from error
+    if profile is None or scope_type == "owner":
+        return queued, active
+    capacity = profile.admission_capacity(operation_kind)
+    # Queue units are five-slide equivalents.  The same bounded unit budget
+    # is used for claims so a large deck cannot bypass the active-slot cap by
+    # being admitted while all executable capacity is under pressure.
+    return min(queued, capacity.generation_queue_units), min(
+        active, capacity.generation_queue_units
+    )
+
+
 async def _ensure_counter(
     session: AsyncSession,
     *,
@@ -976,10 +1042,12 @@ async def _admit_public_operation_v2(
     )
     for scope_type in ("global", "tenant", "owner"):
         counter = counters[scope_type]
-        _, queued_count_limit = _quota_limits(
+        _, queued_count_limit = _effective_runtime_quota_limits(
             policy, scope_type=scope_type, operation_kind=operation_kind
         )
-        queued_resource_limit, _ = _resource_limits(policy, scope_type=scope_type)
+        queued_resource_limit, _ = _effective_runtime_resource_limits(
+            policy, scope_type=scope_type, operation_kind=operation_kind
+        )
         if counter.queued_count >= queued_count_limit:
             raise PublicAdmissionRejected(
                 f"public_{scope_type}_queue_limit_exceeded", retry_after_seconds=15
@@ -1358,10 +1426,12 @@ async def activate_public_operation_v2(
     # the caller inspects another queued candidate in the same transaction.
     for scope_type in ("global", "tenant", "owner"):
         counter = counters[scope_type]
-        active_count_limit, _ = _quota_limits(
+        active_count_limit, _ = _effective_runtime_quota_limits(
             policy, scope_type=scope_type, operation_kind=admission.operation_kind
         )
-        _, active_resource_limit = _resource_limits(policy, scope_type=scope_type)
+        _, active_resource_limit = _effective_runtime_resource_limits(
+            policy, scope_type=scope_type, operation_kind=admission.operation_kind
+        )
         if counter.active_count >= active_count_limit:
             raise PublicAdmissionRejected(f"public_{scope_type}_active_limit_exceeded")
         if counter.active_resource_units + admission.resource_units > active_resource_limit:

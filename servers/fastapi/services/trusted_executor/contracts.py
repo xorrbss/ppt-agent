@@ -181,6 +181,12 @@ class SandboxLaunchSpec:
             "PPT_WORKER_SCRATCH",
             "PPT_WORKER_SECCOMP_PROFILE",
             "PPT_WORKER_WALL_CLOCK_SECONDS",
+            # The export role may assemble an editable hybrid deck. Both name
+            # read-only local resources: the assembler argv and the licensed
+            # server font allowlist. Neither is a credential or a session.
+            "PUBLIC_EXPORT_FONT_ALLOWLIST_DIR",
+            "PUBLIC_EXPORT_HYBRID_COMMAND_JSON",
+            "PUBLIC_EXPORT_HYBRID_SEMANTIC_ENABLED",
             "PUBLIC_WORKER_ARTIFACT_CACHE_MAX_BYTES",
             "PUBLIC_WORKER_ARTIFACT_CACHE_TTL_SECONDS",
             "PUBLIC_WORKER_CAPABILITY_KEY_FILE",

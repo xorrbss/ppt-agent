@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "key": "public-export.hybrid-in-isolated-lane",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "A public export request may produce an editable authored-hybrid PPTX. Chrome and the OOXML assembler run in the isolated export worker, which is the boundary built for exactly this, and never in the durable operation or Core process.",
+  "scope": [
+    "public-export",
+    "authored-hybrid",
+    "composer",
+    "workspace-operations"
+  ],
+  "invariants": [
+    "The durable operation process and the Core process still never launch Chrome or an OOXML converter; the isolated export worker is the only place either runs.",
+    "A public admission no longer forces authored_vnext_export_path to 'shared' for every mode; the isolated lane accepts pptx_mode 'hybrid' and font embedding.",
+    "Every existing isolation guarantee of that worker stays in force: its own process, its content-addressed transport cache, digest-verified artifacts, and its resource and time budgets.",
+    "A hybrid export that cannot be assembled falls back to the fidelity raster rather than failing the request, and the receipt records which path produced the file.",
+    "The exported file's quality readback keeps its ownership and coverage checks unweakened; coverage must describe what the file actually contains."
+  ],
+  "forbidden": [
+    "Running Chrome or an OOXML converter inside the durable operation, Core, or API process to satisfy a public request.",
+    "Relaxing the export quality readback to make a hybrid file pass.",
+    "Embedding a font into a distributed file without a redistribution licence for it."
+  ],
+  "rationale": [
+    "The user decided on 2026-09-04 to allow Chrome and OOXML execution for public export, and asked that the decision be recorded and not raised again.",
+    "Editable PPTX is the product's differentiator, and it was unreachable: workspace_service admits every export through admit_public_operation, the handler then pins authored_vnext_export_path to 'shared', and that branch rejects any pptx_mode other than 'fidelity' with public_isolated_hybrid_not_supported. All 83 recorded export attempts used selected_adapter 'general'; zero were hybrid.",
+    "The isolated worker lane already exists to run untrusted, heavy work off the durable process, so admitting hybrid there honours the original constraint's intent rather than discarding it.",
+    "The Composer's renderer emits the attributes the hybrid exporter reads, and with the ownership-graph and assembler carrier fixes of 2026-09-04 a 35-slide Composer deck assembles with all 35 slides carrying native layers and the readback passing."
+  ],
+  "evidence": [
+    "docs/generation-quality-root-cause-and-composer-architecture-20260904.md",
+    "servers/fastapi/services/workspace_quality_export_operation_handlers.py",
+    "servers/fastapi/services/workspace_service.py",
+    "servers/nextjs/lib/authored-hybrid/pptx-assembler.ts"
+  ],
+  "recordedAt": "2026-09-04T12:00:00.0000000+00:00"
+}

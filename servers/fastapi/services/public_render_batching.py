@@ -10,6 +10,10 @@ from weakref import WeakKeyDictionary, ref
 from sqlalchemy.pool import NullPool, QueuePool
 
 from models.sql.public_artifact import ArtifactRef
+from services.public_workstation_runtime_profile import (
+    PublicWorkstationProfileError,
+    resolve_enabled_workstation_runtime_profile,
+)
 
 MAX_PUBLIC_RENDER_BATCH_SLIDES = 20
 
@@ -75,6 +79,18 @@ def pooled_render_authority_admission(bind: object) -> RenderAuthorityAdmission:
         raise PublicRenderBatchingError("public_render_pool_capacity_invalid")
     else:
         limit = capacity + overflow - 2
+    try:
+        profile = resolve_enabled_workstation_runtime_profile()
+    except PublicWorkstationProfileError as error:
+        raise PublicRenderBatchingError(str(error)) from error
+    if profile is not None:
+        executable = profile.admission_capacity("export").render_export_active_slots
+        if executable < 1:
+            raise PublicRenderBatchingError("public_render_runtime_pressure_rejected")
+        # The role pool leaves two connections for checkpoint/publication, but
+        # may never create more parallel authorities than this workstation's
+        # selected render/export tier can execute.
+        limit = min(limit, executable)
     loop = asyncio.get_running_loop()
     engines = _admissions.setdefault(loop, WeakKeyDictionary())
     existing = engines.get(bind)

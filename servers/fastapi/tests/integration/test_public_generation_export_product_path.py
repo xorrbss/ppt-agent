@@ -252,6 +252,7 @@ def test_public_export_product_path_uses_postgres_claim_trusted_dispatch_and_fen
                         "fencingToken": claim.fencing_token, "inputDigest": input_digest,
                         "ok": True, "errorCode": None,
                         "outputArtifact": output_ref.model_dump(mode="json", by_alias=True),
+                        "executionEvidence": {},
                     }
                     return TrustedWorkerWireResult(json.dumps(result, separators=(",", ":")).encode())
 

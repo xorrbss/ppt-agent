@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import json
 from pathlib import Path
+import re
 import runpy
 import uuid
 
@@ -24,6 +25,8 @@ from migration_revision_contract import (
 )
 from models.sql.presentation_export_attempt import PresentationExportAttempt
 from models.sql.public_artifact import (
+    ArtifactRef as PublicArtifactRef,
+    artifact_storage_key,
     PublicArtifact,
     PublicExportIdentity,
     PublicSlideCheckpoint,
@@ -575,7 +578,18 @@ def test_canonical_export_identity_is_feature_gated_digest_bound_and_fenced(
                     "created_by_operation_id": durable_result.created_by_operation_id,
                 }
             ) == durable_result
-            assert consumer_result.resource_metrics == {}
+            # Reuse runs no worker, so it reports no worker resource sample —
+            # but it must still say what the reused bytes are, or a receipt
+            # would describe an editable deck as a raster one.
+            assert "role" not in consumer_result.resource_metrics
+            assert consumer_result.resource_metrics == {
+                "public_export_worker_evidence": {
+                    "requestedExportMode": "fidelity-raster",
+                    "deliveredExportMode": "fidelity-raster",
+                    "fallbackReason": None,
+                    "reusedCompletedIdentity": True,
+                }
+            }
             repeated = await public_export_operation.execute_canonical_export_execution(
                 consumer_operation, execution=completed, session_factory=sessions
             )
@@ -723,3 +737,281 @@ def test_canonical_export_identity_is_feature_gated_digest_bound_and_fenced(
         await engine.dispose()
 
     asyncio.run(scenario())
+
+
+def _hybrid_identity(owner_id: uuid.UUID) -> CanonicalExportIdentity:
+    checkpoint = SlideCheckpointArtifact(
+        slide_index=0,
+        artifact=PublicArtifactRef(
+            artifact_id=uuid.uuid4(),
+            owner_id=owner_id,
+            tenant_id="tenant-a",
+            kind="slide-png",
+            sha256=_digest("png"),
+            size_bytes=64,
+            media_type="image/png",
+            storage_key=artifact_storage_key(
+                owner_id=owner_id, tenant_id="tenant-a", digest=_digest("png")
+            ),
+            created_by_operation_id=uuid.uuid4(),
+            retention_class="checkpoint",
+        ),
+        validation_digest=_digest("validation"),
+    )
+    return CanonicalExportIdentity.build(
+        owner_id=owner_id,
+        tenant_id="tenant-a",
+        presentation_id=uuid.uuid4(),
+        source_revision=7,
+        export_format="pptx",
+        export_mode="editable-hybrid",
+        render_adapter="public-isolated-hybrid",
+        exporter_version="pptx-exporter-2.0",
+        evidence=ExportEvidenceDigests(
+            scene_digest=_digest("scene"),
+            semantic_digest=_digest("semantic"),
+            quality_digest=_digest("quality"),
+            exporter_digest=_digest("exporter"),
+            font_manifest_digest=_digest("fonts"),
+        ),
+        slides=(checkpoint,),
+    )
+
+
+def test_hybrid_export_bundle_names_the_authored_sources_it_measures() -> None:
+    """The worker reads its own verified cache, never a database, for Hybrid."""
+
+    owner_id = uuid.uuid4()
+    identity = _hybrid_identity(owner_id)
+    source = PublicArtifactRef(
+        artifact_id=uuid.uuid4(),
+        owner_id=owner_id,
+        tenant_id="tenant-a",
+        kind="slide-html",
+        sha256=_digest("html"),
+        size_bytes=32,
+        media_type="text/html",
+        storage_key=artifact_storage_key(
+            owner_id=owner_id, tenant_id="tenant-a", digest=_digest("html")
+        ),
+        created_by_operation_id=uuid.uuid4(),
+        retention_class="ephemeral",
+    )
+
+    bundle = json.loads(
+        build_validated_checkpoint_export_bundle(
+            identity, source_slides=(source,), font_embedding=True
+        )
+    )
+
+    assert bundle["exportMode"] == "editable-hybrid"
+    assert bundle["fontEmbedding"] is True
+    assert bundle["sourceSlides"] == [
+        {
+            "slideIndex": 0,
+            "artifactRef": json.loads(
+                json.dumps(source.model_dump(mode="json", by_alias=True))
+            ),
+        }
+    ]
+    # The bundle names references only; authored markup never rides the wire.
+    assert "<" not in json.dumps(bundle)
+
+    with pytest.raises(
+        public_export_operation.PublicExportOperationError,
+        match="public_export_hybrid_sources_invalid",
+    ):
+        build_validated_checkpoint_export_bundle(identity, source_slides=())
+
+
+def test_fidelity_export_bundle_never_names_authored_sources() -> None:
+    owner_id = uuid.uuid4()
+    identity = replace(
+        _hybrid_identity(owner_id),
+        export_mode="fidelity-raster",
+        render_adapter="public-isolated-fidelity",
+    )
+
+    bundle = json.loads(build_validated_checkpoint_export_bundle(identity))
+
+    assert "sourceSlides" not in bundle and "fontEmbedding" not in bundle
+    assert "html" not in json.dumps(bundle).lower()
+
+
+def _declared_slide(slide_index: int) -> dict:
+    return {
+        "schemaVersion": "public-hybrid-declared-semantic/v1",
+        "slideIndex": slide_index,
+        "bundleDigest": "sha256:" + _digest(f"bundle-{slide_index}"),
+        "fontSetDigest": "sha256:" + _digest("fonts"),
+        "declaredElementIds": ["q-a"],
+        "declaredElements": [
+            {
+                "elementId": "q-a",
+                "kind": "shape",
+                "sourceDigest": "sha256:" + _digest("q-a"),
+                "childIds": ["q-b"],
+            }
+        ],
+    }
+
+
+def test_hybrid_bundle_carries_the_declared_graph_only_when_fully_bound() -> None:
+    """The graph decides what may be promoted, so its binding is not optional."""
+
+    owner_id = uuid.uuid4()
+    identity = _hybrid_identity(owner_id)
+    source = PublicArtifactRef(
+        artifact_id=uuid.uuid4(),
+        owner_id=owner_id,
+        tenant_id="tenant-a",
+        kind="slide-html",
+        sha256=_digest("html"),
+        size_bytes=32,
+        media_type="text/html",
+        storage_key=artifact_storage_key(
+            owner_id=owner_id, tenant_id="tenant-a", digest=_digest("html")
+        ),
+        created_by_operation_id=uuid.uuid4(),
+        retention_class="ephemeral",
+    )
+    semantic = _declared_slide(0)
+    attempt_id = str(uuid.uuid4())
+    renderer_digest = "sha256:" + _digest("runtime")
+
+    bundle = json.loads(
+        build_validated_checkpoint_export_bundle(
+            identity,
+            source_slides=(source,),
+            semantic_slides=(semantic,),
+            export_attempt_id=attempt_id,
+            renderer_source_digest=renderer_digest,
+            font_embedding=True,
+        )
+    )
+    assert bundle["exportAttemptId"] == attempt_id
+    assert bundle["rendererSourceDigest"] == renderer_digest
+    assert [item["slideIndex"] for item in bundle["semanticSlides"]] == [0]
+    assert bundle["semanticSlides"][0]["declaredElements"][0]["childIds"] == ["q-b"]
+    # Only declared identity and structure cross the boundary; the graph
+    # carries no markup, only element ids, kinds and ownership edges.
+    declared = json.dumps(bundle["semanticSlides"])
+    assert "<" not in declared and "html" not in declared.lower()
+
+    # A graph without the attempt/renderer identity it is sealed against, or
+    # one that does not cover every slide, is refused rather than half-shipped.
+    for kwargs in (
+        {"export_attempt_id": None, "renderer_source_digest": renderer_digest},
+        {"export_attempt_id": attempt_id, "renderer_source_digest": None},
+    ):
+        with pytest.raises(
+            public_export_operation.PublicExportOperationError,
+            match="public_export_hybrid_semantic_binding_invalid",
+        ):
+            build_validated_checkpoint_export_bundle(
+                identity,
+                source_slides=(source,),
+                semantic_slides=(semantic,),
+                **kwargs,
+            )
+    with pytest.raises(
+        public_export_operation.PublicExportOperationError,
+        match="public_export_hybrid_semantic_binding_invalid",
+    ):
+        build_validated_checkpoint_export_bundle(
+            identity,
+            source_slides=(source,),
+            semantic_slides=(semantic, _declared_slide(1)),
+            export_attempt_id=attempt_id,
+            renderer_source_digest=renderer_digest,
+        )
+
+    # Without a graph the bundle is byte-identical to the observed-only form.
+    without = json.loads(
+        build_validated_checkpoint_export_bundle(
+            identity, source_slides=(source,), font_embedding=True
+        )
+    )
+    assert "semanticSlides" not in without
+    assert "exportAttemptId" not in without
+
+
+def test_declared_semantic_slide_payload_projects_the_assembler_wire_shape() -> None:
+    """Only declared identity and structure cross; no HTML, no session, no bounds."""
+
+    class _Registry:
+        active_qids = ["q-a", "q-b"]
+
+    class _Element:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def model_dump(self, **_kwargs):
+            return dict(self._payload)
+
+    class _Component:
+        identity_registry = _Registry()
+        elements = [
+            _Element(
+                {
+                    "elementId": "q-a",
+                    "kind": "shape",
+                    "parentId": None,
+                    "childIds": ["q-b"],
+                    "requiredFeatures": [],
+                    "payload": {"preset": "rectangle"},
+                }
+            ),
+            _Element(
+                {
+                    "elementId": "q-b",
+                    "kind": "text",
+                    "parentId": "q-a",
+                    "childIds": [],
+                }
+            ),
+        ]
+
+    class _FontManifest:
+        digest = "sha256:" + _digest("fonts")
+
+    class _Bundle:
+        bundle_digest = "sha256:" + _digest("bundle")
+        font_manifest = _FontManifest()
+        semantic_component = _Component()
+
+    payload = public_export_operation.declared_semantic_slide_payload(_Bundle(), 3)
+
+    assert payload["schemaVersion"] == "public-hybrid-declared-semantic/v1"
+    assert payload["slideIndex"] == 3
+    assert payload["declaredElementIds"] == ["q-a", "q-b"]
+    container, text = payload["declaredElements"]
+    assert container["childIds"] == ["q-b"] and container["kind"] == "shape"
+    # A shape container with children is the only group candidate this deck
+    # kind produces, so childIds must survive the projection.
+    assert text["parentId"] == "q-a"
+    for element in payload["declaredElements"]:
+        assert re.fullmatch(r"sha256:[0-9a-f]{64}", element["sourceDigest"])
+        # A non-chart/table payload is structure the assembler must not read.
+        assert "payload" not in element
+
+    class _Empty:
+        semantic_component = None
+
+    assert public_export_operation.declared_semantic_slide_payload(_Empty(), 0) is None
+
+
+def test_hybrid_declared_graph_ships_only_on_explicit_opt_in() -> None:
+    assert public_export_operation.public_export_hybrid_semantic_enabled({}) is False
+    assert (
+        public_export_operation.public_export_hybrid_semantic_enabled(
+            {"PUBLIC_EXPORT_HYBRID_SEMANTIC_ENABLED": "1"}
+        )
+        is False
+    )
+    assert (
+        public_export_operation.public_export_hybrid_semantic_enabled(
+            {"PUBLIC_EXPORT_HYBRID_SEMANTIC_ENABLED": "true"}
+        )
+        is True
+    )

@@ -7,6 +7,7 @@ from hashlib import sha256
 import io
 import os
 from pathlib import Path
+import time
 import uuid
 
 import pytest
@@ -21,6 +22,7 @@ from models.sql.public_artifact import (
     artifact_storage_key,
 )
 from services.artifact_store import (
+    ArtifactBindingError,
     ArtifactByteRange,
     ArtifactNotFound,
     ArtifactStoreError,
@@ -32,6 +34,7 @@ from services.artifact_store import (
     S3ArtifactObjectStore,
     claim_export_identity,
     complete_export_identity,
+    configured_worker_artifact_cache,
     fail_export_identity,
 )
 from services.isolated_worker_contracts import ArtifactRef as WorkerArtifactRef
@@ -318,6 +321,130 @@ def test_worker_object_port_streams_exact_stage_and_publish(tmp_path: Path) -> N
         assert await store.read_bytes(result_ref) == result_payload
 
     _run(scenario())
+
+
+def test_path_for_key_tolerates_extended_length_prefix_on_candidate_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A resolved candidate can gain the Windows ``\\\\?\\`` extended-length
+    prefix that its already-resolved root lacks (e.g. once the OS opts into
+    it for a deep/long path). That prefix difference alone must not be
+    treated as an escape."""
+
+    store = LocalDevelopmentArtifactObjectStore(tmp_path / "objects")
+    owner_id = uuid.uuid4()
+    digest = sha256(b"extended-length-candidate").hexdigest()
+    key = artifact_storage_key(owner_id=owner_id, tenant_id="tenant-a", digest=digest)
+    original_resolve = Path.resolve
+
+    def resolve_with_extended_length_prefix(self: Path, *args, **kwargs) -> Path:
+        resolved = original_resolve(self, *args, **kwargs)
+        text = str(resolved)
+        return resolved if text.startswith("\\\\?\\") else Path("\\\\?\\" + text)
+
+    monkeypatch.setattr(Path, "resolve", resolve_with_extended_length_prefix)
+
+    resolved_path = store._path_for_key(key)
+
+    assert resolved_path == Path("\\\\?\\" + str(store._root / Path(*key.split("/"))))
+
+
+def test_path_for_key_still_rejects_a_genuine_escape(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The extended-length prefix tolerance must not weaken the containment
+    check: a storage key that genuinely climbs out of the root is still
+    rejected, prefix mismatch or not."""
+
+    store = LocalDevelopmentArtifactObjectStore(tmp_path / "objects")
+    with pytest.raises(ArtifactBindingError, match="storage_key_escape"):
+        store._path_for_key("../outside/secret.txt")
+
+    original_resolve = Path.resolve
+
+    def resolve_with_extended_length_prefix(self: Path, *args, **kwargs) -> Path:
+        resolved = original_resolve(self, *args, **kwargs)
+        text = str(resolved)
+        return resolved if text.startswith("\\\\?\\") else Path("\\\\?\\" + text)
+
+    monkeypatch.setattr(Path, "resolve", resolve_with_extended_length_prefix)
+    with pytest.raises(ArtifactBindingError, match="storage_key_escape"):
+        store._path_for_key("../outside/secret.txt")
+
+
+def test_worker_cache_defaults_to_a_root_separate_from_the_authority_and_cannot_evict_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression test for the original defect: with the local-development
+    backend and no explicit ``PUBLIC_WORKER_ARTIFACT_CACHE_ROOT``, the worker
+    transport cache used to default to the very same directory as the
+    durable artifact authority (``PUBLIC_WORKER_OBJECT_STORE_ROOT``), so the
+    cache's TTL/byte-budget eviction could delete a durable object. The
+    cache must now get its own root, and running its eviction sweep must
+    never remove an object the authority still owns."""
+
+    authority_root = tmp_path / "local-artifact-authority"
+    monkeypatch.setenv("PUBLIC_ARTIFACT_STORE_BACKEND", "local-development")
+    monkeypatch.setenv("ENVIRONMENT", "local")
+    monkeypatch.setenv("PUBLIC_WORKER_OBJECT_STORE_ROOT", str(authority_root))
+    monkeypatch.setenv("APP_DATA_DIRECTORY", str(tmp_path / "app_data"))
+    monkeypatch.delenv("PUBLIC_WORKER_ARTIFACT_CACHE_ROOT", raising=False)
+    # A tiny TTL so a maintenance sweep evicts anything not just written.
+    monkeypatch.setenv("PUBLIC_WORKER_ARTIFACT_CACHE_TTL_SECONDS", "1")
+    monkeypatch.setenv("PUBLIC_WORKER_ARTIFACT_CACHE_MAX_BYTES", str(1024 * 1024))
+
+    authority_store = LocalDevelopmentArtifactObjectStore(authority_root)
+    payload = b"durable-authority-object"
+    owner_id = uuid.uuid4()
+    digest = sha256(payload).hexdigest()
+    reference = ArtifactRef(
+        artifact_id=uuid.uuid4(),
+        owner_id=owner_id,
+        tenant_id="tenant-a",
+        kind="export-bundle",
+        sha256=digest,
+        size_bytes=len(payload),
+        media_type="application/vnd.presenton.export-bundle+json",
+        storage_key=artifact_storage_key(
+            owner_id=owner_id, tenant_id="tenant-a", digest=digest
+        ),
+        created_by_operation_id=uuid.uuid4(),
+        retention_class="ephemeral",
+    )
+    _run(authority_store.put_bytes(reference, payload))
+    authority_object_path = authority_store._path(reference)
+
+    worker_cache = configured_worker_artifact_cache()
+
+    assert worker_cache._root.resolve() != authority_root.resolve()
+
+    # Age the durable object well past the cache TTL and run the cache's own
+    # eviction sweep: it must only ever look at its own root.
+    old_time = time.time() - 3600
+    os.utime(authority_object_path, (old_time, old_time))
+    _run(worker_cache.maintain())
+
+    assert authority_object_path.is_file()
+    assert authority_object_path.read_bytes() == payload
+
+
+def test_configured_worker_artifact_cache_rejects_a_root_shared_with_the_authority(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Even an explicit misconfiguration that points the cache at the
+    authority root must fail closed instead of silently sharing the
+    directory."""
+
+    shared_root = tmp_path / "shared-root"
+    monkeypatch.setenv("PUBLIC_ARTIFACT_STORE_BACKEND", "local-development")
+    monkeypatch.setenv("ENVIRONMENT", "local")
+    monkeypatch.setenv("PUBLIC_WORKER_OBJECT_STORE_ROOT", str(shared_root))
+    monkeypatch.setenv("PUBLIC_WORKER_ARTIFACT_CACHE_ROOT", str(shared_root))
+    monkeypatch.setenv("PUBLIC_WORKER_ARTIFACT_CACHE_TTL_SECONDS", "900")
+    monkeypatch.setenv("PUBLIC_WORKER_ARTIFACT_CACHE_MAX_BYTES", str(1024 * 1024))
+
+    with pytest.raises(RuntimeError, match="worker_cache_root_must_differ_from_authority"):
+        configured_worker_artifact_cache()
 
 
 def test_feature_lifecycle_refcount_expiry_and_gc_fail_closed(

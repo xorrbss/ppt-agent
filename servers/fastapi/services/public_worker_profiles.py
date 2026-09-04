@@ -75,7 +75,12 @@ PUBLIC_WORKER_PROFILES = MappingProxyType(
             provider_network_access=False,
             artifact_access="scoped-read-write",
             network_mode="none",
-            browser_allowed=False,
+            # The export role assembles editable decks, which requires measuring
+            # authored HTML in a browser. It is the only public role allowed to
+            # run both a browser and an OOXML converter
+            # (decision `public-export.hybrid-in-isolated-lane`); the durable
+            # operation, Core and API processes still run neither.
+            browser_allowed=True,
             converter_allowed=True,
             max_jobs_per_process=1,
             required_isolation_controls=(

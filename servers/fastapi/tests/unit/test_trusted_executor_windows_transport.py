@@ -169,6 +169,9 @@ def test_windows_local_transport_runs_bounded_stdio_and_publishes_exact_output(
         "ok": True,
         "errorCode": None,
         "outputArtifact": output_reference.to_wire(),
+        # Workers report how they produced the artifact alongside it; an empty
+        # summary is the normal shape for a role with nothing extra to say.
+        "executionEvidence": {},
     }
     worker_code = """
 import json, os, pathlib, sys

@@ -200,7 +200,7 @@ def _validated_authored_quality_receipt_digest(
 
 
 def _legacy_fidelity_quality_digest(scene_digest: str) -> str:
-    """Bind legacy Fidelity reuse to the exact deck without claiming a quality pass."""
+    """Bind legacy reuse to the exact deck without claiming a quality pass."""
 
     payload = {
         "schemaVersion": "legacy-authored-fidelity-quality/v1",
@@ -233,7 +233,11 @@ def _resolved_authored_quality_digest(
         )
         return digest, "visual-review-pending" if visual_review_pending else None
     except NonRetryableWorkspaceOperationError as error:
-        if error.code != "quality_receipt_v3_required" or pptx_mode != "fidelity":
+        # Compatibility covers only a wholly absent V3 receipt. A receipt that
+        # is present but blocked or digest-invalid still refuses every mode, and
+        # the projected public receipt stays releaseReadiness "blocked" with the
+        # missing-checker reason codes for Hybrid exactly as for Fidelity.
+        if error.code != "quality_receipt_v3_required":
             raise
         return _legacy_fidelity_quality_digest(scene_digest), "legacy"
 
@@ -427,9 +431,12 @@ class WorkspaceExportOperationHandler:
             if admission is not None and admission.state == "active":
                 public_tenant_id = admission.tenant_id
                 # Public requests never execute Chrome or an OOXML converter in
-                # the durable operation/Core process. The isolated raster path
-                # is the public boundary; richer desktop/private modes retain
-                # their existing adapters outside this admission.
+                # the durable operation/Core process. The isolated worker lane
+                # is the public boundary, and since
+                # `public-export.hybrid-in-isolated-lane` it carries the
+                # editable-hybrid mode too. The legacy-native and
+                # semantic-hybrid adapters, which would compile OOXML here,
+                # stay outside this admission.
                 authored_vnext_export_path = "shared"
                 if claim.request_payload.get("quality_policy") == "release-v1":
                     raw_reviewed_revision = claim.request_payload.get(
@@ -764,10 +771,6 @@ class WorkspaceExportOperationHandler:
                     },
                 }
             else:
-                if pptx_mode != "fidelity" or font_embedding:
-                    raise NonRetryableWorkspaceOperationError(
-                        "public_isolated_hybrid_not_supported"
-                    )
                 async with self._session_factory() as session:
                     slides = list(
                         (
@@ -808,6 +811,10 @@ class WorkspaceExportOperationHandler:
                                 + release_review_receipt_digest
                             ).encode("ascii")
                         ).hexdigest()
+                # Hybrid is a PPTX-only output; PDF stays a raster publication.
+                isolated_export_mode = (
+                    pptx_mode if export_format == "pptx" else "fidelity"
+                )
                 htmls = [slide.html_content for slide in slides]
                 if not htmls or any(not isinstance(html, str) or not html for html in htmls):
                     raise NonRetryableWorkspaceOperationError(
@@ -860,13 +867,20 @@ class WorkspaceExportOperationHandler:
                     "adapter_chain": ["general"],
                     "capability_evidence": {
                         "selected_adapter": "general",
-                        "execution_profile": "isolated_raster_v1",
+                        "execution_profile": (
+                            "isolated_hybrid_v1"
+                            if isolated_export_mode == "hybrid"
+                            else "isolated_raster_v1"
+                        ),
                         # Remains false until the completed worker samples carry
                         # production-eligible OS isolation attestations.
                         "network_none_worker": False,
                         "isolation_attestations": [],
                         "sessionless_capability": True,
-                        "pptx_mode": "fidelity" if export_format == "pptx" else None,
+                        "pptx_mode": (
+                            isolated_export_mode if export_format == "pptx" else None
+                        ),
+                        "font_embedding_requested": font_embedding,
                         "legacy_quality_compatibility": (
                             fidelity_quality_compatibility == "legacy"
                         ),
@@ -925,6 +939,9 @@ class WorkspaceExportOperationHandler:
                     export_format=export_format,
                     scene_digest=(authored_scene_digest or ""),
                     quality_digest=quality_receipt_digest,
+                    pptx_mode=isolated_export_mode,
+                    font_embedding=font_embedding,
+                    export_attempt_id=export_attempt_id,
                     expected_render_runtime_binding_digest=(
                         release_review_runtime_binding_digest
                     ),
@@ -951,10 +968,48 @@ class WorkspaceExportOperationHandler:
                 artifact_sha256 = public_ref.sha256
                 artifact_size_bytes = public_ref.size_bytes
                 selected_adapter = "general"
+                worker_evidence = worker_resource_metrics.get(
+                    "public_export_worker_evidence"
+                )
+                worker_evidence = (
+                    dict(worker_evidence)
+                    if isinstance(worker_evidence, Mapping)
+                    else {}
+                )
+                delivered_export_mode = str(
+                    worker_evidence.get("deliveredExportMode")
+                    or ("fidelity-raster" if export_format == "pptx" else "pdf-raster")
+                )
+                hybrid_fallback_reason = (
+                    worker_evidence.get("fallbackReason")
+                    or worker_resource_metrics.get("hybrid_degraded_reason")
+                )
+                delivered_hybrid = delivered_export_mode == "editable-hybrid"
+                renderer_source_sha256 = (
+                    actual_render_runtime_binding_digest.removeprefix("sha256:")
+                )
                 export_provenance = {
                     **initial_provenance,
+                    "fallback_reason": (
+                        str(hybrid_fallback_reason)[:200]
+                        if isinstance(hybrid_fallback_reason, str)
+                        and hybrid_fallback_reason
+                        else None
+                    ),
                     "capability_evidence": {
                         **initial_provenance["capability_evidence"],
+                        # The delivered mode, not the requested one, describes
+                        # what the published file actually is.
+                        "pptx_mode": (
+                            ("hybrid" if delivered_hybrid else "fidelity")
+                            if export_format == "pptx"
+                            else None
+                        ),
+                        "requested_pptx_mode": (
+                            isolated_export_mode if export_format == "pptx" else None
+                        ),
+                        "delivered_export_mode": delivered_export_mode,
+                        "hybrid_export_evidence": worker_evidence,
                         "network_none_worker": (
                             worker_resource_metrics.get("network_none_worker") is True
                         ),
@@ -966,9 +1021,29 @@ class WorkspaceExportOperationHandler:
                     },
                     "freshness": {
                         **initial_provenance["freshness"],
+                        "renderer_source_sha256": renderer_source_sha256,
                         "package_sha256": artifact_sha256,
                         "package_digest_match": True,
                     },
+                    **(
+                        {
+                            # Bind the published package atomically to the exact
+                            # deck, revision and renderer runtime that produced
+                            # it. The isolated lane consumes no authored-vNext
+                            # emission, so this is its whole traceability claim
+                            # and the publisher verifies every field.
+                            "atomic_binding": {
+                                "presentation_id": str(claim.presentation_id),
+                                "export_attempt_id": str(export_attempt_id),
+                                "presentation_revision": effective_revision,
+                                "canonical_source_sha256": source_snapshot_sha256,
+                                "renderer_source_sha256": renderer_source_sha256,
+                                "pptx_sha256": artifact_sha256,
+                            }
+                        }
+                        if delivered_hybrid
+                        else {}
+                    ),
                 }
                 if (
                     authored_scene_digest is None

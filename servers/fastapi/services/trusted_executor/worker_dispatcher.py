@@ -76,6 +76,35 @@ class _PendingDispatch:
     submitted: bool = False
 
 
+# The export role is the only place a browser and an OOXML assembler may run
+# for a public request (decision `public-export.hybrid-in-isolated-lane`), so it
+# carries a browser-sized budget. Every other role keeps the tighter converter
+# budget. These stay hard ceilings, not opt-outs.
+#
+# The 2 GiB default was sized when this role only rebuilt a raster deck from
+# PNGs with python-pptx. A browser-driven assembly of a 35-slide deck holds
+# ~28 Chrome processes at two-way concurrency, which commits about 3 GiB
+# job-wide; at that ceiling renderers are refused memory, retried, and the deck
+# budget expires with half its slides demoted to raster. The job memory limit
+# is a hard OS ceiling either way — it is only its size that was wrong.
+_ROLE_RESOURCE_BUDGETS: dict[str, tuple[int, int, int]] = {
+    "export": (8 * 1024 * 1024 * 1024, 96, 1800),
+}
+_DEFAULT_RESOURCE_BUDGET = (2 * 1024 * 1024 * 1024, 32, 600)
+
+
+def _role_resource_limits(role: str, deadline_seconds: int) -> ResourceLimits:
+    memory_bytes, process_limit, maximum_deadline = _ROLE_RESOURCE_BUDGETS.get(
+        role, _DEFAULT_RESOURCE_BUDGET
+    )
+    return ResourceLimits(
+        memory_bytes=memory_bytes,
+        process_limit=process_limit,
+        deadline_seconds=min(deadline_seconds, maximum_deadline),
+        temporary_bytes=512 * 1024 * 1024,
+    )
+
+
 class TrustedWorkerDispatcher:
     """Serialize scheduler bookkeeping while allowing cap-safe wire concurrency."""
 
@@ -138,12 +167,7 @@ class TrustedWorkerDispatcher:
             role=job.role,
             executable=executable,
             arguments=arguments,
-            limits=ResourceLimits(
-                memory_bytes=2 * 1024 * 1024 * 1024,
-                process_limit=32,
-                deadline_seconds=min(deadline_seconds, 600),
-                temporary_bytes=512 * 1024 * 1024,
-            ),
+            limits=_role_resource_limits(job.role, deadline_seconds),
             policy=SandboxPolicy(),
             filesystem=SandboxFilesystemSpec(
                 sandbox_root=operation_root,

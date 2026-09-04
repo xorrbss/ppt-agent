@@ -2103,6 +2103,14 @@ async def _raise_publication_revision_error(
     raise WorkspaceArtifactPublicationError(fallback_code)
 
 
+def _is_sha256_hex(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
 async def _terminalize_linked_export_attempt(
     session: AsyncSession,
     *,
@@ -2175,6 +2183,32 @@ async def _terminalize_linked_export_attempt(
             ]
             if not receipt_payloads:
                 receipt_payloads = [atomic_binding]
+            if capability_evidence.get("execution_profile") == "isolated_hybrid_v1":
+                # The isolated export worker measures persisted slide HTML; it
+                # never consumes an authored-vNext emission graph, and its
+                # canonical source digest is the HTML snapshot rather than that
+                # graph's digest. Binding it to the emission would compare two
+                # different things. It proves its own binding instead: the
+                # published bytes are the exact deck, revision, attempt and
+                # renderer runtime the attempt recorded. Every field is checked.
+                if (
+                    str(atomic_binding.get("presentation_id"))
+                    != str(artifact.presentation_id)
+                    or str(atomic_binding.get("export_attempt_id"))
+                    != str(artifact.export_attempt_id)
+                    or atomic_binding.get("presentation_revision")
+                    != artifact.source_revision
+                    or atomic_binding.get("canonical_source_sha256")
+                    != source_snapshot_sha256
+                    or atomic_binding.get("pptx_sha256") != artifact.sha256
+                    or not _is_sha256_hex(
+                        atomic_binding.get("renderer_source_sha256")
+                    )
+                ):
+                    raise WorkspaceArtifactPublicationError(
+                        "workspace_export_semantic_binding_required"
+                    )
+                return
             binding_digest = await bind_completed_semantic_export_attempt(
                 session,
                 attempt=attempt,
@@ -2193,6 +2227,11 @@ async def _terminalize_linked_export_attempt(
     except Exception as error:
         if isinstance(error, WorkspaceArtifactPublicationError):
             raise
+        # The stable code is what callers act on, but swallowing the cause
+        # makes a terminalization conflict undiagnosable in the field.
+        LOGGER.exception(
+            "export attempt terminalization failed for artifact %s", artifact.artifact_id
+        )
         raise WorkspaceArtifactPublicationError(
             "workspace_export_attempt_terminal_conflict"
         ) from error
