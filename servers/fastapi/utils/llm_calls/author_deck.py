@@ -44,6 +44,7 @@ from services.authored_author_capacity_recovery import (
     title_capacity_recovery_boundary,
     title_capacity_recovery_diagnostic,
     title_capacity_recovery_hint,
+    resolve_authored_title_capacity_html,
     title_capacity_recovery_qids,
 )
 from utils.llm_calls.author_slide import (
@@ -1104,17 +1105,42 @@ async def _author_one_resilient(
                         if reduced != constrained:
                             constrained = reduced
                             owner_violations = reduced_violations
+                    title_qids = (
+                        title_capacity_recovery_qids(constrained, instructions=instructions)
+                        if allow_title_capacity_recovery and not source_images
+                        and reference_mode != EXACT_RECONSTRUCTION and structured_context is None
+                        and any(item.startswith("owner_title:") for item in owner_violations)
+                        else ()
+                    )
+                    if title_qids and capacity is not None:
+                        # Substituting a larger compatible layout or applying the
+                        # closed abbreviation table costs no provider call, so it
+                        # runs before spending the single guarded recovery call.
+                        # A terminal result keeps that call as the fallback.
+                        title_result = resolve_authored_title_capacity_html(
+                            constrained, capacity, title_qids,
+                        )
+                        if title_result["status"] != "terminal":
+                            recovered_html = title_result["html"]
+                            recovered_violations = aggregate_owner_capacity_violations(
+                                recovered_html, capacity,
+                            )
+                            if not recovered_violations:
+                                return recovered_html
+                            if not any(
+                                item.startswith("owner_title:")
+                                for item in recovered_violations
+                            ):
+                                # Titles now fit; only non-title owners remain, and
+                                # they never spend the title recovery call.
+                                constrained = recovered_html
+                                owner_violations = recovered_violations
+                                title_qids = ()
                     capacity_error = AuthoredAggregateOwnerCapacityExhausted(
                         owner_violations,
                         rejected_html=constrained,
                         capacity=capacity,
-                        title_recovery_qids=(
-                            title_capacity_recovery_qids(constrained, instructions=instructions)
-                            if allow_title_capacity_recovery and not source_images
-                            and reference_mode != EXACT_RECONSTRUCTION and structured_context is None
-                            and any(item.startswith("owner_title:") for item in owner_violations)
-                            else ()
-                        ),
+                        title_recovery_qids=title_qids,
                     )
                     raise capacity_error
                 header_reject = constrained

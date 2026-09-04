@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import html as html_lib
 import re
 from hashlib import sha256
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 from services.authored_title_recovery_contract import (
+    TITLE_CAPACITY_UNRESOLVABLE,
+    build_title_recovery_contract,
     protected_title_token_differences,
+    resolve_title_capacity_recovery,
     title_budget_prompt,
     title_recovery_budget,
     title_token_diagnostic,
@@ -182,6 +186,155 @@ def title_capacity_recovery_qids(html: str, *, instructions: str | None = None) 
         if not protected:
             eligible.append(node.qid)
     return tuple(eligible) if len(eligible) <= DIAGNOSTIC_OWNER_LIMIT else ()
+
+
+class _TitleTextBoundaryParser(_AuthoredStartTagCollector):
+    """Compare markup/CSS/non-target text while masking only selected owner text."""
+
+    def __init__(self, qids: Sequence[str]) -> None:
+        super().__init__()
+        self.convert_charrefs = True
+        self.qids = frozenset(qids)
+        self.structure: list[tuple[Any, ...]] = []
+
+    def handle_starttag(self, tag, attrs) -> None:
+        self.structure.append(("start", tag, tuple(sorted(attrs, key=lambda attr: attr[0]))))
+        super().handle_starttag(tag, attrs)
+
+    def handle_startendtag(self, tag, attrs) -> None:
+        self.structure.append(("empty", tag, tuple(sorted(attrs, key=lambda attr: attr[0]))))
+        super().handle_startendtag(tag, attrs)
+
+    def handle_endtag(self, tag) -> None:
+        self.structure.append(("end", tag))
+        super().handle_endtag(tag)
+
+    def handle_data(self, data) -> None:
+        owner = next((
+            _attribute_map(self.tags[index][1]).get("data-qid", "")
+            for _tag, index in reversed(self._stack)
+            if _attribute_map(self.tags[index][1]).get("data-qid", "")
+        ), "")
+        if owner in self.qids and not any(tag in {"style", "script", "template"} for tag, _ in self._stack):
+            self.structure.append(("title-text", owner))
+        else:
+            self.structure.append(("data", data))
+        super().handle_data(data)
+
+    def handle_comment(self, data) -> None:
+        self.structure.append(("comment", data))
+
+    def handle_decl(self, decl) -> None:
+        self.structure.append(("decl", decl.lower()))
+
+    def handle_pi(self, data) -> None:
+        self.structure.append(("pi", data))
+
+    def title_text(self) -> dict[str, str]:
+        return {
+            _attribute_map(attrs).get("data-qid", ""): re.sub(r"\s+", " ", "".join(self.owned_text_parts[index])).strip()
+            for index, (_tag, attrs, _raw) in enumerate(self.tags)
+            if _attribute_map(attrs).get("data-qid", "") in self.qids
+        }
+
+
+def preauthor_title_recovery_contract_prompt(content: str, capacity: SlideCapacity) -> str:
+    """Freeze a conservative planned-title contract before provider ordinal one."""
+
+    lines = [
+        re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", line)).strip()
+        for line in str(content or "").splitlines()
+    ]
+    lines = [re.sub(r"^(?:#{1,6}|[-*+] |\d+[.)]\s+)", "", line).strip() for line in lines if line]
+    title = lines[0] if len(lines) >= 2 else ""
+    non_title = len(" ".join(lines[1:])) if title else len(" ".join(lines))
+    eligible = (("planned.title", title),) if title else ()
+    measured = {
+        "owner_title": len(title),
+        "owner_visible_text": len(title) + non_title,
+    }
+    contract = build_title_recovery_contract(
+        measured,
+        {
+            "owner_title": capacity.title_max_chars,
+            "owner_visible_text": capacity.max_visible_text_chars,
+        },
+        eligible,
+        layout_id=f"role:{capacity.role.lower()}",
+    )
+    prompt = title_budget_prompt(contract, eligible)
+    return (
+        "PRE-PROVIDER TITLE CONTRACT (server-owned; applies to ordinal one): "
+        + prompt
+        + " Treat planned.title as the single primary title owner identity; if emitted, use that exact QID. "
+    )
+
+
+def title_capacity_recovery_titles(html: str, qids: Sequence[str]) -> dict[str, str]:
+    parser = _TitleTextBoundaryParser(qids)
+    parser.feed(html)
+    parser.close()
+    return parser.title_text()
+
+
+def apply_title_capacity_recovery_titles(
+    html: str, before: Mapping[str, str], replacements: Mapping[str, str],
+) -> str | None:
+    """Replace direct title-owner text without reserializing the document."""
+
+    if before.keys() != replacements.keys():
+        return None
+    parser = _CapacityReducerParser(html)
+    parser.feed(html)
+    parser.close()
+    by_qid = {node.qid: node for node in parser.nodes}
+    edits: list[tuple[int, int, str]] = []
+    for qid, replacement in replacements.items():
+        node = by_qid.get(qid)
+        if node is None or node.end is None or node.descendant_qids:
+            return None
+        start = html.find(">", node.start, node.end)
+        end = html.rfind("<", start + 1, node.end)
+        if start < 0 or end < 0:
+            return None
+        inner = html[start + 1:end]
+        if "<" in inner or re.sub(r"\s+", " ", html_lib.unescape(inner)).strip() != before[qid]:
+            return None
+        edits.append((start + 1, end, html_lib.escape(replacement, quote=False)))
+    recovered = html
+    for start, end, replacement in sorted(edits, reverse=True):
+        recovered = recovered[:start] + replacement + recovered[end:]
+    return recovered
+
+
+def resolve_authored_title_capacity_html(
+    html: str, capacity: SlideCapacity, qids: Sequence[str],
+) -> dict[str, Any]:
+    """Run the closed title resolver and apply its deterministic text result."""
+
+    normalized, measured, _owners = owner_capacity_measurements(html)
+    titles = title_capacity_recovery_titles(normalized, qids)
+    if tuple(titles) != tuple(qids):
+        return {"status": "terminal", "code": TITLE_CAPACITY_UNRESOLVABLE, "html": normalized, "receipt": None}
+    contract = build_title_recovery_contract(
+        measured,
+        {
+            "owner_title": capacity.title_max_chars,
+            "owner_visible_text": capacity.max_visible_text_chars,
+        },
+        tuple(titles.items()),
+        layout_id=f"role:{capacity.role.lower()}",
+    )
+    result = resolve_title_capacity_recovery(contract, titles)
+    if result["status"] == "terminal":
+        return {**result, "html": normalized}
+    recovered = apply_title_capacity_recovery_titles(normalized, titles, result["titles"])
+    if recovered is None or title_capacity_recovery_boundary(normalized, recovered, qids):
+        return {
+            "status": "terminal", "code": TITLE_CAPACITY_UNRESOLVABLE,
+            "html": normalized, "receipt": result["receipt"],
+        }
+    return {**result, "html": recovered}
 
 
 class _TitleTextBoundaryParser(_AuthoredStartTagCollector):
