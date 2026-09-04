@@ -22,31 +22,41 @@ which is exactly what the browser's ``elementsFromPoint``-based occlusion
 probe checks (``utils.slide_capture``) -- only elements painted *above* the
 target in that stack count as occluders.
 
-The z-index above only wins the browser's pixel-occlusion probe (paint
-order); it does nothing about the plain bounding-box "overlap" check, which
-still flags a box whose own source rectangle is simply *too short* for the
-text it carries at the source's own font size -- including the title's,
-captured as a thin strip above a much taller neighbour on a dense page (the
-measured defect on every one of ``composer-offline-eval`` final2-43 slides
-12-15/32: each slide's own ``text:3`` is that slide's *title* component id).
-Since nothing here clips an overflowing child (``.cx-geo`` sets no
-``overflow``), the box's declared height is not what stops that overflow
-from painting over the next component; only the box's *real* rendered extent
-staying within the gap before that neighbour does. ``_fit_growable_box``
-predicts that real extent with the same font-size and line-wrap model the
-renderer will actually use, and: leaves the box alone when it already fits;
-grows it straight down -- never past a horizontally overlapping neighbour's
-own top -- when the natural text fits in that headroom; and only shrinks the
-text (``box_text_scale``-style) when even the full headroom is not enough.
-This runs on every geometry-mode render, ahead of and independent of the
-ladder's own per-box shrink step (``fit._next_terminal_step``), which only
-ever applies a flat 10% cut to whatever the browser blamed on the *previous*
-render.
+The z-index above only wins that pixel-occlusion probe (paint order); it does
+nothing about the plain bounding-box "overlap" check, which still flags a box
+whose own source rectangle is simply *too short* for the text it carries at
+the source's own font size -- including the title's, captured as a thin strip
+above a much taller neighbour on a dense page. Since nothing here clips an
+overflowing child (``.cx-geo`` sets no ``overflow``), the box's declared
+height is not what stops that overflow from painting over the next component;
+only the box's *real* rendered extent staying within the gap before that
+neighbour does. ``_fit_growable_box`` predicts that real extent with the same
+font-size and line-wrap model the renderer will actually use -- the floored
+one, so a box is never pinned to a height its text refused to shrink to --
+and: leaves the box alone when it already fits; grows it straight down, never
+past a horizontally overlapping neighbour's own top; lifts it into the free
+canvas above when that gap alone is too small; and only then shrinks the text
+(``box_text_scale``-style), with whatever still does not fit logged as an
+explicit residual and left visible in the box's own (honest) height rather
+than hidden behind a shorter one. This runs on every geometry-mode render,
+ahead of and independent of the ladder's own per-box shrink step
+(``fit._next_terminal_step``), which only ever applies a flat 10% cut to
+whatever the browser blamed on the *previous* render.
 """
 
 from __future__ import annotations
 
-from services.composer.estimate_components import PARAGRAPH_GAP_PX, paragraph_height_px
+import logging
+import math
+from collections.abc import Sequence
+from typing import NamedTuple
+
+from services.composer.estimate_components import (
+    GROUP_CHROME_PX,
+    PARAGRAPH_GAP_PX,
+    paragraph_height_px,
+    process_per_row,
+)
 from services.composer.plan import (
     CANVAS_HEIGHT,
     CANVAS_WIDTH,
@@ -54,6 +64,7 @@ from services.composer.plan import (
     ComposerDeckPlan,
     ComposerSlidePlan,
     FitParameters,
+    Paragraph,
     SourceRect,
 )
 from services.composer.render_components import (
@@ -66,6 +77,8 @@ from services.composer.render_context import size_role
 from services.composer.render_css import px
 from services.composer.render_text import TextRenderError, dominant_size_pt, open_tag
 
+LOGGER = logging.getLogger(__name__)
+
 _EMU_PER_INCH = 914400.0
 _PX_PER_INCH = 96.0
 
@@ -76,18 +89,41 @@ Box = tuple[float, float, float, float]
 #: order) can paint over it, whatever its DOM position or overflow.
 _PROTECTED_TEXT_Z_INDEX = 2
 _PROTECTED_KINDS = frozenset({"title", "subtitle"})
-#: Simple text-stack/list kinds a box can be grown or shrunk for. Excludes
-#: process/comparison/table/image/furniture, whose own natural height is not
-#: a single paragraph stack. Title and subtitle ARE growable here: the
-#: ``_PROTECTED_TEXT_Z_INDEX`` above only wins the browser's pixel-occlusion
-#: probe (paint order), not the plain bounding-box "overlap" check, which
-#: still flags a title whose declared source box is shorter than its real
-#: multi-line rendered text -- the measured defect on every one of
-#: ``composer-offline-eval`` final2-43 slides 12-15/32 (each one's own
-#: ``text:3`` is that slide's title component id, not a body kicker).
+#: Kinds ``_natural_height_px`` can predict a real rendered height for, and so
+#: the kinds a box is grown, lifted or shrunk for. Title and subtitle ARE
+#: corrected here: ``_PROTECTED_TEXT_Z_INDEX`` wins only the pixel-occlusion
+#: probe, not the bounding-box "overlap" check, which still flags a title
+#: whose declared source box is shorter than its real multi-line text.
+#: ``process`` is here too: ``render_process`` sets each step in a padded,
+#: bordered card on a wrapped grid, so a wide, one-line-tall source rectangle
+#: carrying five runs renders several times its declared height and paints
+#: straight over the title below it (deck-43 slides 14/15/16, each one's
+#: ``text:2``/``text:52`` a kicker strip promoted to a process block).
+#: ``comparison``/``table``/``image``/``furniture`` stay excluded: their
+#: natural height is not modelled here yet.
 _GROWABLE_KINDS = frozenset(
-    {"paragraph", "quote", "kpi", "caption", "bullets", "numbered", "title", "subtitle"}
+    {"paragraph", "quote", "kpi", "caption", "bullets", "numbered", "title", "subtitle", "process"}
 )
+#: Auto-scale at or below which every paragraph of a component is already
+#: pinned to ``render_css.MIN_FONT_PX``, so the predicted height stops
+#: changing: the lower bound of the shrink search, and the scale a component
+#: keeps when even the whole headroom cannot hold its smallest rendering.
+_MIN_AUTO_SCALE = 0.01
+#: Bisection budget for that search; 1/2**18 of a scale unit is far finer than
+#: a pixel of predicted height.
+_SCALE_SEARCH_STEPS = 18
+_FIT_EPS = 1e-6
+#: Sub-pixel remainders are rounding, not a defect worth a log line.
+_RESIDUAL_REPORT_PX = 0.5
+
+
+class _FittedBox(NamedTuple):
+    """One component's corrected geometry: the box it is actually set in, the
+    auto text scale that box assumes, and the height that still did not fit."""
+
+    box: Box
+    scale: float
+    residual_px: float
 
 
 def page_box(deck: ComposerDeckPlan, params: FitParameters) -> Box:
@@ -163,16 +199,28 @@ def _render_placed(component: ComposerComponent, ctx: RenderContext, box_scale: 
     return render_component(component, ctx, box_scale=box_scale, width_px=width_px)
 
 
-def _natural_text_height_px(
-    component: ComposerComponent, ctx: RenderContext, *, width_px: float, box_scale: float
+def _stack_height_px(
+    paragraphs: Sequence[Paragraph],
+    component: ComposerComponent,
+    ctx: RenderContext,
+    *,
+    width_px: float,
+    box_scale: float,
 ) -> float:
-    """Height ``component``'s paragraphs will really render at, at ``width_px``
-    and the current font size -- the same per-paragraph sizing ``render_text_
-    stack``/``render_list`` use (``ctx.size`` already implements source
-    geometry's own ``page_scale``-based formula), so this prediction and the
-    browser's real layout never disagree about how tall the text is."""
+    """Height one paragraph stack will really render at, at ``width_px`` and the
+    current font size -- the same per-paragraph sizing ``render_text_stack``/
+    ``render_list``/``render_components._group_body`` use (``ctx.size`` already
+    implements source geometry's own ``page_scale``-based formula *and* the
+    ``render_css.MIN_FONT_PX`` floor), so this prediction and the browser's
+    real layout never disagree about how tall the text is.
 
-    paragraphs = component.paragraphs
+    ``estimate_components.paragraphs_height_px`` answers the same question for
+    the fit estimate, but it sizes text through ``paragraph_font_px``, which
+    knows only ``source_relative``/``source_factor`` -- not ``source_geometry``
+    and not the absolute font floor -- so at rung 5 it reports the template
+    size for text the renderer sets from the source. It cannot be reused for a
+    prediction that has to match the rendered pixels."""
+
     if not paragraphs:
         return 0.0
     density = 1 if int(ctx.params.density) >= 1 else 0
@@ -184,57 +232,211 @@ def _natural_text_height_px(
     return total + PARAGRAPH_GAP_PX[density] * (len(paragraphs) - 1)
 
 
+def _process_height_px(
+    component: ComposerComponent, ctx: RenderContext, *, width_px: float, box_scale: float
+) -> float:
+    """Height ``render_process`` will really render a process component at.
+
+    Mirrors that renderer exactly: its groups (``render_components._groups``
+    falls back to one step per paragraph, and the component's own intro
+    paragraphs are *not* drawn when it carries groups), its row split
+    (``estimate_components.process_per_row``, the same call with the same
+    width, so the estimate that decided the wrap and the renderer can never
+    disagree), each step's card chrome (``GROUP_CHROME_PX``: padding plus
+    border, subtracted from a step's width and added to its height) and the
+    ``.cx-process`` grid gap, which is ``DensitySpec.gap`` -- the CSS value,
+    not ``estimate_components.GAP_PX``'s looser content-grid figure."""
+
+    groups = component.groups or [[paragraph] for paragraph in component.paragraphs]
+    if not groups:
+        return 0.0
+    per_row = max(1, min(process_per_row(component, ctx.params, ctx.deck, width_px=width_px), len(groups)))
+    density = 1 if int(ctx.params.density) >= 1 else 0
+    chrome = GROUP_CHROME_PX[density]
+    gap = float(ctx.density.gap)
+    step_width = max(1.0, (width_px - gap * (per_row - 1)) / per_row - chrome)
+    heights: list[float] = []
+    for index, group in enumerate(groups):
+        header = component.group_headers[index] if index < len(component.group_headers) else None
+        stack = ([header] if header is not None else []) + list(group)
+        heights.append(
+            _stack_height_px(stack, component, ctx, width_px=step_width, box_scale=box_scale) + chrome
+        )
+    rows = math.ceil(len(groups) / per_row)
+    row_heights = [max(heights[row * per_row : (row + 1) * per_row]) for row in range(rows)]
+    return sum(row_heights) + gap * (rows - 1)
+
+
+def _natural_height_px(
+    component: ComposerComponent, ctx: RenderContext, *, width_px: float, box_scale: float
+) -> float:
+    """Real rendered height of any ``_GROWABLE_KINDS`` component at ``box_scale``."""
+
+    if component.kind == "process":
+        return _process_height_px(component, ctx, width_px=width_px, box_scale=box_scale)
+    return _stack_height_px(
+        component.paragraphs, component, ctx, width_px=width_px, box_scale=box_scale
+    )
+
+
 def _x_overlaps(a: Box, b: Box) -> bool:
     ax0, _ay0, aw, _ah = a
     bx0, _by0, bw, _bh = b
     return ax0 < bx0 + bw and bx0 < ax0 + aw
 
 
-def _growth_ceiling(box: Box, others: list[Box], *, page_bottom: float) -> float:
+def _growth_ceiling(box: Box, others: list[Box]) -> float:
     """The lowest top edge, among boxes below and horizontally overlapping
     ``box``, that growth must stop at -- the "next box" of the module
-    docstring -- or the page's own bottom edge when nothing is in the way."""
+    docstring -- or the canvas's own bottom edge when nothing is in the way.
+
+    The bound is the canvas, not the scaled page: ``body{overflow:hidden}``
+    makes the canvas the one hard boundary, the margin outside the page
+    carries only the decorative side bands, and rung 5's own definition
+    (design record section 4.3) is that a box which still overflows "grows
+    into free canvas"."""
 
     _x, y, _width, _height = box
-    ceiling = page_bottom
+    ceiling = float(CANVAS_HEIGHT)
     for other in others:
         _ox, oy, _ow, _oh = other
-        if oy <= y + 1e-6 or not _x_overlaps(box, other):
+        if oy <= y + _FIT_EPS or not _x_overlaps(box, other):
             continue
         ceiling = min(ceiling, oy)
     return ceiling
 
 
+def _growth_floor(box: Box, others: list[Box]) -> float:
+    """The lowest edge a box may be lifted to: the greatest bottom edge among
+    boxes wholly above and horizontally overlapping ``box``, or the canvas's
+    own top edge. The mirror of ``_growth_ceiling``, for the free canvas a
+    component can claim *above* itself once the gap below it is spent."""
+
+    _x, y, _width, _height = box
+    floor = 0.0
+    for other in others:
+        _ox, oy, _ow, oh = other
+        if oy + oh > y + _FIT_EPS or not _x_overlaps(box, other):
+            continue
+        floor = max(floor, oy + oh)
+    return floor
+
+
+def _fitting_scale(
+    component: ComposerComponent,
+    ctx: RenderContext,
+    *,
+    width_px: float,
+    ladder_scale: float,
+    available: float,
+) -> tuple[float, float]:
+    """Largest auto text scale whose *real* rendered height fits ``available``,
+    and that height.
+
+    The height is measured, never inferred: ``available / natural`` is only
+    the height a box would take if the font shrank linearly, and it does not
+    -- ``render_css.text_px`` clamps every size at ``MIN_FONT_PX``, so past
+    the floor the text stops shrinking while the caller keeps pinning the box
+    to the smaller figure. That mismatch is the defect this search replaces.
+    When even ``_MIN_AUTO_SCALE`` (everything already at the floor) does not
+    fit, that smallest rendering and its own height are returned and the
+    caller records the remainder rather than pretending it went away.
+    """
+
+    def height_at(scale: float) -> float:
+        return _natural_height_px(component, ctx, width_px=width_px, box_scale=ladder_scale * scale)
+
+    smallest = height_at(_MIN_AUTO_SCALE)
+    if smallest > available:
+        return _MIN_AUTO_SCALE, smallest
+    low, high = _MIN_AUTO_SCALE, 1.0
+    for _step in range(_SCALE_SEARCH_STEPS):
+        mid = (low + high) / 2.0
+        if height_at(mid) <= available:
+            low = mid
+        else:
+            high = mid
+    return low, height_at(low)
+
+
 def _fit_growable_box(
-    component: ComposerComponent, ctx: RenderContext, box: Box, others: list[Box], *, page_bottom: float
-) -> tuple[Box, float]:
-    """Grow ``box`` downward to hold its natural text height, capped at the
-    next overlapping box below it; only shrink text when even that full
-    headroom is not enough. Non-``_GROWABLE_KINDS`` boxes are returned
-    unchanged (``box_scale`` 1.0) -- growing those is out of this fix's scope.
+    component: ComposerComponent,
+    ctx: RenderContext,
+    box: Box,
+    others: list[Box],
+    *,
+    ladder_scale: float,
+) -> _FittedBox:
+    """Reconcile ``box`` with the height its text will really render at.
+
+    In order: leave the box alone when it already holds its natural height;
+    grow it straight down into the gap before the next overlapping box; lift
+    it into the free canvas above when that gap is not enough (its bottom
+    edge stays on the ceiling, so the neighbour below is never encroached on);
+    and only then shrink the text, as far as the font floor actually allows.
+    Whatever is left over after all three is reported as ``residual_px`` and
+    the box is still given the text's *real* height, so the declared geometry
+    never claims text fits where it does not -- nothing is clipped, hidden or
+    reordered to make the box's own number come out right.
+
+    Every step is measured at ``ladder_scale`` -- the per-box shrink rung 5
+    already applied (``FitParameters.box_text_scale``) -- times the candidate
+    auto scale, which is exactly the ``box_scale`` the renderer will use, so
+    the correction is right at every step of the ladder rather than only at
+    the terminal rung's entry.
 
     The shrink is not floored at ``MIN_SOURCE_RELATIVE_SCALE`` (the "never
     below 90% of source size" policy ``FitParameters.source_factor``/
     ``page_scale`` apply to a whole *page*): this is a narrow, per-box last
-    resort for one specific overlap, not a page-wide readability policy, so
-    it shrinks as far as the headroom actually needs -- ``render_css.
-    text_px``'s own ``MIN_FONT_PX`` absolute floor still applies underneath
-    it regardless, exactly as it does for every other font size this renderer
-    computes.
+    resort for one overlap, not a page-wide readability policy, so it shrinks
+    as far as the headroom needs -- ``render_css.text_px``'s ``MIN_FONT_PX``
+    absolute floor still applies underneath it, as it does everywhere else.
     """
 
     x, y, width, height = box
-    if component.kind not in _GROWABLE_KINDS or not component.paragraphs:
-        return box, 1.0
-    natural = _natural_text_height_px(component, ctx, width_px=width, box_scale=1.0)
-    if natural <= height:
-        return box, 1.0
-    ceiling = _growth_ceiling(box, others, page_bottom=page_bottom)
-    available = max(height, ceiling - y)
-    if natural <= available:
-        return (x, y, width, natural), 1.0
-    scale = available / natural if natural > 0 else 1.0
-    return (x, y, width, available), scale
+    if component.kind not in _GROWABLE_KINDS:
+        return _FittedBox(box, 1.0, 0.0)
+    natural = _natural_height_px(component, ctx, width_px=width, box_scale=ladder_scale)
+    if natural <= height + _FIT_EPS:
+        return _FittedBox(box, 1.0, 0.0)
+    headroom = max(height, _growth_ceiling(box, others) - y)
+    if natural <= headroom:
+        return _FittedBox((x, y, width, natural), 1.0, 0.0)
+    lift_limit = max(0.0, y - _growth_floor(box, others))
+    if natural <= headroom + lift_limit:
+        return _FittedBox((x, y - (natural - headroom), width, natural), 1.0, 0.0)
+    scale, real = _fitting_scale(
+        component, ctx, width_px=width, ladder_scale=ladder_scale, available=headroom + lift_limit
+    )
+    #: Never *below* the source rectangle: the correction only ever grows or
+    #: lifts a box, so a component whose shrunk text now needs less room than
+    #: the source gave it still keeps the rectangle the source drew for it.
+    fitted_height = max(height, real)
+    lift = min(lift_limit, max(0.0, fitted_height - headroom))
+    residual = max(0.0, real - (headroom + lift_limit))
+    return _FittedBox((x, y - lift, width, fitted_height), scale, residual)
+
+
+def _fit_boxes(
+    placed: list[ComposerComponent], boxes: list[Box], ctx: RenderContext
+) -> list[_FittedBox]:
+    """Correct every box once, topmost source rectangle first.
+
+    Order matters only because a box may now be lifted: resolving from the top
+    down means the space a box claims above itself is bounded by the
+    *corrected* extent of the box above it, never by a declared source
+    rectangle that box has already outgrown, so two neighbours can never claim
+    the same gap. ``_placed``'s own (paint) order is kept for rendering."""
+
+    resolved = [_FittedBox(box, 1.0, 0.0) for box in boxes]
+    for index in sorted(range(len(boxes)), key=lambda position: (boxes[position][1], position)):
+        component = placed[index]
+        others = [fitted.box for position, fitted in enumerate(resolved) if position != index]
+        ladder_scale = float(ctx.params.box_text_scale.get(component.component_id, 1.0))
+        resolved[index] = _fit_growable_box(
+            component, ctx, boxes[index], others, ladder_scale=ladder_scale
+        )
+    return resolved
 
 
 def layout_source_geometry(plan: ComposerSlidePlan, ctx: RenderContext) -> str:
@@ -247,21 +449,36 @@ def layout_source_geometry(plan: ComposerSlidePlan, ctx: RenderContext) -> str:
                 f"component {component.component_id!r} has no source rectangle for source geometry"
             )
         boxes.append(rect_box(component.source_rect, page))
-    page_bottom = page[1] + page[3]
+    fitted = _fit_boxes(placed, boxes, ctx)
     out = [side_bands(page, ctx)]
     for index, component in enumerate(placed):
-        box = boxes[index]
-        others = boxes[:index] + boxes[index + 1 :]
-        grown, auto_scale = _fit_growable_box(component, ctx, box, others, page_bottom=page_bottom)
-        x, y, width, height = grown
+        x, y, width, height = fitted[index].box
         ladder_scale = float(ctx.params.box_text_scale.get(component.component_id, 1.0))
-        box_scale = ladder_scale * auto_scale
+        box_scale = ladder_scale * fitted[index].scale
         inner = _render_placed(component, ctx, box_scale, width)
         if not inner:
             continue
         style = f"left:{px(x)};top:{px(y)};width:{px(width)};height:{px(height)}"
         if component.kind in _PROTECTED_KINDS:
             style += f";z-index:{_PROTECTED_TEXT_Z_INDEX}"
+        #: A component whose smallest rendering still does not fit between its
+        #: neighbours is named here rather than overflowing in silence. It
+        #: cannot be recorded on the element itself: ``utils.renderer_isolation``
+        #: admits a fixed attribute allowlist, and the residual is a render
+        #: observation, not slide content. The geometry is still honest -- the
+        #: box above carries the text's *real* height -- so the DOM inspector
+        #: sees, and the slide's own receipt records, the overlap that is left.
+        if fitted[index].residual_px > _RESIDUAL_REPORT_PX:
+            LOGGER.warning(
+                "composer source geometry: %s on slide %s has %.1fpx of text "
+                "with nowhere to go (box %.1fpx at y=%.1f, text scale %.3f)",
+                component.component_id,
+                plan.source_unit_id,
+                fitted[index].residual_px,
+                height,
+                y,
+                box_scale,
+            )
         out.append(
             open_tag(
                 "div",
