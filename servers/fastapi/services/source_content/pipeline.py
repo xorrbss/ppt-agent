@@ -57,6 +57,7 @@ from services.source_content.outline import (
     build_authored_text_image_slides,
 )
 from services.authored_composition_policy import resolve_composition_profile
+from utils.color_contrast import normalize_hex, readable_color_scheme
 from utils.get_env import get_composer_restyle_enabled
 
 
@@ -229,18 +230,31 @@ def prepare_source_content_authored_reflow(request: Any) -> str:
 
 
 def _style_tokens(style: Any) -> SourceContentStyleTokens:
-    palette = list(getattr(style, "preview_palette", None) or [])
-    palette_navy = (
-        palette[1]
-        if len(palette) > 1 and re.fullmatch(r"#[0-9A-Fa-f]{6}", str(palette[1]))
-        else "#0F172A"
+    """Derive readable deck tokens from the style's own background.
+
+    Text never comes from ``preview_palette`` -- a decorative swatch list with
+    no readability contract, indexing into which once put white body text on
+    an off-white page.  ``utils.color_contrast`` derives the panel and both
+    text planes from the background's luminance instead.
+    """
+
+    scheme = readable_color_scheme(
+        normalize_hex(
+            getattr(style, "background_color", None)
+            or getattr(style, "preview_bg", None),
+            "#FFFFFF",
+        )
     )
     return SourceContentStyleTokens(
-        background=(getattr(style, "background_color", None) or style.preview_bg),
-        surface="#FFFFFF",
-        text_primary=palette_navy,
-        text_secondary="#334155",
-        accent=(getattr(style, "primary_color", None) or style.preview_accent),
+        background=scheme.background,
+        surface=scheme.surface,
+        text_primary=scheme.text_primary,
+        text_secondary=scheme.text_secondary,
+        accent=normalize_hex(
+            getattr(style, "primary_color", None)
+            or getattr(style, "preview_accent", None),
+            "#2563EB",
+        ),
         heading_font=(getattr(style, "heading_font", None) or "Noto Sans KR"),
         body_font=(getattr(style, "body_font", None) or "Noto Sans KR"),
     )
@@ -281,8 +295,10 @@ def _synthetic_style_master(
         update={
             # Synthetic masters are immutable once published. Bump the ID with
             # the placement/composition contract so a corrected template path
-            # never conflicts with an older revision-one record.
-            "master_id": f"master:source-content-{style.id}-v4",
+            # never conflicts with an older revision-one record.  v5 carries
+            # the contrast-derived colour tokens (``_style_tokens``); v4
+            # records hold the unreadable palette-index colours.
+            "master_id": f"master:source-content-{style.id}-v5",
             "name": f"Source content · {style.id}",
             "tokens": base.tokens.model_copy(update={"colors": colors, "fonts": fonts}),
             "furniture": furniture,

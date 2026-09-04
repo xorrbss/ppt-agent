@@ -42,6 +42,7 @@ from services.source_content.allocator import (
     WritableLayout,
     canonical_digest,
 )
+from utils.color_contrast import is_dark_color
 
 
 MATERIALIZED_SCENE_VERSION = "source-content-materialized-scene/v1"
@@ -339,6 +340,14 @@ def _nearly_same_rect(left: Rect, right: Rect) -> bool:
     )
 
 
+def _dark_plane(tokens: SourceContentStyleTokens) -> str:
+    """The dark plane an inverted slide is painted on, for any style."""
+
+    return (
+        tokens.background if is_dark_color(tokens.background) else tokens.text_primary
+    )
+
+
 def _template_scene_elements(
     *,
     slide_id: str,
@@ -347,7 +356,9 @@ def _template_scene_elements(
     tokens: SourceContentStyleTokens,
 ) -> list[SceneShapeElement]:
     dark = layout_role in {"cover", "section", "closing"}
-    background = tokens.text_primary if dark else tokens.background
+    # An inverted plane must actually be dark: on a dark style ``text_primary``
+    # is the near-white ink, so the page background is already the dark plane.
+    background = _dark_plane(tokens) if dark else tokens.background
     elements = [
         SceneShapeElement(
             kind="shape",
