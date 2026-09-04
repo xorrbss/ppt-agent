@@ -437,6 +437,33 @@ shrinks, so light pages sit at the floor with empty canvas below);
 `pipeline.py` at 404 lines needs one more split; the deck title falls back to
 "Presentation" when the style carries none.
 
+## 6b. Phase 1 design (2026-09-04)
+
+Phase 1 is designed in
+`docs/composer-archetype-library-phase1-design-20260904.md`. It changes the
+shape of the row in the table above: the archetype library cannot be ported as
+markup, because its node model clips labels to 10 characters and verbatim
+restyle may not drop a character (measured: 151 real process steps, median 9
+chars, p90 72, max 244). Phase 1 therefore builds a Composer-native figure
+registry — component-level, three elastic variants, a height model per figure,
+export-policy assertions for A6 — using `utils/authored_infographic/` as the
+design reference rather than as code. Selection is deterministic and
+single-candidate; K candidates and a vision critic are flag-gated and off.
+
+## 6c. Phases 2 and 3 withdrawn (2026-09-04, later the same day)
+
+`docs/generation-programme-master-design-20260904.md` supersedes the product
+direction of the migration table above. Decision 3 there: the authored engine
+remains the designer for ordinary generation, because its output with the
+infographic library is the quality bar (`F1-stage12`: 10 slides, 145 s,
+designed figures) and the phase-2 gate ("tie on quality with a fixed figure
+registry") is not credible against it. Phase 2 (ordinary authored on Deck IR)
+and phase 3 (retire authored) are withdrawn. Phase 0 stands for verbatim
+restyle; its fit ladder is reused inside the authored path to replace the LLM
+repair round (master design A4). Phase 1 continues as the verbatim fallback
+path (master design C2) behind a fixture-first alternative (C1). Sections 2-3
+of this document remain the root-cause record for the verbatim route.
+
 ## 7. Product decisions required
 
 1. Verbatim page count. **Decided 2026-09-04: one page is one slide.** The
