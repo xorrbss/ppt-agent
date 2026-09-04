@@ -228,24 +228,42 @@ export const SEMANTIC_OWNERSHIP_ALT_TEXT_PREFIX =
   "presenton-semantic-raster-ownership-v1:";
 
 function semanticOwnerQids(layer: AuthoredHybridSlideLayer): string[] {
-  const qids = layer.rasterBands
+  // A band list attributes a raster owner to the exact transparent plane that
+  // paints it, so no two bands may claim the same QID. It is however only a
+  // subset of the slide's raster owners: an owner whose paint lands on a
+  // native band -- a structural container whose native object was dropped
+  // because its group could not be closed -- belongs to no raster island and
+  // would silently lose its carrier. The layer's own list is the authority for
+  // how many carriers this slide owes, and readback compares against exactly
+  // that set, so band attribution is extended with the remaining owners.
+  const banded = layer.rasterBands
     ? layer.rasterBands.flatMap((band) => [...band.semanticOwnerQids])
-    : [...(layer.semanticOwnerQids ?? [])];
-  if (qids.length > 2048) {
+    : [];
+  const declared = [...(layer.semanticOwnerQids ?? [])];
+  if (banded.length + declared.length > 2048) {
     throw new Error("Hybrid semantic ownership QID count exceeds the bounded limit.");
   }
   const unique = new Set<string>();
-  for (const qid of qids) {
-    if (
-      typeof qid !== "string" ||
-      !/^[A-Za-z][A-Za-z0-9._:-]{0,95}$/.test(qid) ||
-      unique.has(qid)
-    ) {
+  const ordered: string[] = [];
+  const admit = (qid: unknown, rejectRepeat: boolean): void => {
+    if (typeof qid !== "string" || !/^[A-Za-z][A-Za-z0-9._:-]{0,95}$/.test(qid)) {
       throw new Error("Hybrid semantic ownership QIDs must be unique bounded strings.");
     }
+    if (unique.has(qid)) {
+      if (rejectRepeat) {
+        throw new Error("Hybrid semantic ownership QIDs must be unique bounded strings.");
+      }
+      return;
+    }
     unique.add(qid);
-  }
-  return qids;
+    ordered.push(qid);
+  };
+  for (const qid of banded) admit(qid, true);
+  // Without bands the declared list is the only source and keeps its own
+  // uniqueness contract; with bands it may legitimately repeat what a band
+  // already attributed.
+  for (const qid of declared) admit(qid, banded.length === 0);
+  return ordered;
 }
 
 function semanticOwnershipAltText(slideNumber: number, qids: readonly string[]): string {

@@ -1249,14 +1249,34 @@ export function nestPreparedNativeGroups(
   const selectedById = new Map(
     selected.map((item) => [item.source.id, item] as const)
   );
-  const admittedGroups = selected.filter(
-    (item): item is Extract<PreparedNativeElement, { kind: "group" }> =>
-      item.kind === "group" &&
-      item.childElementIds.length > 0 &&
-      item.childElementIds.every((childId) => selectedById.has(childId))
+  const admissible = new Map(
+    selected
+      .filter(
+        (item): item is Extract<PreparedNativeElement, { kind: "group" }> =>
+          item.kind === "group" && item.childElementIds.length > 0
+      )
+      .map((group) => [group.source.id, group] as const)
   );
+  // Admission has to close over nesting, not just over one level: a group whose
+  // own children are all selected can still own a nested group that lost a
+  // child, and closing the tree through that group would dereference an element
+  // that is not in the selection. Drop such parents until the set is stable.
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const group of [...admissible.values()]) {
+      const closed = group.childElementIds.every((childId) => {
+        const child = selectedById.get(childId);
+        return child !== undefined && (child.kind !== "group" || admissible.has(childId));
+      });
+      if (!closed) {
+        admissible.delete(group.source.id);
+        changed = true;
+      }
+    }
+  }
+  const admittedGroups = [...admissible.values()];
   const childIds = new Set(admittedGroups.flatMap((group) => group.childElementIds));
-  const groupById = new Map(admittedGroups.map((group) => [group.source.id, group]));
+  const groupById = admissible;
   const build = (
     item: PreparedNativeElement,
     visiting: ReadonlySet<string> = new Set(),
