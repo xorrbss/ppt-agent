@@ -162,6 +162,11 @@ def test_pptx_manifest_is_deterministic_and_external_relationship_fails_closed(
     assert "".join(text_block.payload["runs"]) == text_block.payload["text"]
     assert text_block.payload["paragraphs"][1] == {
         "runs": ["원본 불릿 문구"],
+        # One style entry per run, so a restyle can set a paragraph at the size
+        # the source itself used.
+        "runStyles": [
+            {"sizePt": 18.0, "bold": False, "italic": False, "color": None}
+        ],
         "text": "원본 불릿 문구",
         "bullet": True,
         "bulletKind": "character",

@@ -39,6 +39,15 @@ DEFAULT_PLACEHOLDER_TYPE = "obj"
 DEFAULT_PLACEHOLDER_IDX = 0
 MAX_LIST_LEVEL = 8
 
+#: Bump this whenever a change to typography/run-style capture (here or in
+#: ``pptx_text_body.py``) or to document-identity capture (here or in
+#: ``pptx_document_identity.py``) alters the derived manifest content for a
+#: source that was already analysed. ``pptx.py`` folds it into
+#: ``manifest_id`` so an extractor upgrade seals a new manifest identity for
+#: the same snapshot instead of colliding with the previously stored digest
+#: under the old one.
+MANIFEST_ID_EXTRACTOR_REVISION = "typography-run-styles-v1+document-identity-v1"
+
 _HEX_RE = re.compile(r"^[0-9A-Fa-f]{6}$")
 _SOLID_FILL_TAG = f"{{{A_NS}}}solidFill"
 _FILL_TAGS = frozenset(

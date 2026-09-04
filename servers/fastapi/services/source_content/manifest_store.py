@@ -168,6 +168,7 @@ async def analyze_reference_snapshot(
         source_path,
         owner_id=_scope(effective_owner),
         reference_snapshot_id=str(snapshot.snapshot_id),
+        original_file_name=asset.original_name,
     )
     manifest = extracted.manifest
     existing = await session.scalar(

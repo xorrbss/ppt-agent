@@ -28,8 +28,12 @@ from services.source_content.errors import (
     UNSUPPORTED_OBJECT,
     SourceContentError,
 )
+from services.source_content.pptx_document_identity import (
+    extract_document_title,
+    title_from_file_name,
+)
 from services.source_content.pptx_text_body import extract_text_body, placeholder_payload
-from services.source_content.pptx_typography import PptxTypographyResolver
+from services.source_content.pptx_typography import MANIFEST_ID_EXTRACTOR_REVISION, PptxTypographyResolver
 from services.source_content.security import (
     REL_NS,
     PackageSecurityReport,
@@ -694,16 +698,20 @@ def extract_pptx_source_content(
     *,
     owner_id: str,
     reference_snapshot_id: str,
+    original_file_name: str | None = None,
 ) -> ExtractedSourceContent:
     report = admit_pptx_package(path)
     source_bytes = path.read_bytes()
     source_digest = digest_bytes(source_bytes)
-    seed = f"{owner_id}\n{reference_snapshot_id}\n{source_digest}".encode("utf-8")
-    manifest_id = f"scm_{sha256(seed).hexdigest()}"
+    # Revision is part of the seed so an extractor upgrade seals a new manifest_id.
+    seed = f"{MANIFEST_ID_EXTRACTOR_REVISION}\n{owner_id}\n{reference_snapshot_id}\n{source_digest}"
+    manifest_id = f"scm_{sha256(seed.encode('utf-8')).hexdigest()}"
 
     with ZipFile(path, "r") as package:
         typography = PptxTypographyResolver(package, relationship_map=_relationship_map)
         slide_size = typography.slide_size()
+        document_title = extract_document_title(package, report)
+        source_file_title = title_from_file_name(original_file_name)
         inventory_objects = _inventory_package(package, report)
         media_assets: dict[str, SealedManifestAsset] = {}
         image_occurrences: Counter[str] = Counter()
@@ -806,6 +814,10 @@ def extract_pptx_source_content(
     }
     if slide_size is not None:
         manifest_without_digest["slideSize"] = slide_size
+    if document_title is not None:
+        manifest_without_digest["documentTitle"] = document_title
+    if source_file_title is not None:
+        manifest_without_digest["sourceFileTitle"] = source_file_title
     manifest = SourceContentManifest(
         **manifest_without_digest,
         owner_id=owner_id,

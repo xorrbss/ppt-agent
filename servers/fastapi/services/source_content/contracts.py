@@ -107,11 +107,27 @@ class SourceContentManifest(ContractModel):
     #: before it. Omitted from dumps while ``None`` so those stored manifests
     #: still re-derive their recorded digest byte for byte.
     slide_size: SourceSlideSize | None = None
+    #: ``dc:title`` from ``docProps/core.xml`` (``pptx_document_identity.py``),
+    #: whitespace-collapsed; ``None`` when the source never had one, when it
+    #: was blank, or for manifests sealed before this capture.
+    document_title: str | None = None
+    #: A title candidate cleaned from the uploaded file's own name
+    #: (``pptx_document_identity.py``); ``None`` when the cleaned remainder
+    #: is empty or a generic placeholder, or for manifests sealed before
+    #: this capture.
+    source_file_title: str | None = None
 
     @model_serializer(mode="wrap")
     def _omit_uncaptured_fields(self, handler: SerializerFunctionWrapHandler):
         data = handler(self)
-        for key in ("slideSize", "slide_size"):
+        for key in (
+            "slideSize",
+            "slide_size",
+            "documentTitle",
+            "document_title",
+            "sourceFileTitle",
+            "source_file_title",
+        ):
             if key in data and data[key] is None:
                 del data[key]
         return data
