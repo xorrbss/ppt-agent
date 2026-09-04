@@ -60,6 +60,13 @@ TABLES = [
 LEGACY_FIXED_DEADLINE_SECONDS = 900
 
 
+@pytest.fixture(autouse=True)
+def _token_rate_profile(monkeypatch):
+    """The scaled budgets below are the token profile's 3-slide, 1-then-2 shape."""
+
+    monkeypatch.setenv("AUTHORED_PROVIDER_RATE_PROFILE", "token")
+
+
 def test_public_default_policy_version_is_v3() -> None:
     assert PUBLIC_DEFAULT_POLICY_VERSION == "public-default/v3"
     assert PUBLIC_PHASE2_DEFAULT_POLICY_VERSION == "public-default/v3"
@@ -98,6 +105,16 @@ def test_generation_deadline_wave_count_and_ceiling_are_bounded() -> None:
     )
     with pytest.raises(ValueError, match="slide_count_must_be_nonnegative"):
         public_generation_deadline_seconds(-1)
+
+
+def test_generation_deadline_follows_the_api_profile_wave_shape(monkeypatch) -> None:
+    """Per-slide calls, five at a time: 20 slides are four waves."""
+
+    monkeypatch.setenv("AUTHORED_PROVIDER_RATE_PROFILE", "api")
+
+    assert public_generation_wave_count(5) == 1
+    assert public_generation_wave_count(20) == 4
+    assert public_generation_deadline_seconds(20) == 900 + 300 * 4
 
 
 def _policy(version: str, *, generation_deadline_seconds: int) -> PublicPolicyProfile:

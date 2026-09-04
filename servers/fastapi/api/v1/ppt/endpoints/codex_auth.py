@@ -16,6 +16,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from utils.codex_token_refresh import persist_codex_token_result
 from utils.oauth.openai_codex import (
     CodexAccountProfile,
     OAuthCallbackServer,
@@ -100,21 +101,14 @@ def _parse_optional_bool(value: Optional[str]) -> Optional[bool]:
 
 
 async def _store_token(result: TokenSuccess) -> CodexAccountProfile:
-    """Persist OAuth fields without staging credentials in process-global state."""
-    profile = get_account_profile(result.access, result.id_token)
-    await asyncio.to_thread(
-        save_codex_tokens_to_user_config,
-        {
-            "CODEX_ACCESS_TOKEN": result.access,
-            "CODEX_REFRESH_TOKEN": result.refresh,
-            "CODEX_TOKEN_EXPIRES": str(result.expires),
-            "CODEX_ACCOUNT_ID": profile.account_id,
-            "CODEX_USERNAME": profile.username,
-            "CODEX_EMAIL": profile.email,
-            "CODEX_IS_PRO": profile.is_pro,
-        },
-    )
-    return profile
+    """Persist OAuth fields without staging credentials in process-global state.
+
+    Delegates to `persist_codex_token_result`
+    (`utils/codex_token_refresh.py`), the same function the automatic-refresh
+    path in `utils/llm_config._get_codex_access_token` calls, so both routes
+    write identical fields through the identical call.
+    """
+    return await asyncio.to_thread(persist_codex_token_result, result)
 
 
 # ---------------------------------------------------------------------------

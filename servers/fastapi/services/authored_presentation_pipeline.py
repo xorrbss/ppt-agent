@@ -687,6 +687,7 @@ async def _author_illustrate_render_pipeline(
         recovery_batches = plan_authored_recovery_batches(
             failed_for_recovery,
             successful_slide_indices=successful,
+            profile=policy.profile,
         )
         for offset in range(0, len(recovery_batches), policy.concurrency):
             window = recovery_batches[offset : offset + policy.concurrency]
@@ -1446,7 +1447,6 @@ async def _author_illustrate_render_pipeline(
         ),
         # Slides are authored in parallel child tasks, so the quality loop's
         # per-slide choice has no ambient way back to the measurement stage.
-        # It travels with the slide's own result instead.
         slide_quality_receipts={
             int(result[0]): dict(result[11])
             for result in completed_results

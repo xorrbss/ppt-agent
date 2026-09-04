@@ -526,6 +526,24 @@
       "description": "Managed Codex subscription indicator."
     },
     {
+      "key": "CODEX_TOKEN_AUTO_REFRESH",
+      "type": "boolean",
+      "default": true,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "llm.codex",
+      "description": "Automatically refresh a near-expiry Codex OAuth access token before use."
+    },
+    {
+      "key": "CODEX_TOKEN_REFRESH_LEEWAY_SECONDS",
+      "type": "integer",
+      "default": 600,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "llm.codex",
+      "description": "Seconds before expiry at which an automatic Codex OAuth token refresh fires."
+    },
+    {
       "key": "DISABLE_THINKING",
       "type": "boolean",
       "default": false,
@@ -756,6 +774,15 @@
       "description": "Brave Search API key."
     },
     {
+      "key": "AUTHORED_HTML_NORMALIZE_ENABLED",
+      "type": "boolean",
+      "default": true,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Strip a whitelist of harmless authored-HTML admission findings (break/page-break CSS declarations, a hidden attribute on bound or unbound elements) before the renderer admission gate."
+    },
+    {
       "key": "AUTHORED_QUALITY_LOOP_ENABLED",
       "type": "boolean",
       "default": false,
@@ -772,6 +799,15 @@
       "targets": ["fastapi.runtime"],
       "group": "authored.quality",
       "description": "Candidates rendered per figure slide, including the baseline (1-4)."
+    },
+    {
+      "key": "IMAGE_GENERATION_TIMEOUT_SECONDS",
+      "type": "integer",
+      "default": 180,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Per-attempt deadline for one image provider call, in seconds. A picture that exceeds it degrades to the HTML-only figure instead of holding the deck's deadline."
     },
     {
       "key": "AUTHORED_DESIGN_CRITIQUE_ENABLED",
@@ -799,6 +835,61 @@
       "targets": ["fastapi.runtime"],
       "group": "authored.quality",
       "description": "Raster fallback elements a hybrid-exported slide may keep before it is marked a quality failure."
+    },
+    {
+      "key": "AUTHORED_PROVIDER_RATE_PROFILE",
+      "type": "enum",
+      "default": "auto",
+      "secret": false,
+      "choices": ["auto", "token", "api"],
+      "targets": ["fastapi.runtime"],
+      "group": "authored.throughput",
+      "description": "Authored provider rate profile: auto derives token for codex and api for every other provider; token keeps the conservative three-slide batches, api authors one slide per call at the author concurrency."
+    },
+    {
+      "key": "AUTHORED_API_PROVIDER_CONCURRENCY_MAX",
+      "type": "integer",
+      "default": 16,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.throughput",
+      "description": "Ceiling for the authored author concurrency under the api rate profile (the token profile keeps 8)."
+    },
+    {
+      "key": "AUTHORED_AUTHOR_CONCURRENCY",
+      "type": "integer",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.throughput",
+      "description": "Explicit authored author concurrency; unset takes the rate profile default (token 5, api 5) and is clamped to the profile ceiling."
+    },
+    {
+      "key": "AUTHORED_BATCH_SLIDES_PER_CALL",
+      "type": "integer",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.throughput",
+      "description": "Explicit slides per authoring provider call; unset takes the rate profile default (token 3, api 1)."
+    },
+    {
+      "key": "AUTHORED_BATCH_WAVE_CONCURRENCY",
+      "type": "integer",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.throughput",
+      "description": "Explicit steady-state authoring calls per scheduling wave; unset takes the rate profile default (token 2, api the author concurrency)."
+    },
+    {
+      "key": "AUTHORED_BATCH_RECOVERY_SUCCESSES",
+      "type": "integer",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.throughput",
+      "description": "Consecutive successful authoring calls after an overload cooldown before one concurrency step is restored; unset takes the rate profile default (3)."
     }
   ]
 }

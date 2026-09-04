@@ -62,7 +62,7 @@ from utils.llm_calls.author_slide import (
 )
 from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
 from utils.provider_idempotency import ProviderOutcomeError
-from utils.renderer_isolation import RendererPolicyError
+from utils.renderer_isolation import RendererPolicyError, admit_authored_html
 
 
 def _run(coro):
@@ -643,6 +643,15 @@ def test_authored_html_validation_allows_server_stamped_source_block_identity():
     assert 'data-source-block-id="source-slide:1:text:2"' in validated
 
 
+# A2 (docs/generation-programme-master-design-20260904.md section 4): admission
+# normalises a whitelist of harmless findings before the renderer gate. The
+# evidence bucket named `css_property_is_not_allowed__break-inside__avoid`;
+# `break-inside` itself has since been separately added to
+# ALLOWED_CSS_PROPERTIES, so `page-break-inside` (same normalised family,
+# still outside the allowlist) is used here to keep demonstrating a real,
+# currently-failing admission error fixed by normalisation.
+
+
 def test_finalized_illustration_html_removes_prompt_only():
     html = (
         "<!doctype html><html><head><meta charset='utf-8'></head><body>"
@@ -712,6 +721,8 @@ def test_author_deck_uses_authored_html_when_valid(monkeypatch):
 
 
 def test_author_deck_recovers_only_failed_slide_from_batch(monkeypatch):
+    # The expected wave shape (3 slides per call) is the token profile's.
+    monkeypatch.setenv("AUTHORED_PROVIDER_RATE_PROFILE", "token")
     calls = []
     failed = AuthoredBatchFailure(ValueError("slide 1 rejected"), "repair slide 1")
 
@@ -3261,3 +3272,9 @@ def test_authored_title_prefers_clean_content_over_verbose_outline():
     title = authored_title(req, outline)
     assert title == "제조업 스마트팩토리 전환 전략 2026"
     assert "발표자" not in title
+
+
+# --- E4 (docs/generation-programme-master-design-20260904.md section 8):
+# a slide whose authored HTML needs A2 normalisation carries the fired rules
+# in its own ``slide_quality_receipts`` entry. --------------------------------
+

@@ -1,14 +1,22 @@
-"""Shared provider-throughput policy for the Authored generation path."""
+"""Shared provider-throughput policy for the Authored generation path.
+
+The default author concurrency and its ceiling come from the provider rate
+profile (``services/authored_provider_rate_profile.py``): the token profile
+keeps the historical 8, the api profile takes ``AUTHORED_API_PROVIDER_CONCURRENCY_MAX``.
+"""
 
 from __future__ import annotations
 
 import os
 import re
 
+from services.authored_provider_rate_profile import (
+    AuthoredRateProfile,
+    resolve_authored_rate_profile,
+)
 
-AUTHORED_PROVIDER_CONCURRENCY_MIN = 5
-AUTHORED_PROVIDER_CONCURRENCY_MAX = 8
-AUTHORED_PROVIDER_CONCURRENCY_DEFAULT = 5
+
+AUTHORED_PROVIDER_CONCURRENCY_MIN = 1
 
 
 def _positive_int(value: str | None) -> int | None:
@@ -24,29 +32,34 @@ def _provider_setting_name(provider: str | None) -> str | None:
     return f"AUTHORED_PROVIDER_{normalized}_CONCURRENCY" if normalized else None
 
 
-def authored_provider_concurrency(provider: str | None = None) -> int:
-    """Return the one approved 5..8 cap for a selected provider.
+def authored_provider_concurrency(
+    provider: str | None = None,
+    *,
+    profile: AuthoredRateProfile | None = None,
+) -> int:
+    """Return the approved author-pool size for a selected provider.
 
     A provider override (``AUTHORED_PROVIDER_<PROVIDER>_CONCURRENCY``) wins;
-    ``AUTHORED_PROVIDER_CONCURRENCY`` is the shared fallback.  The old separate
-    author/pipeline settings intentionally do not participate.
+    ``AUTHORED_PROVIDER_CONCURRENCY`` is the shared fallback; otherwise the
+    profile's author concurrency (itself overridable through
+    ``AUTHORED_AUTHOR_CONCURRENCY``) applies.  Every path is clamped to the
+    profile ceiling so an operator cannot exceed what the profile approves.
     """
 
+    resolved = profile if profile is not None else resolve_authored_rate_profile()
     provider_name = _provider_setting_name(provider)
     configured = _positive_int(os.getenv(provider_name)) if provider_name else None
     if configured is None:
         configured = _positive_int(os.getenv("AUTHORED_PROVIDER_CONCURRENCY"))
     if configured is None:
-        return AUTHORED_PROVIDER_CONCURRENCY_DEFAULT
+        configured = resolved.author_concurrency_default
     return max(
         AUTHORED_PROVIDER_CONCURRENCY_MIN,
-        min(AUTHORED_PROVIDER_CONCURRENCY_MAX, configured),
+        min(resolved.author_concurrency_max, configured),
     )
 
 
 __all__ = [
-    "AUTHORED_PROVIDER_CONCURRENCY_DEFAULT",
-    "AUTHORED_PROVIDER_CONCURRENCY_MAX",
     "AUTHORED_PROVIDER_CONCURRENCY_MIN",
     "authored_provider_concurrency",
 ]

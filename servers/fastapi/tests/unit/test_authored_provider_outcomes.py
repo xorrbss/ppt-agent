@@ -180,8 +180,26 @@ def test_call_timeout_is_a_distinct_recoverable_outcome():
     assert raised.value.recovery_allowed is True
     assert "private endpoint detail" not in str(raised.value)
 
-    # A stuck call is an overload signal: the job drops to serial authoring.
+    # A stuck call is an overload signal: the job halves its wave concurrency
+    # and enters a cooldown before it may recover.
     assert is_authored_provider_overload(raised.value) is True
+
+
+def test_rate_limited_bridge_call_is_an_overload_signal():
+    """A 429 from the transport must slow the wave, not just retry the call."""
+
+    class RateLimited(RuntimeError):
+        status_code = 429
+
+    throttled = _ChatGPTClient([], error=RateLimited("private quota detail"))
+    with pytest.raises(ProviderOutcomeError) as raised:
+        _call(throttled)()
+
+    assert raised.value.code == "public_provider_bridge_exception"
+    assert raised.value.recovery_allowed is True
+    assert "private quota detail" not in str(raised.value)
+    assert is_authored_provider_overload(raised.value) is True
+    assert is_authored_provider_overload(RateLimited("throttled")) is True
 
 
 def test_unenforceable_timeout_is_reported_rather_than_assumed(caplog):

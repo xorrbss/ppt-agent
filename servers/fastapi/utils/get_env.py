@@ -5,6 +5,7 @@ from collections.abc import Callable
 
 from constants.settings_registry import get_settings_by_key
 from services.provider_settings_values import SECRET_SETTING_KEYS
+from utils.parsers import parse_bool_or_none
 from utils.runtime_settings import RuntimeSettings, resolve_runtime_settings
 
 
@@ -163,6 +164,21 @@ def is_parallel_image_generation_enabled(
     return _is_truthy(get_setting_env("ENABLE_PARALLEL_IMAGE_GENERATION", settings))
 
 
+def get_image_generation_timeout_seconds(
+    settings: RuntimeSettings | None = None,
+) -> float:
+    """Per-attempt deadline for one image provider call.
+
+    The OpenAI SDK's own default is ten minutes, and image calls are
+    serialised behind a process-wide lock, so one hung picture can hold a
+    whole deck past its generation deadline. A picture is decoration: it
+    degrades to the HTML-only figure long before that.
+    """
+    return float(
+        max(5, min(600, _int_setting("IMAGE_GENERATION_TIMEOUT_SECONDS", 180, settings)))
+    )
+
+
 def is_authored_source_images_enabled(
     settings: RuntimeSettings | None = None,
 ) -> bool:
@@ -182,6 +198,20 @@ def _int_setting(key: str, default: int, settings: RuntimeSettings | None) -> in
         return int(raw)
     except ValueError:
         return default
+
+
+def is_authored_html_normalize_enabled(
+    settings: RuntimeSettings | None = None,
+) -> bool:
+    """Whether harmless authored-HTML admission findings are normalised first.
+
+    On by default: the whitelist in ``utils/authored_html_normalize.py`` is
+    strictly a subset of what admission already treats as harmless, so the
+    flag exists to allow disabling the rewrite for isolation, not because the
+    default carries a real risk.
+    """
+    parsed = parse_bool_or_none(get_setting_env("AUTHORED_HTML_NORMALIZE_ENABLED", settings))
+    return True if parsed is None else parsed
 
 
 def is_authored_quality_loop_enabled(
@@ -225,3 +255,83 @@ def get_authored_export_fallback_limit(
 ) -> int:
     """Raster fallbacks a hybrid-exported slide may keep before it is flagged."""
     return max(0, _int_setting("AUTHORED_EXPORT_FALLBACK_LIMIT", 2, settings))
+
+
+def is_codex_token_auto_refresh_enabled(
+    settings: RuntimeSettings | None = None,
+) -> bool:
+    """Whether a near-expiry Codex OAuth access token is refreshed automatically.
+
+    On by default. With the flag unset explicitly to false, an expiring token
+    is returned as-is, exactly as before automatic refresh existed.
+    """
+    parsed = parse_bool_or_none(get_setting_env("CODEX_TOKEN_AUTO_REFRESH", settings))
+    return True if parsed is None else parsed
+
+
+def get_codex_token_refresh_leeway_seconds(
+    settings: RuntimeSettings | None = None,
+) -> int:
+    """Seconds of lead time before expiry at which an automatic refresh fires."""
+    return max(0, _int_setting("CODEX_TOKEN_REFRESH_LEEWAY_SECONDS", 600, settings))
+
+
+def _optional_positive_int_setting(
+    key: str, settings: RuntimeSettings | None
+) -> int | None:
+    """An explicit positive integer knob, or ``None`` when unset or invalid."""
+    raw = (get_setting_env(key, settings) or "").strip()
+    if not raw:
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        return None
+    return value if value > 0 else None
+
+
+def get_authored_provider_rate_profile_env(
+    settings: RuntimeSettings | None = None,
+) -> str:
+    """Requested authored rate profile: ``auto`` (default), ``token`` or ``api``."""
+    value = (get_setting_env("AUTHORED_PROVIDER_RATE_PROFILE", settings) or "").strip()
+    return value.lower() or "auto"
+
+
+def get_authored_api_provider_concurrency_max(
+    settings: RuntimeSettings | None = None,
+) -> int:
+    """Author concurrency ceiling under the api rate profile (default 16)."""
+    return _optional_positive_int_setting(
+        "AUTHORED_API_PROVIDER_CONCURRENCY_MAX", settings
+    ) or 16
+
+
+def get_authored_author_concurrency_env(
+    settings: RuntimeSettings | None = None,
+) -> int | None:
+    """Explicit author concurrency, or ``None`` to take the profile default."""
+    return _optional_positive_int_setting("AUTHORED_AUTHOR_CONCURRENCY", settings)
+
+
+def get_authored_batch_slides_per_call_env(
+    settings: RuntimeSettings | None = None,
+) -> int | None:
+    """Explicit slides per authoring call, or ``None`` for the profile default."""
+    return _optional_positive_int_setting("AUTHORED_BATCH_SLIDES_PER_CALL", settings)
+
+
+def get_authored_batch_wave_concurrency_env(
+    settings: RuntimeSettings | None = None,
+) -> int | None:
+    """Explicit steady calls per wave, or ``None`` for the profile default."""
+    return _optional_positive_int_setting("AUTHORED_BATCH_WAVE_CONCURRENCY", settings)
+
+
+def get_authored_batch_recovery_successes_env(
+    settings: RuntimeSettings | None = None,
+) -> int | None:
+    """Explicit successes per recovery step, or ``None`` for the profile default."""
+    return _optional_positive_int_setting(
+        "AUTHORED_BATCH_RECOVERY_SUCCESSES", settings
+    )

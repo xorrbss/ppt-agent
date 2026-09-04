@@ -1790,7 +1790,7 @@ async def author_deck(
     brand: Brand,
     style: Optional[AuthoredStyleLike] = None,
 ) -> AuthoredDeckResult:
-    """Author a deck in adaptive waves of one-call, at-most-three-slide batches."""
+    """Author a deck in adaptive waves of profile-sized, one-call slide batches."""
     plan = prepare_authored_deck(outline, brand, style)
     if author_slide_html is not _DEFAULT_AUTHOR_SLIDE_HTML:
         # Preserve the established single-slide injection seam used by offline
@@ -1835,6 +1835,7 @@ async def author_deck(
     recovery_batches = plan_authored_recovery_batches(
         failures,
         successful_slide_indices=html_by_index,
+        profile=policy.profile,
     )
     for offset in range(0, len(recovery_batches), policy.concurrency):
         window = recovery_batches[offset : offset + policy.concurrency]

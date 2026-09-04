@@ -37,7 +37,6 @@ from utils.get_env import (
     get_bedrock_region_env,
     get_cerebras_api_key_env,
     get_cerebras_base_url_env,
-    get_codex_access_token_env,
     get_codex_account_id_env,
     get_codex_reasoning_effort_env,
     get_custom_llm_api_key_env,
@@ -63,6 +62,7 @@ from utils.get_env import (
     get_web_grounding_env,
 )
 from utils.available_models import normalize_openai_compatible_base_url
+from utils.codex_token_refresh import ensure_fresh_codex_access_token
 from utils.llm_provider import get_llm_provider
 from utils.parsers import parse_bool_or_none
 from utils.runtime_settings import RuntimeSettings, resolve_runtime_settings
@@ -126,7 +126,7 @@ def enforce_llm_egress_policy(
 
 
 def _get_codex_access_token(settings: RuntimeSettings) -> str:
-    access_token = get_codex_access_token_env(settings)
+    access_token = ensure_fresh_codex_access_token(settings)
     if not access_token:
         raise HTTPException(
             status_code=400,

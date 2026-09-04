@@ -22,8 +22,14 @@ from utils.llm_calls import author_slide as author_slide_mod
 def test_provider_cap_and_role_profiles_preserve_strict_authoring(monkeypatch) -> None:
     monkeypatch.setenv("AUTHORED_PROVIDER_CONCURRENCY", "20")
     monkeypatch.setenv("AUTHORED_PROVIDER_OPENAI_CONCURRENCY", "6")
+    # The ceiling comes from the provider rate profile: token keeps 8, api
+    # takes AUTHORED_API_PROVIDER_CONCURRENCY_MAX (default 16).
+    monkeypatch.setenv("AUTHORED_PROVIDER_RATE_PROFILE", "token")
     assert authored_provider_concurrency("openai") == 6
     assert authored_provider_concurrency("anthropic") == 8
+    monkeypatch.setenv("AUTHORED_PROVIDER_RATE_PROFILE", "api")
+    assert authored_provider_concurrency("openai") == 6
+    assert authored_provider_concurrency("anthropic") == 16
 
     assert _authoring_output_profile(
         role="COVER",
