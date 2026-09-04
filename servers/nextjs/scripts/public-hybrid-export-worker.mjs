@@ -367,7 +367,6 @@ async function run() {
   );
 
   const layers = outcomes.map((outcome) => outcome.layer).filter(Boolean);
-  if (!layers.length) throw new HybridWorkerError("hybrid_no_native_layers");
   const report = modules.createPresentationExportQuality(
     "hybrid",
     outcomes.map((outcome) => outcome.quality),
@@ -385,6 +384,13 @@ async function run() {
       },
     },
   );
+  if (!layers.length) {
+    // Every slide fell back. Report why, per slide: a bare "no layers" leaves
+    // the caller with a downgrade it can name but cannot explain or act on.
+    const noLayers = new HybridWorkerError("hybrid_no_native_layers");
+    noLayers.quality = summarizeQuality(report);
+    throw noLayers;
+  }
   const hybridBytes = await modules.assembleAuthoredHybridPptxAsync(
     embedding.pptx,
     layers,
@@ -425,7 +431,15 @@ try {
       ? error.code
       : `hybrid_unexpected_failure:${error instanceof Error ? error.message.slice(0, 120) : "unknown"}`;
   process.stdout.write(
-    `${JSON.stringify({ schemaVersion: RESULT_SCHEMA, ok: false, errorCode: code })}\n`,
+    `${JSON.stringify({
+      schemaVersion: RESULT_SCHEMA,
+      ok: false,
+      errorCode: code,
+      // A refusal still owes an account of itself when it has one.
+      ...(error instanceof HybridWorkerError && error.quality
+        ? { quality: error.quality }
+        : {}),
+    })}\n`,
   );
   process.exit(1);
 }

@@ -22,7 +22,7 @@ from services.isolated_worker_contracts import (
     IsolatedWorkerJob,
     reject_sensitive_worker_payload,
 )
-from workers.public_export_hybrid import assemble_hybrid_pptx
+from workers.public_export_hybrid import HybridAssemblyOutcome, assemble_hybrid_pptx
 from workers.public_worker_runtime import (
     LocalContentAddressedStore,
     PublicWorkerExecutionError,
@@ -346,19 +346,30 @@ async def execute_export(
                 raise PublicWorkerExecutionError(
                     "public_export_source_slides_required"
                 )
-            outcome = await assemble_hybrid_pptx(
-                base_pptx=target,
-                html_paths=[
-                    store.verified_path(reference)
-                    for reference in bundle.source_slides
-                ],
-                scratch=scratch,
-                font_embedding=bundle.font_embedding,
-                budget_seconds=job.deadline_epoch_seconds - time.time(),
-                semantic_slides=bundle.semantic_slides,
-                export_attempt_id=bundle.export_attempt_id,
-                renderer_source_digest=bundle.renderer_source_digest,
-            )
+            try:
+                outcome = await assemble_hybrid_pptx(
+                    base_pptx=target,
+                    html_paths=[
+                        store.verified_path(reference)
+                        for reference in bundle.source_slides
+                    ],
+                    scratch=scratch,
+                    font_embedding=bundle.font_embedding,
+                    budget_seconds=job.deadline_epoch_seconds - time.time(),
+                    semantic_slides=bundle.semantic_slides,
+                    export_attempt_id=bundle.export_attempt_id,
+                    renderer_source_digest=bundle.renderer_source_digest,
+                )
+            except Exception as error:  # noqa: BLE001
+                # The raster deck beside this is already good. Anything the
+                # assembler path can raise costs the richer output and its
+                # reason, never the user's export, so nothing here may escape
+                # into the worker's own failure path.
+                outcome = HybridAssemblyOutcome(
+                    None,
+                    {},
+                    f"hybrid_assembler_raised:{type(error).__name__}"[:160],
+                )
             evidence = {
                 "declaredGraphSlides": len(bundle.semantic_slides),
                 **outcome.evidence,

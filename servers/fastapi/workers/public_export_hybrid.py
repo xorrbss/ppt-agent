@@ -201,7 +201,9 @@ async def assemble_hybrid_pptx(
         reason = result.get("errorCode")
         return HybridAssemblyOutcome(
             None,
-            {},
+            # A failed assembly still owes an account of itself; the caller
+            # records it beside the fallback reason.
+            {"quality": _bounded_evidence(result.get("quality"))},
             str(reason)[:160] if isinstance(reason, str) and reason else "hybrid_assembler_failed",
         )
     if not output_path.is_file() or output_path.stat().st_size <= 0:

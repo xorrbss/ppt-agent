@@ -520,8 +520,18 @@ class PublicExportHybridFallback(PublicExportOperationError):
     instead of inheriting a raster result forever.
     """
 
-    def __init__(self, reason: str) -> None:
+    def __init__(
+        self,
+        reason: str,
+        *,
+        evidence: Mapping[str, Any] | None = None,
+        resource_metrics: Mapping[str, Any] | None = None,
+    ) -> None:
         self.reason = reason
+        #: What the assembler reported before giving up. Losing it would leave
+        #: a fallback with a code and no account of itself.
+        self.evidence = dict(evidence or {})
+        self.resource_metrics = dict(resource_metrics or {})
         super().__init__(reason)
 
 
@@ -1163,7 +1173,11 @@ async def execute_canonical_export_execution(
                 error_code="public_export_delivered_mode_mismatch",
             )
             await session.commit()
-        raise PublicExportHybridFallback(reason)
+        raise PublicExportHybridFallback(
+            reason,
+            evidence=exported.execution_evidence,
+            resource_metrics={"role": exported.role, **exported.resource_metrics},
+        )
     result_ref = _public_worker_output(
         dict(exported.output_artifact or {}),
         retention_class="published",
@@ -1230,6 +1244,7 @@ async def render_and_export_authored_htmls(
         "editable-hybrid" if hybrid_requested else "fidelity-raster"
     )
     hybrid_degraded_reason: str | None = None
+    hybrid_attempt_evidence: dict[str, Any] = {}
 
     artifact_metrics_before = public_artifact_store_metrics_snapshot()
     artifact_service = configured_public_artifact_service()
@@ -1826,8 +1841,13 @@ async def render_and_export_authored_htmls(
             canonical_result = await run_canonical(hybrid=hybrid_requested)
         except PublicExportHybridFallback as fallback:
             # The worker already produced a good raster deck; publish it under
-            # the identity that honestly describes it.
+            # the identity that honestly describes it, and keep the abandoned
+            # attempt's account of itself so the receipt can explain the
+            # downgrade instead of only naming it.
             hybrid_degraded_reason = fallback.reason
+            hybrid_attempt_evidence = fallback.evidence
+            if fallback.resource_metrics:
+                resource_samples.append(fallback.resource_metrics)
             hybrid_requested = False
             canonical_result = await run_canonical(hybrid=False)
         # A completed identity only verifies/registers the consumer ref, and
@@ -1863,6 +1883,11 @@ async def render_and_export_authored_htmls(
                 **(
                     {"hybrid_degraded_reason": hybrid_degraded_reason}
                     if hybrid_degraded_reason
+                    else {}
+                ),
+                **(
+                    {"hybrid_attempt_evidence": hybrid_attempt_evidence}
+                    if hybrid_attempt_evidence
                     else {}
                 ),
                 "public_export_execution_receipt": execution_receipt(
