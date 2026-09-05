@@ -79,3 +79,75 @@ def test_codex_reasoning_defaults_low_but_preserves_explicit_override():
 
     assert get_extra_body(default) == {"reasoning": {"effort": "low"}}
     assert get_extra_body(explicit) == {"reasoning": {"effort": "high"}}
+
+
+def test_openai_reasoning_effort_unset_sends_nothing():
+    settings = RuntimeSettings.from_sources(
+        environ={}, user_config={"LLM": "openai", "OPENAI_API_KEY": "key"}
+    )
+    assert get_extra_body(settings) is None
+
+
+@pytest.mark.parametrize(
+    "effort", ["minimal", "none", "low", "medium", "high", "xhigh"]
+)
+def test_openai_reasoning_effort_uses_the_flat_chat_completions_field(effort):
+    """OPENAI always resolves api_type=COMPLETIONS (chat completions), never
+    the Responses API CODEX/AZURE use. llmai's OpenAI client forwards
+    extra_body straight into chat.completions.create(), which takes a flat
+    `reasoning_effort` string, not the nested `{"reasoning": {"effort": ..}}`
+    object the Responses API expects."""
+
+    settings = RuntimeSettings.from_sources(
+        environ={},
+        user_config={
+            "LLM": "openai",
+            "OPENAI_API_KEY": "key",
+            "OPENAI_REASONING_EFFORT": effort,
+        },
+    )
+    assert get_extra_body(settings) == {"reasoning_effort": effort}
+
+
+def test_warn_if_openai_model_lacks_reasoning_dedupes_per_model(monkeypatch, caplog):
+    from utils import llm_config
+
+    monkeypatch.setattr(llm_config, "_OPENAI_REASONING_WARNING_LOGGED", set())
+
+    non_reasoning = RuntimeSettings.from_sources(
+        environ={},
+        user_config={
+            "LLM": "openai",
+            "OPENAI_API_KEY": "key",
+            "OPENAI_MODEL": "gpt-4.1",
+        },
+    )
+    with caplog.at_level("WARNING", logger="utils.llm_config"):
+        get_llm_config(non_reasoning)
+    assert "non-reasoning model" in caplog.text
+    assert "gpt-4.1" in caplog.text
+
+    caplog.clear()
+    with caplog.at_level("WARNING", logger="utils.llm_config"):
+        get_llm_config(non_reasoning)
+    assert caplog.text == ""  # already warned once for this model
+
+
+def test_warn_if_openai_model_lacks_reasoning_is_silent_for_reasoning_families(
+    monkeypatch, caplog
+):
+    from utils import llm_config
+
+    monkeypatch.setattr(llm_config, "_OPENAI_REASONING_WARNING_LOGGED", set())
+
+    reasoning = RuntimeSettings.from_sources(
+        environ={},
+        user_config={
+            "LLM": "openai",
+            "OPENAI_API_KEY": "key",
+            "OPENAI_MODEL": "gpt-6-astra",
+        },
+    )
+    with caplog.at_level("WARNING", logger="utils.llm_config"):
+        get_llm_config(reasoning)
+    assert caplog.text == ""

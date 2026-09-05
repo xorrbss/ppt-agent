@@ -1,0 +1,337 @@
+"""H6 (D22): one advisory vision pass over the finished deck.
+
+``docs/authored-quality-speed-programme-design-20260905.md`` section 6, H6.
+
+Nothing in the deterministic pipeline sees "flag-free but ugly": the DOM gate
+measures geometry, the capacity checks measure text, and neither can report a
+dead band, a page that fights the deck's palette, or a figure that rendered as
+a broken box. Only a picture of the deck can. So after the deck tail this
+module composes ONE contact sheet from the slide renders the attempt already
+holds and asks the configured vision-capable model, once, for a closed-
+vocabulary list of what a reader would notice.
+
+It is advisory and only advisory. The result is written to the quality receipt
+under ``advisory.vision`` and is read by nothing: it never gates, never flags,
+never triggers a repair, and never fails a deck. Every failure path -- no
+renders, no Pillow, a provider error, unparseable output -- returns
+``{"skipped": <reason>}``. This module never raises.
+
+Cost: one provider call, roughly 5-15 s per deck, behind
+``AUTHORED_VISION_ADVISORY_ENABLED`` (default false; the bench turns it on).
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import re
+import time
+from collections.abc import Mapping, Sequence
+from typing import Any
+
+from services.authored_vision_contact_sheet import compose_contact_sheet
+
+LOGGER = logging.getLogger(__name__)
+
+ADVISORY_MAX_OUTPUT_TOKENS = 1200
+ADVISORY_REASONING_EFFORT = "low"
+ADVISORY_PROMPT_VERSION = "authored-vision-advisory-v1"
+#: An advisory whose vocabulary drifts cannot be compared across bench runs, so
+#: the model is given a closed list and anything else it invents is dropped.
+ISSUE_VOCABULARY: tuple[str, ...] = (
+    "empty_band",
+    "cramped",
+    "unbalanced",
+    "illegible",
+    "off_palette",
+    "broken_figure",
+    "inconsistent_with_deck",
+)
+#: The spellings a model reaches for instead of the token. Mapped, not dropped,
+#: because "off-palette" is the same finding as ``off_palette``.
+_ISSUE_ALIASES: dict[str, str] = {
+    "emptyband": "empty_band",
+    "emptyspace": "empty_band",
+    "deadband": "empty_band",
+    "crowded": "cramped",
+    "unbalancedlayout": "unbalanced",
+    "unreadable": "illegible",
+    "lowcontrast": "illegible",
+    "offpalette": "off_palette",
+    "wrongpalette": "off_palette",
+    "brokenfigure": "broken_figure",
+    "brokenimage": "broken_figure",
+    "inconsistentwithdeck": "inconsistent_with_deck",
+    "inconsistent": "inconsistent_with_deck",
+}
+_MAX_ISSUES_PER_SLIDE = 4
+
+_SYSTEM = (
+    "You are a presentation design reviewer looking at a contact sheet of one "
+    "deck. Each thumbnail is one slide and carries its slide number in the top "
+    "left corner. Report only what a reader would notice at a glance, using "
+    "ONLY these issue words: " + ", ".join(ISSUE_VOCABULARY) + ". "
+    "empty_band: a large dead area the page never fills. cramped: content "
+    "packed with no breathing room. unbalanced: weight pooled on one side or "
+    "corner. illegible: type too small or too low in contrast to read. "
+    "off_palette: colours that disagree with the rest of the deck. "
+    "broken_figure: a chart, table, icon or image that rendered wrong. "
+    "inconsistent_with_deck: this page's visual language differs from its "
+    "neighbours. Omit a slide entirely when it looks fine. Invent nothing, "
+    "explain nothing, and use no other word. Answer as strict JSON: "
+    '{"slides":[{"index":<slide number>,"issues":["<issue word>"]}]}'
+)
+
+
+def _normalize_issue(value: object) -> str | None:
+    """Map one model-supplied word onto the closed vocabulary, or drop it."""
+
+    text = str(value or "").strip().lower()
+    if not text:
+        return None
+    canonical = re.sub(r"[^a-z]+", "_", text).strip("_")
+    if canonical in ISSUE_VOCABULARY:
+        return canonical
+    return _ISSUE_ALIASES.get(canonical.replace("_", ""))
+
+
+def parse_advisory_payload(payload: object, *, slide_count: int) -> list[dict[str, Any]]:
+    """Project a model response into clamped, closed-vocabulary findings.
+
+    Defensive by contract: an index outside the deck is clamped rather than
+    dropped (a model that counts from zero should not lose its whole answer),
+    unknown issue words are dropped, and a slide that survives with no issue
+    left is omitted.
+    """
+
+    if not isinstance(payload, Mapping):
+        return []
+    raw_slides = payload.get("slides")
+    if not isinstance(raw_slides, Sequence) or isinstance(raw_slides, (str, bytes)):
+        return []
+    by_index: dict[int, list[str]] = {}
+    for entry in raw_slides:
+        if not isinstance(entry, Mapping):
+            continue
+        raw_index = entry.get("index")
+        if isinstance(raw_index, bool) or not isinstance(raw_index, (int, float)):
+            continue
+        # The sheet labels thumbnails from 1; the receipt speaks the pipeline's
+        # own 0-based slide index.
+        index = max(0, min(int(raw_index) - 1, max(0, slide_count - 1)))
+        raw_issues = entry.get("issues")
+        if isinstance(raw_issues, (str, bytes)) or not isinstance(raw_issues, Sequence):
+            raw_issues = ()
+        issues = by_index.setdefault(index, [])
+        for item in raw_issues:
+            issue = _normalize_issue(item)
+            if issue is not None and issue not in issues:
+                issues.append(issue)
+    return [
+        {"index": index, "issues": issues[:_MAX_ISSUES_PER_SLIDE]}
+        for index, issues in sorted(by_index.items())
+        if issues
+    ]
+
+
+def _advisory_extra_body() -> dict[str, Any] | None:
+    """Ask for the model's cheapest reasoning; this pass is advisory."""
+
+    from utils.llm_provider import is_codex_selected
+
+    if not is_codex_selected():
+        return None
+    return {"reasoning": {"effort": ADVISORY_REASONING_EFFORT}}
+
+
+def _decode_advisory_text(text: str) -> object:
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+    start, end = text.find("{"), text.rfind("}")
+    if start < 0 or end <= start:
+        return None
+    try:
+        return json.loads(text[start : end + 1])
+    except Exception:
+        return None
+
+
+async def _request_advisory(sheet: bytes, *, slide_count: int) -> tuple[str, object]:
+    """One multimodal call, through the same admission/idempotency wrappers
+    every other authored provider call uses."""
+
+    from llmai import get_client
+    from llmai.shared import (
+        ImageContentPart,
+        JSONSchemaResponse,
+        SystemMessage,
+        TextContentPart,
+        UserMessage,
+    )
+
+    from services.provider_usage_instrumentation import (
+        ProviderCallTimer,
+        current_provider_idempotency_key,
+        provider_call_admission,
+        record_provider_call,
+    )
+    from utils.llm_config import enforce_llm_egress_policy, get_llm_config
+    from utils.llm_provider import get_llm_provider, get_model
+    from utils.llm_utils import extract_text, get_generate_kwargs
+    from utils.provider_idempotency import (
+        provider_generate_call,
+        supports_provider_idempotency,
+    )
+
+    client = get_client(config=get_llm_config())
+    model = str(get_model() or "")
+    schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["slides"],
+        "properties": {
+            "slides": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["index", "issues"],
+                    "properties": {
+                        "index": {"type": "integer"},
+                        "issues": {
+                            "type": "array",
+                            "items": {"type": "string", "enum": list(ISSUE_VOCABULARY)},
+                        },
+                    },
+                },
+            }
+        },
+    }
+    messages = [
+        SystemMessage(content=_SYSTEM),
+        UserMessage(
+            content=[
+                TextContentPart(
+                    text=(
+                        f"This deck has {slide_count} slides, numbered 1 to "
+                        f"{slide_count} in reading order across the sheet."
+                    )
+                ),
+                ImageContentPart(data=sheet, mime_type="image/jpeg"),
+            ]
+        ),
+    ]
+    kwargs = get_generate_kwargs(
+        model=model,
+        messages=messages,
+        max_tokens=ADVISORY_MAX_OUTPUT_TOKENS,
+        response_format=JSONSchemaResponse(
+            name="vision_advisory", json_schema=schema, strict=False
+        ),
+    )
+    reasoning = _advisory_extra_body()
+    if reasoning:
+        kwargs["extra_body"] = reasoning
+    try:
+        provider = str(get_llm_provider().value)
+    except Exception:
+        provider = "unknown"
+
+    timer = ProviderCallTimer()
+    response = None
+    try:
+        async with provider_call_admission(
+            is_retry=False,
+            semantic_slot="authored.vision-advisory",
+            provider=provider,
+            model=model,
+            provider_idempotency_capable=supports_provider_idempotency(
+                client, provider_id=provider
+            ),
+        ):
+            enforce_llm_egress_policy()
+            generate_call = provider_generate_call(
+                client,
+                provider_id=provider,
+                kwargs=kwargs,
+                idempotency_key=current_provider_idempotency_key(),
+                outcome_scope="authored",
+            )
+            response = await asyncio.get_running_loop().run_in_executor(
+                None, generate_call
+            )
+    finally:
+        await record_provider_call(
+            provider=provider,
+            model=model,
+            response=response,
+            latency_ms=timer.elapsed_ms,
+            retry_class="initial",
+        )
+    return model, _decode_advisory_text(extract_text(response.content) or "")
+
+
+async def run_vision_advisory(
+    pngs: Sequence[bytes], *, slide_count: int
+) -> dict[str, Any]:
+    """Ask one vision model, once, what a reader would notice about this deck.
+
+    Returns ``{"model", "latencyMs", "slideCount", "slides"}`` on success and
+    ``{"skipped": <reason>}`` on every other outcome. Never raises: an advisory
+    that could fail a deck would stop being advisory.
+    """
+
+    started = time.monotonic()
+    try:
+        renders = [png for png in pngs if isinstance(png, (bytes, bytearray)) and png]
+        if not renders:
+            return {"skipped": "no_renders"}
+        if len(renders) != int(slide_count or 0):
+            # The sheet is the authority for numbering: a slide with no render
+            # cannot be reviewed, so the advisory speaks about what it saw.
+            LOGGER.info(
+                "[authored] vision advisory renders=%d deck_slides=%d",
+                len(renders),
+                int(slide_count or 0),
+            )
+        try:
+            sheet = await compose_contact_sheet(renders)
+        except Exception:
+            LOGGER.warning("[authored] vision advisory sheet failed", exc_info=True)
+            return {"skipped": "contact_sheet_failed"}
+        if not sheet:
+            return {"skipped": "contact_sheet_unavailable"}
+        model, payload = await _request_advisory(sheet, slide_count=len(renders))
+        if payload is None:
+            return {"skipped": "unparseable_response"}
+        slides = parse_advisory_payload(payload, slide_count=len(renders))
+        latency_ms = int((time.monotonic() - started) * 1000)
+        LOGGER.info(
+            "[authored] vision advisory model=%s slides=%d flagged=%d latency_ms=%d",
+            model,
+            len(renders),
+            len(slides),
+            latency_ms,
+        )
+        return {
+            "promptVersion": ADVISORY_PROMPT_VERSION,
+            "model": model,
+            "latencyMs": latency_ms,
+            "slideCount": len(renders),
+            "sheetBytes": len(sheet),
+            "slides": slides,
+        }
+    except Exception:
+        LOGGER.warning("[authored] vision advisory failed", exc_info=True)
+        return {"skipped": "provider_failed"}
+
+
+__all__ = [
+    "ISSUE_VOCABULARY",
+    "compose_contact_sheet",
+    "parse_advisory_payload",
+    "run_vision_advisory",
+]

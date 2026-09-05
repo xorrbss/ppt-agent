@@ -9,7 +9,21 @@ from typing import Any
 
 from models.authored_infographic_plan import AuthoredSlideInfographic
 from models.authored_visual_plan import AuthoredSlideVisualIntent
+from utils.authored_style_exemplars import exemplar_block
+from utils.authored_styles import archetype_for_role
+from utils.get_env_programme import get_authored_illustration_share
+from utils.llm_calls.author_deck_tokens import deck_tokens_block
 from utils.llm_calls.author_infographic_marker import infographic_marker
+from utils.llm_calls.author_slide_brief import (
+    AGENDA_STRUCTURE_BRIEF,
+    INLINE_SVG_CONTRACT,
+    REQUIREMENT_IDENTIFIER_RULES,
+    SECTION_STRUCTURE_BRIEF,
+    SHARED_UNIVERSALS,
+    SOURCE_IMAGE_RULES,
+    STORY_RULES,
+    composition_intent_block,
+)
 from services.authored_vnext.capability_registry import prompt_capability_clause
 from services.source_images.models import SourceImageCandidate
 from utils.prompt_safety import format_untrusted_source_documents
@@ -110,39 +124,41 @@ def build_design_system(
         if (
             reference_mode != exact_reconstruction
             and getattr(style, "illustration_prompt", None)
+            # A deck whose illustration share is 0 authors no slot on any slide,
+            # so the ~2 030 characters of slot contract would be paid on every
+            # call of every slide to describe an element none of them may emit.
+            and get_authored_illustration_share() > 0
         ):
             style_brief = f"{style_brief}\n{illustration_slot_rules}"
-    return design_system_rules.format(
+    rules = design_system_rules.format(
         primary=brand.primary or "#2563EB",
         fonts=brand.fonts or "Noto Sans KR",
         language=brand.language or "Korean",
         style_brief=style_brief,
+        composition_intent=composition_intent_block(),
+        shared_universals=SHARED_UNIVERSALS,
+        inline_svg_contract=INLINE_SVG_CONTRACT,
         # Empty when the deck has no header contract, which keeps the prompt
         # byte-identical to the pre-contract behaviour.
         header_system=f"{header_system}\n" if header_system else "",
         page_number_system=page_number_system,
         type_scale=type_scale,
-    ) + prompt_capability_clause()
+    )
+    # Deck-invariant tail, in the order design section G8 fixes: the rules, then
+    # this deck's literal tokens, then the style's exemplar slide. The exemplar
+    # is last because it is the longest and the most concrete: everything above
+    # it is the contract it is an instance of.
+    return (
+        rules
+        + prompt_capability_clause()
+        + deck_tokens_block(style, brand)
+        + exemplar_block(getattr(style, "id", None) if style is not None else None)
+    )
 
 
-# Two kinds of picture can be attached to one authoring call and they carry
-# opposite instructions, so the brief names both and says which is which. The
-# rules live here rather than in the design system because a deck whose style
-# generates no illustration can still be handed source images.
-_SOURCE_IMAGE_RULES = (
-    "A style reference is art direction and is not reproduced. A source image is "
-    "one of the user's own assets and may be placed on this slide.\n"
-    "It can earn its place in either of two ways: as evidence for what this "
-    "slide claims, or as an example of the tool, artifact or way of working the "
-    "slide describes. A screenshot captured on a different project still shows "
-    "what that work looks like, which is what a proposal shows it for.\n"
-    "Place any relevant candidates with `<img data-source-slot-id=\"SLOT_ID\">` "
-    "whose areas are reserved with explicit width/height (or absolute inset) styles, "
-    "the way the illustration slot is. Do not add a src attribute, asset id, URL or "
-    "data URI: the trusted source-image stage supplies the verified data URL.\n"
-    "Leave the slide without a picture when no candidate shows anything it talks "
-    "about. These are candidates, not a quota."
-)
+#: Kept as a module-level alias because the text moved to
+#: ``author_slide_brief`` when this module reached its size ratchet.
+_SOURCE_IMAGE_RULES = SOURCE_IMAGE_RULES
 
 
 def _condensed(text: str, limit: int) -> str:
@@ -197,67 +213,21 @@ def source_image_brief(
 
 
 def requirement_marker(*, requirements_enabled: bool) -> str:
-    """The per-slide half of the header contract's requirement rule.
-
-    The identifiers are already in this slide's own CONTENT, so they are read
-    from there rather than handed over as a pre-extracted list. Recognising them
-    needs the surrounding sentence — 'SHA-256' inside a security paragraph looks
-    identical to a requirement code to anything that only matches on shape.
-    """
-    if not requirements_enabled:
-        return ""
-    return (
-        "REQUIREMENT IDENTIFIERS: this deck numbers its requirements. The CONTENT "
-        "field of THIS slide is the ONLY place you may take an identifier from. "
-        "Not the deck topic, not the design system, not another slide, not your "
-        "own knowledge of the document — if the string is not written in this "
-        "slide's CONTENT, it does not go on this slide.\n"
-        "- If this slide's CONTENT states identifiers (a code the source document "
-        "assigns to a requirement, such as those introduced by 고유번호/요구사항 "
-        "번호/REQ), copy each one verbatim into the header's requirement group, "
-        'in the order given, and list them in data-requirement-ids="ID1,ID2".\n'
-        "- Never invent, renumber, or reformat one, and never promote an "
-        "algorithm, protocol, standard, version, or date that merely resembles "
-        "one (SHA-256, AES-256, ISO 9001, HTTP/2).\n"
-        "- If this slide's CONTENT states none, render NO requirement group at "
-        "all and leave the header's right slot empty. That is the correct, "
-        "expected result on such a slide — an empty slot is never a defect to "
-        "paper over, and repeating another slide's identifier to fill it is a "
-        "worse error than leaving it blank."
-    )
+    """The per-slide half of the header contract's requirement rule."""
+    return REQUIREMENT_IDENTIFIER_RULES if requirements_enabled else ""
 
 
 def structure_role_brief(role: str) -> str:
     """What a slide the chapter plan inserted is for, stated per slide.
 
-    These two roles exist only on decks that resolved a chapter plan, so their
-    rules are given to the slides that have them rather than added to the shared
-    design system, where every ordinary deck would carry instructions for pages
-    it does not contain. The visual idiom still comes from the deck's style
-    brief; what is fixed here is what the page is, which is not a style
-    question.
+    The two texts live in ``author_slide_brief`` with the rest of the prompt
+    prose; only the role lookup is here.
     """
     normalized = (role or "").strip().upper()
     if normalized == "SECTION":
-        return (
-            "THIS SLIDE IS A CHAPTER DIVIDER. It announces the chapter and does "
-            "nothing else: the chapter numeral and name are the dominant "
-            "element, and the items the CONTENT lists sit beneath them as a "
-            "quiet secondary column. Compose it full-bleed in this deck's cover "
-            "idiom rather than as a content page. It carries NO header band, no "
-            "eyebrow-and-tick row, no requirement identifier, no divider rule "
-            "imitating the header, and no argument, claim, chart, table, or "
-            "body copy the CONTENT does not state."
-        )
+        return SECTION_STRUCTURE_BRIEF
     if normalized == "AGENDA":
-        return (
-            "THIS SLIDE IS THE DECK'S TABLE OF CONTENTS. It lists the chapters "
-            "in the order the CONTENT gives them and nothing else: one line per "
-            "chapter, numerals aligned in a single column, wording copied "
-            "verbatim. Never add a chapter the CONTENT does not list, a "
-            "description, a page number, a duration, or a status marker. It "
-            "carries this deck's ordinary header like any other content page."
-        )
+        return AGENDA_STRUCTURE_BRIEF
     return ""
 
 
@@ -319,26 +289,9 @@ def illustration_marker(illustration_allowed: bool | None) -> str:
     )
 
 
-_STORY_RULES = {
-    "cover": "Keep the cover minimal: one decisive title hierarchy and one focal field.",
-    "closing": "End with one decisive statement and a restrained next-step cue, not a recap grid.",
-    "section": "Treat the chapter label as the single visual event; keep supporting items quiet.",
-    "agenda": "Use a numbered reading path with aligned chapter labels and no dashboard cards.",
-    "editorial": "Build one clear editorial argument with a dominant claim and subordinate evidence.",
-    "pillars": "Make the pillars visibly distinct in hierarchy without repeating identical heavy cards.",
-    "metric": "Make one stated metric dominant and place its stated context immediately beside it.",
-    "process": "Show the stated sequence as a directional rail; preserve order and do not invent steps.",
-    "architecture": "Show the stated layers and relationships with simple DOM boxes and connectors.",
-    "image": "Use the single allowed image for context while all claims and numbers remain in HTML text.",
-    "dataTable": (
-        "Render the supplied rows and columns as a real semantic HTML table. Highlight the decisive "
-        "row or column only when CONTENT supports it; never invent a cell, total, or rank."
-    ),
-    "dataChart": (
-        "Turn only the numeric series stated in CONTENT into a labelled HTML/CSS chart and pair it "
-        "with one explicit takeaway. Preserve every value and unit verbatim; never fabricate a series."
-    ),
-}
+#: Kept as a module-level alias because the text moved to
+#: ``author_slide_brief`` when this module reached its size ratchet.
+_STORY_RULES = STORY_RULES
 
 
 def visual_story_marker(visual_intent: AuthoredSlideVisualIntent | None) -> str:
@@ -416,7 +369,23 @@ def author_prompt(
     visual_intent: AuthoredSlideVisualIntent | None = None,
     infographic: AuthoredSlideInfographic | None = None,
     capacity_brief: str | None = None,
+    style_anchor: object | None = None,
 ) -> str:
+    """Compose one slide's authoring prompt.
+
+    Order (design section G8): the deck-invariant ``design_system`` first, then
+    the deck's style anchor, then the user's own direction, then this slide's
+    own blocks, then its CONTENT, its page marker and the output contract. The
+    invariant prefix leads so that a provider able to cache a prompt prefix can
+    cache the ~20k characters every slide of the deck shares, and — whether or
+    not it caches — so the model reads what the deck is before it reads what
+    this page says.
+
+    ``style_anchor`` is duck-typed on purpose: it is created by
+    ``utils.llm_calls.author_style_anchor`` and only has to expose
+    ``prompt_block() -> str``. Importing the class here would make the prompt
+    module depend on the pipeline that feeds it.
+    """
     if page_number_mode == "companyStandard":
         page_marker = (
             "PAGE MARKER FOR THIS SLIDE: OMIT IT. Company-standard furniture owns page "
@@ -498,17 +467,26 @@ def author_prompt(
     direction = user_direction_brief(instructions)
     direction_block = f"{direction}\n\n" if direction else ""
     capacity_block = f"{capacity_brief}\n\n" if capacity_brief else ""
+    anchor = (
+        str(style_anchor.prompt_block()).strip()
+        if style_anchor is not None
+        else ""
+    )
+    anchor_block = f"{anchor}\n\n" if anchor else ""
     return (
-        f"Author slide {index + 1} of {n}. Deck topic: {brand.topic}. This slide's ROLE: "
-        f"{role}. CONTENT: {content}.{wordmark}{structured_contract}\n\n"
-        f"{page_marker}\n\n{structure_block}{chapter_block}{requirement_block}"
-        f"{illustration_block}{visual_story_block}{figure_block}{direction_block}"
         f"{design_system}\n\n"
-        f"{capacity_block}"
+        f"{anchor_block}{direction_block}"
+        f"{structure_block}{chapter_block}{requirement_block}"
+        f"{illustration_block}{visual_story_block}{figure_block}{capacity_block}"
+        f"Author slide {index + 1} of {n}. Deck topic: {brand.topic}. This slide's ROLE: "
+        f"{role} ⇒ compose it with the style's \"{archetype_for_role(role)}\" archetype. "
+        f"CONTENT: {content}.{wordmark}{structured_contract}\n\n"
+        f"{page_marker}\n\n"
         "Design THIS slide bespoke and premium within the shared system, vary the layout to "
-        "suit the role. Every visible text, image, simple shape, chart/table container, and "
-        "meaningful grouping element must carry a unique stable data-qid. Output ONLY the "
-        "complete self-contained HTML document."
+        "suit the role. Give a unique stable data-qid to every element that owns text, and to "
+        "every image, table, chart, and card that carries text; a plain decorative shape or a "
+        "pure wrapper does not need one. Output ONLY the complete self-contained HTML "
+        "document."
     )
 
 

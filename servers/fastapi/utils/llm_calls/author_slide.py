@@ -7,12 +7,14 @@ anthropic / ...). Opt-in — never on the fast deterministic default path."""
 
 import asyncio
 import html as _html
+import inspect
 import logging
 import os
 import re
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from functools import lru_cache
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Mapping, Optional, Protocol, Sequence
@@ -26,10 +28,13 @@ from utils.llm_calls.author_slide_admission import (
     retry_after_seconds,
     wait_for_rate_slot,
 )
-from utils.llm_calls import author_slide_prompt, author_slide_rules
+from utils.llm_calls import author_slide_effort, author_slide_prompt, author_slide_rules
+from utils.llm_calls.author_slide_effort import EXACT_RECONSTRUCTION
+from utils.llm_calls.author_prompt_cache_key import apply_prompt_cache_key
+from utils.llm_calls.author_prompt_split import author_messages
+from utils.llm_calls.author_slide_stream import is_authored_author_streaming_enabled, stream_author_call
 
 from llmai import get_client
-from llmai.shared import SystemMessage, TextContentPart, UserMessage
 
 from models.authored_header_contract import AuthoredHeaderContract
 from models.authored_infographic_plan import AuthoredSlideInfographic
@@ -40,15 +45,8 @@ from utils.authored_dom_quality import validate_declared_authored_qids
 from utils.authored_header_prompt import render_header_contract
 from utils.authored_html_normalize import normalize_authored_html
 from services.authored_header_body_extent import ensure_body_root_horizontal_extent
-from utils.get_env import (
-    is_authored_html_normalize_enabled,
-    is_authored_source_images_enabled,
-)
-from utils.llm_calls.author_slide_images import (
-    illustration_slot_rules,
-    reference_parts,
-    source_image_parts,
-)
+from utils.get_env import is_authored_html_normalize_enabled, is_authored_source_images_enabled
+from utils.llm_calls.author_slide_images import illustration_slot_rules, reference_parts, source_image_parts
 from utils.authored_image_slots import scan_slots, source_slot_id_for_asset
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_config import enforce_llm_egress_policy, get_llm_config
@@ -56,9 +54,7 @@ from utils.llm_provider import get_llm_provider, get_model, is_codex_selected
 from utils.prompt_safety import format_untrusted_source_documents
 from utils.renderer_isolation import admit_authored_html
 from utils.renderer_worker_policy import RendererPolicyError
-from services.source_images.models import (
-    SourceImageCandidate,
-)
+from services.source_images.models import SourceImageCandidate
 from services.public_operation_admission import PublicAdmissionRejected
 from services.provider_usage_instrumentation import (
     ProviderCallTimer,
@@ -77,17 +73,18 @@ from utils.llm_utils import extract_text, get_generate_kwargs
 
 logger = logging.getLogger(__name__)
 
-# A bespoke full-bleed HTML slide with inline CSS is large; give the model room so
-# the document is never truncated mid-markup (truncation => broken render).
-AUTHOR_MAX_TOKENS = 16000
-_FAST_ROLE_OUTPUT_BUDGETS = {
-    "COVER": 10_000,
-    "SECTION": 8_000,
-    "AGENDA": 8_000,
-    "CLOSING": 6_000,
-}
+# The output budget, the fast-role table and the reasoning-effort resolution all
+# live in ``author_slide_effort``; they are re-exported here under their historic
+# names because every caller and test imports them from this module.
+AUTHOR_MAX_TOKENS = author_slide_effort.AUTHOR_MAX_TOKENS
+_FAST_ROLE_OUTPUT_BUDGETS = author_slide_effort.FAST_ROLE_OUTPUT_BUDGETS
+_REASONING_EFFORTS = author_slide_effort.REASONING_EFFORTS
+_REASONING_DISABLE = author_slide_effort.REASONING_DISABLE
+_CODEX_REASONING_CAPABILITIES = author_slide_effort.CODEX_REASONING_CAPABILITIES
+_normalized_authoring_reasoning_effort = (
+    author_slide_effort.normalized_authoring_reasoning_effort
+)
 STYLE_REFERENCE = "style_reference"
-EXACT_RECONSTRUCTION = "exact_reconstruction"
 _REFERENCE_MODES = frozenset({STYLE_REFERENCE, EXACT_RECONSTRUCTION})
 _REJECTED_HTML_CONTEXT_MAX_BYTES = 48 * 1024
 
@@ -346,7 +343,27 @@ def _author_prompt(
     visual_intent: Optional[AuthoredSlideVisualIntent] = None,
     infographic: Optional[AuthoredSlideInfographic] = None,
     capacity_brief: Optional[str] = None,
+    style_anchor: object | None = None,
 ) -> str:
+    kwargs: dict[str, object] = {
+        "structured_context": structured_context,
+        "page_number_mode": page_number_mode,
+        "requirements_enabled": requirements_enabled,
+        "chapter_breadcrumb": chapter_breadcrumb,
+        "chapter_prefix": chapter_prefix,
+        "instructions": instructions,
+        "illustration_allowed": illustration_allowed,
+        "visual_intent": visual_intent,
+        "infographic": infographic,
+        "capacity_brief": capacity_brief,
+    }
+    # G0: the deck style anchor is only offered to a prompt builder that
+    # declares it, so this pass-through is a no-op until that lands and the
+    # prompt stays byte-identical whenever no anchor exists.
+    if style_anchor is not None and _prompt_accepts_style_anchor(
+        author_slide_prompt.author_prompt
+    ):
+        kwargs["style_anchor"] = style_anchor
     return author_slide_prompt.author_prompt(
         content,
         design_system,
@@ -354,17 +371,18 @@ def _author_prompt(
         role,
         index,
         n,
-        structured_context=structured_context,
-        page_number_mode=page_number_mode,
-        requirements_enabled=requirements_enabled,
-        chapter_breadcrumb=chapter_breadcrumb,
-        chapter_prefix=chapter_prefix,
-        instructions=instructions,
-        illustration_allowed=illustration_allowed,
-        visual_intent=visual_intent,
-        infographic=infographic,
-        capacity_brief=capacity_brief,
+        **kwargs,
     )
+
+
+@lru_cache(maxsize=8)
+def _prompt_accepts_style_anchor(builder: object) -> bool:
+    """Whether this prompt builder takes the G0 ``style_anchor`` keyword."""
+
+    try:
+        return "style_anchor" in inspect.signature(builder).parameters
+    except (TypeError, ValueError):
+        return False
 
 
 def normalize_reference_mode(reference_mode: Optional[str]) -> str:
@@ -811,88 +829,20 @@ def fallback_slide_html(
     )
 
 
-# codex (gpt-5.x) reasoning-effort levels we forward verbatim. 'off'/'default' are OUR
-# sentinels meaning "send no override, let the provider apply its own default effort" —
-# they are NOT codex levels. ('none' and 'minimal' ARE real codex levels, so they belong
-# in the forward list, not the disable list.)
-_REASONING_EFFORTS = ("minimal", "none", "low", "medium", "high", "xhigh")
-_REASONING_DISABLE = ("off", "default")
-_CODEX_REASONING_CAPABILITIES = {
-    # gpt-5.6-sol rejects the otherwise valid "minimal" level. Keep this
-    # capability exception local to the one authoring request builder so every
-    # author call has the same deterministic normalization before egress.
-    "gpt-5.6-sol": frozenset(("none", "low", "medium", "high", "xhigh", "max")),
-    # gpt-6-astra (probed 2026-09-05) rejects "minimal" and "none" alike:
-    # "Supported values are: 'low', 'medium', 'high', 'xhigh', and 'max'."
-    "gpt-6-astra": frozenset(("low", "medium", "high", "xhigh", "max")),
-}
-
-
-def _normalized_authoring_reasoning_effort(model: object, effort: str) -> str:
-    """Map a recognized Codex effort to the selected model's capability set."""
-
-    model_id = str(model or "").strip().lower()
-    capabilities = next(
-        (
-            supported
-            for family, supported in _CODEX_REASONING_CAPABILITIES.items()
-            if model_id == family or model_id.startswith(f"{family}-")
-        ),
-        None,
-    )
-    if capabilities is None or effort in capabilities:
-        return effort
-    # Fall back to the lowest level the model supports, in the provider's
-    # own order. Returning the unsupported level unchanged (the previous
-    # behaviour when "none" was also unsupported) sent "minimal" to
-    # gpt-6-astra for every fast-role page and cost the slide an attempt on
-    # a 400 that is not retried.
-    for level in ("none", "minimal", "low", "medium", "high", "xhigh", "max"):
-        if level in capabilities:
-            return level
-    return effort
-
-
 def _authoring_extra_body(
     effort: Optional[str] = None, *, model: object = None
 ) -> Optional[dict]:
-    """Per-slide codex reasoning-effort override (codex-only — the param 400s on
+    """Per-slide codex reasoning-effort override (codex-only -- the param 400s on
     providers that don't support it).
 
-    Resolution: a non-blank `effort` argument wins; otherwise the AUTHORED_REASONING_EFFORT
-    env; if neither is meaningfully set the authoring default is the fast 'low' effort
-    (~25% faster per slide with no first-pass quality loss). codex (gpt-5.x) is a reasoning
-    model and per-slide latency is reasoning time, so authoring bespoke HTML — which needs
-    little reasoning — defaults low.
-
-    Returns {"reasoning": {"effort": L}} for any L in _REASONING_EFFORTS. Returns None (no
-    override → the provider's own default effort) for the 'off'/'default' sentinels. An
-    UNRECOGNIZED value is logged (attributing the env vs the argument as its source) and
-    also returns None, so a misconfiguration is never silent."""
+    Thin wrapper over ``author_slide_effort.resolve_authoring_reasoning_level``;
+    the codex check stays here because callers monkeypatch this module's
+    ``is_codex_selected`` to exercise the codex egress path.
+    """
     if not is_codex_selected():
         return None
-    override = (effort or "").strip()
-    if override:
-        raw, source = override, "reasoning_effort argument"
-    else:
-        raw, source = os.getenv("AUTHORED_REASONING_EFFORT", ""), "AUTHORED_REASONING_EFFORT"
-    level = raw.strip().lower()
-    if not level:
-        level = "low"  # unset / blank / whitespace-only -> fast authoring default
-    if level in _REASONING_DISABLE:
-        return None
-    if level in _REASONING_EFFORTS:
-        level = _normalized_authoring_reasoning_effort(model, level)
-        return {"reasoning": {"effort": level}}
-    logger.warning(
-        "%s=%r is not a recognized reasoning effort %s or a disable word %s; "
-        "authoring at the provider default reasoning effort.",
-        source,
-        raw,
-        _REASONING_EFFORTS,
-        _REASONING_DISABLE,
-    )
-    return None
+    level = author_slide_effort.resolve_authoring_reasoning_level(effort, model)
+    return None if level is None else {"reasoning": {"effort": level}}
 
 
 def _authoring_output_profile(
@@ -901,22 +851,17 @@ def _authoring_output_profile(
     reference_mode: str,
     structured_context: dict | None,
     correction_hint: str | None,
+    model: object = None,
 ) -> tuple[int, str]:
     """Select a fast role profile without weakening strict authoring modes."""
 
-    # Structured contexts include source-verbatim requests. Exact reconstruction
-    # and repairs likewise need the established 16k/low profile so a fixed
-    # source or a complex rejected document is never truncated to save time.
-    if (
-        reference_mode == EXACT_RECONSTRUCTION
-        or structured_context is not None
-        or correction_hint is not None
-    ):
-        return AUTHOR_MAX_TOKENS, "low"
-    budget = _FAST_ROLE_OUTPUT_BUDGETS.get((role or "").strip().upper())
-    if budget is not None:
-        return budget, "minimal"
-    return AUTHOR_MAX_TOKENS, "low"
+    return author_slide_effort.authoring_output_profile(
+        role=role,
+        reference_mode=reference_mode,
+        structured_context=structured_context,
+        correction_hint=correction_hint,
+        model=model,
+    )
 
 
 def authored_provider_semantic_slot(
@@ -958,6 +903,9 @@ async def author_slide_html(
     visual_intent: Optional[AuthoredSlideVisualIntent] = None,
     infographic: Optional[AuthoredSlideInfographic] = None,
     capacity_brief: Optional[str] = None,
+    # G0 anchor inheritance: the deck's already-authored anchor slide, offered
+    # as data. ``None`` reproduces the prompt byte for byte.
+    style_anchor: object | None = None,
     correction_hint: Optional[str] = None,
     rejected_html: Optional[str] = None,
     allow_provider_fallback: bool = True,
@@ -998,6 +946,7 @@ async def author_slide_html(
         visual_intent=visual_intent,
         infographic=infographic,
         capacity_brief=capacity_brief,
+        style_anchor=style_anchor,
     )
     if correction_hint:
         prompt += (
@@ -1061,18 +1010,12 @@ async def author_slide_html(
             "object-fit:contain instead of cropping or distortion."
             + source_guidance
         )
-    user_content = (
-        [
-            TextContentPart(text=prompt + reference_guidance + source_guidance),
-            *image_parts,
-        ]
-        if image_parts
-        else prompt
+    messages = author_messages(
+        author_slide_rules.SYSTEM_PROMPT,
+        prompt + reference_guidance + source_guidance if image_parts else prompt,
+        design_system,
+        image_parts=image_parts,
     )
-    messages = [
-        SystemMessage(content=author_slide_rules.SYSTEM_PROMPT),
-        UserMessage(content=user_content),
-    ]
     kwargs = get_generate_kwargs(model=model, messages=messages, max_tokens=output_budget)
     reasoning = _authoring_extra_body(
         reasoning_effort or default_reasoning_effort, model=model
@@ -1081,6 +1024,7 @@ async def author_slide_html(
         # codex-only; get_extra_body() populates extra_body only for the (mutually
         # exclusive) CUSTOM provider, so this reasoning dict is the sole source here.
         kwargs["extra_body"] = reasoning
+    apply_prompt_cache_key(kwargs)
     if not isinstance(allow_provider_fallback, bool):
         raise ValueError("allow_provider_fallback must be a boolean")
     if receipt_retry_class is not None and receipt_retry_class not in {"initial", "recovery"}:
@@ -1140,6 +1084,11 @@ async def author_slide_html(
                     client, provider_id=provider, kwargs=generate_kwargs,
                     idempotency_key=current_provider_idempotency_key(), outcome_scope="authored",
                 )
+                # SPEED-9: streaming keeps the socket busy and returns the same
+                # response shape, so it replaces the executor hand-off entirely.
+                if is_authored_author_streaming_enabled():
+                    response = await stream_author_call(client, generate_kwargs)
+                    return response
                 response = await loop.run_in_executor(_AUTHOR_EXECUTOR, spans.wrap(generate_call))
             return response
         except Exception as error:
@@ -1176,15 +1125,15 @@ async def author_slide_html(
             "Multimodal authored generation failed for slide %d; retrying text-only",
             index + 1,
         )
-        fallback_messages = [
-            SystemMessage(content=author_slide_rules.SYSTEM_PROMPT),
-            UserMessage(content=prompt),
-        ]
+        fallback_messages = author_messages(
+            author_slide_rules.SYSTEM_PROMPT, prompt, design_system
+        )
         fallback_kwargs = get_generate_kwargs(
             model=model, messages=fallback_messages, max_tokens=output_budget
         )
         if reasoning:
             fallback_kwargs["extra_body"] = reasoning
+        apply_prompt_cache_key(fallback_kwargs)
         try:
             response = await generate(
                 fallback_kwargs,

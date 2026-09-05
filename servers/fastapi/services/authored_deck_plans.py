@@ -19,7 +19,7 @@ scene) so the two can never disagree.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Sequence
 
 from models.authored_chapter_plan import AuthoredChapterPlan
 from models.authored_illustration_plan import AuthoredIllustrationPlan
@@ -28,10 +28,11 @@ from models.generate_presentation_request import GeneratePresentationRequest
 from models.presentation_outline_model import PresentationOutlineModel
 from services.authored_deck_chapter_plan import resolve_chapter_plan
 from services.authored_deck_infographic_plan import (
-    derive_illustration_plan,
+    derive_illustration_plan as derive_illustration_plan_from_figures,
     resolve_infographic_plan,
 )
 from utils.get_env import is_authored_infographic_plan_enabled
+from utils.get_env_programme import get_authored_illustration_share
 from utils.llm_calls.author_deck import plan_deck_roles
 from utils.llm_calls.author_slide import (
     EXACT_RECONSTRUCTION,
@@ -81,6 +82,66 @@ def _infographic_plan_applies(request: GeneratePresentationRequest, style) -> bo
     if getattr(request, "_source_content_authored_reflow", False):
         return False
     return _reference_mode(style) != EXACT_RECONSTRUCTION
+
+
+#: Roles that never carry a generated picture, whatever the share is. A cover
+#: and a chapter divider compose on a full field, an agenda is a list, and a
+#: closing page is one line: a picture on any of them is decoration.
+_NON_CONTENT_ROLES = frozenset({"COVER", "SECTION", "AGENDA", "CLOSING"})
+
+
+def illustration_share_plan(roles: Sequence[str]) -> AuthoredIllustrationPlan:
+    """The deterministic per-deck picture budget for a free-composition deck.
+
+    Free composition (the 2026-09-05 default) resolves no infographic plan, so
+    ``derive_illustration_plan`` returned ``None`` and every slide decided for
+    itself whether to ask for a picture. Measured on the same deck that produced
+    4/77 and then 73/77, a slide authored alone cannot answer a deck-level
+    question. This is not a plan and takes no model call: it is a BUDGET —
+    every k-th content slide, ``k = round(1/share)``.
+
+    The first content slide is deliberately skipped. It is the deck's style
+    anchor (design G0): its stylesheet is handed verbatim to every other slide,
+    so an illustration slot on it would be inherited as part of the deck's
+    visual language rather than as this one page's evidence.
+
+    ``share`` of 0 returns an EMPTY plan, which is a decision ("this deck gets
+    no pictures") and is persisted as one — not ``None``, which would restore
+    the per-slide judgement this replaces.
+    """
+    share = get_authored_illustration_share()
+    if share <= 0:
+        return AuthoredIllustrationPlan(slide_indices=())
+    step = max(1, round(1 / share))
+    content_position = 0
+    selected: list[int] = []
+    for index, role in enumerate(roles):
+        if (role or "").strip().upper() in _NON_CONTENT_ROLES:
+            continue
+        # Position 0 is the anchor slide; the budget starts at position 1 and
+        # takes every step-th content slide after it.
+        if content_position >= 1 and (content_position - 1) % step == 0:
+            selected.append(index)
+        content_position += 1
+    return AuthoredIllustrationPlan(slide_indices=tuple(selected))
+
+
+def derive_illustration_plan(
+    plan: Optional[AuthoredInfographicPlan],
+    roles: Sequence[str] = (),
+) -> Optional[AuthoredIllustrationPlan]:
+    """This deck's picture slots, from its figures or from the share budget.
+
+    A deck that planned its figures derives its pictures from them, so the two
+    can never disagree. A free-composition deck has no figures to derive from
+    and takes :func:`illustration_share_plan` instead — but only when ``roles``
+    are supplied, because the budget is defined over content slides and cannot
+    be computed without them. Called with the plan alone, this is exactly the
+    function it shadows, which keeps every existing call site unchanged.
+    """
+    if plan is not None:
+        return derive_illustration_plan_from_figures(plan)
+    return illustration_share_plan(roles) if roles else None
 
 
 @dataclass(frozen=True)
@@ -143,7 +204,7 @@ async def resolve_deck_plans(
         roles=roles,
         chapter_plan=chapter_plan,
         infographic_plan=infographic_plan,
-        illustration_plan=derive_illustration_plan(infographic_plan),
+        illustration_plan=derive_illustration_plan(infographic_plan, roles),
     )
 
 
@@ -175,6 +236,7 @@ async def resolve_final_outline_infographic_plan(
 __all__ = [
     "AuthoredDeckPlans",
     "derive_illustration_plan",
+    "illustration_share_plan",
     "resolve_deck_plans",
     "resolve_final_outline_infographic_plan",
 ]

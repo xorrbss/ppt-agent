@@ -350,6 +350,64 @@ def test_non_editable_qid_telemetry_does_not_hide_complete_editable_coverage():
     assert report.telemetry_status == "available"
 
 
+def test_decoration_role_qid_missing_from_telemetry_is_tolerated():
+    """H5: a `decoration`-role qid the browser skipped measuring owns nothing
+    the reader could lose, so its absence must not flag the payload
+    incomplete -- see ``docs/authored-quality-speed-programme-design-
+    20260905.md`` section 6."""
+    html = (
+        '<html><body><p data-qid="body">Covered</p>'
+        '<div data-qid="deco" data-semantic-role="decoration">*</div>'
+        "</body></html>"
+    )
+    report = inspect_authored_dom(
+        html,
+        {
+            "elements": [
+                {
+                    "qid": "body",
+                    "bbox": {"x": 10, "y": 10, "width": 100, "height": 20},
+                    "client_width": 100,
+                    "client_height": 20,
+                    "scroll_width": 100,
+                    "scroll_height": 20,
+                    "text": "Covered",
+                },
+            ]
+        },
+    )
+
+    assert report.telemetry_status == "available"
+
+
+def test_a_non_decoration_qid_missing_from_telemetry_is_still_incomplete():
+    """The decoration tolerance is narrow: an ordinary missing qid must still
+    be reported as incomplete telemetry coverage."""
+    html = (
+        '<html><body><p data-qid="body">Covered</p>'
+        '<div data-qid="other">not decoration</div>'
+        "</body></html>"
+    )
+    report = inspect_authored_dom(
+        html,
+        {
+            "elements": [
+                {
+                    "qid": "body",
+                    "bbox": {"x": 10, "y": 10, "width": 100, "height": 20},
+                    "client_width": 100,
+                    "client_height": 20,
+                    "scroll_width": 100,
+                    "scroll_height": 20,
+                    "text": "Covered",
+                },
+            ]
+        },
+    )
+
+    assert report.telemetry_status == "incomplete"
+
+
 def test_local_inspector_classifies_fast_browser_signals_and_content_tokens():
     html = ensure_authored_qids(HTML)
     nodes = build_compact_dom_map(html)

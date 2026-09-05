@@ -9,7 +9,6 @@ from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, Optional
 
-import dirtyjson
 from fastapi import HTTPException
 from llmai.shared import (
     LLMTool,
@@ -18,10 +17,18 @@ from llmai.shared import (
     ResponseFormat,
     ResponseStreamCompletionChunk,
     UserMessage,
-    normalize_content_parts,
 )
 
 from utils.llm_config import get_extra_body
+from utils.llm_content_extraction import (
+    extract_structured_content,
+    extract_text,
+    # Re-exported: content coercion moved to `llm_content_extraction`, but
+    # endpoints and llm_calls import both of these from here and that import
+    # path is part of their contract.
+    message_content_to_text,  # noqa: F401
+    serialize_structured_content,  # noqa: F401
+)
 from utils.schema_utils import get_schema_validation_errors
 from utils.structured_semantic_slots import structured_semantic_slot
 from services.provider_usage_instrumentation import (
@@ -836,10 +843,18 @@ async def generate_structured_with_schema_retries(
     text_chunk_callback: Optional[TextChunkCallback] = None,
     is_retry: bool = False,
     semantic_slot_suffix: str = "",
+    semantic_slot_prefix: str = "structured",
 ) -> dict:
     """
     Parse retries (inner loop) plus optional JSON Schema validation feedback loops (outer loop),
     matching the overflow-mitigation behavior from structured generation with validate_schema.
+
+    ``semantic_slot_prefix`` names this call site inside its provider stage. The
+    durable admission key is (operation, stage, slide, semantic slot), so two
+    different structured calls made inside ONE stage must not both take the
+    default prefix: the second would be admitted as a replay of the first and
+    refused with ``public_provider_terminal_replay_unsupported``. Callers that
+    add a structured call to a stage that already has one pass their own prefix.
     """
     max_validation_loops = min(
         max(1, validate_schema_max_loop_count),
@@ -858,6 +873,7 @@ async def generate_structured_with_schema_retries(
                 validation_attempt=validation_attempt,
                 parse_attempt=parse_attempt,
                 suffix=semantic_slot_suffix,
+                prefix=semantic_slot_prefix,
             )
             content = await _generate_structured_content_with_transient_retries(
                 client,
@@ -946,72 +962,6 @@ async def generate_structured_with_schema_retries(
         )
 
     raise HTTPException(status_code=400, detail="LLM did not return any content")
-
-
-def extract_text(content: Any) -> Optional[str]:
-    if content is None:
-        return None
-    if isinstance(content, str):
-        return content
-    if isinstance(content, Sequence) and not isinstance(content, (bytes, bytearray)):
-        parts: list[str] = []
-        for part in content:
-            if isinstance(part, str):
-                parts.append(part)
-                continue
-            text = getattr(part, "text", None)
-            if isinstance(text, str):
-                parts.append(text)
-        joined = "".join(parts)
-        return joined or None
-    text = getattr(content, "text", None)
-    if isinstance(text, str):
-        return text
-    return None
-
-
-def extract_structured_content(content: Any) -> Optional[dict]:
-    if content is None:
-        return None
-    if isinstance(content, dict):
-        return content
-    if hasattr(content, "model_dump"):
-        dumped = content.model_dump(mode="json")
-        if isinstance(dumped, dict):
-            return dumped
-
-    raw_text = extract_text(content)
-    if not raw_text:
-        return None
-
-    try:
-        parsed = dirtyjson.loads(raw_text)
-    except Exception:
-        return None
-
-    if isinstance(parsed, dict):
-        return dict(parsed)
-    return None
-
-
-def serialize_structured_content(content: Any) -> Optional[str]:
-    parsed = extract_structured_content(content)
-    if parsed is not None:
-        return json.dumps(parsed, ensure_ascii=False)
-
-    raw_text = extract_text(content)
-    if raw_text:
-        return raw_text
-    return None
-
-
-def message_content_to_text(content: Sequence[Any] | str | None) -> Optional[str]:
-    joined = "".join(
-        part.text
-        for part in normalize_content_parts(content)
-        if isinstance(getattr(part, "text", None), str)
-    )
-    return joined or None
 
 
 async def _stream_generate_events_unadmitted(

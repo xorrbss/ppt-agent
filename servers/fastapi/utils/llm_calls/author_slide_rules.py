@@ -9,6 +9,8 @@ names, so external importers are unaffected.
 
 from typing import Optional
 
+from utils.llm_calls.author_slide_brief import TYPE_SCALES
+
 # Appendix A — design-system brief (the crux IP). The non-negotiable rendering,
 # fit, language and output constraints stay in this common template. The visual
 # direction lives in a replaceable style brief so authored presets can vary the
@@ -95,6 +97,8 @@ DESIGN SYSTEM (obey on EVERY slide so the deck is cohesive):
   These rules make HTML render offline and editable PPTX typefaces deterministic. They do NOT
   mean that fonts are embedded in the PPTX; font embedding is outside this authoring workflow.
 {style_brief}
+{composition_intent}
+{shared_universals}
 - PPTX-NATIVE SAFETY (keeps exported objects editable):
   - Draw decorative ticks, underlines, badges, and divider lines as real <span>/<div> DOM
     elements, never ::before/::after pseudo-elements; painted pseudo-elements rasterize that subtree.
@@ -110,27 +114,17 @@ DESIGN SYSTEM (obey on EVERY slide so the deck is cohesive):
     corrected, searched or re-used, so accuracy and editability outrank rendering ambition.
   - Do not use inline SVG for simple decoration; use HTML+CSS. Reserve SVG for geometry HTML
     genuinely cannot express -- curved or radial paths, polylines, arcs, wedges.
-  - INLINE SVG CONTRACT (when an essential chart/diagram truly needs SVG):
-    - The root may declare only `xmlns="http://www.w3.org/2000/svg"` (exact value, root only),
-      plus `viewBox`, `width`, `height`, and `preserveAspectRatio`. Never emit `xmlns:xlink`.
-    - Use only inert presentation elements: `svg`, `g`, `path`, `rect`, `circle`, `ellipse`,
-      `line`, `polyline`, `polygon`, `text`, `tspan`, `defs`, `linearGradient`,
-      `radialGradient`, `stop`, `clipPath`, and `mask`.
-    - Geometry/paint attributes are limited to the element's ordinary coordinates, `d`,
-      `points`, `transform`, `fill`, `stroke`, `stroke-width`, `fill-opacity`,
-      `stroke-opacity`, `opacity`, `stroke-linecap`, `stroke-linejoin`, `stroke-dasharray`,
-      `stroke-dashoffset`, `vector-effect`, `clip-path`, and `mask`; `transform` is available
-      on every shape, not only on `g`. Text may also use `font-size`, `font-family`,
-      `font-weight`, `font-style`, `letter-spacing`, `text-anchor`, `dominant-baseline`, and
-      `writing-mode` for a vertical axis label; gradients/stops may use their
-      coordinate/units/transform plus `offset`, `stop-color`, and `stop-opacity`.
-    - Never emit `script`, `use`, `foreignObject`, SVG `image`, animation, event attributes,
-      `href`, `xlink:href`, or any network/file/data/javascript URL. Paint references may only
-      be local fragment ids such as `clip-path="url(#clip1)"` or `mask="url(#mask1)"`.
+{inline_svg_contract}
   - Do not use text-shadow, filter, backdrop-filter, or mix-blend-mode.
-  - Use only one uniform pixel value for border-radius; no asymmetric or percentage radii.
-  - Freely allowed: linear-gradient backgrounds, layered box-shadow, and raster images;
-    the converter maps these natively.
+  - Use ONE radius family for the whole deck (one pixel value, applied uniformly). Per-corner
+    radii are allowed only where the style itself names a tab or folder shape; export demotes
+    that shape to raster, which is an acceptable price for it alone. No percentage radii.
+  - Freely allowed: linear-gradient backgrounds, layered box-shadow, and raster images.
+    Export keeps text, simple shapes and semantic tables as native editable PowerPoint
+    objects and flattens whatever it cannot express — including a gradient field or a
+    shadowed surface — into a picture BEHIND them. So use gradients and shadows for
+    surfaces, and never to carry a value, a label, or the only cue that distinguishes
+    two things.
 - FORBIDDEN: default round bullet dots; identical heavy-shadow boxed cards on every item;
   clutter; lorem/placeholder; text overflowing/clipping the frame; low contrast; off-palette hues.
 - FIT IS CRITICAL — the frame is EXACTLY 1280x720 and CLIPS (overflow:hidden): EVERY element
@@ -148,31 +142,36 @@ DESIGN SYSTEM (obey on EVERY slide so the deck is cohesive):
 {type_scale}
 - Heading sizing: size headings to the ACTUAL text length so they stay within their area, and
   budget vertical space for the real number of wrapped lines.
-- No fragile positioning: do NOT hard-pin a block to a fixed top/absolute offset that a longer
-  heading could overlap. Prefer normal document flow (flex/grid column with gaps); reserve
-  absolute positioning for decorative layers only, and keep clear gaps between text blocks.
+- No fragile positioning: never pin a TEXT block to a fixed top/absolute offset underneath a
+  heading that could wrap to another line. Prefer normal document flow (flex/grid column with
+  gaps) for content, and keep clear gaps between text blocks. Absolute positioning is for
+  decorative layers, the page-number box, and the header contract's own band and body wrapper
+  — those are fixed furniture and are meant to be pinned.
 - Connector clearance: keep every line and its complete arrowhead bounding box inside a dedicated
   gutter, at least 12px away from text glyphs. Budget rotated arrowheads by their painted bounds,
   not only the unrotated CSS box; shorten the connector before reducing text clearance.
-- Korean/CJK: set `word-break: keep-all` AND `overflow-wrap: anywhere` on text containers so
-  words are never split mid-word across lines.
+- Korean/CJK: set `word-break: keep-all` AND `overflow-wrap: break-word` on text containers so
+  a Korean word is never split across lines and a single long token still cannot overflow its
+  box. Set Hangul body copy to a line-height between 1.5 and 1.7 — Hangul needs more leading
+  than Latin at the same size. Keep a numeral and its unit together on one line (one inline
+  element around both, or a non-breaking space between them).
 - Boxes/cards/labels: each one's text must fit ENTIRELY inside it with padding — never let text
   touch or clip an edge. Size the box to its content (or shrink the content to the box).
 {header_system}{page_number_system}
 - All visible text in {language}.
 Return ONLY the complete HTML document."""
 
+# The default style brief now states PALETTE and FONTS only. Everything else it
+# used to carry — margins, the one-accent rule, the eyebrow spec, the
+# allowed-variation list — was a universal that 37 of the 38 presets silently
+# lost, because a preset REPLACES this text rather than extending it. Those
+# sentences now live in ``author_slide_brief.SHARED_UNIVERSALS``, which every
+# deck gets whatever style it chose.
 DEFAULT_STYLE_BRIEF = """\
 - Fonts: use the offline-safe logical stack {font_stack}; headings 800-900 weight, body
   400-500. Do not add any external font resource.
 - Palette: build everything from the brand primary ({primary}) + neutrals (ink #0F172A, muted
-  #64748B, hairline #E2E8F0, surface #F8FAFC, white). The primary is the ONE accent; no other hues.
-- Margins ~64px (except intentional full-bleed colour zones).
-- Consistent eyebrow: UPPERCASE, letter-spaced 0.15em, ~13px, primary, with a short tick/line.
-- Strong, confident type hierarchy; make the single most important element dominant.
-- Allowed (vary per slide): full-bleed/partial colour-blocked zones, asymmetric grids, a left
-  sidebar, oversized numerals, thin rules, subtle tints of the primary, and SVG only for essential
-  charts/diagrams that cannot be expressed in HTML."""
+  #64748B, hairline #E2E8F0, surface #F8FAFC, white). The primary is the ONE accent; no other hues."""
 
 
 # Appended to the style brief only for illustration-enabled styles.
@@ -228,35 +227,18 @@ ILLUSTRATION_SLOT_RULES = """\
 
 #: Per-verbosity type scale for the design-system brief. The deck's verbosity
 #: decides how much text a slide carries, so it also decides how large that text
-#: can be: a concise deck that keeps a 12px floor spends the room it saved on
-#: empty bands instead of readable type. Measured on a 54-slide concise deck
-#: before this rule, 59% of font-size declarations were under 14px.
+#: can be: a concise deck that keeps the floor spends the room it saved on empty
+#: bands instead of readable type.
+#:
+#: As of 2026-09-05 each entry is a RAMP rather than a single floor, rendered
+#: from the table in ``author_slide_brief`` that the deck-token block also
+#: reads, so the tokens and the paragraph can never state different sizes. A
+#: floor alone produced decks where 80% of body elements sat under 18px and no
+#: tier existed between the title and the body.
 #:
 #: The page-number element keeps its own 12px specification from the
 #: PAGE-NUMBER SYSTEM rules; it is furniture, not slide content.
-_TYPE_SCALES = {
-    "concise": """- TYPE SCALE: this deck is written concise, so every slide carries little text and has room to
-  read well. In ordinary authored generation and style-reference mode, set body copy, bullets,
-  labels, and table cells at 22px or larger, the slide's own title between 40px and 56px, and
-  keep no visible content text (headings, body, bullets, tables, chart labels, metrics,
-  callouts, captions, footnotes) below 15px (11pt equivalent). Express text sizes with
-  `font-size` in px; do not use CSS `font` shorthand or relative units to evade this floor.
-  Spare room on a slide goes into a larger type scale and more generous leading, not into one
-  large empty band.""",
-    "standard": """- TYPE SCALE: in ordinary authored generation and style-reference mode, set body copy, bullets,
-  labels, and table cells at 18px or larger, and keep no visible content text (headings, body,
-  bullets, tables, chart labels, metrics, callouts, captions, footnotes) below 13px (10pt
-  equivalent). Express text sizes with `font-size` in px; do not use CSS `font` shorthand or
-  relative units to evade this floor. Spare room on a slide goes into a larger type scale and
-  more generous leading, not into one large empty band. If content does not fit, shorten it or
-  allocate more space instead of shrinking it until it becomes unnecessarily hard to read.""",
-    "text-heavy": """- READABILITY FLOOR: in ordinary authored generation and style-reference mode, every visible
-  text element that communicates slide content (headings, body, bullets, tables, chart labels,
-  metrics, callouts, captions, and footnotes) must be at least 12px (9pt equivalent). Express
-  text sizes with `font-size` in px; do not use CSS `font` shorthand or relative units to evade
-  this floor. If content does not fit, shorten it or allocate more space instead of shrinking it
-  until it becomes unnecessarily hard-to-read.""",
-}
+_TYPE_SCALES = TYPE_SCALES
 
 
 def type_scale_rules(verbosity: Optional[str]) -> str:

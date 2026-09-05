@@ -6,6 +6,8 @@ break/page-break CSS declarations, a `hidden` attribute with or without
 bound source text), the byte-identical no-op guarantee when nothing in a
 document matches, and that anything outside the whitelist is left alone."""
 
+import pytest
+
 from utils.authored_html_normalize import normalize_authored_html
 
 
@@ -305,3 +307,69 @@ def test_normalize_authored_html_title_br_leaves_unbalanced_documents_alone():
 
     assert result.html == html
     assert result.normalizations == []
+
+
+def test_normalize_authored_html_strips_name_attribute_from_a_tag():
+    html = (
+        "<!doctype html><html><head><meta charset='utf-8'></head><body>"
+        '<a name="section-2" data-qid="a">앵커</a>'
+        "</body></html>"
+    )
+
+    result = normalize_authored_html(html)
+
+    assert 'name="section-2"' not in result.html
+    assert "<a data-qid=\"a\">앵커</a>" in result.html
+    assert result.normalizations == [
+        {"rule": "html_attribute_stripped", "detail": "name", "count": 1}
+    ]
+
+
+def test_normalize_authored_html_strips_name_attribute_from_multiple_tags():
+    html = (
+        "<!doctype html><html><head><meta charset='utf-8'></head><body>"
+        '<div name="one">a</div><div name="two">b</div>'
+        "</body></html>"
+    )
+
+    result = normalize_authored_html(html)
+
+    assert "name=" not in result.html
+    assert "<div>a</div><div>b</div>" in result.html
+    assert result.normalizations == [
+        {"rule": "html_attribute_stripped", "detail": "name", "count": 2}
+    ]
+
+
+def test_normalize_authored_html_does_not_strip_data_name_attribute():
+    """`data-name` must never be mistaken for `name`."""
+    html = (
+        "<!doctype html><html><head><meta charset='utf-8'></head><body>"
+        '<div data-name="one">t</div>'
+        "</body></html>"
+    )
+
+    result = normalize_authored_html(html)
+
+    assert result.html == html
+    assert result.normalizations == []
+
+
+def test_admits_after_stripping_a_document_that_previously_failed_admission_on_name():
+    from utils.renderer_isolation import RendererPolicyError, admit_authored_html
+
+    hostile = (
+        "<!doctype html><html><head><meta charset='utf-8'>"
+        "<style>html,body{margin:0;width:1280px;height:720px;background:#fff}</style>"
+        '</head><body><div name="section-2">앵커</div></body></html>'
+    )
+
+    with pytest.raises(RendererPolicyError, match="name"):
+        admit_authored_html(hostile)
+
+    result = normalize_authored_html(hostile)
+    assert result.normalizations == [
+        {"rule": "html_attribute_stripped", "detail": "name", "count": 1}
+    ]
+    admitted = admit_authored_html(result.html)
+    assert admitted.source_digest.startswith("sha256:")

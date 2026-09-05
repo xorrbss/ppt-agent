@@ -137,8 +137,9 @@ def test_source_image_brief_separates_the_two_kinds_of_attached_image(tmp_path):
     # Placement contract uses an opaque source-slot handle.
     assert 'data-source-slot-id="SLOT_ID"' in brief
     assert "width/height" in brief
-    # Priority over an invented illustration, and the freedom to place nothing.
-    assert "in place of a data-illust-prompt" in brief
+    # The slot is the model's only handle: it never supplies the bytes itself,
+    # and it is free to place nothing.
+    assert "Do not add a src attribute, asset id, URL or data URI" in brief
     assert "Leave the slide without a picture when no candidate shows" in brief
     # Both ways a picture can earn its place: a proposal shows a tool or an
     # artifact as an example, and refusing anything but direct evidence left
@@ -171,9 +172,7 @@ def test_illustration_slot_rules_allow_only_the_slot_and_listed_assets():
     # One statement of the allowed set rather than a prohibition plus an exception.
     assert "Do not reference any other image" not in rules
     assert "opaque source-slot ids listed for that slide" in rules
-    assert "no external URLs" in rules
-    assert "no data URIs" in rules
-    assert "no other image source" in rules
+    assert "no asset ids, external URLs, data URIs, or other image source" in rules
 
 
 def test_gated_off_deck_keeps_the_pre_feature_slot_rules(monkeypatch):

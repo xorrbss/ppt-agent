@@ -35,6 +35,7 @@ from services.authored_infographic_assets import (
     fill_scene_cutout,
     substitute_figure_icons,
 )
+from services.authored_checkpoint_html import checkpoint_stage_html
 from services.source_images.models import SourceImageCandidate
 from services.provider_usage_instrumentation import (
     provider_usage_scope,
@@ -93,10 +94,8 @@ async def illustrate_slide(
     uploaded costs none.
     """
     illustrated_html = (
-        checkpoint.illustrated_html
-        if checkpoint
-        and checkpoint.illustrate_status in ("completed", "skipped")
-        and checkpoint.illustrated_html
+        checkpoint_stage_html(checkpoint, stage="illustrate")
+        if checkpoint and checkpoint.illustrate_status in ("completed", "skipped")
         else None
     )
     if illustrated_html is not None:

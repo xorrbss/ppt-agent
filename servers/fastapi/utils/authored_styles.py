@@ -19,6 +19,9 @@ from typing import Any, Mapping, Optional, Sequence
 from PIL import Image, UnidentifiedImageError
 import yaml
 
+# Re-exported: the loader lives apart only because this file is past the ratchet.
+from utils.authored_style_exemplars import load_style_exemplar  # noqa: F401
+
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_AUTHORED_STYLE_ID = "default"
@@ -34,14 +37,8 @@ _ENGLISH_IDENTIFIER_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 _HEX_COLOR_PATTERN = re.compile(r"^#[0-9A-Fa-f]{6}$")
 _REFERENCE_ROLES = frozenset(
     {
-        "cover",
-        "content",
-        "data",
-        "timeline",
-        "architecture",
-        "closing",
-        "section",
-        "agenda",
+        "cover", "content", "data", "timeline",
+        "architecture", "closing", "section", "agenda",
     }
 )
 
@@ -415,27 +412,28 @@ def _validate_exact_sources(
     return tuple(digests)
 
 
+#: The deck ROLE vocabulary mapped onto the keys a style brief uses for its own
+#: SLIDE ARCHETYPES section and its reference images. Unbridged in the prompt, a
+#: PROBLEM/PILLARS/OUTCOMES page was authored against no archetype at all.
+_ROLE_ARCHETYPES: Mapping[str, str] = {
+    "COVER": "cover", "CLOSING": "closing", "SECTION": "section",
+    "AGENDA": "agenda", "ROADMAP": "timeline", "TIMELINE": "timeline",
+    "OUTCOMES": "data", "METRICS": "data", "DATA": "data",
+    "ARCHITECTURE": "architecture", "SYSTEM": "architecture",
+    "SOLUTION": "architecture",
+}
+
+
+def archetype_for_role(role: str) -> str:
+    """The style-brief archetype a deck role composes against."""
+    return _ROLE_ARCHETYPES.get((role or "").strip().upper(), "content")
+
+
 def reference_images_for_role(style: Optional[AuthoredStyle], role: str) -> tuple[Path, ...]:
     """Return the small, role-appropriate reference set for one authored slide."""
     if style is None:
         return ()
-    normalized = (role or "").upper()
-    if normalized == "COVER":
-        key = "cover"
-    elif normalized == "CLOSING":
-        key = "closing"
-    elif normalized == "SECTION":
-        key = "section"
-    elif normalized == "AGENDA":
-        key = "agenda"
-    elif normalized in {"ROADMAP", "TIMELINE"}:
-        key = "timeline"
-    elif normalized in {"OUTCOMES", "METRICS", "DATA"}:
-        key = "data"
-    elif normalized in {"ARCHITECTURE", "SYSTEM", "SOLUTION"}:
-        key = "architecture"
-    else:
-        key = "content"
+    key = archetype_for_role(role)
     references = getattr(style, "reference_images", {})
     for candidate in _REFERENCE_ROLE_FALLBACKS.get(key, (key,)):
         resolved = references.get(candidate, ())

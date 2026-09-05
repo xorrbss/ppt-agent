@@ -26,10 +26,7 @@ from models.sql.presentation import (
     PresentationModel,
 )
 from models.sql.presentation_generation_job import PresentationGenerationJob
-from models.sql.public_admission import (
-    PublicOperationAdmission,
-    PublicProviderLogicalCall,
-)
+from models.sql.public_admission import PublicOperationAdmission, PublicProviderLogicalCall
 from services.authored_checkpoint_service import (
     AuthoredStageError,
     fail_stage,
@@ -64,6 +61,7 @@ from services.authored_deck_plan_checkpoint import (
     resolve_with_authored_deck_plan_checkpoint,
 )
 from utils.llm_calls.author_slide import TEMPLATE_PAGE_NUMBER_MODE as _TEMPLATE_PAGE_NUMBER_MODE
+from utils.slide_capture_deck_scope import set_render_deck_scope
 from services.source_content.header_pages import source_pages_are_numbered
 from services.authored_header_contract_service import (
     page_number_mode_for,
@@ -137,6 +135,8 @@ from services.authored_generation_preflight import (
     AuthoredSlideArtifact,
     preflight_authored_provider_repair,
 )
+from services.authored_deck_instruments_stage import attach_deck_receipt_extras
+from services.authored_final_metrics import resolve_final_browser_metrics
 from services.authored_repair_round_order import remake_first_flagged_slides
 from services.authored_terminal_slide_fallback import (
     MAX_REMAKES_PER_SLIDE,
@@ -175,9 +175,20 @@ from utils.llm_calls.author_vision_qa import (
     AuthoredVqaResidualDomIssuesError,
     revise_authored_deck,
 )
+from services.authored_generation_observability_probes import (
+    _artifact_bytes_metric,
+    _blocked_renderer_reference_count,
+    _maximum_observed_metric,
+    _not_applicable_metric,
+    _object_store_latency_metric,
+    _observed_metric,
+    _runtime_counter_delta,
+    _unavailable_metric,
+    _worker_handle_count_metric,
+    _worker_peak_memory_metric,
+)
 from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
 from utils.slide_capture import (
-    _asset_references,
     _placeholder_png,
     ensure_browser_metrics,
     find_chrome,
@@ -308,149 +319,6 @@ def _encode_optional_model(
     }
 
 
-def _observed_metric(value: object) -> dict[str, object]:
-    return {"state": "observed", "value": value}
-
-
-def _unavailable_metric(reason: str) -> dict[str, object]:
-    return {"state": "unavailable", "reason": reason}
-
-
-def _not_applicable_metric(reason: str) -> dict[str, object]:
-    return {"state": "not_applicable", "reason": reason}
-
-
-def _runtime_counter_delta(
-    before: Mapping[str, int], after: Mapping[str, int], *names: str
-) -> int:
-    return sum(max(0, int(after.get(name, 0)) - int(before.get(name, 0))) for name in names)
-
-
-def _worker_peak_memory_metric() -> dict[str, object]:
-    """Read this worker's lifetime peak working set without third-party packages."""
-
-    if os.name != "nt":
-        return _not_applicable_metric("worker_resource_not_applicable")
-    try:
-        import ctypes
-        from ctypes import wintypes
-
-        class ProcessMemoryCounters(ctypes.Structure):
-            _fields_ = [
-                ("cb", wintypes.DWORD),
-                ("PageFaultCount", wintypes.DWORD),
-                ("PeakWorkingSetSize", ctypes.c_size_t),
-                ("WorkingSetSize", ctypes.c_size_t),
-                ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
-                ("QuotaPagedPoolUsage", ctypes.c_size_t),
-                ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
-                ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
-                ("PagefileUsage", ctypes.c_size_t),
-                ("PeakPagefileUsage", ctypes.c_size_t),
-            ]
-
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        psapi = ctypes.WinDLL("psapi", use_last_error=True)
-        kernel32.GetCurrentProcess.argtypes = ()
-        kernel32.GetCurrentProcess.restype = wintypes.HANDLE
-        psapi.GetProcessMemoryInfo.argtypes = (
-            wintypes.HANDLE,
-            ctypes.POINTER(ProcessMemoryCounters),
-            wintypes.DWORD,
-        )
-        psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
-
-        counters = ProcessMemoryCounters()
-        counters.cb = ctypes.sizeof(counters)
-        process_handle = kernel32.GetCurrentProcess()
-        if not psapi.GetProcessMemoryInfo(
-            process_handle, ctypes.byref(counters), counters.cb
-        ):
-            raise RuntimeError("worker_memory_peak_collection_failed")
-        return _observed_metric(int(counters.PeakWorkingSetSize))
-    except (AttributeError, OSError, TypeError, ValueError) as error:
-        raise RuntimeError("worker_memory_peak_collection_failed") from error
-
-
-def _worker_handle_count_metric() -> dict[str, object]:
-    """Read the current Windows worker handle count from the process kernel."""
-
-    if os.name != "nt":
-        return _not_applicable_metric("worker_resource_not_applicable")
-    try:
-        import ctypes
-        from ctypes import wintypes
-
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        kernel32.GetCurrentProcess.argtypes = ()
-        kernel32.GetCurrentProcess.restype = wintypes.HANDLE
-        kernel32.GetProcessHandleCount.argtypes = (
-            wintypes.HANDLE,
-            ctypes.POINTER(wintypes.DWORD),
-        )
-        kernel32.GetProcessHandleCount.restype = wintypes.BOOL
-
-        count = wintypes.DWORD()
-        process_handle = kernel32.GetCurrentProcess()
-        if not kernel32.GetProcessHandleCount(process_handle, ctypes.byref(count)):
-            raise RuntimeError("worker_handle_count_collection_failed")
-        return _observed_metric(int(count.value))
-    except (AttributeError, OSError, TypeError, ValueError) as error:
-        raise RuntimeError("worker_handle_count_collection_failed") from error
-
-
-def _maximum_observed_metric(
-    first: Mapping[str, object], second: Mapping[str, object]
-) -> dict[str, object]:
-    values = [
-        metric.get("value")
-        for metric in (first, second)
-        if metric.get("state") == "observed"
-    ]
-    numeric = [
-        int(value)
-        for value in values
-        if isinstance(value, (int, float)) and not isinstance(value, bool)
-    ]
-    if numeric:
-        return _observed_metric(max(numeric))
-    return dict(second)
-
-
-def _blocked_renderer_reference_count(htmls: object) -> int:
-    if not isinstance(htmls, (list, tuple)):
-        return 0
-    blocked_schemes = {"http", "https", "file", "ftp", "ws", "wss"}
-    count = 0
-    for html in htmls:
-        if not isinstance(html, str):
-            continue
-        for reference in _asset_references(html):
-            scheme = reference.split(":", 1)[0].strip().lower()
-            if scheme in blocked_schemes or reference.startswith("//"):
-                count += 1
-    return count
-
-
-def _object_store_latency_metric(*sources: object) -> dict[str, object]:
-    """Consume artifact-agent latency metadata without binding its container type."""
-
-    keys = ("object_store_latency_ms", "objectStoreLatencyMs")
-    for source in sources:
-        if isinstance(source, Mapping):
-            for key in keys:
-                value = source.get(key)
-                if isinstance(value, (int, float)) and not isinstance(value, bool):
-                    return _observed_metric(max(0, round(float(value))))
-        for key in keys:
-            value = getattr(source, key, None)
-            if isinstance(value, (int, float)) and not isinstance(value, bool):
-                return _observed_metric(max(0, round(float(value))))
-    # The current authored publisher writes to its local immutable artifact
-    # store. Object-store I/O is therefore not an executed stage on this path.
-    return _not_applicable_metric("artifact_store_not_used")
-
-
 async def _provider_stage_observability_metrics(
     session: AsyncSession,
     operation_id: uuid.UUID,
@@ -535,13 +403,6 @@ async def _provider_stage_observability_metrics(
             else _unavailable_metric("provider_actual_cost_not_reported")
         ),
     }
-
-
-def _artifact_bytes_metric(artifact_path: object) -> dict[str, object]:
-    try:
-        return _observed_metric(os.path.getsize(os.fspath(artifact_path)))
-    except (OSError, TypeError, ValueError) as error:
-        raise RuntimeError("artifact_bytes_collection_failed") from error
 
 
 async def _record_deck_stage_latency(
@@ -1402,6 +1263,7 @@ def _source_image_block_bindings(request) -> tuple[tuple[str, ...], ...] | None:
 
 async def _final_authored_quality_gate(
     *,
+    presentation_id: uuid.UUID | None = None,
     htmls: list[str],
     capacity_plan,
     profile,
@@ -1421,11 +1283,11 @@ async def _final_authored_quality_gate(
     Browser metrics are cache hits for unchanged HTML, so shadow semantic mode
     does not launch a second render merely to collect the gate evidence.
     """
-    metrics = (
-        browser_metrics_by_slide
-        if browser_metrics_by_slide is not None
-        else await asyncio.gather(*(ensure_browser_metrics(html) for html in htmls))
-    )
+    if browser_metrics_by_slide is not None:
+        metrics = browser_metrics_by_slide
+    else:
+        with set_render_deck_scope(str(presentation_id)):
+            metrics = await asyncio.gather(*(ensure_browser_metrics(html) for html in htmls))
     residual: list[dict[str, object]] = []
     for index, (html, browser_metrics) in enumerate(zip(htmls, metrics, strict=True)):
         if capacity_plan is not None:
@@ -1609,11 +1471,11 @@ async def _persist_master_pinned_editable_scene_deck(
     # cache is intentionally process-local.  Recollect the exact instrumented
     # HTML before Scene compilation so a retry cannot publish every owner as
     # geometry-unavailable merely because its PNG outlived the worker process.
-    telemetry = (
-        tuple(browser_metrics_by_slide)
-        if browser_metrics_by_slide is not None
-        else await asyncio.gather(*(ensure_browser_metrics(html) for html in htmls))
-    )
+    if browser_metrics_by_slide is not None:
+        telemetry = tuple(browser_metrics_by_slide)
+    else:
+        with set_render_deck_scope(str(presentation_id)):
+            telemetry = await asyncio.gather(*(ensure_browser_metrics(html) for html in htmls))
     if any(metrics is None for metrics in telemetry):
         raise ValueError("editable Hybrid Scene browser telemetry is unavailable")
     deck_id = f"deck:semantic-{presentation_id.hex}"
@@ -2091,8 +1953,10 @@ async def _generate_authored_presentation(
                 )
             )
     infographic_plan, infographic_reused = await infographic_plan_task
+    # ``roles`` turns the free-composition deck's picture budget on (design G4):
+    # without them the call is byte-identical to the pre-programme behaviour.
     illustration_plan: AuthoredIllustrationPlan | None = derive_illustration_plan(
-        infographic_plan
+        infographic_plan, roles
     )
     LOGGER.info(
         "[authored] deck checkpoint reuse: header=%s infographic=%s",
@@ -2390,7 +2254,12 @@ async def _generate_authored_presentation(
             scene_envelope = remake_first.scene_envelope
             flagged = remake_first.remaining_flagged
             remake_counts.update(remake_first.remake_counts)
-            repaired_gate_indices = list(remake_first.remade_slide_indices)
+            # H3's deterministic rung and the remake both produce a repaired
+            # slide; only the remake spent a provider call and a remake budget.
+            repaired_gate_indices = [
+                *remake_first.remade_slide_indices,
+                *remake_first.text_scaled_slide_indices,
+            ]
         repair_kwargs: dict[str, object] = {
             "slide_indices": flagged,
             "total_slides": len(htmls),
@@ -2860,6 +2729,14 @@ async def _generate_authored_presentation(
     flagged_slides = [dict(e) for e in (*pipeline.author_flagged_slides, *terminal_fallback.flagged_slides)]
     flagged_residual_failures: list[dict[str, object]] = []
     object.__setattr__(request, "_authored_flagged_slides", flagged_slides)
+    # F3: the seconds the wave scheduler slept out a provider cooldown, on the
+    # same request channel the flagged slides use. The attempt timing receipt
+    # records it on the authoring stage as ``cooldownWaitSeconds``.
+    object.__setattr__(
+        request,
+        "_authored_cooldown_wait_seconds",
+        float(getattr(pipeline, "cooldown_wait_seconds", 0.0) or 0.0),
+    )
 
     await mark_stage("checkpoint")
     checkpoint_started = time.monotonic()
@@ -2887,12 +2764,12 @@ async def _generate_authored_presentation(
                 # nothing to check; treating it as a failure ended a 35-slide
                 # deck that had already passed every gate before it.
                 final_source_images = [{} for _ in htmls]
-            final_metrics = (
-                retained_final_metrics
-                if evidence_ledger is not None
-                else await asyncio.gather(
-                    *(ensure_browser_metrics(html) for html in htmls)
-                )
+            # F4: the sealed ledger first, then the repair rounds' own metrics
+            # for a slide whose digest still matches, and only then a render.
+            final_metrics = await resolve_final_browser_metrics(
+                htmls,
+                retained=(retained_final_metrics if evidence_ledger is not None else None),
+                overrides=revised_metrics_by_slide,
             )
             for index, (html, offered, metrics) in enumerate(
                 zip(htmls, final_source_images, final_metrics, strict=True)
@@ -2922,12 +2799,15 @@ async def _generate_authored_presentation(
         # receipt on the same request the timing stage already rides.
         gate_fit_summaries: dict[int, Mapping[str, object]] = {}
         residual_gate_failures = await _final_authored_quality_gate(
+            presentation_id=presentation_id,
             htmls=htmls,
             capacity_plan=capacity_plan,
             profile=composition_profile,
             reference_mode=reference_mode,
-            browser_metrics_by_slide=(
-                retained_final_metrics if evidence_ledger is not None else None
+            browser_metrics_by_slide=await resolve_final_browser_metrics(
+                htmls,
+                retained=(retained_final_metrics if evidence_ledger is not None else None),
+                overrides=revised_metrics_by_slide,
             ),
             flagged_slide_indices=[int(entry["index"]) for entry in flagged_slides],
             fit_summaries=gate_fit_summaries,
@@ -3012,6 +2892,12 @@ async def _generate_authored_presentation(
         quality_gate_receipt["flaggedSlides"] = flagged_slides
     if source_readback_receipt is not None:
         quality_gate_receipt["sourceReadback"] = source_readback_receipt.as_dict()
+    # H4/H6 evidence: deck instruments and the one vision advisory pass. Both
+    # are receipt-only and knob-gated; neither can change what is published.
+    await attach_deck_receipt_extras(
+        quality_gate_receipt, htmls=htmls, pngs=pngs,
+        metrics=list(retained_final_metrics or ()), style=style, brand=brand,
+    )
 
     quality_receipt_v2 = None
     if evidence_ledger is not None and evidence_attempt_id is not None:

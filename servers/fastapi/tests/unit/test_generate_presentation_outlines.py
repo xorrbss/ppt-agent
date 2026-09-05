@@ -193,25 +193,24 @@ def test_slide_text_has_a_content_floor_per_verbosity(verbosity, floor, bullets)
 
 
 @pytest.mark.parametrize(
-    ("verbosity", "expected"),
-    [
-        ("concise", "22px or larger"),
-        ("standard", "18px or larger"),
-        ("text-heavy", "at least 12px (9pt equivalent)"),
-        (None, "18px or larger"),
-    ],
+    ("verbosity", "expected_body_px"),
+    [("concise", 20), ("standard", 18), ("text-heavy", 16), (None, 18)],
 )
-def test_authored_type_scale_follows_deck_verbosity(verbosity, expected):
+def test_authored_type_scale_follows_deck_verbosity(verbosity, expected_body_px):
     """A deck that carries less text per slide may set that text larger.
 
     Verbosity reaches the authoring prompt only through Brand, so a deck that
     kept the 12px floor spent the room it saved on empty bands instead of type.
+
+    Updated 2026-09-05 (design section G2): each verbosity now states a RAMP
+    rather than one "N px or larger" floor, so the assertion moved from the
+    floor sentence to the ramp's body tier.
     """
     from utils.llm_calls.author_slide import Brand, build_design_system
 
     brand = Brand(topic="t", verbosity=verbosity or "standard")
 
-    assert expected in build_design_system(brand)
+    assert f"body copy and bullets {expected_body_px}px" in build_design_system(brand)
 
 
 def test_concise_type_scale_leaves_the_page_number_specification_alone():
@@ -221,4 +220,7 @@ def test_concise_type_scale_leaves_the_page_number_specification_alone():
     design_system = build_design_system(Brand(topic="t", verbosity="concise"))
 
     assert "12px type (9pt equivalent)" in design_system
-    assert "below 15px (11pt equivalent)" in design_system
+    # One floor for every verbosity now (was 15/13/12): the ramp, not the
+    # floor, is what makes a concise deck set its text larger.
+    assert "below 12px (9pt equivalent)" in design_system
+    assert "below 15px" not in design_system

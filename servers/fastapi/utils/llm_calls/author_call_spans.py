@@ -111,7 +111,9 @@ def record_call_spans(
     )
 
     spans.finish()
-    _state, _input_tokens, output_tokens = response_usage(response)
+    # ``response_usage`` also reports cached prompt tokens (R2-D); only the
+    # output count is a span input, so the rest is discarded here.
+    _state, _input_tokens, output_tokens, _cached_tokens = response_usage(response)
     record = spans.record(output_tokens=output_tokens)
     record_provider_call_timing(record)
     return record

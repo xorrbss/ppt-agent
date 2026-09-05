@@ -46,7 +46,14 @@ def test_scene_and_ooxml_use_the_same_capability_registry_binding() -> None:
 def test_prompt_validator_and_font_adapters_share_registry_policy() -> None:
     assert MIN_AUTHORED_FONT_SIZE_PX == AUTHORED_FONT_FLOOR_PX
     assert MIN_AUTHORED_FONT_SIZE_PT == AUTHORED_FONT_FLOOR_PT
-    assert CAPABILITY_REGISTRY_DIGEST in prompt_capability_clause()
+    # The clause no longer carries the registry digest (2026-09-05, design
+    # section G4): a 71-character sha256 the model cannot act on sat in the
+    # prompt's highest-recency slot on every call of every slide. The binding it
+    # existed to prove is still carried — and still checked — by
+    # ``capability_metadata`` on every consumer below.
+    clause = prompt_capability_clause()
+    assert CAPABILITY_REGISTRY_DIGEST not in clause
+    assert "author the visual source only" in clause
     assert capability_metadata(consumer="chromium")["registryDigest"] == CAPABILITY_REGISTRY_DIGEST
 
     class Brand:
@@ -66,7 +73,10 @@ def test_prompt_validator_and_font_adapters_share_registry_policy() -> None:
         page_number_system="",
         type_scale="",
     )
-    assert CAPABILITY_REGISTRY_DIGEST in prompt
+    # The design system still ends with the capability clause; only the digest
+    # inside it is gone.
+    assert CAPABILITY_REGISTRY_DIGEST not in prompt
+    assert clause in prompt
 
 
 def test_registry_metadata_and_validator_feature_drift_fail_closed() -> None:

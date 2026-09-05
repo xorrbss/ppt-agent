@@ -18,6 +18,7 @@ import logging
 from typing import Any
 
 from models.authored_infographic_plan import AuthoredSlideInfographic
+from services.authored_checkpoint_html import checkpoint_stage_html
 from services.authored_quality_loop import run_authored_quality_loop
 from utils.authored_figure_variants import same_figure_document
 from utils.get_env import is_authored_quality_loop_enabled
@@ -30,7 +31,7 @@ def _checkpoint_winner(checkpoint: Any, html: str) -> str | None:
     """The earlier attempt's chosen document, when it is one of this slide's."""
     if checkpoint is None or getattr(checkpoint, "render_status", None) != "completed":
         return None
-    previous = getattr(checkpoint, "illustrated_html", None)
+    previous = checkpoint_stage_html(checkpoint, stage="render")
     if not isinstance(previous, str) or not previous:
         return None
     return previous if same_figure_document(previous, html) else None

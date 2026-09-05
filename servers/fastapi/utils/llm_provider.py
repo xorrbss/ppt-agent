@@ -51,7 +51,23 @@ from services.presentation_profiles import (
     PresentationProfile,
     resolve_presentation_driver,
 )
+from utils.get_env_programme import get_llm_light_model_env
 from utils.runtime_settings import RuntimeSettings, resolve_runtime_settings
+
+#: Latency-sensitive structured tasks eligible for a lighter model under
+#: `get_model_for` (design doc section 10, phase 3, "per-call model tier").
+#: No call site adopts this seam yet; it exists so a follow-up change can
+#: route one of these tasks to `LLM_LIGHT_MODEL` without touching this module
+#: again.
+_LIGHT_MODEL_TASKS = frozenset(
+    {
+        "header_contract",
+        "content_brief",
+        "chapter_plan",
+        "outline_expansion",
+        "vision_advisory",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -281,6 +297,32 @@ def get_model(settings: RuntimeSettings | None = None):
                 "lmstudio, ollama, custom, codex"
             ),
         )
+
+
+def get_model_for(task: str, settings: RuntimeSettings | None = None) -> str:
+    """Resolve the model for one named call-site task.
+
+    Seam for a future per-call model tier (design doc section 10, phase 3,
+    "per-call model tier"): when the operator sets `LLM_LIGHT_MODEL` and
+    `task` is one of `_LIGHT_MODEL_TASKS` (latency-sensitive structured
+    calls: header contract repair, content brief, chapter plan, outline
+    expansion, vision advisory), this returns that lighter model instead of
+    the deck's main configured model. An unset knob, or a `task` outside that
+    set, falls back to `get_model()` unchanged.
+
+    No caller uses this yet. Adopting it at a call site (e.g.
+    `utils/llm_calls/author_header_contract.py`,
+    `services/authored_deck_chapter_plan.py`,
+    `utils/llm_calls/generate_presentation_outlines.py`,
+    `services/authored_vision_advisory.py`) is a follow-up change owned by
+    whichever module makes that call, not this one.
+    """
+    snapshot = resolve_runtime_settings(settings)
+    if task in _LIGHT_MODEL_TASKS:
+        light_model = get_llm_light_model_env(snapshot)
+        if light_model:
+            return light_model
+    return get_model(snapshot)
 
 
 def get_google_llm_client(settings: RuntimeSettings | None = None) -> genai.Client:

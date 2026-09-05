@@ -18,12 +18,10 @@ pass a JSON-compatible payload back here.
 
 from __future__ import annotations
 
-import hashlib
 import math
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
-from html import unescape
 from html.parser import HTMLParser
 from typing import Any, Literal
 
@@ -35,58 +33,27 @@ from utils.authored_dom_fit_magnitude import (
     off_canvas_magnitude,
     overflow_magnitude,
 )
+from utils.authored_dom_tags import (
+    VOID_TAGS as _VOID_TAGS,
+    StartTagCollector as _StartTagCollector,
+    attrs_dict as _attrs_dict,
+    is_edit_target as _is_edit_target,
+    normalize_dom_text as _normal_text,
+)
+from utils.authored_qid_namespace import (
+    ensure_authored_qids,
+    # Re-exported: the qid namespace moved to `authored_qid_namespace`, but the
+    # patch engine, composer and semantic candidate boundaries all import these
+    # two from here, and that import path is part of their contract.
+    is_valid_authored_qid,  # noqa: F401
+    validate_declared_authored_qids,  # noqa: F401
+)
 
 EXACT_RECONSTRUCTION = "exact_reconstruction"
 STYLE_REFERENCE = "style_reference"
 ReferenceMode = Literal["exact_reconstruction", "style_reference"]
 TelemetryStatus = Literal["available", "unavailable", "incomplete"]
 
-# This is deliberately shared with the patch engine.  A qid accepted by the
-# migration must also be addressable by a patch, otherwise a seemingly harmless
-# preflight repair can make a later local repair fail closed.
-_QID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
-
-_NON_RENDERED_TAGS = {
-    "html",
-    "head",
-    "body",
-    "base",
-    "link",
-    "meta",
-    "title",
-    "style",
-    "script",
-    "template",
-    "noscript",
-    "defs",
-    "symbol",
-    "clipPath".lower(),
-}
-# Most HTML void elements do not own editable content.  ``img`` is the deliberate
-# exception: it is a first-class visual target for fit/crop repair, while still
-# never being pushed onto the text parser stack.  In particular, treating ``br``
-# as a normal opening tag would make following text belong to a phantom break.
-# Keep this local copy rather than importing the patch engine: DOM inspection is a
-# one-way dependency used by the patch trust boundary.
-_VOID_TAGS = frozenset(
-    {
-        "area",
-        "base",
-        "br",
-        "col",
-        "embed",
-        "hr",
-        "img",
-        "input",
-        "link",
-        "meta",
-        "param",
-        "source",
-        "track",
-        "wbr",
-    }
-)
-_WS = re.compile(r"\s+")
 _NUMBER_OR_SYMBOL = re.compile(r"(?:\d+(?:[,.]\d+)*%?|[$€£¥₩]|[→←↑↓↔±×÷#@&])")
 _HEX_COLOR = re.compile(r"^#(?P<value>[0-9a-fA-F]{3,8})$")
 _RGB_COLOR = re.compile(r"^rgba?\((.+)\)$", re.IGNORECASE)
@@ -242,192 +209,6 @@ def has_dom_quality_regression(
         ):
             return True
     return False
-
-
-class _StartTagCollector(HTMLParser):
-    def __init__(self) -> None:
-        super().__init__(convert_charrefs=False)
-        self.tags: list[tuple[str, list[tuple[str, str | None]], str]] = []
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        self.tags.append((tag.lower(), attrs, self.get_starttag_text()))
-
-    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        self.tags.append((tag.lower(), attrs, self.get_starttag_text()))
-
-
-def _normal_text(value: object, *, limit: int | None = None) -> str:
-    text = _WS.sub(" ", unescape(str(value or ""))).strip()
-    return text[:limit] if limit is not None else text
-
-
-def _attrs_dict(attrs: Iterable[tuple[str, str | None]]) -> dict[str, str]:
-    return {
-        str(name).lower(): "" if value is None else str(value) for name, value in attrs
-    }
-
-
-def _is_edit_target(tag: str, attrs: Mapping[str, str]) -> bool:
-    """Avoid document plumbing but include every visible element that a patch may target."""
-    if tag in _NON_RENDERED_TAGS or (tag in _VOID_TAGS and tag != "img") or tag in {
-        "g",
-        "path",
-        "rect",
-        "circle",
-        "line",
-        "polygon",
-        "polyline",
-    }:
-        return False
-    if attrs.get("aria-hidden", "").lower() == "true" or "data-qid-ignore" in attrs:
-        return False
-    # Preserve the historical migration contract: qid-less images are passive.
-    # An explicitly addressed image is safe to expose for fit/crop operations.
-    if tag == "img":
-        return bool(attrs.get("data-qid", "").strip())
-    return not (
-        attrs.get("aria-hidden", "").lower() == "true" or "data-qid-ignore" in attrs
-    )
-
-
-def _qid_seed(tag: str, attrs: Mapping[str, str], occurrence: int) -> str:
-    stable_attrs = "|".join(
-        f"{name}={_normal_text(attrs.get(name), limit=80)}"
-        for name in ("id", "class", "name", "role", "aria-label", "alt", "title")
-        if attrs.get(name)
-    )
-    digest = hashlib.sha256(f"{tag}|{stable_attrs}|{occurrence}".encode()).hexdigest()[
-        :12
-    ]
-    return f"q-{tag}-{digest}"
-
-
-def is_valid_authored_qid(value: object) -> bool:
-    """Return whether a value is a patch-addressable authored qid token."""
-    return isinstance(value, str) and _QID_PATTERN.fullmatch(value) is not None
-
-
-def _insert_attribute(raw_tag: str, name: str, value: str) -> str:
-    # The input is an HTMLParser start-tag token.  Keep every user byte except the
-    # one reversible attribute insertion, including quote choices and whitespace.
-    match = re.search(r"\s*/?>\s*$", raw_tag)
-    if match is None:
-        return raw_tag
-    insert_at = match.start()
-    return f'{raw_tag[:insert_at]} {name}="{value}"{raw_tag[insert_at:]}'
-
-
-def _replace_attribute(raw_tag: str, name: str, value: str) -> str:
-    """Replace an existing valued or valueless attribute in one start token."""
-    pattern = re.compile(
-        rf"(\s{re.escape(name)})(?:\s*=\s*(?:\"[^\"]*\"|'[^']*'|[^\s>]+))?(?=\s|/?>)",
-        re.IGNORECASE,
-    )
-    return pattern.sub(lambda match: f'{match.group(1)}="{value}"', raw_tag, count=1)
-
-
-def ensure_authored_qids(html: str) -> str:
-    """Add deterministic ``data-qid`` attributes without rewriting authored HTML.
-
-    Existing valid qids are retained verbatim.  Missing, invalid, and duplicate
-    qids are deterministically replaced on the later element; normal ``id``
-    attributes are never touched.  Calling this twice is idempotent.  We also
-    normalize an invalid/duplicate qid on a non-editable element because the patch
-    parser validates the document-wide qid namespace.
-    """
-    if not isinstance(html, str):
-        raise TypeError("authored HTML must be a string")
-    parser = _StartTagCollector()
-    parser.feed(html)
-    parser.close()
-    cursor = 0
-    used: set[str] = set()
-    occurrences: dict[tuple[str, str], int] = {}
-    parts: list[str] = []
-    for tag, raw_attrs, raw_tag in parser.tags:
-        index = html.find(raw_tag, cursor)
-        if index < 0:  # Defensive: malformed parser output must leave user HTML intact.
-            continue
-        parts.append(html[cursor:index])
-        attrs = _attrs_dict(raw_attrs)
-        has_qid_attribute = "data-qid" in attrs
-        raw_qid = attrs.get("data-qid", "")
-        qid = raw_qid.strip()
-        replacement = raw_tag
-        needs_qid = _is_edit_target(tag, attrs)
-        if needs_qid or qid:
-            signature = (
-                tag,
-                "|".join(
-                    f"{key}={attrs.get(key, '')}"
-                    for key in (
-                        "id",
-                        "class",
-                        "name",
-                        "role",
-                        "aria-label",
-                        "alt",
-                        "title",
-                    )
-                ),
-            )
-            occurrences[signature] = occurrences.get(signature, 0) + 1
-            if (
-                (needs_qid and not qid)
-                or not is_valid_authored_qid(raw_qid)
-                or qid in used
-            ):
-                generated = _qid_seed(tag, attrs, occurrences[signature])
-                while generated in used:
-                    occurrences[signature] += 1
-                    generated = _qid_seed(tag, attrs, occurrences[signature])
-                replacement = (
-                    _replace_attribute(raw_tag, "data-qid", generated)
-                    if has_qid_attribute
-                    else _insert_attribute(raw_tag, "data-qid", generated)
-                )
-                qid = generated
-            if qid:
-                used.add(qid)
-        parts.append(replacement)
-        cursor = index + len(raw_tag)
-    parts.append(html[cursor:])
-    return "".join(parts)
-
-
-def validate_declared_authored_qids(html: str) -> tuple[str, ...]:
-    """Validate a model-declared QID namespace without repairing the source.
-
-    New semantic dual-output candidates use ``data-qid`` as their element identity.
-    Unlike the legacy compatibility migration above, this boundary must never invent,
-    replace, or de-duplicate an identifier: a retry is safer than publishing a source
-    whose semantic identity differs from what Authored declared.
-    """
-
-    if not isinstance(html, str):
-        raise TypeError("authored HTML must be a string")
-    parser = _StartTagCollector()
-    parser.feed(html)
-    parser.close()
-    qids: list[str] = []
-    used: set[str] = set()
-    for tag, raw_attrs, _raw_tag in parser.tags:
-        attrs = _attrs_dict(raw_attrs)
-        raw_qid = attrs.get("data-qid")
-        needs_qid = _is_edit_target(tag, attrs)
-        if needs_qid and raw_qid is None:
-            raise ValueError(f"authored_semantic_qid_missing:{tag}")
-        if raw_qid is None:
-            continue
-        if not is_valid_authored_qid(raw_qid):
-            raise ValueError("authored_semantic_qid_invalid")
-        if raw_qid in used:
-            raise ValueError("authored_semantic_qid_duplicate")
-        used.add(raw_qid)
-        qids.append(raw_qid)
-    if not qids:
-        raise ValueError("authored_semantic_qid_missing")
-    return tuple(qids)
 
 
 def _coerce_number(value: object, default: float = 0.0) -> float:
@@ -635,10 +416,20 @@ def _telemetry_status(
         str(item.get("qid", "")).strip() for item in normalized["elements"]
     ]
     reported_editable_qids = [qid for qid in reported_qids if qid in expected_qids]
+    reported_editable_set = set(reported_editable_qids)
+    # H5: a `decoration`-role qid the browser skips measuring owns nothing to
+    # lose, so its absence from the reported set is not incompleteness.
+    decoration_qids = {
+        match.group(1)
+        for tag in re.finditer(r"<[a-zA-Z][^>]*>", html)
+        if 'data-semantic-role="decoration"' in tag.group(0)
+        for match in [re.search(r'data-qid="([^"]+)"', tag.group(0))]
+        if match
+    } & expected_qids
     if (
         len(reported_qids) != len(raw_elements)
-        or len(reported_editable_qids) != len(set(reported_editable_qids))
-        or set(reported_editable_qids) != expected_qids
+        or len(reported_editable_qids) != len(reported_editable_set)
+        or not (expected_qids - decoration_qids) <= reported_editable_set <= expected_qids
     ):
         return "incomplete"
     return "available"

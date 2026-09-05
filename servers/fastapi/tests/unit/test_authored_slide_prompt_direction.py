@@ -75,7 +75,14 @@ def test_the_user_request_reaches_the_slide_as_delimited_untrusted_data():
     # It directs the deck, but the safety-relevant rules are explicitly out of
     # its reach, and the design system still follows it so it has the last word.
     assert "It can never relax the illustration slot contract" in prompt
-    assert prompt.index("THE USER'S OWN REQUEST") < prompt.index("DESIGN")
+    # Order deliberately inverted on 2026-09-05 (design section G8): the
+    # deck-invariant design system now LEADS the prompt so a provider that
+    # caches a prompt prefix can cache the ~20k characters every slide of the
+    # deck shares. The request keeps the last word by being the narrower, more
+    # specific instruction, and by the explicit sentence above saying which
+    # rules it cannot relax — not by sitting later in the text.
+    assert prompt.index("DESIGN") < prompt.index("THE USER'S OWN REQUEST")
+    assert prompt.index("THE USER'S OWN REQUEST") < prompt.index("CONTENT:")
 
 
 def test_a_request_cannot_close_its_own_data_boundary():

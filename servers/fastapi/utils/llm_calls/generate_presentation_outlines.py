@@ -14,6 +14,11 @@ from llmai.shared import (
 
 from models.presentation_outline_model import PresentationOutlineModel
 from utils.get_dynamic_models import get_presentation_outline_model_with_n_slides
+from utils.get_env_programme import get_outline_density_floor_chars
+from utils.llm_calls.outline_density import (
+    apply_density_floor_to_text,
+    log_outline_density,
+)
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_config import enable_web_grounding, get_llm_config
 from utils.llm_provider import get_model
@@ -227,6 +232,19 @@ async def generate_ppt_outline(
     # imported but never consulted — enabling it had no effect).
     use_search_tool = web_search or enable_web_grounding()
 
+    # K1 (design 20260905 section 8). Every outline is MEASURED: the density
+    # receipt is logged for each deck, floor or no floor, because the number is
+    # what the workstream exists to watch. Only a document-backed deck whose
+    # floor is on can also be EXPANDED, and an expansion has to replace text
+    # this generator has already yielded — so that case, and only that case,
+    # buffers the stream and emits the final outline in one chunk. A prompt-only
+    # deck (nothing to expand from) and OUTLINE_DENSITY_FLOOR_CHARS=0 stream
+    # exactly as before.
+    density_floor = get_outline_density_floor_chars()
+    density_source = str(additional_context or "").strip()
+    density_expands = density_floor > 0 and bool(density_source)
+    collected = ""
+
     try:
         outline_schema = prepare_schema_for_validation(
             response_model.model_json_schema(),
@@ -270,13 +288,23 @@ async def generate_ppt_outline(
                 chunk = getattr(event, "chunk", None)
                 if chunk:
                     emitted_content = True
-                    yield chunk
+                    collected += chunk
+                    if not density_expands:
+                        yield chunk
             elif (
                 isinstance(event, ResponseStreamCompletionChunk) and not emitted_content
             ):
                 final_content = serialize_structured_content(event.content)
                 if final_content:
-                    yield final_content
+                    collected += final_content
+                    if not density_expands:
+                        yield final_content
+        if collected and density_expands:
+            yield await apply_density_floor_to_text(
+                collected, source_text=density_source, floor=density_floor
+            )
+        elif collected:
+            log_outline_density(collected, floor=density_floor)
     except Exception as e:
         handled = handle_llm_client_exceptions(e)
         if isinstance(handled, HTTPException):

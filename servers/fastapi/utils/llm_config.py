@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 
 from fastapi import HTTPException
@@ -63,7 +64,8 @@ from utils.get_env import (
 )
 from utils.available_models import normalize_openai_compatible_base_url
 from utils.codex_token_refresh import ensure_fresh_codex_access_token
-from utils.llm_provider import get_llm_provider
+from utils.get_env_programme import get_openai_reasoning_effort_env
+from utils.llm_provider import get_llm_provider, get_model
 from utils.parsers import parse_bool_or_none
 from utils.runtime_settings import RuntimeSettings, resolve_runtime_settings
 from services.provider_egress_policy import (
@@ -139,6 +141,44 @@ def _get_codex_access_token(settings: RuntimeSettings) -> str:
     return access_token
 
 
+LOGGER = logging.getLogger(__name__)
+
+#: OpenAI model families that accept a reasoning-effort parameter. Used only
+#: to decide whether to log a configuration warning below; never gates
+#: behaviour and never changes the resolved model.
+_OPENAI_REASONING_MODEL_PREFIXES = ("o1", "o3", "o4", "gpt-5", "gpt-6")
+
+#: Models already warned about in this process, so a hot call path (every
+#: authored slide resolves an LLM config) does not spam the log once per call.
+_OPENAI_REASONING_WARNING_LOGGED: set[str] = set()
+
+
+def _looks_like_openai_reasoning_model(model: str) -> bool:
+    return (model or "").strip().lower().startswith(_OPENAI_REASONING_MODEL_PREFIXES)
+
+
+def _warn_if_openai_model_lacks_reasoning(snapshot: RuntimeSettings) -> None:
+    """Log once per model when OPENAI is configured with a non-reasoning model.
+
+    The product's only reachable generation strategy today is `authored`
+    (`models/generate_presentation_request.py`: `strategy` accepts only
+    `"authored"`, `template` defaults to `"authored"`), so this always applies
+    whenever the OpenAI provider is selected. It stays a warning, never a
+    default change (design doc section 10, phase 3, "OpenAI effort branch").
+    """
+    model = get_model(snapshot)
+    if _looks_like_openai_reasoning_model(model) or model in _OPENAI_REASONING_WARNING_LOGGED:
+        return
+    _OPENAI_REASONING_WARNING_LOGGED.add(model)
+    LOGGER.warning(
+        "OpenAI provider configured with non-reasoning model %r; "
+        "OPENAI_REASONING_EFFORT has no effect outside the o1/o3/o4/gpt-5/"
+        "gpt-6 families and authored generation gets no reasoning-effort "
+        "control on this model.",
+        model,
+    )
+
+
 def get_llm_config(settings: RuntimeSettings | None = None) -> ClientConfig:
     snapshot = resolve_runtime_settings(settings)
     llm_provider = get_llm_provider(snapshot)
@@ -150,6 +190,7 @@ def get_llm_config(settings: RuntimeSettings | None = None) -> ClientConfig:
             )
             if not api_key:
                 raise HTTPException(status_code=400, detail="OpenAI API Key is not set")
+            _warn_if_openai_model_lacks_reasoning(snapshot)
             return OpenAIClientConfig(
                 api_key=api_key,
                 api_type=OpenAIApiType.COMPLETIONS,
@@ -423,4 +464,22 @@ def get_extra_body(settings: RuntimeSettings | None = None) -> Optional[dict]:
         # codex (gpt-5.x) reasoning-effort levels; other providers 400 on this param.
         if effort in ("minimal", "none", "low", "medium", "high", "xhigh"):
             return {"reasoning": {"effort": effort}}
+    if provider == LLMProvider.OPENAI:
+        effort = get_openai_reasoning_effort_env(snapshot)
+        # Unlike CODEX above, there is no default here: OPENAI_MODEL defaults
+        # to a non-reasoning model (gpt-4.1, see constants/llm.py), which
+        # rejects a reasoning parameter outright, so this only ever fires
+        # when the operator opted in explicitly.
+        if effort in ("minimal", "none", "low", "medium", "high", "xhigh"):
+            # OPENAI always resolves to api_type=COMPLETIONS (chat
+            # completions), not the Responses API CODEX/AZURE use. llmai's
+            # OpenAI client forwards `extra_body` straight into
+            # `self._client.chat.completions.create(...)` (see
+            # llmai/openai/client.py:_generate_completions_once ->
+            # _create_chat_completion), and OpenAI's chat-completions
+            # endpoint takes reasoning effort as the flat `reasoning_effort`
+            # body field on reasoning-capable models, not the nested
+            # `{"reasoning": {"effort": ...}}` object the Responses API
+            # expects.
+            return {"reasoning_effort": effort}
     return None

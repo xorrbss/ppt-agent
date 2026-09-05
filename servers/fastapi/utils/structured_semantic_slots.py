@@ -16,25 +16,45 @@ deck instead of the documented fallback to the raw source.
 
 from __future__ import annotations
 
-INITIAL = "structured.initial"
-PARSE_REPAIR = "structured.parse-repair"
-SCHEMA_REPAIR = "structured.schema-repair"
-SCHEMA_PARSE_REPAIR = "structured.schema-parse-repair"
+#: The default prefix. A caller that adds a SECOND structured call to a stage
+#: that already has one passes its own instead: two different call sites inside
+#: one usage scope are two logical calls, and sharing the default would make
+#: the later one look like a replay of the earlier.
+DEFAULT_PREFIX = "structured"
+
+#: The rounds of the loop, in the order they are reached.
+INITIAL_ROUND = "initial"
+PARSE_REPAIR_ROUND = "parse-repair"
+SCHEMA_REPAIR_ROUND = "schema-repair"
+SCHEMA_PARSE_REPAIR_ROUND = "schema-parse-repair"
+
+INITIAL = f"{DEFAULT_PREFIX}.{INITIAL_ROUND}"
+PARSE_REPAIR = f"{DEFAULT_PREFIX}.{PARSE_REPAIR_ROUND}"
+SCHEMA_REPAIR = f"{DEFAULT_PREFIX}.{SCHEMA_REPAIR_ROUND}"
+SCHEMA_PARSE_REPAIR = f"{DEFAULT_PREFIX}.{SCHEMA_PARSE_REPAIR_ROUND}"
 
 
 def structured_semantic_slot(
-    *, validation_attempt: int, parse_attempt: int, suffix: str = ""
+    *,
+    validation_attempt: int,
+    parse_attempt: int,
+    suffix: str = "",
+    prefix: str = DEFAULT_PREFIX,
 ) -> str:
     """Name the slot for one round of the structured loop.
 
     ``validation_attempt`` counts JSON-schema validation feedback loops and
     ``parse_attempt`` counts parse retries inside one of them; the first round
     of both is the initial call. ``suffix`` is appended verbatim and is empty
-    for every caller that runs the stage once.
+    for every caller that runs the stage once. ``prefix`` names the CALL SITE
+    and is the default for every caller that is the only structured call in
+    its stage.
     """
 
     if validation_attempt == 0:
-        base = INITIAL if parse_attempt == 0 else PARSE_REPAIR
+        round_name = INITIAL_ROUND if parse_attempt == 0 else PARSE_REPAIR_ROUND
     else:
-        base = SCHEMA_REPAIR if parse_attempt == 0 else SCHEMA_PARSE_REPAIR
-    return f"{base}{suffix}"
+        round_name = (
+            SCHEMA_REPAIR_ROUND if parse_attempt == 0 else SCHEMA_PARSE_REPAIR_ROUND
+        )
+    return f"{prefix}.{round_name}{suffix}"

@@ -24,6 +24,19 @@ Whitelist (nothing more):
 * A ``<br>`` inside a title-role element is replaced with one space so a
   Korean title wraps where the renderer puts it, not where the model forced
   it (rule and title detection in ``utils/authored_html_normalize_rules_title.py``).
+* A ``name`` attribute is always stripped, never the element: it is refused
+  outright by ``renderer_markup_policy`` yet carries no behaviour on the
+  allowed tag surface (the tags that would make it load-bearing -- ``form``,
+  ``input``, ``iframe`` -- are already in ``DROP_TAGS``) (rule in
+  ``utils/authored_html_normalize_rules_name.py``).
+* Any other CSS property not in ``renderer_css_policy.ALLOWED_CSS_PROPERTIES``,
+  and any ``@media``/``@supports``/other at-rule, is handled by
+  ``utils.authored_css_strip`` (H1,
+  ``docs/authored-quality-speed-programme-design-20260905.md`` section 6):
+  disallowed declarations are removed, a plain screen/all/feature-query
+  `@media`/`@supports` block is hoisted, and every other at-rule
+  (`@media print`, `@keyframes`, `@font-face`, `@import`, ...) is removed
+  whole.
 * Anything else the admission policy would reject is left untouched --
   admission still rejects it, exactly as before this module existed.
 
@@ -41,27 +54,30 @@ The CSS whitelist is applied with a targeted regex over declaration text
 elements), never a full DOM rewrite, so untouched markup is left exactly as
 written.
 
-The ``hidden`` whitelist genuinely needs tag structure -- whether a "hidden"
-element has bound-text descendants -- so it uses ``html.parser.HTMLParser``,
-the same parser ``renderer_isolation._PolicyParser`` and
+The ``hidden`` and ``name`` whitelists genuinely need tag structure (whether
+a "hidden" element has bound-text descendants; the exact span of a ``name``
+attribute on its own tag), so each uses ``html.parser.HTMLParser``, the same
+parser ``renderer_isolation._PolicyParser`` and
 ``utils.llm_calls.author_slide._SourceSpanParser`` already use, exactly as
 those do: to locate exact byte spans of real tags via ``get_starttag_text()``
-and line/column position, never to reserialize. It runs only when the literal
-substring ``hidden`` appears anywhere in the document, so a document without
-it is provably untouched. On anything the parser cannot cleanly resolve
-(unbalanced tags, an unmatched end tag) it leaves the document alone and lets
-admission reject it as before -- normalisation is best-effort, never a reason
-a still-invalid document looks valid.
+and line/column position, never to reserialize. Each runs only when its
+literal substring (``hidden``, ``name``) appears anywhere in the document, so
+a document without it is provably untouched. On anything the parser cannot
+cleanly resolve (unbalanced tags, an unmatched end tag) it leaves the
+document alone and lets admission reject it as before -- normalisation is
+best-effort, never a reason a still-invalid document looks valid.
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 
+from utils.authored_html_normalize_edits import apply_edits
+from utils.authored_html_normalize_rules_name import apply_name_attribute_rule
 from utils.authored_html_normalize_rules_title import apply_title_line_break_rule
+from utils.authored_css_strip import strip_disallowed_css
 from utils.renderer_markup_policy import VOID_TAGS
 
 #: Declarations normalised out of both inline ``style=""`` values and
@@ -178,6 +194,15 @@ def normalize_authored_html(html: str) -> NormalizedHtml:
     result, title_break_entry = apply_title_line_break_rule(result)
     if title_break_entry is not None:
         normalizations.append(title_break_entry)
+
+    result, name_entry = apply_name_attribute_rule(result)
+    if name_entry is not None:
+        normalizations.append(name_entry)
+
+    # H1: strip any CSS admission would otherwise refuse outright, instead of
+    # failing the whole document over it (see ``authored_css_strip``).
+    result, css_strip_records = strip_disallowed_css(result)
+    normalizations.extend(css_strip_records)
 
     return NormalizedHtml(html=result, normalizations=normalizations)
 
@@ -386,13 +411,6 @@ def _strip_hidden_attribute(raw: str) -> str:
     return _HIDDEN_ATTRIBUTE.sub("", raw, count=1)
 
 
-def _apply_edits(source: str, edits: Sequence[tuple[int, int, str]]) -> str:
-    result = source
-    for start, end, replacement in sorted(edits, key=lambda edit: edit[0], reverse=True):
-        result = result[:start] + replacement + result[end:]
-    return result
-
-
 def _normalize_hidden_elements(html: str) -> tuple[str, list[_HiddenFinding]]:
     elements = _scan_hidden_elements(html)
     if not elements:
@@ -421,7 +439,7 @@ def _normalize_hidden_elements(html: str) -> tuple[str, list[_HiddenFinding]]:
 
     if not edits:
         return html, []
-    return _apply_edits(html, edits), findings
+    return apply_edits(html, edits), findings
 
 
 __all__ = ["NormalizedHtml", "normalize_authored_html"]

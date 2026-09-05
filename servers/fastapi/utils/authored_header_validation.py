@@ -65,6 +65,11 @@ class _HeaderScan:
     parts: dict[str, int] = field(default_factory=dict)
     requirement_attribute: str | None = None
     requirement_text: str = ""
+    #: The eyebrow element's own visible text, collected the same way the
+    #: requirement group's text is: adjacent children are joined by a space so
+    #: they never concatenate into one unrecognisable token. Only meaningful
+    #: when exactly one eyebrow was found; see ``_eyebrow_prefix_violations``.
+    eyebrow_text: str = ""
     unknown_parts: list[str] = field(default_factory=list)
     #: Raw ``data-header-band`` from the band root, kept unparsed so a missing
     #: declaration stays distinguishable from an unreadable one.
@@ -80,6 +85,7 @@ class _HeaderParser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.scan = _HeaderScan()
         self._requirement_depth = 0
+        self._eyebrow_depth = 0
         self._depth = 0
 
     def handle_starttag(
@@ -91,6 +97,9 @@ class _HeaderParser(HTMLParser):
             # Adjacent chips are separate elements; without a boundary their
             # texts would concatenate into one unrecognisable token.
             self.scan.requirement_text += " "
+            return
+        if self._eyebrow_depth:
+            self.scan.eyebrow_text += " "
             return
         values = {name.lower(): (value or "") for name, value in attrs}
         part = values.get(HEADER_PART_ATTRIBUTE)
@@ -104,6 +113,8 @@ class _HeaderParser(HTMLParser):
         if normalized == "requirements":
             self.scan.requirement_attribute = values.get(REQUIREMENT_IDS_ATTRIBUTE)
             self._requirement_depth = self._depth
+        elif normalized == "eyebrow":
+            self._eyebrow_depth = self._depth
         elif normalized == "band":
             self.scan.band_declaration = values.get(HEADER_BAND_ATTRIBUTE)
             self.scan.band_style = values.get(STYLE_ATTRIBUTE, "")
@@ -125,11 +136,18 @@ class _HeaderParser(HTMLParser):
                 self._requirement_depth = 0
             else:
                 self.scan.requirement_text += " "
+        if self._eyebrow_depth:
+            if self._depth <= self._eyebrow_depth:
+                self._eyebrow_depth = 0
+            else:
+                self.scan.eyebrow_text += " "
         self._depth = max(0, self._depth - 1)
 
     def handle_data(self, data: str) -> None:
         if self._requirement_depth:
             self.scan.requirement_text += data
+        if self._eyebrow_depth:
+            self.scan.eyebrow_text += data
 
 
 def _scan(html: str) -> _HeaderScan:
@@ -254,6 +272,46 @@ def _subline_violations(
     return []
 
 
+def _collapse_whitespace(text: str) -> str:
+    return " ".join((text or "").split())
+
+
+def _eyebrow_prefix_violations(
+    scan: _HeaderScan, chapter_prefix: str | None
+) -> list[str]:
+    """Check that this slide's eyebrow opens with the deck's chapter prefix.
+
+    ``chapter_prefix`` is the deck-wide chapter plan's own frozen string
+    (``AuthoredChapterPlan.eyebrow_prefix_at``), handed to the slide verbatim
+    rather than derived here, for the same reason the plan hands it to the
+    prompt verbatim: a chapter number guessed per slide is the exact drift
+    this check exists to catch. ``None`` means the slide belongs to no
+    chapter (front matter) or no chapter plan ran for this deck, and is
+    skipped rather than checked.
+
+    Only checked when exactly one eyebrow was found: a missing eyebrow is
+    already ``header_eyebrow_missing``, and a duplicated one is already
+    ``header_eyebrow_duplicated`` -- neither needs a second, misleading
+    prefix violation layered on top.
+
+    A companion ``header_eyebrow_prefix_unexpected`` code (front matter whose
+    eyebrow wrongly opens with a chapter marker) is deliberately not
+    implemented: it would need the chapter plan's separator pattern, and
+    ``AuthoredHeaderContract`` does not carry it -- only the chapter plan
+    itself does, and it never reaches this function. Detecting it would need
+    a wider signature than the one call site here has today.
+    """
+    if chapter_prefix is None or scan.parts.get("eyebrow", 0) != 1:
+        return []
+    expected = _collapse_whitespace(chapter_prefix)
+    if not expected:
+        return []
+    visible = _collapse_whitespace(scan.eyebrow_text)
+    if not visible.startswith(expected):
+        return ["header_eyebrow_prefix_missing"]
+    return []
+
+
 def _band_markup(scan: _HeaderScan) -> BandMarkup:
     """Hand the arithmetic checks exactly what the slide wrote, and nothing else."""
     return BandMarkup(
@@ -271,11 +329,18 @@ def validate_header_contract(
     *,
     role: str,
     content: str = "",
+    chapter_prefix: str | None = None,
 ) -> tuple[str, ...]:
     """Return violation codes for one authored slide; empty means conforming.
 
     ``content`` is the slide's own source text, which is what every identifier
     the slide shows must come from. Omitting it skips that grounding check.
+
+    ``chapter_prefix`` is this slide's frozen chapter-breadcrumb opener from
+    the deck's chapter plan (``AuthoredChapterPlan.eyebrow_prefix_at``), or
+    ``None`` for front matter or a deck with no chapter plan. Omitting it
+    (the default) skips the eyebrow-prefix check entirely, so every existing
+    caller keeps its exact prior result.
 
     Roles excluded from the header band are checked only for stray requirement
     markers, since they own their composition entirely.
@@ -303,6 +368,7 @@ def validate_header_contract(
     violations.extend(_subline_violations(scan, contract))
     violations.extend(_requirement_violations(scan, contract, content))
     violations.extend(band_geometry_violations(_band_markup(scan), contract))
+    violations.extend(_eyebrow_prefix_violations(scan, chapter_prefix))
     return tuple(violations)
 
 

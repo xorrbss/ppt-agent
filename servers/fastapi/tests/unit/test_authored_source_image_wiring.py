@@ -92,6 +92,8 @@ def _request(**overrides):
     request = SimpleNamespace(files=None)
     request._reference_snapshots = ()
     request._authored_master_resolution = None
+    # Matches ``GeneratePresentationRequest``'s private-attribute default.
+    request._source_content_authored_reflow = False
     for key, value in overrides.items():
         setattr(request, key, value)
     return request

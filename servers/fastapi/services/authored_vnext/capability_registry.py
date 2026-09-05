@@ -132,13 +132,20 @@ def admission_features_for_kind(kind: str) -> frozenset[str] | None:
 
 
 def prompt_capability_clause() -> str:
-    """Tell the author that native editability is an explicit later decision."""
+    """Tell the author that native editability is an explicit later decision.
+
+    The registry digest used to be appended here. It is a 71-character sha256
+    the model cannot act on, and it sat in the prompt's highest-recency slot on
+    every call of every slide; the 2026-09-05 prompt audit removed it. Every
+    consumer that has to PROVE which registry it was sealed against still gets
+    the digest through :func:`capability_metadata`, which is where the binding
+    is actually checked.
+    """
 
     return (
         "\nCapability contract: author the visual source only; do not claim editable "
         "Hybrid output. Native promotion is explicitly admitted later, and unsupported "
-        "features are rasterized or rejected rather than silently downgraded. "
-        f"Registry digest: {CAPABILITY_REGISTRY_DIGEST}."
+        "features are rasterized or rejected rather than silently downgraded."
     )
 
 

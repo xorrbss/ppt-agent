@@ -9,7 +9,6 @@ import io
 import logging
 import re
 from dataclasses import dataclass
-from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Awaitable, Callable, List, Mapping, Optional, Sequence, Tuple
 
@@ -62,6 +61,8 @@ from utils.llm_calls.author_slide import (
     normalize_reference_mode,
     validate_page_number_mode,
 )
+from utils.llm_calls.author_deck_header_repair import repair_header_violations
+from utils.llm_calls.author_deck_zones import _constrain_structured_zone_html
 from utils.llm_calls.author_batch import (
     AuthoredBatchSlideRequest,
     author_slides_html,
@@ -233,235 +234,6 @@ _SILHOUETTE_FALLBACKS = (
     "editorial-narrow-wide",
     "editorial-wide-narrow",
 )
-
-_ZONE_ID_PATTERN = re.compile(r"^ai-zone:[a-z0-9][a-z0-9._-]*$")
-_HEX_COLOR_PATTERN = re.compile(r"#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?\b")
-_RGB_COLOR_PATTERN = re.compile(
-    r"rgba?\(\s*(\d{1,3})\s*[, ]\s*(\d{1,3})\s*[, ]\s*(\d{1,3})(?:\s*[,/]\s*[\d.]+%?)?\s*\)",
-    re.IGNORECASE,
-)
-_FONT_FAMILY_PATTERN = re.compile(r"font-family\s*:\s*([^;}]+)", re.IGNORECASE)
-_SAFE_FONT_FALLBACKS = frozenset(
-    {
-        "sans-serif",
-        "serif",
-        "monospace",
-        "malgun gothic",
-        "aptos",
-        "batang",
-        "cambria",
-        "consolas",
-    }
-)
-_VOID_HTML_TAGS = frozenset(
-    {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
-)
-
-
-class _ZoneHTMLProbe(HTMLParser):
-    def __init__(self) -> None:
-        super().__init__(convert_charrefs=True)
-        self.stack: list[str] = []
-        self.active_zone: tuple[str, int] | None = None
-        self.zone_occurrences: dict[str, int] = {}
-        self.zone_chars: dict[str, int] = {}
-        self.zone_items: dict[str, int] = {}
-        self.zone_blocks: dict[str, set[str]] = {}
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        values = {name.casefold(): value for name, value in attrs}
-        zone_id = values.get("data-ai-zone-id")
-        if zone_id is not None:
-            if self.active_zone is not None:
-                raise ValueError("structured zones cannot be nested")
-            self.active_zone = (zone_id, len(self.stack))
-            self.zone_occurrences[zone_id] = self.zone_occurrences.get(zone_id, 0) + 1
-            self.zone_chars.setdefault(zone_id, 0)
-            self.zone_items.setdefault(zone_id, 0)
-            self.zone_blocks.setdefault(zone_id, set())
-        if self.active_zone is not None:
-            active_id = self.active_zone[0]
-            block_id = values.get("data-ai-block-id")
-            if block_id is not None:
-                self.zone_blocks[active_id].add(block_id)
-            if "data-ai-item" in values:
-                self.zone_items[active_id] += 1
-        if tag.casefold() not in _VOID_HTML_TAGS:
-            self.stack.append(tag.casefold())
-
-    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        self.handle_starttag(tag, attrs)
-        if tag.casefold() not in _VOID_HTML_TAGS:
-            self.handle_endtag(tag)
-
-    def handle_endtag(self, tag: str) -> None:
-        if not self.stack:
-            return
-        if self.active_zone is not None and len(self.stack) - 1 == self.active_zone[1]:
-            self.active_zone = None
-        self.stack.pop()
-
-    def handle_data(self, data: str) -> None:
-        if self.active_zone is not None:
-            self.zone_chars[self.active_zone[0]] += len(data.strip())
-
-
-def _normalized_color(value: str) -> str:
-    lowered = value.lower()
-    if len(lowered) == 4:
-        return "#" + "".join(character * 2 for character in lowered[1:])
-    return lowered
-
-
-def _constrain_structured_zone_html(
-    html: str,
-    context: Mapping[str, Any] | None,
-) -> str:
-    """Fail closed and pin model-authored zone containers to contract geometry."""
-
-    if context is None:
-        return html
-    if context.get("schemaVersion") != "authored-vnext-ai-edit-zone-context/v1":
-        raise ValueError("unsupported structured authoring context")
-    raw_zones = context.get("zones")
-    design = context.get("templateDesignContext")
-    if not isinstance(raw_zones, list) or not isinstance(design, Mapping):
-        raise ValueError("structured authoring context is incomplete")
-    token_context = design.get("tokens")
-    color_context = token_context.get("colors") if isinstance(token_context, Mapping) else None
-    if not isinstance(color_context, Mapping):
-        raise ValueError("inheritTemplate requires template color tokens")
-    allowed_colors = {
-        _normalized_color(str(value))
-        for value in color_context.values()
-        if isinstance(value, str) and _HEX_COLOR_PATTERN.fullmatch(value)
-    }
-    allowed_fonts = {
-        str(value).strip().strip("\"'").lower()
-        for value in design.get("allowedFonts", [])
-        if isinstance(value, str) and str(value).strip()
-    }
-    if not allowed_colors or not allowed_fonts:
-        raise ValueError("inheritTemplate requires an explicit color and font allowlist")
-
-    css_sources = re.findall(r"<style\b[^>]*>(.*?)</style\s*>", html, re.I | re.S)
-    css_sources.extend(re.findall(r"\bstyle\s*=\s*[\"']([^\"']*)[\"']", html, re.I | re.S))
-    emitted_css = "\n".join(css_sources)
-    invented_colors = {
-        _normalized_color(value)
-        for value in _HEX_COLOR_PATTERN.findall(emitted_css)
-        if _normalized_color(value) not in allowed_colors
-    }
-    for match in _RGB_COLOR_PATTERN.finditer(emitted_css):
-        channels = tuple(int(value) for value in match.groups())
-        if any(value > 255 for value in channels):
-            invented_colors.add(match.group(0).lower())
-            continue
-        normalized = "#" + "".join(f"{value:02x}" for value in channels)
-        if normalized not in allowed_colors:
-            invented_colors.add(normalized)
-    if re.search(r"\b(?:hsl|hsla|lab|lch|oklab|oklch|color)\s*\(", emitted_css, re.I):
-        invented_colors.add("unsupported-functional-color")
-    if invented_colors:
-        raise ValueError(
-            "structured zone output invented colors: " + ", ".join(sorted(invented_colors))
-        )
-    invented_fonts: set[str] = set()
-    for declaration in _FONT_FAMILY_PATTERN.findall(emitted_css):
-        for family in declaration.split(","):
-            normalized = family.strip().strip("\"'").lower()
-            if normalized and normalized not in allowed_fonts and normalized not in _SAFE_FONT_FALLBACKS:
-                invented_fonts.add(normalized)
-    if invented_fonts:
-        raise ValueError(
-            "structured zone output invented fonts: " + ", ".join(sorted(invented_fonts))
-        )
-
-    probe = _ZoneHTMLProbe()
-    probe.feed(html)
-    probe.close()
-    rules: list[str] = []
-    seen_ids: set[str] = set()
-    for raw_zone in raw_zones:
-        if not isinstance(raw_zone, Mapping):
-            raise ValueError("structured zone must be an object")
-        zone_id = raw_zone.get("zoneId")
-        bounds = raw_zone.get("bounds")
-        if not isinstance(zone_id, str) or not _ZONE_ID_PATTERN.fullmatch(zone_id):
-            raise ValueError("structured zone has an invalid zoneId")
-        if zone_id in seen_ids:
-            raise ValueError("structured zone IDs must be unique")
-        seen_ids.add(zone_id)
-        if not isinstance(bounds, Mapping):
-            raise ValueError("structured zone bounds are required")
-        try:
-            x = float(bounds["x"])
-            y = float(bounds["y"])
-            width = float(bounds["width"])
-            height = float(bounds["height"])
-        except (KeyError, TypeError, ValueError) as error:
-            raise ValueError("structured zone bounds are invalid") from error
-        if (
-            x < 0
-            or y < 0
-            or width <= 0
-            or height <= 0
-            or x + width > 1280
-            or y + height > 720
-        ):
-            raise ValueError("structured zone leaves the 1280x720 canvas")
-        generation_state = raw_zone.get("generationState")
-        occurrence_count = probe.zone_occurrences.get(zone_id, 0)
-        if generation_state in {"hidden", "blank"}:
-            if occurrence_count:
-                raise ValueError("empty structured zones must not render content")
-            continue
-        if occurrence_count != 1:
-            raise ValueError("structured zone output must contain each zone exactly once")
-        raw_blocks = raw_zone.get("blocks")
-        if not isinstance(raw_blocks, list):
-            raise ValueError("structured zone blocks must be a list")
-        expected_blocks = {
-            str(block.get("blockId"))
-            for block in raw_blocks
-            if isinstance(block, Mapping) and isinstance(block.get("blockId"), str)
-        }
-        if len(expected_blocks) != len(raw_blocks):
-            raise ValueError("structured zone blocks require unique blockId values")
-        if probe.zone_blocks.get(zone_id, set()) != expected_blocks:
-            raise ValueError("structured zone output does not match its semantic block plan")
-        max_chars = raw_zone.get("maxChars")
-        max_items = raw_zone.get("maxItems")
-        if not isinstance(max_chars, int) or probe.zone_chars.get(zone_id, 0) > max_chars:
-            raise ValueError("structured zone output exceeds maxChars")
-        if not isinstance(max_items, int) or probe.zone_items.get(zone_id, 0) > max_items:
-            raise ValueError("structured zone output exceeds maxItems")
-        text_align = raw_zone.get("textAlign", "inherit")
-        if text_align not in {"inherit", "left", "center", "right"}:
-            raise ValueError("structured zone has an invalid textAlign")
-        selector_id = zone_id.replace("\\", "\\\\").replace('"', '\\"')
-        text_align_rule = (
-            "" if text_align == "inherit" else f"text-align:{text_align}!important;"
-        )
-        rules.append(
-            f'[data-ai-zone-id="{selector_id}"]{{position:absolute!important;'
-            f"left:{x:g}px!important;top:{y:g}px!important;width:{width:g}px!important;"
-            f"height:{height:g}px!important;overflow:hidden!important;box-sizing:border-box!important;"
-            f"{text_align_rule}}}"
-        )
-    constraint_style = (
-        '<style data-ai-zone-constraints="v1">' + "".join(rules) + "</style>"
-    )
-    constrained, count = re.subn(
-        r"</head\s*>",
-        constraint_style + "</head>",
-        html,
-        count=1,
-        flags=re.IGNORECASE,
-    )
-    if count != 1:
-        raise ValueError("structured zone output has no closing head")
-    return constrained
 
 
 def _requirements_enabled(contract: AuthoredHeaderContract | None) -> bool:
@@ -968,6 +740,11 @@ async def _author_one_resilient(
     provider_attempt_offset: int = 0,
     attempt_reserver: Callable[[int], Awaitable[None]] | None = None,
     prior_failure_hint: str | None = None,
+    # G0: the deck's already-authored anchor slide, offered to this call as data.
+    style_anchor: object | None = None,
+    # H2: fired deterministic repairs are appended here when the caller has a
+    # per-slide quality receipt to carry them.
+    normalization_receipt: list[dict] | None = None,
 ) -> str:
     """Author one slide with one explicit correction and a branded fallback.
 
@@ -1045,6 +822,7 @@ async def _author_one_resilient(
                 visual_intent=visual_intent,
                 infographic=infographic,
                 capacity_brief=capacity_brief,
+                style_anchor=style_anchor,
                 **kwargs,
             )
             if is_valid_slide_html(html):
@@ -1075,11 +853,21 @@ async def _author_one_resilient(
                         constrained,
                         header_contract,
                         role=role,
-                        content=content,
+                        content=content, chapter_prefix=chapter_prefix,
                     )
                     if header_contract is not None
                     else ()
                 )
+                if violations:
+                    # H2: a deterministic repair before the correction call.
+                    constrained, violations = repair_header_violations(
+                        constrained,
+                        header_contract,
+                        role=role,
+                        content=content,
+                        violations=violations,
+                        receipt=normalization_receipt, chapter_prefix=chapter_prefix,
+                    )
                 if not violations:
                     owner_violations = (
                         aggregate_owner_capacity_violations(constrained, capacity)
@@ -1529,6 +1317,7 @@ def _planned_batch_request(
     source_images: Sequence[SourceImageCandidate],
     require_all_source_images: bool,
     failure: AuthoredBatchFailure | None,
+    style_anchor: object | None = None,
 ) -> AuthoredBatchSlideRequest:
     illustration_slots = getattr(plan, "illustration_slots", ())
     infographic_briefs = getattr(plan, "infographic_briefs", ())
@@ -1560,6 +1349,7 @@ def _planned_batch_request(
         require_all_source_images=require_all_source_images,
         correction_hint=(failure.correction_hint if failure is not None else None),
         rejected_html=(failure.rejected_html if failure is not None else None),
+        style_anchor=style_anchor,
     )
 
 
@@ -1572,6 +1362,7 @@ def _validate_planned_batch_candidate(
     prior_failure: AuthoredBatchFailure | None,
     recovery: bool,
     raise_on_failure: bool,
+    normalization_receipt: list[dict] | None = None,
 ) -> str:
     capacity_plan = getattr(plan, "capacity_plan", None)
     capacity, _brief = _planned_slide_capacity_inputs(plan, index, source_images)
@@ -1600,16 +1391,27 @@ def _validate_planned_batch_candidate(
     if capacity is not None:
         constrained = canonicalize_authored_capacity_html(constrained)
     slide_contract = plan.header_contract_at(index)
+    slide_chapter_prefix = plan.chapter_prefixes[index] if plan.chapter_prefixes else None
     header_violations = (
         validate_header_contract(
             constrained,
             slide_contract,
             role=plan.roles[index],
-            content=plan.contents[index],
+            content=plan.contents[index], chapter_prefix=slide_chapter_prefix,
         )
         if slide_contract is not None
         else ()
     )
+    if header_violations:
+        # H2: a deterministic repair before the correction call.
+        constrained, header_violations = repair_header_violations(
+            constrained,
+            slide_contract,
+            role=plan.roles[index],
+            content=plan.contents[index],
+            violations=header_violations,
+            receipt=normalization_receipt, chapter_prefix=slide_chapter_prefix,
+        )
     if header_violations:
         # Preserve the historical non-strict final fallback: after the one
         # correction, a usable render with only header drift is preferable to a
@@ -1700,6 +1502,8 @@ async def author_planned_batch(
     raise_on_failure: bool = False,
     attempt_observers: Mapping[int, Callable[[int], None]] | None = None,
     attempt_reservers: Mapping[int, Callable[[int], Awaitable[None]]] | None = None,
+    style_anchor: object | None = None,
+    normalization_receipt: list[dict] | None = None,
 ) -> AuthoredPlannedBatchResult:
     """Author one to three planned slides with one fenced provider call."""
 
@@ -1726,6 +1530,7 @@ async def author_planned_batch(
             source_images=tuple(sources.get(index, ())),
             require_all_source_images=require_all_source_images,
             failure=(prior_failures or {}).get(index),
+            style_anchor=style_anchor,
         )
         for index in selected
     )
@@ -1750,6 +1555,7 @@ async def author_planned_batch(
                 prior_failure=(prior_failures or {}).get(index),
                 recovery=recovery,
                 raise_on_failure=raise_on_failure,
+                normalization_receipt=normalization_receipt,
             )
         except BaseException as error:  # slide-only validation boundary
             failures[index] = _batch_failure(error)
@@ -1767,6 +1573,8 @@ async def author_planned_slide(
     provider_attempt_offset: int = 0,
     attempt_reserver: Callable[[int], Awaitable[None]] | None = None,
     prior_failure_hint: str | None = None,
+    style_anchor: object | None = None,
+    normalization_receipt: list[dict] | None = None,
 ) -> str:
     """Author one planned slide; safe to compose with illustration/render stages.
 
@@ -1826,6 +1634,8 @@ async def author_planned_slide(
         provider_attempt_offset=provider_attempt_offset,
         attempt_reserver=attempt_reserver,
         prior_failure_hint=prior_failure_hint,
+        style_anchor=style_anchor,
+        normalization_receipt=normalization_receipt,
     )
 
 

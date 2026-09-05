@@ -34,15 +34,22 @@ from utils.authored_dom_quality import validate_declared_authored_qids
 from utils.authored_font_policy import enforce_authored_font_floor
 from utils.authored_image_slots import scan_slots, source_slot_id_for_asset
 from utils.llm_calls import author_slide_prompt, author_slide_rules
-from utils.llm_calls.author_slide import (
+from utils.llm_calls.author_prompt_cache_key import apply_prompt_cache_key
+from utils.llm_calls.author_prompt_split import (
+    is_authored_prompt_system_hoist_enabled,
+    split_deck_invariant,
+)
+from utils.llm_calls.author_slide_effort import (
     AUTHOR_MAX_TOKENS,
     EXACT_RECONSTRUCTION,
+    authoring_output_profile,
+)
+from utils.llm_calls.author_slide import (
     STYLE_REFERENCE,
     Brand,
     _AUTHOR_EXECUTOR,
     _author_prompt,
     _authoring_extra_body,
-    _authoring_output_profile,
     _bind_offered_source_image_slots,
     _rejected_html_context,
     _register_author_rate_limit,
@@ -95,6 +102,8 @@ class AuthoredBatchSlideRequest:
     require_all_source_images: bool = False
     correction_hint: str | None = None
     rejected_html: str | None = None
+    # G0: the deck's already-authored anchor slide, offered as data.
+    style_anchor: object | None = None
 
 
 @dataclass(frozen=True)
@@ -121,7 +130,7 @@ def _prepare_slide(
     slide_count: int,
 ) -> _PreparedSlide:
     mode = normalize_reference_mode(request.reference_mode)
-    output_budget, reasoning_effort = _authoring_output_profile(
+    output_budget, reasoning_effort = authoring_output_profile(
         role=request.role,
         reference_mode=mode,
         structured_context=request.structured_context,
@@ -144,6 +153,7 @@ def _prepare_slide(
         visual_intent=request.visual_intent,
         infographic=request.infographic,
         capacity_brief=request.capacity_brief,
+        style_anchor=request.style_anchor,
     )
     if request.correction_hint:
         prompt += (
@@ -323,13 +333,24 @@ async def author_slides_html(
         "document and then </authored-slide>. N must equal the supplied slide index. "
         "Never merge content or assets between wrappers.\n"
     )
+    # G8: the deck-invariant block is carried once, in the system message, so
+    # every slide of the deck shares one cacheable prefix and a three-slide
+    # batch stops repeating the same ~20k characters three times. The text is
+    # unchanged: the hoisted head plus each slide text rejoin exactly.
+    hoisted = ""
     user_parts: list[object] = [TextContentPart(text=wrapper_contract)]
     for item in prepared:
+        head, slide_prompt = (
+            split_deck_invariant(item.prompt, design_system)
+            if is_authored_prompt_system_hoist_enabled()
+            else ("", item.prompt)
+        )
+        hoisted = hoisted or head
         user_parts.append(
             TextContentPart(
                 text=(
                     f"\n\nBEGIN REQUEST FOR SLIDE INDEX {item.request.index}\n"
-                    + item.prompt
+                    + slide_prompt
                     + f"\nEND REQUEST FOR SLIDE INDEX {item.request.index}\n"
                 )
             )
@@ -343,6 +364,7 @@ async def author_slides_html(
             content=author_slide_rules.SYSTEM_PROMPT
             + "\n\nBATCH OUTPUT CONTRACT (authoritative):\n"
             + wrapper_contract
+            + (f"\n{hoisted}" if hoisted else "")
         ),
         UserMessage(content=user_parts),
     ]
@@ -359,6 +381,7 @@ async def author_slides_html(
     reasoning = _authoring_extra_body(reasoning_effort, model=model)
     if reasoning:
         kwargs["extra_body"] = reasoning
+    apply_prompt_cache_key(kwargs)
 
     try:
         provider = str(get_llm_provider().value)
