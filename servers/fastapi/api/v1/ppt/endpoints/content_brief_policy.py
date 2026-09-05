@@ -14,15 +14,20 @@ Timeout formula
 ``input_chars`` counts the source content, the document context and the
 instructions -- everything the brief has to read. Defaults:
 
-* ``base`` 45 s (``CONTENT_BRIEF_TIMEOUT_SECONDS``, the pre-existing knob):
-  a bare topic with no documents keeps the former deadline.
+* ``base`` 600 s (``CONTENT_BRIEF_TIMEOUT_SECONDS``, the pre-existing knob).
+  The former value was 45 s, inherited from the outline endpoint, and it is
+  far below what a reasoning model actually spends here: prompt-only briefs
+  on gpt-6-astra at medium effort measured 325 s and 455 s, so 45 s timed out
+  every single deck and threw the brief away.
 * ``per_kchar`` 1 s per 1,000 characters
   (``CONTENT_BRIEF_TIMEOUT_PER_KCHAR_SECONDS``): a 50k-character document
-  context gets 95 s. Structured-output briefs grow with what they read, and
-  the flat 45 s was tuned for prompt-only decks.
-* ``max`` 180 s (``CONTENT_BRIEF_TIMEOUT_MAX_SECONDS``): reached at 135k
-  characters. ``build_document_context`` admits up to 500k characters, so
-  without a cap a large upload would hold the outline stage for minutes.
+  context adds 50 s. Structured-output briefs grow with what they read.
+* ``max`` 900 s (``CONTENT_BRIEF_TIMEOUT_MAX_SECONDS``).
+  ``build_document_context`` admits up to 500k characters, so without a cap a
+  large upload would hold the stage indefinitely.
+* ``total`` 900 s (``CONTENT_BRIEF_TOTAL_BUDGET_SECONDS``): wall ceiling for
+  the stage including the retry, so two attempts cannot double the deadline.
+  When the first attempt spends it all, the retry is skipped.
 
 Retry
 -----
@@ -65,10 +70,14 @@ BRIEF_STATUS_SKIPPED: BriefStatus = "skipped"
 BASE_TIMEOUT_ENV = "CONTENT_BRIEF_TIMEOUT_SECONDS"
 PER_KCHAR_TIMEOUT_ENV = "CONTENT_BRIEF_TIMEOUT_PER_KCHAR_SECONDS"
 MAX_TIMEOUT_ENV = "CONTENT_BRIEF_TIMEOUT_MAX_SECONDS"
+TOTAL_BUDGET_ENV = "CONTENT_BRIEF_TOTAL_BUDGET_SECONDS"
 
-DEFAULT_BASE_TIMEOUT_SECONDS = 45.0
+DEFAULT_BASE_TIMEOUT_SECONDS = 600.0
 DEFAULT_PER_KCHAR_TIMEOUT_SECONDS = 1.0
-DEFAULT_MAX_TIMEOUT_SECONDS = 180.0
+DEFAULT_MAX_TIMEOUT_SECONDS = 900.0
+#: Wall ceiling for the brief stage as a whole, so the single retry cannot
+#: double the deadline. The retry runs with whatever is left of this budget.
+DEFAULT_TOTAL_BUDGET_SECONDS = 900.0
 
 #: Fraction of the document context kept (from the head) on the retry.
 RETRY_CONTEXT_FRACTION = 0.5
@@ -83,12 +92,18 @@ class ContentBriefTimeoutPolicy:
     base_seconds: float = DEFAULT_BASE_TIMEOUT_SECONDS
     per_kchar_seconds: float = DEFAULT_PER_KCHAR_TIMEOUT_SECONDS
     max_seconds: float = DEFAULT_MAX_TIMEOUT_SECONDS
+    total_budget_seconds: float = DEFAULT_TOTAL_BUDGET_SECONDS
 
     def timeout_for(self, input_chars: int) -> float:
         """Deadline in seconds for a brief that has to read ``input_chars``."""
         chars = max(0, int(input_chars))
         scaled = self.base_seconds + self.per_kchar_seconds * (chars / 1000.0)
         return max(0.0, min(self.max_seconds, scaled))
+
+    def retry_timeout_for(self, input_chars: int, elapsed_seconds: float) -> float:
+        """Retry deadline, clamped to what is left of the stage's wall budget."""
+        remaining = self.total_budget_seconds - max(0.0, elapsed_seconds)
+        return max(0.0, min(self.timeout_for(input_chars), remaining))
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,10 +137,13 @@ def content_brief_timeout_policy() -> ContentBriefTimeoutPolicy:
     base = _float_env(BASE_TIMEOUT_ENV, DEFAULT_BASE_TIMEOUT_SECONDS)
     per_kchar = _float_env(PER_KCHAR_TIMEOUT_ENV, DEFAULT_PER_KCHAR_TIMEOUT_SECONDS)
     maximum = _float_env(MAX_TIMEOUT_ENV, DEFAULT_MAX_TIMEOUT_SECONDS)
+    ceiling = max(maximum, base)
+    total = _float_env(TOTAL_BUDGET_ENV, DEFAULT_TOTAL_BUDGET_SECONDS)
     return ContentBriefTimeoutPolicy(
         base_seconds=base,
         per_kchar_seconds=per_kchar,
-        max_seconds=max(maximum, base),
+        max_seconds=ceiling,
+        total_budget_seconds=max(total, ceiling),
     )
 
 
@@ -199,12 +217,42 @@ async def run_content_brief_with_policy(
         return outcome
 
     retry_context = reduced_brief_context(additional_context)
-    retry_timeout = active.timeout_for(
-        content_brief_input_chars(content, retry_context, instructions)
+    retry_timeout = active.retry_timeout_for(
+        content_brief_input_chars(content, retry_context, instructions),
+        monotonic() - started,
     )
+    if retry_timeout <= 0:
+        outcome = ContentBriefOutcome(
+            BRIEF_STATUS_TIMED_OUT_FALLBACK,
+            None,
+            timeout,
+            0.0,
+            1,
+            monotonic() - started,
+        )
+        LOGGER.warning(
+            "Content brief for presentation %s spent its whole %.1f s budget on the "
+            "first attempt; continuing with the source content",
+            presentation_id,
+            active.total_budget_seconds,
+        )
+        _log_outcome(outcome, presentation_id)
+        return outcome
     try:
         brief = await asyncio.wait_for(
-            brief_fn(content, language, retry_context, tone, RETRY_VERBOSITY, instructions),
+            brief_fn(
+                content,
+                language,
+                retry_context,
+                tone,
+                RETRY_VERBOSITY,
+                instructions,
+                # The first attempt left a terminal provider row behind. Without
+                # its own semantic slot this retry reopens that row, which a
+                # provider without idempotency support refuses outright and the
+                # whole operation fails instead of falling back.
+                is_retry=True,
+            ),
             timeout=retry_timeout,
         )
     except asyncio.TimeoutError:

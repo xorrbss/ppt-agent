@@ -834,6 +834,7 @@ async def generate_structured_with_schema_retries(
     disconnect_checker: Optional[DisconnectChecker] = None,
     text_chunk_callback: Optional[TextChunkCallback] = None,
     is_retry: bool = False,
+    semantic_slot_suffix: str = "",
 ) -> dict:
     """
     Parse retries (inner loop) plus optional JSON Schema validation feedback loops (outer loop),
@@ -860,6 +861,11 @@ async def generate_structured_with_schema_retries(
                 semantic_slot = "structured.schema-repair"
             else:
                 semantic_slot = "structured.schema-parse-repair"
+            # A caller that runs the same stage twice (the content brief retries
+            # once after a timeout) must not reuse the first call's durable
+            # identity: the first row is already terminal, and reopening it is
+            # rejected outright for a provider without idempotency support.
+            semantic_slot = f"{semantic_slot}{semantic_slot_suffix}"
             content = await _generate_structured_content_with_transient_retries(
                 client,
                 disconnect_checker=disconnect_checker,

@@ -101,6 +101,7 @@ async def generate_content_brief(
     tone: Optional[str] = None,
     verbosity: Optional[str] = None,
     instructions: Optional[str] = None,
+    is_retry: bool = False,
 ) -> ContentBrief:
     """Stage A — generate a rich, grounded knowledge brief before slides exist.
 
@@ -130,6 +131,11 @@ async def generate_content_brief(
             json_schema=schema,
             strict=False,
             validate_schema=True,
+            is_retry=is_retry,
+            # The retry runs inside the caller's content_brief usage scope, so
+            # it needs its own semantic slot or it would reopen the terminal
+            # provider row the timed-out first attempt left behind.
+            semantic_slot_suffix=".brief-retry" if is_retry else "",
         )
         return ContentBrief(**content_obj)
     except Exception as e:

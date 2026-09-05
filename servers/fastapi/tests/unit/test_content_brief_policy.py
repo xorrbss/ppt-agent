@@ -22,11 +22,11 @@ def _run(coroutine):
 def test_timeout_formula_scales_with_input_and_caps():
     formula = policy.ContentBriefTimeoutPolicy()
 
-    assert formula.timeout_for(0) == 45.0
-    assert formula.timeout_for(50_000) == 95.0
-    assert formula.timeout_for(135_000) == 180.0
-    assert formula.timeout_for(500_000) == 180.0
-    assert formula.timeout_for(-10) == 45.0
+    assert formula.timeout_for(0) == 600.0
+    assert formula.timeout_for(50_000) == 650.0
+    assert formula.timeout_for(300_000) == 900.0
+    assert formula.timeout_for(500_000) == 900.0
+    assert formula.timeout_for(-10) == 600.0
 
 
 def test_timeout_policy_reads_env_knobs_and_ignores_garbage(monkeypatch):
@@ -73,7 +73,7 @@ def _brief(text: str):
 def test_first_attempt_success_is_applied():
     calls = []
 
-    async def fake_brief(*args):
+    async def fake_brief(*args, **kwargs):
         calls.append(args)
         return _brief("brief")
 
@@ -103,7 +103,7 @@ def test_first_attempt_success_is_applied():
 def test_timeout_then_retry_with_reduced_input_is_retry_applied():
     calls = []
 
-    async def fake_brief(content, language, context, tone, verbosity, instructions):
+    async def fake_brief(content, language, context, tone, verbosity, instructions, is_retry=False):
         calls.append((context, verbosity))
         if len(calls) == 1:
             await asyncio.sleep(10)
@@ -133,7 +133,7 @@ def test_timeout_then_retry_with_reduced_input_is_retry_applied():
 
 
 def test_retry_timeout_is_recomputed_from_the_reduced_input():
-    async def fake_brief(*_args):
+    async def fake_brief(*_args, **_kwargs):
         await asyncio.sleep(10)
 
     outcome = _run(
@@ -161,7 +161,7 @@ def test_retry_timeout_is_recomputed_from_the_reduced_input():
 def test_both_attempts_timing_out_is_timed_out_fallback():
     attempts = 0
 
-    async def fake_brief(*_args):
+    async def fake_brief(*_args, **_kwargs):
         nonlocal attempts
         attempts += 1
         await asyncio.sleep(10)
@@ -188,7 +188,7 @@ def test_both_attempts_timing_out_is_timed_out_fallback():
 def test_non_timeout_failures_propagate_without_retry():
     attempts = 0
 
-    async def fake_brief(*_args):
+    async def fake_brief(*_args, **_kwargs):
         nonlocal attempts
         attempts += 1
         raise RuntimeError("provider down")
@@ -216,3 +216,91 @@ def test_skipped_status_is_logged_with_the_presentation_id(caplog):
 
     assert "status=skipped" in caplog.text
     assert "presentation=p4" in caplog.text
+
+def test_retry_runs_under_its_own_provider_call_identity():
+    """The retry must not reopen the terminal row the timed-out attempt left.
+
+    A provider without idempotency support rejects the reuse outright
+    (``public_provider_terminal_replay_unsupported``), which turned a brief
+    timeout into a failed generation instead of the documented fallback.
+    """
+
+    seen = []
+
+    async def fake_brief(content, language, context, tone, verbosity, instructions, is_retry=False):
+        seen.append(is_retry)
+        if len(seen) == 1:
+            await asyncio.sleep(10)
+        return _brief("second")
+
+    outcome = _run(
+        policy.run_content_brief_with_policy(
+            fake_brief,
+            content="topic",
+            language=None,
+            additional_context=None,
+            tone=None,
+            verbosity=None,
+            instructions=None,
+            presentation_id="p-retry-identity",
+            policy=policy.ContentBriefTimeoutPolicy(
+                base_seconds=0.05, per_kchar_seconds=0.0, max_seconds=1.0
+            ),
+        )
+    )
+
+    assert outcome.status == "retry_applied"
+    assert seen == [False, True]
+
+
+def test_first_attempt_spending_the_whole_budget_skips_the_retry():
+    calls = []
+
+    async def fake_brief(*_args, **_kwargs):
+        calls.append(1)
+        await asyncio.sleep(10)
+
+    outcome = _run(
+        policy.run_content_brief_with_policy(
+            fake_brief,
+            content="topic",
+            language=None,
+            additional_context=None,
+            tone=None,
+            verbosity=None,
+            instructions=None,
+            presentation_id="p-budget",
+            policy=policy.ContentBriefTimeoutPolicy(
+                base_seconds=0.05,
+                per_kchar_seconds=0.0,
+                max_seconds=1.0,
+                total_budget_seconds=0.05,
+            ),
+        )
+    )
+
+    assert outcome.status == "timed_out_fallback"
+    assert outcome.attempts == 1
+    assert calls == [1]
+
+
+def test_retry_deadline_is_clamped_to_the_remaining_stage_budget():
+    active = policy.ContentBriefTimeoutPolicy(
+        base_seconds=600.0,
+        per_kchar_seconds=0.0,
+        max_seconds=900.0,
+        total_budget_seconds=900.0,
+    )
+
+    assert active.retry_timeout_for(0, 600.0) == pytest.approx(300.0)
+    assert active.retry_timeout_for(0, 900.0) == 0.0
+    assert active.retry_timeout_for(0, 0.0) == pytest.approx(600.0)
+
+
+def test_defaults_cover_the_measured_reasoning_model_brief_latency():
+    """gpt-6-astra medium measured 325 s and 455 s for a prompt-only brief."""
+
+    active = policy.content_brief_timeout_policy()
+
+    assert active.timeout_for(0) >= 500.0
+    assert active.total_budget_seconds >= active.max_seconds
