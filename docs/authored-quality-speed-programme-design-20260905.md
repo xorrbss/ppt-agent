@@ -562,3 +562,16 @@ made necessary, all resolved keeping both sides:
 
 Bench protocol (§9) runs on ppt-agent-d0's bench against run 16 (prompt
 fixture) and run 17 (document fixture).
+
+### 15.1 Bench-driven fixes (2026-09-06)
+
+| Run | What the bench found | Fix |
+|---|---|---|
+| 24 (P0) | Legacy barrier lane sealed slides evicted from the browser-metrics LRU into the evidence ledger with `metrics=None`; the final-metrics readback checked only the list length and the v2 gate blocked on `capacity.browser_observation_missing`. | `ea4f2bd5a`: per-slide `source_digest` identity before reuse, recollect otherwise; one resolved metrics set for every consumer; structured `authored_quality_gate_rejected` log and error message. |
+| 25 (P1) | Speed goal met (authoring wall 51 % of parent) but body text median fell 18→16 px and the ≥18 px body share 74 %→29 %: the ramp read as a menu. | `c3164852a`: body copy "18px or larger", label size reserved for eyebrows/axis/units/captions. Run 27 restored the parent's 67 % ≥18 px with more text per slide and authoring wall 50 % (1091 s total vs 2577 s). |
+| 26 (P0) | Cover h1 split into qid-bearing spans → no text-owning title → `title:semantic_role_missing` ended the deck after 37 min. Also: the stamper marks every h1/h2 as title (parents included). | `c907f094a`: `utils/authored_semantic_role_repair.py` promotes exactly one text owner to title when none exists and, at the pre-gate site, demotes extra title owners to supporting; the prompt now teaches the `data-semantic-role` vocabulary and "exactly one title". |
+
+Open after these: the stamper's "every h2 is a title" rule should become single-title
+selection inside `ensure_authored_semantic_roles` itself (that file sits at its ratchet
+baseline; needs an extraction first); slides that pass through gate repair or remake
+after the pipeline site lose the demotion until then.
