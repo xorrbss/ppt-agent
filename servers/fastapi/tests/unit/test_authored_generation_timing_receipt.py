@@ -1233,3 +1233,53 @@ def test_v2_writer_refuses_a_negative_cooldown_wait(tmp_path, monkeypatch) -> No
         ValueError, match="generation_timing_authoring_cooldown_wait_invalid"
     ):
         _cooldown_receipt(-1.0, attempt_id="private-cooldown-negative-w")
+
+
+def test_flagged_entries_accept_the_keys_a_published_deck_actually_carries():
+    """A flagged deck carries slideId and, when double-flagged, reasons.
+
+    Both are added before publication, so a validator that rejects them drops
+    the whole attempt receipt for exactly the decks worth measuring.
+    """
+
+    from services.authored_generation_timing_receipt_e4 import flagged_slide_entries
+
+    entries = flagged_slide_entries(
+        [
+            {
+                "index": 0,
+                "reason": "author:attempts_exhausted",
+                "remakeAttempted": True,
+                "remakeOutcome": "published_flagged",
+                "slideId": "6f1d2c48-0f2a-4d63-9f4c-2b7a51f0c3aa",
+                "reasons": [
+                    "author:attempts_exhausted",
+                    "composition_safety:overflow",
+                ],
+            }
+        ]
+    )
+
+    assert len(entries) == 1
+    assert entries[0]["slideId"] == "6f1d2c48-0f2a-4d63-9f4c-2b7a51f0c3aa"
+    assert entries[0]["reasons"] == [
+        "author:attempts_exhausted",
+        "composition_safety:overflow",
+    ]
+
+
+def test_flagged_entries_still_reject_an_unknown_key():
+    from services.authored_generation_timing_receipt_e4 import flagged_slide_entries
+
+    with pytest.raises(ValueError, match="generation_attempt_v2_flagged_slides_invalid"):
+        flagged_slide_entries(
+            [
+                {
+                    "index": 0,
+                    "reason": "author:attempts_exhausted",
+                    "remakeAttempted": True,
+                    "remakeOutcome": "published_flagged",
+                    "unexpected": "value",
+                }
+            ]
+        )

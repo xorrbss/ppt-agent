@@ -1334,10 +1334,11 @@ def test_author_slide_style_reference_enforces_screen_font_floor(monkeypatch):
 def test_author_slide_style_reference_failure_is_one_receipted_provider_outcome(
     monkeypatch, tmp_path
 ):
-    # A multimodal provider failure used to downgrade silently to a second,
-    # text-only call. Every authored provider call is now receipted against the
-    # two-call slide budget, so the failure surfaces as a content-free provider
-    # outcome after exactly one call and the deck owns the single recovery.
+    # The deck disables the text-only fallback and owns the two-call slide
+    # budget itself, so a multimodal provider failure surfaces as a content-free
+    # provider outcome after exactly one call. With the fallback allowed the
+    # second, image-free call is a receipted retry instead (see
+    # test_authored_source_image_prompt).
     calls = _capture_author_requests(monkeypatch, [RuntimeError("vision unavailable"), _VALID])
 
     with pytest.raises(ProviderOutcomeError) as captured:
@@ -1345,6 +1346,7 @@ def test_author_slide_style_reference_failure_is_one_receipted_provider_outcome(
             author_slide_mod.author_slide_html(
                 "content", "DESIGN", _brand(), "COVER", 0, 1,
                 reference_images=[_reference_image(tmp_path)],
+                allow_provider_fallback=False,
             )
         )
 

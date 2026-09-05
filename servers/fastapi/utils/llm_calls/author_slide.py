@@ -48,14 +48,12 @@ from services.authored_header_body_extent import ensure_body_root_horizontal_ext
 from utils.get_env import is_authored_html_normalize_enabled, is_authored_source_images_enabled
 from utils.llm_calls.author_slide_images import illustration_slot_rules, reference_parts, source_image_parts
 from utils.authored_image_slots import scan_slots, source_slot_id_for_asset
-from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_config import enforce_llm_egress_policy, get_llm_config
 from utils.llm_provider import get_llm_provider, get_model, is_codex_selected
 from utils.prompt_safety import format_untrusted_source_documents
 from utils.renderer_isolation import admit_authored_html
 from utils.renderer_worker_policy import RendererPolicyError
 from services.source_images.models import SourceImageCandidate
-from services.public_operation_admission import PublicAdmissionRejected
 from services.provider_usage_instrumentation import (
     ProviderCallTimer,
     active_usage_scope_slide_index,
@@ -63,12 +61,9 @@ from services.provider_usage_instrumentation import (
     provider_call_admission,
     record_provider_call,
 )
-from utils.provider_idempotency import (
-    ProviderOutcomeError,
-    provider_generate_call,
-    supports_provider_idempotency,
-)
+from utils.provider_idempotency import provider_generate_call, supports_provider_idempotency
 from utils.llm_calls.author_call_spans import ProviderCallSpans, record_call_spans
+from utils.llm_calls.author_slide_fallback import reraise_author_call_error, text_only_fallback_applies
 from services.authored_generation_performance import authored_provider_concurrency
 from utils.llm_utils import extract_text, get_generate_kwargs
 
@@ -1127,12 +1122,15 @@ async def author_slide_html(
     try:
         response = await generate(kwargs, semantic_slot=author_semantic_slot)
     except Exception as error:
-        # Public admission limits are durable, non-retryable control-plane
-        # decisions.  Do not reclassify them as generic provider HTTP errors.
-        if isinstance(error, (PublicAdmissionRejected, ProviderOutcomeError)):
-            raise
-        if not allow_provider_fallback or not image_parts or mode == EXACT_RECONSTRUCTION:
-            raise handle_llm_client_exceptions(error)
+        # The fallback is one more physical call under the same slide attempt:
+        # its own logical slot below, a retry in the admission plan and receipts.
+        if (
+            not allow_provider_fallback
+            or not image_parts
+            or mode == EXACT_RECONSTRUCTION
+            or not text_only_fallback_applies(error)
+        ):
+            reraise_author_call_error(error)
         logger.warning(
             "Multimodal authored generation failed for slide %d; retrying text-only",
             index + 1,
@@ -1152,7 +1150,7 @@ async def author_slide_html(
                 semantic_slot=f"{author_semantic_slot}.text-fallback",
             )
         except Exception as fallback_error:
-            raise handle_llm_client_exceptions(fallback_error)
+            reraise_author_call_error(fallback_error)
     authored_html = extract_html_document(extract_text(response.content) or "")
     authored_html = _strip_nonvisual_pointer_events(authored_html)
     if mode != EXACT_RECONSTRUCTION:

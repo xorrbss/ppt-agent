@@ -195,10 +195,23 @@ def _wrap_batch_response(htmls: dict[int, str]) -> str:
     )
 
 
+#: The authored viewport every DOM bounds observation is expressed in
+#: (``services/authored_composition_policy.py``: "viewport 1280x720"). A
+#: smaller stand-in PNG used to be fine because no worker-lane scenario needed
+#: to crop it, but ``build_editable_hybrid_scene``'s raster-island fallback
+#: (``services/authored_vnext/semantic/editable_scene.py::_raster_asset``)
+#: crops this exact PNG using viewport-space bounds, so a stand-in smaller
+#: than the viewport makes ``left``/``top`` legitimately exceed the image's
+#: own width/height and PIL's ``crop`` raises "Coordinate 'lower' is less
+#: than 'upper'" -- not a defect in the code under test, a resolution
+#: mismatch in this stand-in.
+_VIEWPORT_SIZE = (1280, 720)
+
+
 def _png(seed: str) -> bytes:
     digest = hashlib.sha256(seed.encode("utf-8")).digest()
     output = io.BytesIO()
-    Image.new("RGB", (160, 90), (digest[0], digest[1], digest[2])).save(
+    Image.new("RGB", _VIEWPORT_SIZE, (digest[0], digest[1], digest[2])).save(
         output, format="PNG"
     )
     return output.getvalue()
@@ -720,6 +733,7 @@ async def _run_worker_lane(
     provider: StubProvider,
     contract: AuthoredHeaderContract,
     terminal_statuses: frozenset[str] = frozenset({"completed", "error"}),
+    gate_override: Callable[[pytest.MonkeyPatch], None] | None = None,
 ) -> LaneOutcome:
     from api.v1.ppt.endpoints import presentation_generate as endpoint
 
@@ -832,6 +846,12 @@ async def _run_worker_lane(
     )
     monkeypatch.setattr(authored_service, "resolve_header_contract", fake_header_contract)
     _install_chromium_and_gate_stubs(monkeypatch)
+    if gate_override is not None:
+        # Applied after the always-clean stubs above so a scenario can put a
+        # real gate function (or a synthetic-but-genuine observation) back on
+        # top of them for one deliberately defective slide, without having to
+        # duplicate the rest of ``_install_chromium_and_gate_stubs``.
+        gate_override(monkeypatch)
     _install_provider(monkeypatch, provider)
 
     generation_handler = register_presentation_generation_operation_handler(replace=True)

@@ -18,6 +18,7 @@ from utils.llm_calls.author_slide import (
     _authoring_output_profile,
 )
 from utils.llm_calls import author_slide as author_slide_mod
+from utils.llm_calls import author_slide_fallback as author_slide_fallback_mod
 from utils.provider_idempotency import ProviderOutcomeError
 
 
@@ -145,7 +146,9 @@ def test_codex_model_reasoning_capability_normalizes_once_at_author_egress(
     monkeypatch.setattr(author_slide_mod, "enforce_llm_egress_policy", lambda: None)
     monkeypatch.setattr(author_slide_mod, "_wait_for_author_rate_slot", no_rate_limit)
     monkeypatch.setattr(author_slide_mod, "record_provider_call", record_receipt)
-    monkeypatch.setattr(author_slide_mod, "handle_llm_client_exceptions", lambda error: error)
+    monkeypatch.setattr(
+        author_slide_fallback_mod, "handle_llm_client_exceptions", lambda error: error
+    )
     reference_image = tmp_path / "reference.png"
     reference_image.write_bytes(b"\x89PNG\r\n\x1a\nreference")
 
@@ -207,7 +210,7 @@ def test_author_slide_preserves_nonretryable_public_provider_budget_limit(monkey
     monkeypatch.setattr(author_slide_mod, "provider_call_admission", reject_public_admission)
     monkeypatch.setattr(author_slide_mod, "record_provider_call", record_receipt)
     monkeypatch.setattr(
-        author_slide_mod,
+        author_slide_fallback_mod,
         "handle_llm_client_exceptions",
         lambda _error: AssertionError("public admission must propagate unchanged"),
     )

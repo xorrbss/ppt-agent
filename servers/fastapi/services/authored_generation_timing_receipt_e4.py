@@ -263,7 +263,14 @@ _FLAGGED_SLIDE_KEYS = frozenset(
 #: ``repeated`` is present only on a slide declared terminal by the durable
 #: Scene repair claim, which is the only place that knows whether the same
 #: digest and error came back; ``remakeCount`` only when it exceeds one.
-_FLAGGED_SLIDE_OPTIONAL_KEYS = frozenset({"repeated", "remakeCount"})
+#: ``slideId`` names the persisted row the flag was generated for, so a later
+#: reorder cannot re-address it, and ``reasons`` carries every distinct reason
+#: when one slide was flagged by more than one stage. A deck that publishes a
+#: flagged slide always carries both, so omitting them here silently dropped
+#: the whole attempt receipt.
+_FLAGGED_SLIDE_OPTIONAL_KEYS = frozenset(
+    {"repeated", "remakeCount", "slideId", "reasons"}
+)
 
 
 def flagged_slide_entries(value: object) -> tuple[dict[str, object], ...]:
@@ -319,6 +326,23 @@ def flagged_slide_entries(value: object) -> tuple[dict[str, object], ...]:
             record["repeated"] = bool(entry["repeated"])
         if "remakeCount" in entry:
             record["remakeCount"] = int(entry["remakeCount"])
+        if "slideId" in entry:
+            slide_id = entry["slideId"]
+            if not isinstance(slide_id, str) or not 1 <= len(slide_id) <= 64:
+                raise ValueError("generation_attempt_v2_flagged_slides_invalid")
+            record["slideId"] = slide_id
+        if "reasons" in entry:
+            reasons = entry["reasons"]
+            if (
+                not isinstance(reasons, (list, tuple))
+                or not 1 <= len(reasons) <= 8
+                or any(
+                    not isinstance(item, str) or not item.strip() or len(item) > 160
+                    for item in reasons
+                )
+            ):
+                raise ValueError("generation_attempt_v2_flagged_slides_invalid")
+            record["reasons"] = [str(item) for item in reasons]
         output.append(record)
     return tuple(output)
 

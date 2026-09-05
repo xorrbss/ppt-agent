@@ -6,11 +6,14 @@ the authoring call, and how the brief tells the model to tell a style reference
 """
 
 import asyncio
+from contextlib import asynccontextmanager
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+from services.authored_batch_policy import is_authored_provider_overload
+from services.public_operation_admission import PublicAdmissionRejected
 from services.source_images.models import SourceImageCandidate
 from utils.llm_calls import author_slide as author_slide_mod
 from utils.llm_calls import author_slide_prompt
@@ -19,6 +22,8 @@ from utils.llm_calls.author_slide import (
     EXACT_RECONSTRUCTION,
     build_design_system,
 )
+from utils.llm_calls.author_slide_fallback import text_only_fallback_applies
+from utils.provider_idempotency import ProviderOutcomeError
 from utils.llm_calls.author_slide_images import (
     ILLUSTRATION_SLOT_RULES,
     ILLUSTRATION_SLOT_RULES_WITH_SOURCE_IMAGES,
@@ -518,3 +523,127 @@ def test_author_slide_html_text_only_fallback_drops_the_source_image_brief(
     # The retry carries no images, so it must not offer an asset id either.
     assert "SOURCE IMAGES" not in fallback_content
     assert "asset-a" not in fallback_content
+
+
+def _author_with_source_image(tmp_path, **kwargs):
+    return author_slide_mod.author_slide_html(
+        "content",
+        "DESIGN",
+        _brand(),
+        "CONTENT",
+        1,
+        2,
+        source_images=[_candidate(tmp_path, "asset-a")],
+        **kwargs,
+    )
+
+
+def test_text_only_fallback_is_admitted_and_receipted_as_a_retry(monkeypatch, tmp_path):
+    """The pair is one slide attempt: one ordinal, but two physical calls that
+    the admission plan and the receipts see as an initial call plus a retry
+    in its own logical slot."""
+    calls = _capture_author_requests(
+        monkeypatch, [RuntimeError("vision unavailable"), _VALID]
+    )
+    admissions = []
+    receipts = []
+
+    @asynccontextmanager
+    async def capture_admission(**kwargs):
+        admissions.append(kwargs)
+        yield None
+
+    async def capture_receipt(**kwargs):
+        receipts.append(kwargs)
+
+    monkeypatch.setattr(author_slide_mod, "provider_call_admission", capture_admission)
+    monkeypatch.setattr(author_slide_mod, "record_provider_call", capture_receipt)
+
+    _run(_author_with_source_image(tmp_path))
+
+    assert len(calls) == 2
+    # No usage scope names the slide here, so the slot carries it (deck-stage shape).
+    assert [(entry["semantic_slot"], entry["is_retry"]) for entry in admissions] == [
+        ("author.initial.slide-1", False),
+        ("author.initial.slide-1.text-fallback", True),
+    ]
+    assert [entry["retry_class"] for entry in receipts] == ["initial", "recovery"]
+    assert receipts[0]["response"] is None
+    assert receipts[1]["response"] is not None
+
+
+def test_wrapped_admission_rejection_never_falls_back(monkeypatch, tmp_path):
+    rejection = PublicAdmissionRejected("public_provider_retry_limit_exceeded")
+    calls = _capture_author_requests(monkeypatch, [rejection, _VALID])
+
+    with pytest.raises(ProviderOutcomeError) as raised:
+        _run(_author_with_source_image(tmp_path))
+
+    assert raised.value.__cause__ is rejection
+    assert raised.value.retryable is False
+    assert len(calls) == 1
+
+
+def test_wrapped_overload_timeout_never_falls_back(monkeypatch, tmp_path):
+    class ReadTimeout(RuntimeError):
+        pass
+
+    calls = _capture_author_requests(monkeypatch, [ReadTimeout("stuck"), _VALID])
+
+    with pytest.raises(ProviderOutcomeError) as raised:
+        _run(_author_with_source_image(tmp_path))
+
+    assert raised.value.code == "public_provider_call_timeout"
+    assert is_authored_provider_overload(raised.value) is True
+    assert len(calls) == 1
+
+
+def test_exact_reconstruction_never_falls_back(monkeypatch, tmp_path):
+    calls = _capture_author_requests(
+        monkeypatch, [RuntimeError("vision unavailable"), _VALID]
+    )
+
+    with pytest.raises(ProviderOutcomeError) as raised:
+        _run(
+            author_slide_mod.author_slide_html(
+                "content",
+                "DESIGN",
+                _brand(),
+                "COVER",
+                0,
+                1,
+                reference_images=[_reference_image(tmp_path)],
+                reference_mode=EXACT_RECONSTRUCTION,
+            )
+        )
+
+    assert raised.value.code == "public_provider_bridge_exception"
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "public_provider_call_timeout",
+        "public_provider_empty_output",
+        "public_provider_response_failed",
+        "public_provider_response_incomplete",
+    ],
+)
+def test_durable_provider_verdicts_are_not_fallback_candidates(code):
+    verdict = ProviderOutcomeError(code, recovery_allowed=True)
+    verdict.__cause__ = RuntimeError("transport detail")
+    assert text_only_fallback_applies(verdict) is False
+
+
+def test_only_a_bridged_client_error_is_a_fallback_candidate():
+    bridged = ProviderOutcomeError("public_provider_bridge_exception", recovery_allowed=False)
+    bridged.__cause__ = RuntimeError("HTTP 400: unsupported image")
+    assert text_only_fallback_applies(bridged) is True
+    # A raw client error (the streaming path wraps nothing) still qualifies.
+    assert text_only_fallback_applies(RuntimeError("vision unavailable")) is True
+
+    budget = ProviderOutcomeError("public_provider_bridge_exception", recovery_allowed=True)
+    budget.__cause__ = PublicAdmissionRejected("public_provider_actual_cost_limit_exceeded")
+    assert text_only_fallback_applies(budget) is False
+    assert text_only_fallback_applies(PublicAdmissionRejected("public_deadline_exceeded")) is False
