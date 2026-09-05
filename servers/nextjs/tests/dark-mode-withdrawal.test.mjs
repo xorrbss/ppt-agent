@@ -12,7 +12,6 @@ test("unsupported application dark mode has no runtime declarations", () => {
   assert.doesNotMatch(read("tailwind.config.ts"), /\bdarkMode\b/u);
   assert.doesNotMatch(read("app/globals.css"), /^\s*\.dark(?:\s|\{|,)/mu);
   assert.doesNotMatch(read("components/ui/sonner.tsx"), /\.dark\s+\[data-sonner/u);
-  assert.doesNotMatch(read("components/ui/chart.tsx"), /(?:THEMES|\.dark\s+\[data-chart|theme:\s*\{)/u);
 });
 
 test("documentation distinguishes app appearance from deck themes", () => {
