@@ -13,7 +13,9 @@ import re
 from functools import lru_cache
 
 from utils.authored_infographic.css_base import BASE_CSS
+from utils.authored_infographic.css_compact import COMPACT_CSS
 from utils.authored_infographic.css_data import DATA_CSS
+from utils.authored_infographic.css_fill import FILL_CSS
 from utils.authored_infographic.css_flow import FLOW_CSS
 from utils.authored_infographic.css_list import LIST_CSS
 from utils.authored_infographic.css_structure import STRUCTURE_CSS
@@ -23,7 +25,13 @@ from utils.authored_infographic.tokens import (
     tokens_for_brand,
 )
 
-LIBRARY_TEMPLATE = BASE_CSS + FLOW_CSS + STRUCTURE_CSS + DATA_CSS + LIST_CSS
+#: ``COMPACT_CSS`` states how a figure fits the shortest box it is given and
+#: ``FILL_CSS`` how it fills the tallest, so both come last, in that order:
+#: each must win the ties its selectors do not already outrank, and a cap that
+#: fills a tall box has to outrank the compaction of a short one.
+LIBRARY_TEMPLATE = (
+    BASE_CSS + FLOW_CSS + STRUCTURE_CSS + DATA_CSS + LIST_CSS + COMPACT_CSS + FILL_CSS
+)
 
 #: The rule every rendered library carries first; its presence is what marks a
 #: document as already injected.

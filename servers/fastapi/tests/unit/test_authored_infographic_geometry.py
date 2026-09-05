@@ -144,7 +144,10 @@ def _length(value: str, base: float) -> float:
 
 def _box(declarations: dict[str, str], height: float) -> tuple[float, float, float, float]:
     width = _length(declarations["width"], CANVAS_W)
-    if "height" in declarations:
+    # ``height:auto`` is a plate that takes the height of what it holds, which
+    # is the case the measured constant is for -- reading it as a length would
+    # be reading a number the CSS deliberately does not state.
+    if declarations.get("height", "auto") != "auto":
         height = _length(declarations["height"], CANVAS_H)
     if "left" in declarations:
         x = _length(declarations["left"], CANVAS_W) + _length(

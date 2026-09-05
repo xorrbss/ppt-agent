@@ -19,7 +19,7 @@ TABLE_CSS = """\
 .ig-table td{font-weight:500;color:$ink}
 .ig-table td.is-key{background:$primary_tint;color:$primary_deep;font-weight:700}
 .ig-table tr.is-key th,.ig-table tr.is-key td{background:$primary_tint;color:$primary_deep;font-weight:700}
-.ig-table .ig-th-sub{display:block;font-size:14px;font-weight:500;color:$muted;margin-top:2px}
+.ig-table .ig-th-sub{display:block;font-size:15px;font-weight:500;color:$muted;margin-top:2px}
 .ig-table td.ig-td-num{font-size:26px;font-weight:800;color:$primary_deep;text-align:right}
 .ig-table td.ig-td-after{background:$primary_tint;color:$primary_deep;font-weight:800;font-size:22px;text-align:right}
 .ig-table td.ig-td-before{color:$muted;text-align:right;font-size:20px}
@@ -80,13 +80,13 @@ GAUGE_CSS = """\
 
 MATRIX_CSS = """\
 .ig-matrix{display:grid;grid-template-columns:44px 1fr 1fr;grid-template-rows:1fr 1fr 32px;column-gap:0;row-gap:0}
-.ig-matrix .ig-ax-y{grid-column:1;grid-row:1;align-self:start;font-size:14px;font-weight:800;color:$ink;
+.ig-matrix .ig-ax-y{grid-column:1;grid-row:1;align-self:start;font-size:15px;font-weight:800;color:$ink;
   line-height:18px;padding-top:4px;padding-right:6px;text-align:right}
-.ig-matrix .ig-ax-y-low{grid-column:1;grid-row:2;align-self:end;font-size:13px;font-weight:700;color:$muted;
+.ig-matrix .ig-ax-y-low{grid-column:1;grid-row:2;align-self:end;font-size:15px;font-weight:700;color:$muted;
   padding-right:6px;text-align:right;padding-bottom:6px}
-.ig-matrix .ig-ax-x{grid-column:3;grid-row:3;align-self:end;justify-self:end;font-size:14px;font-weight:800;
+.ig-matrix .ig-ax-x{grid-column:3;grid-row:3;align-self:end;justify-self:end;font-size:15px;font-weight:800;
   color:$ink;line-height:18px;padding-top:8px}
-.ig-matrix .ig-ax-x-low{grid-column:2;grid-row:3;align-self:end;justify-self:start;font-size:13px;font-weight:700;
+.ig-matrix .ig-ax-x-low{grid-column:2;grid-row:3;align-self:end;justify-self:start;font-size:15px;font-weight:700;
   color:$muted;padding-top:8px}
 .ig-q{position:relative;display:flex;flex-direction:column;gap:10px;padding:34px 16px 14px;min-height:150px}
 .ig-q-bg{position:absolute;left:0;top:0;width:100%;height:100%;background:$white;border:1px solid $line}
@@ -98,13 +98,13 @@ MATRIX_CSS = """\
 .ig-q.q-tr .ig-q-bg{background:$primary_tint;border:1px solid $primary_soft;border-radius:14px}
 .ig-q.q-bl .ig-q-bg{border-radius:14px}
 .ig-q.q-br .ig-q-bg{background:$surface;border-radius:14px}
-.ig-qtag{position:absolute;left:16px;top:10px;font-size:13px;font-weight:800;color:$muted;line-height:18px}
+.ig-qtag{position:absolute;left:16px;top:10px;font-size:15px;font-weight:800;color:$muted;line-height:18px}
 .ig-q.q-tr .ig-qtag{color:$primary_deep}
 .ig-matrix .ig-node{flex-direction:row;align-items:center;text-align:left;gap:14px;padding:10px 14px}
 .ig-matrix .ig-node-bg{border-radius:12px}
 .ig-matrix .ig-text{position:relative;display:flex;flex-direction:column;gap:2px;min-width:0}
 .ig-matrix .ig-label{font-size:18px}
-.ig-matrix .ig-desc{font-size:13px}
+.ig-matrix .ig-desc{font-size:15px}
 .ig-matrix .ig-ic{width:36px;height:36px}
 .ig-matrix .ig-ic svg,.ig-matrix .ig-ic img{width:20px;height:20px}
 """

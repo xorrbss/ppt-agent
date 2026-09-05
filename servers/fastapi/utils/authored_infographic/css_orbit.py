@@ -15,12 +15,19 @@ Three and four stations sit on a circle of radius 170px. Five and six do not
 fit on a circle in a 560px-tall canvas — three stacked plate heights do not
 exist — so their plates form two rows and the loop becomes a 520x340 ellipse
 whose arrowheads land in the corridors between the rows.
+
+Every plate is pinned to the figure's own top or bottom edge, so the orbit
+scales with the box the authoring model gave it. The ``min-height`` floor is
+only a guard for a figure dropped into an auto-height container: it sits well
+under the shortest box a real slide has been observed to reserve for a figure
+(373px), because a floor above that is exactly how the plates used to run off
+the bottom of the canvas.
 """
 
 from __future__ import annotations
 
 ORBIT_BASE_CSS = """\
-.ig-cycle,.ig-hub-spoke{min-height:420px}
+.ig-cycle,.ig-hub-spoke{min-height:330px}
 .ig-cycle .ig-node,.ig-hub-spoke .ig-node{position:absolute;width:200px;margin-left:-100px;padding:14px 12px;gap:5px}
 """
 
@@ -32,36 +39,36 @@ CYCLE_CSS = """\
 .ig-ring-head{position:absolute;margin-left:-11px;margin-top:-11px;width:22px;height:22px;border-radius:3px;
   border-top:5px solid $primary;border-right:5px solid $primary}
 .ig-cycle.n3 .ig-node.p1{left:50%;top:0}
-.ig-cycle.n3 .ig-node.p2{left:calc(50% + 260px);top:calc(50% + 50px)}
-.ig-cycle.n3 .ig-node.p3{left:calc(50% - 260px);top:calc(50% + 50px)}
+.ig-cycle.n3 .ig-node.p2{left:calc(50% + 246px);bottom:0}
+.ig-cycle.n3 .ig-node.p3{left:calc(50% - 246px);bottom:0}
 .ig-cycle.n3 .ig-ring-head.h1{left:calc(50% + 147px);top:calc(50% - 85px);transform:rotate(105deg)}
 .ig-cycle.n3 .ig-ring-head.h2{left:50%;top:calc(50% + 170px);transform:rotate(225deg)}
 .ig-cycle.n3 .ig-ring-head.h3{left:calc(50% - 147px);top:calc(50% - 85px);transform:rotate(345deg)}
 .ig-cycle.n4 .ig-node.p1{left:50%;top:0}
-.ig-cycle.n4 .ig-node.p2{left:calc(50% + 260px);top:calc(50% - 60px)}
+.ig-cycle.n4 .ig-node.p2{left:calc(50% + 246px);top:26%}
 .ig-cycle.n4 .ig-node.p3{left:50%;bottom:0}
-.ig-cycle.n4 .ig-node.p4{left:calc(50% - 260px);top:calc(50% - 60px)}
+.ig-cycle.n4 .ig-node.p4{left:calc(50% - 246px);top:26%}
 .ig-cycle.n4 .ig-ring-head.h1{left:calc(50% + 120px);top:calc(50% - 120px);transform:rotate(90deg)}
 .ig-cycle.n4 .ig-ring-head.h2{left:calc(50% + 120px);top:calc(50% + 120px);transform:rotate(180deg)}
 .ig-cycle.n4 .ig-ring-head.h3{left:calc(50% - 120px);top:calc(50% + 120px);transform:rotate(270deg)}
 .ig-cycle.n4 .ig-ring-head.h4{left:calc(50% - 120px);top:calc(50% - 120px);transform:rotate(0deg)}
 .ig-cycle.n5 .ig-ring,.ig-cycle.n6 .ig-ring{width:520px;margin-left:-260px}
 .ig-cycle.n5 .ig-node.p1{left:50%;top:0}
-.ig-cycle.n5 .ig-node.p2{left:calc(50% + 250px);top:0}
+.ig-cycle.n5 .ig-node.p2{left:calc(50% + 236px);top:0}
 .ig-cycle.n5 .ig-node.p3{left:calc(50% + 160px);bottom:0}
 .ig-cycle.n5 .ig-node.p4{left:calc(50% - 160px);bottom:0}
-.ig-cycle.n5 .ig-node.p5{left:calc(50% - 250px);top:0}
+.ig-cycle.n5 .ig-node.p5{left:calc(50% - 236px);top:0}
 .ig-cycle.n5 .ig-ring-head.h1{left:calc(50% + 124px);top:calc(50% - 149px);transform:rotate(65deg)}
 .ig-cycle.n5 .ig-ring-head.h2{left:calc(50% + 260px);top:50%;transform:rotate(135deg)}
 .ig-cycle.n5 .ig-ring-head.h3{left:50%;top:calc(50% + 170px);transform:rotate(225deg)}
 .ig-cycle.n5 .ig-ring-head.h4{left:calc(50% - 260px);top:50%;transform:rotate(315deg)}
 .ig-cycle.n5 .ig-ring-head.h5{left:calc(50% - 124px);top:calc(50% - 149px);transform:rotate(25deg)}
 .ig-cycle.n6 .ig-node.p1{left:50%;top:0}
-.ig-cycle.n6 .ig-node.p2{left:calc(50% + 250px);top:0}
-.ig-cycle.n6 .ig-node.p3{left:calc(50% + 250px);bottom:0}
+.ig-cycle.n6 .ig-node.p2{left:calc(50% + 236px);top:0}
+.ig-cycle.n6 .ig-node.p3{left:calc(50% + 236px);bottom:0}
 .ig-cycle.n6 .ig-node.p4{left:50%;bottom:0}
-.ig-cycle.n6 .ig-node.p5{left:calc(50% - 250px);bottom:0}
-.ig-cycle.n6 .ig-node.p6{left:calc(50% - 250px);top:0}
+.ig-cycle.n6 .ig-node.p5{left:calc(50% - 236px);bottom:0}
+.ig-cycle.n6 .ig-node.p6{left:calc(50% - 236px);top:0}
 .ig-cycle.n6 .ig-ring-head.h1{left:calc(50% + 124px);top:calc(50% - 149px);transform:rotate(65deg)}
 .ig-cycle.n6 .ig-ring-head.h2{left:calc(50% + 260px);top:50%;transform:rotate(135deg)}
 .ig-cycle.n6 .ig-ring-head.h3{left:calc(50% + 124px);top:calc(50% + 149px);transform:rotate(205deg)}
@@ -79,24 +86,24 @@ HUB_SPOKE_CSS = """\
 .ig-spoke{position:absolute;left:50%;top:50%;width:2px;height:170px;margin-left:-1px;margin-top:-170px;
   background:$primary_soft;transform-origin:50% 100%}
 .ig-hub-spoke.n3 .ig-node.p1{left:50%;top:0}
-.ig-hub-spoke.n3 .ig-node.p2{left:calc(50% + 260px);top:calc(50% + 40px)}
-.ig-hub-spoke.n3 .ig-node.p3{left:calc(50% - 260px);top:calc(50% + 40px)}
+.ig-hub-spoke.n3 .ig-node.p2{left:calc(50% + 246px);bottom:0}
+.ig-hub-spoke.n3 .ig-node.p3{left:calc(50% - 246px);bottom:0}
 .ig-hub-spoke.n3 .ig-spoke.k1{transform:rotate(0deg)}
 .ig-hub-spoke.n3 .ig-spoke.k2{transform:rotate(118deg)}
 .ig-hub-spoke.n3 .ig-spoke.k3{transform:rotate(242deg)}
 .ig-hub-spoke.n4 .ig-node.p1{left:50%;top:0}
-.ig-hub-spoke.n4 .ig-node.p2{left:calc(50% + 260px);top:calc(50% - 60px)}
+.ig-hub-spoke.n4 .ig-node.p2{left:calc(50% + 246px);top:26%}
 .ig-hub-spoke.n4 .ig-node.p3{left:50%;bottom:0}
-.ig-hub-spoke.n4 .ig-node.p4{left:calc(50% - 260px);top:calc(50% - 60px)}
+.ig-hub-spoke.n4 .ig-node.p4{left:calc(50% - 246px);top:26%}
 .ig-hub-spoke.n4 .ig-spoke.k1{transform:rotate(0deg)}
 .ig-hub-spoke.n4 .ig-spoke.k2{transform:rotate(99deg)}
 .ig-hub-spoke.n4 .ig-spoke.k3{transform:rotate(180deg)}
 .ig-hub-spoke.n4 .ig-spoke.k4{transform:rotate(261deg)}
 .ig-hub-spoke.n5 .ig-node.p1{left:50%;top:0}
-.ig-hub-spoke.n5 .ig-node.p2{left:calc(50% + 250px);top:calc(50% - 130px)}
+.ig-hub-spoke.n5 .ig-node.p2{left:calc(50% + 236px);top:2%}
 .ig-hub-spoke.n5 .ig-node.p3{left:calc(50% + 160px);bottom:0}
 .ig-hub-spoke.n5 .ig-node.p4{left:calc(50% - 160px);bottom:0}
-.ig-hub-spoke.n5 .ig-node.p5{left:calc(50% - 250px);top:calc(50% - 130px)}
+.ig-hub-spoke.n5 .ig-node.p5{left:calc(50% - 236px);top:2%}
 .ig-hub-spoke.n5 .ig-spoke.k1{transform:rotate(0deg)}
 .ig-hub-spoke.n5 .ig-spoke.k2{transform:rotate(81deg)}
 .ig-hub-spoke.n5 .ig-spoke.k3{transform:rotate(140deg)}

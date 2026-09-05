@@ -1,4 +1,14 @@
-"""Structure archetypes: hierarchy, layers, funnel, pyramid, venn."""
+"""Structure archetypes: hierarchy, layers, funnel, pyramid, venn.
+
+The stacked archetypes state ``min-height:0`` on their rows: a flex item's
+default ``min-height:auto`` refuses to shrink below its content, which is how
+six layers grew past a 386px box and off the canvas. What a row is allowed to
+shrink *to* is stated by the size class in ``css_compact``.
+
+The venn places its sets and labels down the figure in percentages for the
+same reason — only the circles keep a fixed size, because a circle has to
+stay round.
+"""
 
 from __future__ import annotations
 
@@ -20,7 +30,7 @@ HIERARCHY_CSS = """\
 LAYERS_CSS = """\
 .ig-layers{display:flex;flex-direction:column;justify-content:center;gap:10px;padding:0 6%}
 .ig-layers .ig-node{flex-direction:row;align-items:center;text-align:left;gap:20px;padding:14px 26px;flex:1 1 0;
-  min-height:64px}
+  min-height:0}
 .ig-layers .ig-node-bg{border-radius:12px;box-shadow:none;background:$surface}
 .ig-layers .ig-node.l1 .ig-node-bg{background:$surface}
 .ig-layers .ig-node.l2 .ig-node-bg{background:$primary_tint}
@@ -40,54 +50,64 @@ LAYERS_CSS = """\
 FUNNEL_CSS = """\
 .ig-funnel,.ig-pyramid{display:flex;flex-direction:column;align-items:center;justify-content:stretch;gap:8px}
 .ig-funnel .ig-node,.ig-pyramid .ig-node{flex:1 1 0;flex-direction:row;align-items:center;
-  justify-content:space-between;text-align:left;gap:20px;padding:12px 28px;min-height:60px}
+  justify-content:space-between;text-align:left;gap:20px;padding:12px 28px;min-height:0}
 .ig-funnel .ig-node-bg,.ig-pyramid .ig-node-bg{border-radius:10px;box-shadow:none;background:$primary_tint;
   border:1px solid $primary_soft}
 .ig-funnel .ig-node.is-key .ig-node-bg,.ig-pyramid .ig-node.is-key .ig-node-bg{background:$primary;
   border:1px solid $primary}
-.ig-funnel .ig-text,.ig-pyramid .ig-text{position:relative;display:flex;align-items:baseline;gap:12px;min-width:0}
+.ig-funnel .ig-text,.ig-pyramid .ig-text{position:relative;display:flex;align-items:baseline;gap:4px 12px;
+  min-width:0;flex-wrap:wrap}
 .ig-funnel .ig-tail,.ig-pyramid .ig-tail{position:relative;flex:none}
 .ig-funnel .ig-node.f1{width:100%}
-.ig-funnel .ig-node.f2{width:86%}
-.ig-funnel .ig-node.f3{width:72%}
-.ig-funnel .ig-node.f4{width:58%}
-.ig-funnel .ig-node.f5{width:46%}
-.ig-funnel .ig-node.f6{width:36%}
-.ig-pyramid .ig-node.f1{width:36%}
-.ig-pyramid .ig-node.f2{width:48%}
-.ig-pyramid .ig-node.f3{width:60%}
-.ig-pyramid .ig-node.f4{width:72%}
-.ig-pyramid .ig-node.f5{width:84%}
+.ig-funnel .ig-node.f2{width:88%}
+.ig-funnel .ig-node.f3{width:76%}
+.ig-funnel .ig-node.f4{width:64%}
+.ig-funnel .ig-node.f5{width:56%}
+.ig-funnel .ig-node.f6{width:48%}
+.ig-funnel.n3 .ig-node.f2{width:78%}
+.ig-funnel.n3 .ig-node.f3{width:56%}
+.ig-funnel.n4 .ig-node.f2{width:84%}
+.ig-funnel.n4 .ig-node.f3{width:68%}
+.ig-funnel.n4 .ig-node.f4{width:52%}
+.ig-pyramid .ig-node.f1{width:48%}
+.ig-pyramid .ig-node.f2{width:56%}
+.ig-pyramid .ig-node.f3{width:64%}
+.ig-pyramid .ig-node.f4{width:76%}
+.ig-pyramid .ig-node.f5{width:88%}
 .ig-pyramid .ig-node.f6{width:96%}
+.ig-pyramid.n3 .ig-node.f1{width:52%}
+.ig-pyramid.n3 .ig-node.f2{width:74%}
+.ig-pyramid.n3 .ig-node.f3{width:96%}
+.ig-pyramid.n4 .ig-node.f1{width:50%}
+.ig-pyramid.n4 .ig-node.f2{width:66%}
+.ig-pyramid.n4 .ig-node.f3{width:82%}
+.ig-pyramid.n4 .ig-node.f4{width:96%}
 .ig-funnel .ig-num,.ig-pyramid .ig-num{font-size:30px}
 .ig.n3 .ig-funnel-gap,.ig-funnel.n3 .ig-node,.ig-pyramid.n3 .ig-node{min-height:88px}
 """
 
 VENN_CSS = """\
-.ig-venn{min-height:400px}
-.ig-set{position:absolute;width:300px;height:300px;border-radius:150px;background:$primary_tint;
+.ig-venn{min-height:320px}
+.ig-set{position:absolute;width:250px;height:250px;border-radius:125px;background:$primary_tint;
   border:2px solid $primary_soft;opacity:0.85}
 .ig-set.s2{background:$primary_soft}
 .ig-set.s3{background:$surface;border:2px solid $primary}
-.ig.n3 .ig-set.s1{left:calc(50% - 250px);top:20px}
-.ig.n3 .ig-set.s2{left:calc(50% - 50px);top:20px}
-.ig.n3 .ig-set.s3{left:calc(50% - 150px);top:150px}
-.ig.n4 .ig-set.s1{left:calc(50% - 250px);top:20px}
-.ig.n4 .ig-set.s2{left:calc(50% - 50px);top:20px}
-.ig.n4 .ig-set.s3{left:calc(50% - 150px);top:150px}
+.ig.n3 .ig-set.s1,.ig.n4 .ig-set.s1{left:calc(50% - 210px);top:4%}
+.ig.n3 .ig-set.s2,.ig.n4 .ig-set.s2{left:calc(50% - 40px);top:4%}
+.ig.n3 .ig-set.s3,.ig.n4 .ig-set.s3{left:calc(50% - 125px);top:26%}
 .ig-venn .ig-node{position:absolute;width:210px;margin-left:-105px;padding:10px;gap:4px}
 .ig-venn .ig-node-bg{display:none}
-.ig-venn .ig-node.v1{left:calc(50% - 170px);top:40px}
-.ig-venn .ig-node.v2{left:calc(50% + 170px);top:40px}
-.ig-venn .ig-node.v3{left:50%;top:340px}
-.ig-venn .ig-node.v4{left:50%;top:150px;width:200px;margin-left:-100px}
+.ig-venn .ig-node.v1{left:calc(50% - 150px);top:8%}
+.ig-venn .ig-node.v2{left:calc(50% + 150px);top:8%}
+.ig-venn .ig-node.v3{left:50%;top:72%}
+.ig-venn .ig-node.v4{left:50%;top:34%;width:200px;margin-left:-100px}
 .ig-venn .ig-node.v4 .ig-node-bg{display:block;background:$primary;border:1px solid $primary;border-radius:16px}
 .ig-venn .ig-node.v4 .ig-label{color:$on_primary}
 .ig-venn .ig-node.v4 .ig-desc{color:$on_primary_muted}
 .ig-venn .ig-node.is-key .ig-node-bg{display:block;background:$primary;border:1px solid $primary;
   border-radius:16px}
-.ig-venn .ig-core{position:absolute;left:50%;top:150px;width:200px;margin-left:-100px;text-align:center;
-  font-size:20px;font-weight:800;color:$primary_deep;line-height:1.3;word-break:keep-all}
+.ig-venn .ig-core{position:absolute;left:50%;top:34%;width:200px;margin-left:-100px;text-align:center;
+  font-size:20px;font-weight:800;color:$primary_deep;line-height:1.3;word-break:keep-all;overflow-wrap:anywhere}
 """
 
 STRUCTURE_CSS = HIERARCHY_CSS + LAYERS_CSS + FUNNEL_CSS + VENN_CSS

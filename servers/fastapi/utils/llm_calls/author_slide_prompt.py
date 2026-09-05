@@ -493,7 +493,7 @@ def author_prompt(
     illustration_block = f"{illustration}\n\n" if illustration else ""
     visual_story = visual_story_marker(visual_intent)
     visual_story_block = f"{visual_story}\n\n" if visual_story else ""
-    figure = infographic_marker(infographic)
+    figure = infographic_marker(infographic, page_number_mode=page_number_mode)
     figure_block = f"{figure}\n\n" if figure else ""
     direction = user_direction_brief(instructions)
     direction_block = f"{direction}\n\n" if direction else ""

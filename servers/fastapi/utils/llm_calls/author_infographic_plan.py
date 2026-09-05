@@ -89,7 +89,11 @@ FOR EACH SLIDE return one entry with the slide's 0-based index:
   (a figure with text beside it), or quiet (none). A figure page is never quiet.
 - takeaway: the one thing the figure proves, in the deck language, at most
   {MAX_TAKEAWAY_CHARS} characters. It is the figure's headline, not the slide
-  title. Omit for none.
+  title. Write it as ordinary words with ordinary spacing, exactly as it would
+  be typed in a sentence; spaces do not count toward the limit and a word is
+  never joined to the next one to save room. It is set in the page's largest
+  type, and a run of characters with no space in it breaks in the middle of a
+  word. Omit for none.
 - nodes: {MIN_NODES} to {MAX_NODES} labelled elements of the figure — the steps,
   layers, options, quadrants or KPIs. Each label is COPIED VERBATIM from the
   slide's own content (never reworded, never translated, never invented), at

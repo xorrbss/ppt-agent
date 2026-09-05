@@ -9,7 +9,7 @@ keep the pre-plan behaviour where the model composes for itself.
 from __future__ import annotations
 
 from models.authored_infographic_plan import AuthoredSlideInfographic
-from utils.authored_infographic.contracts import slot_contract
+from utils.authored_infographic.contracts import LOW_HEIGHT_MAX_PX, slot_contract
 
 _ARCHETYPE_SHAPES: dict[str, str] = {
     "process": "ordered steps on one directional rail, first to last",
@@ -40,17 +40,60 @@ _DENSITY = {
     "high": "each node carries its label, its supporting phrase and its figure",
 }
 
+#: How much of the page the figure is. Both entries state where the supporting
+#: text may go, because the earlier "beside or below it" invited a reserved band
+#: under the figure that the deck's short capacity envelope then never filled:
+#: measured across 203 real figure slides, only 3 of them actually placed text
+#: beside the figure, yet the figure box still stopped 76px above the page's
+#: bottom content line. Text goes beside the figure or above it in the header;
+#: it never shortens the figure to sit under it.
 _WEIGHT = {
     "hero": (
         "This is one of the deck's HERO pages: the figure IS the page. Give it "
-        "the whole canvas below the header, with the takeaway as the only "
-        "headline and no bullet list beside it."
+        "the whole canvas between the header and the bottom content line, with "
+        "the takeaway as the only headline and no bullet list beside it."
     ),
     "standard": (
-        "This is a STANDARD figure page: the figure takes the larger part of "
-        "the canvas and the supporting text sits beside or below it, never on it."
+        "This is a STANDARD figure page: the figure is still the largest object "
+        "on it and still reaches the bottom content line. Supporting text sits "
+        "BESIDE the figure in a column of its own, or above it in the header and "
+        "takeaway — never on it, and never as a band under it. If you write no "
+        "side column, the figure takes that width too rather than leaving it, "
+        "and it never gives back height to make room for text you did not write."
     ),
 }
+
+#: A KPI row, a gauge dial, a short table, list or timeline has an honest
+#: height ceiling well under the bottom content line (see
+#: ``contracts.LOW_HEIGHT_MAX_PX``), so neither ``_WEIGHT`` entry above fits
+#: it: HERO's "whole canvas" and STANDARD's "still reaches the bottom content
+#: line" both describe a figure this archetype cannot honestly become. These
+#: variants replace them with the two-column-or-centred layout the figure
+#: contract itself now states.
+_WEIGHT_LOW_HEIGHT = {
+    "hero": (
+        "This is one of the deck's HERO pages, but this archetype has an "
+        "intrinsic height ceiling and cannot honestly fill the whole canvas: "
+        "give the figure its ceiling height, hold it there, and let the "
+        "takeaway carry the page above or beside it rather than stretching the "
+        "figure to fill the rest."
+    ),
+    "standard": (
+        "This is a STANDARD figure page, but this archetype has an intrinsic "
+        "height ceiling: it sits in a two-column layout, the figure in the "
+        "wider column at its ceiling height, with supporting text BESIDE it in "
+        "a column of its own. Do not stretch the figure past its ceiling and do "
+        "not leave a blank band under it to make up the difference — spend the "
+        "leftover height on the text column, or centre the figure vertically "
+        "when there is no more text to place beside it, per the figure "
+        "contract below."
+    ),
+}
+
+
+def _weight_line(slide: AuthoredSlideInfographic) -> str:
+    table = _WEIGHT_LOW_HEIGHT if slide.archetype in LOW_HEIGHT_MAX_PX else _WEIGHT
+    return table[slide.weight]
 
 
 def _node_lines(slide: AuthoredSlideInfographic) -> str:
@@ -70,8 +113,16 @@ def _node_lines(slide: AuthoredSlideInfographic) -> str:
     return "\n".join(lines)
 
 
-def infographic_marker(slide: AuthoredSlideInfographic | None) -> str:
-    """Render one slide's figure brief, or nothing when no plan ran."""
+def infographic_marker(
+    slide: AuthoredSlideInfographic | None, *, page_number_mode: str | None = None
+) -> str:
+    """Render one slide's figure brief, or nothing when no plan ran.
+
+    ``page_number_mode`` decides which bottom content line the figure contract
+    tells the model to reach; it is the deck's own mode, already resolved by
+    ``author_prompt``, so the figure is sized against the same line the
+    PAGE-NUMBER SYSTEM rules state a few paragraphs later in the same prompt.
+    """
     if slide is None:
         return ""
     if not slide.has_figure:
@@ -102,12 +153,12 @@ def infographic_marker(slide: AuthoredSlideInfographic | None) -> str:
         f"{_node_lines(slide)}\n"
         f"- density: {slide.density} — {_DENSITY[slide.density]}.\n"
         f"{emphasis}"
-        f"- {_WEIGHT[slide.weight]}\n"
+        f"- {_weight_line(slide)}\n"
         "- Where this brief and the VISUAL STORY PLAN disagree on the figure's "
         "shape, this brief wins. The figure itself is drawn by the archetype "
         "component library under the contract below; the server rejects a "
         "slide that departs from it.\n"
-        f"{slot_contract(slide)}"
+        f"{slot_contract(slide, page_number_mode=page_number_mode)}"
     )
 
 

@@ -15,7 +15,7 @@ PROCESS_CSS = """\
 .ig-process{display:flex;align-items:stretch;justify-content:center;gap:0;padding:8px 0}
 .ig-process .ig-node{flex:1 1 0;max-width:280px;justify-content:center}
 .ig-process .ig-no{width:28px;height:28px;border-radius:14px;background:$primary_tint;color:$primary_deep;
-  line-height:28px;font-size:14px}
+  line-height:28px;font-size:15px}
 .ig-process .ig-node.is-key .ig-no{background:$white;color:$primary_deep}
 """
 
@@ -25,7 +25,7 @@ MILESTONES_CSS = """\
   justify-content:space-between;align-items:stretch;gap:16px}
 .ig-milestones .ig-node{flex:1 1 0;padding:53px 14px 20px;gap:10px;justify-content:flex-start}
 .ig-milestones .ig-node-bg{border-radius:14px;box-shadow:none;background:$surface}
-.ig-milestones .ig-when{position:relative;margin-top:auto;font-size:14px;font-weight:800;color:$primary;
+.ig-milestones .ig-when{position:relative;margin-top:auto;font-size:15px;font-weight:800;color:$primary;
   line-height:20px}
 .ig-milestones .ig-node > :last-child{margin-bottom:auto}
 .ig-milestones .ig-node.is-key .ig-node-bg{background:$primary;border:1px solid $primary}
@@ -76,7 +76,7 @@ SWIMLANE_CSS = """\
 .ig-swimlane .ig-head{position:relative;width:220px;flex:none;display:flex;flex-direction:column;gap:2px}
 .ig-swimlane .ig-steps{position:relative;flex:1 1 0;display:flex;align-items:center;gap:8px}
 .ig-swimlane .ig-step{position:relative;flex:1 1 0;height:40px;border-radius:8px;background:$white;
-  border:1px solid $line;font-size:14px;font-weight:600;color:$ink;line-height:38px;text-align:center;padding:0 8px;
+  border:1px solid $line;font-size:15px;font-weight:600;color:$ink;line-height:38px;text-align:center;padding:0 8px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ig-swimlane .ig-node.is-key .ig-step{border:1px solid $primary_soft;color:$primary_deep}
 .ig-swimlane .ig-step-arrow{flex:none;width:10px;height:10px;border-top:2px solid $primary_soft;
@@ -84,7 +84,8 @@ SWIMLANE_CSS = """\
 """
 
 BRANCH_CSS = """\
-.ig-branch{display:grid;grid-template-columns:1fr 80px 1fr;align-items:center;column-gap:0}
+.ig-branch{display:grid;grid-template-columns:1fr 80px 1fr;grid-template-rows:minmax(0,1fr);
+  align-items:center;column-gap:0}
 .ig-branch .ig-root{align-self:center;padding:26px 22px}
 .ig-branch .ig-root .ig-node-bg{background:$primary_tint;border:1px solid $primary_soft;box-shadow:none}
 .ig-branch .ig-root .ig-label{color:$primary_deep;font-size:26px}

@@ -3,7 +3,10 @@
 The scene root reserves ``.ig-art`` for the one picture the deck may spend on
 this slide (the illustration slot today, a generated object cutout once the
 icon pack stage lands) and lets the model place each callout with the only
-inline style the contract admits: ``left``/``top``/``width``/``height`` in px.
+inline style the contract admits: ``left``/``top``/``width``/``height``. The
+skeleton states those as percentages of the figure, not pixels: the box a
+scene is given is the model's decision and has been observed as narrow as
+758px, where a callout pinned at 892px was off the slide entirely.
 """
 
 from __future__ import annotations
@@ -41,18 +44,18 @@ CHECKLIST_CSS = """\
 """
 
 SCENE_CSS = """\
-.ig-scene{min-height:420px}
-.ig-scene .ig-art{position:absolute;left:50%;top:50%;width:720px;height:405px;margin-left:-360px;margin-top:-202px;
-  display:flex;align-items:center;justify-content:center}
-.ig-scene .ig-art img{display:block;max-width:100%;max-height:100%}
-.ig-scene .ig-co{position:absolute;width:260px;height:88px;padding:12px 14px 12px 52px;display:flex;
-  flex-direction:column;justify-content:center;gap:3px;text-align:left}
+.ig-scene{min-height:320px}
+.ig-scene .ig-art{position:absolute;left:26%;top:6%;width:48%;height:88%;display:flex;align-items:center;
+  justify-content:center}
+.ig-scene .ig-art img{display:block;max-width:100%;max-height:100%;object-fit:contain}
+.ig-scene .ig-co{position:absolute;width:26%;height:23%;padding:10px 12px 10px 50px;display:flex;
+  flex-direction:column;justify-content:center;gap:2px;text-align:left}
 .ig-scene .ig-co-bg{position:absolute;left:0;top:0;width:100%;height:100%;border-radius:14px;background:$white;
   border:1px solid $line;box-shadow:0 10px 24px rgba(15,23,42,0.10),0 2px 4px rgba(15,23,42,0.06)}
 .ig-scene .ig-co .ig-no{position:absolute;left:14px;top:50%;margin-top:-14px;width:28px;height:28px;
-  border-radius:14px;background:$primary;color:$on_primary;line-height:28px;text-align:center;font-size:14px}
+  border-radius:14px;background:$primary;color:$on_primary;line-height:28px;text-align:center;font-size:15px}
 .ig-scene .ig-co .ig-label{font-size:19px;line-height:1.25}
-.ig-scene .ig-co .ig-desc{font-size:13px;line-height:1.35}
+.ig-scene .ig-co .ig-desc{font-size:15px;line-height:1.35}
 .ig-scene .ig-co.is-key .ig-co-bg{background:$primary;border:1px solid $primary;box-shadow:0 14px 30px $primary_glow}
 .ig-scene .ig-co.is-key .ig-no{background:$white;color:$primary_deep}
 .ig-scene .ig-co.is-key .ig-label{color:$on_primary}

@@ -155,23 +155,30 @@ def venn(ctx: Ctx) -> str:
 
 
 def scene(ctx: Ctx) -> str:
+    """The picture, its callouts down either margin, and one pin each.
+
+    Callouts are placed in percentages of the figure, not in pixels: the box a
+    scene is given is the authoring model's decision and has been observed as
+    narrow as 758px, where a callout pinned at 892px was simply off the slide.
+    """
     n = len(ctx.slide.nodes)
+    rows = max(1, (n + 1) // 2)
     parts = [
         f'<div class="ig-art"{ctx.q("art")}><img data-illust-prompt="SCENE" alt=""'
         f' style="width:720px;height:405px"{ctx.q("art", "img")}></div>'
     ]
     for i, node in enumerate(ctx.slide.nodes):
-        left = 0 if i % 2 == 0 else 892
-        top = 20 + (i // 2) * (400 // max(1, (n + 1) // 2))
+        left = 0 if i % 2 == 0 else 74
+        top = 5 + (i // 2) * (90 // rows)
         parts.append(
-            f'<div class="ig-co{ctx.key(i)}" style="left:{left}px;top:{top}px"{ctx.nq(i)}>'
+            f'<div class="ig-co{ctx.key(i)}" style="left:{left}%;top:{top}%"{ctx.nq(i)}>'
             f'<div class="ig-co-bg"{ctx.nq(i, "bg")}></div>'
             f'<div class="ig-no"{ctx.nq(i, "no")}>{i + 1}</div>'
             f"{label_html(ctx, i, node)}{desc_html(ctx, i, node)}</div>"
         )
-        pin_left = 330 if left == 0 else 800
+        pin_left = 30 if left == 0 else 66
         parts.append(
-            f'<div class="ig-pin" style="left:{pin_left}px;top:{top + 100}px"{ctx.nq(i, "pin")}></div>'
+            f'<div class="ig-pin" style="left:{pin_left}%;top:{top + 11}%"{ctx.nq(i, "pin")}></div>'
         )
     return "".join(parts)
 
