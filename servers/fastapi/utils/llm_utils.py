@@ -23,6 +23,7 @@ from llmai.shared import (
 
 from utils.llm_config import get_extra_body
 from utils.schema_utils import get_schema_validation_errors
+from utils.structured_semantic_slots import structured_semantic_slot
 from services.provider_usage_instrumentation import (
     ProviderCallTimer,
     current_provider_idempotency_key,
@@ -853,19 +854,11 @@ async def generate_structured_with_schema_retries(
             if call_budget.remaining <= 0:
                 break
             await _raise_if_client_disconnected(disconnect_checker)
-            if validation_attempt == 0 and parse_attempt == 0:
-                semantic_slot = "structured.initial"
-            elif validation_attempt == 0:
-                semantic_slot = "structured.parse-repair"
-            elif parse_attempt == 0:
-                semantic_slot = "structured.schema-repair"
-            else:
-                semantic_slot = "structured.schema-parse-repair"
-            # A caller that runs the same stage twice (the content brief retries
-            # once after a timeout) must not reuse the first call's durable
-            # identity: the first row is already terminal, and reopening it is
-            # rejected outright for a provider without idempotency support.
-            semantic_slot = f"{semantic_slot}{semantic_slot_suffix}"
+            semantic_slot = structured_semantic_slot(
+                validation_attempt=validation_attempt,
+                parse_attempt=parse_attempt,
+                suffix=semantic_slot_suffix,
+            )
             content = await _generate_structured_content_with_transient_retries(
                 client,
                 disconnect_checker=disconnect_checker,
