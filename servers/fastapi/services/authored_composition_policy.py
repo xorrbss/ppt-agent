@@ -788,8 +788,16 @@ def aggregate_owner_capacity_violations(
     html: str,
     capacity: SlideCapacity,
 ) -> tuple[str, ...]:
-    """Reject nearest-QID aggregate excess; Chromium still owns visual safety."""
+    """Reject nearest-QID aggregate excess; Chromium still owns visual safety.
 
+    This is the author-time half of the envelope (the render-time half is
+    ``capacity_violations``); a relaxed capacity reports nothing here either,
+    or the author loop would still exhaust its provider attempts against caps
+    the prompt never stated.
+    """
+
+    if not capacity.enforced:
+        return ()
     # Imported at the call boundary: the helper reuses this module's canonical
     # owner parser without creating an import-time dependency cycle.
     from services.authored_author_capacity_recovery import owner_capacity_measurements

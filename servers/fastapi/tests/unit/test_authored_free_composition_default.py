@@ -16,8 +16,10 @@ import pytest
 from services.authored_composition_policy import (
     CompositionProfile,
     SlideCapacity,
+    aggregate_owner_capacity_violations,
     build_authored_capacity_plan,
     capacity_violations,
+    reduce_authored_owner_text_capacity,
 )
 from services.authored_deck_plans import _infographic_plan_applies
 from utils.llm_calls import author_deck as author_deck_module
@@ -65,9 +67,25 @@ def test_ordinary_envelope_is_relaxed_by_default() -> None:
         assert slide.prompt_brief(_ORDINARY) == ""
         assert slide.with_source_images(3).enforced is False
         # Nothing was stated to the model, so nothing can be violated: a slide
-        # far past the 460-char / 40-qid envelope is admitted as it is.
+        # far past the 460-char / 40-qid envelope is admitted as it is, at the
+        # author-time aggregate gate as well as at the render-time gate, and
+        # the deterministic reducer leaves it alone.
         assert capacity_violations(_DENSE_HTML, None, slide) == ()
+        assert aggregate_owner_capacity_violations(_DENSE_HTML, slide) == ()
+        assert reduce_authored_owner_text_capacity(
+            _DENSE_HTML, slide, profile_id="ordinary", allow_summarization=True
+        ) == _DENSE_HTML
     assert plan.briefs() == ("", "")
+
+
+def test_bound_ordinary_deck_still_trips_the_author_time_gate(monkeypatch) -> None:
+    monkeypatch.setenv("AUTHORED_COMPOSITION_ENVELOPE_ENABLED", "true")
+    slide = build_authored_capacity_plan(("a",), ("PROBLEM",), _ORDINARY).at(0)
+
+    assert any(
+        item.startswith("owner_qids:")
+        for item in aggregate_owner_capacity_violations(_DENSE_HTML, slide)
+    )
 
 
 def test_source_fidelity_profiles_keep_their_envelope() -> None:
