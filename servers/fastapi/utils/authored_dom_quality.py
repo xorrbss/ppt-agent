@@ -33,6 +33,12 @@ from utils.authored_dom_fit_magnitude import (
     off_canvas_magnitude,
     overflow_magnitude,
 )
+from utils.authored_dom_footer_zone import (
+    FOOTER_ZONE_CATEGORY,
+    find_footer_zone_intrusions,
+    footer_zone_detail,
+    footer_zone_magnitude,
+)
 from utils.authored_dom_tags import (
     VOID_TAGS as _VOID_TAGS,
     StartTagCollector as _StartTagCollector,
@@ -117,6 +123,7 @@ class DomQualityIssue:
         "off_canvas",
         "overlap",
         "text_escapes_card",
+        "text_intrudes_footer_zone",
         "font",
         "image",
         "content",
@@ -1590,6 +1597,30 @@ def inspect_authored_dom(
                 (escape.qid,),
                 mode,
                 text_escape_magnitude(escape, kind=kind_of(escape.qid)),
+            )
+        )
+    # Copy that prints past the deck's own footer safe line, independent of any
+    # card containment.  See ``utils.authored_dom_footer_zone`` for why the
+    # page-number mode cannot be threaded in here and geometry is used instead.
+    for intrusion in find_footer_zone_intrusions(
+        elements, viewport_width=width, viewport_height=height
+    ):
+        owner = item_by_qid.get(intrusion.qid, {})
+        if mode == EXACT_RECONSTRUCTION and not bool(owner.get("unintentional", False)):
+            continue
+        qids = (
+            (intrusion.qid, intrusion.page_number_qid)
+            if intrusion.page_number_qid
+            else (intrusion.qid,)
+        )
+        issues.append(
+            DomQualityIssue(
+                FOOTER_ZONE_CATEGORY,
+                "high" if intrusion.intersects_page_number else "medium",
+                footer_zone_detail(intrusion),
+                qids,
+                mode,
+                footer_zone_magnitude(intrusion, kind=kind_of(intrusion.qid)),
             )
         )
     # Coalesce same category/target reports while retaining deterministic ordering.

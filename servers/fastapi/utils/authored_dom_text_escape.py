@@ -30,6 +30,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from utils.authored_dom_footer_zone import FOOTER_ZONE_CATEGORY
+
 #: Category name for the issue this module feeds.  Deliberately not
 #: ``overflow``/``overlap``: the A4 text-scale rung refuses to run on an
 #: ``overlap`` slide, and this defect is precisely the one shrinking type fixes.
@@ -38,8 +40,18 @@ TEXT_ESCAPE_CATEGORY = "text_escapes_card"
 #: Every category the composition policy treats as a publication blocker.  It
 #: lives here rather than inline in ``services/authored_composition_policy`` so
 #: a detector can add a blocking category without growing that audited file.
+#: ``FOOTER_ZONE_CATEGORY`` (``utils.authored_dom_footer_zone``) is a sibling
+#: detector rather than inline here to keep this file under the file-size
+#: ratchet, but registers its category through this same set.
 BLOCKING_SAFETY_CATEGORIES = frozenset(
-    {"overflow", "clipping", "off_canvas", "overlap", TEXT_ESCAPE_CATEGORY}
+    {
+        "overflow",
+        "clipping",
+        "off_canvas",
+        "overlap",
+        TEXT_ESCAPE_CATEGORY,
+        FOOTER_ZONE_CATEGORY,
+    }
 )
 
 #: Sub-pixel layout noise routinely puts a line box a fraction past its box.

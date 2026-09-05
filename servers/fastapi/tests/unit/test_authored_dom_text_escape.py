@@ -9,6 +9,19 @@ same report as the untrimmed originals:
 * ``run29_slide05_container_clip`` -- the control.  It carries the same
   ``clipped: true`` container mark slide 17 has (``s06.layer.system``) and is
   visually correct, so "a container reports a clip" cannot be the signal.
+
+Two more fixtures cover ``utils.authored_dom_footer_zone`` -- a sibling
+detector for a different published defect, bench run 33 (P0, ``c907f094a``,
+2026-09-05), also trimmed to the keys the gate reads:
+
+* ``run33_slide02_footer_zone`` -- the published defect.  A "검증" callout's
+  text prints under the page number "03": ``text_escapes_card`` cannot see it
+  because both text owners' ink stays *inside* their own card (``s2-takeaway``,
+  which itself runs to y=727); nothing there compares any element against the
+  deck's own footer safe line, only against the nearest painted ancestor.
+* ``run33_slide03_footer_zone_clean`` -- the control.  A similar bottom panel
+  on the following slide stops flush with the footer line and must not trip
+  the new detector.
 """
 
 from __future__ import annotations
@@ -29,6 +42,10 @@ from utils.authored_dom_quality import (
     EXACT_RECONSTRUCTION,
     inspect_authored_dom,
     normalize_browser_metrics,
+)
+from utils.authored_dom_footer_zone import (
+    FOOTER_ZONE_CATEGORY,
+    find_footer_zone_intrusions,
 )
 from utils.authored_dom_text_escape import (
     BLOCKING_SAFETY_CATEGORIES,
@@ -338,3 +355,204 @@ def test_remake_brief_carries_the_measured_defects(monkeypatch):
     assert "s18-accept-evidence" in details[0]
     assert "s18-accept-card" in details[0]
     assert details[1].startswith("Rebuild this slide")
+
+
+# ---------------------------------------------------------------------------
+# The footer safe zone: run 33's published callout under the page number
+# ---------------------------------------------------------------------------
+
+
+def test_run33_slide02_reports_both_intruding_owners():
+    report = inspect_authored_dom("<div></div>", _metrics("run33_slide02_footer_zone"))
+    blocking = blocking_safety_issues(report)
+
+    assert {issue.category for issue in blocking} == {FOOTER_ZONE_CATEGORY}
+    by_qid = {issue.qids[0]: issue for issue in blocking}
+    assert set(by_qid) == {"s2-close", "s2-word"}
+    # Both the paragraph and the "검증" word print under the page number, so
+    # both name it and both are high: the browser boxes actually overlap.
+    for issue in by_qid.values():
+        assert issue.qids == (issue.qids[0], "s2-page")
+        assert issue.severity == "high"
+        assert "s2-page" in issue.detail
+
+
+def test_run33_slide03_is_not_a_footer_zone_intrusion():
+    metrics = _metrics("run33_slide03_footer_zone_clean")
+
+    report = inspect_authored_dom("<div></div>", metrics)
+    assert blocking_safety_issues(report) == ()
+    assert (
+        find_footer_zone_intrusions(
+            normalize_browser_metrics(metrics)["elements"],
+            viewport_width=1280.0,
+            viewport_height=720.0,
+        )
+        == ()
+    )
+
+
+def test_footer_zone_intrusion_feeds_fit_summary_and_bounds_the_text_scale_rung():
+    report = inspect_authored_dom("<div></div>", _metrics("run33_slide02_footer_zone"))
+
+    assert report.fit_summary["worst_overflow_ratio"] > 1.0
+    assert report.fit_summary["overflow_kinds"] == {"text": 2}
+
+    factor = text_scale_factor(
+        [issue.to_dict() for issue in blocking_safety_issues(report)]
+    )
+    assert factor is not None
+    assert TEXT_SCALE_MIN_FACTOR <= factor <= TEXT_SCALE_MAX_FACTOR
+    assert factor == pytest.approx(1.0 / report.fit_summary["worst_overflow_ratio"])
+
+
+def test_footer_zone_category_is_a_blocking_safety_category():
+    assert FOOTER_ZONE_CATEGORY in BLOCKING_SAFETY_CATEGORIES
+    assert {
+        "overflow",
+        "clipping",
+        "off_canvas",
+        "overlap",
+        TEXT_ESCAPE_CATEGORY,
+    } <= BLOCKING_SAFETY_CATEGORIES
+
+
+def test_run29_fixtures_are_unaffected_by_the_footer_zone_detector():
+    """The escape-only fixtures both carry a page-number element at y=690.
+
+    ``s18-stable-scope``'s ink lands exactly 2px past the 648px line -- inside
+    tolerance -- and ``s18-accept-evidence`` lands well above it, so this new
+    detector must add nothing to either report.
+    """
+
+    for name in ("run29_slide17_text_escape", "run29_slide05_container_clip"):
+        elements = normalize_browser_metrics(_metrics(name))["elements"]
+        assert (
+            find_footer_zone_intrusions(
+                elements, viewport_width=1280.0, viewport_height=720.0
+            )
+            == ()
+        )
+
+
+# ---------------------------------------------------------------------------
+# The detector: synthetic geometry
+# ---------------------------------------------------------------------------
+
+
+def _page_number(qid: str = "page", *, bottom_gap: float = 14.0) -> dict:
+    height = 16.0
+    y = 720.0 - bottom_gap - height
+    return {
+        "qid": qid,
+        "tag": "div",
+        "bbox": {"x": 0.0, "y": y, "width": 1280.0, "height": height},
+        "font_size": 12.0,
+        "rendered_text": "03",
+        "text_fragments": [{"x": 600.0, "y": y - 1.0, "width": 20.0, "height": 17.0}],
+    }
+
+
+def _text_owner(
+    qid: str, *, bottom: float, height: float = 26.0, x: float = 100.0, width: float = 200.0
+) -> dict:
+    """A text owner whose one fragment's own em box (height == font size) ends at ``bottom``."""
+
+    y = bottom - height
+    return {
+        "qid": qid,
+        "tag": "p",
+        "bbox": {"x": x, "y": y, "width": width, "height": height},
+        "font_size": height,
+        "text_fragments": [{"x": x, "y": y, "width": width, "height": height}],
+    }
+
+
+def test_page_number_element_is_never_flagged_itself():
+    elements = [_page_number()]
+
+    assert (
+        find_footer_zone_intrusions(elements, viewport_width=1280.0, viewport_height=720.0)
+        == ()
+    )
+
+
+def test_text_past_the_numbered_line_is_reported():
+    elements = [_page_number(), _text_owner("owner", bottom=651.0)]
+
+    result = find_footer_zone_intrusions(
+        elements, viewport_width=1280.0, viewport_height=720.0
+    )
+
+    assert len(result) == 1
+    assert result[0].qid == "owner"
+    assert result[0].page_number_qid == "page"
+    assert result[0].content_bottom_px == pytest.approx(648.0)
+    assert result[0].intrusion_px == pytest.approx(3.0)
+
+
+def test_text_within_tolerance_of_the_numbered_line_is_not_reported():
+    elements = [_page_number(), _text_owner("owner", bottom=649.5)]
+
+    assert (
+        find_footer_zone_intrusions(elements, viewport_width=1280.0, viewport_height=720.0)
+        == ()
+    )
+
+
+def test_without_a_page_number_the_line_falls_back_to_688():
+    within = [_text_owner("owner", bottom=690.0)]
+    assert (
+        find_footer_zone_intrusions(within, viewport_width=1280.0, viewport_height=720.0)
+        == ()
+    )
+
+    past = [_text_owner("owner", bottom=696.0)]
+    result = find_footer_zone_intrusions(
+        past, viewport_width=1280.0, viewport_height=720.0
+    )
+    assert len(result) == 1
+    assert result[0].content_bottom_px == pytest.approx(688.0)
+    assert result[0].page_number_qid == ""
+
+
+def test_intersects_page_number_true_when_boxes_overlap():
+    elements = [_page_number(), _text_owner("owner", bottom=700.0)]
+
+    result = find_footer_zone_intrusions(
+        elements, viewport_width=1280.0, viewport_height=720.0
+    )
+
+    assert len(result) == 1
+    assert result[0].intersects_page_number is True
+
+
+def test_intersects_page_number_false_when_boxes_do_not_overlap():
+    # Ink at y=660 clears the 648 line but its own box (650-660) sits above
+    # the page number's box (690-706): no overlap even though both are late.
+    elements = [_page_number(), _text_owner("owner", bottom=660.0, height=10.0)]
+
+    result = find_footer_zone_intrusions(
+        elements, viewport_width=1280.0, viewport_height=720.0
+    )
+
+    assert len(result) == 1
+    assert result[0].intersects_page_number is False
+
+
+def test_a_narrow_box_is_not_mistaken_for_the_page_number():
+    """Only a full-width box near the bottom is treated as page furniture."""
+
+    narrow = dict(_page_number())
+    narrow["bbox"] = {"x": 500.0, "y": 690.0, "width": 100.0, "height": 16.0}
+
+    result = find_footer_zone_intrusions(
+        [narrow], viewport_width=1280.0, viewport_height=720.0
+    )
+
+    # Not recognized as the page number, so it is measured as ordinary text
+    # against the unnumbered 688px line instead.
+    assert len(result) == 1
+    assert result[0].qid == "page"
+    assert result[0].page_number_qid == ""
+    assert result[0].content_bottom_px == pytest.approx(688.0)
