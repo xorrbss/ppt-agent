@@ -6,7 +6,6 @@
     "electron/app/ipc/setup_install_handlers.ts": 637,
     "electron/app/main.ts": 603,
     "electron/sync_export_runtime.js": 674,
-    "scripts/create-universal-template.mjs": 558,
     "scripts/generate-template-package-metadata.mjs": 608,
     "scripts/intake-upstream-main.mjs": 615,
     "scripts/ppt-agent.mjs": 607,
@@ -123,8 +122,6 @@
     "servers/nextjs/lib/template-v2-table-operations.ts": 846,
     "servers/nextjs/lib/template-v2-vector.ts": 583,
     "servers/nextjs/scripts/lib/authored-hybrid-release-gates.mjs": 629,
-    "servers/nextjs/scripts/qa-authored-hybrid-export.mjs": 529,
-    "servers/nextjs/scripts/qa-authored-hybrid-visual.mjs": 556,
     "servers/nextjs/scripts/run-workspace-e2e.mjs": 3321,
     "servers/nextjs/store/slices/presentationGeneration.ts": 530,
     "start.js": 591

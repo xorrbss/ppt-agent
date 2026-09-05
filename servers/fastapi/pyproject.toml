@@ -146,14 +146,9 @@ select = ["E", "F", "B", "ASYNC"]
 # Restored on 2026-09-04 with the modules a 2026-09-01 merge dropped.
 # Their compressed operator style predates the audit; only line length
 # and statement packing stay here, and every real finding was fixed.
-"scripts/finalize_local_sqlite_migration.py" = ["E501", "E701", "E702"]
-"scripts/import_local_postgres_accounts.py" = ["E501"]
-"scripts/merge_local_migration_assets.py" = ["E501", "E701", "E702"]
-"scripts/migrate_local_sqlite_to_postgres.py" = ["E501", "E701", "E702"]
 "scripts/public_service_malicious_corpus_evidence.py" = ["ASYNC240", "E501"]
 "scripts/seed_public_v2_export_snapshot.py" = ["E501"]
 "scripts/slidespec_human_labeled_replayer.py" = ["ASYNC240", "E501"]
-"scripts/validate_editable_hybrid_libreoffice_readback.py" = ["E501"]
 "scripts/validate_public_fidelity_readback.py" = ["E501"]
 "scripts/warm_fastembed_cache.py" = ["E402"]
 "services/authored_author_capacity_recovery.py" = ["E501"]
