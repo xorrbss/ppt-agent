@@ -6353,6 +6353,8 @@
       "scripts/release-license-policy.mjs",
       "scripts/release-license-policy.test.mjs",
       "scripts/required-ci-contract.test.mjs",
+      "scripts/run-authored-bounded-gate0-v3.mjs",
+      "scripts/run-authored-bounded-gate1-v3.mjs",
       "scripts/seed-authored-semantic-vertical-slice.py",
       "scripts/settings-registry.test.mjs",
       "scripts/start-authored-vnext-dev.ps1",
@@ -6722,6 +6724,8 @@
       "servers/fastapi/services/assets/policies.py",
       "servers/fastapi/services/async_task_read_service.py",
       "servers/fastapi/services/authored_author_capacity_recovery.py",
+      "servers/fastapi/services/authored_author_stage_placeholder.py",
+      "servers/fastapi/services/authored_author_stage_rescue.py",
       "servers/fastapi/services/authored_batch_policy.py",
       "servers/fastapi/services/authored_batch_remake_service.py",
       "servers/fastapi/services/authored_canonical/__init__.py",
@@ -6791,6 +6795,7 @@
       "servers/fastapi/services/authored_quality_review_support.py",
       "servers/fastapi/services/authored_quality_routing.py",
       "servers/fastapi/services/authored_quality_telemetry.py",
+      "servers/fastapi/services/authored_repair_round_order.py",
       "servers/fastapi/services/authored_review_asset_store.py",
       "servers/fastapi/services/authored_semantic_candidate.py",
       "servers/fastapi/services/authored_slide_checkpoint_bundle.py",
@@ -7389,6 +7394,7 @@
       "servers/fastapi/tests/unit/test_author_deck_correction_boundary.py",
       "servers/fastapi/tests/unit/test_author_slide_patch.py",
       "servers/fastapi/tests/unit/test_authored_acceptance_fallback.py",
+      "servers/fastapi/tests/unit/test_authored_author_stage_rescue.py",
       "servers/fastapi/tests/unit/test_authored_batch_policy.py",
       "servers/fastapi/tests/unit/test_authored_batch_remake_preview.py",
       "servers/fastapi/tests/unit/test_authored_bounded_release_profile_v3.py",
@@ -7427,6 +7433,7 @@
       "servers/fastapi/tests/unit/test_authored_generation_preflight.py",
       "servers/fastapi/tests/unit/test_authored_generation_speed_cache_contract.py",
       "servers/fastapi/tests/unit/test_authored_generation_timing_receipt.py",
+      "servers/fastapi/tests/unit/test_authored_geometry_brief.py",
       "servers/fastapi/tests/unit/test_authored_header_body_extent.py",
       "servers/fastapi/tests/unit/test_authored_header_contract.py",
       "servers/fastapi/tests/unit/test_authored_header_enforcement.py",
@@ -7848,6 +7855,7 @@
       "servers/fastapi/utils/authored_figure_variants/selection.py",
       "servers/fastapi/utils/authored_figure_variants/variants.py",
       "servers/fastapi/utils/authored_font_policy.py",
+      "servers/fastapi/utils/authored_geometry_brief.py",
       "servers/fastapi/utils/authored_header_geometry.py",
       "servers/fastapi/utils/authored_header_prompt.py",
       "servers/fastapi/utils/authored_header_restyle.py",
@@ -8522,6 +8530,7 @@
       "servers/nextjs/lib/ooxml-vnext/adapter.test.mjs",
       "servers/nextjs/lib/ooxml-vnext/adapter.ts",
       "servers/nextjs/lib/ooxml-vnext/body-grammar-materializer.test.mjs",
+      "servers/nextjs/lib/ooxml-vnext/cli.mjs",
       "servers/nextjs/lib/ooxml-vnext/compliance.test.mjs",
       "servers/nextjs/lib/ooxml-vnext/compliance.ts",
       "servers/nextjs/lib/ooxml-vnext/contract-validation.ts",
@@ -9126,8 +9135,8 @@
       "upstreamOwned": 10163,
       "identical": 9399,
       "exceptions": 764,
-      "localOnly": 3748
+      "localOnly": 3757
     },
-    "policySha256": "22f98b19fa23b58de76d66a1b64fd5f47ae42486f4f15deccfa7c64f6fd36f0d"
+    "policySha256": "37586ac615c8ca6a094b04b512b6854427b07791887c36f8b719fcf6cc65673a"
   }
 }
